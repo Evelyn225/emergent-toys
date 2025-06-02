@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cellular Automata Garden</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        canvas {
+            display: block;
+        }
+        .controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 100;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        select, button {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+        button {
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #444;
+        }
+        .info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="garden"></canvas>
+    <div class="controls">
+        <div class="control-group">
+            <label for="automataType">Automata Type:</label>
+            <select id="automataType">
+                <option value="grass">Grass</option>
+                <option value="flowers">Flowers</option>
+                <option value="moss">Moss</option>
+                <option value="coral">Coral</option>
+                <option value="fern">Fern</option>
+                <option value="crystal">Crystal</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="speed">Speed:</label>
+            <input type="range" id="speed" min="1" max="30" value="15">
+        </div>
+        <button id="randomize">Randomize Garden</button>
+        <button id="clear">Clear Garden</button>
+    </div>
+    <div class="info">
+        Click and drag to draw cells. Each automata type has different rules for cell survival and birth.
+    </div>
+
+    <script>
+        const canvas = document.getElementById('garden');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let cellSize = 4;
+        let grid = [];
+        let isRunning = true;
+        let isDrawing = false;
+        let currentAutomata = 'grass';
+
+        // Automata rules
+        const rules = {
+            grass: {
+                survive: [2,5],
+                birth: [3,5],
+                name: "Grass"
+            },
+            flowers: {
+                survive: [3,4,6,8],
+                birth: [3,6,7,8],
+                name: "Flowers"
+            },
+            moss: {
+                survive: [2,3,4,5,6,7],
+                birth: [3,7,8],
+                name: "Moss"
+            },
+            coral: {
+                survive: [2,3,8],
+                birth: [3],
+                name: "Coral"
+            },
+            fern: {
+                survive: [3,5,6,7],
+                birth: [4,6],
+                name: "Fern"
+            },
+            crystal: {
+                survive: [2,6,7,8],
+                birth: [3],
+                name: "Crystal"
+            }
+        };
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initGrid();
+        }
+
+        function initGrid() {
+            const cols = Math.floor(width / cellSize);
+            const rows = Math.floor(height / cellSize);
+            grid = Array(cols).fill().map(() => Array(rows).fill(null));
+        }
+
+        function randomize() {
+            // Clear the grid first
+            clear();
+            
+            // Create random splotches for each type
+            for (const type in rules) {
+                // Create 12-32 splotches of each type
+                const numSplotches = Math.floor(Math.random() * 20) + 16;
+                
+                // Get appropriate size for this type
+                let baseSize;
+                switch(type) {
+                    case 'grass':
+                        baseSize = 8;
+                        break;
+                    case 'flowers':
+                        baseSize = 8;
+                        break;
+                    case 'moss':
+                        baseSize = 2;
+                        break;
+                    case 'coral':
+                        baseSize = 5;
+                        break;
+                    case 'fern':
+                        baseSize = 7;
+                        break;
+                    case 'crystal':
+                        baseSize = 1;
+                        break;
+                    default:
+                        baseSize = 4;
+                }
+                
+                for (let s = 0; s < numSplotches; s++) {
+                    // Random position for splotch center
+                    const centerX = Math.floor(Math.random() * grid.length);
+                    const centerY = Math.floor(Math.random() * grid[0].length);
+                    
+                    // Size variation around the base size
+                    const size = Math.floor(Math.random()) + baseSize;
+                    
+                    // Create the splotch
+                    for (let i = -size; i <= size; i++) {
+                        for (let j = -size; j <= size; j++) {
+                            // Only place cells within a rough circle
+                            if (i*i + j*j <= size*size) {
+                                const x = (centerX + i + grid.length) % grid.length;
+                                const y = (centerY + j + grid[0].length) % grid[0].length;
+                                // 80% chance to place a cell
+                                if (Math.random() < 0.8) {
+                                    grid[x][y] = type;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function clear() {
+            for (let i = 0; i < grid.length; i++) {
+                for (let j = 0; j < grid[i].length; j++) {
+                    grid[i][j] = null;
+                }
+            }
+        }
+
+        function countNeighbors(x, y, type) {
+            let count = 0;
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    if (i === 0 && j === 0) continue;
+                    const newX = (x + i + grid.length) % grid.length;
+                    const newY = (y + j + grid[0].length) % grid[0].length;
+                    if (grid[newX][newY] === type) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        function update() {
+            const newGrid = Array(grid.length).fill().map(() => Array(grid[0].length).fill(null));
+            
+            // First pass: handle survival
+            for (let i = 0; i < grid.length; i++) {
+                for (let j = 0; j < grid[i].length; j++) {
+                    const cell = grid[i][j];
+                    if (cell !== null) {
+                        const neighbors = countNeighbors(i, j, cell);
+                        if (rules[cell].survive.includes(neighbors)) {
+                            newGrid[i][j] = cell;
+                        }
+                    }
+                }
+            }
+
+            // Second pass: handle birth
+            for (let i = 0; i < grid.length; i++) {
+                for (let j = 0; j < grid[i].length; j++) {
+                    if (newGrid[i][j] === null) {
+                        for (const type in rules) {
+                            const neighbors = countNeighbors(i, j, type);
+                            if (rules[type].birth.includes(neighbors)) {
+                                newGrid[i][j] = type;
+                                break; // Only one type can be born in a cell
+                            }
+                        }
+                    }
+                }
+            }
+            
+            grid = newGrid;
+        }
+
+        function draw() {
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, width, height);
+
+            for (let i = 0; i < grid.length; i++) {
+                for (let j = 0; j < grid[i].length; j++) {
+                    const cell = grid[i][j];
+                    if (cell === 'flowers') {
+                        // Flower colors
+                        const flowerColors = [
+                            '#FF69B4', // Hot Pink
+                            '#FF1493', // Deep Pink
+                            '#FFB6C1', // Light Pink
+                            '#FFC0CB', // Pink
+                            '#FF69B4'  // Hot Pink
+                        ];
+                        const colorIndex = Math.floor((i + j) / 10) % flowerColors.length;
+                        ctx.fillStyle = flowerColors[colorIndex];
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                    } else if (cell === 'moss') {
+                        // Dark green for Moss
+                        ctx.fillStyle = '#006400';
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                    } else if (cell === 'grass') {
+                        // Green for Grass
+                        ctx.fillStyle = '#80FF80';
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                    } else if (cell === 'coral') {
+                        // Coral colors
+                        const coralColors = [
+                            '#FF7F50', // Coral
+                            '#FF6347', // Tomato
+                            '#FF4500'  // Orange Red
+                        ];
+                        const colorIndex = Math.floor((i + j) / 8) % coralColors.length;
+                        ctx.fillStyle = coralColors[colorIndex];
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                    } else if (cell === 'fern') {
+                        ctx.fillStyle = '#228D3C'; // Forest Green
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                    } else if (cell === 'crystal') {
+                        // Crystal colors
+                        const crystalColors = [
+                            '#00FFFF', // Cyan
+                            '#40E0D0', // Turquoise
+                            '#48D1CC'  // Medium Turquoise
+                        ];
+                        const colorIndex = Math.floor((i + j) / 6) % crystalColors.length;
+                        ctx.fillStyle = crystalColors[colorIndex];
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                    }
+                }
+            }
+        }
+
+        function handleMouse(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / cellSize);
+            const y = Math.floor((e.clientY - rect.top) / cellSize);
+            
+            if (x >= 0 && x < grid.length && y >= 0 && y < grid[0].length) {
+                // Different block sizes for different automata
+                let blockSize;
+                switch(currentAutomata) {
+                    case 'grass': // Grass - medium clusters
+                        blockSize = 3;
+                        break;
+                    case 'flowers': // Flowers - large clusters
+                        blockSize = 4;
+                        break;
+                    case 'moss': // Moss - small clusters
+                        blockSize = 2;
+                        break;
+                    case 'coral': // Coral - large clusters
+                        blockSize = 4;
+                        break;
+                    case 'fern': // Fern - large clusters
+                        blockSize = 5;
+                        break;
+                    case 'crystal': // Crystal - small clusters
+                        blockSize = 2;
+                        break;
+                    default:
+                        blockSize = 3;
+                }
+
+                // Draw block
+                for (let i = 0; i < blockSize; i++) {
+                    for (let j = 0; j < blockSize; j++) {
+                        const newX = (x + i + grid.length) % grid.length;
+                        const newY = (y + j + grid[0].length) % grid[0].length;
+                        grid[newX][newY] = currentAutomata;
+                    }
+                }
+                draw(); // Redraw immediately
+            }
+        }
+
+        // Event listeners
+        window.addEventListener('resize', resize);
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            handleMouse(e);
+        });
+        canvas.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mousemove', handleMouse);
+        canvas.addEventListener('mouseleave', () => isDrawing = false);
+        canvas.addEventListener('mouseout', () => isDrawing = false);
+
+        document.getElementById('automataType').addEventListener('change', (e) => {
+            currentAutomata = e.target.value;
+        });
+
+        document.getElementById('speed').addEventListener('input', (e) => {
+            frameRate = parseInt(e.target.value);
+        });
+
+        document.getElementById('randomize').addEventListener('click', randomize);
+        document.getElementById('clear').addEventListener('click', clear);
+
+        // Animation loop
+        let frameRate = 30;
+        let lastUpdate = 0;
+        function animate(timestamp) {
+            if (!lastUpdate) lastUpdate = timestamp;
+            const elapsed = timestamp - lastUpdate;
+
+            if (elapsed > (1000 / frameRate)) {
+                if (isRunning) {
+                    update();
+                    draw();
+                }
+                lastUpdate = timestamp;
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // Initialize
+        resize();
+        clear();
+        document.getElementById('automataType').value = 'grass'; // Reset menu to Grass
+        document.getElementById('speed').value = '15'; // Reset speed to default
+        currentAutomata = 'grass';
+        frameRate = 15; // Set initial frame rate
+        animate(0);
+    </script>
+</body>
+</html> 
