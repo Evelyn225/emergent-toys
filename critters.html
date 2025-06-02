@@ -240,7 +240,7 @@
     </div>
 
     <script>
-        const API_URL = 'https://art-gallery-alpha-two.vercel.app/'; // Replace with your Vercel URL
+        const API_URL = 'https://art-gallery-alpha-two.vercel.app'; // Removed trailing slash
         const bugs = [
             { name: "Ladybug", searchTerm: "ladybug insect" },
             { name: "Butterfly", searchTerm: "butterfly insect" },
@@ -415,6 +415,7 @@
             // Generate AI introduction message
             try {
                 showTypingIndicator();
+                console.log('Sending request to:', `${API_URL}/api/bug-chat`);
                 const response = await fetch(`${API_URL}/api/bug-chat`, {
                     method: 'POST',
                     headers: {
@@ -426,7 +427,12 @@
                     })
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
+                console.log('Response:', data);
                 const introMessage = data.message;
                 removeTypingIndicator();
                 addMessage(introMessage, 'bug');
@@ -438,8 +444,8 @@
                 bugMemory.get(currentBug.name).push(introMessage);
             } catch (error) {
                 removeTypingIndicator();
+                console.error('Detailed error:', error);
                 addMessage("hello human. i am " + currentBug.name.toLowerCase() + "... wht do u want to know ..", 'bug');
-                console.error('Error generating intro:', error);
             }
         }
 
@@ -456,6 +462,7 @@
             updateSignalStrength();
 
             try {
+                console.log('Sending message to:', `${API_URL}/api/bug-chat`);
                 const response = await fetch(`${API_URL}/api/bug-chat`, {
                     method: 'POST',
                     headers: {
@@ -467,7 +474,12 @@
                     })
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
+                console.log('Response:', data);
                 const bugResponse = data.message;
 
                 removeTypingIndicator();
@@ -477,8 +489,8 @@
                 bugMemory.get(currentBug.name).push(bugResponse);
             } catch (error) {
                 removeTypingIndicator();
+                console.error('Detailed error:', error);
                 addMessage("sorry... connection bad... try again...", 'bug');
-                console.error('Error:', error);
             }
         }
 
