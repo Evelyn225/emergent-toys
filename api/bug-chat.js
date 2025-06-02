@@ -23,6 +23,11 @@ export default async function handler(req, res) {
 
   const { bugType, message } = body;
 
+  // Validate input
+  if (typeof bugType !== 'string' || !bugType.trim() || typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: "Missing or invalid 'bugType' or 'message'." });
+  }
+
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
