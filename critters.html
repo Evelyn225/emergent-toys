@@ -259,7 +259,7 @@
         ];
 
         let currentBug = null;
-        const UNSPLASH_ACCESS_KEY = 'YHsUE3c_Cptl6O2jaa85SelbnFwhCaOIYss_30qn48Q';
+        const UNSPLASH_ACCESS_KEY = 'YHsUE3c_Cptl6O2jaa85SelbnFwhCaOIYss_30qn48Q'; // Replace with your Unsplash API key
         const bugMemory = new Map();
         let isTyping = false;
 
@@ -414,8 +414,8 @@
             // Generate AI introduction message
             try {
                 showTypingIndicator();
-                console.log('Sending request to: /api/bug-chat');
-                const response = await fetch('/api/bug-chat', {
+                console.log('Sending request to: /api/bug-chat.js');
+                const response = await fetch('/api/bug-chat.js', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -432,15 +432,19 @@
 
                 const data = await response.json();
                 console.log('Response:', data);
-                const introMessage = data.message;
-                removeTypingIndicator();
-                addMessage(introMessage, 'bug');
-                
-                // Store in bug memory
-                if (!bugMemory.has(currentBug.name)) {
-                    bugMemory.set(currentBug.name, []);
+                if (data.message) {
+                    removeTypingIndicator();
+                    addMessage(data.message, 'bug');
+                    // Store in bug memory
+                    if (!bugMemory.has(currentBug.name)) {
+                        bugMemory.set(currentBug.name, []);
+                    }
+                    bugMemory.get(currentBug.name).push(data.message);
+                } else {
+                    removeTypingIndicator();
+                    addMessage("hello human. i am " + currentBug.name.toLowerCase() + "... wht do u want to know ..", 'bug');
+                    console.error('API error:', data.error || data.details);
                 }
-                bugMemory.get(currentBug.name).push(introMessage);
             } catch (error) {
                 removeTypingIndicator();
                 console.error('Detailed error:', error);
@@ -461,7 +465,7 @@
             updateSignalStrength();
 
             try {
-                console.log('Sending message to: /api/bug-chat');
+                console.log('Sending message to: /api/bug-chat.js');
                 const response = await fetch('/api/bug-chat.js', {
                     method: 'POST',
                     headers: {
@@ -479,13 +483,16 @@
 
                 const data = await response.json();
                 console.log('Response:', data);
-                const bugResponse = data.message;
-
-                removeTypingIndicator();
-                addMessage(bugResponse, 'bug');
-                
-                // Store in bug memory
-                bugMemory.get(currentBug.name).push(bugResponse);
+                if (data.message) {
+                    removeTypingIndicator();
+                    addMessage(data.message, 'bug');
+                    // Store in bug memory
+                    bugMemory.get(currentBug.name).push(data.message);
+                } else {
+                    removeTypingIndicator();
+                    addMessage("sorry... connection bad... try again...", 'bug');
+                    console.error('API error:', data.error || data.details);
+                }
             } catch (error) {
                 removeTypingIndicator();
                 console.error('Detailed error:', error);
