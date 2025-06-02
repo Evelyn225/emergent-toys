@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warping Tablecloth Pattern</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #f5f0e8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            background: white;
+            max-width: 95vw;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set fixed canvas size - wider aspect ratio
+        canvas.width = 1200;
+        canvas.height = 700;
+
+        // Pattern configuration
+        const config = {
+            gridSize: 28,
+            warpAmplitude: 15,
+            warpFrequency: 0.02,
+            color: '#1a4F58',
+            timeSpeed: 0.002,
+            dotSize: 1,
+            dotSpacing: 4,
+            dotOpacity: 0.12
+        };
+
+        let time = 0;
+
+        // Pre-calculate dot positions
+        const dotPositions = [];
+        for (let x = 0; x <= canvas.width; x += config.dotSpacing) {
+            for (let y = 0; y <= canvas.height; y += config.dotSpacing) {
+                dotPositions.push([x, y]);
+            }
+        }
+
+        function drawDotMatrix() {
+            ctx.save();
+            ctx.fillStyle = '#1a4F58';
+            ctx.globalAlpha = config.dotOpacity;
+            
+            for (const [x, y] of dotPositions) {
+                ctx.beginPath();
+                ctx.arc(x, y, config.dotSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+        }
+
+        function drawWarpedGrid() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw dot matrix background
+            drawDotMatrix();
+            
+            ctx.strokeStyle = config.color;
+            ctx.lineWidth = 1.5;
+            
+            const t = time * 2;
+            const freq = config.warpFrequency;
+            const amp = config.warpAmplitude;
+            
+            // Draw horizontal lines
+            for (let y = 0; y <= canvas.height; y += config.gridSize) {
+                ctx.beginPath();
+                for (let x = 0; x <= canvas.width; x += 8) {
+                    const warpY = y + Math.sin(x * freq + t) * amp;
+                    
+                    if (x === 0) {
+                        ctx.moveTo(x, warpY);
+                    } else {
+                        ctx.lineTo(x, warpY);
+                    }
+                }
+                ctx.stroke();
+            }
+
+            // Draw vertical lines
+            for (let x = 0; x <= canvas.width; x += config.gridSize) {
+                ctx.beginPath();
+                for (let y = 0; y <= canvas.height; y += 8) {
+                    const warpX = x + Math.sin(y * freq + t) * amp;
+                    
+                    if (y === 0) {
+                        ctx.moveTo(warpX, y);
+                    } else {
+                        ctx.lineTo(warpX, y);
+                    }
+                }
+                ctx.stroke();
+            }
+
+            time += config.timeSpeed;
+            requestAnimationFrame(drawWarpedGrid);
+        }
+
+        // Start animation
+        drawWarpedGrid();
+
+        // Add interactivity
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Adjust warp amplitude based on mouse position
+            config.warpAmplitude = 10 + (y / canvas.height) * 20;
+            config.warpFrequency = 0.01 + (x / canvas.width) * 0.03;
+        });
+    </script>
+</body>
+</html> 

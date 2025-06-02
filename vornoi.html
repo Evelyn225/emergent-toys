@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Voronoi Diagram</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://unpkg.com/d3-delaunay@6"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        canvas {
+            display: block;
+        }
+        #controls {
+            position: fixed;
+            left: 20px;
+            top: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            z-index: 100;
+        }
+        button {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button onclick="randomizePoints()">Randomize Points</button>
+        <button onclick="toggleAnimation()">Toggle Animation</button>
+    </div>
+    <script>
+        let points = [];
+        let numPoints = 50;
+        let delaunay;
+        let voronoi;
+        let isAnimating = true;
+        let time = 0;
+        let activeIndex = -1;
+
+        // Wave parameters
+        const waveParams = {
+            frequency: 0.02,
+            amplitude: 2,
+            colorSpeed: 0.03,
+            phaseOffset: 0.5
+        };
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            colorMode(HSB, 360, 100, 100, 1);
+            
+            // Initialize points
+            for (let i = 0; i < numPoints; i++) {
+                const padding = 50;
+                points.push([
+                    random(padding, width - padding),
+                    random(padding, height - padding)
+                ]);
+            }
+            
+            updateVoronoi();
+        }
+
+        function updateVoronoi() {
+            try {
+                delaunay = new d3.Delaunay(points.flat());
+                voronoi = delaunay.voronoi([0, 0, width, height]);
+            } catch (error) {
+                console.error("Error in updateVoronoi:", error);
+            }
+        }
+
+        function findActiveCell() {
+            let minDist = Infinity;
+            let closestIndex = -1;
+            
+            for (let i = 0; i < points.length; i++) {
+                const d = dist(mouseX, mouseY, points[i][0], points[i][1]);
+                if (d < minDist) {
+                    minDist = d;
+                    closestIndex = i;
+                }
+            }
+            
+            return closestIndex;
+        }
+
+        function getBaseColor(x, y, index) {
+            // Create wave-based color pattern
+            const angleFromCenter = atan2(y - height/2, x - width/2);
+            const distFromCenter = dist(x, y, width/2, height/2);
+            const normalizedDist = constrain(map(distFromCenter, 0, width/2, 0, 1), 0, 1);
+            
+            // Add smaller wave motion to colors
+            const waveOffset = sin(time * waveParams.colorSpeed + index * 0.2) * 5; 
+            const satWave = sin(time * waveParams.colorSpeed * 0.5 + index * 0.3) * 5; 
+            const briWave = cos(time * waveParams.colorSpeed * 0.7 + index * 0.4) * 6; 
+            
+            return {
+                hue: (map(angleFromCenter, -PI, PI, 80, 105) + waveOffset + 27) % 360,
+                saturation: 70 + normalizedDist * 15 + satWave,
+                brightness: 80 - normalizedDist * 10 + briWave
+            };
+        }
+
+        function draw() {
+            background(0);
+
+            try {
+                if (!voronoi) return;
+
+                activeIndex = findActiveCell();
+
+                // Update point positions with wave motion
+                if (isAnimating) {
+                    for (let i = 0; i < points.length; i++) {
+                        const baseX = points[i][0];
+                        const baseY = points[i][1];
+                        const phase = i / numPoints * TWO_PI;
+                        
+                        const xOffset = sin(time * waveParams.frequency + phase) * 
+                                      waveParams.amplitude * sin(time * 0.5);
+                        const yOffset = cos(time * waveParams.frequency + phase + waveParams.phaseOffset) * 
+                                      waveParams.amplitude * cos(time * 0.5);
+                        
+                        points[i][0] = baseX + xOffset;
+                        points[i][1] = baseY + yOffset;
+                        
+                        points[i][0] = constrain(points[i][0], 0, width);
+                        points[i][1] = constrain(points[i][1], 0, height);
+                    }
+                    time += 0.016;
+                    updateVoronoi();
+                }
+
+                // Draw cells
+                for (let i = 0; i < points.length; i++) {
+                    const cell = voronoi.cellPolygon(i);
+                    if (cell) {
+                        const [centerX, centerY] = points[i];
+                        const baseColor = getBaseColor(centerX, centerY, i);
+                        
+                        if (i === activeIndex) {
+                            const pulseWave = sin(time * 4) * 0.5 + 0.5;
+                            baseColor.saturation = lerp(baseColor.saturation, 100, pulseWave);
+                            baseColor.brightness = lerp(baseColor.brightness, 100, pulseWave);
+                        }
+
+                        beginShape();
+                        noStroke();
+                        fill(baseColor.hue, baseColor.saturation, baseColor.brightness);
+                        for (const [x, y] of cell) {
+                            vertex(x, y);
+                        }
+                        endShape(CLOSE);
+
+                        if (i === activeIndex) {
+                            stroke(0);
+                            strokeWeight(4);
+                            point(centerX, centerY);
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error("Error in draw:", error);
+            }
+        }
+
+        function randomizePoints() {
+            const padding = 50;
+            for (let i = 0; i < points.length; i++) {
+                points[i] = [
+                    random(padding, width - padding),
+                    random(padding, height - padding)
+                ];
+            }
+            updateVoronoi();
+        }
+
+        function toggleAnimation() {
+            isAnimating = !isAnimating;
+        }
+
+        function mouseDragged() {
+            if (activeIndex >= 0) {
+                points[activeIndex] = [mouseX, mouseY];
+                updateVoronoi();
+            }
+            return false;
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+            updateVoronoi();
+        }
+
+        function doubleClicked() {
+            if (points.length < 100) {
+                points.push([mouseX, mouseY]);
+                updateVoronoi();
+            }
+            return false;
+        }
+    </script>
+</body>
+</html> 

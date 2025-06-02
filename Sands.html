@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Falling Sand Simulation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <script type="importmap">
+    {
+      "imports": {
+        "p5": "https://cdn.jsdelivr.net/npm/p5@1.9.0/+esm"
+      }
+    }
+  </script>
+  <script type="module">
+    import p5 from "p5";
+
+    // Constants
+    const SIMULATION = {
+      CELL_SIZE: 5,
+      BASE_GRAVITY: 2,
+      DENSITY_INFLUENCE: 0.85,
+      BUOYANCY_FORCE: 0.85,
+      MIN_DENSITY_THRESHOLD: 0.2,
+      SAND_EMISSION_RATE: 16,
+      HUE_INCREMENT: 0.2
+    };
+
+    const FLUID = {
+      VISCOSITY: 0.85,
+      DIFFUSION: 0.25,
+      PRESSURE: 0.35,
+      MIN_VELOCITY: 0.01
+    };
+
+    const WIND = {
+      MAX_FORCE: 25,
+      RADIUS: 180
+    };
+
+    const VORTEX = {
+      DURATION: 2500,
+      RADIUS: 150,
+      FORCE: 15,
+      ROTATION_SPEED: 0.15,
+      EDGE_BOOST_FORCE: 5,
+      SPIRAL_FACTOR: 2.8,
+      TURBULENCE: 0.08
+    };
+
+    const BRIGHTNESS = {
+      MIN: 0.05,
+      MAX: 0.9,
+      STEP: 0.02
+    };
+
+    const SLIDER = {
+      WIDTH: 20,
+      MARGIN: 40,
+      HEIGHT_RATIO: 0.5
+    };
+
+    const LIFE = {
+      UPDATE_RATE: 100,
+      PLANT_COLOR: { r: 34, g: 139, b: 34 }
+    };
+
+    const UI = {
+      FADE_DURATION: 1000,
+      INSTRUCTIONS: "Click to add sand\n" +
+                   "Shift + click for wind\n" +
+                   "Right click to draw walls\n" +
+                   "Press 'E' to create a vortex\n" +
+                   "Hold 'L' to draw plants\n" +
+                   "Scroll to adjust particle density\n" +
+                   "Press 'Escape' to pause/show controls"
+    };
+
+    // Interactive falling sand simulation with physics and color effects
+    const sketch = (p) => {
+      // Core simulation state
+      let grid;
+      let velocityGrid;
+      let cols;
+      let rows;
+      let currentHue = 20;
+      let hasLifeCells = false;
+
+      // Interaction state
+      let isWindActive = false;
+      let isVortexActive = false;
+      let isAddingSand = false;
+      let isDrawingWalls = false;
+      let hasInteracted = false;
+      
+      // Position tracking
+      let windOrigin = { x: 0, y: 0 };
+      let windDirection = { x: 0, y: 0 };
+      let vortexPosition = { x: 0, y: 0 };
+      let addSandPosition = { x: 0, y: 0 };
+
+      // Animation timing
+      let vortexStartTime = 0;
+      let lastVortexUpdate = 0;
+      let lastSandEmission = 0;
+      let lastLifeUpdate = 0;
+      let fadeStartTime = 0;
+      let vortexAngle = 0;
+
+      // UI state
+      let messageAlpha = 255;
+      let isPaused = false;
+      let currentBrightness = 0.5;
+
+      // Initialize canvas and simulation
+      p.setup = () => {
+        setupCanvas();
+        setupGrid();
+        setupEventListeners();
+      };
+
+      // Setup canvas and basic p5 configuration
+      function setupCanvas() {
+        const canvas = p.createCanvas(p.windowWidth, p.windowHeight);
+        canvas.position(0, 0);
+        p.background(0);
+        p.textSize(25); 
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textFont('Minecraft');
+      }
+
+      // Initialize simulation grids
+      function setupGrid() {
+        cols = Math.floor(p.width / SIMULATION.CELL_SIZE);
+        rows = Math.floor(p.height / SIMULATION.CELL_SIZE);
+        grid = createGrid(cols, rows);
+        velocityGrid = createVelocityGrid(cols, rows);
+      }
+
+      // Setup event listeners
+      function setupEventListeners() {
+        // Prevent context menu on right click
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Add mouse wheel event listener for brightness control
+        document.addEventListener('wheel', handleMouseWheel, { passive: false });
+      }
+
+      // Handle mouse wheel for brightness adjustment
+      function handleMouseWheel(event) {
+        if (!p.keyIsDown(p.SHIFT)) {
+          const scrollDir = Math.sign(event.deltaY);
+          currentBrightness = Math.max(BRIGHTNESS.MIN, 
+            Math.min(BRIGHTNESS.MAX, 
+              currentBrightness + (scrollDir * BRIGHTNESS.STEP)
+            )
+          );
+          
+          if (isNaN(currentBrightness)) {
+            currentBrightness = 0.5;
+          }
+          
+          event.preventDefault();
+        }
+      }
+
+      // Create a new empty grid
+      function createGrid(cols, rows) {
+        return new Array(cols).fill().map(() => new Array(rows).fill(null));
+      }
+
+      // Create a velocity tracking grid
+      function createVelocityGrid(cols, rows) {
+        return new Array(cols).fill().map(() => 
+          new Array(rows).fill().map(() => ({ x: 0, y: 0 }))
+        );
+      }
+
+      // Handle key press events
+      p.keyPressed = () => {
+        if (p.key === 'Escape') {
+          togglePause();
+        }
+      };
+
+      // Handle key release events
+      p.keyReleased = () => {
+        if (p.key === 'e' || p.key === 'E') {
+          endVortex();
+        }
+      };
+
+      // Start vortex at current mouse position
+      function startVortex() {
+        if (!isVortexActive) {
+          isVortexActive = true;
+          vortexPosition = { x: p.mouseX, y: p.mouseY };
+          vortexStartTime = p.millis();
+          vortexAngle = 0;
+          lastVortexUpdate = p.millis();
+        }
+      }
+
+      // Toggle pause state
+      function togglePause() {
+        isPaused = !isPaused;
+        if (isPaused) {
+          messageAlpha = 255;
+          fadeStartTime = 0;
+        } else if (hasInteracted) {
+          fadeStartTime = p.millis();
+        }
+      }
+
+      // Handle initial mouse press events
+      p.mousePressed = () => {
+        if (isPaused) return;
+
+        if (!hasInteracted) {
+          hasInteracted = true;
+          fadeStartTime = p.millis();
+        }
+
+        if (p.mouseButton === p.RIGHT) {
+          startDrawingWalls();
+        } else if (p.keyIsDown(p.SHIFT)) {
+          startWind();
+        } else {
+          startAddingSand();
+        }
+      };
+
+      // Start drawing walls at current position
+      function startDrawingWalls() {
+        isDrawingWalls = true;
+        drawWall(p.mouseX, p.mouseY);
+      }
+
+      // Start wind effect at current position
+      function startWind() {
+        isWindActive = true;
+        windOrigin.x = p.mouseX;
+        windOrigin.y = p.mouseY;
+        windDirection.x = 0;
+        windDirection.y = 0;
+      }
+
+      // Start adding sand at current position
+      function startAddingSand() {
+        isAddingSand = true;
+        addSandPosition.x = p.mouseX;
+        addSandPosition.y = p.mouseY;
+        if (p.keyIsDown(76) || p.keyIsDown(108)) { // 'L' or 'l' key codes
+          addLifeSand(p.mouseX, p.mouseY);
+        } else {
+          addSand(p.mouseX, p.mouseY);
+        }
+        lastSandEmission = p.millis();
+      }
+
+      // Handle continuous mouse movement
+      p.mouseDragged = () => {
+        if (isPaused) return;
+        
+        if (p.mouseButton === p.RIGHT) {
+          updateWallDrawing();
+        } else if (p.keyIsDown(p.SHIFT)) {
+          updateWind();
+        } else {
+          updateSandPosition();
+        }
+      };
+
+      // Update wall drawing position
+      function updateWallDrawing() {
+        isDrawingWalls = true;
+        drawWall(p.mouseX, p.mouseY);
+      }
+
+      // Update wind direction based on mouse movement
+      function updateWind() {
+        isWindActive = true;
+        windDirection.x = p.mouseX - p.pmouseX;
+        windDirection.y = p.mouseY - p.pmouseY;
+
+        // Normalize direction vector
+        const length = Math.sqrt(windDirection.x * windDirection.x + windDirection.y * windDirection.y);
+        if (length > 0) {
+          windDirection.x /= length;
+          windDirection.y /= length;
+        }
+
+        windOrigin.x = p.mouseX;
+        windOrigin.y = p.mouseY;
+      }
+
+      // Update sand emission position
+      function updateSandPosition() {
+        isAddingSand = true;
+        addSandPosition.x = p.mouseX;
+        addSandPosition.y = p.mouseY;
+      }
+
+      // Handle mouse button release
+      p.mouseReleased = () => {
+        isWindActive = false;
+        isAddingSand = false;
+        isDrawingWalls = false;
+      };
+
+      // Main simulation update and render loop
+      p.draw = () => {
+        p.background(0);
+
+        // Check for vortex key hold
+        if ((p.keyIsDown(69) || p.keyIsDown(101)) && !isPaused) { // 69 is 'E', 101 is 'e'
+          startVortex();
+          // Update vortex position to follow mouse
+          vortexPosition.x = p.mouseX;
+          vortexPosition.y = p.mouseY;
+        }
+        
+        renderSimulation();
+        if (!isPaused) {
+          updateSimulation();
+        }
+      };
+
+      // Render current simulation state
+      function renderSimulation() {
+        renderSand();
+        // Draw semi-transparent black background when paused
+        if (isPaused) {
+          p.push();
+          p.fill(0, 0, 0, 180);  // Semi-transparent black
+          p.noStroke();
+          p.rect(0, 0, p.width, p.height);
+          p.pop();
+        }
+        drawBrightnessSlider();
+        renderInstructions();
+        if (p.millis() - lastLifeUpdate > LIFE.UPDATE_RATE) {
+          updateLife();
+          lastLifeUpdate = p.millis();
+        }
+      }
+
+      // Update simulation state
+      function updateSimulation() {
+        handleSandEmission();
+        updateLife();
+        if (isDrawingWalls) {
+          drawWall(p.mouseX, p.mouseY);
+        }
+        updateSand();
+        if (isWindActive) applyWind();
+        if (isVortexActive) updateVortex();
+      }
+
+      // Handle continuous sand emission
+      function handleSandEmission() {
+          if (isAddingSand && !p.keyIsDown(p.SHIFT)) {
+            const currentTime = p.millis();
+          if (currentTime - lastSandEmission > SIMULATION.SAND_EMISSION_RATE) {
+            if (p.keyIsDown(76) || p.keyIsDown(108)) { // 'L' or 'l' key codes
+                addLifeSand(addSandPosition.x, addSandPosition.y);
+              } else {
+                addSand(addSandPosition.x, addSandPosition.y);
+              }
+              lastSandEmission = currentTime;
+          }
+        }
+      }
+
+      // Update vortex state and effects
+      function updateVortex() {
+        if (!isVortexActive) return;
+
+        const currentTime = p.millis();
+        const deltaTime = (currentTime - lastVortexUpdate) / 16.67;
+        lastVortexUpdate = currentTime;
+
+        const vortexCol = Math.floor(vortexPosition.x / SIMULATION.CELL_SIZE);
+        const vortexRow = Math.floor(vortexPosition.y / SIMULATION.CELL_SIZE);
+        const radiusCells = Math.ceil(VORTEX.RADIUS / SIMULATION.CELL_SIZE);
+        
+        vortexAngle += VORTEX.ROTATION_SPEED * deltaTime;
+
+        drawVortexGraphics();
+
+        const minCol = Math.max(0, vortexCol - radiusCells);
+        const maxCol = Math.min(cols - 1, vortexCol + radiusCells);
+        const minRow = Math.max(0, vortexRow - radiusCells);
+        const maxRow = Math.min(rows - 1, vortexRow + radiusCells);
+
+        // Process all cells in vortex area
+        const cells = [];
+        const centerI = (minCol + maxCol) / 2;
+        const centerJ = (minRow + maxRow) / 2;
+
+        // Collect affected cells with enhanced spiral ordering
+        for (let j = maxRow; j >= minRow; j--) {
+          for (let i = minCol; i <= maxCol; i++) {
+            if (grid[i][j] && grid[i][j].type !== 'wall') {
+              const dx = (i - vortexCol) * SIMULATION.CELL_SIZE;
+              const dy = (j - vortexRow) * SIMULATION.CELL_SIZE;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              
+              if (distance < VORTEX.RADIUS) {
+                const angleFromCenter = Math.atan2(j - centerJ, i - centerI);
+                const distFromCenter = Math.sqrt((i - centerI) * (i - centerI) + (j - centerJ) * (j - centerJ));
+                const spiralValue = angleFromCenter + distFromCenter * VORTEX.SPIRAL_FACTOR;
+                const heightPriority = (j / rows) * 3;
+                cells.push({
+                  i, j, distance,
+                  sortValue: spiralValue + vortexAngle * 1.2 + heightPriority
+                });
+              }
+            }
+          }
+        }
+        
+        cells.sort((a, b) => a.sortValue - b.sortValue);
+
+        // Process cells in spiral order
+        const processedCells = new Set();
+        for (const cell of cells) {
+          const {i, j, distance} = cell;
+          const cellKey = `${i},${j}`;
+          
+          if (processedCells.has(cellKey) || !grid[i][j]) continue;
+          
+          if (!grid[i][j].velocity) {
+            grid[i][j].velocity = { x: 0, y: 0 };
+          }
+
+          const dx = (i - vortexCol) * SIMULATION.CELL_SIZE;
+          const dy = (j - vortexRow) * SIMULATION.CELL_SIZE;
+          const currentAngle = Math.atan2(dy, dx);
+          
+          // Calculate rotation angle with time variation
+          const timeOffset = Math.sin(vortexAngle * 0.8 + distance / 25) * 0.5;
+          const rotationAngle = currentAngle + Math.PI/2 + timeOffset;
+          
+          // Calculate force with distance falloff
+          const forceRatio = 1 - (distance / VORTEX.RADIUS);
+          const heightFactor = j === 0 ? 1.2 : 1.0;
+          
+          // Apply rotational force
+          const rotationForce = VORTEX.FORCE * forceRatio * heightFactor * 
+                               (0.95 + Math.sin(vortexAngle * 3 + distance / 30) * 0.15) * 
+                               deltaTime;
+          
+          // Apply velocity with damping
+          const damping = 0.88 + Math.sin(vortexAngle + distance / 40) * 0.02;
+          grid[i][j].velocity.x = (grid[i][j].velocity.x + 
+            Math.cos(rotationAngle) * rotationForce) * damping;
+          grid[i][j].velocity.y = (grid[i][j].velocity.y + 
+            Math.sin(rotationAngle) * rotationForce) * damping;
+
+          // Add slight turbulence
+          const turbulence = VORTEX.TURBULENCE * forceRatio * 
+                            (0.8 + Math.sin(vortexAngle * 4 + distance / 15) * 0.2);
+          let targetI = i + Math.round(grid[i][j].velocity.x / SIMULATION.CELL_SIZE + 
+                                     (Math.random() - 0.5) * turbulence);
+          let targetJ = j + Math.round(grid[i][j].velocity.y / SIMULATION.CELL_SIZE + 
+                                     (Math.random() - 0.5) * turbulence);
+
+          // Boundary handling with wrapping for top row
+          if (j === 0) {
+            if (targetI < 0) targetI = cols - 1;
+            if (targetI >= cols) targetI = 0;
+            targetJ = Math.max(0, Math.min(rows - 1, targetJ));
+          } else {
+            targetI = Math.max(0, Math.min(cols - 1, targetI));
+            targetJ = Math.max(0, Math.min(rows - 1, targetJ));
+          }
+
+          // Try to move to target position or find nearby empty space
+          let moved = false;
+          let finalTargetI = targetI;
+          let finalTargetJ = targetJ;
+
+          if (!grid[targetI]?.[targetJ]) {
+            moved = true;
+          } else {
+            // Try nearby positions in a spiral pattern
+            for (let radius = 1; radius <= 3 && !moved; radius++) {
+              for (let angle = 0; angle < Math.PI * 2 && !moved; angle += Math.PI / 4) {
+                const tryI = Math.round(targetI + Math.cos(angle + vortexAngle) * radius);
+                const tryJ = Math.round(targetJ + Math.sin(angle + vortexAngle) * radius);
+
+                if (tryI >= 0 && tryI < cols && tryJ >= 0 && tryJ < rows && !grid[tryI][tryJ]) {
+                  finalTargetI = tryI;
+                  finalTargetJ = tryJ;
+                  moved = true;
+                }
+              }
+            }
+          }
+
+          // Move the particle if we found a valid position
+          if (moved) {
+            if (grid[i][j].isLife) {
+              grid[i][j].wasDisturbed = true;
+            }
+            
+            if (!grid[i][j].isLife) {
+              // Restore original color instead of cycling through new colors
+              grid[i][j].r = grid[i][j].originalR;
+              grid[i][j].g = grid[i][j].originalG;
+              grid[i][j].b = grid[i][j].originalB;
+            }
+            grid[finalTargetI][finalTargetJ] = grid[i][j];
+            grid[i][j] = null;
+            processedCells.add(`${finalTargetI},${finalTargetJ}`);
+          }
+        }
+      }
+
+      // End vortex and reset affected particles
+      function endVortex() {
+        if (!isVortexActive) return;
+        
+        isVortexActive = false;
+        // Reset velocities in vortex area
+        const vortexCol = Math.floor(vortexPosition.x / SIMULATION.CELL_SIZE);
+        const vortexRow = Math.floor(vortexPosition.y / SIMULATION.CELL_SIZE);
+        const radiusCells = Math.ceil(VORTEX.RADIUS / SIMULATION.CELL_SIZE);
+        
+        const minCol = Math.max(0, vortexCol - radiusCells);
+        const maxCol = Math.min(cols - 1, vortexCol + radiusCells);
+        const minRow = Math.max(0, vortexRow - radiusCells);
+        const maxRow = Math.min(rows - 1, vortexRow + radiusCells);
+
+        for (let i = minCol; i <= maxCol; i++) {
+          for (let j = minRow; j <= maxRow; j++) {
+            if (grid[i][j] && grid[i][j].type !== 'wall') {
+              const dx = (i - vortexCol) * SIMULATION.CELL_SIZE;
+              const dy = (j - vortexRow) * SIMULATION.CELL_SIZE;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              
+              if (distance < VORTEX.RADIUS) {
+                // Reset any velocity-related properties
+                if (grid[i][j].velocity) {
+                  grid[i][j].velocity = { x: 0, y: 0 };
+                }
+                // Reset color to original if not a life cell
+                if (!grid[i][j].isLife) {
+                  grid[i][j].r = grid[i][j].originalR;
+                  grid[i][j].g = grid[i][j].originalG;
+                  grid[i][j].b = grid[i][j].originalB;
+                }
+              }
+            }
+          }
+        }
+
+        // Clear vortex state
+        vortexStartTime = 0;
+        vortexAngle = 0;
+        lastVortexUpdate = 0;
+      }
+
+      // Draw all particles and walls to the canvas
+      function renderSand() {
+        for (let i = 0; i < cols; i++) {
+          for (let j = 0; j < rows; j++) {
+            if (grid[i][j]) {
+              if (grid[i][j].type === 'wall') {
+                // Render walls in gray
+                p.fill(100);
+                p.noStroke();
+                p.rect(i * SIMULATION.CELL_SIZE, j * SIMULATION.CELL_SIZE, SIMULATION.CELL_SIZE, SIMULATION.CELL_SIZE);
+              } else {
+                // Render sand particles with their colors
+                const color = grid[i][j];
+                p.fill(color.r, color.g, color.b);
+              p.noStroke();
+              p.rect(i * SIMULATION.CELL_SIZE, j * SIMULATION.CELL_SIZE, SIMULATION.CELL_SIZE, SIMULATION.CELL_SIZE);
+              }
+            }
+          }
+        }
+      }
+
+      // Calculate particle density based on its color brightness
+      function getParticleDensity(particle) {
+        if (!particle || particle.type === 'wall') return 1;
+        
+        // Calculate brightness (0-1) from RGB
+        const brightness = (particle.r + particle.g + particle.b) / (255 * 3);
+        
+        // Convert to density (brighter = less dense)
+        return 1 - (brightness * SIMULATION.DENSITY_INFLUENCE);
+      }
+
+      // Check if a particle should start moving (either not life, or disturbed by neighbors)
+      function shouldParticleMove(i, j) {
+        if (!grid[i][j] || grid[i][j].type === 'wall') return false;
+        if (!grid[i][j].isLife || grid[i][j].wasDisturbed) return true;
+
+        // Check if any neighboring non-life particles are touching
+        for (let di = -1; di <= 1; di++) {
+          for (let dj = -1; dj <= 1; dj++) {
+            if (di === 0 && dj === 0) continue;
+            const ni = i + di;
+            const nj = j + dj;
+            if (ni >= 0 && ni < cols && nj >= 0 && nj < rows && 
+                grid[ni][nj] && !grid[ni][nj].isLife && grid[ni][nj].type !== 'wall') {
+              // Mark as permanently disturbed when touched by other particles
+              grid[i][j].wasDisturbed = true;
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      // Update particle positions based on physics
+      function updateSand() {
+        // Process from bottom-up for proper stacking
+        for (let j = rows - 1; j >= 0; j--) {
+          // Process left-to-right and right-to-left alternately for better mixing
+          const leftToRight = (j % 2 === 0);
+          const startI = leftToRight ? 0 : cols - 1;
+          const endI = leftToRight ? cols : -1;
+          const stepI = leftToRight ? 1 : -1;
+
+          for (let i = startI; leftToRight ? i < endI : i > endI; i += stepI) {
+            try {
+              if (!grid[i] || !grid[i][j] || grid[i][j].type === 'wall') continue;
+              
+              if (shouldParticleMove(i, j)) {
+                // Mix colors with neighboring particles
+                mixColors(i, j);
+                
+                const currentDensity = getParticleDensity(grid[i][j]);
+                let moved = false;
+
+                // Apply velocity if particle has it
+                if (grid[i][j].velocity && (Math.abs(grid[i][j].velocity.x) > 0.01 || Math.abs(grid[i][j].velocity.y) > 0.01)) {
+                  const damping = 0.92; // Increased damping for slower movement
+                  
+                  // Apply gravity and density effects to velocity
+                  const gravityForce = SIMULATION.BASE_GRAVITY * currentDensity;
+                  const buoyancyForce = currentDensity < SIMULATION.MIN_DENSITY_THRESHOLD ? 
+                    (SIMULATION.MIN_DENSITY_THRESHOLD - currentDensity) * SIMULATION.BUOYANCY_FORCE : 0;
+                  
+                  // Update velocities with physics - enhanced gravity effect for better arcs
+                  grid[i][j].velocity.x *= damping;
+                  // Apply slight curve to horizontal motion based on vertical velocity
+                  const curveEffect = Math.abs(grid[i][j].velocity.y) * 0.1 * Math.sign(grid[i][j].velocity.x);
+                  grid[i][j].velocity.x -= curveEffect;
+                  
+                  // Enhanced gravity effect for better arcs
+                  grid[i][j].velocity.y = (grid[i][j].velocity.y * damping) + 
+                                        (gravityForce - buoyancyForce) * 0.3;
+
+                  // Cap maximum velocity
+                  const maxVelocity = 3.0;
+                  const currentVelocity = Math.sqrt(
+                    grid[i][j].velocity.x * grid[i][j].velocity.x + 
+                    grid[i][j].velocity.y * grid[i][j].velocity.y
+                  );
+                  if (currentVelocity > maxVelocity) {
+                    const scale = maxVelocity / currentVelocity;
+                    grid[i][j].velocity.x *= scale;
+                    grid[i][j].velocity.y *= scale;
+                  }
+
+                  // Calculate diagonal movement
+                  let targetI = i + Math.round(grid[i][j].velocity.x / SIMULATION.CELL_SIZE);
+                  let targetJ = j + Math.round(grid[i][j].velocity.y / SIMULATION.CELL_SIZE);
+
+                  // Reduced random spread for more predictable arcs
+                  const randomSpread = 0.1;
+                  targetI += Math.round((Math.random() - 0.5) * randomSpread);
+                  targetJ += Math.round((Math.random() - 0.5) * randomSpread);
+
+                  // Enhanced boundary handling for plant cells
+                  if (grid[i][j].isLife) {
+                    // Prevent plant cells from going below the screen
+                    if (targetJ >= rows - 1) {
+                      targetJ = rows - 1;
+                      grid[i][j].velocity.y = 0; // Stop vertical movement
+                      grid[i][j].velocity.x *= 0.5; // Reduce horizontal movement when hitting bottom
+                    }
+                    // Prevent plant cells from going off the sides
+                    if (targetI < 1) {
+                      targetI = 1;
+                      grid[i][j].velocity.x = 0; // Stop horizontal movement when hitting side
+                    }
+                    if (targetI >= cols - 1) {
+                      targetI = cols - 2;
+                      grid[i][j].velocity.x = 0; // Stop horizontal movement when hitting side
+                    }
+                  } else {
+                    // Regular boundary handling for non-plant cells
+                    if (j === 0) {
+                      if (targetI < 0) targetI = cols - 1;
+                      if (targetI >= cols) targetI = 0;
+                      targetJ = Math.max(0, Math.min(rows - 1, targetJ));
+                    } else {
+                      targetI = Math.max(0, Math.min(cols - 1, targetI));
+                      targetJ = Math.max(0, Math.min(rows - 1, targetJ));
+                    }
+                  }
+
+                  // Try to move to velocity-based target
+                  if (targetI !== i || targetJ !== j) {
+                    if (grid[targetI] && !grid[targetI][targetJ]) {
+                      grid[targetI][targetJ] = grid[i][j];
+                      grid[i][j] = null;
+                      moved = true;
+                    } else {
+                      // Try nearby positions in a spiral pattern with diagonal preference
+                      const velocityAngle = Math.atan2(grid[i][j].velocity.y, grid[i][j].velocity.x);
+                      for (let radius = 1; radius <= 2 && !moved; radius++) {
+                        // Try positions biased towards the velocity direction
+                        for (let angleOffset = 0; angleOffset < Math.PI * 2 && !moved; angleOffset += Math.PI / 8) {
+                          const searchAngle = velocityAngle + angleOffset;
+                          const tryI = Math.round(targetI + Math.cos(searchAngle) * radius);
+                          const tryJ = Math.round(targetJ + Math.sin(searchAngle) * radius);
+
+                          // Enhanced boundary checking for plant cells
+                          if (grid[i][j].isLife) {
+                            if (tryI >= 1 && tryI < cols - 1 && tryJ >= 1 && tryJ < rows - 1 && 
+                                grid[tryI] && !grid[tryI][tryJ]) {
+                              // Check if this move maintains the general direction of motion
+                              const dotProduct = (tryI - i) * Math.sign(grid[i][j].velocity.x) + 
+                                              (tryJ - j) * Math.sign(grid[i][j].velocity.y);
+                              
+                              if (dotProduct >= 0) {
+                                grid[tryI][tryJ] = grid[i][j];
+                                grid[i][j] = null;
+                                moved = true;
+                              }
+                            }
+                          } else {
+                            if (tryI >= 0 && tryI < cols && tryJ >= 0 && tryJ < rows && 
+                                grid[tryI] && !grid[tryI][tryJ]) {
+                              // Check if this move maintains the general direction of motion
+                              const dotProduct = (tryI - i) * Math.sign(grid[i][j].velocity.x) + 
+                                              (tryJ - j) * Math.sign(grid[i][j].velocity.y);
+                              
+                              if (dotProduct >= 0) {
+                                grid[tryI][tryJ] = grid[i][j];
+                                grid[i][j] = null;
+                                moved = true;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // If no velocity movement, proceed with normal sand physics
+                if (!moved) {
+                  // Special handling for top row
+                  if (j === 0) {
+                    // Enhanced horizontal movement for top row
+                    const moveChance = 0.3;
+                    if (Math.random() < moveChance) {
+                      const goLeft = Math.random() < 0.5;
+                      if (goLeft && i > 0 && !grid[i - 1][j]) {
+                        grid[i - 1][j] = grid[i][j];
+                        grid[i][j] = null;
+                        moved = true;
+                      } else if (!goLeft && i < cols - 1 && !grid[i + 1][j]) {
+                        grid[i + 1][j] = grid[i][j];
+                        grid[i][j] = null;
+                        moved = true;
+                      }
+                    }
+                  }
+
+                  if (!moved) {
+                    // Check cell below
+                    if (j < rows - 1 && !grid[i][j + 1]) {
+                      // Apply density-based gravity
+                      const fallChance = currentDensity * SIMULATION.BASE_GRAVITY;
+                      if (Math.random() < fallChance) {
+                        grid[i][j + 1] = grid[i][j];
+                        grid[i][j] = null;
+                        moved = true;
+                      }
+                    }
+                    
+                    // If didn't fall straight down, try diagonal movement
+                    if (!moved && j < rows - 1) {
+                      const leftPriority = i % 2 === 0;
+                      
+                      // Try diagonal movements based on density
+                      if (leftPriority) {
+                        moved = tryDiagonalMove(i, j, -1, currentDensity) || 
+                               tryDiagonalMove(i, j, 1, currentDensity);
+                      } else {
+                        moved = tryDiagonalMove(i, j, 1, currentDensity) || 
+                               tryDiagonalMove(i, j, -1, currentDensity);
+                      }
+                    }
+
+                    // Try rising if very light density and didn't move down
+                    if (!moved && currentDensity < SIMULATION.MIN_DENSITY_THRESHOLD) {
+                      const riseChance = (SIMULATION.MIN_DENSITY_THRESHOLD - currentDensity) * SIMULATION.BUOYANCY_FORCE;
+                      
+                      // Only allow rising if not at top row
+                      if (j > 0) {
+                        // Try rising straight up
+                        if (!grid[i][j - 1] && Math.random() < riseChance) {
+                          grid[i][j - 1] = grid[i][j];
+                          grid[i][j] = null;
+                          moved = true;
+                        }
+                        
+                        // Try rising diagonally if not at edges
+                        if (!moved && i > 0 && i < cols - 1) {
+                          const leftPriority = Math.random() < 0.5;
+                          if (leftPriority) {
+                            moved = tryRisingDiagonal(i, j, -1, riseChance) ||
+                                   tryRisingDiagonal(i, j, 1, riseChance);
+                          } else {
+                            moved = tryRisingDiagonal(i, j, 1, riseChance) ||
+                                   tryRisingDiagonal(i, j, -1, riseChance);
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error in particle update:', error);
+              // Clear the problematic cell to prevent further errors
+              if (grid[i] && grid[i][j]) {
+                grid[i][j] = null;
+              }
+            }
+          }
+        }
+      }
+
+      // Helper function for diagonal falling movement
+      function tryDiagonalMove(i, j, dx, density) {
+        if (i + dx >= 0 && i + dx < cols && !grid[i + dx][j + 1]) {
+          // Lower spread chance for lighter particles
+          const spreadChance = density * 0.6; // Reduced from 0.8
+          const topBonus = j === 0 ? 0.2 : 0;
+          if (Math.random() < spreadChance + topBonus) {
+            grid[i + dx][j + 1] = grid[i][j];
+            grid[i][j] = null;
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // Helper function for diagonal rising movement
+      function tryRisingDiagonal(i, j, dx, riseChance) {
+        if (i + dx >= 0 && i + dx < cols && j > 0 && !grid[i + dx][j - 1]) {
+          if (Math.random() < riseChance * 0.8) {
+            grid[i + dx][j - 1] = grid[i][j];
+            grid[i][j] = null;
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // Mix colors between adjacent particles
+      function mixColors(i, j) {
+        const cell = grid[i][j];
+        if (!cell || cell.type === 'wall') return;
+
+        let totalR = cell.r;
+        let totalG = cell.g;
+        let totalB = cell.b;
+        let count = 1;
+        let hasNeighbors = false;
+
+        // Fast isolation test – look at the four direct neighbours only
+        if (
+          (!grid[i-1]?.[j]) &&
+          (!grid[i+1]?.[j]) &&
+          (!grid[i]?.[j-1]) &&
+          (!grid[i]?.[j+1])
+        ) return;
+
+        // Enhanced mixing radius for top particles
+        const mixRadius = j === 0 ? 2 : 1;
+        const isTopRow = j === 0;
+        
+        // Check neighboring cells in larger radius for top row
+        for (let di = -mixRadius; di <= mixRadius; di++) {
+          const ni = i + di;
+          if (ni < 0 || ni >= cols) continue;
+          
+          for (let dj = -mixRadius; dj <= mixRadius; dj++) {
+            if (di === 0 && dj === 0) continue;
+            
+            const nj = j + dj;
+            if (nj < 0 || nj >= rows) continue;
+            
+            const neighbor = grid[ni][nj];
+            if (!neighbor || neighbor.type === 'wall') continue;
+            
+            hasNeighbors = true;
+            // Weight closer particles more heavily
+            const weight = isTopRow ? (1 / Math.sqrt(di * di + dj * dj)) : 1;
+            
+            totalR += neighbor.r * weight;
+            totalG += neighbor.g * weight;
+            totalB += neighbor.b * weight;
+            count += weight;
+          }
+        }
+
+        if (hasNeighbors) {
+          // More aggressive mixing for top row
+          const mixStrength = isTopRow ? 0.4 : 0.2;
+          const invMixStrength = 1 - mixStrength;
+          const avgWeight = mixStrength / count;
+          
+          // Color blending with enhanced mixing
+          cell.r = Math.round(cell.r * invMixStrength + totalR * avgWeight);
+          cell.g = Math.round(cell.g * invMixStrength + totalG * avgWeight);
+          cell.b = Math.round(cell.b * invMixStrength + totalB * avgWeight);
+        }
+      }
+
+            // Apply wind forces to particles within radius
+      function applyWind() {
+        const originCol = Math.floor(windOrigin.x / SIMULATION.CELL_SIZE);
+        const originRow = Math.floor(windOrigin.y / SIMULATION.CELL_SIZE);
+        const radiusCells = Math.ceil(WIND.RADIUS / SIMULATION.CELL_SIZE);
+
+        // Calculate affected area bounds
+        const minCol = Math.max(0, originCol - radiusCells);
+        const maxCol = Math.min(cols - 1, originCol + radiusCells);
+        const minRow = Math.max(0, originRow - radiusCells);
+        const maxRow = Math.min(rows - 1, originRow + radiusCells);
+
+        // Process all cells in wind area
+        for (let j = minRow; j <= maxRow; j++) {
+          for (let i = minCol; i <= maxCol; i++) {
+            const cell = grid[i][j];
+            if (!cell || cell.type === 'wall') continue;
+
+            // Calculate distance from wind origin
+            const dx = (i - originCol) * SIMULATION.CELL_SIZE;
+            const dy = (j - originRow) * SIMULATION.CELL_SIZE;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance >= WIND.RADIUS) continue;
+
+            // Calculate wind force
+            const invRadius = 1 / WIND.RADIUS;
+            const strength = Math.floor(WIND.MAX_FORCE * (1 - distance * invRadius)) + 1;
+            const newI = i + Math.round(windDirection.x * strength);
+            const newJ = j + Math.round(windDirection.y * strength * 0.3);
+
+            // Skip if target position is out of bounds
+            if (cell.isLife) {
+              if (j >= rows - 1 || newI < 1 || newI >= cols - 1 || newJ < 1 || newJ >= rows - 1) continue;
+            } else {
+              if (newI < 0 || newI >= cols || newJ < 0 || newJ >= rows - 1) continue;
+            }
+
+            // Skip if target cell is occupied
+            if (grid[newI][newJ]) continue;
+
+            // Revert non-life particles to original color
+            if (!cell.isLife && cell.originalR !== undefined) {
+              cell.r = cell.originalR;
+              cell.g = cell.originalG;
+              cell.b = cell.originalB;
+            }
+
+            // Move the particle
+            if (cell.isLife) {
+              cell.wasDisturbed = true;
+            }
+            grid[newI][newJ] = cell;
+            grid[i][j] = null;
+          }
+        }
+      }
+
+      // Create wall elements at specified position
+      // x: horizontal position
+      // y: vertical position
+      function drawWall(x, y) {
+        const i = Math.floor(x / SIMULATION.CELL_SIZE);
+        const j = Math.floor(y / SIMULATION.CELL_SIZE);
+
+        // Create 3x3 wall cluster for easier drawing
+        for (let di = -2; di <= 2; di++) {
+          for (let dj = -2; dj <= 2; dj++) {
+            const ni = i + di;
+            const nj = j + dj;
+
+            // Add wall if position is valid
+            if (ni >= 0 && ni < cols && nj >= 0 && nj < rows) {
+              grid[ni][nj] = { type: 'wall' };
+            }
+          }
+        }
+      }
+
+      // Display instruction message
+      function renderInstructions() {
+        if (messageAlpha > 0) {
+          if (hasInteracted && !isPaused) {
+            if (fadeStartTime === 0) {
+              fadeStartTime = p.millis();
+            }
+            const fadeProgress = (p.millis() - fadeStartTime) / UI.FADE_DURATION;
+            messageAlpha = Math.max(0, 255 * (1 - fadeProgress));
+          }
+          
+          p.push();  // Save current drawing settings
+          p.textFont('Minecraft');
+          p.textSize(25);  // Set text size here
+          p.fill(255, 255, 255, messageAlpha);
+          p.text(UI.INSTRUCTIONS, p.width/2, p.height/2);
+          p.pop();  // Restore previous drawing settings
+        }
+      }
+
+      // Draw brightness slider
+      function drawBrightnessSlider() {
+        const sliderX = p.width - SLIDER.WIDTH - SLIDER.MARGIN;
+        const sliderHeight = p.height * SLIDER.HEIGHT_RATIO;
+        const sliderY = (p.height - sliderHeight) / 2;
+
+        // Draw slider background with border
+        p.noStroke();
+        p.fill(30);
+        p.rect(sliderX, sliderY, SLIDER.WIDTH, sliderHeight, 5);
+        p.stroke(50);
+        p.strokeWeight(1);
+        p.noFill();
+        p.rect(sliderX, sliderY, SLIDER.WIDTH, sliderHeight, 5);
+
+        // Draw gradient background (inverted)
+        p.noStroke();
+        const steps = 20;
+        const stepHeight = sliderHeight / steps;
+        for (let i = 0; i < steps; i++) {
+          const y = sliderY + i * stepHeight;
+          const brightness = BRIGHTNESS.MIN + (i / steps) * (BRIGHTNESS.MAX - BRIGHTNESS.MIN);
+          const rgb = hslToRgb(currentHue, 1, brightness);
+          p.fill(rgb.r, rgb.g, rgb.b);
+          p.rect(sliderX + 1, y, SLIDER.WIDTH - 2, stepHeight + 1);
+        }
+
+        // Ensure currentBrightness is within bounds
+        currentBrightness = Math.max(BRIGHTNESS.MIN, Math.min(BRIGHTNESS.MAX, currentBrightness));
+
+        // Draw slider handle (inverted position)
+        const handleY = p.map(
+          currentBrightness,
+          BRIGHTNESS.MIN,
+          BRIGHTNESS.MAX,
+          sliderY,
+          sliderY + sliderHeight
+        );
+        
+        // Draw handle shadow
+        p.noStroke();
+        p.fill(0, 80);
+        p.rect(sliderX - 2, handleY - 1, SLIDER.WIDTH + 4, 5, 2);
+        
+        // Draw handle
+        p.fill(255);
+        p.rect(sliderX - 1, handleY, SLIDER.WIDTH + 2, 3, 2);
+
+        // Draw density percentage (inverted)
+        p.fill(255);
+        p.noStroke();
+        p.textSize(14);
+        p.textAlign(p.CENTER, p.CENTER);
+        const densityPercent = Math.round((1 - (currentBrightness - BRIGHTNESS.MIN) / 
+          (BRIGHTNESS.MAX - BRIGHTNESS.MIN)) * 100);
+        p.text(densityPercent + '%', sliderX + SLIDER.WIDTH/2, sliderY - 20);
+      }
+
+      // Create new sand particles with color cycling
+      function addSand(x, y) {
+        const i = Math.floor(x / SIMULATION.CELL_SIZE);
+        const j = Math.floor(y / SIMULATION.CELL_SIZE);
+
+        // Create sand cluster
+        for (let di = -3; di <= 3; di++) {
+          for (let dj = -3; dj <= 3; dj++) {
+            const ni = i + di;
+            const nj = j + dj;
+
+            // Add sand if position is valid and empty
+            if (ni >= 0 && ni < cols && nj >= 0 && nj < rows && !grid[ni][nj]) {
+              // Use current brightness from slider
+              const rgb = hslToRgb(currentHue, 1, currentBrightness);
+              grid[ni][nj] = {
+                r: rgb.r,
+                g: rgb.g,
+                b: rgb.b,
+                originalR: rgb.r,
+                originalG: rgb.g,
+                originalB: rgb.b
+              };
+
+              // Increment hue and wrap around at 360 degrees
+              currentHue = (currentHue + SIMULATION.HUE_INCREMENT) % 360;
+            }
+          }
+        }
+      }
+
+      // Convert HSL color space to RGB values
+      // h: hue angle (0-360)
+      // s: saturation (0-1)
+      // l: lightness (0-1)
+      function hslToRgb(h, s, l) {
+        let r, g, b;
+
+        if (s === 0) {
+          r = g = b = l;
+        } else {
+          const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1/6) return p + (q - p) * 36 * t;
+            if (t < 1/2) return q;
+            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            return p;
+          };
+
+          const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+          const p = 2 * l - q;
+          r = hue2rgb(p, q, (h / 360 + 1/3));
+          g = hue2rgb(p, q, h / 360);
+          b = hue2rgb(p, q, (h / 360 - 1/3));
+        }
+
+        return {
+          r: Math.round(r * 255),
+          g: Math.round(g * 255),
+          b: Math.round(b * 255)
+        };
+      }
+
+      // Draw vortex visual effect
+      function drawVortexGraphics() {
+        p.push();
+        p.noFill();
+        
+        // Main circle
+        p.stroke(255, 100);
+        p.strokeWeight(2);
+        p.ellipse(vortexPosition.x, vortexPosition.y, VORTEX.RADIUS * 2);
+
+        // Draw swirling lines
+        p.strokeWeight(1);
+        const numSpirals = 3;
+        const maxRotations = 1.5;
+        
+        for (let i = 0; i < numSpirals; i++) {
+          const angleOffset = (i * Math.PI * 2 / numSpirals) + vortexAngle;
+          p.beginShape();
+          for (let t = 0; t <= 1; t += 0.05) {
+            const angle = angleOffset + t * Math.PI * 2 * maxRotations;
+            const radius = VORTEX.RADIUS * (1 - t * 0.7);
+            const x = vortexPosition.x + Math.cos(angle) * radius;
+            const y = vortexPosition.y + Math.sin(angle) * radius;
+            p.vertex(x, y);
+          }
+          p.endShape();
+        }
+        p.pop();
+      }
+
+      // Create new plant cells
+      function addLifeSand(x, y) {
+        const i = Math.floor(x / SIMULATION.CELL_SIZE);
+        const j = Math.floor(y / SIMULATION.CELL_SIZE);
+
+        // Create trunk base - 3x3 cluster for better establishment
+        for (let di = -1; di <= 1; di++) {
+          for (let dj = -1; dj <= 1; dj++) {
+            const ni = i + di;
+            const nj = j + dj;
+
+            if (ni >= 3 && ni < cols && nj >= 3 && nj < rows && !grid[ni][nj]) {
+              // Create denser initial cluster
+              if (di === 0 || dj === 0 || Math.random() < 0.8) {
+                grid[ni][nj] = createPlantCell();
+                hasLifeCells = true;
+              }
+            }
+          }
+        }
+      }
+
+      // Helper function to create a plant cell
+      function createPlantCell(isBranch = false) {
+        return {
+          r: LIFE.PLANT_COLOR.r,
+          g: LIFE.PLANT_COLOR.g,
+          b: LIFE.PLANT_COLOR.b,
+          originalR: LIFE.PLANT_COLOR.r,
+          originalG: LIFE.PLANT_COLOR.g,
+          originalB: LIFE.PLANT_COLOR.b,
+          isLife: true,
+          wasDisturbed: false,
+          isBranch: isBranch,
+          type: 'plant'
+        };
+      }
+
+      // Update Game of Life rules
+      function updateLife() {
+        const newGrid = createGrid(cols, rows);
+        hasLifeCells = false;
+        
+        // Copy walls and non-life cells to new grid
+        for (let i = 0; i < cols; i++) {
+          for (let j = 0; j < rows; j++) {
+            if (grid[i][j]) {
+              if (grid[i][j].type === 'wall' || !grid[i][j].isLife) {
+                newGrid[i][j] = grid[i][j];
+              }
+              if (grid[i][j].isLife) {
+                hasLifeCells = true;
+              }
+            }
+          }
+        }
+
+        // Apply Game of Life rules
+        for (let i = 1; i < cols - 1; i++) {
+          for (let j = 1; j < rows - 1; j++) {
+            if (grid[i][j] && grid[i][j].type !== 'wall' && grid[i][j].isLife) {
+              let neighbors = 0;
+              let upNeighbors = 0;
+              let sideNeighbors = 0;
+              let hasParentBelow = false;
+              let isNearBase = j >= rows - 6; // Increased base area
+
+              // Count different types of neighbors
+              for (let di = -1; di <= 1; di++) {
+                for (let dj = -1; dj <= 1; dj++) {
+                  if (di === 0 && dj === 0) continue;
+                  
+                  const ni = i + di;
+                  const nj = j + dj;
+                  
+                  if (grid[ni][nj] && grid[ni][nj].type !== 'wall' && grid[ni][nj].isLife) {
+                    neighbors++;
+                    if (dj < 0) upNeighbors++;
+                    if (dj === 0) sideNeighbors++;
+                    if (dj === 1 && di === 0) hasParentBelow = true;
+                  }
+                }
+              }
+
+              // Plant-like growth rules
+              const isTrunk = hasParentBelow || (isNearBase && neighbors >= 2);
+              
+              // More lenient survival rules
+              if ((isTrunk && neighbors >= 1) || // Trunk survives with any neighbor
+                  (!isTrunk && neighbors >= 1 && neighbors <= 4) || // Branches more resilient
+                  (isNearBase && neighbors >= 1)) { // Near base very resilient
+                // Cell survives
+                newGrid[i][j] = grid[i][j];
+                hasLifeCells = true;
+
+                // Only allow growth if the cell hasn't been disturbed
+                if (!grid[i][j].wasDisturbed) {
+                  // Growth chance decreases with height and varies by type
+                  const heightFactor = Math.max(0.2, 1 - (j / rows) * 0.6); // Increased minimum and reduced falloff
+                  const trunkFactor = isTrunk ? 1.4 : 0.8;
+                  const baseBonus = isNearBase ? 1.8 : 1.0;
+                  
+                  // Try to grow upward - more likely for trunk and near base
+                  if (j > 0 && !grid[i][j-1] && neighbors < 5) {
+                    const upwardChance = 0.25 * heightFactor * trunkFactor * baseBonus * (1 - upNeighbors/4);
+                    if (Math.random() < upwardChance) {
+                      // Create gaps in vertical growth, but less likely near base
+                      if (isNearBase || Math.random() < 0.8) {
+                        // Check for 2-pixel gap and valid boundaries
+                        if (i >= 1 && i < cols - 1 && j >= 2 && !grid[i][j-2] && !grid[i][j-1]) {
+                          newGrid[i][j-1] = createPlantCell(false);
+                        }
+                      }
+                    }
+                  }
+
+                  // Try to grow branches - more likely with height and fewer side neighbors
+                  if (j > 0 && neighbors < 4) {
+                    const branchChance = 0.15 * heightFactor * (1 - sideNeighbors/3) * 
+                                       (j < rows/2 ? 0.5 : 1.4) * 
+                                       (isTrunk ? 1.3 : 0.9) *
+                                       (isNearBase ? 1.5 : 1.0);
+                    
+                    if (Math.random() < branchChance) {
+                      // Bias towards the side with fewer neighbors
+                      let leftNeighbors = 0, rightNeighbors = 0;
+                      for (let dj = -1; dj <= 1; dj++) {
+                        if (grid[i-1]?.[j+dj]?.isLife) leftNeighbors++;
+                        if (grid[i+1]?.[j+dj]?.isLife) rightNeighbors++;
+                      }
+                      
+                      // Add randomness to prevent perfect symmetry
+                      const randomBias = Math.random() * 0.3;
+                      const goLeft = (leftNeighbors < rightNeighbors) ? 0.7 + randomBias : 0.3 - randomBias;
+                      const leftOrRight = Math.random() < goLeft ? -1 : 1;
+                      
+                      // Try to create branch with gaps
+                      if (i + leftOrRight >= 1 && i + leftOrRight < cols - 1) {
+                        // Branch upward and sideways with 2-pixel gaps
+                        if (!grid[i + leftOrRight][j-1] && !grid[i + leftOrRight][j-2] && 
+                            (isNearBase || Math.random() < 0.7) && j >= 2) {
+                          newGrid[i + leftOrRight][j-1] = createPlantCell(true);
+                        }
+                        // Sometimes extend branch horizontally with 2-pixel gaps
+                        if (Math.random() < (isNearBase ? 0.05 : 0.1) && 
+                            !grid[i + leftOrRight][j] && 
+                            !grid[i + leftOrRight*2][j] &&
+                            i + leftOrRight*2 >= 1 && i + leftOrRight*2 < cols - 1) {
+                          newGrid[i + leftOrRight][j] = createPlantCell(true);
+                        }
+                      }
+                    }
+                  }
+                }
+              } else if ((neighbors >= 1 && neighbors <= 3) && Math.random() < (isNearBase ? 0.8 : 0.6)) {
+                // More lenient birth rules - only allow new growth if parent cell wasn't disturbed
+                if (!grid[i][j].wasDisturbed) {
+                  newGrid[i][j] = createPlantCell(true);
+                  hasLifeCells = true;
+                }
+              }
+            }
+          }
+        }
+
+        // Update grid with new state while preserving physics
+        for (let i = 0; i < cols; i++) {
+          for (let j = 0; j < rows; j++) {
+            if (newGrid[i][j]) {
+              grid[i][j] = newGrid[i][j];
+            } else if (grid[i][j] && grid[i][j].isLife) {
+              grid[i][j] = null;
+            }
+          }
+        }
+      }
+    };
+
+    // Initialize p5.js sketch
+    new p5(sketch);
+  </script>
+</body>
+</html>

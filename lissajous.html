@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lissajous Curve Table</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #000;
+            overflow: hidden;
+        }
+        canvas {
+            border: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        let w; // Width of each cell
+        let cols; // Number of columns
+        let rows; // Number of rows
+        let curves = []; // Array to store curve objects
+        let angle = 0;
+        let paddingHorizontal = 100; // Increased horizontal padding
+        let paddingVertical = 40; // Vertical padding remains the same
+
+        function calculateGridDimensions() {
+            // Calculate optimal cell size and grid dimensions
+            let minCellSize = 60; // Minimum size for each cell
+            let maxCellSize = 120; // Maximum size for each cell
+            
+            // Calculate available space with different paddings
+            let availableWidth = windowWidth - (paddingHorizontal * 2);
+            let availableHeight = windowHeight - (paddingVertical * 2);
+            
+            // Use the smaller dimension to ensure square grid fits
+            let availableSize = Math.min(availableWidth, availableHeight);
+            
+            // Calculate maximum number of cells that could fit at minimum size
+            let maxPossibleCells = Math.floor(availableSize / minCellSize);
+            
+            // Calculate minimum number of cells that would fit at maximum size
+            let minPossibleCells = Math.max(1, Math.floor(availableSize / maxCellSize));
+            
+            // Use maximum possible number of cells (prefer more cells if space allows)
+            cols = maxPossibleCells;
+            rows = maxPossibleCells; // Same as cols for square grid
+            
+            // Calculate cell size to fit the square grid perfectly
+            w = availableSize / cols;
+            
+            // Center the grid by updating paddings if needed
+            let actualWidth = w * cols;
+            let actualHeight = w * rows;
+            
+            // Update horizontal padding if there's extra space
+            if (availableWidth > actualWidth) {
+                paddingHorizontal = (windowWidth - actualWidth) / 2;
+            }
+            
+            // Update vertical padding if there's extra space
+            if (availableHeight > actualHeight) {
+                paddingVertical = (windowHeight - actualHeight) / 2;
+            }
+        }
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            calculateGridDimensions();
+            
+            // Calculate the total size needed for the grid
+            let totalWidth = cols * w;
+            let totalHeight = rows * w;
+            
+            // Center the grid
+            let startX = (width - totalWidth) / 2;
+            let startY = (height - totalHeight) / 2;
+
+            // Create curve objects for each cell
+            curves = []; // Clear existing curves
+            for (let i = 0; i < cols; i++) {
+                curves[i] = [];
+                for (let j = 0; j < rows; j++) {
+                    let x = startX + i * w + w/2;
+                    let y = startY + j * w + w/2;
+                    curves[i][j] = new Curve(x, y, w * 0.45);
+                }
+            }
+        }
+
+        function draw() {
+            background(0, 20); // Slight fade effect
+            stroke(255);
+            noFill();
+
+            // Draw vertical lines
+            let freqX = 0;
+            for (let i = 0; i < cols; i++) {
+                freqX = (i + 1);
+                for (let j = 0; j < rows; j++) {
+                    curves[i][j].setX(cos(angle * freqX));
+                }
+            }
+
+            // Draw horizontal lines
+            let freqY = 0;
+            for (let j = 0; j < rows; j++) {
+                freqY = (j + 1);
+                for (let i = 0; i < cols; i++) {
+                    curves[i][j].setY(cos(angle * freqY));
+                }
+            }
+
+            // Draw all curves
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    curves[i][j].addPoint();
+                    curves[i][j].show();
+                }
+            }
+
+            angle += 0.01;
+        }
+
+        class Curve {
+            constructor(x, y, r) {
+                this.x = x;
+                this.y = y;
+                this.r = r;
+                this.points = [];
+                this.currentX = 0;
+                this.currentY = 0;
+            }
+
+            setX(x) {
+                this.currentX = x;
+            }
+
+            setY(y) {
+                this.currentY = y;
+            }
+
+            addPoint() {
+                let x = this.currentX * this.r;
+                let y = this.currentY * this.r;
+                this.points.push(createVector(x, y));
+                
+                // Remove old points for performance
+                if (this.points.length > 100) {
+                    this.points.splice(0, 1);
+                }
+            }
+
+            show() {
+                push();
+                translate(this.x, this.y);
+                
+                // Draw the curve with gradient color
+                beginShape();
+                for (let i = 0; i < this.points.length; i++) {
+                    let alpha = map(i, 0, this.points.length, 0, 255);
+                    let hue = map(this.x + this.y, 0, width + height, 0, 360);
+                    stroke(hue, 80, 100, alpha);
+                    vertex(this.points[i].x, this.points[i].y);
+                }
+                endShape();
+                
+                pop();
+            }
+        }
+
+        // Handle window resizing
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+            calculateGridDimensions();
+            setup(); // Recalculate positions
+        }
+    </script>
+</body>
+</html> 

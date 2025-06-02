@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII Art Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #controls {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            margin: 0 0 20px 0;
+            padding: 20px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            text-align: center;
+            width: 90%;
+            max-width: 600px;
+        }
+        button, input {
+            margin: 10px;
+            padding: 8px 16px;
+            background: #3a3a3a;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #4a4a4a;
+        }
+        #ascii-container {
+            font-family: 'Courier New', monospace;
+            font-size: 6px;
+            line-height: 6px;
+            white-space: pre;
+            letter-spacing: 1px;
+            background: #000;
+            padding: 20px;
+            border-radius: 8px;
+            width: fit-content;
+            height: fit-content;
+        }
+        #output-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <input type="file" id="imageInput" accept="image/*">
+        <div>
+            <label for="densitySlider">Character Density: </label>
+            <input type="range" id="densitySlider" min="1" max="8" value="4">
+        </div>
+        <div id="status">No image loaded</div>
+    </div>
+    <div id="output-wrapper">
+        <div id="ascii-container"></div>
+    </div>
+
+    <script>
+        let sketch = function(p) {
+            let img;
+            let asciiDiv;
+            let statusDiv;
+            let density = 4;
+            let animationFrame;
+            const asciiChars = ['@', '#', 'W', '8', 'B', 'M', 'R', 'P', 'D', 'Q', 'K', 'X', 'N', 'H', 'G', 'O', 'Z', 'U', 'A', 'S', 'E', '5', '2', 'Y', 'C', 'L', 'F', 'T', 'J', 'I', '3', '1', '/', '|', '\\', '-', '+', '~', ';', ':', ',', '.', ' '];
+            
+            p.setup = function() {
+                p.noCanvas();
+                asciiDiv = p.select('#ascii-container');
+                statusDiv = p.select('#status');
+                
+                // Setup density slider with finer control
+                const densitySlider = p.select('#densitySlider');
+                densitySlider.elt.min = "1";
+                densitySlider.elt.max = "8";
+                densitySlider.elt.value = "4";
+                densitySlider.input(() => {
+                    density = parseInt(densitySlider.value());
+                    if (img) processImage();
+                });
+                
+                // Setup file input
+                const fileInput = p.select('#imageInput');
+                fileInput.elt.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        statusDiv.html('Loading image...');
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            p.loadImage(e.target.result, 
+                                function(loadedImg) {
+                                    img = loadedImg;
+                                    statusDiv.html('Processing...');
+                                    processImage();
+                                },
+                                function(err) {
+                                    statusDiv.html('Error loading image: ' + err);
+                                }
+                            );
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            };
+            
+            function processImage() {
+                if (!img) return;
+                
+                try {
+                    // Calculate dimensions maintaining aspect ratio with higher resolution
+                    let w, h;
+                    const maxWidth = Math.min(400, window.innerWidth / (density * 0.75));
+                    const maxHeight = Math.min(300, window.innerHeight * 0.7);
+                    
+                    if (img.width / img.height > maxWidth / maxHeight) {
+                        w = maxWidth;
+                        h = p.floor((w * img.height) / img.width);
+                    } else {
+                        h = maxHeight;
+                        w = p.floor((h * img.width) / img.height);
+                    }
+                    
+                    // Create scaled buffer
+                    const buffer = p.createGraphics(w, h);
+                    buffer.background(0);
+                    buffer.image(img, 0, 0, w, h);
+                    buffer.loadPixels();
+                    
+                    // Convert to ASCII with more precise brightness mapping
+                    let asciiImage = '';
+                    for (let y = 0; y < h; y += density) {
+                        for (let x = 0; x < w; x += density) {
+                            let avgBrightness = 0;
+                            let samplesCount = 0;
+                            
+                            // Get more precise sampling
+                            for (let dy = 0; dy < density && y + dy < h; dy++) {
+                                for (let dx = 0; dx < density && x + dx < w; dx++) {
+                                    const pixelIndex = ((y + dy) * w + (x + dx)) * 4;
+                                    // Use weighted RGB for more accurate brightness
+                                    const r = buffer.pixels[pixelIndex] * 0.299;
+                                    const g = buffer.pixels[pixelIndex + 1] * 0.587;
+                                    const b = buffer.pixels[pixelIndex + 2] * 0.114;
+                                    avgBrightness += r + g + b;
+                                    samplesCount++;
+                                }
+                            }
+                            
+                            avgBrightness /= samplesCount;
+                            // More precise character mapping with extended character set
+                            const charIndex = p.floor(p.map(avgBrightness, 0, 255, 0, asciiChars.length - 1));
+                            asciiImage += asciiChars[charIndex];
+                        }
+                        asciiImage += '\n';
+                    }
+                    
+                    asciiDiv.html(asciiImage);
+                    statusDiv.html('Processing...');
+                    
+                    // Always animate
+                    if (animationFrame) {
+                        clearTimeout(animationFrame);
+                    }
+                    animationFrame = setTimeout(() => {
+                        asciiChars.unshift(asciiChars.pop());
+                        processImage();
+                    }, 150);
+                    
+                } catch (error) {
+                    console.error(error);
+                    statusDiv.html('Error processing image: ' + error.message);
+                }
+            }
+        };
+
+        // Start p5
+        new p5(sketch);
+    </script>
+</body>
+</html> 

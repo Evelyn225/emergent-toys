@@ -1,0 +1,1891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixelated Fireworks</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #0f0f0f;
+            font-family: Arial, sans-serif;
+        }
+        
+        #menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            z-index: 1000;
+            max-height: 90vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 150px;
+        }
+        
+        .menu-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .menu-button {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .menu-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .checkbox-container label {
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+        }
+        
+        #menu-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            z-index: 1001;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <button id="menu-toggle">Toggle Menu</button>
+    <div id="menu">
+        <div class="menu-controls">
+            <button class="menu-button" id="select-all">Select All</button>
+            <button class="menu-button" id="deselect-all">Deselect All</button>
+        </div>
+        <!-- Primary Effects -->
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="normal">
+            <label>Normal</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="triple">
+            <label>Triple</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="multi">
+            <label>Multi</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="burst">
+            <label>Burst</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="scatter">
+            <label>Scatter</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="comet">
+            <label>Comet</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="fountain">
+            <label>Fountain</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="star">
+            <label>Star</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="heart">
+            <label>Heart</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="sparkler">
+            <label>Sparkler</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" checked data-type="glow">
+            <label>Glow</label>
+        </div>
+        <!-- Additional Effects -->
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="cross">
+            <label>Cross</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="spiral">
+            <label>Spiral</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="splash">
+            <label>Splash</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="pulse">
+            <label>Pulse</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="flower">
+            <label>Flower</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="ripple">
+            <label>Ripple</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="quads">
+            <label>Quads</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="aurora">
+            <label>Aurora</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="dragon">
+            <label>Dragon</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="doubleHelix">
+            <label>Double Helix</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="nova">
+            <label>Nova</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="mandala">
+            <label>Mandala</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="infinity">
+            <label>Infinity</label>
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" data-type="matrix">
+            <label>Matrix</label>
+        </div>
+    </div>
+    <script>
+        let fireworks = [];
+        let particles = [];
+        const gravity = 0.15;
+        const particleLifetime = 320;
+        const fireworkTypes = [
+            'normal', 'triple', 'multi',
+            'burst', 'scatter', 'fountain',
+            'cross', 'star', 'heart',
+            'spiral', 'splash', 'pulse',
+            'sparkler', 'glow', 'comet',
+            'flower', 'ripple', 'quads', 
+            'aurora', 'dragon', 'doubleHelix',
+            'nova', 'mandala', 'infinity',
+            'matrix'
+        ];
+        const initialVelocity = -18;
+        const drag = 0.98;
+        let enabledFireworkTypes = new Set(['normal', 'triple', 'multi', 'burst', 'scatter', 'comet', 'fountain', 'star', 'heart', 'sparkler', 'glow']);
+
+        // Menu
+        document.addEventListener('DOMContentLoaded', function() {
+            const menu = document.getElementById('menu');
+            const menuToggle = document.getElementById('menu-toggle');
+            const selectAllBtn = document.getElementById('select-all');
+            const deselectAllBtn = document.getElementById('deselect-all');
+            let menuVisible = true;
+
+            // Initialize all toggles
+            document.querySelectorAll('.checkbox-container input').forEach(toggle => {
+                const type = toggle.dataset.type;
+                toggle.checked = enabledFireworkTypes.has(type);
+                
+                toggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        enabledFireworkTypes.add(type);
+                    } else {
+                        enabledFireworkTypes.delete(type);
+                    }
+                });
+            });
+
+            // Select All button
+            selectAllBtn.addEventListener('click', function() {
+                document.querySelectorAll('.checkbox-container input').forEach(toggle => {
+                    toggle.checked = true;
+                    enabledFireworkTypes.add(toggle.dataset.type);
+                });
+            });
+
+            // Deselect All button
+            deselectAllBtn.addEventListener('click', function() {
+                document.querySelectorAll('.checkbox-container input').forEach(toggle => {
+                    toggle.checked = false;
+                    enabledFireworkTypes.delete(toggle.dataset.type);
+                });
+            });
+
+            // Menu toggle button
+            menuToggle.addEventListener('click', function() {
+                menuVisible = !menuVisible;
+                menu.style.display = menuVisible ? 'flex' : 'none';
+            });
+        });
+
+        class Firework {
+            constructor(x, y, targetY, type) {
+                this.pos = createVector(x, y);
+                this.vel = createVector(0, initialVelocity);
+                this.acc = createVector(0, 0);
+                this.targetY = targetY;
+                this.exploded = false;
+                this.type = type;
+                
+                // Set colors based on type
+                if (this.type === 'glow') {
+                    // White rocket for glow effect
+                    this.color = color(0, 0, 100);
+                    this.secondaryColor = color(0, 0, 90);
+                    this.rocketColor = color(0, 0, 100);
+                    this.trailColor = color(0, 0, 70);
+                } else if (this.type === 'sparkler') {
+                    // Yellow rocket for sparkler effect
+                    this.color = color(60, 100, 100);
+                    this.secondaryColor = color(60, 100, 90);
+                    this.rocketColor = color(60, 100, 100);
+                    this.trailColor = color(60, 100, 70);
+                } else if (this.type === 'pulse') {
+                    // Cyan rocket for pulse effect
+                    this.color = color(180, 100, 100);
+                    this.secondaryColor = color(180, 100, 90);
+                    this.rocketColor = color(180, 100, 100);
+                    this.trailColor = color(180, 100, 70);
+                } else {
+                    // Color palette for other effects
+                    const colorSchemes = [
+                        {hue: 0, sat: 100, bright: 64},     // Red 
+                        {hue: 180, sat: 79, bright: 65},    // Blue 
+                        {hue: 115, sat: 33, bright: 71},    // Green 
+                        {hue: 8, sat: 30, bright: 91},      // Salmon 
+                        {hue: 260, sat: 41, bright: 87},    // Violet 
+                        {hue: 30, sat: 70, bright: 83},    // Orange
+                        {hue: 60, sat: 70, bright: 90},    // Yellow
+                        {hue: 180, sat: 70, bright: 90},   // Cyan
+                        {hue: 270, sat: 70, bright: 87},   // Purple
+                        {hue: 300, sat: 70, bright: 82},   // Magenta
+                        {hue: 330, sat: 70, bright: 70},    // Rose
+                        {hue: 0, sat: 0, bright: 100}    // white
+                    ];
+                    
+                    // Select base color with some variation
+                    const baseColor = random(colorSchemes);
+                    const hueVariation = random(-5, 5);
+                    const satVariation = random(-5, 5);
+                    const brightVariation = random(-5, 5);
+                    
+                    this.color = color(
+                        (baseColor.hue + hueVariation + 360) % 360,
+                        constrain(baseColor.sat + satVariation, baseColor.sat - 10, baseColor.sat + 10),
+                        constrain(baseColor.bright + brightVariation, baseColor.bright - 10, baseColor.bright + 10)
+                    );
+                    
+                    // Create secondary color with more variation
+                    const secondaryHue = (baseColor.hue + random(-30, 30) + 360) % 360;
+                    const secondarySat = constrain(baseColor.sat + random(-10, 10), baseColor.sat - 15, baseColor.sat + 15);
+                    const secondaryBright = constrain(baseColor.bright + random(-10, 10), baseColor.bright - 15, baseColor.bright + 15);
+                    this.secondaryColor = color(secondaryHue, secondarySat, secondaryBright);
+                    
+                    // Set rocket and trail colors
+                    this.rocketColor = this.color;
+                    this.trailColor = color(
+                        hue(this.color),
+                        saturation(this.color),
+                        brightness(this.color) * 0.7
+                    );
+                }
+            }
+
+            update() {
+                if (!this.exploded) {
+                    this.vel.add(this.acc);
+                    this.vel.mult(drag);
+                    this.pos.add(this.vel);
+                    this.acc.mult(0);
+
+                    if (this.pos.y <= this.targetY) {
+                        this.explode();
+                    }
+                }
+            }
+
+            explode() {
+                this.exploded = true;
+                const particleCount = 250;
+                
+                switch(this.type) {
+                    case 'heart':
+                        this.createHeart(particleCount);
+                        break;
+                    case 'star':
+                        this.createStar(particleCount);
+                        break;
+                    case 'cross':
+                        this.createCross(particleCount);
+                        break;
+                    case 'splash':
+                        this.createSplash(particleCount);
+                        break;
+                    case 'multi':
+                        this.createMultiExplosion(particleCount);
+                        break;
+                    case 'galaxy':
+                        this.createGalaxy(particleCount);
+                        break;
+                    case 'butterfly':
+                        this.createButterfly(particleCount);
+                        break;
+                    case 'quads':
+                        this.createQuads(particleCount);
+                        break;
+                    case 'triple':
+                        this.createTriple(particleCount);
+                        break;
+                    case 'flower':
+                        this.createFlower(particleCount);
+                        break;
+                    case 'matrix':
+                        this.createMatrix(particleCount);
+                        break;
+                    case 'pulse':
+                        this.createPulse(particleCount);
+                        break;
+                    case 'cascade':
+                        this.createCascade(particleCount);
+                        break;
+                    case 'comet':
+                        this.createComet(particleCount);
+                        break;
+                    case 'sparkler':
+                        this.createSparkler(particleCount);
+                        break;
+                    case 'dragon':
+                        this.createDragon(particleCount);
+                        break;
+                    case 'infinity':
+                        this.createInfinity(particleCount);
+                        break;
+                    case 'doubleHelix':
+                        this.createDoubleHelix(particleCount);
+                        break;
+                    case 'mandala':
+                        this.createMandala(particleCount);
+                        break;
+                    case 'aurora':
+                        this.createAurora(particleCount);
+                        break;
+                    case 'burst':
+                        this.createBurst(particleCount);
+                        break;
+                    case 'scatter':
+                        this.createScatter(particleCount);
+                        break;
+                    case 'fountain':
+                        this.createFountain(particleCount);
+                        break;
+                    case 'nova':
+                        this.createNova(particleCount);
+                        break;
+                    case 'ripple':
+                        this.createRipple(particleCount);
+                        break;
+                    case 'sparkle':
+                        this.createSparkle(particleCount);
+                        break;
+                    case 'glow':
+                        this.createGlow(particleCount);
+                        break;
+                    default:
+                        this.createStandardExplosion(particleCount);
+                }
+            }
+
+            createStandardExplosion(count) {
+                for (let i = 0; i < count; i++) {
+                    let angle, speed;
+                    
+                    switch(this.type) {
+                        case 'spiral':
+                            angle = (i / count) * TWO_PI * 6;
+                            speed = map(i, 0, count, 1.5, 8);
+                            break;
+                        default: // normal
+                            angle = random(TWO_PI);
+                            speed = random(4, 10);
+                    }
+
+                    const vel = p5.Vector.fromAngle(angle);
+                    vel.mult(speed);
+                    
+                    // Use Firework's color with slight variation
+                    const hueVariation = random(-25, 15);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createHeart(count) {
+                for (let i = 0; i < count; i++) {
+                    const t = (i / count) * TWO_PI;
+                    const x = 16 * pow(sin(t), 3);
+                    const y = -(13 * cos(t) - 5 * cos(2*t) - 2 * cos(3*t) - cos(4*t));
+                    const scale = random(0.5, 1.5);
+                    const vel = createVector(x * scale, y * scale);
+                    vel.mult(0.5);
+
+                    // Use Firework's color with slight variation
+                    const hueVariation = random(-25, 15);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createStar(count) {
+                for (let i = 0; i < count; i++) {
+                    const t = (i / count) * TWO_PI;
+                    const points = 5;
+                    const baseAngle = t;
+                    const pointAngle = baseAngle * points;
+                    const r = 1 + 0.5 * sin(pointAngle * 2);
+                    const x = cos(baseAngle) * r;
+                    const y = sin(baseAngle) * r;
+                    const scale = random(8, 12);
+                    const vel = createVector(x * scale, y * scale);
+
+                    // Use Firework's color with slight variation
+                    const hueVariation = random(-25, 15);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createCross(count) {
+                const arms = 4;
+                for (let i = 0; i < count; i++) {
+                    const arm = floor(i / (count / arms));
+                    const angle = (arm * TWO_PI / arms) + random(-0.2, 0.2);
+                    const speed = random(8, 12);
+                    const vel = p5.Vector.fromAngle(angle);
+                    vel.mult(speed);
+
+                    // Use Firework's color with slight variation
+                    const hueVariation = random(-25, 15);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createSplash(count) {
+                for (let i = 0; i < count; i++) {
+                    const t = (i / count) * TWO_PI;
+                    const x = sin(t * 2) * 2; 
+                    const y = -t;
+                    const scale = random(1.5, 2.5); 
+                    
+                    // Add wave modulation
+                    const waveMod = sin(t * 3) * 0.2; 
+                    const finalX = x * (1 + waveMod);
+                    
+                    // Use Firework's color with slight variation
+                    const hueVariation = random(-25, 15);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        finalX * scale,
+                        y * scale,
+                        particleColor
+                    ));
+                }
+            }
+
+            createMultiExplosion(count) {
+                const subExplosions = 3;
+                for (let e = 0; e < subExplosions; e++) {
+                    const offset = createVector(
+                        random(-30, 30),
+                        random(-30, 30)
+                    );
+                    
+                    for (let i = 0; i < count / subExplosions; i++) {
+                        const angle = random(TWO_PI);
+                        const speed = random(4, 8);
+                        const vel = p5.Vector.fromAngle(angle);
+                        vel.mult(speed);
+                        
+                        // Use Firework's color with slight variation
+                        const hueVariation = random(-25, 15);
+                        const satVariation = random(-20, 10);
+                        const brightVariation = random(-20, 10);
+                        
+                        const particleColor = color(
+                            (hue(this.color) + hueVariation + 360) % 360,
+                            constrain(saturation(this.color) + satVariation, 50, 90),
+                            constrain(brightness(this.color) + brightVariation, 70, 100)
+                        );
+                        
+                        particles.push(new Particle(
+                            this.pos.x + offset.x,
+                            this.pos.y + offset.y,
+                            vel.x,
+                            vel.y,
+                            particleColor
+                        ));
+                    }
+                }
+            }
+
+            createGalaxy(count) {
+                const arms = 3;
+                for (let i = 0; i < count; i++) {
+                    const arm = floor(i / (count / arms));
+                    const t = (i % (count / arms)) / (count / arms);
+                    const angle = (t * TWO_PI * 2) + (arm * TWO_PI / arms);
+                    const r = map(t, 0, 1, 1, 8) * (1 + random(-0.2, 0.2));
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    const scale = map(r, 1, 8, 6, 3);
+                    const vel = createVector(x * scale, y * scale);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createButterfly(count) {
+                const wings = 2;
+                // Select a single color for the entire butterfly
+                const butterflyColor = color(
+                    random(200, 320), // Blue to purple range
+                    constrain(70 + random(-10, 10), 60, 80), // Consistent saturation
+                    constrain(90 + random(-5, 5), 85, 95) // Consistent brightness
+                );
+                
+                for (let i = 0; i < count; i++) {
+                    const wing = floor(i / (count / wings));
+                    const t = (i % (count / wings)) / (count / wings);
+                    
+                    // Create butterfly wing shape with corrected angle calculations
+                    const baseAngle = wing * PI;
+                    const spreadAngle = (t - 0.5) * PI * 0.5; // Reduced spread for tighter wings
+                    const angle = baseAngle + spreadAngle;
+                    
+                    // Ensure wings stay together by adjusting radius calculation
+                    const r = map(t, 0, 1, 1, 2.5) * (1 + sin(t * TWO_PI * 2) * 0.01);
+                    
+                    // Add wing curve with corrected calculations
+                    const curve = sin(t * PI) * 0.3;
+                    const x = cos(angle) * r * (1 + curve);
+                    const y = sin(angle) * r * (1 + curve);
+                    
+                    // Add slight randomness for natural look
+                    const jitter = 0.05; // Reduced jitter for tighter formation
+                    const finalX = x + random(-jitter, jitter);
+                    const finalY = y + random(-jitter, jitter);
+                    
+                    const scale = map(t, 0, 1, 1.8, 1.2); // Adjusted scale for better proportions
+                    const vel = createVector(finalX * scale, finalY * scale);
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        butterflyColor
+                    ));
+                }
+            }
+
+            createQuads(count) {
+                const iterations = 5; // Increased from 4 to 5 for more detail
+                const branches = 6; // Increased from 5 to 6 for more complexity
+                
+                for (let i = 0; i < count; i++) {
+                    let x = 0, y = 0;
+                    let scale = 1;
+                    let depth = 0;
+                    
+                    // Create fractal pattern using recursive branching
+                    for (let j = 0; j < iterations; j++) {
+                        const branch = floor(random(branches));
+                        const angle = (branch * TWO_PI / branches) + random(-0.3, 0.3); // Increased angle variation
+                        
+                        // Add branching with decreasing scale and increasing complexity
+                        scale *= 0.6; // Changed from 0.5 for more spread
+                        depth++;
+                        
+                        // Add spiral effect to branches
+                        const spiral = j * 0.2;
+                        const spiralX = cos(angle + spiral) * scale;
+                        const spiralY = sin(angle + spiral) * scale;
+                        
+                        x += spiralX;
+                        y += spiralY;
+                    }
+                    
+                    // Apply final scale and add more dynamic randomness
+                    const finalScale = random(6, 14); // Increased range for more variation
+                    const jitter = 0.2; // Increased jitter
+                    x += random(-jitter, jitter);
+                    y += random(-jitter, jitter);
+                    
+                    const vel = createVector(x * finalScale, y * finalScale);
+                    
+                    // Enhanced color system based on depth and position
+                    const depthHue = (hue(this.color) + depth * 60) % 360; // 60 degrees per depth
+                    const positionHue = (atan2(y, x) * 180 / PI + 360) % 360;
+                    const finalHue = (depthHue + positionHue * 0.2) % 360;
+                    
+                    const saturation = map(depth, 0, iterations, 90, 70);
+                    const brightness = map(depth, 0, iterations, 100, 80);
+                    
+                    const particleColor = color(
+                        finalHue,
+                        saturation + random(-10, 10),
+                        brightness + random(-10, 10)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createTriple(count) {
+                const colors = [
+                    this.color,
+                    this.secondaryColor,
+                    color(random(255), random(255), random(255))
+                ];
+                
+                // Create three explosions in a tighter triangle pattern
+                const offsets = [
+                    createVector(-15, -10),  // Reduced from -30, -20
+                    createVector(15, -10),   // Reduced from 30, -20
+                    createVector(0, -20)     // Reduced from 0, -40
+                ];
+                
+                for (let e = 0; e < 3; e++) {
+                    const offset = offsets[e];
+                    const col = colors[e];
+                    
+                    for (let i = 0; i < count / 3; i++) {
+                        const angle = random(TWO_PI);
+                        const speed = random(6, 12);
+                        const vel = p5.Vector.fromAngle(angle);
+                        vel.mult(speed);
+                        
+                        particles.push(new Particle(
+                            this.pos.x + offset.x,
+                            this.pos.y + offset.y,
+                            vel.x,
+                            vel.y,
+                            col
+                        ));
+                    }
+                }
+            }
+
+            createFlower(count) {
+                const petals = 8;
+                const petalCount = floor(count / petals);
+                
+                for (let i = 0; i < count; i++) {
+                    const petal = floor(i / petalCount);
+                    const t = (i % petalCount) / petalCount;
+                    
+                    const baseAngle = (petal * TWO_PI / petals);
+                    const petalAngle = t * PI;
+                    
+                    const petalLength = 2.5;
+                    const petalWidth = 0.9;
+                    const petalCurve = sin(petalAngle) * 0.5;
+                    const sideCurve = sin(t * TWO_PI) * 0.3;
+                    
+                    const r = petalLength * (1 - pow(t - 0.5, 2) * 2);
+                    const x = cos(baseAngle) * r * (1 + petalCurve + sideCurve);
+                    const y = sin(baseAngle) * r * (1 + petalCurve + sideCurve);
+                    
+                    if (t < 0.1) {
+                        const centerScale = 0.6;
+                        const centerX = cos(baseAngle) * t * centerScale;
+                        const centerY = sin(baseAngle) * t * centerScale;
+                        const centerVel = createVector(centerX * 1.5, centerY * 1.5);
+                        
+                        const hueVariation = random(-10, 10);
+                        const satVariation = random(-40, -20);
+                        const brightVariation = random(10, 20);
+                        
+                        const centerColor = color(
+                            (hue(this.color) + hueVariation + 360) % 360,
+                            constrain(saturation(this.color) + satVariation, 30, 50),
+                            constrain(brightness(this.color) + brightVariation, 90, 100)
+                        );
+                        
+                        particles.push(new Particle(
+                            this.pos.x,
+                            this.pos.y,
+                            centerVel.x,
+                            centerVel.y,
+                            centerColor
+                        ));
+                    }
+                    
+                    const jitter = 0.08;
+                    const finalX = x + random(-jitter, jitter);
+                    const finalY = y + random(-jitter, jitter);
+                    
+                    const scale = map(t, 0, 1, 2, 1.2);
+                    const vel = createVector(finalX * scale, finalY * scale);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-40, -20);
+                    const brightVariation = random(10, 20);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 30, 50),
+                        constrain(brightness(this.color) + brightVariation, 90, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createMatrix(count) {
+                const columns = 20;
+                const gridSize = 8;
+                
+                for (let i = 0; i < count; i++) {
+                    const colIndex = i % columns;
+                    // Snap column positions to grid
+                    const x = round((colIndex - columns/2) * 6 / gridSize) * gridSize;
+                    
+                    // Add random scatter within grid cells
+                    const scatterX = round(random(-2, 2) / gridSize) * gridSize;
+                    const scatterY = round(random(-2, 2) / gridSize) * gridSize;
+                    
+                    const speed = random(1, 5);
+                    const vel = createVector(0, speed);
+                    
+                    // Snap vertical position to grid and add scatter
+                    const y = round(this.pos.y / gridSize) * gridSize + scatterY;
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        round(this.pos.x + x + scatterX),
+                        y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createPulse(count) {
+                const rings = 4;
+                for (let i = 0; i < count; i++) {
+                    const ring = floor(i / (count / rings));
+                    const t = (i % (count / rings)) / (count / rings);
+                    
+                    const angle = t * TWO_PI;
+                    const baseRadius = (ring + 1) * 1.5;
+                    const radiusMod = sin(t * TWO_PI * 2) * 0.15;
+                    const r = baseRadius * (1 + radiusMod);
+                    
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    
+                    const scale = map(ring, 0, rings, 2, 1);
+                    const vel = createVector(x * scale/1.8, y * scale /1.5);
+                    
+                    const hueVariation = sin(t * TWO_PI * 3) * 30;
+                    const satVariation = map(r, 1.5, 6, 100, 80) + random(-10, 10);
+                    const brightVariation = map(r, 1.5, 6, 100, 90) + random(-10, 10);
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createCascade(count) {
+                const levels = 5;
+                for (let i = 0; i < count; i++) {
+                    const level = floor(i / (count / levels));
+                    const t = (i % (count / levels)) / (count / levels);
+                    const x = -(t - 0.5) * 35 * (1 + level * 0.2);
+                    const y = level * -12;
+                    const speed = random(5, 10);
+                    const vel = createVector(x * 0.1, speed);
+                    const hue = map(level, 0, levels, 180, 220);
+                    const particleColor = color(hue, 100, 100);
+                    particles.push(new Particle(
+                        this.pos.x + x,
+                        this.pos.y + y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createComet(count) {
+                const tailLength = 0.7;
+                const tailCount = floor(count * tailLength);
+                const headCount = count - tailCount;
+                
+                // Create comet head with radial explosion
+                for (let i = 0; i < headCount; i++) {
+                    const angle = random(TWO_PI);
+                    const r = random(1.5);
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    const scale = random(1.5, 2.5);
+                    const vel = createVector(x * scale, y * scale);
+                    
+                    // Use Firework's color with slight variation
+                    const hueVariation = random(-25, 15);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+                
+                // Create tail effect
+                for (let i = 0; i < tailCount; i++) {
+                    const t = i / tailCount;
+                    const angle = random(TWO_PI);
+                    const r = map(t, 0, 1, 1, 4);
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    const scale = map(t, 0, 1, 2, 1);
+                    const vel = createVector(x * scale, y * scale);
+                    
+                    // Use Firework's color with darkening in tail
+                    const hueVariation = random(-25, 15);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) * (1 - t * 0.3) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createSparkler(count) {
+                const branches = 8;
+                for (let i = 0; i < count; i++) {
+                    const branch = floor(i / (count / branches));
+                    const t = (i % (count / branches)) / (count / branches);
+                    
+                    // Create sparkler effect with branching
+                    const angle = (branch * TWO_PI / branches) + random(-0.2, 0.2);
+                    const r = map(t, 0, 1, 0.8, 2) * (1 + random(-0.2, 0.2)); // Reduced radius
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    
+                    // Add upward bias to sparks
+                    const upwardBias = -1.5; // Upward force
+                    const finalY = y + upwardBias;
+                    
+                    // Reduced speeds for gentler effect
+                    const scale = random(1.2, 2); // Reduced from 3,7
+                    const vel = createVector(x * scale, finalY * scale);
+                    
+                    // Bright white to yellow colors
+                    const hue = random(40, 60);
+                    const saturation = random(80, 100);
+                    const brightness = random(90, 100);
+                    const particleColor = color(hue, saturation, brightness);
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createDragon(count) {
+                const segments = 8; // Increased from 6 for more detail
+                const particlesPerSegment = floor(count / segments);
+                
+                for (let i = 0; i < count; i++) {
+                    const segment = floor(i / particlesPerSegment);
+                    const t = (i % particlesPerSegment) / particlesPerSegment;
+                    
+                    // Create alternating left-right pattern
+                    const direction = segment % 2 === 0 ? 1 : -1;
+                    const baseX = t * 8 * direction; // Increased spread
+                    
+                    // Add wave motion
+                    const wave = sin(t * TWO_PI * 2) * 1.5;
+                    const x = baseX + wave;
+                    
+                    // Add vertical movement
+                    const baseY = segment * -3; // Increased vertical spacing
+                    const y = baseY + sin(t * TWO_PI) * 2;
+                    
+                    // Add flame-like effect
+                    const flame = sin(t * TWO_PI * 4) * 0.5;
+                    const finalX = x + flame * direction;
+                    const finalY = y + flame;
+                    
+                    // Add slight randomness for natural look
+                    const jitter = 0.2;
+                    const finalPosX = finalX + random(-jitter, jitter);
+                    const finalPosY = finalY + random(-jitter, jitter);
+                    
+                    // Varying speeds for depth effect
+                    const scale = map(segment, 0, segments, 2.5, 1.5);
+                    const vel = createVector(finalPosX * scale, finalPosY * scale);
+                    
+                    // Enhanced color system
+                    const baseHue = (hue(this.color) + segment * 30) % 360;
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-10, 10);
+                    const brightVariation = random(-10, 10);
+                    
+                    // Add flame-like color variation
+                    const flameBrightness = map(sin(t * TWO_PI * 4), -1, 1, 70, 100);
+                    
+                    const particleColor = color(
+                        (baseHue + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 60, 90),
+                        constrain(flameBrightness + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createInfinity(count) {
+                // Reduce particle count for infinity pattern
+                const reducedCount = floor(count * 0.4); // Reduced from 0.6 to 0.4 for fewer particles
+                
+                for (let i = 0; i < reducedCount; i++) {
+                    const t = (i / reducedCount) * TWO_PI;
+                    // Create figure-8/infinity shape with reduced scale
+                    const scale = 1.8; // Reduced from 2.5 to 1.8 for smaller size
+                    const x = scale * sin(t) / (1 + pow(cos(t), 2));
+                    const y = scale * sin(t) * cos(t) / (1 + pow(cos(t), 2));
+                    
+                    // Add explosive energy with random variations
+                    const explosionFactor = random(0.8, 1.2);
+                    const vel = createVector(x * 2.5 * explosionFactor, y * 2.5 * explosionFactor); // Increased from 1.5 to 2.5
+                    
+                    // Add random offset for more explosive look
+                    const offsetX = random(-0.3, 0.3);
+                    const offsetY = random(-0.3, 0.3);
+                    
+                    // Use Firework's color with slight variation
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-10, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x + offsetX,
+                        this.pos.y + offsetY,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createDoubleHelix(count) {
+                const strands = 2;
+                const turns = 2;
+                for (let i = 0; i < count; i++) {
+                    const strand = floor(i / (count / strands));
+                    const t = (i % (count / strands)) / (count / strands);
+                    
+                    const angle = t * TWO_PI * turns + (strand * PI);
+                    const r = 2;
+                    const x = cos(angle) * r;
+                    const y = -t * 8;
+                    const z = sin(angle) * r;
+                    
+                    const vel = createVector(x * 2, y);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createMandala(count) {
+                const rings = 3; // Increased from 2 to 3 for more layers
+                const symmetry = 8; // Increased from 6 to 8 for more detailed pattern
+                const reducedCount = floor(count * 0.5);
+                const particlesPerRing = floor(reducedCount / (rings * symmetry));
+                
+                for (let i = 0; i < reducedCount; i++) {
+                    const ring = floor(i / (particlesPerRing * symmetry));
+                    const t = (i % (particlesPerRing * symmetry)) / (particlesPerRing * symmetry);
+                    
+                    for (let s = 0; s < symmetry; s++) {
+                        const angle = (t * TWO_PI) + (s * TWO_PI / symmetry);
+                        let r;
+                        
+                        // Different shape patterns with more variation
+                        const shapeType = floor(random(4)); // Added one more shape type
+                        switch(shapeType) {
+                            case 0: // Standard mandala
+                                r = map(ring, 0, rings, 1.5, 3);
+                                break;
+                            case 1: // Flower-like
+                                r = map(ring, 0, rings, 1.5, 3) * (1 + sin(t * TWO_PI * 3) * 0.3);
+                                break;
+                            case 2: // Star-like
+                                r = map(ring, 0, rings, 1.5, 3) * (1 + abs(sin(t * TWO_PI * 2)) * 0.4);
+                                break;
+                            case 3: // Spiral-like
+                                r = map(ring, 0, rings, 1.5, 3) * (1 + t * 0.5);
+                                break;
+                        }
+                        
+                        // Enhanced wave effect
+                        const waveFreq = random(2, 3);
+                        const waveAmp = random(0.1, 0.2);
+                        const wave = sin(t * TWO_PI * waveFreq) * waveAmp;
+                        const x = cos(angle) * r * (1 + wave);
+                        const y = sin(angle) * r * (1 + wave);
+                        
+                        // Adjust scale for better pattern
+                        const scale = map(ring, 0, rings, 2, 1.2);
+                        const vel = createVector(x * scale, y * scale);
+                        
+                        // Different colors for each ring
+                        const ringHue = (hue(this.color) + ring * 120) % 360; // 120 degrees apart
+                        const hueVariation = random(-10, 10);
+                        const satVariation = random(-20, 10);
+                        const brightVariation = random(-10, 10);
+                        
+                        const particleColor = color(
+                            (ringHue + hueVariation + 360) % 360,
+                            constrain(saturation(this.color) + satVariation, 50, 90),
+                            constrain(brightness(this.color) + brightVariation, 70, 100)
+                        );
+                        
+                        particles.push(new Particle(
+                            this.pos.x,
+                            this.pos.y,
+                            vel.x,
+                            vel.y,
+                            particleColor
+                        ));
+                    }
+                }
+            }
+
+            createSpiralGalaxy(count) {
+                const arms = 3;
+                const rotations = 2; // Increased rotations for tighter spiral
+                for (let i = 0; i < count; i++) {
+                    const arm = floor(i / (count / arms));
+                    const t = (i % (count / arms)) / (count / arms);
+                    
+                    // Create tighter logarithmic spiral
+                    const growth = 0.08; // Reduced from 0.15 for tighter spiral
+                    const angle = t * TWO_PI * rotations + (arm * TWO_PI / arms);
+                    const r = exp(growth * angle) * 0.8; // Added 0.8 multiplier to reduce overall size
+                    
+                    // Add density variation with tighter distribution
+                    if (random() < map(r, 0, 8, 1, 0.4)) { // Adjusted density falloff
+                        const x = cos(angle) * r;
+                        const y = sin(angle) * r;
+                        
+                        // Add slight randomness for natural look
+                        const jitter = 0.1;
+                        const finalX = x + random(-jitter, jitter);
+                        const finalY = y + random(-jitter, jitter);
+                        
+                        // Varying speeds for depth effect
+                        const scale = map(r, 0, 8, 3, 1.5); // Reduced scale range
+                        const vel = createVector(finalX * scale, finalY * scale);
+                        
+                        // Color varies by arm and distance
+                        const baseHue = (arm * 120 + r * 15) % 360; // Increased color variation
+                        const hueVariation = random(-10, 10);
+                        const satVariation = random(-5, 5);
+                        const brightVariation = random(-5, 5);
+                        
+                        const particleColor = color(
+                            (baseHue + hueVariation + 360) % 360,
+                            constrain(85 + satVariation, 80, 90),
+                            constrain(90 + brightVariation, 85, 95)
+                        );
+                        
+                        particles.push(new Particle(
+                            this.pos.x,
+                            this.pos.y,
+                            vel.x,
+                            vel.y,
+                            particleColor
+                        ));
+                    }
+                }
+            }
+
+            createAurora(count) {
+                const waves = 3;
+                for (let i = 0; i < count; i++) {
+                    const wave = floor(i / (count / waves));
+                    const t = (i % (count / waves)) / (count / waves);
+                    
+                    const baseX = map(t, 0, 1, -8, 8);
+                    const waveOffset = sin(t * TWO_PI * 2 + wave) * 2;
+                    const x = baseX + waveOffset;
+                    const y = -t * 10 - wave;
+                    
+                    const vel = createVector(x * 0.6, y);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createQuantum(count) {
+                const orbits = 2; 
+                const particlesPerOrbit = count / orbits;
+                
+                for (let i = 0; i < count; i++) {
+                    const orbit = floor(i / particlesPerOrbit);
+                    const t = (i % particlesPerOrbit) / particlesPerOrbit;
+                    
+                    // Create quantum orbital pattern
+                    const angle = t * TWO_PI;
+                    const r = (orbit + 1) * 2; // Reduced from 3
+                    
+                    // Add probability cloud effect
+                    const uncertainty = random(-1, 1) * (orbit + 1) * 0.3; // Reduced from 0.5
+                    const x = cos(angle) * (r + uncertainty);
+                    const y = sin(angle) * (r + uncertainty);
+                    
+                    // Add spin effect
+                    const spinSpeed = map(orbit, 0, orbits - 1, 6, 3); // Reduced from 8,4
+                    const vel = createVector(x * spinSpeed, y * spinSpeed);
+                    
+                    // Create energy level colors
+                    const hue = map(orbit, 0, orbits - 1, 180, 300);
+                    const saturation = 90 + uncertainty * 8; // Reduced from 10
+                    const brightness = 100 - orbit * 4; // Reduced from 5
+                    const particleColor = color(hue, saturation, brightness);
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createCrescent(count) {
+                const layers = 4;
+                for (let i = 0; i < count; i++) {
+                    const layer = floor(i / (count / layers));
+                    const t = (i % (count / layers)) / (count / layers);
+                    
+                    // Create crescent moon shape using overlapping circles
+                    const angle = map(t, 0, 1, -PI/2, PI/2);
+                    
+                    // Outer circle parameters
+                    const outerRadius = map(layer, 0, layers, 2, 4);
+                    
+                    // Inner circle parameters (offset to create crescent)
+                    const innerRadius = outerRadius * 0.7;
+                    const innerOffset = outerRadius * 0.3;
+                    
+                    // Calculate points on both circles
+                    const outerX = cos(angle) * outerRadius;
+                    const outerY = sin(angle) * outerRadius;
+                    
+                    const innerX = cos(angle) * innerRadius + innerOffset;
+                    const innerY = sin(angle) * innerRadius;
+                    
+                    // Interpolate between outer and inner points
+                    const x = lerp(outerX, innerX, 0.5);
+                    const y = lerp(outerY, innerY, 0.5);
+                    
+                    // Add slight randomness for natural look
+                    const jitter = 0.15;
+                    const finalX = x + random(-jitter, jitter);
+                    const finalY = y + random(-jitter, jitter);
+                    
+                    // Varying speeds for depth effect
+                    const scale = map(layer, 0, layers, 3, 4);
+                    const vel = createVector(finalX * scale, finalY * scale);
+                    
+                    // Create a silver-blue gradient with more depth
+                    const baseHue = map(layer, 0, layers, 200, 220);
+                    const hueVariation = random(-5, 5);
+                    const satVariation = random(-5, 5);
+                    const brightVariation = random(-5, 5);
+                    
+                    const particleColor = color(
+                        (baseHue + hueVariation + 360) % 360,
+                        constrain(50 + satVariation, 40, 60),
+                        constrain(95 + brightVariation, 90, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createBurst(count) {
+                const clusters = 8;
+                for (let i = 0; i < count; i++) {
+                    const cluster = floor(i / (count / clusters));
+                    const t = (i % (count / clusters)) / (count / clusters);
+                    
+                    const angle = (cluster * TWO_PI / clusters) + random(-0.2, 0.2);
+                    const r = random(2, 4);
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    
+                    const scale = random(2, 4);
+                    const vel = createVector(x * scale, y * scale);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createScatter(count) {
+                for (let i = 0; i < count; i++) {
+                    const angle = random(TWO_PI);
+                    const r = random(1, 2.5) * (1 + sin(random(TWO_PI)) * 0.15);
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    
+                    const motionMod = sin(random(TWO_PI)) * 0.1;
+                    const finalX = x * (1 + motionMod);
+                    const finalY = y * (1 + motionMod);
+                    
+                    const scale = random(1.5, 2.5);
+                    const vel = createVector(finalX * scale, finalY * scale);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-40, -20);
+                    const brightVariation = random(10, 20);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 30, 50),
+                        constrain(brightness(this.color) + brightVariation, 90, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createFountain(count) {
+                const bursts = 12;
+                const particlesPerBurst = floor(count / bursts);
+                
+                for (let i = 0; i < count; i++) {
+                    const burst = floor(i / particlesPerBurst);
+                    const t = (i % particlesPerBurst) / particlesPerBurst;
+                    
+                    // Create upward arc pattern (35 degrees on each side of vertical)
+                    const angle = random(-PI/6, PI/6); // 70-degree total spread (35° each side)
+                    const baseSpeed = random(10, 20);
+                    
+                    // Add some randomness to the angle for more natural spray
+                    const angleVariation = random(-0.1, 0.1);
+                    const finalAngle = angle + angleVariation;
+                    
+                    // Calculate velocity with strong upward bias
+                    const x = sin(finalAngle) * baseSpeed;
+                    const y = -cos(finalAngle) * baseSpeed * 1.5; // Increased upward velocity
+                    
+                    // Add some spread to the particles
+                    const spread = random(0.3, 0.8);
+                    const vel = createVector(x * spread/1.2, y * spread/1.3);
+                    
+                    // Add slight position offset for more natural look
+                    const offsetX = random(-1, 1); // Reduced horizontal spread
+                    const offsetY = random(-1, 1);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-40, -20);
+                    const brightVariation = random(10, 20);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 30, 50),
+                        constrain(brightness(this.color) + brightVariation, 90, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x + offsetX,
+                        this.pos.y + offsetY,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createNova(count) {
+                const rings = 4;
+                for (let i = 0; i < count; i++) {
+                    const ring = floor(i / (count / rings));
+                    const t = (i % (count / rings)) / (count / rings);
+                    
+                    const angle = t * TWO_PI;
+                    const r = map(ring, 0, rings, 1, 2.5);
+                    
+                    const waveFreq = 3 + ring;
+                    const waveAmp = 0.2;
+                    const wave = sin(t * TWO_PI * waveFreq) * waveAmp;
+                    const finalR = r * (1 + wave);
+                    
+                    const x = cos(angle) * finalR;
+                    const y = sin(angle) * finalR;
+                    
+                    const scale = map(ring, 0, rings, 2.5, 1.5);
+                    const vel = createVector(x * scale, y * scale);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createRipple(count) {
+                const rings = 6;
+                
+                for (let i = 0; i < count; i++) {
+                    const ring = floor(i / (count / rings));
+                    const t = (i % (count / rings)) / (count / rings);
+                    
+                    const angle = t * TWO_PI;
+                    const baseRadius = map(ring, 0, rings, 1, 3.5);
+                    
+                    const waveFreq = 4;
+                    const waveAmp = 0.3;
+                    const wave = sin(t * TWO_PI * waveFreq) * waveAmp;
+                    const r = baseRadius * (1 + wave);
+                    
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    
+                    const upwardVelocity = -1.5;
+                    const scale = map(ring, 0, rings, 2.5, 1.5);
+                    const vel = createVector(x * scale, y * scale + upwardVelocity);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-40, -20);
+                    const brightVariation = random(10, 20);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 30, 50),
+                        constrain(brightness(this.color) + brightVariation, 90, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createSparkle(count) {
+                const clusters = 6;
+                for (let i = 0; i < count; i++) {
+                    const cluster = floor(i / (count / clusters));
+                    const t = (i % (count / clusters)) / (count / clusters);
+                    
+                    const angle = (cluster * TWO_PI / clusters) + random(-0.3, 0.3);
+                    const r = random(1.5, 3.5);
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    
+                    const sparkleAngle = random(TWO_PI);
+                    const sparkleDist = random(0.2, 0.5);
+                    const sparkleX = cos(sparkleAngle) * sparkleDist;
+                    const sparkleY = sin(sparkleAngle) * sparkleDist;
+                    
+                    const scale = random(1.5, 3);
+                    const vel = createVector((x + sparkleX) * scale, (y + sparkleY) * scale);
+                    
+                    const hueVariation = random(-10, 10);
+                    const satVariation = random(-20, 10);
+                    const brightVariation = random(-20, 10);
+                    
+                    const particleColor = color(
+                        (hue(this.color) + hueVariation + 360) % 360,
+                        constrain(saturation(this.color) + satVariation, 50, 90),
+                        constrain(brightness(this.color) + brightVariation, 70, 100)
+                    );
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            createGlow(count) {
+                const layers = 5; // Increased from 4 for more variation
+                for (let i = 0; i < count; i++) {
+                    const layer = floor(i / (count / layers));
+                    const t = (i % (count / layers)) / (count / layers);
+                    
+                    // Create more random glowing effect
+                    const angle = t * TWO_PI + random(-0.2, 0.2);
+                    const baseRadius = map(layer, 0, layers, 1, 3.5);
+                    
+                    // Add random radius variation
+                    const radiusVariation = random(-0.3, 0.3);
+                    const r = baseRadius * (1 + radiusVariation);
+                    
+                    const x = cos(angle) * r;
+                    const y = sin(angle) * r;
+                    
+                    // More varied expansion
+                    const scale = map(layer, 0, layers, 2, 1.5) * random(0.8, 1.2);
+                    const vel = createVector(x * scale, y * scale);
+                    
+                    // Enhanced color system with white and yellow particles
+                    let hue, saturation, brightness;
+                    
+                    // 30% chance for white/yellow particles
+                    if (random() < 0.3) {
+                        if (random() < 0.5) {
+                            // White particles
+                            hue = random(40, 60);
+                            saturation = random(0, 20);
+                            brightness = random(95, 100);
+                        } else {
+                            // Yellow particles
+                            hue = random(50, 70);
+                            saturation = random(70, 90);
+                            brightness = random(90, 100);
+                        }
+                    } else {
+                        // Regular glow particles with more variation
+                        const baseHue = map(layer, 0, layers, 300, 340);
+                        const hueVariation = random(-30, 30);
+                        hue = (baseHue + hueVariation + 360) % 360;
+                        saturation = map(radiusVariation, -0.3, 0.3, 60, 80) + random(-10, 10);
+                        brightness = map(radiusVariation, -0.3, 0.3, 95, 100) + random(-5, 5);
+                    }
+                    
+                    const particleColor = color(hue, saturation, brightness);
+                    
+                    particles.push(new Particle(
+                        this.pos.x,
+                        this.pos.y,
+                        vel.x,
+                        vel.y,
+                        particleColor
+                    ));
+                }
+            }
+
+            show() {
+                if (!this.exploded) {
+                    noStroke();
+                    // Draw rocket trail
+                    fill(this.trailColor);
+                    const trailLength = 8;
+                    rect(
+                        floor(this.pos.x - 2),
+                        floor(this.pos.y),
+                        4,
+                        trailLength
+                    );
+                    // Draw rocket
+                    fill(this.rocketColor);
+                    const rocketSize = 6;
+                    rect(
+                        floor(this.pos.x - rocketSize/2),
+                        floor(this.pos.y - rocketSize/2),
+                        rocketSize,
+                        rocketSize
+                    );
+                }
+            }
+        }
+
+        class Particle {
+            constructor(x, y, vx, vy, col) {
+                this.pos = createVector(x, y);
+                this.vel = createVector(vx, vy);
+                this.acc = createVector(0, gravity);
+                this.color = col;
+                this.life = particleLifetime;
+                this.alpha = 255;
+                this.prevPos = createVector(x, y);
+                // Base size for particles
+                this.baseSize = random(3, 7);
+                // Use 2-pixel grid for more noticeable pixelation
+                this.gridSize = 2;
+                // Store actual position for smooth movement
+                this.actualPos = createVector(x, y);
+            }
+
+            update() {
+                this.prevPos = this.pos.copy();
+                
+                // Update actual position for smooth movement
+                this.actualPos.add(this.vel);
+                this.vel.add(this.acc);
+                this.vel.mult(drag);
+                
+                // Snap to larger grid while maintaining smooth movement
+                this.pos.x = round(this.actualPos.x / this.gridSize) * this.gridSize;
+                this.pos.y = round(this.actualPos.y / this.gridSize) * this.gridSize;
+                
+                this.life--;
+                this.alpha = map(this.life, 0, particleLifetime, 0, 255, true);
+            }
+
+            show() {
+                noStroke();
+                
+                // Calculate stretched size based on velocity
+                const speed = this.vel.mag();
+                const stretchFactor = min(speed * 0.5, 1.5); // Cap the stretch factor
+                const stretchedSize = this.baseSize * (1 + stretchFactor);
+                
+                // Snap stretched size to grid
+                const gridStretchedSize = round(stretchedSize / this.gridSize) * this.gridSize;
+                
+                // Draw stretched particle
+                this.color.setAlpha(this.alpha);
+                fill(this.color);
+                
+                // Calculate angle of movement
+                const angle = this.vel.heading();
+                
+                // Draw stretched rectangle rotated in direction of movement
+                push();
+                translate(
+                    round(this.pos.x / this.gridSize) * this.gridSize,
+                    round(this.pos.y / this.gridSize) * this.gridSize
+                );
+                rotate(angle);
+                rect(
+                    -gridStretchedSize/2,
+                    -this.baseSize/2,
+                    gridStretchedSize,
+                    this.baseSize
+                );
+                pop();
+            }
+
+            isDead() {
+                return this.life <= 0;
+            }
+        }
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            colorMode(HSB, 360, 100, 100);
+            background(15, 0, 6, 100);
+            pixelDensity(1);
+            noSmooth();
+        }
+
+        function draw() {
+            background(15, 10, 1, 0.03);
+            noSmooth();
+
+            if (random() < 0.02) {
+                const availableTypes = fireworkTypes.filter(type => enabledFireworkTypes.has(type));
+                if (availableTypes.length > 0) {
+                    const type = random(availableTypes);
+                    const firework = new Firework(
+                        random(width),
+                        height,
+                        random(height * 0.2, height * 0.5),
+                        type
+                    );
+                    fireworks.push(firework);
+                }
+            }
+
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                fireworks[i].update();
+                fireworks[i].show();
+                if (fireworks[i].exploded) {
+                    fireworks.splice(i, 1);
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].show();
+                if (particles[i].isDead()) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+            pixelDensity(1);
+        }
+    </script>
+</body>
+</html> 

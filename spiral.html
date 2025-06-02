@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hypnotic Spiral Pattern</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            border: 1px solid #333;
+        }
+        #soundcloudPlayer {
+            display: none;  /* Hide the iframe */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="spiralCanvas"></canvas>
+    <!-- Replace TRACK_URL with your desired SoundCloud track URL -->
+    <iframe id="soundcloudPlayer" 
+        width="100%" 
+        height="166" 
+        scrolling="no" 
+        frameborder="no" 
+        allow="autoplay" 
+        src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/1954672887&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&loop=true">
+    </iframe>
+    <script src="https://w.soundcloud.com/player/api.js"></script>
+    <script>
+        // Initialize SoundCloud Widget API
+        window.onload = function() {
+            var widget = SC.Widget(document.getElementById('soundcloudPlayer'));
+            widget.bind(SC.Widget.Events.READY, function() {
+                widget.setVolume(50); // Set volume to 50%
+            });
+        };
+
+        const canvas = document.getElementById('spiralCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size to window size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Animation variables
+        let frameCount = 0;
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+
+        // Mouse movement handler
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        function draw() {
+            // Clear canvas with fade effect
+            ctx.fillStyle = 'rgba(20, 0, 0, 0.1)';
+            ctx.fillRect(2, 2, canvas.width, canvas.height);
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            // Calculate mouse distance from center for spiral tightness
+            const distanceFromCenter = Math.sqrt(
+                Math.pow(mouseX - centerX, 2) + 
+                Math.pow(mouseY - centerY, 2)
+            );
+            const spiralTightness = Math.max(0.1, Math.min(0.5, distanceFromCenter / 500));
+
+            // Draw spiral
+            const maxRadius = Math.min(canvas.width, canvas.height) * 0.4;
+            const numSpirals = 10;
+            
+            for (let i = 0; i < 360 * numSpirals; i += 5) {
+                const angle = i * (Math.PI / 180);
+                const radius = (i / (360 * numSpirals)) * maxRadius;
+                
+                const x = centerX + radius * Math.cos(angle + frameCount * spiralTightness);
+                const y = centerY + radius * Math.sin(angle + frameCount * spiralTightness);
+                
+                // Dynamic color based on angle and frameCount
+                const hue = (i + frameCount) % 360;
+                const saturation = 80 + Math.sin(frameCount * 0.02) * 20;
+                const lightness = 50 + Math.cos(frameCount * 0.02) * 20;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                ctx.fill();
+            }
+
+            frameCount += 0.5;
+            requestAnimationFrame(draw);
+        }
+
+        // Start animation
+        draw();
+    </script>
+</body>
+</html> 

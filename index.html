@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HEHEHEHE</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'DM Mono', monospace;
+            font-weight: 300;
+            color: #fff;
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #p5-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #p5-container canvas {
+            position: absolute !important;
+        }
+
+        .content {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            display: flex;
+            align-items: top;
+            justify-content: center;
+            background: linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0.4) 0%,
+                rgba(0, 0, 0, 0.2) 40%,
+                rgba(0, 0, 0, 0.2) 60%,
+                rgba(0, 0, 0, 0.4) 100%
+            );
+        }
+
+        .hero {
+            text-align: center;
+            padding: 2rem;
+            padding-top: 4rem;
+            max-width: 800px;
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .hero h1 {
+            font-size: 3.8rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+            background: linear-gradient(45deg, #fff, #a8a8a8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(255,255,255,0.1);
+            font-weight: 400;
+            letter-spacing: -0.02em;
+        }
+
+        .bottom-content {
+            position: absolute;
+            bottom: 17rem;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            opacity: 0.9;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.8);
+            letter-spacing: -0.02em;
+            font-weight: 300;
+            background: rgba(0, 0, 0, 0.7);
+            display: inline-block;
+            padding: .5rem 1rem;
+            border-radius: 4px;
+            backdrop-filter: blur(5px);
+            margin: 0;
+        }
+
+        .cta-button {
+            display: inline-block;
+            padding: 1rem 2.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 30px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+            font-size: 1.1rem;
+            letter-spacing: 0.02em;
+            font-weight: 400;
+            margin-top: 1rem;
+        }
+
+        .cta-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .hero p {
+                font-size: 1.1rem;
+                line-height: 1.6;
+            }
+
+            .bottom-content {
+                bottom: 2rem;
+            }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 2rem;
+            z-index: 3;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-content {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .modal h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            font-weight: 400;
+            letter-spacing: -0.02em;
+            color: #fff;
+        }
+
+        .contact-info {
+            font-size: 1.4rem;
+            margin: 1.5rem 0;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: 'DM Mono', monospace;
+        }
+
+        .modal-text {
+            font-size: 1rem;
+            line-height: 1.6;
+            margin: 1rem 0;
+            color: rgba(255, 255, 255, 0.6);
+            font-style: italic;
+        }
+
+        .close-button {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            font-family: 'DM Mono', monospace;
+            font-size: 1.8rem;
+            padding: 0.5rem;
+            line-height: 0.8;
+            height: 2rem;
+            width: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            border-radius: 4px;
+        }
+
+        .close-button:hover {
+            color: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(3px);
+            z-index: 2;
+        }
+
+        .links-container {
+            padding-top: 1rem;
+            display: flex;
+            gap: 2rem;
+        }
+
+        .site-link {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .site-link:hover {
+            color: rgba(255, 255, 255, 1);
+        }
+    </style>
+</head>
+<body>
+    <div id="p5-container"></div>
+    <div class="content">
+        <div class="hero">
+            <h1>Eve Goodchild</h1>
+            <div class="bottom-content">
+                <p>Let these electric angels take us home.</p>
+                <div class="links-container">
+                    <a href="critters.html" class="site-link">bug hotline</a>
+                    <a href="fireworks.html" class="site-link">fireworks</a>
+                    <a href="fluid.html" class="site-link">fluid</a>
+                    <a href="vornoi.html" class="site-link">vornoi</a>
+                    <a href="lissajous.html" class="site-link">lissajous</a>
+                    <a href="spiral.html" class="site-link">spiral</a>
+                    <a href="ascii-render.html" class="site-link">ascii rendering</a>
+                    <a href="tablecloth.html" class="site-link">tablecloth</a>
+                    <a href="Sands.html" class="site-link">sands</a>
+                </div>
+                <a href="#contact" class="cta-button">Contact</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="modal" id="contactModal">
+        <button class="close-button" onclick="closeModal()">&times;</button>
+        <div class="modal-content">
+            <h2>Contact Information</h2>
+            <div class="contact-info">+1 (866) 245-2366</div>
+            <div class="modal-text">"Please leave a message after the sound of digital entropy."</div>
+        </div>
+    </div>
+
+    <script>
+        let angle = 20;
+        let time = 20;
+        
+        function setup() {
+            let canvas = createCanvas(windowWidth, windowHeight, WEBGL);
+            canvas.parent('p5-container');
+            colorMode(HSB);
+            strokeWeight(1);
+            setAttributes('antialias', true);
+            frameRate(30);
+            perspective(PI/3, width/height, 1, 10000); // Extended frustum with very close near plane
+        }
+
+        function draw() {
+            background(0);
+            
+            // Draw grid
+            push();
+            strokeWeight(0.5);
+            stroke(45,45,90, 10); // White with low opacity
+            noFill();
+            
+            // Calculate grid size based on view
+            let backgroundGridSize = 3000;
+            let gridSpacing = 100;
+            
+            // Center the grid but offset forward towards camera and down for floor visibility
+            translate(-backgroundGridSize/2, 10, -backgroundGridSize/2 + 100);
+            
+            // Draw X-Z plane grid (horizontal)
+            for (let x = 0; x <= backgroundGridSize; x += gridSpacing) {
+                for (let z = 0; z <= backgroundGridSize; z += gridSpacing) {
+                    beginShape(LINES);
+                    vertex(x, 0, 0);
+                    vertex(x, 0, backgroundGridSize);
+                    endShape();
+                    
+                    beginShape(LINES);
+                    vertex(0, 0, z);
+                    vertex(backgroundGridSize, 0, z);
+                    endShape();
+                }
+            }
+            
+            pop();
+            
+            // Simplified lighting
+            ambientLight(25);
+            pointLight(255, 255, 255, 300 * sin(time * 0.1), 200, 300 * cos(time * 0.1));
+            
+            // Camera movement with optimized calculations
+            let camRadius = 400;
+            let camX = camRadius * cos(angle);
+            
+            // Smoother camera height calculation
+            let baseHeight = -25; // Center point of oscillation
+            let amplitude = 25; // How far it moves from the center
+            let rawY = sin(time * 0.2);
+            // Reshape the sine wave to spend less time at extremes
+            let modifiedY = (rawY * Math.abs(rawY)) * amplitude + baseHeight;
+            let camY = min(modifiedY, -5); // Only clamp the upper bound
+            
+            let camZ = camRadius * sin(angle);
+            camera(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
+            
+            // Move entire scene up more to compensate for grid
+            translate(0, -90, 0);
+            
+            // Global scale animation
+            let globalScale = 1 + sin(time * 0.2) * 0.2;
+            scale(globalScale);
+            
+            // Reduced grid size and optimized spacing
+            let gridSize = 8;
+            let cubeSize = 8;
+            let spacing = cubeSize * 1.2;
+            
+            // Pre-calculate time-based values
+            let timeScale = 0.15;
+            let basePower = 8 + sin(time * timeScale) * 2;
+            let secondaryPower = 3 + cos(time * timeScale * 0.7) * 1.5;
+            
+            // Create a grid of cubes with distance-based culling
+            let maxDistance = gridSize * spacing * 0.8;
+            
+            push(); // Save the global transformation state
+            
+            // Add gentle overall rotation to the structure
+            let globalRotationY = time * 0.1;
+            let globalRotationX = sin(time * 0.05) * 0.1;
+            rotateY(globalRotationY);
+            rotateX(globalRotationX);
+            
+            for (let x = -gridSize; x <= gridSize; x += 2) {
+                for (let y = -gridSize; y <= gridSize; y += 2) {
+                    for (let z = -gridSize; z <= gridSize; z += 2) {
+                        let pos = createVector(x * spacing, y * spacing, z * spacing);
+                        let distFromCenter = pos.mag();
+                        
+                        if (distFromCenter > maxDistance) continue;
+                        
+                        let normalizedDist = distFromCenter / maxDistance;
+                        let depthFactor = (z + gridSize) / (gridSize * 2); // 0 to 1 based on depth
+                        
+                        let orbitOffset = createVector(
+                            sin(time * 0.2 + y * 0.02) * 0.15,
+                            cos(time * 0.25 + x * 0.02) * 0.15,
+                            sin(time * 0.3 + z * 0.02) * 0.15
+                        );
+                        
+                        let mandelbulbValue = getOptimizedMandelbulbValue(
+                            (pos.x / maxDistance) + orbitOffset.x,
+                            (pos.y / maxDistance) + orbitOffset.y,
+                            (pos.z / maxDistance) + orbitOffset.z,
+                            basePower,
+                            secondaryPower
+                        );
+                        
+                        if (mandelbulbValue < 1.8) {
+                            push();
+                            translate(pos.x, pos.y, pos.z);
+                            
+                            // Depth-based rotation
+                            let rotationAmplitude = map(depthFactor, 0, 1, 0.5, 1.5);
+                            let rotationPhase = time * 0.5 + normalizedDist * PI;
+                            
+                            // Coordinate rotations with global movement
+                            rotateX(sin(rotationPhase + globalRotationX) * 0.2 * rotationAmplitude);
+                            rotateY(cos(rotationPhase + globalRotationY) * 0.2 * rotationAmplitude);
+                            rotateZ(sin(rotationPhase * 0.5) * 0.1 * rotationAmplitude);
+                            
+                            // Scale variation based on depth
+                            let depthScale = map(depthFactor, 0, 1, 1.1, 0.9);
+                            let scale = map(mandelbulbValue, 0, 1.8, 1.1, 0.5) * depthScale;
+                            
+                            // Color with depth influence
+                            let hue = (mandelbulbValue * 120 + normalizedDist * 180 + depthFactor * 60 + time * 8) % 360;
+                            let sat = map(normalizedDist, 0, 1, 90, 60);
+                            let bright = map(mandelbulbValue, 0, 1.8, 90, 40);
+                            
+                            stroke(hue, sat * 0.6, bright * 0.8, 0.6);
+                            strokeWeight(0.4);
+                            fill(hue, sat, bright, 0.7);
+                            
+                            box(cubeSize * scale);
+                            pop();
+                        }
+                    }
+                }
+            }
+            
+            pop(); // Restore the transformation state
+            
+            angle += 0.005;
+            time += 0.025;
+        }
+
+        function getOptimizedMandelbulbValue(x, y, z, power, secondaryPower) {
+            let pos = createVector(x, y, z);
+            let originalPos = pos.copy();
+            let iterations = 6;
+            
+            for (let i = 0; i < iterations; i++) {
+                let r = pos.mag();
+                if (r > 2) return r;
+                
+                let theta = acos(pos.z / r);
+                let phi = atan2(pos.y, pos.x);
+                
+                let rPow = pow(r, power);
+                let sinTheta = sin(theta * power);
+                
+                let blend = 0.5 + 0.5 * sin(r * PI);
+                pos.x = mix(rPow * sinTheta * cos(phi * power), 
+                           r * sin(theta * secondaryPower) * cos(phi * secondaryPower), blend);
+                pos.y = mix(rPow * sinTheta * sin(phi * power),
+                           r * sin(theta * secondaryPower) * sin(phi * secondaryPower), blend);
+                pos.z = mix(rPow * cos(theta * power),
+                           r * cos(theta * secondaryPower), blend);
+                
+                pos.add(p5.Vector.mult(originalPos, 0.9));
+            }
+            
+            return pos.mag();
+        }
+
+        function mix(a, b, t) {
+            return a * (1 - t) + b * t;
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+
+        // Modal functionality
+        function openModal() {
+            document.getElementById('contactModal').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('contactModal').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('overlay').addEventListener('click', closeModal);
+
+        // Update contact button to open modal
+        document.querySelector('.cta-button').addEventListener('click', function(e) {
+            e.preventDefault();
+            openModal();
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html> 
