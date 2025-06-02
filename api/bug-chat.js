@@ -16,9 +16,18 @@ module.exports = async (req, res) => {
   try {
     const { bugType, message } = req.body;
     
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OpenAI API key is not set');
+      return res.status(500).json({ error: 'API key not configured' });
+    }
+
+    console.log('Initializing OpenAI with API key:', process.env.OPENAI_API_KEY.substring(0, 5) + '...');
+    
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
+
+    console.log('Sending request to OpenAI with:', { bugType, message });
 
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -34,9 +43,13 @@ module.exports = async (req, res) => {
       ]
     });
 
+    console.log('Received response from OpenAI');
     res.json({ message: completion.choices[0].message.content });
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to generate response' });
+    console.error('Detailed error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate response',
+      details: error.message
+    });
   }
 }; 
