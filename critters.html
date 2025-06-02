@@ -240,6 +240,7 @@
     </div>
 
     <script>
+        const API_URL = 'https://art-gallery-alpha-two.vercel.app/'; // Replace with your Vercel URL
         const bugs = [
             { name: "Ladybug", searchTerm: "ladybug insect" },
             { name: "Butterfly", searchTerm: "butterfly insect" },
@@ -414,7 +415,7 @@
             // Generate AI introduction message
             try {
                 showTypingIndicator();
-                const response = await fetch('/api/bug-chat', {
+                const response = await fetch(`${API_URL}/api/bug-chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -455,7 +456,7 @@
             updateSignalStrength();
 
             try {
-                const response = await fetch('/api/bug-chat', {
+                const response = await fetch(`${API_URL}/api/bug-chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
