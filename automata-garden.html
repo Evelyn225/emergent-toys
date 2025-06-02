@@ -277,15 +277,15 @@
                         ];
                         const colorIndex = Math.floor((i + j) / 10) % flowerColors.length;
                         ctx.fillStyle = flowerColors[colorIndex];
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
                     } else if (cell === 'moss') {
                         // Dark green for Moss
                         ctx.fillStyle = '#006400';
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
                     } else if (cell === 'grass') {
                         // Green for Grass
                         ctx.fillStyle = '#80FF80';
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
                     } else if (cell === 'coral') {
                         // Coral colors
                         const coralColors = [
@@ -295,10 +295,10 @@
                         ];
                         const colorIndex = Math.floor((i + j) / 8) % coralColors.length;
                         ctx.fillStyle = coralColors[colorIndex];
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
                     } else if (cell === 'fern') {
                         ctx.fillStyle = '#228D3C'; // Forest Green
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
                     } else if (cell === 'crystal') {
                         // Crystal colors
                         const crystalColors = [
@@ -308,7 +308,7 @@
                         ];
                         const colorIndex = Math.floor((i + j) / 6) % crystalColors.length;
                         ctx.fillStyle = crystalColors[colorIndex];
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize - 1, cellSize - 1);
+                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
                     }
                 }
             }
