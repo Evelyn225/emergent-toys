@@ -1,13 +1,11 @@
-const { OpenAI } = require('openai');
+import { OpenAI } from 'openai';
 
-module.exports = async (req, res) => {
-  // Enable CORS
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
@@ -15,19 +13,15 @@ module.exports = async (req, res) => {
 
   try {
     const { bugType, message } = req.body;
-    
+
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key is not set');
       return res.status(500).json({ error: 'API key not configured' });
     }
 
-    console.log('Initializing OpenAI with API key:', process.env.OPENAI_API_KEY.substring(0, 5) + '...');
-    
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
-
-    console.log('Sending request to OpenAI with:', { bugType, message });
 
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -43,13 +37,12 @@ module.exports = async (req, res) => {
       ]
     });
 
-    console.log('Received response from OpenAI');
     res.json({ message: completion.choices[0].message.content });
   } catch (error) {
     console.error('Detailed error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to generate response',
       details: error.message
     });
   }
-}; 
+}
