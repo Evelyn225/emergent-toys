@@ -240,7 +240,6 @@
     </div>
 
     <script>
-        const API_URL = 'https://art-gallery-alpha-two.vercel.app'; // Removed trailing slash
         const bugs = [
             { name: "Ladybug", searchTerm: "ladybug insect" },
             { name: "Butterfly", searchTerm: "butterfly insect" },
@@ -260,7 +259,7 @@
         ];
 
         let currentBug = null;
-        const UNSPLASH_ACCESS_KEY = 'YHsUE3c_Cptl6O2jaa85SelbnFwhCaOIYss_30qn48Q'; // Replace with your Unsplash API key
+        const UNSPLASH_ACCESS_KEY = 'YHsUE3c_Cptl6O2jaa85SelbnFwhCaOIYss_30qn48Q';
         const bugMemory = new Map();
         let isTyping = false;
 
@@ -415,8 +414,8 @@
             // Generate AI introduction message
             try {
                 showTypingIndicator();
-                console.log('Sending request to:', `${API_URL}/api/bug-chat`);
-                const response = await fetch(`${API_URL}/api/bug-chat`, {
+                console.log('Sending request to: /api/bug-chat');
+                const response = await fetch('/api/bug-chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -462,8 +461,8 @@
             updateSignalStrength();
 
             try {
-                console.log('Sending message to:', `${API_URL}/api/bug-chat`);
-                const response = await fetch(`${API_URL}/api/bug-chat`, {
+                console.log('Sending message to: /api/bug-chat');
+                const response = await fetch('/api/bug-chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
