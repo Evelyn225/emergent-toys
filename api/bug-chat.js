@@ -1,6 +1,28 @@
 import { OpenAI } from 'openai';
 
 export default async function handler(req, res) {
+  // Parse JSON body if POST
+  let body = {};
+  if (req.method === 'POST') {
+    try {
+      body = await new Promise((resolve, reject) => {
+        let data = '';
+        req.on('data', chunk => { data += chunk; });
+        req.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+    } catch (err) {
+      return res.status(400).json({ error: 'Invalid JSON' });
+    }
+  }
+
+  const { bugType, message } = body;
+
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
@@ -12,8 +34,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { bugType, message } = req.body;
-
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key is not set');
       return res.status(500).json({ error: 'API key not configured' });
