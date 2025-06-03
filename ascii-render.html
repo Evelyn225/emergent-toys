@@ -105,9 +105,11 @@
                     const file = e.target.files[0];
                     if (file) {
                         const reader = new FileReader();
+                        statusDiv.html('Processing...');
                         reader.onload = function(e) {
                             p.loadImage(e.target.result, 
                                 function(loadedImg) {
+                                    statusDiv.html('Here ya go!');
                                     img = loadedImg;
                                     processImage();
                                 },
