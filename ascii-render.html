@@ -104,13 +104,11 @@
                 fileInput.elt.addEventListener('change', function(e) {
                     const file = e.target.files[0];
                     if (file) {
-                        statusDiv.html('Loading image...');
                         const reader = new FileReader();
                         reader.onload = function(e) {
                             p.loadImage(e.target.result, 
                                 function(loadedImg) {
                                     img = loadedImg;
-                                    statusDiv.html('Processing...');
                                     processImage();
                                 },
                                 function(err) {
@@ -175,7 +173,6 @@
                     }
                     
                     asciiDiv.html(asciiImage);
-                    statusDiv.html('Processing...');
                     
                     // Always animate
                     if (animationFrame) {
