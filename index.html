@@ -251,7 +251,6 @@
         <div class="hero">
             <h1>Eve Goodchild</h1>
             <div class="bottom-content">
-                <p>Let the electric angels take us home.</p>
                 <div class="links-container">
                     <a href="critters.html" class="site-link">bug hotline</a>
                     <a href="fireworks.html" class="site-link">fireworks</a>
@@ -264,18 +263,7 @@
                     <a href="tablecloth.html" class="site-link">tablecloth</a>
                     <a href="Sands.html" class="site-link">sands</a>
                 </div>
-                <a href="#contact" class="cta-button">Contact</a>
             </div>
-        </div>
-    </div>
-
-    <div class="overlay" id="overlay"></div>
-    <div class="modal" id="contactModal">
-        <button class="close-button" onclick="closeModal()">&times;</button>
-        <div class="modal-content">
-            <h2>Contact Information</h2>
-            <div class="contact-info">+1 (866) 245-2366</div>
-            <div class="modal-text">"Please leave a message after the sound of digital entropy."</div>
         </div>
     </div>
 
@@ -335,12 +323,12 @@
             let camX = camRadius * cos(angle);
             
             // Smoother camera height calculation
-            let baseHeight = -25; // Center point of oscillation
+            let baseHeight = -32; // Center point of oscillation
             let amplitude = 25; // How far it moves from the center
             let rawY = sin(time * 0.2);
             // Reshape the sine wave to spend less time at extremes
             let modifiedY = (rawY * Math.abs(rawY)) * amplitude + baseHeight;
-            let camY = min(modifiedY, -5); // Only clamp the upper bound
+            let camY = min(modifiedY, -5    ); // Only clamp the upper bound
             
             let camZ = camRadius * sin(angle);
             camera(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
@@ -418,11 +406,11 @@
                             // Color with depth influence
                             let hue = (mandelbulbValue * 120 + normalizedDist * 180 + depthFactor * 60 + time * 8) % 360;
                             let sat = map(normalizedDist, 0, 1, 90, 60);
-                            let bright = map(mandelbulbValue, 0, 1.8, 90, 40);
+                            let bright = map(mandelbulbValue / 10, 0, 1.8, 90, 40);
                             
                             stroke(hue, sat * 0.6, bright * 0.8, 0.6);
-                            strokeWeight(0.4);
-                            fill(hue, sat, bright, 0.7);
+                            strokeWeight(0.2);
+                            fill(hue, sat, bright, .25);
                             
                             box(cubeSize * scale);
                             pop();
@@ -440,7 +428,7 @@
         function getOptimizedMandelbulbValue(x, y, z, power, secondaryPower) {
             let pos = createVector(x, y, z);
             let originalPos = pos.copy();
-            let iterations = 6;
+            let iterations = 4;
             
             for (let i = 0; i < iterations; i++) {
                 let r = pos.mag();
@@ -473,33 +461,6 @@
         function windowResized() {
             resizeCanvas(windowWidth, windowHeight);
         }
-
-        // Modal functionality
-        function openModal() {
-            document.getElementById('contactModal').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
-        }
-
-        function closeModal() {
-            document.getElementById('contactModal').style.display = 'none';
-            document.getElementById('overlay').style.display = 'none';
-        }
-
-        // Close modal when clicking outside
-        document.getElementById('overlay').addEventListener('click', closeModal);
-
-        // Update contact button to open modal
-        document.querySelector('.cta-button').addEventListener('click', function(e) {
-            e.preventDefault();
-            openModal();
-        });
-
-        // Close modal with Escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeModal();
-            }
-        });
     </script>
 </body>
 </html> 
