@@ -143,6 +143,8 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}INSTRUCTIONS - DO NOT 
 
 DEPTH & COMPLEXITY REQUIREMENTS:
 - Create a FULL, FLESHED-OUT experience, not a simple demo
+- Add titles and paragraphs of content where appropriate
+- add multiple types of media (images, audio, video) if relevant
 - Implement multiple interactive layers and systems
 - Include state management and persistent behavior
 - Add visual polish with smooth animations and transitions
@@ -151,6 +153,37 @@ DEPTH & COMPLEXITY REQUIREMENTS:
 - Add narrative or contextual elements that develop over time
 - Include multiple interactive zones or sections
 - Create emergent complexity where interactions combine in unexpected ways
+
+USE AT LEAST 1 OF THE FOLLOWING LIBRARIES::
+- p5.js (https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js) - For generative art and sketches
+- Three.js (https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js) - For 3D graphics and WebGL
+- Chart.js (https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js) - For data visualizations
+- rough.js (https://cdnjs.cloudflare.com/ajax/libs/rough.js/4.6.1/rough.min.js) - For hand-drawn sketchy effects
+- Particles.js (https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js) - For particle systems
+- anime.js (https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js) - For advanced animations
+- gsap (https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js) - For timeline-based animations
+- Tone.js (https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.9/Tone.js) - For audio synthesis and sequencing
+- Howler.js (https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js) - For spatial audio and sound management
+- wavesurfer.js (https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js) - For waveform visualizations
+- Matter.js (https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js) - For 2D physics engine
+- verlet-js (https://cdn.jsdelivr.net/npm/verlet-js@1.0.0/build/verlet.min.js) - For soft-body physics
+- simplex-noise (https://cdn.jsdelivr.net/npm/simplex-noise@3.0.0/simplex-noise.min.js) - For Perlin/simplex noise
+- Tippy.js (https://unpkg.com/@tippyjs@6.3.7/dist/tippy-bundle.umd.min.js) - For tooltips and popovers
+- SortableJS (https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js) - For drag and drop
+- Driver.js (https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.min.js) - For interactive tutorials
+
+USE IMAGES FROM THESE APIs (choose based on theme):
+- For abstract/artistic: https://picsum.photos/seed/${encodeURIComponent(theme)}/800/600
+- For nature/landscapes: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))}
+- For patterns/textures: https://picsum.photos/800/600?random=${Math.random()}
+- For pixel art: https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(theme)}
+- For icons: https://api.dicebear.com/7.x/icons/svg?seed=${encodeURIComponent(theme)}
+- For avatars: https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(theme)}
+- For abstract gradients: https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(theme)}
+- For art photography: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))},art
+- For city/architecture: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))},city
+- For textures: https://picsum.photos/seed/${encodeURIComponent(theme)}-texture/900/700
+- For backgrounds: https://www.freewebheaders.com/wordpress/wp-content/gallery/[CATEGORY]/[CATEGORY]-animated-gif-[RANDOM_1_TO_10].gif
 
 VISUAL & DESIGN RICHNESS:
 - Use gradients, shadows, filters, and effects extensively
@@ -353,19 +386,26 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
 
                 "The Geocities Architect (1998)": `SPECIAL GEOCITIES MODE:
 - Authentic late-90s Geocities aesthetic:
-  * Animated GIFs EVERYWHERE
+  * Animated GIFs EVERYWHERE!!
   * Under construction signs (🚧)
   * Hit counter / visitor counter
   * MIDI background music reference
   * <marquee> and <blink> (CSS animation)
   * Background textures (starfield, marble)
   * Guestbook concept
+  * Tiled background images
   * Webring portal links
   * "Best viewed in Netscape Navigator"
   * Tables for layout, spacer GIFs
   * WordArt-style headers
   * Bright clashing colors
-  * Comic Sans and Papyrus fonts`,
+  * WEB 1.0 ASSET SOURCES:
+1. FreeWebHeaders.com - Animated GIFs and backgrounds
+2. 88x31Buttons.com - Webring buttons and badges  
+3. TextFiles.com - Nostalgic ASCII art and text
+4. OldWeb.today - Web 1.0 aesthetic inspiration
+5. Spacejam.com - Preserved 1996 website as reference
+6. The Million Dollar Homepage - As inspiration for layout`,
 
                 "The Glitch": `SPECIAL GLITCH MODE:
 - Embrace beautiful errors and digital decay:
