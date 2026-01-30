@@ -456,6 +456,7 @@
             const bugImage = document.getElementById('bugImage');
             if (currentBug.image) {
                 bugImage.src = currentBug.image;
+            }
             document.getElementById('bugName').textContent = `CONNECTED TO: ${currentBug.name.toUpperCase()}`;
             
             addScanningEffect();
