@@ -250,6 +250,7 @@
     <div class="content">
         <div class="hero">
             <h1>Eve Goodchild</h1>
+            <h1>Emergent Toys</h1>
             <div class="bottom-content">
                 <div class="links-container">
                     <a href="Sands.html" class="site-link">sands</a>
@@ -315,6 +316,7 @@
             pop();
             
             // Simplified lighting
+            // Lighting
             ambientLight(25);
             pointLight(255, 255, 255, 300 * sin(time * 0.1), 200, 300 * cos(time * 0.1));
             
@@ -323,6 +325,7 @@
             let camX = camRadius * cos(angle);
             
             // Smoother camera height calculation
+            // Camera height calculation
             let baseHeight = -32; // Center point of oscillation
             let amplitude = 25; // How far it moves from the center
             let rawY = sin(time * 0.2);
@@ -341,6 +344,7 @@
             scale(globalScale);
             
             // Reduced grid size and optimized spacing
+            // Set grid size
             let gridSize = 8;
             let cubeSize = 8;
             let spacing = cubeSize * 1.2;
