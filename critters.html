@@ -466,8 +466,8 @@
             // Generate AI introduction message
             try {
                 showTypingIndicator();
-                console.log('Sending request to: /api/bug-chat');
-                const response = await fetch('/api/bug-chat', {
+                console.log('Sending request to: /api/bug-chat.js');
+                const response = await fetch('/api/bug-chat.js', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -517,8 +517,8 @@
             updateSignalStrength();
 
             try {
-                console.log('Sending message to: /api/bug-chat');
-                const response = await fetch('/api/bug-chat', {
+                console.log('Sending message to: /api/bug-chat.js');
+                const response = await fetch('/api/bug-chat.js', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
