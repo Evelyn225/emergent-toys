@@ -326,7 +326,7 @@
 
         async function getRandomBugImage(searchTerm) {
             try {
-                const resp = await fetch(`/api/unsplash?query=${encodeURIComponent(searchTerm)}`);
+                const resp = await fetch(`/api/unsplash.js?query=${encodeURIComponent(searchTerm)}`);
                 if (!resp.ok) {
                     // no image available or server error
                     return null;
