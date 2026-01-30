@@ -743,56 +743,100 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
         async function reviewAndImproveCode(html, theme, persona) {
             const specialInstructions = getPersonaSpecialInstructions(persona.name);
 
-            const reviewPrompt = `🚨 REJECTED - TOO MINIMAL 🚨
+            const reviewPrompt = `🚨 QUALITY CHECK - MUST MEET ALL CRITERIA OR REJECT 🚨
 
-This code is REJECTED for being skeletal and underdeveloped.
+YOUR PREVIOUS CODE WAS INADEQUATE. Most websites generated are shallow shells.
 
 ORIGINAL THEME: "${theme}"
 ORIGINAL PERSONA: ${persona.name}
 
-YOUR TASK: REWRITE THIS FROM SCRATCH AS A COMPLETE, RICH EXPERIENCE.
-
-PROBLEMS WITH ORIGINAL:
+ANALYSIS OF PROBLEMS:
 ${generateProblemsList(html)}
 
-NON-NEGOTIABLE REQUIREMENTS:
+⚠️ WHAT NOT TO DO (INSTANT REJECTION):
+- Single interactive element or feature (needs 10+ separate interactions)
+- Generic background colors (need gradients, animations, dynamic effects)
+- Basic text without layering or visual effects
+- No state persistence or progression
+- Empty sections that don't do anything
+- Simple buttons with obvious functionality
+- No emergent complexity (systems should interact in unexpected ways)
+- Anything under 800 lines of code
+- Using a library without deeply integrating it (100+ lines minimum)
+- No sound design, animations, or particle effects
 
-1. **CONTENT VOLUME**: Minimum 600 lines of code
-2. **LIBRARY DEPTH**: Each library gets 100+ lines dedicated to it
-3. **DATA RICHNESS**: 5+ datasets, each with 25+ data points
-4. **INTERACTION DENSITY**: 10+ interactive elements with full feedback
-5. **VISUAL COMPLEXITY**: Multiple layers, animations, transitions
-6. **AUDIO INTEGRATION**: Sound design for key interactions
-7. **STATE MANAGEMENT**: Full save/load/undo/redo capability
-8. **ERROR HANDLING**: Try/catch for every user-facing function
+✅ WHAT SUCCESS LOOKS LIKE (EXAMPLES):
+- Complex interaction layers where clicking one thing affects multiple systems
+- Animated backgrounds that respond to user input
+- Multiple data visualization types showing interconnected info
+- State that persists and evolves as user explores
+- Hidden features, easter eggs, and reward paths
+- Audio feedback, synthesis, or algorithmic sound
+- Particle systems, generative visuals, or procedural content
+- At least 3 distinct UI zones/modes/sections
+- Deep use of at least 2 libraries (200+ lines per library)
+- Every interaction has visual/audio consequence
 
-LIBRARIES MUST BE USED FOR:
-- p5.js: Generative art systems with multiple algorithms
-- Three.js: 3D scenes with lighting, materials, post-processing
-- Tone.js: Synthesizers, effects chains, sequencers
-- Matter.js: Physics simulations with multiple constraints
-- Chart.js: Multiple chart types with interactive data
+MANDATORY REQUIREMENTS (HARD STOPS):
 
-ADD THESE SPECIFIC FEATURES:
-1. A "Laboratory" section where users can experiment
-2. A "Gallery" showing generated examples
-3. A "Control Panel" with 15+ adjustable parameters
-4. A "Statistics" dashboard showing usage data
-5. A "Timeline" showing progression over time
-6. A "Code View" showing the generative algorithms
-7. A "Presets" system with 8+ saved configurations
-8. An "Export" function to save creations
+1. **MINIMUM 800 LINES**: No exceptions. Count every line including comments/formatting.
+2. **2+ LIBRARIES DEEPLY USED**: 
+   - Each library must have 150+ lines of actual usage
+   - p5.js: Multiple sketch functions, transforms, animations
+   - Three.js: Scene, camera, multiple materials, lighting
+   - Tone.js: Synth, effects, sequencing, multiple voices
+   - Chart.js: Multiple chart instances with data updates
+   - Matter.js: Multiple bodies, constraints, collision handling
+3. **10+ INTERACTIVE ELEMENTS**: Each with distinct behavior:
+   - Buttons/clicks that trigger state changes
+   - Hover effects with visual feedback
+   - Drag/drop interactions
+   - Keyboard input
+   - Mouse movement effects
+   - Form inputs that affect the display
+   - Animations that respond to interaction
+   - Sound triggers
+4. **VISUAL RICHNESS**:
+   - Animated gradients or dynamic backgrounds
+   - Text animations, distortions, or effects
+   - Layered visuals (foreground, middle, background all active)
+   - Particle systems or generative visuals
+   - Color palettes with intentional contrast
+5. **DATA DEPTH**:
+   - 3+ different data structures/arrays
+   - Each with 20+ data points
+   - Visualized in multiple ways
+   - Updated by user interaction
+6. **CONTENT RICHNESS**:
+   - Actual written content about "${theme}" (500+ words)
+   - Multiple sections/pages to explore
+   - Narrative or conceptual framework
+   - References to real or fictional sources
+7. **AUDIO INTEGRATION**:
+   - Background music or ambient sound
+   - Sound effects for interactions
+   - Optional mute control
+8. **RESPONSIVENESS**:
+   - Works on all screen sizes
+   - No scrolling required (or scrolling is intentional)
+   - Touch-friendly or keyboard navigable
 
-WRITE ACTUAL CONTENT ABOUT "${theme}":
-- Philosophical exploration
-- Technical specifications
-- Historical context
-- Future implications
-- Personal reflections
+IMMEDIATE FAILURE CONDITIONS (AUTO-REJECT):
+❌ Less than 800 lines total
+❌ Using library without showing it was loaded (no typeof check)
+❌ Fewer than 10 distinct interactive elements
+❌ Single section/zone (needs 3+ distinct areas)
+❌ No audio component
+❌ All content is placeholder/lorem ipsum
+❌ Visible bugs, errors, or broken functionality
+❌ Generic/boring implementation of the theme
 
-THIS SHOULD FEEL LIKE A PROFESSIONAL, COMPLETE DIGITAL ART PIECE - not a demo or prototype.
+YOUR TASK: 
+Rewrite the code from scratch to be SUBSTANTIALLY RICHER. Make every pixel count. Make every interaction matter. If you're not using 80%+ of the code space for actual features (not setup), you're doing it wrong.
 
-OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
+The persona's perspective should be evident in every design choice - the Glitch should have visual corruption, the Arcade should feel like 1983 hardware, the Poet should have lyrical animations.
+
+BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
 
             function detectLibraries(html) {
                 const libraries = [];
