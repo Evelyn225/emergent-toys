@@ -26,19 +26,24 @@ if (!process.env.UNSPLASH_ACCESS_KEY) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  const query = (req.query && req.query.query) || (req.url && new URL(req.url, 'http://localhost').searchParams.get('query'));
+  // FIXED: Simplified query parameter access
+  const query = req.query.query;
+  
+  console.log('Received query:', query); // Debug log
+  console.log('All query params:', req.query); // Debug log
+  
   if (!query || typeof query !== 'string') {
-    return res.status(400).json({ error: 'Missing query parameter' });
+    console.error('Missing or invalid query parameter');
+    return res.status(400).json({ 
+      error: 'Missing query parameter',
+      receivedQuery: query 
+    });
   }
 
   const key = process.env.UNSPLASH_ACCESS_KEY;
@@ -48,20 +53,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Log the search term (console for server logs, and append to a simple file when possible)
-    try {
-      console.log('Unsplash search:', query);
-      // attempt to append to a simple log file (ephemeral on Vercel, but useful in dev)
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const logPath = join(__dirname, '..', 'unsplash_searches.log');
-      appendFileSync(logPath, `${new Date().toISOString()}\t${query}\n`);
-    } catch (logErr) {
-      // non-fatal; continue
-      console.warn('Could not write unsplash_searches.log:', logErr && logErr.message);
-    }
+    // Log the search term
+    console.log('Unsplash search:', query);
+    
 
     const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=30`;
+    console.log('Making request to:', url); // Debug log
+    
     const fetchRes = await fetch(url, {
       headers: {
         Authorization: `Client-ID ${key}`
@@ -70,24 +68,37 @@ export default async function handler(req, res) {
 
     if (!fetchRes.ok) {
       const txt = await fetchRes.text().catch(() => '');
-      console.error('Unsplash error', fetchRes.status, txt);
-      return res.status(502).json({ error: 'Failed to fetch from Unsplash' });
+      console.error('Unsplash API error', fetchRes.status, txt);
+      return res.status(502).json({ 
+        error: 'Failed to fetch from Unsplash',
+        status: fetchRes.status,
+        details: txt 
+      });
     }
 
     const data = await fetchRes.json();
     const images = data && data.results;
+    
+    console.log(`Found ${images ? images.length : 0} images`); // Debug log
+    
     if (!images || images.length === 0) {
-      return res.status(204).end();
+      return res.status(404).json({ error: 'No images found' });
     }
 
     const chosen = images[Math.floor(Math.random() * images.length)];
     const imageUrl = (chosen && chosen.urls && chosen.urls.regular) || null;
 
-    if (!imageUrl) return res.status(204).end();
+    if (!imageUrl) {
+      return res.status(404).json({ error: 'No valid image URL found' });
+    }
 
     res.json({ url: imageUrl });
   } catch (err) {
     console.error('Detailed Unsplash proxy error:', err);
-    res.status(500).json({ error: 'Internal error' });
+    res.status(500).json({ 
+      error: 'Internal error',
+      message: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+    });
   }
 }
