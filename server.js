@@ -21,15 +21,52 @@ async function getHandler(moduleName) {
     return handlers[moduleName];
 }
 
+// Route for /api/random-words (with and without .js extension)
+app.all('/api/random-words', app.all('/api/random-words.js', async (req, res) => {
+  try {
+    const handler = await getHandler('random-words');
+    handler(req, res);
+  } catch (error) {
+    console.error('Error loading random-words handler:', error);
+    res.status(500).json({ error: 'Failed to load handler', details: error.message });
+  }
+}));
 
-// Route for /api/unsplash
+// Route for /api/generate (with and without .js extension)
+app.all('/api/generate', app.all('/api/generate.js', async (req, res) => {
+  try {
+    const handler = await getHandler('generate');
+    handler(req, res);
+  } catch (error) {
+    console.error('Error loading generate handler:', error);
+    res.status(500).json({ error: 'Failed to load handler', details: error.message });
+  }
+}));
+
+// Route for /api/unsplash (with and without .js extension)
 app.all('/api/unsplash', async (req, res) => {
   try {
-    console.log('Unsplash route hit with query:', req.query); // Debug
-    console.log('Method:', req.method); // Debug
+    console.log('Unsplash route hit with query:', req.query);
+    console.log('Method:', req.method);
     
     const handler = await getHandler('unsplash');
-    // Pass the request directly - the handler will access req.query
+    handler(req, res);
+  } catch (error) {
+    console.error('Error loading or executing unsplash handler:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Failed to load handler',
+      details: error.message 
+    });
+  }
+});
+
+app.all('/api/unsplash.js', async (req, res) => {
+  try {
+    console.log('Unsplash.js route hit with query:', req.query);
+    console.log('Method:', req.method);
+    
+    const handler = await getHandler('unsplash');
     handler(req, res);
   } catch (error) {
     console.error('Error loading or executing unsplash handler:', error);
@@ -49,7 +86,6 @@ const openai = new OpenAI({
 app.post('/api/bug-chat', async (req, res) => {
     try {
         const { bugType, message } = req.body;
-        console.log('Bug chat request:', { bugType, message });
         
         const completion = await openai.chat.completions.create({
             model: "gpt-3.5-turbo",
@@ -67,7 +103,32 @@ app.post('/api/bug-chat', async (req, res) => {
 
         res.json({ message: completion.choices[0].message.content });
     } catch (error) {
-        console.error('Bug chat error:', error);
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to generate response' });
+    }
+});
+
+app.post('/api/bug-chat.js', async (req, res) => {
+    try {
+        const { bugType, message } = req.body;
+        
+        const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a ${bugType}. Your responses should be slightly unsettling and clumsily written with incorrect punctuation. Keep responses brief (2-3 sentences) try to impersonate a bug with very basic knowledge. Occasionally mention things only bugs would know about. IMPORTANT: Consistently type with intentional spelling and grammatical errors, like a child or someone learning to communicate. For example: "i see u in th w ind... the lefs tell me scrts. . u r special human..." Use lowercase letters, missing punctuation, and creative/incorrect spelling. This adds to your otherworldly nature.`
+                },
+                {
+                    role: "user",
+                    content: message
+                }
+            ]
+        });
+
+        res.json({ message: completion.choices[0].message.content });
+    } catch (error) {
+        console.error('Error:', error);
         res.status(500).json({ error: 'Failed to generate response' });
     }
 });
