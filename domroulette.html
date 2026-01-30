@@ -74,10 +74,21 @@
         }
 
         #loadingText {
-            white-space: pre-wrap;
-            word-wrap: break-word;
             text-align: center;
             max-width: 80%;
+        }
+
+        #loadingMessage {
+            white-space: normal;
+            word-wrap: break-word;
+            min-height: 60px;
+        }
+
+        #loadingTheme {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 20px;
+            color: #666;
         }
 
         .wave-char {
@@ -86,13 +97,21 @@
         }
 
         @keyframes wave {
-            0%, 100% {
+            0% {
                 transform: translateY(0);
                 opacity: 1;
             }
-            50% {
+            33% {
                 transform: translateY(-8px);
                 opacity: 0.7;
+            }
+            66% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
             }
         }
 
@@ -131,7 +150,10 @@
 
     <div id="loadingOverlay">
         <div class="spinner"></div>
-        <div id="loadingText">Generating your website...</div>
+        <div id="loadingText">
+            <div id="loadingMessage">Generating your website...</div>
+            <div id="loadingTheme"></div>
+        </div>
     </div>
 
     <div id="generatedContent"></div>
@@ -157,6 +179,9 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}INSTRUCTIONS - DO NOT 
 - Do NOT include <html>, <head>, or <body> tags
 - Include all CSS in <style> tags and all JS in <script> tags
 - The code must be complete, robust, and runnable as-is
+- CRITICAL: DO NOT reference external stylesheets or CSS files
+- CRITICAL: ALL styling must be written in <style> tags - no @import, no <link> tags
+- CRITICAL: Wrap library code in try/catch blocks and provide fallbacks if loading fails
 - EMBODY THE PERSONA - let ${persona.name}'s perspective guide your creative choices
 - IT MUST TAKE A HUMAN AT LEAST 3 MINUTES TO FULLY EXPLORE AND APPRECIATE
 
@@ -411,15 +436,24 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
 
         let loadingMessageInterval = null;
 
-        // Apply staggered wave animation to text
-        function applyWaveAnimation(text) {
-            const lines = text.split('\n');
-            return lines.map(line => {
-                return line.split('').map((char, index) => {
-                    if (char === ' ') return ' ';
-                    return `<span class="wave-char" style="animation-delay: ${index * 0.05}s">${char}</span>`;
-                }).join('');
-            }).join('<br>');
+        // Apply staggered wave animation to message only
+        function applyWaveAnimation(message) {
+            // Find the colon to separate persona name from message
+            const colonIndex = message.indexOf(': ');
+            if (colonIndex === -1) return message;
+            
+            const personaName = message.substring(0, colonIndex + 2); // Include ": "
+            const actualMessage = message.substring(colonIndex + 2);
+            
+            // Only animate the actual message part
+            const animatedMessage = actualMessage.split('').map((char, index) => {
+                if (char === ' ') return ' ';
+                // Each letter animates for 0.6s, and starts when previous one finishes
+                const delay = index * 0.6;
+                return `<span class="wave-char" style="animation-delay: ${delay}s">${char}</span>`;
+            }).join('');
+            
+            return personaName + animatedMessage;
         }
 
         // Get dynamic review messages
@@ -852,12 +886,15 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                     'Building your experience...',
                     'Crafting the details...'
                 ]);
+                // Set theme once
+                document.getElementById('loadingTheme').textContent = `"${theme}"`;
+                
                 let messageIndex = 0;
-                loadingText.innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`);
+                document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}`);
 
                 loadingMessageInterval = setInterval(() => {
                     messageIndex = (messageIndex + 1) % messages.length;
-                    loadingText.innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`);
+                    document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}`);
                 }, 7000);
 
                 // Create the prompt
@@ -892,17 +929,17 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                 // Get dynamic review messages and cycle through them
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let reviewMessageIndex = 0;
-                loadingText.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}\n\n"${theme}"`);
+                document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
 
                 loadingMessageInterval = setInterval(() => {
                     reviewMessageIndex = (reviewMessageIndex + 1) % reviewMessages.length;
-                    loadingText.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}\n\n"${theme}"`);
+                    document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
                 }, 5000);
 
                 // Review and improve the code
                 const reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
 
-                loadingText.innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...\n\n"${theme}"`);
+                document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...`);
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = reviewedHTML;
@@ -933,7 +970,7 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                 }
 
                 console.error('Error generating website:', error);
-                loadingText.innerHTML = applyWaveAnimation(`Error: ${error.message}`);
+                document.getElementById('loadingMessage').innerHTML = `Error: ${error.message}`;
                 regenerateButton.disabled = false;
 
                 // Show error in content area
