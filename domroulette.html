@@ -859,7 +859,8 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
         // Call ChatGPT API via Vercel serverless function
         async function generateWebsite() {
             const loadingOverlay = document.getElementById('loadingOverlay');
-            const loadingText = document.getElementById('loadingText');
+            const loadingMessage = document.getElementById('loadingMessage');
+            const loadingTheme = document.getElementById('loadingTheme');
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
 
@@ -875,7 +876,7 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
 
             try {
                 // First, get random words from AI
-                loadingText.textContent = 'Choosing a creative persona...';
+                loadingMessage.textContent = 'Choosing a creative persona...';
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
@@ -887,14 +888,14 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                     'Crafting the details...'
                 ]);
                 // Set theme once
-                document.getElementById('loadingTheme').textContent = `"${theme}"`;
+                loadingTheme.textContent = `"${theme}"`;
                 
                 let messageIndex = 0;
-                document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}`);
+                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}`);
 
                 loadingMessageInterval = setInterval(() => {
                     messageIndex = (messageIndex + 1) % messages.length;
-                    document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}`);
+                    loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}`);
                 }, 7000);
 
                 // Create the prompt
@@ -929,17 +930,17 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                 // Get dynamic review messages and cycle through them
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let reviewMessageIndex = 0;
-                document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
+                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
 
                 loadingMessageInterval = setInterval(() => {
                     reviewMessageIndex = (reviewMessageIndex + 1) % reviewMessages.length;
-                    document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
+                    loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
                 }, 5000);
 
                 // Review and improve the code
                 const reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
 
-                document.getElementById('loadingMessage').innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...`);
+                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...`);
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = reviewedHTML;
@@ -970,7 +971,7 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                 }
 
                 console.error('Error generating website:', error);
-                document.getElementById('loadingMessage').innerHTML = `Error: ${error.message}`;
+                loadingMessage.innerHTML = `Error: ${error.message}`;
                 regenerateButton.disabled = false;
 
                 // Show error in content area
