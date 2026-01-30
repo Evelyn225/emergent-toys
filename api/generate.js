@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: "You are a code generator. You ONLY output raw HTML/CSS/JavaScript code. You NEVER add explanations, descriptions, or any text before or after the code. You NEVER use markdown code blocks. Start directly with the first line of code (<!DOCTYPE, <style>, <script>, or <div>)."
+          content: "You are an expert HTML/CSS/JavaScript code generator for interactive web experiences. Your output is pure code - no explanations, no markdown formatting. If there is any explanatory text in your response, remove it. Output only the raw code starting with the first HTML/CSS/JavaScript element."
         },
         {
           role: "user",
@@ -73,16 +73,14 @@ export default async function handler(req, res) {
     // Remove markdown code blocks if present
     html = html.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
     
-    // Remove any leading explanatory text before first HTML tag
-    const firstTagMatch = html.match(/<!DOCTYPE|<style|<script|<div|<section|<article|<header|<main|<canvas/i);
-    if (firstTagMatch) {
-      html = html.substring(firstTagMatch.index);
-    }
-    
-    // Remove any trailing explanatory text after last closing tag
-    const lastTagMatch = html.match(/<\/(?:style|script|div|section|article|body|html)>(?!.*<\/)/i);
-    if (lastTagMatch) {
-      html = html.substring(0, lastTagMatch.index + lastTagMatch[0].length);
+    // Only remove leading explanatory text (text before first < character)
+    const firstTagIndex = html.indexOf('<');
+    if (firstTagIndex > 0) {
+      // Check if there's actual text before the first tag (not just whitespace)
+      const beforeTag = html.substring(0, firstTagIndex).trim();
+      if (beforeTag.length > 0) {
+        html = html.substring(firstTagIndex);
+      }
     }
 
     res.json({ html: html });
