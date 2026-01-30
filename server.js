@@ -2,12 +2,8 @@
 const express = require('express');
 const cors = require('cors');
 const { OpenAI } = require('openai');
-require('dotenv').config({ path: 'openai.env' });
-
-// For ESM-style API handlers
 const path = require('path');
-const { createRequire } = require('module');
-const requireESM = createRequire(import.meta ? import.meta.url : __filename);
+require('dotenv').config({ path: 'openai.env' });
 
 const app = express();
 
@@ -15,29 +11,47 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.')); // Serve static files from current directory
 
-// Helper to load ESM API handlers
-async function loadApiHandler(modulePath) {
-    // Use dynamic import for ESM modules
-    const handlerModule = await import(path.resolve(modulePath));
-    return handlerModule.default;
+// Dynamically load and cache ESM handlers
+const handlers = {};
+
+async function getHandler(moduleName) {
+    if (!handlers[moduleName]) {
+        handlers[moduleName] = (await import(path.resolve(`./api/${moduleName}.js`))).default;
+    }
+    return handlers[moduleName];
 }
 
 // Route for /api/random-words
 app.all('/api/random-words', async (req, res) => {
-    const handler = (await import(path.resolve('./api/random-words.js'))).default;
-    return handler(req, res);
+    try {
+        const handler = await getHandler('random-words');
+        handler(req, res);
+    } catch (error) {
+        console.error('Error loading random-words handler:', error);
+        res.status(500).json({ error: 'Failed to load handler' });
+    }
 });
 
 // Route for /api/generate
 app.all('/api/generate', async (req, res) => {
-    const handler = (await import(path.resolve('./api/generate.js'))).default;
-    return handler(req, res);
+    try {
+        const handler = await getHandler('generate');
+        handler(req, res);
+    } catch (error) {
+        console.error('Error loading generate handler:', error);
+        res.status(500).json({ error: 'Failed to load handler' });
+    }
 });
 
 // Route for /api/unsplash
 app.all('/api/unsplash', async (req, res) => {
-    const handler = (await import(path.resolve('./api/unsplash.js'))).default;
-    return handler(req, res);
+    try {
+        const handler = await getHandler('unsplash');
+        handler(req, res);
+    } catch (error) {
+        console.error('Error loading unsplash handler:', error);
+        res.status(500).json({ error: 'Failed to load handler' });
+    }
 });
 
 // Initialize OpenAI with API key from environment variable
