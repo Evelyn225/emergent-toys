@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model: "gpt-5",
       messages: [
         {
           role: "system",
