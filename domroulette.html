@@ -751,7 +751,9 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
         async function reviewAndImproveCode(html, theme, persona) {
             const specialInstructions = getPersonaSpecialInstructions(persona.name);
 
-            const reviewPrompt = `🚨 QUALITY CHECK - MUST MEET ALL CRITERIA OR REJECT 🚨
+            const reviewPrompt = `FLESH OUT IDEA:
+
+            CREATE A FULL FEATURE-RICH VERSION OF THE FOLLOWING HTML CODE. MAKE IT SUBSTANTIALLY RICHER, MORE COMPLEX, AND MORE INTERACTIVE.
 
 ORIGINAL THEME: "${theme}"
 ORIGINAL PERSONA: ${persona.name}
@@ -786,10 +788,11 @@ ${generateProblemsList(html)}
 MANDATORY REQUIREMENTS (HARD STOPS):
 
 1. **MINIMUM 500 LINES**: No exceptions. Count every line including comments/formatting.
-2. **LIBRARIES OPTIONAL**:
-    - Use 0-1 library total
-    - If used: include at least 50 lines of actual usage
-    - Prefer p5.js for visual depth
+2. **USE AT LEAST 1 LIBRARY**: Deep integration required, p5.js preferred:
+   - p5.js, Three.js, Tone.js, Chart.js, anime.js, gsap, Howler.js, wavesurfer.js, Matter.js, verlet-js, simplex-noise, Tippy.js, SortableJS, Driver.js
+   - At least 100 lines of code using the library
+   - Proper loading with async and try/catch
+   - Fallbacks if library fails to load
 3. **10+ INTERACTIVE ELEMENTS**: Each with distinct behavior:
    - Buttons/clicks that trigger state changes
    - Hover effects with visual feedback
@@ -922,9 +925,6 @@ BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
         // Final pass: bugfix-only review to reduce runtime errors
         async function bugfixCode(html, theme, persona) {
             const bugfixPrompt = `BUGFIX PASS - FIX ERRORS ONLY
-
-ORIGINAL THEME: "${theme}"
-ORIGINAL PERSONA: ${persona.name}
 
 TASK:
 - Only fix runtime errors and broken references.
