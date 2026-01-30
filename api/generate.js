@@ -21,8 +21,10 @@ export default async function handler(req, res) {
         req.on('data', chunk => { data += chunk; });
         req.on('end', () => {
           try {
+            console.log('Raw POST data:', data);
             resolve(JSON.parse(data));
           } catch (err) {
+            console.error('JSON parse error. Data received:', data);
             reject(err);
           }
         });
