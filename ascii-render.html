@@ -12,7 +12,7 @@
     <style>
         body {
             margin: 0;
-            padding: 20px;
+            padding: 120px 20px 20px 20px;
             background: #1a1a1a;
             color: #fff;
             font-family: monospace;
@@ -20,18 +20,45 @@
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+        #ascii-bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
         }
         #controls {
-            position: sticky;
+            position: fixed;
             top: 0;
+            left: 50%;
+            transform: translateX(-50%) translateY(0);
             z-index: 100;
-            margin: 0 0 20px 0;
+            margin: 10px 0;
             padding: 20px;
-            background: #2a2a2a;
+            background: rgba(87, 87, 87, 0.95);
+            opacity: 0.65;
+            backdrop-filter: blur(5px);
             border-radius: 8px;
             text-align: center;
             width: 90%;
-            max-width: 600px;
+            max-width: 500px;
+            transition: transform 0.3s ease-out;
+        }
+        #controls.hidden {
+            transform: translateX(-50%) translateY(calc(-100%));
+        }
+        .control-row {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         button, input {
             margin: 10px;
@@ -56,6 +83,10 @@
             border-radius: 8px;
             width: fit-content;
             height: fit-content;
+            display: none;
+        }
+        #ascii-container.visible {
+            display: block;
         }
         #output-wrapper {
             display: flex;
@@ -63,15 +94,22 @@
             width: 100%;
             padding: 0 20px;
             box-sizing: border-box;
+            position: relative;
+            z-index: 1;
         }
     </style>
 </head>
 <body>
+    <div id="ascii-bg-canvas"></div>
     <div id="controls">
         <input type="file" id="imageInput" accept="image/*">
-        <div>
+        <div class="control-row">
             <label for="densitySlider">Character Density: </label>
             <input type="range" id="densitySlider" min="1" max="8" value="4">
+        </div>
+        <div class="control-row">
+            <label for="animateToggle">Background Animation: </label>
+            <input type="checkbox" id="animateToggle" checked>
         </div>
         <div id="status">No image loaded</div>
     </div>
@@ -80,6 +118,128 @@
     </div>
 
     <script>
+        // Terminal-style ASCII Background using p5.js
+        window.bgAnimationEnabled = true;
+        let bgSketch = function(p) {
+            const chars = ['@', '#', 'W', '8', 'B', 'M', 'R', 'P', 'D', 'Q', 'K', 'X', 'N', 'H', 'G', 'O', 'Z', 'U', 'A', 'S', 'E', '5', '2', 'Y', 'C', 'L', 'F', 'T', 'J', 'I', '3', '1', '/', '|', '\\', '-', '+', '~', ';', ':', ',', '.', ' '];
+            let columns = [];
+            let charSize = 14;
+            let time = 0;
+            
+            p.setup = function() {
+                const canvas = p.createCanvas(p.windowWidth, p.windowHeight);
+                canvas.parent('ascii-bg-canvas');
+                p.textFont('Courier New');
+                p.textSize(charSize);
+                p.textAlign(p.LEFT, p.TOP);
+                
+                // Initialize columns
+                const numCols = Math.ceil(p.width / charSize);
+                for (let i = 0; i < numCols; i++) {
+                    columns.push({
+                        y: p.random(-p.height, 0),
+                        speed: 0.3 + p.random() * 0.4,
+                        chars: [],
+                        charIndex: p.floor(p.random() * chars.length),
+                        updateRate: 2 + p.random() * 3
+                    });
+                    
+                    // Pre-populate some characters
+                    const numChars = Math.ceil(p.height / charSize) + 5;
+                    for (let j = 0; j < numChars; j++) {
+                        columns[i].chars.push({
+                            char: chars[p.floor(p.random() * chars.length)],
+                            brightness: p.random(0.3, 0.8)
+                        });
+                    }
+                }
+            };
+            
+            p.draw = function() {
+                p.background(26, 26, 26, 255);
+                
+                if (!window.bgAnimationEnabled) {
+                    // Just draw static characters when animation is disabled
+                    for (let i = 0; i < columns.length; i++) {
+                        const col = columns[i];
+                        let yPos = col.y;
+                        for (let j = 0; j < col.chars.length; j++) {
+                            if (yPos > -charSize && yPos < p.height) {
+                                const alpha = p.map(col.chars[j].brightness, 0.3, 0.8, 100, 200);
+                                p.fill(150, 150, 150, alpha);
+                                p.text(col.chars[j].char, i * charSize, yPos);
+                            }
+                            yPos += charSize;
+                        }
+                    }
+                    return;
+                }
+                
+                time += 0.01;
+                
+                // Draw and update columns
+                for (let i = 0; i < columns.length; i++) {
+                    const col = columns[i];
+                    col.y += col.speed;
+                    
+                    // Reset column when it goes off screen
+                    if (col.y > p.height) {
+                        col.y = -charSize * 5;
+                        // Shuffle characters
+                        for (let j = 0; j < col.chars.length; j++) {
+                            col.chars[j].char = chars[p.floor(p.random() * chars.length)];
+                            col.chars[j].brightness = p.random(0.3, 0.8);
+                        }
+                    }
+                    
+                    // Update characters slowly (terminal-like)
+                    if (p.frameCount % Math.floor(col.updateRate) === 0) {
+                        // Shift characters up
+                        col.chars.shift();
+                        col.chars.push({
+                            char: chars[p.floor(p.random() * chars.length)],
+                            brightness: p.random(0.3, 0.8)
+                        });
+                    }
+                    
+                    // Draw characters in column
+                    let yPos = col.y;
+                    for (let j = 0; j < col.chars.length; j++) {
+                        if (yPos > -charSize && yPos < p.height) {
+                            const alpha = p.map(col.chars[j].brightness, 0.3, 0.8, 100, 200);
+                            p.fill(150, 150, 150, alpha);
+                            p.text(col.chars[j].char, i * charSize, yPos);
+                        }
+                        yPos += charSize;
+                    }
+                }
+            };
+            
+            p.windowResized = function() {
+                p.resizeCanvas(p.windowWidth, p.windowHeight);
+                // Reinitialize columns
+                columns = [];
+                const numCols = Math.ceil(p.width / charSize);
+                for (let i = 0; i < numCols; i++) {
+                    columns.push({
+                        y: p.random(-p.height, 0),
+                        speed: 0.3 + p.random() * 0.4,
+                        chars: [],
+                        charIndex: p.floor(p.random() * chars.length),
+                        updateRate: 2 + p.random() * 3
+                    });
+                    const numChars = Math.ceil(p.height / charSize) + 5;
+                    for (let j = 0; j < numChars; j++) {
+                        columns[i].chars.push({
+                            char: chars[p.floor(p.random() * chars.length)],
+                            brightness: p.random(0.3, 0.8)
+                        });
+                    }
+                }
+            };
+        };
+        
+        // Main sketch for image processing
         let sketch = function(p) {
             let img;
             let asciiDiv;
@@ -177,6 +337,7 @@
                     }
                     
                     asciiDiv.html(asciiImage);
+                    asciiDiv.addClass('visible');
                     
                     // Always animate
                     if (animationFrame) {
@@ -194,7 +355,35 @@
             }
         };
 
-        // Start p5
+        // Start both p5 sketches
+        new p5(bgSketch);
         new p5(sketch);
+        
+        // Scroll detection for menu
+        let lastScrollY = window.scrollY;
+        const controls = document.getElementById('controls');
+        
+        window.addEventListener('scroll', () => {
+            const currentScrollY = window.scrollY;
+            
+            if (currentScrollY > lastScrollY && currentScrollY > 50) {
+                // Scrolling down - hide menu
+                controls.classList.add('hidden');
+            } else if (currentScrollY < lastScrollY) {
+                // Scrolling up - show menu
+                controls.classList.remove('hidden');
+            }
+            
+            lastScrollY = currentScrollY;
+        });
+        
+        // Animation toggle
+        const animateToggle = document.getElementById('animateToggle');
+        animateToggle.addEventListener('change', (e) => {
+            window.bgAnimationEnabled = e.target.checked;
+        });
+        
+        // Force the checkbox to be checked on page load
+        animateToggle.checked = true;
     </script>
 </body>
