@@ -32,7 +32,7 @@ export default async function handler(req, res) {
         },
         {
           role: "user",
-          content: "Generate two random words for inspiration."
+          content: "Generate two random words."
         }
       ],
       temperature: 1.2,
