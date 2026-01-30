@@ -474,7 +474,8 @@
                     },
                     body: JSON.stringify({
                         bugType: currentBug.name,
-                        message: "Introduce yourself to the human. Keep it very brief and clumsily written."
+                        message: "Introduce yourself to the human. Keep it very brief and clumsily written.",
+                        conversationHistory: []
                     })
                 });
 
@@ -487,11 +488,14 @@
                 if (data.message) {
                     removeTypingIndicator();
                     addMessage(data.message, 'bug');
-                    // Store in bug memory
+                    // Store in bug memory with role
                     if (!bugMemory.has(currentBug.name)) {
                         bugMemory.set(currentBug.name, []);
                     }
-                    bugMemory.get(currentBug.name).push(data.message);
+                    bugMemory.get(currentBug.name).push({
+                        role: "assistant",
+                        content: data.message
+                    });
                 } else {
                     removeTypingIndicator();
                     addMessage("hello human. i am " + currentBug.name.toLowerCase() + "... wht do u want to know ..", 'bug');
@@ -518,6 +522,13 @@
 
             try {
                 console.log('Sending message to: /api/bug-chat.js');
+                
+                // Build conversation history from bugMemory
+                let conversationHistory = [];
+                if (bugMemory.has(currentBug.name)) {
+                    conversationHistory = bugMemory.get(currentBug.name);
+                }
+                
                 const response = await fetch('/api/bug-chat.js', {
                     method: 'POST',
                     headers: {
@@ -525,7 +536,8 @@
                     },
                     body: JSON.stringify({
                         bugType: currentBug.name,
-                        message: message
+                        message: message,
+                        conversationHistory: conversationHistory
                     })
                 });
 
@@ -538,8 +550,20 @@
                 if (data.message) {
                     removeTypingIndicator();
                     addMessage(data.message, 'bug');
-                    // Store in bug memory
-                    bugMemory.get(currentBug.name).push(data.message);
+                    // Store in bug memory with role
+                    if (!bugMemory.has(currentBug.name)) {
+                        bugMemory.set(currentBug.name, []);
+                    }
+                    // Add user message first
+                    bugMemory.get(currentBug.name).push({
+                        role: "user",
+                        content: message
+                    });
+                    // Then add assistant response
+                    bugMemory.get(currentBug.name).push({
+                        role: "assistant",
+                        content: data.message
+                    });
                 } else {
                     removeTypingIndicator();
                     addMessage("sorry... connection bad... try again...", 'bug');
