@@ -74,8 +74,26 @@
         }
 
         #loadingText {
-            white-space: pre-line;
+            white-space: pre-wrap;
+            word-wrap: break-word;
             text-align: center;
+            max-width: 80%;
+        }
+
+        .wave-char {
+            display: inline-block;
+            animation: wave 0.6s ease-in-out infinite;
+        }
+
+        @keyframes wave {
+            0%, 100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            50% {
+                transform: translateY(-8px);
+                opacity: 0.7;
+            }
         }
 
         #loadingOverlay.hidden {
@@ -393,6 +411,178 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
 
         let loadingMessageInterval = null;
 
+        // Apply staggered wave animation to text
+        function applyWaveAnimation(text) {
+            const lines = text.split('\n');
+            return lines.map(line => {
+                return line.split('').map((char, index) => {
+                    if (char === ' ') return ' ';
+                    return `<span class="wave-char" style="animation-delay: ${index * 0.05}s">${char}</span>`;
+                }).join('');
+            }).join('<br>');
+        }
+
+        // Get dynamic review messages
+        function getReviewLoadingMessages(personaName) {
+            const reviewMessages = {
+                "The Poet": [
+                    "Refining verses...",
+                    "Deepening meaning...",
+                    "Polishing metaphors...",
+                    "Expanding horizons...",
+                    "Weaving more layers...",
+                    "Seeking perfection..."
+                ],
+                "The Dadaist": [
+                    "Corrupting logic further...",
+                    "Embracing the absurd more...",
+                    "Breaking rules intentionally...",
+                    "Rejecting sense completely...",
+                    "Multiplying chaos...",
+                    "Inverting everything..."
+                ],
+                "The Surrealist": [
+                    "Deepening the dream...",
+                    "Adding impossible layers...",
+                    "Melting more boundaries...",
+                    "Revealing subconscious depths...",
+                    "Warping reality further...",
+                    "Unlocking hidden corridors..."
+                ],
+                "The Scientist": [
+                    "Running more simulations...",
+                    "Analyzing deeper patterns...",
+                    "Expanding the dataset...",
+                    "Refining algorithms...",
+                    "Conducting more tests...",
+                    "Optimizing parameters..."
+                ],
+                "The Child": [
+                    "Making it sillier...",
+                    "Adding more fun...",
+                    "Finding more magic...",
+                    "Creating bigger wonders...",
+                    "Imagining wilder things...",
+                    "Breaking more rules..."
+                ],
+                "The Mystic": [
+                    "Channeling deeper truths...",
+                    "Reading more runes...",
+                    "Invoking higher powers...",
+                    "Opening inner sanctums...",
+                    "Harmonizing frequencies...",
+                    "Transcending dimensions..."
+                ],
+                "The Architect": [
+                    "Drafting additional structures...",
+                    "Engineering deeper complexity...",
+                    "Mapping more spaces...",
+                    "Building higher towers...",
+                    "Constructing secret chambers...",
+                    "Expanding blueprints..."
+                ],
+                "The Glitch": [
+                    "C0rrupt1ng m0r3...",
+                    "B34ut1ful3rr0r5 g4th3r1ng...",
+                    "Fragm3nt4t10n 1nten51f135...",
+                    "Gl1tch 4mpl1f13d...",
+                    "Byt35 d34lign1ng...",
+                    "R34l1ty f41l1ng gr4c3fully..."
+                ],
+                "The Collector": [
+                    "Cataloguing more pieces...",
+                    "Archiving deeper...",
+                    "Indexing forgotten details...",
+                    "Preserving more moments...",
+                    "Documenting invisible threads...",
+                    "Collecting the infinite..."
+                ],
+                "The Prophet": [
+                    "Seeing further futures...",
+                    "Remembering tomorrow more...",
+                    "Reading ancient prophecies...",
+                    "Bending timelines...",
+                    "Revealing what will be...",
+                    "Witnessing eternity..."
+                ],
+                "The Dog Who Understands English But Can't Speak": [
+                    "🐕 *whimpers knowingly*...",
+                    "🦴 *barks with intense meaning*...",
+                    "🐾 *paces with purpose*...",
+                    "🎾 *stares into your soul*...",
+                    "🐶 *whines profoundly*...",
+                    "👃 *sniffs the code itself*..."
+                ],
+                "The ZIP Bomb": [
+                    "Compressing further...",
+                    "Nesting infinitely deeper...",
+                    "Decompressing more chaos...",
+                    "Expanding exponentially...",
+                    "Storing more eternity...",
+                    "Unleashing final compression..."
+                ],
+                "The Server at 3AM": [
+                    "🌙 *more coffee required*...",
+                    "😵 *reading more logs*...",
+                    "☕ *hallucinating features*...",
+                    "💤 *eyes closing, still working*...",
+                    "👁️ *is this done? no.*...",
+                    "🧠 *what even is code*..."
+                ],
+                "The Compiler Error": [
+                    "❌ Expected ';' before complexity...",
+                    "🔴 Undefined reference to 'everything'...",
+                    "💥 Stack overflow: too much meaning...",
+                    "⚠️ Segmentation fault in refinement...",
+                    "📍 Multiple errors to fix...",
+                    "🐛 Debugging the infinite..."
+                ],
+                "The Arcade Machine (1983)": [
+                    "🕹️ LEVEL UP ACTIVATED...",
+                    "👾 BONUS STAGE LOADING...",
+                    "🎮 DIFFICULTY MAXIMUM...",
+                    "💰 SCORE MULTIPLIER x10...",
+                    "⚡ POWER UP ENGAGED...",
+                    "🎯 FINAL BOSS APPROACHING..."
+                ],
+                "The Puzzle Master": [
+                    "Hiding more clues...",
+                    "Adding deeper layers...",
+                    "Crafting secret passages...",
+                    "Planting final hints...",
+                    "Weaving last mysteries...",
+                    "Preparing the revelation..."
+                ],
+                "The Browser Abuser": [
+                    "🌐 Weaponizing more APIs...",
+                    "🍪 Doing terrible things...",
+                    "📍 Tracking everything...",
+                    "🎤 Listening more intensely...",
+                    "🔌 Hijacking the impossible...",
+                    "⚙️ Bending reality itself..."
+                ],
+                "The Geocities Architect (1998)": [
+                    "🚧 UNDER CONSTRUCTION INTENSIFIES 🚧...",
+                    "✨ Adding 9000 GIFs...",
+                    "🎵 MIDI loudness: MAXIMUM...",
+                    "📊 Counter spinning wildly...",
+                    "🌐 Webring expanding...",
+                    "🎆 BLINK BLINK BLINK BLINK..."
+                ]
+            };
+
+            return reviewMessages[personaName] || [
+                "Reviewing and improving code...",
+                "Enhancing your creation...",
+                "Adding the finishing touches...",
+                "Perfecting every detail...",
+                "Making it spectacular...",
+                "Almost ready..."
+            ];
+        }
+
+        let loadingMessageInterval = null;
+
         // Get persona-specific creative instructions
         function getPersonaSpecialInstructions(personaName) {
             const specialInstructions = {
@@ -665,11 +855,11 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                     'Crafting the details...'
                 ]);
                 let messageIndex = 0;
-                loadingText.textContent = `${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`;
+                loadingText.innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`);
 
                 loadingMessageInterval = setInterval(() => {
                     messageIndex = (messageIndex + 1) % messages.length;
-                    loadingText.textContent = `${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`;
+                    loadingText.innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`);
                 }, 7000);
 
                 // Create the prompt
@@ -701,12 +891,20 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                     loadingMessageInterval = null;
                 }
 
-                loadingText.textContent = `${persona.name}: Reviewing and improving code...\n\n"${theme}"`;
+                // Get dynamic review messages and cycle through them
+                const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
+                let reviewMessageIndex = 0;
+                loadingText.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}\n\n"${theme}"`);
+
+                loadingMessageInterval = setInterval(() => {
+                    reviewMessageIndex = (reviewMessageIndex + 1) % reviewMessages.length;
+                    loadingText.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}\n\n"${theme}"`);
+                }, 5000);
 
                 // Review and improve the code
                 const reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
 
-                loadingText.textContent = `${persona.name}: Rendering your creation...\n\n"${theme}"`;
+                loadingText.innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...\n\n"${theme}"`);
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = reviewedHTML;
@@ -737,7 +935,7 @@ OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
                 }
 
                 console.error('Error generating website:', error);
-                loadingText.textContent = `Error: ${error.message}`;
+                loadingText.innerHTML = applyWaveAnimation(`Error: ${error.message}`);
                 regenerateButton.disabled = false;
 
                 // Show error in content area
