@@ -39,14 +39,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!process.env.OPENAI_API_KEY) {
     if (!process.env.CRITTER_OPENAI_API_KEY) {
       console.error('OpenAI API key is not set');
       return res.status(500).json({ error: 'API key not configured' });
     }
 
     const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
       apiKey: process.env.CRITTER_OPENAI_API_KEY
     });
 
@@ -71,3 +69,4 @@ export default async function handler(req, res) {
       details: error.message
     });
   }
+}
