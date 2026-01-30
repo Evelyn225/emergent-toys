@@ -46,7 +46,7 @@
         }
         .bug-display {
             text-align: center;
-            margin-bottom: 5px;
+            margin-bottom: 20px;
             padding: 10px;
             background-color: #111;
             border-radius: 5px;
@@ -54,7 +54,7 @@
         .bug-image {
             max-width: 150px;
             height: auto;
-            margin: 5px 0;
+            margin: 10px 0;
             border: 2px solid #1f8b1f;
             border-radius: 5px;
         }
@@ -466,8 +466,8 @@
             // Generate AI introduction message
             try {
                 showTypingIndicator();
-                console.log('Sending request to: /api/bug-chat.js');
-                const response = await fetch('/api/bug-chat.js', {
+                console.log('Sending request to: /api/bug-chat');
+                const response = await fetch('/api/bug-chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -517,8 +517,8 @@
             updateSignalStrength();
 
             try {
-                console.log('Sending message to: /api/bug-chat.js');
-                const response = await fetch('/api/bug-chat.js', {
+                console.log('Sending message to: /api/bug-chat');
+                const response = await fetch('/api/bug-chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
