@@ -49,6 +49,7 @@ const openai = new OpenAI({
 app.post('/api/bug-chat', async (req, res) => {
     try {
         const { bugType, message } = req.body;
+        console.log('Bug chat request:', { bugType, message });
         
         const completion = await openai.chat.completions.create({
             model: "gpt-3.5-turbo",
@@ -66,7 +67,7 @@ app.post('/api/bug-chat', async (req, res) => {
 
         res.json({ message: completion.choices[0].message.content });
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Bug chat error:', error);
         res.status(500).json({ error: 'Failed to generate response' });
     }
 });
