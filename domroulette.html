@@ -110,29 +110,20 @@
 
         // Create the prompt for the AI
         function createGenerationPrompt(theme) {
-            return `You are an experimental web developer who creates bizarre, and unpredictable web experiences. Draw inspiration from these two words: "${theme}".
+            return `Generate a complete, self-contained HTML page inspired by: "${theme}"
 
-Requirements:
-1. Create a complete, self-contained HTML page with embedded CSS and JavaScript
-2. Use the two words "${theme}" as loose inspiration - interpret them in the most bizarre, unexpected way possible. They don't need to form a coherent theme
-3. MUST be interactive - include games, animations, clickable elements, mouse interactions, keyboard controls, or embedded web content (iframes, embeds, etc.)
-4. Embrace brokenness and dysfunction - things don't need to work perfectly. Include intentional glitches, bugs, or chaotic behavior
-5. Can create games (simple or complex), animations, interactive art, or experimental interfaces
-6. Can embed external content: YouTube videos, maps, web pages, APIs, or other web resources
-7. Visual design should match the inspiration - ugly, chaotic, or broken is perfectly fine if it fits
-8. The HTML should be complete and ready to be inserted into a div element
-9. Do NOT include <html>, <head>, or <body> tags - only the content that goes inside the body
-10. Include all CSS in <style> tags and JavaScript in <script> tags
-11. Feel free to use external libraries via CDN - examples:
-    - p5.js for creative coding: https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js
-    - Three.js for 3D: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
-    - Tone.js for audio: https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js
-    - D3.js for data viz: https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js
-    - Canvas or WebGL for graphics
-    - Any other creative coding library
-12. Push boundaries - make it weird, experimental, and potentially broken. The more bizarre, the better!
+INSTRUCTIONS - DO NOT EXPLAIN, ONLY OUTPUT CODE:
+- Output ONLY valid HTML/CSS/JavaScript code
+- Do NOT include any explanations, descriptions, or markdown
+- Do NOT include <html>, <head>, or <body> tags
+- Include all CSS in <style> tags and all JS in <script> tags
+- Make it bizarre, experimental, and interactive
+- Include clickable elements, animations, or creative interactions
+- Use external libraries via CDN if desired (p5.js, Three.js, Tone.js, D3.js, etc.)
+- Embrace glitches, chaos, and unconventional design
+- The code must be complete and runnable as-is
 
-Return ONLY the HTML code (with embedded CSS and JS), nothing else. No markdown, no explanations, just the code.`;
+BEGIN GENERATING THE HTML CODE NOW:`;
         }
 
         // Get random words from AI
