@@ -218,9 +218,8 @@ DEPTH & COMPLEXITY REQUIREMENTS:
 - Include multiple interactive zones or sections (not just one area)
 - Create emergent complexity where interactions combine in unexpected ways
 
-USE AT LEAST 1 OF THE FOLLOWING LIBRARIES::
+OPTIONAL LIBRARIES (use 0-1, prefer p5.js):
 - p5.js (https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js) - For generative art and sketches
-- Three.js (https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js) - For 3D graphics and WebGL
 - Chart.js (https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js) - For data visualizations
 - rough.js (https://cdnjs.cloudflare.com/ajax/libs/rough.js/4.6.1/rough.min.js) - For hand-drawn sketchy effects
 - Particles.js (https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js) - For particle systems
@@ -754,8 +753,6 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
 
             const reviewPrompt = `🚨 QUALITY CHECK - MUST MEET ALL CRITERIA OR REJECT 🚨
 
-YOUR PREVIOUS CODE WAS INADEQUATE. Most websites generated are shallow shells.
-
 ORIGINAL THEME: "${theme}"
 ORIGINAL PERSONA: ${persona.name}
 
@@ -783,19 +780,16 @@ ${generateProblemsList(html)}
 - Audio feedback, synthesis, or algorithmic sound
 - Particle systems, generative visuals, or procedural content
 - At least 3 distinct UI zones/modes/sections
-- Deep use of at least 2 libraries (200+ lines per library)
+- Deep use of at least 1 library (50+ lines)
 - Every interaction has visual/audio consequence
 
 MANDATORY REQUIREMENTS (HARD STOPS):
 
-1. **MINIMUM 800 LINES**: No exceptions. Count every line including comments/formatting.
-2. **2+ LIBRARIES DEEPLY USED**: 
-   - Each library must have 150+ lines of actual usage
-   - p5.js: Multiple sketch functions, transforms, animations
-   - Three.js: Scene, camera, multiple materials, lighting
-   - Tone.js: Synth, effects, sequencing, multiple voices
-   - Chart.js: Multiple chart instances with data updates
-   - Matter.js: Multiple bodies, constraints, collision handling
+1. **MINIMUM 500 LINES**: No exceptions. Count every line including comments/formatting.
+2. **LIBRARIES OPTIONAL**:
+    - Use 0-1 library total
+    - If used: include at least 50 lines of actual usage
+    - Prefer p5.js for visual depth
 3. **10+ INTERACTIVE ELEMENTS**: Each with distinct behavior:
    - Buttons/clicks that trigger state changes
    - Hover effects with visual feedback
@@ -813,29 +807,27 @@ MANDATORY REQUIREMENTS (HARD STOPS):
    - Color palettes with intentional contrast
 5. **DATA DEPTH**:
    - 3+ different data structures/arrays
-   - Each with 20+ data points
+   - Each with 10+ data points
    - Visualized in multiple ways
    - Updated by user interaction
 6. **CONTENT RICHNESS**:
-   - Actual written content about "${theme}" (500+ words)
+   - Actual written content about "${theme}"
    - Multiple sections/pages to explore
    - Narrative or conceptual framework
    - References to real or fictional sources
-7. **AUDIO INTEGRATION**:
-   - Background music or ambient sound
-   - Sound effects for interactions
-   - Optional mute control
+7. **AUDIO INTEGRATION (OPTIONAL)**:
+    - If included: provide a mute control
 8. **RESPONSIVENESS**:
    - Works on all screen sizes
    - No scrolling required (or scrolling is intentional)
    - Touch-friendly or keyboard navigable
 
 IMMEDIATE FAILURE CONDITIONS (AUTO-REJECT):
-❌ Less than 800 lines total
+❌ Less than 500 lines total
 ❌ Using library without showing it was loaded (no typeof check)
 ❌ Fewer than 10 distinct interactive elements
 ❌ Single section/zone (needs 3+ distinct areas)
-❌ No audio component
+❌ No audio component (only if audio is added)
 ❌ All content is placeholder/lorem ipsum
 ❌ Visible bugs, errors, or broken functionality
 ❌ Generic/boring implementation of the theme
@@ -852,15 +844,34 @@ The persona's perspective should be evident in every design choice - the Glitch 
 BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
 
             function detectLibraries(html) {
-                const libraries = [];
-                if (html.includes('p5.js') || html.includes('p5.min.js')) libraries.push('p5.js');
-                if (html.includes('three.js') || html.includes('three.min.js')) libraries.push('Three.js');
-                if (html.includes('tone.js') || html.includes('Tone.js')) libraries.push('Tone.js');
-                if (html.includes('matter.js') || html.includes('matter.min.js')) libraries.push('Matter.js');
-                if (html.includes('chart.js') || html.includes('Chart.js')) libraries.push('Chart.js');
-                if (html.includes('anime.js') || html.includes('anime.min.js')) libraries.push('anime.js');
-                if (html.includes('gsap') || html.includes('gsap.min.js')) libraries.push('GSAP');
-                return libraries.length > 0 ? libraries.join(', ') : 'none';
+                const libraries = new Set();
+                const lower = html.toLowerCase();
+                const has = (patterns) => patterns.some((pattern) => pattern.test(lower));
+                const checks = [
+                    { name: 'p5.js', patterns: [/p5\.min\.js/, /p5\.js/, /new\s+p5\b/, /\bp5\./] },
+                    { name: 'Three.js', patterns: [/three\.min\.js/, /three\.js/, /\bthree\./, /\bnew\s+three\./] },
+                    { name: 'Tone.js', patterns: [/tone\.js/, /\btone\./] },
+                    { name: 'Matter.js', patterns: [/matter\.min\.js/, /matter\.js/, /\bmatter\./] },
+                    { name: 'Chart.js', patterns: [/chart\.umd\.min\.js/, /chart\.js/, /\bchart\./, /new\s+chart\b/] },
+                    { name: 'anime.js', patterns: [/anime\.min\.js/, /anime\.js/, /\banime\(/] },
+                    { name: 'GSAP', patterns: [/gsap\.min\.js/, /\bgsap\./] },
+                    { name: 'Howler.js', patterns: [/howler\.min\.js/, /howler\.js/, /\bhowl\b/, /\bhowler\b/] },
+                    { name: 'wavesurfer.js', patterns: [/wavesurfer\.min\.js/, /wavesurfer\.js/, /\bwavesurfer\b/] },
+                    { name: 'Particles.js', patterns: [/particles\.min\.js/, /particles\.js/, /\bparticlesjs\b/, /\bparticlesjs\./] },
+                    { name: 'Tippy.js', patterns: [/tippy-bundle\.umd\.min\.js/, /tippy\.js/, /\btippy\(/] },
+                    { name: 'SortableJS', patterns: [/sortable\.min\.js/, /sortable\.js/, /\bsortable\b/] },
+                    { name: 'Driver.js', patterns: [/driver\.min\.js/, /driver\.js/, /\bdriver\b/] },
+                    { name: 'simplex-noise', patterns: [/simplex-noise\.min\.js/, /simplex-noise\.js/, /\bsimplexnoise\b/] },
+                    { name: 'verlet-js', patterns: [/verlet\.min\.js/, /verlet\.js/, /\bverlet\b/] }
+                ];
+
+                checks.forEach((check) => {
+                    if (has(check.patterns)) {
+                        libraries.add(check.name);
+                    }
+                });
+
+                return libraries.size > 0 ? Array.from(libraries).join(', ') : 'none';
             }
 
             function generateProblemsList(html) {
@@ -873,8 +884,8 @@ BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
                 const hasErrorHandling = html.includes('try') && html.includes('catch');
 
                 return `
-• Lines of code: ${lines} (need 600+)
-• Word count: ${wordCount} (need 2000+)
+• Lines of code: ${lines} (need 500+)
+• Word count: ${wordCount} (need 1200+)
 • Libraries detected: ${detectedLibs} (${libCount} total, all must be deeply used)
 • Placeholder comments: ${placeholders} (must be 0)
 • Empty divs: ${emptyDivs} (must be 0)
