@@ -481,9 +481,9 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
         function getReviewLoadingMessages(personaName) {
             const reviewMessages = {
                 "The Poet": [
-                    "🪶 Refining verses...",
+                    "🌟 Refining verses...",
                     "🌊 Deepening meaning...",
-                    "🪞 Polishing metaphors...",
+                    "⚖️ Polishing metaphors...",
                     "🌅 Expanding horizons...",
                     "🧵 Weaving more layers...",
                     "✨ Seeking perfection..."
@@ -499,9 +499,9 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                 "The Surrealist": [
                     "💤 Deepening the dream...",
                     "🧩 Adding impossible layers...",
-                    "🫧 Melting more boundaries...",
+                    "🌀 Melting more boundaries...",
                     "🧠 Revealing subconscious depths...",
-                    "🪞 Warping reality further...",
+                    "✨ Warping reality further...",
                     "🗝️ Unlocking hidden corridors..."
                 ],
                 "The Scientist": [
@@ -517,7 +517,7 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                     "🎉 Adding more fun...",
                     "✨ Finding more magic...",
                     "🎠 Creating bigger wonders...",
-                    "🪄 Imagining wilder things...",
+                    "🌀 Imagining wilder things...",
                     "🧩 Breaking more rules..."
                 ],
                 "The Mystic": [
@@ -919,6 +919,48 @@ BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
             return reviewedHTML;
         }
 
+        // Final pass: bugfix-only review to reduce runtime errors
+        async function bugfixCode(html, theme, persona) {
+            const bugfixPrompt = `BUGFIX PASS - FIX ERRORS ONLY
+
+ORIGINAL THEME: "${theme}"
+ORIGINAL PERSONA: ${persona.name}
+
+TASK:
+- Only fix runtime errors and broken references.
+- Check for missing variables, syntax errors, and library usage issues.
+- Do NOT remove features or content unless absolutely necessary for stability.
+- Ensure library usage is guarded with typeof checks and try/catch.
+- Replace any external <link> tags or @import statements with internal code.
+- Keep all CSS inside <style> and all JS inside <script>.
+- Output ONLY valid HTML/CSS/JS. No markdown.
+
+BEGIN OUTPUTTING THE FIXED HTML CODE NOW:`;
+
+            const response = await fetch(GENERATE_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    theme: theme,
+                    prompt: bugfixPrompt
+                })
+            });
+
+            if (!response.ok) {
+                console.warn('Bugfix pass failed, using previous code');
+                return html;
+            }
+
+            const data = await response.json();
+            let fixedHTML = data.html;
+
+            fixedHTML = fixedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+
+            return fixedHTML;
+        }
+
         // Validate and remove external file references from generated HTML
         function validateAndSanitizeHTML(html) {
             // Create a temporary div to parse HTML
@@ -1053,6 +1095,9 @@ BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
 
                 // Review and improve the code
                 let reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
+
+                // Final bugfix-only pass
+                reviewedHTML = await bugfixCode(reviewedHTML, theme, persona);
 
                 loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...`);
 
