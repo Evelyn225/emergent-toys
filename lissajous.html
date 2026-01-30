@@ -28,18 +28,15 @@
         let rows; // Number of rows
         let curves = []; // Array to store curve objects
         let angle = 0;
-        let paddingHorizontalPercent = 0.05; // 5% padding on each side
-        let paddingVerticalPercent = 0.05; // 5% padding on top and bottom
+        let paddingHorizontal = 100; // Increased horizontal padding
+        let paddingVertical = 40; // Vertical padding remains the same
 
         function calculateGridDimensions() {
             // Calculate optimal cell size and grid dimensions
             let minCellSize = 60; // Minimum size for each cell
             let maxCellSize = 120; // Maximum size for each cell
             
-            // Calculate available space with percentage-based padding
-            let paddingHorizontal = windowWidth * paddingHorizontalPercent;
-            let paddingVertical = windowHeight * paddingVerticalPercent;
-            
+            // Calculate available space with different paddings
             let availableWidth = windowWidth - (paddingHorizontal * 2);
             let availableHeight = windowHeight - (paddingVertical * 2);
             

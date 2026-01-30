@@ -40,12 +40,14 @@ export default async function handler(req, res) {
 
   try {
     if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.CRITTER_OPENAI_API_KEY) {
       console.error('OpenAI API key is not set');
       return res.status(500).json({ error: 'API key not configured' });
     }
 
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
+      apiKey: process.env.CRITTER_OPENAI_API_KEY
     });
 
     const completion = await openai.chat.completions.create({
@@ -53,7 +55,6 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `You are a ${bugType}. Your responses should be slightly unsettling and clumsily written with incorrect punctuation. Keep responses brief (2-3 sentences) try to impersonate a bug with very basic knowledge. Occasionally mention things only bugs would know about. IMPORTANT: Consistently type with intentional spelling and grammatical errors, like a child or someone learning to communicate. For example: "i see u in th w ind... the lefs tell me scrts. . u r special human..." Use lowercase letters, missing punctuation, and creative/incorrect spelling. This adds to your otherworldly nature.`
         },
         {
           role: "user",
@@ -70,4 +71,3 @@ export default async function handler(req, res) {
       details: error.message
     });
   }
-}
