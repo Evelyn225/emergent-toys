@@ -81,6 +81,41 @@ export default async function handler(req, res) {
         style: "childlike",
         examples: ["angry carpet", "fuzzy electricity"],
         instruction: "Think like a 5-year-old describing things literally and simply."
+      },
+      {
+        name: "The Mystic",
+        desc: "Creates spiritual, occult, ritualistic combinations",
+        style: "mystical",
+        examples: ["astral bread", "prayer static"],
+        instruction: "Channel the sacred and the supernatural into everyday objects."
+      },
+      {
+        name: "The Architect",
+        desc: "Creates structural, spatial, geometric combinations",
+        style: "architectural",
+        examples: ["recursive doorway", "angular emotion"],
+        instruction: "Build impossible spaces and structural metaphors."
+      },
+      {
+        name: "The Glitch",
+        desc: "Creates corrupted, broken, error-state combinations",
+        style: "corrupted",
+        examples: ["█████ memory", "404 emotion"],
+        instruction: "Embrace digital decay, system failures, and beautiful errors."
+      },
+      {
+        name: "The Collector",
+        desc: "Creates archival, taxonomic, obsessive combinations",
+        style: "curatorial",
+        examples: ["catalogued ghosts", "indexed silence"],
+        instruction: "Organize the unorganizable. Create systems for the abstract."
+      },
+      {
+        name: "The Prophet",
+        desc: "Creates apocalyptic, visionary, future-past combinations",
+        style: "prophetic",
+        examples: ["yesterday's tomorrow", "extinct dawn"],
+        instruction: "Speak of futures that have already happened and pasts yet to come."
       }
     ];
 

@@ -117,12 +117,17 @@
         function createGenerationPrompt(theme) {
             return `Generate a complete, self-contained HTML page inspired by: "${theme}"
 
+YOU ARE: ${persona.name}
+YOUR STYLE: ${persona.style}
+YOUR APPROACH: ${persona.desc}
+
 INSTRUCTIONS - DO NOT EXPLAIN, ONLY OUTPUT CODE:
 - Output ONLY valid HTML/CSS/JavaScript code
 - Do NOT include any explanations, descriptions, or markdown
 - Do NOT include <html>, <head>, or <body> tags
 - Include all CSS in <style> tags and all JS in <script> tags
 - The code must be complete, robust, and runnable as-is
+- EMBODY THE PERSONA - let ${persona.name}'s perspective guide your creative choices
 
 DEPTH & COMPLEXITY REQUIREMENTS:
 - Create a FULL, FLESHED-OUT experience, not a simple demo
@@ -211,6 +216,36 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                 "🖍️ Drawing outside all the lines...",
                 "🧸 Playing make-believe with pixels...",
                 "🌈 Mixing up everything for fun..."
+            ],
+            "The Mystic": [
+                "🔮 Channeling digital spirits...",
+                "✨ Performing ancient algorithms...",
+                "🕯️ Invoking the sacred geometries...",
+                "🌙 Reading the data like tea leaves..."
+            ],
+            "The Architect": [
+                "📐 Drafting impossible blueprints...",
+                "🏛️ Engineering recursive structures...",
+                "📏 Calculating the geometry of chaos...",
+                "🗺️ Mapping spaces that don't exist..."
+            ],
+            "The Glitch": [
+                "⚠️ C̴o̷r̶r̸u̵p̴t̶i̵n̶g̷ reality safely...",
+                "💥 Fragmenting the simulation...",
+                "🔧 Breaking systems intentionally...",
+                "📟 ERR0R: Creating beauty..."
+            ],
+            "The Collector": [
+                "📚 Cataloguing the uncatalogable...",
+                "🗂️ Archiving fleeting moments...",
+                "🔍 Documenting the impossible...",
+                "📋 Indexing dreams and memories..."
+            ],
+            "The Prophet": [
+                "🌅 Seeing futures that were...",
+                "⏳ Remembering tomorrow's visions...",
+                "🔭 Prophesying the already happened...",
+                "📜 Writing the ancient future..."
             ]
         };
 
@@ -221,6 +256,9 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
             const reviewPrompt = `Review this generated HTML code and make it more robust and safe:
 
 ${html}
+
+ORIGINAL THEME: "${theme}"
+ORIGINAL PERSONA: ${persona.name} - ${persona.desc}
 
 INSTRUCTIONS:
 1. Fix any syntax errors or incomplete code
@@ -233,6 +271,8 @@ INSTRUCTIONS:
 8. Ensure the code won't crash if external libraries fail to load
 9. Make sure canvas/WebGL contexts are properly checked
 10. Flesh out any minimal implementations into more complete systems
+11. Ensure the code reflects the original theme and intent
+12. Try to add at least one additional layer of content or interactivity
 
 OUTPUT: Return ONLY the improved HTML code, no explanations.`;
 
@@ -316,7 +356,7 @@ OUTPUT: Return ONLY the improved HTML code, no explanations.`;
                 loadingMessageInterval = setInterval(() => {
                     messageIndex = (messageIndex + 1) % messages.length;
                     loadingText.textContent = `${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`;
-                }, 4000);
+                }, 6000);
 
                 // Create the prompt
                 const prompt = createGenerationPrompt(theme);
