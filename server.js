@@ -21,37 +21,24 @@ async function getHandler(moduleName) {
     return handlers[moduleName];
 }
 
-// Route for /api/random-words
-app.all('/api/random-words', async (req, res) => {
-    try {
-        const handler = await getHandler('random-words');
-        handler(req, res);
-    } catch (error) {
-        console.error('Error loading random-words handler:', error);
-        res.status(500).json({ error: 'Failed to load handler' });
-    }
-});
-
-// Route for /api/generate
-app.all('/api/generate', async (req, res) => {
-    try {
-        const handler = await getHandler('generate');
-        handler(req, res);
-    } catch (error) {
-        console.error('Error loading generate handler:', error);
-        res.status(500).json({ error: 'Failed to load handler' });
-    }
-});
 
 // Route for /api/unsplash
 app.all('/api/unsplash', async (req, res) => {
-    try {
-        const handler = await getHandler('unsplash');
-        handler(req, res);
-    } catch (error) {
-        console.error('Error loading unsplash handler:', error);
-        res.status(500).json({ error: 'Failed to load handler' });
-    }
+  try {
+    console.log('Unsplash route hit with query:', req.query); // Debug
+    console.log('Method:', req.method); // Debug
+    
+    const handler = await getHandler('unsplash');
+    // Pass the request directly - the handler will access req.query
+    handler(req, res);
+  } catch (error) {
+    console.error('Error loading or executing unsplash handler:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Failed to load handler',
+      details: error.message 
+    });
+  }
 });
 
 // Initialize OpenAI with API key from environment variable
