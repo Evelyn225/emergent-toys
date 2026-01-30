@@ -1,4 +1,30 @@
 import { OpenAI } from 'openai';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Load environment variables from openai.env for local development if not set
+if (!process.env.CRITTER_OPENAI_API_KEY) {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const envPath = join(__dirname, '..', 'openai.env');
+    const envFile = readFileSync(envPath, 'utf-8');
+    envFile.split('\n').forEach(line => {
+      const match = line.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        const value = match[2].trim();
+        if (!process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    });
+  } catch (err) {
+    // Ignore if file doesn't exist (production environment)
+    console.log('Could not load openai.env, using environment variables');
+  }
+}
 
 export default async function handler(req, res) {
   // Parse JSON body if POST

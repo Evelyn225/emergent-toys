@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { OpenAI } = require('openai');
-require('dotenv').config();
+require('dotenv').config({ path: 'openai.env' });
 
 const app = express();
 app.use(cors());
