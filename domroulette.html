@@ -69,6 +69,11 @@
             color: #333;
         }
 
+        #loadingText {
+            white-space: pre-line;
+            text-align: center;
+        }
+
         #loadingOverlay.hidden {
             display: none;
         }
@@ -169,7 +174,7 @@ CONTENT RICHNESS:
 - Add visual narratives or symbolic content
 - Make the experience feel intentional and crafted, not random
 
-MAKE IT SUBSTANTIAL - This should feel like a complete webpage or interactive work, not a rough sketch.
+MAKE IT SUBSTANTIAL - This should feel like a complete webpage or interactive work, not a rough sketch. Do NOT use any placeholders or "TODO" comments. do NOT output minimal or simplistic code.
 The weirder AND more detailed, the better.
 
 BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
@@ -260,12 +265,12 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                     'Crafting the details...'
                 ];
                 let messageIndex = 0;
-                loadingText.textContent = `${persona.name}: ${messages[messageIndex]}`;
+                loadingText.textContent = `${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`;
                 
                 loadingMessageInterval = setInterval(() => {
                     messageIndex = (messageIndex + 1) % messages.length;
-                    loadingText.textContent = `${persona.name}: ${messages[messageIndex]}`;
-                }, 2000);
+                    loadingText.textContent = `${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`;
+                }, 4000);
 
                 // Create the prompt
                 const prompt = createGenerationPrompt(theme);
@@ -296,7 +301,7 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                     loadingMessageInterval = null;
                 }
                 
-                loadingText.textContent = `${persona.name}: Rendering your creation...`;
+                loadingText.textContent = `${persona.name}: Rendering your creation...\n\n"${theme}"`;
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = generatedHTML;
