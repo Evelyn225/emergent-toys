@@ -1,12 +1,44 @@
+
 const express = require('express');
 const cors = require('cors');
 const { OpenAI } = require('openai');
 require('dotenv').config({ path: 'openai.env' });
 
+// For ESM-style API handlers
+const path = require('path');
+const { createRequire } = require('module');
+const requireESM = createRequire(import.meta ? import.meta.url : __filename);
+
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static('.')); // Serve static files from current directory
+
+// Helper to load ESM API handlers
+async function loadApiHandler(modulePath) {
+    // Use dynamic import for ESM modules
+    const handlerModule = await import(path.resolve(modulePath));
+    return handlerModule.default;
+}
+
+// Route for /api/random-words
+app.all('/api/random-words', async (req, res) => {
+    const handler = (await import(path.resolve('./api/random-words.js'))).default;
+    return handler(req, res);
+});
+
+// Route for /api/generate
+app.all('/api/generate', async (req, res) => {
+    const handler = (await import(path.resolve('./api/generate.js'))).default;
+    return handler(req, res);
+});
+
+// Route for /api/unsplash
+app.all('/api/unsplash', async (req, res) => {
+    const handler = (await import(path.resolve('./api/unsplash.js'))).default;
+    return handler(req, res);
+});
 
 // Initialize OpenAI with API key from environment variable
 const openai = new OpenAI({
