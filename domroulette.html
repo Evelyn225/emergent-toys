@@ -216,6 +216,52 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
 
         let loadingMessageInterval = null;
 
+        // Review and make code more robust before execution
+        async function reviewAndImproveCode(html, theme) {
+            const reviewPrompt = `Review this generated HTML code and make it more robust and safe:
+
+${html}
+
+INSTRUCTIONS:
+1. Fix any syntax errors or incomplete code
+2. Add error handling to all JavaScript functions
+3. Add null checks and defensive programming
+4. Ensure all animations use requestAnimationFrame properly
+5. Add try-catch blocks around risky operations
+6. Make sure all event listeners are properly bound
+7. Add fallbacks for missing resources or failed API calls
+8. Ensure the code won't crash if external libraries fail to load
+9. Make sure canvas/WebGL contexts are properly checked
+10. Flesh out any minimal implementations into more complete systems
+
+OUTPUT: Return ONLY the improved HTML code, no explanations.`;
+
+            const response = await fetch(GENERATE_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    theme: theme,
+                    prompt: reviewPrompt
+                })
+            });
+
+            if (!response.ok) {
+                // If review fails, return original code
+                console.warn('Code review failed, using original code');
+                return html;
+            }
+
+            const data = await response.json();
+            let reviewedHTML = data.html;
+            
+            // Remove markdown code blocks if present
+            reviewedHTML = reviewedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+            
+            return reviewedHTML;
+        }
+
         // Get random words from AI
         async function getRandomWords() {
             const response = await fetch(RANDOM_WORDS_ENDPOINT, {
@@ -295,16 +341,21 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                 const data = await response.json();
                 const generatedHTML = data.html;
 
-                // Clear the interval before rendering
+                // Clear the interval before reviewing
                 if (loadingMessageInterval) {
                     clearInterval(loadingMessageInterval);
                     loadingMessageInterval = null;
                 }
                 
+                loadingText.textContent = `${persona.name}: Reviewing and improving code...\n\n"${theme}"`;
+
+                // Review and improve the code
+                const reviewedHTML = await reviewAndImproveCode(generatedHTML, theme);
+                
                 loadingText.textContent = `${persona.name}: Rendering your creation...\n\n"${theme}"`;
 
                 // Insert the generated HTML
-                generatedContent.innerHTML = generatedHTML;
+                generatedContent.innerHTML = reviewedHTML;
 
                 // Execute any scripts in the generated content
                 const scripts = generatedContent.querySelectorAll('script');
