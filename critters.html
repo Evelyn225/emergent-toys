@@ -459,14 +459,23 @@
             }
             document.getElementById('bugName').textContent = `CONNECTED TO: ${currentBug.name.toUpperCase()}`;
             
+            // Clear chat box for new bug
+            const chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML = '';
+            
             addScanningEffect();
             updateSignalStrength();
             updateNetworkStatus();
             
+            // Initialize bug memory for this bug
+            if (!bugMemory.has(currentBug.name)) {
+                bugMemory.set(currentBug.name, []);
+            }
+            
             // Generate AI introduction message
+            showTypingIndicator();
             try {
-                showTypingIndicator();
-                console.log('Sending request to: /api/bug-chat.js');
+                console.log('Sending request to: /api/bug-chat.js for intro');
                 const response = await fetch('/api/bug-chat.js', {
                     method: 'POST',
                     headers: {
@@ -484,27 +493,34 @@
                 }
 
                 const data = await response.json();
-                console.log('Response:', data);
+                console.log('Intro Response:', data);
+                
+                let introMessage;
                 if (data.message) {
-                    removeTypingIndicator();
-                    addMessage(data.message, 'bug');
-                    // Store in bug memory with role
-                    if (!bugMemory.has(currentBug.name)) {
-                        bugMemory.set(currentBug.name, []);
-                    }
-                    bugMemory.get(currentBug.name).push({
-                        role: "assistant",
-                        content: data.message
-                    });
+                    introMessage = data.message;
                 } else {
-                    removeTypingIndicator();
-                    addMessage("hello human. i am " + currentBug.name.toLowerCase() + "... wht do u want to know ..", 'bug');
-                    console.error('API error:', data.error || data.details);
+                    introMessage = "hello human. i am " + currentBug.name.toLowerCase() + "... wht do u want to know ..";
                 }
+                
+                removeTypingIndicator();
+                await addMessage(introMessage, 'bug');
+                
+                // Store in bug memory
+                bugMemory.get(currentBug.name).push({
+                    role: "assistant",
+                    content: introMessage
+                });
+                
+                console.log('Intro message added and stored');
             } catch (error) {
                 removeTypingIndicator();
-                console.error('Detailed error:', error);
-                addMessage("hello human. i am " + currentBug.name.toLowerCase() + "... wht do u want to know ..", 'bug');
+                console.error('Error in displayBug:', error);
+                const errorMsg = "sorry... connection bad... try again...";
+                await addMessage(errorMsg, 'bug');
+                bugMemory.get(currentBug.name).push({
+                    role: "assistant",
+                    content: errorMsg
+                });
             }
         }
 
