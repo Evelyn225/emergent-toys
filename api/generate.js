@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -90,7 +90,8 @@ export default async function handler(req, res) {
     console.error('Detailed error:', error);
     res.status(500).json({
       error: 'Failed to generate website',
-      details: error.message
+      details: error.message,
+      errorType: error.type || error.code
     });
   }
 }
