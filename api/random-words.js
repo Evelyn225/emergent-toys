@@ -22,28 +22,119 @@ export default async function handler(req, res) {
       apiKey: process.env.DOMROULETTE_KEY
     });
 
-    // Generate two random, interesting words
+    const moods = [
+      "apocalyptic", "euphoric", "melancholic", "anxious", "nostalgic",
+      "whimsical", "mysterious", "serene", "chaotic", "dreamlike",
+      "surreal", "playful", "ominous", "strange", "vibrant",
+      "refined", "minimal", "gritty", "futuristic", "retro",
+      "ugly", "beautiful", "dark", "light", "liminal",
+      "ceremonial", "feral", "synthetic", "sublime", "uncanny"
+    ];
+
+    const mood = moods[Math.floor(Math.random() * moods.length)];
+
+    // Mood-specific guidance
+    const moodDirectives = {
+      "apocalyptic": "Think: ruins, survival, aftermath, resilience",
+      "euphoric": "Think: transcendence, dissolution, ecstasy, unity",
+      "melancholic": "Think: memory, absence, soft decay, quiet longing",
+      "whimsical": "Think: absurd charm, playful logic, delightful nonsense",
+      "ominous": "Think: quiet dread, unseen threat, subtle wrongness",
+      "ugly": "Think: intentionally off-putting, wrong beauty, unsettling",
+      "dreamlike": "Think: fluid logic, shifting forms, memory distortion",
+      "liminal": "Think: threshold spaces, between states, waiting, transit",
+      "uncanny": "Think: familiar yet strange, subtle horror, almost-right"
+    };
+
+    const personas = [
+      {
+        name: "The Poet",
+        desc: "Creates beautiful, meaningful metaphors",
+        style: "poetic",
+        examples: ["whispering calculus", "paper supernova"],
+        instruction: "Find the hidden connection between seemingly unrelated concepts."
+      },
+      {
+        name: "The Dadaist",
+        desc: "Creates absurd, nonsensical combinations",
+        style: "absurd",
+        examples: ["dirt piano", "blood horse"],
+        instruction: "Combine words that absolutely should not go together. Reject meaning."
+      },
+      {
+        name: "The Surrealist",
+        desc: "Creates dreamlike, bizarre imagery",
+        style: "surreal",
+        examples: ["melting clocks", "floating elephants"],
+        instruction: "Create imagery from dreams or altered states of consciousness."
+      },
+      {
+        name: "The Scientist",
+        desc: "Creates technical-sounding nonsense",
+        style: "technical",
+        examples: ["quantum toast", "cellular democracy"],
+        instruction: "Mix scientific terms with everyday objects in impossible ways."
+      },
+      {
+        name: "The Child",
+        desc: "Creates simple, literal, funny combinations",
+        style: "childlike",
+        examples: ["angry carpet", "fuzzy electricity"],
+        instruction: "Think like a 5-year-old describing things literally and simply."
+      }
+    ];
+
+    const persona = personas[Math.floor(Math.random() * personas.length)];
+    const selectedMood = moods[Math.floor(Math.random() * moods.length)];
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
-          content: "You are a creative word generator. Generate two random words. Return ONLY two words separated by a space, nothing else. Examples: 'broken elevator', 'cellular cheese', 'rusty bicycle', 'screaming lamp', 'confused penguin', 'dancing algorithm','space dominoes'"
+          content: `You are: ${persona.name}
+${persona.desc}
+
+YOUR MISSION: ${persona.instruction}
+
+MOOD TO INFUSE: ${selectedMood}
+
+YOUR STYLE EXAMPLES:
+${persona.examples.map(ex => `• ${ex}`).join('\n')}
+
+CREATE: One two-word phrase in your unique style
+FORMAT: word1 word2
+RULES: No explanations, just output`
         },
         {
           role: "user",
-          content: "Generate two random words."
+          content: "Create a phrase."
         }
       ],
-      temperature: 0.8,
-      max_tokens: 15
+      temperature: persona.style === "absurd" ? 1.0 : 0.8
     });
 
-    const words = completion.choices[0].message.content.trim();
-    
-    res.json({ 
-      words: words,
-      theme: words // Support both for compatibility
+    let theme = completion.choices[0].message.content.trim();
+
+    // Validate and clean
+    if (theme.split(" ").length !== 2) {
+      // Fallback to interesting combos
+      const fallbacks = [
+        "fungal capitalism", "whispering calculus", "paper supernova",
+        "glitching coral", "breathing architecture", "crying silicon",
+        "molten grammar", "electric moss", "arctic circuitry", "neon folklore", "fractal tapestry"
+      ];
+      theme = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    }
+
+    res.json({
+      theme: theme,
+      persona: {
+        name: persona.name,
+        style: persona.style,
+        desc: persona.desc
+      },
+      mood: selectedMood
     });
   } catch (error) {
     console.error('Detailed error:', error);

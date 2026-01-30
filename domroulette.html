@@ -169,11 +169,47 @@ CONTENT RICHNESS:
 - Add visual narratives or symbolic content
 - Make the experience feel intentional and crafted, not random
 
-MAKE IT SUBSTANTIAL - This should feel like a complete artistic or interactive work, not a rough sketch.
+MAKE IT SUBSTANTIAL - This should feel like a complete webpage or interactive work, not a rough sketch.
 The weirder AND more detailed, the better.
 
 BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
         }
+
+        // Persona-specific loading messages
+        const personaLoadingMessages = {
+            "The Poet": [
+                "🌙 Weaving metaphors from starlight...",
+                "✨ Finding beauty in the space between words...",
+                "📜 Composing verses from digital dreams...",
+                "🎭 Sculpting meaning from the void..."
+            ],
+            "The Dadaist": [
+                "🎪 Dismantling logic, one byte at a time...",
+                "🎲 Rolling dice in the void of reason...",
+                "🔀 Shuffling reality like a deck of chaos...",
+                "🃏 Rejecting sense, embracing nonsense..."
+            ],
+            "The Surrealist": [
+                "🌀 Descending into the dream realm...",
+                "🎨 Painting with impossible colors...",
+                "🗝️ Unlocking doors that shouldn't exist...",
+                "🌊 Swimming through liquid consciousness..."
+            ],
+            "The Scientist": [
+                "🔬 Calibrating the quantum generators...",
+                "⚛️ Conducting experiments in digital physics...",
+                "🧪 Synthesizing new forms of reality...",
+                "📊 Analyzing anomalies in the data stream..."
+            ],
+            "The Child": [
+                "🎈 Imagining silly things...",
+                "🖍️ Drawing outside all the lines...",
+                "🧸 Playing make-believe with pixels...",
+                "🌈 Mixing up everything for fun..."
+            ]
+        };
+
+        let loadingMessageInterval = null;
 
         // Get random words from AI
         async function getRandomWords() {
@@ -190,7 +226,7 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
             }
 
             const data = await response.json();
-            return data.theme || data.words;
+            return data;
         }
 
         // Call ChatGPT API via Vercel serverless function
@@ -204,13 +240,32 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
             loadingOverlay.classList.remove('hidden');
             regenerateButton.disabled = true;
             generatedContent.innerHTML = '';
+            
+            // Clear any existing interval
+            if (loadingMessageInterval) {
+                clearInterval(loadingMessageInterval);
+            }
 
             try {
                 // First, get random words from AI
-                loadingText.textContent = 'Getting random words from AI...';
-                const theme = await getRandomWords();
+                loadingText.textContent = 'Choosing a creative persona...';
+                const wordData = await getRandomWords();
+                const theme = wordData.theme;
+                const persona = wordData.persona;
                 
-                loadingText.textContent = `Generating website inspired by: "${theme}"...`;
+                // Start cycling through persona-specific loading messages
+                const messages = personaLoadingMessages[persona.name] || [
+                    'Creating something interesting...',
+                    'Building your experience...',
+                    'Crafting the details...'
+                ];
+                let messageIndex = 0;
+                loadingText.textContent = `${persona.name}: ${messages[messageIndex]}`;
+                
+                loadingMessageInterval = setInterval(() => {
+                    messageIndex = (messageIndex + 1) % messages.length;
+                    loadingText.textContent = `${persona.name}: ${messages[messageIndex]}`;
+                }, 2000);
 
                 // Create the prompt
                 const prompt = createGenerationPrompt(theme);
@@ -235,7 +290,13 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                 const data = await response.json();
                 const generatedHTML = data.html;
 
-                loadingText.textContent = 'Rendering website...';
+                // Clear the interval before rendering
+                if (loadingMessageInterval) {
+                    clearInterval(loadingMessageInterval);
+                    loadingMessageInterval = null;
+                }
+                
+                loadingText.textContent = `${persona.name}: Rendering your creation...`;
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = generatedHTML;
@@ -259,6 +320,12 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                 }, 500);
 
             } catch (error) {
+                // Clear the interval on error
+                if (loadingMessageInterval) {
+                    clearInterval(loadingMessageInterval);
+                    loadingMessageInterval = null;
+                }
+                
                 console.error('Error generating website:', error);
                 loadingText.textContent = `Error: ${error.message}`;
                 regenerateButton.disabled = false;
@@ -268,9 +335,6 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                     <div style="padding: 40px; text-align: center; color: #d32f2f;">
                         <h2>Error generating website</h2>
                         <p>${error.message}</p>
-                        <p style="margin-top: 20px; font-size: 14px; color: #666;">
-                            Make sure your OpenAI API key is set in Vercel environment variables.
-                        </p>
                     </div>
                 `;
             }
