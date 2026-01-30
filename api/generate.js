@@ -74,8 +74,9 @@ export default async function handler(req, res) {
     // Multi-pass generation for initial creation
     console.log('Starting multi-pass generation for theme:', theme);
 
-    // PASS 1: Generate core structure with styling
-    const pass1Prompt = `${prompt}
+    try {
+      // PASS 1: Generate core structure with styling
+      const pass1Prompt = `${prompt}
 
 PASS 1 OF 3: FOUNDATION
 Focus on:
@@ -87,22 +88,29 @@ Focus on:
 
 Output ONLY the code for this foundation. Make it substantial (400+ lines).`;
 
-    const pass1 = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: pass1Prompt }],
-      temperature: 0.9,
-      max_tokens: 8000
-    });
+      console.log('Starting Pass 1...');
+      const pass1 = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [{ role: "user", content: pass1Prompt }],
+        temperature: 0.9,
+        max_tokens: 8000
+      });
 
-    let foundationCode = pass1.choices[0].message.content.trim();
-    foundationCode = foundationCode.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+      let foundationCode = pass1.choices[0].message.content.trim();
+      foundationCode = foundationCode.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
 
-    console.log('Pass 1 complete. Length:', foundationCode.length);
+      console.log('Pass 1 complete. Length:', foundationCode.length);
 
-    // PASS 2: Enhance with advanced features and interactions
-    const pass2Prompt = `You previously generated this foundation code for theme "${theme}":
+      // Check if foundation code is too large for next pass
+      if (foundationCode.length > 30000) {
+        console.warn('Foundation code too large, returning as-is');
+        return res.json({ html: foundationCode });
+      }
 
-${foundationCode}
+      // PASS 2: Enhance with advanced features and interactions
+      const pass2Prompt = `You previously generated this foundation code for theme "${theme}":
+
+${foundationCode.substring(0, 25000)}${foundationCode.length > 25000 ? '\n\n[...code truncated for brevity...]' : ''}
 
 PASS 2 OF 3: ENHANCEMENT
 Add these advanced features to the EXISTING code:
@@ -115,49 +123,40 @@ Add these advanced features to the EXISTING code:
 
 Output the COMPLETE, ENHANCED code with all pass 1 + pass 2 features. Minimum 600+ lines.`;
 
-    const pass2 = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: pass2Prompt }],
-      temperature: 0.85,
-      max_tokens: 12000
-    });
+      console.log('Starting Pass 2...');
+      const pass2 = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [{ role: "user", content: pass2Prompt }],
+        temperature: 0.85,
+        max_tokens: 12000
+      });
 
-    let enhancedCode = pass2.choices[0].message.content.trim();
-    enhancedCode = enhancedCode.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+      let enhancedCode = pass2.choices[0].message.content.trim();
+      enhancedCode = enhancedCode.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
 
-    console.log('Pass 2 complete. Length:', enhancedCode.length);
+      console.log('Pass 2 complete. Length:', enhancedCode.length);
 
-    // PASS 3: Polish and add rich content
-    const pass3Prompt = `You previously generated this enhanced code for theme "${theme}":
+      // Return pass 2 result (skip pass 3 to save time and tokens)
+      console.log('Returning enhanced code from Pass 2');
+      return res.json({ html: enhancedCode });
 
-${enhancedCode}
+    } catch (passError) {
+      console.error('Error in multi-pass generation:', passError);
+      console.log('Falling back to single-pass generation');
+      
+      // Fallback to single-pass generation
+      const fallbackCompletion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.9,
+        max_tokens: 16000
+      });
 
-PASS 3 OF 3: POLISH & CONTENT
-Final improvements:
-- Add rich textual content (descriptions, lore, instructions)
-- Implement error handling (try-catch blocks)
-- Add loading states and transitions
-- Include help/info/about sections
-- Add visual polish (more effects, better colors)
-- Ensure all interactive elements have visual feedback
-- Add accessibility features where needed
-- Remove any TODO/FIXME comments with actual implementations
-
-Output the FINAL, COMPLETE, POLISHED code. This should be production-ready.`;
-
-    const pass3 = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: pass3Prompt }],
-      temperature: 0.8,
-      max_tokens: 16000
-    });
-
-    let finalCode = pass3.choices[0].message.content.trim();
-    finalCode = finalCode.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
-
-    console.log('Pass 3 complete. Final length:', finalCode.length);
-
-    res.json({ html: finalCode });
+      let fallbackHtml = fallbackCompletion.choices[0].message.content.trim();
+      fallbackHtml = fallbackHtml.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+      
+      return res.json({ html: fallbackHtml });
+    }
   } catch (error) {
     console.error('Detailed error:', error);
     res.status(500).json({
