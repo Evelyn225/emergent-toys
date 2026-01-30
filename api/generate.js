@@ -51,29 +51,39 @@ export default async function handler(req, res) {
       apiKey: process.env.DOMROULETTE_KEY
     });
 
-    // List all available models
-    const models = await openai.models.list();
-    const gpt4Models = models.data
-      .filter(m => m.id.includes('gpt-4') || m.id.includes('o1') || m.id.includes('o3'))
-      .sort((a, b) => b.created - a.created);
-    console.log(gpt4Models.map(m => ({ id: m.id, created: new Date(m.created * 1000) })));
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-2024-04-09",
+      model: "gpt-5.2",
       messages: [
+        {
+          role: "system",
+          content: "You are a code generator. You ONLY output raw HTML/CSS/JavaScript code. You NEVER add explanations, descriptions, or any text before or after the code. You NEVER use markdown code blocks. Start directly with the first line of code (<!DOCTYPE, <style>, <script>, or <div>)."
+        },
         {
           role: "user",
           content: prompt
         }
       ],
       temperature: 0.9,
-      max_tokens: 4096
+      max_tokens: 16384
     });
 
     let html = completion.choices[0].message.content.trim();
 
     // Remove markdown code blocks if present
     html = html.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+    
+    // Remove any leading explanatory text before first HTML tag
+    const firstTagMatch = html.match(/<!DOCTYPE|<style|<script|<div|<section|<article|<header|<main|<canvas/i);
+    if (firstTagMatch) {
+      html = html.substring(firstTagMatch.index);
+    }
+    
+    // Remove any trailing explanatory text after last closing tag
+    const lastTagMatch = html.match(/<\/(?:style|script|div|section|article|body|html)>(?!.*<\/)/i);
+    if (lastTagMatch) {
+      html = html.substring(0, lastTagMatch.index + lastTagMatch[0].length);
+    }
 
     res.json({ html: html });
   } catch (error) {
