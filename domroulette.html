@@ -769,9 +769,13 @@ ${generateProblemsList(html)}
 - Empty sections that don't do anything
 - Simple buttons with obvious functionality
 - No emergent complexity (systems should interact in unexpected ways)
-- Anything under 800 lines of code
+- Anything under 500 lines of code
 - Using a library without deeply integrating it (100+ lines minimum)
 - No sound design, animations, or particle effects
+- Single centered card layout
+- One small container with one button
+- Plain gray/white background without motion
+- No canvas/WebGL animation layer
 
 ✅ WHAT SUCCESS LOOKS LIKE (EXAMPLES):
 - Complex interaction layers where clicking one thing affects multiple systems
@@ -788,11 +792,11 @@ ${generateProblemsList(html)}
 MANDATORY REQUIREMENTS (HARD STOPS):
 
 1. **MINIMUM 500 LINES**: No exceptions. Count every line including comments/formatting.
-2. **USE AT LEAST 1 LIBRARY**: Deep integration required, p5.js preferred:
-   - p5.js, Three.js, Tone.js, Chart.js, anime.js, gsap, Howler.js, wavesurfer.js, Matter.js, verlet-js, simplex-noise, Tippy.js, SortableJS, Driver.js
-   - At least 100 lines of code using the library
-   - Proper loading with async and try/catch
-   - Fallbacks if library fails to load
+2. **VISUAL ENGINE REQUIRED**:
+    - Use p5.js OR build a custom canvas/WebGL engine with requestAnimationFrame
+    - At least 100 lines of visual engine code
+    - Must render continuously (animation loop)
+    - If using p5.js: proper loading with async, typeof checks, try/catch, and fallback
 3. **10+ INTERACTIVE ELEMENTS**: Each with distinct behavior:
    - Buttons/clicks that trigger state changes
    - Hover effects with visual feedback
@@ -824,6 +828,9 @@ MANDATORY REQUIREMENTS (HARD STOPS):
    - Works on all screen sizes
    - No scrolling required (or scrolling is intentional)
    - Touch-friendly or keyboard navigable
+9. **MULTI-ZONE LAYOUT**:
+    - At least 3 distinct sections or panels
+    - At least 30 total DOM elements across the page
 
 IMMEDIATE FAILURE CONDITIONS (AUTO-REJECT):
 ❌ Less than 500 lines total
@@ -838,6 +845,8 @@ IMMEDIATE FAILURE CONDITIONS (AUTO-REJECT):
 ❌ ANY external file references (stylesheets, font files, etc)
 ❌ Missing <style> tag with all CSS inline
 ❌ Missing proper <script> tags with all JavaScript inline
+❌ Single centered card/button demo
+❌ No canvas/WebGL animation layer
 
 YOUR TASK: 
 Rewrite the code from scratch to be SUBSTANTIALLY RICHER. Make every pixel count. Make every interaction matter. If you're not using 80%+ of the code space for actual features (not setup), you're doing it wrong.
@@ -930,6 +939,8 @@ TASK:
 - Only fix runtime errors and broken references.
 - Check for missing variables, syntax errors, and library usage issues.
 - Do NOT remove features or content unless absolutely necessary for stability.
+- Do NOT simplify the layout or reduce interactivity.
+- Preserve all sections, panels, and visual engine code.
 - Ensure library usage is guarded with typeof checks and try/catch.
 - Replace any external <link> tags or @import statements with internal code.
 - Keep all CSS inside <style> and all JS inside <script>.
