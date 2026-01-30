@@ -292,7 +292,8 @@
         </div>
         <div class="network-status" id="networkStatus"></div>
         <div class="bug-display">
-            <img id="bugImage" class="bug-image" src="" alt="Live Bug Feed">
+            <img  class="bug-image" src="" alt = "Live Bug Feed"><br><br>
+            <img id="bugImage" class="bug-image" src="">
         </div>
         <div class="chat-box" id="chatBox"></div>
         <div class="input-container">
@@ -380,7 +381,7 @@
         }
 
         function addScanningEffect() {
-            const bugImage = document.getElementById('bugImage');
+            const bugImage = document.getElementsById('bugImage');
             bugImage.classList.add('scanning');
             setTimeout(() => {
                 bugImage.classList.remove('scanning');
@@ -456,9 +457,6 @@
             const bugImage = document.getElementById('bugImage');
             if (currentBug.image) {
                 bugImage.src = currentBug.image;
-            } else {
-                bugImage.src = 'https://via.placeholder.com/200x200?text=BUG+FEED+OFFLINE';
-            }
             document.getElementById('bugName').textContent = `CONNECTED TO: ${currentBug.name.toUpperCase()}`;
             
             addScanningEffect();
