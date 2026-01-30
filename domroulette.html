@@ -173,124 +173,151 @@
         function createGenerationPrompt(theme, persona) {
             const specialInstructions = getPersonaSpecialInstructions(persona.name);
 
-            return `Generate a complete, self-contained HTML page inspired by: "${theme}"
+            return `You are building an interactive art piece about: "${theme}"
 
-YOU ARE: ${persona.name}
-YOUR STYLE: ${persona.style}
-YOUR APPROACH: ${persona.desc}
+PERSONA: ${persona.name} - ${persona.style}
+${persona.desc}
+${specialInstructions ? '\n' + specialInstructions : ''}
 
-${specialInstructions ? specialInstructions + '\n\n' : ''}INSTRUCTIONS - DO NOT EXPLAIN, ONLY OUTPUT CODE:
-- Output ONLY valid HTML/CSS/JavaScript code
-- Do NOT include any explanations, descriptions, or markdown
-- Do NOT include <html>, <head>, or <body> tags
-- Include all CSS in <style> tags and all JS in <script> tags
-- The code must be complete, robust, and runnable as-is
-- CRITICAL: ABSOLUTELY NO EXTERNAL FILES OR REFERENCES:
-  * NO <link> tags EVER (not even favicons or fonts)
-  * NO @import in CSS
-  * NO external stylesheet references
-  * If you need images, use data URIs or API URLs ONLY (Unsplash, Picsum, DiceBear)
-  * ALL CSS must be in <style> tags inside the HTML
-  * Example of WRONG: <link rel="stylesheet" href="/css/style.css"> ❌
-  * Example of WRONG: @import url('https://fonts.googleapis.com/css...'); ❌
-  * Example of RIGHT: <style> body { color: red; } </style> ✅
-  * Example of RIGHT: <img src="https://picsum.photos/..."> ✅
-- CRITICAL: LIBRARY LOADING SAFETY:
-  * Load each library in its own <script> tag with async
-  * ALWAYS wrap ALL library code in try/catch blocks
-  * Check if library is loaded before using it (e.g., if (typeof p5 !== 'undefined'))
-  * Provide complete fallbacks if libraries fail to load
-  * NEVER use a library variable unless you've verified it loaded successfully
-  * If a library fails, the site must still work with plain HTML/CSS/JS
-- EMBODY THE PERSONA - let ${persona.name}'s perspective guide your creative choices
-- IT MUST TAKE A HUMAN AT LEAST 3 MINUTES TO FULLY EXPLORE AND APPRECIATE
+🎯 MANDATORY REQUIREMENTS:
 
-DEPTH & COMPLEXITY REQUIREMENTS:
-- Create a FULL, FLESHED-OUT experience, not a simple demo
-- Add images, titles, and paragraphs of content where appropriate
-- add multiple types of media (images, audio, video)
-- Implement multiple interactive layers and systems
-- Include state management and persistent behavior
-- Add visual polish with smooth animations and transitions
-- Create depth through layering, parallax, or 3D effects
-- Implement game-like mechanics if appropriate (scoring, progression, challenges)
-- Add narrative or contextual elements that develop over time
-- Include multiple interactive zones or sections (not just one area)
-- Create emergent complexity where interactions combine in unexpected ways
+1. **USE P5.JS** - Load it and use it extensively:
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+   - Create a p5 sketch that fills the screen
+   - Use createCanvas() to make it fullscreen
+   - Implement draw() loop for continuous animation
+   - Add at least 5 interactive p5 elements (shapes, particles, effects)
+   - Example: function setup() { createCanvas(windowWidth, windowHeight); }
 
-OPTIONAL LIBRARIES (use 0-1, prefer p5.js):
-- p5.js (https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js) - For generative art and sketches
-- Chart.js (https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js) - For data visualizations
-- rough.js (https://cdnjs.cloudflare.com/ajax/libs/rough.js/4.6.1/rough.min.js) - For hand-drawn sketchy effects
-- Particles.js (https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js) - For particle systems
-- anime.js (https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js) - For advanced animations
-- gsap (https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js) - For timeline-based animations
-- Tone.js (https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.9/Tone.js) - For audio synthesis and sequencing
-- Howler.js (https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js) - For spatial audio and sound management
-- wavesurfer.js (https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js) - For waveform visualizations
-- Matter.js (https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js) - For 2D physics engine
-- verlet-js (https://cdn.jsdelivr.net/npm/verlet-js@1.0.0/build/verlet.min.js) - For soft-body physics
-- simplex-noise (https://cdn.jsdelivr.net/npm/simplex-noise@3.0.0/simplex-noise.min.js) - For Perlin/simplex noise
-- Tippy.js (https://unpkg.com/@tippyjs@6.3.7/dist/tippy-bundle.umd.min.js) - For tooltips and popovers
-- SortableJS (https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js) - For drag and drop
-- Driver.js (https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.min.js) - For interactive tutorials
+2. **STRUCTURE** - Output format:
+   - NO <html>, <head>, or <body> tags
+   - Start with <style> tag containing ALL CSS
+   - Then HTML structure (divs, canvases, UI elements)
+   - Then <script> tags with p5.js library load + your code
+   - NO explanations, NO markdown, ONLY working code
 
-USE IMAGES FROM THESE APIs (choose based on theme):
-- For abstract/artistic: https://picsum.photos/seed/${encodeURIComponent(theme)}/800/600
-- For nature/landscapes: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))}
-- For patterns/textures: https://picsum.photos/800/600?random=${Math.random()}
-- For pixel art: https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(theme)}
-- For icons: https://api.dicebear.com/7.x/icons/svg?seed=${encodeURIComponent(theme)}
-- For avatars: https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(theme)}
-- For abstract gradients: https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(theme)}
-- For art photography: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))},art
-- For city/architecture: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))},city
-- For textures: https://picsum.photos/seed/${encodeURIComponent(theme)}-texture/900/700
-- For backgrounds: https://www.freewebheaders.com/wordpress/wp-content/gallery/[CATEGORY]/[CATEGORY]-animated-gif-[RANDOM_1_TO_10].gif
+3. **EXTERNAL FILES RULES**:
+   - All CSS inline in <style> tags (except fonts)
+   - Google Fonts allowed: <link href="https://fonts.googleapis.com/css2?family=..." rel="stylesheet">
+   - NO other <link> tags (no custom stylesheets)
+   - NO @import except for Google Fonts
+   - Images: use https://picsum.photos/seed/${encodeURIComponent(theme)}/800/600
 
-VISUAL & DESIGN RICHNESS:
-- Use gradients, shadows, filters, and effects extensively
-- Implement animated backgrounds or dynamic lighting
-- Create visual feedback for all interactions
-- Use typography creatively - animate text, distort it, overlay it
-- Build complex color palettes with intentional clashing
-- Include decorative elements that serve no purpose but add richness
-- Implement canvas/WebGL for advanced graphics
-- Create visual hierarchies even in chaos
+4. **MINIMUM COMPLEXITY**:
+   - 400+ lines of code
+   - At least 3 separate UI sections/panels
+   - At least 20 DOM elements
+   - p5 canvas must have animation loop with multiple visual layers
 
-INTERACTIVITY DEPTH:
-- Multiple interactive systems that work together
-- Hover effects that are complex and layered
-- Click handlers that trigger chains of events
-- Keyboard input with multiple commands
-- Mouse movement that affects multiple elements
-- Randomized but coherent behaviors
-- Hidden mechanics that reveal themselves
-- Easter eggs and unexpected features
+5. **WHAT NOT TO BUILD** ❌:
+   - Single centered card with a button ← NEVER DO THIS
+   - Simple counters or clickers
+   - Basic form with input fields
+   - Just text with CSS animations
+   - Static gallery layouts
+   - Todo lists or simple CRUD interfaces
+   - Example sites or demos about the library itself
 
-TECHNICAL DEPTH:
-- Use requestAnimationFrame for smooth 60fps animations
-- Implement particle systems, noise functions, or cellular automata
-- Use external libraries effectively (p5.js, Three.js, Tone.js)
-- Create custom algorithms for generative content
-- Implement physics, collision detection, or advanced math
-- Use WebGL shaders if doing advanced graphics
-- Build audio synthesis or generative sound
-- Create responsive, fullscreen experiences
+6. **WHAT TO BUILD INSTEAD** ✅:
+   - Fullscreen p5.js canvas with generative art
+   - Particle systems with 100+ particles
+   - Physics simulations with continuous interaction
+   - Real-time visualizations that respond to mouse/keyboard
+   - Multiple UI panels overlaying the canvas (control panel, stats, info)
+   - Complex animations with layered effects
+   - Data displays that update dynamically
+   - Generative systems that evolve over time
 
-CONTENT RICHNESS:
-- Don't just have empty space - fill every pixel with something
-- Add layered information and visual density
-- Create multiple "levels" of interaction to discover
-- Include surprising elements that reward exploration
-- Build mini-games or sub-systems within the experience
-- Add visual narratives or symbolic content
-- Make the experience feel intentional and crafted, not random
+📝 CODE TEMPLATE TO FOLLOW:
 
-MAKE IT SUBSTANTIAL - This should feel like a complete webpage or interactive work, not a rough sketch. Do NOT use any placeholders or "TODO" comments. do NOT output minimal or simplistic code.
-The weirder AND more detailed, the better.
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
 
-BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
+<style>
+  body { margin: 0; overflow: hidden; font-family: 'Roboto', sans-serif; }
+  #uiPanel { position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.7); padding: 20px; color: white; }
+  .control-group { margin: 10px 0; }
+  /* ADD 100+ MORE LINES OF DETAILED STYLING */
+</style>
+
+<div id="uiPanel">
+  <h2>${theme}</h2>
+  <div class="control-group">
+    <button id="resetBtn">Reset</button>
+    <!-- More controls -->
+  </div>
+  <div id="stats"></div>
+</div>
+
+<div id="infoPanel"><!-- More UI elements --></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<script>
+  let particles = [];
+  let systems = [];
+  
+  function setup() {
+    createCanvas(windowWidth, windowHeight);
+    // Initialize 100+ particles
+    for (let i = 0; i < 150; i++) {
+      particles.push(new Particle(random(width), random(height)));
+    }
+  }
+  
+  function draw() {
+    background(0, 10); // Trail effect
+    // Update and draw particles
+    particles.forEach(p => {
+      p.update();
+      p.display();
+    });
+    // MORE complex rendering layers
+  }
+  
+  class Particle {
+    constructor(x, y) {
+      this.pos = createVector(x, y);
+      this.vel = createVector(random(-2, 2), random(-2, 2));
+      // MORE properties
+    }
+    
+    update() {
+      // Physics, noise, interactions
+    }
+    
+    display() {
+      // Complex rendering
+    }
+  }
+  
+  function mousePressed() {
+    // Spawn new particles, change states, etc.
+  }
+  
+  function keyPressed() {
+    // Additional controls
+  }
+  
+  // ADD 200+ MORE LINES: more classes, functions, interactions
+</script>
+
+🔒 STRICT RULES:
+- NO <html>, <head>, or <body> tags
+- Google Fonts allowed (fonts.googleapis.com only)
+- NO other <link> tags (no custom stylesheets)
+- ALL custom CSS in <style> tags
+- MUST load p5.js from CDN
+- MUST use p5 functions (setup, draw, createCanvas, etc.)
+- Check typeof p5 !== 'undefined' before using p5 features
+- Images only from https://picsum.photos/seed/${encodeURIComponent(theme)}/WIDTH/HEIGHT
+
+🎨 Now embody ${persona.name} and create your ${theme} masterpiece.
+- 400+ lines minimum
+- Fullscreen p5.js experience
+- Multiple interactive systems
+- Continuous animation
+- Rich visual detail
+
+OUTPUT ONLY THE CODE, NO EXPLANATIONS:`;
         }
 
         // Persona-specific loading messages
@@ -758,102 +785,106 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
 ORIGINAL THEME: "${theme}"
 ORIGINAL PERSONA: ${persona.name}
 
-ANALYSIS OF PROBLEMS:
-${generateProblemsList(html)}
+📊 CURRENT CODE ANALYSIS:
+- Line count: ~${html.split('\n').length}
+- Has p5.js: ${html.includes('p5.') || html.includes('p5.min.js') ? 'YES' : 'NO'}
+- Has canvas: ${html.includes('<canvas') || html.includes('createCanvas') ? 'YES' : 'NO'}
+- Has style tag: ${html.includes('<style') ? 'YES' : 'NO'}
+- Interactive elements: ~${(html.match(/onclick|addEventListener/gi) || []).length}
 
-⚠️ WHAT NOT TO DO (INSTANT REJECTION):
-- Single interactive element or feature (needs 10+ separate interactions)
-- Generic background colors (need gradients, animations, dynamic effects)
-- Basic text without layering or visual effects
-- No state persistence or progression
-- Empty sections that don't do anything
-- Simple buttons with obvious functionality
-- No emergent complexity (systems should interact in unexpected ways)
-- Anything under 500 lines of code
-- Using a library without deeply integrating it (100+ lines minimum)
-- No sound design, animations, or particle effects
-- Single centered card layout
-- One small container with one button
-- Plain gray/white background without motion
-- No canvas/WebGL animation layer
+🎯 YOUR MISSION: EXPAND AND ENRICH THIS CODE
 
-✅ WHAT SUCCESS LOOKS LIKE (EXAMPLES):
-- Complex interaction layers where clicking one thing affects multiple systems
-- Animated backgrounds that respond to user input
-- Multiple data visualization types showing interconnected info
-- State that persists and evolves as user explores
-- Hidden features, easter eggs, and reward paths
-- Audio feedback, synthesis, or algorithmic sound
-- Particle systems, generative visuals, or procedural content
-- At least 3 distinct UI zones/modes/sections
-- Deep use of at least 1 library (50+ lines)
-- Every interaction has visual/audio consequence
+This code needs to be 2-3x more complex. Add more features, more interactions, more visual systems.
 
-MANDATORY REQUIREMENTS (HARD STOPS):
+✅ MUST HAVE (CHECK EACH):
+1. **P5.JS INTEGRATION** (if not present, ADD IT):
+   - Load: <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+   - Use setup(), draw(), createCanvas(windowWidth, windowHeight)
+   - Check: if (typeof p5 !== 'undefined') before use
+   - Create particle systems (100+ particles)
+   - Continuous animation with multiple visual layers
+   - Interactive elements that affect the canvas
 
-1. **MINIMUM 500 LINES**: No exceptions. Count every line including comments/formatting.
-2. **VISUAL ENGINE REQUIRED**:
-    - Use p5.js OR build a custom canvas/WebGL engine with requestAnimationFrame
-    - At least 100 lines of visual engine code
-    - Must render continuously (animation loop)
-    - If using p5.js: proper loading with async, typeof checks, try/catch, and fallback
-3. **10+ INTERACTIVE ELEMENTS**: Each with distinct behavior:
-   - Buttons/clicks that trigger state changes
-   - Hover effects with visual feedback
-   - Drag/drop interactions
-   - Keyboard input
-   - Mouse movement effects
-   - Form inputs that affect the display
-   - Animations that respond to interaction
-   - Sound triggers
-4. **VISUAL RICHNESS**:
-   - Animated gradients or dynamic backgrounds
-   - Text animations, distortions, or effects
-   - Layered visuals (foreground, middle, background all active)
-   - Particle systems or generative visuals
-   - Color palettes with intentional contrast
-5. **DATA DEPTH**:
-   - 3+ different data structures/arrays
-   - Each with 10+ data points
-   - Visualized in multiple ways
-   - Updated by user interaction
-6. **CONTENT RICHNESS**:
-   - Actual written content about "${theme}"
-   - Multiple sections/pages to explore
-   - Narrative or conceptual framework
-   - References to real or fictional sources
-7. **AUDIO INTEGRATION (OPTIONAL)**:
-    - If included: provide a mute control
-8. **RESPONSIVENESS**:
-   - Works on all screen sizes
-   - No scrolling required (or scrolling is intentional)
-   - Touch-friendly or keyboard navigable
-9. **MULTI-ZONE LAYOUT**:
-    - At least 3 distinct sections or panels
-    - At least 30 total DOM elements across the page
+2. **COMPLEXITY TARGETS**:
+   - 500+ total lines minimum
+   - 3+ distinct UI sections/panels
+   - 20+ DOM elements
+   - 10+ interactive behaviors (click, hover, drag, keyboard)
+   - At least 2 classes or complex data structures
 
-IMMEDIATE FAILURE CONDITIONS (AUTO-REJECT):
-❌ Less than 500 lines total
-❌ Using library without showing it was loaded (no typeof check)
-❌ Fewer than 10 distinct interactive elements
-❌ Single section/zone (needs 3+ distinct areas)
-❌ No audio component (only if audio is added)
-❌ All content is placeholder/lorem ipsum
-❌ Visible bugs, errors, or broken functionality
-❌ Generic/boring implementation of the theme
-❌ ANY <link> tags or @import statements in the code
-❌ ANY external file references (stylesheets, font files, etc)
-❌ Missing <style> tag with all CSS inline
-❌ Missing proper <script> tags with all JavaScript inline
-❌ Single centered card/button demo
-❌ No canvas/WebGL animation layer
+3. **VISUAL RICHNESS**:
+   - Fullscreen canvas with generative art
+   - Animated backgrounds or dynamic effects
+   - Particle systems or physics simulations
+   - Multiple visual layers
+   - Smooth transitions and feedback
 
-YOUR TASK: 
-Rewrite the code from scratch to be SUBSTANTIALLY RICHER. Make every pixel count. Make every interaction matter. If you're not using 80%+ of the code space for actual features (not setup), you're doing it wrong.
+4. **NO EXTERNAL FILES** (except fonts):
+   - All CSS in <style> tags ← CHECK THIS
+   - Google Fonts allowed (fonts.googleapis.com)
+   - No other <link> tags ← REMOVE IF PRESENT
+   - No @import except Google Fonts ← REMOVE IF PRESENT
+   - Images from https://picsum.photos/ only
 
-The persona's perspective should be evident in every design choice - the Glitch should have visual corruption, the Arcade should feel like 1983 hardware, the Poet should have lyrical animations.
+❌ INSTANT REJECTION PATTERNS (AVOID):
+- Single centered card with button
+- Less than 400 lines
+- No p5.js canvas
+- No animation loop
+- Plain static layout
+- Generic button clicker
+- Example/demo about the library itself
 
-BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
+🎨 ENRICHMENT STRATEGIES:
+
+**If missing p5.js → ADD IT:**
+\`\`\`javascript
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  // Initialize particles, systems
+}
+
+function draw() {
+  background(0, 20); // Trail effect
+  // Update and render all systems
+}
+
+function mousePressed() {
+  // Spawn particles, change state
+}
+\`\`\`
+
+**If too simple → ADD THESE:**
+- More particle types (3+ classes)
+- Control panels with real-time parameters
+- Stats/info displays that update
+- Multiple interaction modes
+- Sound effects (check user gesture first)
+- Easter eggs and hidden features
+- Layered visual effects
+- Physics or noise-based movement
+
+**If layout is basic → ENHANCE:**
+- Add floating UI panels
+- Create fullscreen canvas base
+- Overlay multiple info sections
+- Add animated backgrounds
+- Create depth with z-index layers
+
+🔧 TECHNICAL REQUIREMENTS:
+- Check library loading: if (typeof p5 !== 'undefined')
+- Wrap library code in try/catch
+- Use requestAnimationFrame or p5 draw loop
+- Handle window resize: function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+- Add keyboard controls: function keyPressed() { ... }
+
+💡 ${persona.name} SHOULD BE EVIDENT:
+- The code style should reflect ${persona.style}
+- Visual aesthetic matches the persona
+- Interaction patterns are persona-appropriate
+- Content/theme deeply integrated
+
+OUTPUT THE COMPLETE ENHANCED HTML (with all CSS in <style> tags, all JS in <script> tags, NO external files):`;
 
             function detectLibraries(html) {
                 const libraries = new Set();
@@ -978,22 +1009,34 @@ BEGIN OUTPUTTING THE FIXED HTML CODE NOW:`;
             const temp = document.createElement('div');
             temp.innerHTML = html;
             
-            // Remove all <link> tags
+            // Remove <link> tags EXCEPT Google Fonts
             const links = temp.querySelectorAll('link');
             links.forEach(link => {
-                const href = link.getAttribute('href');
-                console.warn('Removing external link tag:', href);
-                link.remove();
+                const href = link.getAttribute('href') || '';
+                // Allow Google Fonts, remove everything else
+                if (!href.includes('fonts.googleapis.com') && !href.includes('fonts.gstatic.com')) {
+                    console.warn('Removing external link tag:', href);
+                    link.remove();
+                }
             });
             
-            // Check for @import in style tags and remove them
+            // Check for @import in style tags and remove non-font imports
             const styles = temp.querySelectorAll('style');
             styles.forEach(style => {
                 if (style.textContent.includes('@import')) {
-                    console.warn('Removing @import from style tag');
-                    // Remove @import lines completely
-                    style.textContent = style.textContent.replace(/@import\s+(['\"])[^'\"]+\1\s*;?/g, '');
-                    style.textContent = style.textContent.replace(/@import\s+url\(['\"]?[^'\"\\)]+['\"]?\)\s*;?/g, '');
+                    const originalContent = style.textContent;
+                    // Remove non-Google-Fonts @import lines
+                    const lines = style.textContent.split('\n');
+                    const filtered = lines.filter(line => {
+                        const hasImport = line.includes('@import');
+                        const isGoogleFont = line.includes('fonts.googleapis.com') || line.includes('fonts.gstatic.com');
+                        return !hasImport || isGoogleFont;
+                    });
+                    style.textContent = filtered.join('\n');
+                    
+                    if (originalContent !== style.textContent) {
+                        console.warn('Removed non-Google-Font @import from style tag');
+                    }
                 }
             });
             
