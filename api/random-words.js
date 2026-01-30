@@ -28,15 +28,15 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: "You are a creative word generator. Generate two very random words. Return ONLY the two words separated by a space, nothing else. Make them unexpected, weird, or abstract. Examples: 'quantum pickle', 'glitchy nostalgia', 'floating anxiety', 'digital moss'"
+          content: "You are a creative word generator. Generate two random words. Return ONLY two words separated by a space, nothing else. Examples: 'broken elevator', 'melting cheese', 'rusty bicycle', 'screaming lamp', 'confused penguin', 'dancing algorithm','space dominoes'"
         },
         {
           role: "user",
           content: "Generate two random words."
         }
       ],
-      temperature: 1.2,
-      max_tokens: 20
+      temperature: 0.8,
+      max_tokens: 15
     });
 
     const words = completion.choices[0].message.content.trim();
