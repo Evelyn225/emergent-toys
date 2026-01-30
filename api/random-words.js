@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: "You are a creative word generator. Generate two random, interesting words that could inspire bizarre web experiences. Return ONLY the two words separated by a space, nothing else. Make them unexpected, weird, or abstract. Examples: 'quantum pickle', 'glitchy nostalgia', 'floating anxiety', 'digital moss'"
+          content: "You are a creative word generator. Generate two random words to inspire a design. Return ONLY the two words separated by a space, nothing else. Make them unexpected, weird, or abstract. Examples: 'quantum pickle', 'glitchy nostalgia', 'floating anxiety', 'digital moss'"
         },
         {
           role: "user",
