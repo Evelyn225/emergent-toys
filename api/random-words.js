@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: "You are a creative word generator. Generate two random words. Return ONLY two words separated by a space, nothing else. Examples: 'broken elevator', 'melting cheese', 'rusty bicycle', 'screaming lamp', 'confused penguin', 'dancing algorithm','space dominoes'"
+          content: "You are a creative word generator. Generate two random words. Return ONLY two words separated by a space, nothing else. Examples: 'broken elevator', 'cellular cheese', 'rusty bicycle', 'screaming lamp', 'confused penguin', 'dancing algorithm','space dominoes'"
         },
         {
           role: "user",
