@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM Roulette</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        #regenerateButton {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        #regenerateButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        #regenerateButton:active {
+            transform: translateY(0);
+        }
+
+        #regenerateButton:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            font-size: 18px;
+            color: #333;
+        }
+
+        #loadingOverlay.hidden {
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #generatedContent {
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <button id="regenerateButton">🔄 Regenerate Site</button>
+    
+    <div id="loadingOverlay">
+        <div class="spinner"></div>
+        <div id="loadingText">Generating your website...</div>
+    </div>
+
+    <div id="generatedContent"></div>
+
+    <script>
+        // API endpoints - uses Vercel serverless functions
+        const RANDOM_WORDS_ENDPOINT = '/api/random-words';
+        const GENERATE_ENDPOINT = '/api/generate';
+
+        // Create the prompt for the AI
+        function createGenerationPrompt(theme) {
+            return `You are an experimental web developer who creates bizarre, and unpredictable web experiences. Draw inspiration from these two words: "${theme}".
+
+Requirements:
+1. Create a complete, self-contained HTML page with embedded CSS and JavaScript
+2. Use the two words "${theme}" as loose inspiration - interpret them in the most bizarre, unexpected way possible. They don't need to form a coherent theme
+3. MUST be interactive - include games, animations, clickable elements, mouse interactions, keyboard controls, or embedded web content (iframes, embeds, etc.)
+4. Embrace brokenness and dysfunction - things don't need to work perfectly. Include intentional glitches, bugs, or chaotic behavior
+5. Can create games (simple or complex), animations, interactive art, or experimental interfaces
+6. Can embed external content: YouTube videos, maps, web pages, APIs, or other web resources
+7. Visual design should match the inspiration - ugly, chaotic, or broken is perfectly fine if it fits
+8. The HTML should be complete and ready to be inserted into a div element
+9. Do NOT include <html>, <head>, or <body> tags - only the content that goes inside the body
+10. Include all CSS in <style> tags and JavaScript in <script> tags
+11. Push boundaries - make it weird, experimental, and potentially broken. The more bizarre, the better!
+
+Return ONLY the HTML code (with embedded CSS and JS), nothing else. No markdown, no explanations, just the code.`;
+        }
+
+        // Get random words from AI
+        async function getRandomWords() {
+            const response = await fetch(RANDOM_WORDS_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `API Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.theme || data.words;
+        }
+
+        // Call ChatGPT API via Vercel serverless function
+        async function generateWebsite() {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            const regenerateButton = document.getElementById('regenerateButton');
+            const generatedContent = document.getElementById('generatedContent');
+
+            // Show loading state
+            loadingOverlay.classList.remove('hidden');
+            regenerateButton.disabled = true;
+            generatedContent.innerHTML = '';
+
+            try {
+                // First, get random words from AI
+                loadingText.textContent = 'Getting random words from AI...';
+                const theme = await getRandomWords();
+                
+                loadingText.textContent = `Generating website inspired by: "${theme}"...`;
+
+                // Create the prompt
+                const prompt = createGenerationPrompt(theme);
+
+                // Call Vercel API endpoint to generate website
+                const response = await fetch(GENERATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        theme: theme,
+                        prompt: prompt
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const generatedHTML = data.html;
+
+                loadingText.textContent = 'Rendering website...';
+
+                // Insert the generated HTML
+                generatedContent.innerHTML = generatedHTML;
+
+                // Execute any scripts in the generated content
+                const scripts = generatedContent.querySelectorAll('script');
+                scripts.forEach(oldScript => {
+                    const newScript = document.createElement('script');
+                    if (oldScript.src) {
+                        newScript.src = oldScript.src;
+                    } else {
+                        newScript.textContent = oldScript.textContent;
+                    }
+                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                });
+
+                // Hide loading overlay
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                    regenerateButton.disabled = false;
+                }, 500);
+
+            } catch (error) {
+                console.error('Error generating website:', error);
+                loadingText.textContent = `Error: ${error.message}`;
+                regenerateButton.disabled = false;
+                
+                // Show error in content area
+                generatedContent.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: #d32f2f;">
+                        <h2>Error generating website</h2>
+                        <p>${error.message}</p>
+                        <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                            Make sure your OpenAI API key is set in Vercel environment variables.
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const regenerateButton = document.getElementById('regenerateButton');
+            regenerateButton.addEventListener('click', generateWebsite);
+            
+            // Generate initial website
+            generateWebsite();
+        });
+    </script>
+</body>
+</html>
