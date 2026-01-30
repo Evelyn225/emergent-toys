@@ -22,7 +22,7 @@ async function getHandler(moduleName) {
 }
 
 // Route for /api/random-words (with and without .js extension)
-app.all('/api/random-words', app.all('/api/random-words.js', async (req, res) => {
+app.all('/api/random-words', async (req, res) => {
   try {
     const handler = await getHandler('random-words');
     handler(req, res);
@@ -30,10 +30,20 @@ app.all('/api/random-words', app.all('/api/random-words.js', async (req, res) =>
     console.error('Error loading random-words handler:', error);
     res.status(500).json({ error: 'Failed to load handler', details: error.message });
   }
-}));
+});
+
+app.all('/api/random-words.js', async (req, res) => {
+  try {
+    const handler = await getHandler('random-words');
+    handler(req, res);
+  } catch (error) {
+    console.error('Error loading random-words handler:', error);
+    res.status(500).json({ error: 'Failed to load handler', details: error.message });
+  }
+});
 
 // Route for /api/generate (with and without .js extension)
-app.all('/api/generate', app.all('/api/generate.js', async (req, res) => {
+app.all('/api/generate', async (req, res) => {
   try {
     const handler = await getHandler('generate');
     handler(req, res);
@@ -41,7 +51,17 @@ app.all('/api/generate', app.all('/api/generate.js', async (req, res) => {
     console.error('Error loading generate handler:', error);
     res.status(500).json({ error: 'Failed to load handler', details: error.message });
   }
-}));
+});
+
+app.all('/api/generate.js', async (req, res) => {
+  try {
+    const handler = await getHandler('generate');
+    handler(req, res);
+  } catch (error) {
+    console.error('Error loading generate handler:', error);
+    res.status(500).json({ error: 'Failed to load handler', details: error.message });
+  }
+});
 
 // Route for /api/unsplash (with and without .js extension)
 app.all('/api/unsplash', async (req, res) => {
