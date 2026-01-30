@@ -10,7 +10,7 @@ app.use(express.static('.')); // Serve static files from current directory
 
 // Initialize OpenAI with API key from environment variable
 const openai = new OpenAI({
-    apiKey: process.env.CRITTER_OPENAI_API_KEY
+    apiKey: process.env.CRITTERS_OPENAI_API_KEY
 });
 
 app.post('/api/bug-chat', async (req, res) => {

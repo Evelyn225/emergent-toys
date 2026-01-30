@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 // Load environment variables from openai.env for local development if not set
-if (!process.env.CRITTER_OPENAI_API_KEY) {
+if (!process.env.CRITTERS_OPENAI_API_KEY) {
   try {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
@@ -65,13 +65,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!process.env.CRITTER_OPENAI_API_KEY) {
+    if (!process.env.CRITTERS_OPENAI_API_KEY) {
       console.error('OpenAI API key is not set');
       return res.status(500).json({ error: 'API key not configured' });
     }
 
     const openai = new OpenAI({
-      apiKey: process.env.CRITTER_OPENAI_API_KEY
+      apiKey: process.env.CRITTERS_OPENAI_API_KEY
     });
 
     const completion = await openai.chat.completions.create({
