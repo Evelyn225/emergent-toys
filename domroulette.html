@@ -185,8 +185,16 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}INSTRUCTIONS - DO NOT 
 - Do NOT include <html>, <head>, or <body> tags
 - Include all CSS in <style> tags and all JS in <script> tags
 - The code must be complete, robust, and runnable as-is
-- CRITICAL: DO NOT reference external stylesheets or CSS files
-- CRITICAL: ALL styling must be written in <style> tags - no @import, no <link> tags
+- CRITICAL: ABSOLUTELY NO EXTERNAL FILES OR REFERENCES:
+  * NO <link> tags EVER (not even favicons or fonts)
+  * NO @import in CSS
+  * NO external stylesheet references
+  * If you need images, use data URIs or API URLs ONLY (Unsplash, Picsum, DiceBear)
+  * ALL CSS must be in <style> tags inside the HTML
+  * Example of WRONG: <link rel="stylesheet" href="/css/style.css"> ❌
+  * Example of WRONG: @import url('https://fonts.googleapis.com/css...'); ❌
+  * Example of RIGHT: <style> body { color: red; } </style> ✅
+  * Example of RIGHT: <img src="https://picsum.photos/..."> ✅
 - CRITICAL: LIBRARY LOADING SAFETY:
   * Load each library in its own <script> tag with async
   * ALWAYS wrap ALL library code in try/catch blocks
@@ -199,7 +207,6 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}INSTRUCTIONS - DO NOT 
 
 DEPTH & COMPLEXITY REQUIREMENTS:
 - Create a FULL, FLESHED-OUT experience, not a simple demo
-- At least 10 unique DOM elements
 - Add images, titles, and paragraphs of content where appropriate
 - add multiple types of media (images, audio, video)
 - Implement multiple interactive layers and systems
@@ -261,7 +268,6 @@ INTERACTIVITY DEPTH:
 - Randomized but coherent behaviors
 - Hidden mechanics that reveal themselves
 - Easter eggs and unexpected features
-- Feel free to include hyperlinks to external resources
 
 TECHNICAL DEPTH:
 - Use requestAnimationFrame for smooth 60fps animations
@@ -830,6 +836,10 @@ IMMEDIATE FAILURE CONDITIONS (AUTO-REJECT):
 ❌ All content is placeholder/lorem ipsum
 ❌ Visible bugs, errors, or broken functionality
 ❌ Generic/boring implementation of the theme
+❌ ANY <link> tags or @import statements in the code
+❌ ANY external file references (stylesheets, font files, etc)
+❌ Missing <style> tag with all CSS inline
+❌ Missing proper <script> tags with all JavaScript inline
 
 YOUR TASK: 
 Rewrite the code from scratch to be SUBSTANTIALLY RICHER. Make every pixel count. Make every interaction matter. If you're not using 80%+ of the code space for actual features (not setup), you're doing it wrong.
@@ -893,6 +903,39 @@ BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
             reviewedHTML = reviewedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
 
             return reviewedHTML;
+        }
+
+        // Validate and remove external file references from generated HTML
+        function validateAndSanitizeHTML(html) {
+            // Create a temporary div to parse HTML
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            
+            // Remove all <link> tags
+            const links = temp.querySelectorAll('link');
+            links.forEach(link => {
+                const href = link.getAttribute('href');
+                console.warn('Removing external link tag:', href);
+                link.remove();
+            });
+            
+            // Check for @import in style tags and remove them
+            const styles = temp.querySelectorAll('style');
+            styles.forEach(style => {
+                if (style.textContent.includes('@import')) {
+                    console.warn('Removing @import from style tag');
+                    // Remove @import lines completely
+                    style.textContent = style.textContent.replace(/@import\s+(['\"])[^'\"]+\1\s*;?/g, '');
+                    style.textContent = style.textContent.replace(/@import\s+url\(['\"]?[^'\"\\)]+['\"]?\)\s*;?/g, '');
+                }
+            });
+            
+            // Warn if no style tag exists
+            if (styles.length === 0) {
+                console.warn('No <style> tag found in generated HTML');
+            }
+            
+            return temp.innerHTML;
         }
 
         // Get random words from AI
@@ -998,6 +1041,9 @@ BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
                 const reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
 
                 loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...`);
+
+                // Validate and sanitize the generated HTML
+                reviewedHTML = validateAndSanitizeHTML(reviewedHTML);
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = reviewedHTML;
