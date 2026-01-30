@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     }
   }
 
-  const { theme, prompt, isReview } = body;
+  const { theme, prompt } = body;
 
   // Validate input
   if (!theme || !prompt) {
@@ -51,11 +51,15 @@ export default async function handler(req, res) {
       apiKey: process.env.DOMROULETTE_KEY
     });
 
-    // Single-pass generation with high token limit
-    console.log('Generating website for theme:', theme);
-    
+    // List all available models
+    const models = await openai.models.list();
+    const gpt4Models = models.data
+      .filter(m => m.id.includes('gpt-4') || m.id.includes('o1') || m.id.includes('o3'))
+      .sort((a, b) => b.created - a.created);
+    console.log(gpt4Models.map(m => ({ id: m.id, created: new Date(m.created * 1000) })));
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4-turbo-2024-04-09",
       messages: [
         {
           role: "user",
@@ -63,24 +67,15 @@ export default async function handler(req, res) {
         }
       ],
       temperature: 0.9,
-      max_tokens: 16000
+      max_tokens: 4096
     });
 
     let html = completion.choices[0].message.content.trim();
-    
+
     // Remove markdown code blocks if present
     html = html.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
-    
-    console.log('Generation complete. Length:', html.length);
-    
+
     res.json({ html: html });
-  } catch (error) {
-    console.error('Detailed error:', error);
-    res.status(500).json({
-      error: 'Failed to generate website',
-      details: error.message
-    });
-  }
   } catch (error) {
     console.error('Detailed error:', error);
     res.status(500).json({
