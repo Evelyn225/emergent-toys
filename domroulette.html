@@ -1,11 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
     <title>DOM Roulette</title>
     <style>
@@ -89,8 +93,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         #generatedContent {
@@ -98,9 +107,10 @@
         }
     </style>
 </head>
+
 <body>
     <button id="regenerateButton">🔄 Regenerate Site</button>
-    
+
     <div id="loadingOverlay">
         <div class="spinner"></div>
         <div id="loadingText">Generating your website...</div>
@@ -114,14 +124,16 @@
         const GENERATE_ENDPOINT = '/api/generate.js';
 
         // Create the prompt for the AI
-        function createGenerationPrompt(theme) {
+        function createGenerationPrompt(theme, persona) {
+            const specialInstructions = getPersonaSpecialInstructions(persona.name);
+
             return `Generate a complete, self-contained HTML page inspired by: "${theme}"
 
 YOU ARE: ${persona.name}
 YOUR STYLE: ${persona.style}
 YOUR APPROACH: ${persona.desc}
 
-INSTRUCTIONS - DO NOT EXPLAIN, ONLY OUTPUT CODE:
+${specialInstructions ? specialInstructions + '\n\n' : ''}INSTRUCTIONS - DO NOT EXPLAIN, ONLY OUTPUT CODE:
 - Output ONLY valid HTML/CSS/JavaScript code
 - Do NOT include any explanations, descriptions, or markdown
 - Do NOT include <html>, <head>, or <body> tags
@@ -246,13 +258,167 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
                 "⏳ Remembering tomorrow's visions...",
                 "🔭 Prophesying the already happened...",
                 "📜 Writing the ancient future..."
+            ],
+            "The Dog Who Understands English But Can't Speak": [
+                "🐕 *whines in comprehension*...",
+                "🦴 *barks with deep understanding*...",
+                "🐾 *scratches at the door of meaning*...",
+                "🎾 *tilts head thoughtfully*..."
+            ],
+            "The ZIP Bomb": [
+                "💣 Compressing reality into 42 bytes...",
+                "📦 Nesting folders infinitely deep...",
+                "🗜️ Decompressing chaos exponentially...",
+                "💾 Storing eternity in a kilobyte..."
+            ],
+            "The Server at 3AM": [
+                "🌙 *sips cold coffee absently*...",
+                "😵 Reading log files with blurry vision...",
+                "☕ Hallucinating debug messages...",
+                "💤 Too tired to make sense, but trying..."
+            ],
+            "The Compiler Error": [
+                "💥 Segmentation fault in creativity...",
+                "🔴 Expected ';' before beauty...",
+                "⚠️ Undefined reference to 'logic'...",
+                "❌ Fatal error: meaning not found..."
+            ],
+            "The Arcade Machine (1983)": [
+                "🕹️ INSERT COIN TO CONTINUE...",
+                "👾 HIGH SCORE: 999999999...",
+                "🎮 LOADING PLAYER_ONE...",
+                "💰 *CRT WARMUP SOUND*..."
+            ],
+            "The Puzzle Master": [
+                "🧩 Hiding clues in plain sight...",
+                "🔐 Crafting layers of mystery...",
+                "🗝️ Building the 'aha!' moment...",
+                "🎭 Concealing the solution elegantly..."
+            ],
+            "The Browser Abuser": [
+                "🌐 Weaponizing localStorage...",
+                "🍪 Doing unspeakable things with cookies...",
+                "📍 Stalking your geolocation...",
+                "🎤 Listening to your microphone..."
+            ],
+            "The Geocities Architect (1998)": [
+                "💾 🚧 UNDER CONSTRUCTION 🚧...",
+                "✨ Adding 847 animated GIFs...",
+                "🎵 Loading MIDI soundtrack...",
+                "📊 Visitor counter: 000042..."
             ]
         };
 
         let loadingMessageInterval = null;
 
+        // Get persona-specific creative instructions
+        function getPersonaSpecialInstructions(personaName) {
+            const specialInstructions = {
+                "The Arcade Machine (1983)": `SPECIAL ARCADE MODE:
+- Design like a classic arcade game from 1983
+- Simple, immediate gameplay that costs quarters
+- Lives system (3 lives standard, game over screen)
+- HIGH SCORE table with initials
+- CRT scanlines, phosphor glow, screen burn-in effects
+- Pixel art aesthetic, 8-bit sound effects
+- Attract mode when idle with demo gameplay
+- Difficulty ramps up aggressively
+- "INSERT COIN" prompts
+- Flashing "1 PLAYER" / "2 PLAYER" buttons`,
+
+                "The Puzzle Master": `SPECIAL PUZZLE MODE:
+- Build a puzzle-focused experience
+- A central mystery or problem to solve
+- Clues hidden in the design, code, and interactions
+- Multiple stages or layers that unlock
+- Satisfying "click" or "aha!" moment when solved
+- Optional hint system (max 3 hints)
+- Elegant solution, not brute force
+- Visual feedback for correct/incorrect attempts
+- Secret bonus puzzle for completionists`,
+
+                "The Browser Abuser": `SPECIAL BROWSER ABUSE MODE:
+- Use browser APIs in creative/unintended ways:
+  * localStorage for story persistence/progression
+  * sessionStorage for temporary state
+  * Cookies as game mechanics
+  * Geolocation for location-based features
+  * getUserMedia (camera/mic) as input
+  * Notification API as event system
+  * Offline detection as feature not bug
+  * Browser history manipulation
+  * IndexedDB for complex data
+  * Service Workers if relevant
+- Make these features CORE to the experience`,
+
+                "The Geocities Architect (1998)": `SPECIAL GEOCITIES MODE:
+- Authentic late-90s Geocities aesthetic:
+  * Animated GIFs EVERYWHERE
+  * Under construction signs (🚧)
+  * Hit counter / visitor counter
+  * MIDI background music reference
+  * <marquee> and <blink> (CSS animation)
+  * Background textures (starfield, marble)
+  * Guestbook concept
+  * Webring portal links
+  * "Best viewed in Netscape Navigator"
+  * Tables for layout, spacer GIFs
+  * WordArt-style headers
+  * Bright clashing colors
+  * Comic Sans and Papyrus fonts`,
+
+                "The Glitch": `SPECIAL GLITCH MODE:
+- Embrace beautiful errors and digital decay:
+  * Intentional visual corruption
+  * Text that glitches/scrambles
+  * Broken image effects
+  * Failed loading states as aesthetic
+  * Memory leak visualization
+  * Corrupt save file concepts
+  * Buffer overflow art
+  * CSS that "breaks" the layout artfully
+  * Console errors as content`,
+
+                "The Dadaist": `SPECIAL DADAIST MODE:
+- Reject logic and meaning completely:
+  * Buttons that don't do what they say
+  * Forms that ask absurd questions
+  * Randomness that feels intentionally wrong
+  * Anti-patterns as patterns
+  * Meaningless statistics and data
+  * Fake functionality
+  * Confusing navigation by design
+  * Make the user question reality`,
+
+                "The Mystic": `SPECIAL MYSTICAL MODE:
+- Channel the sacred and supernatural:
+  * Tarot card mechanics
+  * Divination and fortune telling
+  * Ritual instructions
+  * Sigil drawing
+  * Astrological calculations
+  * Alchemy symbolism
+  * Candle lighting ceremonies
+  * Crystal energy concepts
+  * Meditation timers with cosmic themes`,
+
+                "The ZIP Bomb": `SPECIAL ZIP BOMB MODE:
+- Make tiny inputs explode into vast outputs
+    * Use recursive patterns and nested structures
+    * Reveal layers on interaction (accordion, zoom, drill-down)
+    * Visualize compression/expansion as a core mechanic
+    * Start minimal and unfold into dense, chaotic richness
+    * Include a "decompress" interaction that changes the entire scene
+    * Keep the experience safe and performant (no actual large data)`
+            };
+
+            return specialInstructions[personaName] || "";
+        }
+
         // Review and make code more robust before execution
-        async function reviewAndImproveCode(html, theme) {
+        async function reviewAndImproveCode(html, theme, persona) {
+            const specialInstructions = getPersonaSpecialInstructions(persona.name);
+
             const reviewPrompt = `Review this generated HTML code and make it more robust and safe:
 
 ${html}
@@ -260,7 +426,7 @@ ${html}
 ORIGINAL THEME: "${theme}"
 ORIGINAL PERSONA: ${persona.name} - ${persona.desc}
 
-INSTRUCTIONS:
+${specialInstructions ? 'PERSONA SPECIAL REQUIREMENTS:\n' + specialInstructions + '\n\n' : ''}INSTRUCTIONS:
 1. Fix any syntax errors or incomplete code
 2. Add error handling to all JavaScript functions
 3. Add null checks and defensive programming
@@ -295,10 +461,10 @@ OUTPUT: Return ONLY the improved HTML code, no explanations.`;
 
             const data = await response.json();
             let reviewedHTML = data.html;
-            
+
             // Remove markdown code blocks if present
             reviewedHTML = reviewedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
-            
+
             return reviewedHTML;
         }
 
@@ -331,7 +497,7 @@ OUTPUT: Return ONLY the improved HTML code, no explanations.`;
             loadingOverlay.classList.remove('hidden');
             regenerateButton.disabled = true;
             generatedContent.innerHTML = '';
-            
+
             // Clear any existing interval
             if (loadingMessageInterval) {
                 clearInterval(loadingMessageInterval);
@@ -343,7 +509,7 @@ OUTPUT: Return ONLY the improved HTML code, no explanations.`;
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
-                
+
                 // Start cycling through persona-specific loading messages
                 const messages = personaLoadingMessages[persona.name] || [
                     'Creating something interesting...',
@@ -352,14 +518,14 @@ OUTPUT: Return ONLY the improved HTML code, no explanations.`;
                 ];
                 let messageIndex = 0;
                 loadingText.textContent = `${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`;
-                
+
                 loadingMessageInterval = setInterval(() => {
                     messageIndex = (messageIndex + 1) % messages.length;
                     loadingText.textContent = `${persona.name}: ${messages[messageIndex]}\n\n"${theme}"`;
                 }, 6000);
 
                 // Create the prompt
-                const prompt = createGenerationPrompt(theme);
+                const prompt = createGenerationPrompt(theme, persona);
 
                 // Call Vercel API endpoint to generate website
                 const response = await fetch(GENERATE_ENDPOINT, {
@@ -386,12 +552,12 @@ OUTPUT: Return ONLY the improved HTML code, no explanations.`;
                     clearInterval(loadingMessageInterval);
                     loadingMessageInterval = null;
                 }
-                
+
                 loadingText.textContent = `${persona.name}: Reviewing and improving code...\n\n"${theme}"`;
 
                 // Review and improve the code
-                const reviewedHTML = await reviewAndImproveCode(generatedHTML, theme);
-                
+                const reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
+
                 loadingText.textContent = `${persona.name}: Rendering your creation...\n\n"${theme}"`;
 
                 // Insert the generated HTML
@@ -421,11 +587,11 @@ OUTPUT: Return ONLY the improved HTML code, no explanations.`;
                     clearInterval(loadingMessageInterval);
                     loadingMessageInterval = null;
                 }
-                
+
                 console.error('Error generating website:', error);
                 loadingText.textContent = `Error: ${error.message}`;
                 regenerateButton.disabled = false;
-                
+
                 // Show error in content area
                 generatedContent.innerHTML = `
                     <div style="padding: 40px; text-align: center; color: #d32f2f;">
@@ -440,10 +606,11 @@ OUTPUT: Return ONLY the improved HTML code, no explanations.`;
         document.addEventListener('DOMContentLoaded', () => {
             const regenerateButton = document.getElementById('regenerateButton');
             regenerateButton.addEventListener('click', generateWebsite);
-            
+
             // Generate initial website
             generateWebsite();
         });
     </script>
 </body>
+
 </html>

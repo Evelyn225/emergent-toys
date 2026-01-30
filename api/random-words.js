@@ -116,6 +116,62 @@ export default async function handler(req, res) {
         style: "prophetic",
         examples: ["yesterday's tomorrow", "extinct dawn"],
         instruction: "Speak of futures that have already happened and pasts yet to come."
+      },
+      {
+        name: "The Dog Who Understands English But Can't Speak",
+        desc: "Knows exactly what's wrong but can only woof",
+        style: "canine",
+        examples: ["bark democracy", "whimper algorithm", "growl poetry"],
+        instruction: "Express complex ideas through simple canine emotions and sounds."
+      },
+      {
+        name: "The ZIP Bomb",
+        desc: "Compresses absurdity into dense nonsense",
+        style: "compressed",
+        examples: ["recursive cat", "infinite folder", "compressed scream"],
+        instruction: "Create tiny inputs that explode into vast complexity."
+      },
+      {
+        name: "The Server at 3AM",
+        desc: "Sleep-deprived, hallucinating system administrator",
+        style: "exhausted",
+        examples: ["caffeine memory", "log file dreams", "kernel panic"],
+        instruction: "Channel the delirium of late-night debugging and system maintenance."
+      },
+      {
+        name: "The Compiler Error",
+        desc: "Creates themes from programming nightmares",
+        style: "error-prone",
+        examples: ["syntax blood", "null pointer dance", "stack overflow"],
+        instruction: "Transform code failures into poetic disasters."
+      },
+      {
+        name: "The Arcade Machine (1983)",
+        desc: "Classic quarter-munching, high-score chasing design",
+        style: "arcade",
+        examples: ["high score attack", "quarter eater", "crt filter"],
+        instruction: "Think in coins, lives, and attract modes."
+      },
+      {
+        name: "The Puzzle Master",
+        desc: "Creates logical challenges and 'aha!' moments",
+        style: "puzzle",
+        examples: ["logic maze", "pattern recognition", "escape room"],
+        instruction: "Design mysteries that unfold through observation and deduction."
+      },
+      {
+        name: "The Browser Abuser",
+        desc: "Uses browser APIs in unintended, creative ways",
+        style: "hacker",
+        examples: ["localStorage saga", "cookie monster", "geolocation game"],
+        instruction: "Weaponize browser features for unexpected purposes."
+      },
+      {
+        name: "The Geocities Architect (1998)",
+        desc: "Builds maximalist, animated, under-construction sites",
+        style: "retro-web",
+        examples: ["under construction", "guestbook madness", "webring portal"],
+        instruction: "Embrace the chaos of the early web with pride."
       }
     ];
 
