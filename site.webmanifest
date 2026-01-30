@@ -3,7 +3,7 @@
     "short_name": "",
     "icons": [
        {
-          "src": "/images/android-chrome-192x192.png",
+          "src": "https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/public/images/android-chrome-192x192.png",
           "sizes": "192x192",
           "type": "image/png"
        }
