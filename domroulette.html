@@ -145,7 +145,7 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}INSTRUCTIONS - DO NOT 
 DEPTH & COMPLEXITY REQUIREMENTS:
 - Create a FULL, FLESHED-OUT experience, not a simple demo
 - At least 10 unique DOM elements
-- Add titles and paragraphs of content where appropriate
+- Add images, titles, and paragraphs of content where appropriate
 - add multiple types of media (images, audio, video)
 - Implement multiple interactive layers and systems
 - Include state management and persistent behavior
@@ -153,7 +153,7 @@ DEPTH & COMPLEXITY REQUIREMENTS:
 - Create depth through layering, parallax, or 3D effects
 - Implement game-like mechanics if appropriate (scoring, progression, challenges)
 - Add narrative or contextual elements that develop over time
-- Include multiple interactive zones or sections
+- Include multiple interactive zones or sections (not just one area)
 - Create emergent complexity where interactions combine in unexpected ways
 
 USE AT LEAST 1 OF THE FOLLOWING LIBRARIES::
@@ -508,28 +508,87 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
         async function reviewAndImproveCode(html, theme, persona) {
             const specialInstructions = getPersonaSpecialInstructions(persona.name);
 
-            const reviewPrompt = `Review this generated HTML code and make it more robust and safe:
+            const reviewPrompt = `🚨 REJECTED - TOO MINIMAL 🚨
 
-${html}
+This code is REJECTED for being skeletal and underdeveloped.
 
 ORIGINAL THEME: "${theme}"
-ORIGINAL PERSONA: ${persona.name} - ${persona.desc}
+ORIGINAL PERSONA: ${persona.name}
 
-${specialInstructions ? 'PERSONA SPECIAL REQUIREMENTS:\n' + specialInstructions + '\n\n' : ''}INSTRUCTIONS:
-1. Fix any syntax errors or incomplete code
-2. Add error handling to all JavaScript functions
-3. Add null checks and defensive programming
-4. Ensure all animations use requestAnimationFrame properly
-5. Add try-catch blocks around risky operations
-6. Make sure all event listeners are properly bound
-7. Add fallbacks for missing resources or failed API calls
-8. Ensure the code won't crash if external libraries fail to load
-9. Make sure canvas/WebGL contexts are properly checked
-10. Flesh out any minimal implementations into more complete systems
-11. Ensure the code reflects the original theme and intent
-12. Try to add at least one additional layer of content or interactivity
+YOUR TASK: REWRITE THIS FROM SCRATCH AS A COMPLETE, RICH EXPERIENCE.
 
-OUTPUT: Return ONLY the improved HTML code, no explanations.`;
+PROBLEMS WITH ORIGINAL:
+${generateProblemsList(html)}
+
+NON-NEGOTIABLE REQUIREMENTS:
+
+1. **CONTENT VOLUME**: Minimum 600 lines of code
+2. **LIBRARY DEPTH**: Each library gets 100+ lines dedicated to it
+3. **DATA RICHNESS**: 5+ datasets, each with 25+ data points
+4. **INTERACTION DENSITY**: 10+ interactive elements with full feedback
+5. **VISUAL COMPLEXITY**: Multiple layers, animations, transitions
+6. **AUDIO INTEGRATION**: Sound design for key interactions
+7. **STATE MANAGEMENT**: Full save/load/undo/redo capability
+8. **ERROR HANDLING**: Try/catch for every user-facing function
+
+LIBRARIES MUST BE USED FOR:
+- p5.js: Generative art systems with multiple algorithms
+- Three.js: 3D scenes with lighting, materials, post-processing
+- Tone.js: Synthesizers, effects chains, sequencers
+- Matter.js: Physics simulations with multiple constraints
+- Chart.js: Multiple chart types with interactive data
+
+ADD THESE SPECIFIC FEATURES:
+1. A "Laboratory" section where users can experiment
+2. A "Gallery" showing generated examples
+3. A "Control Panel" with 15+ adjustable parameters
+4. A "Statistics" dashboard showing usage data
+5. A "Timeline" showing progression over time
+6. A "Code View" showing the generative algorithms
+7. A "Presets" system with 8+ saved configurations
+8. An "Export" function to save creations
+
+WRITE ACTUAL CONTENT ABOUT "${theme}":
+- Philosophical exploration
+- Technical specifications
+- Historical context
+- Future implications
+- Personal reflections
+
+THIS SHOULD FEEL LIKE A PROFESSIONAL, COMPLETE DIGITAL ART PIECE - not a demo or prototype.
+
+OUTPUT THE COMPLETE, EXPANDED HTML CODE NOW:`;
+
+            function detectLibraries(html) {
+                const libraries = [];
+                if (html.includes('p5.js') || html.includes('p5.min.js')) libraries.push('p5.js');
+                if (html.includes('three.js') || html.includes('three.min.js')) libraries.push('Three.js');
+                if (html.includes('tone.js') || html.includes('Tone.js')) libraries.push('Tone.js');
+                if (html.includes('matter.js') || html.includes('matter.min.js')) libraries.push('Matter.js');
+                if (html.includes('chart.js') || html.includes('Chart.js')) libraries.push('Chart.js');
+                if (html.includes('anime.js') || html.includes('anime.min.js')) libraries.push('anime.js');
+                if (html.includes('gsap') || html.includes('gsap.min.js')) libraries.push('GSAP');
+                return libraries.length > 0 ? libraries.join(', ') : 'none';
+            }
+
+            function generateProblemsList(html) {
+                const lines = html.split('\n').length;
+                const wordCount = html.split(/\s+/).length;
+                const detectedLibs = detectLibraries(html);
+                const libCount = detectedLibs !== 'none' ? detectedLibs.split(',').length : 0;
+                const placeholders = (html.match(/TODO|FIXME|HACK|XXX/g) || []).length;
+                const emptyDivs = (html.match(/<div[^>]*>\s*<\/div>/g) || []).length;
+                const hasErrorHandling = html.includes('try') && html.includes('catch');
+
+                return `
+• Lines of code: ${lines} (need 600+)
+• Word count: ${wordCount} (need 2000+)
+• Libraries detected: ${detectedLibs} (${libCount} total, all must be deeply used)
+• Placeholder comments: ${placeholders} (must be 0)
+• Empty divs: ${emptyDivs} (must be 0)
+• Missing error handling: ${!hasErrorHandling ? 'YES' : 'NO'}
+`;
+            }
 
             const response = await fetch(GENERATE_ENDPOINT, {
                 method: 'POST',
