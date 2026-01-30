@@ -108,8 +108,8 @@
                 opacity: 1;
             }
             25% {
-                transform: translateY(-8px);
-                opacity: 0.7;
+                transform: translateY(-4px);
+                opacity: 0.85;
             }
             50% {
                 transform: translateY(0);
@@ -462,9 +462,12 @@ BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
             
             const personaName = message.substring(0, colonIndex + 2); // Include ": "
             const actualMessage = message.substring(colonIndex + 2);
+            const segments = (typeof Intl !== 'undefined' && Intl.Segmenter)
+                ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(actualMessage)].map(segment => segment.segment)
+                : Array.from(actualMessage);
             
             // Animate every character with staggered wave timing
-            const animatedMessage = actualMessage.split('').map((char, index) => {
+            const animatedMessage = segments.map((char, index) => {
                 if (char === ' ') return ' ';
                 // Each character waves continuously with staggered delay
                 // Animation is 1.2s, so delay is spread across characters
