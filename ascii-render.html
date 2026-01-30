@@ -12,7 +12,7 @@
     <style>
         body {
             margin: 0;
-            padding: 120px 20px 20px 20px;
+            padding: 240px 20px 20px 20px;
             background: #1a1a1a;
             color: #fff;
             font-family: monospace;
@@ -38,22 +38,21 @@
             left: 50%;
             transform: translateX(-50%) translateY(0);
             z-index: 100;
-            margin: 10px 0;
-            padding: 20px;
-            background: rgba(87, 87, 87, 0.95);
-            opacity: 0.65;
+            margin: 6px 0;
+            padding: 8px;
+            background: rgba(187, 187, 187, 0.08);
             backdrop-filter: blur(5px);
             border-radius: 8px;
             text-align: center;
             width: 90%;
-            max-width: 500px;
+            max-width: 420px;
             transition: transform 0.3s ease-out;
         }
         #controls.hidden {
             transform: translateX(-50%) translateY(calc(-100%));
         }
         .control-row {
-            margin: 10px 0;
+            margin: 0px 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -61,8 +60,8 @@
             flex-wrap: wrap;
         }
         button, input {
-            margin: 10px;
-            padding: 8px 16px;
+            margin: 6px;
+            padding: 4px 14px;
             background: #3a3a3a;
             color: #fff;
             border: none;
@@ -74,13 +73,13 @@
         }
         #ascii-container {
             font-family: 'Courier New', monospace;
-            font-size: 6px;
-            line-height: 6px;
+            font-size: 9px;
+            line-height: 9px;
             white-space: pre;
             letter-spacing: 1px;
             background: #000;
-            padding: 20px;
-            border-radius: 8px;
+            padding: 5px;
+            border-radius: 4px;
             width: fit-content;
             height: fit-content;
             display: none;
@@ -111,7 +110,13 @@
             <label for="animateToggle">Background Animation: </label>
             <input type="checkbox" id="animateToggle" checked>
         </div>
-        <div id="status">No image loaded</div>
+        <div class="control-row">
+            <label for="pauseToggle">Image Animation: </label>
+            <input type="checkbox" id="pauseToggle" checked>
+        </div>
+        <div class="control-row">
+            <button id="copyButton">Copy ASCII Art</button>
+        </div>
     </div>
     <div id="output-wrapper">
         <div id="ascii-container"></div>
@@ -120,6 +125,7 @@
     <script>
         // Terminal-style ASCII Background using p5.js
         window.bgAnimationEnabled = true;
+        window.imagePaused = false;
         let bgSketch = function(p) {
             const chars = ['@', '#', 'W', '8', 'B', 'M', 'R', 'P', 'D', 'Q', 'K', 'X', 'N', 'H', 'G', 'O', 'Z', 'U', 'A', 'S', 'E', '5', '2', 'Y', 'C', 'L', 'F', 'T', 'J', 'I', '3', '1', '/', '|', '\\', '-', '+', '~', ';', ':', ',', '.', ' '];
             let columns = [];
@@ -308,6 +314,12 @@
                     buffer.image(img, 0, 0, w, h);
                     buffer.loadPixels();
                     
+                    // Validate buffer has pixels
+                    if (!buffer.pixels || buffer.pixels.length === 0) {
+                        statusDiv.html('Error: Could not load image pixels');
+                        return;
+                    }
+                    
                     // Convert to ASCII with more precise brightness mapping
                     let asciiImage = '';
                     for (let y = 0; y < h; y += density) {
@@ -319,18 +331,23 @@
                             for (let dy = 0; dy < density && y + dy < h; dy++) {
                                 for (let dx = 0; dx < density && x + dx < w; dx++) {
                                     const pixelIndex = ((y + dy) * w + (x + dx)) * 4;
-                                    // Use weighted RGB for more accurate brightness
-                                    const r = buffer.pixels[pixelIndex] * 0.299;
-                                    const g = buffer.pixels[pixelIndex + 1] * 0.587;
-                                    const b = buffer.pixels[pixelIndex + 2] * 0.114;
-                                    avgBrightness += r + g + b;
-                                    samplesCount++;
+                                    // Validate pixel index is within bounds
+                                    if (pixelIndex + 2 < buffer.pixels.length) {
+                                        // Use weighted RGB for more accurate brightness
+                                        const r = (buffer.pixels[pixelIndex] || 0) * 0.299;
+                                        const g = (buffer.pixels[pixelIndex + 1] || 0) * 0.587;
+                                        const b = (buffer.pixels[pixelIndex + 2] || 0) * 0.114;
+                                        avgBrightness += r + g + b;
+                                        samplesCount++;
+                                    }
                                 }
                             }
                             
-                            avgBrightness /= samplesCount;
+                            if (samplesCount > 0) {
+                                avgBrightness /= samplesCount;
+                            }
                             // More precise character mapping with extended character set
-                            const charIndex = p.floor(p.map(avgBrightness, 0, 255, 0, asciiChars.length - 1));
+                            const charIndex = Math.min(Math.max(Math.floor(p.map(avgBrightness, 0, 255, 0, asciiChars.length - 1)), 0), asciiChars.length - 1);
                             asciiImage += asciiChars[charIndex];
                         }
                         asciiImage += '\n';
@@ -344,8 +361,15 @@
                         clearTimeout(animationFrame);
                     }
                     animationFrame = setTimeout(() => {
-                        asciiChars.unshift(asciiChars.pop());
-                        processImage();
+                        if (!window.imagePaused) {
+                            asciiChars.unshift(asciiChars.pop());
+                            processImage();
+                        } else {
+                            // Even when paused, schedule the next check
+                            animationFrame = setTimeout(() => {
+                                processImage();
+                            }, 150);
+                        }
                     }, 150);
                     
                 } catch (error) {
@@ -383,7 +407,31 @@
             window.bgAnimationEnabled = e.target.checked;
         });
         
-        // Force the checkbox to be checked on page load
+        // Image animation toggle
+        const pauseToggle = document.getElementById('pauseToggle');
+        pauseToggle.addEventListener('change', (e) => {
+            window.imagePaused = !e.target.checked;
+        });
+        
+        // Copy ASCII art to clipboard
+        const copyButton = document.getElementById('copyButton');
+        copyButton.addEventListener('click', () => {
+            const asciiDiv = document.getElementById('ascii-container');
+            const text = asciiDiv.innerText;
+            if (text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    copyButton.textContent = 'Copied!';
+                    setTimeout(() => {
+                        copyButton.textContent = 'Copy ASCII Art';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                });
+            }
+        });
+        
+        // Force the checkboxes to be checked on page load
         animateToggle.checked = true;
+        pauseToggle.checked = true;
     </script>
 </body>
