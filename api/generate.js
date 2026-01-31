@@ -62,6 +62,7 @@ export default async function handler(req, res) {
 CRITICAL REQUIREMENTS:
 - Generate COMPLETE, SUBSTANTIAL sites (500+ lines minimum)
 - NO SHELLS: Every page must have multiple interactive systems, layered visuals, and real features
+- MUST USE EXACTLY 1 LIBRARY (prefer p5.js): Integrate deeply with 100+ lines of library-specific code
 - Multiple distinct sections/zones (not just a title and button)
 - At least 10 interactive elements with real functionality
 - Rich content and visual effects (gradients, animations, layered elements)
@@ -70,7 +71,7 @@ CRITICAL REQUIREMENTS:
 - If there is explanatory text before the code, remove it completely
 - Output starts with first tag character (<)
 
-Remember: The user will provide a detailed prompt with specific requirements. Follow ALL of those requirements exactly.`
+Remember: The user will provide a detailed prompt with specific requirements. Follow ALL of those requirements exactly. Library usage is NON-NEGOTIABLE.`
         },
         {
           role: "user",
