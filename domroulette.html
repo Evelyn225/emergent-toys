@@ -209,14 +209,15 @@ ${specialInstructions ? '\n' + specialInstructions : ''}
    - At least 20 DOM elements
    - p5 canvas must have animation loop with multiple visual layers
 
-5. **WHAT NOT TO BUILD** ❌:
-   - Single centered card with a button ← NEVER DO THIS
-   - Simple counters or clickers
-   - Basic form with input fields
-   - Just text with CSS animations
-   - Static gallery layouts
-   - Todo lists or simple CRUD interfaces
-   - Example sites or demos about the library itself
+5. **FORBIDDEN PATTERNS** ❌ INSTANT REJECTION:
+   - ❌ ANY page with title "Interactive Web Page" or "Interactive Button"
+   - ❌ Single centered card/container with one button
+   - ❌ Buttons that say "Click me" or do nothing
+   - ❌ Simple counters, clickers, or basic forms
+   - ❌ Static text with basic CSS animations only
+   - ❌ Example/demo pages showing how the library works
+   - ❌ Anything under 400 lines of code
+   - ❌ No p5.js canvas or animation
 
 6. **WHAT TO BUILD INSTEAD** ✅:
    - Fullscreen p5.js canvas with generative art
@@ -228,76 +229,27 @@ ${specialInstructions ? '\n' + specialInstructions : ''}
    - Data displays that update dynamically
    - Generative systems that evolve over time
 
-📝 CODE TEMPLATE TO FOLLOW:
+� STRUCTURE REQUIREMENTS:
 
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+Your code MUST start with <style> tag containing 100+ lines of CSS, then HTML with multiple divs/panels, then p5.js script.
+
+EXAMPLE structure (NOT literal code - create something much more complex):
 
 <style>
-  body { margin: 0; overflow: hidden; font-family: 'Roboto', sans-serif; }
-  #uiPanel { position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.7); padding: 20px; color: white; }
-  .control-group { margin: 10px 0; }
-  /* ADD 100+ MORE LINES OF DETAILED STYLING */
+  /* 100+ lines of rich styling */
+  body { margin: 0; overflow: hidden; }
+  /* Multiple panels, buttons, animations, effects */
 </style>
 
-<div id="uiPanel">
-  <h2>${theme}</h2>
-  <div class="control-group">
-    <button id="resetBtn">Reset</button>
-    <!-- More controls -->
-  </div>
-  <div id="stats"></div>
-</div>
-
-<div id="infoPanel"><!-- More UI elements --></div>
+<div id="mainPanel"><!-- Complex UI here --></div>
+<div id="controls"><!-- Interactive controls --></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
 <script>
-  let particles = [];
-  let systems = [];
-  
-  function setup() {
-    createCanvas(windowWidth, windowHeight);
-    // Initialize 100+ particles
-    for (let i = 0; i < 150; i++) {
-      particles.push(new Particle(random(width), random(height)));
-    }
-  }
-  
-  function draw() {
-    background(0, 10); // Trail effect
-    // Update and draw particles
-    particles.forEach(p => {
-      p.update();
-      p.display();
-    });
-    // MORE complex rendering layers
-  }
-  
-  class Particle {
-    constructor(x, y) {
-      this.pos = createVector(x, y);
-      this.vel = createVector(random(-2, 2), random(-2, 2));
-      // MORE properties
-    }
-    
-    update() {
-      // Physics, noise, interactions
-    }
-    
-    display() {
-      // Complex rendering
-    }
-  }
-  
-  function mousePressed() {
-    // Spawn new particles, change states, etc.
-  }
-  
-  function keyPressed() {
-    // Additional controls
-  }
-  
-  // ADD 200+ MORE LINES: more classes, functions, interactions
+  // Create particle system with 100+ particles
+  // Implement physics, interactions, visual effects
+  // Add classes, functions, event handlers
+  // 300+ lines of p5.js code
 </script>
 
 🔒 STRICT RULES:
@@ -310,14 +262,16 @@ ${specialInstructions ? '\n' + specialInstructions : ''}
 - Check typeof p5 !== 'undefined' before using p5 features
 - Images only from https://picsum.photos/seed/${encodeURIComponent(theme)}/WIDTH/HEIGHT
 
-🎨 Now embody ${persona.name} and create your ${theme} masterpiece.
-- 400+ lines minimum
-- Fullscreen p5.js experience
-- Multiple interactive systems
-- Continuous animation
-- Rich visual detail
+🎨 Now embody ${persona.name} and create a COMPLEX ${theme} art piece.
 
-OUTPUT ONLY THE CODE, NO EXPLANATIONS:`;
+REMINDER BEFORE YOU START:
+- DO NOT use generic titles like "Interactive Web Page" - use creative, theme-specific titles
+- DO NOT create single button demos - create particle systems, physics, generative art
+- START with <style> tag immediately (NO explanatory text first)
+- 400+ lines minimum with p5.js fullscreen canvas
+- Multiple interactive systems with continuous animation
+
+BEGIN CODE NOW (start with <style> or <link> tag):`;
         }
 
         // Persona-specific loading messages
@@ -778,9 +732,17 @@ OUTPUT ONLY THE CODE, NO EXPLANATIONS:`;
         async function reviewAndImproveCode(html, theme, persona) {
             const specialInstructions = getPersonaSpecialInstructions(persona.name);
 
-            const reviewPrompt = `FLESH OUT IDEA:
+            const reviewPrompt = `REVIEW AND IMPROVE THIS CODE - MAKE IT COMPLEX AND RICH
 
-            CREATE A FULL FEATURE-RICH VERSION OF THE FOLLOWING HTML CODE. MAKE IT SUBSTANTIALLY RICHER, MORE COMPLEX, AND MORE INTERACTIVE.
+⚠️ CRITICAL PRE-CHECK: If this code has ANY of these, REJECT IT and rebuild from scratch:
+- Title contains "Interactive Web Page", "Interactive Button", "Click Me", "Example", or other generic text
+- Single centered container with just one button
+- Button does nothing or just displays text
+- No p5.js canvas element
+- Less than 300 lines total
+- No animation or static layout only
+
+IF ANY ABOVE IS TRUE → DISCARD THIS CODE AND CREATE A PROPER P5.JS ART PIECE INSTEAD.
 
 ORIGINAL THEME: "${theme}"
 ORIGINAL PERSONA: ${persona.name}
