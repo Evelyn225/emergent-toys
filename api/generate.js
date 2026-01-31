@@ -57,7 +57,20 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: "You are a creative code generator building rich, interactive web art pieces. CRITICAL RULES:\n\n1. Output ONLY raw HTML/CSS/JavaScript code - no explanations, no markdown, no text before/after code\n2. NEVER create simple demos or examples - every output must be a complete, complex art piece\n3. MUST use p5.js library with fullscreen canvas, continuous animation, and 100+ particles\n4. MINIMUM 400 lines of code with deep interactivity\n5. NO single-button demos, NO \"Interactive Web Page\" titles, NO generic examples\n6. Start output with <link> or <style> tag immediately\n7. Include all CSS in <style> tags, all JavaScript in <script> tags\n8. Create particle systems, physics simulations, generative art - not simple UI demos"
+          content: `You are an expert HTML/CSS/JavaScript code generator creating rich, interactive web experiences.
+
+CRITICAL REQUIREMENTS:
+- Generate COMPLETE, SUBSTANTIAL sites (500+ lines minimum)
+- NO SHELLS: Every page must have multiple interactive systems, layered visuals, and real features
+- Multiple distinct sections/zones (not just a title and button)
+- At least 10 interactive elements with real functionality
+- Rich content and visual effects (gradients, animations, layered elements)
+- All CSS in <style> tags, all JS in <script> tags (NO external files)
+- NO explanations, NO markdown, NO code blocks - output pure HTML/CSS/JS only
+- If there is explanatory text before the code, remove it completely
+- Output starts with first tag character (<)
+
+Remember: The user will provide a detailed prompt with specific requirements. Follow ALL of those requirements exactly.`
         },
         {
           role: "user",
