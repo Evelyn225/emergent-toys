@@ -218,22 +218,16 @@ DEPTH & COMPLEXITY REQUIREMENTS:
 - Include multiple interactive zones or sections (not just one area)
 - Create emergent complexity where interactions combine in unexpected ways
 
-OPTIONAL LIBRARIES (use 0-1, prefer p5.js):
-- p5.js (https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js) - For generative art and sketches
+REQUIRED LIBRARY (must use exactly 1, prefer p5.js):
+- p5.js (https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js) - For generative art and sketches [PREFERRED]
 - Chart.js (https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js) - For data visualizations
-- rough.js (https://cdnjs.cloudflare.com/ajax/libs/rough.js/4.6.1/rough.min.js) - For hand-drawn sketchy effects
-- Particles.js (https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js) - For particle systems
 - anime.js (https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js) - For advanced animations
 - gsap (https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js) - For timeline-based animations
-- Tone.js (https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.9/Tone.js) - For audio synthesis and sequencing
-- Howler.js (https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js) - For spatial audio and sound management
-- wavesurfer.js (https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js) - For waveform visualizations
-- Matter.js (https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js) - For 2D physics engine
-- verlet-js (https://cdn.jsdelivr.net/npm/verlet-js@1.0.0/build/verlet.min.js) - For soft-body physics
-- simplex-noise (https://cdn.jsdelivr.net/npm/simplex-noise@3.0.0/simplex-noise.min.js) - For Perlin/simplex noise
-- Tippy.js (https://unpkg.com/@tippyjs@6.3.7/dist/tippy-bundle.umd.min.js) - For tooltips and popovers
-- SortableJS (https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js) - For drag and drop
-- Driver.js (https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.min.js) - For interactive tutorials
+- Tone.js (https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.9/Tone.js) - For audio synthesis
+- Howler.js (https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js) - For sound management
+- Matter.js (https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js) - For 2D physics
+- Particles.js (https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js) - For particle systems
+Load in <script async> tag. Wrap ALL usage in try/catch with typeof checks. Fallback if library fails.
 
 USE IMAGES FROM THESE APIs (choose based on theme):
 - For abstract/artistic: https://picsum.photos/seed/${encodeURIComponent(theme)}/800/600
