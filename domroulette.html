@@ -49,6 +49,157 @@
             transition: transform 0.2s, box-shadow 0.2s;
         }
 
+        #saveButton {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 10000;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: none;
+        }
+
+        #favoritesButton {
+            position: fixed;
+            top: 20px;
+            left: 180px;
+            z-index: 10000;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        #saveButton:hover,
+        #favoritesButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        #saveButton:active,
+        #favoritesButton:active {
+            transform: translateY(0);
+        }
+
+        #favoritesModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 20000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            overflow-y: auto;
+        }
+
+        #favoritesModal.show {
+            display: flex;
+        }
+
+        #favoritesContent {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        #favoritesContent h2 {
+            margin: 0 0 30px 0;
+            font-size: 28px;
+            color: #333;
+        }
+
+        #favoritesGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .favorite-item {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            background: #f9f9f9;
+        }
+
+        .favorite-item:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .favorite-item h3 {
+            margin: 0 0 8px 0;
+            font-size: 18px;
+            color: #667eea;
+        }
+
+        .favorite-item p {
+            margin: 4px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .favorite-item .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .favorite-item .delete-btn:hover {
+            background: #cc0000;
+        }
+
+        #closeModal {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            color: #666;
+            line-height: 1;
+        }
+
+        #closeModal:hover {
+            color: #000;
+        }
+
         #regenerateButton:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
@@ -168,6 +319,16 @@
 
 <body>
     <button id="regenerateButton">🔄 Regenerate Site</button>
+    <button id="saveButton">💾 Save Favorite</button>
+    <button id="favoritesButton">📚 View Favorites</button>
+
+    <div id="favoritesModal">
+        <div id="favoritesContent">
+            <button id="closeModal">&times;</button>
+            <h2>Saved Favorites</h2>
+            <div id="favoritesGrid"></div>
+        </div>
+    </div>
 
     <div id="loadingOverlay">
         <div class="spinner"></div>
@@ -390,6 +551,11 @@ BEGIN HTML OUTPUT:`;
         }
 
         let loadingMessageInterval = null;
+        let currentGeneration = {
+            theme: '',
+            persona: null,
+            code: ''
+        };
 
         // Apply continuous wave animation to message
         function applyWaveAnimation(message) {
@@ -704,6 +870,113 @@ BEGIN HTML OUTPUT:`;
             return data;
         }
 
+        // Favorites management
+        function saveFavorite() {
+            if (!currentGeneration.code) {
+                alert('No generation to save!');
+                return;
+            }
+
+            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
+            const favorite = {
+                id: Date.now(),
+                theme: currentGeneration.theme,
+                persona: currentGeneration.persona.name,
+                code: currentGeneration.code,
+                timestamp: new Date().toISOString()
+            };
+
+            favorites.push(favorite);
+            localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
+            
+            alert('Saved to favorites! 💾');
+        }
+
+        function loadFavorites() {
+            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
+            const grid = document.getElementById('favoritesGrid');
+            
+            if (favorites.length === 0) {
+                grid.innerHTML = '<p style="color: #666; text-align: center; padding: 40px;">No favorites saved yet. Generate something cool and save it!</p>';
+                return;
+            }
+
+            grid.innerHTML = favorites.map(fav => `
+                <div class="favorite-item" data-id="${fav.id}">
+                    <button class="delete-btn" onclick="deleteFavorite(${fav.id}); event.stopPropagation();">&times;</button>
+                    <h3>${fav.theme}</h3>
+                    <p><strong>Persona:</strong> ${fav.persona}</p>
+                    <p><strong>Saved:</strong> ${new Date(fav.timestamp).toLocaleString()}</p>
+                </div>
+            `).reverse().join('');
+
+            // Add click handlers
+            document.querySelectorAll('.favorite-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const id = parseInt(item.dataset.id);
+                    loadFavorite(id);
+                });
+            });
+        }
+
+        function loadFavorite(id) {
+            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
+            const favorite = favorites.find(f => f.id === id);
+            
+            if (!favorite) return;
+
+            // Close modal
+            document.getElementById('favoritesModal').classList.remove('show');
+
+            // Update current generation
+            currentGeneration = {
+                theme: favorite.theme,
+                persona: { name: favorite.persona },
+                code: favorite.code
+            };
+
+            // Update UI
+            document.getElementById('loadingTheme').textContent = `"${favorite.theme}"`;
+            document.getElementById('loadingPersona').textContent = `${favorite.persona}: `;
+            
+            // Render the saved code
+            const container = document.getElementById('generatedContent');
+            container.innerHTML = '';
+            
+            const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
+            
+            if (isFullHTML) {
+                const iframe = document.createElement('iframe');
+                iframe.style.width = '100%';
+                iframe.style.height = '100vh';
+                iframe.style.border = 'none';
+                iframe.style.margin = '0';
+                iframe.style.padding = '0';
+                container.appendChild(iframe);
+                
+                iframe.contentDocument.open();
+                iframe.contentDocument.write(favorite.code);
+                iframe.contentDocument.close();
+            } else {
+                const script = document.createElement('script');
+                script.textContent = favorite.code;
+                container.appendChild(script);
+            }
+
+            // Show save button
+            document.getElementById('saveButton').style.display = 'block';
+        }
+
+        function deleteFavorite(id) {
+            if (!confirm('Delete this favorite?')) return;
+            
+            let favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
+            favorites = favorites.filter(f => f.id !== id);
+            localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
+            
+            loadFavorites();
+        }
+
         // Call ChatGPT API via Vercel serverless function - SIMPLIFIED
         async function generateWebsite() {
             const loadingOverlay = document.getElementById('loadingOverlay');
@@ -735,6 +1008,10 @@ BEGIN HTML OUTPUT:`;
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
+                
+                // Store for favorites
+                currentGeneration.theme = theme;
+                currentGeneration.persona = persona;
                 
                 const messages = shuffleArray(personaLoadingMessages[persona.name] || [
                     'Creating something interesting...',
@@ -988,10 +1265,14 @@ BEGIN HTML OUTPUT:`;
                     container.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
                 }
 
+                // Store final code
+                currentGeneration.code = p5Code;
+
                 // Hide loading overlay
                 setTimeout(() => {
                     loadingOverlay.classList.add('hidden');
                     regenerateButton.disabled = false;
+                    document.getElementById('saveButton').style.display = 'block';
                 }, 500);
 
             } catch (error) {
@@ -1011,7 +1292,28 @@ BEGIN HTML OUTPUT:`;
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             const regenerateButton = document.getElementById('regenerateButton');
+            const saveButton = document.getElementById('saveButton');
+            const favoritesButton = document.getElementById('favoritesButton');
+            const closeModal = document.getElementById('closeModal');
+            const modal = document.getElementById('favoritesModal');
+            
             regenerateButton.addEventListener('click', generateWebsite);
+            saveButton.addEventListener('click', saveFavorite);
+            
+            favoritesButton.addEventListener('click', () => {
+                loadFavorites();
+                modal.classList.add('show');
+            });
+            
+            closeModal.addEventListener('click', () => {
+                modal.classList.remove('show');
+            });
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('show');
+                }
+            });
 
             // Generate initial website
             generateWebsite();
