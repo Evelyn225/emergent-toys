@@ -12,6 +12,7 @@
         href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
     <title>The Web Wizard's Casino</title>
+    <link href="https://fonts.googleapis.com/css2?family=Iosevka:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <style>
         * {
@@ -21,7 +22,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Iosevka', monospace;
             min-height: 100vh;
             position: relative;
         }
@@ -45,7 +46,7 @@
             align-items: center;
             padding: 0 40px;
             gap: 15px;
-            font-family: 'Courier New', 'Monaco', monospace;
+            font-family: 'Iosevka', monospace;
         }
 
         #regenerateButton {
@@ -57,7 +58,7 @@
             cursor: pointer;
             font-size: 14px;
             font-weight: 400;
-            font-family: 'Courier New', 'Monaco', monospace;
+            font-family: 'Iosevka', monospace;
             letter-spacing: 0.5px;
             transition: all 0.2s;
             margin-left: auto;
@@ -72,7 +73,7 @@
             cursor: pointer;
             font-size: 14px;
             font-weight: 400;
-            font-family: 'Courier New', 'Monaco', monospace;
+            font-family: 'Iosevka', monospace;
             letter-spacing: 0.5px;
             transition: all 0.2s;
             display: none;
@@ -87,7 +88,7 @@
             cursor: pointer;
             font-size: 14px;
             font-weight: 400;
-            font-family: 'Courier New', 'Monaco', monospace;
+            font-family: 'Iosevka', monospace;
             letter-spacing: 0.5px;
             transition: all 0.2s;
         }
@@ -130,7 +131,7 @@
             justify-content: center;
             align-items: center;
             overflow-y: auto;
-            font-family: 'Courier New', 'Monaco', monospace;
+            font-family: 'Iosevka', monospace;
         }
 
         #favoritesModal.show {
@@ -268,7 +269,7 @@
             justify-content: flex-start;
             align-items: flex-start;
             z-index: 9999;
-            font-family: 'Courier New', 'Monaco', monospace;
+            font-family: 'Iosevka', monospace;
             color: #ffffff;
             overflow: hidden;
             padding: 80px;
@@ -406,7 +407,7 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 2px;
             font-size: 14px;
-            font-family: 'Courier New', 'Monaco', monospace;
+            font-family: 'Iosevka', monospace;
             font-weight: 400;
             cursor: pointer;
             letter-spacing: 0.5px;
@@ -718,20 +719,54 @@ BEGIN HTML OUTPUT:`;
         ];
 
         function typeText(element, text, speed = 60) {
-            element.textContent = '';
-            let i = 0;
-            const cursor = document.createElement('span');
-            cursor.className = 'typing-cursor';
-            element.appendChild(cursor);
-            
             return new Promise((resolve) => {
+                let i = 0;
+                element.textContent = '';
+                
                 const interval = setInterval(() => {
                     if (i < text.length) {
-                        element.insertBefore(document.createTextNode(text[i]), cursor);
+                        element.textContent += text[i];
                         i++;
                     } else {
                         clearInterval(interval);
-                        cursor.remove();
+                        resolve();
+                    }
+                }, speed);
+            });
+        }
+
+        function typeConsoleCommand(text, type = 'normal', speed = 30) {
+            return new Promise((resolve) => {
+                const consoleOutput = document.getElementById('consoleOutput');
+                if (!consoleOutput) {
+                    resolve();
+                    return;
+                }
+                
+                const line = document.createElement('div');
+                line.className = 'console-line';
+                if (type !== 'normal') line.classList.add(type);
+                
+                consoleOutput.appendChild(line);
+                
+                let i = 0;
+                const interval = setInterval(() => {
+                    if (i < text.length) {
+                        line.textContent += text[i];
+                        i++;
+                    } else {
+                        clearInterval(interval);
+                        
+                        // Remove old lines if too many (keep last 20 lines)
+                        const lines = consoleOutput.querySelectorAll('.console-line');
+                        if (lines.length > 20) {
+                            lines[0].classList.add('fading');
+                            setTimeout(() => {
+                                if (lines[0].parentNode) {
+                                    lines[0].remove();
+                                }
+                            }, 500);
+                        }
                         resolve();
                     }
                 }, speed);
@@ -739,7 +774,10 @@ BEGIN HTML OUTPUT:`;
         }
 
         function addConsoleCommand(text, type = 'normal') {
+            // Just add text without typing - used for status updates
             const consoleOutput = document.getElementById('consoleOutput');
+            if (!consoleOutput) return;
+            
             const line = document.createElement('div');
             line.className = 'console-line';
             if (type !== 'normal') line.classList.add(type);
@@ -747,9 +785,9 @@ BEGIN HTML OUTPUT:`;
             
             consoleOutput.appendChild(line);
             
-            // Remove old lines if too many
+            // Remove old lines if too many (keep last 20 lines)
             const lines = consoleOutput.querySelectorAll('.console-line');
-            if (lines.length > maxConsoleLines) {
+            if (lines.length > 20) {
                 lines[0].classList.add('fading');
                 setTimeout(() => {
                     if (lines[0].parentNode) {
@@ -760,19 +798,23 @@ BEGIN HTML OUTPUT:`;
         }
 
         function startConsoleCommands() {
-            // Add initial commands quickly
-            addConsoleCommand('System initialized', 'status');
-            setTimeout(() => addConsoleCommand('Connecting to AI engine...'), 500);
-            setTimeout(() => addConsoleCommand('Connection established', 'status'), 1200);
-            setTimeout(() => addConsoleCommand('Loading creative personas...'), 1800);
-            
-            // Continue with random commands
-            setTimeout(() => {
-                consoleCommandInterval = setInterval(() => {
+            // Add initial commands with typing animation
+            (async () => {
+                await typeConsoleCommand('System initialized', 'status', 30);
+                await new Promise(r => setTimeout(r, 500));
+                await typeConsoleCommand('Connecting to AI engine...', 'normal', 30);
+                await new Promise(r => setTimeout(r, 500));
+                await typeConsoleCommand('Connection established', 'status', 30);
+                await new Promise(r => setTimeout(r, 500));
+                await typeConsoleCommand('Loading creative personas...', 'normal', 30);
+                await new Promise(r => setTimeout(r, 1200));
+                
+                // Continue with random commands
+                consoleCommandInterval = setInterval(async () => {
                     const randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
-                    addConsoleCommand(randomCommand);
-                }, 2000);
-            }, 2500);
+                    await typeConsoleCommand(randomCommand, 'normal', 25);
+                }, 3500);
+            })();
         }
 
         function stopConsoleCommands() {
@@ -1238,7 +1280,7 @@ BEGIN HTML OUTPUT:`;
             }
 
             try {
-                addConsoleCommand('Selecting creative persona...');
+                await typeConsoleCommand('Selecting creative persona...', 'normal', 25);
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
@@ -1247,12 +1289,12 @@ BEGIN HTML OUTPUT:`;
                 currentGeneration.theme = theme;
                 currentGeneration.persona = persona;
                 
-                addConsoleCommand(`Persona loaded: ${persona.name}`, 'status');
-                addConsoleCommand(`Theme assigned: "${theme}"`, 'info');
+                await typeConsoleCommand(`Persona loaded: ${persona.name}`, 'status', 25);
+                await typeConsoleCommand(`Theme assigned: "${theme}"`, 'info', 25);
                 
                 // Type out main status
-                await typeText(mainStatus, persona.name.toUpperCase());
-                await typeText(currentMessage, `Creating ${theme}...`);
+                await typeText(mainStatus, persona.name.toUpperCase(), 40);
+                await typeText(currentMessage, `Creating ${theme}...`, 40);
                 
                 const messages = shuffleArray(personaLoadingMessages[persona.name] || [
                     'Creating something interesting...',
@@ -1289,6 +1331,7 @@ BEGIN HTML OUTPUT:`;
                         const text = await response.text();
                         if (text) errorMsg = text.substring(0, 200);
                     }
+                    await typeConsoleCommand(`Error: ${errorMsg}`, 'error', 25);
                     throw new Error(errorMsg);
                 }
 
@@ -1346,14 +1389,14 @@ BEGIN HTML OUTPUT:`;
                 }
 
                 // Second pass: enhance with an interesting addition
-                addConsoleCommand('Enhancing generated code...');
+                await typeConsoleCommand('Enhancing generated code...', 'normal', 25);
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let reviewIndex = 0;
-                await typeText(currentMessage, reviewMessages[reviewIndex]);
+                await typeText(currentMessage, reviewMessages[reviewIndex], 40);
                 
                 loadingMessageInterval = setInterval(async () => {
                     reviewIndex = (reviewIndex + 1) % reviewMessages.length;
-                    await typeText(currentMessage, reviewMessages[reviewIndex]);
+                    await typeText(currentMessage, reviewMessages[reviewIndex], 40);
                 }, 7000);
 
                 const codeBlockStart = String.fromCharCode(96, 96, 96) + 'html';
@@ -1414,16 +1457,17 @@ BEGIN HTML OUTPUT:`;
                 }
 
                 // Third pass: error detection and fixing
+                await typeConsoleCommand('Detecting and fixing errors...', 'normal', 25);
                 const fixMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let fixIndex = 0;
-                loadingMessageText.innerHTML = applyWaveAnimation(fixMessages[fixIndex]);
+                await typeText(currentMessage, fixMessages[fixIndex], 40);
                 
                 if (loadingMessageInterval) {
                     clearInterval(loadingMessageInterval);
                 }
-                loadingMessageInterval = setInterval(() => {
+                loadingMessageInterval = setInterval(async () => {
                     fixIndex = (fixIndex + 1) % fixMessages.length;
-                    loadingMessageText.innerHTML = applyWaveAnimation(fixMessages[fixIndex]);
+                    await typeText(currentMessage, fixMessages[fixIndex], 40);
                 }, 7000);
 
                 const fixPrompt = 'Here is some p5.js code:\n\n' + '```\n' + p5Code + '\n```\n\n' +
@@ -1550,7 +1594,7 @@ BEGIN HTML OUTPUT:`;
                 }
 
                 console.error('Error generating website:', error);
-                addConsoleCommand('Error: ' + error.message, 'error');
+                await typeConsoleCommand('Error: ' + error.message, 'error', 25);
                 mainStatus.textContent = 'ERROR';
                 currentMessage.textContent = error.message;
                 regenerateButton.disabled = false;
