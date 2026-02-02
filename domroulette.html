@@ -32,36 +32,35 @@
         }
 
         #regenerateButton {
-            position: fixed !important;
-            top: 20px !important;
-            right: 20px !important;
-            z-index: 10000 !important;
-            padding: 12px 24px !important;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 8px !important;
-            cursor: pointer !important;
-            font-size: 16px !important;
-            font-weight: 600 !important;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-            transition: transform 0.2s, box-shadow 0.2s !important;
-            isolation: isolate;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
         }
 
         #regenerateButton:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
 
         #regenerateButton:active {
-            transform: translateY(0) !important;
+            transform: translateY(0);
         }
 
         #regenerateButton:disabled {
-            opacity: 0.6 !important;
-            cursor: not-allowed !important;
-            transform: none !important;
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
 
         #loadingOverlay {
@@ -186,7 +185,7 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - All CSS in a single <style> tag
 - All JS in <script> tags
 - MUST be fully self-contained
-- MUST contain the two word theme/title somewhere in the content: "${theme}"
+- MUST contain the two word theme somewhere in the content as a title: "${theme}"
 - MUST work on desktop primarily, mobile optional
 - p5.js IS THE PRIMARY TECHNOLOGY (150+ lines of active p5 code in setup/draw/events)
 - Visuals, animations, and interactions MUST use p5.js drawing functions (rect, circle, fill, stroke, translate, rotate, noise, etc)
@@ -688,20 +687,16 @@ BEGIN OUTPUT:`;
             const enrichPrompt = `Theme: "${theme}"
 Persona: ${persona.name}
 
-ENRICH THIS CODE WITH MORE CONTENT:
+THIS IS MERELY A SHELL! ENRICH THIS CODE WITH MORE CONTENT:
 
 FOCUS ON:
-1. Add 3+ data arrays with 10+ items each about "${theme}"
-2. TEXT CONTENT: Decide based on type:
-   - If game/visual art/generative: Keep text minimal
-   - If puzzle/story/educational: Add descriptive text
-   - If website/info page: Add multiple paragraphs about "${theme}"
-3. Fix any undefined variables or broken references
-4. Add typeof checks around p5.js usage
-5. Make ALL buttons clickable with real functionality
-6. Make theme more explicit in visuals and interactions
-7. Replace any generic/placeholder content with theme-specific details
-8. If the website content references some functionality, ensure it is fully implemented
+1. ADD MORE LINES OF CODE (aim for 500+ total)
+2. Fix any undefined variables or broken references
+3. Add typeof checks around p5.js usage
+4. Make ALL buttons clickable with real functionality
+5. Make theme more explicit in visuals and interactions
+6. Replace any generic/placeholder content with theme-specific details
+7. If the website content references some functionality, ensure it is fully implemented
 
 HELPER FUNCTIONS (available):
 
@@ -794,8 +789,8 @@ BEGIN:`;
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
-                console.log('themeData:', wordData.themeData);
-
+                console.log('Theme data:', wordData);
+                
                 // Start cycling through persona-specific loading messages (randomized)
                 const messages = shuffleArray(personaLoadingMessages[persona.name] || [
                     'Creating something interesting...',
