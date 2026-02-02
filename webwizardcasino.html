@@ -1237,35 +1237,34 @@ BEGIN HTML OUTPUT:`;
                 code: favorite.code
             };
             
-            // Only render if we're not currently generating (no active generation)
+            // Always render the favorite content
+            const container = document.getElementById('generatedContent');
+            container.innerHTML = '';
+            
+            const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
+            
+            if (isFullHTML) {
+                const iframe = document.createElement('iframe');
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+                iframe.style.border = 'none';
+                iframe.style.margin = '0';
+                iframe.style.padding = '0';
+                container.appendChild(iframe);
+
+                iframe.contentDocument.open();
+                iframe.contentDocument.write(favorite.code);
+                iframe.contentDocument.close();
+            } else {
+                const script = document.createElement('script');
+                script.textContent = favorite.code;
+                container.appendChild(script);
+            }
+
+            // Only hide overlay if not currently generating
             if (!isGenerating) {
                 const loadingOverlay = document.getElementById('loadingOverlay');
                 loadingOverlay.classList.add('hidden');
-                
-                // Render the saved code
-                const container = document.getElementById('generatedContent');
-                container.innerHTML = '';
-                
-                const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
-                
-                if (isFullHTML) {
-                    const iframe = document.createElement('iframe');
-                    iframe.style.width = '100%';
-                    iframe.style.height = '100%';
-                    iframe.style.border = 'none';
-                    iframe.style.margin = '0';
-                    iframe.style.padding = '0';
-                    container.appendChild(iframe);
-
-                    iframe.contentDocument.open();
-                    iframe.contentDocument.write(favorite.code);
-                    iframe.contentDocument.close();
-                } else {
-                    const script = document.createElement('script');
-                    script.textContent = favorite.code;
-                    container.appendChild(script);
-                }
-
                 // Show save button
                 document.getElementById('saveButton').style.display = 'block';
                 updateSaveButtonState();
