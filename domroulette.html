@@ -12,6 +12,7 @@
         href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
     <title>The Web Wizard's Casino</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <style>
         * {
             margin: 0;
@@ -186,75 +187,45 @@
         const RANDOM_WORDS_ENDPOINT = '/api/random-words.js';
         const GENERATE_ENDPOINT = '/api/generate.js';
 
-        // Create the prompt for the AI
+        // Create the prompt for the AI - SIMPLIFIED: Just p5.js code
         function createGenerationPrompt(theme, persona) {
             const specialInstructions = getPersonaSpecialInstructions(persona.name);
 
-                        return `Theme: "${theme}"
+            return `Theme: "${theme}"
 
 YOU ARE: ${persona.name}
 YOUR STYLE: ${persona.style}
 YOUR APPROACH: ${persona.desc}
 
-${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLANATIONS):
-- Output ONLY HTML/CSS/JS (no markdown)
-- Do NOT include <html>, <head>, or <body> tags
-- All CSS in a single <style> tag
-- All JS in <script> tags
-- MUST be fully self-contained
-- MUST contain the two word theme somewhere visible in the content: "${theme}"
-- MUST work on desktop primarily, mobile optional
-- p5.js IS THE PRIMARY TECHNOLOGY (150+ lines of active p5 code in setup/draw/events)
-- Visuals, animations, and interactions MUST use p5.js drawing functions (rect, circle, fill, stroke, translate, rotate, noise, etc)
-- MUST include setup() and draw() functions
-- MUST create a canvas with createCanvas()
-- MUST call background() in draw() to clear the canvas
-- CRITICAL: Ensure p5 canvas is visible - set CSS for canvas element: canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
-- Other UI elements should have z-index > 1 to appear above canvas
-- Use opaque backgrounds in draw() - avoid very low alpha values that make canvas invisible
-- Text and images can be standard HTML/CSS if needed
-- Loaded from CDN in its own <script> tag (NOT async)
-- DO NOT use deprecated p5 features such as motion sensor or orientation sensor
-- Wrap ALL p5 usage in try/catch and guard with (typeof p5 !== 'undefined')
-- Can use Google Fonts: <link href="https://fonts.googleapis.com/css2?family=..." rel="stylesheet">
-- NO other <link> tags or @import statements
-- NO local/project files (e.g., /style.css, /script.js, ./assets/)
-- If you reference a function, it MUST be fully defined in your output (no undefined calls)
-- MUST define ALL classes and functions used
-- NO duplicate variable declarations
-- NO syntax errors
-- Test that the code would run if pasted into the p5.js editor
-- Do NOT add DOM event listeners unless the target element is created in your HTML
-- If you must add event listeners, check for element existence before use
-- Do NOT use async image loading unless it happens inside preload()
-- Avoid repetitive layouts: do NOT place default UI controls (e.g., buttons) in the top-left corner
-- Vary layout and positioning; avoid two-button clusters in the same spot
+${specialInstructions ? specialInstructions + '\n\n' : ''}CREATE A P5.JS SKETCH:
 
-HELPER FUNCTIONS (injected automatically):
+OUTPUT RULES:
+- Output ONLY p5.js JavaScript code (NO HTML, NO CSS, NO markdown)
+- Do NOT wrap in <script> tags or markdown code blocks
+- Start directly with your p5 code
+- MUST include setup() function that calls createCanvas()
+- MUST include draw() function that calls background() at the start
+- Must visually incorporate the theme "${theme}" in the sketch
+- Create something substantial: 150+ lines of creative p5 code
+- Use p5 drawing functions: rect(), ellipse(), line(), fill(), stroke(), etc
+- Can use: noise(), sin(), cos(), random(), map(), etc for animation
+- Can add interactivity: mousePressed(), keyPressed(), mouseX, mouseY, etc
+- Create classes, variables, arrays as needed
+- Can use images via: loadImage('https://picsum.photos/800/600')
+- DO NOT use deprecated features (deviceOrientation, etc)
+- Make it visually interesting and animated
+- Vary your approach - don't always do the same thing
 
-window.fetchImage(query) - ASYNC: Get images from Unsplash or Picsum
-    Usage: const url = await window.fetchImage('theme name');
-    Note: must be used inside async functions or with .then()
+EXAMPLES OF GOOD APPROACHES:
+- Generative art that evolves over time
+- Interactive particles or creatures
+- Animated patterns or fractals  
+- Games or simulations
+- Data visualizations
+- Abstract animations
+- Geometric explorations
 
-window.fetchImageURL(query) - SYNC: immediate Picsum fallback URL
-    Usage: const url = window.fetchImageURL('theme name');
-
-IMAGES - Use any of these methods:
-- fetchImage('query') - Unsplash API with Picsum fallback
-- https://picsum.photos/seed/QUERY/800/600 - Direct Picsum URL
-- https://api.dicebear.com/7.x/avataaars/svg?seed=QUERY - DiceBear avatars
-IMPORTANT: Images MUST only be used in <img> tags or backgrounds, NEVER in <video> or <audio> elements
-
-BUILD:
-- A substantial, multi-section experience (500+ lines of code)
-- multiple interactive elements with real behaviors
-- Theme must be explicit in visuals and interactions
-- TEXT/PARAGRAPHS: Decide based on type:
-  * Games/visual art/generative experiences: Minimal or no explanatory text, interactivity optional
-  * Puzzles/interactive stories/educational content: Include descriptive text
-  * Standard websites/info pages: Include multiple paragraphs about the theme
-
-BEGIN OUTPUT:`;
+BEGIN P5.JS CODE:`;
         }
 
         // Persona-specific loading messages
@@ -705,84 +676,6 @@ BEGIN OUTPUT:`;
             return specialInstructions[personaName] || "";
         }
 
-        // Fast content enrichment pass (cached prompt for speed)
-        async function enrichContent(html, theme, persona) {
-            const lines = html.split('\n').length;
-
-            // Fast, focused enrichment prompt (cacheable)
-            const enrichPrompt = `Theme: "${theme}"
-Persona: ${persona.name}
-
-THIS IS MERELY A SHELL! ENRICH THIS CODE WITH MORE CONTENT:
-
-FOCUS ON:
-1. ADD MORE LINES OF CODE (aim for 500+ total)
-2. FIX ANY UNDEFINED VARIABLES OR BROKEN REFERENCES
-3. ENSURE p5 CANVAS IS VISIBLE WITH PROPER CSS: canvas { display: block; position: absolute; z-index: 1; }
-4. MAKE SURE EVERY BUTTON HAS ACTUAL FUNCTIONALITY
-5. MAKE THEME MORE EXPLICIT IN VISUALS AND INTERACTIONS
-6. REPLACE ANY GENERIC/PLACEHOLDER CONTENT WITH THEME-SPECIFIC DETAILS
-7. IF THE WEBSITE CONTENT REFERENCES SOME FUNCTIONALITY, ENSURE IT IS FULLY IMPLEMENTED
-8. CREATE 1 MORE PIECE OF VISUAL FLAIR
-
-HELPER FUNCTIONS (available):
-
-window.fetchImage(query) - ASYNC: Get images from Unsplash or Picsum
-    Usage: const url = await window.fetchImage('theme name');
-    Note: must be used inside async functions or with .then()
-
-window.fetchImageURL(query) - SYNC: immediate Picsum fallback URL
-    Usage: const url = window.fetchImageURL('theme name');
-
-IMAGES: Use any of these methods:
-- await fetchImage('query') - Unsplash with Picsum fallback
-- https://picsum.photos/seed/QUERY/800/600 - Direct Picsum
-- https://api.dicebear.com/7.x/avataaars/svg?seed=QUERY - DiceBear avatars
-NEVER USE IMAGES IN <video>/<audio> ELEMENTS
-
-DO NOT:
-- Change the core structure unless it's broken
-- Remove working features
-- Add <link> tags other than Google Fonts
-- Add @import or local/project files
-- Create unfinished/non-functional content
-- Do NOT reference functions you do not define
-- Do NOT add event listeners to elements you did not create
-- Do NOT use async image loading unless it is inside preload()
-- Do NOT place UI controls in the top-left by default
-- Do NOT use a boring two-button layout
-
-OUTPUT: Complete HTML/CSS/JS (no markdown, no explanations)
-
-BEGIN:`;
-
-            const response = await fetch(GENERATE_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    theme: theme,
-                    prompt: enrichPrompt
-                })
-            });
-
-            if (!response.ok) {
-                console.warn('Content enrichment failed, using original code');
-                return html;
-            }
-
-            try {
-                const data = await response.json();
-                let enrichedHTML = data.html;
-                enrichedHTML = enrichedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
-                return enrichedHTML;
-            } catch (parseErr) {
-                console.warn('Failed to parse enrichment response:', parseErr);
-                return html;
-            }
-        }
-
         // Get random words from AI
         async function getRandomWords() {
             const response = await fetch(RANDOM_WORDS_ENDPOINT, {
@@ -808,7 +701,7 @@ BEGIN:`;
             return data;
         }
 
-        // Call ChatGPT API via Vercel serverless function
+        // Call ChatGPT API via Vercel serverless function - SIMPLIFIED
         async function generateWebsite() {
             const loadingOverlay = document.getElementById('loadingOverlay');
             const loadingMessage = document.getElementById('loadingMessage');
@@ -822,6 +715,13 @@ BEGIN:`;
             loadingOverlay.classList.remove('hidden');
             regenerateButton.disabled = true;
             generatedContent.innerHTML = '';
+
+            // Clear any previous p5 instance
+            if (window.p5Instance) {
+                try {
+                    window.p5Instance.remove();
+                } catch (e) {}
+            }
 
             if (loadingMessageInterval) {
                 clearInterval(loadingMessageInterval);
@@ -874,16 +774,16 @@ BEGIN:`;
                     throw new Error(errorMsg);
                 }
 
-                let generatedHTML;
+                let p5Code;
                 try {
                     const data = await response.json();
-                    generatedHTML = data.html;
+                    p5Code = data.html; // Still called 'html' in API but now it's just js
                 } catch (parseErr) {
                     const text = await response.text();
-                    if (text && text.trim().startsWith('<')) {
-                        generatedHTML = text;
+                    if (text) {
+                        p5Code = text;
                     } else {
-                        throw new Error('API returned invalid JSON');
+                        throw new Error('API returned invalid response');
                     }
                 }
 
@@ -892,164 +792,110 @@ BEGIN:`;
                     loadingMessageInterval = null;
                 }
 
+                // Clean any markdown code blocks
+                p5Code = p5Code.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
+
+                // Second pass: enhance with an interesting addition
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
-                loadingMessageText.innerHTML = applyWaveAnimation(reviewMessages[0]);
-
-                let reviewedHTML = await enrichContent(generatedHTML, theme, persona);
-
-                loadingMessageText.innerHTML = applyWaveAnimation('🎨 Rendering your creation...');
-
-                const helperFunctions = `<script>
-window.fetchImageURL = window.fetchImageURL || (function(query) {
-    return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
-});
-window.fetchImage = window.fetchImage || (async function(query) {
-    try {
-        const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
-        if (r.ok) { 
-            try {
-                const d = await r.json(); 
-                if (d && d.url) return d.url;
-            } catch (parseErr) {}
-        }
-    } catch (e) {}
-    return window.fetchImageURL(query);
-});
-try {
-    const style = document.createElement('style');
-    style.textContent = 'canvas{display:block !important;position:absolute !important;top:0;left:0;z-index:1;}';
-    document.head.appendChild(style);
-} catch (e) {}
-
-try {
-    if (typeof window.createCanvas === 'function') {
-        const _createCanvas = window.createCanvas;
-        window.createCanvas = function(w, h, renderer) {
-            const canvas = _createCanvas(w, h, renderer);
-            try {
-                const parent = document.getElementById('generatedContent');
-                if (canvas && canvas.elt) {
-                    if (parent) parent.appendChild(canvas.elt);
-                    canvas.elt.style.position = 'absolute';
-                    canvas.elt.style.top = '0';
-                    canvas.elt.style.left = '0';
-                    canvas.elt.style.display = 'block';
-                    canvas.elt.style.zIndex = '1';
-                } else if (canvas && typeof canvas.parent === 'function') {
-                    if (parent) canvas.parent('generatedContent');
-                }
-            } catch (e) {}
-            return canvas;
-        };
-    }
-} catch (e) {}
-<\/script>`;
-                reviewedHTML = helperFunctions + reviewedHTML;
-
-                const scriptRegex = /<script\b[^>]*>(?:[\s\S]*?)<\/script>/gi;
-                let cleanHTML = reviewedHTML;
-                const extractedScripts = [];
-                let match;
+                let reviewIndex = 0;
+                loadingMessageText.innerHTML = applyWaveAnimation(reviewMessages[reviewIndex]);
                 
-                while ((match = scriptRegex.exec(reviewedHTML)) !== null) {
-                    extractedScripts.push(match[0]);
-                    cleanHTML = cleanHTML.replace(match[0], '');
-                }
-                
-                // Insert HTML without scripts
-                generatedContent.innerHTML = cleanHTML;
+                loadingMessageInterval = setInterval(() => {
+                    reviewIndex = (reviewIndex + 1) % reviewMessages.length;
+                    loadingMessageText.innerHTML = applyWaveAnimation(reviewMessages[reviewIndex]);
+                }, 7000);
 
-                // Now execute scripts in order: external (especially p5.js) first, then inline
-                const externalScripts = [];
-                const inlineScripts = [];
-                
-                const parseScriptTag = (scriptTag) => {
-                    const attrs = {};
-                    const attrRegex = /(\w+)(?:=("[^"]*"|'[^']*'|[^\s>]+))?/g;
-                    const openTagMatch = scriptTag.match(/<script\b([^>]*)>/i);
-                    const attrString = openTagMatch ? openTagMatch[1] : '';
-                    let attrMatch;
-                    while ((attrMatch = attrRegex.exec(attrString)) !== null) {
-                        const key = attrMatch[1];
-                        let value = attrMatch[2];
-                        if (value) {
-                            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-                                value = value.slice(1, -1);
-                            }
-                        } else {
-                            value = true;
-                        }
-                        attrs[key] = value;
-                    }
-                    const code = scriptTag.replace(/<script\b[^>]*>|<\/script>/gi, '');
-                    return { attrs, code };
-                };
+                const enhancePrompt = `Theme: "${theme}"
 
-                for (const scriptTag of extractedScripts) {
-                    const parsed = parseScriptTag(scriptTag);
-                    if (parsed.attrs.src) {
-                        externalScripts.push(parsed);
-                    } else {
-                        inlineScripts.push(parsed);
-                    }
-                }
+YOU ARE: ${persona.name}
+YOUR STYLE: ${persona.style}
+YOUR APPROACH: ${persona.desc}
 
-                // Load p5.js first (make sure it's first external script)
-                const p5Index = externalScripts.findIndex(s => String(s.attrs.src || '').includes('p5'));
-                if (p5Index > 0) {
-                    [externalScripts[0], externalScripts[p5Index]] = [externalScripts[p5Index], externalScripts[0]];
-                }
+You just created this p5.js sketch for the theme "${theme}":
 
-                // Load external scripts sequentially
-                const loadScripts = async () => {
-                    // Load all external scripts first
-                    for (const scriptTag of externalScripts) {
-                        await new Promise((resolve) => {
-                            const script = document.createElement('script');
-                            Object.keys(scriptTag.attrs).forEach((key) => {
-                                if (key === 'async' || key === 'defer') {
-                                    return;
-                                }
-                                if (scriptTag.attrs[key] === true) {
-                                    script.setAttribute(key, '');
-                                } else {
-                                    script.setAttribute(key, scriptTag.attrs[key]);
-                                }
-                            });
-                            script.async = false;
-                            script.defer = false;
-                            script.onload = resolve;
-                            script.onerror = resolve;
-                            generatedContent.appendChild(script);
-                        });
-                    }
-                    
-                    for (const scriptTag of inlineScripts) {
-                        const code = scriptTag.code;
-                        const script = document.createElement('script');
-                        Object.keys(scriptTag.attrs).forEach((key) => {
-                            if (scriptTag.attrs[key] === true) {
-                                script.setAttribute(key, '');
-                            } else {
-                                script.setAttribute(key, scriptTag.attrs[key]);
-                            }
-                        });
-                        const isModule = String(scriptTag.attrs.type || '').toLowerCase() === 'module';
-                        script.textContent = isModule
-                            ? code
-                            : `try {\n${code}\n} catch (e) { console.error('Inline script error:', e); }`;
-                        generatedContent.appendChild(script);
-                    }
-                };
+\`\`\`javascript
+${p5Code}
+\`\`\`
 
-                // Execute all scripts
-                loadScripts().then(() => {
-                    // Hide loading overlay after everything is loaded
-                    setTimeout(() => {
-                        loadingOverlay.classList.add('hidden');
-                        regenerateButton.disabled = false;
-                    }, 500);
+NOW: Add the most interesting expansion you can think of that fits your persona and the theme.
+
+REQUIREMENTS:
+- Output the COMPLETE enhanced p5.js code (include everything from above + your addition)
+- Add ONE substantial, creative feature that makes this more interesting
+- Keep it true to your persona's style and approach
+- Stay focused on p5.js (no HTML/CSS)
+- The addition should be meaningful, not just cosmetic
+- Keep setup() and draw() structure intact
+- Output ONLY JavaScript code (no markdown, no explanations)
+
+IDEAS FOR ADDITIONS (choose what fits):
+- Interactive element that responds to mouse/keyboard
+- Additional visual layer or effect
+- New generative pattern or animation
+- Particle system or physics
+- Data visualization component
+- Sound/rhythm visualization (if audio available)
+- Camera/video integration (if appropriate)
+- 3D elements (WEBGL mode)
+- Perlin noise field or flow field
+- Fractal or recursive structure
+
+BEGIN ENHANCED CODE:`;
+
+                const enhanceResponse = await fetch(GENERATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        theme: theme,
+                        prompt: enhancePrompt
+                    })
                 });
+
+                if (enhanceResponse.ok) {
+                    try {
+                        const enhanceData = await enhanceResponse.json();
+                        let enhancedCode = enhanceData.html;
+                        enhancedCode = enhancedCode.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
+                        if (enhancedCode && enhancedCode.length > p5Code.length * 0.8) {
+                            p5Code = enhancedCode;
+                        }
+                    } catch (e) {
+                        console.warn('Enhancement failed, using original:', e);
+                    }
+                }
+
+                if (loadingMessageInterval) {
+                    clearInterval(loadingMessageInterval);
+                    loadingMessageInterval = null;
+                }
+
+                loadingMessageText.innerHTML = applyWaveAnimation('🎨 Running your sketch...');
+
+                // Execute p5 code directly
+                try {
+                    const script = document.createElement('script');
+                    script.textContent = `
+                        try {
+                            ${p5Code}
+                        } catch (e) {
+                            console.error('P5 sketch error:', e);
+                            document.getElementById('generatedContent').innerHTML = 
+                                '<div style="padding: 40px; font-family: monospace;">Error running sketch: ' + e.message + '</div>';
+                        }
+                    `;
+                    document.body.appendChild(script);
+                } catch (e) {
+                    console.error('Script injection error:', e);
+                    generatedContent.innerHTML = `<div style="padding: 40px;">Error: ${e.message}</div>`;
+                }
+
+                // Hide loading overlay
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                    regenerateButton.disabled = false;
+                }, 500);
 
             } catch (error) {
                 // Clear the interval on error
