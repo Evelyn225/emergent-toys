@@ -793,42 +793,16 @@ BEGIN HTML OUTPUT:`;
                     loadingMessageInterval = null;
                 }
 
-                // Clean any markdown code blocks
+                // Clean any markdown code blocks (keep full HTML)
                 p5Code = p5Code.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
                 p5Code = p5Code.trim();
-                
-                // If wrapped in script tags, extract content
-                const scriptMatch = p5Code.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
-                if (scriptMatch) {
-                    p5Code = scriptMatch[1];
+
+                // If the model returned only JS, wrap it in a minimal HTML shell
+                const hasHtmlTag = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code);
+                if (!hasHtmlTag) {
+                    p5Code = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>\n</head>\n<body>\n<script>\n${p5Code}\n</script>\n</body>\n</html>`;
                 }
-                
-                // Remove any remaining HTML tags completely
-                p5Code = p5Code.replace(/<[^>]*>/g, '');
-                
-                // Remove any lines that start with markdown-like markers
-                p5Code = p5Code.split('\n')
-                    .filter(line => !line.trim().match(/^(---|#|>|\*\*|<|&)/))
-                    .join('\n');
-                
-                // Find where actual JavaScript starts (skip any leading junk)
-                const lines = p5Code.split('\n');
-                let codeStart = 0;
-                for (let i = 0; i < lines.length; i++) {
-                    const trimmed = lines[i].trim();
-                    if (trimmed && !trimmed.match(/^(let|const|var|function|class|async|\/\/|\/\*|\*)/)) {
-                        // Skip lines that don't look like code
-                        if (trimmed.match(/^[a-zA-Z_$]/)) {
-                            codeStart = i;
-                            break;
-                        }
-                    } else if (trimmed.match(/^(let|const|var|function|class|async|\/\/|\/\*)/)) {
-                        codeStart = i;
-                        break;
-                    }
-                }
-                p5Code = lines.slice(codeStart).join('\n').trim();
-                
+
                 if (!p5Code) {
                     throw new Error('Generated code appears to be empty after sanitization');
                 }
