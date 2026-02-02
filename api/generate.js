@@ -57,6 +57,7 @@ CRITICAL REQUIREMENTS:
 - Output starts with first tag character (<)
 
 REMEMBER: p5.js is NOT optional.
+        `
         },
         {
           role: "user",
@@ -70,9 +71,12 @@ REMEMBER: p5.js is NOT optional.
     let html = completion.choices[0].message.content.trim();
 
     // Remove markdown code blocks if present
-    if (html.startsWith('```html')) html = html.substring(7);
-    if (html.startsWith('```')) html = html.substring(3);
-    if (html.endsWith('```')) html = html.substring(0, html.length - 3);
+    const backtick = String.fromCharCode(96);
+    const tick3 = backtick + backtick + backtick;
+    const tick3html = tick3 + 'html';
+    if (html.startsWith(tick3html)) html = html.substring(7);
+    if (html.startsWith(tick3)) html = html.substring(3);
+    if (html.endsWith(tick3)) html = html.substring(0, html.length - 3);
     
     // Only remove leading explanatory text (text before first < character)
     const firstTagIndex = html.indexOf('<');

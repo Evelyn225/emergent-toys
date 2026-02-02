@@ -875,6 +875,8 @@ BEGIN:`;
                         throw new Error('API returned invalid JSON');
                     }
                 }
+
+                if (loadingMessageInterval) {
                     clearInterval(loadingMessageInterval);
                     loadingMessageInterval = null;
                 }
