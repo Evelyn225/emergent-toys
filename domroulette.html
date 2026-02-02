@@ -185,6 +185,7 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - All CSS in a single <style> tag
 - All JS in <script> tags
 - MUST be fully self-contained
+- MUST contain the two word theme/title somewhere in the content: "${theme}"
 - MUST work on desktop primarily, mobile optional
 - MUST use p5.js, loaded from CDN in its own <script async> tag
 - DO NOT use deprecated p5 features such as motion sensor or orientation sensor
@@ -654,155 +655,45 @@ BEGIN OUTPUT:`;
             return specialInstructions[personaName] || "";
         }
 
-        // Review and make code more robust before execution
-        async function reviewAndImproveCode(html, theme, persona) {
-            const specialInstructions = getPersonaSpecialInstructions(persona.name);
-
-            const reviewPrompt = `FLESH OUT IDEA:
-
-            CREATE A FULL FEATURE-RICH VERSION OF THE FOLLOWING HTML CODE. MAKE IT SUBSTANTIALLY RICHER, MORE COMPLEX, AND MORE INTERACTIVE.
-
-ORIGINAL THEME: "${theme}"
-ORIGINAL PERSONA: ${persona.name}
-
-ANALYSIS OF PROBLEMS:
-${generateProblemsList(html)}
-
-⚠️ WHAT NOT TO DO (INSTANT REJECTION):
-- Single interactive element or feature (needs 10+ separate interactions)
-- Generic background colors (need gradients, animations, dynamic effects)
-- Basic text without layering or visual effects
-- No state persistence or progression
-- Empty sections that don't do anything
-- Simple buttons with obvious functionality
-- No emergent complexity (systems should interact in unexpected ways)
-- Anything under 800 lines of code
-- Using a library without deeply integrating it (100+ lines minimum)
-- No sound design, animations, or particle effects
-
-✅ WHAT SUCCESS LOOKS LIKE (EXAMPLES):
-- Complex interaction layers where clicking one thing affects multiple systems
-- Animated backgrounds that respond to user input
-- Multiple data visualization types showing interconnected info
-- State that persists and evolves as user explores
-- Hidden features, easter eggs, and reward paths
-- Audio feedback, synthesis, or algorithmic sound
-- Particle systems, generative visuals, or procedural content
-- At least 3 distinct UI zones/modes/sections
-- Deep use of at least 1 library (50+ lines)
-- Every interaction has visual/audio consequence
-
-MANDATORY REQUIREMENTS (HARD STOPS):
-
-1. **MINIMUM 500 LINES**: No exceptions. Count every line including comments/formatting.
-2. **USE AT LEAST 1 LIBRARY**: Deep integration required, p5.js preferred:
-   - p5.js, Three.js, Tone.js, Chart.js, anime.js, gsap, Howler.js, wavesurfer.js, Matter.js, verlet-js, simplex-noise, Tippy.js, SortableJS, Driver.js
-   - At least 100 lines of code using the library
-   - Proper loading with async and try/catch
-   - Fallbacks if library fails to load
-3. **10+ INTERACTIVE ELEMENTS**: Each with distinct behavior:
-   - Buttons/clicks that trigger state changes
-   - Hover effects with visual feedback
-   - Drag/drop interactions
-   - Keyboard input
-   - Mouse movement effects
-   - Form inputs that affect the display
-   - Animations that respond to interaction
-   - Sound triggers
-4. **VISUAL RICHNESS**:
-   - Animated gradients or dynamic backgrounds
-   - Text animations, distortions, or effects
-   - Layered visuals (foreground, middle, background all active)
-   - Particle systems or generative visuals
-   - Color palettes with intentional contrast
-5. **DATA DEPTH**:
-   - 3+ different data structures/arrays
-   - Each with 10+ data points
-   - Visualized in multiple ways
-   - Updated by user interaction
-6. **CONTENT RICHNESS**:
-   - Actual written content about "${theme}"
-   - Multiple sections/pages to explore
-   - Narrative or conceptual framework
-   - References to real or fictional sources
-7. **AUDIO INTEGRATION (OPTIONAL)**:
-    - If included: provide a mute control
-8. **RESPONSIVENESS**:
-   - Works on all screen sizes
-   - No scrolling required (or scrolling is intentional)
-   - Touch-friendly or keyboard navigable
-
-IMMEDIATE FAILURE CONDITIONS (AUTO-REJECT):
-❌ Less than 500 lines total
-❌ NO LIBRARY USED (must use exactly 1 library, p5.js preferred, with 100+ lines of integration)
-❌ Using library without showing it was loaded (no typeof check)
-❌ Fewer than 10 distinct interactive elements
-❌ Single section/zone (needs 3+ distinct areas)
-❌ No audio component (only if audio is added)
-❌ All content is placeholder/lorem ipsum
-❌ Visible bugs, errors, or broken functionality
-❌ Generic/boring implementation of the theme
-❌ ANY <link> tags or @import statements in the code
-❌ ANY external file references (stylesheets, font files, etc)
-❌ Missing <style> tag with all CSS inline
-❌ Missing proper <script> tags with all JavaScript inline
-
-YOUR TASK: 
-Rewrite the code from scratch to be SUBSTANTIALLY RICHER. Make every pixel count. Make every interaction matter. If you're not using 80%+ of the code space for actual features (not setup), you're doing it wrong.
-
-The persona's perspective should be evident in every design choice - the Glitch should have visual corruption, the Arcade should feel like 1983 hardware, the Poet should have lyrical animations.
-
-BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
-
-            function detectLibraries(html) {
-                const libraries = new Set();
-                const lower = html.toLowerCase();
-                const has = (patterns) => patterns.some((pattern) => pattern.test(lower));
-                const checks = [
-                    { name: 'p5.js', patterns: [/p5\.min\.js/, /p5\.js/, /new\s+p5\b/, /\bp5\./] },
-                    { name: 'Three.js', patterns: [/three\.min\.js/, /three\.js/, /\bthree\./, /\bnew\s+three\./] },
-                    { name: 'Tone.js', patterns: [/tone\.js/, /\btone\./] },
-                    { name: 'Matter.js', patterns: [/matter\.min\.js/, /matter\.js/, /\bmatter\./] },
-                    { name: 'Chart.js', patterns: [/chart\.umd\.min\.js/, /chart\.js/, /\bchart\./, /new\s+chart\b/] },
-                    { name: 'anime.js', patterns: [/anime\.min\.js/, /anime\.js/, /\banime\(/] },
-                    { name: 'GSAP', patterns: [/gsap\.min\.js/, /\bgsap\./] },
-                    { name: 'Howler.js', patterns: [/howler\.min\.js/, /howler\.js/, /\bhowl\b/, /\bhowler\b/] },
-                    { name: 'wavesurfer.js', patterns: [/wavesurfer\.min\.js/, /wavesurfer\.js/, /\bwavesurfer\b/] },
-                    { name: 'Particles.js', patterns: [/particles\.min\.js/, /particles\.js/, /\bparticlesjs\b/, /\bparticlesjs\./] },
-                    { name: 'Tippy.js', patterns: [/tippy-bundle\.umd\.min\.js/, /tippy\.js/, /\btippy\(/] },
-                    { name: 'SortableJS', patterns: [/sortable\.min\.js/, /sortable\.js/, /\bsortable\b/] },
-                    { name: 'Driver.js', patterns: [/driver\.min\.js/, /driver\.js/, /\bdriver\b/] },
-                    { name: 'simplex-noise', patterns: [/simplex-noise\.min\.js/, /simplex-noise\.js/, /\bsimplexnoise\b/] },
-                    { name: 'verlet-js', patterns: [/verlet\.min\.js/, /verlet\.js/, /\bverlet\b/] }
-                ];
-
-                checks.forEach((check) => {
-                    if (has(check.patterns)) {
-                        libraries.add(check.name);
-                    }
-                });
-
-                return libraries.size > 0 ? Array.from(libraries).join(', ') : 'none';
+        // Fast content enrichment pass (cached prompt for speed)
+        async function enrichContent(html, theme, persona) {
+            // Check for "demo" - if found, always review
+            const hasDemo = /demo/i.test(html);
+            
+            // Skip review if already substantial (unless it's a demo)
+            const lines = html.split('\n').length;
+            const hasP5 = /p5\.min\.js|p5\.js/.test(html.toLowerCase());
+            if (!hasDemo && lines > 600 && hasP5) {
+                console.log('Skipping review - content already substantial');
+                return html;
             }
 
-            function generateProblemsList(html) {
-                const lines = html.split('\n').length;
-                const wordCount = html.split(/\s+/).length;
-                const detectedLibs = detectLibraries(html);
-                const libCount = detectedLibs !== 'none' ? detectedLibs.split(',').length : 0;
-                const placeholders = (html.match(/TODO|FIXME|HACK|XXX/g) || []).length;
-                const emptyDivs = (html.match(/<div[^>]*>\s*<\/div>/g) || []).length;
-                const hasErrorHandling = html.includes('try') && html.includes('catch');
-
-                return `
-• Lines of code: ${lines} (need 500+)
-• Word count: ${wordCount} (need 1200+)
-• Libraries detected: ${detectedLibs} (${libCount} total, all must be deeply used)
-• Placeholder comments: ${placeholders} (must be 0)
-• Empty divs: ${emptyDivs} (must be 0)
-• Missing error handling: ${!hasErrorHandling ? 'YES' : 'NO'}
-`;
+            if (hasDemo) {
+                console.log('Demo detected - forcing content enrichment');
             }
+
+            // Fast, focused enrichment prompt (cacheable)
+            const enrichPrompt = `Theme: "${theme}"
+Persona: ${persona.name}
+
+ENRICH THIS CODE WITH MORE CONTENT:
+
+${hasDemo ? 'CRITICAL: This is a demo/placeholder. Rewrite with FULL content.\n' : ''}FOCUS ON:
+1. Add 3+ data arrays with 10+ items each about "${theme}"
+2. Add descriptive text/paragraphs about "${theme}" 
+3. Fix any undefined variables or broken references
+4. Add typeof checks around p5.js usage
+5. Make theme more explicit in visuals and interactions
+6. Replace any generic/placeholder content with theme-specific details
+
+DO NOT:
+- Change the core structure unless it's broken
+- Remove working features
+- Add external <link> or @import
+
+OUTPUT: Complete HTML/CSS/JS (no markdown, no explanations)
+
+BEGIN:`;
 
             const response = await fetch(GENERATE_ENDPOINT, {
                 method: 'POST',
@@ -811,62 +702,19 @@ BEGIN THE COMPLETE, POLISHED, FEATURE-RICH HTML CODE NOW:`;
                 },
                 body: JSON.stringify({
                     theme: theme,
-                    prompt: reviewPrompt
+                    prompt: enrichPrompt
                 })
             });
 
             if (!response.ok) {
-                // If review fails, return original code
-                console.warn('Code review failed, using original code');
+                console.warn('Content enrichment failed, using original code');
                 return html;
             }
 
             const data = await response.json();
-            let reviewedHTML = data.html;
-
-            // Remove markdown code blocks if present
-            reviewedHTML = reviewedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
-
-            return reviewedHTML;
-        }
-
-        // Final pass: bugfix-only review to reduce runtime errors
-        async function bugfixCode(html, theme, persona) {
-            const bugfixPrompt = `BUGFIX PASS - FIX ERRORS ONLY
-
-TASK:
-- Only fix runtime errors and broken references.
-- Check for missing variables, syntax errors, and library usage issues.
-- Do NOT remove features or content unless absolutely necessary for stability.
-- Ensure library usage is guarded with typeof checks and try/catch.
-- Replace any external <link> tags or @import statements with internal code.
-- Keep all CSS inside <style> and all JS inside <script>.
-- Output ONLY valid HTML/CSS/JS. No markdown.
-
-BEGIN OUTPUTTING THE FIXED HTML CODE NOW:`;
-
-            const response = await fetch(GENERATE_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    theme: theme,
-                    prompt: bugfixPrompt
-                })
-            });
-
-            if (!response.ok) {
-                console.warn('Bugfix pass failed, using previous code');
-                return html;
-            }
-
-            const data = await response.json();
-            let fixedHTML = data.html;
-
-            fixedHTML = fixedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
-
-            return fixedHTML;
+            let enrichedHTML = data.html;
+            enrichedHTML = enrichedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+            return enrichedHTML;
         }
 
         // Validate and remove external file references from generated HTML
@@ -991,23 +839,12 @@ BEGIN OUTPUTTING THE FIXED HTML CODE NOW:`;
                     loadingMessageInterval = null;
                 }
 
-                // Get dynamic review messages and cycle through them
+                // Content enrichment pass
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
-                let reviewMessageIndex = 0;
-                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
+                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[0]}`);
 
-                loadingMessageInterval = setInterval(() => {
-                    reviewMessageIndex = (reviewMessageIndex + 1) % reviewMessages.length;
-                    loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
-                }, 5000);
-
-                // Review and improve the code (temporarily disabled)
-                // let reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
-
-                // Final bugfix-only pass (temporarily disabled)
-                // reviewedHTML = await bugfixCode(reviewedHTML, theme, persona);
-
-                let reviewedHTML = generatedHTML;
+                // Single fast enrichment pass
+                let reviewedHTML = await enrichContent(generatedHTML, theme, persona);
 
                 loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...`);
 
