@@ -28,7 +28,7 @@
       DENSITY_INFLUENCE: 0.85,
       BUOYANCY_FORCE: 0.85,
       MIN_DENSITY_THRESHOLD: 0.2,
-      SAND_EMISSION_RATE: 16,
+      SAND_EMISSION_RATE: 8,
       HUE_INCREMENT: 0.2
     };
 
@@ -121,6 +121,7 @@
       let messageAlpha = 255;
       let isPaused = false;
       let currentBrightness = 0.5;
+      let isDraggingSlider = false;
 
       // Initialize canvas and simulation
       p.setup = () => {
@@ -155,6 +156,34 @@
         // Add mouse wheel event listener for brightness control
         document.addEventListener('wheel', handleMouseWheel, { passive: false });
       }
+
+      // Handle touch events for mobile
+      p.touchStarted = () => {
+        // Check if touching slider
+        if (isOverSlider(p.mouseX, p.mouseY)) {
+          isDraggingSlider = true;
+          updateBrightnessFromSlider(p.mouseY);
+          return false; // Prevent default
+        }
+        // Otherwise handle like mouse press
+        p.mousePressed();
+        return false; // Prevent default
+      };
+
+      p.touchMoved = () => {
+        if (isDraggingSlider) {
+          updateBrightnessFromSlider(p.mouseY);
+          return false; // Prevent default
+        }
+        // Otherwise handle like mouse drag
+        p.mouseDragged();
+        return false; // Prevent default
+      };
+
+      p.touchEnded = () => {
+        p.mouseReleased();
+        return false; // Prevent default
+      };
 
       // Handle mouse wheel for brightness adjustment
       function handleMouseWheel(event) {
@@ -224,6 +253,13 @@
 
       // Handle initial mouse press events
       p.mousePressed = () => {
+        // Check if clicking on slider first
+        if (isOverSlider(p.mouseX, p.mouseY)) {
+          isDraggingSlider = true;
+          updateBrightnessFromSlider(p.mouseY);
+          return;
+        }
+
         if (isPaused) return;
 
         if (!hasInteracted) {
@@ -282,6 +318,11 @@
 
       // Handle continuous mouse movement
       p.mouseDragged = () => {
+        if (isDraggingSlider) {
+          updateBrightnessFromSlider(p.mouseY);
+          return;
+        }
+
         if (isPaused) return;
         
         if (p.mouseButton === p.RIGHT) {
@@ -337,6 +378,7 @@
 
       // Handle mouse button release
       p.mouseReleased = () => {
+        isDraggingSlider = false;
         isWindActive = false;
         isAddingSand = false;
         isDrawingWalls = false;
@@ -1123,6 +1165,26 @@
           p.text(UI.INSTRUCTIONS, p.width/2, p.height/2);
           p.pop();  // Restore previous drawing settings
         }
+      }
+
+      // Check if position is over the slider
+      function isOverSlider(x, y) {
+        const sliderX = p.width - SLIDER.WIDTH - SLIDER.MARGIN;
+        const sliderHeight = p.height * SLIDER.HEIGHT_RATIO;
+        const sliderY = (p.height - sliderHeight) / 2;
+        return x >= sliderX - 10 && x <= sliderX + SLIDER.WIDTH + 10 &&
+               y >= sliderY && y <= sliderY + sliderHeight;
+      }
+
+      // Update brightness from slider position
+      function updateBrightnessFromSlider(y) {
+        const sliderHeight = p.height * SLIDER.HEIGHT_RATIO;
+        const sliderY = (p.height - sliderHeight) / 2;
+        currentBrightness = p.constrain(
+          p.map(y, sliderY, sliderY + sliderHeight, BRIGHTNESS.MIN, BRIGHTNESS.MAX),
+          BRIGHTNESS.MIN,
+          BRIGHTNESS.MAX
+        );
       }
 
       // Draw brightness slider
