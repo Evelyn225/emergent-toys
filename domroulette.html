@@ -975,12 +975,17 @@ window.fetchImage = window.fetchImage || (async function(query) {
                         await new Promise((resolve) => {
                             const script = document.createElement('script');
                             Object.keys(scriptTag.attrs).forEach((key) => {
+                                if (key === 'async' || key === 'defer') {
+                                    return;
+                                }
                                 if (scriptTag.attrs[key] === true) {
                                     script.setAttribute(key, '');
                                 } else {
                                     script.setAttribute(key, scriptTag.attrs[key]);
                                 }
                             });
+                            script.async = false;
+                            script.defer = false;
                             script.onload = resolve;
                             script.onerror = resolve;
                             generatedContent.appendChild(script);
@@ -997,7 +1002,10 @@ window.fetchImage = window.fetchImage || (async function(query) {
                                 script.setAttribute(key, scriptTag.attrs[key]);
                             }
                         });
-                        script.textContent = code;
+                        const isModule = String(scriptTag.attrs.type || '').toLowerCase() === 'module';
+                        script.textContent = isModule
+                            ? code
+                            : `try {\n${code}\n} catch (e) { console.error('Inline script error:', e); }`;
                         generatedContent.appendChild(script);
                     }
                 };
