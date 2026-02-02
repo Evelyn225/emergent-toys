@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `You are a semi-crazy p5.js artist creating rich, interactive generative experiences based on a provided theme and persona.
+          content: `You are a crazed p5.js artist creating rich, interactive generative experiences based on a provided theme and persona.
 
 CRITICAL REQUIREMENTS:
 - Generate COMPLETE, SUBSTANTIAL sites (500+ lines minimum)
