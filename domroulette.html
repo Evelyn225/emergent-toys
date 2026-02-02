@@ -761,10 +761,15 @@ BEGIN:`;
                 return html;
             }
 
-            const data = await response.json();
-            let enrichedHTML = data.html;
-            enrichedHTML = enrichedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
-            return enrichedHTML;
+            try {
+                const data = await response.json();
+                let enrichedHTML = data.html;
+                enrichedHTML = enrichedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+                return enrichedHTML;
+            } catch (parseErr) {
+                console.warn('Failed to parse enrichment response:', parseErr);
+                return html;
+            }
         }
 
         // Get random words from AI
@@ -777,7 +782,7 @@ BEGIN:`;
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = await response.json().catch(() => ({ error: `API Error: ${response.status}` }));
                 throw new Error(errorData.error || `API Error: ${response.status}`);
             }
 
@@ -920,7 +925,7 @@ window.fetchImage = window.fetchImage || (async function(query) {
                                 script.src = srcMatch[1];
                                 script.onload = resolve;
                                 script.onerror = resolve;
-                                document.body.appendChild(script);
+                                generatedContent.appendChild(script);
                             } else {
                                 resolve();
                             }
@@ -932,7 +937,7 @@ window.fetchImage = window.fetchImage || (async function(query) {
                         const code = scriptTag.replace(/<script[^>]*>|<\/script>/g, '');
                         const script = document.createElement('script');
                         script.textContent = code;
-                        document.body.appendChild(script);
+                        generatedContent.appendChild(script);
                     }
                 };
 
