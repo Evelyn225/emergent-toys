@@ -900,7 +900,7 @@ BEGIN ENHANCED CODE:`;
                     document.body.appendChild(script);
                 } catch (e) {
                     console.error('Script injection error:', e);
-                    generatedContent.innerHTML = \`<div style="padding: 40px;">Error: \${e.message}</div>\`;
+                    generatedContent.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
                 }
 
                 // Hide loading overlay
