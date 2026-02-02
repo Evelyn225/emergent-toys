@@ -198,14 +198,15 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - NO local/project files (e.g., /style.css, /script.js, ./assets/)
 - ALL buttons must be clickable and have real functionality (no fake/disabled buttons)
 
-HELPER FUNCTION (injected automatically):
-async function fetchImage(query) {
-  try {
-    const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
-    if (r.ok) { const d = await r.json(); return d.url; }
-  } catch (e) {}
-  return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
-}
+HELPER FUNCTIONS (injected automatically):
+
+async function fetchImage(query) - Get images from Unsplash or Picsum
+  Usage: const url = await fetchImage('theme name');
+
+THEME-SPECIFIC DATA (available in scope):
+const themeData = { nouns: [], verbs: [], adjectives: [] };
+Use these authentic words for realistic, themed content.
+Example: const noun = themeData.nouns[Math.floor(Math.random() * themeData.nouns.length)];
 
 IMAGES - Use any of these methods:
 - fetchImage('query') - Unsplash API with Picsum fallback
@@ -689,7 +690,7 @@ Persona: ${persona.name}
 
 ENRICH THIS CODE WITH MORE CONTENT:
 
-${hasDemo ? 'CRITICAL: This is a demo/placeholder. Rewrite with FULL content.\n' : ''}FOCUS ON:
+FOCUS ON:
 1. Add 3+ data arrays with 10+ items each about "${theme}"
 2. TEXT CONTENT: Decide based on type:
    - If game/visual art/generative: Keep text minimal
@@ -702,14 +703,15 @@ ${hasDemo ? 'CRITICAL: This is a demo/placeholder. Rewrite with FULL content.\n'
 7. Replace any generic/placeholder content with theme-specific details
 8. If the website content references some functionality, ensure it is fully implemented
 
-HELPER FUNCTION (available):
-async function fetchImage(query) {
-  try {
-    const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
-    if (r.ok) { const d = await r.json(); return d.url; }
-  } catch (e) {}
-  return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
-}
+HELPER FUNCTIONS (available):
+
+async function fetchImage(query) - Get images from Unsplash or Picsum
+  Usage: const url = await fetchImage('theme name');
+
+THEME-SPECIFIC DATA (available in scope):
+const themeData = { nouns: [], verbs: [], adjectives: [] };
+Use these authentic words to replace generic placeholder content.
+Example: const noun = themeData.nouns[Math.floor(Math.random() * themeData.nouns.length)];
 
 IMAGES: Use any of these methods:
 - await fetchImage('query') - Unsplash with Picsum fallback
@@ -848,8 +850,9 @@ BEGIN:`;
 
                 loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: 🎨 Rendering your creation...`);
 
-                // Inject fetchImage helper into generated content
-                const fetchImageHelper = `
+                // Inject helper functions and theme data into generated content
+                const themeDataJSON = JSON.stringify(wordData.themeData);
+                const helperFunctions = `
 <script>
 async function fetchImage(query) {
   try {
@@ -861,9 +864,11 @@ async function fetchImage(query) {
   } catch (e) {}
   return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
 }
+
+const themeData = ${themeDataJSON};
 </script>
                 `;
-                reviewedHTML = fetchImageHelper + reviewedHTML;
+                reviewedHTML = helperFunctions + reviewedHTML;
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = reviewedHTML;
