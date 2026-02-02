@@ -866,7 +866,12 @@ window.fetchImageURL = window.fetchImageURL || (function(query) {
 window.fetchImage = window.fetchImage || (async function(query) {
     try {
         const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
-        if (r.ok) { const d = await r.json(); return d.url; }
+        if (r.ok) { 
+            try {
+                const d = await r.json(); 
+                if (d && d.url) return d.url;
+            } catch (parseErr) {}
+        }
     } catch (e) {}
     return window.fetchImageURL(query);
 });
