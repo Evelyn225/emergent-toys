@@ -224,6 +224,9 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - NO duplicate variable declarations
 - NO syntax errors
 - Test that the code would run if pasted into the p5.js editor
+- Do NOT add DOM event listeners unless the target element is created in your HTML
+- If you must add event listeners, check for element existence before use
+- Do NOT use async image loading unless it happens inside preload()
 
 HELPER FUNCTIONS (injected automatically):
 
@@ -742,6 +745,8 @@ DO NOT:
 - Add @import or local/project files
 - Create unfinished/non-functional content
 - Do NOT reference functions you do not define
+- Do NOT add event listeners to elements you did not create
+- Do NOT use async image loading unless it is inside preload()
 
 OUTPUT: Complete HTML/CSS/JS (no markdown, no explanations)
 
@@ -909,7 +914,7 @@ window.fetchImage = window.fetchImage || (async function(query) {
 <\/script>`;
                 reviewedHTML = helperFunctions + reviewedHTML;
 
-                const scriptRegex = /<script[^>]*(?:src="([^"]*)")[^>]*>(?:[\s\S]*?)<\/script>|<script[^>]*>(?:[\s\S]*?)<\/script>/gi;
+                const scriptRegex = /<script\b[^>]*>(?:[\s\S]*?)<\/script>/gi;
                 let cleanHTML = reviewedHTML;
                 const extractedScripts = [];
                 let match;
@@ -926,16 +931,39 @@ window.fetchImage = window.fetchImage || (async function(query) {
                 const externalScripts = [];
                 const inlineScripts = [];
                 
+                const parseScriptTag = (scriptTag) => {
+                    const attrs = {};
+                    const attrRegex = /(\w+)(?:=("[^"]*"|'[^']*'|[^\s>]+))?/g;
+                    const openTagMatch = scriptTag.match(/<script\b([^>]*)>/i);
+                    const attrString = openTagMatch ? openTagMatch[1] : '';
+                    let attrMatch;
+                    while ((attrMatch = attrRegex.exec(attrString)) !== null) {
+                        const key = attrMatch[1];
+                        let value = attrMatch[2];
+                        if (value) {
+                            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                                value = value.slice(1, -1);
+                            }
+                        } else {
+                            value = true;
+                        }
+                        attrs[key] = value;
+                    }
+                    const code = scriptTag.replace(/<script\b[^>]*>|<\/script>/gi, '');
+                    return { attrs, code };
+                };
+
                 for (const scriptTag of extractedScripts) {
-                    if (scriptTag.includes('src=')) {
-                        externalScripts.push(scriptTag);
+                    const parsed = parseScriptTag(scriptTag);
+                    if (parsed.attrs.src) {
+                        externalScripts.push(parsed);
                     } else {
-                        inlineScripts.push(scriptTag);
+                        inlineScripts.push(parsed);
                     }
                 }
 
                 // Load p5.js first (make sure it's first external script)
-                const p5Index = externalScripts.findIndex(s => s.includes('p5'));
+                const p5Index = externalScripts.findIndex(s => String(s.attrs.src || '').includes('p5'));
                 if (p5Index > 0) {
                     [externalScripts[0], externalScripts[p5Index]] = [externalScripts[p5Index], externalScripts[0]];
                 }
@@ -946,22 +974,29 @@ window.fetchImage = window.fetchImage || (async function(query) {
                     for (const scriptTag of externalScripts) {
                         await new Promise((resolve) => {
                             const script = document.createElement('script');
-                            const srcMatch = scriptTag.match(/src="([^"]*)"/);
-                            if (srcMatch) {
-                                script.src = srcMatch[1];
-                                script.onload = resolve;
-                                script.onerror = resolve;
-                                generatedContent.appendChild(script);
-                            } else {
-                                resolve();
-                            }
+                            Object.keys(scriptTag.attrs).forEach((key) => {
+                                if (scriptTag.attrs[key] === true) {
+                                    script.setAttribute(key, '');
+                                } else {
+                                    script.setAttribute(key, scriptTag.attrs[key]);
+                                }
+                            });
+                            script.onload = resolve;
+                            script.onerror = resolve;
+                            generatedContent.appendChild(script);
                         });
                     }
                     
-                    // Then execute inline scripts in order
                     for (const scriptTag of inlineScripts) {
-                        const code = scriptTag.replace(/<script[^>]*>|<\/script>/g, '');
+                        const code = scriptTag.code;
                         const script = document.createElement('script');
+                        Object.keys(scriptTag.attrs).forEach((key) => {
+                            if (scriptTag.attrs[key] === true) {
+                                script.setAttribute(key, '');
+                            } else {
+                                script.setAttribute(key, scriptTag.attrs[key]);
+                            }
+                        });
                         script.textContent = code;
                         generatedContent.appendChild(script);
                     }
