@@ -70,7 +70,9 @@ REMEMBER: p5.js is NOT optional.
     let html = completion.choices[0].message.content.trim();
 
     // Remove markdown code blocks if present
-    html = html.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
+    if (html.startsWith('```html')) html = html.substring(7);
+    if (html.startsWith('```')) html = html.substring(3);
+    if (html.endsWith('```')) html = html.substring(0, html.length - 3);
     
     // Only remove leading explanatory text (text before first < character)
     const firstTagIndex = html.indexOf('<');
