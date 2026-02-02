@@ -200,13 +200,12 @@ YOUR APPROACH: ${persona.desc}
 ${specialInstructions ? specialInstructions + '\n\n' : ''}CREATE A P5.JS SKETCH:
 
 OUTPUT RULES:
-- Output ONLY p5.js JavaScript code (NO HTML, NO CSS, NO markdown)
+- Output p5.js JavaScript code, HTML, and CSS
 - Do NOT wrap in <script> tags or markdown code blocks
-- Start directly with your p5 code
 - MUST include setup() function that calls createCanvas()
 - MUST include draw() function that calls background() at the start
 - Must visually incorporate the theme "${theme}" in the sketch
-- Create something substantial: 150+ lines of creative p5 code
+- Create something substantial: 250+ lines of creative p5 code
 - Use p5 drawing functions: rect(), ellipse(), line(), fill(), stroke(), etc
 - Can use: noise(), sin(), cos(), random(), map(), etc for animation
 - Can add interactivity: mousePressed(), keyPressed(), mouseX, mouseY, etc
@@ -794,6 +793,28 @@ BEGIN P5.JS CODE:`;
 
                 // Clean any markdown code blocks
                 p5Code = p5Code.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
+                
+                // Additional sanitization
+                p5Code = p5Code.trim();
+                
+                // Remove any HTML tags or markdown that might remain
+                p5Code = p5Code.replace(/<[^>]*>/g, '');
+                
+                // Remove any lines that start with markdown-like markers
+                p5Code = p5Code.split('\n')
+                    .filter(line => !line.trim().match(/^(---|#|>|\*\*)/))
+                    .join('\n');
+                
+                // Remove any leading/trailing content before JavaScript
+                const jsStart = p5Code.search(/\b(function|const|let|var|class|async)\b/);
+                if (jsStart > 0) {
+                    p5Code = p5Code.substring(jsStart);
+                }
+                
+                p5Code = p5Code.trim();
+                if (!p5Code) {
+                    throw new Error('Generated code appears to be empty after sanitization');
+                }
 
                 // Second pass: enhance with an interesting addition
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
@@ -821,12 +842,11 @@ NOW: Add the most interesting expansion you can think of that fits your persona 
 
 REQUIREMENTS:
 - Output the COMPLETE enhanced p5.js code (include everything from above + your addition)
-- Add ONE substantial, creative feature that makes this more interesting
+- Add one substantial, creative feature that makes this more interesting
 - Keep it true to your persona's style and approach
-- Stay focused on p5.js (no HTML/CSS)
-- The addition should be meaningful, not just cosmetic
-- Keep setup() and draw() structure intact
-- Output ONLY JavaScript code (no markdown, no explanations)
+- The addition should be meaningful
+- Keep setup() and draw() structurally intact
+- Output ONLY code (no markdown, no explanations)
 
 IDEAS FOR ADDITIONS (choose what fits):
 - Interactive element that responds to mouse/keyboard
@@ -876,6 +896,13 @@ BEGIN ENHANCED CODE:`;
                 // Execute p5 code in instance mode to target the container
                 try {
                     const script = document.createElement('script');
+                    
+                    // Properly escape code for embedding in template literal
+                    const escapedCode = p5Code
+                        .replace(/\\/g, '\\\\')
+                        .replace(/`/g, '\\`')
+                        .replace(/\$/g, '\\$');
+                    
                     script.textContent = `
                         try {
                             const container = document.getElementById('generatedContent');
@@ -884,7 +911,7 @@ BEGIN ENHANCED CODE:`;
                             // Wrap in p5 instance mode to target container
                             new p5(function(p) {
                                 // Replace global p5 functions with instance methods
-                                const sketch = \`${p5Code.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
+                                const sketch = \`${escapedCode}\`;
                                 
                                 // Create a wrapper that redirects global calls to instance
                                 with(p) {
@@ -893,8 +920,9 @@ BEGIN ENHANCED CODE:`;
                             }, 'generatedContent');
                         } catch (e) {
                             console.error('P5 sketch error:', e);
+                            console.error('Code preview:', \`${escapedCode.substring(0, 300)}\`);
                             document.getElementById('generatedContent').innerHTML = 
-                                '<div style="padding: 40px; font-family: monospace;">Error running sketch: ' + e.message + '</div>';
+                                '<div style="padding: 40px; font-family: monospace; color: red;"><strong>Error:</strong> ' + e.message + '<br><code>' + e.stack + '</code></div>';
                         }
                     `;
                     document.body.appendChild(script);
