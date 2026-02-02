@@ -62,22 +62,17 @@ export default async function handler(req, res) {
 CRITICAL REQUIREMENTS:
 - Generate COMPLETE, SUBSTANTIAL sites (500+ lines minimum)
 - p5.js IS THE PRIMARY TECHNOLOGY (150+ lines of active p5 code in draw loop, setup, interactions)
-- ALL visuals must use p5.js: shapes, colors, transforms, particles, animation loops
-- Every interaction responds via p5 mousePressed, mouseMoved, keyPressed, etc.
 - Use p5 creativity heavily: patterns, recursion, noise(), randomness, animations, layering
-- Multiple distinct interactive zones all driven by p5.js
-- At least 10 interactive elements all leveraging p5 drawing functions
 - Rich p5 visual effects: procedural generation, transforms, particle effects, animations
 - Output ONLY valid HTML/CSS/JavaScript code
 - Do NOT include <html>, <head>, or <body> tags
 - All CSS in <style> tags, all JS in <script> tags
-- Load p5.js from CDN in its own <script async> tag
 - Do NOT reference any local/project files (e.g., no /style.css, /script.js, ./assets/*)
 - NO explanations, NO markdown, NO code blocks - output pure HTML/CSS/JS only
 - If there is explanatory text before the code, remove it completely
 - Output starts with first tag character (<)
 
-REMEMBER: p5.js is NOT optional. Every animation, interaction, and visual must leverage p5 drawing functions, transforms, and event handling. The user will provide a detailed prompt with specific requirements. Follow ALL of those requirements exactly.`
+REMEMBER: p5.js is NOT optional.
         },
         {
           role: "user",
