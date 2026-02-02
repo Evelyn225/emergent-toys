@@ -682,7 +682,7 @@ BEGIN HTML OUTPUT:`;
         let backgroundGeneration = null;
         let isGenerating = false;
         let consoleCommandInterval = null;
-        let maxConsoleLines = 8;
+        let maxConsoleLines = 6;
 
         // Random console commands for loading
         const consoleCommands = [
@@ -1374,7 +1374,7 @@ BEGIN HTML OUTPUT:`;
                 await typeConsoleCommand('Enhancing generated code...', 'normal', 25);
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let reviewIndex = 0;
-                await typeText(currentMessage, reviewMessages[reviewIndex], 40);
+                typeText(currentMessage, reviewMessages[reviewIndex], 40);
                 
                 loadingMessageInterval = setInterval(async () => {
                     reviewIndex = (reviewIndex + 1) % reviewMessages.length;
@@ -1442,7 +1442,7 @@ BEGIN HTML OUTPUT:`;
                 await typeConsoleCommand('Detecting and fixing errors...', 'normal', 25);
                 const fixMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let fixIndex = 0;
-                await typeText(currentMessage, fixMessages[fixIndex], 40);
+                typeText(currentMessage, fixMessages[fixIndex], 40);
                 
                 if (loadingMessageInterval) {
                     clearInterval(loadingMessageInterval);
