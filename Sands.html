@@ -1118,6 +1118,7 @@
           p.push();  // Save current drawing settings
           p.textFont('Minecraft');
           p.textSize(25);  // Set text size here
+          p.textLeading(40);  // Add more vertical space between lines
           p.fill(255, 255, 255, messageAlpha);
           p.text(UI.INSTRUCTIONS, p.width/2, p.height/2);
           p.pop();  // Restore previous drawing settings
