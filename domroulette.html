@@ -800,25 +800,21 @@ BEGIN:`;
             regenerateButton.disabled = true;
             generatedContent.innerHTML = '';
 
-            // Clear any existing interval
             if (loadingMessageInterval) {
                 clearInterval(loadingMessageInterval);
             }
 
             try {
-                // First, get random words from AI
                 loadingMessageText.textContent = 'Choosing a creative persona...';
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
                 
-                // Start cycling through persona-specific loading messages (randomized)
                 const messages = shuffleArray(personaLoadingMessages[persona.name] || [
                     'Creating something interesting...',
                     'Building your experience...',
                     'Crafting the details...'
                 ]);
-                // Set theme once
                 loadingTheme.textContent = `"${theme}"`;
                 
                 let messageIndex = 0;
@@ -830,10 +826,8 @@ BEGIN:`;
                     loadingMessageText.innerHTML = applyWaveAnimation(messages[messageIndex]);
                 }, 7000);
 
-                // Create the prompt
                 const prompt = createGenerationPrompt(theme, persona);
 
-                // Call Vercel API endpoint to generate website
                 const response = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: {
@@ -853,22 +847,18 @@ BEGIN:`;
                 const data = await response.json();
                 const generatedHTML = data.html;
 
-                // Clear the interval before reviewing
                 if (loadingMessageInterval) {
                     clearInterval(loadingMessageInterval);
                     loadingMessageInterval = null;
                 }
 
-                // Content enrichment pass
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 loadingMessageText.innerHTML = applyWaveAnimation(reviewMessages[0]);
 
-                // Single fast enrichment pass
                 let reviewedHTML = await enrichContent(generatedHTML, theme, persona);
 
                 loadingMessageText.innerHTML = applyWaveAnimation('🎨 Rendering your creation...');
 
-                // Inject helper functions into generated content
                 const helperFunctions = `<script>
 window.fetchImageURL = window.fetchImageURL || (function(query) {
     return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
@@ -883,8 +873,6 @@ window.fetchImage = window.fetchImage || (async function(query) {
 <\/script>`;
                 reviewedHTML = helperFunctions + reviewedHTML;
 
-                // Insert the generated HTML (without executing scripts yet)
-                // We need to extract scripts first to ensure proper loading order
                 const scriptRegex = /<script[^>]*(?:src="([^"]*)")[^>]*>(?:[\s\S]*?)<\/script>|<script[^>]*>(?:[\s\S]*?)<\/script>/gi;
                 let cleanHTML = reviewedHTML;
                 const extractedScripts = [];
