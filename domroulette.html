@@ -975,14 +975,6 @@ window.fetchImage = window.fetchImage || (async function(query) {
                 loadingPersona.textContent = '';
                 loadingMessageText.textContent = `Error: ${error.message}`;
                 regenerateButton.disabled = false;
-
-                // Show error in content area
-                generatedContent.innerHTML = `
-                    <div style="padding: 40px; text-align: center; color: #d32f2f;">
-                        <h2>Error generating website</h2>
-                        <p>${error.message}</p>
-                    </div>
-                `;
             }
         }
 
