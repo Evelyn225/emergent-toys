@@ -801,7 +801,7 @@ BEGIN HTML OUTPUT:`;
                 // If the model returned only JS, wrap it in a minimal HTML shell
                 const hasHtmlTag = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code);
                 if (!hasHtmlTag) {
-                    p5Code = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><' + '/script>\n</head>\n<body>\n<script>\n' + p5Code + '\n<' + '/script>\n</body>\n</html>';
+                    p5Code = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><' + '/script>\n</head>\n<body>\n<script>\n// Wait for p5.js to load\nfunction waitForP5AndRun(userCode) {\n  if (typeof p5 !== "undefined") {\n    eval(userCode);\n  } else {\n    setTimeout(() => waitForP5AndRun(userCode), 100);\n  }\n}\nconst userSketchCode = `' + p5Code.split('`').join('\\`') + '`;\nwaitForP5AndRun(userSketchCode);\n<' + '/script>\n</body>\n</html>';
                 }
 
                 if (!p5Code) {
@@ -828,12 +828,12 @@ BEGIN HTML OUTPUT:`;
                     codeBlockStart + '\n' +
                     p5Code + '\n' +
                     codeBlockEnd + '\n\n' +
-                    'NOW: Add the most interesting expansion you can think of that fits your persona and the theme.\n\n' +
+                    'NOW: Check for errors / missing references and add anything missing. ALSO add the most interesting expansion you can think of that fits your persona and the theme.\n\n' +
                     'REQUIREMENTS:\n' +
                     '- Output the COMPLETE enhanced HTML with p5.js code in <script> tags\n' +
                     '- Add one substantial, creative feature that makes this more interesting\n' +
                     '- Keep it true to your persona\'s style and approach\n' +
-                    '- The addition should be meaningful\n' +
+                    '- The additions should be meaningful\n' +
                     '- Keep setup() and draw() structurally intact\n' +
                     '- Output complete HTML (no markdown, no explanations)\n\n' +
                     'IDEAS FOR ADDITIONS (choose what fits):\n' +
