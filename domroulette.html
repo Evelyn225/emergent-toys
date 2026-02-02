@@ -206,8 +206,11 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - MUST work on desktop primarily, mobile optional
 - p5.js IS THE PRIMARY TECHNOLOGY (150+ lines of active p5 code in setup/draw/events)
 - Visuals, animations, and interactions MUST use p5.js drawing functions (rect, circle, fill, stroke, translate, rotate, noise, etc)
+- CRITICAL: Ensure p5 canvas is visible - set CSS for canvas element: canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+- Other UI elements should have z-index > 1 to appear above canvas
+- Use opaque backgrounds in draw() - avoid very low alpha values that make canvas invisible
 - Text and images can be standard HTML/CSS if needed
-- Loaded from CDN in its own <script async> tag
+- Loaded from CDN in its own <script> tag (NOT async)
 - DO NOT use deprecated p5 features such as motion sensor or orientation sensor
 - Wrap ALL p5 usage in try/catch and guard with (typeof p5 !== 'undefined')
 - Can use Google Fonts: <link href="https://fonts.googleapis.com/css2?family=..." rel="stylesheet">
@@ -708,12 +711,12 @@ FOCUS ON:
 1. ADD MORE LINES OF CODE (aim for 500+ total)
 2. Fix any undefined variables or broken references
 3. Add typeof checks around p5.js usage
-4. Make sure ALL buttons have actual functionality
-5. Add null/undefined checks before accessing element properties (if checks or ?.)
-6. Make theme more explicit in visuals and interactions
-7. Replace any generic/placeholder content with theme-specific details
-8. If the website content references some functionality, ensure it is fully implemented
-
+4. ENSURE p5 canvas is visible with proper CSS: canvas { display: block; position: absolute; z-index: 1; }
+5. Make sure ALL buttons have actual functionality
+6. Add null/undefined checks before accessing element properties (if checks or ?.)
+7. Make theme more explicit in visuals and interactions
+8. Replace any generic/placeholder content with theme-specific details
+9. If the website content references some functionality, ensure it is fully implemented
 HELPER FUNCTIONS (available):
 
 window.fetchImage(query) - ASYNC: Get images from Unsplash or Picsum
