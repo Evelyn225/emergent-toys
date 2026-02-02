@@ -958,8 +958,8 @@ BEGIN HTML OUTPUT:`;
                     const container = document.getElementById('generatedContent');
                     container.innerHTML = '';
                     
-                    // Check if p5Code contains full HTML document
-                    const isFullHTML = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code);
+                    // Check if p5Code contains HTML tags (not just wrapped in script)
+                    const isFullHTML = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code) || /<style[\s>]/i.test(p5Code);
                     
                     if (isFullHTML) {
                         // For full HTML, create an iframe to isolate it
