@@ -369,6 +369,41 @@
             right: 0;
             bottom: 0;
         }
+
+        #newSiteNotification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+            z-index: 10001;
+            display: none;
+            transition: all 0.3s ease;
+            animation: slideDown 0.5s ease;
+        }
+
+        #newSiteNotification:hover {
+            transform: translateX(-50%) translateY(-3px);
+            box-shadow: 0 6px 24px rgba(102, 126, 234, 0.6);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
     </style>
 </head>
 
@@ -378,6 +413,8 @@
         <button id="favoritesButton">📚 View Favorites</button>
         <button id="regenerateButton">🔄 Regenerate Site</button>
     </div>
+
+    <button id="newSiteNotification">✨ New site ready! Click to view</button>
 
     <div id="favoritesModal">
         <div id="favoritesContent">
@@ -613,6 +650,8 @@ BEGIN HTML OUTPUT:`;
             persona: null,
             code: ''
         };
+        let backgroundGeneration = null;
+        let isGenerating = false;
 
         // Apply continuous wave animation to message
         function applyWaveAnimation(message) {
@@ -982,17 +1021,9 @@ BEGIN HTML OUTPUT:`;
             
             if (!favorite) return;
 
-            // Stop any ongoing generation
-            if (loadingMessageInterval) {
-                clearInterval(loadingMessageInterval);
-                loadingMessageInterval = null;
-            }
-            
-            // Hide loading overlay and re-enable buttons
+            // Hide loading overlay if visible (generation continues in background)
             const loadingOverlay = document.getElementById('loadingOverlay');
-            const regenerateButton = document.getElementById('regenerateButton');
             loadingOverlay.classList.add('hidden');
-            regenerateButton.disabled = false;
 
             // Close modal
             document.getElementById('favoritesModal').classList.remove('show');
@@ -1060,7 +1091,9 @@ BEGIN HTML OUTPUT:`;
             loadingOverlay.classList.remove('hidden');
             regenerateButton.disabled = true;
             document.getElementById('saveButton').style.display = 'none';
+            document.getElementById('newSiteNotification').style.display = 'none';
             generatedContent.innerHTML = '';
+            isGenerating = true;
 
             // Clear any previous p5 instance
             if (window.p5Instance) {
@@ -1338,14 +1371,31 @@ BEGIN HTML OUTPUT:`;
                 }
 
                 // Store final code
-                currentGeneration.code = p5Code;
+                const generatedData = {
+                    theme: currentGeneration.theme,
+                    persona: currentGeneration.persona,
+                    code: p5Code
+                };
 
-                // Hide loading overlay
-                setTimeout(() => {
-                    loadingOverlay.classList.add('hidden');
+                // Check if loading overlay is hidden (user loaded a favorite)
+                const isOverlayHidden = loadingOverlay.classList.contains('hidden');
+                
+                if (isOverlayHidden && isGenerating) {
+                    // Generation completed in background, show notification
+                    backgroundGeneration = generatedData;
+                    document.getElementById('newSiteNotification').style.display = 'block';
                     regenerateButton.disabled = false;
-                    document.getElementById('saveButton').style.display = 'block';
-                }, 500);
+                    isGenerating = false;
+                } else {
+                    // Normal completion, load the site
+                    currentGeneration.code = p5Code;
+                    setTimeout(() => {
+                        loadingOverlay.classList.add('hidden');
+                        regenerateButton.disabled = false;
+                        document.getElementById('saveButton').style.display = 'block';
+                        isGenerating = false;
+                    }, 500);
+                }
 
             } catch (error) {
                 // Clear the interval on error
@@ -1368,6 +1418,45 @@ BEGIN HTML OUTPUT:`;
             const favoritesButton = document.getElementById('favoritesButton');
             const closeModal = document.getElementById('closeModal');
             const modal = document.getElementById('favoritesModal');
+            const notification = document.getElementById('newSiteNotification');
+
+            notification.addEventListener('click', () => {
+                if (backgroundGeneration) {
+                    // Load the background-generated site
+                    currentGeneration = backgroundGeneration;
+                    backgroundGeneration = null;
+                    notification.style.display = 'none';
+                    
+                    // Update UI
+                    document.getElementById('loadingTheme').textContent = `"${currentGeneration.theme}"`;
+                    document.getElementById('loadingPersona').textContent = `${currentGeneration.persona.name}: `;
+                    document.getElementById('saveButton').style.display = 'block';
+                    
+                    // Render the code
+                    const container = document.getElementById('generatedContent');
+                    container.innerHTML = '';
+                    
+                    const isFullHTML = /<html[\s>]/i.test(currentGeneration.code) || /<body[\s>]/i.test(currentGeneration.code) || /<script[\s>]/i.test(currentGeneration.code) || /<style[\s>]/i.test(currentGeneration.code);
+                    
+                    if (isFullHTML) {
+                        const iframe = document.createElement('iframe');
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.style.border = 'none';
+                        iframe.style.margin = '0';
+                        iframe.style.padding = '0';
+                        container.appendChild(iframe);
+                        
+                        iframe.contentDocument.open();
+                        iframe.contentDocument.write(currentGeneration.code);
+                        iframe.contentDocument.close();
+                    } else {
+                        const script = document.createElement('script');
+                        script.textContent = currentGeneration.code;
+                        container.appendChild(script);
+                    }
+                }
+            });
             
             regenerateButton.addEventListener('click', generateWebsite);
             saveButton.addEventListener('click', saveFavorite);
