@@ -206,6 +206,9 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - MUST work on desktop primarily, mobile optional
 - p5.js IS THE PRIMARY TECHNOLOGY (150+ lines of active p5 code in setup/draw/events)
 - Visuals, animations, and interactions MUST use p5.js drawing functions (rect, circle, fill, stroke, translate, rotate, noise, etc)
+- MUST include setup() and draw() functions
+- MUST create a canvas with createCanvas()
+- MUST call background() in draw() to clear the canvas
 - CRITICAL: Ensure p5 canvas is visible - set CSS for canvas element: canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
 - Other UI elements should have z-index > 1 to appear above canvas
 - Use opaque backgrounds in draw() - avoid very low alpha values that make canvas invisible
@@ -217,6 +220,10 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - NO other <link> tags or @import statements
 - NO local/project files (e.g., /style.css, /script.js, ./assets/)
 - If you reference a function, it MUST be fully defined in your output (no undefined calls)
+- MUST define ALL classes and functions used
+- NO duplicate variable declarations
+- NO syntax errors
+- Test that the code would run if pasted into the p5.js editor
 
 HELPER FUNCTIONS (injected automatically):
 
