@@ -883,40 +883,68 @@ window.fetchImage = window.fetchImage || (async function(query) {
 <\/script>`;
                 reviewedHTML = helperFunctions + reviewedHTML;
 
-                // Insert the generated HTML
-                generatedContent.innerHTML = reviewedHTML;
+                // Insert the generated HTML (without executing scripts yet)
+                // We need to extract scripts first to ensure proper loading order
+                const scriptRegex = /<script[^>]*(?:src="([^"]*)")[^>]*>(?:[\s\S]*?)<\/script>|<script[^>]*>(?:[\s\S]*?)<\/script>/gi;
+                let cleanHTML = reviewedHTML;
+                const extractedScripts = [];
+                let match;
+                
+                while ((match = scriptRegex.exec(reviewedHTML)) !== null) {
+                    extractedScripts.push(match[0]);
+                    cleanHTML = cleanHTML.replace(match[0], '');
+                }
+                
+                // Insert HTML without scripts
+                generatedContent.innerHTML = cleanHTML;
 
-                // Execute scripts in proper order: external first, then inline
-                const scripts = Array.from(generatedContent.querySelectorAll('script'));
-                const externalScripts = scripts.filter(s => s.src);
-                const inlineScripts = scripts.filter(s => !s.src);
+                // Now execute scripts in order: external (especially p5.js) first, then inline
+                const externalScripts = [];
+                const inlineScripts = [];
+                
+                for (const scriptTag of extractedScripts) {
+                    if (scriptTag.includes('src=')) {
+                        externalScripts.push(scriptTag);
+                    } else {
+                        inlineScripts.push(scriptTag);
+                    }
+                }
 
-                // Load external scripts first (like p5.js CDN)
-                const loadExternalScripts = async () => {
-                    for (const oldScript of externalScripts) {
+                // Load p5.js first (make sure it's first external script)
+                const p5Index = externalScripts.findIndex(s => s.includes('p5'));
+                if (p5Index > 0) {
+                    [externalScripts[0], externalScripts[p5Index]] = [externalScripts[p5Index], externalScripts[0]];
+                }
+
+                // Load external scripts sequentially
+                const loadScripts = async () => {
+                    // Load all external scripts first
+                    for (const scriptTag of externalScripts) {
                         await new Promise((resolve) => {
-                            const newScript = document.createElement('script');
-                            newScript.src = oldScript.src;
-                            newScript.onload = resolve;
-                            newScript.onerror = resolve; // Continue even if script fails
-                            oldScript.parentNode.replaceChild(newScript, oldScript);
+                            const script = document.createElement('script');
+                            const srcMatch = scriptTag.match(/src="([^"]*)"/);
+                            if (srcMatch) {
+                                script.src = srcMatch[1];
+                                script.onload = resolve;
+                                script.onerror = resolve;
+                                document.body.appendChild(script);
+                            } else {
+                                resolve();
+                            }
                         });
+                    }
+                    
+                    // Then execute inline scripts in order
+                    for (const scriptTag of inlineScripts) {
+                        const code = scriptTag.replace(/<script[^>]*>|<\/script>/g, '');
+                        const script = document.createElement('script');
+                        script.textContent = code;
+                        document.body.appendChild(script);
                     }
                 };
 
-                // Execute inline scripts after external scripts load
-                const executeInlineScripts = () => {
-                    inlineScripts.forEach(oldScript => {
-                        const newScript = document.createElement('script');
-                        newScript.textContent = oldScript.textContent;
-                        oldScript.parentNode.replaceChild(newScript, oldScript);
-                    });
-                };
-
-                // Load external scripts, then execute inline scripts
-                loadExternalScripts().then(() => {
-                    executeInlineScripts();
-                    
+                // Execute all scripts
+                loadScripts().then(() => {
                     // Hide loading overlay after everything is loaded
                     setTimeout(() => {
                         loadingOverlay.classList.add('hidden');
