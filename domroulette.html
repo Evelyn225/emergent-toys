@@ -216,6 +216,9 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - NO local/project files (e.g., /style.css, /script.js, ./assets/)
 - Buttons must have real functionality (no fake/disabled buttons)
 - If you reference a function, it MUST be fully defined in your output (no undefined calls)
+- ALWAYS check if DOM elements exist before accessing properties
+- Use optional chaining (?.) or if checks: if (element) { element.onClick = ... }
+- Never assume getElementById/querySelector returns a valid element
 
 HELPER FUNCTIONS (injected automatically):
 
@@ -230,6 +233,7 @@ IMAGES - Use any of these methods:
 - fetchImage('query') - Unsplash API with Picsum fallback
 - https://picsum.photos/seed/QUERY/800/600 - Direct Picsum URL
 - https://api.dicebear.com/7.x/avataaars/svg?seed=QUERY - DiceBear avatars
+IMPORTANT: Images MUST only be used in <img> tags or CSS backgrounds, NEVER in <video> or <audio> elements
 
 BUILD:
 - A substantial, multi-section experience (500+ lines of code)
@@ -706,9 +710,10 @@ FOCUS ON:
 2. Fix any undefined variables or broken references
 3. Add typeof checks around p5.js usage
 4. Make sure ALL buttons have actual functionality
-5. Make theme more explicit in visuals and interactions
-6. Replace any generic/placeholder content with theme-specific details
-7. If the website content references some functionality, ensure it is fully implemented
+5. Add null/undefined checks before accessing element properties (if checks or ?.)
+6. Make theme more explicit in visuals and interactions
+7. Replace any generic/placeholder content with theme-specific details
+8. If the website content references some functionality, ensure it is fully implemented
 
 HELPER FUNCTIONS (available):
 
@@ -724,6 +729,7 @@ IMAGES: Use any of these methods:
 - https://picsum.photos/seed/QUERY/800/600 - Direct Picsum
 - https://api.dicebear.com/7.x/avataaars/svg?seed=QUERY - DiceBear avatars
 ENSURE ALL IMAGES HAVE ALT TEXT
+IMAGES ONLY IN <img> TAGS OR CSS BACKGROUNDS, NEVER IN <video>/<audio> ELEMENTS
 
 DO NOT:
 - Change the core structure unless it's broken
