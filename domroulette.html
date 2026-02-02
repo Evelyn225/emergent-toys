@@ -184,7 +184,10 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - Do NOT include <html>, <head>, or <body> tags
 - All CSS in a single <style> tag
 - All JS in <script> tags
-- MUST use p5.js ONLY, loaded from CDN in its own <script async> tag
+- MUST be fully self-contained
+- MUST work on desktop primarily, mobile optional
+- MUST use p5.js, loaded from CDN in its own <script async> tag
+- DO NOT use deprecated p5 features such as motion sensor or orientation sensor
 - Wrap ALL p5 usage in try/catch and guard with (typeof p5 !== 'undefined')
 - If p5 fails, provide a plain JS fallback so the page still works
 - NO <link> tags, NO @import, NO local/project files (e.g., /style.css, /script.js)
@@ -545,7 +548,7 @@ BEGIN OUTPUT:`;
             const specialInstructions = {
                 "The Arcade Machine (1983)": `SPECIAL ARCADE MODE:
 - Design like a classic arcade game from 1983
-- Simple, immediate gameplay that costs quarters
+- Simple, immediate gameplay that actually works
 - Lives system (3 lives standard, game over screen)
 - HIGH SCORE table with initials
 - CRT scanlines, phosphor glow, screen burn-in effects
