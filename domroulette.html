@@ -168,6 +168,7 @@
         // API endpoints - uses Vercel serverless functions
         const RANDOM_WORDS_ENDPOINT = '/api/random-words.js';
         const GENERATE_ENDPOINT = '/api/generate.js';
+        const UNSPLASH_ENDPOINT = '/api/unsplash.js';
 
         // Create the prompt for the AI
         function createGenerationPrompt(theme, persona) {
@@ -187,16 +188,41 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - MUST be fully self-contained
 - MUST contain the two word theme/title somewhere in the content: "${theme}"
 - MUST work on desktop primarily, mobile optional
-- MUST use p5.js, loaded from CDN in its own <script async> tag
+- MUST make deep use of p5.js (>100 lines), loaded from CDN in its own <script async> tag
 - DO NOT use deprecated p5 features such as motion sensor or orientation sensor
 - Wrap ALL p5 usage in try/catch and guard with (typeof p5 !== 'undefined')
 - If p5 fails, provide a plain JS fallback so the page still works
-- NO <link> tags, NO @import, NO local/project files (e.g., /style.css, /script.js)
+- Can use Google Fonts: <link href="https://fonts.googleapis.com/css2?family=..." rel="stylesheet">
+- NO other <link> tags or @import statements
+- NO local/project files (e.g., /style.css, /script.js, ./assets/)
+- ALL buttons must be clickable and have real functionality (no fake/disabled buttons)
+
+HELPER FUNCTION (available in generated code):
+async function fetchImage(query) {
+  try {
+    const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
+    if (r.ok) {
+      const d = await r.json();
+      return d.url;
+    }
+  } catch (e) {}
+  return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
+}
+// Usage: const imgUrl = await fetchImage('theme');
+
+IMAGES:
+- Use the fetchImage() helper: const url = await fetchImage('${theme}');
+- Or Picsum: https://picsum.photos/seed/${encodeURIComponent(theme)}/800/600
+- Or DiceBear for avatars/icons: https://api.dicebear.com/7.x/[style]/svg?seed=${encodeURIComponent(theme)}
 
 BUILD:
 - A substantial, multi-section experience (500+ lines)
 - 10+ interactive elements with real behaviors
-- Theme must be explicit in text, visuals, and interactions
+- Theme must be explicit in visuals and interactions
+- TEXT/PARAGRAPHS: Decide based on type:
+  * Games/visual art/generative experiences: Minimal or no explanatory text
+  * Puzzles/interactive stories/educational content: Include descriptive text
+  * Standard websites/info pages: Include multiple paragraphs about the theme
 
 BEGIN OUTPUT:`;
         }
@@ -680,16 +706,35 @@ ENRICH THIS CODE WITH MORE CONTENT:
 
 ${hasDemo ? 'CRITICAL: This is a demo/placeholder. Rewrite with FULL content.\n' : ''}FOCUS ON:
 1. Add 3+ data arrays with 10+ items each about "${theme}"
-2. Add descriptive text/paragraphs about "${theme}" 
+2. TEXT CONTENT: Decide based on type:
+   - If game/visual art/generative: Keep text minimal
+   - If puzzle/story/educational: Add descriptive text
+   - If website/info page: Add multiple paragraphs about "${theme}"
 3. Fix any undefined variables or broken references
 4. Add typeof checks around p5.js usage
-5. Make theme more explicit in visuals and interactions
-6. Replace any generic/placeholder content with theme-specific details
+5. Make ALL buttons clickable with real functionality
+6. Make theme more explicit in visuals and interactions
+7. Replace any generic/placeholder content with theme-specific details
+
+HELPER FUNCTION (available in your code):
+async function fetchImage(query) {
+  try {
+    const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
+    if (r.ok) { const d = await r.json(); return d.url; }
+  } catch (e) {}
+  return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
+}
+// Usage: const url = await fetchImage('${theme}');
+
+IMAGES: Use fetchImage() helper or Picsum/DiceBear as fallbacks
+ENSURE ALL IMAGES HAVE ALT TEXT
 
 DO NOT:
 - Change the core structure unless it's broken
 - Remove working features
-- Add external <link> or @import
+- Add <link> tags other than Google Fonts
+- Add @import or local/project files
+- Create fake/non-functional buttons
 
 OUTPUT: Complete HTML/CSS/JS (no markdown, no explanations)
 
@@ -846,7 +891,7 @@ BEGIN:`;
                 // Single fast enrichment pass
                 let reviewedHTML = await enrichContent(generatedHTML, theme, persona);
 
-                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...`);
+                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: 🎨 Rendering your creation...`);
 
                 // Validate and sanitize the generated HTML
                 reviewedHTML = validateAndSanitizeHTML(reviewedHTML);
