@@ -686,18 +686,31 @@ BEGIN OUTPUT:`;
             // Check for "demo" - if found, always review
             const hasDemo = /demo/i.test(html);
             
-            // Skip review if already substantial (unless it's a demo)
+            // Analyze content quality
             const lines = html.split('\n').length;
             const hasP5 = /p5\.min\.js|p5\.js/.test(html.toLowerCase());
-            if (!hasDemo && lines > 600 && hasP5) {
-                console.log('Skipping review - content already substantial');
+            
+            // Detect empty p5 canvas (setup exists but no actual drawing)
+            const hasSetup = /function\s+setup\s*\(\)\s*\{/.test(html);
+            const hasDrawing = /p5\.|rect\(|circle\(|line\(|fill\(|stroke\(|background\(|ellipse\(|arc\(|triangle\(/i.test(html);
+            const isEmpty = hasP5 && hasSetup && !hasDrawing;
+            
+            // Skip enrichment if already large and substantial
+            if (!hasDemo && !isEmpty && lines > 1000) {
+                console.log('Skipping enrichment - output already large and substantial');
                 return html;
             }
-
-            if (hasDemo) {
-                console.log('Demo detected - forcing content enrichment');
+            
+            // Enrich if: demo detected, empty canvas, or small/medium output
+            if (isEmpty) {
+                console.log('Empty p5 canvas detected - forcing enrichment');
+            } else if (hasDemo) {
+                console.log('Demo detected - forcing enrichment');
             }
-
+            else {
+                console.log('Enriching content - output size:', lines, 'lines');
+            }
+            
             // Fast, focused enrichment prompt (cacheable)
             const enrichPrompt = `Theme: "${theme}"
 Persona: ${persona.name}
