@@ -247,17 +247,96 @@
         .links-container {
             padding-top: 1rem;
             display: flex;
-            gap: 2rem;
+            gap: 3rem;
         }
 
         .site-link {
-            color: rgba(255, 255, 255, 0.8);
+            color: rgba(255, 255, 255, 0.9);
             text-decoration: none;
-            transition: color 0.3s;
+            transition: color 0.3s, outline 0.3s, transform 0.2s;
+            white-space: normal;
+            max-width: 120px;
+            text-align: center;
+            
         }
 
         .site-link:hover {
             color: rgba(255, 255, 255, 1);
+            transform: scale(1.03);
+        }
+
+        .site-link:focus {
+            outline: 2px solid rgba(255, 255, 255, 0.9);
+            outline-offset: 4px;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        .site-link:focus:not(:focus-visible) {
+            outline: none;
+        }
+
+        .site-link:active {
+                transform: scale(0.95);
+                color: #fff;
+            }
+
+        .site-link:focus-visible {
+            outline: 2px solid rgba(255, 255, 255, 0.9);
+            outline-offset: 4px;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        @media (max-width: 768px) {
+            .links-container {
+                overflow-x: auto;
+                overflow-y: hidden;
+                padding: 10rem 0rem;
+                margin-bottom: 1rem;
+                gap: 2rem;
+                max-width: 100%;
+                scroll-behavior: smooth;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 1rem;
+            }
+
+            .site-link {
+                white-space: normal;
+                max-width: 100px;
+                text-align: center;
+                font-size: 0.9rem;
+                line-height: 1.25;
+                flex-shrink: 0;
+                min-width: 40px;
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0.1rem;
+                color: rgba(255, 255, 255, 0.9);
+            }
+            
+            /* Hide scrollbar while keeping scrollability */
+            .links-container::-webkit-scrollbar {
+                display: none;
+            }
+
+            .links-container {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+        }
+
+        .links-container {
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        .site-link {
+            pointer-events: auto;
         }
     </style>
 </head>
@@ -267,7 +346,7 @@
         <div class="hero">
             <h1><span id="hero-title"></span><span class="typing-cursor">_</span></h1>
             <div class="bottom-content">
-                <div class="links-container">
+                <nav class="links-container" role="region" aria-label="Project navigation" tabindex="0">
                     <a href="Sands.html" class="site-link">sands</a>
                     <a href="critters.html" class="site-link">bug hotline</a>
                     <a href="fireworks.html" class="site-link">fireworks</a>
@@ -279,7 +358,7 @@
                     <a href="lissajous.html" class="site-link">lissajous</a>
                     <a href="ascii-render.html" class="site-link">ascii rendering</a>
                     <a href="tablecloth.html" class="site-link">tablecloth</a>
-                </div>
+                </nav>
             </div>
         </div>
     </div>
@@ -544,6 +623,100 @@
         function windowResized() {
             resizeCanvas(windowWidth, windowHeight);
         }
+
+        // Drag-to-scroll functionality for links container
+        const linksContainer = document.querySelector('.links-container');
+        let isDown = false;
+        let startX;
+        let scrollLeft;
+        let isDragging = false;
+
+        // Keyboard navigation for links container
+        linksContainer.addEventListener('keydown', (e) => {
+            const links = Array.from(document.querySelectorAll('.site-link'));
+            const focusedElement = document.activeElement;
+            const currentIndex = links.indexOf(focusedElement);
+            
+            if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (currentIndex < links.length - 1) {
+                    links[currentIndex + 1].focus();
+                    links[currentIndex + 1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (currentIndex > 0) {
+                    links[currentIndex - 1].focus();
+                    links[currentIndex - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                } else if (currentIndex === -1 && links.length > 0) {
+                    links[0].focus();
+                }
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                links[0].focus();
+                links[0].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                links[links.length - 1].focus();
+                links[links.length - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+            }
+        });
+
+        linksContainer.addEventListener('mousedown', (e) => {
+            isDown = true;
+            isDragging = false;
+            startX = e.pageX - linksContainer.offsetLeft;
+            scrollLeft = linksContainer.scrollLeft;
+            linksContainer.style.cursor = 'grabbing';
+            linksContainer.style.scrollBehavior = 'auto';
+        });
+
+        linksContainer.addEventListener('mouseleave', () => {
+            isDown = false;
+            isDragging = false;
+            linksContainer.style.cursor = 'grab';
+        });
+
+        linksContainer.addEventListener('mouseup', () => {
+            isDown = false;
+            linksContainer.style.scrollBehavior = 'smooth';
+            if (!isDragging) {
+                // Allow normal click interactions
+            }
+            linksContainer.style.cursor = 'grab';
+        });
+
+        linksContainer.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            
+            const x = e.pageX - linksContainer.offsetLeft;
+            const walk = (x - startX) * 1.5;
+            
+            if (Math.abs(walk) > 3) {
+                isDragging = true;
+                e.preventDefault();
+            }
+            
+            linksContainer.scrollLeft = scrollLeft - walk;
+        });
+
+        // Prevent link clicks when dragging
+        const links = document.querySelectorAll('.site-link');
+        links.forEach(link => {
+            link.addEventListener('mousedown', (e) => {
+                startX = e.pageX - linksContainer.offsetLeft;
+                scrollLeft = linksContainer.scrollLeft;
+            });
+
+            link.addEventListener('click', (e) => {
+                if (isDragging) {
+                    e.preventDefault();
+                }
+            });
+        });
+
+        // Set initial cursor style
+        linksContainer.style.cursor = 'grab';
     </script>
 </body>
 </html>
