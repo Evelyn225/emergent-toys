@@ -893,41 +893,23 @@ BEGIN ENHANCED CODE:`;
 
                 loadingMessageText.innerHTML = applyWaveAnimation('🎨 Running your sketch...');
 
-                // Execute p5 code in instance mode to target the container
+                // Execute code directly (supports p5, HTML, and CSS)
                 try {
+                    const container = document.getElementById('generatedContent');
+                    container.innerHTML = '';
+                    
                     const script = document.createElement('script');
+                    script.textContent = p5Code;
                     
-                    // Properly escape code for embedding in template literal
-                    const escapedCode = p5Code
-                        .replace(/\\/g, '\\\\')
-                        .replace(/`/g, '\\`')
-                        .replace(/\$/g, '\\$');
-                    
-                    script.textContent = `
-                        try {
-                            const container = document.getElementById('generatedContent');
-                            container.innerHTML = '';
-                            
-                            // Wrap in p5 instance mode to target container
-                            new p5(function(p) {
-                                // Replace global p5 functions with instance methods
-                                const sketch = \`${escapedCode}\`;
-                                
-                                // Create a wrapper that redirects global calls to instance
-                                with(p) {
-                                    eval(sketch);
-                                }
-                            }, 'generatedContent');
-                        } catch (e) {
-                            console.error('P5 sketch error:', e);
-                            console.error('Code preview:', \`${escapedCode.substring(0, 300)}\`);
-                            document.getElementById('generatedContent').innerHTML = 
-                                '<div style="padding: 40px; font-family: monospace; color: red;"><strong>Error:</strong> ' + e.message + '<br><code>' + e.stack + '</code></div>';
-                        }
-                    `;
-                    document.body.appendChild(script);
+                    try {
+                        // Insert the script to execute the code
+                        document.body.appendChild(script);
+                    } catch (e) {
+                        console.error('Script injection error:', e);
+                        container.innerHTML = '<div style="padding: 40px; font-family: monospace; color: red;"><strong>Error:</strong> ' + e.message + '</div>';
+                    }
                 } catch (e) {
-                    console.error('Script injection error:', e);
+                    console.error('Execution error:', e);
                     generatedContent.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
                 }
 
