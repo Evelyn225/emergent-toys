@@ -1245,6 +1245,7 @@ BEGIN HTML OUTPUT:`;
             // Always render the favorite content
             const container = document.getElementById('generatedContent');
             container.innerHTML = '';
+            container.style.display = 'block';
             
             const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
             
@@ -1255,11 +1256,15 @@ BEGIN HTML OUTPUT:`;
                 iframe.style.border = 'none';
                 iframe.style.margin = '0';
                 iframe.style.padding = '0';
+                iframe.style.display = 'block';
                 container.appendChild(iframe);
 
-                iframe.contentDocument.open();
-                iframe.contentDocument.write(favorite.code);
-                iframe.contentDocument.close();
+                // Use setTimeout to ensure iframe is ready
+                setTimeout(() => {
+                    iframe.contentDocument.open();
+                    iframe.contentDocument.write(favorite.code);
+                    iframe.contentDocument.close();
+                }, 0);
             } else {
                 const script = document.createElement('script');
                 script.textContent = favorite.code;
