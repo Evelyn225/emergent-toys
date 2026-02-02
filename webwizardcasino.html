@@ -64,6 +64,20 @@
             margin-left: auto;
         }
 
+        #backButton {
+            padding: 12px 24px;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 400;
+            font-family: 'Iosevka', monospace;
+            letter-spacing: 0.5px;
+            transition: all 0.2s;
+        }
+
         #saveButton {
             padding: 12px 24px;
             background: transparent;
@@ -93,6 +107,7 @@
         }
 
         #regenerateButton:hover,
+        #backButton:hover,
         #saveButton:hover,
         #favoritesButton:hover,
         #newSiteNotification:hover {
@@ -102,6 +117,7 @@
         }
 
         #regenerateButton:active,
+        #backButton:active,
         #saveButton:active,
         #favoritesButton:active {
             background: rgba(255, 255, 255, 0.1);
@@ -1230,10 +1246,16 @@ BEGIN HTML OUTPUT:`;
             const modal = document.getElementById('favoritesModal');
             modal.classList.remove('show');
             
-            // Save current generation as previous if it has content
+            // Save current generation as previous if it has content and is not already saved
             if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
-                previousGeneration = { ...currentGeneration };
-                document.getElementById('backButton').style.display = 'block';
+                const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
+                if (!isAlreadySaved) {
+                    previousGeneration = { ...currentGeneration };
+                    document.getElementById('backButton').style.display = 'block';
+                } else {
+                    previousGeneration = null;
+                    document.getElementById('backButton').style.display = 'none';
+                }
             }
             
             // Mark that we're not on the loading screen anymore
@@ -1711,10 +1733,16 @@ BEGIN HTML OUTPUT:`;
 
             notification.addEventListener('click', () => {
                 if (backgroundGeneration) {
-                    // Save current view as previous if it has content
+                    // Save current view as previous if it has content and is not already saved
                     if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
-                        previousGeneration = { ...currentGeneration };
-                        document.getElementById('backButton').style.display = 'block';
+                        const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
+                        if (!isAlreadySaved) {
+                            previousGeneration = { ...currentGeneration };
+                            document.getElementById('backButton').style.display = 'block';
+                        } else {
+                            previousGeneration = null;
+                            document.getElementById('backButton').style.display = 'none';
+                        }
                     }
                     
                     // Load the background generation
