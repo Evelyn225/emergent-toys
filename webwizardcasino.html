@@ -443,6 +443,7 @@
 
 <body>
     <div id="topBar">
+        <button id="backButton" style="display: none;">back_to_site</button>
         <button id="saveButton">save_favorite</button>
         <button id="favoritesButton">view_favorites</button>
         <button id="newSiteNotification" style="display: none;">// new site ready</button>
@@ -684,6 +685,7 @@ BEGIN HTML OUTPUT:`;
             persona: null,
             code: ''
         };
+        let previousGeneration = null;
         let backgroundGeneration = null;
         let wasLoadingWhenGenerated = false;
         let isGenerating = false;
@@ -1229,6 +1231,12 @@ BEGIN HTML OUTPUT:`;
             const modal = document.getElementById('favoritesModal');
             modal.classList.remove('show');
             
+            // Save current generation as previous if it has content
+            if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
+                previousGeneration = { ...currentGeneration };
+                document.getElementById('backButton').style.display = 'block';
+            }
+            
             // Mark that we're not on the loading screen anymore
             wasLoadingWhenGenerated = false;
             
@@ -1287,6 +1295,48 @@ BEGIN HTML OUTPUT:`;
             localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
             
             loadFavorites();
+        }
+
+        function backToGeneratedSite() {
+            if (!previousGeneration) return;
+
+            // Restore the previous generation
+            currentGeneration = { ...previousGeneration };
+            previousGeneration = null;
+            
+            // Hide back button
+            document.getElementById('backButton').style.display = 'none';
+            
+            // Render the previous content
+            const container = document.getElementById('generatedContent');
+            container.innerHTML = '';
+            container.style.display = 'block';
+            
+            const isFullHTML = /<html[\s>]/i.test(currentGeneration.code) || /<body[\s>]/i.test(currentGeneration.code) || /<script[\s>]/i.test(currentGeneration.code) || /<style[\s>]/i.test(currentGeneration.code);
+            
+            if (isFullHTML) {
+                const iframe = document.createElement('iframe');
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+                iframe.style.border = 'none';
+                iframe.style.margin = '0';
+                iframe.style.padding = '0';
+                iframe.style.display = 'block';
+                container.appendChild(iframe);
+
+                setTimeout(() => {
+                    iframe.contentDocument.open();
+                    iframe.contentDocument.write(currentGeneration.code);
+                    iframe.contentDocument.close();
+                }, 0);
+            } else {
+                const script = document.createElement('script');
+                script.textContent = currentGeneration.code;
+                container.appendChild(script);
+            }
+
+            // Update save button state
+            updateSaveButtonState();
         }
 
         // Call ChatGPT API via Vercel serverless function - SIMPLIFIED
@@ -1560,40 +1610,6 @@ BEGIN HTML OUTPUT:`;
                 addConsoleCommand('Running final sketch...');
                 await typeText(currentMessage, '🎨 Executing code...');
 
-                // Execute HTML directly in the container
-                try {
-                    const container = document.getElementById('generatedContent');
-                    container.innerHTML = '';
-                    
-                    // Check if p5Code contains HTML tags (not just wrapped in script)
-                    const isFullHTML = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code) || /<style[\s>]/i.test(p5Code);
-                    
-                    if (isFullHTML) {
-                        // For full HTML, create an iframe to isolate it
-                        const iframe = document.createElement('iframe');
-                        iframe.style.width = '100%';
-                        iframe.style.height = '100%';
-                        iframe.style.border = 'none';
-                        iframe.style.margin = '0';
-                        iframe.style.padding = '0';
-                        container.appendChild(iframe);
-                        
-                        // Write the full HTML to the iframe
-                        iframe.contentDocument.open();
-                        iframe.contentDocument.write(p5Code);
-                        iframe.contentDocument.close();
-                    } else {
-                        // For partial code, inject as script
-                        const script = document.createElement('script');
-                        script.textContent = p5Code;
-                        container.appendChild(script);
-                    }
-                } catch (e) {
-                    console.error('Execution error:', e);
-                    const container = document.getElementById('generatedContent');
-                    container.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
-                }
-
                 // Store final code
                 const generatedData = {
                     theme: currentGeneration.theme,
@@ -1613,6 +1629,7 @@ BEGIN HTML OUTPUT:`;
                 
                 if (isOverlayHidden && isGenerating) {
                     // Generation completed in background (user is viewing a favorite)
+                    // Don't render it, just store it and show notification
                     backgroundGeneration = generatedData;
                     wasLoadingWhenGenerated = false;
                     document.getElementById('newSiteNotification').style.display = 'block';
@@ -1620,8 +1637,43 @@ BEGIN HTML OUTPUT:`;
                     setRegenerateButtonText('regenerate');
                     isGenerating = false;
                 } else {
-                    // Normal completion, load the site
+                    // Normal completion, render the site
                     currentGeneration.code = p5Code;
+                    
+                    // Execute HTML directly in the container
+                    try {
+                        const container = document.getElementById('generatedContent');
+                        container.innerHTML = '';
+                        
+                        // Check if p5Code contains HTML tags (not just wrapped in script)
+                        const isFullHTML = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code) || /<style[\s>]/i.test(p5Code);
+                        
+                        if (isFullHTML) {
+                            // For full HTML, create an iframe to isolate it
+                            const iframe = document.createElement('iframe');
+                            iframe.style.width = '100%';
+                            iframe.style.height = '100%';
+                            iframe.style.border = 'none';
+                            iframe.style.margin = '0';
+                            iframe.style.padding = '0';
+                            container.appendChild(iframe);
+                            
+                            // Write the full HTML to the iframe
+                            iframe.contentDocument.open();
+                            iframe.contentDocument.write(p5Code);
+                            iframe.contentDocument.close();
+                        } else {
+                            // For partial code, inject as script
+                            const script = document.createElement('script');
+                            script.textContent = p5Code;
+                            container.appendChild(script);
+                        }
+                    } catch (e) {
+                        console.error('Execution error:', e);
+                        const container = document.getElementById('generatedContent');
+                        container.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
+                    }
+                    
                     setTimeout(() => {
                         loadingOverlay.classList.add('hidden');
                         regenerateButton.disabled = false;
@@ -1652,6 +1704,7 @@ BEGIN HTML OUTPUT:`;
         document.addEventListener('DOMContentLoaded', () => {
             const regenerateButton = document.getElementById('regenerateButton');
             const saveButton = document.getElementById('saveButton');
+            const backButton = document.getElementById('backButton');
             const favoritesButton = document.getElementById('favoritesButton');
             const closeModal = document.getElementById('closeModal');
             const modal = document.getElementById('favoritesModal');
@@ -1659,15 +1712,53 @@ BEGIN HTML OUTPUT:`;
 
             notification.addEventListener('click', () => {
                 if (backgroundGeneration) {
-                    // Just hide the notification button, don't auto-load
-                    // User can manually regenerate or view the background generation
+                    // Save current view as previous if it has content
+                    if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
+                        previousGeneration = { ...currentGeneration };
+                        document.getElementById('backButton').style.display = 'block';
+                    }
+                    
+                    // Load the background generation
+                    currentGeneration = { ...backgroundGeneration };
+                    
+                    // Render the new site
+                    const container = document.getElementById('generatedContent');
+                    container.innerHTML = '';
+                    container.style.display = 'block';
+                    
+                    const isFullHTML = /<html[\s>]/i.test(currentGeneration.code) || /<body[\s>]/i.test(currentGeneration.code) || /<script[\s>]/i.test(currentGeneration.code) || /<style[\s>]/i.test(currentGeneration.code);
+                    
+                    if (isFullHTML) {
+                        const iframe = document.createElement('iframe');
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.style.border = 'none';
+                        iframe.style.margin = '0';
+                        iframe.style.padding = '0';
+                        iframe.style.display = 'block';
+                        container.appendChild(iframe);
+
+                        setTimeout(() => {
+                            iframe.contentDocument.open();
+                            iframe.contentDocument.write(currentGeneration.code);
+                            iframe.contentDocument.close();
+                        }, 0);
+                    } else {
+                        const script = document.createElement('script');
+                        script.textContent = currentGeneration.code;
+                        container.appendChild(script);
+                    }
+                    
+                    // Hide notification and update UI
                     notification.style.display = 'none';
+                    updateSaveButtonState();
                     backgroundGeneration = null;
                 }
             });
             
             regenerateButton.addEventListener('click', generateWebsite);
             saveButton.addEventListener('click', saveFavorite);
+            backButton.addEventListener('click', backToGeneratedSite);
             
             favoritesButton.addEventListener('click', () => {
                 loadFavorites();
