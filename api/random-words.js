@@ -12,41 +12,29 @@ export default async function handler(req, res) {
     return;
   }
 
-  try {
-    if (!process.env.DOMROULETTE_KEY) {
-      console.error('OpenAI API key is not set');
-      return res.status(500).json({ error: 'API key not configured' });
-    }
+  const moods = [
+    "apocalyptic", "euphoric", "melancholic", "anxious", "nostalgic",
+    "whimsical", "mysterious", "serene", "chaotic", "dreamlike",
+    "surreal", "playful", "ominous", "strange", "vibrant",
+    "refined", "minimal", "gritty", "futuristic", "retro",
+    "ugly", "beautiful", "dark", "light", "liminal",
+    "ceremonial", "feral", "synthetic", "sublime", "uncanny"
+  ];
 
-    const openai = new OpenAI({
-      apiKey: process.env.DOMROULETTE_KEY
-    });
+  // Mood-specific guidance
+  const moodDirectives = {
+    "apocalyptic": "Think: ruins, survival, aftermath, resilience",
+    "euphoric": "Think: transcendence, dissolution, ecstasy, unity",
+    "melancholic": "Think: memory, absence, soft decay, quiet longing",
+    "whimsical": "Think: absurd charm, playful logic, delightful nonsense",
+    "ominous": "Think: quiet dread, unseen threat, subtle wrongness",
+    "ugly": "Think: intentionally off-putting, wrong beauty, unsettling",
+    "dreamlike": "Think: fluid logic, shifting forms, memory distortion",
+    "liminal": "Think: threshold spaces, between states, waiting, transit",
+    "uncanny": "Think: familiar yet strange, subtle horror, almost-right"
+  };
 
-    const moods = [
-      "apocalyptic", "euphoric", "melancholic", "anxious", "nostalgic",
-      "whimsical", "mysterious", "serene", "chaotic", "dreamlike",
-      "surreal", "playful", "ominous", "strange", "vibrant",
-      "refined", "minimal", "gritty", "futuristic", "retro",
-      "ugly", "beautiful", "dark", "light", "liminal",
-      "ceremonial", "feral", "synthetic", "sublime", "uncanny"
-    ];
-
-    const mood = moods[Math.floor(Math.random() * moods.length)];
-
-    // Mood-specific guidance
-    const moodDirectives = {
-      "apocalyptic": "Think: ruins, survival, aftermath, resilience",
-      "euphoric": "Think: transcendence, dissolution, ecstasy, unity",
-      "melancholic": "Think: memory, absence, soft decay, quiet longing",
-      "whimsical": "Think: absurd charm, playful logic, delightful nonsense",
-      "ominous": "Think: quiet dread, unseen threat, subtle wrongness",
-      "ugly": "Think: intentionally off-putting, wrong beauty, unsettling",
-      "dreamlike": "Think: fluid logic, shifting forms, memory distortion",
-      "liminal": "Think: threshold spaces, between states, waiting, transit",
-      "uncanny": "Think: familiar yet strange, subtle horror, almost-right"
-    };
-
-    const personas = [
+  const personas = [
       {
         name: "The Poet",
         desc: "Creates beautiful, meaningful metaphors",
@@ -175,6 +163,16 @@ export default async function handler(req, res) {
       }
     ];
 
+  try {
+    if (!process.env.DOMROULETTE_KEY) {
+      console.error('OpenAI API key is not set');
+      throw new Error('API key not configured');
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.DOMROULETTE_KEY
+    });
+
     const persona = personas[Math.floor(Math.random() * personas.length)];
     const selectedMood = moods[Math.floor(Math.random() * moods.length)];
 
@@ -229,7 +227,26 @@ RULES: No explanations, just output`
     });
   } catch (error) {
     console.error('Detailed error:', error);
-    res.status(500).json({
+    const fallbackPersonas = personas.length > 0 ? personas : [
+      { name: "The Poet", style: "poetic", desc: "Creates beautiful, meaningful metaphors" }
+    ];
+    const fallbackPersona = fallbackPersonas[Math.floor(Math.random() * fallbackPersonas.length)];
+    const fallbackTheme = [
+      "fungal capitalism", "whispering calculus", "paper supernova",
+      "glitching coral", "breathing architecture", "crying silicon",
+      "molten grammar", "electric moss", "arctic circuitry", "neon folklore", "fractal tapestry"
+    ][Math.floor(Math.random() * 11)];
+    const fallbackMood = moods[Math.floor(Math.random() * moods.length)];
+
+    res.json({
+      theme: fallbackTheme,
+      persona: {
+        name: fallbackPersona.name,
+        style: fallbackPersona.style,
+        desc: fallbackPersona.desc
+      },
+      mood: fallbackMood,
+      fallback: true,
       error: 'Failed to generate random words',
       details: error.message
     });
