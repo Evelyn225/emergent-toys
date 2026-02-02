@@ -880,10 +880,20 @@ BEGIN HTML OUTPUT:`;
 
                 loadingMessageText.innerHTML = applyWaveAnimation('🎨 Running your sketch...');
 
-                // Execute HTML directly in the container
+                // Execute HTML directly in the container - scripts need to be created as elements
                 try {
                     const container = document.getElementById('generatedContent');
-                    container.innerHTML = p5Code;
+                    container.innerHTML = '';
+                    
+                    // Create a temporary div to parse the HTML
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = p5Code;
+                    
+                    // Move all child nodes to container
+                    while (tempDiv.firstChild) {
+                        const node = tempDiv.firstChild;
+                        container.appendChild(node);
+                    }
                 } catch (e) {
                     console.error('Execution error:', e);
                     const container = document.getElementById('generatedContent');
