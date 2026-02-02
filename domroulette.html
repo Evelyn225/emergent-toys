@@ -852,22 +852,16 @@ BEGIN:`;
 
                 // Inject helper functions and theme data into generated content
                 const themeDataJSON = JSON.stringify(wordData.themeData);
-                const helperFunctions = `
-<script>
+                const helperFunctions = `<script>
 async function fetchImage(query) {
   try {
     const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
-    if (r.ok) {
-      const d = await r.json();
-      return d.url;
-    }
+    if (r.ok) { const d = await r.json(); return d.url; }
   } catch (e) {}
   return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
 }
-
 const themeData = ${themeDataJSON};
-</script>
-                `;
+<\/script>`;
                 reviewedHTML = helperFunctions + reviewedHTML;
 
                 // Insert the generated HTML
