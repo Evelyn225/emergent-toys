@@ -878,11 +878,15 @@ BEGIN ENHANCED CODE:`;
                     const script = document.createElement('script');
                     script.textContent = `
                         try {
-                            const sketchContainer = document.getElementById('generatedContent');
-                            const p5Sketch = (p) => {
+                            (function() {
+                                // Clear container and set up for p5
+                                const container = document.getElementById('generatedContent');
+                                container.innerHTML = '';
+                                container.style.minHeight = '100vh';
+                                
+                                // Evaluate the p5 code in this scope
                                 ${p5Code}
-                            };
-                            new p5(p5Sketch, sketchContainer);
+                            })();
                         } catch (e) {
                             console.error('P5 sketch error:', e);
                             document.getElementById('generatedContent').innerHTML = 
