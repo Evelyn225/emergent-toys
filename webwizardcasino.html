@@ -272,94 +272,202 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.95);
+            background: #0a0e27;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 9999;
-            font-size: 18px;
-            color: #333;
+            font-family: 'Courier New', 'Monaco', monospace;
+            color: #00ff41;
+        }
+
+        .terminal-container {
+            width: 90%;
+            max-width: 900px;
+            background: #000000;
+            border: 2px solid #00ff41;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 0 60px rgba(0, 255, 65, 0.4),
+                        inset 0 0 40px rgba(0, 255, 65, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .terminal-header {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #00ff41;
+            opacity: 0.7;
+        }
+
+        .terminal-button {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff5f56;
+            box-shadow: 0 0 5px rgba(255, 95, 86, 0.5);
+        }
+
+        .terminal-button:nth-child(2) {
+            background: #ffbd2e;
+            box-shadow: 0 0 5px rgba(255, 189, 46, 0.5);
+        }
+
+        .terminal-button:nth-child(3) {
+            background: #27c93f;
+            box-shadow: 0 0 5px rgba(39, 201, 63, 0.5);
         }
 
         #loadingText {
-            text-align: center;
-            max-width: 80%;
+            text-align: left;
+            width: 100%;
+            font-size: 15px;
+            line-height: 2;
+            letter-spacing: 0.5px;
+        }
+
+        .terminal-line {
+            margin: 6px 0;
+            opacity: 0;
+            animation: fadeInTerminal 0.4s forwards;
+            color: #00ff41;
+        }
+
+        @keyframes fadeInTerminal {
+            to {
+                opacity: 0.8;
+            }
+        }
+
+        .terminal-prompt {
+            color: #888;
+        }
+
+        .terminal-prompt::before {
+            content: '// ';
+            color: #666;
+            font-weight: bold;
         }
 
         #loadingMessage {
-            display: inline-flex;
-            align-items: baseline;
-            gap: 8px;
-            flex-wrap: nowrap;
-            white-space: normal;
-            word-wrap: break-word;
-            min-height: 60px;
+            display: block;
+            margin: 15px 0;
+            padding: 12px;
+            background: rgba(0, 255, 65, 0.03);
+            border-left: 3px solid #00d9ff;
         }
 
         #loadingPersona {
-            font-weight: 600;
-            white-space: pre;
-            flex: 0 0 auto;
+            color: #00d9ff;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 15px rgba(0, 217, 255, 0.6);
+            display: block;
+            margin-bottom: 8px;
         }
 
         #loadingMessageText {
-            min-width: 0;
+            color: #00ff41;
+            display: inline-block;
+        }
+
+        .typing-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: #00ff41;
+            margin-left: 5px;
+            animation: blink 1s step-end infinite;
+            box-shadow: 0 0 8px rgba(0, 255, 65, 0.8);
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
         }
 
         #loadingTheme {
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            color: #ff6b9d;
             margin-top: 20px;
-            color: #666;
+            padding: 15px;
+            border-left: 3px solid #ff6b9d;
+            background: rgba(255, 107, 157, 0.08);
+            text-shadow: 0 0 10px rgba(255, 107, 157, 0.5);
+            font-style: italic;
+            letter-spacing: 1px;
         }
 
-        .wave-char {
-            display: inline-block;
-            animation: wave 1.6s ease-in-out infinite;
+        #loadingTheme::before {
+            content: 'THEME: ';
+            color: #ff6b9d;
+            font-weight: bold;
+            opacity: 0.7;
         }
 
-        @keyframes wave {
-            0% {
-                transform: translateY(0);
-                opacity: 1;
-            }
-            25% {
-                transform: translateY(-4px);
-                opacity: 0.85;
-            }
-            50% {
-                transform: translateY(0);
-                opacity: 1;
-            }
-            100% {
-                transform: translateY(0);
-                opacity: 1;
-            }
+        .progress-bar-container {
+            width: 100%;
+            height: 3px;
+            background: #1a1a1a;
+            margin-top: 25px;
+            border-radius: 2px;
+            overflow: hidden;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff41, #00d9ff, #00ff41);
+            background-size: 200% 100%;
+            width: 0%;
+            animation: progressMove 3s ease-in-out infinite, progressWidth 8s ease-in-out infinite;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.7);
+        }
+
+        @keyframes progressWidth {
+            0% { width: 0%; }
+            50% { width: 85%; }
+            100% { width: 95%; }
+        }
+
+        @keyframes progressMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .scanline {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                transparent 0%,
+                rgba(0, 255, 65, 0.03) 50%,
+                transparent 100%
+            );
+            animation: scan 6s linear infinite;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        .glitch-text {
+            position: relative;
         }
 
         #loadingOverlay.hidden {
             display: none;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
         }
 
         #generatedContent {
@@ -425,13 +533,32 @@
     </div>
 
     <div id="loadingOverlay">
-        <div class="spinner"></div>
-        <div id="loadingText">
-            <div id="loadingMessage">
-                <span id="loadingPersona"></span>
-                <span id="loadingMessageText">Generating your website...</span>
+        <div class="terminal-container">
+            <div class="terminal-header">
+                <div class="terminal-button"></div>
+                <div class="terminal-button"></div>
+                <div class="terminal-button"></div>
             </div>
-            <div id="loadingTheme"></div>
+            <div id="loadingText">
+                <div class="terminal-line">
+                    <span class="terminal-prompt">INITIALIZING WEB WIZARD CASINO...</span>
+                </div>
+                <div class="terminal-line" style="animation-delay: 0.3s;">
+                    <span class="terminal-prompt">CONNECTING TO AI ENGINE...</span>
+                </div>
+                <div class="terminal-line" style="animation-delay: 0.6s;">
+                    <span class="terminal-prompt">LOADING CREATIVE PERSONAS...</span>
+                </div>
+                <div id="loadingMessage">
+                    <span id="loadingPersona"></span>
+                    <span id="loadingMessageText">Generating your website...</span><span class="typing-cursor"></span>
+                </div>
+                <div id="loadingTheme"></div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar"></div>
+                </div>
+            </div>
+            <div class="scanline"></div>
         </div>
     </div>
 
