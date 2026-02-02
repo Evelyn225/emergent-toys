@@ -409,6 +409,23 @@
             cursor: pointer;
             letter-spacing: 0.5px;
             transition: all 0.2s;
+            animation: pulse 0.6s ease-out;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0;
+                transform: scale(0.9);
+                border-color: rgba(100, 255, 218, 0.3);
+            }
+            50% {
+                border-color: rgba(100, 255, 218, 0.8);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+                border-color: rgba(255, 255, 255, 0.3);
+            }
         }
     </style>
 </head>
@@ -1099,9 +1116,33 @@ BEGIN HTML OUTPUT:`;
         }
 
         // Favorites management
+        function isSavedFavorite(theme, personaName) {
+            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
+            return favorites.some(f => f.theme === theme && f.persona === personaName);
+        }
+        
+        function updateSaveButtonState() {
+            if (!currentGeneration.theme || !currentGeneration.persona) return;
+            
+            const isSaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
+            const saveButton = document.getElementById('saveButton');
+            
+            if (isSaved) {
+                saveButton.style.display = 'none';
+            } else {
+                saveButton.style.display = 'block';
+            }
+        }
+        
         function saveFavorite() {
             if (!currentGeneration.code) {
                 alert('No generation to save!');
+                return;
+            }
+
+            // Check if already saved
+            if (isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name)) {
+                alert('Already in favorites!');
                 return;
             }
 
@@ -1118,6 +1159,7 @@ BEGIN HTML OUTPUT:`;
             localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
             
             alert('Saved to favorites! 💾');
+            updateSaveButtonState();
         }
 
         function loadFavorites() {
@@ -1197,6 +1239,7 @@ BEGIN HTML OUTPUT:`;
 
             // Show save button
             document.getElementById('saveButton').style.display = 'block';
+            updateSaveButtonState();
         }
 
         function deleteFavorite(id) {
@@ -1543,7 +1586,7 @@ BEGIN HTML OUTPUT:`;
                     setTimeout(() => {
                         loadingOverlay.classList.add('hidden');
                         regenerateButton.disabled = false;
-                        document.getElementById('saveButton').style.display = 'block';
+                        updateSaveButtonState();
                         isGenerating = false;
                     }, 500);
                 }
@@ -1575,39 +1618,10 @@ BEGIN HTML OUTPUT:`;
 
             notification.addEventListener('click', () => {
                 if (backgroundGeneration) {
-                    // Load the background-generated site
-                    currentGeneration = backgroundGeneration;
-                    backgroundGeneration = null;
+                    // Just hide the notification button, don't auto-load
+                    // User can manually regenerate or view the background generation
                     notification.style.display = 'none';
-                    
-                    // Update UI
-                    document.getElementById('loadingTheme').textContent = `"${currentGeneration.theme}"`;
-                    document.getElementById('loadingPersona').textContent = `${currentGeneration.persona.name}: `;
-                    document.getElementById('saveButton').style.display = 'block';
-                    
-                    // Render the code
-                    const container = document.getElementById('generatedContent');
-                    container.innerHTML = '';
-                    
-                    const isFullHTML = /<html[\s>]/i.test(currentGeneration.code) || /<body[\s>]/i.test(currentGeneration.code) || /<script[\s>]/i.test(currentGeneration.code) || /<style[\s>]/i.test(currentGeneration.code);
-                    
-                    if (isFullHTML) {
-                        const iframe = document.createElement('iframe');
-                        iframe.style.width = '100%';
-                        iframe.style.height = '100%';
-                        iframe.style.border = 'none';
-                        iframe.style.margin = '0';
-                        iframe.style.padding = '0';
-                        container.appendChild(iframe);
-                        
-                        iframe.contentDocument.open();
-                        iframe.contentDocument.write(currentGeneration.code);
-                        iframe.contentDocument.close();
-                    } else {
-                        const script = document.createElement('script');
-                        script.textContent = currentGeneration.code;
-                        container.appendChild(script);
-                    }
+                    backgroundGeneration = null;
                 }
             });
             
