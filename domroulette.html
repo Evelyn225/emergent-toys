@@ -798,10 +798,31 @@ BEGIN HTML OUTPUT:`;
                 p5Code = p5Code.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
                 p5Code = p5Code.trim();
 
-                // If the model returned only JS, wrap it in a minimal HTML shell
-                const hasHtmlTag = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code);
+                // If the model returned HTML (with tags like html, body, script, style), use as-is
+                // Otherwise wrap pure JS in a minimal HTML shell
+                const hasHtmlTag = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code) || /<style[\s>]/i.test(p5Code);
+                
                 if (!hasHtmlTag) {
-                    p5Code = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><' + '/script>\n</head>\n<body>\n<script>\n// Wait for p5.js to load\nfunction waitForP5AndRun(userCode) {\n  if (typeof p5 !== "undefined") {\n    eval(userCode);\n  } else {\n    setTimeout(() => waitForP5AndRun(userCode), 100);\n  }\n}\nconst userSketchCode = `' + p5Code.split('`').join('\\`') + '`;\nwaitForP5AndRun(userSketchCode);\n<' + '/script>\n</body>\n</html>';
+                    // Extract any style content from the code
+                    const styleMatch = p5Code.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+                    let styleContent = '';
+                    let cleanCode = p5Code;
+                    
+                    if (styleMatch) {
+                        styleContent = styleMatch[1];
+                        cleanCode = p5Code.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+                    }
+                    
+                    // Build the HTML shell with styles in head
+                    let htmlShell = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><' + '/script>\n';
+                    
+                    if (styleContent) {
+                        htmlShell += '<style>\n' + styleContent + '\n<' + '/style>\n';
+                    }
+                    
+                    htmlShell += '</head>\n<body>\n<script>\n// Wait for p5.js to load\nfunction waitForP5AndRun(userCode) {\n  if (typeof p5 !== "undefined") {\n    eval(userCode);\n  } else {\n    setTimeout(() => waitForP5AndRun(userCode), 100);\n  }\n}\nconst userSketchCode = `' + cleanCode.split('`').join('\\`') + '`;\nwaitForP5AndRun(userSketchCode);\n<' + '/script>\n</body>\n</html>';
+                    
+                    p5Code = htmlShell;
                 }
 
                 if (!p5Code) {
