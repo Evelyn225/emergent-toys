@@ -288,20 +288,23 @@
         }
 
         #loadingMessage {
-            display: block;
-            text-align: left;
+            display: inline-flex;
+            align-items: baseline;
+            gap: 8px;
+            flex-wrap: nowrap;
+            white-space: normal;
+            word-wrap: break-word;
             min-height: 60px;
         }
 
         #loadingPersona {
             font-weight: 600;
-            display: inline-block;
-            min-width: 200px;
-            white-space: nowrap;
+            white-space: pre;
+            flex: 0 0 auto;
         }
 
         #loadingMessageText {
-            display: inline;
+            min-width: 0;
         }
 
         #loadingTheme {
