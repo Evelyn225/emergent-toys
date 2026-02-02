@@ -173,118 +173,28 @@
         function createGenerationPrompt(theme, persona) {
             const specialInstructions = getPersonaSpecialInstructions(persona.name);
 
-            return `Generate a complete, self-contained HTML page inspired by: "${theme}"
+                        return `Theme: "${theme}"
 
 YOU ARE: ${persona.name}
 YOUR STYLE: ${persona.style}
 YOUR APPROACH: ${persona.desc}
 
-${specialInstructions ? specialInstructions + '\n\n' : ''}INSTRUCTIONS - DO NOT EXPLAIN, ONLY OUTPUT CODE:
-- Output ONLY valid HTML/CSS/JavaScript code
-- Do NOT include any explanations, descriptions, or markdown
+${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLANATIONS):
+- Output ONLY HTML/CSS/JS (no markdown)
 - Do NOT include <html>, <head>, or <body> tags
-- Include all CSS in <style> tags and all JS in <script> tags
-- The code must be complete, robust, and runnable as-is
-- CRITICAL: ABSOLUTELY NO EXTERNAL FILES OR REFERENCES:
-  * NO <link> tags EVER (not even favicons or fonts)
-  * NO @import in CSS
-  * NO external stylesheet references
-  * If you need images, use data URIs or API URLs ONLY (Unsplash, Picsum, DiceBear)
-  * ALL CSS must be in <style> tags inside the HTML
-  * Example of WRONG: <link rel="stylesheet" href="/css/style.css"> ❌
-  * Example of WRONG: @import url('https://fonts.googleapis.com/css...'); ❌
-  * Example of RIGHT: <style> body { color: red; } </style> ✅
-  * Example of RIGHT: <img src="https://picsum.photos/..."> ✅
-- CRITICAL: LIBRARY LOADING SAFETY:
-  * Load each library in its own <script> tag with async
-  * ALWAYS wrap ALL library code in try/catch blocks
-  * Check if library is loaded before using it (e.g., if (typeof p5 !== 'undefined'))
-  * Provide complete fallbacks if libraries fail to load
-  * NEVER use a library variable unless you've verified it loaded successfully
-  * If a library fails, the site must still work with plain HTML/CSS/JS
-- EMBODY THE PERSONA - let ${persona.name}'s perspective guide your creative choices
-- IT MUST TAKE A HUMAN AT LEAST 3 MINUTES TO FULLY EXPLORE AND APPRECIATE
+- All CSS in a single <style> tag
+- All JS in <script> tags
+- MUST use p5.js ONLY, loaded from CDN in its own <script async> tag
+- Wrap ALL p5 usage in try/catch and guard with (typeof p5 !== 'undefined')
+- If p5 fails, provide a plain JS fallback so the page still works
+- NO <link> tags, NO @import, NO local/project files (e.g., /style.css, /script.js)
 
-DEPTH & COMPLEXITY REQUIREMENTS:
-- Create a FULL, FLESHED-OUT experience, not a simple demo
-- Add images, titles, and paragraphs of content where appropriate
-- add multiple types of media (images, audio, video)
-- Implement multiple interactive layers and systems
-- Include state management and persistent behavior
-- Add visual polish with smooth animations and transitions
-- Create depth through layering, parallax, or 3D effects
-- Implement game-like mechanics if appropriate (scoring, progression, challenges)
-- Add narrative or contextual elements that develop over time
-- Include multiple interactive zones or sections (not just one area)
-- Create emergent complexity where interactions combine in unexpected ways
+BUILD:
+- A substantial, multi-section experience (500+ lines)
+- 10+ interactive elements with real behaviors
+- Theme must be explicit in text, visuals, and interactions
 
-REQUIRED LIBRARY (must use exactly 1, prefer p5.js):
-- p5.js (https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js) - For generative art and sketches [PREFERRED]
-- Chart.js (https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js) - For data visualizations
-- anime.js (https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js) - For advanced animations
-- gsap (https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js) - For timeline-based animations
-- Tone.js (https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.9/Tone.js) - For audio synthesis
-- Howler.js (https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js) - For sound management
-- Matter.js (https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js) - For 2D physics
-- Particles.js (https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js) - For particle systems
-Load in <script async> tag. Wrap ALL usage in try/catch with typeof checks. Fallback if library fails.
-
-USE IMAGES FROM THESE APIs (choose based on theme):
-- For abstract/artistic: https://picsum.photos/seed/${encodeURIComponent(theme)}/800/600
-- For nature/landscapes: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))}
-- For patterns/textures: https://picsum.photos/800/600?random=${Math.random()}
-- For pixel art: https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(theme)}
-- For icons: https://api.dicebear.com/7.x/icons/svg?seed=${encodeURIComponent(theme)}
-- For avatars: https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(theme)}
-- For abstract gradients: https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(theme)}
-- For art photography: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))},art
-- For city/architecture: https://source.unsplash.com/800x600/?${encodeURIComponent(theme.replace(' ', ','))},city
-- For textures: https://picsum.photos/seed/${encodeURIComponent(theme)}-texture/900/700
-- For backgrounds: https://www.freewebheaders.com/wordpress/wp-content/gallery/[CATEGORY]/[CATEGORY]-animated-gif-[RANDOM_1_TO_10].gif
-
-VISUAL & DESIGN RICHNESS:
-- Use gradients, shadows, filters, and effects extensively
-- Implement animated backgrounds or dynamic lighting
-- Create visual feedback for all interactions
-- Use typography creatively - animate text, distort it, overlay it
-- Build complex color palettes with intentional clashing
-- Include decorative elements that serve no purpose but add richness
-- Implement canvas/WebGL for advanced graphics
-- Create visual hierarchies even in chaos
-
-INTERACTIVITY DEPTH:
-- Multiple interactive systems that work together
-- Hover effects that are complex and layered
-- Click handlers that trigger chains of events
-- Keyboard input with multiple commands
-- Mouse movement that affects multiple elements
-- Randomized but coherent behaviors
-- Hidden mechanics that reveal themselves
-- Easter eggs and unexpected features
-
-TECHNICAL DEPTH:
-- Use requestAnimationFrame for smooth 60fps animations
-- Implement particle systems, noise functions, or cellular automata
-- Use external libraries effectively (p5.js, Three.js, Tone.js)
-- Create custom algorithms for generative content
-- Implement physics, collision detection, or advanced math
-- Use WebGL shaders if doing advanced graphics
-- Build audio synthesis or generative sound
-- Create responsive, fullscreen experiences
-
-CONTENT RICHNESS:
-- Don't just have empty space - fill every pixel with something
-- Add layered information and visual density
-- Create multiple "levels" of interaction to discover
-- Include surprising elements that reward exploration
-- Build mini-games or sub-systems within the experience
-- Add visual narratives or symbolic content
-- Make the experience feel intentional and crafted, not random
-
-MAKE IT SUBSTANTIAL - This should feel like a complete webpage or interactive work, not a rough sketch. Do NOT use any placeholders or "TODO" comments. do NOT output minimal or simplistic code.
-The weirder AND more detailed, the better.
-
-BEGIN OUTPUTTING THE COMPLETE HTML CODE NOW:`;
+BEGIN OUTPUT:`;
         }
 
         // Persona-specific loading messages
@@ -1088,11 +998,13 @@ BEGIN OUTPUTTING THE FIXED HTML CODE NOW:`;
                     loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[reviewMessageIndex]}`);
                 }, 5000);
 
-                // Review and improve the code
-                let reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
+                // Review and improve the code (temporarily disabled)
+                // let reviewedHTML = await reviewAndImproveCode(generatedHTML, theme, persona);
 
-                // Final bugfix-only pass
-                reviewedHTML = await bugfixCode(reviewedHTML, theme, persona);
+                // Final bugfix-only pass (temporarily disabled)
+                // reviewedHTML = await bugfixCode(reviewedHTML, theme, persona);
+
+                let reviewedHTML = generatedHTML;
 
                 loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: Rendering your creation...`);
 

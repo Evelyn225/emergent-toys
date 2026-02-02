@@ -62,14 +62,14 @@ export default async function handler(req, res) {
 CRITICAL REQUIREMENTS:
 - Generate COMPLETE, SUBSTANTIAL sites (500+ lines minimum)
 - NO SHELLS: Every page must have multiple interactive systems, layered visuals, and real features
-- MUST USE EXACTLY 1 LIBRARY (prefer p5.js): Integrate deeply with 100+ lines of library-specific code
+- MUST USE p5.js ONLY (required): Integrate deeply with 100+ lines of p5-specific code
 - Multiple distinct sections/zones (not just a title and button)
 - At least 10 interactive elements with real functionality
 - Rich content and visual effects (gradients, animations, layered elements)
 - Output ONLY valid HTML/CSS/JavaScript code
 - Do NOT include <html>, <head>, or <body> tags
 - All CSS in <style> tags, all JS in <script> tags
-- External libraries via CDN <script> tags are allowed
+- Load p5.js from CDN in its own <script async> tag
 - Do NOT reference any local/project files (e.g., no /style.css, /script.js, ./assets/*)
 - NO explanations, NO markdown, NO code blocks - output pure HTML/CSS/JS only
 - If there is explanatory text before the code, remove it completely
