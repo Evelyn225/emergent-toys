@@ -797,7 +797,7 @@ BEGIN HTML OUTPUT:`;
                 "The Arcade Machine (1983)": `SPECIAL ARCADE MODE:
 - Design like a classic arcade game from 1983
 - Simple, immediate gameplay that actually works
-- Lives system (3 lives standard, game over screen)
+- Lives system (with game over screen)
 - HIGH SCORE table with initials
 - CRT scanlines, phosphor glow, screen burn-in effects
 - Pixel art aesthetic, 8-bit sound effects
@@ -812,7 +812,7 @@ BEGIN HTML OUTPUT:`;
 - Clues hidden in the design, code, and interactions
 - Multiple stages or layers that unlock
 - Satisfying "click" or "aha!" moment when solved
-- Optional hint system (max 3 hints)
+- Optional hint system
 - Elegant solution, not brute force
 - Visual feedback for correct/incorrect attempts
 - Secret bonus puzzle for completionists`,
@@ -1197,12 +1197,13 @@ BEGIN HTML OUTPUT:`;
                     codeBlockStart + '\n' +
                     p5Code + '\n' +
                     codeBlockEnd + '\n\n' +
-                    'NOW: Check for errors / missing references and add anything missing. ALSO add the most interesting expansion you can think of that fits your persona and the theme.\n\n' +
+                    'NOW: Add the most interesting expansion you can think of that fits your persona and the theme.\n\n' +
                     'REQUIREMENTS:\n' +
                     '- Output the COMPLETE enhanced HTML with p5.js code in <script> tags\n' +
                     '- Add one substantial, creative feature that makes this more interesting\n' +
                     '- Keep it true to your persona\'s style and approach\n' +
                     '- The additions should be meaningful\n' +
+                    '- Expand on any unfinished/demo features\n\n' +
                     '- Keep setup() and draw() structurally intact\n' +
                     '- Output complete HTML (no markdown, no explanations)\n\n' +
                     'IDEAS FOR ADDITIONS (choose what fits):\n' +
@@ -1264,10 +1265,10 @@ BEGIN HTML OUTPUT:`;
                     '- Check for common p5.js mistakes\n' +
                     '- Ensure setup() and draw() exist and are properly structured\n' +
                     '- Fix any issues you find\n' +
+                    '-If you think a feature should be obviously added, add it now.-\n\n' +
                     '- Keep the overall logic and style intact\n' +
                     '- Output the complete corrected code\n' +
                     '- Output ONLY the code, no explanations\n\n' +
-                    '-If you think a feature should be obviously added, add it now.-\n\n' +
                     'BEGIN CORRECTED CODE:';
 
                 const fixResponse = await fetch(GENERATE_ENDPOINT, {
