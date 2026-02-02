@@ -873,20 +873,24 @@ BEGIN ENHANCED CODE:`;
 
                 loadingMessageText.innerHTML = applyWaveAnimation('🎨 Running your sketch...');
 
-                // Execute p5 code directly
+                // Execute p5 code in instance mode to target the container
                 try {
                     const script = document.createElement('script');
                     script.textContent = `
                         try {
-                            (function() {
-                                // Clear container and set up for p5
-                                const container = document.getElementById('generatedContent');
-                                container.innerHTML = '';
-                                container.style.minHeight = '100vh';
+                            const container = document.getElementById('generatedContent');
+                            container.innerHTML = '';
+                            
+                            // Wrap in p5 instance mode to target container
+                            new p5(function(p) {
+                                // Replace global p5 functions with instance methods
+                                const sketch = \`${p5Code.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
                                 
-                                // Evaluate the p5 code in this scope
-                                ${p5Code}
-                            })();
+                                // Create a wrapper that redirects global calls to instance
+                                with(p) {
+                                    eval(sketch);
+                                }
+                            }, 'generatedContent');
                         } catch (e) {
                             console.error('P5 sketch error:', e);
                             document.getElementById('generatedContent').innerHTML = 
@@ -896,7 +900,7 @@ BEGIN ENHANCED CODE:`;
                     document.body.appendChild(script);
                 } catch (e) {
                     console.error('Script injection error:', e);
-                    generatedContent.innerHTML = `<div style="padding: 40px;">Error: ${e.message}</div>`;
+                    generatedContent.innerHTML = \`<div style="padding: 40px;">Error: \${e.message}</div>\`;
                 }
 
                 // Hide loading overlay
