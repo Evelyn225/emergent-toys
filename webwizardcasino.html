@@ -111,6 +111,12 @@
             transform: none;
         }
 
+        #saveButton:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         #favoritesModal {
             position: fixed;
             top: 0;
@@ -976,6 +982,18 @@ BEGIN HTML OUTPUT:`;
             
             if (!favorite) return;
 
+            // Stop any ongoing generation
+            if (loadingMessageInterval) {
+                clearInterval(loadingMessageInterval);
+                loadingMessageInterval = null;
+            }
+            
+            // Hide loading overlay and re-enable buttons
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const regenerateButton = document.getElementById('regenerateButton');
+            loadingOverlay.classList.add('hidden');
+            regenerateButton.disabled = false;
+
             // Close modal
             document.getElementById('favoritesModal').classList.remove('show');
 
@@ -1041,6 +1059,7 @@ BEGIN HTML OUTPUT:`;
             // Show loading state
             loadingOverlay.classList.remove('hidden');
             regenerateButton.disabled = true;
+            document.getElementById('saveButton').style.display = 'none';
             generatedContent.innerHTML = '';
 
             // Clear any previous p5 instance
