@@ -995,12 +995,12 @@ BEGIN HTML OUTPUT:`;
             if (isFullHTML) {
                 const iframe = document.createElement('iframe');
                 iframe.style.width = '100%';
-                iframe.style.height = '100vh';
+                iframe.style.height = 'calc(100vh - 70px)';
                 iframe.style.border = 'none';
                 iframe.style.margin = '0';
                 iframe.style.padding = '0';
                 container.appendChild(iframe);
-                
+
                 iframe.contentDocument.open();
                 iframe.contentDocument.write(favorite.code);
                 iframe.contentDocument.close();
@@ -1291,7 +1291,7 @@ BEGIN HTML OUTPUT:`;
                         // For full HTML, create an iframe to isolate it
                         const iframe = document.createElement('iframe');
                         iframe.style.width = '100%';
-                        iframe.style.height = '100vh';
+                        iframe.style.height = 'calc(100vh - 70px)';
                         iframe.style.border = 'none';
                         iframe.style.margin = '0';
                         iframe.style.padding = '0';
