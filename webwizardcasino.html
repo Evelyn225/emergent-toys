@@ -824,24 +824,6 @@ BEGIN HTML OUTPUT:`;
             }
         }
 
-        // Apply continuous wave animation to message
-        function applyWaveAnimation(message) {
-            const segments = (typeof Intl !== 'undefined' && Intl.Segmenter)
-                ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(message)].map(segment => segment.segment)
-                : Array.from(message);
-            
-            // Animate every character with staggered wave timing
-            const animatedMessage = segments.map((char, index) => {
-                if (char === ' ') return ' ';
-                // Each character waves continuously with staggered delay
-                // Animation is 1.2s, so delay is spread across characters
-                const delay = (index * 0.08) % 1.2;
-                return `<span class="wave-char" style="animation-delay: ${delay}s">${char}</span>`;
-            }).join('');
-            
-            return animatedMessage;
-        }
-
         // Get dynamic review messages
         function getReviewLoadingMessages(personaName) {
             const reviewMessages = {
