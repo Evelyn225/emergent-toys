@@ -85,9 +85,24 @@
         }
 
         #loadingMessage {
+            display: inline-flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
             white-space: normal;
             word-wrap: break-word;
             min-height: 60px;
+        }
+
+        #loadingPersona {
+            font-weight: 600;
+            white-space: pre;
+            flex: 0 0 auto;
+        }
+
+        #loadingMessageText {
+            min-width: 0;
         }
 
         #loadingTheme {
@@ -157,7 +172,10 @@
     <div id="loadingOverlay">
         <div class="spinner"></div>
         <div id="loadingText">
-            <div id="loadingMessage">Generating your website...</div>
+            <div id="loadingMessage">
+                <span id="loadingPersona"></span>
+                <span id="loadingMessageText">Generating your website...</span>
+            </div>
             <div id="loadingTheme"></div>
         </div>
     </div>
@@ -388,15 +406,9 @@ BEGIN OUTPUT:`;
 
         // Apply continuous wave animation to message
         function applyWaveAnimation(message) {
-            // Find the colon to separate persona name from message
-            const colonIndex = message.indexOf(': ');
-            if (colonIndex === -1) return message;
-            
-            const personaName = message.substring(0, colonIndex + 2); // Include ": "
-            const actualMessage = message.substring(colonIndex + 2);
             const segments = (typeof Intl !== 'undefined' && Intl.Segmenter)
-                ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(actualMessage)].map(segment => segment.segment)
-                : Array.from(actualMessage);
+                ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(message)].map(segment => segment.segment)
+                : Array.from(message);
             
             // Animate every character with staggered wave timing
             const animatedMessage = segments.map((char, index) => {
@@ -407,7 +419,7 @@ BEGIN OUTPUT:`;
                 return `<span class="wave-char" style="animation-delay: ${delay}s">${char}</span>`;
             }).join('');
             
-            return personaName + animatedMessage;
+            return animatedMessage;
         }
 
         // Get dynamic review messages
@@ -771,6 +783,8 @@ BEGIN:`;
         async function generateWebsite() {
             const loadingOverlay = document.getElementById('loadingOverlay');
             const loadingMessage = document.getElementById('loadingMessage');
+            const loadingPersona = document.getElementById('loadingPersona');
+            const loadingMessageText = document.getElementById('loadingMessageText');
             const loadingTheme = document.getElementById('loadingTheme');
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
@@ -787,7 +801,7 @@ BEGIN:`;
 
             try {
                 // First, get random words from AI
-                loadingMessage.textContent = 'Choosing a creative persona...';
+                loadingMessageText.textContent = 'Choosing a creative persona...';
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
@@ -803,11 +817,12 @@ BEGIN:`;
                 loadingTheme.textContent = `"${theme}"`;
                 
                 let messageIndex = 0;
-                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}`);
+                loadingPersona.textContent = `${persona.name}: `;
+                loadingMessageText.innerHTML = applyWaveAnimation(messages[messageIndex]);
 
                 loadingMessageInterval = setInterval(() => {
                     messageIndex = (messageIndex + 1) % messages.length;
-                    loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${messages[messageIndex]}`);
+                    loadingMessageText.innerHTML = applyWaveAnimation(messages[messageIndex]);
                 }, 7000);
 
                 // Create the prompt
@@ -841,12 +856,12 @@ BEGIN:`;
 
                 // Content enrichment pass
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
-                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: ${reviewMessages[0]}`);
+                loadingMessageText.innerHTML = applyWaveAnimation(reviewMessages[0]);
 
                 // Single fast enrichment pass
                 let reviewedHTML = await enrichContent(generatedHTML, theme, persona);
 
-                loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: 🎨 Rendering your creation...`);
+                loadingMessageText.innerHTML = applyWaveAnimation('🎨 Rendering your creation...');
 
                 // Inject helper functions and theme data into generated content
                                 const themeDataJSON = JSON.stringify(wordData.themeData || { nouns: [], verbs: [], adjectives: [] });
@@ -891,7 +906,8 @@ window.__themeData = ${themeDataJSON};
                 }
 
                 console.error('Error generating website:', error);
-                loadingMessage.innerHTML = `Error: ${error.message}`;
+                loadingPersona.textContent = '';
+                loadingMessageText.textContent = `Error: ${error.message}`;
                 regenerateButton.disabled = false;
 
                 // Show error in content area
