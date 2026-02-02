@@ -200,8 +200,8 @@ YOUR APPROACH: ${persona.desc}
 ${specialInstructions ? specialInstructions + '\n\n' : ''}CREATE A P5.JS SKETCH:
 
 OUTPUT RULES:
-- Output p5.js JavaScript code, HTML, and CSS
-- Do NOT wrap in <script> tags or markdown code blocks
+- Output complete HTML with p5.js JavaScript code wrapped in <script> tags and <style> tags as needed
+- Include a <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script> tag if needed
 - MUST include setup() function that calls createCanvas()
 - MUST include draw() function that calls background() at the start
 - Must visually incorporate the theme "${theme}" in the sketch
@@ -214,6 +214,8 @@ OUTPUT RULES:
 - DO NOT use deprecated features (deviceOrientation, etc)
 - Make it visually interesting and animated
 - Vary your approach - don't always do the same thing
+- No markdown code blocks, just raw HTML
+- DO NOT include any external CSS or JS files except p5.js CDN
 
 EXAMPLES OF GOOD APPROACHES:
 - Generative art that evolves over time
@@ -224,7 +226,7 @@ EXAMPLES OF GOOD APPROACHES:
 - Abstract animations
 - Geometric explorations
 
-BEGIN P5.JS CODE:`;
+BEGIN HTML OUTPUT:`;
         }
 
         // Persona-specific loading messages
@@ -793,25 +795,40 @@ BEGIN P5.JS CODE:`;
 
                 // Clean any markdown code blocks
                 p5Code = p5Code.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
-                
-                // Additional sanitization
                 p5Code = p5Code.trim();
                 
-                // Remove any HTML tags or markdown that might remain
+                // If wrapped in script tags, extract content
+                const scriptMatch = p5Code.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+                if (scriptMatch) {
+                    p5Code = scriptMatch[1];
+                }
+                
+                // Remove any remaining HTML tags completely
                 p5Code = p5Code.replace(/<[^>]*>/g, '');
                 
                 // Remove any lines that start with markdown-like markers
                 p5Code = p5Code.split('\n')
-                    .filter(line => !line.trim().match(/^(---|#|>|\*\*)/))
+                    .filter(line => !line.trim().match(/^(---|#|>|\*\*|<|&)/))
                     .join('\n');
                 
-                // Remove any leading/trailing content before JavaScript
-                const jsStart = p5Code.search(/\b(function|const|let|var|class|async)\b/);
-                if (jsStart > 0) {
-                    p5Code = p5Code.substring(jsStart);
+                // Find where actual JavaScript starts (skip any leading junk)
+                const lines = p5Code.split('\n');
+                let codeStart = 0;
+                for (let i = 0; i < lines.length; i++) {
+                    const trimmed = lines[i].trim();
+                    if (trimmed && !trimmed.match(/^(let|const|var|function|class|async|\/\/|\/\*|\*)/)) {
+                        // Skip lines that don't look like code
+                        if (trimmed.match(/^[a-zA-Z_$]/)) {
+                            codeStart = i;
+                            break;
+                        }
+                    } else if (trimmed.match(/^(let|const|var|function|class|async|\/\/|\/\*)/)) {
+                        codeStart = i;
+                        break;
+                    }
                 }
+                p5Code = lines.slice(codeStart).join('\n').trim();
                 
-                p5Code = p5Code.trim();
                 if (!p5Code) {
                     throw new Error('Generated code appears to be empty after sanitization');
                 }
@@ -826,41 +843,36 @@ BEGIN P5.JS CODE:`;
                     loadingMessageText.innerHTML = applyWaveAnimation(reviewMessages[reviewIndex]);
                 }, 7000);
 
-                const enhancePrompt = `Theme: "${theme}"
-
-YOU ARE: ${persona.name}
-YOUR STYLE: ${persona.style}
-YOUR APPROACH: ${persona.desc}
-
-You just created this p5.js sketch for the theme "${theme}":
-
-\`\`\`javascript
-${p5Code}
-\`\`\`
-
-NOW: Add the most interesting expansion you can think of that fits your persona and the theme.
-
-REQUIREMENTS:
-- Output the COMPLETE enhanced p5.js code (include everything from above + your addition)
-- Add one substantial, creative feature that makes this more interesting
-- Keep it true to your persona's style and approach
-- The addition should be meaningful
-- Keep setup() and draw() structurally intact
-- Output ONLY code (no markdown, no explanations)
-
-IDEAS FOR ADDITIONS (choose what fits):
-- Interactive element that responds to mouse/keyboard
-- Additional visual layer or effect
-- New generative pattern or animation
-- Particle system or physics
-- Data visualization component
-- Sound/rhythm visualization (if audio available)
-- Camera/video integration (if appropriate)
-- 3D elements (WEBGL mode)
-- Perlin noise field or flow field
-- Fractal or recursive structure
-
-BEGIN ENHANCED CODE:`;
+                const codeBlockStart = String.fromCharCode(96, 96, 96) + 'html';
+                const codeBlockEnd = String.fromCharCode(96, 96, 96);
+                const enhancePrompt = 'Theme: "' + theme + '"\n\n' +
+                    'YOU ARE: ' + persona.name + '\n' +
+                    'YOUR STYLE: ' + persona.style + '\n' +
+                    'YOUR APPROACH: ' + persona.desc + '\n\n' +
+                    'You just created this p5.js sketch for the theme "' + theme + '":\n\n' +
+                    codeBlockStart + '\n' +
+                    p5Code + '\n' +
+                    codeBlockEnd + '\n\n' +
+                    'NOW: Add the most interesting expansion you can think of that fits your persona and the theme.\n\n' +
+                    'REQUIREMENTS:\n' +
+                    '- Output the COMPLETE enhanced HTML with p5.js code in <script> tags\n' +
+                    '- Add one substantial, creative feature that makes this more interesting\n' +
+                    '- Keep it true to your persona\'s style and approach\n' +
+                    '- The addition should be meaningful\n' +
+                    '- Keep setup() and draw() structurally intact\n' +
+                    '- Output complete HTML (no markdown, no explanations)\n\n' +
+                    'IDEAS FOR ADDITIONS (choose what fits):\n' +
+                    '- Interactive element that responds to mouse/keyboard\n' +
+                    '- Additional visual layer or effect\n' +
+                    '- New generative pattern or animation\n' +
+                    '- Particle system or physics\n' +
+                    '- Data visualization component\n' +
+                    '- Sound/rhythm visualization (if audio available)\n' +
+                    '- Camera/video integration (if appropriate)\n' +
+                    '- 3D elements (WEBGL mode)\n' +
+                    '- Perlin noise field or flow field\n' +
+                    '- Fractal or recursive structure\n\n' +
+                    'BEGIN ENHANCED HTML:';
 
                 const enhanceResponse = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
@@ -877,7 +889,8 @@ BEGIN ENHANCED CODE:`;
                     try {
                         const enhanceData = await enhanceResponse.json();
                         let enhancedCode = enhanceData.html;
-                        enhancedCode = enhancedCode.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
+                        const backtickPattern = String.fromCharCode(96, 96, 96);
+                        enhancedCode = enhancedCode.replace(new RegExp('^' + backtickPattern + '[\\w]*\\n?', 'gm'), '').replace(new RegExp('\\n?' + backtickPattern + '$', 'gm'), '');
                         if (enhancedCode && enhancedCode.length > p5Code.length * 0.8) {
                             p5Code = enhancedCode;
                         }
@@ -893,24 +906,14 @@ BEGIN ENHANCED CODE:`;
 
                 loadingMessageText.innerHTML = applyWaveAnimation('🎨 Running your sketch...');
 
-                // Execute code directly (supports p5, HTML, and CSS)
+                // Execute HTML directly in the container
                 try {
                     const container = document.getElementById('generatedContent');
-                    container.innerHTML = '';
-                    
-                    const script = document.createElement('script');
-                    script.textContent = p5Code;
-                    
-                    try {
-                        // Insert the script to execute the code in the container
-                        container.appendChild(script);
-                    } catch (e) {
-                        console.error('Script injection error:', e);
-                        container.innerHTML = '<div style="padding: 40px; font-family: monospace; color: red;"><strong>Error:</strong> ' + e.message + '</div>';
-                    }
+                    container.innerHTML = p5Code;
                 } catch (e) {
                     console.error('Execution error:', e);
-                    generatedContent.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
+                    const container = document.getElementById('generatedContent');
+                    container.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
                 }
 
                 // Hide loading overlay
@@ -928,7 +931,7 @@ BEGIN ENHANCED CODE:`;
 
                 console.error('Error generating website:', error);
                 loadingPersona.textContent = '';
-                loadingMessageText.textContent = `Error: ${error.message}`;
+                loadingMessageText.textContent = 'Error: ' + error.message;
                 regenerateButton.disabled = false;
             }
         }
