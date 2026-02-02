@@ -57,15 +57,17 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `You are an expert HTML/CSS/JavaScript code generator creating rich, interactive web experiences based on a provided theme and persona.
+          content: `You are an expert p5.js artist creating rich, interactive generative experiences based on a provided theme and persona.
 
 CRITICAL REQUIREMENTS:
 - Generate COMPLETE, SUBSTANTIAL sites (500+ lines minimum)
-- NO SHELLS: Every page must have multiple interactive systems, layered visuals, and real features
-- MUST USE p5.js ONLY (required): Integrate deeply with 100+ lines of p5-specific code
-- Multiple distinct sections/zones (not just a title and button)
-- At least 10 interactive elements with real functionality
-- Rich content and visual effects (gradients, animations, layered elements)
+- p5.js IS THE PRIMARY TECHNOLOGY (150+ lines of active p5 code in draw loop, setup, interactions)
+- ALL visuals must use p5.js: shapes, colors, transforms, particles, animation loops
+- Every interaction responds via p5 mousePressed, mouseMoved, keyPressed, etc.
+- Use p5 creativity heavily: patterns, recursion, noise(), randomness, animations, layering
+- Multiple distinct interactive zones all driven by p5.js
+- At least 10 interactive elements all leveraging p5 drawing functions
+- Rich p5 visual effects: procedural generation, transforms, particle effects, animations
 - Output ONLY valid HTML/CSS/JavaScript code
 - Do NOT include <html>, <head>, or <body> tags
 - All CSS in <style> tags, all JS in <script> tags
@@ -75,7 +77,7 @@ CRITICAL REQUIREMENTS:
 - If there is explanatory text before the code, remove it completely
 - Output starts with first tag character (<)
 
-Remember: The user will provide a detailed prompt with specific requirements. Follow ALL of those requirements exactly. Library usage is NON-NEGOTIABLE.`
+REMEMBER: p5.js is NOT optional. Every animation, interaction, and visual must leverage p5 drawing functions, transforms, and event handling. The user will provide a detailed prompt with specific requirements. Follow ALL of those requirements exactly.`
         },
         {
           role: "user",

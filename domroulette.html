@@ -188,10 +188,12 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - MUST be fully self-contained
 - MUST contain the two word theme/title somewhere in the content: "${theme}"
 - MUST work on desktop primarily, mobile optional
-- MUST make deep use of p5.js (>100 lines), loaded from CDN in its own <script async> tag
+- p5.js IS THE PRIMARY TECHNOLOGY (150+ lines of active p5 code in setup/draw/events)
+- Visuals, animations, and interactions MUST use p5.js drawing functions (rect, circle, fill, stroke, translate, rotate, noise, etc)
+- Text and images can be standard HTML/CSS if needed
+- Loaded from CDN in its own <script async> tag
 - DO NOT use deprecated p5 features such as motion sensor or orientation sensor
 - Wrap ALL p5 usage in try/catch and guard with (typeof p5 !== 'undefined')
-- If p5 fails, provide a plain JS fallback so the page still works
 - Can use Google Fonts: <link href="https://fonts.googleapis.com/css2?family=..." rel="stylesheet">
 - NO other <link> tags or @import statements
 - NO local/project files (e.g., /style.css, /script.js, ./assets/)
@@ -658,7 +660,7 @@ BEGIN OUTPUT:`;
 
                 "The Mystic": `SPECIAL MYSTICAL MODE:
 - Channel the sacred and supernatural:
-  * Tarot card mechanics
+  * Maybe tarot card mechanics
   * Divination and fortune telling
   * Ritual instructions
   * Sigil drawing
@@ -666,7 +668,7 @@ BEGIN OUTPUT:`;
   * Alchemy symbolism
   * Candle lighting ceremonies
   * Crystal energy concepts
-  * Meditation timers with cosmic themes`,
+  * Maybe meditation timers with cosmic themes`,
 
                 "The ZIP Bomb": `SPECIAL ZIP BOMB MODE:
 - Make tiny inputs explode into vast outputs
@@ -683,34 +685,11 @@ BEGIN OUTPUT:`;
 
         // Fast content enrichment pass (cached prompt for speed)
         async function enrichContent(html, theme, persona) {
-            // Check for "demo" - if found, always review
-            const hasDemo = /demo/i.test(html);
-            
-            // Analyze content quality
-            const lines = html.split('\n').length;
-            const hasP5 = /p5\.min\.js|p5\.js/.test(html.toLowerCase());
-            
-            // Detect empty p5 canvas (setup exists but no actual drawing)
-            const hasSetup = /function\s+setup\s*\(\)\s*\{/.test(html);
-            const hasDrawing = /p5\.|rect\(|circle\(|line\(|fill\(|stroke\(|background\(|ellipse\(|arc\(|triangle\(/i.test(html);
-            const isEmpty = hasP5 && hasSetup && !hasDrawing;
-            
-            // Skip enrichment if already large and substantial
-            if (!hasDemo && !isEmpty && lines > 1000) {
-                console.log('Skipping enrichment - output already large and substantial');
-                return html;
-            }
-            
-            // Enrich if: demo detected, empty canvas, or small/medium output
-            if (isEmpty) {
-                console.log('Empty p5 canvas detected - forcing enrichment');
-            } else if (hasDemo) {
-                console.log('Demo detected - forcing enrichment');
-            }
-            else {
+            // FORCED: Always enrich for testing
+            console.log('Enrichment: FORCED MODE - always running');
                 console.log('Enriching content - output size:', lines, 'lines');
             }
-            
+
             // Fast, focused enrichment prompt (cacheable)
             const enrichPrompt = `Theme: "${theme}"
 Persona: ${persona.name}
@@ -774,39 +753,6 @@ BEGIN:`;
             let enrichedHTML = data.html;
             enrichedHTML = enrichedHTML.replace(/^```html\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
             return enrichedHTML;
-        }
-
-        // Validate and remove external file references from generated HTML
-        function validateAndSanitizeHTML(html) {
-            // Create a temporary div to parse HTML
-            const temp = document.createElement('div');
-            temp.innerHTML = html;
-            
-            // Remove all <link> tags
-            const links = temp.querySelectorAll('link');
-            links.forEach(link => {
-                const href = link.getAttribute('href');
-                console.warn('Removing external link tag:', href);
-                link.remove();
-            });
-            
-            // Check for @import in style tags and remove them
-            const styles = temp.querySelectorAll('style');
-            styles.forEach(style => {
-                if (style.textContent.includes('@import')) {
-                    console.warn('Removing @import from style tag');
-                    // Remove @import lines completely
-                    style.textContent = style.textContent.replace(/@import\s+(['\"])[^'\"]+\1\s*;?/g, '');
-                    style.textContent = style.textContent.replace(/@import\s+url\(['\"]?[^'\"\\)]+['\"]?\)\s*;?/g, '');
-                }
-            });
-            
-            // Warn if no style tag exists
-            if (styles.length === 0) {
-                console.warn('No <style> tag found in generated HTML');
-            }
-            
-            return temp.innerHTML;
         }
 
         // Get random words from AI
@@ -906,9 +852,6 @@ BEGIN:`;
                 let reviewedHTML = await enrichContent(generatedHTML, theme, persona);
 
                 loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: 🎨 Rendering your creation...`);
-
-                // Validate and sanitize the generated HTML
-                reviewedHTML = validateAndSanitizeHTML(reviewedHTML);
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = reviewedHTML;
