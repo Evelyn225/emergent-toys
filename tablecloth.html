@@ -77,6 +77,18 @@
             return { isTorn: false };
         }
 
+        function getTornEdgeWiggle(x, y, time) {
+            const tearCheck = isNearTear(x, y, 40);
+            if (tearCheck.isTorn) {
+                // More wiggle the closer to the tear
+                const wiggleFactor = (40 - tearCheck.dist) / 40;
+                const wiggleX = Math.sin(time * 3 + x * 0.05) * 15 * wiggleFactor;
+                const wiggleY = Math.cos(time * 3 + y * 0.05) * 15 * wiggleFactor;
+                return { x: wiggleX, y: wiggleY, factor: wiggleFactor };
+            }
+            return { x: 0, y: 0, factor: 0 };
+        }
+
         function drawDotMatrix() {
             ctx.save();
             ctx.fillStyle = '#1a4F58';
@@ -120,11 +132,16 @@
                             isDrawing = false;
                         }
                     } else {
+                        // Add extra wiggle near torn edges
+                        const wiggle = getTornEdgeWiggle(x, warpY, time);
+                        const finalY = warpY + wiggle.y;
+                        const finalX = x + wiggle.x;
+                        
                         if (!isDrawing) {
-                            ctx.moveTo(x, warpY);
+                            ctx.moveTo(finalX, finalY);
                             isDrawing = true;
                         } else {
-                            ctx.lineTo(x, warpY);
+                            ctx.lineTo(finalX, finalY);
                         }
                     }
                 }
@@ -146,11 +163,16 @@
                             isDrawing = false;
                         }
                     } else {
+                        // Add extra wiggle near torn edges
+                        const wiggle = getTornEdgeWiggle(warpX, y, time);
+                        const finalX = warpX + wiggle.x;
+                        const finalY = y + wiggle.y;
+                        
                         if (!isDrawing) {
-                            ctx.moveTo(warpX, y);
+                            ctx.moveTo(finalX, finalY);
                             isDrawing = true;
                         } else {
-                            ctx.lineTo(warpX, y);
+                            ctx.lineTo(finalX, finalY);
                         }
                     }
                 }
