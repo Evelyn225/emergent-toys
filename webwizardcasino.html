@@ -275,115 +275,84 @@
             background: #0a0e27;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            justify-content: flex-start;
+            align-items: flex-start;
             z-index: 9999;
             font-family: 'Courier New', 'Monaco', monospace;
-            color: #00ff41;
-        }
-
-        .terminal-container {
-            width: 90%;
-            max-width: 900px;
-            background: #000000;
-            border: 2px solid #00ff41;
-            border-radius: 8px;
-            padding: 40px;
-            box-shadow: 0 0 60px rgba(0, 255, 65, 0.4),
-                        inset 0 0 40px rgba(0, 255, 65, 0.05);
-            position: relative;
+            color: #ffffff;
             overflow: hidden;
+            padding: 80px;
         }
 
-        .terminal-header {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #00ff41;
-            opacity: 0.7;
-        }
-
-        .terminal-button {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #ff5f56;
-            box-shadow: 0 0 5px rgba(255, 95, 86, 0.5);
-        }
-
-        .terminal-button:nth-child(2) {
-            background: #ffbd2e;
-            box-shadow: 0 0 5px rgba(255, 189, 46, 0.5);
-        }
-
-        .terminal-button:nth-child(3) {
-            background: #27c93f;
-            box-shadow: 0 0 5px rgba(39, 201, 63, 0.5);
-        }
-
-        #loadingText {
-            text-align: left;
+        #consoleOutput {
             width: 100%;
-            font-size: 15px;
-            line-height: 2;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            font-size: 18px;
+            line-height: 1.8;
             letter-spacing: 0.5px;
         }
 
-        .terminal-line {
-            margin: 6px 0;
+        .console-line {
+            color: rgba(255, 255, 255, 0.6);
+            margin: 4px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        }
+
+        .console-line.fading {
             opacity: 0;
-            animation: fadeInTerminal 0.4s forwards;
-            color: #00ff41;
+            transform: translateY(-10px);
         }
 
-        @keyframes fadeInTerminal {
-            to {
-                opacity: 0.8;
-            }
+        .console-line::before {
+            content: '> ';
+            color: rgba(255, 255, 255, 0.3);
         }
 
-        .terminal-prompt {
-            color: #888;
+        .console-line.status {
+            color: rgba(100, 255, 218, 0.8);
         }
 
-        .terminal-prompt::before {
-            content: '// ';
-            color: #666;
-            font-weight: bold;
+        .console-line.status::before {
+            content: '✓ ';
+            color: rgba(100, 255, 218, 0.8);
         }
 
-        #loadingMessage {
-            display: block;
-            margin: 15px 0;
-            padding: 12px;
-            background: rgba(0, 255, 65, 0.03);
-            border-left: 3px solid #00d9ff;
+        .console-line.error {
+            color: rgba(255, 100, 100, 0.8);
         }
 
-        #loadingPersona {
-            color: #00d9ff;
-            font-weight: 700;
-            text-transform: uppercase;
+        .console-line.info {
+            color: rgba(255, 200, 100, 0.8);
+        }
+
+        #mainStatus {
+            font-size: 42px;
+            color: rgba(255, 255, 255, 0.95);
+            margin: 30px 0 15px 0;
+            font-weight: 600;
             letter-spacing: 2px;
-            text-shadow: 0 0 15px rgba(0, 217, 255, 0.6);
-            display: block;
-            margin-bottom: 8px;
         }
 
-        #loadingMessageText {
-            color: #00ff41;
-            display: inline-block;
+        #currentMessage {
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 10px 0;
         }
 
         .typing-cursor {
             display: inline-block;
-            width: 8px;
-            height: 16px;
-            background: #00ff41;
-            margin-left: 5px;
+            width: 3px;
+            height: 1em;
+            background: rgba(255, 255, 255, 0.8);
+            margin-left: 4px;
             animation: blink 1s step-end infinite;
-            box-shadow: 0 0 8px rgba(0, 255, 65, 0.8);
+            vertical-align: text-bottom;
         }
 
         @keyframes blink {
@@ -391,79 +360,37 @@
             51%, 100% { opacity: 0; }
         }
 
-        #loadingTheme {
-            color: #ff6b9d;
-            margin-top: 20px;
-            padding: 15px;
-            border-left: 3px solid #ff6b9d;
-            background: rgba(255, 107, 157, 0.08);
-            text-shadow: 0 0 10px rgba(255, 107, 157, 0.5);
-            font-style: italic;
-            letter-spacing: 1px;
+        .progress-container {
+            margin-top: 40px;
+            width: 100%;
         }
 
-        #loadingTheme::before {
-            content: 'THEME: ';
-            color: #ff6b9d;
-            font-weight: bold;
-            opacity: 0.7;
+        .progress-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            margin-bottom: 10px;
         }
 
         .progress-bar-container {
             width: 100%;
             height: 3px;
-            background: #1a1a1a;
-            margin-top: 25px;
-            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.1);
             overflow: hidden;
-            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+            position: relative;
         }
 
         .progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, #00ff41, #00d9ff, #00ff41);
-            background-size: 200% 100%;
+            background: rgba(255, 255, 255, 0.5);
             width: 0%;
-            animation: progressMove 3s ease-in-out infinite, progressWidth 8s ease-in-out infinite;
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.7);
+            animation: progressWidth 8s ease-in-out infinite;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
         }
 
         @keyframes progressWidth {
             0% { width: 0%; }
-            50% { width: 85%; }
-            100% { width: 95%; }
-        }
-
-        @keyframes progressMove {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .scanline {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(
-                to bottom,
-                transparent 0%,
-                rgba(0, 255, 65, 0.03) 50%,
-                transparent 100%
-            );
-            animation: scan 6s linear infinite;
-            pointer-events: none;
-            opacity: 0.5;
-        }
-
-        @keyframes scan {
-            0% { transform: translateY(-100%); }
-            100% { transform: translateY(100%); }
-        }
-
-        .glitch-text {
-            position: relative;
+            50% { width: 75%; }
+            100% { width: 92%; }
         }
 
         #loadingOverlay.hidden {
@@ -533,32 +460,14 @@
     </div>
 
     <div id="loadingOverlay">
-        <div class="terminal-container">
-            <div class="terminal-header">
-                <div class="terminal-button"></div>
-                <div class="terminal-button"></div>
-                <div class="terminal-button"></div>
+        <div id="consoleOutput"></div>
+        <div id="mainStatus"></div>
+        <div id="currentMessage"></div>
+        <div class="progress-container">
+            <div class="progress-label">Processing...</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar"></div>
             </div>
-            <div id="loadingText">
-                <div class="terminal-line">
-                    <span class="terminal-prompt">INITIALIZING WEB WIZARD CASINO...</span>
-                </div>
-                <div class="terminal-line" style="animation-delay: 0.3s;">
-                    <span class="terminal-prompt">CONNECTING TO AI ENGINE...</span>
-                </div>
-                <div class="terminal-line" style="animation-delay: 0.6s;">
-                    <span class="terminal-prompt">LOADING CREATIVE PERSONAS...</span>
-                </div>
-                <div id="loadingMessage">
-                    <span id="loadingPersona"></span>
-                    <span id="loadingMessageText">Generating your website...</span><span class="typing-cursor"></span>
-                </div>
-                <div id="loadingTheme"></div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar"></div>
-                </div>
-            </div>
-            <div class="scanline"></div>
         </div>
     </div>
 
@@ -779,6 +688,107 @@ BEGIN HTML OUTPUT:`;
         };
         let backgroundGeneration = null;
         let isGenerating = false;
+        let consoleCommandInterval = null;
+        let maxConsoleLines = 15;
+
+        // Random console commands for loading
+        const consoleCommands = [
+            'Initializing neural network...',
+            'Loading creative modules...',
+            'Calibrating style parameters...',
+            'Accessing design database...',
+            'Parsing theme metadata...',
+            'Compiling visual elements...',
+            'Optimizing code structure...',
+            'Synchronizing art engine...',
+            'Generating procedural content...',
+            'Applying color palettes...',
+            'Building interactive layers...',
+            'Processing animation frames...',
+            'Allocating memory buffers...',
+            'Linking p5.js libraries...',
+            'Initializing canvas renderer...',
+            'Computing mathematical models...',
+            'Sampling creative patterns...',
+            'Injecting persona traits...',
+            'Analyzing theme semantics...',
+            'Constructing DOM elements...',
+            'Establishing event listeners...',
+            'Rendering pixel data...',
+            'Optimizing performance...',
+            'Finalizing output stream...',
+            'Validating code syntax...',
+            'Preparing deployment...',
+            'Spawning worker threads...',
+            'Caching resource files...',
+            'Indexing visual assets...',
+            'Configuring transformation matrix...'
+        ];
+
+        function typeText(element, text, speed = 30) {
+            element.textContent = '';
+            let i = 0;
+            const cursor = document.createElement('span');
+            cursor.className = 'typing-cursor';
+            element.appendChild(cursor);
+            
+            return new Promise((resolve) => {
+                const interval = setInterval(() => {
+                    if (i < text.length) {
+                        element.insertBefore(document.createTextNode(text[i]), cursor);
+                        i++;
+                    } else {
+                        clearInterval(interval);
+                        cursor.remove();
+                        resolve();
+                    }
+                }, speed);
+            });
+        }
+
+        function addConsoleCommand(text, type = 'normal') {
+            const consoleOutput = document.getElementById('consoleOutput');
+            const line = document.createElement('div');
+            line.className = 'console-line';
+            if (type !== 'normal') line.classList.add(type);
+            line.textContent = text;
+            
+            consoleOutput.appendChild(line);
+            
+            // Remove old lines if too many
+            const lines = consoleOutput.querySelectorAll('.console-line');
+            if (lines.length > maxConsoleLines) {
+                lines[0].classList.add('fading');
+                setTimeout(() => {
+                    if (lines[0].parentNode) {
+                        lines[0].remove();
+                    }
+                }, 500);
+            }
+        }
+
+        function startConsoleCommands() {
+            // Add initial commands quickly
+            addConsoleCommand('System initialized', 'status');
+            setTimeout(() => addConsoleCommand('Connecting to AI engine...'), 200);
+            setTimeout(() => addConsoleCommand('Connection established', 'status'), 400);
+            setTimeout(() => addConsoleCommand('Loading creative personas...'), 600);
+            
+            // Continue with random commands
+            setTimeout(() => {
+                consoleCommandInterval = setInterval(() => {
+                    const randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
+                    addConsoleCommand(randomCommand);
+                }, 800);
+            }, 1000);
+        }
+
+        function stopConsoleCommands() {
+            if (consoleCommandInterval) {
+                clearInterval(consoleCommandInterval);
+                consoleCommandInterval = null;
+            }
+        }
 
         // Apply continuous wave animation to message
         function applyWaveAnimation(message) {
@@ -1207,10 +1217,8 @@ BEGIN HTML OUTPUT:`;
         // Call ChatGPT API via Vercel serverless function - SIMPLIFIED
         async function generateWebsite() {
             const loadingOverlay = document.getElementById('loadingOverlay');
-            const loadingMessage = document.getElementById('loadingMessage');
-            const loadingPersona = document.getElementById('loadingPersona');
-            const loadingMessageText = document.getElementById('loadingMessageText');
-            const loadingTheme = document.getElementById('loadingTheme');
+            const mainStatus = document.getElementById('mainStatus');
+            const currentMessage = document.getElementById('currentMessage');
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
 
@@ -1221,6 +1229,10 @@ BEGIN HTML OUTPUT:`;
             document.getElementById('newSiteNotification').style.display = 'none';
             generatedContent.innerHTML = '';
             isGenerating = true;
+            
+            // Clear console and start commands
+            document.getElementById('consoleOutput').innerHTML = '';
+            startConsoleCommands();
 
             // Clear any previous p5 instance
             if (window.p5Instance) {
@@ -1234,7 +1246,7 @@ BEGIN HTML OUTPUT:`;
             }
 
             try {
-                loadingMessageText.textContent = 'Choosing a creative persona...';
+                addConsoleCommand('Selecting creative persona...');
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
@@ -1243,20 +1255,24 @@ BEGIN HTML OUTPUT:`;
                 currentGeneration.theme = theme;
                 currentGeneration.persona = persona;
                 
+                addConsoleCommand(`Persona loaded: ${persona.name}`, 'status');
+                addConsoleCommand(`Theme assigned: "${theme}"`, 'info');
+                
+                // Type out main status
+                await typeText(mainStatus, persona.name.toUpperCase());
+                await typeText(currentMessage, `Creating ${theme}...`);
+                
                 const messages = shuffleArray(personaLoadingMessages[persona.name] || [
                     'Creating something interesting...',
                     'Building your experience...',
                     'Crafting the details...'
                 ]);
-                loadingTheme.textContent = `"${theme}"`;
                 
                 let messageIndex = 0;
-                loadingPersona.textContent = `${persona.name}: `;
-                loadingMessageText.innerHTML = applyWaveAnimation(messages[messageIndex]);
-
-                loadingMessageInterval = setInterval(() => {
+                
+                loadingMessageInterval = setInterval(async () => {
                     messageIndex = (messageIndex + 1) % messages.length;
-                    loadingMessageText.innerHTML = applyWaveAnimation(messages[messageIndex]);
+                    await typeText(currentMessage, messages[messageIndex]);
                 }, 7000);
 
                 const prompt = createGenerationPrompt(theme, persona);
@@ -1338,13 +1354,14 @@ BEGIN HTML OUTPUT:`;
                 }
 
                 // Second pass: enhance with an interesting addition
+                addConsoleCommand('Enhancing generated code...');
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let reviewIndex = 0;
-                loadingMessageText.innerHTML = applyWaveAnimation(reviewMessages[reviewIndex]);
+                await typeText(currentMessage, reviewMessages[reviewIndex]);
                 
-                loadingMessageInterval = setInterval(() => {
+                loadingMessageInterval = setInterval(async () => {
                     reviewIndex = (reviewIndex + 1) % reviewMessages.length;
-                    loadingMessageText.innerHTML = applyWaveAnimation(reviewMessages[reviewIndex]);
+                    await typeText(currentMessage, reviewMessages[reviewIndex]);
                 }, 7000);
 
                 const codeBlockStart = String.fromCharCode(96, 96, 96) + 'html';
@@ -1461,7 +1478,8 @@ BEGIN HTML OUTPUT:`;
                     loadingMessageInterval = null;
                 }
 
-                loadingMessageText.innerHTML = applyWaveAnimation('🎨 Running your sketch...');
+                addConsoleCommand('Running final sketch...');
+                await typeText(currentMessage, '🎨 Executing code...');
 
                 // Execute HTML directly in the container
                 try {
@@ -1507,6 +1525,13 @@ BEGIN HTML OUTPUT:`;
                 // Check if loading overlay is hidden (user loaded a favorite)
                 const isOverlayHidden = loadingOverlay.classList.contains('hidden');
                 
+                // Stop console commands
+                stopConsoleCommands();
+                if (loadingMessageInterval) {
+                    clearInterval(loadingMessageInterval);
+                    loadingMessageInterval = null;
+                }
+                
                 if (isOverlayHidden && isGenerating) {
                     // Generation completed in background, show notification
                     backgroundGeneration = generatedData;
@@ -1526,14 +1551,16 @@ BEGIN HTML OUTPUT:`;
 
             } catch (error) {
                 // Clear the interval on error
+                stopConsoleCommands();
                 if (loadingMessageInterval) {
                     clearInterval(loadingMessageInterval);
                     loadingMessageInterval = null;
                 }
 
                 console.error('Error generating website:', error);
-                loadingPersona.textContent = '';
-                loadingMessageText.textContent = 'Error: ' + error.message;
+                addConsoleCommand('Error: ' + error.message, 'error');
+                mainStatus.textContent = 'ERROR';
+                currentMessage.textContent = error.message;
                 regenerateButton.disabled = false;
             }
         }
