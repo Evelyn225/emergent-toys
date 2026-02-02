@@ -874,6 +874,57 @@ BEGIN HTML OUTPUT:`;
                     }
                 }
 
+                // Third pass: error detection and fixing
+                const fixMessages = shuffleArray(getReviewLoadingMessages(persona.name));
+                let fixIndex = 0;
+                loadingMessageText.innerHTML = applyWaveAnimation(fixMessages[fixIndex]);
+                
+                if (loadingMessageInterval) {
+                    clearInterval(loadingMessageInterval);
+                }
+                loadingMessageInterval = setInterval(() => {
+                    fixIndex = (fixIndex + 1) % fixMessages.length;
+                    loadingMessageText.innerHTML = applyWaveAnimation(fixMessages[fixIndex]);
+                }, 7000);
+
+                const fixPrompt = 'Here is some p5.js code:\n\n' + '```\n' + p5Code + '\n```\n\n' +
+                    'Review this code for bugs, errors, and issues. Identify any problems and fix them.\n\n' +
+                    'REQUIREMENTS:\n' +
+                    '- Check for syntax errors\n' +
+                    '- Verify all variables are defined before use\n' +
+                    '- Check for common p5.js mistakes\n' +
+                    '- Ensure setup() and draw() exist and are properly structured\n' +
+                    '- Fix any issues you find\n' +
+                    '- Keep the overall logic and style intact\n' +
+                    '- Output the complete corrected code\n' +
+                    '- Output ONLY the code, no explanations\n\n' +
+                    'BEGIN CORRECTED CODE:';
+
+                const fixResponse = await fetch(GENERATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        theme: theme,
+                        prompt: fixPrompt
+                    })
+                });
+
+                if (fixResponse.ok) {
+                    try {
+                        const fixData = await fixResponse.json();
+                        let fixedCode = fixData.html;
+                        const backtickPattern = String.fromCharCode(96, 96, 96);
+                        fixedCode = fixedCode.replace(new RegExp('^' + backtickPattern + '[\\w]*\\n?', 'gm'), '').replace(new RegExp('\\n?' + backtickPattern + '$', 'gm'), '');
+                        if (fixedCode && fixedCode.length > p5Code.length * 0.5) {
+                            p5Code = fixedCode;
+                        }
+                    } catch (e) {
+                        console.warn('Error fixing failed, using enhanced version:', e);
+                    }
+                }
+
                 if (loadingMessageInterval) {
                     clearInterval(loadingMessageInterval);
                     loadingMessageInterval = null;
