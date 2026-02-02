@@ -878,26 +878,43 @@ window.fetchImage = window.fetchImage || (async function(query) {
                 // Insert the generated HTML
                 generatedContent.innerHTML = reviewedHTML;
 
-                // Execute any scripts in the generated content
-                const scripts = generatedContent.querySelectorAll('script');
-                scripts.forEach(oldScript => {
-                    const newScript = document.createElement('script');
-                    if (oldScript.src) {
-                        newScript.src = oldScript.src;
-                        // Copy attributes like async
-                        if (oldScript.async) newScript.async = true;
-                        if (oldScript.defer) newScript.defer = true;
-                    } else {
-                        newScript.textContent = oldScript.textContent;
-                    }
-                    oldScript.parentNode.replaceChild(newScript, oldScript);
-                });
+                // Execute scripts in proper order: external first, then inline
+                const scripts = Array.from(generatedContent.querySelectorAll('script'));
+                const externalScripts = scripts.filter(s => s.src);
+                const inlineScripts = scripts.filter(s => !s.src);
 
-                // Hide loading overlay
-                setTimeout(() => {
-                    loadingOverlay.classList.add('hidden');
-                    regenerateButton.disabled = false;
-                }, 500);
+                // Load external scripts first (like p5.js CDN)
+                const loadExternalScripts = async () => {
+                    for (const oldScript of externalScripts) {
+                        await new Promise((resolve) => {
+                            const newScript = document.createElement('script');
+                            newScript.src = oldScript.src;
+                            newScript.onload = resolve;
+                            newScript.onerror = resolve; // Continue even if script fails
+                            oldScript.parentNode.replaceChild(newScript, oldScript);
+                        });
+                    }
+                };
+
+                // Execute inline scripts after external scripts load
+                const executeInlineScripts = () => {
+                    inlineScripts.forEach(oldScript => {
+                        const newScript = document.createElement('script');
+                        newScript.textContent = oldScript.textContent;
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                    });
+                };
+
+                // Load external scripts, then execute inline scripts
+                loadExternalScripts().then(() => {
+                    executeInlineScripts();
+                    
+                    // Hide loading overlay after everything is loaded
+                    setTimeout(() => {
+                        loadingOverlay.classList.add('hidden');
+                        regenerateButton.disabled = false;
+                    }, 500);
+                });
 
             } catch (error) {
                 // Clear the interval on error
