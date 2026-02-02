@@ -197,16 +197,17 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - NO other <link> tags or @import statements
 - NO local/project files (e.g., /style.css, /script.js, ./assets/)
 - ALL buttons must be clickable and have real functionality (no fake/disabled buttons)
+- If you reference a function, it MUST be fully defined in your output (no undefined calls)
 
 HELPER FUNCTIONS (injected automatically):
 
-async function fetchImage(query) - Get images from Unsplash or Picsum
-  Usage: const url = await fetchImage('theme name');
+window.fetchImage(query) - Get images from Unsplash or Picsum
+    Usage: const url = await window.fetchImage('theme name');
 
 THEME-SPECIFIC DATA (available in scope):
-const themeData = { nouns: [], verbs: [], adjectives: [] };
+window.__themeData = { nouns: [], verbs: [], adjectives: [] };
 Use these authentic words for realistic, themed content.
-Example: const noun = themeData.nouns[Math.floor(Math.random() * themeData.nouns.length)];
+Example: const noun = window.__themeData.nouns[Math.floor(Math.random() * window.__themeData.nouns.length)];
 
 IMAGES - Use any of these methods:
 - fetchImage('query') - Unsplash API with Picsum fallback
@@ -700,13 +701,13 @@ FOCUS ON:
 
 HELPER FUNCTIONS (available):
 
-async function fetchImage(query) - Get images from Unsplash or Picsum
-  Usage: const url = await fetchImage('theme name');
+window.fetchImage(query) - Get images from Unsplash or Picsum
+    Usage: const url = await window.fetchImage('theme name');
 
 THEME-SPECIFIC DATA (available in scope):
-const themeData = { nouns: [], verbs: [], adjectives: [] };
+window.__themeData = { nouns: [], verbs: [], adjectives: [] };
 Use these authentic words to replace generic placeholder content.
-Example: const noun = themeData.nouns[Math.floor(Math.random() * themeData.nouns.length)];
+Example: const noun = window.__themeData.nouns[Math.floor(Math.random() * window.__themeData.nouns.length)];
 
 IMAGES: Use any of these methods:
 - await fetchImage('query') - Unsplash with Picsum fallback
@@ -720,6 +721,7 @@ DO NOT:
 - Add <link> tags other than Google Fonts
 - Add @import or local/project files
 - Create fake/non-functional buttons
+- Do NOT reference functions you do not define
 
 OUTPUT: Complete HTML/CSS/JS (no markdown, no explanations)
 
@@ -847,16 +849,16 @@ BEGIN:`;
                 loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: 🎨 Rendering your creation...`);
 
                 // Inject helper functions and theme data into generated content
-                const themeDataJSON = JSON.stringify(wordData.themeData);
-                const helperFunctions = `<script>
-async function fetchImage(query) {
-  try {
-    const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
-    if (r.ok) { const d = await r.json(); return d.url; }
-  } catch (e) {}
-  return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
-}
-const themeData = ${themeDataJSON};
+                                const themeDataJSON = JSON.stringify(wordData.themeData || { nouns: [], verbs: [], adjectives: [] });
+                                const helperFunctions = `<script>
+window.fetchImage = window.fetchImage || (async function(query) {
+    try {
+        const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
+        if (r.ok) { const d = await r.json(); return d.url; }
+    } catch (e) {}
+    return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
+});
+window.__themeData = ${themeDataJSON};
 <\/script>`;
                 reviewedHTML = helperFunctions + reviewedHTML;
 
