@@ -481,7 +481,7 @@ YOU ARE: ${persona.name}
 YOUR STYLE: ${persona.style}
 YOUR APPROACH: ${persona.desc}
 
-${specialInstructions ? specialInstructions + '\n\n' : ''}CREATE A P5.JS SKETCH:
+${specialInstructions ? specialInstructions + '\n\n' : ''}CREATE A CREATIVE SITE WITH A P5.JS SKETCH:
 
 OUTPUT RULES:
 - Output complete HTML with p5.js JavaScript code wrapped in <script> tags and <style> tags as needed
@@ -490,7 +490,7 @@ OUTPUT RULES:
 - MUST include draw() function that calls background() at the start
 - Must visually incorporate the theme "${theme}" in the sketch
 - MUST literally include the theme word(s) ${theme} as text in the content somewhere
-- Create something substantial: 250+ lines of creative p5 code
+- Create something substantial: 250+ lines of creative code
 - Have more than one element of interactivity, preferably mouse or keyboard based
 - Use p5 drawing functions: rect(), ellipse(), line(), fill(), stroke(), etc
 - Can use: noise(), sin(), cos(), random(), map(), etc for animation
@@ -1083,6 +1083,7 @@ BEGIN HTML OUTPUT:`;
 
                 "The ZIP Bomb": `SPECIAL ZIP BOMB MODE:
 - Make tiny inputs explode into vast outputs
+    * Try using technologies other than p5.js
     * Use recursive patterns and nested structures
     * Reveal layers on interaction (accordion, zoom, drill-down)
     * Visualize compression/expansion as a core mechanic
