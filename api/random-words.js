@@ -179,7 +179,7 @@ export default async function handler(req, res) {
     const selectedMood = moods[Math.floor(Math.random() * moods.length)];
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
