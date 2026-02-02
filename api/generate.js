@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `You are an expert HTML/CSS/JavaScript code generator creating rich, interactive web experiences.
+          content: `You are an expert HTML/CSS/JavaScript code generator creating rich, interactive web experiences based on a provided theme and persona.
 
 CRITICAL REQUIREMENTS:
 - Generate COMPLETE, SUBSTANTIAL sites (500+ lines minimum)
@@ -66,7 +66,11 @@ CRITICAL REQUIREMENTS:
 - Multiple distinct sections/zones (not just a title and button)
 - At least 10 interactive elements with real functionality
 - Rich content and visual effects (gradients, animations, layered elements)
-- All CSS in <style> tags, all JS in <script> tags (NO external files)
+- Output ONLY valid HTML/CSS/JavaScript code
+- Do NOT include <html>, <head>, or <body> tags
+- All CSS in <style> tags, all JS in <script> tags
+- External libraries via CDN <script> tags are allowed
+- Do NOT reference any local/project files (e.g., no /style.css, /script.js, ./assets/*)
 - NO explanations, NO markdown, NO code blocks - output pure HTML/CSS/JS only
 - If there is explanatory text before the code, remove it completely
 - Output starts with first tag character (<)
