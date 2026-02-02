@@ -863,10 +863,18 @@ BEGIN:`;
                     throw new Error(errorMsg);
                 }
 
-                const data = await response.json();
-                const generatedHTML = data.html;
-
-                if (loadingMessageInterval) {
+                let generatedHTML;
+                try {
+                    const data = await response.json();
+                    generatedHTML = data.html;
+                } catch (parseErr) {
+                    const text = await response.text();
+                    if (text && text.trim().startsWith('<')) {
+                        generatedHTML = text;
+                    } else {
+                        throw new Error('API returned invalid JSON');
+                    }
+                }
                     clearInterval(loadingMessageInterval);
                     loadingMessageInterval = null;
                 }

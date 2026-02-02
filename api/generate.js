@@ -15,23 +15,7 @@ export default async function handler(req, res) {
   // Parse JSON body if POST
   let body = {};
   if (req.method === 'POST') {
-    try {
-      body = await new Promise((resolve, reject) => {
-        let data = '';
-        req.on('data', chunk => { data += chunk; });
-        req.on('end', () => {
-          try {
-            console.log('Raw POST data:', data);
-            resolve(JSON.parse(data));
-          } catch (err) {
-            console.error('JSON parse error. Data received:', data);
-            reject(err);
-          }
-        });
-      });
-    } catch (err) {
-      return res.status(400).json({ error: 'Invalid JSON' });
-    }
+    body = req.body || {};
   }
 
   const { theme, prompt } = body;
@@ -98,7 +82,10 @@ REMEMBER: p5.js is NOT optional.
       }
     }
 
-    res.json({ html: html });
+    // Ensure response is valid JSON with html property
+    const responseData = { html: html };
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json(responseData);
   } catch (error) {
     console.error('Detailed error:', error);
     res.status(500).json({
