@@ -216,11 +216,7 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - Can use Google Fonts: <link href="https://fonts.googleapis.com/css2?family=..." rel="stylesheet">
 - NO other <link> tags or @import statements
 - NO local/project files (e.g., /style.css, /script.js, ./assets/)
-- Buttons must have real functionality (no fake/disabled buttons)
 - If you reference a function, it MUST be fully defined in your output (no undefined calls)
-- ALWAYS check if DOM elements exist before accessing properties
-- Use optional chaining (?.) or if checks: if (element) { element.onClick = ... }
-- Never assume getElementById/querySelector returns a valid element
 
 HELPER FUNCTIONS (injected automatically):
 
@@ -709,14 +705,14 @@ THIS IS MERELY A SHELL! ENRICH THIS CODE WITH MORE CONTENT:
 
 FOCUS ON:
 1. ADD MORE LINES OF CODE (aim for 500+ total)
-2. Fix any undefined variables or broken references
-3. Add typeof checks around p5.js usage
-4. ENSURE p5 canvas is visible with proper CSS: canvas { display: block; position: absolute; z-index: 1; }
-5. Make sure ALL buttons have actual functionality
-6. Add null/undefined checks before accessing element properties (if checks or ?.)
-7. Make theme more explicit in visuals and interactions
-8. Replace any generic/placeholder content with theme-specific details
-9. If the website content references some functionality, ensure it is fully implemented
+2. FIX ANY UNDEFINED VARIABLES OR BROKEN REFERENCES
+3. ENSURE p5 CANVAS IS VISIBLE WITH PROPER CSS: canvas { display: block; position: absolute; z-index: 1; }
+4. MAKE SURE EVERY BUTTON HAS ACTUAL FUNCTIONALITY
+5. MAKE THEME MORE EXPLICIT IN VISUALS AND INTERACTIONS
+6. REPLACE ANY GENERIC/PLACEHOLDER CONTENT WITH THEME-SPECIFIC DETAILS
+7. IF THE WEBSITE CONTENT REFERENCES SOME FUNCTIONALITY, ENSURE IT IS FULLY IMPLEMENTED
+8. CREATE 1 MORE PIECE OF VISUAL FLAIR
+
 HELPER FUNCTIONS (available):
 
 window.fetchImage(query) - ASYNC: Get images from Unsplash or Picsum
@@ -730,15 +726,14 @@ IMAGES: Use any of these methods:
 - await fetchImage('query') - Unsplash with Picsum fallback
 - https://picsum.photos/seed/QUERY/800/600 - Direct Picsum
 - https://api.dicebear.com/7.x/avataaars/svg?seed=QUERY - DiceBear avatars
-ENSURE ALL IMAGES HAVE ALT TEXT
-IMAGES ONLY IN <img> TAGS OR CSS BACKGROUNDS, NEVER IN <video>/<audio> ELEMENTS
+NEVER USE IMAGES IN <video>/<audio> ELEMENTS
 
 DO NOT:
 - Change the core structure unless it's broken
 - Remove working features
 - Add <link> tags other than Google Fonts
 - Add @import or local/project files
-- Create fake/non-functional buttons
+- Create unfinished/non-functional content
 - Do NOT reference functions you do not define
 
 OUTPUT: Complete HTML/CSS/JS (no markdown, no explanations)
