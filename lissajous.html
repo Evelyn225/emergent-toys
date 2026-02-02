@@ -32,13 +32,17 @@
         let rows; // Number of rows
         let curves = []; // Array to store curve objects
         let angle = 0;
-        let paddingHorizontal = 100; // Increased horizontal padding
-        let paddingVertical = 40; // Vertical padding remains the same
+        let paddingHorizontal; // Responsive horizontal padding
+        let paddingVertical; // Responsive vertical padding
 
         function calculateGridDimensions() {
+            // Set responsive padding based on screen size
+            paddingHorizontal = windowWidth < 600 ? 10 : (windowWidth < 1024 ? 20 : 100);
+            paddingVertical = windowWidth < 600 ? 10 : (windowWidth < 1024 ? 20 : 40);
+            
             // Calculate optimal cell size and grid dimensions
-            let minCellSize = 60; // Minimum size for each cell
-            let maxCellSize = 120; // Maximum size for each cell
+            let minCellSize = windowWidth < 600 ? 40 : 60; // Smaller minimum on mobile
+            let maxCellSize = windowWidth < 600 ? 80 : 120; // Smaller maximum on mobile
             
             // Calculate available space with different paddings
             let availableWidth = windowWidth - (paddingHorizontal * 2);
@@ -100,7 +104,7 @@
         }
 
         function draw() {
-            background(0, 20); // Slight fade effect
+            background(0); // Clear background
             stroke(255);
             noFill();
 
