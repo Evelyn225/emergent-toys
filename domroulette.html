@@ -902,8 +902,8 @@ BEGIN ENHANCED CODE:`;
                     script.textContent = p5Code;
                     
                     try {
-                        // Insert the script to execute the code
-                        document.body.appendChild(script);
+                        // Insert the script to execute the code in the container
+                        container.appendChild(script);
                     } catch (e) {
                         console.error('Script injection error:', e);
                         container.innerHTML = '<div style="padding: 40px; font-family: monospace; color: red;"><strong>Error:</strong> ' + e.message + '</div>';
