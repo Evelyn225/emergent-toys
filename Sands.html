@@ -76,6 +76,7 @@
       INSTRUCTIONS: "Click to add sand\n" +
                    "Shift + click for wind\n" +
                    "Right click to draw walls\n" +
+                   "Ctrl + click to erase walls and particles\n" +
                    "Press 'E' to create a vortex\n" +
                    "Hold 'L' to draw plants\n" +
                    "Scroll to adjust particle density\n" +
@@ -97,6 +98,7 @@
       let isVortexActive = false;
       let isAddingSand = false;
       let isDrawingWalls = false;
+      let isErasing = false;
       let hasInteracted = false;
       
       // Position tracking
@@ -105,6 +107,7 @@
       let vortexPosition = { x: 0, y: 0 };
       let addSandPosition = { x: 0, y: 0 };
       let lastWallPosition = { x: 0, y: 0 };
+      let lastErasePosition = { x: 0, y: 0 };
 
       // Animation timing
       let vortexStartTime = 0;
@@ -230,6 +233,8 @@
 
         if (p.mouseButton === p.RIGHT) {
           startDrawingWalls();
+        } else if (p.keyIsDown(p.CONTROL)) {
+          startErasing();
         } else if (p.keyIsDown(p.SHIFT)) {
           startWind();
         } else {
@@ -243,6 +248,14 @@
         lastWallPosition.x = p.mouseX;
         lastWallPosition.y = p.mouseY;
         drawWall(p.mouseX, p.mouseY);
+      }
+
+      // Start erasing at current position
+      function startErasing() {
+        isErasing = true;
+        lastErasePosition.x = p.mouseX;
+        lastErasePosition.y = p.mouseY;
+        eraseAtPosition(p.mouseX, p.mouseY);
       }
 
       // Start wind effect at current position
@@ -273,6 +286,8 @@
         
         if (p.mouseButton === p.RIGHT) {
           updateWallDrawing();
+        } else if (p.keyIsDown(p.CONTROL)) {
+          updateErasing();
         } else if (p.keyIsDown(p.SHIFT)) {
           updateWind();
         } else {
@@ -286,6 +301,14 @@
         drawWallLine(lastWallPosition.x, lastWallPosition.y, p.mouseX, p.mouseY);
         lastWallPosition.x = p.mouseX;
         lastWallPosition.y = p.mouseY;
+      }
+
+      // Update erasing position with interpolation
+      function updateErasing() {
+        isErasing = true;
+        eraseInLine(lastErasePosition.x, lastErasePosition.y, p.mouseX, p.mouseY);
+        lastErasePosition.x = p.mouseX;
+        lastErasePosition.y = p.mouseY;
       }
 
       // Update wind direction based on mouse movement
@@ -317,6 +340,7 @@
         isWindActive = false;
         isAddingSand = false;
         isDrawingWalls = false;
+        isErasing = false;
       };
 
       // Main simulation update and render loop
@@ -1038,6 +1062,45 @@
           const x = x1 + dx * t;
           const y = y1 + dy * t;
           drawWall(x, y);
+        }
+      }
+
+      // Erase walls and particles at specified position
+      function eraseAtPosition(x, y) {
+        const i = Math.floor(x / SIMULATION.CELL_SIZE);
+        const j = Math.floor(y / SIMULATION.CELL_SIZE);
+
+        // Erase in a 5x5 area for easier erasing
+        for (let di = -2; di <= 2; di++) {
+          for (let dj = -2; dj <= 2; dj++) {
+            const ni = i + di;
+            const nj = j + dj;
+
+            // Erase cell if position is valid
+            if (ni >= 0 && ni < cols && nj >= 0 && nj < rows) {
+              grid[ni][nj] = null;
+              velocityGrid[ni][nj] = { x: 0, y: 0 };
+            }
+          }
+        }
+      }
+
+      // Erase in a continuous line between two points
+      function eraseInLine(x1, y1, x2, y2) {
+        // Calculate distance between points
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Number of steps based on distance and cell size
+        const steps = Math.max(1, Math.ceil(distance / SIMULATION.CELL_SIZE));
+        
+        // Interpolate and erase along the line
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const x = x1 + dx * t;
+          const y = y1 + dy * t;
+          eraseAtPosition(x, y);
         }
       }
 
