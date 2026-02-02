@@ -168,7 +168,6 @@
         // API endpoints - uses Vercel serverless functions
         const RANDOM_WORDS_ENDPOINT = '/api/random-words.js';
         const GENERATE_ENDPOINT = '/api/generate.js';
-        const UNSPLASH_ENDPOINT = '/api/unsplash.js';
 
         // Create the prompt for the AI
         function createGenerationPrompt(theme, persona) {
@@ -199,23 +198,19 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - NO local/project files (e.g., /style.css, /script.js, ./assets/)
 - ALL buttons must be clickable and have real functionality (no fake/disabled buttons)
 
-HELPER FUNCTION (available in generated code):
+HELPER FUNCTION (injected automatically):
 async function fetchImage(query) {
   try {
     const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
-    if (r.ok) {
-      const d = await r.json();
-      return d.url;
-    }
+    if (r.ok) { const d = await r.json(); return d.url; }
   } catch (e) {}
   return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
 }
-// Usage: const imgUrl = await fetchImage('theme');
 
-IMAGES:
-- Use the fetchImage() helper: const url = await fetchImage('${theme}');
-- Or Picsum: https://picsum.photos/seed/${encodeURIComponent(theme)}/800/600
-- Or DiceBear for avatars/icons: https://api.dicebear.com/7.x/[style]/svg?seed=${encodeURIComponent(theme)}
+IMAGES - Use any of these methods:
+- fetchImage('query') - Unsplash API with Picsum fallback
+- https://picsum.photos/seed/QUERY/800/600 - Direct Picsum URL
+- https://api.dicebear.com/7.x/avataaars/svg?seed=QUERY - DiceBear avatars
 
 BUILD:
 - A substantial, multi-section experience (500+ lines)
@@ -685,10 +680,8 @@ BEGIN OUTPUT:`;
 
         // Fast content enrichment pass (cached prompt for speed)
         async function enrichContent(html, theme, persona) {
-            // FORCED: Always enrich for testing
-            console.log('Enrichment: FORCED MODE - always running');
-                console.log('Enriching content - output size:', lines, 'lines');
-            }
+            const lines = html.split('\n').length;
+            console.log('Enriching content - output size:', lines, 'lines');
 
             // Fast, focused enrichment prompt (cacheable)
             const enrichPrompt = `Theme: "${theme}"
@@ -709,7 +702,7 @@ ${hasDemo ? 'CRITICAL: This is a demo/placeholder. Rewrite with FULL content.\n'
 7. Replace any generic/placeholder content with theme-specific details
 8. If the website content references some functionality, ensure it is fully implemented
 
-HELPER FUNCTION (available in your code):
+HELPER FUNCTION (available):
 async function fetchImage(query) {
   try {
     const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
@@ -717,9 +710,11 @@ async function fetchImage(query) {
   } catch (e) {}
   return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
 }
-// Usage: const url = await fetchImage('${theme}');
 
-IMAGES: Use fetchImage() helper or Picsum/DiceBear as fallbacks
+IMAGES: Use any of these methods:
+- await fetchImage('query') - Unsplash with Picsum fallback
+- https://picsum.photos/seed/QUERY/800/600 - Direct Picsum
+- https://api.dicebear.com/7.x/avataaars/svg?seed=QUERY - DiceBear avatars
 ENSURE ALL IMAGES HAVE ALT TEXT
 
 DO NOT:
@@ -852,6 +847,23 @@ BEGIN:`;
                 let reviewedHTML = await enrichContent(generatedHTML, theme, persona);
 
                 loadingMessage.innerHTML = applyWaveAnimation(`${persona.name}: 🎨 Rendering your creation...`);
+
+                // Inject fetchImage helper into generated content
+                const fetchImageHelper = `
+<script>
+async function fetchImage(query) {
+  try {
+    const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
+    if (r.ok) {
+      const d = await r.json();
+      return d.url;
+    }
+  } catch (e) {}
+  return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
+}
+</script>
+                `;
+                reviewedHTML = fetchImageHelper + reviewedHTML;
 
                 // Insert the generated HTML
                 generatedContent.innerHTML = reviewedHTML;
