@@ -95,7 +95,8 @@
 
         #regenerateButton:hover,
         #saveButton:hover,
-        #favoritesButton:hover {
+        #favoritesButton:hover,
+        #newSiteNotification:hover {
             background: rgba(255, 255, 255, 0.05);
             border-color: rgba(255, 255, 255, 0.6);
             color: rgba(255, 255, 255, 1);
@@ -289,7 +290,7 @@
 
         .console-line {
             color: rgba(255, 255, 255, 0.6);
-            margin: 7px 0;
+            margin: 10px 0;
             white-space: pre-wrap;
             word-wrap: break-word;
             transition: opacity 0.5s ease-out, transform 0.5s ease-out;
@@ -397,13 +398,9 @@
         }
 
         #newSiteNotification {
-            position: fixed;
-            top: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #0a0e27;
-            color: rgba(255, 255, 255, 0.9);
-            padding: 16px 32px;
+            padding: 12px 24px;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 2px;
             font-size: 14px;
@@ -411,26 +408,7 @@
             font-weight: 400;
             cursor: pointer;
             letter-spacing: 0.5px;
-            z-index: 10001;
-            display: none;
-            transition: all 0.2s ease;
-            animation: slideDown 0.3s ease;
-        }
-
-        #newSiteNotification:hover {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.5);
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
+            transition: all 0.2s;
         }
     </style>
 </head>
@@ -439,10 +417,9 @@
     <div id="topBar">
         <button id="saveButton">save_favorite</button>
         <button id="favoritesButton">view_favorites</button>
+        <button id="newSiteNotification" style="display: none;">// new site ready</button>
         <button id="regenerateButton">regenerate</button>
     </div>
-
-    <button id="newSiteNotification">// new site ready</button>
 
     <div id="favoritesModal">
         <div id="favoritesContent">
@@ -680,6 +657,7 @@ BEGIN HTML OUTPUT:`;
             code: ''
         };
         let backgroundGeneration = null;
+        let wasLoadingWhenGenerated = false;
         let isGenerating = false;
         let consoleCommandInterval = null;
         let maxConsoleLines = 6;
@@ -759,7 +737,7 @@ BEGIN HTML OUTPUT:`;
                         
                         // Remove old lines if too many (keep last 20 lines)
                         const lines = consoleOutput.querySelectorAll('.console-line');
-                        if (lines.length > 20) {
+                        if (lines.length > 6) {
                             lines[0].classList.add('fading');
                             setTimeout(() => {
                                 if (lines[0].parentNode) {
@@ -1178,6 +1156,10 @@ BEGIN HTML OUTPUT:`;
             // Hide loading overlay if visible (generation continues in background)
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
+            
+            // Hide new site notification
+            document.getElementById('newSiteNotification').style.display = 'none';
+            wasLoadingWhenGenerated = false;
 
             // Close modal
             document.getElementById('favoritesModal').classList.remove('show');
@@ -1188,10 +1170,6 @@ BEGIN HTML OUTPUT:`;
                 persona: { name: favorite.persona },
                 code: favorite.code
             };
-
-            // Update UI
-            document.getElementById('loadingTheme').textContent = `"${favorite.theme}"`;
-            document.getElementById('loadingPersona').textContent = `${favorite.persona}: `;
             
             // Render the saved code
             const container = document.getElementById('generatedContent');
@@ -1246,6 +1224,7 @@ BEGIN HTML OUTPUT:`;
             document.getElementById('newSiteNotification').style.display = 'none';
             generatedContent.innerHTML = '';
             isGenerating = true;
+            wasLoadingWhenGenerated = true;
             
             // Clear console and start commands
             document.getElementById('consoleOutput').innerHTML = '';
@@ -1552,8 +1531,9 @@ BEGIN HTML OUTPUT:`;
                 }
                 
                 if (isOverlayHidden && isGenerating) {
-                    // Generation completed in background, show notification
+                    // Generation completed in background (user is viewing a favorite)
                     backgroundGeneration = generatedData;
+                    wasLoadingWhenGenerated = false;
                     document.getElementById('newSiteNotification').style.display = 'block';
                     regenerateButton.disabled = false;
                     isGenerating = false;
