@@ -114,6 +114,16 @@
             border-color: rgba(255, 255, 255, 0.1);
         }
 
+        .button-wave-char {
+            display: inline-block;
+            animation: buttonWave 0.8s ease-in-out infinite;
+        }
+
+        @keyframes buttonWave {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
         #saveButton:disabled {
             opacity: 0.3;
             cursor: not-allowed;
@@ -678,6 +688,22 @@ BEGIN HTML OUTPUT:`;
         let isGenerating = false;
         let consoleCommandInterval = null;
         let maxConsoleLines = 6;
+
+        // Helper function to set regenerate button text with wave animation
+        function setRegenerateButtonText(text) {
+            const regenerateButton = document.getElementById('regenerateButton');
+            if (text === 'generating...') {
+                // Create wave animation with spans
+                const chars = text.split('');
+                regenerateButton.innerHTML = chars.map((char, index) => {
+                    const delay = (index * 0.1) % 1.2;
+                    return `<span class="button-wave-char" style="animation-delay: ${delay}s">${char}</span>`;
+                }).join('');
+            } else {
+                // Plain text without animation
+                regenerateButton.textContent = text;
+            }
+        }
 
         // Random console commands for loading
         const consoleCommands = [
@@ -1263,6 +1289,7 @@ BEGIN HTML OUTPUT:`;
             // Show loading state
             loadingOverlay.classList.remove('hidden');
             regenerateButton.disabled = true;
+            setRegenerateButtonText('generating...');
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
             generatedContent.innerHTML = '';
@@ -1579,6 +1606,7 @@ BEGIN HTML OUTPUT:`;
                     wasLoadingWhenGenerated = false;
                     document.getElementById('newSiteNotification').style.display = 'block';
                     regenerateButton.disabled = false;
+                    setRegenerateButtonText('regenerate');
                     isGenerating = false;
                 } else {
                     // Normal completion, load the site
@@ -1586,6 +1614,7 @@ BEGIN HTML OUTPUT:`;
                     setTimeout(() => {
                         loadingOverlay.classList.add('hidden');
                         regenerateButton.disabled = false;
+                        setRegenerateButtonText('regenerate');
                         updateSaveButtonState();
                         isGenerating = false;
                     }, 500);
@@ -1604,6 +1633,7 @@ BEGIN HTML OUTPUT:`;
                 mainStatus.textContent = 'ERROR';
                 currentMessage.textContent = error.message;
                 regenerateButton.disabled = false;
+                setRegenerateButtonText('regenerate');
             }
         }
 
