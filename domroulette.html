@@ -219,12 +219,16 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 
 HELPER FUNCTIONS (injected automatically):
 
-window.fetchImage(query) - Get images from Unsplash or Picsum
+window.fetchImage(query) - ASYNC: Get images from Unsplash or Picsum
     Usage: const url = await window.fetchImage('theme name');
+    Note: must be used inside async functions or with .then()
+
+window.fetchImageURL(query) - SYNC: immediate Picsum fallback URL
+    Usage: const url = window.fetchImageURL('theme name');
 
 THEME-SPECIFIC DATA (available in scope):
 window.__themeData = { nouns: [], verbs: [], adjectives: [] };
-Use these authentic words for realistic, themed content.
+If needed, use these authentic words for realistic, themed content.
 Example: const noun = window.__themeData.nouns[Math.floor(Math.random() * window.__themeData.nouns.length)];
 
 IMAGES - Use any of these methods:
@@ -233,8 +237,8 @@ IMAGES - Use any of these methods:
 - https://api.dicebear.com/7.x/avataaars/svg?seed=QUERY - DiceBear avatars
 
 BUILD:
-- A substantial, multi-section experience (500+ lines)
-- 10+ interactive elements with real behaviors
+- A substantial, multi-section experience (500+ lines of code)
+- multiple interactive elements with real behaviors
 - Theme must be explicit in visuals and interactions
 - TEXT/PARAGRAPHS: Decide based on type:
   * Games/visual art/generative experiences: Minimal or no explanatory text
@@ -713,8 +717,12 @@ FOCUS ON:
 
 HELPER FUNCTIONS (available):
 
-window.fetchImage(query) - Get images from Unsplash or Picsum
+window.fetchImage(query) - ASYNC: Get images from Unsplash or Picsum
     Usage: const url = await window.fetchImage('theme name');
+    Note: must be used inside async functions or with .then()
+
+window.fetchImageURL(query) - SYNC: immediate Picsum fallback URL
+    Usage: const url = window.fetchImageURL('theme name');
 
 THEME-SPECIFIC DATA (available in scope):
 window.__themeData = { nouns: [], verbs: [], adjectives: [] };
@@ -866,12 +874,15 @@ BEGIN:`;
                 // Inject helper functions and theme data into generated content
                                 const themeDataJSON = JSON.stringify(wordData.themeData || { nouns: [], verbs: [], adjectives: [] });
                                 const helperFunctions = `<script>
+window.fetchImageURL = window.fetchImageURL || (function(query) {
+    return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
+});
 window.fetchImage = window.fetchImage || (async function(query) {
     try {
         const r = await fetch('/api/unsplash.js?query=' + encodeURIComponent(query));
         if (r.ok) { const d = await r.json(); return d.url; }
     } catch (e) {}
-    return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
+    return window.fetchImageURL(query);
 });
 window.__themeData = ${themeDataJSON};
 <\/script>`;
