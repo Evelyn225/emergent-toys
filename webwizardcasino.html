@@ -1271,17 +1271,12 @@ BEGIN HTML OUTPUT:`;
                 container.appendChild(script);
             }
 
-            // Only hide overlay if not currently generating
-            if (!isGenerating) {
-                const loadingOverlay = document.getElementById('loadingOverlay');
-                loadingOverlay.classList.add('hidden');
-                // Show save button
-                document.getElementById('saveButton').style.display = 'block';
-                updateSaveButtonState();
-            } else {
-                // Still generating - overlay will stay visible, but show the favorite content behind it
-                // This allows viewing favorite while generation completes
-            }
+            // Always hide overlay when loading a favorite
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.add('hidden');
+            // Show save button
+            document.getElementById('saveButton').style.display = 'block';
+            updateSaveButtonState();
         }
 
         function deleteFavorite(id) {
