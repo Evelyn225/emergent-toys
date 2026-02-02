@@ -28,8 +28,8 @@
       DENSITY_INFLUENCE: 0.85,
       BUOYANCY_FORCE: 0.85,
       MIN_DENSITY_THRESHOLD: 0.2,
-      SAND_EMISSION_RATE: 8,
-      HUE_INCREMENT: 0.2
+      SAND_EMISSION_RATE: 1,
+      HUE_INCREMENT: 0.05
     };
 
     const FLUID = {
@@ -56,7 +56,7 @@
 
     const BRIGHTNESS = {
       MIN: 0.05,
-      MAX: 0.9,
+      MAX: 0.75,
       STEP: 0.02
     };
 
@@ -108,6 +108,7 @@
       let addSandPosition = { x: 0, y: 0 };
       let lastWallPosition = { x: 0, y: 0 };
       let lastErasePosition = { x: 0, y: 0 };
+      let lastSandPosition = { x: 0, y: 0 };
 
       // Animation timing
       let vortexStartTime = 0;
@@ -120,7 +121,7 @@
       // UI state
       let messageAlpha = 255;
       let isPaused = false;
-      let currentBrightness = 0.5;
+      let currentBrightness = 0.4;
       let isDraggingSlider = false;
 
       // Initialize canvas and simulation
@@ -308,6 +309,8 @@
         isAddingSand = true;
         addSandPosition.x = p.mouseX;
         addSandPosition.y = p.mouseY;
+        lastSandPosition.x = p.mouseX;
+        lastSandPosition.y = p.mouseY;
         if (p.keyIsDown(76) || p.keyIsDown(108)) { // 'L' or 'l' key codes
           addLifeSand(p.mouseX, p.mouseY);
         } else {
@@ -372,6 +375,27 @@
       // Update sand emission position
       function updateSandPosition() {
         isAddingSand = true;
+        
+        // Interpolate between last and current position
+        const dx = p.mouseX - lastSandPosition.x;
+        const dy = p.mouseY - lastSandPosition.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const steps = Math.max(1, Math.ceil(distance / SIMULATION.CELL_SIZE));
+        
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const x = lastSandPosition.x + dx * t;
+          const y = lastSandPosition.y + dy * t;
+          
+          if (p.keyIsDown(76) || p.keyIsDown(108)) { // 'L' or 'l' key codes
+            addLifeSand(x, y);
+          } else {
+            addSand(x, y);
+          }
+        }
+        
+        lastSandPosition.x = p.mouseX;
+        lastSandPosition.y = p.mouseY;
         addSandPosition.x = p.mouseX;
         addSandPosition.y = p.mouseY;
       }
