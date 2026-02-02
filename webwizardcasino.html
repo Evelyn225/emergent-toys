@@ -405,6 +405,7 @@
             left: 0;
             right: 0;
             bottom: 0;
+            z-index: 5000;
         }
 
         #newSiteNotification {
@@ -1208,9 +1209,12 @@ BEGIN HTML OUTPUT:`;
 
             // Add click handlers
             document.querySelectorAll('.favorite-item').forEach(item => {
-                item.addEventListener('click', () => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('delete-btn')) return;
                     const id = parseInt(item.dataset.id);
-                    loadFavorite(id);
+                    if (!isNaN(id)) {
+                        loadFavorite(id);
+                    }
                 });
             });
         }
@@ -1269,6 +1273,9 @@ BEGIN HTML OUTPUT:`;
                 // Show save button
                 document.getElementById('saveButton').style.display = 'block';
                 updateSaveButtonState();
+            } else {
+                // Still generating - overlay will stay visible, but show the favorite content behind it
+                // This allows viewing favorite while generation completes
             }
         }
 
@@ -1342,7 +1349,7 @@ BEGIN HTML OUTPUT:`;
                 
                 loadingMessageInterval = setInterval(async () => {
                     messageIndex = (messageIndex + 1) % messages.length;
-                    await typeText(currentMessage, messages[messageIndex]);
+                    await typeText(currentMessage, messages[messageIndex], 40);
                 }, 7000);
 
                 const prompt = createGenerationPrompt(theme, persona);
@@ -1428,7 +1435,7 @@ BEGIN HTML OUTPUT:`;
                 await typeConsoleCommand('Enhancing generated code...', 'normal', 25);
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let reviewIndex = 0;
-                typeText(currentMessage, reviewMessages[reviewIndex], 40);
+                await typeText(currentMessage, reviewMessages[reviewIndex], 40);
                 
                 loadingMessageInterval = setInterval(async () => {
                     reviewIndex = (reviewIndex + 1) % reviewMessages.length;
@@ -1496,7 +1503,7 @@ BEGIN HTML OUTPUT:`;
                 await typeConsoleCommand('Detecting and fixing errors...', 'normal', 25);
                 const fixMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let fixIndex = 0;
-                typeText(currentMessage, fixMessages[fixIndex], 40);
+                await typeText(currentMessage, fixMessages[fixIndex], 40);
                 
                 if (loadingMessageInterval) {
                     clearInterval(loadingMessageInterval);
