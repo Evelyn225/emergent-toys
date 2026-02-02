@@ -99,7 +99,7 @@
 
         .wave-char {
             display: inline-block;
-            animation: wave 0.6s ease-in-out infinite;
+            animation: wave 1.6s ease-in-out infinite;
         }
 
         @keyframes wave {
@@ -682,7 +682,6 @@ BEGIN OUTPUT:`;
         // Fast content enrichment pass (cached prompt for speed)
         async function enrichContent(html, theme, persona) {
             const lines = html.split('\n').length;
-            console.log('Enriching content - output size:', lines, 'lines');
 
             // Fast, focused enrichment prompt (cacheable)
             const enrichPrompt = `Theme: "${theme}"
@@ -794,6 +793,7 @@ BEGIN:`;
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
+                console.log('themeData:', wordData.themeData);
 
                 // Start cycling through persona-specific loading messages (randomized)
                 const messages = shuffleArray(personaLoadingMessages[persona.name] || [
