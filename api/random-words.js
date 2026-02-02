@@ -216,44 +216,8 @@ RULES: No explanations, just output`
       theme = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
 
-    // Generate theme-specific vocabulary
-    const themeDataCompletion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `Generate authentic vocabulary for the theme: "${theme}"
-Return ONLY valid JSON (no markdown, no explanation):
-{"nouns": ["word1", "word2", ...], "verbs": ["verb1", "verb2", ...], "adjectives": ["adj1", "adj2", ...]}
-10 unique words per category, relevant and authentic to the theme.`
-        },
-        {
-          role: "user",
-          content: "Generate vocabulary"
-        }
-      ],
-      temperature: 0.7
-    });
-
-    let themeData = { nouns: [], verbs: [], adjectives: [] };
-    try {
-      const themeDataText = themeDataCompletion.choices[0].message.content.trim();
-      // Remove markdown code blocks if present
-      const cleanedText = themeDataText.replace(/^```json\n?/i, '').replace(/^```\n?/i, '').replace(/\n?```$/i, '');
-      themeData = JSON.parse(cleanedText);
-    } catch (parseError) {
-      console.warn('Failed to parse theme data, using fallback:', parseError);
-      // Fallback data if parsing fails
-      themeData = {
-        nouns: ['concept', 'element', 'form', 'structure', 'essence', 'artifact', 'entity', 'pattern', 'manifestation', 'embodiment'],
-        verbs: ['emerge', 'transform', 'dissolve', 'manifest', 'shift', 'evolve', 'resonate', 'pulse', 'flow', 'transcend'],
-        adjectives: ['mysterious', 'dynamic', 'vibrant', 'ethereal', 'profound', 'intricate', 'luminous', 'surreal', 'sublime', 'enigmatic']
-      };
-    }
-
     res.json({
       theme: theme,
-      themeData: themeData,
       persona: {
         name: persona.name,
         style: persona.style,
@@ -276,11 +240,6 @@ Return ONLY valid JSON (no markdown, no explanation):
 
     res.json({
       theme: fallbackTheme,
-      themeData: {
-        nouns: ['concept', 'element', 'form', 'structure', 'essence'],
-        verbs: ['emerge', 'transform', 'dissolve', 'manifest', 'shift'],
-        adjectives: ['mysterious', 'dynamic', 'vibrant', 'ethereal', 'profound']
-      },
       persona: {
         name: fallbackPersona.name,
         style: fallbackPersona.style,

@@ -214,7 +214,7 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - Can use Google Fonts: <link href="https://fonts.googleapis.com/css2?family=..." rel="stylesheet">
 - NO other <link> tags or @import statements
 - NO local/project files (e.g., /style.css, /script.js, ./assets/)
-- ALL buttons must be clickable and have real functionality (no fake/disabled buttons)
+- Buttons must have real functionality (no fake/disabled buttons)
 - If you reference a function, it MUST be fully defined in your output (no undefined calls)
 
 HELPER FUNCTIONS (injected automatically):
@@ -226,11 +226,6 @@ window.fetchImage(query) - ASYNC: Get images from Unsplash or Picsum
 window.fetchImageURL(query) - SYNC: immediate Picsum fallback URL
     Usage: const url = window.fetchImageURL('theme name');
 
-THEME-SPECIFIC DATA (available in scope):
-window.__themeData = { nouns: [], verbs: [], adjectives: [] };
-If needed, use these authentic words for realistic, themed content.
-Example: const noun = window.__themeData.nouns[Math.floor(Math.random() * window.__themeData.nouns.length)];
-
 IMAGES - Use any of these methods:
 - fetchImage('query') - Unsplash API with Picsum fallback
 - https://picsum.photos/seed/QUERY/800/600 - Direct Picsum URL
@@ -241,7 +236,7 @@ BUILD:
 - multiple interactive elements with real behaviors
 - Theme must be explicit in visuals and interactions
 - TEXT/PARAGRAPHS: Decide based on type:
-  * Games/visual art/generative experiences: Minimal or no explanatory text
+  * Games/visual art/generative experiences: Minimal or no explanatory text, interactivity optional
   * Puzzles/interactive stories/educational content: Include descriptive text
   * Standard websites/info pages: Include multiple paragraphs about the theme
 
@@ -724,11 +719,6 @@ window.fetchImage(query) - ASYNC: Get images from Unsplash or Picsum
 window.fetchImageURL(query) - SYNC: immediate Picsum fallback URL
     Usage: const url = window.fetchImageURL('theme name');
 
-THEME-SPECIFIC DATA (available in scope):
-window.__themeData = { nouns: [], verbs: [], adjectives: [] };
-Use these authentic words to replace generic placeholder content.
-Example: const noun = window.__themeData.nouns[Math.floor(Math.random() * window.__themeData.nouns.length)];
-
 IMAGES: Use any of these methods:
 - await fetchImage('query') - Unsplash with Picsum fallback
 - https://picsum.photos/seed/QUERY/800/600 - Direct Picsum
@@ -813,7 +803,6 @@ BEGIN:`;
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
-                console.log('Theme data:', wordData);
                 
                 // Start cycling through persona-specific loading messages (randomized)
                 const messages = shuffleArray(personaLoadingMessages[persona.name] || [
@@ -871,9 +860,8 @@ BEGIN:`;
 
                 loadingMessageText.innerHTML = applyWaveAnimation('🎨 Rendering your creation...');
 
-                // Inject helper functions and theme data into generated content
-                                const themeDataJSON = JSON.stringify(wordData.themeData || { nouns: [], verbs: [], adjectives: [] });
-                                const helperFunctions = `<script>
+                // Inject helper functions into generated content
+                const helperFunctions = `<script>
 window.fetchImageURL = window.fetchImageURL || (function(query) {
     return 'https://picsum.photos/seed/' + encodeURIComponent(query) + '/800/600';
 });
@@ -884,7 +872,6 @@ window.fetchImage = window.fetchImage || (async function(query) {
     } catch (e) {}
     return window.fetchImageURL(query);
 });
-window.__themeData = ${themeDataJSON};
 <\/script>`;
                 reviewedHTML = helperFunctions + reviewedHTML;
 
@@ -897,6 +884,9 @@ window.__themeData = ${themeDataJSON};
                     const newScript = document.createElement('script');
                     if (oldScript.src) {
                         newScript.src = oldScript.src;
+                        // Copy attributes like async
+                        if (oldScript.async) newScript.async = true;
+                        if (oldScript.defer) newScript.defer = true;
                     } else {
                         newScript.textContent = oldScript.textContent;
                     }
