@@ -227,6 +227,8 @@ ${specialInstructions ? specialInstructions + '\n\n' : ''}OUTPUT RULES (NO EXPLA
 - Do NOT add DOM event listeners unless the target element is created in your HTML
 - If you must add event listeners, check for element existence before use
 - Do NOT use async image loading unless it happens inside preload()
+- Avoid repetitive layouts: do NOT place default UI controls (e.g., buttons) in the top-left corner
+- Vary layout and positioning; avoid two-button clusters in the same spot
 
 HELPER FUNCTIONS (injected automatically):
 
@@ -747,6 +749,8 @@ DO NOT:
 - Do NOT reference functions you do not define
 - Do NOT add event listeners to elements you did not create
 - Do NOT use async image loading unless it is inside preload()
+- Do NOT place UI controls in the top-left by default
+- Do NOT use a boring two-button layout
 
 OUTPUT: Complete HTML/CSS/JS (no markdown, no explanations)
 
@@ -911,6 +915,34 @@ window.fetchImage = window.fetchImage || (async function(query) {
     } catch (e) {}
     return window.fetchImageURL(query);
 });
+try {
+    const style = document.createElement('style');
+    style.textContent = 'canvas{display:block !important;position:absolute !important;top:0;left:0;z-index:1;}';
+    document.head.appendChild(style);
+} catch (e) {}
+
+try {
+    if (typeof window.createCanvas === 'function') {
+        const _createCanvas = window.createCanvas;
+        window.createCanvas = function(w, h, renderer) {
+            const canvas = _createCanvas(w, h, renderer);
+            try {
+                const parent = document.getElementById('generatedContent');
+                if (canvas && canvas.elt) {
+                    if (parent) parent.appendChild(canvas.elt);
+                    canvas.elt.style.position = 'absolute';
+                    canvas.elt.style.top = '0';
+                    canvas.elt.style.left = '0';
+                    canvas.elt.style.display = 'block';
+                    canvas.elt.style.zIndex = '1';
+                } else if (canvas && typeof canvas.parent === 'function') {
+                    if (parent) canvas.parent('generatedContent');
+                }
+            } catch (e) {}
+            return canvas;
+        };
+    }
+} catch (e) {}
 <\/script>`;
                 reviewedHTML = helperFunctions + reviewedHTML;
 
