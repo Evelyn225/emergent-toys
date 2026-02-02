@@ -69,8 +69,8 @@
         <div class="control-group">
             <label for="automataType">Automata Type:</label>
             <select id="automataType">
-                <option value="grass">Grass</option>
                 <option value="flowers">Flowers</option>
+                <option value="grass">Grass</option>                
                 <option value="moss">Moss</option>
                 <option value="coral">Coral</option>
                 <option value="fern">Fern</option>
@@ -96,23 +96,26 @@
         let grid = [];
         let isRunning = true;
         let isDrawing = false;
-        let currentAutomata = 'grass';
+        let currentAutomata = 'flowers';
+        let lastMousePosition = { x: 0, y: 0 };
 
         // Automata rules
         const rules = {
-            grass: {
+            flowers: {
+                survive: [1,4,7,8],
+                birth: [2,6,7,8],
                 survive: [2,5],
                 birth: [3,5],
-                name: "Grass"
-            },
-            flowers: {
-                survive: [3,4,6,8],
-                birth: [3,6,7,8],
                 name: "Flowers"
+            },
+            grass: {
+                survive: [1,7,8],
+                birth: [2],
+                name: "Grass"
             },
             moss: {
                 survive: [2,3,4,5,6,7],
-                birth: [3,7,8],
+                birth: [3],
                 name: "Moss"
             },
             coral: {
@@ -158,10 +161,10 @@
                 // Get appropriate size for this type
                 let baseSize;
                 switch(type) {
-                    case 'grass':
-                        baseSize = 8;
-                        break;
                     case 'flowers':
+                        baseSize = 4;
+                        break;
+                    case 'grass':
                         baseSize = 8;
                         break;
                     case 'moss':
@@ -318,54 +321,73 @@
             }
         }
 
+        function drawCellBlock(x, y) {
+            if (x < 0 || x >= grid.length || y < 0 || y >= grid[0].length) return;
+            
+            // Different block sizes for different automata
+            let blockSize;
+            switch(currentAutomata) {
+                case 'grass': // Grass - small clusters
+                    blockSize = 2;
+                    break;
+                case 'flowers': // Flowers - large clusters
+                    blockSize = 4;
+                    break;
+                case 'moss': // Moss - small clusters
+                    blockSize = 2;
+                    break;
+                case 'coral': // Coral - large clusters
+                    blockSize = 4;
+                    break;
+                case 'fern': // Fern - large clusters
+                    blockSize = 5;
+                    break;
+                case 'crystal': // Crystal - small clusters
+                    blockSize = 2;
+                    break;
+                default:
+                    blockSize = 3;
+            }
+
+            // Draw block
+            for (let i = 0; i < blockSize; i++) {
+                for (let j = 0; j < blockSize; j++) {
+                    const newX = (x + i + grid.length) % grid.length;
+                    const newY = (y + j + grid[0].length) % grid[0].length;
+                    grid[newX][newY] = currentAutomata;
+                }
+            }
+        }
+
         function handleMouse(e) {
             if (!isDrawing) return;
             const rect = canvas.getBoundingClientRect();
             const x = Math.floor((e.clientX - rect.left) / cellSize);
             const y = Math.floor((e.clientY - rect.top) / cellSize);
             
-            if (x >= 0 && x < grid.length && y >= 0 && y < grid[0].length) {
-                // Different block sizes for different automata
-                let blockSize;
-                switch(currentAutomata) {
-                    case 'grass': // Grass - medium clusters
-                        blockSize = 3;
-                        break;
-                    case 'flowers': // Flowers - large clusters
-                        blockSize = 4;
-                        break;
-                    case 'moss': // Moss - small clusters
-                        blockSize = 2;
-                        break;
-                    case 'coral': // Coral - large clusters
-                        blockSize = 4;
-                        break;
-                    case 'fern': // Fern - large clusters
-                        blockSize = 5;
-                        break;
-                    case 'crystal': // Crystal - small clusters
-                        blockSize = 2;
-                        break;
-                    default:
-                        blockSize = 3;
-                }
-
-                // Draw block
-                for (let i = 0; i < blockSize; i++) {
-                    for (let j = 0; j < blockSize; j++) {
-                        const newX = (x + i + grid.length) % grid.length;
-                        const newY = (y + j + grid[0].length) % grid[0].length;
-                        grid[newX][newY] = currentAutomata;
-                    }
-                }
-                draw(); // Redraw immediately
+            // Interpolate between last position and current position
+            const dx = x - lastMousePosition.x;
+            const dy = y - lastMousePosition.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            const steps = Math.max(1, Math.ceil(distance));
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const interpX = Math.floor(lastMousePosition.x + dx * t);
+                const interpY = Math.floor(lastMousePosition.y + dy * t);
+                drawCellBlock(interpX, interpY);
             }
+            lastMousePosition = { x, y };
+            draw(); // Redraw immediately
         }
 
         // Event listeners
         window.addEventListener('resize', resize);
         canvas.addEventListener('mousedown', (e) => {
             isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastMousePosition.x = Math.floor((e.clientX - rect.left) / cellSize);
+            lastMousePosition.y = Math.floor((e.clientY - rect.top) / cellSize);
             handleMouse(e);
         });
         canvas.addEventListener('mouseup', () => isDrawing = false);
@@ -404,10 +426,10 @@
         // Initialize
         resize();
         clear();
-        document.getElementById('automataType').value = 'grass'; // Reset menu to Grass
-        document.getElementById('speed').value = '15'; // Reset speed to default
-        currentAutomata = 'grass';
-        frameRate = 15; // Set initial frame rate
+        document.getElementById('automataType').value = 'flowers'; // Reset menu to Grass
+        document.getElementById('speed').value = '1'; // Reset speed to default
+        currentAutomata = 'flowers';
+        frameRate = 10; // Set initial frame rate
         animate(0);
     </script>
 </body>
