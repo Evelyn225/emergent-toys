@@ -121,7 +121,7 @@
             for (let y = 0; y <= canvas.height; y += config.gridSize) {
                 ctx.beginPath();
                 let isDrawing = false;
-                for (let x = 0; x <= canvas.width; x += 8) {
+                for (let x = 0; x <= canvas.width; x += 1) {
                     const warpY = y + Math.sin(x * freq + t) * amp;
                     const tearCheck = isNearTear(x, warpY);
                     
@@ -152,7 +152,7 @@
             for (let x = 0; x <= canvas.width; x += config.gridSize) {
                 ctx.beginPath();
                 let isDrawing = false;
-                for (let y = 0; y <= canvas.height; y += 8) {
+                for (let y = 0; y <= canvas.height; y += 2) {
                     const warpX = x + Math.sin(y * freq + t) * amp;
                     const tearCheck = isNearTear(warpX, y);
                     
