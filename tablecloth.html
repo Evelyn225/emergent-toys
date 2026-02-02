@@ -54,6 +54,7 @@
         let tears = [];
         let isDragging = false;
         let currentTear = [];
+        let lastTearPosition = { x: 0, y: 0 };
 
         // Pre-calculate dot positions
         const dotPositions = [];
@@ -229,6 +230,7 @@
             const x = (e.clientX - rect.left) * (canvas.width / rect.width);
             const y = (e.clientY - rect.top) * (canvas.height / rect.height);
             currentTear.push({ x, y });
+            lastTearPosition = { x, y };
         });
 
         canvas.addEventListener('mousemove', (e) => {
@@ -237,12 +239,21 @@
             const y = (e.clientY - rect.top) * (canvas.height / rect.height);
             
             if (isDragging) {
-                // Add point to current tear if moved enough
-                const last = currentTear[currentTear.length - 1];
-                const dx = x - last.x;
-                const dy = y - last.y;
-                if (Math.sqrt(dx * dx + dy * dy) > 5) {
-                    currentTear.push({ x, y });
+                // Interpolate points between last position and current position
+                const dx = x - lastTearPosition.x;
+                const dy = y - lastTearPosition.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Add interpolated points if movement is significant
+                if (distance > 5) {
+                    const steps = Math.ceil(distance / 5);
+                    for (let i = 1; i <= steps; i++) {
+                        const t = i / steps;
+                        const interpX = lastTearPosition.x + dx * t;
+                        const interpY = lastTearPosition.y + dy * t;
+                        currentTear.push({ x: interpX, y: interpY });
+                    }
+                    lastTearPosition = { x, y };
                 }
             } else {
                 // Subtle warp adjustment when not tearing
