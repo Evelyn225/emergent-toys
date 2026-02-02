@@ -318,6 +318,20 @@
 
         function draw() {
             background(0);
+
+            // Camera movement with optimized calculations
+            let camRadius = 400;
+            let camX = camRadius * cos(angle);
+
+            // Camera height calculation
+            let baseHeight = -32; // Center point of oscillation
+            let amplitude = 25; // How far it moves from the center
+            let rawY = sin(time * 0.2);
+            // Reshape the sine wave to spend less time at extremes
+            let modifiedY = (rawY * Math.abs(rawY)) * amplitude + baseHeight;
+            let camY = min(modifiedY, -5    ); // Only clamp the upper bound
+
+            let camZ = camRadius * sin(angle);
             
             // Draw grid
             push();
@@ -326,26 +340,72 @@
             noFill();
             
             // Calculate grid size based on view
-            let backgroundGridSize = 3000;
-            let gridSpacing = 100;
+            let backgroundGridSize = 1000;
+            let gridSpacing = 80;
             
             // Center the grid but offset forward towards camera and down for floor visibility
-            translate(-backgroundGridSize/2, 10, -backgroundGridSize/2 + 100);
-            
+            translate(-backgroundGridSize/2, 50, -backgroundGridSize/2 + 100);
+
+            // Distance culling around camera to reduce draw cost
+            let cullRadius = 600;
+            let cullRadiusSq = cullRadius * cullRadius;
+            let gridZOffset = 100;
+
             // Draw X-Z plane grid (horizontal)
             for (let x = 0; x <= backgroundGridSize; x += gridSpacing) {
-                for (let z = 0; z <= backgroundGridSize; z += gridSpacing) {
-                    beginShape(LINES);
-                    vertex(x, 0, 0);
-                    vertex(x, 0, backgroundGridSize);
-                    endShape();
-                    
-                    beginShape(LINES);
-                    vertex(0, 0, z);
-                    vertex(backgroundGridSize, 0, z);
-                    endShape();
-                }
+                let worldX = x - backgroundGridSize / 2;
+                let dx = worldX - camX;
+                if (Math.abs(dx) > cullRadius) continue;
+
+                let maxZDelta = sqrt(cullRadiusSq - dx * dx);
+                let zWorldMin = camZ - maxZDelta;
+                let zWorldMax = camZ + maxZDelta;
+
+                let zStart = zWorldMin + backgroundGridSize / 2 - gridZOffset;
+                let zEnd = zWorldMax + backgroundGridSize / 2 - gridZOffset;
+                zStart = constrain(zStart, 0, backgroundGridSize);
+                zEnd = constrain(zEnd, 0, backgroundGridSize);
+                if (zEnd <= zStart) continue;
+
+                beginShape(LINES);
+                vertex(x, 0, zStart);
+                vertex(x, 0, zEnd);
+                endShape();
             }
+
+            for (let z = 0; z <= backgroundGridSize; z += gridSpacing) {
+                let worldZ = z - backgroundGridSize / 2 + gridZOffset;
+                let dz = worldZ - camZ;
+                if (Math.abs(dz) > cullRadius) continue;
+
+                let maxXDelta = sqrt(cullRadiusSq - dz * dz);
+                let xWorldMin = camX - maxXDelta;
+                let xWorldMax = camX + maxXDelta;
+
+                let xStart = xWorldMin + backgroundGridSize / 2;
+                let xEnd = xWorldMax + backgroundGridSize / 2;
+                xStart = constrain(xStart, 0, backgroundGridSize);
+                xEnd = constrain(xEnd, 0, backgroundGridSize);
+                if (xEnd <= xStart) continue;
+
+                beginShape(LINES);
+                vertex(xStart, 0, z);
+                vertex(xEnd, 0, z);
+                endShape();
+            }
+
+            // Culling circle outline on the grid plane
+            let circleCenterX = camX + backgroundGridSize / 2;
+            let circleCenterZ = camZ + backgroundGridSize / 2 - gridZOffset;
+            let circleSteps = 120;
+            beginShape();
+            for (let i = 0; i <= circleSteps; i += 1) {
+                let t = (TWO_PI * i) / circleSteps;
+                let cx = circleCenterX + cos(t) * cullRadius;
+                let cz = circleCenterZ + sin(t) * cullRadius;
+                vertex(cx, 0, cz);
+            }
+            endShape();
             
             pop();
             
@@ -353,19 +413,6 @@
             ambientLight(25);
             pointLight(255, 255, 255, 300 * sin(time * 0.1), 200, 300 * cos(time * 0.1));
             
-            // Camera movement with optimized calculations
-            let camRadius = 400;
-            let camX = camRadius * cos(angle);
-            
-            // Camera height calculation
-            let baseHeight = -32; // Center point of oscillation
-            let amplitude = 25; // How far it moves from the center
-            let rawY = sin(time * 0.2);
-            // Reshape the sine wave to spend less time at extremes
-            let modifiedY = (rawY * Math.abs(rawY)) * amplitude + baseHeight;
-            let camY = min(modifiedY, -5    ); // Only clamp the upper bound
-            
-            let camZ = camRadius * sin(angle);
             camera(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
             
             // Move entire scene up more to compensate for grid
