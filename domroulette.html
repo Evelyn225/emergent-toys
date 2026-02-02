@@ -800,7 +800,7 @@ BEGIN HTML OUTPUT:`;
                 // If the model returned only JS, wrap it in a minimal HTML shell
                 const hasHtmlTag = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code);
                 if (!hasHtmlTag) {
-                    p5Code = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>\n</head>\n<body>\n<script>\n${p5Code}\n</script>\n</body>\n</html>`;
+                    p5Code = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><' + '/script>\n</head>\n<body>\n<script>\n' + p5Code + '\n<' + '/script>\n</body>\n</html>';
                 }
 
                 if (!p5Code) {
