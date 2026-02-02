@@ -357,7 +357,11 @@
         }
 
         #generatedContent {
-            margin-top: 70px;
+            position: fixed;
+            top: 70px;
+            left: 0;
+            right: 0;
+            bottom: 0;
         }
     </style>
 </head>
@@ -995,7 +999,7 @@ BEGIN HTML OUTPUT:`;
             if (isFullHTML) {
                 const iframe = document.createElement('iframe');
                 iframe.style.width = '100%';
-                iframe.style.height = 'calc(100vh - 70px)';
+                iframe.style.height = '100%';
                 iframe.style.border = 'none';
                 iframe.style.margin = '0';
                 iframe.style.padding = '0';
@@ -1291,7 +1295,7 @@ BEGIN HTML OUTPUT:`;
                         // For full HTML, create an iframe to isolate it
                         const iframe = document.createElement('iframe');
                         iframe.style.width = '100%';
-                        iframe.style.height = 'calc(100vh - 70px)';
+                        iframe.style.height = '100%';
                         iframe.style.border = 'none';
                         iframe.style.margin = '0';
                         iframe.style.padding = '0';
