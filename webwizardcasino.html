@@ -373,9 +373,11 @@ BEGIN HTML OUTPUT:`;
         }
         
         function updateSaveButtonState() {
-            if (!currentGeneration.theme || !currentGeneration.persona || isGenerating) return;
+            if (!currentGeneration.theme || !currentGeneration.persona) return;
+            if (isGenerating) return;
             
-            const isSaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
+            const personaName = currentGeneration.persona.name || currentGeneration.persona;
+            const isSaved = isSavedFavorite(currentGeneration.theme, personaName);
             const saveButton = document.getElementById('saveButton');
             
             if (isSaved) {
@@ -522,6 +524,8 @@ BEGIN HTML OUTPUT:`;
             localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
             
             loadFavorites();
+            // Update save button state in case the current site was deleted from favorites
+            updateSaveButtonState();
         }
 
         function backToGeneratedSite() {
@@ -580,12 +584,7 @@ BEGIN HTML OUTPUT:`;
 
             // Save current generation as previous before starting new generation
             if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
-                const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
-                if (!isAlreadySaved) {
-                    previousGeneration = { ...currentGeneration };
-                } else {
-                    previousGeneration = null;
-                }
+                previousGeneration = { ...currentGeneration };
             }
 
             // Show loading state
