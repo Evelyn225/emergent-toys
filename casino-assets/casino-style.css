@@ -167,7 +167,28 @@ body {
     letter-spacing: 2px;
 }
 
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.06);
 #favoritesContent h2::before {
+
+#favoritesContent::-webkit-scrollbar {
+    width: 10px;
+}
+
+#favoritesContent::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+}
+
+#favoritesContent::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.2));
+    border-radius: 10px;
+    border: 2px solid rgba(10, 14, 39, 0.9);
+}
+
+#favoritesContent::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.3));
+}
     content: '> ';
     color: rgba(255, 255, 255, 0.5);
 }
