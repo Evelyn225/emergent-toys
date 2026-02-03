@@ -76,6 +76,7 @@
         let lastMousePos = { x: 0, y: 0, time: 0 };
         let mouseRippleCounter = 0;
         let mouseAngle = 0;
+        let targetAngle = 0;
         let cursorImage = null;
 
         // Load custom cursor image
@@ -254,8 +255,15 @@
 
             // Update cursor angle based on movement direction
             if (dx !== 0 || dy !== 0) {
-                mouseAngle = Math.atan2(dy, dx) + Math.PI / 2; // Add 90 degrees so paw points forward
+                targetAngle = Math.atan2(dy, dx) + Math.PI / 2; // Add 90 degrees so paw points forward
             }
+
+            // Smoothly interpolate towards target angle
+            let angleDiff = targetAngle - mouseAngle;
+            // Normalize angle difference to shortest path
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            mouseAngle += angleDiff * 0.15; // Smooth easing (adjust 0.15 for faster/slower rotation)
 
             // Create ripple on every mouse movement with some speed
             if (dist > 3 && timeDelta > 16) { // ~60fps polling
