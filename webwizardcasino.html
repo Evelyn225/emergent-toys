@@ -199,8 +199,16 @@ BEGIN HTML OUTPUT:`;
             'Configuring transformation matrix...'
         ];
 
+        let currentTypingInterval = null; // Track active typing animation
+
         function typeText(element, text, speed = 60) {
             return new Promise((resolve) => {
+                // Cancel any existing typing animation on this element
+                if (currentTypingInterval !== null) {
+                    clearInterval(currentTypingInterval);
+                    currentTypingInterval = null;
+                }
+                
                 let i = 0;
                 element.textContent = '';
                 
@@ -210,9 +218,12 @@ BEGIN HTML OUTPUT:`;
                         i++;
                     } else {
                         clearInterval(interval);
+                        currentTypingInterval = null;
                         resolve();
                     }
                 }, speed);
+                
+                currentTypingInterval = interval;
             });
         }
 
@@ -313,12 +324,12 @@ BEGIN HTML OUTPUT:`;
             }
             
             return reviewMessages.length > 0 ? reviewMessages : [
-                "🔍 Reviewing and improving code...",
-                "✨ Enhancing your creation...",
-                "🛠️ Adding the finishing touches...",
-                "💎 Perfecting every detail...",
-                "🌟 Making it spectacular...",
-                "⏳ Almost ready..."
+                "Reviewing and improving code...",
+                "Enhancing your creation...",
+                "Adding the finishing touches...",
+                "Perfecting every detail...",
+                "Making it spectacular...",
+                "Almost ready..."
             ];
         }
 
@@ -857,7 +868,7 @@ BEGIN HTML OUTPUT:`;
                 }
 
                 addConsoleCommand('Running final sketch...');
-                await typeText(currentMessage, '🎨 Executing code...');
+                await typeText(currentMessage, 'Executing code...');
 
                 // Store final code
                 const generatedData = {
@@ -928,6 +939,9 @@ BEGIN HTML OUTPUT:`;
                         setRegenerateButtonText('regenerate');
                         updateSaveButtonState();
                         isGenerating = false;
+                        // Clear previous generation so back button won't show on new site
+                        previousGeneration = null;
+                        document.getElementById('backButton').style.display = 'none';
                     }, 500);
                 }
 
