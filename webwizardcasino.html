@@ -156,6 +156,15 @@ BEGIN HTML OUTPUT:`;
             }
         }
 
+        // Update progress bar
+        function setProgressBar(percent) {
+            const progressBar = document.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.style.width = percent + '%';
+                progressBar.style.animation = 'none'; // Stop the animation
+            }
+        }
+
         // Random console messages for loading
         const consoleCommands = [
             'Initializing neural network...',
@@ -557,7 +566,6 @@ BEGIN HTML OUTPUT:`;
 
             // Show loading state
             loadingOverlay.classList.remove('hidden');
-            regenerateButton.disabled = true;
             setRegenerateButtonText('generating...');
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
@@ -582,9 +590,11 @@ BEGIN HTML OUTPUT:`;
 
             try {
                 await typeConsoleCommand('Selecting creative persona...', 'normal', 25);
+                setProgressBar(5);
                 const wordData = await getRandomWords();
                 const theme = wordData.theme;
                 const persona = wordData.persona;
+                setProgressBar(10);
                 
                 // Store for favorites
                 currentGeneration.theme = theme;
@@ -635,6 +645,7 @@ BEGIN HTML OUTPUT:`;
                         prompt: prompt
                     })
                 });
+                setProgressBar(35);
 
                 if (!response.ok) {
                     let errorMsg = `API Error: ${response.status}`;
@@ -704,6 +715,7 @@ BEGIN HTML OUTPUT:`;
 
                 // Second pass: enhance with an interesting addition
                 await typeConsoleCommand('Enhancing generated code...', 'normal', 25);
+                setProgressBar(50);
                 const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
                 let reviewIndex = 0;
                 await typeText(currentMessage, reviewMessages[reviewIndex], 40);
@@ -755,6 +767,7 @@ BEGIN HTML OUTPUT:`;
                         prompt: enhancePrompt
                     })
                 });
+                setProgressBar(70);
 
                 if (enhanceResponse.ok) {
                     try {
@@ -798,6 +811,9 @@ BEGIN HTML OUTPUT:`;
                     '- Output ONLY the code, no explanations\n\n' +
                     'BEGIN CORRECTED CODE:';
 
+                await typeConsoleCommand('Fixing bugs and errors...', 'normal', 25);
+                setProgressBar(85);
+
                 const fixResponse = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: {
@@ -808,6 +824,7 @@ BEGIN HTML OUTPUT:`;
                         prompt: fixPrompt
                     })
                 });
+                setProgressBar(92);
 
                 if (fixResponse.ok) {
                     try {
@@ -854,7 +871,6 @@ BEGIN HTML OUTPUT:`;
                     backgroundGeneration = generatedData;
                     wasLoadingWhenGenerated = false;
                     document.getElementById('newSiteNotification').style.display = 'block';
-                    regenerateButton.disabled = false;
                     setRegenerateButtonText('regenerate');
                     isGenerating = false;
                 } else {
@@ -897,7 +913,6 @@ BEGIN HTML OUTPUT:`;
                     
                     setTimeout(() => {
                         loadingOverlay.classList.add('hidden');
-                        regenerateButton.disabled = false;
                         setRegenerateButtonText('regenerate');
                         updateSaveButtonState();
                         isGenerating = false;
@@ -916,8 +931,8 @@ BEGIN HTML OUTPUT:`;
                 await typeConsoleCommand('Error: ' + error.message, 'error', 25);
                 mainStatus.textContent = 'ERROR';
                 currentMessage.textContent = error.message;
-                regenerateButton.disabled = false;
                 setRegenerateButtonText('regenerate');
+                isGenerating = false;
             }
         }
 
@@ -983,7 +998,17 @@ BEGIN HTML OUTPUT:`;
                 }
             });
             
-            regenerateButton.addEventListener('click', generateWebsite);
+            regenerateButton.addEventListener('click', () => {
+                // If currently generating, go back to loading screen
+                if (isGenerating) {
+                    const loadingOverlay = document.getElementById('loadingOverlay');
+                    loadingOverlay.classList.remove('hidden');
+                    document.getElementById('generatedContent').innerHTML = '';
+                } else {
+                    // Otherwise, start a new generation
+                    generateWebsite();
+                }
+            });
             saveButton.addEventListener('click', saveFavorite);
             backButton.addEventListener('click', backToGeneratedSite);
             
