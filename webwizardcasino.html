@@ -935,10 +935,10 @@ BEGIN HTML OUTPUT:`;
                     
                     setProgressBar(100); // Mark generation as complete
                     setTimeout(() => {
+                        isGenerating = false;
                         loadingOverlay.classList.add('hidden');
                         setRegenerateButtonText('regenerate');
                         updateSaveButtonState();
-                        isGenerating = false;
                         // Keep back button visible since current generation can go back to previous
                         document.getElementById('backButton').style.display = 'block';
                     }, 500);
