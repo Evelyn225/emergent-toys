@@ -80,7 +80,7 @@
 
         // Load custom cursor image
         const cursorImg = new Image();
-        cursorImg.src = 'paw.png';
+        cursorImg.src = 'https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/paw.png';
         cursorImg.onload = () => {
             cursorImage = cursorImg;
         };
@@ -89,7 +89,7 @@
         function drawCursor(x, y, angle) {
             if (!cursorImage) return;
             
-            const size = 32; // Adjust size as needed
+            const size = 24; // Adjust size as needed
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate(angle);
