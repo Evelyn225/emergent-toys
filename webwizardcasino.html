@@ -622,7 +622,7 @@ BEGIN HTML OUTPUT:`;
                 await typeText(currentMessage, `Creating ${theme}...`, 40);
 
                 const sessionTime = new Date().toISOString().slice(11, 19);
-                await TypeConsoleCommand(`[INFO] Session started at ${sessionTime} UTC`, 'info');
+                await typeConsoleCommand(`[INFO] Session started at ${sessionTime} UTC`, 'info');
                 
                 // Wait briefly for personas to load if needed
                 let attempts = 0;
