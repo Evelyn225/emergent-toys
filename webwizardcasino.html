@@ -569,9 +569,16 @@ BEGIN HTML OUTPUT:`;
             setRegenerateButtonText('generating...');
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
+            // Show back button in loading screen if there's a previous generation
+            if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code) {
+                document.getElementById('backButton').style.display = 'block';
+            } else {
+                document.getElementById('backButton').style.display = 'none';
+            }
             generatedContent.innerHTML = '';
             isGenerating = true;
             wasLoadingWhenGenerated = true;
+            setProgressBar(0); // Reset progress bar
             
             // Clear console and start commands
             document.getElementById('consoleOutput').innerHTML = '';
@@ -911,6 +918,7 @@ BEGIN HTML OUTPUT:`;
                         container.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
                     }
                     
+                    setProgressBar(100); // Mark generation as complete
                     setTimeout(() => {
                         loadingOverlay.classList.add('hidden');
                         setRegenerateButtonText('regenerate');

@@ -383,8 +383,8 @@ body {
     height: 100%;
     background: rgba(255, 255, 255, 0.5);
     width: 0%;
-    animation: progressWidth 8s ease-in-out infinite;
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+    transition: width 0.3s ease-in-out;
 }
 
 @keyframes progressWidth {
