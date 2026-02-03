@@ -367,14 +367,13 @@ BEGIN HTML OUTPUT:`;
                 return;
             }
 
-            const personaName = currentGeneration.persona?.name || currentGeneration.persona || '';
-            const canCheckFavorite = Boolean(currentGeneration.theme && personaName);
-            const isSaved = canCheckFavorite && isSavedFavorite(currentGeneration.theme, personaName);
-
-            if (isSaved) {
-                saveButton.style.display = 'none';
-            } else if (canCheckFavorite || currentGeneration.code) {
-                saveButton.style.display = 'block';
+            // Show save button if there's a generated site that's not already in favorites
+            if (currentGeneration.code) {
+                const personaName = currentGeneration.persona?.name || currentGeneration.persona || '';
+                const canCheckFavorite = Boolean(currentGeneration.theme && personaName);
+                const isSaved = canCheckFavorite && isSavedFavorite(currentGeneration.theme, personaName);
+                
+                saveButton.style.display = isSaved ? 'none' : 'block';
             } else {
                 saveButton.style.display = 'none';
             }
@@ -537,6 +536,7 @@ BEGIN HTML OUTPUT:`;
             // Hide loading overlay
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
+            isGenerating = false;
 
             // Restore the previous generation
             currentGeneration = { ...previousGeneration };
