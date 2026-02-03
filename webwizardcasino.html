@@ -392,13 +392,11 @@ BEGIN HTML OUTPUT:`;
         
         function saveFavorite() {
             if (!currentGeneration.code) {
-                alert('No generation to save!');
                 return;
             }
 
             // Check if already saved
             if (isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name)) {
-                alert('Already in favorites!');
                 return;
             }
 
@@ -414,7 +412,6 @@ BEGIN HTML OUTPUT:`;
             favorites.push(favorite);
             localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
             
-            alert('Saved to favorites! 💾');
             updateSaveButtonState();
         }
 
