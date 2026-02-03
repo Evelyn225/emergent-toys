@@ -152,6 +152,7 @@ BEGIN HTML OUTPUT:`;
             persona: null,
             code: ''
         };
+        let displayedGeneration = null;
         let previousGeneration = null;
         let backgroundGeneration = null;
         let wasLoadingWhenGenerated = false;
@@ -381,24 +382,31 @@ BEGIN HTML OUTPUT:`;
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             return favorites.some(f => f.theme === theme && f.persona === personaName);
         }
+
+        function setDisplayedGeneration(gen) {
+            if (!gen) {
+                displayedGeneration = null;
+                return;
+            }
+            displayedGeneration = {
+                theme: gen.theme || '',
+                persona: gen.persona || null,
+                code: gen.code || ''
+            };
+        }
         
         function updateSaveButtonState() {
             const saveButton = document.getElementById('saveButton');
             if (!saveButton) return;
-            if (isGenerating) {
-                saveButton.style.display = 'none';
-                return;
-            }
-
             // Show save button on any non-favorited site with rendered content
-            if (!currentGeneration.code) {
+            if (!displayedGeneration || !displayedGeneration.code) {
                 saveButton.style.display = 'none';
                 return;
             }
 
-            const personaName = getPersonaNameFrom(currentGeneration);
-            const hasIdentity = Boolean(currentGeneration.theme && personaName);
-            const isSaved = hasIdentity && isSavedFavorite(currentGeneration.theme, personaName);
+            const personaName = getPersonaNameFrom(displayedGeneration);
+            const hasIdentity = Boolean(displayedGeneration.theme && personaName);
+            const isSaved = hasIdentity && isSavedFavorite(displayedGeneration.theme, personaName);
 
             saveButton.style.display = isSaved ? 'none' : 'block';
         }
@@ -415,26 +423,26 @@ BEGIN HTML OUTPUT:`;
         }
         
         function saveFavorite() {
-            if (!currentGeneration.code) {
+            if (!displayedGeneration || !displayedGeneration.code) {
                 return;
             }
 
-            const personaName = getPersonaNameFrom(currentGeneration);
-            if (!currentGeneration.theme || !personaName) {
+            const personaName = getPersonaNameFrom(displayedGeneration);
+            if (!displayedGeneration.theme || !personaName) {
                 return;
             }
 
             // Check if already saved
-            if (isSavedFavorite(currentGeneration.theme, personaName)) {
+            if (isSavedFavorite(displayedGeneration.theme, personaName)) {
                 return;
             }
 
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const favorite = {
                 id: Date.now(),
-                theme: currentGeneration.theme,
+                theme: displayedGeneration.theme,
                 persona: personaName,
-                code: currentGeneration.code,
+                code: displayedGeneration.code,
                 timestamp: new Date().toISOString()
             };
 
@@ -532,12 +540,14 @@ BEGIN HTML OUTPUT:`;
                     iframe.contentDocument.write(favorite.code);
                     iframe.contentDocument.close();
                     disableGeneratedContextMenu(container, iframe);
+                    setDisplayedGeneration(currentGeneration);
                 }, 0);
             } else {
                 const script = document.createElement('script');
                 script.textContent = favorite.code;
                 container.appendChild(script);
                 disableGeneratedContextMenu(container);
+                setDisplayedGeneration(currentGeneration);
             }
 
             // Always hide overlay when loading a favorite
@@ -594,12 +604,14 @@ BEGIN HTML OUTPUT:`;
                     iframe.contentDocument.write(currentGeneration.code);
                     iframe.contentDocument.close();
                     disableGeneratedContextMenu(container, iframe);
+                    setDisplayedGeneration(currentGeneration);
                 }, 0);
             } else {
                 const script = document.createElement('script');
                 script.textContent = currentGeneration.code;
                 container.appendChild(script);
                 disableGeneratedContextMenu(container);
+                setDisplayedGeneration(currentGeneration);
             }
 
             // Update save button state
@@ -974,12 +986,14 @@ BEGIN HTML OUTPUT:`;
                             iframe.contentDocument.write(p5Code);
                             iframe.contentDocument.close();
                             disableGeneratedContextMenu(container, iframe);
+                            setDisplayedGeneration(currentGeneration);
                         } else {
                             // For partial code, inject as script
                             const script = document.createElement('script');
                             script.textContent = p5Code;
                             container.appendChild(script);
                             disableGeneratedContextMenu(container);
+                            setDisplayedGeneration(currentGeneration);
                         }
                     } catch (e) {
                         console.error('Execution error:', e);
@@ -1062,12 +1076,14 @@ BEGIN HTML OUTPUT:`;
                             iframe.contentDocument.write(currentGeneration.code);
                             iframe.contentDocument.close();
                             disableGeneratedContextMenu(container, iframe);
+                            setDisplayedGeneration(currentGeneration);
                         }, 0);
                     } else {
                         const script = document.createElement('script');
                         script.textContent = currentGeneration.code;
                         container.appendChild(script);
                         disableGeneratedContextMenu(container);
+                        setDisplayedGeneration(currentGeneration);
                     }
                     
                     // Hide notification and update UI
