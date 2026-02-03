@@ -191,7 +191,7 @@ MOOD TO INFUSE: ${selectedMood}
 YOUR STYLE EXAMPLES:
 ${persona.examples.map(ex => `• ${ex}`).join('\n')}
 
-CREATE: One two-word phrase in your unique style
+CREATE: One nonsensical two-word phrase in your unique style
 FORMAT: word1 word2
 RULES: No explanations, just output`
         },
