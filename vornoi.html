@@ -45,7 +45,7 @@
     </style>
 </head>
 <body>
-    <a href="index.html" style="position: fixed; top: 20px; right: 20px; z-index: 101; padding: 10px 14px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.2s; line-height: 1;">🏠</a>
+    <a href="index.html" style="position: fixed; top: 20px; right: 20px; z-index: 101; padding: 10px 10px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(100, 150, 255, 0.8)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
     <div id="controls">
         <button onclick="randomizePoints()">Randomize Points</button>
         <button onclick="toggleAnimation()">Toggle Animation</button>
