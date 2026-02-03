@@ -505,8 +505,10 @@ BEGIN HTML OUTPUT:`;
                 } else {
                     previousGeneration = null;
                 }
+            } else {
+                // No current generation or it's already saved, don't set previous
+                previousGeneration = null;
             }
-            updateBackButtonState();
             
             // Mark that we're not on the loading screen anymore
             wasLoadingWhenGenerated = false;
@@ -557,6 +559,8 @@ BEGIN HTML OUTPUT:`;
             // Always hide overlay when loading a favorite
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
+            // Update back button state after setting previousGeneration
+            updateBackButtonState();
             // Let helper decide visibility based on favorite status
             updateSaveButtonState();
         }
