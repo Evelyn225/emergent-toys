@@ -165,10 +165,10 @@ body {
     font-weight: 400;
     text-align: left;
     letter-spacing: 2px;
-}
-
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.06);
+}
+
 #favoritesContent h2::before {
 
 #favoritesContent::-webkit-scrollbar {
@@ -322,6 +322,8 @@ body {
     margin: 10px 0;
     white-space: pre-wrap;
     word-wrap: break-word;
+    opacity: 1;
+    transform: translateY(0);
     transition: opacity 0.5s ease-out, transform 0.5s ease-out;
 }
 
