@@ -157,7 +157,7 @@ BEGIN HTML OUTPUT:`;
         let wasLoadingWhenGenerated = false;
         let isGenerating = false;
         let consoleCommandInterval = null;
-        let maxConsoleLines = 6;
+        let maxConsoleLines = 5;
 
         // Helper function to set regenerate button text with wave animation
         function setRegenerateButtonText(text) {
@@ -235,9 +235,9 @@ BEGIN HTML OUTPUT:`;
                     } else {
                         clearInterval(interval);
                         
-                        // Remove old lines if too many (keep last 20 lines)
+                        // Remove old lines if too many (keep last 5 lines)
                         const lines = consoleOutput.querySelectorAll('.console-line');
-                        if (lines.length > 6) {
+                        if (lines.length > 5) {
                             lines[0].classList.add('fading');
                             setTimeout(() => {
                                 if (lines[0].parentNode) {
@@ -263,9 +263,9 @@ BEGIN HTML OUTPUT:`;
             
             consoleOutput.appendChild(line);
             
-            // Remove old lines if too many (keep last 20 lines)
+            // Remove old lines if too many (keep last 6 lines)
             const lines = consoleOutput.querySelectorAll('.console-line');
-            if (lines.length > 20) {
+            if (lines.length > 6) {
                 lines[0].classList.add('fading');
                 setTimeout(() => {
                     if (lines[0].parentNode) {
