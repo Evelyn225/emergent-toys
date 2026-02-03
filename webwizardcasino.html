@@ -948,8 +948,8 @@ BEGIN HTML OUTPUT:`;
                         loadingOverlay.classList.add('hidden');
                         setRegenerateButtonText('regenerate');
                         updateSaveButtonState();
-                        // Only show back button if there's a previous generation to go back to
-                        if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code) {
+                        // Only show back button if there's a previous generation to go back to AND it's not already saved
+                        if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code && !isSavedFavorite(previousGeneration.theme, previousGeneration.persona.name)) {
                             document.getElementById('backButton').style.display = 'block';
                         } else {
                             document.getElementById('backButton').style.display = 'none';
