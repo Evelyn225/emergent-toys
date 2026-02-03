@@ -53,6 +53,8 @@
         // Load personas data from external JSON file
         let personasData = {};
         let personasLoaded = false;
+        let consoleCommands = [];
+        let consoleCommandsLoaded = false;
         
         (async () => {
             try {
@@ -64,6 +66,19 @@
                 console.log('✓ Personas loaded successfully');
             } catch (error) {
                 console.error('✗ Error loading personas.json:', error);
+            }
+        })();
+
+        (async () => {
+            try {
+                const response = await fetch('/casino-assets/console-commands.json');
+                if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load console-commands.json`);
+                const data = await response.json();
+                consoleCommands = Array.isArray(data.commands) ? data.commands : [];
+                consoleCommandsLoaded = true;
+                console.log('✓ Console commands loaded successfully');
+            } catch (error) {
+                console.error('✗ Error loading console-commands.json:', error);
             }
         })();
 
@@ -165,48 +180,7 @@ BEGIN HTML OUTPUT:`;
             }
         }
 
-        // Random console messages for loading
-        const consoleCommands = [
-            'Linking p5.js libraries...',
-            'Booting creative cortex...',
-            'Filling the idea bucket...',
-            'Waking up the gnomes...',
-            'Untangling spaghetti code...',
-            'Applying color palettes...',
-            'Watering plants...',
-            'Rendering pixel data...',
-            'Noticing the dust in the sunlight...',
-            'Buffing shiny surfaces...',
-            'Untangling the yarn ball...',
-            'Filling the soap dispensers...',
-            'Fluffing the digital pillows...',
-            'Checking expiration dates on pixels...',
-            'Counting ceiling tiles...',
-            'Buffing the shiny surfaces...',
-            'Validating code syntax...',
-            'Straightening crooked frames...',
-            'Sorting paperclips by color...',
-            'Dusting the server fans...',
-            'Optimizing performance...',
-            'Refilling the coffee pot...',
-            'Tightening loose bolts on existence...',
-            'Vacuuming the loading screen...',
-            'Wiping down conceptual surfaces...',
-            'Polishing metaphorical doorknobs...',
-            'Arranging clouds by fluffiness...',
-            'Sharpening all the pencils...',
-            'Petting the code puppies...',
-            'Testing emergency exit signs...',
-            'Reminiscing on old memories...',
-            'Remembering this place...',
-            'Finding your way back...',
-            'Sweeping under the rug...',
-            'Flushing the emotional caches...',
-            'Compiling "TODO: fix this" comments...',
-            'Running silent scream function...',
-            'Compiling tech debt interest...',
-            'Creating memory leaks...'
-];
+        // Random console messages for loading (loaded from /casino-assets/console-commands.json)
 
         let currentTypingInterval = null; // Track active typing animation
 
@@ -312,6 +286,7 @@ BEGIN HTML OUTPUT:`;
                 
                 // Continue with random commands
                 consoleCommandInterval = setInterval(async () => {
+                    if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
                     const randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
                     await typeConsoleCommand(randomCommand, 'normal', 25);
                 }, 3500);
@@ -637,7 +612,7 @@ BEGIN HTML OUTPUT:`;
                 
                 // Store for favorites
                 currentGeneration.theme = theme;
-                currentGeneration.persona = persona;
+                currentGeneration.persona = persona;     
                 
                 await typeConsoleCommand(`Persona loaded: ${persona.name}`, 'status', 25);
                 await typeConsoleCommand(`Theme assigned: "${theme}"`, 'info', 25);
@@ -645,6 +620,9 @@ BEGIN HTML OUTPUT:`;
                 // Type out main status
                 await typeText(mainStatus, persona.name.toUpperCase(), 40);
                 await typeText(currentMessage, `Creating ${theme}...`, 40);
+
+                const sessionTime = new Date().toISOString().slice(11, 19);
+                await TypeConsoleCommand(`[INFO] Session started at ${sessionTime} UTC`, 'info');
                 
                 // Wait briefly for personas to load if needed
                 let attempts = 0;
