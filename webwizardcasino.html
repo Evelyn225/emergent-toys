@@ -579,6 +579,16 @@ BEGIN HTML OUTPUT:`;
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
 
+            // Save current generation as previous before starting new generation
+            if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
+                const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
+                if (!isAlreadySaved) {
+                    previousGeneration = { ...currentGeneration };
+                } else {
+                    previousGeneration = null;
+                }
+            }
+
             // Show loading state
             loadingOverlay.classList.remove('hidden');
             setRegenerateButtonText('generating...');
@@ -939,8 +949,12 @@ BEGIN HTML OUTPUT:`;
                         loadingOverlay.classList.add('hidden');
                         setRegenerateButtonText('regenerate');
                         updateSaveButtonState();
-                        // Keep back button visible since current generation can go back to previous
-                        document.getElementById('backButton').style.display = 'block';
+                        // Only show back button if there's a previous generation to go back to
+                        if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code) {
+                            document.getElementById('backButton').style.display = 'block';
+                        } else {
+                            document.getElementById('backButton').style.display = 'none';
+                        }
                     }, 500);
                 }
 
@@ -1030,17 +1044,6 @@ BEGIN HTML OUTPUT:`;
                     loadingOverlay.classList.remove('hidden');
                     document.getElementById('generatedContent').innerHTML = '';
                 } else {
-                    // Save current generation as previous if it exists and is not in favorites
-                    if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
-                        const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
-                        if (!isAlreadySaved) {
-                            previousGeneration = { ...currentGeneration };
-                        } else {
-                            previousGeneration = null;
-                        }
-                    } else {
-                        previousGeneration = null;
-                    }
                     // Start a new generation
                     generateWebsite();
                 }
