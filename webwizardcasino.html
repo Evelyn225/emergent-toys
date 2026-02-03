@@ -289,7 +289,7 @@ BEGIN HTML OUTPUT:`;
                     if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
                     const randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
                     await typeConsoleCommand(randomCommand, 'normal', 25);
-                }, 3500);
+                }, 6000);
             })();
         }
 
@@ -569,6 +569,8 @@ BEGIN HTML OUTPUT:`;
             // Save current generation as previous before starting new generation
             if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
                 previousGeneration = { ...currentGeneration };
+            } else {
+                previousGeneration = null;
             }
 
             // Show loading state
@@ -576,8 +578,8 @@ BEGIN HTML OUTPUT:`;
             setRegenerateButtonText('generating...');
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
-            // Show back button in loading screen if there's a previous generation
-            if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code) {
+            // Show back button in loading screen only if previous generation exists and isn't favorited
+            if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code && !isSavedFavorite(previousGeneration.theme, previousGeneration.persona.name)) {
                 document.getElementById('backButton').style.display = 'block';
             } else {
                 document.getElementById('backButton').style.display = 'none';
@@ -889,6 +891,7 @@ BEGIN HTML OUTPUT:`;
                     backgroundGeneration = generatedData;
                     wasLoadingWhenGenerated = false;
                     document.getElementById('newSiteNotification').style.display = 'block';
+                    document.getElementById('saveButton').style.display = 'none';
                     setRegenerateButtonText('regenerate');
                     isGenerating = false;
                 } else {
