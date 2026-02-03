@@ -382,9 +382,9 @@ body {
     text-align: right;
     flex: 0 0 auto;
     max-width: 45%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 #currentMessage {
