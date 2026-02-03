@@ -384,16 +384,17 @@ BEGIN HTML OUTPUT:`;
                 return;
             }
 
-            // Show save button if there's a generated site that's not already in favorites
-            if (currentGeneration.code) {
-                const personaName = currentGeneration.persona?.name || currentGeneration.persona || '';
-                const canCheckFavorite = Boolean(currentGeneration.theme && personaName);
-                const isSaved = canCheckFavorite && isSavedFavorite(currentGeneration.theme, personaName);
-                
-                saveButton.style.display = isSaved ? 'none' : 'block';
-            } else {
+            // Show save button on any non-favorited site with rendered content
+            if (!currentGeneration.code) {
                 saveButton.style.display = 'none';
+                return;
             }
+
+            const personaName = currentGeneration.persona?.name || currentGeneration.persona || '';
+            const hasIdentity = Boolean(currentGeneration.theme && personaName);
+            const isSaved = hasIdentity && isSavedFavorite(currentGeneration.theme, personaName);
+
+            saveButton.style.display = isSaved ? 'none' : 'block';
         }
 
         function updateBackButtonState() {
@@ -530,8 +531,8 @@ BEGIN HTML OUTPUT:`;
             // Always hide overlay when loading a favorite
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
-            // Hide save button - this site is already favorited
-            document.getElementById('saveButton').style.display = 'none';
+            // Let helper decide visibility based on favorite status
+            updateSaveButtonState();
         }
 
         function deleteFavorite(id) {
@@ -612,7 +613,8 @@ BEGIN HTML OUTPUT:`;
             // Show loading state
             loadingOverlay.classList.remove('hidden');
             setRegenerateButtonText('generating...');
-            document.getElementById('saveButton').style.display = 'none';
+            // Hide save button while generating; helper will re-enable when done
+            updateSaveButtonState();
             document.getElementById('newSiteNotification').style.display = 'none';
             if (themeStatus) {
                 themeStatus.textContent = '';
@@ -926,7 +928,8 @@ BEGIN HTML OUTPUT:`;
                     backgroundGeneration = generatedData;
                     wasLoadingWhenGenerated = false;
                     document.getElementById('newSiteNotification').style.display = 'block';
-                    document.getElementById('saveButton').style.display = 'none';
+                    // Keep save button consistent with current site's favorite status
+                    updateSaveButtonState();
                     setRegenerateButtonText('regenerate');
                     isGenerating = false;
                 } else {
@@ -1013,10 +1016,8 @@ BEGIN HTML OUTPUT:`;
                         const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
                         if (!isAlreadySaved) {
                             previousGeneration = { ...currentGeneration };
-                            document.getElementById('backButton').style.display = 'block';
                         } else {
                             previousGeneration = null;
-                            document.getElementById('backButton').style.display = 'none';
                         }
                     }
                     
