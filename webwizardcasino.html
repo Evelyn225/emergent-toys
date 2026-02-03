@@ -413,8 +413,13 @@ BEGIN HTML OUTPUT:`;
                 return;
             }
 
+            const personaName = currentGeneration.persona?.name || currentGeneration.persona || '';
+            if (!currentGeneration.theme || !personaName) {
+                return;
+            }
+
             // Check if already saved
-            if (isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name)) {
+            if (isSavedFavorite(currentGeneration.theme, personaName)) {
                 return;
             }
 
@@ -422,7 +427,7 @@ BEGIN HTML OUTPUT:`;
             const favorite = {
                 id: Date.now(),
                 theme: currentGeneration.theme,
-                persona: currentGeneration.persona.name,
+                persona: personaName,
                 code: currentGeneration.code,
                 timestamp: new Date().toISOString()
             };
@@ -613,8 +618,8 @@ BEGIN HTML OUTPUT:`;
             // Show loading state
             loadingOverlay.classList.remove('hidden');
             setRegenerateButtonText('generating...');
-            // Hide save button while generating; helper will re-enable when done
-            updateSaveButtonState();
+            // Hide save button while generating
+            document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
             if (themeStatus) {
                 themeStatus.textContent = '';
@@ -905,10 +910,10 @@ BEGIN HTML OUTPUT:`;
                 addConsoleCommand('Running final sketch...');
                 await typeText(currentMessage, 'Executing code...');
 
-                // Store final code
+                // Store final code using the theme/persona for this run
                 const generatedData = {
-                    theme: currentGeneration.theme,
-                    persona: currentGeneration.persona,
+                    theme: theme,
+                    persona: persona,
                     code: p5Code
                 };
 
