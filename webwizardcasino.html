@@ -517,6 +517,10 @@ BEGIN HTML OUTPUT:`;
         function backToGeneratedSite() {
             if (!previousGeneration) return;
 
+            // Hide loading overlay
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.add('hidden');
+
             // Restore the previous generation
             currentGeneration = { ...previousGeneration };
             previousGeneration = null;
