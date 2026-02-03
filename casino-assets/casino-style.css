@@ -134,7 +134,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(10, 14, 39, 0.95);
+    background: #0C0C0C;
     z-index: 20000;
     display: none;
     justify-content: center;
@@ -165,11 +165,18 @@ body {
     font-weight: 400;
     text-align: left;
     letter-spacing: 2px;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.06);
 }
 
 #favoritesContent h2::before {
+    content: '> ';
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* macOS console-style scrollbar */
+#favoritesContent {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.06);
+}
 
 #favoritesContent::-webkit-scrollbar {
     width: 10px;
@@ -188,9 +195,6 @@ body {
 
 #favoritesContent::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.3));
-}
-    content: '> ';
-    color: rgba(255, 255, 255, 0.5);
 }
 
 #favoritesGrid {
