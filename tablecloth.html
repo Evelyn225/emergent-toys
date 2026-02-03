@@ -22,9 +22,11 @@
         }
         canvas {
             border: 1px solid #ccc;
-            background: white;
+            background: linear-gradient(135deg, #ffffff 0%, #f8f6f1 100%);
             max-width: 95vw;
             height: auto;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            cursor: none;
         }
     </style>
 </head>
@@ -34,185 +36,201 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // Set fixed canvas size - wider aspect ratio
-        canvas.width = 1200;
-        canvas.height = 700;
+        // Base canvas size (logical) and responsive scaling
+        const baseSize = { width: 1200, height: 700 };
+        let logicalWidth = baseSize.width;
+        let logicalHeight = baseSize.height;
+
+        function resizeCanvas() {
+            const maxW = window.innerWidth * 0.95;
+            const maxH = window.innerHeight * 0.9;
+            const scale = Math.min(maxW / baseSize.width, maxH / baseSize.height, 1);
+            logicalWidth = Math.round(baseSize.width * scale);
+            logicalHeight = Math.round(baseSize.height * scale);
+
+            const dpr = window.devicePixelRatio || 1;
+            canvas.style.width = `${logicalWidth}px`;
+            canvas.style.height = `${logicalHeight}px`;
+            canvas.width = Math.round(logicalWidth * dpr);
+            canvas.height = Math.round(logicalHeight * dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            // no cached background; everything is redrawn each frame
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
 
         // Pattern configuration
         const config = {
             gridSize: 28,
-            warpAmplitude: 15,
+            warpAmplitude: 18,
             warpFrequency: 0.02,
-            color: '#1a4F58',
-            timeSpeed: 0.002,
-            dotSize: 1,
-            dotSpacing: 4,
-            dotOpacity: 0.12
+            color: '#0c0c0c',
+            accentColor: '#0c0c0c',
+            timeSpeed: 0.008,
+            lineWidth: 2
         };
 
         let time = 0;
-        let tears = [];
-        let isDragging = false;
-        let currentTear = [];
-        let lastTearPosition = { x: 0, y: 0 };
+        const ripples = [];
+        let lastMousePos = { x: 0, y: 0, time: 0 };
+        let mouseRippleCounter = 0;
+        let mouseAngle = 0;
+        let cursorImage = null;
 
-        // Pre-calculate dot positions
-        const dotPositions = [];
-        for (let x = 0; x <= canvas.width; x += config.dotSpacing) {
-            for (let y = 0; y <= canvas.height; y += config.dotSpacing) {
-                dotPositions.push([x, y]);
-            }
-        }
+        // Load custom cursor image
+        const cursorImg = new Image();
+        cursorImg.src = 'paw.png';
+        cursorImg.onload = () => {
+            cursorImage = cursorImg;
+        };
 
-        function isNearTear(x, y, threshold = 25) {
-            for (const tear of tears) {
-                for (const point of tear) {
-                    const dx = x - point.x;
-                    const dy = y - point.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < threshold) {
-                        return { isTorn: true, dist, point };
-                    }
-                }
-            }
-            return { isTorn: false };
-        }
-
-        function getTornEdgeWiggle(x, y, time) {
-            const tearCheck = isNearTear(x, y, 40);
-            if (tearCheck.isTorn) {
-                // More wiggle the closer to the tear
-                const wiggleFactor = (40 - tearCheck.dist) / 40;
-                const wiggleX = Math.sin(time * 3 + x * 0.05) * 15 * wiggleFactor;
-                const wiggleY = Math.cos(time * 3 + y * 0.05) * 15 * wiggleFactor;
-                return { x: wiggleX, y: wiggleY, factor: wiggleFactor };
-            }
-            return { x: 0, y: 0, factor: 0 };
-        }
-
-        function drawDotMatrix() {
+        // Draw rotated cursor image on main canvas
+        function drawCursor(x, y, angle) {
+            if (!cursorImage) return;
+            
+            const size = 32; // Adjust size as needed
             ctx.save();
-            ctx.fillStyle = '#1a4F58';
-            ctx.globalAlpha = config.dotOpacity;
-            
-            for (const [x, y] of dotPositions) {
-                ctx.beginPath();
-                ctx.arc(x, y, config.dotSize, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.drawImage(cursorImage, -size / 2, -size / 2, size, size);
             ctx.restore();
         }
 
+        function rippleDisplacement(x, y) {
+            if (ripples.length === 0) return 0;
+            let offset = 0;
+            for (let i = 0; i < ripples.length; i++) {
+                const r = ripples[i];
+                const dx = x - r.x;
+                const dy = y - r.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const wave = Math.sin((dist - r.t * 120) / 10);
+                const falloff = Math.exp(-dist / 220);
+                const fade = Math.max(0, 1 - r.t / 1.4);
+                const ease = fade * fade * (3 - 2 * fade);
+                const strength = r.strength !== undefined ? r.strength : 1.0;
+                offset += wave * falloff * 6 * ease * strength;
+            }
+            return offset;
+        }
+
         function drawWarpedGrid() {
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw dot matrix background
-            drawDotMatrix();
-            
+            // Base fill
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
             ctx.strokeStyle = config.color;
-            ctx.lineWidth = 1.5;
-            
+            ctx.lineWidth = config.lineWidth;
+            ctx.lineCap = 'round';
+
             const t = time * 2;
             const freq = config.warpFrequency;
             const amp = config.warpAmplitude;
-            
-            // Draw horizontal lines
-            for (let y = 0; y <= canvas.height; y += config.gridSize) {
-                ctx.beginPath();
-                let isDrawing = false;
-                for (let x = 0; x <= canvas.width; x += 1) {
-                    const warpY = y + Math.sin(x * freq + t) * amp;
-                    const tearCheck = isNearTear(x, warpY);
-                    
-                    if (tearCheck.isTorn) {
-                        if (isDrawing) {
-                            ctx.stroke();
-                            ctx.beginPath();
-                            isDrawing = false;
-                        }
-                    } else {
-                        // Add extra wiggle near torn edges
-                        const wiggle = getTornEdgeWiggle(x, warpY, time);
-                        const finalY = warpY + wiggle.y;
-                        const finalX = x + wiggle.x;
-                        
-                        if (!isDrawing) {
-                            ctx.moveTo(finalX, finalY);
-                            isDrawing = true;
-                        } else {
-                            ctx.lineTo(finalX, finalY);
-                        }
-                    }
+            ctx.globalAlpha = 0.85;
+            const drawW = logicalWidth + config.gridSize;
+            const drawH = logicalHeight + config.gridSize;
+
+            // Red/white check pattern that follows the warp + ripples
+            const block = config.gridSize * 3.02; // Slightly larger to better match visual grid spacing
+            ctx.globalAlpha = 0.95;
+            // Start at grid-aligned positions
+            const startY = Math.floor(-block / config.gridSize) * config.gridSize;
+            const startX = Math.floor(-block / config.gridSize) * config.gridSize;
+            for (let y = startY; y <= logicalHeight + block; y += block) {
+                for (let x = startX; x <= logicalWidth + block; x += block) {
+                    const isRed = (Math.floor(x / block) + Math.floor(y / block)) % 2 === 0;
+                    ctx.fillStyle = isRed ? '#C94B4B' : '#FFFFFF';
+
+                    // Match exact grid line displacement
+                    const r1 = rippleDisplacement(x, y);
+                    const r2 = rippleDisplacement(x + block, y);
+                    const r3 = rippleDisplacement(x + block, y + block);
+                    const r4 = rippleDisplacement(x, y + block);
+
+                    // X warps based on Y position (vertical lines), Y warps based on X position (horizontal lines)
+                    const x1 = x + Math.sin(y * freq + t) * amp + r1;
+                    const y1 = y + Math.sin(x * freq + t) * amp + r1;
+                    const x2 = (x + block) + Math.sin(y * freq + t) * amp + r2;
+                    const y2 = y + Math.sin((x + block) * freq + t) * amp + r2;
+                    const x3 = (x + block) + Math.sin((y + block) * freq + t) * amp + r3;
+                    const y3 = (y + block) + Math.sin((x + block) * freq + t) * amp + r3;
+                    const x4 = x + Math.sin((y + block) * freq + t) * amp + r4;
+                    const y4 = (y + block) + Math.sin(x * freq + t) * amp + r4;
+
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.lineTo(x3, y3);
+                    ctx.lineTo(x4, y4);
+                    ctx.closePath();
+                    ctx.fill();
                 }
-                if (isDrawing) ctx.stroke();
             }
 
-            // Draw vertical lines
-            for (let x = 0; x <= canvas.width; x += config.gridSize) {
+            // Draw horizontal lines (warp)
+            ctx.globalAlpha = 0.85;
+            ctx.strokeStyle = config.color;
+            ctx.lineWidth = config.lineWidth;
+            for (let y = -config.gridSize; y <= drawH; y += config.gridSize) {
                 ctx.beginPath();
-                let isDrawing = false;
-                for (let y = 0; y <= canvas.height; y += 2) {
-                    const warpX = x + Math.sin(y * freq + t) * amp;
-                    const tearCheck = isNearTear(warpX, y);
-                    
-                    if (tearCheck.isTorn) {
-                        if (isDrawing) {
-                            ctx.stroke();
-                            ctx.beginPath();
-                            isDrawing = false;
-                        }
+                for (let x = -config.gridSize; x <= drawW; x += 15) {
+                    const ripple = rippleDisplacement(x, y);
+                    const warpY = y + Math.sin(x * freq + t) * amp + ripple;
+                    if (x === 0) {
+                        ctx.moveTo(x, warpY);
                     } else {
-                        // Add extra wiggle near torn edges
-                        const wiggle = getTornEdgeWiggle(warpX, y, time);
-                        const finalX = warpX + wiggle.x;
-                        const finalY = y + wiggle.y;
-                        
-                        if (!isDrawing) {
-                            ctx.moveTo(finalX, finalY);
-                            isDrawing = true;
-                        } else {
-                            ctx.lineTo(finalX, finalY);
-                        }
+                        ctx.lineTo(x, warpY);
                     }
-                }
-                if (isDrawing) ctx.stroke();
-            }
-
-            // Draw tears with frayed edges
-            ctx.strokeStyle = 'rgba(26, 79, 88, 0.4)';
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            
-            for (const tear of tears) {
-                if (tear.length < 2) continue;
-                
-                // Main tear line
-                ctx.beginPath();
-                ctx.moveTo(tear[0].x, tear[0].y);
-                for (let i = 1; i < tear.length; i++) {
-                    ctx.lineTo(tear[i].x, tear[i].y);
                 }
                 ctx.stroke();
-                
-                // Add frayed edges
-                ctx.strokeStyle = 'rgba(26, 79, 88, 0.2)';
-                ctx.lineWidth = 1;
-                for (let i = 0; i < tear.length; i += 3) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const length = 8 + Math.random() * 8;
-                    ctx.beginPath();
-                    ctx.moveTo(tear[i].x, tear[i].y);
-                    ctx.lineTo(
-                        tear[i].x + Math.cos(angle) * length,
-                        tear[i].y + Math.sin(angle) * length
-                    );
-                    ctx.stroke();
+            }
+
+            // Draw vertical lines (weft)
+            for (let x = -config.gridSize; x <= drawW; x += config.gridSize) {
+                ctx.beginPath();
+                for (let y = -config.gridSize; y <= drawH; y += 15) {
+                    const ripple = rippleDisplacement(x, y);
+                    const warpX = x + Math.sin(y * freq + t) * amp + ripple;
+                    if (y === 0) {
+                        ctx.moveTo(warpX, y);
+                    } else {
+                        ctx.lineTo(warpX, y);
+                    }
                 }
-                ctx.strokeStyle = 'rgba(26, 79, 88, 0.4)';
-                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            // Draw ripple interactions
+            if (ripples.length > 0) {
+                ctx.strokeStyle = config.accentColor;
+                ctx.lineWidth = 1.5;
+                for (let i = ripples.length - 1; i >= 0; i--) {
+                    const r = ripples[i];
+                    
+                    // Draw visible circles for click ripples
+                    if (r.type === 'click') {
+                        const radius = r.t * 120;
+                        const fade = Math.max(0, 1 - r.t / 1.4);
+                        const ease = fade * fade * (3 - 2 * fade);
+                        const alpha = 0.55 * ease;
+                        ctx.globalAlpha = alpha;
+                        ctx.beginPath();
+                        ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    
+                    r.t += 0.015;
+                    if (r.t > 1.4) {
+                        ripples.splice(i, 1);
+                    }
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            // Draw paw cursor
+            if (lastMousePos.x > 0 || lastMousePos.y > 0) {
+                drawCursor(lastMousePos.x, lastMousePos.y, mouseAngle);
             }
 
             time += config.timeSpeed;
@@ -221,66 +239,49 @@
 
         // Start animation
         drawWarpedGrid();
-
-        // Add tear interactivity
-        canvas.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            currentTear = [];
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            currentTear.push({ x, y });
-            lastTearPosition = { x, y };
-        });
-
+        // Mouse interactivity - simple and performant
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            
-            if (isDragging) {
-                // Interpolate points between last position and current position
-                const dx = x - lastTearPosition.x;
-                const dy = y - lastTearPosition.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                // Add interpolated points if movement is significant
-                if (distance > 5) {
-                    const steps = Math.ceil(distance / 5);
-                    for (let i = 1; i <= steps; i++) {
-                        const t = i / steps;
-                        const interpX = lastTearPosition.x + dx * t;
-                        const interpY = lastTearPosition.y + dy * t;
-                        currentTear.push({ x: interpX, y: interpY });
-                    }
-                    lastTearPosition = { x, y };
-                }
-            } else {
-                // Subtle warp adjustment when not tearing
-                config.warpAmplitude = 10 + (y / canvas.height) * 20;
-                config.warpFrequency = 0.01 + (x / canvas.width) * 0.03;
+            const x = (e.clientX - rect.left) / rect.width * logicalWidth;
+            const y = (e.clientY - rect.top) / rect.height * logicalHeight;
+
+            // Create subtle ripples as mouse moves
+            const now = Date.now();
+            const dx = x - lastMousePos.x;
+            const dy = y - lastMousePos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const timeDelta = now - lastMousePos.time;
+
+            // Update cursor angle based on movement direction
+            if (dx !== 0 || dy !== 0) {
+                mouseAngle = Math.atan2(dy, dx) + Math.PI / 2; // Add 90 degrees so paw points forward
+            }
+
+            // Create ripple on every mouse movement with some speed
+            if (dist > 3 && timeDelta > 16) { // ~60fps polling
+                // Scale strength with mouse speed (dist/timeDelta)
+                const speed = dist / Math.max(timeDelta, 1);
+                const strength = Math.min(0.5, 0.1 + speed * 0.05); // 0.1 to 0.5 range
+                ripples.push({ x, y, t: 0, strength: strength, type: 'mousemove' }); // subtler, no circle
+                lastMousePos = { x, y, time: now };
             }
         });
-
-        canvas.addEventListener('mouseup', () => {
-            if (isDragging && currentTear.length > 1) {
-                tears.push(currentTear);
-            }
-            isDragging = false;
-            currentTear = [];
-        });
-
         canvas.addEventListener('mouseleave', () => {
-            if (isDragging && currentTear.length > 1) {
-                tears.push(currentTear);
-            }
-            isDragging = false;
-            currentTear = [];
+            config.warpAmplitude = 18;
+            config.warpFrequency = 0.02;
         });
-
-        // Double-click to clear all tears
+        // Click to create ripples
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width * logicalWidth;
+            const y = (e.clientY - rect.top) / rect.height * logicalHeight;
+            ripples.push({ x, y, t: 0, strength: 1.0, type: 'click' });
+        });
+        // Double-click to reset
         canvas.addEventListener('dblclick', () => {
-            tears = [];
+            config.warpAmplitude = 18;
+            config.warpFrequency = 0.02;
+            time = 0;
         });
     </script>
 </body>
