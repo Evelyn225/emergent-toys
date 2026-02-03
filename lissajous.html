@@ -26,7 +26,16 @@
     </style>
 </head>
 <body>
-    <a href="index.html" style="position: fixed; top: 20px; right: 20px; z-index: 1000; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(255, 150, 200, 0.8)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
+    <a href="index.html" style="position: fixed; top: 20px; right: 20px; z-index: 1000; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(255, 150, 200, 0.8)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain; animation: lissajousWave 4s ease-in-out infinite;"></a>
+    <style>
+        @keyframes lissajousWave {
+            0% { transform: translateX(0px) translateY(0px) rotate(0deg); }
+            25% { transform: translateX(3px) translateY(-2px) rotate(5deg); }
+            50% { transform: translateX(0px) translateY(3px) rotate(0deg); }
+            75% { transform: translateX(-3px) translateY(-2px) rotate(-5deg); }
+            100% { transform: translateX(0px) translateY(0px) rotate(0deg); }
+        }
+    </style>
     <script>
         let w; // Width of each cell
         let cols; // Number of columns
