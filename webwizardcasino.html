@@ -1036,6 +1036,10 @@ BEGIN HTML OUTPUT:`;
                     // Hide notification and update UI
                     notification.style.display = 'none';
                     updateSaveButtonState();
+                    const favoritesButton = document.getElementById('favoritesButton');
+                    if (favoritesButton) {
+                        favoritesButton.style.display = 'block';
+                    }
                     backgroundGeneration = null;
                 }
             });
