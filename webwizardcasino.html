@@ -371,6 +371,12 @@ BEGIN HTML OUTPUT:`;
         }
 
         // Favorites management
+        function getPersonaNameFrom(gen) {
+            if (!gen || !gen.persona) return '';
+            if (typeof gen.persona === 'string') return gen.persona;
+            return gen.persona.name || '';
+        }
+
         function isSavedFavorite(theme, personaName) {
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             return favorites.some(f => f.theme === theme && f.persona === personaName);
@@ -390,7 +396,7 @@ BEGIN HTML OUTPUT:`;
                 return;
             }
 
-            const personaName = currentGeneration.persona?.name || currentGeneration.persona || '';
+            const personaName = getPersonaNameFrom(currentGeneration);
             const hasIdentity = Boolean(currentGeneration.theme && personaName);
             const isSaved = hasIdentity && isSavedFavorite(currentGeneration.theme, personaName);
 
@@ -401,7 +407,7 @@ BEGIN HTML OUTPUT:`;
             const backButton = document.getElementById('backButton');
             if (!backButton) return;
 
-            const personaName = previousGeneration?.persona?.name || previousGeneration?.persona || '';
+            const personaName = getPersonaNameFrom(previousGeneration);
             const hasPrevious = Boolean(previousGeneration?.theme && personaName && previousGeneration?.code);
             const isPrevSaved = hasPrevious && isSavedFavorite(previousGeneration.theme, personaName);
 
@@ -413,7 +419,7 @@ BEGIN HTML OUTPUT:`;
                 return;
             }
 
-            const personaName = currentGeneration.persona?.name || currentGeneration.persona || '';
+            const personaName = getPersonaNameFrom(currentGeneration);
             if (!currentGeneration.theme || !personaName) {
                 return;
             }
@@ -480,7 +486,8 @@ BEGIN HTML OUTPUT:`;
             
             // Save current generation as previous if it has content and is not already saved
             if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
-                const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
+                const currentPersonaName = getPersonaNameFrom(currentGeneration);
+                const isAlreadySaved = currentPersonaName && isSavedFavorite(currentGeneration.theme, currentPersonaName);
                 if (!isAlreadySaved) {
                     previousGeneration = { ...currentGeneration };
                 } else {
@@ -608,8 +615,11 @@ BEGIN HTML OUTPUT:`;
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
 
-            // Save current generation as previous before starting new generation
-            if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
+            // Save current generation as previous before starting new generation,
+            // but only if it's not already a saved favorite
+            const currentPersonaName = getPersonaNameFrom(currentGeneration);
+            if (currentGeneration.theme && currentPersonaName && currentGeneration.code &&
+                !isSavedFavorite(currentGeneration.theme, currentPersonaName)) {
                 previousGeneration = { ...currentGeneration };
             } else {
                 previousGeneration = null;
@@ -1018,7 +1028,8 @@ BEGIN HTML OUTPUT:`;
                 if (backgroundGeneration) {
                     // Save current view as previous if it has content and is not already saved
                     if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
-                        const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
+                        const currentPersonaName = getPersonaNameFrom(currentGeneration);
+                        const isAlreadySaved = currentPersonaName && isSavedFavorite(currentGeneration.theme, currentPersonaName);
                         if (!isAlreadySaved) {
                             previousGeneration = { ...currentGeneration };
                         } else {
