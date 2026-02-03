@@ -621,8 +621,9 @@ BEGIN HTML OUTPUT:`;
                 await typeText(mainStatus, persona.name.toUpperCase(), 40);
                 await typeText(currentMessage, `Creating ${theme}...`, 40);
 
-                const sessionTime = new Date().toISOString().slice(11, 19);
-                await typeConsoleCommand(`[INFO] Session started at ${sessionTime} UTC`, 'info');
+                const sessionTime = new Date().toLocaleTimeString([], { hour12: false });
+                const sessionZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                await typeConsoleCommand(`[INFO] Session started at ${sessionTime} ${sessionZone}`, 'info');
                 
                 // Wait briefly for personas to load if needed
                 let attempts = 0;
