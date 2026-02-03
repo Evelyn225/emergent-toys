@@ -496,3 +496,26 @@ body {
         border-color: rgba(255, 255, 255, 0.3);
     }
 }
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+    #mainStatus {
+        font-size: 28px;
+    }
+    
+    .console-line {
+        font-size: 13px;
+        margin: 8px 0;
+    }
+}
+
+@media (max-width: 480px) {
+    #mainStatus {
+        font-size: 24px;
+    }
+    
+    .console-line {
+        font-size: 12px;
+        margin: 6px 0;
+    }
+}
