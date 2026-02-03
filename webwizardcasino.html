@@ -407,8 +407,12 @@ BEGIN HTML OUTPUT:`;
             const personaName = getPersonaNameFrom(displayedGeneration);
             const hasIdentity = Boolean(displayedGeneration.theme && personaName);
             const isSaved = hasIdentity && isSavedFavorite(displayedGeneration.theme, personaName);
+            const isCurrentGeneration = currentGeneration.code === displayedGeneration.code &&
+                                       currentGeneration.theme === displayedGeneration.theme &&
+                                       getPersonaNameFrom(currentGeneration) === getPersonaNameFrom(displayedGeneration);
 
-            saveButton.style.display = isSaved ? 'none' : 'block';
+            // Only show save button if: has content, has identity, not already saved, AND is the current generation
+            saveButton.style.display = (isSaved || !isCurrentGeneration) ? 'none' : 'block';
         }
 
         function updateBackButtonState() {
@@ -636,6 +640,9 @@ BEGIN HTML OUTPUT:`;
             } else {
                 previousGeneration = null;
             }
+
+            // Clear any pending background generation from before
+            backgroundGeneration = null;
 
             // Show loading state
             loadingOverlay.classList.remove('hidden');
@@ -1051,8 +1058,17 @@ BEGIN HTML OUTPUT:`;
                         }
                     }
                     
-                    // Load the background generation
-                    currentGeneration = { ...backgroundGeneration };
+                    // Store the generation to render
+                    const generationToRender = { ...backgroundGeneration };
+                    
+                    // Hide notification first (before we clear backgroundGeneration)
+                    notification.style.display = 'none';
+                    
+                    // Clear background generation immediately so future generations can use it
+                    backgroundGeneration = null;
+                    
+                    // Update current generation
+                    currentGeneration = generationToRender;
                     
                     // Render the new site
                     const container = document.getElementById('generatedContent');
@@ -1077,6 +1093,13 @@ BEGIN HTML OUTPUT:`;
                             iframe.contentDocument.close();
                             disableGeneratedContextMenu(container, iframe);
                             setDisplayedGeneration(currentGeneration);
+                            // Update UI state after rendering
+                            updateSaveButtonState();
+                            updateBackButtonState();
+                            const favButton = document.getElementById('favoritesButton');
+                            if (favButton) {
+                                favButton.style.display = 'block';
+                            }
                         }, 0);
                     } else {
                         const script = document.createElement('script');
@@ -1084,17 +1107,14 @@ BEGIN HTML OUTPUT:`;
                         container.appendChild(script);
                         disableGeneratedContextMenu(container);
                         setDisplayedGeneration(currentGeneration);
+                        // Update UI state
+                        updateSaveButtonState();
+                        updateBackButtonState();
+                        const favButton = document.getElementById('favoritesButton');
+                        if (favButton) {
+                            favButton.style.display = 'block';
+                        }
                     }
-                    
-                    // Hide notification and update UI
-                    notification.style.display = 'none';
-                    updateSaveButtonState();
-                    updateBackButtonState();
-                    const favoritesButton = document.getElementById('favoritesButton');
-                    if (favoritesButton) {
-                        favoritesButton.style.display = 'block';
-                    }
-                    backgroundGeneration = null;
                 }
             });
             
