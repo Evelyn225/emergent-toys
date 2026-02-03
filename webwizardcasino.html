@@ -379,6 +379,17 @@ BEGIN HTML OUTPUT:`;
                 saveButton.style.display = 'none';
             }
         }
+
+        function updateBackButtonState() {
+            const backButton = document.getElementById('backButton');
+            if (!backButton) return;
+
+            const personaName = previousGeneration?.persona?.name || previousGeneration?.persona || '';
+            const hasPrevious = Boolean(previousGeneration?.theme && personaName && previousGeneration?.code);
+            const isPrevSaved = hasPrevious && isSavedFavorite(previousGeneration.theme, personaName);
+
+            backButton.style.display = hasPrevious && !isPrevSaved ? 'block' : 'none';
+        }
         
         function saveFavorite() {
             if (!currentGeneration.code) {
@@ -453,12 +464,11 @@ BEGIN HTML OUTPUT:`;
                 const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
                 if (!isAlreadySaved) {
                     previousGeneration = { ...currentGeneration };
-                    document.getElementById('backButton').style.display = 'block';
                 } else {
                     previousGeneration = null;
-                    document.getElementById('backButton').style.display = 'none';
                 }
             }
+            updateBackButtonState();
             
             // Mark that we're not on the loading screen anymore
             wasLoadingWhenGenerated = false;
@@ -531,9 +541,7 @@ BEGIN HTML OUTPUT:`;
             // Restore the previous generation
             currentGeneration = { ...previousGeneration };
             previousGeneration = null;
-            
-            // Hide back button
-            document.getElementById('backButton').style.display = 'none';
+            updateBackButtonState();
             
             // Render the previous content
             const container = document.getElementById('generatedContent');
@@ -591,12 +599,7 @@ BEGIN HTML OUTPUT:`;
             if (themeStatus) {
                 themeStatus.textContent = '';
             }
-            // Show back button in loading screen only if previous generation exists and isn't favorited
-            if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code && !isSavedFavorite(previousGeneration.theme, previousGeneration.persona.name)) {
-                document.getElementById('backButton').style.display = 'block';
-            } else {
-                document.getElementById('backButton').style.display = 'none';
-            }
+            updateBackButtonState();
             generatedContent.innerHTML = '';
             isGenerating = true;
             wasLoadingWhenGenerated = true;
@@ -952,12 +955,7 @@ BEGIN HTML OUTPUT:`;
                         loadingOverlay.classList.add('hidden');
                         setRegenerateButtonText('regenerate');
                         updateSaveButtonState();
-                        // Only show back button if there's a previous generation to go back to AND it's not already saved
-                        if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code && !isSavedFavorite(previousGeneration.theme, previousGeneration.persona.name)) {
-                            document.getElementById('backButton').style.display = 'block';
-                        } else {
-                            document.getElementById('backButton').style.display = 'none';
-                        }
+                        updateBackButtonState();
                     }, 500);
                 }
 
@@ -1036,6 +1034,7 @@ BEGIN HTML OUTPUT:`;
                     // Hide notification and update UI
                     notification.style.display = 'none';
                     updateSaveButtonState();
+                    updateBackButtonState();
                     const favoritesButton = document.getElementById('favoritesButton');
                     if (favoritesButton) {
                         favoritesButton.style.display = 'block';
