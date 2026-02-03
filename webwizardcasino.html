@@ -915,7 +915,7 @@ BEGIN HTML OUTPUT:`;
                     } catch (e) {
                         console.error('Execution error:', e);
                         const container = document.getElementById('generatedContent');
-                        container.innerHTML = '<div style="padding: 40px;">Error: ' + e.message + '</div>';
+                        container.innerHTML = '<div style="padding: 40px; color: red;">Error: ' + e.message + '</div>';
                     }
                     
                     setProgressBar(100); // Mark generation as complete
