@@ -510,9 +510,8 @@ BEGIN HTML OUTPUT:`;
             // Always hide overlay when loading a favorite
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
-            // Show save button
-            document.getElementById('saveButton').style.display = 'block';
-            updateSaveButtonState();
+            // Hide save button - this site is already favorited
+            document.getElementById('saveButton').style.display = 'none';
         }
 
         function deleteFavorite(id) {
