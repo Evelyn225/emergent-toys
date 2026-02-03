@@ -275,6 +275,23 @@ BEGIN HTML OUTPUT:`;
             }
         }
 
+        function disableGeneratedContextMenu(container, iframe = null) {
+            if (!container) return;
+
+            if (!container.dataset.contextMenuDisabled) {
+                container.addEventListener('contextmenu', (event) => event.preventDefault());
+                container.dataset.contextMenuDisabled = 'true';
+            }
+
+            if (iframe && iframe.contentDocument) {
+                const doc = iframe.contentDocument;
+                doc.addEventListener('contextmenu', (event) => event.preventDefault());
+                if (doc.body) {
+                    doc.body.addEventListener('contextmenu', (event) => event.preventDefault());
+                }
+            }
+        }
+
         function startConsoleCommands() {
             // Add initial commands with typing animation
             (async () => {
@@ -501,11 +518,13 @@ BEGIN HTML OUTPUT:`;
                     iframe.contentDocument.open();
                     iframe.contentDocument.write(favorite.code);
                     iframe.contentDocument.close();
+                    disableGeneratedContextMenu(container, iframe);
                 }, 0);
             } else {
                 const script = document.createElement('script');
                 script.textContent = favorite.code;
                 container.appendChild(script);
+                disableGeneratedContextMenu(container);
             }
 
             // Always hide overlay when loading a favorite
@@ -561,11 +580,13 @@ BEGIN HTML OUTPUT:`;
                     iframe.contentDocument.open();
                     iframe.contentDocument.write(currentGeneration.code);
                     iframe.contentDocument.close();
+                    disableGeneratedContextMenu(container, iframe);
                 }, 0);
             } else {
                 const script = document.createElement('script');
                 script.textContent = currentGeneration.code;
                 container.appendChild(script);
+                disableGeneratedContextMenu(container);
             }
 
             // Update save button state
@@ -934,11 +955,13 @@ BEGIN HTML OUTPUT:`;
                             iframe.contentDocument.open();
                             iframe.contentDocument.write(p5Code);
                             iframe.contentDocument.close();
+                            disableGeneratedContextMenu(container, iframe);
                         } else {
                             // For partial code, inject as script
                             const script = document.createElement('script');
                             script.textContent = p5Code;
                             container.appendChild(script);
+                            disableGeneratedContextMenu(container);
                         }
                     } catch (e) {
                         console.error('Execution error:', e);
@@ -1021,11 +1044,13 @@ BEGIN HTML OUTPUT:`;
                             iframe.contentDocument.open();
                             iframe.contentDocument.write(currentGeneration.code);
                             iframe.contentDocument.close();
+                            disableGeneratedContextMenu(container, iframe);
                         }, 0);
                     } else {
                         const script = document.createElement('script');
                         script.textContent = currentGeneration.code;
                         container.appendChild(script);
+                        disableGeneratedContextMenu(container);
                     }
                     
                     // Hide notification and update UI
