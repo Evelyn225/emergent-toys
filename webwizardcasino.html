@@ -37,7 +37,10 @@
 
     <div id="loadingOverlay">
         <div id="consoleOutput"></div>
-        <div id="mainStatus"></div>
+        <div id="loadingHeader">
+            <div id="mainStatus"></div>
+            <div id="themeStatus"></div>
+        </div>
         <div id="currentMessage"></div>
         <div class="progress-container">
             <div class="progress-label">Processing...</div>
@@ -357,17 +360,23 @@ BEGIN HTML OUTPUT:`;
         }
         
         function updateSaveButtonState() {
-            if (!currentGeneration.theme || !currentGeneration.persona) return;
-            if (isGenerating) return;
-            
-            const personaName = currentGeneration.persona.name || currentGeneration.persona;
-            const isSaved = isSavedFavorite(currentGeneration.theme, personaName);
             const saveButton = document.getElementById('saveButton');
-            
+            if (!saveButton) return;
+            if (isGenerating) {
+                saveButton.style.display = 'none';
+                return;
+            }
+
+            const personaName = currentGeneration.persona?.name || currentGeneration.persona || '';
+            const canCheckFavorite = Boolean(currentGeneration.theme && personaName);
+            const isSaved = canCheckFavorite && isSavedFavorite(currentGeneration.theme, personaName);
+
             if (isSaved) {
                 saveButton.style.display = 'none';
-            } else {
+            } else if (canCheckFavorite || currentGeneration.code) {
                 saveButton.style.display = 'block';
+            } else {
+                saveButton.style.display = 'none';
             }
         }
         
@@ -562,6 +571,7 @@ BEGIN HTML OUTPUT:`;
         async function generateWebsite() {
             const loadingOverlay = document.getElementById('loadingOverlay');
             const mainStatus = document.getElementById('mainStatus');
+            const themeStatus = document.getElementById('themeStatus');
             const currentMessage = document.getElementById('currentMessage');
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
@@ -578,6 +588,9 @@ BEGIN HTML OUTPUT:`;
             setRegenerateButtonText('generating...');
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
+            if (themeStatus) {
+                themeStatus.textContent = '';
+            }
             // Show back button in loading screen only if previous generation exists and isn't favorited
             if (previousGeneration && previousGeneration.theme && previousGeneration.persona && previousGeneration.code && !isSavedFavorite(previousGeneration.theme, previousGeneration.persona.name)) {
                 document.getElementById('backButton').style.display = 'block';
@@ -621,6 +634,7 @@ BEGIN HTML OUTPUT:`;
                 
                 // Type out main status
                 await typeText(mainStatus, persona.name.toUpperCase(), 40);
+                await typeText(themeStatus, theme.toUpperCase(), 40);
                 await typeText(currentMessage, `Creating ${theme}...`, 40);
 
                 const sessionTime = new Date().toLocaleTimeString([], { hour12: false });

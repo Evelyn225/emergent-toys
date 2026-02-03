@@ -331,12 +331,33 @@ body {
     color: rgba(255, 200, 100, 0.8);
 }
 
+#loadingHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin: 30px 0 15px 0;
+    gap: 20px;
+}
+
 #mainStatus {
     font-size: 42px;
     color: rgba(255, 255, 255, 0.95);
-    margin: 30px 0 15px 0;
     font-weight: 600;
     letter-spacing: 2px;
+    flex: 1 1 auto;
+}
+
+#themeStatus {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.8);
+    letter-spacing: 1px;
+    text-align: right;
+    flex: 0 0 auto;
+    max-width: 45%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #currentMessage {
