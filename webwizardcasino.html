@@ -373,7 +373,7 @@ BEGIN HTML OUTPUT:`;
         }
         
         function updateSaveButtonState() {
-            if (!currentGeneration.theme || !currentGeneration.persona) return;
+            if (!currentGeneration.theme || !currentGeneration.persona || isGenerating) return;
             
             const isSaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
             const saveButton = document.getElementById('saveButton');
@@ -773,7 +773,7 @@ BEGIN HTML OUTPUT:`;
                     '- Particle system or physics\n' +
                     '- Data visualization component\n' +
                     '- Sound/rhythm visualization (if audio available)\n' +
-                    '- Camera/video integration (if appropriate)\n' +
+                    '- Information elements (paragraphs, images, etc.)\n' +
                     '- 3D elements (WEBGL mode)\n' +
                     '- Perlin noise field or flow field\n' +
                     '- Fractal or recursive structure\n\n' +
@@ -939,9 +939,8 @@ BEGIN HTML OUTPUT:`;
                         setRegenerateButtonText('regenerate');
                         updateSaveButtonState();
                         isGenerating = false;
-                        // Clear previous generation so back button won't show on new site
-                        previousGeneration = null;
-                        document.getElementById('backButton').style.display = 'none';
+                        // Keep back button visible since current generation can go back to previous
+                        document.getElementById('backButton').style.display = 'block';
                     }, 500);
                 }
 
