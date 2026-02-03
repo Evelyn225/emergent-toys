@@ -420,6 +420,17 @@ body {
     font-family: 'Iosevka', monospace;
     letter-spacing: 0.5px;
     transition: all 0.2s;
+    animation: blinkingRedOutline 1.5s ease-in-out infinite;
+}
+
+@keyframes blinkingRedOutline {
+    0%, 100% {
+        border-color: rgba(255, 100, 100, 0.3);
+    }
+    50% {
+        border-color: rgba(255, 100, 100, 0.9);
+        box-shadow: 0 0 10px rgba(255, 100, 100, 0.6);
+    }
 }
 
 @keyframes pulse {
