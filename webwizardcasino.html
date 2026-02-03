@@ -610,6 +610,7 @@ BEGIN HTML OUTPUT:`;
                     iframe.contentDocument.close();
                     disableGeneratedContextMenu(container, iframe);
                     setDisplayedGeneration(currentGeneration);
+                    updateSaveButtonState();
                 }, 0);
             } else {
                 const script = document.createElement('script');
@@ -617,10 +618,8 @@ BEGIN HTML OUTPUT:`;
                 container.appendChild(script);
                 disableGeneratedContextMenu(container);
                 setDisplayedGeneration(currentGeneration);
+                updateSaveButtonState();
             }
-
-            // Update save button state
-            updateSaveButtonState();
         }
 
         // Call ChatGPT API via Vercel serverless function - SIMPLIFIED
