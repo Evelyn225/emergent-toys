@@ -248,6 +248,7 @@
             padding-top: 1rem;
             display: flex;
             gap: 3rem;
+            touch-action: pan-x;
         }
 
         .site-link {
@@ -292,13 +293,14 @@
             .links-container {
                 overflow-x: auto;
                 overflow-y: hidden;
-                padding: 10rem 0rem;
+                padding: 2rem 1rem;
                 margin-bottom: 1rem;
                 gap: 2rem;
-                max-width: 100%;
+                width: 100vw;
+                margin-left: calc(-50vw + 50%);
                 scroll-behavior: smooth;
                 -webkit-overflow-scrolling: touch;
-                padding-bottom: 1rem;
+                touch-action: pan-x;
             }
 
             .site-link {
@@ -624,129 +626,8 @@
             resizeCanvas(windowWidth, windowHeight);
         }
 
-        // Drag-to-scroll functionality for links container (mouse and touch)
-        const linksContainer = document.querySelector('.links-container');
-        let isDown = false;
-        let startX;
-        let startY;
-        let scrollLeft;
-        let isDragging = false;
-        let velocity = 0;
-        let lastX = 0;
-        let lastTime = 0;
-
-        function handleDragStart(clientX, clientY) {
-            isDown = true;
-            isDragging = false;
-            startX = clientX - linksContainer.offsetLeft;
-            startY = clientY;
-            scrollLeft = linksContainer.scrollLeft;
-            lastX = clientX;
-            lastTime = Date.now();
-            linksContainer.style.scrollBehavior = 'auto';
-            linksContainer.style.cursor = 'grabbing';
-        }
-
-        function handleDragMove(clientX, clientY) {
-            if (!isDown) return;
-            
-            const x = clientX - linksContainer.offsetLeft;
-            const y = clientY;
-            const walk = (x - startX) * 1.5;
-            const yDiff = Math.abs(y - startY);
-            
-            // Only treat as horizontal drag if vertical movement is minimal
-            if (Math.abs(walk) > 3 && yDiff < 20) {
-                isDragging = true;
-            }
-            
-            if (isDragging) {
-                // Calculate velocity for momentum scrolling
-                const now = Date.now();
-                const timeDiff = now - lastTime;
-                if (timeDiff > 0) {
-                    velocity = (lastX - clientX) / timeDiff;
-                }
-                lastX = clientX;
-                lastTime = now;
-                
-                linksContainer.scrollLeft = scrollLeft - walk;
-            }
-        }
-
-        function handleDragEnd() {
-            isDown = false;
-            if (isDragging) {
-                // Apply momentum scrolling
-                let currentVelocity = velocity;
-                const deceleration = 0.95;
-                const minVelocity = 0.1;
-                
-                const momentumScroll = () => {
-                    if (Math.abs(currentVelocity) > minVelocity) {
-                        linksContainer.scrollLeft += currentVelocity * 5;
-                        currentVelocity *= deceleration;
-                        requestAnimationFrame(momentumScroll);
-                    }
-                };
-                momentumScroll();
-            }
-            linksContainer.style.scrollBehavior = 'smooth';
-            linksContainer.style.cursor = 'grab';
-        }
-
-        // Mouse events
-        linksContainer.addEventListener('mousedown', (e) => {
-            handleDragStart(e.pageX, e.pageY);
-        });
-
-        linksContainer.addEventListener('mouseleave', () => {
-            if (isDown) {
-                handleDragEnd();
-            }
-        });
-
-        linksContainer.addEventListener('mouseup', () => {
-            handleDragEnd();
-        });
-
-        linksContainer.addEventListener('mousemove', (e) => {
-            handleDragMove(e.pageX, e.pageY);
-        });
-
-        // Touch events for mobile
-        linksContainer.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) {
-                handleDragStart(e.touches[0].clientX, e.touches[0].clientY);
-            }
-        }, { passive: true });
-
-        linksContainer.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1) {
-                handleDragMove(e.touches[0].clientX, e.touches[0].clientY);
-            }
-        }, { passive: true });
-
-        linksContainer.addEventListener('touchend', () => {
-            handleDragEnd();
-        }, { passive: true });
-
-        linksContainer.addEventListener('touchcancel', () => {
-            handleDragEnd();
-        }, { passive: true });
-
-        // Prevent link clicks when dragging
-        const links = document.querySelectorAll('.site-link');
-        links.forEach(link => {
-            link.addEventListener('click', (e) => {
-                if (isDragging) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            });
-        });
-
         // Keyboard navigation for links container
+        const linksContainer = document.querySelector('.links-container');
         linksContainer.addEventListener('keydown', (e) => {
             const links = Array.from(document.querySelectorAll('.site-link'));
             const focusedElement = document.activeElement;
