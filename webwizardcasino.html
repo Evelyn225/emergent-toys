@@ -52,13 +52,20 @@
     <script>
         // Load personas data from external JSON file
         let personasData = {};
+        let personasLoaded = false;
         
-        fetch('casino-assets/personas.json')
-            .then(response => response.json())
-            .then(data => {
+        (async () => {
+            try {
+                const response = await fetch('casino-assets/personas.json');
+                if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load personas.json`);
+                const data = await response.json();
                 personasData = data.personas;
-            })
-            .catch(error => console.error('Error loading personas:', error));
+                personasLoaded = true;
+                console.log('✓ Personas loaded successfully');
+            } catch (error) {
+                console.error('✗ Error loading personas.json:', error);
+            }
+        })();
 
         // API endpoints - uses Vercel serverless functions
         const RANDOM_WORDS_ENDPOINT = '/api/random-words.js';
@@ -292,9 +299,12 @@ BEGIN HTML OUTPUT:`;
 
         // Get dynamic review messages from personas JSON data
         function getReviewLoadingMessages(personaName) {
-            const reviewMessages = personasData[personaName] ? personasData[personaName].review : [];
+            let reviewMessages = [];
+            if (personasLoaded && personasData[personaName]) {
+                reviewMessages = personasData[personaName].review || [];
+            }
             
-            return reviewMessages || [
+            return reviewMessages.length > 0 ? reviewMessages : [
                 "🔍 Reviewing and improving code...",
                 "✨ Enhancing your creation...",
                 "🛠️ Adding the finishing touches...",
@@ -306,7 +316,7 @@ BEGIN HTML OUTPUT:`;
 
         // Get persona-specific creative instructions from personas JSON data
         function getPersonaSpecialInstructions(personaName) {
-            if (personasData[personaName] && personasData[personaName].special) {
+            if (personasLoaded && personasData[personaName] && personasData[personaName].special) {
                 return personasData[personaName].special;
             }
             return "";
@@ -588,8 +598,20 @@ BEGIN HTML OUTPUT:`;
                 await typeText(mainStatus, persona.name.toUpperCase(), 40);
                 await typeText(currentMessage, `Creating ${theme}...`, 40);
                 
-                const personaLoadingMessages = personasData[persona.name] ? personasData[persona.name].loading : [];
-                const messages = shuffleArray(personaLoadingMessages || [
+                // Wait briefly for personas to load if needed
+                let attempts = 0;
+                while (!personasLoaded && attempts < 50) {
+                    await new Promise(r => setTimeout(r, 10));
+                    attempts++;
+                }
+                
+                // Use loaded persona messages or fallback defaults
+                let personaLoadingMessages = [];
+                if (personasLoaded && personasData[persona.name]) {
+                    personaLoadingMessages = personasData[persona.name].loading || [];
+                }
+                
+                const messages = shuffleArray(personaLoadingMessages.length > 0 ? personaLoadingMessages : [
                     'Creating something interesting...',
                     'Building your experience...',
                     'Crafting the details...'
