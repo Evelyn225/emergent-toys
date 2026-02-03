@@ -1013,7 +1013,18 @@ BEGIN HTML OUTPUT:`;
                     loadingOverlay.classList.remove('hidden');
                     document.getElementById('generatedContent').innerHTML = '';
                 } else {
-                    // Otherwise, start a new generation
+                    // Save current generation as previous if it exists and is not in favorites
+                    if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
+                        const isAlreadySaved = isSavedFavorite(currentGeneration.theme, currentGeneration.persona.name);
+                        if (!isAlreadySaved) {
+                            previousGeneration = { ...currentGeneration };
+                        } else {
+                            previousGeneration = null;
+                        }
+                    } else {
+                        previousGeneration = null;
+                    }
+                    // Start a new generation
                     generateWebsite();
                 }
             });
