@@ -116,6 +116,161 @@
             <p>We're not trying to replace the internet. We're creating alternatives that exist alongside commercial infrastructure, ready to sustain communities when commercial systems fail.</p>
             <p>The first generation of these networks is now reaching maturity. It's time to scale the model globally.</p>
         </div>
+
+        <div class="article">
+            <h2>The Hum: Infrastructure Sonics & Network Presence</h2>
+            <div class="date">February 2026 – Field Recording</div>
+            <p>Listen to the ambient sound of a distributed mesh node at rest. This is the sound of a server in standby—the quiet hum of infrastructure that connects communities. It's a reminder that beneath every message, every connection, every shared moment online, there is physical machinery at work.</p>
+            <div style="margin: 1rem 0; padding: 1rem; background: rgba(0, 255, 136, 0.1); border-radius: 2px;">
+                <button id="humToggle" style="padding: 0.8rem 1.5rem; background: #00ff88; color: #0a0e27; border: none; border-radius: 2px; cursor: pointer; font-weight: bold; font-family: 'Courier New', monospace;">▶ Play Server Hum</button>
+                <span id="humStatus" style="margin-left: 1rem; color: #7a9ab8;">Click to start continuous hum</span>
+            </div>
+            <p>Our nodes are designed to run continuously with minimal power consumption. The hum you hear represents efficiency, reliability, and persistence. It is the sound of resilience.</p>
+            <script>
+                let audioContext;
+                let oscillators = [];
+                let playing = false;
+                const humToggle = document.getElementById('humToggle');
+                const humStatus = document.getElementById('humStatus');
+
+                humToggle.addEventListener('click', () => {
+                    if (!audioContext) {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+
+                    if (!playing) {
+                        startHum();
+                        humToggle.textContent = '⏸ Stop Hum';
+                        humStatus.textContent = 'Hum running...';
+                        playing = true;
+                    } else {
+                        stopHum();
+                        humToggle.textContent = '▶ Play Server Hum';
+                        humStatus.textContent = 'Click to start continuous hum';
+                        playing = false;
+                    }
+                });
+
+                function startHum() {
+                    const now = audioContext.currentTime;
+                    const gain = audioContext.createGain();
+                    gain.gain.value = 0.15;
+                    gain.connect(audioContext.destination);
+
+                    // Create fundamental frequency (50Hz electrical hum)
+                    const osc1 = audioContext.createOscillator();
+                    osc1.frequency.value = 50;
+                    osc1.type = 'sine';
+                    osc1.connect(gain);
+                    osc1.start(now);
+                    oscillators.push({ osc: osc1, gain: gain });
+
+                    // Add harmonics for richness
+                    [100, 150].forEach(freq => {
+                        const osc = audioContext.createOscillator();
+                        osc.frequency.value = freq;
+                        osc.type = 'sine';
+                        const harmGain = audioContext.createGain();
+                        harmGain.gain.value = 0.08;
+                        harmGain.connect(audioContext.destination);
+                        osc.connect(harmGain);
+                        osc.start(now);
+                        oscillators.push({ osc: osc, gain: harmGain });
+                    });
+                }
+
+                function stopHum() {
+                    oscillators.forEach(({ osc }) => {
+                        osc.stop(audioContext.currentTime);
+                    });
+                    oscillators = [];
+                }
+
+                // Cleanup on page unload
+                window.addEventListener('beforeunload', () => {
+                    if (playing) stopHum();
+                });
+            </script>
+        </div>
+
+        <div class="article">
+            <h2>Power Independence: Running Networks Off-Grid</h2>
+            <div class="date">January 2026 – Technical Case Study</div>
+            <p>A critical advantage of mesh networks is their ability to operate independently from centralized power infrastructure. In a remote community in the Andes, we deployed a fully solar-powered mesh backbone that maintains network connectivity even during extended outages affecting surrounding regions.</p>
+            <div class="code-block">
+Power requirements per backbone node:<br>
+- Peak load: 45W (dual 5GHz radios)<br>
+- Idle load: 12W (wake on radio)<br>
+- Sleep mode: 0.8W<br>
+<br>
+Solar array sizing: 200W peak output<br>
+Battery capacity: 2kWh LiFePO4<br>
+Uptime: 99.2% (accounting for seasonal weather)
+            </div>
+            <p>Communities no longer need to wait for utility companies to extend power grids. Network infrastructure can power itself, creating digital resilience alongside energy independence.</p>
+        </div>
+
+        <div class="article">
+            <h2>Mesh Networks & Emergency Communication</h2>
+            <div class="date">November 2025 – Field Report</div>
+            <p>When hurricane season brought catastrophic flooding to a coastal community, the local mesh network proved invaluable. Commercial internet infrastructure went offline within hours. The mesh network continued operating on battery backup and solar power, enabling emergency coordinators to communicate with isolated areas and distribute critical information.</p>
+            <p>Key lessons from this deployment:</p>
+            <div class="code-block">
+1. Decentralization saves lives—single point failures don't cascade<br>
+2. Battery backup is essential, not optional<br>
+3. Community training enables adaptation during crisis<br>
+4. Mesh networks scale gracefully—adding nodes improves reliability<br>
+5. Open protocols allow integration with satellite and ham radio backup systems
+            </div>
+            <p>After this event, 7 additional communities requested mesh deployments. Resilience is contagious.</p>
+        </div>
+
+        <div class="article">
+            <h2>From Theory to Hardware: The MeshBox Project</h2>
+            <div class="date">October 2025 – Hardware Documentation</div>
+            <p>We've standardized on the MeshBox v3 design—a weatherproof enclosure containing routing hardware, backup battery, and solar charging controller. The design is fully open-source, with BOM costs around $180 in bulk quantities.</p>
+            <div class="code-block">
+Key components:<br>
+- Qualcomm IPQ4019 SoC (dual-core ARM @ 716MHz)<br>
+- 2x 802.11ac radios (2.4GHz + 5GHz)<br>
+- 256MB RAM, 128MB Flash<br>
+- TP-Link outdoor POE antenna mount<br>
+- 10000mAh battery module<br>
+- Heatsink + passive cooling (no fans = no failure points)
+            </div>
+            <p>Manufacturing partnerships in Southeast Asia allow communities to produce these locally, creating jobs while building infrastructure. So far, over 8,000 units have been deployed across 30+ countries.</p>
+        </div>
+
+        <div class="article">
+            <h2>Cultural Protocols: Beyond Technical Specifications</h2>
+            <div class="date">September 2025 – Social Infrastructure</div>
+            <p>A mesh network is only as strong as the community that maintains it. We've developed "Cultural Protocols"—guidelines for governance, resource allocation, and conflict resolution that work alongside technical protocols.</p>
+            <p>These include:</p>
+            <div class="code-block">
+• Transparent bandwidth allocation during emergencies<br>
+• Revenue sharing from any commercial use of network capacity<br>
+• Training requirements for anyone operating backbone nodes<br>
+• Regular maintenance schedules determined by community vote<br>
+• Dispute resolution through peer arbitration<br>
+• Technology review cycles to plan for upgrades
+            </div>
+            <p>The mesh networks that thrive are those where human systems are as carefully designed as technical ones.</p>
+        </div>
+
+        <div class="article">
+            <h2>2026 Roadmap: Scaling Global Infrastructure</h2>
+            <div class="date">February 2026 – Strategic Vision</div>
+            <p>The Mesh Collective's goals for 2026:</p>
+            <div class="code-block">
+Q1: Launch regional hubs in 8 new countries<br>
+Q2: Deploy 50,000 additional nodes globally<br>
+Q3: Complete satellite inter-mesh gateway prototype<br>
+Q4: Establish training centers in 15 locations<br>
+<br>
+Target by year-end: 500,000 active users across 100+ communities
+            </div>
+            <p>We are witnessing the birth of digital infrastructure that communities can own, maintain, and control. This is not speculation—it is happening now, and you can join us.</p>
+        </div>
     </main>
     <footer>
         <p>MESH COLLECTIVE | 2024-2026 | All documentation open source</p>
