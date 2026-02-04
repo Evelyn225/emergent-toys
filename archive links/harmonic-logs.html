@@ -172,20 +172,31 @@
         let currentOscillators = [];
         let audioContext = null;
         let interferenceBuffer = null;
+        let interferenceLoaded = false;
 
-        // Load interference audio on page load
+        // Load interference audio on first user interaction
         async function loadInterferenceAudio() {
+            if (interferenceLoaded) return;
+            interferenceLoaded = true;
+            
             try {
                 const response = await fetch('audio/interference.mp3');
+                if (!response.ok) throw new Error('Failed to fetch interference audio');
                 const arrayBuffer = await response.arrayBuffer();
-                const ctx = getAudioContext();
-                interferenceBuffer = await ctx.decodeAudioData(arrayBuffer);
+                
+                // Try to decode the audio
+                try {
+                    interferenceBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                } catch (decodeError) {
+                    // MP3 might not be supported
+                    console.log('MP3 decode failed:', decodeError);
+                    interferenceBuffer = null;
+                }
             } catch (e) {
                 console.log('Could not load interference audio:', e);
+                interferenceBuffer = null;
             }
         }
-
-        loadInterferenceAudio();
 
         function getAudioContext() {
             if (!audioContext) {
@@ -213,25 +224,29 @@
             const startTime = Math.random() * Math.max(0, duration - 0.5);
             const snippetDuration = Math.min(0.3 + Math.random() * 0.4, duration - startTime);
 
-            const source = ctx.createBufferSource();
-            source.buffer = interferenceBuffer;
-            
-            // Create filter for radio effect
-            const filter = ctx.createBiquadFilter();
-            filter.type = 'bandpass';
-            filter.frequency.value = 2000 + Math.random() * 3000;
-            filter.Q.value = 0.5;
-            
-            const gain = ctx.createGain();
-            gain.gain.setValueAtTime(0.12, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + snippetDuration);
-            
-            source.connect(filter);
-            filter.connect(gain);
-            gain.connect(ctx.destination);
-            
-            source.start(now, startTime, snippetDuration);
-            source.stop(now + snippetDuration);
+            try {
+                const source = ctx.createBufferSource();
+                source.buffer = interferenceBuffer;
+                
+                // Create filter for radio effect
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 2000 + Math.random() * 3000;
+                filter.Q.value = 0.5;
+                
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + snippetDuration);
+                
+                source.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+                
+                source.start(now, startTime, snippetDuration);
+                source.stop(now + snippetDuration);
+            } catch (e) {
+                console.log('Error playing interference snippet:', e);
+            }
         }
 
         function playHarmonic(frequency, button) {
@@ -241,6 +256,11 @@
             if (button.textContent.includes('■')) {
                 button.textContent = button.textContent.replace('■', '▶');
                 return;
+            }
+
+            // Load interference on first play
+            if (!interferenceLoaded) {
+                loadInterferenceAudio();
             }
 
             const oscillators = [];
@@ -301,6 +321,11 @@
                 return;
             }
 
+            // Load interference on first play
+            if (!interferenceLoaded) {
+                loadInterferenceAudio();
+            }
+
             const oscillators = [];
             const gain = ctx.createGain();
             gain.gain.setValueAtTime(0.2, ctx.currentTime);
@@ -351,6 +376,11 @@
             if (button.textContent.includes('■')) {
                 button.textContent = button.textContent.replace('■', '▶');
                 return;
+            }
+
+            // Load interference on first play
+            if (!interferenceLoaded) {
+                loadInterferenceAudio();
             }
 
             const oscillators = [];
