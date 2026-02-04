@@ -1061,18 +1061,25 @@
         const personalities = ["curious", "lazy", "energetic", "tender", "brave", "aloof", "playful", "gentle"];
         const baseURL = "https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/pets/";
         
-        const bodyCount = 6;
-        const eyesCount = 6;
-        const accessoryCount = 4;
+        const bodyCount = 7;
+        const eyesCount = 7;
+        const accessoryCount = 5;
         
         const palettes = [
-            { primary: "#7cf2ff", secondary: "#c48bff", accent: "#ffd28f" },
-            { primary: "#9dffb0", secondary: "#4d7cff", accent: "#ff90c2" },
-            { primary: "#ffd37c", secondary: "#ff7be6", accent: "#84fff7" },
-            { primary: "#f0f5ff", secondary: "#84ffe3", accent: "#7b9bff" },
-            { primary: "#ff9dc2", secondary: "#8f7bff", accent: "#94fff7" },
-            { primary: "#d1fffd", secondary: "#c9a7ff", accent: "#ffe1a8" }
+            { primary: "#ff4444", secondary: "#ff8888", accent: "#ffcccc" },  // Red
+            { primary: "#ff8844", secondary: "#ffaa66", accent: "#ffddaa" },  // Orange
+            { primary: "#ffdd44", secondary: "#ffee88", accent: "#ffffcc" },  // Yellow
+            { primary: "#88ff44", secondary: "#aaffcc", accent: "#ddffaa" },  // Lime
+            { primary: "#44ff88", secondary: "#88ffaa", accent: "#ccffdd" },  // Green
+            { primary: "#44ffdd", secondary: "#88ffee", accent: "#ccffff" },  // Cyan
+            { primary: "#4488ff", secondary: "#88aaff", accent: "#ccddff" },  // Blue
+            { primary: "#8844ff", secondary: "#aa88ff", accent: "#ddccff" },  // Purple
+            { primary: "#ff44dd", secondary: "#ff88ee", accent: "#ffccff" },  // Magenta
+            { primary: "#ff4488", secondary: "#ff88aa", accent: "#ffccdd" },  // Pink
+            { primary: "#ffffff", secondary: "#dddddd", accent: "#bbbbbb" },  // White
+            { primary: "#888888", secondary: "#aaaaaa", accent: "#cccccc" }   // Gray
         ];
+
 
         const blogPosts = [
             { path: "/blog/2018-notes", title: "2018 Recovery Notes", excerpt: "Rebuilding a shattered studio after a power surge.", glitch: true, species: "Velvet Moth" },
@@ -1395,6 +1402,12 @@
         const glitchCount = null; // Sidebar removed, stats no longer displayed
 
         function attachLinkHandlers() {
+            // Remove existing handlers and clone nodes to clear all listeners
+            document.querySelectorAll("a[data-route], a[data-external='true']").forEach(link => {
+                const newLink = link.cloneNode(true);
+                link.parentNode.replaceChild(newLink, link);
+            });
+            
             // Handle all links with data-route attribute
             document.querySelectorAll("a[data-route]").forEach(link => {
                 link.addEventListener("click", event => {
