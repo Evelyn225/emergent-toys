@@ -161,7 +161,7 @@ SEQUENCE C: 2ms, 4ms, 8ms, 16ms, 32ms, 64ms (truncated)
             <h2>Implementation Notes</h2>
             <p>
                 The framework requires precise timing mechanisms. System clocks synchronized 
-                via NTP are insufficient—drift detection needs microsecond precision.
+                via NTP are insufficient; drift detection needs microsecond precision.
             </p>
             <div class="code-block">
 // Capture delay, not just presence
@@ -187,7 +187,7 @@ function measureGap(prev, curr) {
             <h2>Ongoing Research</h2>
             <p>
                 Current hypothesis: the delays are intentional. Not artifacts of infrastructure 
-                but deliberate insertions. The question isn't what's causing the delays—it's 
+                but deliberate insertions. The question isn't what's causing the delays. It's 
                 what's trying to communicate through them.
             </p>
             <p>
