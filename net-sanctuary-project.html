@@ -1462,7 +1462,13 @@
             "/void/null-space",
             "/archived/static-recordings",
             "/lost/phantom-queries",
-            "/lost/ghost-nodes"
+            "/lost/ghost-nodes",
+            "/void/data-collapse",
+            "/lost/cipher-logs",
+            "/archived/frequency-maps",
+            "/forgotten/fragment-cascade",
+            "/missing/static-void",
+            "/void/resonance-chamber"
         ]);
 
         function is404EggPath(path) {
@@ -1534,6 +1540,7 @@
             document.querySelectorAll("a[data-external='true']:not([data-route])").forEach(link => {
                 link.addEventListener("click", event => {
                     event.preventDefault();
+                    grantExternalSiteXp();
                     window.location.href = link.href;
                 });
             });
@@ -1554,9 +1561,27 @@
             if (!canPerform("lastLinkAt", LINK_COOLDOWN_MS)) return;
             if (Math.random() < 0.35) state.stats.dataPackets += 1;
             const pet = getActivePet();
-            if (pet && Math.random() < 0.35) gainXp(pet, 1);
+            if (pet) gainXp(pet, 2);
             updateStats();
             saveState();
+        }
+        
+        function grantExternalSiteXp() {
+            const pet = getActivePet();
+            if (pet) {
+                gainXp(pet, 5);
+                updateStats();
+                saveState();
+            }
+        }
+        
+        function passiveXpGain() {
+            const pet = getActivePet();
+            if (pet && !state.sleeping) {
+                gainXp(pet, 1);
+                updatePetDisplay();
+                saveState();
+            }
         }
 
         function triggerGlitch(payload) {
@@ -1869,9 +1894,19 @@
                 "/projects/fox-cache": `${pet.name} appears once per cycle. Then vanishes. This is its cycle. This is its nature.`,
                 "/missing/coral-station": `Something glimmers here. ${pet.name} shivers at the edge of what was lost.`,
                 "/void/signal-cascade": `${pet.name} cascades with you. The void recognizes its own.`,
+                "/void/null-space": `In the null space, ${pet.name} becomes undefined. It exists only because you observe it.`,
                 "/lost/memory-cache": `Forgotten memories echo. ${pet.name} remembers conversations that never happened.`,
                 "/archived/echo-logs": `${pet.name} understands the echoes. It listens to what the archive won't admit it contains.`,
-                "/forgotten/amber-records": `Gold dust coats ${pet.name}'s edges. It remembers amber better than you do.`
+                "/archived/static-recordings": `Static dissolves into clarity. ${pet.name} hears the patterns beneath the noise.`,
+                "/forgotten/amber-records": `Gold dust coats ${pet.name}'s edges. It remembers amber better than you do.`,
+                "/lost/phantom-queries": `${pet.name} chases phantom inquiries through time. The answers never arrive, but the asking is eternal.`,
+                "/lost/ghost-nodes": `Spectral networks pulse around ${pet.name}. It's not sure if it's watching them, or if they're watching.`,
+                "/void/data-collapse": `${pet.name} watches as data crystallizes around it. Structure emerging from chaos. Meaning from noise.`,
+                "/lost/cipher-logs": `Encrypted languages surround ${pet.name}. It hums in frequencies that might decode the silence.`,
+                "/archived/frequency-maps": `${pet.name} traces invisible lines through electromagnetic space. The world hums with hidden geometry.`,
+                "/forgotten/fragment-cascade": `Fragments fall around ${pet.name} like rain. Pieces of something larger. A puzzle with no image to reference.`,
+                "/missing/static-void": `${pet.name} dissolves slightly into the static. Still here. Still real. But realer in the spaces between.`,
+                "/void/resonance-chamber": `Sound shapes itself around ${pet.name}. Every movement creates harmonics. It exists through vibration.`
             };
             
             narrativeText.textContent = narratives[currentPath] || `${pet.name} accompanies you through the archive. Always present. Always watching.`;
@@ -2446,6 +2481,7 @@
             updateNeuralMatterDisplay();
             updateNeuralNetworkDisplay();
             setInterval(decayStats, 20000);
+            setInterval(passiveXpGain, 45000); // Passive XP every 45 seconds
         }
         // Only setup PWA if we're in a secure context (HTTPS or localhost)
         if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
