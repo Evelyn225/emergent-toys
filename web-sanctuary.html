@@ -1041,8 +1041,8 @@
         let contentMap = {};
         let pagesReady = false;
 
-        // Load content from JSON file - use relative path for maximum compatibility
-        const contentPath = './sanctuary-content.json';
+        // Load content from JSON file - use simple filename for Vercel compatibility
+        const contentPath = 'sanctuary-content.json';
         
         fetch(contentPath)
             .then(response => {
