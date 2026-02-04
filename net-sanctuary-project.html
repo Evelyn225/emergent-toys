@@ -1988,24 +1988,25 @@
             const manifestUrl = URL.createObjectURL(manifestBlob);
             document.getElementById("pwa-manifest").setAttribute("href", manifestUrl);
 
-            if ("serviceWorker" in navigator) {
-                const swCode = `
-                    const CACHE = 'sanctuary-v1';
-                    self.addEventListener('install', event => {
-                        event.waitUntil(
-                            caches.open(CACHE).then(cache => cache.addAll([self.location.href]))
-                        );
-                    });
-                    self.addEventListener('fetch', event => {
-                        event.respondWith(
-                            caches.match(event.request).then(response => response || fetch(event.request))
-                        );
-                    });
-                `;
-                const swBlob = new Blob([swCode], { type: "text/javascript" });
-                const swUrl = URL.createObjectURL(swBlob);
-                navigator.serviceWorker.register(swUrl);
-            }
+            // Service worker disabled - blob URL scope causes issues on Vercel
+            // if ("serviceWorker" in navigator) {
+            //     const swCode = `
+            //         const CACHE = 'sanctuary-v1';
+            //         self.addEventListener('install', event => {
+            //             event.waitUntil(
+            //                 caches.open(CACHE).then(cache => cache.addAll([self.location.href]))
+            //             );
+            //         });
+            //         self.addEventListener('fetch', event => {
+            //             event.respondWith(
+            //                 caches.match(event.request).then(response => response || fetch(event.request))
+            //             );
+            //         });
+            //     `;
+            //     const swBlob = new Blob([swCode], { type: "text/javascript" });
+            //     const swUrl = URL.createObjectURL(swBlob);
+            //     navigator.serviceWorker.register(swUrl);
+            // }
         }
 
         window.addEventListener("hashchange", () => {
