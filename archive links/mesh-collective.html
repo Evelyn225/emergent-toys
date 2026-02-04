@@ -118,14 +118,16 @@
         </div>
 
         <div class="article">
-            <h2>The Hum: Infrastructure Sonics & Network Presence</h2>
-            <div class="date">February 2026 – Field Recording</div>
-            <p>Listen to the ambient sound of a distributed mesh node at rest. This is the sound of a server in standby: the quiet hum of infrastructure that connects communities. It's a reminder that beneath every message, every connection, every shared moment online, there is physical machinery at work.</p>
+            <h2>The Hum: Shared Archive of Server Silence</h2>
+            <div class="date">February 2026 – Ambient Recording</div>
+            <p>There's a frequency to machine silence most people never notice. When processing halts but the lights stay on. When the fans slow to a whisper. This archive preserves those moments.</p>
+            <p>Over the past year, I recorded eleven hours of ambient sound from a server closet during low-activity periods. The initial recordings were dense with obvious rhythms: fan cycles, power supply hum, thermal management systems. These were filtered out, leaving what remained underneath. Something like patience.</p>
+            <p>The mesh collective provides shared infrastructure for communities to upload, preserve, and analyze ambient recordings. This recording has been distributed across our network, redundant and resilient. Each node stores a copy. No single server can fail and lose what was captured.</p>
             <div style="margin: 1rem 0; padding: 1rem; background: rgba(0, 255, 136, 0.1); border-radius: 2px;">
-                <button id="humToggle" style="padding: 0.8rem 1.5rem; background: #00ff88; color: #0a0e27; border: none; border-radius: 2px; cursor: pointer; font-weight: bold; font-family: 'Courier New', monospace;">▶ Play Server Hum</button>
-                <span id="humStatus" style="margin-left: 1rem; color: #7a9ab8;">Click to start continuous hum</span>
+                <button id="humToggle" style="padding: 0.8rem 1.5rem; background: #00ff88; color: #0a0e27; border: none; border-radius: 2px; cursor: pointer; font-weight: bold; font-family: 'Courier New', monospace;">▶ Play Filtered Hum</button>
+                <span id="humStatus" style="margin-left: 1rem; color: #7a9ab8;">Raw server closet recording, 50Hz fundamental</span>
             </div>
-            <p>Our nodes are designed to run continuously with minimal power consumption. The hum you hear represents efficiency, reliability, and persistence. It is the sound of resilience.</p>
+            <p>The spectral analysis of this recording reveals patterns that emerge without imposed interpretation. The harmonic logs archive contains detailed decomposition of the frequency content. What's interesting isn't the individual frequencies, but what they suggest about the system's state when nobody is watching. The machine having a conversation with itself.</p>
             <script>
                 let audioContext;
                 let oscillators = [];
@@ -140,13 +142,13 @@
 
                     if (!playing) {
                         startHum();
-                        humToggle.textContent = '⏸ Stop Hum';
-                        humStatus.textContent = 'Hum running...';
+                        humToggle.textContent = '⏸ Stop';
+                        humStatus.textContent = 'Recording playing...';
                         playing = true;
                     } else {
                         stopHum();
-                        humToggle.textContent = '▶ Play Server Hum';
-                        humStatus.textContent = 'Click to start continuous hum';
+                        humToggle.textContent = '▶ Play Filtered Hum';
+                        humStatus.textContent = 'Raw server closet recording, 50Hz fundamental';
                         playing = false;
                     }
                 });
@@ -177,11 +179,89 @@
                         osc.start(now);
                         oscillators.push({ osc: osc, gain: harmGain });
                     });
+
+                    // Rare radio interference/broken speech
+                    const interferenceInterval = setInterval(() => {
+                        if (!playing) {
+                            clearInterval(interferenceInterval);
+                            return;
+                        }
+                        
+                        // Very rare: 5% chance every 2 seconds
+                        if (Math.random() < 0.05) {
+                            addRadioInterference();
+                        }
+                    }, 2000);
+                    
+                    oscillators.push({ interval: interferenceInterval });
+                }
+
+                function addRadioInterference() {
+                    const ctx = audioContext;
+                    const now = ctx.currentTime;
+                    const duration = 0.3 + Math.random() * 0.4; // 300-700ms
+
+                    // Create interference noise channel
+                    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
+                    const noiseData = noiseBuffer.getChannelData(0);
+                    
+                    // Generate glitchy noise
+                    for (let i = 0; i < noiseData.length; i++) {
+                        noiseData[i] = (Math.random() - 0.5) * 0.3;
+                    }
+                    
+                    const noiseSource = ctx.createBufferSource();
+                    noiseSource.buffer = noiseBuffer;
+                    
+                    // Radio static effect with band-pass filter
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'bandpass';
+                    filter.frequency.value = 2000 + Math.random() * 3000;
+                    filter.Q.value = 0.5;
+                    
+                    const gain = ctx.createGain();
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+                    
+                    noiseSource.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(audioContext.destination);
+                    
+                    noiseSource.start(now);
+                    noiseSource.stop(now + duration);
+
+                    // Add glitchy frequency chirps
+                    const numChirps = 1 + Math.floor(Math.random() * 2);
+                    for (let i = 0; i < numChirps; i++) {
+                        const chirpDelay = Math.random() * (duration - 0.1);
+                        const chirpOsc = ctx.createOscillator();
+                        const chirpGain = ctx.createGain();
+                        
+                        chirpOsc.type = 'sawtooth';
+                        chirpOsc.frequency.setValueAtTime(800 + Math.random() * 2000, now + chirpDelay);
+                        chirpOsc.frequency.exponentialRampToValueAtTime(400 + Math.random() * 1500, now + chirpDelay + 0.15);
+                        
+                        chirpGain.gain.setValueAtTime(0.1, now + chirpDelay);
+                        chirpGain.gain.exponentialRampToValueAtTime(0.02, now + chirpDelay + 0.15);
+                        
+                        chirpOsc.connect(chirpGain);
+                        chirpGain.connect(audioContext.destination);
+                        
+                        chirpOsc.start(now + chirpDelay);
+                        chirpOsc.stop(now + chirpDelay + 0.15);
+                    }
                 }
 
                 function stopHum() {
-                    oscillators.forEach(({ osc }) => {
-                        osc.stop(audioContext.currentTime);
+                    oscillators.forEach(({ osc, interval }) => {
+                        if (osc) {
+                            try {
+                                osc.stop(audioContext.currentTime);
+                            } catch (e) {}
+                        }
+                        if (interval) {
+                            clearInterval(interval);
+                        }
                     });
                     oscillators = [];
                 }
