@@ -879,8 +879,13 @@
                     <a href="#/blog" data-route="/blog">Blog</a>
                     <a href="#/projects" data-route="/projects">Projects</a>
                     <a href="#/about" data-route="/about">About</a>
-                    <div id="neural-matter-display" style="display: none; margin-left: auto; padding: 0.5rem 1rem; border: 1px solid #ffffff; color: var(--warning); font-size: 0.9rem; font-weight: 500;">
-                        Neural Matter: <span id="neural-matter-count">0</span>
+                    <div style="margin-left: auto; display: flex; gap: 1rem;">
+                        <div id="neural-matter-display" style="display: none; padding: 0.5rem 1rem; border: 1px solid #ffffff; color: var(--warning); font-size: 0.9rem; font-weight: 500;">
+                            Neural Matter: <span id="neural-matter-count">0</span>
+                        </div>
+                        <div id="neural-network-display" style="display: none; padding: 0.5rem 1rem; border: 1px solid #ffffff; color: #ff44dd; font-size: 0.9rem; font-weight: 500; animation: pulse 2s infinite;">
+                            Neural Network: <span id="neural-network-count">0</span>
+                        </div>
                     </div>
                 </nav>
             </div>
@@ -983,9 +988,9 @@
 
     <div class="overlay" id="name-overlay" aria-hidden="true">
         <div class="overlay-card modal">
-            <h2>Name your GlitchGatchi</h2>
+            <h2>Name your neural shard</h2>
             <p style="margin-top: 0.8rem; color: var(--muted);">
-                This name will be archived with the pet forever.
+                This name will be archived with this entity forever.
             </p>
             <input type="text" id="pet-name-input" placeholder="ENTER NAME HERE" maxlength="18" />
             <div class="modal-actions">
@@ -996,9 +1001,9 @@
 
     <div class="overlay" id="delete-overlay" aria-hidden="true">
         <div class="overlay-card modal">
-            <h2 style="color: var(--warning);">Delete Pet</h2>
+            <h2 style="color: var(--warning);">Delete Entity</h2>
             <p style="margin-top: 0.8rem; color: var(--muted);">
-                This action cannot be undone. The pet will be permanently removed from the archive.
+                This action cannot be undone. The entity will be permanently removed from the archive.
             </p>
             <p style="margin-top: 0.8rem; color: var(--warning); font-weight: 500;" id="delete-pet-name">—</p>
             <div class="modal-actions" style="display: flex; gap: 0.5rem;">
@@ -1026,7 +1031,7 @@
             </div>
             <h2 style="color: var(--warning);">RAM FULL</h2>
             <p style="margin-top: 0.8rem; color: var(--muted);">
-                Maximum companion capacity reached (4/4). Delete a pet to make space.
+                Maximum companion capacity reached (4/4). Delete an entity to make space.
             </p>
             <div class="modal-actions">
                 <button class="button" id="close-ram-full">Close</button>
@@ -1043,6 +1048,7 @@
                 dataPackets: 0
             },
             neuralMatter: 0,
+            neuralNetwork: 0,
             mood: "curious",
             sleeping: false,
             dancing: false,
@@ -1057,28 +1063,28 @@
         };
 
         const baseSpecies = [
-            "Velvet Moth",
-            "Lumen Koi",
-            "Amber Wisp",
-            "Cobalt Sable",
-            "Misty Finch",
-            "Aurora Lynx",
-            "Prism Hare",
-            "Ivory Gecko",
-            "Solar Sprite",
-            "Woolen Nebula",
-            "Coral Drifter",
-            "Opal Bloom",
-            "Frost Pippin",
-            "Saffron Glide",
-            "Murmur Fawn",
-            "Bramble Owl",
+            "Buffer Moth",
+            "Pixel Koi",
+            "Cache Wisp",
+            "Kernel Sable",
+            "Static Finch",
+            "Hex Lynx",
+            "Array Hare",
+            "Socket Gecko",
+            "Bit Sprite",
+            "Packet Nebula",
+            "Socket Drifter",
+            "Hash Bloom",
+            "Null Pippin",
+            "Syntax Glide",
+            "Loop Fawn",
+            "Stack Owl",
             "Echo Seal",
-            "Honeyglass Doe",
-            "Juniper Pup",
-            "Twilight Nix",
-            "Petal Manta",
-            "Quartz Plover"
+            "Glassfish Doe",
+            "Thread Pup",
+            "Epoch Nix",
+            "Packet Manta",
+            "Data Fox"
         ];
 
         const personalities = ["curious", "lazy", "energetic", "tender", "brave", "aloof", "playful", "gentle"];
@@ -1226,6 +1232,7 @@
                 title: "█████████",
                 content: () => {
                     const wrapper = document.createElement('div');
+                    const hasNetwork = state.neuralNetwork > 0;
                     wrapper.innerHTML = `
                         <h2 class="page-title" style="animation: glitch-text 0.3s infinite; color: var(--warning);">
                             ███ NEURAL VOID ███
@@ -1253,7 +1260,39 @@
                                 [INTEGRITY: COMPROMISED]
                             </p>
                         </div>
+                        ${hasNetwork ? `
+                            <div style="margin-top: 3rem; padding: 2rem; border: 2px solid #ff44dd; text-align: center; background: rgba(255, 68, 221, 0.05);">
+                                <p style="color: #ff44dd; font-weight: 500; margin-bottom: 1rem; animation: glitch-text 0.4s infinite;">
+                                    [NEURAL NETWORK DETECTED]
+                                </p>
+                                <p style="color: var(--muted); margin-bottom: 2rem; font-size: 0.9rem;">
+                                    A fully formed entity has been sacrificed. Its consciousness lingers. The network is complete.<br>
+                                    You can now initiate the final protocol.
+                                </p>
+                                <button id="activate-shutdown" style="padding: 1rem 2rem; background: transparent; border: 2px solid #ff44dd; color: #ff44dd; font-size: 1rem; cursor: pointer; font-weight: 500; transition: all 0.3s;">
+                                    ACTIVATE NEURAL COLLAPSE
+                                </button>
+                            </div>
+                        ` : ''}
                     `;
+                    
+                    if (hasNetwork) {
+                        setTimeout(() => {
+                            const btn = document.getElementById('activate-shutdown');
+                            if (btn) {
+                                btn.addEventListener('click', initiateShutdown);
+                                btn.addEventListener('mouseenter', () => {
+                                    btn.style.background = '#ff44dd';
+                                    btn.style.color = '#0b0f1a';
+                                });
+                                btn.addEventListener('mouseleave', () => {
+                                    btn.style.background = 'transparent';
+                                    btn.style.color = '#ff44dd';
+                                });
+                            }
+                        }, 100);
+                    }
+                    
                     return wrapper;
                 }
             }
@@ -1664,10 +1703,10 @@
         }
 
         function getStage(level) {
-            if (level < 6) return "Glitchling";
-            if (level < 16) return "Datapet";
-            if (level < 30) return "Digital Companion";
-            return "Archive Guardian";
+            if (level < 6) return "developing";
+            if (level < 16) return "emerging";
+            if (level < 30) return "stabilizing";
+            return "fully formed";
         }
 
         function generatePet(context) {
@@ -2035,9 +2074,16 @@
                     state.pets.splice(petIndex, 1);
                 }
                 
-                // Increment neural matter
-                state.neuralMatter++;
-                updateNeuralMatterDisplay();
+                // Check if pet was fully formed (max level)
+                if (pet.stage === "fully formed") {
+                    // Give neural network instead
+                    state.neuralNetwork++;
+                    updateNeuralNetworkDisplay();
+                } else {
+                    // Increment neural matter for non-max level pets
+                    state.neuralMatter++;
+                    updateNeuralMatterDisplay();
+                }
                 
                 // Check for neural void unlock
                 if (state.neuralMatter === 10) {
@@ -2125,6 +2171,18 @@
             }
         }
 
+        function updateNeuralNetworkDisplay() {
+            const display = document.getElementById("neural-network-display");
+            const count = document.getElementById("neural-network-count");
+            
+            if (state.neuralNetwork > 0) {
+                display.style.display = "block";
+                count.textContent = state.neuralNetwork;
+            } else {
+                display.style.display = "none";
+            }
+        }
+
         function showNeuralVoidUnlock() {
             // Show brief notification of unlock
             glitchCanvas.classList.add("active");
@@ -2157,6 +2215,87 @@
             }, 50);
         }
 
+        function initiateShutdown() {
+            // Start the collapse animation
+            glitchCanvas.classList.add("active");
+            const ctx = glitchCanvas.getContext("2d");
+            document.body.style.overflow = "hidden";
+            
+            let phase = 0;
+            let frameCount = 0;
+            const totalFrames = 300; // 5 seconds at 60fps
+            
+            const collapseAnimation = () => {
+                if (frameCount >= totalFrames) {
+                    // Set shutdown flag and reload
+                    localStorage.setItem("sanctuaryShutdown", "true");
+                    location.reload();
+                    return;
+                }
+                
+                const { innerWidth: w, innerHeight: h } = window;
+                glitchCanvas.width = w;
+                glitchCanvas.height = h;
+                
+                const progress = frameCount / totalFrames;
+                
+                // Phase 1: Intense glitching (0-33%)
+                if (progress < 0.33) {
+                    ctx.clearRect(0, 0, w, h);
+                    for (let i = 0; i < 500; i++) {
+                        ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}, ${0.3 + progress})`;
+                        ctx.fillRect(Math.random() * w, Math.random() * h, Math.random() * 150 + 20, Math.random() * 20 + 3);
+                    }
+                }
+                // Phase 2: Convergence (33-66%)
+                else if (progress < 0.66) {
+                    ctx.clearRect(0, 0, w, h);
+                    const centerX = w / 2;
+                    const centerY = h / 2;
+                    const radius = (1 - (progress - 0.33) / 0.33) * Math.max(w, h);
+                    
+                    for (let i = 0; i < 300; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = Math.random() * radius;
+                        const x = centerX + Math.cos(angle) * dist;
+                        const y = centerY + Math.sin(angle) * dist;
+                        ctx.fillStyle = `rgba(255, 68, 221, ${0.5 + Math.random() * 0.5})`;
+                        ctx.fillRect(x, y, Math.random() * 50 + 10, Math.random() * 10 + 2);
+                    }
+                }
+                // Phase 3: Collapse to center (66-100%)
+                else {
+                    ctx.fillStyle = '#0b0f1a';
+                    ctx.fillRect(0, 0, w, h);
+                    
+                    const centerX = w / 2;
+                    const centerY = h / 2;
+                    const collapseProgress = (progress - 0.66) / 0.34;
+                    const circleRadius = (1 - collapseProgress) * Math.min(w, h) / 2;
+                    
+                    // Draw collapsing circle
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, circleRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 68, 221, ${1 - collapseProgress})`;
+                    ctx.fill();
+                    
+                    // Draw fragmenting particles
+                    for (let i = 0; i < 100; i++) {
+                        const angle = (i / 100) * Math.PI * 2;
+                        const x = centerX + Math.cos(angle) * circleRadius;
+                        const y = centerY + Math.sin(angle) * circleRadius;
+                        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * (1 - collapseProgress)})`;
+                        ctx.fillRect(x, y, 3, 3);
+                    }
+                }
+                
+                frameCount++;
+                requestAnimationFrame(collapseAnimation);
+            };
+            
+            collapseAnimation();
+        }
+
         document.getElementById("close-ram-full").addEventListener("click", () => {
             closeRamFull();
         });
@@ -2166,6 +2305,7 @@
             localStorage.setItem("sanctuaryStats", JSON.stringify(state.stats));
             localStorage.setItem("sanctuaryActivePetId", state.activePetId || "");
             localStorage.setItem("sanctuaryNeuralMatter", state.neuralMatter.toString());
+            localStorage.setItem("sanctuaryNeuralNetwork", state.neuralNetwork.toString());
         }
 
         function loadState() {
@@ -2173,10 +2313,12 @@
             const stats = localStorage.getItem("sanctuaryStats");
             const activeId = localStorage.getItem("sanctuaryActivePetId");
             const neuralMatter = localStorage.getItem("sanctuaryNeuralMatter");
+            const neuralNetwork = localStorage.getItem("sanctuaryNeuralNetwork");
             if (pets) state.pets = JSON.parse(pets);
             if (stats) state.stats = JSON.parse(stats);
             if (activeId) state.activePetId = activeId;
             if (neuralMatter) state.neuralMatter = parseInt(neuralMatter, 10) || 0;
+            if (neuralNetwork) state.neuralNetwork = parseInt(neuralNetwork, 10) || 0;
             if (!state.activePetId && state.pets.length) state.activePetId = state.pets[0].id;
         }
 
@@ -2255,6 +2397,42 @@
             }
         });
 
+        // Check for shutdown state first
+        const isShutdown = localStorage.getItem("sanctuaryShutdown") === "true";
+        if (isShutdown) {
+            // Show permanent shutdown message
+            document.body.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0b0f1a; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #ffffff; font-family: 'Courier New', monospace;">
+                    <div style="text-align: center; animation: glitch-text 0.5s infinite;">
+                        <h1 style="font-size: 4rem; margin-bottom: 1rem; color: var(--warning);">404</h1>
+                        <h2 style="font-size: 1.5rem; margin-bottom: 2rem; color: #ff44dd;">NEURAL COLLAPSE COMPLETE</h2>
+                        <p style="color: var(--muted); line-height: 1.8; max-width: 600px; margin: 0 auto;">
+                            The archive has been consumed by the void.<br>
+                            All companions have been absorbed into the neural network.<br>
+                            The sanctuary no longer exists.<br><br>
+                            <span style="font-style: italic; opacity: 0.7;">
+                                [SYSTEM TERMINATED]<br>
+                                [MEMORY STRUCTURES COLLAPSED]<br>
+                                [NO RECOVERY POSSIBLE]
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            `;
+            return; // Stop all initialization
+        }
+        
+        // TEST MODE: Call this in console to add max shards and neural network for testing
+        // Simply delete this function block when done testing (lines 2405-2412)
+        window.addTestResources = function() {
+            state.neuralMatter = 10;
+            state.neuralNetwork = 1;
+            updateNeuralMatterDisplay();
+            updateNeuralNetworkDisplay();
+            saveState();
+            console.log("✓ Added max neural matter and 1 neural network");
+        };
+        
         loadState();
         // Initial renderRoute will be called after content loads
         updateStats();
@@ -2262,6 +2440,7 @@
         renderPetList();
         updatePetWidgetVisibility();
         updateNeuralMatterDisplay();
+        updateNeuralNetworkDisplay();
         setInterval(decayStats, 20000);
         // Only setup PWA if we're in a secure context (HTTPS or localhost)
         if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
