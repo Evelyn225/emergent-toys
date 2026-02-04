@@ -1032,13 +1032,11 @@
                 `
             }
         };
-
         let contentMap = {};
 
         // Load content from JSON file
-        const contentPath = window.location.pathname.includes('/web-sanctuary-preserve.html') 
-            ? window.location.pathname.replace('web-sanctuary-preserve.html', 'blog-content.json')
-            : (window.location.pathname.endsWith('/') ? window.location.pathname + 'blog-content.json' : window.location.pathname + '/blog-content.json');
+        // On Vercel, use a relative path that works from the root
+        const contentPath = '/sanctuary-content.json';
         
         fetch(contentPath)
             .then(response => response.json())
@@ -1089,7 +1087,7 @@
             .catch(err => {
                 console.error('Failed to load content:', err);
                 // Create a simple fallback
-                pageContent.innerHTML = '<p style="color: var(--muted);">Content loading. Please ensure blog-content.json is in the same directory as this file.</p>';
+                pageContent.innerHTML = '<p style="color: var(--muted);">Content loading. Please ensure sanctuary-content.json is in the same directory as this file.</p>';
             });
 
         const routeLabel = document.getElementById("route-label");
