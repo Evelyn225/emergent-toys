@@ -6,6 +6,7 @@
     { "src": "*.json", "use": "@vercel/static" },
     { "src": "casino-assets/**", "use": "@vercel/static" },
     { "src": "images/**", "use": "@vercel/static" },
+    { "src": "archive links/**", "use": "@vercel/static" },
     { "src": "site.webmanifest", "use": "@vercel/static" }
   ],
   "routes": [
