@@ -25,3 +25,7 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# Local audio generation sources
+audio/server-hum-generator.js
+audio/interference.mp3
