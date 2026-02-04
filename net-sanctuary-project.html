@@ -401,8 +401,11 @@
 
         .pet-eyes {
             position: absolute;
-            width: 100%;
-            height: 100%;
+            width: 40%;
+            height: 40%;
+            top: 30%;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -422,7 +425,8 @@
             width: 60px;
             height: 60px;
             top: 10px;
-            right: 15px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 4;
             display: none;
         }
@@ -602,47 +606,133 @@
             overflow-y: auto;
         }
 
-        .egg {
-            width: 140px;
-            height: 180px;
-            background: radial-gradient(circle at 30% 20%, #f2fff8 0, #d3ffea 40%, #7cf2ff 100%);
-            border-radius: 50% 50% 45% 45%;
+        .corruption-cluster {
+            width: 160px;
+            height: 160px;
             margin: 0 auto 1.5rem;
             position: relative;
-            animation: eggPulse 1.4s ease-in-out infinite;
             cursor: pointer;
-            box-shadow: 0 0 0px transparent;
         }
 
-        .egg::after {
+        .corruption-cluster::before {
             content: "";
             position: absolute;
-            inset: 14px;
-            border-radius: inherit;
-            border: 2px dashed rgba(12, 18, 32, 0.4);
-        }
-
-        @keyframes eggPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-
-        .crack {
-            position: absolute;
             inset: 0;
-            background: linear-gradient(135deg, transparent 40%, rgba(11, 15, 26, 0.8) 41%, rgba(11, 15, 26, 0.8) 60%, transparent 61%);
-            opacity: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(124, 242, 255, 0.3) 0%, transparent 40%),
+                radial-gradient(circle at 80% 60%, rgba(196, 139, 255, 0.3) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
+            filter: blur(8px);
+            animation: corruptionPulse 2s ease-in-out infinite;
         }
 
-        .egg.cracked .crack {
-            opacity: 1;
-            animation: crackFlash 0.6s ease;
+        .corruption-fragment {
+            position: absolute;
+            width: 100%;
+            height: 100%;
         }
 
-        @keyframes crackFlash {
-            0% { opacity: 0; }
-            50% { opacity: 1; }
-            100% { opacity: 0; }
+        .fragment-block {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 8px rgba(124, 242, 255, 0.6), inset 0 0 4px rgba(196, 139, 255, 0.4);
+            animation: fragmentFloat 3s ease-in-out infinite;
+        }
+
+        .fragment-block:nth-child(1) {
+            width: 40px;
+            height: 6px;
+            top: 30%;
+            left: 20%;
+            animation-delay: 0s;
+        }
+
+        .fragment-block:nth-child(2) {
+            width: 30px;
+            height: 4px;
+            top: 50%;
+            right: 25%;
+            animation-delay: 0.3s;
+        }
+
+        .fragment-block:nth-child(3) {
+            width: 35px;
+            height: 5px;
+            bottom: 35%;
+            left: 30%;
+            animation-delay: 0.6s;
+        }
+
+        .fragment-block:nth-child(4) {
+            width: 25px;
+            height: 4px;
+            top: 40%;
+            right: 20%;
+            animation-delay: 0.9s;
+        }
+
+        .fragment-block:nth-child(5) {
+            width: 20px;
+            height: 3px;
+            bottom: 40%;
+            left: 50%;
+            animation-delay: 1.2s;
+        }
+
+        @keyframes corruptionPulse {
+            0%, 100% { 
+                opacity: 0.6;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 1;
+                transform: scale(1.15);
+            }
+        }
+
+        @keyframes fragmentFloat {
+            0%, 100% { 
+                transform: translateY(0) translateX(0);
+                opacity: 0.7;
+            }
+            50% { 
+                transform: translateY(-8px) translateX(4px);
+                opacity: 1;
+            }
+        }
+
+        .corruption-cluster.birthing .fragment-block {
+            animation: fragmentBurst 0.7s ease-out forwards;
+        }
+
+        .corruption-cluster.birthing::before {
+            animation: corruptionExpand 0.7s ease-out forwards;
+        }
+
+        @keyframes fragmentBurst {
+            0% {
+                transform: translateY(0) translateX(0) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-50px) translateX(var(--burst-x, 30px)) scale(0.3);
+                opacity: 0;
+            }
+        }
+
+        @keyframes corruptionExpand {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.5);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
         }
 
         .glitch-canvas {
@@ -657,6 +747,47 @@
 
         .glitch-canvas.active {
             display: block;
+        }
+
+        .ram-full-visual {
+            width: 200px;
+            height: 120px;
+            margin: 0 auto 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        .ram-bar {
+            width: 100%;
+            height: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #ffffff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ram-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: var(--fill, 100%);
+            background: linear-gradient(90deg, #ff4444, #ff6666);
+            animation: ramPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes ramPulse {
+            0%, 100% {
+                opacity: 0.8;
+            }
+            50% {
+                opacity: 1;
+                box-shadow: 0 0 15px rgba(255, 68, 68, 0.8);
+            }
         }
 
         .modal input {
@@ -810,9 +941,9 @@
         </div>
         <div class="pet-controls">
             <button class="button" id="toggle-dance">Toggle Dance</button>
-            <button class="button secondary" id="open-games">Mini-games</button>
         </div>
         <div class="pet-controls">
+            <button class="button warning" id="delete-pet">Delete Pet</button>
             <button class="button warning" id="reset-pet">Reset Pets</button>
         </div>
         </div>
@@ -822,12 +953,18 @@
 
     <div class="overlay" id="glitch-overlay" aria-hidden="true">
         <div class="overlay-card" id="glitch-card">
-            <div class="egg" id="glitch-egg">
-                <div class="crack"></div>
+            <div class="corruption-cluster" id="glitch-egg">
+                <div class="corruption-fragment">
+                    <div class="fragment-block" style="--burst-x: -40px;"></div>
+                    <div class="fragment-block" style="--burst-x: 35px;"></div>
+                    <div class="fragment-block" style="--burst-x: -20px;"></div>
+                    <div class="fragment-block" style="--burst-x: 45px;"></div>
+                    <div class="fragment-block" style="--burst-x: -30px;"></div>
+                </div>
             </div>
-            <h2>Digital anomaly detected</h2>
+            <h2>Neural fragment detected</h2>
             <p style="margin-top: 0.8rem; color: var(--muted);">
-                Lifeform signature found. Tap the egg to hatch your glitch companion.
+                Corrupted data signature found. Tap the cluster to birth your companion.
             </p>
         </div>
     </div>
@@ -841,6 +978,46 @@
             <input type="text" id="pet-name-input" placeholder="e.g. Nyxbyte" maxlength="18" />
             <div class="modal-actions">
                 <button class="button" id="save-name">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="delete-overlay" aria-hidden="true">
+        <div class="overlay-card modal">
+            <h2 style="color: var(--warning);">Delete Pet</h2>
+            <p style="margin-top: 0.8rem; color: var(--muted);">
+                This action cannot be undone. The pet will be permanently removed from the archive.
+            </p>
+            <p style="margin-top: 0.8rem; color: var(--warning); font-weight: 500;" id="delete-pet-name">—</p>
+            <div class="modal-actions" style="display: flex; gap: 0.5rem;">
+                <button class="button" id="cancel-delete">Cancel</button>
+                <button class="button warning" id="confirm-delete">Delete Forever</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="ram-full-overlay" aria-hidden="true">
+        <div class="overlay-card" id="ram-full-card">
+            <div class="ram-full-visual" id="ram-full-visual">
+                <div class="ram-bar" style="--fill: 100%;">
+                    <div class="ram-fill"></div>
+                </div>
+                <div class="ram-bar" style="--fill: 100%;">
+                    <div class="ram-fill"></div>
+                </div>
+                <div class="ram-bar" style="--fill: 100%;">
+                    <div class="ram-fill"></div>
+                </div>
+                <div class="ram-bar" style="--fill: 100%;">
+                    <div class="ram-fill"></div>
+                </div>
+            </div>
+            <h2 style="color: var(--warning);">RAM FULL</h2>
+            <p style="margin-top: 0.8rem; color: var(--muted);">
+                Maximum companion capacity reached (4/4). Delete a pet to make space.
+            </p>
+            <div class="modal-actions">
+                <button class="button" id="close-ram-full">Close</button>
             </div>
         </div>
     </div>
@@ -1092,36 +1269,56 @@
             
             // Check if this is a 404 egg path
             if (!route && is404EggPath(path)) {
-                // Display 404 with egg finding opportunity
-                pageContent.innerHTML = `
-                    <h2 class="page-title" style="color: var(--warning); font-size: 3rem;">404</h2>
-                    <p class="page-subtitle" style="color: var(--muted);">This entry does not exist.</p>
-                    <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
-                        The archive has no record of this path. But something is here. Something that shouldn't be.
-                    </p>
-                    <div style="margin-top: 2.5rem; padding: 1.5rem; background: transparent; border: 1px dashed #ffffff; border-radius: 0px; text-align: center; cursor: pointer;" id="hidden-egg-area">
-                        <p style="color: var(--muted); font-size: 0.9rem;">Something glimmers in the void...</p>
-                    </div>
-                    <div style="margin-top: 2rem;">
-                        <a href="#/" data-route="/" class="work-link" data-type="home">Return to the archive →</a>
-                    </div>
-                `;
+                // Check if egg has already been claimed
+                const eggClaimed = hasClaimedEgg(path);
+                
+                // Display 404 with or without egg finding opportunity
+                if (eggClaimed) {
+                    // Show 404 without the egg button
+                    pageContent.innerHTML = `
+                        <h2 class="page-title" style="color: var(--warning); font-size: 3rem;">404</h2>
+                        <p class="page-subtitle" style="color: var(--muted);">This entry does not exist.</p>
+                        <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
+                            The archive has no record of this path. Whatever was here has already been claimed.
+                        </p>
+                        <div style="margin-top: 2rem;">
+                            <a href="#/" data-route="/" class="work-link" data-type="home">Return to the archive →</a>
+                        </div>
+                    `;
+                } else {
+                    // Show 404 with egg finding opportunity
+                    pageContent.innerHTML = `
+                        <h2 class="page-title" style="color: var(--warning); font-size: 3rem;">404</h2>
+                        <p class="page-subtitle" style="color: var(--muted);">This entry does not exist.</p>
+                        <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
+                            The archive has no record of this path. But something is here. Something that shouldn't be.
+                        </p>
+                        <div style="margin-top: 2.5rem; padding: 1.5rem; background: transparent; border: 1px dashed #ffffff; border-radius: 0px; text-align: center; cursor: pointer;" id="hidden-egg-area">
+                            <p style="color: var(--muted); font-size: 0.9rem;">Something glimmers in the void...</p>
+                        </div>
+                        <div style="margin-top: 2rem;">
+                            <a href="#/" data-route="/" class="work-link" data-type="home">Return to the archive →</a>
+                        </div>
+                    `;
+                }
                 routeLabel.textContent = path;
-                // Add egg finding interaction
-                setTimeout(() => {
-                    const eggArea = document.getElementById("hidden-egg-area");
-                    if (eggArea) {
-                        eggArea.addEventListener("click", () => {
-                            triggerGlitch({
-                                species: getRandomSpecies(),
-                                path: path,
-                                section: "404",
-                                text: "Found in the void",
-                                timestamp: Date.now()
+                // Add egg finding interaction only if not claimed
+                if (!eggClaimed) {
+                    setTimeout(() => {
+                        const eggArea = document.getElementById("hidden-egg-area");
+                        if (eggArea) {
+                            eggArea.addEventListener("click", () => {
+                                triggerGlitch({
+                                    species: getRandomSpecies(),
+                                    path: path,
+                                    section: "404",
+                                    text: "Found in the void",
+                                    timestamp: Date.now()
+                                });
                             });
-                        });
-                    }
-                }, 100);
+                        }
+                    }, 100);
+                }
             } else if (!route) {
                 // Regular 404 page
                 pageContent.innerHTML = `
@@ -1161,6 +1358,19 @@
 
         function is404EggPath(path) {
             return eggPaths.has(path);
+        }
+
+        function hasClaimedEgg(path) {
+            const claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedEggs") || "[]");
+            return claimed.includes(path);
+        }
+
+        function markEggClaimed(path) {
+            const claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedEggs") || "[]");
+            if (!claimed.includes(path)) {
+                claimed.push(path);
+                localStorage.setItem("sanctuaryClaimedEggs", JSON.stringify(claimed));
+            }
         }
 
         function getRandomSpecies() {
@@ -1235,12 +1445,70 @@
         }
 
         function triggerGlitch(payload) {
+            // Check if at max capacity
+            if (state.pets.length >= 4) {
+                triggerRamFull();
+                return;
+            }
+            
             glitchCanvas.classList.add("active");
             glitchOverlay.classList.add("active");
             glitchOverlay.setAttribute("aria-hidden", "false");
             document.body.style.overflow = "hidden";
             startGlitchVisual();
             state.pending = payload;
+        }
+
+        function triggerRamFull() {
+            const ramFullOverlay = document.getElementById("ram-full-overlay");
+            glitchCanvas.classList.add("active");
+            ramFullOverlay.classList.add("active");
+            ramFullOverlay.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+            startRamFullVisual();
+        }
+
+        function closeRamFull() {
+            const ramFullOverlay = document.getElementById("ram-full-overlay");
+            ramFullOverlay.classList.remove("active");
+            ramFullOverlay.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+            stopRamFullVisual();
+        }
+
+        let ramFullAnimId = null;
+        function startRamFullVisual() {
+            const ctx = glitchCanvas.getContext("2d");
+            const draw = () => {
+                const { innerWidth: w, innerHeight: h } = window;
+                glitchCanvas.width = w;
+                glitchCanvas.height = h;
+                ctx.clearRect(0, 0, w, h);
+                
+                // Red warning blocks
+                for (let i = 0; i < 100; i++) {
+                    const x = Math.random() * w;
+                    const y = Math.random() * h;
+                    const width = Math.random() * 60 + 15;
+                    const height = Math.random() * 8 + 2;
+                    ctx.fillStyle = `rgba(255, ${Math.floor(Math.random() * 100)}, ${Math.floor(Math.random() * 100)}, 0.4)`;
+                    ctx.fillRect(x, y, width, height);
+                }
+                
+                // Vertical scan lines
+                if (Math.random() < 0.2) {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+                    ctx.fillRect(Math.random() * w, 0, 3, h);
+                }
+                
+                ramFullAnimId = requestAnimationFrame(draw);
+            };
+            draw();
+        }
+
+        function stopRamFullVisual() {
+            if (ramFullAnimId) cancelAnimationFrame(ramFullAnimId);
+            glitchCanvas.classList.remove("active");
         }
 
         function closeGlitch() {
@@ -1338,7 +1606,9 @@
             const eyesImage = Math.floor(rng() * eyesCount) + 1;
             const hasAccessory = rng() < 0.35;
             const accessoryImage = hasAccessory ? Math.floor(rng() * accessoryCount) + 1 : null;
-            const palette = pick(palettes, rng);
+            const bodyPalette = pick(palettes, rng);
+            const eyesPalette = pick(palettes, rng);
+            const accessoryPalette = pick(palettes, rng);
             const personality = pick(personalities, rng);
             const species = context.species && context.species !== "Pixel Puff"
                 ? context.species
@@ -1351,7 +1621,9 @@
                 bodyImage,
                 eyesImage,
                 accessoryImage,
-                color: palette.primary,
+                bodyColor: bodyPalette.primary,
+                eyesColor: eyesPalette.primary,
+                accessoryColor: accessoryPalette.primary,
                 stats: {
                     hunger: Math.floor(70 + rng() * 25),
                     happiness: Math.floor(65 + rng() * 30),
@@ -1411,16 +1683,24 @@
                 accessoryContainer.classList.remove("visible");
             }
             
-            // Apply color filter directly to images using hue-rotate
-            const hue = rgbToHue(pet.color);
-            const colorFilter = `hue-rotate(${hue}deg) saturate(120%) brightness(110%)`;
+            // Apply color filters directly to images using hue-rotate (separate colors for each part)
+            const bodyHue = rgbToHue(pet.bodyColor);
+            const eyesHue = rgbToHue(pet.eyesColor);
+            const accessoryHue = rgbToHue(pet.accessoryColor);
+            
+            const bodyColorFilter = `hue-rotate(${bodyHue}deg) saturate(120%) brightness(110%)`;
+            const eyesColorFilter = `hue-rotate(${eyesHue}deg) saturate(120%) brightness(110%)`;
+            const accessoryColorFilter = `hue-rotate(${accessoryHue}deg) saturate(120%) brightness(110%)`;
             
             // Combine with existing brightness/contrast/drop-shadow filters
-            const baseFilter = "brightness(1.2) contrast(1.1) drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))";
-            bodyImg.style.filter = `${baseFilter} ${colorFilter}`;
-            eyesImg.style.filter = `brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6)) ${colorFilter}`;
+            const baseBodyFilter = "brightness(1.2) contrast(1.1) drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))";
+            const baseEyesFilter = "brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6))";
+            const baseAccessoryFilter = "brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))";
+            
+            bodyImg.style.filter = `${baseBodyFilter} ${bodyColorFilter}`;
+            eyesImg.style.filter = `${baseEyesFilter} ${eyesColorFilter}`;
             if (pet.accessoryImage) {
-                accessoryImg.style.filter = `brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.5)) ${colorFilter}`;
+                accessoryImg.style.filter = `${baseAccessoryFilter} ${accessoryColorFilter}`;
             }
             
             updatePetStats(pet);
@@ -1531,18 +1811,24 @@
         }
 
         glitchEgg.addEventListener("click", () => {
-            glitchEgg.classList.add("cracked");
+            glitchEgg.classList.add("birthing");
             setTimeout(() => {
                 closeGlitch();
                 if (state.pending) {
                     const newPet = generatePet(state.pending);
                     state.pets.push(newPet);
                     state.activePetId = newPet.id;
+                    
+                    // Mark egg as claimed only after pet is successfully created
+                    if (state.pending.path) {
+                        markEggClaimed(state.pending.path);
+                    }
+                    
                     openNameModal();
                 }
                 handleWorkingLink("home");
                 updateStats();
-                glitchEgg.classList.remove("cracked");
+                glitchEgg.classList.remove("birthing");
                 if (state.pending && state.pending.path) navigate(state.pending.path);
             }, 700);
         });
@@ -1640,6 +1926,107 @@
 
 
 
+        const deleteOverlay = document.getElementById("delete-overlay");
+        const deletePetName = document.getElementById("delete-pet-name");
+        const cancelDelete = document.getElementById("cancel-delete");
+        const confirmDelete = document.getElementById("confirm-delete");
+
+        document.getElementById("delete-pet").addEventListener("click", () => {
+            const pet = getActivePet();
+            if (!pet) return;
+            deletePetName.textContent = pet.name || pet.species;
+            deleteOverlay.classList.add("active");
+            deleteOverlay.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+        });
+
+        cancelDelete.addEventListener("click", () => {
+            deleteOverlay.classList.remove("active");
+            deleteOverlay.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+        });
+
+        confirmDelete.addEventListener("click", () => {
+            const pet = getActivePet();
+            if (!pet) return;
+            
+            // Close modal
+            deleteOverlay.classList.remove("active");
+            deleteOverlay.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+            
+            // Start corruption effect
+            startCorruptionEffect();
+            
+            // Delete pet after corruption
+            setTimeout(() => {
+                const petIndex = state.pets.findIndex(p => p.id === pet.id);
+                if (petIndex !== -1) {
+                    state.pets.splice(petIndex, 1);
+                }
+                
+                // Set new active pet or clear
+                if (state.pets.length > 0) {
+                    state.activePetId = state.pets[0].id;
+                } else {
+                    state.activePetId = null;
+                }
+                
+                renderPetList();
+                updateStats();
+                saveState();
+                stopCorruptionEffect();
+            }, 2000);
+        });
+
+        function startCorruptionEffect() {
+            glitchCanvas.classList.add("active");
+            const ctx = glitchCanvas.getContext("2d");
+            let frameCount = 0;
+            
+            const draw = () => {
+                if (frameCount > 120) return; // Stop after ~2 seconds
+                
+                const { innerWidth: w, innerHeight: h } = window;
+                glitchCanvas.width = w;
+                glitchCanvas.height = h;
+                
+                // Intensifying corruption effect
+                const intensity = Math.min(1, frameCount / 60);
+                const blockCount = Math.floor(200 * intensity);
+                
+                ctx.clearRect(0, 0, w, h);
+                
+                // Random corruption blocks
+                for (let i = 0; i < blockCount; i++) {
+                    const x = Math.random() * w;
+                    const y = Math.random() * h;
+                    const width = Math.random() * 80 + 10;
+                    const height = Math.random() * 8 + 2;
+                    const r = Math.floor(Math.random() * 255);
+                    const g = Math.floor(Math.random() * 100);
+                    const b = Math.floor(Math.random() * 100);
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.3 + intensity * 0.4})`;
+                    ctx.fillRect(x, y, width, height);
+                }
+                
+                // Screen distortion lines
+                if (Math.random() < 0.3) {
+                    ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + intensity * 0.2})`;
+                    ctx.fillRect(0, Math.random() * h, w, Math.random() * 20 + 2);
+                }
+                
+                frameCount++;
+                glitchAnimId = requestAnimationFrame(draw);
+            };
+            draw();
+        }
+
+        function stopCorruptionEffect() {
+            if (glitchAnimId) cancelAnimationFrame(glitchAnimId);
+            glitchCanvas.classList.remove("active");
+        }
+
         document.getElementById("reset-pet").addEventListener("click", () => {
             localStorage.removeItem("sanctuaryPets");
             localStorage.removeItem("sanctuaryStats");
@@ -1649,6 +2036,10 @@
             state.stats = { dataPackets: 0 };
             updateStats();
             renderPetList();
+        });
+
+        document.getElementById("close-ram-full").addEventListener("click", () => {
+            closeRamFull();
         });
 
         function saveState() {
