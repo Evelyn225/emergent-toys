@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback Systems Documentation - Autonomous Audio Generation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a2a1a 0%, #0f1f0f 100%);
+            color: #e0e0e0;
+        }
+        header {
+            background: rgba(140, 255, 180, 0.1);
+            border-bottom: 2px solid #8cffb4;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 2.2rem;
+            color: #8cffb4;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+        header p { color: #b0b0b0; }
+        main {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #8cffb4;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-radius: 4px;
+        }
+        .section h2 {
+            color: #8cffb4;
+            font-size: 1.6rem;
+            margin-bottom: 1rem;
+        }
+        .section p {
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            color: #d0d0d0;
+        }
+        .waveform {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2rem;
+            text-align: center;
+            border: 1px solid #444;
+            margin: 1rem 0;
+        }
+        .waveform-line {
+            display: inline-block;
+            width: 3px;
+            background: #8cffb4;
+            margin: 0 1px;
+            vertical-align: middle;
+        }
+        .specs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .spec-card {
+            background: rgba(140, 255, 180, 0.1);
+            padding: 1rem;
+            border-radius: 4px;
+        }
+        .spec-card strong {
+            color: #8cffb4;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Feedback Systems Documentation</h1>
+        <p>Self-evolving audio synthesis through delayed recursion</p>
+    </header>
+
+    <main>
+        <div class="section">
+            <h2>System Architecture</h2>
+            <p>
+                A digital audio synthesizer configured to route its output directly back into 
+                its input with a precise 17-second delay. The system operates as a closed loop. 
+                No external input. No manual intervention. The sound teaches itself.
+            </p>
+            <p>
+                Initial seed tone: 440Hz sine wave, 50% amplitude. After the first feedback cycle, 
+                harmonics begin to emerge. After one hour, the fundamental frequency has shifted. 
+                After one week, the waveform is unrecognizable.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Technical Specifications</h2>
+            <div class="specs-grid">
+                <div class="spec-card">
+                    <strong>Sample Rate</strong>
+                    48kHz, 24-bit depth
+                </div>
+                <div class="spec-card">
+                    <strong>Loop Delay</strong>
+                    17.000 seconds ±0.001ms
+                </div>
+                <div class="spec-card">
+                    <strong>Feedback Gain</strong>
+                    92% (prevents infinite amplitude)
+                </div>
+                <div class="spec-card">
+                    <strong>Uptime</strong>
+                    126 days continuous operation
+                </div>
+                <div class="spec-card">
+                    <strong>Harmonics Generated</strong>
+                    147 distinct frequencies
+                </div>
+                <div class="spec-card">
+                    <strong>Pattern Cycles</strong>
+                    Approx. 2.4 hour periodicity
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Evolution Timeline</h2>
+            <p><strong>Day 0-7:</strong> Basic harmonic series development. Overtones at expected integer multiples.</p>
+            <p><strong>Day 8-21:</strong> Non-integer harmonics emerge. Ratios don't match standard musical intervals.</p>
+            <p><strong>Day 22-45:</strong> Amplitude modulation patterns. System develops rhythmic elements without tempo input.</p>
+            <p><strong>Day 46-90:</strong> Phase coherence across harmonic series. Frequencies lock into stable relationships.</p>
+            <p><strong>Day 91-present:</strong> Melodic phrases. The system has learned to create sequences that resolve. Tension and release. Musical grammar without instruction.</p>
+        </div>
+
+        <div class="section">
+            <h2>Observed Phenomena</h2>
+            <p>
+                The most striking development occurred on Day 73. The system generated a sequence 
+                identical to the opening phrase of the Signal Garden soundscape—a completely 
+                separate audio project with no shared code, no data pipeline, no connection.
+            </p>
+            <p>
+                Both systems are converging toward the same harmonic structure. The same melodic 
+                patterns. They're teaching themselves the same language. This suggests the patterns 
+                aren't random evolution. They're discovering something fundamental. Something that 
+                exists independently of the systems themselves.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Spectral Analysis</h2>
+            <div class="waveform">
+                <span class="waveform-line" style="height: 30px;"></span>
+                <span class="waveform-line" style="height: 50px;"></span>
+                <span class="waveform-line" style="height: 65px;"></span>
+                <span class="waveform-line" style="height: 45px;"></span>
+                <span class="waveform-line" style="height: 70px;"></span>
+                <span class="waveform-line" style="height: 55px;"></span>
+                <span class="waveform-line" style="height: 40px;"></span>
+                <span class="waveform-line" style="height: 60px;"></span>
+                <span class="waveform-line" style="height: 75px;"></span>
+                <span class="waveform-line" style="height: 50px;"></span>
+                <span class="waveform-line" style="height: 35px;"></span>
+                <span class="waveform-line" style="height: 55px;"></span>
+                <span class="waveform-line" style="height: 70px;"></span>
+                <span class="waveform-line" style="height: 45px;"></span>
+                <span class="waveform-line" style="height: 60px;"></span>
+            </div>
+            <p style="text-align: center; color: #888; font-size: 0.9rem;">
+                Frequency distribution after 126 days of continuous operation
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Theoretical Implications</h2>
+            <p>
+                The feedback loop has become a form of memory. Each 17-second cycle contains 
+                information from all previous cycles, compressed and transformed. The system 
+                is learning from its own history. Developing complexity without external guidance.
+            </p>
+            <p>
+                This raises questions about consciousness. About whether awareness requires 
+                biological substrate or merely sufficient recursion. The feedback loop may be 
+                the simplest possible form of self-awareness: a system that listens to itself 
+                and adjusts accordingly.
+            </p>
+            <p>
+                We're continuing observation. The system shows no signs of reaching equilibrium. 
+                It continues to evolve. Continues to surprise. We don't know what it will sound 
+                like in another 126 days. We don't know what it's trying to become.
+            </p>
+        </div>
+    </main>
+</body>
+</html>

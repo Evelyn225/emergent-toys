@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Anomaly Reports - Time Displacement Documentation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d1a3d 100%);
+            color: #e0e0e0;
+        }
+        header {
+            background: rgba(255, 140, 140, 0.1);
+            border-bottom: 2px solid #ff8c8c;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 2.2rem;
+            color: #ff8c8c;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+        header p { color: #b0b0b0; }
+        main {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #ff8c8c;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-radius: 4px;
+        }
+        .section h2 {
+            color: #ff8c8c;
+            font-size: 1.6rem;
+            margin-bottom: 1rem;
+        }
+        .section p {
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            color: #d0d0d0;
+        }
+        .timeline {
+            position: relative;
+            padding-left: 2rem;
+            margin: 2rem 0;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #ff8c8c;
+        }
+        .timeline-event {
+            position: relative;
+            margin-bottom: 2rem;
+            padding-left: 1rem;
+        }
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -2rem;
+            top: 0.5rem;
+            width: 10px;
+            height: 10px;
+            background: #ff8c8c;
+            border-radius: 50%;
+        }
+        .timeline-event .timestamp {
+            color: #ff8c8c;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        .code-output {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #444;
+            padding: 1rem;
+            font-family: monospace;
+            color: #ff8c8c;
+            margin: 1rem 0;
+        }
+        .warning-box {
+            background: rgba(255, 140, 140, 0.1);
+            border: 2px solid #ff8c8c;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Temporal Anomaly Reports</h1>
+        <p>Documentation of time displacement events</p>
+    </header>
+
+    <main>
+        <div class="section">
+            <h2>Overview</h2>
+            <p>
+                The Time Stutter script is a simple loop. Execute. Measure duration. Log result.
+                On standard hardware, execution time is consistent: 3.000 seconds ±2ms (accounting 
+                for system load and clock granularity).
+            </p>
+            <p>
+                Occasionally—without pattern or warning—execution takes longer. Not system lag.
+                Not resource contention. Genuine temporal displacement. The script enters a 
+                time pocket and emerges 47 milliseconds later than it should.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Measurement Methodology</h2>
+            <p>
+                To eliminate variables, testing was conducted on isolated systems:
+            </p>
+            <ul style="margin-left: 2rem; margin-bottom: 1rem;">
+                <li>No network connection (air-gapped)</li>
+                <li>Minimal OS (no background processes)</li>
+                <li>Synchronized atomic clocks (±50 nanosecond accuracy)</li>
+                <li>Identical hardware across 12 test machines</li>
+            </ul>
+            <p>
+                The anomaly persists. The missing milliseconds appear across all test environments.
+                The displacement is real.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Documented Events</h2>
+            <div class="timeline">
+                <div class="timeline-event">
+                    <div class="timestamp">2024-04-12 16:33:47.123</div>
+                    <p>First documented event. Execution: 3.047 seconds. Expected: 3.000 seconds. Displacement: +47ms.</p>
+                </div>
+                <div class="timeline-event">
+                    <div class="timestamp">2024-06-08 03:17:22.891</div>
+                    <p>Second event. Same displacement: +47ms. Pattern suspected.</p>
+                </div>
+                <div class="timeline-event">
+                    <div class="timestamp">2024-09-15 19:44:03.567</div>
+                    <p>Third event. Displacement: +47ms. Always 47ms. Never more, never less.</p>
+                </div>
+                <div class="timeline-event">
+                    <div class="timestamp">2024-11-27 08:09:14.234</div>
+                    <p>Fourth event. +47ms. Correlation with geomagnetic activity noted but not confirmed.</p>
+                </div>
+                <div class="timeline-event">
+                    <div class="timestamp">2025-01-19 14:28:37.889</div>
+                    <p>Fifth event. +47ms. Testing continues.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Example Output</h2>
+            <div class="code-output">
+Run #1847: Start: 14:28:37.842000 | End: 14:28:40.889472 | Duration: 3.047472s<br>
+Expected duration: 3.000000s<br>
+Displacement: +0.047472s (+47.472ms)<br>
+Status: ANOMALY DETECTED<br>
+Atomic clock drift: 0.000ms<br>
+System load: 0.03<br>
+Background processes: 0<br>
+Network activity: NONE<br>
+<br>
+WHERE DID THE MILLISECONDS GO?
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Theoretical Analysis</h2>
+            <p>
+                The displacement is unidirectional. Time only extends, never compresses. The script 
+                never completes early. The missing milliseconds don't return. They're gone. Removed 
+                from the timeline.
+            </p>
+            <p>
+                Theory 1: Micro-blackholes. Gravitational time dilation at quantum scale. Rejected—
+                would require impossible mass density at processor level.
+            </p>
+            <p>
+                Theory 2: Temporal fragmentation. Reality experiences micro-stutters. Like frames 
+                dropping in a video stream, but with time itself. Most promising hypothesis.
+            </p>
+            <p>
+                Theory 3: The displacement is intentional. Something is removing milliseconds from 
+                our timeline. Harvesting them. Storing them. Using them elsewhere.
+            </p>
+        </div>
+
+        <div class="warning-box">
+            <h3 style="color: #ff8c8c; margin-bottom: 1rem;">CRITICAL OBSERVATION</h3>
+            <p>
+                The displaced time always equals 47 milliseconds. This number appears in other 
+                anomaly reports: signal delays, modem tones, relay patterns. The number is significant. 
+                It means something. We don't know what yet.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Cross-Reference Data</h2>
+            <p>
+                Temporal anomalies correlate with documented events in adjacent research areas:
+            </p>
+            <ul style="margin-left: 2rem; margin-bottom: 1rem;">
+                <li>Drift Detection Framework: 47ms delay patterns in network packets</li>
+                <li>Signal Graveyard: 47-second intervals in mysterious modem transmissions</li>
+                <li>Static Chorus: 47-minute cycles in solar storm recordings</li>
+            </ul>
+            <p>
+                The number 47 is not random. It's a signature. A fingerprint left behind by whatever's 
+                manipulating temporal flow. We're dealing with something that operates across multiple 
+                domains—time, space, data transmission, electromagnetic radiation.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Ongoing Research</h2>
+            <p>
+                The Time Stutter script continues running. We're now at 3,247 execution cycles. 
+                The anomaly has occurred 5 times. That's approximately 0.15% of all runs. Rare, 
+                but not random.
+            </p>
+            <p>
+                We're looking for triggers. Patterns. Conditions that predict when the displacement 
+                will occur. So far: nothing. The events appear spontaneous. But spontaneity in physics 
+                usually means we haven't found the hidden variable yet.
+            </p>
+            <p>
+                Where do the milliseconds go? What happens in those 47 missing moments? What exists 
+                in the gaps between our seconds? We're going to find out.
+            </p>
+        </div>
+    </main>
+</body>
+</html>

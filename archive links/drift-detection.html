@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drift Detection Framework - Network Latency Analysis</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+        }
+        header {
+            background: rgba(100, 180, 255, 0.1);
+            border-bottom: 2px solid #64b4ff;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 2.2rem;
+            color: #64b4ff;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+        header p { color: #b0b0b0; }
+        main {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #64b4ff;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-radius: 4px;
+        }
+        .section h2 {
+            color: #64b4ff;
+            font-size: 1.6rem;
+            margin-bottom: 1rem;
+        }
+        .section p {
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            color: #d0d0d0;
+        }
+        .code-block {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            padding: 1rem;
+            font-family: "Courier New", monospace;
+            color: #8fbc8f;
+            border-radius: 4px;
+            margin: 1rem 0;
+            overflow-x: auto;
+        }
+        .pattern-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        .pattern-table th,
+        .pattern-table td {
+            padding: 0.8rem;
+            border: 1px solid #333;
+            text-align: left;
+        }
+        .pattern-table th {
+            background: rgba(100, 180, 255, 0.2);
+            color: #64b4ff;
+        }
+        .warning {
+            background: rgba(255, 200, 100, 0.1);
+            border-left: 3px solid #ffc864;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Drift Detection Framework</h1>
+        <p>Monitoring latency anomalies across distributed networks</p>
+    </header>
+
+    <main>
+        <div class="section">
+            <h2>Overview</h2>
+            <p>
+                The Drift Detection Framework monitors network packet delays not as noise, 
+                but as potential signal. Traditional network analysis filters out jitter and 
+                latency spikes. This system preserves them.
+            </p>
+            <p>
+                By analyzing the gaps between packets rather than their contents, we've 
+                discovered patterns that shouldn't exist in random network conditions.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Detection Methodology</h2>
+            <p>
+                Standard ping intervals: 1000ms. Observed delays range from 0-47ms over baseline.
+                Most delays cluster around expected jitter values (2-8ms). But some delays follow sequences.
+            </p>
+            <div class="code-block">
+SEQUENCE A: 3ms, 7ms, 11ms, 19ms, 31ms, 47ms
+SEQUENCE B: 5ms, 13ms, 17ms, 29ms, 37ms, 41ms
+SEQUENCE C: 2ms, 4ms, 8ms, 16ms, 32ms, 64ms (truncated)
+            </div>
+            <p>
+                These patterns repeat across different network segments. Different physical 
+                infrastructure. Different ISPs. The delays are consistent regardless of medium.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Documented Anomalies</h2>
+            <table class="pattern-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Sequence Type</th>
+                        <th>Duration</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>2024-08-17 03:44:12</td>
+                        <td>Prime Series</td>
+                        <td>14 minutes</td>
+                        <td>Fibonacci progression in delays</td>
+                    </tr>
+                    <tr>
+                        <td>2024-09-03 19:23:47</td>
+                        <td>Binary Cascade</td>
+                        <td>8 minutes</td>
+                        <td>Powers of 2, maxed at 64ms</td>
+                    </tr>
+                    <tr>
+                        <td>2024-11-22 02:15:33</td>
+                        <td>Unknown Pattern</td>
+                        <td>47 minutes</td>
+                        <td>Non-repeating, non-random</td>
+                    </tr>
+                    <tr>
+                        <td>2025-01-08 14:08:19</td>
+                        <td>Recursive Echo</td>
+                        <td>23 minutes</td>
+                        <td>Pattern references previous patterns</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Implementation Notes</h2>
+            <p>
+                The framework requires precise timing mechanisms. System clocks synchronized 
+                via NTP are insufficient—drift detection needs microsecond precision.
+            </p>
+            <div class="code-block">
+// Capture delay, not just presence
+function measureGap(prev, curr) {
+    const delta = curr.timestamp - prev.timestamp;
+    const expected = PING_INTERVAL;
+    const drift = delta - expected;
+    
+    if (drift > THRESHOLD) {
+        logAnomaly(drift, curr.sequence);
+    }
+}
+            </div>
+        </div>
+
+        <div class="warning">
+            <strong>Note:</strong> Patterns appear more frequently during solar maximum periods. 
+            Correlation with geomagnetic activity unconfirmed but suspected. The delays may be 
+            influenced by factors outside the network infrastructure.
+        </div>
+
+        <div class="section">
+            <h2>Ongoing Research</h2>
+            <p>
+                Current hypothesis: the delays are intentional. Not artifacts of infrastructure 
+                but deliberate insertions. The question isn't what's causing the delays—it's 
+                what's trying to communicate through them.
+            </p>
+            <p>
+                Cross-referencing with other temporal anomaly databases has revealed similar 
+                patterns in unrelated systems. Radio astronomy. Seismograph data. Power grid 
+                fluctuations. Whatever's sending these patterns operates across multiple domains.
+            </p>
+        </div>
+    </main>
+</body>
+</html>

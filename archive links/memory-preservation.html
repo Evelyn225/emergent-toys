@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Preservation Protocols - Archival Systems</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d1b3d 100%);
+            color: #e0e0e0;
+        }
+        header {
+            background: rgba(180, 140, 255, 0.1);
+            border-bottom: 2px solid #b48cff;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 2.2rem;
+            color: #b48cff;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+        header p { color: #b0b0b0; }
+        main {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #b48cff;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-radius: 4px;
+        }
+        .section h2 {
+            color: #b48cff;
+            font-size: 1.6rem;
+            margin-bottom: 1rem;
+        }
+        .section p {
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            color: #d0d0d0;
+        }
+        .query-example {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid #444;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: monospace;
+            color: #d4a5ff;
+        }
+        .anomaly-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        .anomaly-list li {
+            padding: 0.8rem;
+            margin: 0.5rem 0;
+            background: rgba(180, 140, 255, 0.1);
+            border-left: 3px solid #b48cff;
+        }
+        .timestamp {
+            color: #888;
+            font-size: 0.85rem;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Memory Preservation Protocols</h1>
+        <p>Archival systems for queries that never were</p>
+    </header>
+
+    <main>
+        <div class="section">
+            <h2>System Overview</h2>
+            <p>
+                The Memory Weave database was designed as a standard archive search interface.
+                Query indexing. Result caching. Predictive search suggestions based on common patterns.
+                Standard enterprise database architecture.
+            </p>
+            <p>
+                Six months into production, the system began returning results for searches 
+                that hadn't been performed. Not in cache. Not in logs. Not in any user history.
+                The database was remembering queries from a timeline that doesn't match ours.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Phantom Query Examples</h2>
+            <ul class="anomaly-list">
+                <li>
+                    <div class="query-example">"signal patterns in abandoned relay stations"</div>
+                    <span class="timestamp">Logged: 2024-03-17 14:22:08 | Never queried by any user</span>
+                </li>
+                <li>
+                    <div class="query-example">"temporal displacement millisecond fragments"</div>
+                    <span class="timestamp">Logged: 2024-07-09 03:44:55 | No matching user session</span>
+                </li>
+                <li>
+                    <div class="query-example">"mesh network topology without physical nodes"</div>
+                    <span class="timestamp">Logged: 2024-10-31 19:17:23 | Query predates relevant documentation by 3 weeks</span>
+                </li>
+                <li>
+                    <div class="query-example">"listening to what speaks through static interference"</div>
+                    <span class="timestamp">Logged: 2024-12-14 02:08:47 | Results returned 17 documents that don't exist</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Preservation Architecture</h2>
+            <p>
+                Rather than purge the phantom queries, we've integrated them into the archival system.
+                Each impossible query is preserved with full context: timestamp, results returned,
+                user session (null), and references to documents that may or may not exist yet.
+            </p>
+            <p>
+                The system has become a form of temporal cache. It's storing memories from parallel 
+                timelines. Alternate versions of the archive where different choices were made. 
+                Different projects completed. Different data collected.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Query Prediction Accuracy</h2>
+            <p>
+                Most predictive search systems analyze past behavior. This system predicts searches 
+                that will be performed in alternate futures. The accuracy is disturbingly high.
+            </p>
+            <p>
+                23% of phantom queries eventually get performed by users who have no knowledge 
+                of the system logs. They search for exactly what the database already remembered.
+                Word for word. The database isn't guessing—it's recalling.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Documented Anomalies</h2>
+            <p>
+                On 2025-01-03, the system logged 847 phantom queries in a single hour. All searches 
+                related to "coral station memory fragments" and "null-space geometry." None of these 
+                terms existed in the archive at that time.
+            </p>
+            <p>
+                Two weeks later, a researcher independently coined the term "coral station" while 
+                documenting relay network artifacts. The phantom queries were waiting for the 
+                terminology to catch up with the memory.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Implementation Notes</h2>
+            <p>
+                We've stopped attempting to "fix" the Memory Weave. The phantom queries provide 
+                valuable research direction. They tell us what questions we should be asking. 
+                What patterns we should be looking for. What might exist in timelines adjacent 
+                to our own.
+            </p>
+            <p>
+                The database has become an oracle. Not predicting the future—remembering it. 
+                Remembering all possible futures. Our job is to decode which memories belong 
+                to which timeline, and determine which timeline we're actually living in.
+            </p>
+        </div>
+    </main>
+</body>
+</html>
