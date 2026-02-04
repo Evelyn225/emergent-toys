@@ -80,7 +80,6 @@
             z-index: 10;
             background: #000000;
             border-bottom: 2px solid #ffffff;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
         }
 
         .nav-bar {
@@ -130,7 +129,6 @@
             background: rgba(255, 255, 255, 0.1);
             border-left: 2px solid #ffffff;
             padding-left: calc(0.7rem - 2px);
-            box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
         }
 
         main {
@@ -149,7 +147,6 @@
             border: 2px solid #ffffff;
             border-radius: 0px;
             padding: 2rem;
-            box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1), 0 0 10px rgba(255, 255, 255, 0.2);
             min-height: 480px;
             position: relative;
             overflow: hidden;
@@ -211,8 +208,8 @@
 
         .mini-card:hover {
             background: #000000;
-            transform: none;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.1);
+            transform: translate(-3px, -3px);
+            box-shadow: 3px 3px 0px #ffffff;
         }
 
         .mini-card h3 {
@@ -252,7 +249,6 @@
             border-radius: 0px;
             padding: 1.4rem;
             border: 1px solid #ffffff;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
         }
 
         .panel h4 {
@@ -281,12 +277,12 @@
             font-size: 0.85rem;
             cursor: pointer;
             transition: all 0.2s ease;
-            text-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
         }
 
         .button:hover {
             background: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+            transform: translate(-2px, -2px);
+            box-shadow: 2px 2px 0px #ffffff;
         }
 
         .button.secondary {
@@ -298,7 +294,6 @@
             background: transparent;
             border-color: #ff4444;
             color: #ff4444;
-            text-shadow: 0 0 3px rgba(255, 68, 68, 0.5);
         }
 
         .pet-widget {
@@ -312,7 +307,6 @@
             border-top: 2px solid #ffffff;
             border-radius: 0px;
             padding: 0;
-            box-shadow: -5px -5px 20px rgba(255, 255, 255, 0.2);
             z-index: 15;
             display: flex;
             flex-direction: column;
@@ -370,7 +364,6 @@
             position: relative;
             overflow: hidden;
             border: 1px solid #ffffff;
-            box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.2);
             image-rendering: pixelated;
             image-rendering: -moz-crisp-edges;
             image-rendering: crisp-edges;
@@ -394,7 +387,6 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            filter: brightness(1.2) contrast(1.1) drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
             transition: transform 0.2s ease;
             image-rendering: pixelated;
         }
@@ -416,7 +408,6 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            filter: brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
             image-rendering: pixelated;
         }
 
@@ -435,7 +426,6 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            filter: brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.5));
             image-rendering: pixelated;
         }
 
@@ -1683,24 +1673,21 @@
                 accessoryContainer.classList.remove("visible");
             }
             
-            // Apply color filters directly to images using hue-rotate (separate colors for each part)
+            // Apply color filters to white images (separate colors for each part)
             const bodyHue = rgbToHue(pet.bodyColor);
             const eyesHue = rgbToHue(pet.eyesColor);
             const accessoryHue = rgbToHue(pet.accessoryColor);
             
-            const bodyColorFilter = `hue-rotate(${bodyHue}deg) saturate(120%) brightness(110%)`;
-            const eyesColorFilter = `hue-rotate(${eyesHue}deg) saturate(120%) brightness(110%)`;
-            const accessoryColorFilter = `hue-rotate(${accessoryHue}deg) saturate(120%) brightness(110%)`;
+            // For white images: brightness(0) makes black, invert(1) makes white, sepia(1) adds tone, hue-rotate shifts color
+            const bodyColorFilter = `brightness(0) saturate(100%) invert(1) sepia(1) hue-rotate(${bodyHue}deg) saturate(300%) brightness(100%)`;
+            const eyesColorFilter = `brightness(0) saturate(100%) invert(1) sepia(1) hue-rotate(${eyesHue}deg) saturate(300%) brightness(100%)`;
+            const accessoryColorFilter = `brightness(0) saturate(100%) invert(1) sepia(1) hue-rotate(${accessoryHue}deg) saturate(300%) brightness(100%)`;
             
-            // Combine with existing brightness/contrast/drop-shadow filters
-            const baseBodyFilter = "brightness(1.2) contrast(1.1) drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))";
-            const baseEyesFilter = "brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6))";
-            const baseAccessoryFilter = "brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))";
-            
-            bodyImg.style.filter = `${baseBodyFilter} ${bodyColorFilter}`;
-            eyesImg.style.filter = `${baseEyesFilter} ${eyesColorFilter}`;
+            // Apply color filters without glow
+            bodyImg.style.filter = bodyColorFilter;
+            eyesImg.style.filter = eyesColorFilter;
             if (pet.accessoryImage) {
-                accessoryImg.style.filter = `${baseAccessoryFilter} ${accessoryColorFilter}`;
+                accessoryImg.style.filter = accessoryColorFilter;
             }
             
             updatePetStats(pet);
