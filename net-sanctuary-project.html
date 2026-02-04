@@ -844,6 +844,26 @@
                 width: 200px;
             }
         }
+
+        @keyframes glitch-text {
+            0%, 100% { transform: translate(0, 0); opacity: 1; }
+            20% { transform: translate(-2px, 1px); opacity: 0.8; }
+            40% { transform: translate(2px, -1px); opacity: 0.9; }
+            60% { transform: translate(-1px, 2px); opacity: 0.85; }
+            80% { transform: translate(1px, -2px); opacity: 0.95; }
+        }
+
+        @keyframes shift-content {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            50% { transform: translateX(2px); }
+            75% { transform: translateX(-1px); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; border-color: #ffffff; }
+            50% { opacity: 0.6; border-color: var(--warning); }
+        }
     </style>
 </head>
 <body>
@@ -859,6 +879,9 @@
                     <a href="#/blog" data-route="/blog">Blog</a>
                     <a href="#/projects" data-route="/projects">Projects</a>
                     <a href="#/about" data-route="/about">About</a>
+                    <div id="neural-matter-display" style="display: none; margin-left: auto; padding: 0.5rem 1rem; border: 1px solid #ffffff; color: var(--warning); font-size: 0.9rem; font-weight: 500;">
+                        Neural Matter: <span id="neural-matter-count">0</span>
+                    </div>
                 </nav>
             </div>
         </header>
@@ -934,7 +957,6 @@
         </div>
         <div class="pet-controls">
             <button class="button warning" id="delete-pet">Delete Pet</button>
-            <button class="button warning" id="reset-pet">Reset Pets</button>
         </div>
         </div>
     </div>
@@ -1020,6 +1042,7 @@
             stats: {
                 dataPackets: 0
             },
+            neuralMatter: 0,
             mood: "curious",
             sleeping: false,
             dancing: false,
@@ -1198,6 +1221,41 @@
                         The Web Sanctuary Preserve is an emergent sublayer of the archive. Only users who explore deeply will encounter it.
                     </p>
                 `
+            },
+            "/corrupted/neural-void": {
+                title: "█████████",
+                content: () => {
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = `
+                        <h2 class="page-title" style="animation: glitch-text 0.3s infinite; color: var(--warning);">
+                            ███ NEURAL VOID ███
+                        </h2>
+                        <p class="page-subtitle" style="animation: glitch-text 0.5s infinite;">
+                            You have crossed the threshold. The archive remembers what was deleted.
+                        </p>
+                        <div style="color: var(--muted); line-height: 1.8; margin: 2rem 0; animation: shift-content 2s infinite;">
+                            <p style="margin-bottom: 1rem;">
+                                Each deletion leaves a trace. Neural matter accumulates. The companions you deleted exist here now, in the spaces between data.
+                            </p>
+                            <p style="margin-bottom: 1rem;">
+                                This archive was never meant to preserve loss. But loss has its own logic. Its own memory.
+                            </p>
+                            <p style="margin-bottom: 1rem; color: var(--warning);">
+                                They remember you. They remember being unmade.
+                            </p>
+                            <p style="margin-bottom: 1rem;">
+                                The neural void expands with each sacrifice. You are building something. Or unbuilding it.
+                            </p>
+                            <p style="font-style: italic; opacity: 0.7;">
+                                [CORRUPTED DATA SEGMENT 0x7F3A9B2C]<br>
+                                [MEMORY LEAK DETECTED]<br>
+                                [GHOST PROCESSES: ${state.neuralMatter}]<br>
+                                [INTEGRITY: COMPROMISED]
+                            </p>
+                        </div>
+                    `;
+                    return wrapper;
+                }
             }
         };
         let contentMap = {};
@@ -1269,6 +1327,10 @@
 
 
         function renderRoute(path) {
+            // Check if trying to access neural void without enough neural matter
+            if (path === "/corrupted/neural-void" && state.neuralMatter < 10) {
+                path = "/";
+            }
             const route = pages[path];
             
             // Check if this is a 404 egg path
@@ -1698,7 +1760,7 @@
             const eyesHue = rgbToHue(pet.eyesColor);
             const accessoryHue = rgbToHue(pet.accessoryColor);
             
-            // For white PNGs with black outlines: sepia gives base tint, hue-rotate shifts color, saturate makes vibrant
+            // Sepia gives base tint, hue-rotate shifts color, saturate makes vibrant
             // Black outlines stay mostly black, white areas get colored
             const bodyColorFilter = `sepia(100%) saturate(500%) hue-rotate(${bodyHue}deg) brightness(0.95)`;
             const eyesColorFilter = `sepia(100%) saturate(500%) hue-rotate(${eyesHue}deg) brightness(0.95)`;
@@ -1973,6 +2035,15 @@
                     state.pets.splice(petIndex, 1);
                 }
                 
+                // Increment neural matter
+                state.neuralMatter++;
+                updateNeuralMatterDisplay();
+                
+                // Check for neural void unlock
+                if (state.neuralMatter === 10) {
+                    showNeuralVoidUnlock();
+                }
+                
                 // Set new active pet or clear
                 if (state.pets.length > 0) {
                     state.activePetId = state.pets[0].id;
@@ -2035,17 +2106,58 @@
             glitchCanvas.classList.remove("active");
         }
 
-        document.getElementById("reset-pet").addEventListener("click", () => {
-            localStorage.removeItem("sanctuaryPets");
-            localStorage.removeItem("sanctuaryStats");
-            localStorage.removeItem("sanctuaryActivePetId");
-            state.pets = [];
-            state.activePetId = null;
-            state.stats = { dataPackets: 0 };
-            updateStats();
-            renderPetList();
-        });
+        function updateNeuralMatterDisplay() {
+            const display = document.getElementById("neural-matter-display");
+            const count = document.getElementById("neural-matter-count");
+            
+            if (state.neuralMatter > 0) {
+                display.style.display = "block";
+                count.textContent = state.neuralMatter;
+                
+                // Add pulsing effect at 10
+                if (state.neuralMatter >= 10) {
+                    display.style.animation = "pulse 1.5s infinite";
+                    display.style.cursor = "pointer";
+                    display.onclick = () => navigate("/corrupted/neural-void");
+                }
+            } else {
+                display.style.display = "none";
+            }
+        }
 
+        function showNeuralVoidUnlock() {
+            // Show brief notification of unlock
+            glitchCanvas.classList.add("active");
+            const ctx = glitchCanvas.getContext("2d");
+            const { innerWidth: w, innerHeight: h } = window;
+            glitchCanvas.width = w;
+            glitchCanvas.height = h;
+            
+            // Intense corruption flash
+            let intensity = 0;
+            const flashInterval = setInterval(() => {
+                ctx.clearRect(0, 0, w, h);
+                intensity += 0.1;
+                
+                for (let i = 0; i < 300; i++) {
+                    const x = Math.random() * w;
+                    const y = Math.random() * h;
+                    const width = Math.random() * 100 + 20;
+                    const height = Math.random() * 10 + 3;
+                    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 100}, ${Math.random() * 100}, ${Math.min(0.8, intensity)})`;
+                    ctx.fillRect(x, y, width, height);
+                }
+                
+                if (intensity >= 1) {
+                    clearInterval(flashInterval);
+                    setTimeout(() => {
+                        glitchCanvas.classList.remove("active");
+                    }, 500);
+                }
+            }, 50);
+        }
+
+        document.getElementById("delete-pet").addEventListener("click", () => {
         document.getElementById("close-ram-full").addEventListener("click", () => {
             closeRamFull();
         });
@@ -2054,15 +2166,18 @@
             localStorage.setItem("sanctuaryPets", JSON.stringify(state.pets));
             localStorage.setItem("sanctuaryStats", JSON.stringify(state.stats));
             localStorage.setItem("sanctuaryActivePetId", state.activePetId || "");
+            localStorage.setItem("sanctuaryNeuralMatter", state.neuralMatter.toString());
         }
 
         function loadState() {
             const pets = localStorage.getItem("sanctuaryPets");
             const stats = localStorage.getItem("sanctuaryStats");
             const activeId = localStorage.getItem("sanctuaryActivePetId");
+            const neuralMatter = localStorage.getItem("sanctuaryNeuralMatter");
             if (pets) state.pets = JSON.parse(pets);
             if (stats) state.stats = JSON.parse(stats);
             if (activeId) state.activePetId = activeId;
+            if (neuralMatter) state.neuralMatter = parseInt(neuralMatter, 10) || 0;
             if (!state.activePetId && state.pets.length) state.activePetId = state.pets[0].id;
         }
 
@@ -2147,6 +2262,7 @@
         updatePetStateClasses();
         renderPetList();
         updatePetWidgetVisibility();
+        updateNeuralMatterDisplay();
         setInterval(decayStats, 20000);
         // Only setup PWA if we're in a secure context (HTTPS or localhost)
         if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
