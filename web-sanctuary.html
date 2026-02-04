@@ -1035,11 +1035,18 @@
         let contentMap = {};
 
         // Load content from JSON file
-        // On Vercel, use a relative path that works from the root
-        const contentPath = '/sanctuary-content.json';
+        // Use a path that works on both Vercel and direct access
+        const contentPath = window.location.hostname.includes('github') || window.location.hostname.includes('raw.githubusercontent')
+            ? 'https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/sanctuary-content.json'
+            : '/sanctuary-content.json';
         
-        fetch(contentPath)
-            .then(response => response.json())
+        fetch(contentPath, { mode: 'cors' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 contentMap = data;
                 
@@ -1085,13 +1092,14 @@
                 renderRoute(getCurrentPath());
             })
             .catch(err => {
-                console.error('Failed to load content:', err);
+                console.error('Failed to load content from', contentPath, ':', err);
                 // Create a simple fallback
-                pageContent.innerHTML = '<p style="color: var(--muted);">Content loading. Please ensure sanctuary-content.json is in the same directory as this file.</p>';
+                pageContent.innerHTML = '<p style="color: var(--muted);">Content loading. Please ensure sanctuary-content.json is accessible at ' + contentPath + '</p>';
             });
 
         const routeLabel = document.getElementById("route-label");
         const pageContent = document.getElementById("page-content");
+
 
         function renderRoute(path) {
             const route = pages[path];
