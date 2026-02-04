@@ -2423,29 +2423,30 @@
                     </div>
                 </div>
             `;
-            return; // Stop all initialization
-        }
-        
-        // TEST MODE: Call this in console to add max shards and neural network for testing
-        // Simply delete this function block when done testing (lines 2405-2412)
-        window.addTestResources = function() {
-            state.neuralMatter = 10;
-            state.neuralNetwork = 1;
+        } else {
+            // Normal initialization - only if not shut down
+            
+            // TEST MODE: Call this in console to add max shards and neural network for testing
+            // Simply delete this function block when done testing (lines 2405-2412)
+            window.addTestResources = function() {
+                state.neuralMatter = 10;
+                state.neuralNetwork = 1;
+                updateNeuralMatterDisplay();
+                updateNeuralNetworkDisplay();
+                saveState();
+                console.log("✓ Added max neural matter and 1 neural network");
+            };
+            
+            loadState();
+            // Initial renderRoute will be called after content loads
+            updateStats();
+            updatePetStateClasses();
+            renderPetList();
+            updatePetWidgetVisibility();
             updateNeuralMatterDisplay();
             updateNeuralNetworkDisplay();
-            saveState();
-            console.log("✓ Added max neural matter and 1 neural network");
-        };
-        
-        loadState();
-        // Initial renderRoute will be called after content loads
-        updateStats();
-        updatePetStateClasses();
-        renderPetList();
-        updatePetWidgetVisibility();
-        updateNeuralMatterDisplay();
-        updateNeuralNetworkDisplay();
-        setInterval(decayStats, 20000);
+            setInterval(decayStats, 20000);
+        }
         // Only setup PWA if we're in a secure context (HTTPS or localhost)
         if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             setupPwa();
