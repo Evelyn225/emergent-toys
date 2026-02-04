@@ -602,126 +602,113 @@
             margin: 0 auto 1.5rem;
             position: relative;
             cursor: pointer;
+            background: #1a1a1a;
+            border: 1px solid #444444;
+            font-family: "Courier New", monospace;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
         }
 
         .corruption-cluster::before {
             content: "";
             position: absolute;
             inset: 0;
-            background: 
-                radial-gradient(circle at 20% 30%, rgba(124, 242, 255, 0.3) 0%, transparent 40%),
-                radial-gradient(circle at 80% 60%, rgba(196, 139, 255, 0.3) 0%, transparent 40%),
-                radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
-            filter: blur(8px);
-            animation: corruptionPulse 2s ease-in-out infinite;
+            background: none;
+            filter: none;
+            animation: none;
         }
 
         .corruption-fragment {
             position: absolute;
             width: 100%;
             height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            line-height: 1.2;
+            color: #888888;
+            text-align: center;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            overflow: hidden;
+            letter-spacing: 2px;
         }
 
         .fragment-block {
             position: absolute;
-            background: rgba(255, 255, 255, 0.8);
-            box-shadow: 0 0 8px rgba(124, 242, 255, 0.6), inset 0 0 4px rgba(196, 139, 255, 0.4);
-            animation: fragmentFloat 3s ease-in-out infinite;
+            background: none;
+            box-shadow: none;
+            animation: asciiFlicker 0.15s infinite;
+            font-size: 11px;
+            color: #666666;
+            letter-spacing: 1px;
+            font-weight: bold;
         }
 
         .fragment-block:nth-child(1) {
-            width: 40px;
-            height: 6px;
-            top: 30%;
-            left: 20%;
+            top: 20%;
+            left: 15%;
             animation-delay: 0s;
         }
 
         .fragment-block:nth-child(2) {
-            width: 30px;
-            height: 4px;
-            top: 50%;
-            right: 25%;
-            animation-delay: 0.3s;
+            top: 35%;
+            right: 20%;
+            animation-delay: 0.05s;
         }
 
         .fragment-block:nth-child(3) {
-            width: 35px;
-            height: 5px;
-            bottom: 35%;
-            left: 30%;
-            animation-delay: 0.6s;
+            top: 50%;
+            left: 25%;
+            animation-delay: 0.1s;
         }
 
         .fragment-block:nth-child(4) {
-            width: 25px;
-            height: 4px;
-            top: 40%;
-            right: 20%;
-            animation-delay: 0.9s;
+            top: 65%;
+            right: 30%;
+            animation-delay: 0.15s;
         }
 
         .fragment-block:nth-child(5) {
-            width: 20px;
-            height: 3px;
-            bottom: 40%;
-            left: 50%;
-            animation-delay: 1.2s;
+            top: 80%;
+            left: 40%;
+            animation-delay: 0.2s;
+        }
+
+        @keyframes asciiFlicker {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
         }
 
         @keyframes corruptionPulse {
-            0%, 100% { 
-                opacity: 0.6;
-                transform: scale(1);
-            }
-            50% { 
-                opacity: 1;
-                transform: scale(1.15);
-            }
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
         }
 
         @keyframes fragmentFloat {
-            0%, 100% { 
-                transform: translateY(0) translateX(0);
-                opacity: 0.7;
-            }
-            50% { 
-                transform: translateY(-8px) translateX(4px);
-                opacity: 1;
-            }
+            0%, 100% { transform: translateY(0); opacity: 0.5; }
+            50% { transform: translateY(-4px); opacity: 1; }
         }
 
         .corruption-cluster.birthing .fragment-block {
-            animation: fragmentBurst 0.7s ease-out forwards;
+            animation: asciiScatter 0.6s ease-out forwards !important;
         }
 
         .corruption-cluster.birthing::before {
-            animation: corruptionExpand 0.7s ease-out forwards;
+            animation: none;
         }
 
-        @keyframes fragmentBurst {
+        @keyframes asciiScatter {
             0% {
-                transform: translateY(0) translateX(0) scale(1);
                 opacity: 1;
+                transform: translateY(0) translateX(0);
             }
             100% {
-                transform: translateY(-50px) translateX(var(--burst-x, 30px)) scale(0.3);
                 opacity: 0;
-            }
-        }
-
-        @keyframes corruptionExpand {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-            50% {
-                transform: scale(1.5);
-                opacity: 0.8;
-            }
-            100% {
-                transform: scale(2.5);
-                opacity: 0;
+                transform: translateY(var(--burst-y, -40px)) translateX(var(--burst-x, 30px));
             }
         }
 
@@ -972,11 +959,11 @@
         <div class="overlay-card" id="glitch-card">
             <div class="corruption-cluster" id="glitch-egg">
                 <div class="corruption-fragment">
-                    <div class="fragment-block" style="--burst-x: -40px;"></div>
-                    <div class="fragment-block" style="--burst-x: 35px;"></div>
-                    <div class="fragment-block" style="--burst-x: -20px;"></div>
-                    <div class="fragment-block" style="--burst-x: 45px;"></div>
-                    <div class="fragment-block" style="--burst-x: -30px;"></div>
+                    <div class="fragment-block" style="--burst-x: -40px; --burst-y: -30px;">%</div>
+                    <div class="fragment-block" style="--burst-x: 35px; --burst-y: -25px;">$</div>
+                    <div class="fragment-block" style="--burst-x: -20px; --burst-y: -35px;">@</div>
+                    <div class="fragment-block" style="--burst-x: 45px; --burst-y: -20px;">#</div>
+                    <div class="fragment-block" style="--burst-x: -30px; --burst-y: -40px;">^</div>
                 </div>
             </div>
             <h2>Neural fragment detected</h2>
