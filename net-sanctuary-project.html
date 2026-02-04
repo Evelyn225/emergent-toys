@@ -1693,15 +1693,16 @@
                 accessoryContainer.classList.remove("visible");
             }
             
-            // Apply color filters to white images (separate colors for each part)
+            // Apply color filters to images (separate colors for each part)
             const bodyHue = rgbToHue(pet.bodyColor);
             const eyesHue = rgbToHue(pet.eyesColor);
             const accessoryHue = rgbToHue(pet.accessoryColor);
             
-            // For white images: brightness(0) makes black, invert(1) makes white, sepia(1) adds tone, hue-rotate shifts color
-            const bodyColorFilter = `brightness(0) saturate(100%) invert(1) sepia(1) hue-rotate(${bodyHue}deg) saturate(300%) brightness(100%)`;
-            const eyesColorFilter = `brightness(0) saturate(100%) invert(1) sepia(1) hue-rotate(${eyesHue}deg) saturate(300%) brightness(100%)`;
-            const accessoryColorFilter = `brightness(0) saturate(100%) invert(1) sepia(1) hue-rotate(${accessoryHue}deg) saturate(300%) brightness(100%)`;
+            // For white PNGs with black outlines: sepia gives base tint, hue-rotate shifts color, saturate makes vibrant
+            // Black outlines stay mostly black, white areas get colored
+            const bodyColorFilter = `sepia(100%) saturate(500%) hue-rotate(${bodyHue}deg) brightness(0.95)`;
+            const eyesColorFilter = `sepia(100%) saturate(500%) hue-rotate(${eyesHue}deg) brightness(0.95)`;
+            const accessoryColorFilter = `sepia(100%) saturate(500%) hue-rotate(${accessoryHue}deg) brightness(0.95)`;
             
             // Apply color filters without glow
             bodyImg.style.filter = bodyColorFilter;
