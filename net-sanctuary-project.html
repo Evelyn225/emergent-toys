@@ -394,8 +394,9 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            filter: brightness(0) saturate(100%);
+            filter: brightness(1.2) contrast(1.1) drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
             transition: transform 0.2s ease;
+            image-rendering: pixelated;
         }
 
         .pet-eyes {
@@ -412,7 +413,8 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            filter: brightness(0) saturate(100%);
+            filter: brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
+            image-rendering: pixelated;
         }
 
         .pet-accessory {
@@ -429,7 +431,8 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            filter: brightness(0) saturate(100%);
+            filter: brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.5));
+            image-rendering: pixelated;
         }
 
         .pet-accessory.visible {
@@ -842,28 +845,6 @@
         </div>
     </div>
 
-    <div class="overlay" id="games-overlay" aria-hidden="true">
-        <div class="overlay-card modal">
-            <h2>Mini-games</h2>
-            <p style="margin-top: 0.8rem; color: var(--muted);">
-                Play to boost your pet's happiness and gain extra data packets.
-            </p>
-            <div class="mini-game" id="game-area">
-                <div id="game-menu">
-                    <p>Choose a game:</p>
-                    <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.8rem;">
-                        <button class="button" id="play-rhythm">Rhythm Master</button>
-                        <button class="button secondary" id="play-pattern">Pattern Memory</button>
-                    </div>
-                </div>
-                <canvas id="game-canvas" width="520" height="200" style="display: none;"></canvas>
-                <div id="game-status" style="margin-top: 0.8rem; color: var(--muted);"></div>
-            </div>
-            <div class="modal-actions">
-                <button class="button secondary" id="close-games">Close</button>
-            </div>
-        </div>
-    </div>
 
     <script>
         const state = {
@@ -1430,14 +1411,16 @@
                 accessoryContainer.classList.remove("visible");
             }
             
-            // Apply color filter using hue-rotate to colorize white images
+            // Apply color filter directly to images using hue-rotate
             const hue = rgbToHue(pet.color);
             const colorFilter = `hue-rotate(${hue}deg) saturate(120%) brightness(110%)`;
             
-            bodyImg.parentElement.style.filter = colorFilter;
-            eyesImg.parentElement.style.filter = colorFilter;
+            // Combine with existing brightness/contrast/drop-shadow filters
+            const baseFilter = "brightness(1.2) contrast(1.1) drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))";
+            bodyImg.style.filter = `${baseFilter} ${colorFilter}`;
+            eyesImg.style.filter = `brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6)) ${colorFilter}`;
             if (pet.accessoryImage) {
-                accessoryImg.parentElement.style.filter = colorFilter;
+                accessoryImg.style.filter = `brightness(1.2) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.5)) ${colorFilter}`;
             }
             
             updatePetStats(pet);
@@ -1655,243 +1638,7 @@
             }
         });
 
-        const gamesOverlay = document.getElementById("games-overlay");
-        const openGames = document.getElementById("open-games");
-        const closeGames = document.getElementById("close-games");
-        const playRhythm = document.getElementById("play-rhythm");
-        const playPattern = document.getElementById("play-pattern");
-        const gameCanvas = document.getElementById("game-canvas");
-        const gameStatus = document.getElementById("game-status");
-        const gameMenu = document.getElementById("game-menu");
 
-        openGames.addEventListener("click", () => {
-            if (!getActivePet()) return;
-            gamesOverlay.classList.add("active");
-            gamesOverlay.setAttribute("aria-hidden", "false");
-            document.body.style.overflow = "hidden";
-        });
-
-        closeGames.addEventListener("click", () => {
-            gamesOverlay.classList.remove("active");
-            gamesOverlay.setAttribute("aria-hidden", "true");
-            document.body.style.overflow = "";
-            stopGame();
-        });
-
-        const game = { running: false, mode: null, timer: null, score: 0, sequence: [], playerSequence: [], level: 1 };
-
-        function startGame(mode) {
-            game.running = true;
-            game.mode = mode;
-            game.score = 0;
-            game.level = 1;
-            game.sequence = [];
-            game.playerSequence = [];
-            gameMenu.style.display = "none";
-            gameCanvas.style.display = "block";
-            
-            if (mode === "rhythm") {
-                gameStatus.textContent = "Tap to the beat! Follow the rhythm for 15 seconds.";
-                startRhythmGame();
-            } else if (mode === "pattern") {
-                gameStatus.textContent = "Repeat the sequence! Click the colored boxes.";
-                startPatternGame();
-            }
-        }
-
-        function startRhythmGame() {
-            const ctx = gameCanvas.getContext("2d");
-            const startTime = Date.now();
-            const beatInterval = 600;
-            let lastBeatTime = startTime;
-            const colors = ["#7cf2ff", "#c48bff", "#ffd28f", "#9dffb0"];
-            const boxes = [
-                { x: 60, y: 40, w: 80, h: 80 },
-                { x: 200, y: 40, w: 80, h: 80 },
-                { x: 340, y: 40, w: 80, h: 80 },
-                { x: 60, y: 160, w: 80, h: 80 }
-            ];
-            let activeBox = -1;
-            let boxTimer = 0;
-
-            gameCanvas.addEventListener("click", handleRhythmClick);
-            function handleRhythmClick(e) {
-                if (!game.running) return;
-                const rect = gameCanvas.getBoundingClientRect();
-                const x = (e.clientX - rect.left) * (gameCanvas.width / rect.width);
-                const y = (e.clientY - rect.top) * (gameCanvas.height / rect.height);
-                
-                for (let i = 0; i < boxes.length; i++) {
-                    const b = boxes[i];
-                    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-                        const timeSinceLastBeat = (Date.now() - lastBeatTime) % beatInterval;
-                        if (timeSinceLastBeat < 150 || timeSinceLastBeat > beatInterval - 150) {
-                            game.score += 10;
-                        } else {
-                            game.score += 5;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            const loop = () => {
-                if (!game.running) {
-                    gameCanvas.removeEventListener("click", handleRhythmClick);
-                    return;
-                }
-                const now = Date.now();
-                const elapsed = now - startTime;
-                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
-                ctx.fillStyle = "rgba(124, 242, 255, 0.1)";
-                ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
-
-                // Draw boxes
-                for (let i = 0; i < boxes.length; i++) {
-                    const b = boxes[i];
-                    const isBeat = Math.floor((now - startTime) / beatInterval) % 4 === i;
-                    ctx.fillStyle = isBeat ? colors[i] : `${colors[i]}40`;
-                    ctx.fillRect(b.x, b.y, b.w, b.h);
-                    ctx.strokeStyle = colors[i];
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(b.x, b.y, b.w, b.h);
-                }
-
-                // Draw beat indicator
-                const beatPhase = ((now - startTime) % beatInterval) / beatInterval;
-                ctx.fillStyle = `rgba(255, 255, 255, ${0.5 - beatPhase * 0.3})`;
-                ctx.beginPath();
-                ctx.arc(420, 100, 20 + beatPhase * 10, 0, Math.PI * 2);
-                ctx.fill();
-
-                if (elapsed > 15000) {
-                    endGame();
-                    return;
-                }
-                requestAnimationFrame(loop);
-            };
-            loop();
-        }
-
-        function startPatternGame() {
-            const ctx = gameCanvas.getContext("2d");
-            const startTime = Date.now();
-            const colors = ["#7cf2ff", "#c48bff", "#ffd28f", "#9dffb0"];
-            const boxes = [
-                { x: 60, y: 40, w: 80, h: 80, color: 0 },
-                { x: 200, y: 40, w: 80, h: 80, color: 1 },
-                { x: 340, y: 40, w: 80, h: 80, color: 2 },
-                { x: 60, y: 160, w: 80, h: 80, color: 3 }
-            ];
-            let activeBox = -1;
-            let showDuration = 0;
-
-            // Add first color to sequence
-            game.sequence.push(Math.floor(Math.random() * 4));
-
-            function playSequence() {
-                game.playerSequence = [];
-                let delay = 800;
-                game.sequence.forEach((boxIndex) => {
-                    setTimeout(() => {
-                        activeBox = boxIndex;
-                        showDuration = 400;
-                    }, delay);
-                    delay += 800;
-                });
-                setTimeout(() => {
-                    activeBox = -1;
-                }, delay);
-            }
-
-            gameCanvas.addEventListener("click", handlePatternClick);
-            function handlePatternClick(e) {
-                if (!game.running || game.playerSequence.length >= game.sequence.length) return;
-                const rect = gameCanvas.getBoundingClientRect();
-                const x = (e.clientX - rect.left) * (gameCanvas.width / rect.width);
-                const y = (e.clientY - rect.top) * (gameCanvas.height / rect.height);
-                
-                for (let i = 0; i < boxes.length; i++) {
-                    const b = boxes[i];
-                    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-                        game.playerSequence.push(i);
-                        activeBox = i;
-                        showDuration = 200;
-                        
-                        if (game.playerSequence[game.playerSequence.length - 1] !== game.sequence[game.playerSequence.length - 1]) {
-                            game.running = false;
-                            gameStatus.textContent = `Level ${game.level}: Failed! Score: ${game.score}`;
-                            gameCanvas.removeEventListener("click", handlePatternClick);
-                            setTimeout(stopGame, 2000);
-                            return;
-                        }
-                        
-                        if (game.playerSequence.length === game.sequence.length) {
-                            game.level++;
-                            game.score += 20;
-                            game.sequence.push(Math.floor(Math.random() * 4));
-                            setTimeout(playSequence, 1000);
-                        }
-                        break;
-                    }
-                }
-            }
-
-            const loop = () => {
-                if (!game.running) {
-                    gameCanvas.removeEventListener("click", handlePatternClick);
-                    return;
-                }
-                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
-                ctx.fillStyle = "rgba(124, 242, 255, 0.1)";
-                ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
-
-                // Draw boxes
-                for (let i = 0; i < boxes.length; i++) {
-                    const b = boxes[i];
-                    const isActive = i === activeBox && showDuration > 0;
-                    ctx.fillStyle = isActive ? colors[i] : `${colors[i]}40`;
-                    ctx.fillRect(b.x, b.y, b.w, b.h);
-                    ctx.strokeStyle = colors[i];
-                    ctx.lineWidth = isActive ? 3 : 2;
-                    ctx.strokeRect(b.x, b.y, b.w, b.h);
-                }
-                showDuration -= 16;
-
-                ctx.fillStyle = "#7cf2ff";
-                ctx.font = "14px monospace";
-                ctx.fillText(`Level: ${game.level}`, 10, 180);
-
-                requestAnimationFrame(loop);
-            };
-            playSequence();
-            loop();
-        }
-
-        function stopGame() {
-            game.running = false;
-            gameCanvas.style.display = "none";
-            gameMenu.style.display = "block";
-            gameStatus.textContent = "";
-        }
-
-        function endGame() {
-            game.running = false;
-            const packetsEarned = Math.max(1, Math.floor(game.score / 8));
-            gameStatus.textContent = `Game Over! Score: ${game.score} · Data packets +${packetsEarned}`;
-            state.stats.dataPackets += packetsEarned;
-            const pet = getActivePet();
-            if (pet) {
-                pet.stats.happiness = clamp(pet.stats.happiness + 10);
-                gainXp(pet, Math.ceil(game.score / 10));
-            }
-            updateStats();
-            saveState();
-            setTimeout(stopGame, 2000);
-        }
-
-        playRhythm.addEventListener("click", () => startGame("rhythm"));
-        playPattern.addEventListener("click", () => startGame("pattern"));
 
         document.getElementById("reset-pet").addEventListener("click", () => {
             localStorage.removeItem("sanctuaryPets");
@@ -1987,26 +1734,6 @@
             const manifestBlob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
             const manifestUrl = URL.createObjectURL(manifestBlob);
             document.getElementById("pwa-manifest").setAttribute("href", manifestUrl);
-
-            // Service worker disabled - blob URL scope causes issues on Vercel
-            // if ("serviceWorker" in navigator) {
-            //     const swCode = `
-            //         const CACHE = 'sanctuary-v1';
-            //         self.addEventListener('install', event => {
-            //             event.waitUntil(
-            //                 caches.open(CACHE).then(cache => cache.addAll([self.location.href]))
-            //             );
-            //         });
-            //         self.addEventListener('fetch', event => {
-            //             event.respondWith(
-            //                 caches.match(event.request).then(response => response || fetch(event.request))
-            //             );
-            //         });
-            //     `;
-            //     const swBlob = new Blob([swCode], { type: "text/javascript" });
-            //     const swUrl = URL.createObjectURL(swBlob);
-            //     navigator.serviceWorker.register(swUrl);
-            // }
         }
 
         window.addEventListener("hashchange", () => {
