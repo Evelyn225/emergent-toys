@@ -81,7 +81,8 @@
             Spectral analysis reveals underlying pattern matching Fibonacci sequence when mapped to musical intervals.
         </p>
         <div class="audio-controls">
-            <button class="play-btn" onclick="playHarmonic(47.3, this)">▶ Play (47.3 Hz)</button>
+            <audio id="audio-47.3" src="../audio/harmonic-47.3.wav" preload="none"></audio>
+            <button class="play-btn" onclick="toggleAudio('audio-47.3', this)">▶ Play (47.3 Hz)</button>
             <span class="status">Server closet hum</span>
         </div>
     </div>
@@ -95,7 +96,8 @@
             during high-load hours. Pattern suggests the network "relaxes" when not under observation.
         </p>
         <div class="audio-controls">
-            <button class="play-btn" onclick="playVariableFreq(120, 180, this)">▶ Play (120-180 Hz)</button>
+            <audio id="audio-120-180" src="../audio/harmonic-120-180.wav" preload="none"></audio>
+            <button class="play-btn" onclick="toggleAudio('audio-120-180', this)">▶ Play (120-180 Hz)</button>
             <span class="status">Nocturnal harmonics</span>
         </div>
     </div>
@@ -110,7 +112,8 @@
             The sound of what remains when everything else is removed.
         </p>
         <div class="audio-controls">
-            <button class="play-btn" onclick="playHarmonic(432, this)">▶ Play (432 Hz)</button>
+            <audio id="audio-432" src="../audio/harmonic-432.wav" preload="none"></audio>
+            <button class="play-btn" onclick="toggleAudio('audio-432', this)">▶ Play (432 Hz)</button>
             <span class="status">Unknown persistent tone</span>
         </div>
     </div>
@@ -125,7 +128,8 @@
             creates a pattern resembling crystalline growth formations.
         </p>
         <div class="audio-controls">
-            <button class="play-btn" onclick="playHarmonic(256, this)">▶ Play (256 Hz)</button>
+            <audio id="audio-256" src="../audio/harmonic-256.wav" preload="none"></audio>
+            <button class="play-btn" onclick="toggleAudio('audio-256', this)">▶ Play (256 Hz)</button>
             <span class="status">Data flow resonance</span>
         </div>
     </div>
@@ -140,15 +144,7 @@
             Mathematical relationship mirrors golden ratio proportions.
         </p>
         <div class="audio-controls">
-            <button class="play-btn" onclick="playDualHarmonic(144, 288, this)">▶ Play (144 + 288 Hz)</button>
-            <span class="status">Sympathetic harmonics</span>
-        </div>
-    </div>
-
-    <h2>Analysis Methods</h2>
-    <p>
-        Recordings are processed through:
-    </p>
+            <audio id="audio-144-288" src="../audio/harmonic-144-288.wav" preload="none"></audio>
     <ul>
         <li>Fast Fourier Transform (FFT) for frequency decomposition</li>
         <li>Pattern matching against known mathematical sequences</li>
@@ -169,139 +165,35 @@
     </p>
 
     <script>
-        let currentOscillators = [];
-        let audioContext = null;
-
-        function getAudioContext() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            return audioContext;
-        }
-
-        function stopAllSounds() {
-            currentOscillators.forEach(osc => {
-                try {
-                    osc.stop(getAudioContext().currentTime + 0.1);
-                } catch (e) {}
-            });
-            currentOscillators = [];
-        }
-
-        function playHarmonic(frequency, button) {
-            const ctx = getAudioContext();
-            stopAllSounds();
+        function toggleAudio(audioId, button) {
+            const audio = document.getElementById(audioId);
             
-            if (button.textContent.includes('■')) {
-                button.textContent = button.textContent.replace('■', '▶');
-                return;
+            if (audio.paused) {
+                // Stop all other audio
+                document.querySelectorAll('audio').forEach(a => {
+                    a.pause();
+                    a.currentTime = 0;
+                });
+                document.querySelectorAll('.play-btn').forEach(btn => {
+                    btn.textContent = '▶ Play (' + btn.textContent.match(/\d+[.\d]*(?:\s*[+-]\s*\d+[.\d]*)?/)[0] + ')';
+                    btn.style.background = '#4488ff';
+                });
+                
+                // Play selected audio
+                audio.play();
+                button.textContent = '■ Stop';
+                button.style.background = '#ff4488';
+            } else {
+                audio.pause();
+                audio.currentTime = 0;
+                button.textContent = '▶ Play (' + button.textContent.match(/\d+[.\d]*(?:\s*[+-]\s*\d+[.\d]*)?/)[0] + ')';
+                button.style.background = '#4488ff';
             }
-
-            const oscillators = [];
-            const gain = ctx.createGain();
-            gain.gain.setValueAtTime(0.2, ctx.currentTime);
-            gain.connect(ctx.destination);
-
-            // Primary frequency
-            const osc = ctx.createOscillator();
-            osc.frequency.value = frequency;
-            osc.type = 'sine';
-            osc.connect(gain);
-            osc.start(ctx.currentTime);
-            oscillators.push(osc);
-
-            // Add subtle harmonics for richness
-            [frequency * 2, frequency * 0.5].forEach(freq => {
-                const harmOsc = ctx.createOscillator();
-                harmOsc.frequency.value = freq;
-                harmOsc.type = 'sine';
-                const harmGain = ctx.createGain();
-                harmGain.gain.value = 0.08;
-                harmGain.connect(ctx.destination);
-                harmOsc.connect(harmGain);
-                harmOsc.start(ctx.currentTime);
-                oscillators.push(harmOsc);
-            });
-
-            currentOscillators = oscillators;
-            button.textContent = button.textContent.replace('▶', '■');
-            button.style.background = '#ff4488';
-        }
-
-        function playVariableFreq(minFreq, maxFreq, button) {
-            const ctx = getAudioContext();
-            stopAllSounds();
             
-            if (button.textContent.includes('■')) {
-                button.textContent = button.textContent.replace('■', '▶');
-                return;
-            }
-
-            const oscillators = [];
-            const gain = ctx.createGain();
-            gain.gain.setValueAtTime(0.2, ctx.currentTime);
-            gain.connect(ctx.destination);
-
-            const osc = ctx.createOscillator();
-            osc.frequency.setValueAtTime(minFreq, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(maxFreq, ctx.currentTime + 4);
-            osc.type = 'sine';
-            osc.connect(gain);
-            osc.start(ctx.currentTime);
-            oscillators.push(osc);
-
-            currentOscillators = oscillators;
-            button.textContent = button.textContent.replace('▶', '■');
-            button.style.background = '#ff4488';
-
-            setTimeout(() => {
-                if (currentOscillators === oscillators) {
-                    stopAllSounds();
-                    button.textContent = button.textContent.replace('■', '▶');
-                    button.style.background = '#4488ff';
-                }
-            }, 4000);
+            audio.addEventListener('ended', () => {
+                button.textContent = '▶ Play (' + button.textContent.match(/\d+[.\d]*(?:\s*[+-]\s*\d+[.\d]*)?/)[0] + ')';
+                button.style.background = '#4488ff';
+            }, { once: true });
         }
-
-        function playDualHarmonic(freq1, freq2, button) {
-            const ctx = getAudioContext();
-            stopAllSounds();
-            
-            if (button.textContent.includes('■')) {
-                button.textContent = button.textContent.replace('■', '▶');
-                return;
-            }
-
-            const oscillators = [];
-            
-            // First harmonic
-            const gain1 = ctx.createGain();
-            gain1.gain.setValueAtTime(0.15, ctx.currentTime);
-            gain1.connect(ctx.destination);
-            const osc1 = ctx.createOscillator();
-            osc1.frequency.value = freq1;
-            osc1.type = 'sine';
-            osc1.connect(gain1);
-            osc1.start(ctx.currentTime);
-            oscillators.push(osc1);
-
-            // Second harmonic
-            const gain2 = ctx.createGain();
-            gain2.gain.setValueAtTime(0.12, ctx.currentTime);
-            gain2.connect(ctx.destination);
-            const osc2 = ctx.createOscillator();
-            osc2.frequency.value = freq2;
-            osc2.type = 'sine';
-            osc2.connect(gain2);
-            osc2.start(ctx.currentTime);
-            oscillators.push(osc2);
-
-            currentOscillators = oscillators;
-            button.textContent = button.textContent.replace('▶', '■');
-            button.style.background = '#ff4488';
-        }
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', stopAllSounds);
     </script></body>
 </html>
