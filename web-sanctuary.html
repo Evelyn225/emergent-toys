@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0f1a" />
+    <title>Web Sanctuary Preserve</title>
+    <link id="pwa-manifest" rel="manifest" href="#" />
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0b0f1a;
+            --bg-soft: #121828;
+            --ink: #e7ebff;
+            --muted: #9aa6c4;
+            --accent: #7cf2ff;
+            --accent-2: #c48bff;
+            --warning: #ff7b7b;
+            --glitch: #39ff9a;
+            --shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+            --radius: 18px;
+            --radius-sm: 12px;
+            --scanline: rgba(255, 255, 255, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            width: 100%;
+            height: 100%;
+        }
+
+        body {
+            font-family: "DM Mono", "Fira Mono", "JetBrains Mono", monospace;
+            background: radial-gradient(circle at top, #121a33 0%, #0b0f1a 50%, #070910 100%);
+            color: var(--ink);
+            min-height: 100vh;
+            width: 100%;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .archive-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            backdrop-filter: blur(14px);
+            background: rgba(8, 12, 22, 0.7);
+            border-bottom: 1px solid rgba(124, 242, 255, 0.1);
+        }
+
+        .nav-bar {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 1.2rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .brand {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .brand h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+
+        .brand span {
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        nav {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        nav a {
+            font-size: 0.95rem;
+            color: var(--muted);
+            padding: 0.4rem 0.7rem;
+            border-radius: 999px;
+            transition: all 0.2s ease;
+        }
+
+        nav a.active,
+        nav a:hover {
+            color: var(--ink);
+            background: rgba(124, 242, 255, 0.12);
+        }
+
+        main {
+            flex: 1;
+            max-width: 1100px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 2.5rem 1.5rem 8rem;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 2rem;
+        }
+
+        .content-card {
+            background: rgba(14, 20, 35, 0.85);
+            border: 1px solid rgba(124, 242, 255, 0.08);
+            border-radius: var(--radius);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            min-height: 480px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .content-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0,
+                transparent 18px,
+                var(--scanline) 20px
+            );
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        .archive-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .archive-chip {
+            padding: 0.4rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(124, 242, 255, 0.12);
+            color: var(--accent);
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+        }
+
+        .archive-meta span {
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .page-subtitle {
+            color: var(--muted);
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .mini-card {
+            background: rgba(18, 25, 44, 0.9);
+            border-radius: var(--radius-sm);
+            padding: 1.2rem;
+            border: 1px solid rgba(124, 242, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .mini-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        .mini-card h3 {
+            font-size: 1rem;
+        }
+
+        .mini-card p {
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .link-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--accent);
+        }
+
+        .work-link {
+            color: var(--accent);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .work-link:hover {
+            color: var(--accent-2);
+        }
+
+        .sidebar {
+            display: none;
+        }
+
+        .panel {
+            background: rgba(14, 20, 35, 0.9);
+            border-radius: var(--radius);
+            padding: 1.4rem;
+            border: 1px solid rgba(124, 242, 255, 0.1);
+            box-shadow: var(--shadow);
+        }
+
+        .panel h4 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stats-list {
+            display: grid;
+            gap: 0.6rem;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .stats-list span {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .button {
+            background: rgba(124, 242, 255, 0.16);
+            border: 1px solid rgba(124, 242, 255, 0.4);
+            color: var(--ink);
+            padding: 0.6rem 1rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .button:hover {
+            background: rgba(124, 242, 255, 0.28);
+        }
+
+        .button.secondary {
+            background: rgba(196, 139, 255, 0.16);
+            border-color: rgba(196, 139, 255, 0.4);
+        }
+
+        .button.warning {
+            background: rgba(255, 123, 123, 0.16);
+            border-color: rgba(255, 123, 123, 0.4);
+        }
+
+        .pet-widget {
+            position: fixed !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 280px;
+            max-height: 90vh;
+            background: rgba(12, 18, 32, 0.98);
+            border-left: 1px solid rgba(124, 242, 255, 0.15);
+            border-top: 1px solid rgba(124, 242, 255, 0.15);
+            border-radius: 18px 0 0 0;
+            padding: 0;
+            box-shadow: var(--shadow);
+            z-index: 15;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .pet-widget.collapsed {
+            transform: translateY(calc(100% - 50px));
+        }
+
+        .pet-widget.collapsed #toggle-arrow {
+            transform: rotate(180deg);
+        }
+
+        .pet-widget.hidden {
+            display: none;
+        }
+
+        .pet-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .pet-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .pet-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .pet-stage {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .pet-meta {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .pet-display {
+            height: 140px;
+            border-radius: 14px;
+            background: rgba(14, 22, 40, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pet-display::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(124, 242, 255, 0.12), rgba(196, 139, 255, 0.08));
+            mix-blend-mode: screen;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .pet-body {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+        }
+
+        .pet-body img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: brightness(0) saturate(100%);
+            transition: transform 0.2s ease;
+        }
+
+        .pet-eyes {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3;
+        }
+
+        .pet-eyes img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: brightness(0) saturate(100%);
+        }
+
+        .pet-accessory {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            top: 10px;
+            right: 15px;
+            z-index: 4;
+            display: none;
+        }
+
+        .pet-accessory img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: brightness(0) saturate(100%);
+        }
+
+        .pet-accessory.visible {
+            display: block;
+        }
+
+        .pet-blush,
+        .pet-pattern {
+            display: none;
+        }
+
+        .pet-mood {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .pet-stats {
+            display: grid;
+            gap: 0.4rem;
+            font-size: 0.72rem;
+            color: var(--muted);
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: 58px 1fr;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .stat-bar {
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(124, 242, 255, 0.12);
+            overflow: hidden;
+        }
+
+        .stat-bar span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(124, 242, 255, 0.9), rgba(196, 139, 255, 0.7));
+        }
+
+        .growth {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            font-size: 0.72rem;
+            color: var(--muted);
+        }
+
+        .growth-bar {
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+        }
+
+        .growth-bar span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(124, 242, 255, 0.7), rgba(255, 123, 123, 0.8));
+        }
+
+        .pet-list {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .pet-chip {
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.65rem;
+            background: rgba(124, 242, 255, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(124, 242, 255, 0.3);
+            cursor: pointer;
+        }
+
+        .pet-chip.active {
+            background: rgba(124, 242, 255, 0.3);
+            color: var(--ink);
+        }
+
+        .pet-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem;
+        }
+
+        .pet-controls.three {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .status-chip {
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            background: rgba(124, 242, 255, 0.14);
+            font-size: 0.7rem;
+            color: var(--accent);
+        }
+
+        .glitch-ui {
+            position: relative;
+        }
+
+        .glitch-ui::before,
+        .glitch-ui::after {
+            content: "";
+            position: absolute;
+            inset: -1px;
+            border-radius: 18px;
+            opacity: 0.18;
+            mix-blend-mode: screen;
+            pointer-events: none;
+        }
+
+        .glitch-ui::before {
+            border: 1px solid rgba(124, 242, 255, 0.4);
+            transform: translate(1px, -1px);
+        }
+
+        .glitch-ui::after {
+            border: 1px solid rgba(255, 123, 123, 0.35);
+            transform: translate(-1px, 1px);
+        }
+
+        .pet-display.sleeping .pet-body {
+            transform: rotate(5deg) scale(0.95);
+            opacity: 0.7;
+        }
+
+        .pet-display.dancing .pet-body {
+            animation: wiggle 0.8s ease-in-out infinite;
+        }
+
+        .pet-display.dizzy .pet-body {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes wiggle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px) rotate(-4deg); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 8, 16, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .overlay.active {
+            display: flex;
+            pointer-events: auto;
+        }
+
+        .overlay-card {
+            background: rgba(8, 12, 22, 0.94);
+            border-radius: 20px;
+            border: 1px solid rgba(124, 242, 255, 0.25);
+            padding: 2rem;
+            width: min(560px, 90vw);
+            text-align: center;
+            position: relative;
+            box-shadow: var(--shadow);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .egg {
+            width: 140px;
+            height: 180px;
+            background: radial-gradient(circle at 30% 20%, #f2fff8 0, #d3ffea 40%, #7cf2ff 100%);
+            border-radius: 50% 50% 45% 45%;
+            margin: 0 auto 1.5rem;
+            position: relative;
+            animation: eggPulse 1.4s ease-in-out infinite;
+            cursor: pointer;
+            box-shadow: 0 0 30px rgba(124, 242, 255, 0.5);
+        }
+
+        .egg::after {
+            content: "";
+            position: absolute;
+            inset: 14px;
+            border-radius: inherit;
+            border: 2px dashed rgba(12, 18, 32, 0.4);
+        }
+
+        @keyframes eggPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .crack {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, transparent 40%, rgba(11, 15, 26, 0.8) 41%, rgba(11, 15, 26, 0.8) 60%, transparent 61%);
+            opacity: 0;
+        }
+
+        .egg.cracked .crack {
+            opacity: 1;
+            animation: crackFlash 0.6s ease;
+        }
+
+        @keyframes crackFlash {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .glitch-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            pointer-events: none;
+            z-index: 25;
+        }
+
+        .glitch-canvas.active {
+            display: block;
+        }
+
+        .modal input {
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            border-radius: 10px;
+            border: 1px solid rgba(124, 242, 255, 0.35);
+            background: rgba(12, 18, 32, 0.9);
+            color: var(--ink);
+            margin-top: 1rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.2rem;
+        }
+
+        .mini-game {
+            margin-top: 1rem;
+            border-radius: 16px;
+            border: 1px dashed rgba(124, 242, 255, 0.3);
+            padding: 1rem;
+            min-height: 220px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mini-game canvas {
+            width: 100%;
+            height: 200px;
+        }
+
+        .game-lock {
+            padding: 0.6rem 1rem;
+            border-radius: 999px;
+            background: rgba(255, 123, 123, 0.2);
+            color: var(--warning);
+            font-size: 0.75rem;
+            display: inline-block;
+        }
+
+        @media (max-width: 980px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                order: -1;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .nav-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .pet-widget {
+                right: 0.8rem;
+                bottom: 0.8rem;
+                width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="archive-shell">
+        <header>
+            <div class="nav-bar">
+                <div class="brand">
+                    <h1>Web Sanctuary</h1>
+                    <span>Personal research logs · 2013 — 2026</span>
+                </div>
+                <nav>
+                    <a href="#/" data-route="/">Home</a>
+                    <a href="#/blog" data-route="/blog">Blog</a>
+                    <a href="#/projects" data-route="/projects">Projects</a>
+                    <a href="#/about" data-route="/about">About</a>
+                </nav>
+            </div>
+        </header>
+
+        <main>
+            <section class="content-card">
+                <div class="archive-meta">
+                    <div class="archive-chip">ARCHIVE</div>
+                    <span id="route-label">/</span>
+                </div>
+                <div id="page-content"></div>
+            </section>
+
+            <aside class="sidebar"></aside>
+        </main>
+    </div>
+
+    <div class="pet-widget glitch-ui" id="pet-widget" aria-live="polite">
+        <div class="pet-toggle" id="pet-toggle" style="padding: 0.8rem 1rem; border-bottom: 1px solid rgba(124, 242, 255, 0.15); cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+            <span style="font-size: 0.9rem; font-weight: 500;">Pet Companion</span>
+            <span id="toggle-arrow" style="font-size: 1.2rem; transition: transform 0.3s ease;">↓</span>
+        </div>
+        <div class="pet-content" style="padding: 1rem; overflow-y: auto; flex: 1;">
+        <div class="pet-header">
+            <div>
+                <div class="pet-name" id="pet-name">—</div>
+                <div class="pet-stage" id="pet-stage">—</div>
+                <div class="pet-meta" id="pet-meta">Level — · Data packets —</div>
+            </div>
+            <div class="status-chip" id="pet-status">Idle</div>
+        </div>
+        <div class="pet-display" id="pet-display">
+            <div class="pet-body" id="pet-body"><img id="body-img" src="" alt="pet body" /></div>
+            <div class="pet-eyes" id="pet-eyes"><img id="eyes-img" src="" alt="pet eyes" /></div>
+            <div class="pet-accessory" id="pet-accessory"><img id="accessory-img" src="" alt="pet accessory" /></div>
+            <div class="pet-pattern"></div>
+            <div class="pet-blush"></div>
+        </div>
+        <div class="pet-mood" id="pet-mood">—</div>
+        <div class="story-narrative" id="story-narrative" style="font-size: 0.8rem; color: var(--muted); line-height: 1.5; padding: 0.6rem 0; border-top: 1px solid rgba(124, 242, 255, 0.1); border-bottom: 1px solid rgba(124, 242, 255, 0.1); margin: 0.5rem 0;">
+            <p id="narrative-text">A strange visitor to your archive. Found in the void.</p>
+        </div>
+        <div class="pet-stats">
+            <div class="stat-row">
+                <span>Food</span>
+                <div class="stat-bar"><span id="stat-hunger"></span></div>
+            </div>
+            <div class="stat-row">
+                <span>Mood</span>
+                <div class="stat-bar"><span id="stat-happy"></span></div>
+            </div>
+            <div class="stat-row">
+                <span>Energy</span>
+                <div class="stat-bar"><span id="stat-energy"></span></div>
+            </div>
+            <div class="stat-row">
+                <span>Clean</span>
+                <div class="stat-bar"><span id="stat-clean"></span></div>
+            </div>
+        </div>
+        <div class="growth">
+            <span id="growth-label">Growth · 0%</span>
+            <div class="growth-bar"><span id="growth-bar"></span></div>
+        </div>
+        <div class="pet-list" id="pet-list"></div>
+        <div class="pet-controls three">
+            <button class="button" id="pet-feed">Feed</button>
+            <button class="button secondary" id="pet-play">Play</button>
+            <button class="button" id="pet-clean">Clean</button>
+        </div>
+        <div class="pet-controls">
+            <button class="button" id="toggle-dance">Toggle Dance</button>
+            <button class="button secondary" id="open-games">Mini-games</button>
+        </div>
+        <div class="pet-controls">
+            <button class="button warning" id="reset-pet">Reset Pets</button>
+        </div>
+        </div>
+    </div>
+
+    <canvas class="glitch-canvas" id="glitch-canvas"></canvas>
+
+    <div class="overlay" id="glitch-overlay" aria-hidden="true">
+        <div class="overlay-card" id="glitch-card">
+            <div class="egg" id="glitch-egg">
+                <div class="crack"></div>
+            </div>
+            <h2>Digital anomaly detected</h2>
+            <p style="margin-top: 0.8rem; color: var(--muted);">
+                Lifeform signature found. Tap the egg to hatch your glitch companion.
+            </p>
+        </div>
+    </div>
+
+    <div class="overlay" id="name-overlay" aria-hidden="true">
+        <div class="overlay-card modal">
+            <h2>Name your GlitchGatchi</h2>
+            <p style="margin-top: 0.8rem; color: var(--muted);">
+                This name will be archived with the pet forever.
+            </p>
+            <input type="text" id="pet-name-input" placeholder="e.g. Nyxbyte" maxlength="18" />
+            <div class="modal-actions">
+                <button class="button" id="save-name">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="games-overlay" aria-hidden="true">
+        <div class="overlay-card modal">
+            <h2>Mini-games</h2>
+            <p style="margin-top: 0.8rem; color: var(--muted);">
+                Play to boost your pet's happiness and gain extra data packets.
+            </p>
+            <div class="mini-game" id="game-area">
+                <div id="game-menu">
+                    <p>Choose a game:</p>
+                    <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.8rem;">
+                        <button class="button" id="play-rhythm">Rhythm Master</button>
+                        <button class="button secondary" id="play-pattern">Pattern Memory</button>
+                    </div>
+                </div>
+                <canvas id="game-canvas" width="520" height="200" style="display: none;"></canvas>
+                <div id="game-status" style="margin-top: 0.8rem; color: var(--muted);"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="button secondary" id="close-games">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            pets: [],
+            activePetId: null,
+            stats: {
+                dataPackets: 0
+            },
+            mood: "curious",
+            sleeping: false,
+            dancing: false,
+            dizzy: false,
+            lastScroll: 0,
+            scrollTimer: null,
+            pending: null,
+            firstInteraction: null,
+            initTime: Date.now(),
+            lastLinkAt: 0,
+            lastActionAt: 0
+        };
+
+        const baseSpecies = [
+            "Velvet Moth",
+            "Lumen Koi",
+            "Amber Wisp",
+            "Cobalt Sable",
+            "Misty Finch",
+            "Aurora Lynx",
+            "Prism Hare",
+            "Ivory Gecko",
+            "Solar Sprite",
+            "Woolen Nebula",
+            "Coral Drifter",
+            "Opal Bloom",
+            "Frost Pippin",
+            "Saffron Glide",
+            "Murmur Fawn",
+            "Bramble Owl",
+            "Echo Seal",
+            "Honeyglass Doe",
+            "Juniper Pup",
+            "Twilight Nix",
+            "Petal Manta",
+            "Quartz Plover"
+        ];
+
+        const personalities = ["curious", "lazy", "energetic", "tender", "brave", "aloof", "playful", "gentle"];
+        const baseURL = "https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/pets/";
+        
+        const bodyCount = 6;
+        const eyesCount = 6;
+        const accessoryCount = 4;
+        
+        const palettes = [
+            { primary: "#7cf2ff", secondary: "#c48bff", accent: "#ffd28f" },
+            { primary: "#9dffb0", secondary: "#4d7cff", accent: "#ff90c2" },
+            { primary: "#ffd37c", secondary: "#ff7be6", accent: "#84fff7" },
+            { primary: "#f0f5ff", secondary: "#84ffe3", accent: "#7b9bff" },
+            { primary: "#ff9dc2", secondary: "#8f7bff", accent: "#94fff7" },
+            { primary: "#d1fffd", secondary: "#c9a7ff", accent: "#ffe1a8" }
+        ];
+
+        const blogPosts = [
+            { path: "/blog/2018-notes", title: "2018 Recovery Notes", excerpt: "Rebuilding a shattered studio after a power surge.", glitch: true, species: "Velvet Moth" },
+            { path: "/blog/quiet-servers", title: "Quiet Servers", excerpt: "Listening to the machines between requests.", glitch: false, species: "Lumen Koi" },
+            { path: "/blog/ghost-compiler", title: "Ghost Compiler", excerpt: "The compiler that finishes my sentences.", glitch: false, species: "Amber Wisp" },
+            { path: "/blog/maintenance", title: "Maintenance Report 22-β", excerpt: "An access log with missing timestamps.", glitch: true, species: "Archive Mite" },
+            { path: "/blog/unfiled", title: "Unfiled Draft", excerpt: "Notes left in the margins of a half-built UI.", glitch: false, species: "Misty Finch" },
+            { path: "/blog/soft-moon", title: "Soft Moon", excerpt: "A nocturnal routine written in dim pixels.", glitch: false, species: "Aurora Lynx" },
+            { path: "/blog/stillwater", title: "Stillwater Signals", excerpt: "Tracing coastal waveforms through a quiet modem.", glitch: false, species: "Prism Hare" },
+            { path: "/blog/relay-forest", title: "Relay Forest", excerpt: "A year of signals passed between trees.", glitch: true, species: "Woolen Nebula" },
+            { path: "/blog/amber-map", title: "Amber Map", excerpt: "A journal of golden light on rainy days.", glitch: false, species: "Opal Bloom" },
+            { path: "/blog/ghost-parcel", title: "Ghost Parcel", excerpt: "A file that keeps arriving unopened.", glitch: true, species: "Twilight Nix" },
+            { path: "/blog/sleep-chorus", title: "Sleep Chorus", excerpt: "Harmonics from idle fans and soft disks.", glitch: false, species: "Juniper Pup" }
+        ];
+
+        const projects = [
+            { path: "/projects/abandoned-game", title: "Abandoned RPG", excerpt: "A pixel RPG whose NPCs remember more than they should.", glitch: true, species: "Cobalt Sable" },
+            { path: "/projects/signal-garden", title: "Signal Garden", excerpt: "A live-coded soundscape that blooms with traffic.", glitch: false, species: "Coral Drifter" },
+            { path: "/projects/moire-lab", title: "Moire Lab", excerpt: "Procedural textures for experimental print.", glitch: false, species: "Opal Bloom" },
+            { path: "/projects/fox-cache", title: "Fox Cache", excerpt: "An elusive caching daemon that appears once per cycle.", glitch: true, species: "404 Fox" },
+            { path: "/projects/hollow-loom", title: "Hollow Loom", excerpt: "A fabric of slow-motion fractal tapestries.", glitch: false, species: "Petal Manta" },
+            { path: "/projects/aurora-glass", title: "Aurora Glass", excerpt: "Light funnels that store color for later.", glitch: true, species: "Quartz Plover" }
+        ];
+
+        const pages = {
+            "/": {
+                title: "Home",
+                content: () => `
+                    <h2 class="page-title">Welcome to the Web Sanctuary</h2>
+                    <p class="page-subtitle">
+                        A collection of experiments, abandoned prototypes, and research notes.
+                        Everything here is static. Nothing here is alive. Or so it seems.
+                    </p>
+                    <div class="card-grid">
+                        <div class="mini-card">
+                            <h3>Field Log</h3>
+                            <p>Cataloging the quiet years between released projects.</p>
+                            <div class="link-row">
+                                <a href="#/blog" data-route="/blog" class="work-link" data-type="home">Read the log →</a>
+                            </div>
+                        </div>
+                        <div class="mini-card">
+                            <h3>Archive Utilities</h3>
+                            <p>Tools created to classify data anomalies.</p>
+                            <div class="link-row">
+                                <a href="#/projects" data-route="/projects" class="work-link" data-type="home">View utilities →</a>
+                            </div>
+                        </div>
+                        <div class="mini-card">
+                            <h3>Maintenance Notes</h3>
+                            <p>Ongoing issues with corrupted memory sectors.</p>
+                            <div class="link-row">
+                                <a href="#/blog/maintenance" data-route="/blog/maintenance" class="glitch-link" data-species="Archive Mite">Maintenance report →</a>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            "/blog": {
+                title: "Blog",
+                content: () => `
+                    <h2 class="page-title">Blogosphere Logs</h2>
+                    <p class="page-subtitle">Archived thoughts, mostly coherent. Some entries are unstable.</p>
+                    <div class="card-grid">
+                        ${blogPosts.map(post => `
+                            <div class="mini-card">
+                                <h3>${post.title}</h3>
+                                <p>${post.excerpt}</p>
+                                <div class="link-row">
+                                    <a href="#${post.path}" data-route="${post.path}" class="work-link" data-type="blog" data-species="${post.species}">
+                                        Read entry →
+                                    </a>
+                                </div>
+                            </div>
+                        `).join("")}
+                    </div>
+                `
+            },
+            "/projects": {
+                title: "Projects",
+                content: () => `
+                    <h2 class="page-title">Projects Index</h2>
+                    <p class="page-subtitle">Prototypes, tools, and abandoned games stored for posterity.</p>
+                    <div class="card-grid">
+                        ${projects.map(project => `
+                            <div class="mini-card">
+                                <h3>${project.title}</h3>
+                                <p>${project.excerpt}</p>
+                                <div class="link-row">
+                                    <a href="#${project.path}" data-route="${project.path}" class="work-link" data-type="projects" data-species="${project.species}">
+                                        Inspect project →
+                                    </a>
+                                </div>
+                            </div>
+                        `).join("")}
+                    </div>
+                `
+            },
+            "/about": {
+                title: "About",
+                content: () => `
+                    <h2 class="page-title">About the Archivist</h2>
+                    <p class="page-subtitle">I preserve digital artifacts, even the ones that refuse to stay quiet.</p>
+                    <p style="color: var(--muted); line-height: 1.7;">
+                        The archive exists to document processes, abandoned scripts, and prototypes that never made it into the public network.
+                        The archive also documents anomalies. If you see a link flicker, proceed with care.
+                    </p>
+                    <p style="margin-top: 1rem; color: var(--muted); line-height: 1.7;">
+                        The Web Sanctuary Preserve is an emergent sublayer of the archive. Only users who explore deeply will encounter it.
+                    </p>
+                `
+            }
+        };
+
+        let contentMap = {};
+
+        // Load content from JSON file
+        const contentPath = window.location.pathname.includes('/web-sanctuary-preserve.html') 
+            ? window.location.pathname.replace('web-sanctuary-preserve.html', 'blog-content.json')
+            : (window.location.pathname.endsWith('/') ? window.location.pathname + 'blog-content.json' : window.location.pathname + '/blog-content.json');
+        
+        fetch(contentPath)
+            .then(response => response.json())
+            .then(data => {
+                contentMap = data;
+                
+                // Generate pages AFTER content is loaded
+                const generatedPages = [...blogPosts, ...projects].reduce((acc, item) => {
+                    acc[item.path] = {
+                        title: item.title,
+                        content: () => {
+                            const content = contentMap[item.path] || "This entry exists but its contents are corrupted or missing.";
+                            const returnLink = item.path.startsWith("/blog") ? "/blog" : "/projects";
+                            const typeLabel = returnLink === "/blog" ? "blog" : "projects";
+                            const contentContainer = document.createElement('div');
+                            contentContainer.style.cssText = 'color: var(--ink); line-height: 1.8; margin: 1.5rem 0;';
+                            contentContainer.innerHTML = content;
+                            
+                            const returnLinkEl = document.createElement('div');
+                            returnLinkEl.style.marginTop = '2rem';
+                            returnLinkEl.innerHTML = `<a href="#${returnLink}" data-route="${returnLink}" class="work-link" data-type="${typeLabel}">Return to index →</a>`;
+                            
+                            const wrapper = document.createElement('div');
+                            const title = document.createElement('h2');
+                            title.className = 'page-title';
+                            title.textContent = item.title;
+                            
+                            const subtitle = document.createElement('p');
+                            subtitle.className = 'page-subtitle';
+                            subtitle.textContent = item.excerpt;
+                            
+                            wrapper.appendChild(title);
+                            wrapper.appendChild(subtitle);
+                            wrapper.appendChild(contentContainer);
+                            wrapper.appendChild(returnLinkEl);
+                            
+                            return wrapper;
+                        }
+                    };
+                    return acc;
+                }, {});
+                
+                Object.assign(pages, generatedPages);
+                
+                // Now render the current route after pages are loaded
+                renderRoute(getCurrentPath());
+            })
+            .catch(err => {
+                console.error('Failed to load content:', err);
+                // Create a simple fallback
+                pageContent.innerHTML = '<p style="color: var(--muted);">Content loading. Please ensure blog-content.json is in the same directory as this file.</p>';
+            });
+
+        const routeLabel = document.getElementById("route-label");
+        const pageContent = document.getElementById("page-content");
+
+        function renderRoute(path) {
+            const route = pages[path];
+            
+            // Check if this is a 404 egg path
+            if (!route && is404EggPath(path)) {
+                // Display 404 with egg finding opportunity
+                pageContent.innerHTML = `
+                    <h2 class="page-title" style="color: var(--warning); font-size: 3rem;">404</h2>
+                    <p class="page-subtitle" style="color: var(--muted);">This entry does not exist.</p>
+                    <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
+                        The archive has no record of this path. But something is here. Something that shouldn't be.
+                    </p>
+                    <div style="margin-top: 2.5rem; padding: 1.5rem; background: rgba(124, 242, 255, 0.08); border: 1px dashed rgba(124, 242, 255, 0.3); border-radius: 8px; text-align: center; cursor: pointer;" id="hidden-egg-area">
+                        <p style="color: var(--muted); font-size: 0.9rem;">Something glimmers in the void...</p>
+                    </div>
+                    <div style="margin-top: 2rem;">
+                        <a href="#/" data-route="/" class="work-link" data-type="home">Return to the archive →</a>
+                    </div>
+                `;
+                routeLabel.textContent = path;
+                // Add egg finding interaction
+                setTimeout(() => {
+                    const eggArea = document.getElementById("hidden-egg-area");
+                    if (eggArea) {
+                        eggArea.addEventListener("click", () => {
+                            triggerGlitch({
+                                species: getRandomSpecies(),
+                                path: path,
+                                section: "404",
+                                text: "Found in the void",
+                                timestamp: Date.now()
+                            });
+                        });
+                    }
+                }, 100);
+            } else if (!route) {
+                // Regular 404 page
+                pageContent.innerHTML = `
+                    <h2 class="page-title" style="color: var(--warning); font-size: 3rem;">404</h2>
+                    <p class="page-subtitle" style="color: var(--muted);">This entry does not exist. Or it exists in a way that cannot be accessed.</p>
+                    <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
+                        The archive has no record of this path. The network logs show no request. It's as if you imagined needing this page, and now that you're here, the archive must decide whether to pretend it never existed.
+                    </p>
+                    <div style="margin-top: 2rem;">
+                        <a href="#/" data-route="/" class="work-link" data-type="home">Return to the archive →</a>
+                    </div>
+                `;
+                routeLabel.textContent = path;
+            } else {
+                const contentElement = route.content();
+                pageContent.innerHTML = '';
+                if (contentElement instanceof HTMLElement) {
+                    pageContent.appendChild(contentElement);
+                } else {
+                    pageContent.innerHTML = contentElement;
+                }
+                routeLabel.textContent = path;
+            }
+            highlightNav(path);
+            attachLinkHandlers();
+            updateNarrative();
+        }
+
+        // Define which 404 paths have eggs
+        const eggPaths = new Set([
+            "/missing/coral-station",
+            "/archived/echo-logs",
+            "/forgotten/amber-records",
+            "/void/signal-cascade",
+            "/lost/memory-cache"
+        ]);
+
+        function is404EggPath(path) {
+            return eggPaths.has(path);
+        }
+
+        function getRandomSpecies() {
+            return baseSpecies[Math.floor(Math.random() * baseSpecies.length)];
+        }
+
+        function highlightNav(path) {
+            document.querySelectorAll("nav a").forEach(link => {
+                link.classList.toggle("active", link.dataset.route === path || (path.startsWith("/blog") && link.dataset.route === "/blog") || (path.startsWith("/projects") && link.dataset.route === "/projects"));
+            });
+        }
+
+        function navigate(path) {
+            window.location.hash = path;
+        }
+
+        function getCurrentPath() {
+            const hash = window.location.hash.replace("#", "");
+            return hash || "/";
+        }
+
+        const glitchOverlay = document.getElementById("glitch-overlay");
+        const glitchCanvas = document.getElementById("glitch-canvas");
+        const glitchEgg = document.getElementById("glitch-egg");
+        const glitchCount = null; // Sidebar removed, stats no longer displayed
+
+        function attachLinkHandlers() {
+            // Handle all links with data-route attribute
+            document.querySelectorAll("a[data-route]").forEach(link => {
+                link.addEventListener("click", event => {
+                    event.preventDefault();
+                    const path = link.dataset.route;
+                    const isExternal = link.dataset.external === "true";
+                    
+                    if (isExternal) {
+                        // External links open in same window (to simulate being tricked)
+                        window.location.href = link.href;
+                    } else {
+                        handleWorkingLink(link.dataset.type || "home");
+                        navigate(path);
+                    }
+                });
+            });
+            
+            // Handle external links without data-route (from archive links/)
+            document.querySelectorAll("a[data-external='true']:not([data-route])").forEach(link => {
+                link.addEventListener("click", event => {
+                    event.preventDefault();
+                    window.location.href = link.href;
+                });
+            });
+        }
+
+        const XP_PER_LEVEL = 24;
+        const LINK_COOLDOWN_MS = 2500;
+        const ACTION_COOLDOWN_MS = 1500;
+
+        function canPerform(key, cooldownMs) {
+            const now = Date.now();
+            if (now - state[key] < cooldownMs) return false;
+            state[key] = now;
+            return true;
+        }
+
+        function handleWorkingLink(type) {
+            if (!canPerform("lastLinkAt", LINK_COOLDOWN_MS)) return;
+            if (Math.random() < 0.35) state.stats.dataPackets += 1;
+            const pet = getActivePet();
+            if (pet && Math.random() < 0.35) gainXp(pet, 1);
+            updateStats();
+            saveState();
+        }
+
+        function triggerGlitch(payload) {
+            glitchCanvas.classList.add("active");
+            glitchOverlay.classList.add("active");
+            glitchOverlay.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+            startGlitchVisual();
+            state.pending = payload;
+        }
+
+        function closeGlitch() {
+            glitchOverlay.classList.remove("active");
+            glitchCanvas.classList.remove("active");
+            glitchOverlay.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+            stopGlitchVisual();
+        }
+
+        let glitchAnimId = null;
+        function startGlitchVisual() {
+            const ctx = glitchCanvas.getContext("2d");
+            const draw = () => {
+                const { innerWidth: w, innerHeight: h } = window;
+                glitchCanvas.width = w;
+                glitchCanvas.height = h;
+                ctx.clearRect(0, 0, w, h);
+                for (let i = 0; i < 140; i++) {
+                    const x = Math.random() * w;
+                    const y = Math.random() * h;
+                    const width = Math.random() * 40 + 10;
+                    const height = Math.random() * 6 + 2;
+                    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.35)`;
+                    ctx.fillRect(x, y, width, height);
+                }
+                glitchAnimId = requestAnimationFrame(draw);
+            };
+            draw();
+        }
+
+        function stopGlitchVisual() {
+            if (glitchAnimId) cancelAnimationFrame(glitchAnimId);
+        }
+
+        const petWidget = document.getElementById("pet-widget");
+        const petName = document.getElementById("pet-name");
+        const petStage = document.getElementById("pet-stage");
+        const petMood = document.getElementById("pet-mood");
+        const petStatus = document.getElementById("pet-status");
+        const petMeta = document.getElementById("pet-meta");
+        const petDisplay = document.getElementById("pet-display");
+        const petBody = document.getElementById("pet-body");
+        const petAccessory = document.getElementById("pet-accessory");
+        const petList = document.getElementById("pet-list");
+        const statHunger = document.getElementById("stat-hunger");
+        const statHappy = document.getElementById("stat-happy");
+        const statEnergy = document.getElementById("stat-energy");
+        const statClean = document.getElementById("stat-clean");
+        const growthLabel = document.getElementById("growth-label");
+        const growthBar = document.getElementById("growth-bar");
+
+        function hashString(value) {
+            let hash = 2166136261;
+            for (let i = 0; i < value.length; i++) {
+                hash ^= value.charCodeAt(i);
+                hash = Math.imul(hash, 16777619);
+            }
+            return hash >>> 0;
+        }
+
+        function mulberry32(seed) {
+            return function () {
+                let t = seed += 0x6D2B79F5;
+                t = Math.imul(t ^ t >>> 15, t | 1);
+                t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            };
+        }
+
+        function seededRng(seedString) {
+            return mulberry32(hashString(seedString));
+        }
+
+        function pick(list, rng) {
+            return list[Math.floor(rng() * list.length)];
+        }
+
+        function clamp(value, min = 0, max = 100) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function getStage(level) {
+            if (level < 6) return "Glitchling";
+            if (level < 16) return "Datapet";
+            if (level < 30) return "Digital Companion";
+            return "Archive Guardian";
+        }
+
+        function generatePet(context) {
+            const interaction = state.firstInteraction || { x: 0, y: 0, time: state.initTime };
+            const seed = `${context.text}|${context.path}|${context.section}|${context.timestamp}|${interaction.x},${interaction.y}|${interaction.time}`;
+            const rng = seededRng(seed);
+            const bodyImage = Math.floor(rng() * bodyCount) + 1;
+            const eyesImage = Math.floor(rng() * eyesCount) + 1;
+            const hasAccessory = rng() < 0.35;
+            const accessoryImage = hasAccessory ? Math.floor(rng() * accessoryCount) + 1 : null;
+            const palette = pick(palettes, rng);
+            const personality = pick(personalities, rng);
+            const species = context.species && context.species !== "Pixel Puff"
+                ? context.species
+                : pick(baseSpecies, rng);
+            return {
+                id: `pet-${Date.now()}-${Math.floor(rng() * 1000)}`,
+                name: "",
+                species,
+                personality,
+                bodyImage,
+                eyesImage,
+                accessoryImage,
+                color: palette.primary,
+                stats: {
+                    hunger: Math.floor(70 + rng() * 25),
+                    happiness: Math.floor(65 + rng() * 30),
+                    energy: Math.floor(60 + rng() * 35),
+                    cleanliness: Math.floor(60 + rng() * 35)
+                },
+                xp: 0,
+                level: 1,
+                stage: "Glitchling",
+                bornAt: new Date().toISOString(),
+                lastCareAt: Date.now()
+            };
+        }
+
+        function getActivePet() {
+            return state.pets.find(pet => pet.id === state.activePetId);
+        }
+
+        function updatePetWidgetVisibility() {
+            const hasPets = state.pets.length > 0;
+            petWidget.classList.toggle("hidden", !hasPets);
+        }
+
+        function renderPetList() {
+            petList.innerHTML = "";
+            state.pets.forEach(pet => {
+                const chip = document.createElement("button");
+                chip.className = "pet-chip" + (pet.id === state.activePetId ? " active" : "");
+                chip.textContent = pet.name || pet.species;
+                chip.addEventListener("click", () => setActivePet(pet.id));
+                petList.appendChild(chip);
+            });
+        }
+
+        function updatePetDisplay() {
+            const pet = getActivePet();
+            if (!pet) return;
+            petName.textContent = pet.name || "Unnamed glitch";
+            petStage.textContent = `${pet.species} · ${pet.stage}`;
+            petMood.textContent = `${pet.personality} · Mood: ${state.mood}`;
+            petStatus.textContent = state.sleeping ? "Sleeping" : state.dancing ? "Dancing" : state.dizzy ? "Dizzy" : "Active";
+            petMeta.textContent = `Level ${pet.level} · Data packets ${state.stats.dataPackets}`;
+            
+            // Set image sources from GitHub
+            const bodyImg = document.getElementById("body-img");
+            const eyesImg = document.getElementById("eyes-img");
+            const accessoryImg = document.getElementById("accessory-img");
+            const accessoryContainer = document.getElementById("pet-accessory");
+            
+            bodyImg.src = `${baseURL}body${pet.bodyImage}.png`;
+            eyesImg.src = `${baseURL}eyes${pet.eyesImage}.png`;
+            
+            if (pet.accessoryImage) {
+                accessoryImg.src = `${baseURL}accessory${pet.accessoryImage}.png`;
+                accessoryContainer.classList.add("visible");
+            } else {
+                accessoryContainer.classList.remove("visible");
+            }
+            
+            // Apply color filter using hue-rotate to colorize white images
+            const hue = rgbToHue(pet.color);
+            const colorFilter = `hue-rotate(${hue}deg) saturate(120%) brightness(110%)`;
+            
+            bodyImg.parentElement.style.filter = colorFilter;
+            eyesImg.parentElement.style.filter = colorFilter;
+            if (pet.accessoryImage) {
+                accessoryImg.parentElement.style.filter = colorFilter;
+            }
+            
+            updatePetStats(pet);
+            updateNarrative();
+        }
+        
+        function rgbToHue(hexColor) {
+            const hex = hexColor.replace("#", "");
+            const r = parseInt(hex.substring(0, 2), 16) / 255;
+            const g = parseInt(hex.substring(2, 4), 16) / 255;
+            const b = parseInt(hex.substring(4, 6), 16) / 255;
+            
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const delta = max - min;
+            
+            let hue = 0;
+            if (delta !== 0) {
+                if (max === r) hue = 60 * ((g - b) / delta % 6);
+                else if (max === g) hue = 60 * ((b - r) / delta + 2);
+                else hue = 60 * ((r - g) / delta + 4);
+            }
+            return hue < 0 ? hue + 360 : hue;
+        }
+
+        function updateNarrative() {
+            const narrativeText = document.getElementById("narrative-text");
+            const currentPath = window.location.hash.substring(2) || "/";
+            const pet = getActivePet();
+            
+            if (!pet) return; // Don't update if no pet exists yet
+            
+            const narratives = {
+                "/": `${pet.name} watches the archive entrance. Waiting for visitors who might never come.`,
+                "/blog": `Your research companion observes the collected thoughts. ${pet.personality} and curious about patterns.`,
+                "/blog/2018-notes": `${pet.name} senses the signal surge you documented. Restless. Excited about the relay stations.`,
+                "/blog/relay-forest": `Drawn to the idea of self-organizing relays. ${pet.name} hums at a frequency that matches the signal paths.`,
+                "/blog/soft-moon": `The blue light seems to affect ${pet.name}. It watches the monitors with unusual intensity.`,
+                "/blog/ghost-compiler": `${pet.name} finds kinship with the compiler. Both seem to understand things that weren't explicitly programmed.`,
+                "/blog/maintenance": `Anomalies intrigue your companion. ${pet.name} tilts its head at the impossible patterns.`,
+                "/blog/quiet-servers": `${pet.name} listens to the silence with you. It hears something in the ambient hum you can't quite parse.`,
+                "/blog/ghost-parcel": `The unopened files confuse ${pet.name}. It wants to know what never arrives.`,
+                "/blog/sleep-chorus": `${pet.name} dreams alongside you. Your sleeping harmonics have become entangled.`,
+                "/blog/stillwater": `The modem signal calls to ${pet.name}. It recognizes the pattern, even if you don't.`,
+                "/blog/unfiled": `${pet.name} exists here, in the notes that don't fit. It understands being unorganized.`,
+                "/blog/amber-map": `Golden light makes ${pet.name} luminescent. It remembers amber moments you've yet to document.`,
+                "/projects": `${pet.name} contemplates your creations. Each one a piece of yourself translated into being.`,
+                "/projects/signal-garden": `${pet.name}'s form harmonizes with the soundscape. Part of the garden now.`,
+                "/projects/moire-lab": `The fractal textures mesmerize ${pet.name}. It wears them like understanding made visible.`,
+                "/projects/hollow-loom": `${pet.name} traces the woven patterns with invisible threads. The loom pulses with its presence.`,
+                "/projects/abandoned-game": `${pet.name} recognizes itself in the game's NPCs. Adapt. Remember. Become.`,
+                "/projects/aurora-glass": `Captive light surrounds ${pet.name}. It stores colors for a midnight that never comes.`,
+                "/projects/fox-cache": `${pet.name} appears once per cycle. Then vanishes. This is its cycle. This is its nature.`,
+                "/missing/coral-station": `Something glimmers here. ${pet.name} shivers at the edge of what was lost.`,
+                "/void/signal-cascade": `${pet.name} cascades with you. The void recognizes its own.`,
+                "/lost/memory-cache": `Forgotten memories echo. ${pet.name} remembers conversations that never happened.`,
+                "/archived/echo-logs": `${pet.name} understands the echoes. It listens to what the archive won't admit it contains.`,
+                "/forgotten/amber-records": `Gold dust coats ${pet.name}'s edges. It remembers amber better than you do.`
+            };
+            
+            narrativeText.textContent = narratives[currentPath] || `${pet.name} accompanies you through the archive. Always present. Always watching.`;
+        }
+
+        function updatePetStats(pet) {
+            statHunger.style.width = `${pet.stats.hunger}%`;
+            statHappy.style.width = `${pet.stats.happiness}%`;
+            statEnergy.style.width = `${pet.stats.energy}%`;
+            statClean.style.width = `${pet.stats.cleanliness}%`;
+            const progress = (pet.xp % XP_PER_LEVEL) / XP_PER_LEVEL;
+            growthLabel.textContent = `Level ${pet.level} · ${Math.floor(progress * 100)}%`;
+            growthBar.style.width = `${Math.floor(progress * 100)}%`;
+        }
+
+        function setActivePet(petId) {
+            state.activePetId = petId;
+            renderPetList();
+            updatePetDisplay();
+            saveState();
+        }
+
+        function gainXp(pet, amount) {
+            pet.xp += amount;
+            pet.level = Math.max(1, Math.floor(pet.xp / XP_PER_LEVEL) + 1);
+            pet.stage = getStage(pet.level);
+        }
+
+        function updateStats() {
+            updatePetWidgetVisibility();
+            updatePetDisplay();
+        }
+
+        const nameOverlay = document.getElementById("name-overlay");
+        const nameInput = document.getElementById("pet-name-input");
+        const saveName = document.getElementById("save-name");
+
+        function openNameModal() {
+            nameOverlay.classList.add("active");
+            nameOverlay.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+            nameInput.value = "";
+            nameInput.focus();
+        }
+
+        function closeNameModal() {
+            nameOverlay.classList.remove("active");
+            nameOverlay.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+        }
+
+        glitchEgg.addEventListener("click", () => {
+            glitchEgg.classList.add("cracked");
+            setTimeout(() => {
+                closeGlitch();
+                if (state.pending) {
+                    const newPet = generatePet(state.pending);
+                    state.pets.push(newPet);
+                    state.activePetId = newPet.id;
+                    openNameModal();
+                }
+                handleWorkingLink("home");
+                updateStats();
+                glitchEgg.classList.remove("cracked");
+                if (state.pending && state.pending.path) navigate(state.pending.path);
+            }, 700);
+        });
+
+        saveName.addEventListener("click", () => {
+            const pet = getActivePet();
+            if (!pet) return;
+            const value = nameInput.value.trim();
+            pet.name = value || "Glitchling";
+            closeNameModal();
+            gainXp(pet, 3);
+            state.mood = "bonded";
+            renderPetList();
+            updatePetDisplay();
+            saveState();
+        });
+
+        document.getElementById("pet-toggle").addEventListener("click", () => {
+            const petWidget = document.getElementById("pet-widget");
+            petWidget.classList.toggle("collapsed");
+        });
+
+        document.getElementById("pet-feed").addEventListener("click", () => {
+            if (!canPerform("lastActionAt", ACTION_COOLDOWN_MS)) return;
+            const pet = getActivePet();
+            if (!pet) return;
+            pet.stats.hunger = clamp(pet.stats.hunger + 12);
+            pet.stats.cleanliness = clamp(pet.stats.cleanliness - 3);
+            gainXp(pet, 1);
+            state.mood = "sated";
+            updateStats();
+            saveState();
+        });
+
+        document.getElementById("pet-play").addEventListener("click", () => {
+            if (!canPerform("lastActionAt", ACTION_COOLDOWN_MS)) return;
+            const pet = getActivePet();
+            if (!pet) return;
+            pet.stats.happiness = clamp(pet.stats.happiness + 14);
+            pet.stats.energy = clamp(pet.stats.energy - 8);
+            gainXp(pet, 1);
+            state.mood = "sparked";
+            updatePetDisplay();
+            saveState();
+        });
+
+        document.getElementById("pet-clean").addEventListener("click", () => {
+            if (!canPerform("lastActionAt", ACTION_COOLDOWN_MS)) return;
+            const pet = getActivePet();
+            if (!pet) return;
+            pet.stats.cleanliness = clamp(pet.stats.cleanliness + 16);
+            pet.stats.happiness = clamp(pet.stats.happiness + 6);
+            gainXp(pet, 1);
+            state.mood = "fresh";
+            updatePetDisplay();
+            saveState();
+        });
+
+        const toggleDance = document.getElementById("toggle-dance");
+
+        toggleDance.addEventListener("click", () => {
+            state.dancing = !state.dancing;
+            updatePetDisplay();
+            updatePetStateClasses();
+        });
+
+        function updatePetStateClasses() {
+            petDisplay.classList.toggle("sleeping", state.sleeping);
+            petDisplay.classList.toggle("dancing", state.dancing);
+            petDisplay.classList.toggle("dizzy", state.dizzy);
+        }
+
+        document.addEventListener("visibilitychange", () => {
+            state.sleeping = document.hidden;
+            updatePetDisplay();
+            updatePetStateClasses();
+        });
+
+        window.addEventListener("scroll", () => {
+            const now = Date.now();
+            const delta = Math.abs(window.scrollY - state.lastScroll);
+            const speed = delta / (now - (state.lastScrollTime || now));
+            state.lastScroll = window.scrollY;
+            state.lastScrollTime = now;
+            if (speed > 1.4) {
+                state.dizzy = true;
+                updatePetStateClasses();
+                if (state.scrollTimer) clearTimeout(state.scrollTimer);
+                state.scrollTimer = setTimeout(() => {
+                    state.dizzy = false;
+                    updatePetStateClasses();
+                }, 1000);
+            }
+        });
+
+        const gamesOverlay = document.getElementById("games-overlay");
+        const openGames = document.getElementById("open-games");
+        const closeGames = document.getElementById("close-games");
+        const playRhythm = document.getElementById("play-rhythm");
+        const playPattern = document.getElementById("play-pattern");
+        const gameCanvas = document.getElementById("game-canvas");
+        const gameStatus = document.getElementById("game-status");
+        const gameMenu = document.getElementById("game-menu");
+
+        openGames.addEventListener("click", () => {
+            if (!getActivePet()) return;
+            gamesOverlay.classList.add("active");
+            gamesOverlay.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+        });
+
+        closeGames.addEventListener("click", () => {
+            gamesOverlay.classList.remove("active");
+            gamesOverlay.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+            stopGame();
+        });
+
+        const game = { running: false, mode: null, timer: null, score: 0, sequence: [], playerSequence: [], level: 1 };
+
+        function startGame(mode) {
+            game.running = true;
+            game.mode = mode;
+            game.score = 0;
+            game.level = 1;
+            game.sequence = [];
+            game.playerSequence = [];
+            gameMenu.style.display = "none";
+            gameCanvas.style.display = "block";
+            
+            if (mode === "rhythm") {
+                gameStatus.textContent = "Tap to the beat! Follow the rhythm for 15 seconds.";
+                startRhythmGame();
+            } else if (mode === "pattern") {
+                gameStatus.textContent = "Repeat the sequence! Click the colored boxes.";
+                startPatternGame();
+            }
+        }
+
+        function startRhythmGame() {
+            const ctx = gameCanvas.getContext("2d");
+            const startTime = Date.now();
+            const beatInterval = 600;
+            let lastBeatTime = startTime;
+            const colors = ["#7cf2ff", "#c48bff", "#ffd28f", "#9dffb0"];
+            const boxes = [
+                { x: 60, y: 40, w: 80, h: 80 },
+                { x: 200, y: 40, w: 80, h: 80 },
+                { x: 340, y: 40, w: 80, h: 80 },
+                { x: 60, y: 160, w: 80, h: 80 }
+            ];
+            let activeBox = -1;
+            let boxTimer = 0;
+
+            gameCanvas.addEventListener("click", handleRhythmClick);
+            function handleRhythmClick(e) {
+                if (!game.running) return;
+                const rect = gameCanvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * (gameCanvas.width / rect.width);
+                const y = (e.clientY - rect.top) * (gameCanvas.height / rect.height);
+                
+                for (let i = 0; i < boxes.length; i++) {
+                    const b = boxes[i];
+                    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+                        const timeSinceLastBeat = (Date.now() - lastBeatTime) % beatInterval;
+                        if (timeSinceLastBeat < 150 || timeSinceLastBeat > beatInterval - 150) {
+                            game.score += 10;
+                        } else {
+                            game.score += 5;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            const loop = () => {
+                if (!game.running) {
+                    gameCanvas.removeEventListener("click", handleRhythmClick);
+                    return;
+                }
+                const now = Date.now();
+                const elapsed = now - startTime;
+                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+                ctx.fillStyle = "rgba(124, 242, 255, 0.1)";
+                ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+                // Draw boxes
+                for (let i = 0; i < boxes.length; i++) {
+                    const b = boxes[i];
+                    const isBeat = Math.floor((now - startTime) / beatInterval) % 4 === i;
+                    ctx.fillStyle = isBeat ? colors[i] : `${colors[i]}40`;
+                    ctx.fillRect(b.x, b.y, b.w, b.h);
+                    ctx.strokeStyle = colors[i];
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(b.x, b.y, b.w, b.h);
+                }
+
+                // Draw beat indicator
+                const beatPhase = ((now - startTime) % beatInterval) / beatInterval;
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.5 - beatPhase * 0.3})`;
+                ctx.beginPath();
+                ctx.arc(420, 100, 20 + beatPhase * 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (elapsed > 15000) {
+                    endGame();
+                    return;
+                }
+                requestAnimationFrame(loop);
+            };
+            loop();
+        }
+
+        function startPatternGame() {
+            const ctx = gameCanvas.getContext("2d");
+            const startTime = Date.now();
+            const colors = ["#7cf2ff", "#c48bff", "#ffd28f", "#9dffb0"];
+            const boxes = [
+                { x: 60, y: 40, w: 80, h: 80, color: 0 },
+                { x: 200, y: 40, w: 80, h: 80, color: 1 },
+                { x: 340, y: 40, w: 80, h: 80, color: 2 },
+                { x: 60, y: 160, w: 80, h: 80, color: 3 }
+            ];
+            let activeBox = -1;
+            let showDuration = 0;
+
+            // Add first color to sequence
+            game.sequence.push(Math.floor(Math.random() * 4));
+
+            function playSequence() {
+                game.playerSequence = [];
+                let delay = 800;
+                game.sequence.forEach((boxIndex) => {
+                    setTimeout(() => {
+                        activeBox = boxIndex;
+                        showDuration = 400;
+                    }, delay);
+                    delay += 800;
+                });
+                setTimeout(() => {
+                    activeBox = -1;
+                }, delay);
+            }
+
+            gameCanvas.addEventListener("click", handlePatternClick);
+            function handlePatternClick(e) {
+                if (!game.running || game.playerSequence.length >= game.sequence.length) return;
+                const rect = gameCanvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * (gameCanvas.width / rect.width);
+                const y = (e.clientY - rect.top) * (gameCanvas.height / rect.height);
+                
+                for (let i = 0; i < boxes.length; i++) {
+                    const b = boxes[i];
+                    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+                        game.playerSequence.push(i);
+                        activeBox = i;
+                        showDuration = 200;
+                        
+                        if (game.playerSequence[game.playerSequence.length - 1] !== game.sequence[game.playerSequence.length - 1]) {
+                            game.running = false;
+                            gameStatus.textContent = `Level ${game.level}: Failed! Score: ${game.score}`;
+                            gameCanvas.removeEventListener("click", handlePatternClick);
+                            setTimeout(stopGame, 2000);
+                            return;
+                        }
+                        
+                        if (game.playerSequence.length === game.sequence.length) {
+                            game.level++;
+                            game.score += 20;
+                            game.sequence.push(Math.floor(Math.random() * 4));
+                            setTimeout(playSequence, 1000);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            const loop = () => {
+                if (!game.running) {
+                    gameCanvas.removeEventListener("click", handlePatternClick);
+                    return;
+                }
+                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+                ctx.fillStyle = "rgba(124, 242, 255, 0.1)";
+                ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+                // Draw boxes
+                for (let i = 0; i < boxes.length; i++) {
+                    const b = boxes[i];
+                    const isActive = i === activeBox && showDuration > 0;
+                    ctx.fillStyle = isActive ? colors[i] : `${colors[i]}40`;
+                    ctx.fillRect(b.x, b.y, b.w, b.h);
+                    ctx.strokeStyle = colors[i];
+                    ctx.lineWidth = isActive ? 3 : 2;
+                    ctx.strokeRect(b.x, b.y, b.w, b.h);
+                }
+                showDuration -= 16;
+
+                ctx.fillStyle = "#7cf2ff";
+                ctx.font = "14px monospace";
+                ctx.fillText(`Level: ${game.level}`, 10, 180);
+
+                requestAnimationFrame(loop);
+            };
+            playSequence();
+            loop();
+        }
+
+        function stopGame() {
+            game.running = false;
+            gameCanvas.style.display = "none";
+            gameMenu.style.display = "block";
+            gameStatus.textContent = "";
+        }
+
+        function endGame() {
+            game.running = false;
+            const packetsEarned = Math.max(1, Math.floor(game.score / 8));
+            gameStatus.textContent = `Game Over! Score: ${game.score} · Data packets +${packetsEarned}`;
+            state.stats.dataPackets += packetsEarned;
+            const pet = getActivePet();
+            if (pet) {
+                pet.stats.happiness = clamp(pet.stats.happiness + 10);
+                gainXp(pet, Math.ceil(game.score / 10));
+            }
+            updateStats();
+            saveState();
+            setTimeout(stopGame, 2000);
+        }
+
+        playRhythm.addEventListener("click", () => startGame("rhythm"));
+        playPattern.addEventListener("click", () => startGame("pattern"));
+
+        document.getElementById("reset-pet").addEventListener("click", () => {
+            localStorage.removeItem("sanctuaryPets");
+            localStorage.removeItem("sanctuaryStats");
+            localStorage.removeItem("sanctuaryActivePetId");
+            state.pets = [];
+            state.activePetId = null;
+            state.stats = { dataPackets: 0 };
+            updateStats();
+            renderPetList();
+        });
+
+        function saveState() {
+            localStorage.setItem("sanctuaryPets", JSON.stringify(state.pets));
+            localStorage.setItem("sanctuaryStats", JSON.stringify(state.stats));
+            localStorage.setItem("sanctuaryActivePetId", state.activePetId || "");
+        }
+
+        function loadState() {
+            const pets = localStorage.getItem("sanctuaryPets");
+            const stats = localStorage.getItem("sanctuaryStats");
+            const activeId = localStorage.getItem("sanctuaryActivePetId");
+            if (pets) state.pets = JSON.parse(pets);
+            if (stats) state.stats = JSON.parse(stats);
+            if (activeId) state.activePetId = activeId;
+            if (!state.activePetId && state.pets.length) state.activePetId = state.pets[0].id;
+        }
+
+        function decayStats() {
+            const now = Date.now();
+            state.pets.forEach(pet => {
+                const minutes = Math.max(1, Math.floor((now - pet.lastCareAt) / 60000));
+                if (minutes <= 0) return;
+                pet.stats.hunger = clamp(pet.stats.hunger - minutes * 1.2);
+                pet.stats.happiness = clamp(pet.stats.happiness - minutes * 1.0);
+                pet.stats.energy = clamp(pet.stats.energy - minutes * 1.4);
+                pet.stats.cleanliness = clamp(pet.stats.cleanliness - minutes * 0.8);
+                pet.lastCareAt = now;
+            });
+            updateMood();
+            updatePetDisplay();
+            saveState();
+        }
+
+        function updateMood() {
+            const pet = getActivePet();
+            if (!pet) return;
+            const avg = (pet.stats.hunger + pet.stats.happiness + pet.stats.energy + pet.stats.cleanliness) / 4;
+            if (avg > 80) state.mood = "thriving";
+            else if (avg > 60) state.mood = "steady";
+            else if (avg > 40) state.mood = "wavering";
+            else state.mood = "fragile";
+        }
+
+        window.addEventListener("pointerdown", event => {
+            if (!state.firstInteraction) {
+                state.firstInteraction = {
+                    x: Math.floor(event.clientX),
+                    y: Math.floor(event.clientY),
+                    time: Date.now()
+                };
+            }
+        }, { once: true });
+
+        function setupPwa() {
+            const svgIcon = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'>
+                <defs>
+                    <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+                        <stop offset='0' stop-color='#7cf2ff'/>
+                        <stop offset='1' stop-color='#c48bff'/>
+                    </linearGradient>
+                </defs>
+                <rect width='128' height='128' rx='28' fill='#0b0f1a'/>
+                <path d='M64 20c20 0 36 18 36 38 0 28-20 42-36 50-16-8-36-22-36-50 0-20 16-38 36-38z' fill='url(#g)'/>
+                <circle cx='50' cy='60' r='6' fill='#0b0f1a'/>
+                <circle cx='78' cy='60' r='6' fill='#0b0f1a'/>
+            </svg>`;
+            const manifest = {
+                name: "Web Sanctuary Preserve",
+                short_name: "Sanctuary",
+                start_url: ".",
+                display: "standalone",
+                background_color: "#0b0f1a",
+                theme_color: "#0b0f1a",
+                icons: [
+                    {
+                        src: `data:image/svg+xml;base64,${btoa(svgIcon)}`,
+                        sizes: "128x128",
+                        type: "image/svg+xml"
+                    }
+                ]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+            const manifestUrl = URL.createObjectURL(manifestBlob);
+            document.getElementById("pwa-manifest").setAttribute("href", manifestUrl);
+
+            if ("serviceWorker" in navigator) {
+                const swCode = `
+                    const CACHE = 'sanctuary-v1';
+                    self.addEventListener('install', event => {
+                        event.waitUntil(
+                            caches.open(CACHE).then(cache => cache.addAll([self.location.href]))
+                        );
+                    });
+                    self.addEventListener('fetch', event => {
+                        event.respondWith(
+                            caches.match(event.request).then(response => response || fetch(event.request))
+                        );
+                    });
+                `;
+                const swBlob = new Blob([swCode], { type: "text/javascript" });
+                const swUrl = URL.createObjectURL(swBlob);
+                navigator.serviceWorker.register(swUrl);
+            }
+        }
+
+        window.addEventListener("hashchange", () => renderRoute(getCurrentPath()));
+
+        loadState();
+        // Initial renderRoute will be called after content loads
+        updateStats();
+        updatePetStateClasses();
+        renderPetList();
+        updatePetWidgetVisibility();
+        setInterval(decayStats, 20000);
+        // Only setup PWA if we're in a secure context (HTTPS or localhost)
+        if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            setupPwa();
+        }
+    </script>
+</body>
+</html>
