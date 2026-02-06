@@ -54,6 +54,15 @@
     <!-- Fragment Counter UI moved to header below nav bar -->
 
     <script>
+            // Developer utility: advance to next phase manually
+            window.nextPhase = function() {
+                state.phase = Math.min(state.phase + 1, 6); // Max phase 6
+                saveState();
+                updateFragmentCounter();
+                updateNarrative();
+                renderRoute(getCurrentPath());
+                console.log('Advanced to phase', state.phase);
+            };
     // Show/hide Daemon Core tab in nav after phase 2 (3+ fragments)
     function updateDaemonNavLink() {
         var daemonLink = document.getElementById('daemon-nav-link');
