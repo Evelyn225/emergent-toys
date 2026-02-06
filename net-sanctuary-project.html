@@ -60,7 +60,6 @@
                     state.phase = Math.min(state.phase + 1, 6); // Max phase 6
                     saveState();
                     updateFragmentCounter();
-                    updateNarrative && updateNarrative();
                     renderRoute(getCurrentPath());
                     console.log('Advanced to phase', state.phase);
                 };
@@ -581,7 +580,6 @@
             return eggPaths.has(path);
         }
 
-
         function hasClaimedEgg(path) {
             let claimed = [];
             try {
@@ -591,7 +589,6 @@
             }
             return Array.isArray(claimed) && claimed.includes(path);
         }
-
 
         function markEggClaimed(path) {
             let claimed = [];
