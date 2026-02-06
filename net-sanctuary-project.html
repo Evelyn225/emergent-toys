@@ -612,24 +612,24 @@
                 const newLink = link.cloneNode(true);
                 link.parentNode.replaceChild(newLink, link);
             });
-            
+
             // Handle all links with data-route attribute
             document.querySelectorAll("a[data-route]").forEach(link => {
                 link.addEventListener("click", event => {
                     event.preventDefault();
                     const path = link.dataset.route;
                     const isExternal = link.dataset.external === "true";
-                    
+
                     if (isExternal) {
                         // External links open in same window (to simulate being tricked)
                         window.location.href = link.href;
                     } else {
-                        handleWorkingLink(link.dataset.type || "home");
+                        // Removed handleWorkingLink (function not defined and not needed)
                         navigate(path);
                     }
                 });
             });
-            
+
             // Handle external links without data-route (from archive links/)
             document.querySelectorAll("a[data-external='true']:not([data-route])").forEach(link => {
                 link.addEventListener("click", event => {
