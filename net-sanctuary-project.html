@@ -108,37 +108,7 @@
             state.phase = phase ? Math.max(1, parseInt(phase, 10) || 1) : getUnlockPhaseFromFragments(state.fragments);
               
         }
-        // Narrative update logic for phase transitions
-                function updateNarrative() {
-                    // Expand this switch as you add more narrative/phase logic
-                    const phase = getUnlockPhase();
-                    const narrativeBanner = document.getElementById('narrative-banner');
-                    if (!narrativeBanner) return;
-                    let message = '';
-                    switch (phase) {
-                        case 1:
-                            message = 'Phase 1: The archive is dormant. Only the most basic logs are accessible.';
-                            break;
-                        case 2:
-                            message = 'Phase 2: New anomalies detected. Additional logs and projects are now accessible.';
-                            break;
-                        case 3:
-                            message = 'Phase 3: The archive is awakening. Deeper layers are now visible.';
-                            break;
-                        case 4:
-                            message = 'Phase 4: The network is unstable. Unfiled and hidden content is surfacing.';
-                            break;
-                        case 5:
-                            message = 'Phase 5: The void is near. Null and static phenomena are now accessible.';
-                            break;
-                        case 6:
-                            message = 'Phase 6: The sanctuary is fully emergent. All fragments and secrets are revealed.';
-                            break;
-                        default:
-                            message = 'The archive is in an unknown state.';
-                    }
-                    narrativeBanner.textContent = message;
-                }
+        
         function saveState() {
             localStorage.setItem("sanctuaryFragments", state.fragments.toString());
             localStorage.setItem("sanctuaryPhase", state.phase.toString());
@@ -156,7 +126,6 @@
             if (!document.hidden) {
                 loadState();
                 updateFragmentCounter();
-                updateNarrative();
             }
         });
 
@@ -675,7 +644,7 @@
             saveState();
             updateFragmentCounter();
             markEggClaimed(payload.path);
-            updateNarrative();
+            // Optionally show a visual effect
         }
 
         let glitchAnimId = null;
@@ -951,8 +920,6 @@
             // Initial renderRoute will be called after content loads
             document.addEventListener('DOMContentLoaded', () => {
                 updateFragmentCounter();
-                updateDaemonNavLink();
-                updateNarrative();
             });
         }
         // Only setup PWA if we're in a secure context (HTTPS or localhost)
