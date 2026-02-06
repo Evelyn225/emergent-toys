@@ -125,6 +125,7 @@
                 updateFragmentCounter();
             }
         });
+
             function loadState() {
                 const fragments = localStorage.getItem("sanctuaryFragments");
                 state.fragments = fragments ? parseInt(fragments, 10) || 0 : 0;
@@ -580,13 +581,25 @@
             return eggPaths.has(path);
         }
 
+
         function hasClaimedEgg(path) {
-            const claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedEggs") || "[]");
-            return claimed.includes(path);
+            let claimed = [];
+            try {
+                claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedEggs") || "[]");
+            } catch (e) {
+                claimed = [];
+            }
+            return Array.isArray(claimed) && claimed.includes(path);
         }
 
+
         function markEggClaimed(path) {
-            const claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedEggs") || "[]");
+            let claimed = [];
+            try {
+                claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedEggs") || "[]");
+            } catch (e) {
+                claimed = [];
+            }
             if (!claimed.includes(path)) {
                 claimed.push(path);
                 localStorage.setItem("sanctuaryClaimedEggs", JSON.stringify(claimed));
@@ -824,17 +837,8 @@
             collapseAnimation();
         }
 
-        function saveState() {
-            localStorage.setItem("sanctuaryFragments", state.fragments.toString());
-            localStorage.setItem("sanctuaryStats", JSON.stringify(state.stats));
-        }
 
-        function loadState() {
-            const fragments = localStorage.getItem("sanctuaryFragments");
-            const stats = localStorage.getItem("sanctuaryStats");
-            if (fragments) state.fragments = parseInt(fragments, 10) || 0;
-            if (stats) state.stats = JSON.parse(stats);
-        }
+        // (Removed duplicate/incorrect saveState and loadState at the end)
         
         function updateFragmentCounter() {
             const counter = document.getElementById("fragment-counter");
