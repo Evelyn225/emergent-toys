@@ -40,7 +40,7 @@
         <main>
             <section class="content-card">
                 <div class="archive-meta">
-                    <div class="archive-chip">ARCHIVE</div>
+                    <div class="archive-chip"><a href="#/">ARCHIVE</a></div>
                     <span id="route-label">/</span>
                 </div>
                 <div id="page-content"></div>
@@ -55,14 +55,16 @@
 
     <script>
             // Developer utility: advance to next phase manually
-            window.nextPhase = function() {
-                state.phase = Math.min(state.phase + 1, 6); // Max phase 6
-                saveState();
-                updateFragmentCounter();
-                updateNarrative();
-                renderRoute(getCurrentPath());
-                console.log('Advanced to phase', state.phase);
-            };
+            // (Removed duplicate window.nextPhase definition)
+                window.nextPhase = function() {
+                    loadState(); // Always load latest state
+                    state.phase = Math.min(state.phase + 1, 6); // Max phase 6
+                    saveState();
+                    updateFragmentCounter();
+                    updateNarrative && updateNarrative();
+                    renderRoute(getCurrentPath());
+                    console.log('Advanced to phase', state.phase);
+                };
     // Show/hide Daemon Core tab in nav after phase 2 (3+ fragments)
     function updateDaemonNavLink() {
         var daemonLink = document.getElementById('daemon-nav-link');
@@ -109,19 +111,7 @@
         };
 
         // Always sync fragment count and phase with localStorage (shared across pages)
-        function loadState() {
-            const fragments = localStorage.getItem("sanctuaryFragments");
-            state.fragments = fragments ? parseInt(fragments, 10) || 0 : 0;
-            // Always start at phase 1 unless fragments unlock higher
-            const phase = localStorage.getItem("sanctuaryPhase");
-            state.phase = phase ? Math.max(1, parseInt(phase, 10) || 1) : getUnlockPhaseFromFragments(state.fragments);
-              
-        }
-        
-        function saveState() {
-            localStorage.setItem("sanctuaryFragments", state.fragments.toString());
-            localStorage.setItem("sanctuaryPhase", state.phase.toString());
-        }
+        // (Removed duplicate loadState and saveState definitions)
 
         function getUnlockPhaseFromFragments(fragments) {
             // Phase 2 unlocks after 3+ fragments, can be extended for more phases
@@ -137,6 +127,24 @@
                 updateFragmentCounter();
             }
         });
+            function loadState() {
+                const fragments = localStorage.getItem("sanctuaryFragments");
+                state.fragments = fragments ? parseInt(fragments, 10) || 0 : 0;
+                // Always start at phase 1 unless phase is stored
+                const phase = localStorage.getItem("sanctuaryPhase");
+                if (phase) {
+                    state.phase = Math.max(1, parseInt(phase, 10) || 1);
+                } else {
+                    // If no phase stored, infer from fragments
+                    state.phase = getUnlockPhaseFromFragments(state.fragments);
+                    localStorage.setItem("sanctuaryPhase", state.phase.toString());
+                }
+            }
+
+            function saveState() {
+                localStorage.setItem("sanctuaryFragments", state.fragments.toString());
+                localStorage.setItem("sanctuaryPhase", state.phase.toString());
+            }
 
 
 
@@ -645,15 +653,23 @@
         
         
 
-        function triggerGlitch(payload) {
-            // Add a fragment when an egg is found
-            state.fragments += 1;
-            state.phase = getUnlockPhaseFromFragments(state.fragments);
-            saveState();
-            updateFragmentCounter();
-            markEggClaimed(payload.path);
-            // Optionally show a visual effect
-        }
+        // (Removed duplicate triggerGlitch definition)
+            function triggerGlitch(payload) {
+                // Add a fragment when an egg is found
+                loadState();
+                state.fragments += 1;
+                // Phase may increase if enough fragments collected
+                const newPhase = getUnlockPhaseFromFragments(state.fragments);
+                if (newPhase > state.phase) {
+                    state.phase = newPhase;
+                }
+                saveState();
+                updateFragmentCounter();
+                updateNarrative && updateNarrative();
+                renderRoute(getCurrentPath());
+                markEggClaimed(payload.path);
+                // Optionally show a visual effect
+            }
 
         let glitchAnimId = null;
         function startGlitchVisual() {
@@ -827,18 +843,27 @@
             if (fragments) state.fragments = parseInt(fragments, 10) || 0;
             if (stats) state.stats = JSON.parse(stats);
         }
-        function updateFragmentCounter() {
-            const counter = document.getElementById("fragment-counter");
-            const count = document.getElementById("fragment-count");
-            if (count) count.textContent = state.fragments;
-            if (counter) {
-                if (state.fragments > 0) {
-                    counter.style.display = 'flex';
-                } else {
-                    counter.style.display = 'none';
+        // (Removed duplicate updateFragmentCounter definition)
+            function updateFragmentCounter() {
+                const counter = document.getElementById("fragment-counter");
+                const count = document.getElementById("fragment-count");
+                if (count) count.textContent = state.fragments;
+                if (counter) {
+                    if (state.fragments > 0) {
+                        counter.style.display = 'flex';
+                    } else {
+                        counter.style.display = 'none';
+                    }
+                }
+                // When fragment count changes, check if phase should increase
+                const newPhase = getUnlockPhaseFromFragments(state.fragments);
+                if (newPhase > state.phase) {
+                    state.phase = newPhase;
+                    saveState();
+                    updateNarrative && updateNarrative();
+                    renderRoute(getCurrentPath());
                 }
             }
-        }
 
         // Pet logic removed. Only deletion capability retained below if needed.
 
