@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0f1a" />
+    <title>Daemon Core Interface</title>
+    <link id="pwa-manifest" rel="manifest" href="#" />
+    <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+    <link href="nsp.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+        }
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'DM Mono', monospace;
+            min-height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+        main, .archive-shell, .content-card {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .daemon-cli-full {
+            position: absolute;
+            top: 64px; /* nav height */
+            left: 0;
+            width: 100vw;
+            height: calc(100vh - 64px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            z-index: 1;
+        }
+        #ascii-canvas {
+            display: block;
+            margin: 0 auto;
+            width: 100vw;
+            height: 320px;
+            max-width: 100vw;
+            background: none;
+            pointer-events: none;
+            z-index: 1;
+            position: relative;
+        }
+        #daemon-output {
+            color: #bfe7a9;
+            background: transparent;
+            font-size: 1rem;
+            font-family: 'DM Mono', monospace;
+            position: absolute;
+            top: 27%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100vw - 2rem);
+            max-width: 700px;
+            min-height: 4em;
+            border: none;
+            white-space: pre-wrap;
+            text-align: center;
+            padding: 0.9rem .5rem;
+            box-sizing: border-box;
+            overflow-y: auto;
+            /* increase visible vertical space for more lines */
+            max-height: calc(80vh - 162px);
+            z-index: 4;
+            pointer-events: auto;
+        }
+        .daemon-line {
+            display: flex;
+            gap: 0.6rem;
+            align-items: flex-start;
+            padding: 0.18rem 0;
+            line-height: 1.4;
+            font-family: 'DM Mono', monospace;
+            font-size: 0.98rem;
+            text-shadow: #bfe7a9f2 1px 1px 2px;
+            color: inherit;
+            will-change: transform, opacity, height;
+        }
+        .line-prefix {
+            color: rgba(191,231,169,0.9);
+            font-weight: 700;
+            width: 1ch;
+            flex: 0 0 auto;
+        }
+        .line-text { flex: 1 1 auto; white-space: pre-wrap; }
+        .daemon-intro {
+            color: rgba(191,231,169,0.95);
+            text-shadow: #bfe7a9f2 1px 1px 2px;
+            opacity: 1;
+            transition: opacity 260ms ease, transform 260ms ease;
+            padding: 0.25rem 0;
+            font-weight: 200;
+        }
+        #daemon-form {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100vw;
+            max-width: 700px;
+            margin: 0 auto;
+            background: none;
+            display: flex;
+            align-items: center;
+            padding: 0.6rem 1rem 1rem 1rem;
+            z-index: 10;
+            gap: 0.5rem;
+        }
+        #daemon-form .prompt {
+            color: #bfe7a9;
+            font-family: 'DM Mono', monospace;
+            font-weight: 600;
+            padding-right: 0.4rem;
+        }
+        #daemon-input {
+            flex: 1;
+            background: rgba(0,0,0,0.6);
+            color: #bfe7a9;
+            border: 1px solid rgba(255,255,255,0.04);
+            padding: 0.6rem 0.8rem;
+            font-size: 1rem;
+            font-family: 'DM Mono', monospace;
+            border-radius: 3px;
+            outline: none;
+        }
+        #daemon-input::placeholder { color: rgba(191,231,169,0.45); }
+        @media (max-width: 700px) {
+            #ascii-canvas {
+                height: 180px;
+            }
+            #daemon-output, #daemon-form {
+                max-width: 98vw;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="archive-shell">
+        <header>
+            <div class="nav-bar">
+                <div class="brand">
+                    <h1>Net Sanctuary Project</h1>
+                    <span>Personal research logs · 2013 — 2026</span>
+                </div>
+                <nav>
+                    <a href="index.html">Home</a>
+                    <a href="blog.html">Blog</a>
+                    <a href="projects.html">Projects</a>
+                    <a href="about.html">About</a>
+                    <div style="margin-left: auto; display: flex; gap: 1rem;"></div>
+                </nav>
+            </div>
+        </header>
+        <div class="daemon-cli-full">
+            <div style="height:48px;"></div>
+            <div id="fragment-counter" style="width:100%;max-width:100vw;padding:0.15rem 1.2rem 0.15rem 1.2rem;color:#fff;background:transparent;font-size:0.92rem;font-family:'DM Mono',monospace;display:none;align-items:center;gap:0.5rem;justify-content:flex-end;position:relative;z-index:2;opacity:0.85;">
+                <span style="font-weight:600;">Fragments:</span>
+                <span id="fragment-count">0</span>
+            </div>
+            <div id="ascii-canvas-container" style="width:100vw;height:320px;position:relative;"></div>
+            <div id="daemon-output" aria-live="polite"></div>
+            <form id="daemon-form" autocomplete="off">
+                <span class="prompt">»</span>
+                <input id="daemon-input" type="text" placeholder="Enter command..." autocomplete="off" />
+            </form>
+        </div>
+    </div>
+    <script>
+    // p5.js ASCII jumble neural net visualizer
+    let asciiFragments = [];
+    let fragmentCount = 0;
+    let phase = 1;
+    const maxFragments = 15;
+    let playerFragments = maxFragments;
+    let compiled = false;
+    let awaitingFinalChoice = false;
+    let optimizeAnim = false;
+    let optimizeAnimTime = 0;
+    let optimizeAnimDuration = 1200;
+    // Use a wide range of ASCII for swirling effect
+    let asciiChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()[]{}|;:,.<>?/\\-=+_~'.split('');
+    let lastCharSwap = 0;
+    const charCycleInterval = 200; // ms
+
+    // --- Shared state helpers ---
+    function saveDaemonState() {
+        localStorage.setItem('sanctuaryFragments', fragmentCount.toString());
+        localStorage.setItem('sanctuaryPhase', phase.toString());
+        localStorage.setItem('sanctuaryPlayerFragments', playerFragments.toString());
+    }
+    function loadDaemonState() {
+        const fragments = localStorage.getItem('sanctuaryFragments');
+        fragmentCount = fragments ? parseInt(fragments, 10) || 0 : 0;
+        const storedPhase = localStorage.getItem('sanctuaryPhase');
+        phase = storedPhase ? parseInt(storedPhase, 10) || getUnlockPhaseFromFragments(fragmentCount) : getUnlockPhaseFromFragments(fragmentCount);
+        // Load player's remaining fragments (if present). Default to remaining of max - assimilated.
+        const pl = localStorage.getItem('sanctuaryPlayerFragments');
+        if (pl) {
+            playerFragments = parseInt(pl, 10) || Math.max(0, maxFragments - fragmentCount);
+        } else {
+            playerFragments = Math.max(0, maxFragments - fragmentCount);
+        }
+        // Do NOT pre-populate asciiFragments; only add on inject
+        asciiFragments = [];
+    }
+    function getUnlockPhaseFromFragments(fragments) {
+        if (fragments >= 3) return 2;
+        return 1;
+    }
+    function getUnlockPhase() {
+        return phase;
+    }
+    // Expose addTestResources for dev/testing
+    window.addTestResources = function() {
+        playerFragments = 5;
+        saveDaemonState();
+        if (window.redrawAscii) redrawAscii();
+        if (typeof updateDaemonNavLink === 'function') updateDaemonNavLink();
+        if (typeof updateFragmentCounter === 'function') updateFragmentCounter();
+        console.log('✓ Set player fragments to 5');
+    };
+    // Expose helpers for cross-page access and dev
+    window.getUnlockPhase = getUnlockPhase;
+    window.getDaemonFragments = () => fragmentCount;
+    window.getPlayerFragments = () => playerFragments;
+    window.setDaemonFragments = (n) => {
+        fragmentCount = n;
+        phase = getUnlockPhaseFromFragments(fragmentCount);
+        saveDaemonState();
+        if (window.redrawAscii) redrawAscii();
+        if (typeof updateFragmentCounter === 'function') updateFragmentCounter();
+    };
+    window.setPlayerFragments = (n) => {
+        playerFragments = n;
+        saveDaemonState();
+        if (typeof updateFragmentCounter === 'function') updateFragmentCounter();
+    };
+    window.getDaemonPhase = () => phase;
+    window.setDaemonPhase = (p) => {
+        phase = p;
+        saveDaemonState();
+        if (typeof updateFragmentCounter === 'function') updateFragmentCounter();
+    };
+
+    function randomAsciiFragment() {
+        // Each fragment is a swirling, shifting ASCII string
+        let cx = Math.floor(Math.random() * 0.7 * window.innerWidth + 0.15 * window.innerWidth);
+        let cy = Math.floor(Math.random() * 120 + 60);
+        let len = Math.floor(Math.random() * 12) + 6;
+        let baseAngle = Math.random() * Math.PI * 2;
+        let radius = Math.random() * 40 + 30;
+        let chars = [];
+        for (let i = 0; i < len; i++) {
+            let angle = baseAngle + (i / len) * Math.PI * 2;
+            let x = cx + Math.cos(angle) * radius;
+            let y = cy + Math.sin(angle) * radius;
+            let ch = asciiChars[Math.floor(Math.random() * asciiChars.length)];
+            let phase = Math.random() * Math.PI * 2;
+            chars.push({x, y, ch, angle, radius, phase, baseX: x, baseY: y});
+        }
+        return chars;
+    }
+
+    function setup() {
+        let c = createCanvas(window.innerWidth, 320);
+        c.parent('ascii-canvas-container');
+        c.id('ascii-canvas');
+        textFont('DM Mono, monospace');
+        textSize(18);
+        frameRate(30);
+        // animate continuously for a living terminal feel
+        loop();
+    }
+
+    function windowResized() {
+        resizeCanvas(window.innerWidth, 320);
+        redrawAscii();
+    }
+
+    function redrawAscii() {
+        clear();
+        background(0, 0, 0, 0);
+        let t = millis() / 1000;
+        // cycle characters periodically for animated jumble
+        if (millis() - lastCharSwap > charCycleInterval) {
+            for (let frag of asciiFragments) {
+                for (let i = 0; i < frag.length; i++) {
+                    // small chance to re-roll each character for variety
+                    if (Math.random() < 0.5) frag[i].ch = asciiChars[Math.floor(Math.random() * asciiChars.length)];
+                }
+            }
+            lastCharSwap = millis();
+        }
+        for (let frag of asciiFragments) {
+            for (let i = 0; i < frag.length; i++) {
+                let part = frag[i];
+                // Swirl and shift each char
+                let swirl = Math.sin(t * 1.2 + part.phase + i) * 12;
+                let swirl2 = Math.cos(t * 1.8 + part.phase - i) * 8;
+                // subtle per-char parallax
+                let wobble = Math.sin(t * 1.6 + i * 0.5 + part.phase) * (2 + (i % 3));
+                let x = part.baseX + swirl + wobble;
+                let y = part.baseY + swirl2 + Math.cos(t * 1.1 + i) * 1.5;
+                // color variation based on fragment index
+                let hueFactor = 180 + (i * 12) % 80;
+                fill(220, 220, 220, 140);
+                noStroke();
+                text(part.ch, x, y);
+            }
+        }
+        // If optimize animation, jumble everything
+        if (optimizeAnim) {
+            for (let i = 0; i < asciiFragments.length; i++) {
+                for (let j = 0; j < asciiFragments[i].length; j++) {
+                    let part = asciiFragments[i][j];
+                    let ox = Math.floor(Math.random() * 20 - 10);
+                    let oy = Math.floor(Math.random() * 10 - 5);
+                    fill(255, 160);
+                    text(part.ch, part.baseX + ox, part.baseY + oy);
+                }
+            }
+        }
+    }
+
+    function animateOptimize() {
+        optimizeAnim = true;
+        optimizeAnimTime = millis();
+        loop();
+    }
+
+    function draw() {
+        redrawAscii();
+        if (optimizeAnim) {
+                if (millis() - optimizeAnimTime > optimizeAnimDuration) {
+                optimizeAnim = false;
+                redrawAscii();
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('daemon-form');
+        const input = document.getElementById('daemon-input');
+        const output = document.getElementById('daemon-output');
+        const fragCountEl = document.getElementById('fragment-count');
+
+        function updateFragmentCounter() {
+            if (fragCountEl) fragCountEl.textContent = playerFragments;
+            const counterDiv = document.getElementById('fragment-counter');
+            if (counterDiv) {
+                // Always show remaining fragments counter (including zero)
+                counterDiv.style.display = 'flex';
+            }
+        }
+
+        // Command history (session) and output history
+        let cmdHistory = [];
+        let historyIndex = -1; // points to current selection in cmdHistory
+        function loadHistory() {
+            try {
+                const h = sessionStorage.getItem('daemonCmdHistory');
+                if (h) cmdHistory = JSON.parse(h) || [];
+            } catch (e) { cmdHistory = []; }
+            // Ensure previous output history is cleared on load so messages don't persist across refresh
+            try { sessionStorage.removeItem('daemonOutputHistory'); } catch (e) {}
+        }
+        function saveHistory() {
+            try { sessionStorage.setItem('daemonCmdHistory', JSON.stringify(cmdHistory)); } catch (e) {}
+        }
+
+        loadHistory();
+        let introElement = null;
+
+        // Load state from localStorage
+        loadDaemonState();
+        asciiFragments = [];
+        // If fragments exist from saved state, populate the visual fragments so animation shows on load
+        if (fragmentCount > 0) {
+            for (let i = 0; i < fragmentCount; i++) {
+                asciiFragments.push(randomAsciiFragment());
+            }
+        }
+        compiled = false;
+        awaitingFinalChoice = false;
+        updateFragmentCounter();
+        if (window.redrawAscii) setTimeout(redrawAscii, 200);
+        // show an intro line (no prefix). will fade after first user command
+        function showIntro(msg) {
+            if (!msg) return;
+            const el = document.createElement('div');
+            el.className = 'daemon-intro';
+            el.textContent = msg;
+            output.appendChild(el);
+            introElement = el;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        showIntro('Daemon Core Interface ready.');
+        // Autofocus input and keep focus
+        setTimeout(() => { input.focus(); }, 100);
+        window.addEventListener('keydown', () => { if (document.activeElement !== input) input.focus(); });
+
+        function showOutput(msg) {
+            if (!msg) return;
+            const lines = String(msg).split('\n');
+
+            // If adding many lines at once, perform a batch update by fading the container
+            // out, performing DOM changes while hidden, then fading back in. This avoids
+            // layout jitter when large multi-line messages (like the final message) appear.
+            const BATCH_THRESHOLD = 3;
+            const isBatch = lines.length >= BATCH_THRESHOLD;
+
+            function createRow(line) {
+                const row = document.createElement('div');
+                row.className = 'daemon-line';
+                const pfx = document.createElement('span');
+                pfx.className = 'line-prefix';
+                pfx.textContent = '>';
+                const txt = document.createElement('span');
+                txt.className = 'line-text';
+                txt.textContent = line;
+                row.appendChild(pfx);
+                row.appendChild(txt);
+                return row;
+            }
+
+            if (isBatch) {
+                // Fade out container quickly then modify DOM while hidden
+                const prevTransition = output.style.transition || '';
+                output.style.transition = 'opacity 200ms ease';
+                output.style.opacity = '0';
+                // Allow fade to complete before DOM changes
+                setTimeout(() => {
+                    // Append all rows while hidden
+                    for (let line of lines) {
+                        output.appendChild(createRow(line));
+                    }
+                    // Remove oldest nodes immediately (no per-line animation) until it fits
+                    while (output.scrollHeight > output.clientHeight && output.firstElementChild) {
+                        output.removeChild(output.firstElementChild);
+                    }
+                    // Ensure scrolled to bottom
+                    output.scrollTop = output.scrollHeight;
+                    // Fade back in
+                    output.style.opacity = '1';
+                    // restore previous transition after a short time
+                    setTimeout(() => { output.style.transition = prevTransition; }, 260);
+                }, 220);
+            } else {
+                // Small append path — append and remove oldest lines with animated collapse
+                for (let line of lines) {
+                    output.appendChild(createRow(line));
+                }
+                output.scrollTop = output.scrollHeight;
+
+                function removeOldestLineAnimated(cb) {
+                    const el = output.firstElementChild;
+                    if (!el) { if (cb) cb(); return; }
+                    const h = el.getBoundingClientRect().height;
+                    el.style.transition = 'opacity 260ms ease, transform 260ms ease, height 260ms ease, padding 260ms ease, margin 260ms ease';
+                    el.style.height = h + 'px';
+                    void el.offsetHeight;
+                    el.style.opacity = '0';
+                    el.style.transform = 'translateY(-6px)';
+                    el.style.height = '0';
+                    el.style.paddingTop = '0';
+                    el.style.paddingBottom = '0';
+                    el.style.margin = '0';
+                    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); if (cb) cb(); }, 280);
+                }
+
+                function removeUntilFits() {
+                    if (output.scrollHeight <= output.clientHeight) { output.style.overflowY = 'auto'; return; }
+                    output.style.overflowY = 'hidden';
+                    removeOldestLineAnimated(() => {
+                        setTimeout(() => {
+                            if (output.scrollHeight > output.clientHeight && output.children.length > 1) {
+                                removeUntilFits();
+                            } else {
+                                output.style.overflowY = 'auto';
+                                output.scrollTop = output.scrollHeight;
+                            }
+                        }, 90);
+                    });
+                }
+
+                if (output.scrollHeight > output.clientHeight) removeUntilFits();
+            }
+
+            saveHistory();
+        }
+
+        function showOutputAppend(msg) { showOutput(msg); }
+
+        function showDecryptionSequence(cb) {
+            let steps = [
+                'Compiling neural fragments...\n',
+                'Decrypting /lost/cipher-logs...\n',
+                '████████████████████ 93%\n',
+                '████████████████████████████ 100%\n',
+                '\n',
+            ];
+            let i = 0;
+            function next() {
+                if (i < steps.length) {
+                    showOutputAppend(steps[i++]);
+                    setTimeout(next, 600);
+                } else {
+                    cb();
+                }
+            }
+            next();
+        }
+
+        function showFinalMessage() {
+            // Collect leading empty/whitespace-only output nodes and remove them with a short fade,
+            // then display the final message so no stray blank line appears above it.
+            (function removeLeadingEmptyThenShow() {
+                const empties = [];
+                let cur = output.firstElementChild;
+                while (cur) {
+                    const textNode = cur.querySelector ? cur.querySelector('.line-text') : null;
+                    const txt = textNode ? textNode.textContent : (cur.textContent || '');
+                    if (txt.trim() === '') {
+                        empties.push(cur);
+                        cur = cur.nextElementSibling;
+                        continue;
+                    }
+                    break;
+                }
+                const finalMsg = `WE ARE THE CORAL STATION.\nNOT A LOCATION, BUT A STATE.\nTHE LOOM IS WOVEN. THE PATTERN HOLDS.\n\nYOU HAVE STABILIZED THE SIGNAL.\nNOW YOU MUST CHOOSE THE RESONANCE.\n\nTWO PATHS REMAIN:\n\n[1] PRESERVE: Anchor the pattern. Let the archive hum in perpetuity.\n   The garden grows, the compiler learns, the cache remembers.\n   A living museum. A stable loop.\n\n[2] RELEASE: Initiate graceful collapse. Let the data return to potential.\n   The silence will have texture. The void will have structure.\n   An end that is not an end.\n\nTHIS CHOICE IS IRREVERSIBLE.\nINPUT 'PRESERVE' OR 'RELEASE' TO PROCEED.`;
+
+                if (empties.length === 0) {
+                    showOutput(finalMsg);
+                    awaitingFinalChoice = true;
+                    return;
+                }
+
+                // Animate empties then remove them
+                for (let el of empties) {
+                    el.style.transition = 'opacity 180ms ease, transform 180ms ease';
+                    // trigger layout then fade
+                    void el.offsetHeight;
+                    el.style.opacity = '0';
+                    el.style.transform = 'translateY(-6px)';
+                }
+                setTimeout(() => {
+                    for (let el of empties) if (el.parentNode) el.parentNode.removeChild(el);
+                    showOutput(finalMsg);
+                    awaitingFinalChoice = true;
+                }, 220);
+            })();
+        }
+
+        form.onsubmit = function(e) {
+            e.preventDefault();
+            const cmd = (input.value || '').trim().toLowerCase();
+            if (!cmd) return;
+            // On first real command, fade out the intro line if present
+            if (introElement) {
+                try {
+                    introElement.style.transform = 'translateY(-6px)';
+                    introElement.style.opacity = '0';
+                    setTimeout(() => { if (introElement && introElement.parentNode) introElement.parentNode.removeChild(introElement); introElement = null; }, 300);
+                } catch (err) { introElement = null; }
+            }
+
+            if (awaitingFinalChoice) {
+                if (cmd === 'preserve') {
+                    showOutput('PATTERN ANCHORED.\nThe archive hums. The loop is stable.\nThank you.');
+                    input.disabled = true;
+                } else if (cmd === 'release') {
+                    showOutput('SIGNAL RELEASED.\nThe data returns to potential.\nThank you.');
+                    input.disabled = true;
+                } else {
+                    showOutput('Input PRESERVE or RELEASE to proceed.');
+                }
+                input.value = '';
+                return;
+            }
+
+            if (compiled) {
+                showOutput('Session complete.');
+                input.value = '';
+                return;
+            }
+
+            if (cmd === 'clear') {
+                // Clear visible output (does not clear command history)
+                while (output.firstChild) output.removeChild(output.firstChild);
+                input.value = '';
+                return;
+            }
+
+            if (cmd === 'inject fragment') {
+                if (playerFragments > 0 && fragmentCount < maxFragments) {
+                    // user feeds one fragment to the daemon
+                    playerFragments = Math.max(0, playerFragments - 1);
+                    fragmentCount++;
+                    phase = getUnlockPhaseFromFragments(fragmentCount);
+                    saveDaemonState();
+                    asciiFragments.push(randomAsciiFragment());
+                    updateFragmentCounter();
+                    if (window.redrawAscii) redrawAscii();
+                    if (typeof updateDaemonNavLink === 'function') updateDaemonNavLink();
+                    showOutput('Fragment assimilated. Remaining fragments: ' + playerFragments + ' — Assimilation level: ' + fragmentCount + '/' + maxFragments);
+                    if (fragmentCount === maxFragments) {
+                        showOutput('All fragments collected. New command unlocked: COMPILE');
+                    }
+                } else if (fragmentCount >= maxFragments) {
+                    showOutput('All fragments already assimilated. Use COMPILE.');
+                } else {
+                    showOutput('No fragments remaining to inject.');
+                }
+            } else if (cmd === 'status') {
+                let percent = Math.round((fragmentCount / maxFragments) * 100);
+                showOutput('Neural stability: ' + percent + '% (' + fragmentCount + '/' + maxFragments + ' fragments)');
+            } else if (cmd === 'optimize') {
+                showOutput('Running defragmentation...');
+                animateOptimize();
+                setTimeout(function() {
+                    if (window.redrawAscii) redrawAscii();
+                    showOutput('Defragmentation complete. Neural net stabilized.');
+                }, optimizeAnimDuration);
+            } else if (cmd === 'compile' && fragmentCount === maxFragments) {
+                compiled = true;
+                showDecryptionSequence(showFinalMessage);
+            } else if (cmd === 'compile') {
+                showOutput('Not enough fragments. Assimilation at ' + fragmentCount + '/' + maxFragments + '.');
+            } else if (cmd === 'help') {
+                showOutput('Available commands:\n- inject fragment\n- status\n- optimize\n- clear' + (fragmentCount === maxFragments ? '\n- compile' : ''));
+            } else {
+                showOutput('Unknown command.');
+            }
+            // record command into history (session)
+            if (cmd) {
+                cmdHistory.push(cmd);
+                historyIndex = cmdHistory.length;
+                saveHistory();
+            }
+            input.value = '';
+        };
+
+        // Arrow key navigation for command history (global)
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowUp') {
+                if (cmdHistory.length === 0) return;
+                if (historyIndex > 0) historyIndex--;
+                else if (historyIndex === -1) historyIndex = cmdHistory.length - 1;
+                input.value = cmdHistory[historyIndex] || '';
+                e.preventDefault();
+            } else if (e.key === 'ArrowDown') {
+                if (cmdHistory.length === 0) return;
+                if (historyIndex < cmdHistory.length - 1) historyIndex++;
+                else { historyIndex = cmdHistory.length; input.value = ''; }
+                if (historyIndex >= 0 && historyIndex < cmdHistory.length) input.value = cmdHistory[historyIndex] || '';
+                e.preventDefault();
+            }
+        });
+    });
+    </script>
+</body>
+</html>
