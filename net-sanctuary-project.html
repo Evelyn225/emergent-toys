@@ -661,7 +661,6 @@
                 }
                 saveState();
                 updateFragmentCounter();
-                updateNarrative && updateNarrative();
                 renderRoute(getCurrentPath());
                 markEggClaimed(payload.path);
                 // Optionally show a visual effect
@@ -847,7 +846,6 @@
             if (newPhase > state.phase) {
                 state.phase = newPhase;
                 saveState();
-                updateNarrative && updateNarrative();
                 renderRoute(getCurrentPath());
             }
         }
