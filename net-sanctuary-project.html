@@ -158,18 +158,12 @@
             // Phase 2
             [
                 { path: "/blog/ghost-compiler", title: "Ghost Compiler", excerpt: "It finishes my sentences. At first I thought it was autocomplete.", glitch: false, species: "Cache Wisp" },
-                { path: "/blog/stillwater", title: "Stillwater Signals", excerpt: "The modem still works. It shouldn't, but it does.", glitch: false, species: "Array Hare" },
-                { path: "/projects/abandoned-game", title: "Abandoned RPG", excerpt: "An RPG I started three years ago. The NPCs remember conversations I never programmed.", glitch: true, species: "Kernel Sable" },
-                { path: "/projects/feedback-loop", title: "Feedback Loop", excerpt: "A synthesizer that feeds its output back into its input.", glitch: false, species: "Socket Drifter" },
-                { path: "/projects/moire-lab", title: "Moire Lab", excerpt: "Procedural textures built from sampled moiré patterns.", glitch: false, species: "Hash Bloom" }
+                { path: "/blog/stillwater", title: "Stillwater Signals", excerpt: "The modem still works. It shouldn't, but it does.", glitch: false, species: "Array Hare" }
             ],
             // Phase 3
             [
                 { path: "/blog/amber-map", title: "Amber Map", excerpt: "Golden light on the rainy days.", glitch: false, species: "Socket Drifter" },
-                { path: "/blog/ghost-parcel", title: "Ghost Parcel", excerpt: "A file arrived again today. Addressed to an account that doesn't exist anymore.", glitch: true, species: "Epoch Nix" },
-                { path: "/projects/memory-weave", title: "Memory Weave", excerpt: "A database that remembers queries it was never asked.", glitch: true, species: "Epoch Nix" },
-                { path: "/projects/time-stutter", title: "Time Stutter", excerpt: "A script that occasionally takes longer to execute than it should.", glitch: true, species: "Array Hare" },
-                { path: "/projects/ghost-network", title: "Ghost Network", excerpt: "A mesh network that appears but can't be connected to.", glitch: true, species: "Data Fox" }
+                { path: "/blog/ghost-parcel", title: "Ghost Parcel", excerpt: "A file arrived again today. Addressed to an account that doesn't exist anymore.", glitch: true, species: "Epoch Nix" }
             ],
             // Phase 4
             [
@@ -179,9 +173,7 @@
             ],
             // Phase 5
             [
-                { path: "/projects/null-garden", title: "Null Garden", excerpt: "An experiment in absence. Files of zero bytes.", glitch: true, species: "Cache Wisp" },
                 { path: "/void/data-collapse", title: "Data Collapse", excerpt: "Data crystallizes around your companion.", glitch: true, species: "Static Finch" },
-                { path: "/projects/static-chorus", title: "Static Chorus", excerpt: "Audio installation built from solar storm static.", glitch: true, species: "Kernel Sable" },
                 { path: "/missing/static-void", title: "Static Void", excerpt: "Dissolves slightly into the static.", glitch: false, species: "Glassfish Doe" },
                 { path: "/void/resonance-chamber", title: "Resonance Chamber", excerpt: "Sound shapes itself around your companion.", glitch: false, species: "Thread Pup" }
             ],
@@ -189,10 +181,7 @@
             [
                 { path: "/lost/cipher-logs", title: "Cipher Logs", excerpt: "Encrypted languages surround your companion.", glitch: true, species: "Data Fox" },
                 { path: "/archived/frequency-maps", title: "Frequency Maps", excerpt: "Invisible lines through electromagnetic space.", glitch: false, species: "Hash Bloom" },
-                { path: "/forgotten/fragment-cascade", title: "Fragment Cascade", excerpt: "Fragments fall like rain. Pieces of something larger.", glitch: true, species: "Epoch Nix" },
-                { path: "/projects/hollow-loom", title: "Hollow Loom", excerpt: "A fabric of slow-motion fractal tapestries.", glitch: false, species: "Packet Manta" },
-                { path: "/projects/aurora-glass", title: "Aurora Glass", excerpt: "Light funnels that store color for later.", glitch: true, species: "Null Pippin" },
-                { path: "/projects/fox-cache", title: "Fox Cache", excerpt: "A caching daemon that appears once per cycle.", glitch: true, species: "Data Fox" }
+                { path: "/forgotten/fragment-cascade", title: "Fragment Cascade", excerpt: "Fragments fall like rain. Pieces of something larger.", glitch: true, species: "Epoch Nix" }
             ]
         ];
 
@@ -216,15 +205,18 @@
             ],
             // Phase 4
             [
-                // Moved to blogPhases phase 5 for correct rollout
+                // (No projects for phase 4)
             ],
             // Phase 5
             [
-                // Already included in blogPhases phase 5
+                { path: "/projects/null-garden", title: "Null Garden", excerpt: "An experiment in absence. Files of zero bytes.", glitch: true, species: "Cache Wisp" },
+                { path: "/projects/static-chorus", title: "Static Chorus", excerpt: "Audio installation built from solar storm static.", glitch: true, species: "Kernel Sable" }
             ],
             // Phase 6
             [
-                // Already included in blogPhases phase 6
+                { path: "/projects/hollow-loom", title: "Hollow Loom", excerpt: "A fabric of slow-motion fractal tapestries.", glitch: false, species: "Packet Manta" },
+                { path: "/projects/aurora-glass", title: "Aurora Glass", excerpt: "Light funnels that store color for later.", glitch: true, species: "Null Pippin" },
+                { path: "/projects/fox-cache", title: "Fox Cache", excerpt: "A caching daemon that appears once per cycle.", glitch: true, species: "Data Fox" }
             ]
         ];
 
@@ -406,7 +398,7 @@
                                     let glitchTimeout = null;
                                     function handleSearch() {
                                         const val = input.value.trim();
-                                        if (val === '17-47-2') {
+                                        if (val === '17-42-2') {
                                             result.textContent = '';
                                             result.style.color = '#ff44dd';
                                             result.textContent = 'compiling fragments..';
@@ -650,7 +642,6 @@
             document.querySelectorAll("a[data-external='true']:not([data-route])").forEach(link => {
                 link.addEventListener("click", event => {
                     event.preventDefault();
-                    grantExternalSiteXp();
                     window.location.href = link.href;
                 });
             });
