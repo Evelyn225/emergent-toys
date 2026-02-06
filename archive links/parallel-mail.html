@@ -1,141 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parallel Mail - Inter-Reality Communication Archives</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Georgia', serif;
-            background: #2a2a2a url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%232a2a2a" width="100" height="100"/><path stroke="%23333" stroke-width="0.5" d="M0,0 L100,100 M100,0 L0,100"/></svg>');
-            color: #e0e0e0;
-            line-height: 1.8;
-            padding: 2rem;
+            background: #181818;
+            color: #eaeaea;
+            font-family: 'DM Mono', monospace;
+            margin: 0;
+            padding: 0;
         }
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: #1a1a1a;
-            padding: 3rem;
-            border: 2px solid #8b7355;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
-        }
+
         h1 {
-            color: #d4af37;
-            font-size: 1.8rem;
-            margin-bottom: 0.3rem;
-            text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
-        }
-        .subtitle {
-            color: #8b7355;
-            font-size: 0.9rem;
-            margin-bottom: 2rem;
-            font-style: italic;
-        }
-        .letter {
-            margin: 2rem 0;
-            padding: 2rem;
-            background: #2a2a2a;
-            border: 1px solid #8b7355;
-            position: relative;
-        }
-        .letter::before {
-            content: '✉';
-            position: absolute;
-            right: 20px;
-            top: 15px;
+            color: #eaeaea;
             font-size: 2rem;
-            opacity: 0.2;
-            color: #d4af37;
+            margin: 2rem 0 1rem 0;
+            font-weight: 600;
+            text-align: left;
         }
-        .letter-header {
-            color: #d4af37;
-            font-weight: bold;
-            margin-bottom: 1rem;
-            font-size: 0.9rem;
+
+        .archive {
+            margin: 2rem 0;
+            font-size: 1.1rem;
+            line-height: 1.6;
         }
-        .addressee {
-            color: #a39f8c;
-            font-style: italic;
-            margin: 0.5rem 0;
+
+        .mail-index {
+            margin: 2rem 0;
+            padding: 0;
         }
-        .received {
-            color: #666;
-            font-size: 0.85rem;
-            margin-bottom: 1.5rem;
-        }
-        .letter-body {
-            color: #c0c0c0;
+
+        .mail-item {
+            border-bottom: 1px solid #444;
+            padding: 1rem 0;
             margin-bottom: 1rem;
         }
-        .status {
-            color: #e74c3c;
-            font-size: 0.85rem;
-            font-weight: bold;
+
+        .meta {
+            color: #b0b0b0;
+            font-size: 0.95rem;
+            margin-top: 0.5rem;
         }
-        hr {
-            border: none;
-            border-top: 1px dashed #8b7355;
-            margin: 3rem 0;
-            opacity: 0.5;
+
+        .corrupt {
+            color: #eaeaea;
+            font-size: 1rem;
+            margin: 2rem 0 1rem 0;
+            opacity: 0.7;
         }
     </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Parallel Mail</h1>
-        <p class="subtitle">Archive of Inter-Reality Correspondence | Year 3847-Θ</p>
-        
-        <div class="letter">
-            <div class="letter-header">INCOMING TRANSMISSION - CHANNEL 7</div>
-            <div class="addressee">To: The Archive Keepers</div>
-            <div class="addressee">From: The Unopened Series</div>
-            <div class="received">Received: 3847-Θ-04-12 | Status: Unopenable</div>
-            <div class="letter-body">
-We write from a dimension where all mail arrives but none open. The addresses are correct, the stamps are genuine, the postage is paid. Yet our hands pass through the envelope folds. We have been attempting to deliver this message for what we perceive as centuries. Your response, if received, would be our first confirmation of other states of existence.
-            </div>
-            <div class="status">UNREAD | UNDELIVERABLE | PERSISTENT</div>
+    <p class="subtitle">Archive of Inter-Reality Correspondence | Year 3847-Θ</p>
+
+    <div class="letter">
+        <h1>Parallel Mail Archives</h1>
+        <div class="archive">
+            Catalogued mail artifacts. Each arrived addressed to accounts that no longer exist. All attempts to open have failed. The envelopes are identical, refusing to yield their contents. The archive claims no record of their origin, but the mailbox insists they exist. We have reached an impasse.<br><br>
+            A mental block prevents anyone from opening the mail. The moment a hand reaches for the flap, the mind blanks, the intention dissolves. It is not a physical lock, but a cognitive one. An invisible barrier that erases the memory of the attempt. Researchers have tried every method: tools, automation, hypnosis. All fail. The mail remains unopenable, its contents forever out of reach.<br><br>
+            Mail from parallel timelines. Letters with impossible postmarks. Communication across layers of reality that shouldn't intersect. The archive now treats them as artifacts, cataloguing visible details and metadata. The contents remain locked, but the envelopes and postmarks are available for study. Each artifact carries its own story, pieced together from the circumstances of its arrival and the memories it evokes.
         </div>
-
-        <hr>
-
-        <div class="letter">
-            <div class="letter-header">OUTGOING TRANSMISSION - CHANNEL 12</div>
-            <div class="addressee">To: The Unopened Series</div>
-            <div class="addressee">From: Archive 4-Beta</div>
-            <div class="received">Sent: 3847-Θ-05-20 | Status: Lost in Transit</div>
-            <div class="letter-body">
-Your message has been received. We confirm parallel existence. We, too, experience your correspondence, not as unopened mail, but as memories we never lived. Is this the same thing? We are sending acknowledgment through channels you may not receive. Success defined as: continuing to attempt contact across the void.
+        <div class="mail-index">
+            <div class="mail-item">
+                Envelope: White, standard size<br>
+                Addressed to: [REDACTED]<br>
+                Postmark: 2026-01-17, Parallel Timeline 4<br>
+                Artifact ID: PM-001<br>
+                <div class="meta">Status: Unopened. Origin: Unknown.</div>
+                <div class="meta"><b>Story:</b> Arrived during a power outage. The staff member who found this piece of mail reported a vivid dream of a conversation with a stranger, but could not recall the details. The envelope appeared on the desk the next morning, untouched.</div>
             </div>
-            <div class="status">SENT | LOST | RECURSIVE</div>
-        </div>
-
-        <hr>
-
-        <div class="letter">
-            <div class="letter-header">INTERNAL MEMO - CLASSIFICATION PROTOCOL-X</div>
-            <div class="addressee">To: All Dimensional Coordinators</div>
-            <div class="addressee">From: Inter-Reality Postal Service</div>
-            <div class="received">Logged: 3847-Θ-11-01 | Status: Continuous Loop</div>
-            <div class="letter-body">
-We have received letters addressed to ourselves. We have received responses to messages we have not yet sent. The incoming mail predates our sending by what appears to be genuine future time. We continue the correspondence anyway. Each response opens new channels. Each unopened letter confirms we are never alone, even when alone.
+            <div class="mail-item">
+                Envelope: White, standard size<br>
+                Addressed to: [REDACTED]<br>
+                Postmark: 2026-01-24, Parallel Timeline 7<br>
+                Artifact ID: PM-002<br>
+                <div class="meta">Status: Unopened. Origin: Unknown.</div>
+                <div class="meta"><b>Story:</b> This was found in the mailbox after a week of unexplained system errors. A staff member remembers standing at the mailbox, unable to recall why they were there. The envelope was placed in the archive, but no one remembers who carried it inside.</div>
             </div>
-            <div class="status">RECEIVED | UNANSWERED | ESSENTIAL</div>
-        </div>
-
-        <hr>
-
-        <div class="letter">
-            <div class="letter-header">LOST CORRESPONDENCE - RECOVERED FRAGMENT</div>
-            <div class="addressee">To: Unknown</div>
-            <div class="addressee">From: Unknown</div>
-            <div class="received">Date: Illegible | Status: Partial Recovery</div>
-            <div class="letter-body">
-It is to believe that somewhere, versions of us continue writing. That our words arrive in dimensions we cannot see. That unopened letters are not failed communication, but successful ones. The silence is not absence. It is evidence of contact. Please know that we continue.
+            <div class="mail-item">
+                Envelope: White, standard size<br>
+                Addressed to: [REDACTED]<br>
+                Postmark: 2026-02-01, Parallel Timeline 2<br>
+                Artifact ID: PM-003<br>
+                <div class="meta">Status: Unopened. Origin: Unknown.</div>
+                <div class="meta"><b>Story:</b> Arrived on a day when the archive was running memory diagnostics. The envelope was discovered in a locked drawer, which no one admits to opening. Everyone who has looked at this envelope recalls a sense of déjà vu, as if the mail had been received before, but cannot remember when.</div>
             </div>
-            <div class="status">INCOMPLETE | ECHOING | UNANSWERED</div>
-        </div>
-    </div>
-</body>
+            <div class="mail-item">
+                Envelope: White, standard size<br>
+                Addressed to: [REDACTED]<br>
+                Postmark: 2026-02-08, Parallel Timeline 9<br>
+                Artifact ID: PM-004<br>
+                <div class="meta">Status: Unopened. Origin: Unknown.</div>
+                <div class="meta"><b>Story:</b> The envelope was found wedged between two server racks, covered in dust. The technician who found it swears he saw his own handwriting on the address, but the label is perfectly printed. He left it on the break room table, and it vanished for three days before reappearing in the archive logbook.</div>
+            </div>
+            <div class="mail-item">
+                Envelope: White, standard size<br>
+                Addressed to: [REDACTED]<br>
+                Postmark: 2026-02-13, Parallel Timeline 12<br>
+                Artifact ID: PM-005<br>
+                <div class="meta">Status: Unopened. Origin: Unknown.</div>
+                <div class="meta"><b>Story:</b> This piece arrived during a routine fire drill. Someone noticed it sitting on the floor by the emergency exit, but nobody saw it brought in. The security footage skips the exact moment of its arrival. It smells faintly of ozone and old paper, but nothing else about it is remarkable except that it cannot be thrown away. Any attempts to get rid of this letter result in it reappearing in the archive within hours.</div>
+            </div>
+
+    </body>
+
 </html>
