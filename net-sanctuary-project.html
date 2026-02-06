@@ -355,9 +355,11 @@
             })
             .then(data => {
                 contentMap = data;
-                
+                // Flatten all blog posts and projects from all phases
+                const allBlogPosts = blogPhases.flat();
+                const allProjects = projectPhases.flat();
                 // Generate pages AFTER content is loaded
-                const generatedPages = [...blogPosts, ...projects].reduce((acc, item) => {
+                const generatedPages = [...allBlogPosts, ...allProjects].reduce((acc, item) => {
                     acc[item.path] = {
                         title: item.title,
                         content: () => {
