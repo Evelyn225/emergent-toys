@@ -403,17 +403,21 @@
                                             result.style.color = '#ff44dd';
                                             result.textContent = 'compiling fragments..';
                                             glitchTimeout = setTimeout(() => {
+                                                // Flash 'Access granted.' text on and off
+                                                let flashCount = 0;
                                                 result.textContent = 'Access granted.';
                                                 result.style.color = '#44ffdd';
-                                                // Glitch background effect
-                                                contentContainer.style.transition = 'background 1.5s';
-                                                contentContainer.style.background = 'repeating-linear-gradient(135deg, #222 0 10px, #ff44dd 10px 20px, #222 20px 30px)';
-                                                setTimeout(() => {
-                                                    contentContainer.style.background = '';
-                                                    localStorage.setItem('sanctuaryMemoryWeaveUnlock', 'true');
-                                                    // Re-render to unlock phase 6
-                                                    renderRoute('/projects/memory-weave');
-                                                }, 1800);
+                                                const flashInterval = setInterval(() => {
+                                                    result.style.visibility = (flashCount % 2 === 0) ? 'visible' : 'hidden';
+                                                    flashCount++;
+                                                    if (flashCount > 7) {
+                                                        clearInterval(flashInterval);
+                                                        result.style.visibility = 'visible';
+                                                        localStorage.setItem('sanctuaryMemoryWeaveUnlock', 'true');
+                                                        // Re-render to unlock phase 6
+                                                        renderRoute('/projects/memory-weave');
+                                                    }
+                                                }, 180);
                                             }, 1200);
                                         } else {
                                             if (glitchTimeout) clearTimeout(glitchTimeout);
@@ -512,7 +516,6 @@
                         if (eggArea) {
                             eggArea.addEventListener("click", () => {
                                 triggerGlitch({
-                                    species: getRandomSpecies(),
                                     path: path,
                                     section: "404",
                                     text: "Found in the void",
