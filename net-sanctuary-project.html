@@ -9,7 +9,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
-    <link href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/nsp.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/gh/Evelyn225/emergent-toys/nsp.css" rel="stylesheet" />
 </head>
 <body>
     <div class="archive-shell">
@@ -344,7 +344,7 @@
         let pagesReady = false;
 
         // Load content from JSON file - use simple filename for Vercel compatibility
-        const contentPath = 'sanctuary-content.json';
+        const contentPath = 'https://cdn.jsdelivr.net/gh/Evelyn225/emergent-toys/sanctuary-content.json';
         
         fetch(contentPath)
             .then(response => {
