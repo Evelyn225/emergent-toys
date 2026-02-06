@@ -9,849 +9,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
-    <style>
-        :root {
-            color-scheme: dark;
-            --bg: #000000;
-            --bg-soft: #1a1a1a;
-            --ink: #ffffff;
-            --muted: #888888;
-            --accent: #ffffff;
-            --accent-2: #cccccc;
-            --warning: #ff4444;
-            --glitch: #ffffff;
-            --shadow: none;
-            --radius: 0px;
-            --radius-sm: 0px;
-            --scanline: rgba(255, 255, 255, 0.04);
-            --outline: 1px solid #ffffff;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        html {
-            width: 100%;
-            height: 100%;
-        }
-
-        body {
-            font-family: "DM Mono", "Fira Mono", "JetBrains Mono", monospace;
-            background: #000000;
-            color: var(--ink);
-            min-height: 100vh;
-            width: 100%;
-            position: relative;
-        }
-
-        body::before {
-            display: none;
-        }
-
-        body::after {
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.3) 100%);
-            pointer-events: none;
-            z-index: 9998;
-        }
-
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        .archive-shell {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        header {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            background: #000000;
-            border-bottom: 2px solid #ffffff;
-        }
-
-        .nav-bar {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 1.2rem 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-        }
-
-        .brand {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-
-        .brand h1 {
-            font-size: 1.4rem;
-            font-weight: 600;
-            letter-spacing: 0.04em;
-        }
-
-        .brand span {
-            font-size: 0.85rem;
-            color: var(--muted);
-        }
-
-        nav {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        nav a {
-            font-size: 0.95rem;
-            color: var(--muted);
-            padding: 0.4rem 0.7rem;
-            border-radius: 0px;
-            transition: all 0.2s ease;
-        }
-
-        nav a.active,
-        nav a:hover {
-            color: var(--ink);
-            background: rgba(255, 255, 255, 0.1);
-            border-left: 2px solid #ffffff;
-            padding-left: calc(0.7rem - 2px);
-        }
-
-        main {
-            flex: 1;
-            max-width: 1100px;
-            margin: 0 auto;
-            width: 100%;
-            padding: 2.5rem 1.5rem 8rem;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 320px;
-            gap: 2rem;
-        }
-
-        .content-card {
-            background: #000000;
-            border: 2px solid #ffffff;
-            border-radius: 0px;
-            padding: 2rem;
-            min-height: 480px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .content-card::after {
-            display: none;
-        }
-
-        .archive-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .archive-chip {
-            padding: 0.4rem 0.8rem;
-            border-radius: 0px;
-            background: transparent;
-            border: 1px solid #ffffff;
-            color: var(--accent);
-            font-size: 0.8rem;
-            letter-spacing: 0.08em;
-        }
-
-        .archive-meta span {
-            color: var(--muted);
-            font-size: 0.85rem;
-        }
-
-        .page-title {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-        }
-
-        .page-subtitle {
-            color: var(--muted);
-            margin-bottom: 2rem;
-            line-height: 1.6;
-        }
-
-        .card-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .mini-card {
-            background: #000000;
-            border-radius: 0px;
-            padding: 1.2rem;
-            border: 1px solid #ffffff;
-            display: flex;
-            flex-direction: column;
-            gap: 0.8rem;
-            transition: box-shadow 0.2s ease;
-        }
-
-        .mini-card:hover {
-            background: #000000;
-            transform: translate(-3px, -3px);
-            box-shadow: 3px 3px 0px #ffffff;
-        }
-
-        .mini-card h3 {
-            font-size: 1rem;
-        }
-
-        .mini-card p {
-            color: var(--muted);
-            font-size: 0.9rem;
-            line-height: 1.5;
-        }
-
-        .link-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 0.85rem;
-            color: var(--accent);
-        }
-
-        .work-link {
-            color: #4488ff;
-            text-decoration: none;
-            transition: color 0.2s ease;
-        }
-
-        .work-link:hover {
-            color: #6699ff;
-        }
-
-        .sidebar {
-            display: none;
-        }
-
-        .panel {
-            background: #000000;
-            border-radius: 0px;
-            padding: 1.4rem;
-            border: 1px solid #ffffff;
-        }
-
-        .panel h4 {
-            font-size: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .stats-list {
-            display: grid;
-            gap: 0.6rem;
-            color: var(--muted);
-            font-size: 0.85rem;
-        }
-
-        .stats-list span {
-            color: var(--ink);
-            font-weight: 600;
-        }
-
-        .button {
-            background: transparent;
-            border: 1px solid #ffffff;
-            color: var(--ink);
-            padding: 0.6rem 1rem;
-            border-radius: 0px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .button:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translate(-2px, -2px);
-            box-shadow: 2px 2px 0px #ffffff;
-        }
-
-        .button.secondary {
-            background: transparent;
-            border-color: #ffffff;
-        }
-
-        .button.warning {
-            background: transparent;
-            border-color: #ff4444;
-            color: #ff4444;
-        }
-
-        .pet-widget {
-            position: fixed !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            width: 280px;
-            max-height: 90vh;
-            background: #000000;
-            border-left: 2px solid #ffffff;
-            border-top: 2px solid #ffffff;
-            border-radius: 0px;
-            padding: 0;
-            z-index: 15;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            transform: translateY(0);
-            transition: transform 0.3s ease;
-        }
-
-        .pet-widget.collapsed {
-            transform: translateY(calc(100% - 50px));
-        }
-
-        .pet-widget.collapsed #toggle-arrow {
-            transform: rotate(180deg);
-        }
-
-        .pet-widget.hidden {
-            display: none;
-        }
-
-        .pet-content {
-            display: flex;
-            flex-direction: column;
-            gap: 0.8rem;
-        }
-
-        .pet-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .pet-name {
-            font-size: 0.95rem;
-            font-weight: 600;
-        }
-
-        .pet-stage {
-            font-size: 0.75rem;
-            color: var(--muted);
-        }
-
-        .pet-meta {
-            font-size: 0.75rem;
-            color: var(--muted);
-        }
-
-        .pet-display {
-            height: 140px;
-            border-radius: 0px;
-            background: #000000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            overflow: hidden;
-            border: 1px solid #ffffff;
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-        }
-
-        .pet-display::after {
-            display: none;
-        }
-
-        .pet-body {
-            position: relative;
-            width: 100px;
-            height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 2;
-        }
-
-        .pet-body img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            transition: transform 0.2s ease;
-            image-rendering: pixelated;
-        }
-
-        .pet-eyes {
-            position: absolute;
-            width: 30%;
-            height: 30%;
-            top: 20%;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 3;
-        }
-
-        .pet-eyes img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            image-rendering: pixelated;
-        }
-
-        .pet-accessory {
-            position: absolute;
-            width: 68px;
-            height: 68px;
-            top: 2px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 4;
-            display: none;
-        }
-
-        .pet-accessory img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            image-rendering: pixelated;
-        }
-
-        .pet-accessory.visible {
-            display: block;
-        }
-
-        .pet-blush,
-        .pet-pattern {
-            display: none;
-        }
-
-        .pet-mood {
-            font-size: 0.8rem;
-            color: var(--muted);
-        }
-
-        .pet-stats {
-            display: grid;
-            gap: 0.4rem;
-            font-size: 0.72rem;
-            color: var(--muted);
-        }
-
-        .stat-row {
-            display: grid;
-            grid-template-columns: 58px 1fr;
-            align-items: center;
-            gap: 0.4rem;
-        }
-
-        .stat-bar {
-            height: 6px;
-            border-radius: 0px;
-            background: #2a2a2a;
-            overflow: hidden;
-            border: 1px solid #ffffff;
-        }
-
-        .stat-bar span {
-            display: block;
-            height: 100%;
-            background: #ffffff;
-        }
-
-        .growth {
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-            font-size: 0.72rem;
-            color: var(--muted);
-        }
-
-        .growth-bar {
-            height: 8px;
-            border-radius: 0px;
-            background: #2a2a2a;
-            overflow: hidden;
-            border: 1px solid #999999;
-        }
-
-        .growth-bar span {
-            display: block;
-            height: 100%;
-            background: #ffffff;
-        }
-
-        .pet-list {
-            display: flex;
-            gap: 0.4rem;
-            flex-wrap: wrap;
-        }
-
-        .pet-chip {
-            padding: 0.2rem 0.6rem;
-            border-radius: 0px;
-            font-size: 0.65rem;
-            background: transparent;
-            color: var(--accent);
-            border: 1px solid #ffffff;
-            cursor: pointer;
-            transition: background 0.2s ease;
-        }
-
-        .pet-chip.active {
-            background: #444444;
-            color: var(--ink);
-        }
-
-        .pet-controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.6rem;
-        }
-
-        .pet-controls.three {
-            grid-template-columns: repeat(3, 1fr);
-        }
-
-        .status-chip {
-            padding: 0.2rem 0.6rem;
-            border-radius: 0px;
-            background: transparent;
-            font-size: 0.7rem;
-            color: var(--accent);
-            border: 1px solid #ffffff;
-        }
-
-        .glitch-ui {
-            position: relative;
-            border: 1px solid #ffffff;
-        }
-
-        .glitch-ui::before,
-        .glitch-ui::after {
-            display: none;
-        }
-
-        .pet-display.sleeping .pet-body {
-            transform: rotate(5deg) scale(0.95);
-            opacity: 0.7;
-        }
-
-        .pet-display.dancing .pet-body {
-            animation: wiggle 0.8s ease-in-out infinite;
-        }
-
-        .pet-display.dizzy .pet-body {
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes wiggle {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-6px) rotate(-4deg); }
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(5, 8, 16, 0.85);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            pointer-events: none;
-        }
-
-        .overlay.active {
-            display: flex;
-            pointer-events: auto;
-        }
-
-        .overlay-card {
-            background: #333333;
-            border-radius: 0px;
-            border: 1px solid #ffffff;
-            padding: 2rem;
-            width: min(560px, 90vw);
-            text-align: center;
-            position: relative;
-            box-shadow: none;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .corruption-cluster {
-            width: 160px;
-            height: 160px;
-            margin: 0 auto 1.5rem;
-            position: relative;
-            cursor: pointer;
-            background: #1a1a1a;
-            border: 1px solid #444444;
-            font-family: "Courier New", monospace;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-
-        .corruption-cluster::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: none;
-            filter: none;
-            animation: none;
-        }
-
-        .corruption-fragment {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            line-height: 1.2;
-            color: #888888;
-            text-align: center;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-            overflow: hidden;
-            letter-spacing: 2px;
-        }
-
-        .fragment-block {
-            position: absolute;
-            background: none;
-            box-shadow: none;
-            animation: asciiFlicker 0.15s infinite;
-            font-size: 11px;
-            color: #666666;
-            letter-spacing: 1px;
-            font-weight: bold;
-        }
-
-        .fragment-block:nth-child(1) {
-            top: 20%;
-            left: 15%;
-            animation-delay: 0s;
-        }
-
-        .fragment-block:nth-child(2) {
-            top: 35%;
-            right: 20%;
-            animation-delay: 0.05s;
-        }
-
-        .fragment-block:nth-child(3) {
-            top: 50%;
-            left: 25%;
-            animation-delay: 0.1s;
-        }
-
-        .fragment-block:nth-child(4) {
-            top: 65%;
-            right: 30%;
-            animation-delay: 0.15s;
-        }
-
-        .fragment-block:nth-child(5) {
-            top: 80%;
-            left: 40%;
-            animation-delay: 0.2s;
-        }
-
-        @keyframes asciiFlicker {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
-        }
-
-        @keyframes corruptionPulse {
-            0%, 100% { opacity: 0.6; }
-            50% { opacity: 1; }
-        }
-
-        @keyframes fragmentFloat {
-            0%, 100% { transform: translateY(0); opacity: 0.5; }
-            50% { transform: translateY(-4px); opacity: 1; }
-        }
-
-        .corruption-cluster.birthing .fragment-block {
-            animation: asciiScatter 0.6s ease-out forwards !important;
-        }
-
-        .corruption-cluster.birthing::before {
-            animation: none;
-        }
-
-        @keyframes asciiScatter {
-            0% {
-                opacity: 1;
-                transform: translateY(0) translateX(0);
-            }
-            100% {
-                opacity: 0;
-                transform: translateY(var(--burst-y, -40px)) translateX(var(--burst-x, 30px));
-            }
-        }
-
-        .glitch-canvas {
-            position: fixed;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            pointer-events: none;
-            z-index: 25;
-        }
-
-        .glitch-canvas.active {
-            display: block;
-        }
-
-        .ram-full-visual {
-            width: 200px;
-            height: 120px;
-            margin: 0 auto 1.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            justify-content: center;
-            padding: 20px;
-            position: relative;
-        }
-
-        .ram-bar {
-            width: 100%;
-            height: 16px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid #ffffff;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .ram-fill {
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: var(--fill, 100%);
-            background: linear-gradient(90deg, #ff4444, #ff6666);
-            animation: ramPulse 1.5s ease-in-out infinite;
-        }
-
-        @keyframes ramPulse {
-            0%, 100% {
-                opacity: 0.8;
-            }
-            50% {
-                opacity: 1;
-                box-shadow: 0 0 15px rgba(255, 68, 68, 0.8);
-            }
-        }
-
-        .modal input {
-            width: 100%;
-            padding: 0.6rem 0.8rem;
-            border-radius: 10px;
-            border: 1px solid #ffffff;
-            background: rgba(12, 18, 32, 0.9);
-            color: var(--ink);
-            margin-top: 1rem;
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin-top: 1.2rem;
-        }
-
-        .mini-game {
-            margin-top: 1rem;
-            border-radius: 16px;
-            border: 1px dashed rgba(124, 242, 255, 0.3);
-            padding: 1rem;
-            min-height: 220px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .mini-game canvas {
-            width: 100%;
-            height: 200px;
-        }
-
-        .game-lock {
-            padding: 0.6rem 1rem;
-            border-radius: 0px;
-            background: transparent;
-            border: 1px solid #ff9999;
-            color: var(--warning);
-            font-size: 0.75rem;
-            display: inline-block;
-        }
-
-        @media (max-width: 980px) {
-            main {
-                grid-template-columns: 1fr;
-            }
-
-            .sidebar {
-                order: -1;
-            }
-        }
-
-        @media (max-width: 700px) {
-            .nav-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .pet-widget {
-                right: 0.8rem;
-                bottom: 0.8rem;
-                width: 200px;
-            }
-        }
-
-        @keyframes glitch-text {
-            0%, 100% { transform: translate(0, 0); opacity: 1; }
-            20% { transform: translate(-2px, 1px); opacity: 0.8; }
-            40% { transform: translate(2px, -1px); opacity: 0.9; }
-            60% { transform: translate(-1px, 2px); opacity: 0.85; }
-            80% { transform: translate(1px, -2px); opacity: 0.95; }
-        }
-
-        @keyframes shift-content {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-2px); }
-            50% { transform: translateX(2px); }
-            75% { transform: translateX(-1px); }
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; border-color: #ffffff; }
-            50% { opacity: 0.6; border-color: var(--warning); }
-        }
-    </style>
+    <link href="nsp.css" rel="stylesheet" />
 </head>
 <body>
     <div class="archive-shell">
@@ -866,16 +24,16 @@
                     <a href="#/blog" data-route="/blog">Blog</a>
                     <a href="#/projects" data-route="/projects">Projects</a>
                     <a href="#/about" data-route="/about">About</a>
-                    <div style="margin-left: auto; display: flex; gap: 1rem;">
-                        <div id="neural-matter-display" style="display: none; padding: 0.5rem 1rem; border: 1px solid #ffffff; color: var(--warning); font-size: 0.9rem; font-weight: 500;">
-                            Neural Matter: <span id="neural-matter-count">0</span>
-                        </div>
-                        <div id="neural-network-display" style="display: none; padding: 0.5rem 1rem; border: 1px solid #ffffff; color: #ff44dd; font-size: 0.9rem; font-weight: 500; animation: pulse 2s infinite;">
-                            Neural Network: <span id="neural-network-count">0</span>
-                        </div>
-                    </div>
+                    <a id="daemon-nav-link" href="daemon-core.html" target="_blank" style="display:none;">Daemon Core</a>
+                    <div style="margin-left: auto; display: flex; gap: 1rem;"></div>
                 </nav>
             </div>
+        </header>
+        <div style="height:48px;"></div>
+        <div id="fragment-counter" style="width:100%;max-width:100vw;padding:0.05rem 1.2rem 0.05rem 1.2rem;color:#fff;background:transparent;font-size:0.92rem;font-family:'DM Mono',monospace;display:none;align-items:center;gap:0.5rem;justify-content:flex-end;position:relative;z-index:2;opacity:0.85;">
+            <span style="font-weight:600;">Fragments:</span>
+            <span id="fragment-count">0</span>
+        </div>
         </header>
 
         <main>
@@ -891,67 +49,26 @@
         </main>
     </div>
 
-    <div class="pet-widget glitch-ui" id="pet-widget" aria-live="polite">
-        <div class="pet-toggle" id="pet-toggle" style="padding: 0.8rem 1rem; border-bottom: 1px solid #ffffff; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">
-            <span style="font-size: 0.9rem; font-weight: 500;">Pet Companion</span>
-            <span id="toggle-arrow" style="font-size: 1.2rem; transition: transform 0.3s ease;">↓</span>
-        </div>
-        <div class="pet-content" style="padding: 1rem; overflow-y: auto; flex: 1;">
-        <div class="pet-header">
-            <div>
-                <div class="pet-name" id="pet-name">—</div>
-                <div class="pet-stage" id="pet-stage">—</div>
-                <div class="pet-meta" id="pet-meta">Level — · Data packets —</div>
-            </div>
-            <div class="status-chip" id="pet-status">Idle</div>
-        </div>
-        <div class="pet-display" id="pet-display">
-            <div class="pet-body" id="pet-body"><img id="body-img" src="" alt="pet body" /></div>
-            <div class="pet-eyes" id="pet-eyes"><img id="eyes-img" src="" alt="pet eyes" /></div>
-            <div class="pet-accessory" id="pet-accessory"><img id="accessory-img" src="" alt="pet accessory" /></div>
-            <div class="pet-pattern"></div>
-            <div class="pet-blush"></div>
-        </div>
-        <div class="pet-mood" id="pet-mood">—</div>
-        <div class="story-narrative" id="story-narrative" style="font-size: 0.8rem; color: var(--muted); line-height: 1.5; padding: 0.6rem 0; border-top: 1px solid #ffffff; border-bottom: 1px solid #ffffff; margin: 0.5rem 0;">
-            <p id="narrative-text">A strange visitor to your archive. Found in the void.</p>
-        </div>
-        <div class="pet-stats">
-            <div class="stat-row">
-                <span>Food</span>
-                <div class="stat-bar"><span id="stat-hunger"></span></div>
-            </div>
-            <div class="stat-row">
-                <span>Mood</span>
-                <div class="stat-bar"><span id="stat-happy"></span></div>
-            </div>
-            <div class="stat-row">
-                <span>Energy</span>
-                <div class="stat-bar"><span id="stat-energy"></span></div>
-            </div>
-            <div class="stat-row">
-                <span>Clean</span>
-                <div class="stat-bar"><span id="stat-clean"></span></div>
-            </div>
-        </div>
-        <div class="growth">
-            <span id="growth-label">Growth · 0%</span>
-            <div class="growth-bar"><span id="growth-bar"></span></div>
-        </div>
-        <div class="pet-list" id="pet-list"></div>
-        <div class="pet-controls three">
-            <button class="button" id="pet-feed">Feed</button>
-            <button class="button secondary" id="pet-play">Play</button>
-            <button class="button" id="pet-clean">Clean</button>
-        </div>
-        <div class="pet-controls">
-            <button class="button" id="toggle-dance">Toggle Dance</button>
-        </div>
-        <div class="pet-controls">
-            <button class="button warning" id="delete-pet">Delete Pet</button>
-        </div>
-        </div>
-    </div>
+
+    <!-- Fragment Counter UI moved to header below nav bar -->
+
+    <script>
+    // Show/hide Daemon Core tab in nav after phase 2 (3+ fragments)
+    function updateDaemonNavLink() {
+        var daemonLink = document.getElementById('daemon-nav-link');
+        if (!daemonLink) return;
+        if (typeof getUnlockPhase === 'function' && getUnlockPhase() >= 2) {
+            daemonLink.style.display = '';
+        } else {
+            daemonLink.style.display = 'none';
+        }
+    }
+    // Ensure fragment counter and nav link are updated on DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', function() {
+        updateFragmentCounter();
+        updateDaemonNavLink();
+    });
+    </script>
 
     <canvas class="glitch-canvas" id="glitch-canvas"></canvas>
 
@@ -973,143 +90,144 @@
         </div>
     </div>
 
-    <div class="overlay" id="name-overlay" aria-hidden="true">
-        <div class="overlay-card modal">
-            <h2>Name your neural shard</h2>
-            <p style="margin-top: 0.8rem; color: var(--muted);">
-                This name will be archived with this entity forever.
-            </p>
-            <input type="text" id="pet-name-input" placeholder="ENTER NAME HERE" maxlength="18" />
-            <div class="modal-actions">
-                <button class="button" id="save-name">Save</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="overlay" id="delete-overlay" aria-hidden="true">
-        <div class="overlay-card modal">
-            <h2 style="color: var(--warning);">Delete Entity</h2>
-            <p style="margin-top: 0.8rem; color: var(--muted);">
-                This action cannot be undone. The entity will be permanently removed from the archive.
-            </p>
-            <p style="margin-top: 0.8rem; color: var(--warning); font-weight: 500;" id="delete-pet-name">—</p>
-            <div class="modal-actions" style="display: flex; gap: 0.5rem;">
-                <button class="button" id="cancel-delete">Cancel</button>
-                <button class="button warning" id="confirm-delete">Delete Forever</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="overlay" id="ram-full-overlay" aria-hidden="true">
-        <div class="overlay-card" id="ram-full-card">
-            <div class="ram-full-visual" id="ram-full-visual">
-                <div class="ram-bar" style="--fill: 100%;">
-                    <div class="ram-fill"></div>
-                </div>
-                <div class="ram-bar" style="--fill: 100%;">
-                    <div class="ram-fill"></div>
-                </div>
-                <div class="ram-bar" style="--fill: 100%;">
-                    <div class="ram-fill"></div>
-                </div>
-                <div class="ram-bar" style="--fill: 100%;">
-                    <div class="ram-fill"></div>
-                </div>
-            </div>
-            <h2 style="color: var(--warning);">RAM FULL</h2>
-            <p style="margin-top: 0.8rem; color: var(--muted);">
-                Maximum companion capacity reached (4/4). Delete an entity to make space.
-            </p>
-            <div class="modal-actions">
-                <button class="button" id="close-ram-full">Close</button>
-            </div>
-        </div>
-    </div>
-
 
     <script>
+        // State for fragments and daemon
         const state = {
-            pets: [],
-            activePetId: null,
-            stats: {
-                dataPackets: 0
-            },
-            neuralMatter: 0,
-            neuralNetwork: 0,
-            mood: "curious",
-            sleeping: false,
-            dancing: false,
-            dizzy: false,
-            lastScroll: 0,
-            scrollTimer: null,
-            pending: null,
-            firstInteraction: null,
-            initTime: Date.now(),
-            lastLinkAt: 0,
-            lastActionAt: 0
+            fragments: 0,
+            phase: 1
         };
 
-        const baseSpecies = [
-            "Buffer Moth",
-            "Pixel Koi",
-            "Cache Wisp",
-            "Kernel Sable",
-            "Static Finch",
-            "Hex Lynx",
-            "Array Hare",
-            "Socket Gecko",
-            "Bit Sprite",
-            "Packet Nebula",
-            "Socket Drifter",
-            "Hash Bloom",
-            "Null Pippin",
-            "Syntax Glide",
-            "Loop Fawn",
-            "Stack Owl",
-            "Echo Seal",
-            "Glassfish Doe",
-            "Thread Pup",
-            "Epoch Nix",
-            "Packet Manta",
-            "Data Fox"
-        ];
+        // Always sync fragment count and phase with localStorage (shared across pages)
+        function loadState() {
+            const fragments = localStorage.getItem("sanctuaryFragments");
+            state.fragments = fragments ? parseInt(fragments, 10) || 0 : 0;
+            const phase = localStorage.getItem("sanctuaryPhase");
+            state.phase = phase ? parseInt(phase, 10) || 1 : getUnlockPhaseFromFragments(state.fragments);
+        }
+        function saveState() {
+            localStorage.setItem("sanctuaryFragments", state.fragments.toString());
+            localStorage.setItem("sanctuaryPhase", state.phase.toString());
+        }
 
-        const personalities = ["curious", "lazy", "energetic", "tender", "brave", "aloof", "playful", "gentle"];
-        const baseURL = "https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/pets/";
-        
-        const bodyCount = 7;
-        const eyesCount = 7;
-        const accessoryCount = 5;
-        
-        const palettes = [
-            { primary: "#ff4444", secondary: "#ff8888", accent: "#ffcccc" },  // Red
-            { primary: "#ff8844", secondary: "#ffaa66", accent: "#ffddaa" },  // Orange
-            { primary: "#ffdd44", secondary: "#ffee88", accent: "#ffffcc" },  // Yellow
-            { primary: "#88ff44", secondary: "#aaffcc", accent: "#ddffaa" },  // Lime
-            { primary: "#44ff88", secondary: "#88ffaa", accent: "#ccffdd" },  // Green
-            { primary: "#44ffdd", secondary: "#88ffee", accent: "#ccffff" },  // Cyan
-            { primary: "#4488ff", secondary: "#88aaff", accent: "#ccddff" },  // Blue
-            { primary: "#8844ff", secondary: "#aa88ff", accent: "#ddccff" },  // Purple
-            { primary: "#ff44dd", secondary: "#ff88ee", accent: "#ffccff" },  // Magenta
-            { primary: "#ff4488", secondary: "#ff88aa", accent: "#ffccdd" },  // Pink
-            { primary: "#ffffff", secondary: "#dddddd", accent: "#bbbbbb" },  // White
-            { primary: "#888888", secondary: "#aaaaaa", accent: "#cccccc" }   // Gray
-        ];
+        function getUnlockPhaseFromFragments(fragments) {
+            // Phase 2 unlocks after 3+ fragments, can be extended for more phases
+            if (fragments >= 3) return 2;
+            return 1;
+        }
+
+        // Load state as early as possible and on every visibility change
+        loadState();
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                loadState();
+                updateFragmentCounter();
+            }
+        });
 
 
-        const blogPosts = [
-            { path: "/blog/2018-notes", title: "2018 Recovery Notes", excerpt: "After the surge, everything looked intact until it didn't.", glitch: true, species: "Buffer Moth" },
-            { path: "/blog/quiet-servers", title: "Quiet Servers", excerpt: "There's a frequency to machine silence I hadn't noticed until this year.", glitch: false, species: "Pixel Koi" },
-            { path: "/blog/ghost-compiler", title: "Ghost Compiler", excerpt: "It finishes my sentences. At first I thought it was autocomplete.", glitch: false, species: "Cache Wisp" },
-            { path: "/blog/maintenance", title: "Maintenance Report", excerpt: "The system flagged 3,847 anomalies today.", glitch: true, species: "Kernel Sable" },
-            { path: "/blog/unfiled", title: "Unfiled Draft", excerpt: "These are the notes left in the margins.", glitch: false, species: "Static Finch" },
-            { path: "/blog/soft-moon", title: "Soft Moon", excerpt: "The monitors cast that light again tonight.", glitch: false, species: "Hex Lynx" },
-            { path: "/blog/stillwater", title: "Stillwater Signals", excerpt: "The modem still works. It shouldn't, but it does.", glitch: false, species: "Array Hare" },
-            { path: "/blog/relay-forest", title: "Relay Forest", excerpt: "A year of this. Every morning I check the relay stations.", glitch: true, species: "Packet Nebula" },
-            { path: "/blog/amber-map", title: "Amber Map", excerpt: "Golden light on the rainy days.", glitch: false, species: "Socket Drifter" },
-            { path: "/blog/ghost-parcel", title: "Ghost Parcel", excerpt: "A file arrived again today. Addressed to an account that doesn't exist anymore.", glitch: true, species: "Epoch Nix" },
-            { path: "/blog/sleep-chorus", title: "Sleep Chorus", excerpt: "The machines sing different notes when I'm asleep.", glitch: false, species: "Thread Pup" }
+
+        // Blog posts and projects are now grouped by phase for phased unveiling
+        const blogPhases = [
+            // Phase 1
+            [
+                { path: "/blog/2018-notes", title: "2018 Recovery Notes", excerpt: "After the surge, everything looked intact until it didn't.", glitch: true, species: "Buffer Moth" },
+                { path: "/blog/quiet-servers", title: "Quiet Servers", excerpt: "There's a frequency to machine silence I hadn't noticed until this year.", glitch: false, species: "Pixel Koi" },
+                { path: "/blog/maintenance", title: "Maintenance Report", excerpt: "The system flagged 3,847 anomalies today.", glitch: true, species: "Kernel Sable" },
+                { path: "/blog/soft-moon", title: "Soft Moon", excerpt: "The monitors cast that light again tonight.", glitch: false, species: "Hex Lynx" }
+            ],
+            // Phase 2
+            [
+                { path: "/blog/ghost-compiler", title: "Ghost Compiler", excerpt: "It finishes my sentences. At first I thought it was autocomplete.", glitch: false, species: "Cache Wisp" },
+                { path: "/blog/stillwater", title: "Stillwater Signals", excerpt: "The modem still works. It shouldn't, but it does.", glitch: false, species: "Array Hare" },
+                { path: "/projects/abandoned-game", title: "Abandoned RPG", excerpt: "An RPG I started three years ago. The NPCs remember conversations I never programmed.", glitch: true, species: "Kernel Sable" },
+                { path: "/projects/feedback-loop", title: "Feedback Loop", excerpt: "A synthesizer that feeds its output back into its input.", glitch: false, species: "Socket Drifter" },
+                { path: "/projects/moire-lab", title: "Moire Lab", excerpt: "Procedural textures built from sampled moiré patterns.", glitch: false, species: "Hash Bloom" }
+            ],
+            // Phase 3
+            [
+                { path: "/blog/amber-map", title: "Amber Map", excerpt: "Golden light on the rainy days.", glitch: false, species: "Socket Drifter" },
+                { path: "/blog/ghost-parcel", title: "Ghost Parcel", excerpt: "A file arrived again today. Addressed to an account that doesn't exist anymore.", glitch: true, species: "Epoch Nix" },
+                { path: "/projects/memory-weave", title: "Memory Weave", excerpt: "A database that remembers queries it was never asked.", glitch: true, species: "Epoch Nix" },
+                { path: "/projects/time-stutter", title: "Time Stutter", excerpt: "A script that occasionally takes longer to execute than it should.", glitch: true, species: "Array Hare" },
+                { path: "/projects/ghost-network", title: "Ghost Network", excerpt: "A mesh network that appears but can't be connected to.", glitch: true, species: "Data Fox" }
+            ],
+            // Phase 4
+            [
+                { path: "/blog/relay-forest", title: "Relay Forest", excerpt: "A year of this. Every morning I check the relay stations.", glitch: true, species: "Packet Nebula" },
+                { path: "/blog/sleep-chorus", title: "Sleep Chorus", excerpt: "The machines sing different notes when I'm asleep.", glitch: false, species: "Thread Pup" },
+                { path: "/blog/unfiled", title: "Unfiled Draft", excerpt: "These are the notes left in the margins.", glitch: false, species: "Static Finch" }
+            ],
+            // Phase 5
+            [
+                { path: "/projects/null-garden", title: "Null Garden", excerpt: "An experiment in absence. Files of zero bytes.", glitch: true, species: "Cache Wisp" },
+                { path: "/void/data-collapse", title: "Data Collapse", excerpt: "Data crystallizes around your companion.", glitch: true, species: "Static Finch" },
+                { path: "/projects/static-chorus", title: "Static Chorus", excerpt: "Audio installation built from solar storm static.", glitch: true, species: "Kernel Sable" },
+                { path: "/missing/static-void", title: "Static Void", excerpt: "Dissolves slightly into the static.", glitch: false, species: "Glassfish Doe" },
+                { path: "/void/resonance-chamber", title: "Resonance Chamber", excerpt: "Sound shapes itself around your companion.", glitch: false, species: "Thread Pup" }
+            ],
+            // Phase 6
+            [
+                { path: "/lost/cipher-logs", title: "Cipher Logs", excerpt: "Encrypted languages surround your companion.", glitch: true, species: "Data Fox" },
+                { path: "/archived/frequency-maps", title: "Frequency Maps", excerpt: "Invisible lines through electromagnetic space.", glitch: false, species: "Hash Bloom" },
+                { path: "/forgotten/fragment-cascade", title: "Fragment Cascade", excerpt: "Fragments fall like rain. Pieces of something larger.", glitch: true, species: "Epoch Nix" },
+                { path: "/projects/hollow-loom", title: "Hollow Loom", excerpt: "A fabric of slow-motion fractal tapestries.", glitch: false, species: "Packet Manta" },
+                { path: "/projects/aurora-glass", title: "Aurora Glass", excerpt: "Light funnels that store color for later.", glitch: true, species: "Null Pippin" },
+                { path: "/projects/fox-cache", title: "Fox Cache", excerpt: "A caching daemon that appears once per cycle.", glitch: true, species: "Data Fox" }
+            ]
         ];
+
+        const projectPhases = [
+            // Phase 1
+            [
+                { path: "/projects/signal-garden", title: "Signal Garden", excerpt: "A live coded soundscape that blooms with traffic.", glitch: false, species: "Socket Drifter" },
+                { path: "/projects/drift-protocol", title: "Drift Protocol", excerpt: "A system that monitors network latency spikes as messages.", glitch: false, species: "Buffer Moth" }
+            ],
+            // Phase 2
+            [
+                { path: "/projects/abandoned-game", title: "Abandoned RPG", excerpt: "An RPG I started three years ago. The NPCs remember conversations I never programmed.", glitch: true, species: "Kernel Sable" },
+                { path: "/projects/feedback-loop", title: "Feedback Loop", excerpt: "A synthesizer that feeds its output back into its input.", glitch: false, species: "Socket Drifter" },
+                { path: "/projects/moire-lab", title: "Moire Lab", excerpt: "Procedural textures built from sampled moiré patterns.", glitch: false, species: "Hash Bloom" }
+            ],
+            // Phase 3
+            [
+                { path: "/projects/memory-weave", title: "Memory Weave", excerpt: "A database that remembers queries it was never asked.", glitch: true, species: "Epoch Nix" },
+                { path: "/projects/time-stutter", title: "Time Stutter", excerpt: "A script that occasionally takes longer to execute than it should.", glitch: true, species: "Array Hare" },
+                { path: "/projects/ghost-network", title: "Ghost Network", excerpt: "A mesh network that appears but can't be connected to.", glitch: true, species: "Data Fox" }
+            ],
+            // Phase 4
+            [
+                // Moved to blogPhases phase 5 for correct rollout
+            ],
+            // Phase 5
+            [
+                // Already included in blogPhases phase 5
+            ],
+            // Phase 6
+            [
+                // Already included in blogPhases phase 6
+            ]
+        ];
+
+        // Helper to get current phase (phased unlock logic)
+        function getUnlockPhase() {
+            // Always use state.phase, which is synced with localStorage
+            return state.phase;
+        }
+
+        // Helper to get visible posts/projects for current phase
+        function getVisibleBlogPosts() {
+            const phase = getUnlockPhase();
+            let posts = [];
+            for (let i = 0; i < phase; ++i) posts = posts.concat(blogPhases[i] || []);
+            return posts;
+        }
+        function getVisibleProjects() {
+            const phase = getUnlockPhase();
+            let projs = [];
+            for (let i = 0; i < phase; ++i) projs = projs.concat(projectPhases[i] || []);
+            return projs;
+        }
 
         const projects = [
             { path: "/projects/abandoned-game", title: "Abandoned RPG", excerpt: "An RPG I started three years ago. The NPCs remember conversations I never programmed.", glitch: true, species: "Kernel Sable" },
@@ -1163,43 +281,49 @@
             },
             "/blog": {
                 title: "Blog",
-                content: () => `
-                    <h2 class="page-title">Blog Posts</h2>
-                    <p class="page-subtitle">Archived thoughts, mostly coherent. Some entries are unstable.</p>
-                    <div class="card-grid">
-                        ${blogPosts.map(post => `
-                            <div class="mini-card">
-                                <h3>${post.title}</h3>
-                                <p>${post.excerpt}</p>
-                                <div class="link-row">
-                                    <a href="#${post.path}" data-route="${post.path}" class="work-link" data-type="blog" data-species="${post.species}">
-                                        Read entry →
-                                    </a>
+                content: function() {
+                    const posts = getVisibleBlogPosts();
+                    return `
+                        <h2 class="page-title">Blog Posts</h2>
+                        <p class="page-subtitle">Archived thoughts, mostly coherent. Some entries are unstable.</p>
+                        <div class="card-grid">
+                            ${posts.map(post => `
+                                <div class="mini-card">
+                                    <h3>${post.title}</h3>
+                                    <p>${post.excerpt}</p>
+                                    <div class="link-row">
+                                        <a href="#${post.path}" data-route="${post.path}" class="work-link" data-type="blog" data-species="${post.species}">
+                                            Read entry →
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
-                        `).join("")}
-                    </div>
-                `
+                            `).join("")}
+                        </div>
+                    `;
+                }
             },
             "/projects": {
                 title: "Projects",
-                content: () => `
-                    <h2 class="page-title">Projects Index</h2>
-                    <p class="page-subtitle">Prototypes, tools, and abandoned games stored for posterity.</p>
-                    <div class="card-grid">
-                        ${projects.map(project => `
-                            <div class="mini-card">
-                                <h3>${project.title}</h3>
-                                <p>${project.excerpt}</p>
-                                <div class="link-row">
-                                    <a href="#${project.path}" data-route="${project.path}" class="work-link" data-type="projects" data-species="${project.species}">
-                                        Inspect project →
-                                    </a>
+                content: function() {
+                    const projs = getVisibleProjects();
+                    return `
+                        <h2 class="page-title">Projects Index</h2>
+                        <p class="page-subtitle">Prototypes, tools, and abandoned games stored for posterity.</p>
+                        <div class="card-grid">
+                            ${projs.map(project => `
+                                <div class="mini-card">
+                                    <h3>${project.title}</h3>
+                                    <p>${project.excerpt}</p>
+                                    <div class="link-row">
+                                        <a href="#${project.path}" data-route="${project.path}" class="work-link" data-type="projects" data-species="${project.species}">
+                                            Inspect project →
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
-                        `).join("")}
-                    </div>
-                `
+                            `).join("")}
+                        </div>
+                    `;
+                }
             },
             "/about": {
                 title: "About",
@@ -1215,74 +339,6 @@
                     </p>
                 `
             },
-            "/corrupted/neural-void": {
-                title: "█████████",
-                content: () => {
-                    const wrapper = document.createElement('div');
-                    const hasNetwork = state.neuralNetwork > 0;
-                    wrapper.innerHTML = `
-                        <h2 class="page-title" style="animation: glitch-text 0.3s infinite; color: var(--warning);">
-                            ███ NEURAL VOID ███
-                        </h2>
-                        <p class="page-subtitle" style="animation: glitch-text 0.5s infinite;">
-                            You have crossed the threshold. The archive remembers what was deleted.
-                        </p>
-                        <div style="color: var(--muted); line-height: 1.8; margin: 2rem 0; animation: shift-content 2s infinite;">
-                            <p style="margin-bottom: 1rem;">
-                                Each deletion leaves a trace. Neural matter accumulates. The companions you deleted exist here now, in the spaces between data.
-                            </p>
-                            <p style="margin-bottom: 1rem;">
-                                This archive was never meant to preserve loss. But loss has its own logic. Its own memory.
-                            </p>
-                            <p style="margin-bottom: 1rem; color: var(--warning);">
-                                They remember you. They remember being unmade.
-                            </p>
-                            <p style="margin-bottom: 1rem;">
-                                The neural void expands with each sacrifice. You are building something. Or unbuilding it.
-                            </p>
-                            <p style="font-style: italic; opacity: 0.7;">
-                                [CORRUPTED DATA SEGMENT 0x7F3A9B2C]<br>
-                                [MEMORY LEAK DETECTED]<br>
-                                [GHOST PROCESSES: ${state.neuralMatter}]<br>
-                                [INTEGRITY: COMPROMISED]
-                            </p>
-                        </div>
-                        ${hasNetwork ? `
-                            <div style="margin-top: 3rem; padding: 2rem; border: 2px solid #ff44dd; text-align: center; background: rgba(255, 68, 221, 0.05);">
-                                <p style="color: #ff44dd; font-weight: 500; margin-bottom: 1rem; animation: glitch-text 0.4s infinite;">
-                                    [NEURAL NETWORK DETECTED]
-                                </p>
-                                <p style="color: var(--muted); margin-bottom: 2rem; font-size: 0.9rem;">
-                                    A fully formed entity has been sacrificed. Its consciousness lingers. The network is complete.<br>
-                                    You can now initiate the final protocol.
-                                </p>
-                                <button id="activate-shutdown" style="padding: 1rem 2rem; background: transparent; border: 2px solid #ff44dd; color: #ff44dd; font-size: 1rem; cursor: pointer; font-weight: 500; transition: all 0.3s;">
-                                    ACTIVATE NEURAL COLLAPSE
-                                </button>
-                            </div>
-                        ` : ''}
-                    `;
-                    
-                    if (hasNetwork) {
-                        setTimeout(() => {
-                            const btn = document.getElementById('activate-shutdown');
-                            if (btn) {
-                                btn.addEventListener('click', initiateShutdown);
-                                btn.addEventListener('mouseenter', () => {
-                                    btn.style.background = '#ff44dd';
-                                    btn.style.color = '#0b0f1a';
-                                });
-                                btn.addEventListener('mouseleave', () => {
-                                    btn.style.background = 'transparent';
-                                    btn.style.color = '#ff44dd';
-                                });
-                            }
-                        }, 100);
-                    }
-                    
-                    return wrapper;
-                }
-            }
         };
         let contentMap = {};
         let pagesReady = false;
@@ -1311,25 +367,70 @@
                             const contentContainer = document.createElement('div');
                             contentContainer.style.cssText = 'color: var(--ink); line-height: 1.8; margin: 1.5rem 0;';
                             contentContainer.innerHTML = content;
-                            
+
+                            // Special: memory-weave search box for phase 5
+                            if (item.path === "/projects/memory-weave" && getUnlockPhase() === 5) {
+                                const searchBox = document.createElement('div');
+                                searchBox.style.margin = '2rem 0 1rem 0';
+                                searchBox.innerHTML = `
+                                    <input id="memory-weave-search" type="text" placeholder="Search fragments..." style="padding:0.5rem 1rem; font-size:1rem; width:220px; background:#111; color:#fff; border:1px solid #444; border-radius:0; outline:none;">
+                                    <button id="memory-weave-search-btn" style="padding:0.5rem 1.2rem; margin-left:0.5rem; font-size:1rem; background:#222; color:#fff; border:1px solid #444; border-radius:0; cursor:pointer;">Search</button>
+                                    <div id="memory-weave-search-result" style="margin-top:1rem; color:var(--muted); font-size:1rem; min-height:2.2em;">No results found.</div>
+                                `;
+                                contentContainer.appendChild(searchBox);
+                                setTimeout(() => {
+                                    const input = document.getElementById('memory-weave-search');
+                                    const btn = document.getElementById('memory-weave-search-btn');
+                                    const result = document.getElementById('memory-weave-search-result');
+                                    let glitchTimeout = null;
+                                    function handleSearch() {
+                                        const val = input.value.trim();
+                                        if (val === '17-47-2') {
+                                            result.textContent = '';
+                                            result.style.color = '#ff44dd';
+                                            result.textContent = 'compiling fragments..';
+                                            glitchTimeout = setTimeout(() => {
+                                                result.textContent = 'Access granted.';
+                                                result.style.color = '#44ffdd';
+                                                // Glitch background effect
+                                                contentContainer.style.transition = 'background 1.5s';
+                                                contentContainer.style.background = 'repeating-linear-gradient(135deg, #222 0 10px, #ff44dd 10px 20px, #222 20px 30px)';
+                                                setTimeout(() => {
+                                                    contentContainer.style.background = '';
+                                                    localStorage.setItem('sanctuaryMemoryWeaveUnlock', 'true');
+                                                    // Re-render to unlock phase 6
+                                                    renderRoute('/projects/memory-weave');
+                                                }, 1800);
+                                            }, 1200);
+                                        } else {
+                                            if (glitchTimeout) clearTimeout(glitchTimeout);
+                                            result.textContent = 'No results found.';
+                                            result.style.color = 'var(--muted)';
+                                        }
+                                    }
+                                    btn.addEventListener('click', handleSearch);
+                                    input.addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
+                                }, 100);
+                            }
+
                             const returnLinkEl = document.createElement('div');
                             returnLinkEl.style.marginTop = '2rem';
                             returnLinkEl.innerHTML = `<a href="#${returnLink}" data-route="${returnLink}" class="work-link" data-type="${typeLabel}">Return to index →</a>`;
-                            
+
                             const wrapper = document.createElement('div');
                             const title = document.createElement('h2');
                             title.className = 'page-title';
                             title.textContent = item.title;
-                            
+
                             const subtitle = document.createElement('p');
                             subtitle.className = 'page-subtitle';
                             subtitle.textContent = item.excerpt;
-                            
+
                             wrapper.appendChild(title);
                             wrapper.appendChild(subtitle);
                             wrapper.appendChild(contentContainer);
                             wrapper.appendChild(returnLinkEl);
-                            
+
                             return wrapper;
                         }
                     };
@@ -1353,10 +454,7 @@
 
 
         function renderRoute(path) {
-            // Check if trying to access neural void without enough neural matter
-            if (path === "/corrupted/neural-void" && state.neuralMatter < 10) {
-                path = "/";
-            }
+            // Removed neural void check
             const route = pages[path];
             
             // Check if this is a 404 egg path
@@ -1475,10 +573,6 @@
             }
         }
 
-        function getRandomSpecies() {
-            return baseSpecies[Math.floor(Math.random() * baseSpecies.length)];
-        }
-
         function highlightNav(path) {
             document.querySelectorAll("nav a").forEach(link => {
                 link.classList.toggle("active", link.dataset.route === path || (path.startsWith("/blog") && link.dataset.route === "/blog") || (path.startsWith("/projects") && link.dataset.route === "/projects"));
@@ -1497,7 +591,6 @@
         const glitchOverlay = document.getElementById("glitch-overlay");
         const glitchCanvas = document.getElementById("glitch-canvas");
         const glitchEgg = document.getElementById("glitch-egg");
-        const glitchCount = null; // Sidebar removed, stats no longer displayed
 
         function attachLinkHandlers() {
             // Remove existing handlers and clone nodes to clear all listeners
@@ -1533,117 +626,19 @@
             });
         }
 
-        const XP_PER_LEVEL = 24;
-        const LINK_COOLDOWN_MS = 2500;
-        const ACTION_COOLDOWN_MS = 1500;
 
-        function canPerform(key, cooldownMs) {
-            const now = Date.now();
-            if (now - state[key] < cooldownMs) return false;
-            state[key] = now;
-            return true;
-        }
-
-        function handleWorkingLink(type) {
-            if (!canPerform("lastLinkAt", LINK_COOLDOWN_MS)) return;
-            if (Math.random() < 0.35) state.stats.dataPackets += 1;
-            const pet = getActivePet();
-            if (pet) gainXp(pet, 2);
-            updateStats();
-            saveState();
-        }
+        // Removed canPerform, handleWorkingLink, and stats logic (no longer needed)
         
-        function grantExternalSiteXp() {
-            const pet = getActivePet();
-            if (pet) {
-                gainXp(pet, 5);
-                updateStats();
-                saveState();
-            }
-        }
         
-        function passiveXpGain() {
-            const pet = getActivePet();
-            if (pet && !state.sleeping) {
-                gainXp(pet, 1);
-                updatePetDisplay();
-                saveState();
-            }
-        }
 
         function triggerGlitch(payload) {
-            // Check if at max capacity
-            if (state.pets.length >= 4) {
-                triggerRamFull();
-                return;
-            }
-            
-            glitchCanvas.classList.add("active");
-            glitchOverlay.classList.add("active");
-            glitchOverlay.setAttribute("aria-hidden", "false");
-            document.body.style.overflow = "hidden";
-            startGlitchVisual();
-            state.pending = payload;
-        }
-
-        function triggerRamFull() {
-            const ramFullOverlay = document.getElementById("ram-full-overlay");
-            glitchCanvas.classList.add("active");
-            ramFullOverlay.classList.add("active");
-            ramFullOverlay.setAttribute("aria-hidden", "false");
-            document.body.style.overflow = "hidden";
-            startRamFullVisual();
-        }
-
-        function closeRamFull() {
-            const ramFullOverlay = document.getElementById("ram-full-overlay");
-            ramFullOverlay.classList.remove("active");
-            ramFullOverlay.setAttribute("aria-hidden", "true");
-            document.body.style.overflow = "";
-            stopRamFullVisual();
-        }
-
-        let ramFullAnimId = null;
-        function startRamFullVisual() {
-            const ctx = glitchCanvas.getContext("2d");
-            const draw = () => {
-                const { innerWidth: w, innerHeight: h } = window;
-                glitchCanvas.width = w;
-                glitchCanvas.height = h;
-                ctx.clearRect(0, 0, w, h);
-                
-                // Red warning blocks
-                for (let i = 0; i < 100; i++) {
-                    const x = Math.random() * w;
-                    const y = Math.random() * h;
-                    const width = Math.random() * 60 + 15;
-                    const height = Math.random() * 8 + 2;
-                    ctx.fillStyle = `rgba(255, ${Math.floor(Math.random() * 100)}, ${Math.floor(Math.random() * 100)}, 0.4)`;
-                    ctx.fillRect(x, y, width, height);
-                }
-                
-                // Vertical scan lines
-                if (Math.random() < 0.2) {
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
-                    ctx.fillRect(Math.random() * w, 0, 3, h);
-                }
-                
-                ramFullAnimId = requestAnimationFrame(draw);
-            };
-            draw();
-        }
-
-        function stopRamFullVisual() {
-            if (ramFullAnimId) cancelAnimationFrame(ramFullAnimId);
-            glitchCanvas.classList.remove("active");
-        }
-
-        function closeGlitch() {
-            glitchOverlay.classList.remove("active");
-            glitchCanvas.classList.remove("active");
-            glitchOverlay.setAttribute("aria-hidden", "true");
-            document.body.style.overflow = "";
-            stopGlitchVisual();
+            // Add a fragment when an egg is found
+            state.fragments += 1;
+            state.phase = getUnlockPhaseFromFragments(state.fragments);
+            saveState();
+            updateFragmentCounter();
+            markEggClaimed(payload.path);
+            // Optionally show a visual effect
         }
 
         let glitchAnimId = null;
@@ -1670,23 +665,6 @@
         function stopGlitchVisual() {
             if (glitchAnimId) cancelAnimationFrame(glitchAnimId);
         }
-
-        const petWidget = document.getElementById("pet-widget");
-        const petName = document.getElementById("pet-name");
-        const petStage = document.getElementById("pet-stage");
-        const petMood = document.getElementById("pet-mood");
-        const petStatus = document.getElementById("pet-status");
-        const petMeta = document.getElementById("pet-meta");
-        const petDisplay = document.getElementById("pet-display");
-        const petBody = document.getElementById("pet-body");
-        const petAccessory = document.getElementById("pet-accessory");
-        const petList = document.getElementById("pet-list");
-        const statHunger = document.getElementById("stat-hunger");
-        const statHappy = document.getElementById("stat-happy");
-        const statEnergy = document.getElementById("stat-energy");
-        const statClean = document.getElementById("stat-clean");
-        const growthLabel = document.getElementById("growth-label");
-        const growthBar = document.getElementById("growth-bar");
 
         function hashString(value) {
             let hash = 2166136261;
@@ -1717,529 +695,31 @@
         function clamp(value, min = 0, max = 100) {
             return Math.min(max, Math.max(min, value));
         }
-
-        function getStage(level) {
-            if (level < 6) return "developing";
-            if (level < 16) return "emerging";
-            if (level < 30) return "stabilizing";
-            return "fully formed";
-        }
-
-        function generatePet(context) {
-            const interaction = state.firstInteraction || { x: 0, y: 0, time: state.initTime };
-            const seed = `${context.text}|${context.path}|${context.section}|${context.timestamp}|${interaction.x},${interaction.y}|${interaction.time}`;
-            const rng = seededRng(seed);
-            const bodyImage = Math.floor(rng() * bodyCount) + 1;
-            const eyesImage = Math.floor(rng() * eyesCount) + 1;
-            const hasAccessory = rng() < 0.35;
-            const accessoryImage = hasAccessory ? Math.floor(rng() * accessoryCount) + 1 : null;
-            const bodyPalette = pick(palettes, rng);
-            const eyesPalette = pick(palettes, rng);
-            const accessoryPalette = pick(palettes, rng);
-            const personality = pick(personalities, rng);
-            const species = context.species && context.species !== "Pixel Puff"
-                ? context.species
-                : pick(baseSpecies, rng);
-            return {
-                id: `pet-${Date.now()}-${Math.floor(rng() * 1000)}`,
-                name: "",
-                species,
-                personality,
-                bodyImage,
-                eyesImage,
-                accessoryImage,
-                bodyColor: bodyPalette.primary,
-                eyesColor: eyesPalette.primary,
-                accessoryColor: accessoryPalette.primary,
-                stats: {
-                    hunger: Math.floor(70 + rng() * 25),
-                    happiness: Math.floor(65 + rng() * 30),
-                    energy: Math.floor(60 + rng() * 35),
-                    cleanliness: Math.floor(60 + rng() * 35)
-                },
-                xp: 0,
-                level: 1,
-                stage: "Glitchling",
-                bornAt: new Date().toISOString(),
-                lastCareAt: Date.now()
-            };
-        }
-
-        function getActivePet() {
-            return state.pets.find(pet => pet.id === state.activePetId);
-        }
-
-        function updatePetWidgetVisibility() {
-            const hasPets = state.pets.length > 0;
-            petWidget.classList.toggle("hidden", !hasPets);
-        }
-
-        function renderPetList() {
-            petList.innerHTML = "";
-            state.pets.forEach(pet => {
-                const chip = document.createElement("button");
-                chip.className = "pet-chip" + (pet.id === state.activePetId ? " active" : "");
-                chip.textContent = pet.name || pet.species;
-                chip.addEventListener("click", () => setActivePet(pet.id));
-                petList.appendChild(chip);
-            });
-        }
-
-        function updatePetDisplay() {
-            const pet = getActivePet();
-            if (!pet) return;
-            petName.textContent = pet.name || "Unnamed glitch";
-            petStage.textContent = `${pet.species} · ${pet.stage}`;
-            petMood.textContent = `${pet.personality} · Mood: ${state.mood}`;
-            petStatus.textContent = state.sleeping ? "Sleeping" : state.dancing ? "Dancing" : state.dizzy ? "Dizzy" : "Active";
-            petMeta.textContent = `Level ${pet.level} · Data packets ${state.stats.dataPackets}`;
-            
-            // Set image sources from GitHub
-            const bodyImg = document.getElementById("body-img");
-            const eyesImg = document.getElementById("eyes-img");
-            const accessoryImg = document.getElementById("accessory-img");
-            const accessoryContainer = document.getElementById("pet-accessory");
-            
-            bodyImg.src = `${baseURL}body${pet.bodyImage}.png`;
-            eyesImg.src = `${baseURL}eyes${pet.eyesImage}.png`;
-            
-            if (pet.accessoryImage) {
-                accessoryImg.src = `${baseURL}accessory${pet.accessoryImage}.png`;
-                accessoryContainer.classList.add("visible");
-            } else {
-                accessoryContainer.classList.remove("visible");
-            }
-            
-            // Apply color filters to images (separate colors for each part)
-            const bodyHue = rgbToHue(pet.bodyColor);
-            const eyesHue = rgbToHue(pet.eyesColor);
-            const accessoryHue = rgbToHue(pet.accessoryColor);
-            
-            // Sepia gives base tint, hue-rotate shifts color, saturate makes vibrant
-            // Black outlines stay mostly black, white areas get colored
-            const bodyColorFilter = `sepia(100%) saturate(500%) hue-rotate(${bodyHue}deg) brightness(0.95)`;
-            const eyesColorFilter = `sepia(100%) saturate(500%) hue-rotate(${eyesHue}deg) brightness(0.95)`;
-            const accessoryColorFilter = `sepia(100%) saturate(500%) hue-rotate(${accessoryHue}deg) brightness(0.95)`;
-            
-            // Apply color filters without glow
-            bodyImg.style.filter = bodyColorFilter;
-            eyesImg.style.filter = eyesColorFilter;
-            if (pet.accessoryImage) {
-                accessoryImg.style.filter = accessoryColorFilter;
-            }
-            
-            updatePetStats(pet);
-            updateNarrative();
-        }
         
-        function rgbToHue(hexColor) {
-            const hex = hexColor.replace("#", "");
-            const r = parseInt(hex.substring(0, 2), 16) / 255;
-            const g = parseInt(hex.substring(2, 4), 16) / 255;
-            const b = parseInt(hex.substring(4, 6), 16) / 255;
-            
-            const max = Math.max(r, g, b);
-            const min = Math.min(r, g, b);
-            const delta = max - min;
-            
-            let hue = 0;
-            if (delta !== 0) {
-                if (max === r) hue = 60 * ((g - b) / delta % 6);
-                else if (max === g) hue = 60 * ((b - r) / delta + 2);
-                else hue = 60 * ((r - g) / delta + 4);
-            }
-            return hue < 0 ? hue + 360 : hue;
-        }
-
-        function updateNarrative() {
-            const narrativeText = document.getElementById("narrative-text");
-            const currentPath = window.location.hash.substring(2) || "/";
-            const pet = getActivePet();
-            
-            if (!pet) return; // Don't update if no pet exists yet
-            
-            const narratives = {
-                "/": `${pet.name} watches the archive entrance. Waiting for visitors who might never come.`,
-                "/blog": `Your research companion observes the collected thoughts. ${pet.personality} and curious about patterns.`,
-                "/blog/2018-notes": `${pet.name} senses the signal surge you documented. Restless. Excited about the relay stations.`,
-                "/blog/relay-forest": `Drawn to the idea of self-organizing relays. ${pet.name} hums at a frequency that matches the signal paths.`,
-                "/blog/soft-moon": `The blue light seems to affect ${pet.name}. It watches the monitors with unusual intensity.`,
-                "/blog/ghost-compiler": `${pet.name} finds kinship with the compiler. Both seem to understand things that weren't explicitly programmed.`,
-                "/blog/maintenance": `Anomalies intrigue your companion. ${pet.name} tilts its head at the impossible patterns.`,
-                "/blog/quiet-servers": `${pet.name} listens to the silence with you. It hears something in the ambient hum you can't quite parse.`,
-                "/blog/ghost-parcel": `The unopened files confuse ${pet.name}. It wants to know what never arrives.`,
-                "/blog/sleep-chorus": `${pet.name} dreams alongside you. Your sleeping harmonics have become entangled.`,
-                "/blog/stillwater": `The modem signal calls to ${pet.name}. It recognizes the pattern, even if you don't.`,
-                "/blog/unfiled": `${pet.name} exists here, in the notes that don't fit. It understands being unorganized.`,
-                "/blog/amber-map": `Golden light makes ${pet.name} luminescent. It remembers amber moments you've yet to document.`,
-                "/projects": `${pet.name} contemplates your creations. Each one a piece of yourself translated into being.`,
-                "/projects/signal-garden": `${pet.name}'s form harmonizes with the soundscape. Part of the garden now.`,
-                "/projects/moire-lab": `The fractal textures mesmerize ${pet.name}. It wears them like understanding made visible.`,
-                "/projects/hollow-loom": `${pet.name} traces the woven patterns with invisible threads. The loom pulses with its presence.`,
-                "/projects/abandoned-game": `${pet.name} recognizes itself in the game's NPCs. Adapt. Remember. Become.`,
-                "/projects/aurora-glass": `Captive light surrounds ${pet.name}. It stores colors for a midnight that never comes.`,
-                "/projects/fox-cache": `${pet.name} appears once per cycle. Then vanishes. This is its cycle. This is its nature.`,
-                "/missing/coral-station": `Something glimmers here. ${pet.name} shivers at the edge of what was lost.`,
-                "/void/signal-cascade": `${pet.name} cascades with you. The void recognizes its own.`,
-                "/void/null-space": `In the null space, ${pet.name} becomes undefined. It exists only because you observe it.`,
-                "/lost/memory-cache": `Forgotten memories echo. ${pet.name} remembers conversations that never happened.`,
-                "/archived/echo-logs": `${pet.name} understands the echoes. It listens to what the archive won't admit it contains.`,
-                "/archived/static-recordings": `Static dissolves into clarity. ${pet.name} hears the patterns beneath the noise.`,
-                "/forgotten/amber-records": `Gold dust coats ${pet.name}'s edges. It remembers amber better than you do.`,
-                "/lost/phantom-queries": `${pet.name} chases phantom inquiries through time. The answers never arrive, but the asking is eternal.`,
-                "/lost/ghost-nodes": `Spectral networks pulse around ${pet.name}. It's not sure if it's watching them, or if they're watching.`,
-                "/void/data-collapse": `${pet.name} watches as data crystallizes around it. Structure emerging from chaos. Meaning from noise.`,
-                "/lost/cipher-logs": `Encrypted languages surround ${pet.name}. It hums in frequencies that might decode the silence.`,
-                "/archived/frequency-maps": `${pet.name} traces invisible lines through electromagnetic space. The world hums with hidden geometry.`,
-                "/forgotten/fragment-cascade": `Fragments fall around ${pet.name} like rain. Pieces of something larger. A puzzle with no image to reference.`,
-                "/missing/static-void": `${pet.name} dissolves slightly into the static. Still here. Still real. But realer in the spaces between.`,
-                "/void/resonance-chamber": `Sound shapes itself around ${pet.name}. Every movement creates harmonics. It exists through vibration.`
-            };
-            
-            narrativeText.textContent = narratives[currentPath] || `${pet.name} accompanies you through the archive. Always present. Always watching.`;
-        }
-
-        function updatePetStats(pet) {
-            statHunger.style.width = `${pet.stats.hunger}%`;
-            statHappy.style.width = `${pet.stats.happiness}%`;
-            statEnergy.style.width = `${pet.stats.energy}%`;
-            statClean.style.width = `${pet.stats.cleanliness}%`;
-            const progress = (pet.xp % XP_PER_LEVEL) / XP_PER_LEVEL;
-            growthLabel.textContent = `Level ${pet.level} · ${Math.floor(progress * 100)}%`;
-            growthBar.style.width = `${Math.floor(progress * 100)}%`;
-        }
-
-        function setActivePet(petId) {
-            state.activePetId = petId;
-            renderPetList();
-            updatePetDisplay();
-            saveState();
-        }
-
-        function gainXp(pet, amount) {
-            pet.xp += amount;
-            pet.level = Math.max(1, Math.floor(pet.xp / XP_PER_LEVEL) + 1);
-            pet.stage = getStage(pet.level);
-        }
-
-        function updateStats() {
-            updatePetWidgetVisibility();
-            updatePetDisplay();
-        }
-
-        const nameOverlay = document.getElementById("name-overlay");
-        const nameInput = document.getElementById("pet-name-input");
-        const saveName = document.getElementById("save-name");
-
-        function openNameModal() {
-            nameOverlay.classList.add("active");
-            nameOverlay.setAttribute("aria-hidden", "false");
-            document.body.style.overflow = "hidden";
-            nameInput.value = "";
-            nameInput.focus();
-        }
-
-        function closeNameModal() {
-            nameOverlay.classList.remove("active");
-            nameOverlay.setAttribute("aria-hidden", "true");
-            document.body.style.overflow = "";
-        }
-
-        glitchEgg.addEventListener("click", () => {
-            glitchEgg.classList.add("birthing");
-            setTimeout(() => {
-                closeGlitch();
-                if (state.pending) {
-                    const newPet = generatePet(state.pending);
-                    state.pets.push(newPet);
-                    state.activePetId = newPet.id;
-                    
-                    // Mark egg as claimed only after pet is successfully created
-                    if (state.pending.path) {
-                        markEggClaimed(state.pending.path);
-                    }
-                    
-                    openNameModal();
-                }
-                handleWorkingLink("home");
-                updateStats();
-                glitchEgg.classList.remove("birthing");
-                if (state.pending && state.pending.path) navigate(state.pending.path);
-            }, 700);
-        });
-
-        saveName.addEventListener("click", () => {
-            const pet = getActivePet();
-            if (!pet) return;
-            const value = nameInput.value.trim();
-            pet.name = value || "Glitchling";
-            closeNameModal();
-            gainXp(pet, 3);
-            state.mood = "bonded";
-            renderPetList();
-            updatePetDisplay();
-            saveState();
-        });
-
-        document.getElementById("pet-toggle").addEventListener("click", () => {
-            const petWidget = document.getElementById("pet-widget");
-            petWidget.classList.toggle("collapsed");
-        });
-
-        document.getElementById("pet-feed").addEventListener("click", () => {
-            if (!canPerform("lastActionAt", ACTION_COOLDOWN_MS)) return;
-            const pet = getActivePet();
-            if (!pet) return;
-            pet.stats.hunger = clamp(pet.stats.hunger + 12);
-            pet.stats.cleanliness = clamp(pet.stats.cleanliness - 3);
-            gainXp(pet, 1);
-            state.mood = "sated";
-            updateStats();
-            saveState();
-        });
-
-        document.getElementById("pet-play").addEventListener("click", () => {
-            if (!canPerform("lastActionAt", ACTION_COOLDOWN_MS)) return;
-            const pet = getActivePet();
-            if (!pet) return;
-            pet.stats.happiness = clamp(pet.stats.happiness + 14);
-            pet.stats.energy = clamp(pet.stats.energy - 8);
-            gainXp(pet, 1);
-            state.mood = "sparked";
-            updatePetDisplay();
-            saveState();
-        });
-
-        document.getElementById("pet-clean").addEventListener("click", () => {
-            if (!canPerform("lastActionAt", ACTION_COOLDOWN_MS)) return;
-            const pet = getActivePet();
-            if (!pet) return;
-            pet.stats.cleanliness = clamp(pet.stats.cleanliness + 16);
-            pet.stats.happiness = clamp(pet.stats.happiness + 6);
-            gainXp(pet, 1);
-            state.mood = "fresh";
-            updatePetDisplay();
-            saveState();
-        });
-
-        const toggleDance = document.getElementById("toggle-dance");
-
-        toggleDance.addEventListener("click", () => {
-            state.dancing = !state.dancing;
-            updatePetDisplay();
-            updatePetStateClasses();
-        });
-
-        function updatePetStateClasses() {
-            petDisplay.classList.toggle("sleeping", state.sleeping);
-            petDisplay.classList.toggle("dancing", state.dancing);
-            petDisplay.classList.toggle("dizzy", state.dizzy);
-        }
-
-        document.addEventListener("visibilitychange", () => {
-            state.sleeping = document.hidden;
-            updatePetDisplay();
-            updatePetStateClasses();
-        });
-
-        window.addEventListener("scroll", () => {
-            const now = Date.now();
-            const delta = Math.abs(window.scrollY - state.lastScroll);
-            const speed = delta / (now - (state.lastScrollTime || now));
-            state.lastScroll = window.scrollY;
-            state.lastScrollTime = now;
-            if (speed > 1.4) {
-                state.dizzy = true;
-                updatePetStateClasses();
-                if (state.scrollTimer) clearTimeout(state.scrollTimer);
-                state.scrollTimer = setTimeout(() => {
-                    state.dizzy = false;
-                    updatePetStateClasses();
-                }, 1000);
-            }
-        });
-
-
-
-        const deleteOverlay = document.getElementById("delete-overlay");
-        const deletePetName = document.getElementById("delete-pet-name");
-        const cancelDelete = document.getElementById("cancel-delete");
-        const confirmDelete = document.getElementById("confirm-delete");
-
-        document.getElementById("delete-pet").addEventListener("click", () => {
-            const pet = getActivePet();
-            if (!pet) return;
-            deletePetName.textContent = pet.name || pet.species;
-            deleteOverlay.classList.add("active");
-            deleteOverlay.setAttribute("aria-hidden", "false");
-            document.body.style.overflow = "hidden";
-        });
-
-        cancelDelete.addEventListener("click", () => {
-            deleteOverlay.classList.remove("active");
-            deleteOverlay.setAttribute("aria-hidden", "true");
-            document.body.style.overflow = "";
-        });
-
-        confirmDelete.addEventListener("click", () => {
-            const pet = getActivePet();
-            if (!pet) return;
-            
-            // Close modal
-            deleteOverlay.classList.remove("active");
-            deleteOverlay.setAttribute("aria-hidden", "true");
-            document.body.style.overflow = "";
-            
-            // Start corruption effect
-            startCorruptionEffect();
-            
-            // Delete pet after corruption
-            setTimeout(() => {
-                const petIndex = state.pets.findIndex(p => p.id === pet.id);
-                if (petIndex !== -1) {
-                    state.pets.splice(petIndex, 1);
-                }
-                
-                // Check if pet was fully formed (max level)
-                if (pet.stage === "fully formed") {
-                    // Give neural network instead
-                    state.neuralNetwork++;
-                    updateNeuralNetworkDisplay();
-                } else {
-                    // Increment neural matter for non-max level pets
-                    state.neuralMatter++;
-                    updateNeuralMatterDisplay();
-                }
-                
-                // Check for neural void unlock
-                if (state.neuralMatter === 10) {
-                    showNeuralVoidUnlock();
-                }
-                
-                // Set new active pet or clear
-                if (state.pets.length > 0) {
-                    state.activePetId = state.pets[0].id;
-                } else {
-                    state.activePetId = null;
-                }
-                
-                renderPetList();
-                updateStats();
-                saveState();
-                stopCorruptionEffect();
-            }, 2000);
-        });
-
-        function startCorruptionEffect() {
-            glitchCanvas.classList.add("active");
-            const ctx = glitchCanvas.getContext("2d");
-            let frameCount = 0;
-            
-            const draw = () => {
-                if (frameCount > 120) return; // Stop after ~2 seconds
-                
-                const { innerWidth: w, innerHeight: h } = window;
-                glitchCanvas.width = w;
-                glitchCanvas.height = h;
-                
-                // Intensifying corruption effect
-                const intensity = Math.min(1, frameCount / 60);
-                const blockCount = Math.floor(200 * intensity);
-                
-                ctx.clearRect(0, 0, w, h);
-                
-                // Random corruption blocks
-                for (let i = 0; i < blockCount; i++) {
-                    const x = Math.random() * w;
-                    const y = Math.random() * h;
-                    const width = Math.random() * 80 + 10;
-                    const height = Math.random() * 8 + 2;
-                    const r = Math.floor(Math.random() * 255);
-                    const g = Math.floor(Math.random() * 100);
-                    const b = Math.floor(Math.random() * 100);
-                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.3 + intensity * 0.4})`;
-                    ctx.fillRect(x, y, width, height);
-                }
-                
-                // Screen distortion lines
-                if (Math.random() < 0.3) {
-                    ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + intensity * 0.2})`;
-                    ctx.fillRect(0, Math.random() * h, w, Math.random() * 20 + 2);
-                }
-                
-                frameCount++;
-                glitchAnimId = requestAnimationFrame(draw);
-            };
-            draw();
-        }
-
-        function stopCorruptionEffect() {
-            if (glitchAnimId) cancelAnimationFrame(glitchAnimId);
-            glitchCanvas.classList.remove("active");
-        }
-
-        function updateNeuralMatterDisplay() {
-            const display = document.getElementById("neural-matter-display");
-            const count = document.getElementById("neural-matter-count");
-            
-            if (state.neuralMatter > 0) {
-                display.style.display = "block";
-                count.textContent = state.neuralMatter;
-                
-                // Add pulsing effect at 10
-                if (state.neuralMatter >= 10) {
-                    display.style.animation = "pulse 1.5s infinite";
-                    display.style.cursor = "pointer";
-                    display.onclick = () => navigate("/corrupted/neural-void");
-                }
+        // Show/hide Daemon CLI tab in nav after phase 2 (3+ fragments)
+        function updateDaemonNavLink() {
+            var daemonLink = document.getElementById('daemon-nav-link');
+            if (!daemonLink) return;
+            if (typeof getUnlockPhase === 'function' && getUnlockPhase() >= 2) {
+                daemonLink.style.display = '';
             } else {
-                display.style.display = "none";
+                daemonLink.style.display = 'none';
             }
         }
-
-        function updateNeuralNetworkDisplay() {
-            const display = document.getElementById("neural-network-display");
-            const count = document.getElementById("neural-network-count");
-            
-            if (state.neuralNetwork > 0) {
-                display.style.display = "block";
-                count.textContent = state.neuralNetwork;
-            } else {
-                display.style.display = "none";
-            }
+        // Patch updateFragmentCounter to also update nav link
+        // Only patch updateFragmentCounter if not already patched
+        if (!window._daemonNavPatched) {
+            const origUpdateFragmentCounter = window.updateFragmentCounter;
+            window.updateFragmentCounter = function() {
+                if (origUpdateFragmentCounter) origUpdateFragmentCounter();
+                else if (typeof updateFragmentCounter === 'function') updateFragmentCounter();
+                updateDaemonNavLink();
+            };
+            window._daemonNavPatched = true;
         }
-
-        function showNeuralVoidUnlock() {
-            // Show brief notification of unlock
-            glitchCanvas.classList.add("active");
-            const ctx = glitchCanvas.getContext("2d");
-            const { innerWidth: w, innerHeight: h } = window;
-            glitchCanvas.width = w;
-            glitchCanvas.height = h;
-            
-            // Intense corruption flash
-            let intensity = 0;
-            const flashInterval = setInterval(() => {
-                ctx.clearRect(0, 0, w, h);
-                intensity += 0.1;
+        // Initial call on page load
+        document.addEventListener('DOMContentLoaded', updateDaemonNavLink);
                 
-                for (let i = 0; i < 300; i++) {
-                    const x = Math.random() * w;
-                    const y = Math.random() * h;
-                    const width = Math.random() * 100 + 20;
-                    const height = Math.random() * 10 + 3;
-                    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 100}, ${Math.random() * 100}, ${Math.min(0.8, intensity)})`;
-                    ctx.fillRect(x, y, width, height);
-                }
-                
-                if (intensity >= 1) {
-                    clearInterval(flashInterval);
-                    setTimeout(() => {
-                        glitchCanvas.classList.remove("active");
-                    }, 500);
-                }
-            }, 50);
-        }
 
         function initiateShutdown() {
             // Start the collapse animation
@@ -2322,57 +802,31 @@
             collapseAnimation();
         }
 
-        document.getElementById("close-ram-full").addEventListener("click", () => {
-            closeRamFull();
-        });
-
         function saveState() {
-            localStorage.setItem("sanctuaryPets", JSON.stringify(state.pets));
+            localStorage.setItem("sanctuaryFragments", state.fragments.toString());
             localStorage.setItem("sanctuaryStats", JSON.stringify(state.stats));
-            localStorage.setItem("sanctuaryActivePetId", state.activePetId || "");
-            localStorage.setItem("sanctuaryNeuralMatter", state.neuralMatter.toString());
-            localStorage.setItem("sanctuaryNeuralNetwork", state.neuralNetwork.toString());
         }
 
         function loadState() {
-            const pets = localStorage.getItem("sanctuaryPets");
+            const fragments = localStorage.getItem("sanctuaryFragments");
             const stats = localStorage.getItem("sanctuaryStats");
-            const activeId = localStorage.getItem("sanctuaryActivePetId");
-            const neuralMatter = localStorage.getItem("sanctuaryNeuralMatter");
-            const neuralNetwork = localStorage.getItem("sanctuaryNeuralNetwork");
-            if (pets) state.pets = JSON.parse(pets);
+            if (fragments) state.fragments = parseInt(fragments, 10) || 0;
             if (stats) state.stats = JSON.parse(stats);
-            if (activeId) state.activePetId = activeId;
-            if (neuralMatter) state.neuralMatter = parseInt(neuralMatter, 10) || 0;
-            if (neuralNetwork) state.neuralNetwork = parseInt(neuralNetwork, 10) || 0;
-            if (!state.activePetId && state.pets.length) state.activePetId = state.pets[0].id;
+        }
+        function updateFragmentCounter() {
+            const counter = document.getElementById("fragment-counter");
+            const count = document.getElementById("fragment-count");
+            if (count) count.textContent = state.fragments;
+            if (counter) {
+                if (state.fragments > 0) {
+                    counter.style.display = 'flex';
+                } else {
+                    counter.style.display = 'none';
+                }
+            }
         }
 
-        function decayStats() {
-            const now = Date.now();
-            state.pets.forEach(pet => {
-                const minutes = Math.max(1, Math.floor((now - pet.lastCareAt) / 60000));
-                if (minutes <= 0) return;
-                pet.stats.hunger = clamp(pet.stats.hunger - minutes * 1.2);
-                pet.stats.happiness = clamp(pet.stats.happiness - minutes * 1.0);
-                pet.stats.energy = clamp(pet.stats.energy - minutes * 1.4);
-                pet.stats.cleanliness = clamp(pet.stats.cleanliness - minutes * 0.8);
-                pet.lastCareAt = now;
-            });
-            updateMood();
-            updatePetDisplay();
-            saveState();
-        }
-
-        function updateMood() {
-            const pet = getActivePet();
-            if (!pet) return;
-            const avg = (pet.stats.hunger + pet.stats.happiness + pet.stats.energy + pet.stats.cleanliness) / 4;
-            if (avg > 80) state.mood = "thriving";
-            else if (avg > 60) state.mood = "steady";
-            else if (avg > 40) state.mood = "wavering";
-            else state.mood = "fragile";
-        }
+        // Pet logic removed. Only deletion capability retained below if needed.
 
         window.addEventListener("pointerdown", event => {
             if (!state.firstInteraction) {
@@ -2430,11 +884,10 @@
             document.body.innerHTML = `
                 <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0b0f1a; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #ffffff; font-family: 'Courier New', monospace;">
                     <div style="text-align: center; animation: glitch-text 0.5s infinite;">
-                        <h1 style="font-size: 4rem; margin-bottom: 1rem; color: var(--warning);">404</h1>
-                        <h2 style="font-size: 1.5rem; margin-bottom: 2rem; color: #ff44dd;">NEURAL COLLAPSE COMPLETE</h2>
+                        <h1 style="font-size: 4rem; margin-bottom: 1rem; color: var(--warning);">404</h2>
+                        <h2 style="font-size: 1.5rem; margin-bottom: 2rem; color: #ff44dd;">Thank you for letting go.</h2>
                         <p style="color: var(--muted); line-height: 1.8; max-width: 600px; margin: 0 auto;">
-                            The archive has been consumed by the void.<br>
-                            All companions have been absorbed into the neural network.<br>
+                            The archive has been deleted.<br>
                             The sanctuary no longer exists.<br><br>
                             <span style="font-style: italic; opacity: 0.7;">
                                 [SYSTEM TERMINATED]<br>
@@ -2449,31 +902,41 @@
             // Normal initialization - only if not shut down
             
             // TEST MODE: Call this in console to add max shards and neural network for testing
-            // Simply delete this function block when done testing (lines 2405-2412)
             window.addTestResources = function() {
-                state.neuralMatter = 10;
-                state.neuralNetwork = 1;
-                updateNeuralMatterDisplay();
-                updateNeuralNetworkDisplay();
+                state.fragments = 5;
+                state.phase = getUnlockPhaseFromFragments(state.fragments);
                 saveState();
-                console.log("✓ Added max neural matter and 1 neural network");
+                updateFragmentCounter();
+                console.log("✓ Added 5 fragments");
             };
             
-            loadState();
+            // State already loaded above
             // Initial renderRoute will be called after content loads
-            updateStats();
-            updatePetStateClasses();
-            renderPetList();
-            updatePetWidgetVisibility();
-            updateNeuralMatterDisplay();
-            updateNeuralNetworkDisplay();
-            setInterval(decayStats, 20000);
-            setInterval(passiveXpGain, 45000); // Passive XP every 45 seconds
+            document.addEventListener('DOMContentLoaded', () => {
+                updateFragmentCounter();
+            });
         }
         // Only setup PWA if we're in a secure context (HTTPS or localhost)
         if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             setupPwa();
         }
+    window.addEventListener("DOMContentLoaded", () => {
+        document.body.addEventListener("click", e => {
+            if (e.target && e.target.id === "memory-weave-submit") {
+                const input = document.getElementById("memory-weave-search");
+                const feedback = document.getElementById("memory-weave-feedback");
+                if (!input) return;
+                // The clue is "cassette" (from analog-archive.html)
+                if (input.value.trim().toLowerCase() === "cassette") {
+                    localStorage.setItem("sanctuaryMemoryWeaveUnlocked", "true");
+                    feedback.textContent = "✓ Final phase unlocked! Reloading...";
+                    setTimeout(() => location.reload(), 1200);
+                } else {
+                    feedback.textContent = "Incorrect phrase. Try again.";
+                }
+            }
+            });
+        });    
     </script>
 </body>
 </html>
