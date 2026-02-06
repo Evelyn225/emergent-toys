@@ -483,28 +483,34 @@
                 if (eggClaimed) {
                     // Show 404 without the egg button
                     pageContent.innerHTML = `
-                        <h2 class="page-title" style="color: var(--warning); font-size: 3rem;">404</h2>
-                        <p class="page-subtitle" style="color: var(--muted);">This entry does not exist.</p>
-                        <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
-                            The archive has no record of this path. Whatever was here has already been claimed.
-                        </p>
-                        <div style="margin-top: 2rem;">
-                            <a href="#/" data-route="/" class="work-link" data-type="home">Return to the archive →</a>
+                        <div style="background: linear-gradient(135deg, #0b0f1a 60%, #222 100%); border-radius: 12px; box-shadow: 0 0 32px #2228, 0 0 0 1px #222; padding: 2.5rem 1.5rem; text-align: center;">
+                            <h2 class="page-title" style="color: #ff44dd; font-size: 3rem; letter-spacing: 0.04em;">404: VOID</h2>
+                            <p class="page-subtitle" style="color: #44ffdd; font-size: 1.2rem; margin-bottom: 1.2rem;">This entry has been lost to the void.</p>
+                            <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
+                                The archive has no record of this path. Whatever was here has already been claimed.<br>
+                                <span style="color:#ff44dd;">Fragments swirl in the darkness.</span>
+                            </p>
+                            <div style="margin-top: 2rem;">
+                                <a href="#/" data-route="/" class="work-link" data-type="home" style="color:#44ffdd;">Return to the archive →</a>
+                            </div>
                         </div>
                     `;
                 } else {
                     // Show 404 with egg finding opportunity
                     pageContent.innerHTML = `
-                        <h2 class="page-title" style="color: var(--warning); font-size: 3rem;">404</h2>
-                        <p class="page-subtitle" style="color: var(--muted);">This entry does not exist.</p>
-                        <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
-                            The archive has no record of this path. But something is here. Something that shouldn't be.
-                        </p>
-                        <div style="margin-top: 2.5rem; padding: 1.5rem; background: transparent; border: 1px dashed #ffffff; border-radius: 0px; text-align: center; cursor: pointer;" id="hidden-egg-area">
-                            <p style="color: var(--muted); font-size: 0.9rem;">Something glimmers in the void...</p>
-                        </div>
-                        <div style="margin-top: 2rem;">
-                            <a href="#/" data-route="/" class="work-link" data-type="home">Return to the archive →</a>
+                        <div style="background: linear-gradient(135deg, #0b0f1a 60%, #222 100%); border-radius: 12px; box-shadow: 0 0 32px #2228, 0 0 0 1px #222; padding: 2.5rem 1.5rem; text-align: center;">
+                            <h2 class="page-title" style="color: #ff44dd; font-size: 3rem; letter-spacing: 0.04em;">404: VOID</h2>
+                            <p class="page-subtitle" style="color: #44ffdd; font-size: 1.2rem; margin-bottom: 1.2rem;">This entry does not exist, but something remains.</p>
+                            <p style="color: var(--muted); line-height: 1.7; margin: 1.5rem 0;">
+                                The archive has no record of this path.<br>
+                                <span style="color:#ff44dd;">A fragment glimmers in the darkness.</span>
+                            </p>
+                            <div style="margin-top: 2.5rem; padding: 1.5rem; background: rgba(68,255,221,0.08); border: 1px dashed #44ffdd; border-radius: 8px; text-align: center; cursor: pointer; transition: background 0.3s;" id="hidden-egg-area">
+                                <p style="color: #ff44dd; font-size: 1.1rem;">✦ Claim fragment from the void ✦</p>
+                            </div>
+                            <div style="margin-top: 2rem;">
+                                <a href="#/" data-route="/" class="work-link" data-type="home" style="color:#44ffdd;">Return to the archive →</a>
+                            </div>
                         </div>
                     `;
                 }
@@ -514,13 +520,15 @@
                     setTimeout(() => {
                         const eggArea = document.getElementById("hidden-egg-area");
                         if (eggArea) {
-                            eggArea.addEventListener("click", () => {
+                            eggArea.addEventListener("click", function eggClickHandler() {
                                 triggerGlitch({
                                     path: path,
                                     section: "404",
                                     text: "Found in the void",
                                     timestamp: Date.now()
                                 });
+                                eggArea.removeEventListener("click", eggClickHandler);
+                                eggArea.style.display = "none";
                             });
                         }
                     }, 100);
@@ -660,10 +668,20 @@
                     state.phase = newPhase;
                 }
                 saveState();
+                markEggClaimed(payload.path);
+                // Animate fragment counter
+                const counter = document.getElementById("fragment-counter");
+                if (counter) {
+                    counter.style.transition = "background 0.4s, color 0.4s";
+                    counter.style.background = "#44ffdd";
+                    counter.style.color = "#222";
+                    setTimeout(() => {
+                        counter.style.background = "transparent";
+                        counter.style.color = "#fff";
+                    }, 400);
+                }
                 updateFragmentCounter();
                 renderRoute(getCurrentPath());
-                markEggClaimed(payload.path);
-                // Optionally show a visual effect
             }
 
         let glitchAnimId = null;
