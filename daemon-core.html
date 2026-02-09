@@ -606,24 +606,35 @@
             }
 
             if (cmd === 'inject fragment') {
-                if (playerFragments > 0 && fragmentCount < maxFragments) {
+                if (playerFragments > 0 && fragmentCount > 0) {
                     // user feeds one fragment to the daemon
                     playerFragments = Math.max(0, playerFragments - 1);
-                    fragmentCount++;
+                    fragmentCount = Math.max(0, fragmentCount - 1);
                     phase = getUnlockPhaseFromFragments(fragmentCount);
                     saveDaemonState();
-                    asciiFragments.push(randomAsciiFragment());
+                    // Also update sanctuaryPlayerFragments in localStorage for sync
+                    let playerFragmentsStorage = localStorage.getItem('sanctuaryPlayerFragments');
+                    let updatedPlayerFragments = playerFragments;
+                    if (playerFragmentsStorage !== null) {
+                        updatedPlayerFragments = parseInt(playerFragmentsStorage, 10) || 0;
+                        updatedPlayerFragments += 1;
+                        localStorage.setItem('sanctuaryPlayerFragments', updatedPlayerFragments.toString());
+                    } else {
+                        localStorage.setItem('sanctuaryPlayerFragments', playerFragments.toString());
+                    }
                     updateFragmentCounter();
                     if (window.redrawAscii) redrawAscii();
                     if (typeof updateDaemonNavLink === 'function') updateDaemonNavLink();
-                    showOutput('Fragment assimilated. Remaining fragments: ' + playerFragments + ' — Assimilation level: ' + fragmentCount + '/' + maxFragments);
+                    showOutput('Fragment injected. Remaining fragments: ' + playerFragments + ' — Assimilation level: ' + fragmentCount + '/' + maxFragments);
                     if (fragmentCount === maxFragments) {
                         showOutput('All fragments collected. New command unlocked: COMPILE');
                     }
+                } else if (fragmentCount <= 0) {
+                    showOutput('No fragments left to inject.');
                 } else if (fragmentCount >= maxFragments) {
                     showOutput('All fragments already assimilated. Use COMPILE.');
                 } else {
-                    showOutput('No fragments remaining to inject.');
+                    showOutput('No fragments left to inject.');
                 }
             } else if (cmd === 'status') {
                 let percent = Math.round((fragmentCount / maxFragments) * 100);

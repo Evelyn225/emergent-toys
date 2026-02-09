@@ -29,10 +29,11 @@
                     <div style="margin-left: auto; display: flex; gap: 1rem;"></div>
                 </nav>
             </div>
-            <div id="fragment-counter" style="width:100%;max-width:100vw;padding:0.05rem 1.2rem 0.05rem 1.2rem;color:#fff;background:transparent;font-size:0.92rem;font-family:'DM Mono',monospace;display:none;align-items:center;gap:0.5rem;justify-content:flex-end;position:sticky;top:0;z-index:11;opacity:0.85;">
-                <span style="font-weight:600;">Fragments:</span>
-                <span id="fragment-count">0</span>
-            </div>
+        </header>
+        <div id="fragment-counter" style="width:100%;max-width:100vw;padding:0.05rem 1.2rem 0.05rem 1.2rem;color:#fff;background:transparent;font-size:0.92rem;font-family:'DM Mono',monospace;display:none;align-items:center;gap:0.5rem;justify-content:flex-end;position:sticky;top:64px;z-index:11;opacity:0.85;">
+            <span style="font-weight:600;">Fragments:</span>
+            <span id="fragment-count">0</span>
+        </div>
         </header>
         <!-- fragment counter moved above -->
         </header>
@@ -661,7 +662,17 @@
             function triggerGlitch(payload) {
                 // Add a fragment when an egg is found
                 loadState();
-                state.fragments += 1;
+                    state.fragments += 1; // Increment fragment count
+                    // Also update sanctuaryPlayerFragments for daemon-core sync
+                    let playerFragments = localStorage.getItem("sanctuaryPlayerFragments");
+                    if (playerFragments !== null) {
+                        playerFragments = parseInt(playerFragments, 10) || 0;
+                        // Decrement playerFragments if possible
+                        if (playerFragments > 0) {
+                            playerFragments -= 1;
+                            localStorage.setItem("sanctuaryPlayerFragments", playerFragments.toString());
+                        }
+                    }
                 // Phase may increase if enough fragments collected
                 const newPhase = getUnlockPhaseFromFragments(state.fragments);
                 if (newPhase > state.phase) {
