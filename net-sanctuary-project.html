@@ -85,7 +85,7 @@
 
     <div class="overlay" id="glitch-overlay" aria-hidden="true">
         <div class="overlay-card" id="glitch-card">
-            <div class="corruption-cluster" id="glitch-egg">
+            <div class="corruption-cluster" id="glitch-frag">
                 <div class="corruption-fragment">
                     <div class="fragment-block" style="--burst-x: -40px; --burst-y: -30px;">%</div>
                     <div class="fragment-block" style="--burst-x: 35px; --burst-y: -25px;">$</div>
@@ -475,14 +475,14 @@
             // Removed neural void check
             const route = pages[path];
             
-            // Check if this is a 404 egg path
-            if (!route && is404EggPath(path)) {
-                // Check if egg has already been claimed
-                const eggClaimed = hasClaimedEgg(path);
+            // Check if this is a 404 frag path
+            if (!route && is404FragPath(path)) {
+                // Check if frag has already been claimed
+                const fragClaimed = hasClaimedFrag(path);
                 
-                // Display 404 with or without egg finding opportunity
-                if (eggClaimed) {
-                    // Show 404 without the egg button
+                // Display 404 with or without frag finding opportunity
+                if (fragClaimed) {
+                    // Show 404 without the frag button
                     pageContent.innerHTML = `
                         <div style="background: linear-gradient(135deg, #0b0f1a 60%, #222 100%); border-radius: 12px; box-shadow: 0 0 32px #2228, 0 0 0 1px #222; padding: 2.5rem 1.5rem; text-align: center;">
                             <h2 class="page-title" style="color: #ff44dd; font-size: 3rem; letter-spacing: 0.04em;">404: VOID</h2>
@@ -497,7 +497,7 @@
                         </div>
                     `;
                 } else {
-                    // Show 404 with egg finding opportunity
+                    // Show 404 with frag finding opportunity
                     pageContent.innerHTML = `
                         <div style="background: linear-gradient(135deg, #0b0f1a 60%, #222 100%); border-radius: 12px; box-shadow: 0 0 32px #2228, 0 0 0 1px #222; padding: 2.5rem 1.5rem; text-align: center;">
                             <h2 class="page-title" style="color: #ff44dd; font-size: 3rem; letter-spacing: 0.04em;">404: VOID</h2>
@@ -506,7 +506,7 @@
                                 The archive has no record of this path.<br>
                                 <span style="color:#ff44dd;">A fragment glimmers in the darkness.</span>
                             </p>
-                            <div style="margin-top: 2.5rem; padding: 1.5rem; background: rgba(68,255,221,0.08); border: 1px dashed #44ffdd; border-radius: 8px; text-align: center; cursor: pointer; transition: background 0.3s;" id="hidden-egg-area">
+                            <div style="margin-top: 2.5rem; padding: 1.5rem; background: rgba(68,255,221,0.08); border: 1px dashed #44ffdd; border-radius: 8px; text-align: center; cursor: pointer; transition: background 0.3s;" id="hidden-frag-area">
                                 <p style="color: #ff44dd; font-size: 1.1rem;">✦ Claim fragment from the void ✦</p>
                             </div>
                             <div style="margin-top: 2rem;">
@@ -516,20 +516,20 @@
                     `;
                 }
                 routeLabel.textContent = path;
-                // Add egg finding interaction only if not claimed
-                if (!eggClaimed) {
+                // Add frag finding interaction only if not claimed
+                if (!fragClaimed) {
                     setTimeout(() => {
-                        const eggArea = document.getElementById("hidden-egg-area");
-                        if (eggArea) {
-                            eggArea.addEventListener("click", function eggClickHandler() {
+                        const fragArea = document.getElementById("hidden-frag-area");
+                        if (fragArea) {
+                            fragArea.addEventListener("click", function fragClickHandler() {
                                 triggerGlitch({
                                     path: path,
                                     section: "404",
                                     text: "Found in the void",
                                     timestamp: Date.now()
                                 });
-                                eggArea.removeEventListener("click", eggClickHandler);
-                                eggArea.style.display = "none";
+                                fragArea.removeEventListener("click", fragClickHandler);
+                                fragArea.style.display = "none";
                             });
                         }
                     }, 100);
@@ -561,9 +561,10 @@
             attachLinkHandlers();
         }
 
-        // Define which 404 paths have eggs
-        const eggPaths = new Set([
+        // Define which 404 paths have fragments
+        const fragPaths = new Set([
             "/void/signal-cascade",
+            "/void/signal-cascade-archive",
             "/missing/coral-station",
             "/archived/echo-logs",
             "/forgotten/amber-records",
@@ -571,7 +572,6 @@
             "/void/null-space",
             "/archived/static-recordings",
             "/lost/phantom-queries",
-            "/lost/ghost-nodes",
             "/void/data-collapse",
             "/lost/cipher-logs",
             "/archived/frequency-maps",
@@ -580,30 +580,30 @@
             "/void/resonance-chamber"
         ]);
 
-        function is404EggPath(path) {
-            return eggPaths.has(path);
+        function is404FragPath(path) {
+            return fragPaths.has(path);
         }
 
-        function hasClaimedEgg(path) {
+        function hasClaimedFrag(path) {
             let claimed = [];
             try {
-                claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedEggs") || "[]");
+                claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedFrags") || "[]");
             } catch (e) {
                 claimed = [];
             }
             return Array.isArray(claimed) && claimed.includes(path);
         }
 
-        function markEggClaimed(path) {
+        function markFragClaimed(path) {
             let claimed = [];
             try {
-                claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedEggs") || "[]");
+                claimed = JSON.parse(localStorage.getItem("sanctuaryClaimedFrags") || "[]");
             } catch (e) {
                 claimed = [];
             }
             if (!claimed.includes(path)) {
                 claimed.push(path);
-                localStorage.setItem("sanctuaryClaimedEggs", JSON.stringify(claimed));
+                localStorage.setItem("sanctuaryClaimedFrags", JSON.stringify(claimed));
             }
         }
 
@@ -624,7 +624,7 @@
 
         const glitchOverlay = document.getElementById("glitch-overlay");
         const glitchCanvas = document.getElementById("glitch-canvas");
-        const glitchEgg = document.getElementById("glitch-egg");
+        const glitchFrag = document.getElementById("glitch-frag");
 
         function attachLinkHandlers() {
             // Remove existing handlers and clone nodes to clear all listeners
@@ -660,7 +660,7 @@
         }
 
             function triggerGlitch(payload) {
-                // Add a fragment when an egg is found
+                // Add a fragment when an frag is found
                 loadState();
                 state.fragments += 1; // Increment fragment count
                 // Also update sanctuaryPlayerFragments for daemon-core sync
@@ -679,12 +679,12 @@
                     state.phase = newPhase;
                 }
                 saveState();
-                markEggClaimed(payload.path);
+                markFragClaimed(payload.path);
 
                 // --- Fragment Burst Animation (2) ---
                 const overlay = document.getElementById('glitch-overlay');
                 const card = document.getElementById('glitch-card');
-                const cluster = document.getElementById('glitch-egg');
+                const cluster = document.getElementById('glitch-frag');
                 const fragmentBlocks = cluster ? cluster.querySelectorAll('.fragment-block') : [];
                 if (overlay && card && cluster && fragmentBlocks.length) {
                     overlay.style.display = 'flex';
