@@ -662,17 +662,17 @@
             function triggerGlitch(payload) {
                 // Add a fragment when an egg is found
                 loadState();
-                    state.fragments += 1; // Increment fragment count
-                    // Also update sanctuaryPlayerFragments for daemon-core sync
-                    let playerFragments = localStorage.getItem("sanctuaryPlayerFragments");
-                    if (playerFragments !== null) {
-                        playerFragments = parseInt(playerFragments, 10) || 0;
-                        // Decrement playerFragments if possible
-                        if (playerFragments > 0) {
-                            playerFragments -= 1;
-                            localStorage.setItem("sanctuaryPlayerFragments", playerFragments.toString());
-                        }
+                state.fragments += 1; // Increment fragment count
+                // Also update sanctuaryPlayerFragments for daemon-core sync
+                let playerFragments = localStorage.getItem("sanctuaryPlayerFragments");
+                if (playerFragments !== null) {
+                    playerFragments = parseInt(playerFragments, 10) || 0;
+                    // Decrement playerFragments if possible
+                    if (playerFragments > 0) {
+                        playerFragments -= 1;
+                        localStorage.setItem("sanctuaryPlayerFragments", playerFragments.toString());
                     }
+                }
                 // Phase may increase if enough fragments collected
                 const newPhase = getUnlockPhaseFromFragments(state.fragments);
                 if (newPhase > state.phase) {
@@ -680,6 +680,89 @@
                 }
                 saveState();
                 markEggClaimed(payload.path);
+
+                // --- Fragment Burst Animation (2) ---
+                const overlay = document.getElementById('glitch-overlay');
+                const card = document.getElementById('glitch-card');
+                const cluster = document.getElementById('glitch-egg');
+                const fragmentBlocks = cluster ? cluster.querySelectorAll('.fragment-block') : [];
+                if (overlay && card && cluster && fragmentBlocks.length) {
+                    overlay.style.display = 'flex';
+                    overlay.style.opacity = '1';
+                    card.style.transform = 'scale(1)';
+                    card.style.transition = 'transform 0.3s cubic-bezier(.7,1.7,.7,1), box-shadow 0.3s';
+                    card.style.boxShadow = '0 0 32px #44ffdd88, 0 0 0 2px #44ffdd44';
+                    // Animate cluster pulse
+                    cluster.style.transition = 'transform 0.3s cubic-bezier(.7,1.7,.7,1)';
+                    cluster.style.transform = 'scale(1.15)';
+                    setTimeout(() => {
+                        cluster.style.transform = 'scale(1)';
+                    }, 180);
+                    // Animate fragment burst
+                    fragmentBlocks.forEach((block, i) => {
+                        block.style.transition = 'transform 0.7s cubic-bezier(.2,1.7,.7,1), opacity 0.7s';
+                        block.style.transform = `translate(${block.style.getPropertyValue('--burst-x') || '0px'}, ${block.style.getPropertyValue('--burst-y') || '0px'}) scale(1.7)`;
+                        block.style.opacity = '0.7';
+                        // Glitch flicker
+                        setTimeout(() => {
+                            block.style.opacity = '1';
+                            block.style.transform += ' rotate(' + (Math.random() * 40 - 20) + 'deg)';
+                        }, 120 + i * 40);
+                    });
+                }
+
+                // --- Play Sound (5) ---
+                const audio = new Audio('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/audio/fragment-get.wav');
+                audio.volume = 0.7;
+                audio.play().catch(()=>{});
+
+                // --- Glitch Canvas Effect (4) ---
+                if (typeof glitchCanvas !== 'undefined' && glitchCanvas) {
+                    const ctx = glitchCanvas.getContext('2d');
+                    const w = window.innerWidth;
+                    const h = window.innerHeight;
+                    glitchCanvas.width = w;
+                    glitchCanvas.height = h;
+                    // Burst effect: radial lines and rectangles
+                    for (let i = 0; i < 32; i++) {
+                        const angle = (i / 32) * Math.PI * 2;
+                        const r = 80 + Math.random() * 60;
+                        const x = w/2 + Math.cos(angle) * r;
+                        const y = h/2 + Math.sin(angle) * r;
+                        ctx.save();
+                        ctx.translate(w/2, h/2);
+                        ctx.rotate(angle);
+                        ctx.fillStyle = `rgba(${180+Math.random()*60},${200+Math.random()*55},255,${0.18+Math.random()*0.22})`;
+                        ctx.fillRect(30, -2, r, 4+Math.random()*2);
+                        ctx.restore();
+                        // Flicker dots
+                        ctx.beginPath();
+                        ctx.arc(x, y, 3+Math.random()*3, 0, Math.PI*2);
+                        ctx.fillStyle = `rgba(255,68,221,${0.25+Math.random()*0.5})`;
+                        ctx.fill();
+                    }
+                }
+
+                // --- Fade Out Animation (5) ---
+                setTimeout(() => {
+                    // Fade out overlay and reset burst
+                    if (overlay) {
+                        overlay.style.transition = 'opacity 0.7s cubic-bezier(.7,1.7,.7,1)';
+                        overlay.style.opacity = '0';
+                    }
+                    if (fragmentBlocks.length) {
+                        fragmentBlocks.forEach((block) => {
+                            block.style.transition = 'none';
+                            block.style.transform = 'none';
+                            block.style.opacity = '1';
+                        });
+                    }
+                    setTimeout(() => {
+                        if (overlay) overlay.style.display = 'none';
+                        if (card) card.style.boxShadow = '';
+                    }, 700);
+                }, 1200);
+
                 // Animate fragment counter
                 const counter = document.getElementById("fragment-counter");
                 if (counter) {
