@@ -641,10 +641,9 @@
                     const isExternal = link.dataset.external === "true";
 
                     if (isExternal) {
-                        // External links open in same window (to simulate being tricked)
+                        // External links open in same window
                         window.location.href = link.href;
                     } else {
-                        // Removed handleWorkingLink (function not defined and not needed)
                         navigate(path);
                     }
                 });
@@ -660,7 +659,7 @@
         }
 
             function triggerGlitch(payload) {
-                // Add a fragment when an frag is found
+                // Add a fragment
                 loadState();
                 state.fragments += 1; // Increment fragment count
                 // Also update sanctuaryPlayerFragments for daemon-core sync
