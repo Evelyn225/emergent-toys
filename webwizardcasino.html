@@ -574,6 +574,7 @@
                 document.getElementById('loadingOverlay').classList.add('hidden');
             });
             randomThemeButton.addEventListener('click', async () => {
+                topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
                 randomThemeButton.disabled = true;
                 randomThemeButton.textContent = '...';
                 try {
@@ -586,11 +587,13 @@
                 randomThemeButton.textContent = 'random_theme';
             });
             themeInput.addEventListener('keydown', e => {
+                topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
                 if (e.key === 'Enter') {
                     startGenerationButton.click();
                 }
             });
             startGenerationButton.addEventListener('click', () => {
+                topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
                 generateWebsite();
             });
             saveButton.addEventListener('click', saveFavorite);
