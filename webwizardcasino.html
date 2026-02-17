@@ -448,15 +448,21 @@
             isGenerating = true;
             wasLoadingWhenGenerated = true;
             setProgressBar(0);
-            // Animated progress bar
+            // Animated progress bar with easing for more natural pacing
             let progress = 0;
+            let t = 0;
             let progressInterval = setInterval(() => {
                 if (progress < 90) {
-                    progress += Math.random() * 2 + 1; // Randomize for organic feel
-                    if (progress > 90) progress = 90;
+                    // Ease in: slow at first, then faster
+                    t += 0.0125; // Controls overall speed (smaller = slower)
+                    // Use an ease-out cubic function for natural feel
+                    let eased = 90 * (1 - Math.pow(1 - t, 3));
+                    // Prevent overshooting
+                    if (eased > 90) eased = 90;
+                    progress = eased;
                     setProgressBar(progress);
                 }
-            }, 200);
+            }, 60); // Faster update for smoothness
             document.getElementById('consoleOutput').innerHTML = '';
             // Ensure theme variable is always defined and in scope
             let themeValue = themeInput.value.trim();
