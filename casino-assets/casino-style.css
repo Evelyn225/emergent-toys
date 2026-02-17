@@ -314,7 +314,7 @@ body {
     flex-direction: row;
     align-items: center;
     font-size: 18px;
-    color: #fff;
+    color: rgba(255, 255, 255, 0.9);
     font-weight: 600;
     letter-spacing: 1px;
     word-break: break-word;

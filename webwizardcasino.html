@@ -110,12 +110,12 @@
 
     EXAMPLES OF GOOD APPROACHES:
     - Generative art that evolves over time
-    - Interactive particles or creatures
     - Animated patterns or fractals  
     - Games or simulations
     - Data visualizations
     - Abstract animations
     - Geometric explorations
+    - Creative uses of HTML elements + p5.js canvas depending on the theme
 
     BEGIN HTML OUTPUT:`;
         }
@@ -358,10 +358,15 @@
                 // Save the original code as it was received, not after script extraction
                 code: currentGeneration.code
             };
-            // Show new site notification
+            // Only show new site notification if viewing a favorite
             const notification = document.getElementById('newSiteNotification');
             if (notification) {
-                notification.style.display = 'block';
+                // Check if we are viewing a favorite (not from loading screen)
+                if (previousGeneration && previousGeneration.theme && previousGeneration.code) {
+                    notification.style.display = 'block';
+                } else {
+                    notification.style.display = 'none';
+                }
             }
         }
         
@@ -569,6 +574,16 @@ ${firstPassCode}
                     code: improvedCode
                 };
                 setDisplayedGeneration(currentGeneration);
+                // If viewing a favorite, store pendingGeneration and show new site ready button
+                if (displayedGeneration && displayedGeneration.theme && displayedGeneration.code && displayedGeneration.theme !== themeValue) {
+                    pendingGeneration = { ...currentGeneration };
+                    const notification = document.getElementById('newSiteNotification');
+                    if (notification) notification.style.display = 'block';
+                } else {
+                    pendingGeneration = null;
+                    const notification = document.getElementById('newSiteNotification');
+                    if (notification) notification.style.display = 'none';
+                }
                 setTimeout(() => {
                     generatedContent.innerHTML = improvedCode;
                     disableGeneratedContextMenu(generatedContent);
