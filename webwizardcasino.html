@@ -28,7 +28,7 @@
         <a href="index.html" id="homeButton" style="padding: 12px 12px; background: transparent; color: rgba(255, 255, 255, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; cursor: pointer; font-size: 18px; font-family: 'Iosevka', monospace; text-decoration: none; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); display: flex; align-items: center; line-height: 1;" onmouseover="this.style.transform='scale(1.2)'; this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
     </div>
 
-    <div id="themeScreen" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:80vh; background:#181818; color:#cfcfcf; font-family:'Iosevka',monospace;">
+    <div id="themeScreen" style="display:flex; flex-direction:column; align-items:center; justify-content:center; position:fixed; inset:0; width:100vw; height:100vh; z-index:10000; background:#181818; color:#cfcfcf; font-family:'Iosevka',monospace; pointer-events:auto;">
         <div style="max-width:480px; width:100%; background:#222; border-radius:6px; box-shadow:0 2px 16px #0008; padding:32px 24px; border:1px solid #333;">
             <div style="font-size:22px; font-weight:600; margin-bottom:18px; letter-spacing:0.5px;">The Web Wizard's Casino Terminal</div>
             <div style="font-size:15px; margin-bottom:24px; color:#aaa;">Enter a theme for your generative site, or let the wizard choose one for you.</div>
