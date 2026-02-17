@@ -62,7 +62,13 @@
     </div>
 
     <div id="generatedContent"></div>
-    <div id="favoritePreview" style="display:none;"></div>
+    <div id="favoritePreview" style="display:none;">
+        <!-- Ensure favorite preview is always above generated site and modal -->
+        <div id="favoritePreview">
+            <div style="position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 1200; background: #222; border: 2px solid #444; box-shadow: 0 4px 24px rgba(0,0,0,0.4); padding: 24px; max-width: 900px; min-height: 400px; display: none;">
+            </div>
+        </div>
+    </div>
 
     <script>
         let consoleCommands = [];
