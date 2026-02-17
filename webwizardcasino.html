@@ -516,20 +516,21 @@
                     themeInput.value = theme;
                 }
                 const prompt = createGenerationPrompt(theme);
+                // Always send both theme and prompt to backend
                 const response = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt })
+                    body: JSON.stringify({ theme, prompt })
                 });
                 if (!response.ok) throw new Error('Failed to generate site');
                 const data = await response.json();
                 currentGeneration = {
                     theme: theme,
-                    code: data.code
+                    code: data.html || data.code // support both html and code keys
                 };
                 setDisplayedGeneration(currentGeneration);
                 setTimeout(() => {
-                    generatedContent.innerHTML = data.code;
+                    generatedContent.innerHTML = currentGeneration.code;
                     disableGeneratedContextMenu(generatedContent);
                     loadingOverlay.classList.add('hidden');
                     updateSaveButtonState();
