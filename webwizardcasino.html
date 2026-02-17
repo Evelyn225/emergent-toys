@@ -61,12 +61,13 @@
                     const baseText = 'Processing';
                     let ellipsis = '';
                     let ellipsisIndex = 0;
-                    let waveIndex = 0;
+                    let time = 0;
                     function render() {
-                        // Wavy animation for each letter
+                        // Wavy animation for each letter using sine wave
                         label.innerHTML = baseText.split('').map((char, i) => {
-                            const delay = (i * 0.12) + (waveIndex * 0.05);
-                            return `<span style="display:inline-block;animation:waveAnim 1.2s infinite;animation-delay:${delay}s">${char}</span>`;
+                            // Calculate vertical offset using sine wave
+                            const offset = Math.sin((time/8) + i * 0.35) * 7;
+                            return `<span style="display:inline-block;transform:translateY(${offset}px);transition:transform 0.1s;">${char}</span>`;
                         }).join('') + `<span id="ellipsisSpan">${ellipsis}</span>`;
                     }
                     function animateEllipsis() {
@@ -76,15 +77,11 @@
                     }
                     render();
                     setInterval(() => {
-                        waveIndex = (waveIndex + 1) % baseText.length;
+                        time++;
                         render();
-                    }, 120);
+                    }, 60);
                     setInterval(animateEllipsis, 400);
                 }
-                // Add keyframes for waveAnim
-                const style = document.createElement('style');
-                style.innerHTML = `@keyframes waveAnim {0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}`;
-                document.head.appendChild(style);
                 document.addEventListener('DOMContentLoaded', animateProgressLabel);
         let consoleCommands = [];
         let consoleCommandsLoaded = false;
@@ -192,7 +189,14 @@
             } else {
                 regenerateButton.textContent = text;
                 regenerateButton.disabled = false;
-                regenerateButton.onclick = null;
+                regenerateButton.onclick = () => {
+                    // Show theme screen, hide generated content, reset button
+                    document.getElementById('themeScreen').style.display = 'flex';
+                    document.getElementById('topBar').style.display = 'flex';
+                    document.getElementById('generatedContent').innerHTML = '';
+                    setRegenerateButtonText('generate');
+                    regenerateButton.disabled = false;
+                };
             }
         }
 
@@ -535,7 +539,6 @@ ${firstPassCode}
                     loadingOverlay.classList.add('hidden');
                     // Hide themeStatus after loading
                     document.getElementById('themeStatus').style.display = 'none';
-                    updateSaveButtonState();
                     setRegenerateButtonText('generate');
                     regenerateButton.disabled = false;
                     isGenerating = false;
