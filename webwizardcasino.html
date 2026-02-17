@@ -496,6 +496,10 @@
             wasLoadingWhenGenerated = true;
             setProgressBar(0);
             document.getElementById('consoleOutput').innerHTML = '';
+            // Show the theme in large font below consoleOutput, above progress bar
+            const themeStatus = document.getElementById('themeStatus');
+            themeStatus.textContent = theme;
+            themeStatus.style.display = 'block';
             startConsoleCommands();
             if (window.p5Instance) {
                 window.p5Instance.remove();
@@ -533,6 +537,8 @@
                     generatedContent.innerHTML = currentGeneration.code;
                     disableGeneratedContextMenu(generatedContent);
                     loadingOverlay.classList.add('hidden');
+                    // Hide themeStatus after loading
+                    document.getElementById('themeStatus').style.display = 'none';
                     updateSaveButtonState();
                     updateBackButtonState();
                     isGenerating = false;
@@ -541,7 +547,8 @@
                 addConsoleCommand('Error: ' + error.message, 'error');
                 setRegenerateButtonText('generate');
                 isGenerating = false;
-                // Do NOT hide loadingOverlay on error; let user see the error message
+                // Show themeStatus even on error
+                document.getElementById('themeStatus').style.display = 'block';
             }
         }
 
