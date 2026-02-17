@@ -525,13 +525,34 @@
                 });
                 if (!response.ok) throw new Error('Failed to generate site');
                 const data = await response.json();
+                let firstPassCode = data.html || data.code;
+                // Second pass: ask AI to flesh out and fully implement referenced functions
+                const secondPassPrompt = `
+You previously generated this site for the theme: "${themeValue}". Please review and improve it:
+
+1. Flesh out the site further, making it more substantial and creative.
+2. Carefully check for any referenced functions, variables, or classes that are not fully implemented, and implement them.
+3. Ensure all p5.js code is complete and functional.
+4. Output only the improved HTML/CSS/JS code, no explanations.
+
+Here is the current code:
+${firstPassCode}
+`;
+                const secondResponse = await fetch(GENERATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: themeValue, prompt: secondPassPrompt })
+                });
+                if (!secondResponse.ok) throw new Error('Failed to improve site');
+                const improvedData = await secondResponse.json();
+                const improvedCode = improvedData.html || improvedData.code;
                 currentGeneration = {
                     theme: themeValue,
-                    code: data.html || data.code // support both html and code keys
+                    code: improvedCode
                 };
                 setDisplayedGeneration(currentGeneration);
                 setTimeout(() => {
-                    generatedContent.innerHTML = currentGeneration.code;
+                    generatedContent.innerHTML = improvedCode;
                     disableGeneratedContextMenu(generatedContent);
                     loadingOverlay.classList.add('hidden');
                     // Hide themeStatus after loading
@@ -585,7 +606,7 @@
                     const theme = await getRandomTheme();
                     themeInput.value = theme;
                 } catch (e) {
-                    themeInput.value = 'glitching coral';
+                    themeInput.value = 'nothing found';
                 }
                 randomThemeButton.disabled = false;
                 randomThemeButton.textContent = 'random_theme';
