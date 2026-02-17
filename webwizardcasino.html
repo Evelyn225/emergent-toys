@@ -674,7 +674,10 @@ ${firstPassCode}
             backButton.addEventListener('click', backToGeneratedSite);
             favoritesButton.addEventListener('click', () => {
                 loadFavorites();
-                modal.classList.add('show');
+                // Show modal regardless of theme screen state
+                document.getElementById('favoritesModal').classList.add('show');
+                // Hide theme screen when modal is opened
+                document.getElementById('themeScreen').style.display = 'none';
             });
             closeModal.addEventListener('click', () => {
                 modal.classList.remove('show');
