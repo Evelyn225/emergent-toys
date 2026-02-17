@@ -456,7 +456,7 @@
                 progressInterval = setInterval(() => {
                     if (progress < 85) {
                         // Ease in: slow at first, then faster
-                        t += 0.0025; // Even slower
+                        t += 0.005; // Even slower
                         // Use an ease-out cubic function for natural feel
                         let eased = 85 * (1 - Math.pow(1 - t, 3));
                         // Prevent overshooting
