@@ -155,11 +155,17 @@
                 }).join('');
                 regenerateButton.disabled = false;
                 regenerateButton.onclick = () => {
-                    // Show theme screen, hide generated content, reset button
-                    document.getElementById('themeScreen').style.display = 'flex';
-                    document.getElementById('topBar').style.display = 'flex';
-                    document.getElementById('generatedContent').innerHTML = '';
-                    setRegenerateButtonText('generate');
+                    // Show loading overlay if site is generating
+                    if (isGenerating) {
+                        document.getElementById('loadingOverlay').classList.remove('hidden');
+                        document.getElementById('themeScreen').style.display = 'none';
+                    } else {
+                        // Show theme screen, hide generated content, reset button
+                        document.getElementById('themeScreen').style.display = 'flex';
+                        document.getElementById('topBar').style.display = 'flex';
+                        document.getElementById('generatedContent').innerHTML = '';
+                        setRegenerateButtonText('generate');
+                    }
                 };
             } else {
                 regenerateButton.textContent = text;
@@ -624,14 +630,20 @@ ${firstPassCode}
 
             notification.addEventListener('click', () => {});
             regenerateButton.addEventListener('click', () => {
-                // Show theme screen, hide generated content, reset button
-                themeScreen.style.display = 'flex';
-                topBar.style.display = 'flex';
-                document.getElementById('generatedContent').innerHTML = '';
-                // Always reset regenerate button when theme screen is shown
-                setRegenerateButtonText('generate');
-                regenerateButton.disabled = false;
-                // Do NOT hide loadingOverlay here; it will be hidden after generation completes
+                // Show loading overlay if site is generating
+                if (isGenerating) {
+                    document.getElementById('loadingOverlay').classList.remove('hidden');
+                    document.getElementById('themeScreen').style.display = 'none';
+                } else {
+                    // Show theme screen, hide generated content, reset button
+                    document.getElementById('themeScreen').style.display = 'flex';
+                    document.getElementById('topBar').style.display = 'flex';
+                    document.getElementById('generatedContent').innerHTML = '';
+                    // Always reset regenerate button when theme screen is shown
+                    setRegenerateButtonText('generate');
+                    regenerateButton.disabled = false;
+                    // Do NOT hide loadingOverlay here; it will be hidden after generation completes
+                }
             });
             randomThemeButton.addEventListener('click', async () => {
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
