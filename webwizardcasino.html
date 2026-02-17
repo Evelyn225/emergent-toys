@@ -19,15 +19,25 @@
 </head>
 
 <body>
-    <div id="topBar">
+    <div id="topBar" style="display:none;">
         <button id="backButton" style="display: none;">back_to_site</button>
         <button id="saveButton">save_favorite</button>
         <button id="favoritesButton">view_favorites</button>
         <button id="newSiteNotification" style="display: none;">// new site ready</button>
-        <input id="themeInput" type="text" placeholder="Enter a theme (e.g. glitching coral)" style="margin-right:8px; font-size:16px; padding:4px 8px; border-radius:2px; border:1px solid #ccc; font-family:'Iosevka',monospace; width:220px;">
-        <button id="randomThemeButton">random_theme</button>
         <button id="regenerateButton">generate</button>
         <a href="index.html" id="homeButton" style="padding: 12px 12px; background: transparent; color: rgba(255, 255, 255, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; cursor: pointer; font-size: 18px; font-family: 'Iosevka', monospace; text-decoration: none; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); display: flex; align-items: center; line-height: 1;" onmouseover="this.style.transform='scale(1.2)'; this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
+    </div>
+
+    <div id="themeScreen" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:80vh; background:#181818; color:#cfcfcf; font-family:'Iosevka',monospace;">
+        <div style="max-width:480px; width:100%; background:#222; border-radius:6px; box-shadow:0 2px 16px #0008; padding:32px 24px; border:1px solid #333;">
+            <div style="font-size:22px; font-weight:600; margin-bottom:18px; letter-spacing:0.5px;">Casino Terminal</div>
+            <div style="font-size:15px; margin-bottom:24px; color:#aaa;">Enter a theme for your generative site, or let the wizard choose one for you.</div>
+            <div style="display:flex; gap:8px; margin-bottom:24px;">
+                <input id="themeInput" type="text" placeholder="Enter a theme (e.g. glitching coral)" style="flex:1; font-size:16px; padding:8px 12px; border-radius:3px; border:1px solid #444; background:#181818; color:#cfcfcf; font-family:'Iosevka',monospace;">
+                <button id="randomThemeButton" style="background:#222; color:#cfcfcf; border:1px solid #444; border-radius:3px; font-size:16px; padding:8px 16px; cursor:pointer;">random_theme</button>
+            </div>
+            <button id="startGenerationButton" style="width:100%; background:#181818; color:#cfcfcf; border:1px solid #444; border-radius:3px; font-size:18px; padding:12px 0; cursor:pointer; font-family:'Iosevka',monospace;">generate site</button>
+        </div>
     </div>
 
     <div id="favoritesModal">
@@ -472,11 +482,12 @@
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
             const themeInput = document.getElementById('themeInput');
-            if (currentGeneration.theme && currentGeneration.code) {
-                previousGeneration = { ...currentGeneration };
-            }
-            backgroundGeneration = null;
+            const themeScreen = document.getElementById('themeScreen');
+            const topBar = document.getElementById('topBar');
+            // Hide theme screen, show loading overlay
+            themeScreen.style.display = 'none';
             loadingOverlay.classList.remove('hidden');
+            topBar.style.display = 'flex';
             setRegenerateButtonText('generating...');
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
@@ -495,16 +506,17 @@
                 clearInterval(loadingMessageInterval);
                 loadingMessageInterval = null;
             }
+            if (currentGeneration.theme && currentGeneration.code) {
+                previousGeneration = { ...currentGeneration };
+            }
+            backgroundGeneration = null;
             try {
                 let theme = themeInput.value.trim();
                 if (!theme) {
-                    // If no theme entered, get a random one
                     theme = await getRandomTheme();
                     themeInput.value = theme;
                 }
-                // Compose prompt
                 const prompt = createGenerationPrompt(theme);
-                // Call AI backend
                 const response = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -517,7 +529,6 @@
                     code: data.code
                 };
                 setDisplayedGeneration(currentGeneration);
-                // Render
                 setTimeout(() => {
                     generatedContent.innerHTML = data.code;
                     disableGeneratedContextMenu(generatedContent);
@@ -545,10 +556,20 @@
             const notification = document.getElementById('newSiteNotification');
             const randomThemeButton = document.getElementById('randomThemeButton');
             const themeInput = document.getElementById('themeInput');
+            const themeScreen = document.getElementById('themeScreen');
+            const startGenerationButton = document.getElementById('startGenerationButton');
+            const topBar = document.getElementById('topBar');
+
+            // Show theme screen initially
+            themeScreen.style.display = 'flex';
+            topBar.style.display = 'none';
 
             notification.addEventListener('click', () => {});
             regenerateButton.addEventListener('click', () => {
-                generateWebsite();
+                // Show theme screen, hide top bar and generated content
+                themeScreen.style.display = 'flex';
+                topBar.style.display = 'none';
+                document.getElementById('generatedContent').innerHTML = '';
             });
             randomThemeButton.addEventListener('click', async () => {
                 randomThemeButton.disabled = true;
@@ -564,8 +585,11 @@
             });
             themeInput.addEventListener('keydown', e => {
                 if (e.key === 'Enter') {
-                    generateWebsite();
+                    startGenerationButton.click();
                 }
+            });
+            startGenerationButton.addEventListener('click', () => {
+                generateWebsite();
             });
             saveButton.addEventListener('click', saveFavorite);
             backButton.addEventListener('click', backToGeneratedSite);
@@ -581,7 +605,6 @@
                     modal.classList.remove('show');
                 }
             });
-            generateWebsite();
         });
     </script>
 </body>
