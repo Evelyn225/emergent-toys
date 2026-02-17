@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `CREATE: One creative two-word theme for a generative art website
+          content: `CREATE: One random two-word theme for a generative art website
 FORMAT: word1 word2
 RULES: No explanations, just output.`
         },
@@ -38,7 +38,7 @@ RULES: No explanations, just output.`
           content: "Create a theme."
         }
       ],
-      temperature: 0.8
+      temperature: 0.95
     });
 
     let theme = completion.choices[0].message.content.trim();
