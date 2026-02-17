@@ -613,10 +613,15 @@ ${firstPassCode}
                 themeScreen.style.display = 'flex';
                 topBar.style.display = 'flex';
                 document.getElementById('generatedContent').innerHTML = '';
+                // Always reset regenerate button when theme screen is shown
+                setRegenerateButtonText('generate');
+                regenerateButton.disabled = false;
                 // Do NOT hide loadingOverlay here; it will be hidden after generation completes
             });
             randomThemeButton.addEventListener('click', async () => {
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
+                setRegenerateButtonText('generate');
+                regenerateButton.disabled = false;
                 randomThemeButton.disabled = true;
                 randomThemeButton.textContent = '...';
                 try {
@@ -630,12 +635,16 @@ ${firstPassCode}
             });
             themeInput.addEventListener('keydown', e => {
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
+                setRegenerateButtonText('generate');
+                regenerateButton.disabled = false;
                 if (e.key === 'Enter') {
                     startGenerationButton.click();
                 }
             });
             startGenerationButton.addEventListener('click', () => {
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
+                setRegenerateButtonText('generate');
+                regenerateButton.disabled = false;
                 generateWebsite();
             });
             saveButton.addEventListener('click', saveFavorite);
