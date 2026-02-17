@@ -363,6 +363,8 @@
             const container = document.getElementById('generatedContent');
             clearAndSandbox(container);
             container.style.display = 'block';
+            // Always hide new site ready button when showing a generated site
+            document.getElementById('newSiteNotification').style.display = 'none';
             const isFullHTML = /<html[\s>]/i.test(gen.code) || /<body[\s>]/i.test(gen.code) || /<script[\s>]/i.test(gen.code) || /<style[\s>]/i.test(gen.code);
             if (isFullHTML) {
                 setTimeout(() => {
