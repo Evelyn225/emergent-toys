@@ -370,7 +370,9 @@
                 setTimeout(() => {
                     container.innerHTML = gen.code;
                     disableGeneratedContextMenu(container);
+                    // Remove all script tags from container
                     Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
+                    // Extract scripts from a temp div and append them to container
                     const tempDiv = document.createElement('div');
                     tempDiv.innerHTML = gen.code;
                     const scripts = tempDiv.querySelectorAll('script');
@@ -382,7 +384,7 @@
                         if (oldScript.textContent) {
                             newScript.textContent = oldScript.textContent;
                         }
-                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                        container.appendChild(newScript);
                     });
                 }, 0);
             } else {
@@ -447,6 +449,8 @@
                         deleteFavorite(Number(item.dataset.id));
                         e.stopPropagation();
                     } else {
+                        // Close modal and preview favorite
+                        document.getElementById('favoritesModal').classList.remove('show');
                         previewFavorite(Number(item.dataset.id));
                     }
                 });
