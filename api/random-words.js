@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `CREATE: Two truly random unusual words.
+          content: `CREATE: Two random words.
 FORMAT: word1 word2
 RULES: No explanations, just output.`
         },
