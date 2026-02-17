@@ -452,9 +452,9 @@
             let progress = 0;
             let t = 0;
             let progressInterval = setInterval(() => {
-                if (progress < 50) {
+                if (progress < 90) {
                     // Ease in: slow at first, then faster
-                    t += 0.0125; // Controls overall speed (smaller = slower)
+                    t += 0.005; // Slower overall speed (smaller = slower)
                     // Use an ease-out cubic function for natural feel
                     let eased = 90 * (1 - Math.pow(1 - t, 3));
                     // Prevent overshooting
@@ -462,7 +462,7 @@
                     progress = eased;
                     setProgressBar(progress);
                 }
-            }, 60); // Faster update for smoothness
+            }, 100); // Slower update for smoother, longer loading
             document.getElementById('consoleOutput').innerHTML = '';
             // Ensure theme variable is always defined and in scope
             let themeValue = themeInput.value.trim();
@@ -492,9 +492,6 @@
                 if (!response.ok) throw new Error('Failed to generate site');
                 const data = await response.json();
                 let firstPassCode = data.html || data.code;
-                // Jump progress bar to 50% after first pass
-                progress = 50;
-                setProgressBar(progress);
                 // Second pass: ask AI to flesh out and fully implement referenced functions
                 const secondPassPrompt = `
 You previously generated this site for the theme: "${themeValue}". Please review and improve it:
@@ -553,8 +550,8 @@ ${firstPassCode}
                                     container.appendChild(errorDiv);
                                 }
                             });
-                    // Complete progress bar after second pass
-                    progress = 100;
+                    // Complete progress bar
+                    setProgressBar(100);
                     clearInterval(progressInterval);
                     loadingOverlay.classList.add('hidden');
                     // Hide themeStatus after loading
