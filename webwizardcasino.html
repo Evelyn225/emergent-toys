@@ -458,6 +458,18 @@
                 setTimeout(() => {
                     container.innerHTML = favorite.code;
                     disableGeneratedContextMenu(container);
+                    // Execute any script tags in the loaded favorite
+                    const scripts = container.querySelectorAll('script');
+                    scripts.forEach(oldScript => {
+                        const newScript = document.createElement('script');
+                        for (const attr of oldScript.attributes) {
+                            newScript.setAttribute(attr.name, attr.value);
+                        }
+                        if (oldScript.textContent) {
+                            newScript.textContent = oldScript.textContent;
+                        }
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                    });
                 }, 0);
             } else {
                 container.textContent = favorite.code;
@@ -573,7 +585,6 @@ ${firstPassCode}
                     theme: themeValue,
                     code: improvedCode
                 };
-                setDisplayedGeneration(currentGeneration);
                 // If viewing a favorite, store pendingGeneration and show new site ready button
                 if (displayedGeneration && displayedGeneration.theme && displayedGeneration.code && displayedGeneration.theme !== themeValue) {
                     pendingGeneration = { ...currentGeneration };
@@ -583,6 +594,8 @@ ${firstPassCode}
                     pendingGeneration = null;
                     const notification = document.getElementById('newSiteNotification');
                     if (notification) notification.style.display = 'none';
+                    // Only show new site immediately if not viewing a favorite
+                    setDisplayedGeneration(currentGeneration);
                 }
                 setTimeout(() => {
                     generatedContent.innerHTML = improvedCode;
@@ -591,11 +604,9 @@ ${firstPassCode}
                     const scripts = generatedContent.querySelectorAll('script');
                     scripts.forEach(oldScript => {
                         const newScript = document.createElement('script');
-                        // Copy attributes
                         for (const attr of oldScript.attributes) {
                             newScript.setAttribute(attr.name, attr.value);
                         }
-                        // Copy inline code
                         if (oldScript.textContent) {
                             newScript.textContent = oldScript.textContent;
                         }
