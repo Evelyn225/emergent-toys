@@ -19,9 +19,6 @@
 
 <body>
     <div id="topBar" style="display:none;">
-        <button id="saveButton">save_favorite</button>
-        <button id="favoritesButton">view_favorites</button>
-        <button id="newSiteNotification">// new site ready</button>
         <button id="regenerateButton">generate</button>
         <a href="index.html" id="homeButton" style="padding: 12px 12px; background: transparent; color: rgba(255, 255, 255, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; cursor: pointer; font-size: 18px; font-family: 'Iosevka', monospace; text-decoration: none; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); display: flex; align-items: center; line-height: 1;" onmouseover="this.style.transform='scale(1.2)'; this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
     </div>
@@ -38,13 +35,6 @@
         </div>
     </div>
 
-    <div id="favoritesModal">
-        <div id="favoritesContent">
-            <button id="closeModal">&times;</button>
-            <h2>Saved Favorites</h2>
-            <div id="favoritesGrid"></div>
-        </div>
-    </div>
 
     <div id="loadingOverlay">
         <div id="consoleOutput"></div>
@@ -62,17 +52,10 @@
     </div>
 
     <div id="generatedContent"></div>
-    <div id="favoritePreview">
-        <div class="favorite-preview-inner">
-            <iframe id="favoritePreviewIframe" sandbox="allow-scripts allow-same-origin"></iframe>
-        </div>
-    </div>
 
     <script>
         let consoleCommands = [];
         let consoleCommandsLoaded = false;
-        // Fix: Declare pendingGeneration at top-level scope
-        let pendingGeneration = null;
         (async () => {
             try {
                 const response = await fetch('/casino-assets/console-commands.json');
@@ -351,13 +334,6 @@
             return data.theme;
         }
 
-        // Favorites management
-
-        function isSavedFavorite(theme) {
-            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            return favorites.some(f => f.theme === theme);
-        }
-
         function setDisplayedGeneration(gen) {
             displayedGeneration = gen;
             const container = document.getElementById('generatedContent');
@@ -396,66 +372,6 @@
             document.getElementById('newSiteNotification').style.display = 'none';
         }
         
-        function updateSaveButtonState() {
-            const saveButton = document.getElementById('saveButton');
-            if (!saveButton) return;
-            // Only show save button if displaying an unsaved, generated site
-            if (!displayedGeneration || !displayedGeneration.code) {
-                saveButton.style.display = 'none';
-                return;
-            }
-            // Hide save button if theme screen is visible
-            if (document.getElementById('themeScreen').style.display !== 'none') {
-                saveButton.style.display = 'none';
-                return;
-            }
-            const hasIdentity = Boolean(displayedGeneration.theme);
-            const isSaved = hasIdentity && isSavedFavorite(displayedGeneration.theme);
-            const isCurrentGeneration = currentGeneration.code === displayedGeneration.code && currentGeneration.theme === displayedGeneration.theme;
-            saveButton.style.display = (isSaved || !isCurrentGeneration) ? 'none' : 'block';
-        }
-        
-        function saveFavorite() {
-            if (!displayedGeneration || !displayedGeneration.code) return;
-            if (!displayedGeneration.theme) return;
-            if (isSavedFavorite(displayedGeneration.theme)) return;
-            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            const favorite = {
-                id: Date.now(),
-                theme: displayedGeneration.theme,
-                code: displayedGeneration.code
-            };
-            favorites.push(favorite);
-            localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
-            updateSaveButtonState();
-        }
-
-        function loadFavorites() {
-            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            const grid = document.getElementById('favoritesGrid');
-            if (favorites.length === 0) {
-                grid.innerHTML = '<div style="padding:24px; color:#aaa;">No favorites saved yet.</div>';
-                return;
-            }
-            grid.innerHTML = favorites.map(fav => `
-                <div class="favorite-item" data-id="${fav.id}">
-                    ${fav.theme}
-                    <button class="delete-btn">X</button>
-                </div>
-            `).reverse().join('');
-            document.querySelectorAll('.favorite-item').forEach(item => {
-                item.addEventListener('click', e => {
-                    if (e.target.classList.contains('delete-btn')) {
-                        deleteFavorite(Number(item.dataset.id));
-                        e.stopPropagation();
-                    } else {
-                        // Close modal and preview favorite
-                        document.getElementById('favoritesModal').classList.remove('show');
-                        previewFavorite(Number(item.dataset.id));
-                    }
-                });
-            });
-        }
         // Utility to sandbox and clear preview or generated site
         function clearAndSandbox(container) {
             // Remove all child nodes and scripts
@@ -469,67 +385,7 @@
             }
         }
 
-        function previewFavorite(id) {
-            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            const favorite = favorites.find(f => f.id === id);
-            if (!favorite) return;
-            document.getElementById('themeScreen').style.display = 'none';
-            document.getElementById('topBar').style.display = 'flex';
-            const preview = document.getElementById('favoritePreview');
-            clearAndSandbox(preview);
-            updateSaveButtonState();
-            preview.style.display = 'flex';
-            // Use a sandboxed iframe for preview
-            const iframe = document.getElementById('favoritePreviewIframe');
-            if (iframe) {
-                try {
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    doc.open();
-                    doc.write(favorite.code);
-                    doc.close();
-                } catch (e) {
-                    iframe.srcdoc = `<div class='error-overlay'>Favorite error: ${e}</div>`;
-                }
-            }
-            // Show new site ready button if pendingGeneration exists
-            if (pendingGeneration && pendingGeneration.theme && pendingGeneration.code) {
-                document.getElementById('newSiteNotification').style.display = 'block';
-            } else {
-                document.getElementById('newSiteNotification').style.display = 'none';
-            }
-        }
 
-        function loadFavorite(id) {
-            // No longer used for preview, only for switching
-            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            const favorite = favorites.find(f => f.id === id);
-            if (!favorite) return;
-            const modal = document.getElementById('favoritesModal');
-            modal.classList.remove('show');
-            if (currentGeneration.theme && currentGeneration.code) {
-                previousGeneration = { ...currentGeneration };
-            }
-            wasLoadingWhenGenerated = false;
-            currentGeneration = {
-                theme: favorite.theme,
-                code: favorite.code
-            };
-            displayedGeneration = { ...favorite };
-            setDisplayedGeneration(displayedGeneration);
-            document.getElementById('favoritePreview').style.display = 'none';
-        }
-
-        function deleteFavorite(id) {
-            if (!confirm('Delete this favorite?')) return;
-            
-            let favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            favorites = favorites.filter(f => f.id !== id);
-            localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
-            
-            loadFavorites();
-            // Update save button state in case the current site was deleted from favorites
-            updateSaveButtonState();
-        }
 
         // Call AI API to generate a site for a theme
         async function generateWebsite() {
@@ -622,16 +478,8 @@ ${firstPassCode}
                     theme: themeValue,
                     code: improvedCode
                 };
-                // If viewing a favorite, store pendingGeneration and show new site ready button
-                if (document.getElementById('favoritePreview').style.display === 'flex') {
-                    pendingGeneration = { ...currentGeneration };
-                    newSiteNotification.style.display = 'block';
-                } else {
-                    pendingGeneration = null;
-                    newSiteNotification.style.display = 'none';
-                    // Only show new site immediately if not viewing a favorite
-                    setDisplayedGeneration(currentGeneration);
-                }
+                // Only show new site immediately
+                setDisplayedGeneration(currentGeneration);
                 setTimeout(() => {
                     generatedContent.innerHTML = improvedCode;
                     disableGeneratedContextMenu(generatedContent);
@@ -679,11 +527,6 @@ ${firstPassCode}
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             const regenerateButton = document.getElementById('regenerateButton');
-            const saveButton = document.getElementById('saveButton');
-            const favoritesButton = document.getElementById('favoritesButton');
-            const closeModal = document.getElementById('closeModal');
-            const modal = document.getElementById('favoritesModal');
-            const notification = document.getElementById('newSiteNotification');
             const randomThemeButton = document.getElementById('randomThemeButton');
             const themeInput = document.getElementById('themeInput');
             const themeScreen = document.getElementById('themeScreen');
@@ -695,7 +538,6 @@ ${firstPassCode}
             topBar.style.display = 'flex';
             document.getElementById('loadingOverlay').classList.add('hidden');
 
-            notification.addEventListener('click', () => {});
             regenerateButton.addEventListener('click', () => {
                 // Show loading overlay if site is generating
                 if (isGenerating) {
@@ -740,19 +582,6 @@ ${firstPassCode}
                 setRegenerateButtonText('generate');
                 regenerateButton.disabled = false;
                 generateWebsite();
-            });
-            saveButton.addEventListener('click', saveFavorite);
-            favoritesButton.addEventListener('click', () => {
-                loadFavorites();
-                modal.classList.add('show');
-            });
-            closeModal.addEventListener('click', () => {
-                modal.classList.remove('show');
-            });
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('show');
-                }
             });
         });
     </script>

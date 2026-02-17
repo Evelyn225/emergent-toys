@@ -108,9 +108,7 @@ body {
     font-family: 'Iosevka', monospace;
 }
 
-#topBar button,
-#closeModal,
-.favorite-item .delete-btn {
+#topBar button {
     border-width: 2px;
     box-shadow: 1px 1px 0 rgba(255, 255, 255, 0.25),
         2px 2px 0 rgba(255, 255, 255, 0.18),
@@ -139,68 +137,17 @@ body {
     margin-left: auto;
 }
 
-#backButton {
-    padding: 12px 24px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 2px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 400;
-    font-family: 'Iosevka', monospace;
-    letter-spacing: 0.5px;
-    transition: all 0.2s;
-}
-
-#saveButton {
-    padding: 12px 24px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 2px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 400;
-    font-family: 'Iosevka', monospace;
-    letter-spacing: 0.5px;
-    transition: all 0.2s;
-}
-
-#favoritesButton {
-    padding: 12px 24px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 2px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 400;
-    font-family: 'Iosevka', monospace;
-    letter-spacing: 0.5px;
-    transition: all 0.2s;
-}
-
-#regenerateButton:hover,
-#backButton:hover,
-#saveButton:hover,
-#favoritesButton:hover,
-#newSiteNotification:hover {
+#regenerateButton:hover {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.6);
     color: rgba(255, 255, 255, 1);
 }
 
-#regenerateButton:active,
-#backButton:active,
-#saveButton:active,
-#favoritesButton:active {
+#regenerateButton:active {
     background: rgba(255, 255, 255, 0.1);
 }
 
-#topBar button:active,
-#closeModal:active,
-.favorite-item .delete-btn:active {
+#topBar button:active {
     box-shadow: 0px 0px 0px 0px;
     transform: translate(4px, 4px);
 }
@@ -219,164 +166,6 @@ body {
 @keyframes buttonWave {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-3px); }
-}
-
-#saveButton:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-#favoritesModal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: #0c0c0cab;
-    z-index: 20000;
-    display: none;
-    justify-content: center;
-    align-items: center;
-    overflow-y: auto;
-    font-family: 'Iosevka', monospace;
-}
-
-#favoritesModal.show {
-    display: flex;
-}
-
-#favoritesContent {
-    background: #0C0C0C;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 60px;
-    border-radius: 2px;
-    max-width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    position: relative;
-}
-
-#favoritesContent h2 {
-    margin: 0 0 40px 0;
-    font-size: 28px;
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: 400;
-    text-align: left;
-    letter-spacing: 2px;
-}
-
-#favoritesContent h2::before {
-    content: '> ';
-    color: rgba(255, 255, 255, 0.5);
-}
-
-/* macOS console-style scrollbar */
-#favoritesContent {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.06);
-}
-
-#favoritesContent::-webkit-scrollbar {
-    width: 10px;
-}
-
-#favoritesContent::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
-}
-
-#favoritesContent::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.2));
-    border-radius: 10px;
-    border: 2px solid rgba(10, 14, 39, 0.9);
-}
-
-#favoritesContent::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.3));
-}
-
-#favoritesGrid {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    max-height: 60vh;
-    overflow-y: auto;
-    padding-right: 8px;
-}
-
-.favorite-item {
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 2px;
-    padding: 24px 24px 24px 24px;
-    cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
-    position: relative;
-    background: rgba(255, 255, 255, 0.02);
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    font-size: 18px;
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: 600;
-    letter-spacing: 1px;
-    word-break: break-word;
-}
-
-.favorite-item:hover {
-    border-color: rgba(255, 255, 255, 0.4);
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.favorite-item .delete-btn {
-    margin-left: auto;
-    background: transparent;
-    color: rgba(255, 100, 100, 0.7);
-    border: 1px solid rgba(255, 100, 100, 0.3);
-    border-radius: 2px;
-    width: 28px;
-    height: 28px;
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-    padding-bottom: 3px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-    z-index: 2;
-}
-
-.favorite-item .delete-btn:hover {
-    background: rgba(255, 100, 100, 0.1);
-    border-color: rgba(255, 100, 100, 0.5);
-    color: rgba(255, 100, 100, 0.9);
-}
-
-#closeModal {
-    position: absolute;
-    top: 30px;
-    right: 30px;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    font-size: 20px;
-    cursor: pointer;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1;
-    padding-bottom: 3px;
-    width: 36px;
-    height: 36px;
-    border-radius: 2px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-#closeModal:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.4);
-    color: rgba(255, 255, 255, 0.9);
 }
 
 #loadingOverlay {
@@ -544,79 +333,6 @@ body {
     display: block;
 }
 
-/* NEW SITE READY BUTTON (favorites preview) */
-#newSiteNotification {
-    display: none;
-    /* Inherit topBar button styles */
-    background: transparent;
-    color: rgba(255, 255, 255, 0.8);
-    border: 2px solid #ff3333;
-    border-radius: 3px;
-    padding: 12px 24px;
-    font-size: 16px;
-    font-family: 'Iosevka', monospace;
-    font-weight: 600;
-    letter-spacing: 1.2px;
-    text-transform: uppercase;
-    box-shadow: 1px 1px 0 rgba(255, 255, 255, 0.25),
-        2px 2px 0 rgba(255, 255, 255, 0.18),
-        3px 3px 0 rgba(255, 255, 255, 0.12),
-        4px 4px 0 rgba(255, 255, 255, 0.08);
-    margin-right: 8px;
-    margin-left: 8px;
-    cursor: pointer;
-    position: relative;
-    animation: flashRedOutline 1s linear infinite alternate;
-    transition: background 0.2s, color 0.2s, border 0.2s;
-}
-
-@keyframes flashRedOutline {
-    0% {
-        border-color: #ff3333;
-        box-shadow: 0 0 8px 2px #ff3333, 1px 1px 0 rgba(255,255,255,0.25);
-    }
-    50% {
-        border-color: #fff;
-        box-shadow: 0 0 16px 4px #ff3333, 2px 2px 0 rgba(255,255,255,0.18);
-    }
-    100% {
-        border-color: #ff3333;
-        box-shadow: 0 0 8px 2px #ff3333, 3px 3px 0 rgba(255,255,255,0.12);
-    }
-}
-
-#newSiteNotification:hover {
-    background: #fff;
-    color: #ff9800;
-    border-color: #ff9800;
-}
-
-@keyframes blinkingRedOutline {
-    0%, 100% {
-        border-color: rgba(255, 100, 100, 0.3);
-    }
-    50% {
-        border-color: rgba(255, 100, 100, 0.9);
-        box-shadow: 0 0 10px rgba(255, 100, 100, 0.6);
-    }
-}
-
-@keyframes pulse {
-    0% {
-        opacity: 0;
-        transform: scale(0.9);
-        border-color: rgba(100, 255, 218, 0.3);
-    }
-    50% {
-        border-color: rgba(100, 255, 218, 0.8);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1);
-        border-color: rgba(255, 255, 255, 0.3);
-    }
-}
-
 /* Mobile responsive styles */
 @media (max-width: 768px) {
     #mainStatus {
@@ -638,38 +354,4 @@ body {
         font-size: 12px;
         margin: 6px 0;
     }
-}
-
-/* FAVORITE PREVIEW MODAL */
-#favoritePreview {
-    display: none;
-    position: fixed;
-    top: 70px;
-    left: 0;
-    width: 100vw;
-    height: calc(100vh - 70px);
-    background: rgba(20,20,30,0.98);
-    z-index: 1200;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-}
-.favorite-preview-inner {
-    width: 100vw;
-    height: 100%;
-    max-width: 100vw;
-    max-height: 100%;
-    background: #222;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-#favoritePreviewIframe {
-    width: 100vw;
-    height: 100%;
-    border: none;
-    background: #222;
 }
