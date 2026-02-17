@@ -451,6 +451,8 @@
                 code: favorite.code
             };
             const container = document.getElementById('generatedContent');
+            // Remove all existing script tags from previous site
+            Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
             container.innerHTML = '';
             container.style.display = 'block';
             const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
@@ -458,8 +460,12 @@
                 setTimeout(() => {
                     container.innerHTML = favorite.code;
                     disableGeneratedContextMenu(container);
+                    // Remove all existing script tags again (in case innerHTML added duplicates)
+                    Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
                     // Execute any script tags in the loaded favorite
-                    const scripts = container.querySelectorAll('script');
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = favorite.code;
+                    const scripts = tempDiv.querySelectorAll('script');
                     scripts.forEach(oldScript => {
                         const newScript = document.createElement('script');
                         for (const attr of oldScript.attributes) {
@@ -468,7 +474,7 @@
                         if (oldScript.textContent) {
                             newScript.textContent = oldScript.textContent;
                         }
-                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                        container.appendChild(newScript);
                     });
                 }, 0);
             } else {
