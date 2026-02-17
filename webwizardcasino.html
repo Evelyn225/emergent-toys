@@ -54,35 +54,33 @@
     <div id="generatedContent"></div>
 
     <script>
-                // Wavy animation and typing ellipses for progress-label
-                function animateProgressLabel() {
-                    const label = document.getElementById('progressLabel');
-                    if (!label) return;
-                    const baseText = 'Processing';
-                    let ellipsis = '';
-                    let ellipsisIndex = 0;
-                    let time = 0;
-                    function render() {
-                        // Wavy animation for each letter using sine wave
-                        label.innerHTML = baseText.split('').map((char, i) => {
-                            // Calculate vertical offset using sine wave
-                            const offset = Math.sin((time/8) + i * 0.35) * 7;
-                            return `<span style="display:inline-block;transform:translateY(${offset}px);transition:transform 0.1s;">${char}</span>`;
-                        }).join('') + `<span id="ellipsisSpan">${ellipsis}</span>`;
-                    }
-                    function animateEllipsis() {
-                        ellipsisIndex = (ellipsisIndex + 1) % 4;
-                        ellipsis = '.'.repeat(ellipsisIndex);
-                        render();
-                    }
-                    render();
-                    setInterval(() => {
-                        time++;
-                        render();
-                    }, 60);
-                    setInterval(animateEllipsis, 400);
-                }
-                document.addEventListener('DOMContentLoaded', animateProgressLabel);
+        // Unified wavy animation for 'Processing...' and ellipses
+        function animateProgressLabel() {
+            const label = document.getElementById('progressLabel');
+            if (!label) return;
+            const baseText = 'Processing';
+            let ellipsisIndex = 0;
+            let time = 0;
+            function render() {
+                // Build full text with ellipses
+                const fullText = baseText + '.'.repeat(ellipsisIndex);
+                label.innerHTML = fullText.split('').map((char, i) => {
+                    // Unified sine wave for all characters
+                    const offset = Math.sin((time/8) + i * 0.35) * 7;
+                    return `<span style="display:inline-block;transform:translateY(${offset}px);transition:transform 0.1s;">${char}</span>`;
+                }).join('');
+            }
+            render();
+            setInterval(() => {
+                time++;
+                render();
+            }, 60);
+            setInterval(() => {
+                ellipsisIndex = (ellipsisIndex + 1) % 4;
+                render();
+            }, 400);
+        }
+        document.addEventListener('DOMContentLoaded', animateProgressLabel);
         let consoleCommands = [];
         let consoleCommandsLoaded = false;
         (async () => {
@@ -376,8 +374,11 @@
             clearAndSandbox(container);
             container.style.display = 'block';
             const isFullHTML = /<html[\s>]/i.test(gen.code) || /<body[\s>]/i.test(gen.code) || /<script[\s>]/i.test(gen.code) || /<style[\s>]/i.test(gen.code);
-            if (isFullHTML) {
-                setTimeout(() => {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            // Hide overlay first, then inject site
+            loadingOverlay.classList.add('hidden');
+            setTimeout(() => {
+                if (isFullHTML) {
                     container.innerHTML = gen.code;
                     disableGeneratedContextMenu(container);
                     // Remove all script tags from container
@@ -396,13 +397,10 @@
                         }
                         container.appendChild(newScript);
                     });
-                }, 0);
-            } else {
-                container.textContent = gen.code;
-            }
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            loadingOverlay.classList.add('hidden');
-            // ...existing code...
+                } else {
+                    container.textContent = gen.code;
+                }
+            }, 120); // Delay to ensure overlay is hidden first
         }
         
         // Utility to sandbox and clear preview or generated site
