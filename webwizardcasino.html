@@ -62,11 +62,9 @@
     </div>
 
     <div id="generatedContent"></div>
-    <div id="favoritePreview" style="display:none;">
-        <!-- Ensure favorite preview is always above generated site and modal -->
-        <div id="favoritePreview">
-            <div style="position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 1200; background: #222; border: 2px solid #444; box-shadow: 0 4px 24px rgba(0,0,0,0.4); padding: 24px; max-width: 900px; min-height: 400px; display: none;">
-            </div>
+    <div id="favoritePreview" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(20,20,30,0.98); z-index:1200; align-items:center; justify-content:center;">
+        <div style="width:90vw; height:90vh; max-width:1200px; max-height:90vh; background:#222; border:2px solid #444; box-shadow:0 4px 24px rgba(0,0,0,0.4); padding:0; display:flex; align-items:center; justify-content:center;">
+            <iframe id="favoritePreviewIframe" style="width:100%; height:100%; border:none; background:#222;" sandbox="allow-scripts allow-same-origin"></iframe>
         </div>
     </div>
 
@@ -467,14 +465,14 @@
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const favorite = favorites.find(f => f.id === id);
             if (!favorite) return;
-            // Hide theme screen and show top bar when previewing a favorite
             document.getElementById('themeScreen').style.display = 'none';
             document.getElementById('topBar').style.display = 'flex';
             const preview = document.getElementById('favoritePreview');
             clearAndSandbox(preview);
+            updateSaveButtonState();
             preview.style.display = 'block';
             // Use a sandboxed iframe for preview
-            const iframe = document.createElement('iframe');
+            const iframe = document.createElement('favoritePreviewIframe');
             iframe.style.width = '100%';
             iframe.style.height = '500px';
             iframe.style.border = 'none';
