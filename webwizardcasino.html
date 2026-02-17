@@ -44,7 +44,7 @@
         </div>
         <div id="currentMessage"></div>
         <div class="progress-container">
-            <div class="progress-label">Processing...</div>
+            <div class="progress-label" id="progressLabel"></div>
             <div class="progress-bar-container">
                 <div class="progress-bar"></div>
             </div>
@@ -54,6 +54,38 @@
     <div id="generatedContent"></div>
 
     <script>
+                // Wavy animation and typing ellipses for progress-label
+                function animateProgressLabel() {
+                    const label = document.getElementById('progressLabel');
+                    if (!label) return;
+                    const baseText = 'Processing';
+                    let ellipsis = '';
+                    let ellipsisIndex = 0;
+                    let waveIndex = 0;
+                    function render() {
+                        // Wavy animation for each letter
+                        label.innerHTML = baseText.split('').map((char, i) => {
+                            const delay = (i * 0.12) + (waveIndex * 0.05);
+                            return `<span style="display:inline-block;animation:waveAnim 1.2s infinite;animation-delay:${delay}s">${char}</span>`;
+                        }).join('') + `<span id="ellipsisSpan">${ellipsis}</span>`;
+                    }
+                    function animateEllipsis() {
+                        ellipsisIndex = (ellipsisIndex + 1) % 4;
+                        ellipsis = '.'.repeat(ellipsisIndex);
+                        render();
+                    }
+                    render();
+                    setInterval(() => {
+                        waveIndex = (waveIndex + 1) % baseText.length;
+                        render();
+                    }, 120);
+                    setInterval(animateEllipsis, 400);
+                }
+                // Add keyframes for waveAnim
+                const style = document.createElement('style');
+                style.innerHTML = `@keyframes waveAnim {0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}`;
+                document.head.appendChild(style);
+                document.addEventListener('DOMContentLoaded', animateProgressLabel);
         let consoleCommands = [];
         let consoleCommandsLoaded = false;
         (async () => {
