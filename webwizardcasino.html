@@ -147,18 +147,12 @@
             return shuffled;
         }
 
-        let loadingMessageInterval = null;
         let currentGeneration = {
             theme: '',
             code: ''
         };
-        let displayedGeneration = null;
-        let previousGeneration = null;
-        let backgroundGeneration = null;
-        let wasLoadingWhenGenerated = false;
         let isGenerating = false;
         let consoleCommandInterval = null;
-        let maxConsoleLines = 5;
 
         // Helper function to set regenerate button text with wave animation
         function setRegenerateButtonText(text) {
@@ -171,30 +165,35 @@
                     return `<span class="button-wave-char" style="animation-delay: ${delay}s">${char}</span>`;
                 }).join('');
                 regenerateButton.disabled = false;
-                regenerateButton.onclick = () => {
-                    // Show loading overlay if site is generating
-                    if (isGenerating) {
-                        document.getElementById('loadingOverlay').classList.remove('hidden');
-                        document.getElementById('themeScreen').style.display = 'none';
-                    } else {
-                        // Show theme screen, hide generated content, reset button
+                // Only attach handler if not already attached
+                if (!regenerateButton._handlerAttached) {
+                    regenerateButton.onclick = () => {
+                        if (isGenerating) {
+                            document.getElementById('loadingOverlay').classList.remove('hidden');
+                            document.getElementById('themeScreen').style.display = 'none';
+                        } else {
+                            document.getElementById('themeScreen').style.display = 'flex';
+                            document.getElementById('topBar').style.display = 'flex';
+                            document.getElementById('generatedContent').innerHTML = '';
+                            setRegenerateButtonText('generate');
+                        }
+                    };
+                    regenerateButton._handlerAttached = true;
+                }
+            } else {
+                regenerateButton.textContent = text;
+                regenerateButton.disabled = false;
+                // Only attach handler if not already attached
+                if (!regenerateButton._handlerAttached) {
+                    regenerateButton.onclick = () => {
                         document.getElementById('themeScreen').style.display = 'flex';
                         document.getElementById('topBar').style.display = 'flex';
                         document.getElementById('generatedContent').innerHTML = '';
                         setRegenerateButtonText('generate');
-                    }
-                };
-            } else {
-                regenerateButton.textContent = text;
-                regenerateButton.disabled = false;
-                regenerateButton.onclick = () => {
-                    // Show theme screen, hide generated content, reset button
-                    document.getElementById('themeScreen').style.display = 'flex';
-                    document.getElementById('topBar').style.display = 'flex';
-                    document.getElementById('generatedContent').innerHTML = '';
-                    setRegenerateButtonText('generate');
-                    regenerateButton.disabled = false;
-                };
+                        regenerateButton.disabled = false;
+                    };
+                    regenerateButton._handlerAttached = true;
+                }
             }
         }
 
