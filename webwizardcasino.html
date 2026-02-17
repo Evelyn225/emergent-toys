@@ -610,17 +610,9 @@ ${firstPassCode}
                 }
                 randomThemeButton.disabled = false;
                 randomThemeButton.textContent = 'random_theme';
-            });
-            themeInput.addEventListener('keydown', e => {
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
-                setRegenerateButtonText('generate');
-                regenerateButton.disabled = false;
-                if (e.key === 'Enter') {
-                    startGenerationButton.click();
-                }
             });
             startGenerationButton.addEventListener('click', () => {
-                topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
                 setRegenerateButtonText('generate');
                 regenerateButton.disabled = false;
                 generateWebsite();
