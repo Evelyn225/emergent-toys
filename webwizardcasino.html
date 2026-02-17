@@ -355,18 +355,14 @@
         function setDisplayedGeneration(gen) {
             displayedGeneration = gen;
             const container = document.getElementById('generatedContent');
-            // Remove all existing script tags from previous site
-            Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
-            container.innerHTML = '';
+            clearAndSandbox(container);
             container.style.display = 'block';
             const isFullHTML = /<html[\s>]/i.test(gen.code) || /<body[\s>]/i.test(gen.code) || /<script[\s>]/i.test(gen.code) || /<style[\s>]/i.test(gen.code);
             if (isFullHTML) {
                 setTimeout(() => {
                     container.innerHTML = gen.code;
                     disableGeneratedContextMenu(container);
-                    // Remove all existing script tags again (in case innerHTML added duplicates)
                     Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
-                    // Execute any script tags in the loaded site, wrapped in try/catch
                     const tempDiv = document.createElement('div');
                     tempDiv.innerHTML = gen.code;
                     const scripts = tempDiv.querySelectorAll('script');
@@ -376,8 +372,7 @@
                             newScript.setAttribute(attr.name, attr.value);
                         }
                         if (oldScript.textContent) {
-                            // Wrap script content in try/catch for robustness
-                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { console.error('Favorite script error:', e); }`;
+                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { document.getElementById('generatedContent').innerHTML += '<div class=\'error-overlay\'>Site error: '+e+'</div>'; }`;
                         }
                         container.appendChild(newScript);
                     });
@@ -451,14 +446,27 @@
                     }
                 });
             });
-        // Preview favorite in dedicated area
+        }
+        // Utility to sandbox and clear preview or generated site
+        function clearAndSandbox(container) {
+            // Remove all child nodes and scripts
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+            // Remove any lingering p5.js instances
+            if (window.p5Instance) {
+                window.p5Instance.remove();
+                window.p5Instance = null;
+            }
+        }
+
         function previewFavorite(id) {
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const favorite = favorites.find(f => f.id === id);
             if (!favorite) return;
             const preview = document.getElementById('favoritePreview');
+            clearAndSandbox(preview);
             preview.style.display = 'block';
-            preview.innerHTML = '';
             const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
             if (isFullHTML) {
                 setTimeout(() => {
@@ -474,7 +482,7 @@
                             newScript.setAttribute(attr.name, attr.value);
                         }
                         if (oldScript.textContent) {
-                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { console.error('Favorite script error:', e); }`;
+                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { document.getElementById('favoritePreview').innerHTML += '<div class=\'error-overlay\'>Favorite error: '+e+'</div>'; }`;
                         }
                         preview.appendChild(newScript);
                     });
@@ -482,7 +490,6 @@
             } else {
                 preview.textContent = favorite.code;
             }
-        }
         }
 
         function loadFavorite(id) {
