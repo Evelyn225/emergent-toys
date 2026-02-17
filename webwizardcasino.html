@@ -566,11 +566,11 @@
 
             notification.addEventListener('click', () => {});
             regenerateButton.addEventListener('click', () => {
-                // Show theme screen, show top bar, hide generated content, hide loading overlay
+                // Show theme screen, show top bar, hide generated content
                 themeScreen.style.display = 'flex';
                 topBar.style.display = 'flex';
                 document.getElementById('generatedContent').innerHTML = '';
-                document.getElementById('loadingOverlay').classList.add('hidden');
+                // Do NOT hide loadingOverlay here; it will be hidden after generation completes
             });
             randomThemeButton.addEventListener('click', async () => {
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
