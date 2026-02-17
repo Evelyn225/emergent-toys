@@ -395,7 +395,13 @@
         function updateSaveButtonState() {
             const saveButton = document.getElementById('saveButton');
             if (!saveButton) return;
+            // Only show save button if displaying an unsaved, generated site
             if (!displayedGeneration || !displayedGeneration.code) {
+                saveButton.style.display = 'none';
+                return;
+            }
+            // Hide save button if theme screen is visible
+            if (document.getElementById('themeScreen').style.display !== 'none') {
                 saveButton.style.display = 'none';
                 return;
             }
@@ -461,6 +467,9 @@
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const favorite = favorites.find(f => f.id === id);
             if (!favorite) return;
+            // Hide theme screen and show top bar when previewing a favorite
+            document.getElementById('themeScreen').style.display = 'none';
+            document.getElementById('topBar').style.display = 'flex';
             const preview = document.getElementById('favoritePreview');
             clearAndSandbox(preview);
             preview.style.display = 'block';
