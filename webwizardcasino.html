@@ -62,6 +62,7 @@
     </div>
 
     <div id="generatedContent"></div>
+    <div id="favoritePreview" style="display:none;"></div>
 
     <script>
         let consoleCommands = [];
@@ -446,23 +447,51 @@
                         deleteFavorite(Number(item.dataset.id));
                         e.stopPropagation();
                     } else {
-                        loadFavorite(Number(item.dataset.id));
-                        // Close modal after loading favorite
-                        document.getElementById('favoritesModal').classList.remove('show');
-                        // Hide theme screen if open
-                        document.getElementById('themeScreen').style.display = 'none';
+                        previewFavorite(Number(item.dataset.id));
                     }
                 });
             });
+        // Preview favorite in dedicated area
+        function previewFavorite(id) {
+            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
+            const favorite = favorites.find(f => f.id === id);
+            if (!favorite) return;
+            const preview = document.getElementById('favoritePreview');
+            preview.style.display = 'block';
+            preview.innerHTML = '';
+            const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
+            if (isFullHTML) {
+                setTimeout(() => {
+                    preview.innerHTML = favorite.code;
+                    disableGeneratedContextMenu(preview);
+                    Array.from(preview.querySelectorAll('script')).forEach(s => s.remove());
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = favorite.code;
+                    const scripts = tempDiv.querySelectorAll('script');
+                    scripts.forEach(oldScript => {
+                        const newScript = document.createElement('script');
+                        for (const attr of oldScript.attributes) {
+                            newScript.setAttribute(attr.name, attr.value);
+                        }
+                        if (oldScript.textContent) {
+                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { console.error('Favorite script error:', e); }`;
+                        }
+                        preview.appendChild(newScript);
+                    });
+                }, 0);
+            } else {
+                preview.textContent = favorite.code;
+            }
+        }
         }
 
         function loadFavorite(id) {
+            // No longer used for preview, only for switching
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const favorite = favorites.find(f => f.id === id);
             if (!favorite) return;
             const modal = document.getElementById('favoritesModal');
             modal.classList.remove('show');
-            // Before loading favorite, set previousGeneration to the current site if it exists
             if (currentGeneration.theme && currentGeneration.code) {
                 previousGeneration = { ...currentGeneration };
             }
@@ -473,6 +502,7 @@
             };
             displayedGeneration = { ...favorite };
             setDisplayedGeneration(displayedGeneration);
+            document.getElementById('favoritePreview').style.display = 'none';
         }
 
         function deleteFavorite(id) {
