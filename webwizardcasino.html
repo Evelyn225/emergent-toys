@@ -339,8 +339,6 @@
             const container = document.getElementById('generatedContent');
             clearAndSandbox(container);
             container.style.display = 'block';
-            // Always hide new site ready button when showing a generated site
-            document.getElementById('newSiteNotification').style.display = 'none';
             const isFullHTML = /<html[\s>]/i.test(gen.code) || /<body[\s>]/i.test(gen.code) || /<script[\s>]/i.test(gen.code) || /<style[\s>]/i.test(gen.code);
             if (isFullHTML) {
                 setTimeout(() => {
@@ -368,8 +366,7 @@
             }
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
-            updateSaveButtonState();
-            document.getElementById('newSiteNotification').style.display = 'none';
+            // ...existing code...
         }
         
         // Utility to sandbox and clear preview or generated site
@@ -401,8 +398,7 @@
             topBar.style.display = 'flex';
             setRegenerateButtonText('generating...');
             regenerateButton.disabled = true;
-            document.getElementById('saveButton').style.display = 'none';
-            document.getElementById('newSiteNotification').style.display = 'none';
+            // ...existing code...
             generatedContent.innerHTML = '';
             isGenerating = true;
             wasLoadingWhenGenerated = true;
