@@ -576,6 +576,8 @@ ${firstPassCode}
                     document.getElementById('themeStatus').style.display = 'none';
                     updateSaveButtonState();
                     updateBackButtonState();
+                    setRegenerateButtonText('generate');
+                    regenerateButton.disabled = false;
                     isGenerating = false;
                 }, 0);
             } catch (error) {
