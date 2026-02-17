@@ -355,7 +355,8 @@
             if (!gen) return;
             displayedGeneration = {
                 theme: gen.theme,
-                code: gen.code
+                // Save the original code as it was received, not after script extraction
+                code: currentGeneration.code
             };
             // Show new site notification
             const notification = document.getElementById('newSiteNotification');
@@ -409,7 +410,7 @@
             }
             grid.innerHTML = favorites.map(fav => `
                 <div class="favorite-item" data-id="${fav.id}">
-                    <div class="favorite-theme">${fav.theme}</div>
+                    ${fav.theme}
                     <button class="delete-btn">X</button>
                 </div>
             `).reverse().join('');
