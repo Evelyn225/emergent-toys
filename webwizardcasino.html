@@ -24,7 +24,9 @@
         <button id="saveButton">save_favorite</button>
         <button id="favoritesButton">view_favorites</button>
         <button id="newSiteNotification" style="display: none;">// new site ready</button>
-        <button id="regenerateButton">regenerate</button>
+        <input id="themeInput" type="text" placeholder="Enter a theme (e.g. glitching coral)" style="margin-right:8px; font-size:16px; padding:4px 8px; border-radius:2px; border:1px solid #ccc; font-family:'Iosevka',monospace; width:220px;">
+        <button id="randomThemeButton">random_theme</button>
+        <button id="regenerateButton">generate</button>
         <a href="index.html" id="homeButton" style="padding: 12px 12px; background: transparent; color: rgba(255, 255, 255, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; cursor: pointer; font-size: 18px; font-family: 'Iosevka', monospace; text-decoration: none; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); display: flex; align-items: center; line-height: 1;" onmouseover="this.style.transform='scale(1.2)'; this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
     </div>
 
@@ -54,25 +56,8 @@
     <div id="generatedContent"></div>
 
     <script>
-        // Load personas data from external JSON file
-        let personasData = {};
-        let personasLoaded = false;
         let consoleCommands = [];
         let consoleCommandsLoaded = false;
-        
-        (async () => {
-            try {
-                const response = await fetch('/casino-assets/personas.json');
-                if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load personas.json`);
-                const data = await response.json();
-                personasData = data.personas;
-                personasLoaded = true;
-                console.log('✓ Personas loaded successfully');
-            } catch (error) {
-                console.error('✗ Error loading personas.json:', error);
-            }
-        })();
-
         (async () => {
             try {
                 const response = await fetch('/casino-assets/console-commands.json');
@@ -91,51 +76,41 @@
         const GENERATE_ENDPOINT = '/api/generate.js';
 
         // Create the prompt for the AI
-        function createGenerationPrompt(theme, persona) {
-            const specialInstructions = getPersonaSpecialInstructions(persona.name);
+        function createGenerationPrompt(theme) {
+            return `
+    CREATE A CREATIVE SITE WITH A P5.JS SKETCH:
 
-            return `Theme: "${theme}"
+    OUTPUT RULES:
+    - Output complete HTML with p5.js JavaScript code wrapped in <script> tags and <style> tags as needed
+    - Include a <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><\/script> tag if needed
+    - MUST include setup() function that calls createCanvas()
+    - MUST include draw() function that calls background() at the start
+    - Must visually incorporate the theme "${theme}" in the sketch
+    - MUST literally include the theme word(s) ${theme} as text in the content somewhere
+    - Create something substantial: 250+ lines of creative code
+    - Have more than one element of interactivity, preferably mouse or keyboard based
+    - Use p5 drawing functions: rect(), ellipse(), line(), fill(), stroke(), etc
+    - Can use: noise(), sin(), cos(), random(), map(), etc for animation
+    - Can add interactivity: mousePressed(), keyPressed(), mouseX, mouseY, etc
+    - Create classes, variables, arrays as needed
+    - Can use images via: loadImage('https://picsum.photos/800/600')
+    - DO NOT use deprecated features (deviceOrientation, etc)
+    - Make it visually interesting and animated
+    - Vary your approach - don't always do the same thing
+    - No markdown code blocks, just raw HTML
+    - DO NOT include any external CSS or JS files except p5.js CDN
 
-YOU ARE: ${persona.name}
-YOUR STYLE: ${persona.style}
-YOUR APPROACH: ${persona.desc}
+    EXAMPLES OF GOOD APPROACHES:
+    - Generative art that evolves over time
+    - Interactive particles or creatures
+    - Animated patterns or fractals  
+    - Games or simulations
+    - Data visualizations
+    - Abstract animations
+    - Geometric explorations
 
-${specialInstructions ? specialInstructions + '\n\n' : ''}CREATE A CREATIVE SITE WITH A P5.JS SKETCH:
-
-OUTPUT RULES:
-- Output complete HTML with p5.js JavaScript code wrapped in <script> tags and <style> tags as needed
-- Include a <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><\/script> tag if needed
-- MUST include setup() function that calls createCanvas()
-- MUST include draw() function that calls background() at the start
-- Must visually incorporate the theme "${theme}" in the sketch
-- MUST literally include the theme word(s) ${theme} as text in the content somewhere
-- Create something substantial: 250+ lines of creative code
-- Have more than one element of interactivity, preferably mouse or keyboard based
-- Use p5 drawing functions: rect(), ellipse(), line(), fill(), stroke(), etc
-- Can use: noise(), sin(), cos(), random(), map(), etc for animation
-- Can add interactivity: mousePressed(), keyPressed(), mouseX, mouseY, etc
-- Create classes, variables, arrays as needed
-- Can use images via: loadImage('https://picsum.photos/800/600')
-- DO NOT use deprecated features (deviceOrientation, etc)
-- Make it visually interesting and animated
-- Vary your approach - don't always do the same thing
-- No markdown code blocks, just raw HTML
-- DO NOT include any external CSS or JS files except p5.js CDN
-
-EXAMPLES OF GOOD APPROACHES:
-- Generative art that evolves over time
-- Interactive particles or creatures
-- Animated patterns or fractals  
-- Games or simulations
-- Data visualizations
-- Abstract animations
-- Geometric explorations
-
-BEGIN HTML OUTPUT:`;
+    BEGIN HTML OUTPUT:`;
         }
-
-        // Persona-specific loading messages are loaded from casino-assets/personas.json
-        // Access via personasData[personaName].loading
 
         // Shuffle message array for randomization
         function shuffleArray(array) {
@@ -322,166 +297,104 @@ BEGIN HTML OUTPUT:`;
             }
         }
 
-        // Get dynamic review messages from personas JSON data
-        function getReviewLoadingMessages(personaName) {
-            let reviewMessages = [];
-            if (personasLoaded && personasData[personaName]) {
-                reviewMessages = personasData[personaName].review || [];
-            }
-            
-            return reviewMessages.length > 0 ? reviewMessages : [
-                "Reviewing and improving code...",
-                "Enhancing your creation...",
-                "Adding the finishing touches...",
-                "Perfecting every detail...",
-                "Making it spectacular...",
+        // Generic loading messages
+        function getLoadingMessages() {
+            return [
+                "Generating creative code...",
+                "Summoning digital muses...",
+                "Drawing pixels from the void...",
+                "Brewing up generative magic...",
+                "Composing a new experience...",
+                "Building your site...",
+                "Unleashing creative chaos...",
+                "Rendering the impossible...",
+                "Inventing new patterns...",
                 "Almost ready..."
             ];
         }
 
-        // Get persona-specific creative instructions from personas JSON data
-        function getPersonaSpecialInstructions(personaName) {
-            if (personasLoaded && personasData[personaName] && personasData[personaName].special) {
-                return personasData[personaName].special;
-            }
-            return "";
-        }
-
-        // Get random words from AI
-        async function getRandomWords() {
-            const response = await fetch(RANDOM_WORDS_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
+        // Get random theme from AI
+        async function getRandomTheme() {
+            const response = await fetch(RANDOM_WORDS_ENDPOINT, {});
             if (!response.ok) {
-                let errorMsg = `API Error: ${response.status}`;
-                try {
-                    const errorData = await response.json().catch(() => ({ error: errorMsg }));
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    const text = await response.text();
-                    if (text) errorMsg = text.substring(0, 200);
-                }
-                throw new Error(errorMsg);
+                throw new Error('Failed to fetch random theme');
             }
-
             const data = await response.json();
-            return data;
+            return data.theme;
         }
 
         // Favorites management
-        function getPersonaNameFrom(gen) {
-            if (!gen || !gen.persona) return '';
-            if (typeof gen.persona === 'string') return gen.persona;
-            return gen.persona.name || '';
-        }
+        // No persona logic needed
 
-        function isSavedFavorite(theme, personaName) {
+        function isSavedFavorite(theme) {
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            return favorites.some(f => f.theme === theme && f.persona === personaName);
+            return favorites.some(f => f.theme === theme);
         }
 
         function setDisplayedGeneration(gen) {
-            if (!gen) {
-                displayedGeneration = null;
-                return;
-            }
+            if (!gen) return;
             displayedGeneration = {
-                theme: gen.theme || '',
-                persona: gen.persona || null,
-                code: gen.code || ''
+                theme: gen.theme,
+                code: gen.code
             };
         }
         
         function updateSaveButtonState() {
             const saveButton = document.getElementById('saveButton');
             if (!saveButton) return;
-            // Show save button on any non-favorited site with rendered content
             if (!displayedGeneration || !displayedGeneration.code) {
                 saveButton.style.display = 'none';
                 return;
             }
-
-            const personaName = getPersonaNameFrom(displayedGeneration);
-            const hasIdentity = Boolean(displayedGeneration.theme && personaName);
-            const isSaved = hasIdentity && isSavedFavorite(displayedGeneration.theme, personaName);
-            const isCurrentGeneration = currentGeneration.code === displayedGeneration.code &&
-                                       currentGeneration.theme === displayedGeneration.theme &&
-                                       getPersonaNameFrom(currentGeneration) === getPersonaNameFrom(displayedGeneration);
-
-            // Only show save button if: has content, has identity, not already saved, AND is the current generation
+            const hasIdentity = Boolean(displayedGeneration.theme);
+            const isSaved = hasIdentity && isSavedFavorite(displayedGeneration.theme);
+            const isCurrentGeneration = currentGeneration.code === displayedGeneration.code && currentGeneration.theme === displayedGeneration.theme;
             saveButton.style.display = (isSaved || !isCurrentGeneration) ? 'none' : 'block';
         }
 
         function updateBackButtonState() {
             const backButton = document.getElementById('backButton');
             if (!backButton) return;
-
-            const personaName = getPersonaNameFrom(previousGeneration);
-            const hasPrevious = Boolean(previousGeneration?.theme && personaName && previousGeneration?.code);
-            const isPrevSaved = hasPrevious && isSavedFavorite(previousGeneration.theme, personaName);
-
+            const hasPrevious = Boolean(previousGeneration?.theme && previousGeneration?.code);
+            const isPrevSaved = hasPrevious && isSavedFavorite(previousGeneration.theme);
             backButton.style.display = hasPrevious && !isPrevSaved ? 'block' : 'none';
         }
         
         function saveFavorite() {
-            if (!displayedGeneration || !displayedGeneration.code) {
-                return;
-            }
-
-            const personaName = getPersonaNameFrom(displayedGeneration);
-            if (!displayedGeneration.theme || !personaName) {
-                return;
-            }
-
-            // Check if already saved
-            if (isSavedFavorite(displayedGeneration.theme, personaName)) {
-                return;
-            }
-
+            if (!displayedGeneration || !displayedGeneration.code) return;
+            if (!displayedGeneration.theme) return;
+            if (isSavedFavorite(displayedGeneration.theme)) return;
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const favorite = {
                 id: Date.now(),
                 theme: displayedGeneration.theme,
-                persona: personaName,
-                code: displayedGeneration.code,
-                timestamp: new Date().toISOString()
+                code: displayedGeneration.code
             };
-
             favorites.push(favorite);
             localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
-            
             updateSaveButtonState();
         }
 
         function loadFavorites() {
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const grid = document.getElementById('favoritesGrid');
-            
             if (favorites.length === 0) {
-                grid.innerHTML = '<p style="color: #666; text-align: center; padding: 40px;">No favorites saved yet. Generate something cool and save it!</p>';
+                grid.innerHTML = '<div style="padding:24px; color:#aaa;">No favorites saved yet.</div>';
                 return;
             }
-
             grid.innerHTML = favorites.map(fav => `
                 <div class="favorite-item" data-id="${fav.id}">
-                    <button class="delete-btn" onclick="deleteFavorite(${fav.id}); event.stopPropagation();">&times;</button>
-                    <h3>${fav.theme}</h3>
-                    <p><strong>Persona:</strong> ${fav.persona}</p>
-                    <p><strong>Saved:</strong> ${new Date(fav.timestamp).toLocaleString()}</p>
+                    <div class="favorite-theme">${fav.theme}</div>
+                    <button class="favorite-delete">delete</button>
                 </div>
             `).reverse().join('');
-
-            // Add click handlers
             document.querySelectorAll('.favorite-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('delete-btn')) return;
-                    const id = parseInt(item.dataset.id);
-                    if (!isNaN(id)) {
-                        loadFavorite(id);
+                item.addEventListener('click', e => {
+                    if (e.target.classList.contains('favorite-delete')) {
+                        deleteFavorite(Number(item.dataset.id));
+                        e.stopPropagation();
+                    } else {
+                        loadFavorite(Number(item.dataset.id));
                     }
                 });
             });
@@ -490,76 +403,32 @@ BEGIN HTML OUTPUT:`;
         function loadFavorite(id) {
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const favorite = favorites.find(f => f.id === id);
-            
             if (!favorite) return;
-
-            // Close modal immediately
             const modal = document.getElementById('favoritesModal');
             modal.classList.remove('show');
-            
-            // Save current generation as previous if it has content and is not already saved
-            if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
-                const currentPersonaName = getPersonaNameFrom(currentGeneration);
-                const isAlreadySaved = currentPersonaName && isSavedFavorite(currentGeneration.theme, currentPersonaName);
-                if (!isAlreadySaved) {
-                    previousGeneration = { ...currentGeneration };
-                } else {
-                    previousGeneration = null;
-                }
-            } else {
-                // No current generation or it's already saved, don't set previous
-                previousGeneration = null;
+            if (currentGeneration.theme && currentGeneration.code) {
+                previousGeneration = { ...currentGeneration };
             }
-            
-            // Mark that we're not on the loading screen anymore
             wasLoadingWhenGenerated = false;
-
-            // Update current generation
             currentGeneration = {
                 theme: favorite.theme,
-                persona: { name: favorite.persona },
                 code: favorite.code
             };
-            
-            // Always render the favorite content
             const container = document.getElementById('generatedContent');
             container.innerHTML = '';
             container.style.display = 'block';
-            
             const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
-            
             if (isFullHTML) {
-                const iframe = document.createElement('iframe');
-                iframe.style.width = '100%';
-                iframe.style.height = '100%';
-                iframe.style.border = 'none';
-                iframe.style.margin = '0';
-                iframe.style.padding = '0';
-                iframe.style.display = 'block';
-                container.appendChild(iframe);
-
-                // Use setTimeout to ensure iframe is ready
                 setTimeout(() => {
-                    iframe.contentDocument.open();
-                    iframe.contentDocument.write(favorite.code);
-                    iframe.contentDocument.close();
-                    disableGeneratedContextMenu(container, iframe);
-                    setDisplayedGeneration(currentGeneration);
+                    container.innerHTML = favorite.code;
+                    disableGeneratedContextMenu(container);
                 }, 0);
             } else {
-                const script = document.createElement('script');
-                script.textContent = favorite.code;
-                container.appendChild(script);
-                disableGeneratedContextMenu(container);
-                setDisplayedGeneration(currentGeneration);
+                container.textContent = favorite.code;
             }
-
-            // Always hide overlay when loading a favorite
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
-            // Update back button state after setting previousGeneration
             updateBackButtonState();
-            // Let helper decide visibility based on favorite status
             updateSaveButtonState();
         }
 
@@ -577,462 +446,91 @@ BEGIN HTML OUTPUT:`;
 
         function backToGeneratedSite() {
             if (!previousGeneration) return;
-
-            // Hide loading overlay
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
             isGenerating = false;
-
-            // Restore the previous generation
             currentGeneration = { ...previousGeneration };
             previousGeneration = null;
             updateBackButtonState();
-            
-            // Render the previous content
             const container = document.getElementById('generatedContent');
             container.innerHTML = '';
             container.style.display = 'block';
-            
             const isFullHTML = /<html[\s>]/i.test(currentGeneration.code) || /<body[\s>]/i.test(currentGeneration.code) || /<script[\s>]/i.test(currentGeneration.code) || /<style[\s>]/i.test(currentGeneration.code);
-            
             if (isFullHTML) {
-                const iframe = document.createElement('iframe');
-                iframe.style.width = '100%';
-                iframe.style.height = '100%';
-                iframe.style.border = 'none';
-                iframe.style.margin = '0';
-                iframe.style.padding = '0';
-                iframe.style.display = 'block';
-                container.appendChild(iframe);
-
                 setTimeout(() => {
-                    iframe.contentDocument.open();
-                    iframe.contentDocument.write(currentGeneration.code);
-                    iframe.contentDocument.close();
-                    disableGeneratedContextMenu(container, iframe);
-                    setDisplayedGeneration(currentGeneration);
-                    updateSaveButtonState();
+                    container.innerHTML = currentGeneration.code;
+                    disableGeneratedContextMenu(container);
                 }, 0);
             } else {
-                const script = document.createElement('script');
-                script.textContent = currentGeneration.code;
-                container.appendChild(script);
-                disableGeneratedContextMenu(container);
-                setDisplayedGeneration(currentGeneration);
-                updateSaveButtonState();
+                container.textContent = currentGeneration.code;
             }
         }
 
-        // Call ChatGPT API via Vercel serverless function - SIMPLIFIED
+        // Call AI API to generate a site for a theme
         async function generateWebsite() {
             const loadingOverlay = document.getElementById('loadingOverlay');
-            const mainStatus = document.getElementById('mainStatus');
-            const themeStatus = document.getElementById('themeStatus');
-            const currentMessage = document.getElementById('currentMessage');
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
-
-            // Save current generation as previous before starting new generation,
-            // but only if it's not already a saved favorite
-            const currentPersonaName = getPersonaNameFrom(currentGeneration);
-            if (currentGeneration.theme && currentPersonaName && currentGeneration.code &&
-                !isSavedFavorite(currentGeneration.theme, currentPersonaName)) {
+            const themeInput = document.getElementById('themeInput');
+            if (currentGeneration.theme && currentGeneration.code) {
                 previousGeneration = { ...currentGeneration };
-            } else {
-                previousGeneration = null;
             }
-
-            // Clear any pending background generation from before
             backgroundGeneration = null;
-
-            // Show loading state
             loadingOverlay.classList.remove('hidden');
             setRegenerateButtonText('generating...');
-            // Hide save button while generating
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
-            if (themeStatus) {
-                themeStatus.textContent = '';
-            }
             updateBackButtonState();
             generatedContent.innerHTML = '';
             isGenerating = true;
             wasLoadingWhenGenerated = true;
-            setProgressBar(0); // Reset progress bar
-            
-            // Clear console and start commands
+            setProgressBar(0);
             document.getElementById('consoleOutput').innerHTML = '';
             startConsoleCommands();
-
-            // Clear any previous p5 instance
             if (window.p5Instance) {
-                try {
-                    window.p5Instance.remove();
-                } catch (e) {}
+                window.p5Instance.remove();
+                window.p5Instance = null;
             }
-
             if (loadingMessageInterval) {
                 clearInterval(loadingMessageInterval);
+                loadingMessageInterval = null;
             }
-
             try {
-                await typeConsoleCommand('Selecting creative persona...', 'normal', 25);
-                setProgressBar(5);
-                const wordData = await getRandomWords();
-                const theme = wordData.theme;
-                const persona = wordData.persona;
-                setProgressBar(10);
-                
-                // Store for favorites
-                currentGeneration.theme = theme;
-                currentGeneration.persona = persona;     
-                
-                await typeConsoleCommand(`Persona loaded: ${persona.name}`, 'status', 25);
-                await typeConsoleCommand(`Theme assigned: "${theme}"`, 'info', 25);
-                
-                // Type out main status
-                await typeText(mainStatus, persona.name.toUpperCase(), 40);
-                await typeText(themeStatus, theme.toUpperCase(), 40);
-                await typeText(currentMessage, `Creating ${theme}...`, 40);
-
-                const sessionTime = new Date().toLocaleTimeString([], { hour12: false });
-                const sessionZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                await typeConsoleCommand(`[INFO] Session started at ${sessionTime} ${sessionZone}`, 'info');
-                
-                // Wait briefly for personas to load if needed
-                let attempts = 0;
-                while (!personasLoaded && attempts < 50) {
-                    await new Promise(r => setTimeout(r, 10));
-                    attempts++;
+                let theme = themeInput.value.trim();
+                if (!theme) {
+                    // If no theme entered, get a random one
+                    theme = await getRandomTheme();
+                    themeInput.value = theme;
                 }
-                
-                // Use loaded persona messages or fallback defaults
-                let personaLoadingMessages = [];
-                if (personasLoaded && personasData[persona.name]) {
-                    personaLoadingMessages = personasData[persona.name].loading || [];
-                }
-                
-                const messages = shuffleArray(personaLoadingMessages.length > 0 ? personaLoadingMessages : [
-                    'Creating something interesting...',
-                    'Building your experience...',
-                    'Crafting the details...'
-                ]);
-                
-                let messageIndex = 0;
-                
-                loadingMessageInterval = setInterval(async () => {
-                    messageIndex = (messageIndex + 1) % messages.length;
-                    await typeText(currentMessage, messages[messageIndex], 40);
-                }, 7000);
-
-                const prompt = createGenerationPrompt(theme, persona);
-
+                // Compose prompt
+                const prompt = createGenerationPrompt(theme);
+                // Call AI backend
                 const response = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        theme: theme,
-                        prompt: prompt
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
                 });
-                setProgressBar(35);
-
-                if (!response.ok) {
-                    let errorMsg = `API Error: ${response.status}`;
-                    try {
-                        const errorData = await response.json();
-                        errorMsg = errorData.error || errorMsg;
-                    } catch (e) {
-                        const text = await response.text();
-                        if (text) errorMsg = text.substring(0, 200);
-                    }
-                    await typeConsoleCommand(`Error: ${errorMsg}`, 'error', 25);
-                    throw new Error(errorMsg);
-                }
-
-                let p5Code;
-                try {
-                    const data = await response.json();
-                    p5Code = data.html; // Still called 'html' in API but now it's just js
-                } catch (parseErr) {
-                    const text = await response.text();
-                    if (text) {
-                        p5Code = text;
-                    } else {
-                        throw new Error('API returned invalid response');
-                    }
-                }
-
-                if (loadingMessageInterval) {
-                    clearInterval(loadingMessageInterval);
-                    loadingMessageInterval = null;
-                }
-
-                // Clean any markdown code blocks (keep full HTML)
-                p5Code = p5Code.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
-                p5Code = p5Code.trim();
-
-                // If the model returned HTML (with tags like html, body, script, style), use as-is
-                // Otherwise wrap pure JS in a minimal HTML shell
-                const hasHtmlTag = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code) || /<style[\s>]/i.test(p5Code);
-                
-                if (!hasHtmlTag) {
-                    // Extract any style content from the code
-                    const styleMatch = p5Code.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-                    let styleContent = '';
-                    let cleanCode = p5Code;
-                    
-                    if (styleMatch) {
-                        styleContent = styleMatch[1];
-                        cleanCode = p5Code.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-                    }
-                    
-                    // Build the HTML shell with styles in head
-                    let htmlShell = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><' + '/script>\n';
-                    
-                    if (styleContent) {
-                        htmlShell += '<style>\n' + styleContent + '\n<' + '/style>\n';
-                    }
-                    
-                    htmlShell += '</head>\n<body>\n<script>\n// Wait for p5.js to load\nfunction waitForP5AndRun(userCode) {\n  if (typeof p5 !== "undefined") {\n    eval(userCode);\n  } else {\n    setTimeout(() => waitForP5AndRun(userCode), 100);\n  }\n}\nconst userSketchCode = `' + cleanCode.split('`').join('\\`') + '`;\nwaitForP5AndRun(userSketchCode);\n<' + '/script>\n</body>\n</html>';
-                    
-                    p5Code = htmlShell;
-                }
-
-                if (!p5Code) {
-                    throw new Error('Generated code appears to be empty after sanitization');
-                }
-
-                // Second pass: enhance with an interesting addition
-                await typeConsoleCommand('Enhancing generated code...', 'normal', 25);
-                setProgressBar(50);
-                const reviewMessages = shuffleArray(getReviewLoadingMessages(persona.name));
-                let reviewIndex = 0;
-                await typeText(currentMessage, reviewMessages[reviewIndex], 40);
-                
-                loadingMessageInterval = setInterval(async () => {
-                    reviewIndex = (reviewIndex + 1) % reviewMessages.length;
-                    await typeText(currentMessage, reviewMessages[reviewIndex], 40);
-                }, 7000);
-
-                const codeBlockStart = String.fromCharCode(96, 96, 96) + 'html';
-                const codeBlockEnd = String.fromCharCode(96, 96, 96);
-                const enhancePrompt = 'Theme: "' + theme + '"\n\n' +
-                    'YOU ARE: ' + persona.name + '\n' +
-                    'YOUR STYLE: ' + persona.style + '\n' +
-                    'YOUR APPROACH: ' + persona.desc + '\n\n' +
-                    'You just created this p5.js sketch for the theme "' + theme + '":\n\n' +
-                    codeBlockStart + '\n' +
-                    p5Code + '\n' +
-                    codeBlockEnd + '\n\n' +
-                    'NOW: Add the most interesting expansion you can think of that fits your persona and the theme.\n\n' +
-                    'REQUIREMENTS:\n' +
-                    '- Output the COMPLETE enhanced HTML with p5.js code in <script> tags\n' +
-                    '- Add one substantial, creative feature that makes this more interesting\n' +
-                    '- Keep it true to your persona\'s style and approach\n' +
-                    '- The additions should be meaningful\n' +
-                    '- Expand on any unfinished/demo features\n\n' +
-                    '- Keep setup() and draw() structurally intact\n' +
-                    '- Output complete HTML (no markdown, no explanations)\n\n' +
-                    'IDEAS FOR ADDITIONS (choose what fits):\n' +
-                    '- Interactive element that responds to mouse/keyboard, add a right-click interaction\n' +
-                    '- Additional visual layer or effect\n' +
-                    '- New generative pattern or animation\n' +
-                    '- Particle system or physics\n' +
-                    '- Data visualization component\n' +
-                    '- Sound/rhythm visualization (if audio available)\n' +
-                    '- Information elements (paragraphs, images, etc.)\n' +
-                    '- 3D elements (WEBGL mode)\n' +
-                    '- Perlin noise field or flow field\n' +
-                    '- Fractal or recursive structure\n\n' +
-                    'BEGIN ENHANCED HTML:';
-
-                const enhanceResponse = await fetch(GENERATE_ENDPOINT, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        theme: theme,
-                        prompt: enhancePrompt
-                    })
-                });
-                setProgressBar(70);
-
-                if (enhanceResponse.ok) {
-                    try {
-                        const enhanceData = await enhanceResponse.json();
-                        let enhancedCode = enhanceData.html;
-                        const backtickPattern = String.fromCharCode(96, 96, 96);
-                        enhancedCode = enhancedCode.replace(new RegExp('^' + backtickPattern + '[\\w]*\\n?', 'gm'), '').replace(new RegExp('\\n?' + backtickPattern + '$', 'gm'), '');
-                        if (enhancedCode && enhancedCode.length > p5Code.length * 0.8) {
-                            p5Code = enhancedCode;
-                        }
-                    } catch (e) {
-                        console.warn('Enhancement failed, using original:', e);
-                    }
-                }
-
-                // Third pass: error detection and fixing
-                await typeConsoleCommand('Detecting and fixing errors...', 'normal', 25);
-                const fixMessages = shuffleArray(getReviewLoadingMessages(persona.name));
-                let fixIndex = 0;
-                await typeText(currentMessage, fixMessages[fixIndex], 40);
-                
-                if (loadingMessageInterval) {
-                    clearInterval(loadingMessageInterval);
-                }
-                loadingMessageInterval = setInterval(async () => {
-                    fixIndex = (fixIndex + 1) % fixMessages.length;
-                    await typeText(currentMessage, fixMessages[fixIndex], 40);
-                }, 7000);
-
-                const fixPrompt = 'Here is some p5.js code:\n\n' + '```\n' + p5Code + '\n```\n\n' +
-                    'Review this code for bugs, errors, and issues. Identify any problems and fix them.\n\n' +
-                    'REQUIREMENTS:\n' +
-                    '- Check for syntax errors\n' +
-                    '- Verify all variables are defined before use\n' +
-                    '- Check for common p5.js mistakes\n' +
-                    '- Ensure setup() and draw() exist and are properly structured\n' +
-                    '- Fix any issues you find\n' +
-                    '-If you think a feature should be obviously added, add it now.-\n\n' +
-                    '- Keep the overall logic and style intact\n' +
-                    '- Output the complete corrected code\n' +
-                    '- Output ONLY the code, no explanations\n\n' +
-                    'BEGIN CORRECTED CODE:';
-
-                await typeConsoleCommand('Fixing bugs and errors...', 'normal', 25);
-                setProgressBar(85);
-
-                const fixResponse = await fetch(GENERATE_ENDPOINT, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        theme: theme,
-                        prompt: fixPrompt
-                    })
-                });
-                setProgressBar(92);
-
-                if (fixResponse.ok) {
-                    try {
-                        const fixData = await fixResponse.json();
-                        let fixedCode = fixData.html;
-                        const backtickPattern = String.fromCharCode(96, 96, 96);
-                        fixedCode = fixedCode.replace(new RegExp('^' + backtickPattern + '[\\w]*\\n?', 'gm'), '').replace(new RegExp('\\n?' + backtickPattern + '$', 'gm'), '');
-                        if (fixedCode && fixedCode.length > p5Code.length * 0.5) {
-                            p5Code = fixedCode;
-                        }
-                    } catch (e) {
-                        console.warn('Error fixing failed, using enhanced version:', e);
-                    }
-                }
-
-                if (loadingMessageInterval) {
-                    clearInterval(loadingMessageInterval);
-                    loadingMessageInterval = null;
-                }
-
-                addConsoleCommand('Running final sketch...');
-                await typeText(currentMessage, 'Executing code...');
-
-                // Store final code using the theme/persona for this run
-                const generatedData = {
+                if (!response.ok) throw new Error('Failed to generate site');
+                const data = await response.json();
+                currentGeneration = {
                     theme: theme,
-                    persona: persona,
-                    code: p5Code
+                    code: data.code
                 };
-
-                // Check if loading overlay is hidden (user loaded a favorite)
-                const isOverlayHidden = loadingOverlay.classList.contains('hidden');
-                
-                // Stop console commands
-                stopConsoleCommands();
-                if (loadingMessageInterval) {
-                    clearInterval(loadingMessageInterval);
-                    loadingMessageInterval = null;
-                }
-                
-                if (isOverlayHidden && isGenerating) {
-                    // Generation completed in background (user is viewing a favorite)
-                    // Don't render it, just store it and show notification
-                    backgroundGeneration = generatedData;
-                    wasLoadingWhenGenerated = false;
-                    document.getElementById('newSiteNotification').style.display = 'block';
-                    // Keep save button consistent with current site's favorite status
-                    updateSaveButtonState();
-                    setRegenerateButtonText('regenerate');
-                    isGenerating = false;
-                } else {
-                    // Normal completion, render the site
-                    currentGeneration.code = p5Code;
-                    
-                    // Execute HTML directly in the container
-                    try {
-                        const container = document.getElementById('generatedContent');
-                        container.innerHTML = '';
-                        
-                        // Check if p5Code contains HTML tags (not just wrapped in script)
-                        const isFullHTML = /<html[\s>]/i.test(p5Code) || /<body[\s>]/i.test(p5Code) || /<script[\s>]/i.test(p5Code) || /<style[\s>]/i.test(p5Code);
-                        
-                        if (isFullHTML) {
-                            // For full HTML, create an iframe to isolate it
-                            const iframe = document.createElement('iframe');
-                            iframe.style.width = '100%';
-                            iframe.style.height = '100%';
-                            iframe.style.border = 'none';
-                            iframe.style.margin = '0';
-                            iframe.style.padding = '0';
-                            container.appendChild(iframe);
-                            
-                            // Write the full HTML to the iframe
-                            iframe.contentDocument.open();
-                            iframe.contentDocument.write(p5Code);
-                            iframe.contentDocument.close();
-                            disableGeneratedContextMenu(container, iframe);
-                            setDisplayedGeneration(currentGeneration);
-                        } else {
-                            // For partial code, inject as script
-                            const script = document.createElement('script');
-                            script.textContent = p5Code;
-                            container.appendChild(script);
-                            disableGeneratedContextMenu(container);
-                            setDisplayedGeneration(currentGeneration);
-                        }
-                    } catch (e) {
-                        console.error('Execution error:', e);
-                        const container = document.getElementById('generatedContent');
-                        container.innerHTML = '<div style="padding: 40px; color: red;">Error: ' + e.message + '</div>';
-                    }
-                    
-                    setProgressBar(100); // Mark generation as complete
-                    setTimeout(() => {
-                        isGenerating = false;
-                        loadingOverlay.classList.add('hidden');
-                        setRegenerateButtonText('regenerate');
-                        updateSaveButtonState();
-                        updateBackButtonState();
-                    }, 500);
-                }
-
-            } catch (error) {
-                // Clear the interval on error
-                stopConsoleCommands();
-                if (loadingMessageInterval) {
-                    clearInterval(loadingMessageInterval);
-                    loadingMessageInterval = null;
-                }
-
-                console.error('Error generating website:', error);
-                await typeConsoleCommand('Error: ' + error.message, 'error', 25);
-                mainStatus.textContent = 'ERROR';
-                currentMessage.textContent = error.message;
-                setRegenerateButtonText('regenerate');
+                setDisplayedGeneration(currentGeneration);
+                // Render
+                setTimeout(() => {
+                    generatedContent.innerHTML = data.code;
+                    disableGeneratedContextMenu(generatedContent);
+                }, 0);
+                loadingOverlay.classList.add('hidden');
+                updateSaveButtonState();
+                updateBackButtonState();
                 isGenerating = false;
+            } catch (error) {
+                addConsoleCommand('Error: ' + error.message, 'error');
+                setRegenerateButtonText('generate');
+                isGenerating = false;
+                loadingOverlay.classList.add('hidden');
             }
         }
 
@@ -1045,110 +543,44 @@ BEGIN HTML OUTPUT:`;
             const closeModal = document.getElementById('closeModal');
             const modal = document.getElementById('favoritesModal');
             const notification = document.getElementById('newSiteNotification');
+            const randomThemeButton = document.getElementById('randomThemeButton');
+            const themeInput = document.getElementById('themeInput');
 
-            notification.addEventListener('click', () => {
-                if (backgroundGeneration) {
-                    // Save current view as previous if it has content and is not already saved
-                    if (currentGeneration.theme && currentGeneration.persona && currentGeneration.code) {
-                        const currentPersonaName = getPersonaNameFrom(currentGeneration);
-                        const isAlreadySaved = currentPersonaName && isSavedFavorite(currentGeneration.theme, currentPersonaName);
-                        if (!isAlreadySaved) {
-                            previousGeneration = { ...currentGeneration };
-                        } else {
-                            previousGeneration = null;
-                        }
-                    }
-                    
-                    // Store the generation to render
-                    const generationToRender = { ...backgroundGeneration };
-                    
-                    // Hide notification first (before we clear backgroundGeneration)
-                    notification.style.display = 'none';
-                    
-                    // Clear background generation immediately so future generations can use it
-                    backgroundGeneration = null;
-                    
-                    // Update current generation
-                    currentGeneration = generationToRender;
-                    
-                    // Render the new site
-                    const container = document.getElementById('generatedContent');
-                    container.innerHTML = '';
-                    container.style.display = 'block';
-                    
-                    const isFullHTML = /<html[\s>]/i.test(currentGeneration.code) || /<body[\s>]/i.test(currentGeneration.code) || /<script[\s>]/i.test(currentGeneration.code) || /<style[\s>]/i.test(currentGeneration.code);
-                    
-                    if (isFullHTML) {
-                        const iframe = document.createElement('iframe');
-                        iframe.style.width = '100%';
-                        iframe.style.height = '100%';
-                        iframe.style.border = 'none';
-                        iframe.style.margin = '0';
-                        iframe.style.padding = '0';
-                        iframe.style.display = 'block';
-                        container.appendChild(iframe);
-
-                        setTimeout(() => {
-                            iframe.contentDocument.open();
-                            iframe.contentDocument.write(currentGeneration.code);
-                            iframe.contentDocument.close();
-                            disableGeneratedContextMenu(container, iframe);
-                            setDisplayedGeneration(currentGeneration);
-                            // Update UI state after rendering
-                            updateSaveButtonState();
-                            updateBackButtonState();
-                            const favButton = document.getElementById('favoritesButton');
-                            if (favButton) {
-                                favButton.style.display = 'block';
-                            }
-                        }, 0);
-                    } else {
-                        const script = document.createElement('script');
-                        script.textContent = currentGeneration.code;
-                        container.appendChild(script);
-                        disableGeneratedContextMenu(container);
-                        setDisplayedGeneration(currentGeneration);
-                        // Update UI state
-                        updateSaveButtonState();
-                        updateBackButtonState();
-                        const favButton = document.getElementById('favoritesButton');
-                        if (favButton) {
-                            favButton.style.display = 'block';
-                        }
-                    }
-                }
-            });
-            
+            notification.addEventListener('click', () => {});
             regenerateButton.addEventListener('click', () => {
-                // If currently generating, go back to loading screen
-                if (isGenerating) {
-                    const loadingOverlay = document.getElementById('loadingOverlay');
-                    loadingOverlay.classList.remove('hidden');
-                    document.getElementById('generatedContent').innerHTML = '';
-                } else {
-                    // Start a new generation
+                generateWebsite();
+            });
+            randomThemeButton.addEventListener('click', async () => {
+                randomThemeButton.disabled = true;
+                randomThemeButton.textContent = '...';
+                try {
+                    const theme = await getRandomTheme();
+                    themeInput.value = theme;
+                } catch (e) {
+                    themeInput.value = 'glitching coral';
+                }
+                randomThemeButton.disabled = false;
+                randomThemeButton.textContent = 'random_theme';
+            });
+            themeInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
                     generateWebsite();
                 }
             });
             saveButton.addEventListener('click', saveFavorite);
             backButton.addEventListener('click', backToGeneratedSite);
-            
             favoritesButton.addEventListener('click', () => {
                 loadFavorites();
                 modal.classList.add('show');
             });
-            
             closeModal.addEventListener('click', () => {
                 modal.classList.remove('show');
             });
-            
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     modal.classList.remove('show');
                 }
             });
-
-            // Generate initial website
             generateWebsite();
         });
     </script>
