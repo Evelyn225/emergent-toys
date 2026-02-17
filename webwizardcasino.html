@@ -57,107 +57,99 @@
         <div id="currentMessage"></div>
         <div class="progress-container">
             <div class="progress-label">Processing...</div>
-            <style>
-                /* Top bar always on top */
-                #topBar {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100vw;
-                    z-index: 11001;
-                }
-                /* Loading Overlay above everything except topBar */
-                #loadingOverlay {
-                    position: fixed;
-                    inset: 0;
-                    width: 100vw;
-                    height: 100vh;
-                    background: #181818 !important;
-                    color: #cfcfcf;
-                    font-family: 'Iosevka', monospace;
-                    z-index: 11000;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    pointer-events: auto;
-                    transition: opacity 0.3s;
-                }
-                #loadingOverlay.hidden {
-                    display: none !important;
-                }
-                #loadingHeader {
-                    margin-bottom: 18px;
-                    text-align: center;
-                }
-                #mainStatus {
-                    font-size: 20px;
-                    font-weight: 600;
-                    margin-bottom: 6px;
-                }
-                #themeStatus {
-                    font-size: 15px;
-                    color: #aaa;
-                }
-                #consoleOutput {
-                    width: 100%;
-                    max-width: 480px;
-                    min-height: 80px;
-                    background: #222;
-                    border-radius: 6px;
-                    box-shadow: 0 2px 16px #0008;
-                    padding: 18px 18px 12px 18px;
-                    border: 1px solid #333;
-                    margin-bottom: 24px;
-                    font-size: 15px;
-                    color: #cfcfcf;
-                    font-family: 'Iosevka', monospace;
-                    overflow-y: auto;
-                }
-                .console-line {
-                    margin-bottom: 2px;
-                    white-space: pre-wrap;
-                    transition: opacity 0.6s;
-                }
-                .console-line.status {
-                    color: #7fffd4;
-                }
-                .console-line.error {
-                    color: #ff6b6b;
-                }
-                .console-line.fading {
-                    opacity: 0.2;
-                }
-                .progress-container {
-                    width: 100%;
-                    max-width: 480px;
-                    margin: 0 auto;
-                    margin-top: 18px;
-                }
-                .progress-label {
-                    font-size: 13px;
-                    color: #aaa;
-                    margin-bottom: 4px;
-                }
-                .progress-bar-container {
-                    width: 100%;
-                    height: 10px;
-                    background: #333;
-                    border-radius: 5px;
-                    overflow: hidden;
-                }
-                .progress-bar {
-                    height: 100%;
-                    width: 0%;
-                    background: linear-gradient(90deg, #7fffd4 0%, #00bfff 100%);
-                    border-radius: 5px;
-                    transition: width 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-                }
-                /* Theme Screen below loading overlay, above content */
-                #themeScreen {
-                    z-index: 10999;
-                }
-            </style>
+            <div class="progress-bar-container">
+                <div class="progress-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="generatedContent"></div>
+
+    <script>
+        let consoleCommands = [];
+        let consoleCommandsLoaded = false;
+        (async () => {
+            try {
+                const response = await fetch('/casino-assets/console-commands.json');
+                if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load console-commands.json`);
+                const data = await response.json();
+                consoleCommands = Array.isArray(data.commands) ? data.commands : [];
+                consoleCommandsLoaded = true;
+                console.log('✓ Console commands loaded successfully');
+            } catch (error) {
+                console.error('✗ Error loading console-commands.json:', error);
+            }
+        })();
+
+        // API endpoints - uses Vercel serverless functions
+        const RANDOM_WORDS_ENDPOINT = '/api/random-words.js';
+        const GENERATE_ENDPOINT = '/api/generate.js';
+
+        // Create the prompt for the AI
+        function createGenerationPrompt(theme) {
+            return `
+    CREATE A CREATIVE SITE WITH A P5.JS SKETCH:
+
+    OUTPUT RULES:
+    - Output complete HTML with p5.js JavaScript code wrapped in <script> tags and <style> tags as needed
+    - Include a <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"><\/script> tag if needed
+    - MUST include setup() function that calls createCanvas()
+    - MUST include draw() function that calls background() at the start
+    - Must visually incorporate the theme "${theme}" in the sketch
+    - MUST literally include the theme word(s) ${theme} as text in the content somewhere
+    - Create something substantial: 250+ lines of creative code
+    - Have more than one element of interactivity, preferably mouse or keyboard based
+    - Use p5 drawing functions: rect(), ellipse(), line(), fill(), stroke(), etc
+    - Can use: noise(), sin(), cos(), random(), map(), etc for animation
+    - Can add interactivity: mousePressed(), keyPressed(), mouseX, mouseY, etc
+    - Create classes, variables, arrays as needed
+    - Can use images via: loadImage('https://picsum.photos/800/600')
+    - DO NOT use deprecated features (deviceOrientation, etc)
+    - Make it visually interesting and animated
+    - Vary your approach - don't always do the same thing
+    - No markdown code blocks, just raw HTML
+    - DO NOT include any external CSS or JS files except p5.js CDN
+
+    EXAMPLES OF GOOD APPROACHES:
+    - Generative art that evolves over time
+    - Interactive particles or creatures
+    - Animated patterns or fractals  
+    - Games or simulations
+    - Data visualizations
+    - Abstract animations
+    - Geometric explorations
+
+    BEGIN HTML OUTPUT:`;
+        }
+
+        // Shuffle message array for randomization
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        let loadingMessageInterval = null;
+        let currentGeneration = {
+            theme: '',
+            persona: null,
+            code: ''
+        };
+        let displayedGeneration = null;
+        let previousGeneration = null;
+        let backgroundGeneration = null;
+        let wasLoadingWhenGenerated = false;
+        let isGenerating = false;
+        let consoleCommandInterval = null;
+        let maxConsoleLines = 5;
+
+        // Helper function to set regenerate button text with wave animation
+        function setRegenerateButtonText(text) {
+            const regenerateButton = document.getElementById('regenerateButton');
+            if (text === 'generating...') {
                 // Create wave animation with spans
                 const chars = text.split('');
                 regenerateButton.innerHTML = chars.map((char, index) => {
@@ -493,7 +485,6 @@
             const themeScreen = document.getElementById('themeScreen');
             const topBar = document.getElementById('topBar');
             // Hide theme screen, show loading overlay
-            // Hide theme screen first, then show loading overlay (which is above themeScreen)
             themeScreen.style.display = 'none';
             loadingOverlay.classList.remove('hidden');
             topBar.style.display = 'flex';
