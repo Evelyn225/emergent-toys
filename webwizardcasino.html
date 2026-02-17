@@ -292,7 +292,7 @@
                     if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
                     const randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
                     await typeConsoleCommand(randomCommand, 'normal', 25);
-                }, 7500);
+                }, 7000);
             })();
         }
 
@@ -326,69 +326,20 @@
                 throw new Error('Failed to fetch random theme');
             }
             const data = await response.json();
-            return data.theme;
-        }
+                // Use themeValue for all theme logic
+                const prompt = createGenerationPrompt(themeValue);
+                // First pass: get a rough outline
+                const response = await fetch(GENERATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: themeValue, prompt })
+                });
+                if (!response.ok) throw new Error('Failed to generate site');
+                const data = await response.json();
+                let firstPassCode = data.html || data.code;
 
-        // Favorites management
-
-        function isSavedFavorite(theme) {
-            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            return favorites.some(f => f.theme === theme);
-        }
-
-        function setDisplayedGeneration(gen) {
-            if (!gen) return;
-            displayedGeneration = {
-                theme: gen.theme,
-                code: gen.code
-            };
-        }
-        
-        function updateSaveButtonState() {
-            const saveButton = document.getElementById('saveButton');
-            if (!saveButton) return;
-            if (!displayedGeneration || !displayedGeneration.code) {
-                saveButton.style.display = 'none';
-                return;
-            }
-            const hasIdentity = Boolean(displayedGeneration.theme);
-            const isSaved = hasIdentity && isSavedFavorite(displayedGeneration.theme);
-            const isCurrentGeneration = currentGeneration.code === displayedGeneration.code && currentGeneration.theme === displayedGeneration.theme;
-            saveButton.style.display = (isSaved || !isCurrentGeneration) ? 'none' : 'block';
-        }
-
-        function updateBackButtonState() {
-            const backButton = document.getElementById('backButton');
-            if (!backButton) return;
-            const hasPrevious = Boolean(previousGeneration?.theme && previousGeneration?.code);
-            const isPrevSaved = hasPrevious && isSavedFavorite(previousGeneration.theme);
-            backButton.style.display = hasPrevious && !isPrevSaved ? 'block' : 'none';
-        }
-        
-        function saveFavorite() {
-            if (!displayedGeneration || !displayedGeneration.code) return;
-            if (!displayedGeneration.theme) return;
-            if (isSavedFavorite(displayedGeneration.theme)) return;
-            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            const favorite = {
-                id: Date.now(),
-                theme: displayedGeneration.theme,
-                code: displayedGeneration.code
-            };
-            favorites.push(favorite);
-            localStorage.setItem('domroulette_favorites', JSON.stringify(favorites));
-            updateSaveButtonState();
-        }
-
-        function loadFavorites() {
-            const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
-            const grid = document.getElementById('favoritesGrid');
-            if (favorites.length === 0) {
-                grid.innerHTML = '<div style="padding:24px; color:#aaa;">No favorites saved yet.</div>';
-                return;
-            }
-            grid.innerHTML = favorites.map(fav => `
-                <div class="favorite-item" data-id="${fav.id}">
+                // Second pass: expand the rough outline into a much more detailed, creative, and substantial site
+                const expandPrompt = `
                     <div class="favorite-theme">${fav.theme}</div>
                     <button class="favorite-delete">delete</button>
                 </div>
@@ -399,6 +350,19 @@
                         deleteFavorite(Number(item.dataset.id));
                         e.stopPropagation();
                     } else {
+                themeStatus.textContent = themeValue;
+                themeStatus.style.display = 'block';
+                const expandResponse = await fetch(GENERATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: themeValue, prompt: expandPrompt })
+                });
+                if (!expandResponse.ok) throw new Error('Failed to expand site');
+                const expandData = await expandResponse.json();
+                let secondPassCode = expandData.html || expandData.code;
+
+                // Third and final pass: flesh out and fully implement referenced functions, ensure p5.js code is complete
+                const finalPassPrompt = `
                         loadFavorite(Number(item.dataset.id));
                     }
                 });
@@ -409,6 +373,45 @@
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
             const favorite = favorites.find(f => f.id === id);
             if (!favorite) return;
+                themeStatus.textContent = themeValue;
+                themeStatus.style.display = 'block';
+                const finalResponse = await fetch(GENERATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: themeValue, prompt: finalPassPrompt })
+                });
+                if (!finalResponse.ok) throw new Error('Failed to improve site');
+                const improvedData = await finalResponse.json();
+                const improvedCode = improvedData.html || improvedData.code;
+                currentGeneration = {
+                    theme: themeValue,
+                    code: improvedCode
+                };
+                setDisplayedGeneration(currentGeneration);
+                setTimeout(() => {
+                    generatedContent.innerHTML = improvedCode;
+                    disableGeneratedContextMenu(generatedContent);
+                    // Execute any script tags in the generated HTML
+                    const scripts = generatedContent.querySelectorAll('script');
+                    scripts.forEach(oldScript => {
+                        const newScript = document.createElement('script');
+                        // Copy attributes
+                        for (const attr of oldScript.attributes) {
+                            newScript.setAttribute(attr.name, attr.value);
+                        }
+                        // Copy inline code
+                        if (oldScript.textContent) {
+                            newScript.textContent = oldScript.textContent;
+                        }
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                    });
+                    loadingOverlay.classList.add('hidden');
+                    // Hide themeStatus after loading
+                    document.getElementById('themeStatus').style.display = 'none';
+                    updateSaveButtonState();
+                    updateBackButtonState();
+                    isGenerating = false;
+                }, 0);
             const modal = document.getElementById('favoritesModal');
             modal.classList.remove('show');
             if (currentGeneration.theme && currentGeneration.code) {
