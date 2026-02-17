@@ -557,6 +557,20 @@ ${firstPassCode}
                 setTimeout(() => {
                     generatedContent.innerHTML = improvedCode;
                     disableGeneratedContextMenu(generatedContent);
+                    // Execute any script tags in the generated HTML
+                    const scripts = generatedContent.querySelectorAll('script');
+                    scripts.forEach(oldScript => {
+                        const newScript = document.createElement('script');
+                        // Copy attributes
+                        for (const attr of oldScript.attributes) {
+                            newScript.setAttribute(attr.name, attr.value);
+                        }
+                        // Copy inline code
+                        if (oldScript.textContent) {
+                            newScript.textContent = oldScript.textContent;
+                        }
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                    });
                     loadingOverlay.classList.add('hidden');
                     // Hide themeStatus after loading
                     document.getElementById('themeStatus').style.display = 'none';
