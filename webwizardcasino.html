@@ -390,7 +390,6 @@
                 }
             }
             const isFullHTML = /<html[\s>]/i.test(gen.code) || /<body[\s>]/i.test(gen.code) || /<script[\s>]/i.test(gen.code) || /<style[\s>]/i.test(gen.code);
-            const loadingOverlay = document.getElementById('loadingOverlay');
             // Hide overlay first, then inject site
             loadingOverlay.classList.add('hidden');
             setTimeout(() => {
