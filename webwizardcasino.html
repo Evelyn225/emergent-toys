@@ -486,10 +486,6 @@
             // Hide theme screen, show loading overlay
             themeScreen.style.display = 'none';
             loadingOverlay.classList.remove('hidden');
-            // Remove 'hidden' class in case it is still present
-            if (loadingOverlay.classList.contains('hidden')) {
-                loadingOverlay.classList.remove('hidden');
-            }
             topBar.style.display = 'flex';
             setRegenerateButtonText('generating...');
             document.getElementById('saveButton').style.display = 'none';
@@ -544,7 +540,7 @@
                 addConsoleCommand('Error: ' + error.message, 'error');
                 setRegenerateButtonText('generate');
                 isGenerating = false;
-                loadingOverlay.classList.add('hidden');
+                // Do NOT hide loadingOverlay on error; let user see the error message
             }
         }
 
