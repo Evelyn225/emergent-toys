@@ -352,22 +352,41 @@
         }
 
         function setDisplayedGeneration(gen) {
-            if (!gen) return;
-            displayedGeneration = {
-                theme: gen.theme,
-                // Save the original code as it was received, not after script extraction
-                code: currentGeneration.code
-            };
-            // Only show new site notification if viewing a favorite
-            const notification = document.getElementById('newSiteNotification');
-            if (notification) {
-                // Check if we are viewing a favorite (not from loading screen)
-                if (previousGeneration && previousGeneration.theme && previousGeneration.code) {
-                    notification.style.display = 'block';
-                } else {
-                    notification.style.display = 'none';
-                }
+            const container = document.getElementById('generatedContent');
+            // Remove all existing script tags from previous site
+            Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
+            container.innerHTML = '';
+            container.style.display = 'block';
+            const isFullHTML = /<html[\s>]/i.test(gen.code) || /<body[\s>]/i.test(gen.code) || /<script[\s>]/i.test(gen.code) || /<style[\s>]/i.test(gen.code);
+            if (isFullHTML) {
+                setTimeout(() => {
+                    container.innerHTML = gen.code;
+                    disableGeneratedContextMenu(container);
+                    // Remove all existing script tags again (in case innerHTML added duplicates)
+                    Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
+                    // Execute any script tags in the loaded site
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = gen.code;
+                    const scripts = tempDiv.querySelectorAll('script');
+                    scripts.forEach(oldScript => {
+                        const newScript = document.createElement('script');
+                        for (const attr of oldScript.attributes) {
+                            newScript.setAttribute(attr.name, attr.value);
+                        }
+                        if (oldScript.textContent) {
+                            newScript.textContent = oldScript.textContent;
+                        }
+                        container.appendChild(newScript);
+                    });
+                }, 0);
+            } else {
+                container.textContent = gen.code;
             }
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.add('hidden');
+            updateBackButtonState();
+            updateSaveButtonState();
+            document.getElementById('newSiteNotification').style.display = 'none';
         }
         
         function updateSaveButtonState() {
