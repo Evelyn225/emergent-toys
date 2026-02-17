@@ -541,7 +541,9 @@ ${firstPassCode}
                             // Global error handler for generated content
                             window.addEventListener('error', function(event) {
                                 const container = document.getElementById('generatedContent');
-                                if (container && event.filename && event.filename.includes('webwizardcasino.html')) {
+                                if (!container) return;
+                                // Check if error target is inside generatedContent
+                                if (event.target && container.contains(event.target)) {
                                     const errorDiv = document.createElement('div');
                                     errorDiv.className = 'error-overlay';
                                     errorDiv.textContent = 'Site error: ' + event.message;
