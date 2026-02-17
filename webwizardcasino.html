@@ -380,13 +380,7 @@
                             newScript.setAttribute(attr.name, attr.value);
                         }
                         if (oldScript.textContent) {
-                            // Only wrap in try/catch if not already a syntax error
-                            try {
-                                new Function(oldScript.textContent);
-                                newScript.textContent = `try { ${oldScript.textContent} } catch(e) { document.getElementById('generatedContent').innerHTML += '<div class=\'error-overlay\'>Site error: '+e+'</div>'; }`;
-                            } catch (syntaxErr) {
-                                newScript.textContent = oldScript.textContent;
-                            }
+                            newScript.textContent = oldScript.textContent;
                         }
                         oldScript.parentNode.replaceChild(newScript, oldScript);
                     });
