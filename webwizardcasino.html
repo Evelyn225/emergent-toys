@@ -21,7 +21,7 @@
     <div id="topBar" style="display:none;">
         <button id="saveButton">save_favorite</button>
         <button id="favoritesButton">view_favorites</button>
-        <button id="newSiteNotification" style="display: none;">// new site ready</button>
+        <button id="newSiteNotification">// new site ready</button>
         <button id="regenerateButton">generate</button>
         <a href="index.html" id="homeButton" style="padding: 12px 12px; background: transparent; color: rgba(255, 255, 255, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; cursor: pointer; font-size: 18px; font-family: 'Iosevka', monospace; text-decoration: none; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); display: flex; align-items: center; line-height: 1;" onmouseover="this.style.transform='scale(1.2)'; this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
     </div>
@@ -62,9 +62,9 @@
     </div>
 
     <div id="generatedContent"></div>
-    <div id="favoritePreview" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(20,20,30,0.98); z-index:1200; align-items:center; justify-content:center;">
-        <div style="width:90vw; height:90vh; max-width:1200px; max-height:90vh; background:#222; border:2px solid #444; box-shadow:0 4px 24px rgba(0,0,0,0.4); padding:0; display:flex; align-items:center; justify-content:center;">
-            <iframe id="favoritePreviewIframe" style="width:100%; height:100%; border:none; background:#222;" sandbox="allow-scripts allow-same-origin"></iframe>
+    <div id="favoritePreview">
+        <div class="favorite-preview-inner">
+            <iframe id="favoritePreviewIframe" sandbox="allow-scripts allow-same-origin"></iframe>
         </div>
     </div>
 
@@ -376,9 +376,15 @@
                             newScript.setAttribute(attr.name, attr.value);
                         }
                         if (oldScript.textContent) {
-                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { document.getElementById('generatedContent').innerHTML += '<div class=\'error-overlay\'>Site error: '+e+'</div>'; }`;
+                            // Only wrap in try/catch if not already a syntax error
+                            try {
+                                new Function(oldScript.textContent);
+                                newScript.textContent = `try { ${oldScript.textContent} } catch(e) { document.getElementById('generatedContent').innerHTML += '<div class=\'error-overlay\'>Site error: '+e+'</div>'; }`;
+                            } catch (syntaxErr) {
+                                newScript.textContent = oldScript.textContent;
+                            }
                         }
-                        container.appendChild(newScript);
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
                     });
                 }, 0);
             } else {
@@ -470,26 +476,25 @@
             const preview = document.getElementById('favoritePreview');
             clearAndSandbox(preview);
             updateSaveButtonState();
-            preview.style.display = 'block';
+            preview.style.display = 'flex';
             // Use a sandboxed iframe for preview
-            const iframe = document.createElement('favoritePreviewIframe');
-            iframe.style.width = '100%';
-            iframe.style.height = '500px';
-            iframe.style.border = 'none';
-            iframe.style.background = '#222';
-            iframe.sandbox = 'allow-scripts allow-same-origin';
-            preview.appendChild(iframe);
-            // Write the favorite code into the iframe
-            setTimeout(() => {
+            const iframe = document.getElementById('favoritePreviewIframe');
+            if (iframe) {
                 try {
                     const doc = iframe.contentDocument || iframe.contentWindow.document;
                     doc.open();
                     doc.write(favorite.code);
                     doc.close();
                 } catch (e) {
-                    preview.innerHTML += `<div class='error-overlay'>Favorite error: ${e}</div>`;
+                    iframe.srcdoc = `<div class='error-overlay'>Favorite error: ${e}</div>`;
                 }
-            }, 0);
+            }
+            // Show new site ready button if pendingGeneration exists
+            if (pendingGeneration && pendingGeneration.theme && pendingGeneration.code) {
+                document.getElementById('newSiteNotification').style.display = 'block';
+            } else {
+                document.getElementById('newSiteNotification').style.display = 'none';
+            }
         }
 
         function loadFavorite(id) {
@@ -616,14 +621,12 @@ ${firstPassCode}
                     code: improvedCode
                 };
                 // If viewing a favorite, store pendingGeneration and show new site ready button
-                if (displayedGeneration && displayedGeneration.theme && displayedGeneration.code && displayedGeneration.theme !== themeValue) {
+                if (document.getElementById('favoritePreview').style.display === 'flex') {
                     pendingGeneration = { ...currentGeneration };
-                    const notification = document.getElementById('newSiteNotification');
-                    if (notification) notification.style.display = 'block';
+                    newSiteNotification.style.display = 'block';
                 } else {
                     pendingGeneration = null;
-                    const notification = document.getElementById('newSiteNotification');
-                    if (notification) notification.style.display = 'none';
+                    newSiteNotification.style.display = 'none';
                     // Only show new site immediately if not viewing a favorite
                     setDisplayedGeneration(currentGeneration);
                 }
