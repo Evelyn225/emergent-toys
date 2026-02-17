@@ -451,18 +451,21 @@
             // Animated progress bar with easing for more natural pacing
             let progress = 0;
             let t = 0;
-            let progressInterval = setInterval(() => {
-                if (progress < 85) {
-                    // Ease in: slow at first, then faster
-                    t += 0.0025; // Even slower
-                    // Use an ease-out cubic function for natural feel
-                    let eased = 85 * (1 - Math.pow(1 - t, 3));
-                    // Prevent overshooting
-                    if (eased > 85) eased = 85;
-                    progress = eased;
-                    setProgressBar(progress);
-                }
-            }, 120); // Even slower update
+            let progressInterval = null;
+            setTimeout(() => {
+                progressInterval = setInterval(() => {
+                    if (progress < 85) {
+                        // Ease in: slow at first, then faster
+                        t += 0.0025; // Even slower
+                        // Use an ease-out cubic function for natural feel
+                        let eased = 85 * (1 - Math.pow(1 - t, 3));
+                        // Prevent overshooting
+                        if (eased > 85) eased = 85;
+                        progress = eased;
+                        setProgressBar(progress);
+                    }
+                }, 120); // Even slower update
+            }, 1500); // Delay progress bar start by 1500ms
             document.getElementById('consoleOutput').innerHTML = '';
             // Ensure theme variable is always defined and in scope
             let themeValue = themeInput.value.trim();
