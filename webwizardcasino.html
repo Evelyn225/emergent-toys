@@ -20,7 +20,7 @@
 <body>
     <div id="topBar" style="display:none;">
         <button id="regenerateButton">generate</button>
-        <button id="fixButton" style="display:none; margin-left: 12px;">fix errors</button>
+        <button id="fixButton" style="display:none; float:left; margin-left: 0; margin-right: 12px;">fix errors</button>
         <a href="index.html" id="homeButton" style="padding: 12px 12px; background: transparent; color: rgba(255, 255, 255, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; cursor: pointer; font-size: 18px; font-family: 'Iosevka', monospace; text-decoration: none; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); display: flex; align-items: center; line-height: 1;" onmouseover="this.style.transform='scale(1.2)'; this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
     </div>
 
@@ -378,9 +378,17 @@
             const container = document.getElementById('generatedContent');
             clearAndSandbox(container);
             container.style.display = 'block';
-            // Show Fix button when a site is displayed
+            // Show Fix button when a site is displayed and not loading
             const fixButton = document.getElementById('fixButton');
-            if (fixButton) fixButton.style.display = 'inline-block';
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const themeScreen = document.getElementById('themeScreen');
+            if (fixButton && loadingOverlay && themeScreen) {
+                if (loadingOverlay.classList.contains('hidden') && themeScreen.style.display === 'none') {
+                    fixButton.style.display = 'inline-block';
+                } else {
+                    fixButton.style.display = 'none';
+                }
+            }
             const isFullHTML = /<html[\s>]/i.test(gen.code) || /<body[\s>]/i.test(gen.code) || /<script[\s>]/i.test(gen.code) || /<style[\s>]/i.test(gen.code);
             const loadingOverlay = document.getElementById('loadingOverlay');
             // Hide overlay first, then inject site
@@ -442,6 +450,9 @@
 
         // Call AI API to generate a site for a theme
         async function generateWebsite() {
+                        // Hide Fix button during loading
+                        const fixButton = document.getElementById('fixButton');
+                        if (fixButton) fixButton.style.display = 'none';
             const loadingOverlay = document.getElementById('loadingOverlay');
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
@@ -556,8 +567,8 @@ ${firstPassCode}
                             window.addEventListener('error', function(event) {
                                 const container = document.getElementById('generatedContent');
                                 if (!container) return;
-                                // Check if error target is inside generatedContent
-                                if (event.target && container.contains(event.target)) {
+                                    // Check if error target is a Node and inside generatedContent
+                                    if (event.target && typeof event.target === 'object' && 'nodeType' in event.target && container.contains(event.target)) {
                                     const errorDiv = document.createElement('div');
                                     errorDiv.className = 'error-overlay';
                                     errorDiv.textContent = 'Site error: ' + event.message;
@@ -589,6 +600,8 @@ ${firstPassCode}
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+                        // Hide Fix button on theme screen
+                        if (fixButton) fixButton.style.display = 'none';
             const regenerateButton = document.getElementById('regenerateButton');
             const randomThemeButton = document.getElementById('randomThemeButton');
             const themeInput = document.getElementById('themeInput');
