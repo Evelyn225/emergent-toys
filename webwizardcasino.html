@@ -532,11 +532,11 @@
                 setTimeout(() => {
                     generatedContent.innerHTML = data.code;
                     disableGeneratedContextMenu(generatedContent);
+                    loadingOverlay.classList.add('hidden');
+                    updateSaveButtonState();
+                    updateBackButtonState();
+                    isGenerating = false;
                 }, 0);
-                loadingOverlay.classList.add('hidden');
-                updateSaveButtonState();
-                updateBackButtonState();
-                isGenerating = false;
             } catch (error) {
                 addConsoleCommand('Error: ' + error.message, 'error');
                 setRegenerateButtonText('generate');
@@ -560,16 +560,16 @@
             const startGenerationButton = document.getElementById('startGenerationButton');
             const topBar = document.getElementById('topBar');
 
-            // Show theme screen initially, hide loading overlay
+            // Show theme screen initially, show top bar, hide loading overlay
             themeScreen.style.display = 'flex';
-            topBar.style.display = 'none';
+            topBar.style.display = 'flex';
             document.getElementById('loadingOverlay').classList.add('hidden');
 
             notification.addEventListener('click', () => {});
             regenerateButton.addEventListener('click', () => {
-                // Show theme screen, hide top bar and generated content, hide loading overlay
+                // Show theme screen, show top bar, hide generated content, hide loading overlay
                 themeScreen.style.display = 'flex';
-                topBar.style.display = 'none';
+                topBar.style.display = 'flex';
                 document.getElementById('generatedContent').innerHTML = '';
                 document.getElementById('loadingOverlay').classList.add('hidden');
             });
