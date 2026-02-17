@@ -134,7 +134,6 @@
         let loadingMessageInterval = null;
         let currentGeneration = {
             theme: '',
-            persona: null,
             code: ''
         };
         let displayedGeneration = null;
@@ -287,8 +286,6 @@
                 await new Promise(r => setTimeout(r, 500));
                 await typeConsoleCommand('Connection established', 'status', 30);
                 await new Promise(r => setTimeout(r, 500));
-                await typeConsoleCommand('Loading creative personas...', 'normal', 30);
-                await new Promise(r => setTimeout(r, 1200));
                 
                 // Continue with random commands
                 consoleCommandInterval = setInterval(async () => {
@@ -333,7 +330,6 @@
         }
 
         // Favorites management
-        // No persona logic needed
 
         function isSavedFavorite(theme) {
             const favorites = JSON.parse(localStorage.getItem('domroulette_favorites') || '[]');
@@ -496,9 +492,14 @@
             wasLoadingWhenGenerated = true;
             setProgressBar(0);
             document.getElementById('consoleOutput').innerHTML = '';
-            // Show the theme in large font below consoleOutput, above progress bar
+            // Ensure theme variable is always defined and in scope
+            let themeValue = themeInput.value.trim();
+            if (!themeValue) {
+                themeValue = await getRandomTheme();
+                themeInput.value = themeValue;
+            }
             const themeStatus = document.getElementById('themeStatus');
-            themeStatus.textContent = theme;
+            themeStatus.textContent = themeValue;
             themeStatus.style.display = 'block';
             startConsoleCommands();
             if (window.p5Instance) {
@@ -514,22 +515,18 @@
             }
             backgroundGeneration = null;
             try {
-                let theme = themeInput.value.trim();
-                if (!theme) {
-                    theme = await getRandomTheme();
-                    themeInput.value = theme;
-                }
-                const prompt = createGenerationPrompt(theme);
+                // Use themeValue for all theme logic
+                const prompt = createGenerationPrompt(themeValue);
                 // Always send both theme and prompt to backend
                 const response = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ theme, prompt })
+                    body: JSON.stringify({ theme: themeValue, prompt })
                 });
                 if (!response.ok) throw new Error('Failed to generate site');
                 const data = await response.json();
                 currentGeneration = {
-                    theme: theme,
+                    theme: themeValue,
                     code: data.html || data.code // support both html and code keys
                 };
                 setDisplayedGeneration(currentGeneration);
