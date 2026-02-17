@@ -388,9 +388,9 @@
                 return;
             }
             grid.innerHTML = favorites.map(fav => `
-                <div class="favorite-item" data-id="${fav.id}">
-                    <div class="favorite-theme">${fav.theme}</div>
-                    <button class="favorite-delete">delete</button>
+                <div class="favorite-item styled-favorite" data-id="${fav.id}">
+                    <div class="favorite-theme styled-favorite-theme">${fav.theme}</div>
+                    <button class="favorite-delete styled-favorite-delete">delete</button>
                 </div>
             `).reverse().join('');
             document.querySelectorAll('.favorite-item').forEach(item => {
@@ -400,6 +400,8 @@
                         e.stopPropagation();
                     } else {
                         loadFavorite(Number(item.dataset.id));
+                        // Hide modal after loading favorite
+                        document.getElementById('favoritesModal').classList.remove('show');
                     }
                 });
             });
@@ -411,7 +413,7 @@
             if (!favorite) return;
             const modal = document.getElementById('favoritesModal');
             modal.classList.remove('show');
-            // Only set previousGeneration when loading a favorite
+            // Before loading favorite, set previousGeneration to the current site if it exists
             if (currentGeneration.theme && currentGeneration.code) {
                 previousGeneration = { ...currentGeneration };
             }
@@ -635,6 +637,8 @@ ${firstPassCode}
                 // Always reset regenerate button when theme screen is shown
                 setRegenerateButtonText('generate');
                 regenerateButton.disabled = false;
+                // Hide favorites modal if open
+                document.getElementById('favoritesModal').classList.remove('show');
                 // Do NOT hide loadingOverlay here; it will be hidden after generation completes
             });
             randomThemeButton.addEventListener('click', async () => {
