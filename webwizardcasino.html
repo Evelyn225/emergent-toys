@@ -452,17 +452,17 @@
             let progress = 0;
             let t = 0;
             let progressInterval = setInterval(() => {
-                if (progress < 90) {
+                if (progress < 85) {
                     // Ease in: slow at first, then faster
-                    t += 0.005; // Slower overall speed (smaller = slower)
+                    t += 0.0025; // Even slower
                     // Use an ease-out cubic function for natural feel
-                    let eased = 90 * (1 - Math.pow(1 - t, 3));
+                    let eased = 85 * (1 - Math.pow(1 - t, 3));
                     // Prevent overshooting
-                    if (eased > 90) eased = 90;
+                    if (eased > 85) eased = 85;
                     progress = eased;
                     setProgressBar(progress);
                 }
-            }, 100); // Slower update for smoother, longer loading
+            }, 120); // Even slower update
             document.getElementById('consoleOutput').innerHTML = '';
             // Ensure theme variable is always defined and in scope
             let themeValue = themeInput.value.trim();
@@ -551,6 +551,7 @@ ${firstPassCode}
                                 }
                             });
                     // Complete progress bar
+                    progress = 100;
                     setProgressBar(100);
                     clearInterval(progressInterval);
                     loadingOverlay.classList.add('hidden');
