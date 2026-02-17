@@ -19,7 +19,6 @@
 
 <body>
     <div id="topBar" style="display:none;">
-        <button id="backButton" style="display: none;">back_to_site</button>
         <button id="saveButton">save_favorite</button>
         <button id="favoritesButton">view_favorites</button>
         <button id="newSiteNotification" style="display: none;">// new site ready</button>
@@ -154,8 +153,18 @@
                     const delay = (index * 0.1) % 1.2;
                     return `<span class="button-wave-char" style="animation-delay: ${delay}s">${char}</span>`;
                 }).join('');
+                regenerateButton.disabled = false;
+                regenerateButton.onclick = () => {
+                    // Show theme screen, hide generated content, reset button
+                    document.getElementById('themeScreen').style.display = 'flex';
+                    document.getElementById('topBar').style.display = 'flex';
+                    document.getElementById('generatedContent').innerHTML = '';
+                    setRegenerateButtonText('generate');
+                };
             } else {
                 regenerateButton.textContent = text;
+                regenerateButton.disabled = false;
+                regenerateButton.onclick = null;
             }
         }
 
@@ -292,7 +301,7 @@
                     if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
                     const randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
                     await typeConsoleCommand(randomCommand, 'normal', 25);
-                }, 4500);
+                }, 4000);
             })();
         }
 
@@ -342,6 +351,11 @@
                 theme: gen.theme,
                 code: gen.code
             };
+            // Show new site notification
+            const notification = document.getElementById('newSiteNotification');
+            if (notification) {
+                notification.style.display = 'block';
+            }
         }
         
         function updateSaveButtonState() {
@@ -389,7 +403,7 @@
             }
             grid.innerHTML = favorites.map(fav => `
                 <div class="favorite-item" data-id="${fav.id}">
-                    <div class="favorite-item">${fav.theme}</div>
+                    <div class="favorite-theme">${fav.theme}</div>
                     <button class="delete-btn">X</button>
                 </div>
             `).reverse().join('');
@@ -440,6 +454,7 @@
             loadingOverlay.classList.add('hidden');
             updateBackButtonState();
             updateSaveButtonState();
+            document.getElementById('newSiteNotification').style.display = 'none';
         }
 
         function deleteFavorite(id) {
@@ -452,30 +467,6 @@
             loadFavorites();
             // Update save button state in case the current site was deleted from favorites
             updateSaveButtonState();
-        }
-
-        function backToGeneratedSite() {
-            if (!previousGeneration) return;
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            loadingOverlay.classList.add('hidden');
-            isGenerating = false;
-            currentGeneration = { ...previousGeneration };
-            previousGeneration = null;
-            updateBackButtonState();
-            const container = document.getElementById('generatedContent');
-            container.innerHTML = '';
-            container.style.display = 'block';
-            const isFullHTML = /<html[\s>]/i.test(currentGeneration.code) || /<body[\s>]/i.test(currentGeneration.code) || /<script[\s>]/i.test(currentGeneration.code) || /<style[\s>]/i.test(currentGeneration.code);
-            if (isFullHTML) {
-                setTimeout(() => {
-                    container.innerHTML = currentGeneration.code;
-                    disableGeneratedContextMenu(container);
-                }, 0);
-            } else {
-                container.textContent = currentGeneration.code;
-            }
-            // After going back, clear previousGeneration so you can't go back again
-            previousGeneration = null;
         }
 
         // Call AI API to generate a site for a theme
@@ -616,7 +607,6 @@ ${firstPassCode}
         document.addEventListener('DOMContentLoaded', () => {
             const regenerateButton = document.getElementById('regenerateButton');
             const saveButton = document.getElementById('saveButton');
-            const backButton = document.getElementById('backButton');
             const favoritesButton = document.getElementById('favoritesButton');
             const closeModal = document.getElementById('closeModal');
             const modal = document.getElementById('favoritesModal');
@@ -634,7 +624,7 @@ ${firstPassCode}
 
             notification.addEventListener('click', () => {});
             regenerateButton.addEventListener('click', () => {
-                // Show theme screen, show top bar, hide generated content
+                // Show theme screen, hide generated content, reset button
                 themeScreen.style.display = 'flex';
                 topBar.style.display = 'flex';
                 document.getElementById('generatedContent').innerHTML = '';
@@ -673,7 +663,6 @@ ${firstPassCode}
                 generateWebsite();
             });
             saveButton.addEventListener('click', saveFavorite);
-            backButton.addEventListener('click', backToGeneratedSite);
             favoritesButton.addEventListener('click', () => {
                 loadFavorites();
                 modal.classList.add('show');
