@@ -560,16 +560,18 @@
             const startGenerationButton = document.getElementById('startGenerationButton');
             const topBar = document.getElementById('topBar');
 
-            // Show theme screen initially
+            // Show theme screen initially, hide loading overlay
             themeScreen.style.display = 'flex';
             topBar.style.display = 'none';
+            document.getElementById('loadingOverlay').classList.add('hidden');
 
             notification.addEventListener('click', () => {});
             regenerateButton.addEventListener('click', () => {
-                // Show theme screen, hide top bar and generated content
+                // Show theme screen, hide top bar and generated content, hide loading overlay
                 themeScreen.style.display = 'flex';
                 topBar.style.display = 'none';
                 document.getElementById('generatedContent').innerHTML = '';
+                document.getElementById('loadingOverlay').classList.add('hidden');
             });
             randomThemeButton.addEventListener('click', async () => {
                 randomThemeButton.disabled = true;
