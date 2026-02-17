@@ -484,6 +484,7 @@
             loadingOverlay.classList.remove('hidden');
             topBar.style.display = 'flex';
             setRegenerateButtonText('generating...');
+            regenerateButton.disabled = true;
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
             updateBackButtonState();
@@ -491,6 +492,15 @@
             isGenerating = true;
             wasLoadingWhenGenerated = true;
             setProgressBar(0);
+            // Animated progress bar
+            let progress = 0;
+            let progressInterval = setInterval(() => {
+                if (progress < 90) {
+                    progress += Math.random() * 2 + 1; // Randomize for organic feel
+                    if (progress > 90) progress = 90;
+                    setProgressBar(progress);
+                }
+            }, 200);
             document.getElementById('consoleOutput').innerHTML = '';
             // Ensure theme variable is always defined and in scope
             let themeValue = themeInput.value.trim();
@@ -571,6 +581,9 @@ ${firstPassCode}
                         }
                         oldScript.parentNode.replaceChild(newScript, oldScript);
                     });
+                    // Complete progress bar
+                    setProgressBar(100);
+                    clearInterval(progressInterval);
                     loadingOverlay.classList.add('hidden');
                     // Hide themeStatus after loading
                     document.getElementById('themeStatus').style.display = 'none';
@@ -582,7 +595,10 @@ ${firstPassCode}
                 }, 0);
             } catch (error) {
                 addConsoleCommand('Error: ' + error.message, 'error');
+                setProgressBar(100);
+                clearInterval(progressInterval);
                 setRegenerateButtonText('generate');
+                regenerateButton.disabled = false;
                 isGenerating = false;
                 // Show themeStatus even on error
                 document.getElementById('themeStatus').style.display = 'block';
