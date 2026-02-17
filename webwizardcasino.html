@@ -388,20 +388,22 @@
                 return;
             }
             grid.innerHTML = favorites.map(fav => `
-                <div class="favorite-item styled-favorite" data-id="${fav.id}">
-                    <div class="favorite-theme styled-favorite-theme">${fav.theme}</div>
-                    <button class="favorite-delete styled-favorite-delete">delete</button>
+                <div class="favorite-item" data-id="${fav.id}">
+                    <div class="favorite-theme">${fav.theme}</div>
+                    <button class="delete-btn">delete</button>
                 </div>
             `).reverse().join('');
             document.querySelectorAll('.favorite-item').forEach(item => {
                 item.addEventListener('click', e => {
-                    if (e.target.classList.contains('favorite-delete')) {
+                    if (e.target.classList.contains('delete-btn')) {
                         deleteFavorite(Number(item.dataset.id));
                         e.stopPropagation();
                     } else {
                         loadFavorite(Number(item.dataset.id));
-                        // Hide modal after loading favorite
+                        // Close modal after loading favorite
                         document.getElementById('favoritesModal').classList.remove('show');
+                        // Hide theme screen if open
+                        document.getElementById('themeScreen').style.display = 'none';
                     }
                 });
             });
@@ -637,8 +639,6 @@ ${firstPassCode}
                 // Always reset regenerate button when theme screen is shown
                 setRegenerateButtonText('generate');
                 regenerateButton.disabled = false;
-                // Hide favorites modal if open
-                document.getElementById('favoritesModal').classList.remove('show');
                 // Do NOT hide loadingOverlay here; it will be hidden after generation completes
             });
             randomThemeButton.addEventListener('click', async () => {
@@ -674,10 +674,7 @@ ${firstPassCode}
             backButton.addEventListener('click', backToGeneratedSite);
             favoritesButton.addEventListener('click', () => {
                 loadFavorites();
-                // Show modal regardless of theme screen state
-                document.getElementById('favoritesModal').classList.add('show');
-                // Hide theme screen when modal is opened
-                document.getElementById('themeScreen').style.display = 'none';
+                modal.classList.add('show');
             });
             closeModal.addEventListener('click', () => {
                 modal.classList.remove('show');
