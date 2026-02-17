@@ -388,7 +388,6 @@
             }
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('hidden');
-            updateBackButtonState();
             updateSaveButtonState();
             document.getElementById('newSiteNotification').style.display = 'none';
         }
@@ -404,14 +403,6 @@
             const isSaved = hasIdentity && isSavedFavorite(displayedGeneration.theme);
             const isCurrentGeneration = currentGeneration.code === displayedGeneration.code && currentGeneration.theme === displayedGeneration.theme;
             saveButton.style.display = (isSaved || !isCurrentGeneration) ? 'none' : 'block';
-        }
-
-        function updateBackButtonState() {
-            const backButton = document.getElementById('backButton');
-            if (!backButton) return;
-            const hasPrevious = Boolean(previousGeneration?.theme && previousGeneration?.code);
-            const isPrevSaved = hasPrevious && isSavedFavorite(previousGeneration.theme);
-            backButton.style.display = hasPrevious && !isPrevSaved ? 'block' : 'none';
         }
         
         function saveFavorite() {
@@ -473,29 +464,25 @@
             const preview = document.getElementById('favoritePreview');
             clearAndSandbox(preview);
             preview.style.display = 'block';
-            const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
-            if (isFullHTML) {
-                setTimeout(() => {
-                    preview.innerHTML = favorite.code;
-                    disableGeneratedContextMenu(preview);
-                    Array.from(preview.querySelectorAll('script')).forEach(s => s.remove());
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = favorite.code;
-                    const scripts = tempDiv.querySelectorAll('script');
-                    scripts.forEach(oldScript => {
-                        const newScript = document.createElement('script');
-                        for (const attr of oldScript.attributes) {
-                            newScript.setAttribute(attr.name, attr.value);
-                        }
-                        if (oldScript.textContent) {
-                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { document.getElementById('favoritePreview').innerHTML += '<div class=\'error-overlay\'>Favorite error: '+e+'</div>'; }`;
-                        }
-                        preview.appendChild(newScript);
-                    });
-                }, 0);
-            } else {
-                preview.textContent = favorite.code;
-            }
+            // Use a sandboxed iframe for preview
+            const iframe = document.createElement('iframe');
+            iframe.style.width = '100%';
+            iframe.style.height = '500px';
+            iframe.style.border = 'none';
+            iframe.style.background = '#222';
+            iframe.sandbox = 'allow-scripts allow-same-origin';
+            preview.appendChild(iframe);
+            // Write the favorite code into the iframe
+            setTimeout(() => {
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    doc.open();
+                    doc.write(favorite.code);
+                    doc.close();
+                } catch (e) {
+                    preview.innerHTML += `<div class='error-overlay'>Favorite error: ${e}</div>`;
+                }
+            }, 0);
         }
 
         function loadFavorite(id) {
@@ -546,7 +533,6 @@
             regenerateButton.disabled = true;
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('newSiteNotification').style.display = 'none';
-            updateBackButtonState();
             generatedContent.innerHTML = '';
             isGenerating = true;
             wasLoadingWhenGenerated = true;
@@ -645,8 +631,13 @@ ${firstPassCode}
                             newScript.setAttribute(attr.name, attr.value);
                         }
                         if (oldScript.textContent) {
-                            // Wrap script content in try/catch for robustness
-                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { console.error('Favorite script error:', e); }`;
+                            // Only wrap in try/catch if not already a syntax error
+                            try {
+                                new Function(oldScript.textContent);
+                                newScript.textContent = `try { ${oldScript.textContent} } catch(e) { document.getElementById('generatedContent').innerHTML += '<div class=\'error-overlay\'>Site error: '+e+'</div>'; }`;
+                            } catch (syntaxErr) {
+                                newScript.textContent = oldScript.textContent;
+                            }
                         }
                         oldScript.parentNode.replaceChild(newScript, oldScript);
                     });
@@ -657,7 +648,6 @@ ${firstPassCode}
                     // Hide themeStatus after loading
                     document.getElementById('themeStatus').style.display = 'none';
                     updateSaveButtonState();
-                    updateBackButtonState();
                     setRegenerateButtonText('generate');
                     regenerateButton.disabled = false;
                     isGenerating = false;
