@@ -316,6 +316,12 @@
         }
 
         function startConsoleCommands() {
+            stopConsoleCommands(); // Ensure no previous interval is running
+            // Clear console output before starting new commands
+            const consoleOutput = document.getElementById('consoleOutput');
+            if (consoleOutput) {
+                consoleOutput.innerHTML = '';
+            }
             // Add initial commands with typing animation
             (async () => {
                 await typeConsoleCommand('System initialized', 'status', 30);
@@ -324,7 +330,6 @@
                 await new Promise(r => setTimeout(r, 500));
                 await typeConsoleCommand('Connection established', 'status', 30);
                 await new Promise(r => setTimeout(r, 500));
-                
                 // Continue with random commands
                 consoleCommandInterval = setInterval(async () => {
                     if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
