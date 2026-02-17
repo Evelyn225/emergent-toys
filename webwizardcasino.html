@@ -390,7 +390,7 @@
             grid.innerHTML = favorites.map(fav => `
                 <div class="favorite-item" data-id="${fav.id}">
                     <div class="favorite-theme">${fav.theme}</div>
-                    <button class="delete-btn">delete</button>
+                    <button class="delete-btn">X</button>
                 </div>
             `).reverse().join('');
             document.querySelectorAll('.favorite-item').forEach(item => {
