@@ -538,6 +538,9 @@ You previously generated this site for the theme: "${themeValue}". Please review
 Here is the current code:
 ${firstPassCode}
 `;
+                // Show theme again during second pass
+                themeStatus.textContent = themeValue;
+                themeStatus.style.display = 'block';
                 const secondResponse = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

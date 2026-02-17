@@ -29,8 +29,8 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `CREATE: One random two-word theme for a generative art website
-FORMAT: word1 word2
+          content: `CREATE: Three truly random unusual words.
+FORMAT: word1 word2 word3
 RULES: No explanations, just output.`
         },
         {
