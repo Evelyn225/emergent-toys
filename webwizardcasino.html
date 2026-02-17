@@ -418,6 +418,13 @@
                 window.p5Instance.remove();
                 window.p5Instance = null;
             }
+            // Remove all canvas elements from the document
+            const canvases = document.querySelectorAll('canvas');
+            canvases.forEach(canvas => {
+                if (canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
         }
 
 
