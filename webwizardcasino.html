@@ -545,10 +545,12 @@
                 const secondPassPrompt = `
 You previously generated this site for the theme: "${themeValue}". Please review and improve it:
 
-1. Flesh out the site further, making it more substantial and creative. The current code is merely a skeleton of what the site could be. Expand on it and make it more fully realized. This site should be very unique.
+1. Flesh out the site further, making it more substantial and creative. The current code is merely a skeleton of what the site could be. Expand on it and make it more fully realized. This site should better fit the idea: "${themeValue}".
 2. Carefully check for any referenced functions, variables, or classes that are not fully implemented, and implement them.
 3. Ensure all p5.js code is complete and functional.
 4. Output only the improved HTML/CSS/JS code, no explanations.
+
+Theme: ${themeValue}
 
 Here is the current code:
 ${firstPassCode}
