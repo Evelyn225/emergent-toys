@@ -36,7 +36,7 @@ RULES: No explanations, just output.`
         },
         {
           role: "user",
-          content: "Create a theme."
+          content: "Create an unusual theme."
         }
       ],
       temperature: 0.95
