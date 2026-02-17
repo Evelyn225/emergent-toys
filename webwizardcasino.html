@@ -71,6 +71,8 @@
     <script>
         let consoleCommands = [];
         let consoleCommandsLoaded = false;
+        // Fix: Declare pendingGeneration at top-level scope
+        let pendingGeneration = null;
         (async () => {
             try {
                 const response = await fetch('/casino-assets/console-commands.json');

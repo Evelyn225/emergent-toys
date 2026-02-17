@@ -297,9 +297,12 @@ body {
 }
 
 #favoritesGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 8px;
 }
 
 .favorite-item {
@@ -544,21 +547,43 @@ body {
 /* NEW SITE READY BUTTON (favorites preview) */
 #newSiteNotification {
     display: none;
-    position: fixed;
-    left: 50%;
-    top: 90px;
-    transform: translateX(-50%);
-    z-index: 1300;
-    background: #fffa;
-    color: #222;
-    border: 2px solid #ffb300;
-    border-radius: 8px;
-    padding: 16px 32px;
-    font-size: 1.2em;
-    font-weight: bold;
-    box-shadow: 0 2px 16px 0 #0008;
+    /* Inherit topBar button styles */
+    background: transparent;
+    color: rgba(255, 255, 255, 0.8);
+    border: 2px solid #ff3333;
+    border-radius: 3px;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-family: 'Iosevka', monospace;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    box-shadow: 1px 1px 0 rgba(255, 255, 255, 0.25),
+        2px 2px 0 rgba(255, 255, 255, 0.18),
+        3px 3px 0 rgba(255, 255, 255, 0.12),
+        4px 4px 0 rgba(255, 255, 255, 0.08);
+    margin-right: 8px;
+    margin-left: 8px;
     cursor: pointer;
+    position: relative;
+    animation: flashRedOutline 1s linear infinite alternate;
     transition: background 0.2s, color 0.2s, border 0.2s;
+}
+
+@keyframes flashRedOutline {
+    0% {
+        border-color: #ff3333;
+        box-shadow: 0 0 8px 2px #ff3333, 1px 1px 0 rgba(255,255,255,0.25);
+    }
+    50% {
+        border-color: #fff;
+        box-shadow: 0 0 16px 4px #ff3333, 2px 2px 0 rgba(255,255,255,0.18);
+    }
+    100% {
+        border-color: #ff3333;
+        box-shadow: 0 0 8px 2px #ff3333, 3px 3px 0 rgba(255,255,255,0.12);
+    }
+}
 }
 #newSiteNotification:hover {
     background: #fff;
