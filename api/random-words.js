@@ -24,13 +24,14 @@ export default async function handler(req, res) {
       apiKey: process.env.DOMROULETTE_KEY
     });
 
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `CREATE: Three truly random unusual words.
-FORMAT: word1 word2 word3
+          content: `CREATE: Two truly random unusual words.
+FORMAT: word1 word2
 RULES: No explanations, just output.`
         },
         {
