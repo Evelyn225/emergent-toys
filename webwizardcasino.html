@@ -352,6 +352,7 @@
         }
 
         function setDisplayedGeneration(gen) {
+            displayedGeneration = gen;
             const container = document.getElementById('generatedContent');
             // Remove all existing script tags from previous site
             Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
@@ -364,7 +365,7 @@
                     disableGeneratedContextMenu(container);
                     // Remove all existing script tags again (in case innerHTML added duplicates)
                     Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
-                    // Execute any script tags in the loaded site
+                    // Execute any script tags in the loaded site, wrapped in try/catch
                     const tempDiv = document.createElement('div');
                     tempDiv.innerHTML = gen.code;
                     const scripts = tempDiv.querySelectorAll('script');
@@ -374,7 +375,8 @@
                             newScript.setAttribute(attr.name, attr.value);
                         }
                         if (oldScript.textContent) {
-                            newScript.textContent = oldScript.textContent;
+                            // Wrap script content in try/catch for robustness
+                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { console.error('Favorite script error:', e); }`;
                         }
                         container.appendChild(newScript);
                     });
@@ -469,41 +471,8 @@
                 theme: favorite.theme,
                 code: favorite.code
             };
-            const container = document.getElementById('generatedContent');
-            // Remove all existing script tags from previous site
-            Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
-            container.innerHTML = '';
-            container.style.display = 'block';
-            const isFullHTML = /<html[\s>]/i.test(favorite.code) || /<body[\s>]/i.test(favorite.code) || /<script[\s>]/i.test(favorite.code) || /<style[\s>]/i.test(favorite.code);
-            if (isFullHTML) {
-                setTimeout(() => {
-                    container.innerHTML = favorite.code;
-                    disableGeneratedContextMenu(container);
-                    // Remove all existing script tags again (in case innerHTML added duplicates)
-                    Array.from(container.querySelectorAll('script')).forEach(s => s.remove());
-                    // Execute any script tags in the loaded favorite
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = favorite.code;
-                    const scripts = tempDiv.querySelectorAll('script');
-                    scripts.forEach(oldScript => {
-                        const newScript = document.createElement('script');
-                        for (const attr of oldScript.attributes) {
-                            newScript.setAttribute(attr.name, attr.value);
-                        }
-                        if (oldScript.textContent) {
-                            newScript.textContent = oldScript.textContent;
-                        }
-                        container.appendChild(newScript);
-                    });
-                }, 0);
-            } else {
-                container.textContent = favorite.code;
-            }
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            loadingOverlay.classList.add('hidden');
-            updateBackButtonState();
-            updateSaveButtonState();
-            document.getElementById('newSiteNotification').style.display = 'none';
+            displayedGeneration = { ...favorite };
+            setDisplayedGeneration(displayedGeneration);
         }
 
         function deleteFavorite(id) {
@@ -633,7 +602,8 @@ ${firstPassCode}
                             newScript.setAttribute(attr.name, attr.value);
                         }
                         if (oldScript.textContent) {
-                            newScript.textContent = oldScript.textContent;
+                            // Wrap script content in try/catch for robustness
+                            newScript.textContent = `try { ${oldScript.textContent} } catch(e) { console.error('Favorite script error:', e); }`;
                         }
                         oldScript.parentNode.replaceChild(newScript, oldScript);
                     });
