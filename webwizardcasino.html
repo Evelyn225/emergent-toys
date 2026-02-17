@@ -526,7 +526,7 @@ ${firstPassCode}
                 setTimeout(() => {
                     generatedContent.innerHTML = improvedCode;
                     disableGeneratedContextMenu(generatedContent);
-                    // Execute any script tags in the generated HTML
+                    // Execute any script tags in the generated HTML (no template literal injection)
                     const scripts = generatedContent.querySelectorAll('script');
                     scripts.forEach(oldScript => {
                         const newScript = document.createElement('script');
@@ -534,16 +534,20 @@ ${firstPassCode}
                             newScript.setAttribute(attr.name, attr.value);
                         }
                         if (oldScript.textContent) {
-                            // Only wrap in try/catch if not already a syntax error
-                            try {
-                                new Function(oldScript.textContent);
-                                newScript.textContent = `try { ${oldScript.textContent} } catch(e) { document.getElementById('generatedContent').innerHTML += '<div class=\'error-overlay\'>Site error: '+e+'</div>'; }`;
-                            } catch (syntaxErr) {
-                                newScript.textContent = oldScript.textContent;
-                            }
+                            newScript.textContent = oldScript.textContent;
                         }
                         oldScript.parentNode.replaceChild(newScript, oldScript);
                     });
+                            // Global error handler for generated content
+                            window.addEventListener('error', function(event) {
+                                const container = document.getElementById('generatedContent');
+                                if (container && event.filename && event.filename.includes('webwizardcasino.html')) {
+                                    const errorDiv = document.createElement('div');
+                                    errorDiv.className = 'error-overlay';
+                                    errorDiv.textContent = 'Site error: ' + event.message;
+                                    container.appendChild(errorDiv);
+                                }
+                            });
                     // Complete progress bar
                     setProgressBar(100);
                     clearInterval(progressInterval);
