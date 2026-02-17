@@ -452,7 +452,7 @@
             let progress = 0;
             let t = 0;
             let progressInterval = setInterval(() => {
-                if (progress < 90) {
+                if (progress < 50) {
                     // Ease in: slow at first, then faster
                     t += 0.0125; // Controls overall speed (smaller = slower)
                     // Use an ease-out cubic function for natural feel
@@ -492,6 +492,9 @@
                 if (!response.ok) throw new Error('Failed to generate site');
                 const data = await response.json();
                 let firstPassCode = data.html || data.code;
+                // Jump progress bar to 50% after first pass
+                progress = 50;
+                setProgressBar(progress);
                 // Second pass: ask AI to flesh out and fully implement referenced functions
                 const secondPassPrompt = `
 You previously generated this site for the theme: "${themeValue}". Please review and improve it:
@@ -550,8 +553,8 @@ ${firstPassCode}
                                     container.appendChild(errorDiv);
                                 }
                             });
-                    // Complete progress bar
-                    setProgressBar(100);
+                    // Complete progress bar after second pass
+                    progress = 100;
                     clearInterval(progressInterval);
                     loadingOverlay.classList.add('hidden');
                     // Hide themeStatus after loading
