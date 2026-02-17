@@ -292,7 +292,7 @@
                     if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
                     const randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
                     await typeConsoleCommand(randomCommand, 'normal', 25);
-                }, 7500);
+                }, 4500);
             })();
         }
 
@@ -411,6 +411,7 @@
             if (!favorite) return;
             const modal = document.getElementById('favoritesModal');
             modal.classList.remove('show');
+            // Only set previousGeneration when loading a favorite
             if (currentGeneration.theme && currentGeneration.code) {
                 previousGeneration = { ...currentGeneration };
             }
@@ -469,6 +470,8 @@
             } else {
                 container.textContent = currentGeneration.code;
             }
+            // After going back, clear previousGeneration so you can't go back again
+            previousGeneration = null;
         }
 
         // Call AI API to generate a site for a theme
@@ -520,9 +523,7 @@
                 clearInterval(loadingMessageInterval);
                 loadingMessageInterval = null;
             }
-            if (currentGeneration.theme && currentGeneration.code) {
-                previousGeneration = { ...currentGeneration };
-            }
+            previousGeneration = null;
             backgroundGeneration = null;
             try {
                 // Use themeValue for all theme logic
