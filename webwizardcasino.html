@@ -601,13 +601,13 @@ ${firstPassCode}
         document.addEventListener('DOMContentLoaded', () => {
                         // Hide Fix button on theme screen
                         if (fixButton) fixButton.style.display = 'none';
+            const fixButton = document.getElementById('fixButton');
             const regenerateButton = document.getElementById('regenerateButton');
             const randomThemeButton = document.getElementById('randomThemeButton');
             const themeInput = document.getElementById('themeInput');
             const themeScreen = document.getElementById('themeScreen');
             const startGenerationButton = document.getElementById('startGenerationButton');
             const topBar = document.getElementById('topBar');
-            const fixButton = document.getElementById('fixButton');
             // Fix button handler
             if (fixButton) {
                 fixButton.addEventListener('click', async () => {
