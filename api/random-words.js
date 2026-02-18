@@ -42,7 +42,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `CREATE: A short, interesting, visually creative idea for a p5.js sketch or generative site.
+          content: `CREATE: A short, interesting, visually creative idea for a p5.js sketch or generative site. Dont use audio based ideas.
 FORMAT: A short, descriptive phrase or sentence.
 EXAMPLES: Sand physics simulation, Game of Life variant with hexagonal cells, Animated fractal tree that grows with mouse movement, Inverse kinematics tentacle following the cursor, Procedural city generator, Interactive cellular automata playground, Dynamic Voronoi diagram with moving points, Generative art inspired by Mondrian, Particle system with flocking behavior, Recursive subdivision maze generator.
 RULES: No explanations, just output the idea as a phrase or sentence.`
