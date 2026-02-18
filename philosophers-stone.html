@@ -111,6 +111,10 @@
       <input type="range" id="particleSlider" min="10" max="1000" value="500">
     </div>
     <div class="control-group">
+      <label>Spawn Amount: <span id="spawnAmountValue">5</span> (1-30)</label>
+      <input type="range" id="spawnAmountSlider" min="1" max="30" value="5">
+    </div>
+    <div class="control-group">
       <label>Particle Speed: <span id="speedValue">1.0</span> (0.1-3.0)</label>
       <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0">
     </div>
@@ -161,8 +165,14 @@
       killRate: 0.062,
       decayRate: 0.999,
       speedMultiplier: 1.0,
-      reactionRate: 0.10
+      reactionRate: 0.10,
+      spawnAmount: 5
     };
+  // Track mouse state for continuous spawn
+  let mouseDown = false;
+  let lastMouseX = 0;
+  let lastMouseY = 0;
+  let spawnIntervalId = null;
 
     class Particle {
       constructor(x, y, isAnti = false) {
@@ -382,47 +392,56 @@
       }
     });
 
-    canvas.addEventListener('click', (e) => {
-      const isAnti = e.shiftKey;
-      for (let i = 0; i < 5; i++) {
+    function spawnParticlesAt(x, y, amount, isAnti) {
+      for (let i = 0; i < amount; i++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = Math.random() * 20;
         particles.push(new Particle(
-          e.clientX + Math.cos(angle) * dist,
-          e.clientY + Math.sin(angle) * dist,
+          x + Math.cos(angle) * dist,
+          y + Math.sin(angle) * dist,
           isAnti
         ));
       }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      mouseDown = true;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      spawnParticlesAt(e.clientX, e.clientY, params.spawnAmount, e.shiftKey);
+      // Start interval for continuous spawn
+      if (spawnIntervalId) clearInterval(spawnIntervalId);
+      spawnIntervalId = setInterval(() => {
+        if (mouseDown) {
+          spawnParticlesAt(lastMouseX, lastMouseY, params.spawnAmount, e.shiftKey);
+        }
+      }, 60); // ~16 FPS
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      mouseDown = false;
+      if (spawnIntervalId) clearInterval(spawnIntervalId);
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      mouseDown = false;
+      if (spawnIntervalId) clearInterval(spawnIntervalId);
     });
 
     canvas.addEventListener('mousemove', (e) => {
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
       if (e.buttons & 1) {
-        particles.push(new Particle(
-          e.clientX + (Math.random() - 0.5) * 10,
-          e.clientY + (Math.random() - 0.5) * 10,
-          e.shiftKey
-        ));
+        spawnParticlesAt(e.clientX, e.clientY, params.spawnAmount, e.shiftKey);
       }
       if (e.buttons & 2) {
-        particles.push(new Particle(
-          e.clientX + (Math.random() - 0.5) * 10,
-          e.clientY + (Math.random() - 0.5) * 10,
-          true
-        ));
+        spawnParticlesAt(e.clientX, e.clientY, params.spawnAmount, true);
       }
     });
 
     canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      for (let i = 0; i < 5; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = Math.random() * 20;
-        particles.push(new Particle(
-          e.clientX + Math.cos(angle) * dist,
-          e.clientY + Math.sin(angle) * dist,
-          true
-        ));
-      }
+      spawnParticlesAt(e.clientX, e.clientY, params.spawnAmount, true);
     });
 
     document.getElementById('particleSlider').addEventListener('input', (e) => {
@@ -471,24 +490,33 @@
       initializeParticles();
     });
 
+    // Spawn Amount slider logic
+    const spawnAmountSlider = document.getElementById('spawnAmountSlider');
+    const spawnAmountValue = document.getElementById('spawnAmountValue');
+    spawnAmountSlider.addEventListener('input', (e) => {
+      params.spawnAmount = parseInt(e.target.value);
+      spawnAmountValue.textContent = params.spawnAmount;
+    });
+
     function initializeControls() {
       document.getElementById('particleSlider').value = 500;
       document.getElementById('speedSlider').value = 1.0;
       document.getElementById('diffusionSlider').value = 0.25;
       document.getElementById('reactionSlider').value = 0.10;
       document.getElementById('decaySlider').value = 0.950;
-      
+      document.getElementById('spawnAmountSlider').value = 5;
       document.getElementById('particleCount').textContent = 500;
       document.getElementById('speedValue').textContent = (1.0).toFixed(1);
       document.getElementById('diffusionValue').textContent = (0.25).toFixed(2);
       document.getElementById('reactionValue').textContent = (0.10).toFixed(2);
       document.getElementById('decayValue').textContent = (0.950).toFixed(3);
-      
+      document.getElementById('spawnAmountValue').textContent = 5;
       params.particleCount = 500;
       params.speedMultiplier = 1.0;
       params.diffusionB = 0.25;
       params.reactionRate = 0.10;
       params.decayRate = 0.950;
+      params.spawnAmount = 5;
     }
     
     initializeControls();
