@@ -20,7 +20,6 @@
 <body>
     <div id="topBar" style="display:none;">
         <button id="regenerateButton">generate</button>
-        <button id="fixButton" style="display:none; float:left; margin-left: 0; margin-right: 12px;">fix errors</button>
         <a href="index.html" id="homeButton" style="padding: 12px 12px; background: transparent; color: rgba(255, 255, 255, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; cursor: pointer; font-size: 18px; font-family: 'Iosevka', monospace; text-decoration: none; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); display: flex; align-items: center; line-height: 1;" onmouseover="this.style.transform='scale(1.2)'; this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
     </div>
 
@@ -323,6 +322,7 @@
             if (consoleOutput) {
                 consoleOutput.innerHTML = '';
             }
+            let lastCommand = null;
             // Add initial commands with typing animation
             (async () => {
                 await typeConsoleCommand('System initialized', 'status', 30);
@@ -334,7 +334,13 @@
                 // Continue with random commands
                 consoleCommandInterval = setInterval(async () => {
                     if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
-                    const randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
+                    let randomCommand;
+                    let attempts = 0;
+                    do {
+                        randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
+                        attempts++;
+                    } while (randomCommand === lastCommand && attempts < 10);
+                    lastCommand = randomCommand;
                     await typeConsoleCommand(randomCommand, 'normal', 25);
                 }, 4000);
             })();
@@ -378,18 +384,8 @@
             const container = document.getElementById('generatedContent');
             clearAndSandbox(container);
             container.style.display = 'block';
-            // Show Fix button when a site is displayed and not loading
-            const fixButton = document.getElementById('fixButton');
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            const themeScreen = document.getElementById('themeScreen');
-            if (fixButton && loadingOverlay && themeScreen) {
-                if (loadingOverlay.classList.contains('hidden') && themeScreen.style.display === 'none') {
-                    fixButton.style.display = 'inline-block';
-                } else {
-                    fixButton.style.display = 'none';
-                }
-            }
             const isFullHTML = /<html[\s>]/i.test(gen.code) || /<body[\s>]/i.test(gen.code) || /<script[\s>]/i.test(gen.code) || /<style[\s>]/i.test(gen.code);
+            const loadingOverlay = document.getElementById('loadingOverlay');
             // Hide overlay first, then inject site
             loadingOverlay.classList.add('hidden');
             setTimeout(() => {
@@ -415,18 +411,11 @@
                 } else {
                     container.textContent = gen.code;
                 }
-                // Hide Fix button if code is not full HTML
-                if (!isFullHTML) {
-                    if (fixButton) fixButton.style.display = 'none';
-                }
             }, 120); // Delay to ensure overlay is hidden first
         }
         
         // Utility to sandbox and clear preview or generated site
         function clearAndSandbox(container) {
-                        // Hide Fix button when clearing content
-                        const fixButton = document.getElementById('fixButton');
-                        if (fixButton) fixButton.style.display = 'none';
             // Remove all child nodes and scripts
             while (container.firstChild) {
                 container.removeChild(container.firstChild);
@@ -449,9 +438,6 @@
 
         // Call AI API to generate a site for a theme
         async function generateWebsite() {
-                        // Hide Fix button during loading
-                        const fixButton = document.getElementById('fixButton');
-                        if (fixButton) fixButton.style.display = 'none';
             const loadingOverlay = document.getElementById('loadingOverlay');
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
@@ -566,8 +552,8 @@ ${firstPassCode}
                             window.addEventListener('error', function(event) {
                                 const container = document.getElementById('generatedContent');
                                 if (!container) return;
-                                    // Check if error target is a Node and inside generatedContent
-                                    if (event.target && typeof event.target === 'object' && 'nodeType' in event.target && container.contains(event.target)) {
+                                // Check if error target is inside generatedContent
+                                if (event.target && container.contains(event.target)) {
                                     const errorDiv = document.createElement('div');
                                     errorDiv.className = 'error-overlay';
                                     errorDiv.textContent = 'Site error: ' + event.message;
@@ -599,44 +585,12 @@ ${firstPassCode}
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            const fixButton = document.getElementById('fixButton');
-            // Hide Fix button on theme screen
-            if (fixButton) fixButton.style.display = 'none';
             const regenerateButton = document.getElementById('regenerateButton');
             const randomThemeButton = document.getElementById('randomThemeButton');
             const themeInput = document.getElementById('themeInput');
             const themeScreen = document.getElementById('themeScreen');
             const startGenerationButton = document.getElementById('startGenerationButton');
             const topBar = document.getElementById('topBar');
-            // Fix button handler
-            if (fixButton) {
-                fixButton.addEventListener('click', async () => {
-                    if (!currentGeneration || !currentGeneration.code) return;
-                    fixButton.disabled = true;
-                    fixButton.textContent = 'fixing...';
-                    const loadingOverlay = document.getElementById('loadingOverlay');
-                    loadingOverlay.classList.remove('hidden');
-                    try {
-                        // Send current code to AI for fixing
-                        const fixPrompt = `Please fix any errors or bugs in this code and return a corrected version.\n\n${currentGeneration.code}`;
-                        const response = await fetch(GENERATE_ENDPOINT, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ theme: currentGeneration.theme || '', prompt: fixPrompt })
-                        });
-                        if (!response.ok) throw new Error('Failed to fix site');
-                        const data = await response.json();
-                        const fixedCode = data.html || data.code;
-                        currentGeneration.code = fixedCode;
-                        setDisplayedGeneration(currentGeneration);
-                    } catch (error) {
-                        addConsoleCommand('Error: ' + error.message, 'error');
-                    } finally {
-                        fixButton.disabled = false;
-                        fixButton.textContent = 'fix errors';
-                    }
-                });
-            }
 
             // Show theme screen initially, show top bar, hide loading overlay
             themeScreen.style.display = 'flex';

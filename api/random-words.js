@@ -30,13 +30,14 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `CREATE: Two random words.
-FORMAT: word1 word2
-RULES: No explanations, just output.`
+          content: `CREATE: An interesting, creative idea for a p5.js sketch or generative site.
+FORMAT: A short, descriptive phrase or sentence.
+EXAMPLES: "Sand physics simulation", "Game of Life variant with hexagonal cells", "Animated fractal tree that grows with mouse movement", "Inverse kinematics tentacle following the cursor", "Procedural city generator", "Interactive cellular automata playground", "Dynamic Voronoi diagram with moving points", "Generative art inspired by Mondrian", "Particle system with flocking behavior", "Recursive subdivision maze generator".
+RULES: No explanations, just output the idea as a phrase or sentence.`
         },
         {
           role: "user",
-          content: "Create two random words."
+          content: "Create an interesting idea for a p5.js sketch or generative site."
         }
       ],
       temperature: 0.95
@@ -45,12 +46,14 @@ RULES: No explanations, just output.`
     let theme = completion.choices[0].message.content.trim();
 
     // Validate and clean
-    if (theme.split(" ").length !== 2) {
-      // Fallback to interesting combos
+    if (!theme || theme.length < 8) {
+      // Fallback to interesting sketch ideas
       const fallbacks = [
-        "fungal capitalism", "whispering calculus", "paper supernova",
-        "glitching coral", "breathing architecture", "crying silicon",
-        "molten grammar", "electric moss", "arctic circuitry", "neon folklore", "fractal tapestry"
+        "crayon paint tool", "Game of Life variant with hexagonal cells", "Animated fractal tree that grows with mouse movement",
+        "Inverse kinematics tentacle following the cursor", "Procedural city generator", "Interactive cellular automata playground",
+        "kaleidoscopic pattern generator", "Generative art inspired by Mondrian", "Particle system with flocking behavior",
+        "Recursive subdivision maze generator", "Boids flocking simulation with predators", "Big dog woof woof",
+        "Water ripple simulation", "Organic growth algorithm", "Procedural cave generation"
       ];
       theme = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
