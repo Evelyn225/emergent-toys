@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Play catch with your dad!</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #0d0d14;
+        }
+    </style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+<script>
+class Segment {
+    constructor(x, y, len, i) {
+        this.angle = 0;
+        this.b = createVector();
+        if (x instanceof Segment) {
+            // create from vector x, with len y
+            this.sw = map(len, 0, 20, 1, 10);
+            this.a = x.b.copy();
+            this.len = y;
+            this.calculateB();
+        } else {
+            // create new vector
+            this.a = createVector(x, y);
+            this.sw = map(i, 0, 20, 1, 10);
+            this.len = len;
+            this.calculateB();
+        }
+    }
+
+    followChild(child) {
+        let targetX = child.a.x;
+        let targetY = child.a.y;
+        this.follow(targetX, targetY);
+    }
+
+    follow(tx, ty) {
+        let target = createVector(tx, ty);
+        let dir = p5.Vector.sub(target, this.a);
+        this.angle = dir.heading();
+        dir.setMag(this.len);
+        dir.mult(-1);
+        this.a = p5.Vector.add(target, dir);
+    }
+
+    setA(pos) {
+        this.a = pos.copy();
+        this.calculateB();
+    }
+
+    calculateB() {
+        let dx = this.len * cos(this.angle);
+        let dy = this.len * sin(this.angle);
+        this.b.set(this.a.x + dx, this.a.y + dy);
+    }
+
+    update() {
+        this.calculateB();
+    }
+
+    show() {
+        stroke(255);
+        strokeWeight(this.sw);
+        line(this.a.x, this.a.y, this.b.x, this.b.y);
+    }
+}
+
+class Tentacle {
+    constructor(x, y) {
+        this.segments = [];
+        this.base = createVector(x, y);
+        this.numSegments = 24;
+        this.len = 28;
+        // First segment
+        this.segments[0] = new Segment(x, y, this.len, 0);
+        for (let i = 1; i < this.numSegments; i++) {
+            this.segments[i] = new Segment(this.segments[i - 1], this.len, i);
+            // Taper stroke weight
+            this.segments[i].sw = map(i, 0, this.numSegments-1, 18, 3);
+        }
+        // Taper first segment
+        this.segments[0].sw = 18;
+    }
+
+    followBall(ball) {
+        let total = this.segments.length;
+        let end = this.segments[total - 1];
+        end.follow(ball.x, ball.y);
+        end.update();
+        for (let i = total - 2; i >= 0; i--) {
+            this.segments[i].followChild(this.segments[i + 1]);
+            this.segments[i].update();
+        }
+        this.segments[0].setA(this.base);
+        for (let i = 1; i < total; i++) {
+            this.segments[i].setA(this.segments[i - 1].b);
+        }
+    }
+
+    show() {
+        for (let i = 0; i < this.segments.length; i++) {
+            this.segments[i].show();
+        }
+    }
+}
+
+let arm;
+let ball;
+let gravity = 0.3;
+let dragging = false;
+let dragOffset = {x:0, y:0};
+let throwStage = null;
+let throwTimer = 0;
+let throwLiftTarget = null;
+let throwLiftProgress = 0;
+let throwLiftStart = null;
+let throwContactTimer = 0;
+let throwCooldown = 0;
+
+function setup() {
+    createCanvas(windowWidth, windowHeight);
+    arm = new Tentacle(width-80, height/2);
+    resetBall();
+}
+
+function resetBall() {
+    ball = {
+        x: 120,
+        y: height/2,
+        vx: 0,
+        vy: 0,
+        isHeld: false,
+        isReturning: false,
+        radius: 32
+    };
+}
+
+function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+    arm = new Tentacle(width-80, height/2);
+    resetBall();
+}
+
+function mousePressed() {
+    let d = dist(mouseX, mouseY, ball.x, ball.y);
+    // Prevent grabbing if ball is held by tentacle or in throw sequence
+    if (d < (ball.radius || 32) && !ball.isHeld && !ball.isReturning && !throwStage) {
+        dragging = true;
+        ball.isHeld = true;
+        ball.isReturning = false;
+        dragOffset.x = ball.x - mouseX;
+        dragOffset.y = ball.y - mouseY;
+        ball.vx = 0;
+        ball.vy = 0;
+    }
+}
+
+function mouseDragged() {
+    if (dragging && ball.isHeld) {
+        ball.x = mouseX + dragOffset.x;
+        ball.y = mouseY + dragOffset.y;
+    }
+}
+
+function mouseReleased() {
+    if (dragging && ball.isHeld) {
+        dragging = false;
+        ball.isHeld = false;
+        // Throw ball based on drag velocity
+        ball.vx = (mouseX - pmouseX) * 0.75;
+        ball.vy = (mouseY - pmouseY) * 0.75;
+    }
+}
+
+function draw() {
+    background(0);
+    arm.followBall(ball);
+    arm.show();
+
+    // Declare tip and tipDist at the top
+    let tip = arm.segments[arm.segments.length-1].b;
+    let tipDist = dist(ball.x, ball.y, tip.x, tip.y);
+
+    if (throwStage === 'lift') {
+    // Ball is lifted up and back
+    if (!throwLiftTarget) {
+        let tip = arm.segments[arm.segments.length-1].b;
+        // Use ball's current velocity to determine lift direction
+        let liftDirX = ball.vx * 90; // amplify influence
+        let liftDirY = ball.vy * 90;
+        // Clamp lift direction to reasonable values
+        liftDirX = constrain(liftDirX, -80, 80);
+        liftDirY = constrain(liftDirY, -80, 80);
+        let liftX = tip.x + liftDirX;
+        let desiredLiftY = tip.y + liftDirY - 60;
+        let liftY = min(max(desiredLiftY, ball.radius + 20), height - ball.radius - 20);
+        throwLiftTarget = {x: liftX, y: liftY};
+        throwLiftProgress = 0;
+        throwLiftStart = {x: ball.x, y: ball.y};
+        // Store velocity at start of lift
+        throwLiftStartVel = {vx: ball.vx, vy: ball.vy};
+    }
+    // Progress from 0 to 1 over throwTimer duration
+    let totalFrames = 24;
+    throwLiftProgress += 1/totalFrames;
+    // Interpolate from start to target
+    let prevX = ball.x;
+    let prevY = ball.y;
+    ball.x = lerp(throwLiftStart.x, throwLiftTarget.x, throwLiftProgress);
+    ball.y = lerp(throwLiftStart.y, throwLiftTarget.y, throwLiftProgress);
+
+    if (typeof throwLiftStartVel !== 'undefined') {
+        let liftMoveX = ball.x - prevX;
+        let liftMoveY = ball.y - prevY;
+        ball.vx = lerp(throwLiftStartVel.vx, liftMoveX, throwLiftProgress);
+        ball.vy = lerp(throwLiftStartVel.vy, liftMoveY, throwLiftProgress);
+    }
+    throwTimer--;
+    if (throwTimer <= 0 || throwLiftProgress >= 1) {
+        throwStage = 'throw';
+        throwTimer = 0;
+        throwLiftTarget = null;
+        throwLiftProgress = 0;
+        throwLiftStart = null;
+        throwLiftStartVel = undefined;
+    }
+} else if (throwStage === 'throw') {
+    // Ball is thrown forward, force depends on lift direction
+    ball.isReturning = false;
+    ball.isHeld = false;
+    // Only calculate throw force if throwLiftTarget and throwLiftStart exist
+    let throwForceX = 0, throwForceY = 0;
+    if (throwLiftTarget && throwLiftStart) {
+        throwForceX = (throwLiftTarget.x - throwLiftStart.x) * 0.5;
+        throwForceY = (throwLiftTarget.y - throwLiftStart.y) * 0.5;
+    } else {
+        // Fallback: throw left and up with extra force
+        throwForceX = -24 + random(-4,4);
+        throwForceY = -18 + random(-4,4);
+    }
+    ball.vx = throwForceX + random(-4,4);
+    ball.vy = throwForceY + random(-5,4);
+    throwStage = null;
+    throwTimer = 0;
+    throwLiftTarget = null;
+    throwLiftProgress = 0;
+    throwLiftStart = null;
+    throwCooldown = 60; // Prevent reattachment
+}
+
+    // Ball physics
+    if (!ball.isHeld) {
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+        // No gravity during lift phase
+        if (!(throwStage === 'lift')) {
+            ball.vy += gravity;
+        }
+    }
+    // If ball is being held by arm, let tentacle tip follow ball's velocity and gravity
+    if (!ball.isHeld && !ball.isReturning && tipDist < ball.radius + 8 && !throwStage && throwCooldown === 0) {
+        ball.isReturning = true;
+        ball.x = tip.x;
+        ball.y = tip.y;
+        // Start contact timer
+        if (throwContactTimer === 0) throwContactTimer = 40;
+    }
+        // Decrement throw cooldown
+        if (throwCooldown > 0) throwCooldown--;
+    // After contact timer expires, start lift
+    if (ball.isReturning && !throwStage && throwContactTimer > 0) {
+        throwContactTimer--;
+        if (throwContactTimer === 0) {
+            throwStage = 'lift';
+            throwTimer = 24;
+            throwLiftTarget = null;
+            throwLiftProgress = 0;
+            throwLiftStart = null;
+        }
+    }
+    // Reset contact timer if ball is not returning
+    if (!ball.isReturning) {
+        throwContactTimer = 0;
+    }
+    if (ball.x < ball.radius) {
+        ball.x = ball.radius;
+        ball.vx *= -0.5;
+    }
+    if (ball.x > width-ball.radius) {
+        ball.x = width-ball.radius;
+        ball.vx *= -0.5;
+    }
+    if (ball.y > height-ball.radius) {
+        ball.y = height-ball.radius;
+        ball.vy *= -0.5;
+    }
+    if (ball.y < ball.radius) {
+        ball.y = ball.radius;
+        ball.vy *= -0.5;
+    }
+
+    if (ball.isReturning && !ball.isHeld && throwStage !== 'throw' && throwStage !== 'lift') {
+        ball.vy += gravity;
+        let tip = arm.segments[arm.segments.length-1].b;
+        // Prevent constraint if ball was just thrown
+        if (ball.vx === 0 && ball.vy === 0) {
+            ball.x = tip.x;
+            ball.y = tip.y;
+        }
+    }
+
+    // Draw ball
+    noStroke();
+    fill(ball.isHeld ? 'orange' : 'lime');
+    ellipse(ball.x, ball.y, ball.radius*2, ball.radius*2);
+
+    // If ball returns to user side, reset
+    if (ball.isReturning && ball.x < 80) {
+        resetBall();
+    }
+}
+</script>
+</body>
+</html>
