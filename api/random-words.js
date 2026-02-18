@@ -1,5 +1,17 @@
 
+
 import { OpenAI } from 'openai';
+
+const fallbacks = [
+  "crayon paint tool", "Game of Life variant with hexagonal cells", "Animated fractal tree that grows with mouse movement",
+  "Inverse kinematics tentacle following the cursor", "Procedural city generator", "Interactive cellular automata playground",
+  "kaleidoscopic pattern generator", "Generative art inspired by Mondrian", "Particle system with flocking behavior",
+  "Recursive subdivision maze generator", "Boids flocking simulation with predators", "Big dog woof woof",
+  "Water ripple simulation", "Organic growth algorithm", "Procedural cave generation",
+  "fungal capitalism", "whispering calculus", "paper supernova",
+  "glitching coral", "breathing architecture", "crying silicon",
+  "molten grammar", "electric moss", "arctic circuitry", "neon folklore", "fractal tapestry"
+];
 
 export default async function handler(req, res) {
   // Handle CORS
@@ -47,14 +59,6 @@ RULES: No explanations, just output the idea as a phrase or sentence.`
 
     // Validate and clean
     if (!theme || theme.length < 8) {
-      // Fallback to interesting sketch ideas
-      const fallbacks = [
-        "crayon paint tool", "Game of Life variant with hexagonal cells", "Animated fractal tree that grows with mouse movement",
-        "Inverse kinematics tentacle following the cursor", "Procedural city generator", "Interactive cellular automata playground",
-        "kaleidoscopic pattern generator", "Generative art inspired by Mondrian", "Particle system with flocking behavior",
-        "Recursive subdivision maze generator", "Boids flocking simulation with predators", "Big dog woof woof",
-        "Water ripple simulation", "Organic growth algorithm", "Procedural cave generation"
-      ];
       theme = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
 
@@ -63,14 +67,9 @@ RULES: No explanations, just output the idea as a phrase or sentence.`
     });
   } catch (error) {
     console.error('Detailed error:', error);
-    const fallbackTheme = [
-      "fungal capitalism", "whispering calculus", "paper supernova",
-      "glitching coral", "breathing architecture", "crying silicon",
-      "molten grammar", "electric moss", "arctic circuitry", "neon folklore", "fractal tapestry"
-    ][Math.floor(Math.random() * 11)];
-
+    const fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     res.json({
-      theme: fallbackTheme,
+      theme: fallback,
       fallback: true,
       error: 'Failed to generate random theme',
       details: error.message
