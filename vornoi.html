@@ -45,10 +45,11 @@
     </style>
 </head>
 <body>
-    <a href="index.html" style="position: fixed; top: 20px; right: 20px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(100, 150, 255, 0.8)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
+    <a href="index.html" style="position: fixed; top: 20px; right: 20px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(20, 250, 170, 0.8)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
     <div id="controls">
         <button onclick="randomizePoints()">Randomize Points</button>
         <button onclick="toggleAnimation()">Toggle Animation</button>
+        <button onclick="randomizeColors()">Randomize Colors</button>
     </div>
     <script>
         let points = [];
@@ -58,6 +59,7 @@
         let isAnimating = true;
         let time = 0;
         let activeIndex = -1;
+        let randomCellColors = null;
 
         // Wave parameters
         const waveParams = {
@@ -108,21 +110,35 @@
         }
 
         function getBaseColor(x, y, index) {
+            if (randomCellColors && randomCellColors[index]) {
+                return randomCellColors[index];
+            }
             // Create wave-based color pattern
             const angleFromCenter = atan2(y - height/2, x - width/2);
             const distFromCenter = dist(x, y, width/2, height/2);
             const normalizedDist = constrain(map(distFromCenter, 0, width/2, 0, 1), 0, 1);
-            
             // Add smaller wave motion to colors
             const waveOffset = sin(time * waveParams.colorSpeed + index * 0.2) * 5; 
             const satWave = sin(time * waveParams.colorSpeed * 0.5 + index * 0.3) * 5; 
             const briWave = cos(time * waveParams.colorSpeed * 0.7 + index * 0.4) * 6; 
-            
             return {
                 hue: (map(angleFromCenter, -PI, PI, 80, 105) + waveOffset + 27) % 360,
                 saturation: 70 + normalizedDist * 15 + satWave,
                 brightness: 80 - normalizedDist * 10 + briWave
             };
+        }
+
+        function randomizeColors() {
+            randomCellColors = [];
+            // Pick a new base hue for all cells
+            const baseHue = random(0, 360);
+            for (let i = 0; i < points.length; i++) {
+                randomCellColors.push({
+                    hue: (baseHue + random(-8, 8)) % 360,
+                    saturation: 70 + random(-8, 8),
+                    brightness: 80 + random(-8, 8)
+                });
+            }
         }
 
         function draw() {
@@ -198,6 +214,7 @@
                 ];
             }
             updateVoronoi();
+            if (randomCellColors) randomizeColors();
         }
 
         function toggleAnimation() {
@@ -221,6 +238,7 @@
             if (points.length < 100) {
                 points.push([mouseX, mouseY]);
                 updateVoronoi();
+                if (randomCellColors) randomizeColors();
             }
             return false;
         }
