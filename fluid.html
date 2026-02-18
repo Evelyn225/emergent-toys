@@ -64,24 +64,24 @@
             tint(255, .6);
             image(fadeLayer, 0, 0);
             pop();
-            
+
             blendMode(ADD);
             time += 0.003;
             colorCycle += 0.02;
             noiseOffset += 0.0011;
-            
+
             // Update global hue for new particles - start from red and oscillate through half spectrum
             let timeSinceStart = (millis() - startTime) / 1000; // Convert to seconds
             let maxHueRange = Math.min(25, timeSinceStart * 0.25); // Only go through half the spectrum, slower
             globalHue = maxHueRange * Math.abs(sin(time * 0.005)); // Oscillate back and forth
-            
+
             // Create center points for vortex effects
             const vortexPoints = [
                 { x: width * 0.3 + sin(time * 0.2) * 50, y: height * 0.4 + cos(time * 0.15) * 50 },
                 { x: width * 0.8 + sin(time * 0.15) * 50, y: height * 0.6 + cos(time * 0.2) * 50 },
                 { x: width * 0.5 + sin(time * 0.1) * 30, y: height * 0.5 + cos(time * 0.1) * 30 }
             ];
-            
+
             // Update and draw particles
             particles.forEach(particle => {
                 // Complex flow field combining noise and vortex influences
@@ -106,11 +106,27 @@
                 // Combine noise and vortex effects
                 particle.vel.x = cos(angle) * particleSpeed + vortexInfluence.x;
                 particle.vel.y = sin(angle) * particleSpeed + vortexInfluence.y;
-                
+
+                // If mouse is pressed, attract particles toward mouse
+                if (mouseIsPressed && mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height) {
+                    let toMouse = createVector(mouseX - particle.pos.x, mouseY - particle.pos.y);
+                    let dist = toMouse.mag();
+                    if (dist > 1) {
+                        // Add a wave/ripple effect to the direction
+                        let waveAngle = sin(time * 8 + particle.pos.x * 0.01 + particle.pos.y * 0.01) * 0.7;
+                        toMouse.rotate(waveAngle);
+                        toMouse.normalize();
+                        // Strong but not overwhelming attraction
+                        let attractStrength = 6.0 * constrain(400 / (dist + 40), 0.2, 2.0);
+                        particle.vel.x += toMouse.x * attractStrength;
+                        particle.vel.y += toMouse.y * attractStrength;
+                    }
+                }
+
                 // Update position with velocity damping
                 particle.vel.mult(0.95);
                 particle.pos.add(particle.vel);
-                
+
                 // Update particle life and reset if needed
                 particle.life += 1;
                 if (particle.life > particle.maxLife) {
@@ -126,19 +142,21 @@
                         particle.birthHue = globalHue;
                     }
                 }
-                
+
                 // Color transition based on life and velocity
-                let speed = particle.vel.mag();
+                let speed = constrain(particle.vel.mag(), 0, 4); // Clamp speed for color mapping
                 let baseHue = particle.birthHue;
-                let saturation = map(speed, 0, 3, 40, 80);
-                let brightness = map(particle.life, 0, particle.maxLife, 80, 20);
-                let alpha = map(particle.life, 0, particle.maxLife, 45, 20);
-                
+                // Ensure minimum saturation and lower max brightness for slow particles
+                let saturation = map(speed, 0, 3, 60, 80); // min 60, max 80
+                let brightness = map(particle.life, 0, particle.maxLife, 60, 20); // max 60, min 20
+                // Reduce max alpha for fast particles to avoid white dots
+                let alpha = map(particle.life, 0, particle.maxLife, 40, 18) * map(speed, 0, 4, 1, 0.5);
+
                 // Draw particles with modulated color
                 noStroke();
                 fill(baseHue, saturation, brightness, alpha);
                 circle(particle.pos.x, particle.pos.y, particle.size * 1.2);
-                
+
                 // Wrap around edges with smooth transition
                 if (particle.pos.x < -20) {
                     particle.pos.x = width + 20;
