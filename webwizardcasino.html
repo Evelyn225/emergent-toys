@@ -599,9 +599,9 @@ ${firstPassCode}
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-                        // Hide Fix button on theme screen
-                        if (fixButton) fixButton.style.display = 'none';
             const fixButton = document.getElementById('fixButton');
+            // Hide Fix button on theme screen
+            if (fixButton) fixButton.style.display = 'none';
             const regenerateButton = document.getElementById('regenerateButton');
             const randomThemeButton = document.getElementById('randomThemeButton');
             const themeInput = document.getElementById('themeInput');
