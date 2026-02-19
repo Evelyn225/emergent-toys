@@ -11,93 +11,179 @@
     <link rel="icon" type="image/png" sizes="16x16"
         href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <title>Hellscape</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
     <style>
-                /* Minimal minimize button for menu bar */
-                #minimizeMenuBtn {
-                    background: none;
-                    border: none;
-                    color: #fff;
-                    width: 24px;
-                    height: 24px;
-                    font-size: 22px;
-                    line-height: 22px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow: none;
-                    padding: 0;
-                    border-radius: 50%;
-                    opacity: 0.85;
-                    transition: opacity 0.2s;
-                    position: absolute;
-                    top: 4px;
-                    right: 6px;
-                    cursor: pointer;
-                    z-index: 103;
-                }
-                #minimizeMenuBtn:hover {
-                    opacity: 1;
-                    text-shadow: #ffff 0 0 4px;
-                }
-                #menu-bar.minimized {
-                    width: 36px !important;
-                    height: 36px !important;
-                    min-width: unset !important;
-                    min-height: unset !important;
-                    padding: 0 !important;
-                    box-shadow: 0 2px 8px #0008;
-                    overflow: hidden;
-                    display: flex;
-                    align-items: flex-start;
-                    justify-content: flex-end;
-                }
-                #menu-bar > *:not(#minimizeMenuBtn) {
-                    opacity: 1;
-                    pointer-events: auto;
-                }
-                #menu-bar.minimized > *:not(#minimizeMenuBtn) {
-                    transition: none !important;
-                    opacity: 0 !important;
-                    pointer-events: none;
-                }
-                #menu-bar:not(.minimized) > *:not(#minimizeMenuBtn) {
-                    transition: opacity 0.35s cubic-bezier(0.4,0,0.2,1);
-                    opacity: 1 !important;
-                    pointer-events: auto;
-                }
-                #menu-bar {
-                    transition: height 0.16s ease, width 0.15s ease, padding 0.4s ease;
-                }
-                #subcategory-select {
-                    font-size: 17px;
-                    border-radius: 6px;
-                    padding: 4px 8px;
-                    background: rgba(25,5,5,1);
-                    color: #fff;
-                    border: 1px solid #555;
-                }
-                #category-select {
-                    font-size: 17px;
-                    border-radius: 6px;
-                    padding: 4px 8px;
-                    background: rgba(25,5,5,1);
-                    color: #fff;
-                    border: 1px solid #555;
-                }
+        #subcategory-select option[disabled][selected] {
+            color: #000 !important;
+        }
+
+        #minimizeMenuBtn {
+            background: none;
+            border: none;
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            font-size: 22px;
+            line-height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: none;
+            padding: 0;
+            border-radius: 50%;
+            opacity: 0.85;
+            transition: opacity 0.2s;
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            cursor: pointer;
+            z-index: 103;
+        }
+
+        #minimizeMenuBtn:hover {
+            opacity: 1;
+            text-shadow: #ffff 0 0 4px;
+            scale: 1.15;
+        }
+
+        #menu-bar.minimized {
+            width: 36px !important;
+            height: 35px !important;
+            min-width: unset !important;
+            min-height: unset !important;
+            padding: 0 !important;
+            box-shadow: 0 2px 8px #0008;
+            overflow: hidden;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-end;
+        }
+
+        #menu-bar>*:not(#minimizeMenuBtn) {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #menu-bar.minimized>*:not(#minimizeMenuBtn) {
+            transition: none !important;
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        #menu-bar:not(.minimized)>*:not(#minimizeMenuBtn) {
+            transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 1 !important;
+            pointer-events: auto;
+        }
+
+        #menu-bar {
+            transition: height 0.16s ease, width 0.15s ease, padding 0.4s ease;
+        }
+
+        #subcategory-select {
+            font-size: 17px;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: rgb(138, 84, 118);
+            color: #fff;
+            border: 1px solid #ffffff;
+            transition: all ease 0.2s;
+        }
+
+        #subcategory-select:hover {
+            box-shadow: 0 0 8px #ff88ff88;
+            background: rgb(153, 98, 127);
+        }
+        #subcategory-select:active {
+            scale: 0.97;
+        }
+
+        #category-select {
+            font-size: 17px;
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: rgb(138, 84, 118);
+            color: #fff;
+            border: 1px solid #ffffff;
+            transition: all ease 0.2s;
+        }
+
+        #category-select:active {
+            scale: 0.97;
+        }
+
+        #category-select:hover {
+            box-shadow: 0 0 8px #ff88ff88;
+            background: rgb(153, 98, 127);
+        }
+
+        #refreshBtn {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            border: 1px solid #fff;
+            border-radius: 6px;
+            margin-top: 2px;
+            font-size: 16px;
+            padding: 2px 10px;
+            cursor: pointer;
+            transition: all ease 0.2s;
+        }
+
+        #refreshBtn:hover {
+            background: rgba(255, 255, 255, 0.226);
+            box-shadow: 0 0 8px #ff88ff88;
+        }
+        #refreshBtn:active {
+            scale: 0.97;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #refreshBtn .spin {            
+            display: inline-block;
+            transition: none;
+        }
+
+        #refreshBtn.spinning .spin {
+            animation: spin-refresh 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes spin-refresh {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
         body {
             margin: 0;
             overflow: hidden;
             background: #000000;
         }
+
+        body,
+        #menu-bar,
+        #category-select,
+        #subcategory-select,
+        #refreshBtn {
+            font-family: 'Fira Sans', 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+        }
     </style>
 </head>
-<body>
-    <a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; text-decoration: none; font-family: 'Inter', sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(140, 85, 120, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
 
-    <div id="menu-bar" style="position: fixed; top: 10px; left: 10px; z-index: 102; background: rgba(30, 0, 0, 0.92); color: #fff; border-radius: 10px; box-shadow: 0 2px 12px #0008; padding: 16px 18px 14px 18px; font-family: 'Inter', sans-serif; font-size: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 220px;">
-            <button id="minimizeMenuBtn">–</button>
+<body>
+    <a href="index.html"
+        style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; text-decoration: none; font-family: 'Inter', sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;"
+        onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(140, 85, 120, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'"
+        onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.3)'"
+        onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
+        onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img
+            src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home"
+            style="width: 18px; height: 18px; object-fit: contain;"></a>
+
+    <div id="menu-bar"
+        style="position: fixed; top: 10px; left: 10px; z-index: 102; background: rgba(140, 85, 120, 0.8); color: #fff; border-radius: 10px; box-shadow: 0 2px 12px #0008; padding: 16px 18px 14px 18px; font-family: 'Inter', sans-serif; font-size: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 220px;">
+        <button id="minimizeMenuBtn">–</button>
         <div style="margin-bottom: 8px; font-weight: bold; font-size: 20px; letter-spacing: 1px;">Image Menu</div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
             <label for="category-select">SFW/NSFW:</label>
@@ -110,18 +196,32 @@
             <label for="subcategory-select">Category:</label>
             <select id="subcategory-select" style="font-size: 17px; border-radius: 6px; padding: 4px 8px;"></select>
         </div>
-        
+        <button id="refreshBtn">Refresh  <span class="spin">⟳</span></button>
+
     </div>
 
     <div id="waifu-grid"></div>
 
     <script>
+        // Refresh button logic
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', function () {
+                if (subcategorySelect.value) {
+                    refreshBtn.classList.remove('spinning');
+                    void refreshBtn.offsetWidth; // Force reflow
+                    refreshBtn.classList.add('spinning');
+                    setTimeout(() => refreshBtn.classList.remove('spinning'), 700);
+                    updateGrid();
+                }
+            });
+        }
         // Minimize button logic for menu bar
         const menuBar = document.getElementById('menu-bar');
         const minimizeMenuBtn = document.getElementById('minimizeMenuBtn');
         let menuMinimized = false;
         if (minimizeMenuBtn && menuBar) {
-            minimizeMenuBtn.addEventListener('click', function() {
+            minimizeMenuBtn.addEventListener('click', function () {
                 menuMinimized = !menuMinimized;
                 if (menuMinimized) {
                     menuBar.classList.add('minimized');
@@ -132,179 +232,184 @@
                 }
             });
         }
-    // Settings
-    let tileSize = 200; // px, will be dynamically adjusted
-    const gridDiv = document.getElementById('waifu-grid');
-    const categorySelect = document.getElementById('category-select');
-    const subcategorySelect = document.getElementById('subcategory-select');
+        // Settings
+        let tileSize = 200; // px, will be dynamically adjusted
+        const gridDiv = document.getElementById('waifu-grid');
+        const categorySelect = document.getElementById('category-select');
+        const subcategorySelect = document.getElementById('subcategory-select');
 
-    // Category/subcategory data
-    const categories = {
-        sfw: [
-            'pat', 'smug', 'bonk', 'yeet', 'blush', 'smile', 'wave', 'highfive', 'handhold', 'nom', 'bite', 'glomp', 'slap', 'kill', 'kick', 'happy', 'wink', 'poke', 'dance', 'cringe'
-        ],
-        nsfw: [
-            'waifu', 'neko', 'trap', 'blowjob'
-        ]
-    };
+        // Category/subcategory data
+        const categories = {
+            sfw: [
+                'pat', 'smug', 'bonk', 'yeet', 'blush', 'smile', 'wave', 'highfive', 'handhold', 'nom', 'bite', 'glomp', 'slap', 'kill', 'kick', 'happy', 'wink', 'poke', 'dance', 'cringe'
+            ],
+            nsfw: [
+                'waifu', 'neko', 'trap', 'blowjob'
+            ]
+        };
 
-    // Populate subcategory select
-    function updateSubcategories() {
-        const cat = categorySelect.value;
-        subcategorySelect.innerHTML = '';
-        // Add a placeholder option
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = '-- Select --';
-        placeholder.disabled = true;
-        placeholder.selected = true;
-        subcategorySelect.appendChild(placeholder);
-        categories[cat].forEach(sub => {
-            const opt = document.createElement('option');
-            // Display 'femboy' for 'trap', but keep value as 'trap'
-            if (sub === 'trap') {
-                opt.value = 'trap';
-                opt.textContent = 'Femboy';
-            } else {
-                opt.value = sub;
-                opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
-            }
-            subcategorySelect.appendChild(opt);
-        });
-    }
-
-    categorySelect.addEventListener('change', () => {
-        updateSubcategories();
-        // Do not call updateGrid here; wait for subcategory selection
-    });
-    subcategorySelect.addEventListener('change', function() {
-        if (subcategorySelect.value) {
-            updateGrid();
+        // Populate subcategory select
+        function updateSubcategories() {
+            const cat = categorySelect.value;
+            subcategorySelect.innerHTML = '';
+            // Add a placeholder option (enabled, not disabled)
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = '-- Select --';
+            placeholder.selected = true;
+            placeholder.style.color = '#000';
+            placeholder.disabled = true;
+            subcategorySelect.appendChild(placeholder);
+            categories[cat].forEach(sub => {
+                const opt = document.createElement('option');
+                // Display 'femboy' for 'trap', but keep value as 'trap'
+                if (sub === 'trap') {
+                    opt.value = 'trap';
+                    opt.textContent = 'Femboy';
+                } else {
+                    opt.value = sub;
+                    opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
+                }
+                subcategorySelect.appendChild(opt);
+            });
         }
-    });
 
-    // Initial subcategory population
-    // Initial subcategory population
-    updateSubcategories();
-
-    // On first load, select SFW and 'wave' if available, and load images
-    let initialLoad = true;
-    function tryInitialLoad() {
-        if (initialLoad) {
-            categorySelect.value = 'sfw';
+        categorySelect.addEventListener('change', () => {
             updateSubcategories();
-            // Try to select 'wave' if it exists
-            let found = false;
-            for (let i = 0; i < subcategorySelect.options.length; i++) {
-                if (subcategorySelect.options[i].value === 'wave') {
-                    subcategorySelect.selectedIndex = i;
-                    found = true;
-                    break;
+            // Do not call updateGrid here; wait for subcategory selection
+        });
+        subcategorySelect.addEventListener('change', function () {
+            // If placeholder is selected, reset to placeholder and do nothing
+            if (subcategorySelect.value === '') {
+                subcategorySelect.selectedIndex = 0;
+                return;
+            }
+            updateGrid();
+        });
+
+        // Initial subcategory population
+        // Initial subcategory population
+        updateSubcategories();
+
+        // On first load, select SFW and 'wave' if available, and load images
+        let initialLoad = true;
+        function tryInitialLoad() {
+            if (initialLoad) {
+                categorySelect.value = 'sfw';
+                updateSubcategories();
+                // Try to select 'wave' if it exists
+                let found = false;
+                for (let i = 0; i < subcategorySelect.options.length; i++) {
+                    if (subcategorySelect.options[i].value === 'wave') {
+                        subcategorySelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) {
+                    updateGrid();
+                }
+                initialLoad = false;
+            }
+        }
+        // Run after DOMContentLoaded to ensure selects are ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', tryInitialLoad);
+        } else {
+            tryInitialLoad();
+        }
+
+        function getApiUrl() {
+            const cat = categorySelect.value;
+            const sub = subcategorySelect.value;
+            return `https://api.waifu.pics/many/${cat}/${sub}`;
+        }
+
+        async function updateGrid() {
+            // Remove old images
+            gridDiv.innerHTML = '';
+            // If no subcategory is selected, do nothing
+            if (!subcategorySelect.value) return;
+            // Get viewport size
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            // Calculate columns and rows to keep tiles near 200px, but fill both width and height exactly
+            let cols = Math.max(2, Math.round(w / 200));
+            let rows = Math.max(2, Math.round(h / 200));
+            let tileW = Math.ceil(w / cols);
+            let tileH = Math.ceil(h / rows);
+            // Adjust grid size to fill viewport exactly
+            const gridW = tileW * cols;
+            const gridH = tileH * rows;
+            gridDiv.style.position = 'fixed';
+            gridDiv.style.left = '0';
+            gridDiv.style.top = '0';
+            gridDiv.style.width = gridW + 'px';
+            gridDiv.style.height = gridH + 'px';
+            gridDiv.style.pointerEvents = 'none';
+            gridDiv.style.zIndex = '10';
+            gridDiv.style.display = 'grid';
+            gridDiv.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
+            gridDiv.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
+
+            // Fetch and place images using the 'many' endpoint, maximizing for unique images
+            const apiUrl = getApiUrl();
+            const cat = categorySelect.value;
+            const sub = subcategorySelect.value;
+            const needed = cols * rows;
+            let uniqueImages = new Set();
+            let tries = 0;
+            let maxTries = 8; // up to 8*30 = 240 images max
+            let lastBatch = [];
+            while (uniqueImages.size < needed && tries < maxTries) {
+                let excludeArr = Array.from(uniqueImages);
+                let body = excludeArr.length > 0 ? { exclude: excludeArr } : {};
+                let resp = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                let data = await resp.json();
+                let files = data.files || [];
+                lastBatch = files;
+                for (let url of files) {
+                    uniqueImages.add(url);
+                }
+                // If the API returns fewer than 30, break early (no more uniques available)
+                if (files.length < 30) break;
+                tries++;
+            }
+            let images = Array.from(uniqueImages);
+            // If not enough uniques, fill with random duplicates from all used images
+            function getRandomFrom(arr) {
+                return arr[Math.floor(Math.random() * arr.length)];
+            }
+            // Use all images ever fetched for filling
+            let allUsedImages = images.slice();
+            if (lastBatch && lastBatch.length > 0) {
+                for (let url of lastBatch) {
+                    if (!allUsedImages.includes(url)) allUsedImages.push(url);
                 }
             }
-            if (found) {
-                updateGrid();
+            while (images.length < needed && allUsedImages.length > 0) {
+                images.push(getRandomFrom(allUsedImages));
             }
-            initialLoad = false;
-        }
-    }
-    // Run after DOMContentLoaded to ensure selects are ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', tryInitialLoad);
-    } else {
-        tryInitialLoad();
-    }
-
-    function getApiUrl() {
-        const cat = categorySelect.value;
-        const sub = subcategorySelect.value;
-        return `https://api.waifu.pics/many/${cat}/${sub}`;
-    }
-
-    async function updateGrid() {
-        // Remove old images
-        gridDiv.innerHTML = '';
-        // If no subcategory is selected, do nothing
-        if (!subcategorySelect.value) return;
-        // Get viewport size
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        // Calculate columns and rows to keep tiles near 200px, but fill both width and height exactly
-        let cols = Math.max(2, Math.round(w / 200));
-        let rows = Math.max(2, Math.round(h / 200));
-        let tileW = Math.ceil(w / cols);
-        let tileH = Math.ceil(h / rows);
-        // Adjust grid size to fill viewport exactly
-        const gridW = tileW * cols;
-        const gridH = tileH * rows;
-        gridDiv.style.position = 'fixed';
-        gridDiv.style.left = '0';
-        gridDiv.style.top = '0';
-        gridDiv.style.width = gridW + 'px';
-        gridDiv.style.height = gridH + 'px';
-        gridDiv.style.pointerEvents = 'none';
-        gridDiv.style.zIndex = '10';
-        gridDiv.style.display = 'grid';
-        gridDiv.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
-        gridDiv.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
-
-        // Fetch and place images using the 'many' endpoint, maximizing for unique images
-        const apiUrl = getApiUrl();
-        const cat = categorySelect.value;
-        const sub = subcategorySelect.value;
-        const needed = cols * rows;
-        let uniqueImages = new Set();
-        let tries = 0;
-        let maxTries = 8; // up to 8*30 = 240 images max
-        let lastBatch = [];
-        while (uniqueImages.size < needed && tries < maxTries) {
-            let excludeArr = Array.from(uniqueImages);
-            let body = excludeArr.length > 0 ? { exclude: excludeArr } : {};
-            let resp = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            let data = await resp.json();
-            let files = data.files || [];
-            lastBatch = files;
-            for (let url of files) {
-                uniqueImages.add(url);
-            }
-            // If the API returns fewer than 30, break early (no more uniques available)
-            if (files.length < 30) break;
-            tries++;
-        }
-        let images = Array.from(uniqueImages);
-        // If not enough uniques, fill with random duplicates from all used images
-        function getRandomFrom(arr) {
-            return arr[Math.floor(Math.random() * arr.length)];
-        }
-        // Use all images ever fetched for filling
-        let allUsedImages = images.slice();
-        if (lastBatch && lastBatch.length > 0) {
-            for (let url of lastBatch) {
-                if (!allUsedImages.includes(url)) allUsedImages.push(url);
+            // Render images
+            for (let i = 0; i < needed; i++) {
+                const img = document.createElement('img');
+                img.src = images[i];
+                img.style.width = tileW + 'px';
+                img.style.height = tileH + 'px';
+                img.style.objectFit = 'cover';
+                img.style.display = 'block';
+                img.draggable = false;
+                gridDiv.appendChild(img);
             }
         }
-        while (images.length < needed && allUsedImages.length > 0) {
-            images.push(getRandomFrom(allUsedImages));
-        }
-        // Render images
-        for (let i = 0; i < needed; i++) {
-            const img = document.createElement('img');
-            img.src = images[i];
-            img.style.width = tileW + 'px';
-            img.style.height = tileH + 'px';
-            img.style.objectFit = 'cover';
-            img.style.display = 'block';
-            img.draggable = false;
-            gridDiv.appendChild(img);
-        }
-    }
-    
-    window.addEventListener('resize', updateGrid);
-    // Do not call updateGrid() on load; wait for user to select a subcategory
+
+        window.addEventListener('resize', updateGrid);
+        // Do not call updateGrid() on load; wait for user to select a subcategory
     </script>
 </body>
+
 </html>
