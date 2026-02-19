@@ -47,15 +47,28 @@
                     min-width: unset !important;
                     min-height: unset !important;
                     padding: 0 !important;
-                    background: rgba(30,0,0,0.92);
                     box-shadow: 0 2px 8px #0008;
                     overflow: hidden;
                     display: flex;
                     align-items: flex-start;
                     justify-content: flex-end;
                 }
+                #menu-bar > *:not(#minimizeMenuBtn) {
+                    opacity: 1;
+                    pointer-events: auto;
+                }
                 #menu-bar.minimized > *:not(#minimizeMenuBtn) {
-                    display: none !important;
+                    transition: none !important;
+                    opacity: 0 !important;
+                    pointer-events: none;
+                }
+                #menu-bar:not(.minimized) > *:not(#minimizeMenuBtn) {
+                    transition: opacity 0.35s cubic-bezier(0.4,0,0.2,1);
+                    opacity: 1 !important;
+                    pointer-events: auto;
+                }
+                #menu-bar {
+                    transition: height 0.16s ease, width 0.15s ease, padding 0.4s ease;
                 }
                 #subcategory-select {
                     font-size: 17px;
@@ -139,21 +152,68 @@
     function updateSubcategories() {
         const cat = categorySelect.value;
         subcategorySelect.innerHTML = '';
+        // Add a placeholder option
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '-- Select --';
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        subcategorySelect.appendChild(placeholder);
         categories[cat].forEach(sub => {
             const opt = document.createElement('option');
-            opt.value = sub;
-            opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
+            // Display 'femboy' for 'trap', but keep value as 'trap'
+            if (sub === 'trap') {
+                opt.value = 'trap';
+                opt.textContent = 'Femboy';
+            } else {
+                opt.value = sub;
+                opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
+            }
             subcategorySelect.appendChild(opt);
         });
     }
+
     categorySelect.addEventListener('change', () => {
         updateSubcategories();
-        updateGrid();
+        // Do not call updateGrid here; wait for subcategory selection
     });
-    subcategorySelect.addEventListener('change', updateGrid);
+    subcategorySelect.addEventListener('change', function() {
+        if (subcategorySelect.value) {
+            updateGrid();
+        }
+    });
 
     // Initial subcategory population
+    // Initial subcategory population
     updateSubcategories();
+
+    // On first load, select SFW and 'wave' if available, and load images
+    let initialLoad = true;
+    function tryInitialLoad() {
+        if (initialLoad) {
+            categorySelect.value = 'sfw';
+            updateSubcategories();
+            // Try to select 'wave' if it exists
+            let found = false;
+            for (let i = 0; i < subcategorySelect.options.length; i++) {
+                if (subcategorySelect.options[i].value === 'wave') {
+                    subcategorySelect.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                updateGrid();
+            }
+            initialLoad = false;
+        }
+    }
+    // Run after DOMContentLoaded to ensure selects are ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tryInitialLoad);
+    } else {
+        tryInitialLoad();
+    }
 
     function getApiUrl() {
         const cat = categorySelect.value;
@@ -161,9 +221,11 @@
         return `https://api.waifu.pics/many/${cat}/${sub}`;
     }
 
-    function updateGrid() {
+    async function updateGrid() {
         // Remove old images
         gridDiv.innerHTML = '';
+        // If no subcategory is selected, do nothing
+        if (!subcategorySelect.value) return;
         // Get viewport size
         const w = window.innerWidth;
         const h = window.innerHeight;
@@ -185,38 +247,64 @@
         gridDiv.style.display = 'grid';
         gridDiv.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
         gridDiv.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
-        // Fetch and place images using the 'many' endpoint
+
+        // Fetch and place images using the 'many' endpoint, maximizing for unique images
         const apiUrl = getApiUrl();
         const cat = categorySelect.value;
         const sub = subcategorySelect.value;
-        fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({})
-        })
-            .then(res => res.json())
-            .then(data => {
-                let images = data.files || [];
-                // If not enough images, repeat the array
-                while (images.length < cols * rows) {
-                    images = images.concat(images);
-                }
-                for (let i = 0; i < cols * rows; i++) {
-                    const img = document.createElement('img');
-                    img.src = images[i];
-                    img.style.width = tileW + 'px';
-                    img.style.height = tileH + 'px';
-                    img.style.objectFit = 'cover';
-                    img.style.display = 'block';
-                    img.draggable = false;
-                    gridDiv.appendChild(img);
-                }
+        const needed = cols * rows;
+        let uniqueImages = new Set();
+        let tries = 0;
+        let maxTries = 8; // up to 8*30 = 240 images max
+        let lastBatch = [];
+        while (uniqueImages.size < needed && tries < maxTries) {
+            let excludeArr = Array.from(uniqueImages);
+            let body = excludeArr.length > 0 ? { exclude: excludeArr } : {};
+            let resp = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
             });
+            let data = await resp.json();
+            let files = data.files || [];
+            lastBatch = files;
+            for (let url of files) {
+                uniqueImages.add(url);
+            }
+            // If the API returns fewer than 30, break early (no more uniques available)
+            if (files.length < 30) break;
+            tries++;
+        }
+        let images = Array.from(uniqueImages);
+        // If not enough uniques, fill with random duplicates from all used images
+        function getRandomFrom(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+        // Use all images ever fetched for filling
+        let allUsedImages = images.slice();
+        if (lastBatch && lastBatch.length > 0) {
+            for (let url of lastBatch) {
+                if (!allUsedImages.includes(url)) allUsedImages.push(url);
+            }
+        }
+        while (images.length < needed && allUsedImages.length > 0) {
+            images.push(getRandomFrom(allUsedImages));
+        }
+        // Render images
+        for (let i = 0; i < needed; i++) {
+            const img = document.createElement('img');
+            img.src = images[i];
+            img.style.width = tileW + 'px';
+            img.style.height = tileH + 'px';
+            img.style.objectFit = 'cover';
+            img.style.display = 'block';
+            img.draggable = false;
+            gridDiv.appendChild(img);
+        }
     }
+    
     window.addEventListener('resize', updateGrid);
-    updateGrid();
+    // Do not call updateGrid() on load; wait for user to select a subcategory
     </script>
 </body>
 </html>
