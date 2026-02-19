@@ -158,7 +158,7 @@
     function getApiUrl() {
         const cat = categorySelect.value;
         const sub = subcategorySelect.value;
-        return `https://api.waifu.pics/${cat}/${sub}`;
+        return `https://api.waifu.pics/many/${cat}/${sub}`;
     }
 
     function updateGrid() {
@@ -185,22 +185,35 @@
         gridDiv.style.display = 'grid';
         gridDiv.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
         gridDiv.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
-        // Fetch and place images
+        // Fetch and place images using the 'many' endpoint
         const apiUrl = getApiUrl();
-        for (let i = 0; i < cols * rows; i++) {
-            fetch(apiUrl)
-                .then(res => res.json())
-                .then(data => {
+        const cat = categorySelect.value;
+        const sub = subcategorySelect.value;
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        })
+            .then(res => res.json())
+            .then(data => {
+                let images = data.files || [];
+                // If not enough images, repeat the array
+                while (images.length < cols * rows) {
+                    images = images.concat(images);
+                }
+                for (let i = 0; i < cols * rows; i++) {
                     const img = document.createElement('img');
-                    img.src = data.url;
+                    img.src = images[i];
                     img.style.width = tileW + 'px';
                     img.style.height = tileH + 'px';
                     img.style.objectFit = 'cover';
                     img.style.display = 'block';
                     img.draggable = false;
                     gridDiv.appendChild(img);
-                });
-        }
+                }
+            });
     }
     window.addEventListener('resize', updateGrid);
     updateGrid();
