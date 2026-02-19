@@ -344,6 +344,10 @@
         const tileSizeSlider = document.getElementById('tile-size-slider');
         const tileSizeValue = document.getElementById('tile-size-value');
         if (tileSizeSlider && tileSizeValue) {
+            // Reset slider to default on site load
+            tileSizeSlider.value = '200';
+            tileSize = 200;
+            tileSizeValue.textContent = '200';
             tileSizeSlider.addEventListener('input', function() {
                 tileSize = parseInt(tileSizeSlider.value, 10);
                 tileSizeValue.textContent = tileSize;
