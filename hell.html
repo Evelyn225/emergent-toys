@@ -185,92 +185,108 @@
         #refreshBtn {
             font-family: 'Fira Sans', 'Segoe UI', 'Roboto', 'Arial', sans-serif;
         }
-        
-                #tile-size-slider {
-                    -webkit-appearance: none;
-                    width: 100%;
-                    height: 4px;
-                    background: #ff88ff88;
-                    border-radius: 2px;
-                    outline: none;
-                    margin: 4px;
-                    padding: 0;
-                    box-shadow: none;
-                    transition: background 0.2s;
-                }
-                #tile-size-slider:hover {
-                    background: #ff88ffcc;
-                }
-                #tile-size-slider::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 18px;
-                    height: 18px;
-                    border-radius: 50%;
-                    background: #ff88ff88;
-                    border: 2px solid #fff;
-                    box-shadow: 0 2px 8px #ff88ff88;
-                    cursor: pointer;
-                    transition: background 0.2s, box-shadow 0.2s;
-                }
-                #tile-size-slider:active::-webkit-slider-thumb {
-                    background: #a01883;
-                    box-shadow: 0 0 0 4px #ff69b422;
-                }
-                #tile-size-slider::-moz-range-thumb {
-                    width: 18px;
-                    height: 18px;
-                    border-radius: 50%;
-                    background: #ff88ff88;
-                    border: 2px solid #fff;
-                    box-shadow: 0 2px 8px #ff69b488;
-                    cursor: pointer;
-                    transition: background 0.2s, box-shadow 0.2s;
-                }
-                #tile-size-slider:active::-moz-range-thumb {
-                    background: #c94ace;
-                    box-shadow: 0 0 0 4px #ff69b422;
-                }
-                #tile-size-slider::-ms-thumb {
-                    width: 18px;
-                    height: 18px;
-                    border-radius: 50%;
-                    background: #ff88ff88;
-                    border: 2px solid #fff;
-                    box-shadow: 0 2px 8px #ff69b488;
-                    cursor: pointer;
-                    transition: background 0.2s, box-shadow 0.2s;
-                }
-                #tile-size-slider:active::-ms-thumb {
-                    background: #c94ace;
-                    box-shadow: 0 0 0 4px #ff69b422;
-                }
-                #tile-size-slider::-ms-fill-lower {
-                    background: #c94ace;
-                }
-                #tile-size-slider::-ms-fill-upper {
-                    background: #c94ace;
-                }
-                #tile-size-slider:focus {
-                    outline: none;
-                }
-                #tile-size-slider::-webkit-slider-thumb {
-                    box-shadow: 0 2px 8px #ff69b488;
-                }
-                #tile-size-slider::-webkit-slider-runnable-track {
-                    height: 4px;
-                    background: transparent;
-                }
-                #tile-size-slider::-moz-range-track {
-                    height: 4px;
-                    background: #ff88ff88;
-                }
-                #tile-size-slider::-ms-fill-lower, #tile-size-slider::-ms-fill-upper {
-                    background: #ff88ff88;
-                }
-                #tile-size-slider::-ms-tooltip {
-                    display: none;
-                }
+
+        #tile-size-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: #ff88ff88;
+            border-radius: 2px;
+            outline: none;
+            margin: 4px;
+            padding: 0;
+            box-shadow: none;
+            transition: background 0.2s;
+        }
+
+        #tile-size-slider:hover {
+            background: #ff88ffcc;
+        }
+
+        #tile-size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ff88ff88;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px #ff88ff88;
+            cursor: pointer;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+
+        #tile-size-slider:active::-webkit-slider-thumb {
+            background: #a01883;
+            box-shadow: 0 0 0 4px #ff69b422;
+        }
+
+        #tile-size-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ff88ff88;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px #ff69b488;
+            cursor: pointer;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+
+        #tile-size-slider:active::-moz-range-thumb {
+            background: #c94ace;
+            box-shadow: 0 0 0 4px #ff69b422;
+        }
+
+        #tile-size-slider::-ms-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ff88ff88;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px #ff69b488;
+            cursor: pointer;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+
+        #tile-size-slider:active::-ms-thumb {
+            background: #c94ace;
+            box-shadow: 0 0 0 4px #ff69b422;
+        }
+
+        #tile-size-slider::-ms-fill-lower {
+            background: #c94ace;
+        }
+
+        #tile-size-slider::-ms-fill-upper {
+            background: #c94ace;
+        }
+
+        #tile-size-slider:focus {
+            outline: none;
+        }
+
+        #tile-size-slider::-webkit-slider-thumb {
+            box-shadow: 0 2px 8px #ff69b488;
+        }
+
+        #tile-size-slider::-webkit-slider-runnable-track {
+            height: 4px;
+            background: transparent;
+        }
+
+        #tile-size-slider::-moz-range-track {
+            height: 4px;
+            background: #ff88ff88;
+        }
+
+        #tile-size-slider::-ms-fill-lower,
+        #tile-size-slider::-ms-fill-upper {
+            background: #ff88ff88;
+        }
+
+        #tile-size-slider::-ms-tooltip {
+            display: none;
+        }
     </style>
 </head>
 
@@ -301,7 +317,7 @@
         <div style="display: flex; flex-direction: column; gap: 8px;">
             <label for="tile-size-slider">Tile Size: <span id="tile-size-value">200</span>px</label>
             <input type="range" id="tile-size-slider" min="80" max="400" value="200" step="1" style="width: 100%;">
-               
+
         </div>
         <button id="refreshBtn">Refresh <span class="spin">⟳</span></button>
 
@@ -348,13 +364,13 @@
             tileSizeSlider.value = '200';
             tileSize = 200;
             tileSizeValue.textContent = '200';
-            tileSizeSlider.addEventListener('input', function() {
+            tileSizeSlider.addEventListener('input', function () {
                 tileSize = parseInt(tileSizeSlider.value, 10);
                 tileSizeValue.textContent = tileSize;
                 updateGrid();
             });
             // On mouseup/touchend, force a second update to ensure grid is filled
-            tileSizeSlider.addEventListener('change', function() {
+            tileSizeSlider.addEventListener('change', function () {
                 tileSize = parseInt(tileSizeSlider.value, 10);
                 tileSizeValue.textContent = tileSize;
                 updateGrid();
