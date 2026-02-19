@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wave Collapse Image Pattern</title>
+  <link href="https://fonts.googleapis.com/css?family=Titillium+Web:400,600,700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+  <style>
+    body {
+      font-family: 'Titillium Web', Arial, sans-serif;
+      background: #0a060a;
+      color: #f5f5f5;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    h1 {
+      font-size: 2.2em;
+      font-weight: 700;
+      margin: 32px 0 18px 0;
+      letter-spacing: 0.04em;
+      color: #fff;
+    }
+    #canvas-container {
+      margin: 0 auto 24px auto;
+      box-shadow: 0 2px 30px rgba(0, 0, 0, 0.95);
+      border-radius: 4px;
+      background: #140e14;
+      padding: 6px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-width: 512px;
+      min-height: 512px;
+    }
+    .controls-bar {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+      margin-top: 8px;
+    }
+    input[type="file"] {
+      background: none;
+      color: #fff;
+      border: none;
+      font-size: 1em;
+      font-family: inherit;
+      padding: 0;
+      margin: 0;
+      outline: none;
+    }
+    button {
+      background: #140e14;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 1.08em;
+      font-weight: 600;
+      padding: 8px 22px;
+      margin: 0;
+      transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+      box-shadow: 0 1px 6px #0004;
+      cursor: pointer;
+      outline: none;
+      letter-spacing: 0.02em;
+      transition: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+    button:active {
+      transform: scale(0.95);
+    }
+    button:hover {
+      background: #20171e;
+      box-shadow: 0 4px 12px #0008;
+    }
+    button[disabled] {
+      opacity: 0.5;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bg-pixels" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;image-rendering:pixelated;"></canvas>
+  <h1>Wave Collapse Image Pattern</h1>
+  <div class="controls-bar">
+    <input type="file" id="imgInput" accept="image/*">
+    <button id="fractalBtn">Generate Image</button>
+    <button id="collapseBtn" disabled>Wave Collapse!</button>
+  </div>
+  <div id="canvas-container"></div>
+  <script>
+    // --- Pixelated background ---
+    function drawPixelBg() {
+      const bg = document.getElementById('bg-pixels');
+      // Match grid resolution (tileSize)
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const t = tileSize || 8;
+      const cols = Math.ceil(w / t);
+      const rows = Math.ceil(h / t);
+      bg.width = cols;
+      bg.height = rows;
+      const ctx = bg.getContext('2d');
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          // Slightly random very dark purple shade
+          const base = 9 + Math.floor(Math.random() * 5); // 9-13 for R/B
+          const purple = 3 + Math.floor(Math.random() * 5); // 3-7 for G
+          ctx.fillStyle = `rgb(${base},${purple},${base})`;
+          ctx.fillRect(x, y, 0.8, 0.8); 
+        }
+      }
+    }
+    window.addEventListener('resize', drawPixelBg);
+    window.addEventListener('DOMContentLoaded', drawPixelBg);
+    // Redraw bg if tileSize changes (after WFC start)
+    const origStartWFC = startWFC;
+    startWFC = function() { drawPixelBg(); origStartWFC.apply(this, arguments); };
+    let img;
+    let input, collapseBtn, fractalBtn;
+    let canvas;
+    let tileSize = 8; // 512/8 = 64
+    let tiles = [];
+    let grid = [];
+    let wfcReady = false;
+    let animating = false;
+    let tilesX, tilesY;
+    let loaderDiv;
+
+    function setup() {
+      canvas = createCanvas(512, 512);
+      canvas.parent('canvas-container');
+      background(30);
+      input = select('#imgInput');
+      collapseBtn = select('#collapseBtn');
+      fractalBtn = select('#fractalBtn');
+      input.changed(handleFile);
+      collapseBtn.mousePressed(startWFC);
+      fractalBtn.mousePressed(generateFractalArt);
+      noSmooth();
+        // loaderDiv is no longer needed
+    }
+    // --- Fractal Art Generator ---
+    function generateFractalArt() {
+      // Use requestAnimationFrame to allow spinner to animate
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          // Generate a fractal flame/IFS spiral fractal
+          let gfx = createGraphics(512, 512);
+          gfx.background(0, 0, 0, 255);
+          drawFractalFlame(gfx);
+          img = gfx.get();
+          image(img, 0, 0, width, height);
+          collapseBtn.removeAttribute('disabled');
+            // Loader is no longer needed
+        }, 10);
+      });
+    }
+
+    // Simple fractal flame/IFS spiral generator
+    function drawFractalFlame(gfx) {
+      gfx.colorMode(HSB, 360, 255, 255, 255);
+      gfx.noStroke();
+      let w = 512, h = 512;
+      let cx = w/2, cy = h/2;
+      let points = 400000; // denser
+      // Add randomness to parameters
+      let spread = w; // always fill canvas
+      let jitter = 70 + random(50);
+      let spiralA = 0.78 + random(0.15);
+      let spiralB = 0.22 + random(0.15);
+      let spiralTheta = 1.2 + random(0.8);
+      let spiralSin = 0.8 + random(0.5);
+      let startX = random(-1, 1);
+      let startY = random(-1, 1);
+      let colorSeed = random(1000);
+      let x = startX, y = startY;
+      // Snap to tile grid
+      let tileSize = 4; // use the same tileSize as the main render, or make this a parameter if needed
+      for (let i = 0; i < points; i++) {
+        // Spiral IFS: polar coordinates with nonlinearity
+        let r = sqrt(x*x + y*y);
+        let theta = atan2(y, x);
+        // Nonlinear spiral transformation
+        let newR = r * (spiralA + spiralB * sin(theta*3 + i*0.0001 + colorSeed));
+        let newTheta = theta + spiralTheta + spiralSin * sin(r*2 + i*0.0002 + colorSeed);
+        x = newR * cos(newTheta) + 0.2 * sin(i*0.01 + colorSeed);
+        y = newR * sin(newTheta) + 0.2 * cos(i*0.013 + colorSeed);
+        // Map to screen
+        let px = cx + x * spread;
+        let py = cy + y * spread;
+        // Snap px, py to tile grid
+        px = Math.floor(px / tileSize) * tileSize;
+        py = Math.floor(py / tileSize) * tileSize;
+        // Colorful spiral
+        let hue = (180 + 120 * sin(theta*2 + i*0.0005 + colorSeed) + i*0.01) % 360;
+        let sat = 200 + 55 * sin(i*0.0003 + r*2 + colorSeed);
+        let bri = 200 + 55 * cos(i*0.0002 + theta*3 + colorSeed);
+        let alpha = 22 + 32 * sin(i*0.0001 + r*3 + colorSeed);
+        if (px >= 0 && px < w && py >= 0 && py < h) {
+          gfx.fill(hue, sat, bri, alpha);
+          gfx.rect(px, py, tileSize, tileSize);
+        }
+      }
+      gfx.colorMode(RGB, 255, 255, 255, 255);
+    }
+    
+    function handleFile() {
+      const file = input.elt.files[0];
+      if (file && file.type.startsWith('image')) {
+        clear();
+        background(30);
+        loadImage(URL.createObjectURL(file), loaded => {
+          // Always resize to 512x512 for consistency
+          let gfx = createGraphics(512, 512);
+          gfx.background(0,0,0,0);
+          let scale = Math.min(512 / loaded.width, 512 / loaded.height);
+          let w = Math.round(loaded.width * scale);
+          let h = Math.round(loaded.height * scale);
+          gfx.image(loaded, 0, 0, w, h);
+          img = gfx.get();
+          image(img, 0, 0, width, height);
+          collapseBtn.removeAttribute('disabled');
+        });
+      }
+    }
+
+    function startWFC() {
+      if (!img) return;
+      setTimeout(() => {
+        // 1. Extract unique tiles and their edges
+        tiles = extractTiles(img, tileSize);
+        // 2. Build adjacency rules
+        buildAdjacency(tiles);
+        // 3. Initialize grid to fill canvas
+        tilesX = Math.ceil(width / tileSize);
+        tilesY = Math.ceil(height / tileSize);
+        grid = [];
+        for (let y = 0; y < tilesY; y++) {
+          let row = [];
+          for (let x = 0; x < tilesX; x++) {
+            row.push({collapsed: false, options: [...Array(tiles.length).keys()]});
+          }
+          grid.push(row);
+        }
+        wfcReady = true;
+        // Simple fast collapse
+        simpleWFCCollapse();
+      }, 10);
+    }
+
+    // Simple, fast WFC: collapse all cells randomly, ignoring entropy/propagation
+    function simpleWFCCollapse() {
+      for (let y = 0; y < grid.length; y++) {
+        for (let x = 0; x < grid[0].length; x++) {
+          let cell = grid[y][x];
+          let pick = floor(random(tiles.length));
+          cell.options = [pick];
+          cell.collapsed = true;
+        }
+      }
+      renderGrid();
+        // Loader is no longer needed
+    }
+
+    // --- WFC Helper Functions ---
+
+    function extractTiles(img, size) {
+      // Use a hash for uniqueness
+      let unique = [];
+      let hashes = new Set();
+      for (let y = 0; y <= img.height - size; y += size) {
+        for (let x = 0; x <= img.width - size; x += size) {
+          let t = img.get(x, y, size, size);
+          t.loadPixels();
+          let hash = '';
+          for (let i = 0; i < t.pixels.length; i++) { 
+            hash += t.pixels[i];
+          }
+          if (!hashes.has(hash)) {
+            hashes.add(hash);
+            let edges = getEdges(t);
+            unique.push({image: t, edges: edges, compatible: {top: [], right: [], bottom: [], left: []}});
+          }
+        }
+      }
+      return unique;
+    }
+
+    function getEdges(tile) {
+      let top = [], right = [], bottom = [], left = [];
+      for (let i = 0; i < tile.width; i++) top.push(tile.get(i, 0).toString());
+      for (let i = 0; i < tile.width; i++) bottom.push(tile.get(i, tile.height-1).toString());
+      for (let i = 0; i < tile.height; i++) left.push(tile.get(0, i).toString());
+      for (let i = 0; i < tile.height; i++) right.push(tile.get(tile.width-1, i).toString());
+      return {top, right, bottom, left};
+    }
+
+    function compareTiles(a, b) {
+      if (a.width !== b.width || a.height !== b.height) return false;
+      a.loadPixels(); b.loadPixels();
+      for (let i = 0; i < a.pixels.length; i++) {
+        if (a.pixels[i] !== b.pixels[i]) return false;
+      }
+      return true;
+    }
+
+    function buildAdjacency(tiles) {
+      // Simplest: compare only the color of the edge pixels
+      for (let i = 0; i < tiles.length; i++) {
+        for (let j = 0; j < tiles.length; j++) {
+          if (simpleEdgeMatch(tiles[i].edges.right, tiles[j].edges.left)) tiles[i].compatible.right.push(j);
+          if (simpleEdgeMatch(tiles[i].edges.left, tiles[j].edges.right)) tiles[i].compatible.left.push(j);
+          if (simpleEdgeMatch(tiles[i].edges.top, tiles[j].edges.bottom)) tiles[i].compatible.top.push(j);
+          if (simpleEdgeMatch(tiles[i].edges.bottom, tiles[j].edges.top)) tiles[i].compatible.bottom.push(j);
+        }
+      }
+        // Simple nearest neighbor pixel color check
+        function simpleEdgeMatch(a, b) {
+          if (a.length !== b.length) return false;
+          let tolerance = 64;
+          for (let i = 0; i < a.length; i++) {
+            // Parse color strings to arrays
+            let ca = a[i].split(',').map(Number);
+            let cb = b[i].split(',').map(Number);
+            // Compute Euclidean distance in RGB
+            let dist = Math.sqrt(
+              Math.pow(ca[0] - cb[0], 2) +
+              Math.pow(ca[1] - cb[1], 2) +
+              Math.pow(ca[2] - cb[2], 2)
+            );
+            if (dist > tolerance) return false;
+          }
+          return true;
+        }
+    }
+
+    function edgesMatch(a, b) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+      return true;
+    }
+
+    function findLowestEntropyCell() {
+      let min = Infinity;
+      let candidates = [];
+      for (let y = 0; y < grid.length; y++) {
+        for (let x = 0; x < grid[0].length; x++) {
+          let cell = grid[y][x];
+          if (!cell.collapsed && cell.options.length < min && cell.options.length > 1) {
+            min = cell.options.length;
+            candidates = [{x, y}];
+          } else if (!cell.collapsed && cell.options.length === min) {
+            candidates.push({x, y});
+          }
+        }
+      }
+      if (candidates.length === 0) return null;
+      return random(candidates);
+    }
+
+    function collapseCell(x, y) {
+      let cell = grid[y][x];
+      let pick = random(cell.options);
+      cell.options = [pick];
+      cell.collapsed = true;
+    }
+
+    function propagate() {
+      // Queue-based propagation: only update immediate neighbors, avoid duplicate queue entries
+      const dirs = [
+        {dx: 0, dy: -1, dir: 'top', opp: 'bottom'},
+        {dx: 1, dy: 0, dir: 'right', opp: 'left'},
+        {dx: 0, dy: 1, dir: 'bottom', opp: 'top'},
+        {dx: -1, dy: 0, dir: 'left', opp: 'right'}
+      ];
+      // Initialize queue with all collapsed cells
+      let queue = [];
+      let inQueue = new Set();
+      function queueKey(x, y) { return x + ',' + y; }
+      for (let y = 0; y < grid.length; y++) {
+        for (let x = 0; x < grid[0].length; x++) {
+          if (grid[y][x].collapsed) {
+            queue.push({x, y});
+            inQueue.add(queueKey(x, y));
+          }
+        }
+      }
+      let iter = 0;
+      const maxIter = 10000;
+      while (queue.length > 0 && iter < maxIter) {
+        const {x, y} = queue.shift();
+        inQueue.delete(queueKey(x, y));
+        let cell = grid[y][x];
+        for (let d of dirs) {
+          let nx = x + d.dx, ny = y + d.dy;
+          if (nx < 0 || ny < 0 || nx >= grid[0].length || ny >= grid.length) continue;
+          let neighbor = grid[ny][nx];
+          if (!neighbor || neighbor.collapsed) continue;
+          // Collect all compatible options for this direction
+          let allowed = new Set(cell.options.flatMap(o => tiles[o].compatible[d.dir]));
+          let neighborOpts = neighbor.options.filter(opt => allowed.has(opt));
+          if (neighborOpts.length < neighbor.options.length) {
+            neighbor.options = neighborOpts;
+            // If neighbor collapses, enqueue its neighbors immediately
+            if (neighbor.options.length === 1) {
+              neighbor.collapsed = true;
+              for (let nd of dirs) {
+                let nnx = nx + nd.dx, nny = ny + nd.dy;
+                if (nnx < 0 || nny < 0 || nnx >= grid[0].length || nny >= grid.length) continue;
+                let nkey = queueKey(nnx, nny);
+                if (!inQueue.has(nkey)) {
+                  queue.push({x: nnx, y: nny});
+                  inQueue.add(nkey);
+                }
+              }
+            }
+            // Enqueue neighbor if not already in queue
+            let nkey = queueKey(nx, ny);
+            if (!inQueue.has(nkey)) {
+              queue.push({x: nx, y: ny});
+              inQueue.add(nkey);
+            }
+          }
+        }
+        iter++;
+      }
+      if (iter === maxIter) {
+        console.warn('Propagation stopped early to prevent infinite loop.');
+      }
+    }
+
+    function renderGrid() {
+      background(30);
+      for (let y = 0; y < grid.length; y++) {
+        for (let x = 0; x < grid[0].length; x++) {
+          let cell = grid[y][x];
+          if (cell.collapsed && cell.options.length > 0) {
+            let t = tiles[cell.options[0]].image;
+            let drawW = Math.min(tileSize, width - x * tileSize);
+            let drawH = Math.min(tileSize, height - y * tileSize);
+            image(t, x * tileSize, y * tileSize, drawW, drawH);
+          } else {
+            // Optionally, draw unresolved cells as gray
+            fill(60);
+            noStroke();
+            rect(x * tileSize, y * tileSize, tileSize, tileSize);
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
