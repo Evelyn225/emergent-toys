@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="apple-touch-icon" sizes="180x180"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+    <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+    <title>Hellscape</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+                /* Minimal minimize button for menu bar */
+                #minimizeMenuBtn {
+                    background: none;
+                    border: none;
+                    color: #fff;
+                    width: 24px;
+                    height: 24px;
+                    font-size: 22px;
+                    line-height: 22px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: none;
+                    padding: 0;
+                    border-radius: 50%;
+                    opacity: 0.85;
+                    transition: opacity 0.2s;
+                    position: absolute;
+                    top: 4px;
+                    right: 6px;
+                    cursor: pointer;
+                    z-index: 103;
+                }
+                #minimizeMenuBtn:hover {
+                    opacity: 1;
+                    text-shadow: #ffff 0 0 4px;
+                }
+                #menu-bar.minimized {
+                    width: 36px !important;
+                    height: 36px !important;
+                    min-width: unset !important;
+                    min-height: unset !important;
+                    padding: 0 !important;
+                    background: rgba(30,0,0,0.92);
+                    box-shadow: 0 2px 8px #0008;
+                    overflow: hidden;
+                    display: flex;
+                    align-items: flex-start;
+                    justify-content: flex-end;
+                }
+                #menu-bar.minimized > *:not(#minimizeMenuBtn) {
+                    display: none !important;
+                }
+                #subcategory-select {
+                    font-size: 17px;
+                    border-radius: 6px;
+                    padding: 4px 8px;
+                    background: rgba(25,5,5,1);
+                    color: #fff;
+                    border: 1px solid #555;
+                }
+                #category-select {
+                    font-size: 17px;
+                    border-radius: 6px;
+                    padding: 4px 8px;
+                    background: rgba(25,5,5,1);
+                    color: #fff;
+                    border: 1px solid #555;
+                }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000000;
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; text-decoration: none; font-family: 'Inter', sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(140, 85, 120, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
+
+    <div id="menu-bar" style="position: fixed; top: 10px; left: 10px; z-index: 102; background: rgba(30, 0, 0, 0.92); color: #fff; border-radius: 10px; box-shadow: 0 2px 12px #0008; padding: 16px 18px 14px 18px; font-family: 'Inter', sans-serif; font-size: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 220px;">
+            <button id="minimizeMenuBtn">–</button>
+        <div style="margin-bottom: 8px; font-weight: bold; font-size: 20px; letter-spacing: 1px;">Image Menu</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <label for="category-select">SFW/NSFW:</label>
+            <select id="category-select" style="font-size: 17px; border-radius: 6px; padding: 4px 8px;">
+                <option value="sfw">SFW</option>
+                <option value="nsfw">NSFW</option>
+            </select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <label for="subcategory-select">Category:</label>
+            <select id="subcategory-select" style="font-size: 17px; border-radius: 6px; padding: 4px 8px;"></select>
+        </div>
+        
+    </div>
+
+    <div id="waifu-grid"></div>
+
+    <script>
+        // Minimize button logic for menu bar
+        const menuBar = document.getElementById('menu-bar');
+        const minimizeMenuBtn = document.getElementById('minimizeMenuBtn');
+        let menuMinimized = false;
+        if (minimizeMenuBtn && menuBar) {
+            minimizeMenuBtn.addEventListener('click', function() {
+                menuMinimized = !menuMinimized;
+                if (menuMinimized) {
+                    menuBar.classList.add('minimized');
+                    minimizeMenuBtn.textContent = '+';
+                } else {
+                    menuBar.classList.remove('minimized');
+                    minimizeMenuBtn.textContent = '–';
+                }
+            });
+        }
+    // Settings
+    let tileSize = 200; // px, will be dynamically adjusted
+    const gridDiv = document.getElementById('waifu-grid');
+    const categorySelect = document.getElementById('category-select');
+    const subcategorySelect = document.getElementById('subcategory-select');
+
+    // Category/subcategory data
+    const categories = {
+        sfw: [
+            'pat', 'smug', 'bonk', 'yeet', 'blush', 'smile', 'wave', 'highfive', 'handhold', 'nom', 'bite', 'glomp', 'slap', 'kill', 'kick', 'happy', 'wink', 'poke', 'dance', 'cringe'
+        ],
+        nsfw: [
+            'waifu', 'neko', 'trap', 'blowjob'
+        ]
+    };
+
+    // Populate subcategory select
+    function updateSubcategories() {
+        const cat = categorySelect.value;
+        subcategorySelect.innerHTML = '';
+        categories[cat].forEach(sub => {
+            const opt = document.createElement('option');
+            opt.value = sub;
+            opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
+            subcategorySelect.appendChild(opt);
+        });
+    }
+    categorySelect.addEventListener('change', () => {
+        updateSubcategories();
+        updateGrid();
+    });
+    subcategorySelect.addEventListener('change', updateGrid);
+
+    // Initial subcategory population
+    updateSubcategories();
+
+    function getApiUrl() {
+        const cat = categorySelect.value;
+        const sub = subcategorySelect.value;
+        return `https://api.waifu.pics/${cat}/${sub}`;
+    }
+
+    function updateGrid() {
+        // Remove old images
+        gridDiv.innerHTML = '';
+        // Get viewport size
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        // Calculate columns and rows to keep tiles near 200px, but fill both width and height exactly
+        let cols = Math.max(2, Math.round(w / 200));
+        let rows = Math.max(2, Math.round(h / 200));
+        let tileW = Math.ceil(w / cols);
+        let tileH = Math.ceil(h / rows);
+        // Adjust grid size to fill viewport exactly
+        const gridW = tileW * cols;
+        const gridH = tileH * rows;
+        gridDiv.style.position = 'fixed';
+        gridDiv.style.left = '0';
+        gridDiv.style.top = '0';
+        gridDiv.style.width = gridW + 'px';
+        gridDiv.style.height = gridH + 'px';
+        gridDiv.style.pointerEvents = 'none';
+        gridDiv.style.zIndex = '10';
+        gridDiv.style.display = 'grid';
+        gridDiv.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
+        gridDiv.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
+        // Fetch and place images
+        const apiUrl = getApiUrl();
+        for (let i = 0; i < cols * rows; i++) {
+            fetch(apiUrl)
+                .then(res => res.json())
+                .then(data => {
+                    const img = document.createElement('img');
+                    img.src = data.url;
+                    img.style.width = tileW + 'px';
+                    img.style.height = tileH + 'px';
+                    img.style.objectFit = 'cover';
+                    img.style.display = 'block';
+                    img.draggable = false;
+                    gridDiv.appendChild(img);
+                });
+        }
+    }
+    window.addEventListener('resize', updateGrid);
+    updateGrid();
+    </script>
+</body>
+</html>

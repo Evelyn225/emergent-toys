@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+        <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+        <title>Pixel Splatter</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+        <style>
+            body {
+                margin: 0;
+                overflow: hidden;
+                background: #000000;
+            }
+            #controls {
+                position: fixed;
+                left: 10px;
+                top: 10px;
+                z-index: 200;
+                background: rgba(0,0,0,0.7);
+                color: #fff;
+                padding: 10px 20px 12px 10px;
+                border-radius: 12px;
+                font-family: 'Inter', sans-serif;
+                font-size: 14px;
+                box-shadow: 0 2px 16px #0008;
+                user-select: none;
+            }
+            #controls label {
+                display: block;
+                margin-top: 8px;
+                margin-bottom: 2px;
+            }
+            #controls input[type=range] {
+                width: 160px;
+            }
+            #redraw-btn {
+                margin-top: 10px;
+                padding: 6px 18px;
+                font-size: 1em;
+                border-radius: 6px;
+                border: none;
+                background: #e23;
+                color: #fff;
+                cursor: pointer;
+                font-family: inherit;
+                transition: background 0.2s,transform 0.1s;
+            }
+            #redraw-btn:hover {
+                background: #c11;
+            }
+            #redraw-btn:active {
+                transform: scale(0.95);
+            }
+        </style>
+    </head>
+<body>
+<a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; text-decoration: none; font-family: 'Inter', sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(180, 15, 80, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
+
+<div id="controls">
+    <label for="sliderA">Spiral A: <span id="valA"></span></label>
+    <input type="range" id="sliderA" min="0.1" max="1.0" step="0.01" value="0.25">
+    <label for="sliderB">Spiral B: <span id="valB"></span></label>
+    <input type="range" id="sliderB" min="0.01" max="1.5" step="0.01" value="0.4">
+    <label for="sliderTheta">Spiral Theta: <span id="valTheta"></span></label>
+    <input type="range" id="sliderTheta" min="0.1" max="6.0" step="0.01" value="1.2">
+    <label for="sliderSin">Spiral Sin: <span id="valSin"></span></label>
+    <input type="range" id="sliderSin" min="0.01" max="3.0" step="0.01" value="1.3">
+    <label for="sliderTile">Tile Size: <span id="valTile"></span></label>
+    <input type="range" id="sliderTile" min="1" max="8" step="1" value="3"><br>
+    <select id="paletteSelect">
+        <option value="rainbow">Rainbow</option>
+        <option value="blood">Blood</option>
+        <option value="ice">Ice</option>
+        <option value="forest">Forest</option>
+        <option value="mana">Mana</option>
+        <option value="pastel">Pastel</option>
+        <option value="mono">Monochrome</option>
+    </select><br>
+    
+    <button id="redraw-btn">Redraw</button>
+</div>
+
+<script>
+let params = {
+    spiralA: 0.25,
+    spiralB: 0.4,
+    spiralTheta: 1.2,
+    spiralSin: 1.3,
+    tileSize: 3,
+    palette: 'rainbow'
+};
+let flameLayer;
+let needsRedraw = true;
+let flameDrawState = null;
+
+function setup() {
+    pixelDensity(1);
+    createCanvas(windowWidth, windowHeight);
+    noSmooth();
+    flameLayer = createGraphics(512, 512);
+    flameLayer.noSmooth();
+    startFractalAnimation();
+}
+
+function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+    needsRedraw = true;
+}
+
+function redrawFractal() {
+    flameLayer.clear();
+    startFractalAnimation();
+}
+
+function startFractalAnimation() {
+    // Set up state for incremental drawing
+    flameDrawState = {
+        w: 512,
+        h: 512,
+        cx: 256,
+        cy: 256,
+        points: 360000,
+        spread: 512,
+        spiralA: params.spiralA,
+        spiralB: params.spiralB,
+        spiralTheta: params.spiralTheta,
+        spiralSin: params.spiralSin,
+        tileSize: params.tileSize,
+        palette: params.palette,
+        colorSeed: random(1000),
+        x: random(-2, 2),
+        y: random(-2, 2),
+        i: 0,
+        batch: 3000 // points per frame
+    };
+    needsRedraw = true;
+}
+
+function draw() {
+    if (flameDrawState) {
+        drawFractalFlameAnimated(flameLayer, flameDrawState);
+        background(0, 0, 0);
+        image(flameLayer, 0, 0, width, height);
+        if (flameDrawState.i >= flameDrawState.points) {
+            flameDrawState = null;
+        }
+    } else if (needsRedraw) {
+        background(0, 0, 0);
+        image(flameLayer, 0, 0, width, height);
+        needsRedraw = false;
+    }
+}
+
+function drawFractalFlameAnimated(gfx, state) {
+    gfx.colorMode(HSB, 360, 255, 255, 255);
+    gfx.noStroke();
+    let {w, h, cx, cy, points, spread, spiralA, spiralB, spiralTheta, spiralSin, tileSize, palette, colorSeed} = state;
+    let x = state.x, y = state.y;
+    let i = state.i;
+    let batch = state.batch;
+    for (let b = 0; b < batch && i < points; b++, i++) {
+        let r = sqrt(x*x + y*y) + random(-0.0005, 0.0005);
+        let theta = atan2(y, x);
+        let newR = r * (spiralA + spiralB * sin(theta*3 + i*0.0001 + colorSeed));
+        let newTheta = theta + spiralTheta + spiralSin * sin(r*2 + i*0.0002 + colorSeed);
+        x = newR * cos(newTheta) + 0.25 * sin(i*0.01 + colorSeed);
+        y = newR * sin(newTheta) + 0.25 * cos(i*0.013 + colorSeed);
+        let px = cx + x * spread;
+        let py = cy + y * spread;
+        px = Math.floor(px / tileSize) * tileSize;
+        py = Math.floor(py / tileSize) * tileSize;
+        // Palette-based coloring
+        let t = (i / points);
+        let hue, sat, bri;
+        switch (palette) {
+            case 'rainbow':
+                hue = (360 * t + 120 * sin(theta*2 + i*0.0005 + colorSeed)) % 360;
+                sat = 220;
+                bri = 255;
+                break;
+            case 'blood':
+                hue = 1 + 5 * t + 6 * sin(i*0.0005 + colorSeed);
+                sat = 240 - 40 * t; 
+                bri = 110 + 40 * t + 10 * sin(i*0.0002 + colorSeed);
+                break;
+            case 'ice':
+                hue = 180 + 60 * t + 10 * sin(i*0.0005 + colorSeed);
+                sat = 120 + 80 * (1-t);
+                bri = 200 + 35 * t;
+                break;
+            case 'forest':
+                hue = 90 + 40 * t + 10 * sin(i*2 + colorSeed);
+                sat = 180 - 40 * t;
+                bri = 22 + 100 * t;
+                break;
+            case 'mana':
+                hue = 250 + 4 * t + 20 * Math.pow(t,4) + 2 * sin(i*0.0005 + colorSeed);
+                sat = 170 - 10 * t;
+                bri = 170 + 1 * sin(t);
+                break;
+            case 'pastel':
+                hue = (360 * t + 120 * sin(theta + i*0.0005)) % 360;
+                sat = 130 - 10 * t;
+                bri = 200 + 10 * t;
+                break;
+            case 'mono':
+                hue = 0;
+                sat = 0;
+                bri = 180 + 75 * t;
+                break;
+            default:
+                hue = (360 * t) % 360;
+                sat = 220;
+                bri = 255;
+        }
+        let alpha = 22 + 52 * sin(i*0.0001 + r*3 + colorSeed);
+        if (px >= 0 && px < w && py >= 0 && py < h) {
+            gfx.fill(hue, sat, bri, alpha);
+            gfx.rect(px, py, tileSize, tileSize);
+        }
+    }
+    state.x = x;
+    state.y = y;
+    state.i = i;
+    gfx.colorMode(RGB, 255, 255, 255, 255);
+}
+
+// --- UI Controls ---
+function updateSliderDisplays() {
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+    setVal('valA', params.spiralA.toFixed(2));
+    setVal('valB', params.spiralB.toFixed(2));
+    setVal('valTheta', params.spiralTheta.toFixed(2));
+    setVal('valSin', params.spiralSin.toFixed(2));
+    setVal('valTile', params.tileSize);
+}
+function setupSliders() {
+    const sliders = [
+        {id: 'sliderA', key: 'spiralA'},
+        {id: 'sliderB', key: 'spiralB'},
+        {id: 'sliderTheta', key: 'spiralTheta'},
+        {id: 'sliderSin', key: 'spiralSin'},
+        {id: 'sliderTile', key: 'tileSize'}
+    ];
+    sliders.forEach(s => {
+        const el = document.getElementById(s.id);
+        el.value = params[s.key];
+        el.addEventListener('input', () => {
+            params[s.key] = (s.key === 'tileSize') ? parseInt(el.value) : parseFloat(el.value);
+            updateSliderDisplays();
+        });
+    });
+    // Palette dropdown
+    const paletteSel = document.getElementById('paletteSelect');
+    paletteSel.value = params.palette;
+    paletteSel.addEventListener('change', () => {
+        params.palette = paletteSel.value;
+        updateSliderDisplays();
+    });
+    updateSliderDisplays();
+    document.getElementById('redraw-btn').onclick = redrawFractal;
+}
+window.addEventListener('DOMContentLoaded', setupSliders);
+</script>
+</body>
+</html>
