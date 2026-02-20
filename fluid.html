@@ -22,7 +22,7 @@
     <input id="influenceSlider" type="range" min="80" max="600" value="260" style="position: fixed; left: 24px; bottom: 24px; width: 120px; z-index: 1001; background: transparent; accent-color: #fff;">
     <script>
         const particles = [];
-        const numParticles = 12500;
+        const numParticles = 14000;
         const noiseScale = 0.002;
         const particleSpeed = 2.1;
         let time = 0;
@@ -41,14 +41,14 @@
             fadeLayer.background(0, 0, 0);
             colorMode(HSB, 50);
             blendMode(ADD);
-            // Initialize particles with more properties
+            // Initialize particles
             for (let i = 0; i < numParticles; i++) {
                 particles.push({
                     pos: createVector(random(width), random(height)),
                     vel: createVector(0, 0),
                     size: random(1.5, 3.5),
-                    life: random(0, 120),
-                    maxLife: 120,
+                    life: random(0, 140),
+                    maxLife: random(120, 200),
                     birthHue: 0, // Start all particles as red
                     isOriginal: true // Track if this is an original particle
                 });
@@ -74,10 +74,10 @@
             colorCycle += 0.02;
             noiseOffset += 0.0011;
 
-            // Update global hue for new particles - start from red and oscillate through half spectrum
+            // Update global hue for new particles
             let timeSinceStart = (millis() - startTime) / 1000; // Convert to seconds
-            let maxHueRange = Math.min(25, timeSinceStart * 0.25); // Only go through half the spectrum, slower
-            globalHue = maxHueRange * Math.abs(sin(time * 0.005)); // Oscillate back and forth
+            let maxHueRange = (timeSinceStart)%360; // Only go through half the spectrum
+            globalHue = maxHueRange * Math.abs(sin(time * 0.5)); // Oscillate back and forth
 
             // Create center points for vortex effects
             const vortexPoints = [
@@ -120,8 +120,22 @@
                         let waveAngle = sin(time * 8 + particle.pos.x * 0.01 + particle.pos.y * 0.01) * 0.7;
                         toMouse.rotate(waveAngle);
                         toMouse.normalize();
-                        // Strong but not overwhelming attraction
+                        // Feathered attraction: strong in center, fades at edge but never zero
+                        let feather = 1 - (dist / influenceRadius);
+                        feather = constrain(feather, 0, 1);
                         let attractStrength = 6.0 * constrain(400 / (dist + 40), 0.2, 2.0);
+                        attractStrength *= feather * 0.85 + 0.15; // Always at least 15% strength at edge
+                        particle.vel.x += toMouse.x * attractStrength;
+                        particle.vel.y += toMouse.y * attractStrength;
+                    } else if (dist >= influenceRadius && dist < influenceRadius * 1.5) {
+                        // Residual feathered pull outside the main radius
+                        let waveAngle = sin(time * 8 + particle.pos.x * 0.01 + particle.pos.y * 0.01) * 0.7;
+                        toMouse.rotate(waveAngle);
+                        toMouse.normalize();
+                        let feather = 1 - ((dist - influenceRadius) / (influenceRadius * 0.25));
+                        feather = constrain(feather, 0, 1);
+                        let attractStrength = 6.0 * constrain(400 / (dist + 40), 0.05, 0.2);
+                        attractStrength *= feather * 0.6; // Residual pull fades out
                         particle.vel.x += toMouse.x * attractStrength;
                         particle.vel.y += toMouse.y * attractStrength;
                     }
