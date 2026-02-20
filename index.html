@@ -1,9 +1,13 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
     <title>H̷̡͈̙̳̼̳̲̅̋͂̋͝͝Ë̸̠̤̰́̄̚H̴͓͎̪͗͒̔̏͘E̶̗̙̱̖͎͊̋̈́̅̈́H̸͉̗͈̍̕E̶̤̼͌̎͊H̴̢̹̩̙̞͑̀̾͒̕E̵̟̋̋̎͘̚</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
@@ -50,13 +54,11 @@
             display: flex;
             align-items: top;
             justify-content: center;
-            background: linear-gradient(
-                to bottom,
-                rgba(0, 0, 0, 0.4) 0%,
-                rgba(0, 0, 0, 0.2) 40%,
-                rgba(0, 0, 0, 0.2) 60%,
-                rgba(0, 0, 0, 0.4) 100%
-            );
+            background: linear-gradient(to bottom,
+                    rgba(0, 0, 0, 0.4) 0%,
+                    rgba(0, 0, 0, 0.2) 40%,
+                    rgba(0, 0, 0, 0.2) 60%,
+                    rgba(0, 0, 0, 0.4) 100%);
         }
 
         .hero {
@@ -78,7 +80,7 @@
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(255,255,255,0.1);
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
             font-weight: 400;
             letter-spacing: -0.02em;
             min-height: 5rem;
@@ -92,8 +94,16 @@
         }
 
         @keyframes cursor-blink {
-            0%, 49% { opacity: 1; }
-            50%, 100% { opacity: 0; }
+
+            0%,
+            49% {
+                opacity: 1;
+            }
+
+            50%,
+            100% {
+                opacity: 0;
+            }
         }
 
         .bottom-content {
@@ -103,28 +113,6 @@
             align-items: center;
             gap: 1.2rem;
             padding-bottom: 6rem;
-        }
-
-        .cta-button {
-            display: inline-block;
-            padding: 1rem 2.5rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #fff;
-            text-decoration: none;
-            border-radius: 30px;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s;
-            font-size: 1.1rem;
-            letter-spacing: 0.02em;
-            font-weight: 400;
-            margin-top: 1rem;
-        }
-
-        .cta-button:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
 
         .hero p {
@@ -165,29 +153,55 @@
             width: 100vw;
             max-width: none;
             box-sizing: border-box;
-            padding-left: 15vw;
-            padding-right: 15vw;
+            padding-left: 5vw;
+            padding-right: 5vw;
         }
 
         .site-link {
             color: rgba(255, 255, 255, 0.9);
             text-decoration: none;
-            transition: color 0.3s, outline 0.3s, transform 0.2s, text-shadow 0.3s;
+            transition: all 1s linear(0,
+                    0.009,
+                    0.035 2.1%,
+                    0.141,
+                    0.281 6.7%,
+                    0.723 12.9%,
+                    0.938 16.7%,
+                    1.017,
+                    1.077,
+                    1.121,
+                    1.149 24.3%,
+                    1.159,
+                    1.163,
+                    1.161,
+                    1.154 29.9%,
+                    1.129 32.8%,
+                    1.051 39.6%,
+                    1.017 43.1%,
+                    0.991,
+                    0.977 51%,
+                    0.974 53.8%,
+                    0.975 57.1%,
+                    0.997 69.8%,
+                    1.003 76.9%,
+                    1.004 83.8%,
+                    1);
             white-space: normal;
             width: 120px;
-            padding:8px;
+            padding: 8px;
             max-width: 120px;
             min-width: 120px;
             flex: 0 0 120px;
             flex-shrink: 0;
             text-align: center;
-            font-size: 1rem;
+            font-size: 1.1rem;
         }
 
         .site-link:hover {
             color: rgba(255, 255, 255, 1);
-            transform: scale(1.05);
+            transform: scale(1.13);
             text-shadow: rgba(255, 255, 255, 0.6) 3px 3px 0px, rgba(255, 255, 255, 0.4) 5px 5px 0px, rgba(255, 255, 255, 0.2) 7px 7px 0px;
+            flex-grow: inherit;
         }
 
         .site-link:focus {
@@ -202,9 +216,11 @@
         }
 
         .site-link:active {
-                transform: scale(0.95);
-                color: #fff;
-            }
+            transform: scale(0.96);
+            color: #fff;
+            text-shadow: none;
+            font-style: oblique;
+        }
 
         .site-link:focus-visible {
             outline: 2px solid rgba(255, 255, 255, 0.9);
@@ -212,42 +228,9 @@
             border-radius: 4px;
             color: #fff;
         }
-
-        @media (max-width: 768px) {
-            .links-container {
-                padding: .5rem 1vw;
-                margin-bottom: .4rem;
-                gap: 1rem;
-                width: 100vw;
-                max-width: none;
-                flex-wrap: wrap;
-            }
-
-            .site-link {
-                white-space: normal;
-                max-width: 80px;
-                min-width: 40px;
-                text-align: center;
-                font-size: 0.9rem;
-                line-height: .9;
-                min-height: 30px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 0.5rem;
-                color: rgba(255, 255, 255, 0.9);
-                flex: 1 1 0;
-                pointer-events: auto;
-            }
-        }
-        .links-container {
-            user-select: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-        }
     </style>
 </head>
+
 <body>
     <div id="p5-container"></div>
     <div class="content">
@@ -298,7 +281,7 @@
 
         let angle = 20;
         let time = 20;
-        
+
         function setup() {
             let canvas = createCanvas(windowWidth, windowHeight, WEBGL);
             canvas.parent('p5-container');
@@ -306,7 +289,7 @@
             strokeWeight(1);
             setAttributes('antialias', true);
             frameRate(30);
-            perspective(PI/3, width/height, 1, 10000); // Extended frustum with very close near plane
+            perspective(PI / 3, width / height, 1, 10000); // Extended frustum with very close near plane
         }
 
         function draw() {
@@ -322,22 +305,22 @@
             let rawY = sin(time * 0.2);
             // Reshape the sine wave to spend less time at extremes
             let modifiedY = (rawY * Math.abs(rawY)) * amplitude + baseHeight;
-            let camY = min(modifiedY, -5    ); // Only clamp the upper bound
+            let camY = min(modifiedY, -5); // Only clamp the upper bound
 
             let camZ = camRadius * sin(angle);
-            
+
             // Draw grid
             push();
             strokeWeight(0.5);
-            stroke(45,45,90, 10); // White with low opacity
+            stroke(45, 45, 90, 10); // White with low opacity
             noFill();
-            
+
             // Calculate grid size based on view
             let backgroundGridSize = 1000;
             let gridSpacing = 80;
-            
+
             // Center the grid but offset forward towards camera and down for floor visibility
-            translate(-backgroundGridSize/2, 50, -backgroundGridSize/2 + 100);
+            translate(-backgroundGridSize / 2, 50, -backgroundGridSize / 2 + 100);
 
             // Distance culling around camera to reduce draw cost
             let cullRadius = 600;
@@ -399,60 +382,60 @@
                 vertex(cx, 0, cz);
             }
             endShape();
-            
+
             pop();
-            
+
             // Lighting
             ambientLight(100);
             pointLight(255, 255, 255, 300 * sin(time * 0.1), 200, 300 * cos(time * 0.1));
-            
+
             camera(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
-            
+
             // Move entire scene up more to compensate for grid
             translate(0, -90, 0);
-            
+
             // Global scale animation
             let globalScale = 1 + sin(time * 0.2) * 0.2;
             scale(globalScale);
-            
+
             // Set grid size
             let gridSize = 8;
             let cubeSize = 8;
             let spacing = cubeSize * 1.2;
-            
+
             // Pre-calculate time-based values
             let timeScale = 0.15;
             let basePower = 8 + sin(time * timeScale) * 2;
             let secondaryPower = 3 + cos(time * timeScale * 0.7) * 1.5;
-            
+
             // Create a grid of cubes with distance-based culling
             let maxDistance = gridSize * spacing * 0.8;
-            
+
             push(); // Save the global transformation state
-            
+
             // Add gentle overall rotation to the structure
             let globalRotationY = time * 0.1;
             let globalRotationX = sin(time * 0.05) * 0.1;
             rotateY(globalRotationY);
             rotateX(globalRotationX);
-            
+
             for (let x = -gridSize; x <= gridSize; x += 2) {
                 for (let y = -gridSize; y <= gridSize; y += 2) {
                     for (let z = -gridSize; z <= gridSize; z += 2) {
                         let pos = createVector(x * spacing, y * spacing, z * spacing);
                         let distFromCenter = pos.mag();
-                        
+
                         if (distFromCenter > maxDistance) continue;
-                        
+
                         let normalizedDist = distFromCenter / maxDistance;
                         let depthFactor = (z + gridSize) / (gridSize * 2); // 0 to 1 based on depth
-                        
+
                         let orbitOffset = createVector(
                             sin(time * 0.2 + y * 0.02) * 0.15,
                             cos(time * 0.25 + x * 0.02) * 0.15,
                             sin(time * 0.3 + z * 0.02) * 0.15
                         );
-                        
+
                         let mandelbulbValue = getOptimizedMandelbulbValue(
                             (pos.x / maxDistance) + orbitOffset.x,
                             (pos.y / maxDistance) + orbitOffset.y,
@@ -460,42 +443,42 @@
                             basePower,
                             secondaryPower
                         );
-                        
+
                         if (mandelbulbValue < 1.8) {
                             push();
                             translate(pos.x, pos.y, pos.z);
-                            
+
                             // Depth-based rotation
                             let rotationAmplitude = map(depthFactor, 0, 1, 0.5, 1.5);
                             let rotationPhase = time * 0.5 + normalizedDist * PI;
-                            
+
                             // Coordinate rotations with global movement
                             rotateX(sin(rotationPhase + globalRotationX) * 0.2 * rotationAmplitude);
                             rotateY(cos(rotationPhase + globalRotationY) * 0.2 * rotationAmplitude);
                             rotateZ(sin(rotationPhase * 0.5) * 0.1 * rotationAmplitude);
-                            
+
                             // Scale variation based on depth
                             let depthScale = map(depthFactor, 0, 1, 1.1, 0.9);
                             let scale = map(mandelbulbValue, 0, 1.8, 1.1, 0.5) * depthScale;
-                            
+
                             // Color with depth influence
                             let hue = (mandelbulbValue * 120 + normalizedDist * 180 + depthFactor * 60 + time * 8) % 360;
                             let sat = map(normalizedDist, 0, 1, 90, 60);
                             let bright = map(mandelbulbValue / 10, 0, 1.8, 90, 40);
-                            
+
                             stroke(hue, sat * 0.6, bright * 0.8, 0.6);
                             strokeWeight(0.2);
                             fill(hue, sat, bright, .25);
-                            
+
                             box(cubeSize * scale);
                             pop();
                         }
                     }
                 }
             }
-            
+
             pop(); // Restore the transformation state
-            
+
             angle += 0.005;
             time += 0.025;
         }
@@ -504,28 +487,28 @@
             let pos = createVector(x, y, z);
             let originalPos = pos.copy();
             let iterations = 4;
-            
+
             for (let i = 0; i < iterations; i++) {
                 let r = pos.mag();
                 if (r > 2) return r;
-                
+
                 let theta = acos(pos.z / r);
                 let phi = atan2(pos.y, pos.x);
-                
+
                 let rPow = pow(r, power);
                 let sinTheta = sin(theta * power);
-                
+
                 let blend = 0.5 + 0.5 * sin(r * PI);
-                pos.x = mix(rPow * sinTheta * cos(phi * power), 
-                           r * sin(theta * secondaryPower) * cos(phi * secondaryPower), blend);
+                pos.x = mix(rPow * sinTheta * cos(phi * power),
+                    r * sin(theta * secondaryPower) * cos(phi * secondaryPower), blend);
                 pos.y = mix(rPow * sinTheta * sin(phi * power),
-                           r * sin(theta * secondaryPower) * sin(phi * secondaryPower), blend);
+                    r * sin(theta * secondaryPower) * sin(phi * secondaryPower), blend);
                 pos.z = mix(rPow * cos(theta * power),
-                           r * cos(theta * secondaryPower), blend);
-                
+                    r * cos(theta * secondaryPower), blend);
+
                 pos.add(p5.Vector.mult(originalPos, 0.9));
             }
-            
+
             return pos.mag();
         }
 
@@ -543,7 +526,7 @@
             const links = Array.from(document.querySelectorAll('.site-link'));
             const focusedElement = document.activeElement;
             const currentIndex = links.indexOf(focusedElement);
-            
+
             if (e.key === 'ArrowRight') {
                 e.preventDefault();
                 if (currentIndex < links.length - 1) {
@@ -566,4 +549,5 @@
         });
     </script>
 </body>
+
 </html>
