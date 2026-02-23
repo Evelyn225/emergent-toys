@@ -47,8 +47,9 @@ async function setup() {
 	CELL_SIZE = Math.floor(Math.min(WIDTH, HEIGHT) / GRID_SIZE);
 	createCanvas(WIDTH, HEIGHT);
 	pixelDensity(1);
-	// Load country grid map
-	countryGridMap = await loadJSON('api/country-grid-map.json');
+	// Load country grid map from GitHub raw URL
+	const countryGridUrl = 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/api/country-grid-map.json';
+	countryGridMap = await fetch(countryGridUrl).then(r => r.json());
 	// Initialize grid
 	grid = [];
 	for (let x = 0; x < GRID_SIZE; x++) {
