@@ -21,12 +21,16 @@ let HEIGHT = window.innerHeight;
 
 // --- DATA ---
 
+
 let grid = [];
 let storms = [];
 let lastTraffic = 50; // Initial guess
 let currentTraffic = 50;
 let windSpeed = 0;
 let windAngle = 0;
+
+let countryGridMap = null;
+let countryTraffic = null;
 
 let worldMapImg;
 
@@ -37,12 +41,14 @@ function preload() {
 	worldMapImg = loadImage('https://upload.wikimedia.org/wikipedia/commons/8/83/Equirectangular_projection_SW.jpg');
 }
 
-function setup() {
+async function setup() {
 	WIDTH = window.innerWidth;
 	HEIGHT = window.innerHeight;
 	CELL_SIZE = Math.floor(Math.min(WIDTH, HEIGHT) / GRID_SIZE);
 	createCanvas(WIDTH, HEIGHT);
 	pixelDensity(1);
+	// Load country grid map
+	countryGridMap = await loadJSON('api/country-grid-map.json');
 	// Initialize grid
 	grid = [];
 	for (let x = 0; x < GRID_SIZE; x++) {
@@ -109,38 +115,43 @@ function windowResized() {
 
 // --- API FETCHING ---
 async function fetchData() {
-    // --- Cloudflare Radar ---
-    try {
-        const cfRes = await fetch('/api/radar');
-        const cfData = await cfRes.json();
-        // Example: { desktop: 58, mobile: 40, tablet: 2 }
-        let total = 0;
-        let weighted = 0;
-        for (const [type, pct] of Object.entries(cfData.result.totals)) {
-            let weight = (type === 'desktop') ? 1 : (type === 'mobile') ? 1.2 : 1.1;
-            weighted += pct * weight;
-            total += pct;
-        }
-        lastTraffic = currentTraffic;
-        currentTraffic = Math.min(100, Math.max(0, weighted / total * 100));
-    } catch (e) {
-        // fallback: random walk
-        lastTraffic = currentTraffic;
-        currentTraffic += random(-2, 2);
-        currentTraffic = constrain(currentTraffic, 0, 100);
-    }
+	// --- Cloudflare Radar by Country ---
+	try {
+		const cfRes = await fetch('/api/radar-countries');
+		const cfData = await cfRes.json();
+		// cfData.result is an array of { country: 'US', pct: 12.3 }
+		countryTraffic = {};
+		if (cfData.result && Array.isArray(cfData.result)) {
+			for (const entry of cfData.result) {
+				countryTraffic[entry.country] = entry.pct;
+			}
+		}
+		// For fallback global temp
+		let total = 0, weighted = 0;
+		for (const pct of Object.values(countryTraffic)) {
+			weighted += pct;
+			total += 1;
+		}
+		lastTraffic = currentTraffic;
+		currentTraffic = total > 0 ? Math.min(100, Math.max(0, weighted / total)) : 50;
+	} catch (e) {
+		// fallback: random walk
+		lastTraffic = currentTraffic;
+		currentTraffic += random(-2, 2);
+		currentTraffic = constrain(currentTraffic, 0, 100);
+	}
 
-    // --- Wikipedia Recent Changes ---
-    try {
-        const wikiRes = await fetch('https://wikimedia.org/api/rest_v1/metrics/edited-pages/top/en.wikipedia/all-access/1-day');
-        const wikiData = await wikiRes.json();
-        // If spike, create a storm
-        if (wikiData.items && wikiData.items[0] && wikiData.items[0].results) {
-            let top = wikiData.items[0].results[0].edits;
-            if (top > 1000) { // arbitrary spike threshold
-                createStorm();
-            }
-        }
+	// --- Wikipedia Recent Changes ---
+	try {
+		const wikiRes = await fetch('https://wikimedia.org/api/rest_v1/metrics/edited-pages/top/en.wikipedia/all-access/1-day');
+		const wikiData = await wikiRes.json();
+		// If spike, create a storm
+		if (wikiData.items && wikiData.items[0] && wikiData.items[0].results) {
+			let top = wikiData.items[0].results[0].edits;
+			if (top > 1000) { // arbitrary spike threshold
+				createStorm();
+			}
+		}
 	} catch (e) {
 		console.error('Wikipedia API error:', e);
 	}
@@ -160,7 +171,7 @@ function updateWind() {
 }
 
 function updateHeat() {
-	// Map traffic to temp
+	// Map regional traffic to temp
 	for (let x = 0; x < GRID_SIZE; x++) {
 		for (let y = 0; y < GRID_SIZE; y++) {
 			// Diffuse heat
@@ -176,10 +187,12 @@ function updateHeat() {
 					}
 				}
 			}
-			// Pull toward global temp (from Cloudflare)
-			let globalTemp = map(currentTraffic, 0, 100, 0, 100);
+			// Pull toward country temp if available, else global
+			let countryCode = countryGridMap ? countryGridMap[`${x},${y}`] : null;
+			let countryPct = (countryCode && countryTraffic && countryTraffic[countryCode]) ? countryTraffic[countryCode] : currentTraffic;
+			let cellTemp = map(countryPct, 0, 100, 0, 100);
 			grid[x][y].temp = lerp(t, (sum / max(1, neighbors)), 0.05);
-			grid[x][y].temp = lerp(grid[x][y].temp, globalTemp, 0.01);
+			grid[x][y].temp = lerp(grid[x][y].temp, cellTemp, 0.01);
 		}
 	}
 }
@@ -188,8 +201,9 @@ function updateStorms() {
 	for (let i = storms.length - 1; i >= 0; i--) {
 		let s = storms[i];
 		s.strength *= 0.98;
+		s.age = (s.age || 0) + 1;
 		if (s.strength < 0.1) storms.splice(i, 1);
-		// Swirl grid
+		// Swirl grid and add pulse/flash
 		for (let dx = -s.radius; dx <= s.radius; dx++) {
 			for (let dy = -s.radius; dy <= s.radius; dy++) {
 				let x = floor(s.x + dx);
@@ -197,13 +211,15 @@ function updateStorms() {
 				if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
 					let dist = sqrt(dx*dx + dy*dy);
 					if (dist < s.radius) {
-						let angle = atan2(dy, dx) + s.strength * 0.2;
+						// Swirl effect
+						let angle = atan2(dy, dx) + s.strength * 0.2 + sin(s.age * 0.2) * 0.5;
 						let r = dist;
 						let sx = floor(s.x + cos(angle) * r);
 						let sy = floor(s.y + sin(angle) * r);
 						if (sx >= 0 && sx < GRID_SIZE && sy >= 0 && sy < GRID_SIZE) {
-							// brighten and swirl
-							grid[sx][sy].temp = min(100, grid[sx][sy].temp + s.strength * 2);
+							// brighten and swirl, add pulse
+							let pulse = 2 + 2 * sin(s.age * 0.5 + dist * 0.5);
+							grid[sx][sy].temp = min(100, grid[sx][sy].temp + s.strength * 2 + pulse);
 						}
 					}
 				}
@@ -217,7 +233,8 @@ function createStorm() {
 		x: random(GRID_SIZE),
 		y: random(GRID_SIZE),
 		strength: random(2, 5),
-		radius: random(5, 15)
+		radius: random(8, 18),
+		age: 0
 	});
 }
 
