@@ -81,6 +81,32 @@ function draw() {
 	updateHeat();
 	updateStorms();
 	drawPixels();
+	drawStormOverlays();
+}
+// Draw swirling, pulsing storm overlays
+function drawStormOverlays() {
+	if (!storms || storms.length === 0) return;
+	push();
+	noFill();
+	for (const s of storms) {
+		let px = map(s.x, 0, GRID_SIZE, 0, WIDTH);
+		let py = map(s.y, 0, GRID_SIZE, 0, HEIGHT);
+		let baseR = map(s.radius, 0, GRID_SIZE, 0, min(WIDTH, HEIGHT));
+		let pulse = 8 + 8 * sin((s.age || 0) * 0.3);
+		let alpha = map(s.strength, 0, 5, 0, 120);
+		stroke(255, 255, 180, alpha);
+		strokeWeight(2 + pulse * 0.1);
+		// Swirl effect: draw multiple arcs
+		for (let a = 0; a < TWO_PI; a += PI / 3) {
+			let swirlR = baseR + pulse * sin((s.age || 0) * 0.2 + a);
+			arc(px, py, swirlR, swirlR, a + (s.age || 0) * 0.1, a + PI / 2 + (s.age || 0) * 0.1);
+		}
+		// Central flash
+		noStroke();
+		fill(255, 255, 180, alpha * 0.7);
+		ellipse(px, py, baseR * 0.5 + pulse * 0.2);
+	}
+	pop();
 }
 function movePixelsByWind() {
 	// Move temperature field by wind (wrap around edges)
