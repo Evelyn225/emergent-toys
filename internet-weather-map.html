@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Internet Weather Map</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+	<style>
+		body { margin: 0; background: #111; }
+		canvas { display: block; margin: 0 auto; }
+	</style>
+</head>
+<body>
+<script>
+// --- CONFIG ---
+const GRID_SIZE = 100;
+const CELL_SIZE = 7;
+const FETCH_INTERVAL = 30000; // 30s
+const WIDTH = GRID_SIZE * CELL_SIZE;
+const HEIGHT = GRID_SIZE * CELL_SIZE;
+
+// --- DATA ---
+let grid = [];
+let storms = [];
+let lastTraffic = 50; // Initial guess
+let currentTraffic = 50;
+let windSpeed = 0;
+let windAngle = 0;
+
+// --- SETUP ---
+function setup() {
+	createCanvas(WIDTH, HEIGHT);
+	pixelDensity(1);
+	// Initialize grid
+	for (let x = 0; x < GRID_SIZE; x++) {
+		grid[x] = [];
+		for (let y = 0; y < GRID_SIZE; y++) {
+			grid[x][y] = {
+				temp: 50, // neutral
+				velocityX: 0,
+				velocityY: 0
+			};
+		}
+	}
+	fetchData();
+	setInterval(fetchData, FETCH_INTERVAL);
+}
+
+// --- DRAW LOOP ---
+function draw() {
+	background(10);
+	updateWind();
+	updateHeat();
+	updateStorms();
+	drawPixels();
+}
+
+// --- API FETCHING ---
+async function fetchData() {
+    // --- Cloudflare Radar ---
+    try {
+        const cfRes = await fetch('/api/radar');
+        const cfData = await cfRes.json();
+        // Example: { desktop: 58, mobile: 40, tablet: 2 }
+        let total = 0;
+        let weighted = 0;
+        for (const [type, pct] of Object.entries(cfData.result.totals)) {
+            let weight = (type === 'desktop') ? 1 : (type === 'mobile') ? 1.2 : 1.1;
+            weighted += pct * weight;
+            total += pct;
+        }
+        lastTraffic = currentTraffic;
+        currentTraffic = Math.min(100, Math.max(0, weighted / total * 100));
+    } catch (e) {
+        // fallback: random walk
+        lastTraffic = currentTraffic;
+        currentTraffic += random(-2, 2);
+        currentTraffic = constrain(currentTraffic, 0, 100);
+    }
+
+    // --- Wikipedia Recent Changes ---
+    try {
+        const wikiRes = await fetch('https://wikimedia.org/api/rest_v1/metrics/edited-pages/top/en.wikipedia/all-access/1-day');
+        const wikiData = await wikiRes.json();
+        // If spike, create a storm
+        if (wikiData.items && wikiData.items[0] && wikiData.items[0].results) {
+            let top = wikiData.items[0].results[0].edits;
+            if (top > 1000) { // arbitrary spike threshold
+                createStorm();
+            }
+        }
+	} catch (e) {
+		console.error('Wikipedia API error:', e);
+	}
+}
+
+// --- SIMULATION LOGIC ---
+function updateWind() {
+	windSpeed = abs(currentTraffic - lastTraffic) * 0.5;
+	windAngle = random(TWO_PI);
+	// Apply wind to grid
+	for (let x = 0; x < GRID_SIZE; x++) {
+		for (let y = 0; y < GRID_SIZE; y++) {
+			grid[x][y].velocityX = windSpeed * cos(windAngle) * random(0.8, 1.2);
+			grid[x][y].velocityY = windSpeed * sin(windAngle) * random(0.8, 1.2);
+		}
+	}
+}
+
+function updateHeat() {
+	// Map traffic to temp
+	for (let x = 0; x < GRID_SIZE; x++) {
+		for (let y = 0; y < GRID_SIZE; y++) {
+			// Diffuse heat
+			let t = grid[x][y].temp;
+			let neighbors = 0, sum = 0;
+			for (let dx = -1; dx <= 1; dx++) {
+				for (let dy = -1; dy <= 1; dy++) {
+					if (dx === 0 && dy === 0) continue;
+					let nx = x + dx, ny = y + dy;
+					if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+						sum += grid[nx][ny].temp;
+						neighbors++;
+					}
+				}
+			}
+			grid[x][y].temp = lerp(t, (sum / max(1, neighbors)), 0.05);
+			// Pull toward global temp
+			grid[x][y].temp = lerp(grid[x][y].temp, currentTraffic, 0.01);
+		}
+	}
+}
+
+function updateStorms() {
+	for (let i = storms.length - 1; i >= 0; i--) {
+		let s = storms[i];
+		s.strength *= 0.98;
+		if (s.strength < 0.1) storms.splice(i, 1);
+		// Swirl grid
+		for (let dx = -s.radius; dx <= s.radius; dx++) {
+			for (let dy = -s.radius; dy <= s.radius; dy++) {
+				let x = floor(s.x + dx);
+				let y = floor(s.y + dy);
+				if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+					let dist = sqrt(dx*dx + dy*dy);
+					if (dist < s.radius) {
+						let angle = atan2(dy, dx) + s.strength * 0.2;
+						let r = dist;
+						let sx = floor(s.x + cos(angle) * r);
+						let sy = floor(s.y + sin(angle) * r);
+						if (sx >= 0 && sx < GRID_SIZE && sy >= 0 && sy < GRID_SIZE) {
+							// brighten and swirl
+							grid[sx][sy].temp = min(100, grid[sx][sy].temp + s.strength * 2);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+function createStorm() {
+	storms.push({
+		x: random(GRID_SIZE),
+		y: random(GRID_SIZE),
+		strength: random(2, 5),
+		radius: random(5, 15)
+	});
+}
+
+function drawPixels() {
+	noStroke();
+	for (let x = 0; x < GRID_SIZE; x++) {
+		for (let y = 0; y < GRID_SIZE; y++) {
+			let t = grid[x][y].temp;
+			// Color: blue (cold) → cyan → yellow → red (hot)
+			let c;
+			if (t < 30) c = lerpColor(color(10,20,80), color(0,200,255), map(t,0,30,0,1));
+			else if (t < 60) c = lerpColor(color(0,200,255), color(255,255,0), map(t,30,60,0,1));
+			else c = lerpColor(color(255,255,0), color(255,40,0), map(t,60,100,0,1));
+			fill(c);
+			rect(x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+		}
+	}
+}
+</script>
+</body>
+</html>
