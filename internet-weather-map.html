@@ -14,12 +14,13 @@
 <script>
 // --- CONFIG ---
 const GRID_SIZE = 100;
-const CELL_SIZE = 7;
-const FETCH_INTERVAL = 30000; // 30s
-const WIDTH = GRID_SIZE * CELL_SIZE;
-const HEIGHT = GRID_SIZE * CELL_SIZE;
+let CELL_SIZE = 7; // Will be recalculated
+const FETCH_INTERVAL = 10000; // 10s for more frequent updates
+let WIDTH = window.innerWidth;
+let HEIGHT = window.innerHeight;
 
 // --- DATA ---
+
 let grid = [];
 let storms = [];
 let lastTraffic = 50; // Initial guess
@@ -27,11 +28,23 @@ let currentTraffic = 50;
 let windSpeed = 0;
 let windAngle = 0;
 
+let worldMapImg;
+
 // --- SETUP ---
+
+function preload() {
+	// Use a public domain world map (equirectangular projection)
+	worldMapImg = loadImage('https://upload.wikimedia.org/wikipedia/commons/8/83/Equirectangular_projection_SW.jpg');
+}
+
 function setup() {
+	WIDTH = window.innerWidth;
+	HEIGHT = window.innerHeight;
+	CELL_SIZE = Math.floor(Math.min(WIDTH, HEIGHT) / GRID_SIZE);
 	createCanvas(WIDTH, HEIGHT);
 	pixelDensity(1);
 	// Initialize grid
+	grid = [];
 	for (let x = 0; x < GRID_SIZE; x++) {
 		grid[x] = [];
 		for (let y = 0; y < GRID_SIZE; y++) {
@@ -47,12 +60,24 @@ function setup() {
 }
 
 // --- DRAW LOOP ---
+
 function draw() {
-	background(10);
+	// Draw the world map as background, stretched to fit
+	if (worldMapImg) {
+		image(worldMapImg, 0, 0, WIDTH, HEIGHT);
+	} else {
+		background(10);
+	}
 	updateWind();
 	updateHeat();
 	updateStorms();
 	drawPixels();
+}
+function windowResized() {
+	WIDTH = window.innerWidth;
+	HEIGHT = window.innerHeight;
+	CELL_SIZE = Math.floor(Math.min(WIDTH, HEIGHT) / GRID_SIZE);
+	resizeCanvas(WIDTH, HEIGHT);
 }
 
 // --- API FETCHING ---
@@ -168,6 +193,7 @@ function createStorm() {
 	});
 }
 
+
 function drawPixels() {
 	noStroke();
 	for (let x = 0; x < GRID_SIZE; x++) {
@@ -175,9 +201,9 @@ function drawPixels() {
 			let t = grid[x][y].temp;
 			// Color: blue (cold) → cyan → yellow → red (hot)
 			let c;
-			if (t < 30) c = lerpColor(color(10,20,80), color(0,200,255), map(t,0,30,0,1));
-			else if (t < 60) c = lerpColor(color(0,200,255), color(255,255,0), map(t,30,60,0,1));
-			else c = lerpColor(color(255,255,0), color(255,40,0), map(t,60,100,0,1));
+			if (t < 30) c = lerpColor(color(10,20,80,120), color(0,200,255,120), map(t,0,30,0,1));
+			else if (t < 60) c = lerpColor(color(0,200,255,120), color(255,255,0,120), map(t,30,60,0,1));
+			else c = lerpColor(color(255,255,0,120), color(255,40,0,120), map(t,60,100,0,1));
 			fill(c);
 			rect(x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE);
 		}
