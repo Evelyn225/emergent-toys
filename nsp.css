@@ -61,6 +61,11 @@ a {
     display: flex;
     flex-direction: column;
 }
+@view-transition {
+  navigation: auto;
+}
+
+
 
 header {
     position: sticky;

@@ -12,7 +12,7 @@
     <link href="https://cdn.jsdelivr.net/gh/Evelyn225/emergent-toys/nsp.css" rel="stylesheet" />
 </head>
 <body>
-    <div id="narrative-banner" style="width:100%;background:rgba(0,0,0,0.7);color:#fff;padding:0.5rem 1.2rem;font-size:1.05rem;font-family:'DM Mono',monospace;text-align:center;letter-spacing:0.01em;"></div>
+    
     <div class="archive-shell">
         <header>
             <div class="nav-bar">
@@ -25,17 +25,16 @@
                     <a href="#/blog" data-route="/blog">Blog</a>
                     <a href="#/projects" data-route="/projects">Projects</a>
                     <a href="#/about" data-route="/about">About</a>
-                    <a id="daemon-nav-link" href="daemon-core.html" target="_blank" style="display:none;">Daemon Core</a>
+                    <a id="daemon-nav-link" href="daemon-core.html" style="display:none;">Daemon Core</a>
                     <div style="margin-left: auto; display: flex; gap: 1rem;"></div>
                 </nav>
             </div>
         </header>
-        <div id="fragment-counter" style="width:100%;max-width:100vw;padding:0.05rem 1.2rem 0.05rem 1.2rem;color:#fff;background:transparent;font-size:0.92rem;font-family:'DM Mono',monospace;display:none;align-items:center;gap:0.5rem;justify-content:flex-end;position:sticky;top:64px;z-index:11;opacity:0.85;">
+        <div id="fragment-counter" style="width:100%;max-width:100vw;padding:0.15rem 1.2rem 0.15rem 1.2rem;color:#fff;background:transparent;font-size:0.92rem;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:0.5rem;justify-content:flex-end;position:relative;z-index:2;opacity:0.85;">
             <span style="font-weight:600;">Fragments:</span>
             <span id="fragment-count">0</span>
         </div>
         </header>
-        <!-- fragment counter moved above -->
         </header>
 
         <main>
@@ -84,21 +83,7 @@
     <canvas class="glitch-canvas" id="glitch-canvas"></canvas>
 
     <div class="overlay" id="glitch-overlay" aria-hidden="true">
-        <div class="overlay-card" id="glitch-card">
-            <div class="corruption-cluster" id="glitch-frag">
-                <div class="corruption-fragment">
-                    <div class="fragment-block" style="--burst-x: -40px; --burst-y: -30px;">%</div>
-                    <div class="fragment-block" style="--burst-x: 35px; --burst-y: -25px;">$</div>
-                    <div class="fragment-block" style="--burst-x: -20px; --burst-y: -35px;">@</div>
-                    <div class="fragment-block" style="--burst-x: 45px; --burst-y: -20px;">#</div>
-                    <div class="fragment-block" style="--burst-x: -30px; --burst-y: -40px;">^</div>
-                </div>
-            </div>
-            <h2>Neural fragment detected</h2>
-            <p style="margin-top: 0.8rem; color: var(--muted);">
-                Corrupted data signature found. Tap the cluster to birth your companion.
-            </p>
-        </div>
+        <div class="corruption-cluster" id="glitch-frag" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:20;pointer-events:none;"></div>
     </div>
 
 
@@ -680,138 +665,153 @@
                 saveState();
                 markFragClaimed(payload.path);
 
-                // --- Fragment Burst Animation (2) ---
+                // --- Fragment Pickup Animation ---
                 const overlay = document.getElementById('glitch-overlay');
-                const card = document.getElementById('glitch-card');
                 const cluster = document.getElementById('glitch-frag');
-                const fragmentBlocks = cluster ? cluster.querySelectorAll('.fragment-block') : [];
-                if (overlay && card && cluster && fragmentBlocks.length) {
+                if (overlay && cluster) {
                     overlay.style.display = 'flex';
                     overlay.style.opacity = '1';
-                    card.style.transform = 'scale(1)';
-                    card.style.transition = 'transform 0.3s cubic-bezier(.7,1.7,.7,1), box-shadow 0.3s';
-                    card.style.boxShadow = '0 0 32px #44ffdd88, 0 0 0 2px #44ffdd44';
-                    // Animate cluster pulse
-                    cluster.style.transition = 'transform 0.3s cubic-bezier(.7,1.7,.7,1)';
-                    cluster.style.transform = 'scale(1.15)';
-                    setTimeout(() => {
-                        cluster.style.transform = 'scale(1)';
-                    }, 180);
-                    // Animate fragment burst
-                    fragmentBlocks.forEach((block, i) => {
-                        block.style.transition = 'transform 0.7s cubic-bezier(.2,1.7,.7,1), opacity 0.7s';
-                        block.style.transform = `translate(${block.style.getPropertyValue('--burst-x') || '0px'}, ${block.style.getPropertyValue('--burst-y') || '0px'}) scale(1.7)`;
-                        block.style.opacity = '0.7';
-                        // Glitch flicker
-                        setTimeout(() => {
-                            block.style.opacity = '1';
-                            block.style.transform += ' rotate(' + (Math.random() * 40 - 20) + 'deg)';
-                        }, 120 + i * 40);
-                    });
+                    overlay.style.removeProperty('background');
+                    overlay.style.removeProperty('backgroundColor');                    
+                    cluster.innerHTML = '';
+                    // Cryptic hacker animation: white characters, matrix-like rain/flicker
+                    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()'.split('');
+                    const w = window.innerWidth;
+                    const h = window.innerHeight;
+                    const fontSize = 22;
+                    const cols = Math.floor(w / fontSize);
+                    const rows = Math.floor(h / fontSize);
+                    // Create animated character spans
+                    for (let x = 0; x < cols; x++) {
+                        for (let y = 0; y < rows; y++) {
+                            if (Math.random() < 0.13) { // sparse, but enough for effect
+                                const span = document.createElement('span');
+                                span.textContent = chars[Math.floor(Math.random() * chars.length)];
+                                span.style.position = 'absolute';
+                                span.style.left = (x * fontSize) + 'px';
+                                span.style.top = (y * fontSize) + 'px';
+                                span.style.fontSize = fontSize + 'px';
+                                span.style.fontFamily = 'DM Mono, monospace';
+                                span.style.color = '#fff';
+                                span.style.opacity = (0.7 + Math.random() * 0.3).toFixed(2);
+                                span.style.pointerEvents = 'none';
+                                span.style.userSelect = 'none';
+                                // Animate: matrix rain/flicker/swirl
+                                span.animate([
+                                    { filter: 'blur(0px)', opacity: span.style.opacity, transform: 'translateY(0px) scale(1)' },
+                                    { filter: 'blur(2px)', opacity: '0.3', transform: 'translateY(' + (Math.random() * 60 + 20) + 'px) scale(' + (0.9 + Math.random() * 0.2) + ')' },
+                                    { filter: 'blur(0px)', opacity: span.style.opacity, transform: 'translateY(0px) scale(1)' }
+                                ], {
+                                    duration: Math.random() * 1200 + 800,
+                                    iterations: Infinity,
+                                    direction: 'alternate',
+                                    easing: 'ease-in-out'
+                                });
+                                cluster.appendChild(span);
+                            }
+                        }
+                    }
                 }
 
-                // --- Play Sound (5) ---
-                const audio = new Audio('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/audio/fragment-get.wav');
-                audio.volume = 0.7;
-                audio.play().catch(()=>{});
-
-                // --- Glitch Canvas Effect (4) ---
+                // --- Fragment Dither Shader Effect ---
                 if (typeof glitchCanvas !== 'undefined' && glitchCanvas) {
-                    const ctx = glitchCanvas.getContext('2d');
                     const w = window.innerWidth;
                     const h = window.innerHeight;
                     glitchCanvas.width = w;
                     glitchCanvas.height = h;
-                    // Burst effect: radial lines and rectangles
-                    for (let i = 0; i < 32; i++) {
-                        const angle = (i / 32) * Math.PI * 2;
-                        const r = 80 + Math.random() * 60;
-                        const x = w/2 + Math.cos(angle) * r;
-                        const y = h/2 + Math.sin(angle) * r;
-                        ctx.save();
-                        ctx.translate(w/2, h/2);
-                        ctx.rotate(angle);
-                        ctx.fillStyle = `rgba(${180+Math.random()*60},${200+Math.random()*55},255,${0.18+Math.random()*0.22})`;
-                        ctx.fillRect(30, -2, r, 4+Math.random()*2);
-                        ctx.restore();
-                        // Flicker dots
-                        ctx.beginPath();
-                        ctx.arc(x, y, 3+Math.random()*3, 0, Math.PI*2);
-                        ctx.fillStyle = `rgba(255,68,221,${0.25+Math.random()*0.5})`;
-                        ctx.fill();
+                    // Use WebGL to render fragment with dithering shader
+                    try {
+                        const gl = glitchCanvas.getContext('webgl');
+                        if (!gl) throw new Error('WebGL not supported');
+                        // Load shader source from ditheringShader.glsl
+                        // For demo, inline minimal shader (replace with full shader as needed)
+                        const vertSrc = `
+                            attribute vec2 a_position;
+                            varying vec2 v_uv;
+                            void main() {
+                                v_uv = a_position * 0.5 + 0.5;
+                                gl_Position = vec4(a_position, 0, 1);
+                            }
+                        `;
+                        const fragSrc = `
+                            precision highp float;
+                            varying vec2 v_uv;
+                            uniform float matrixSize;
+                            uniform float bias;
+                            uniform vec2 resolution;
+                            // Bayer matrix (2x2, 4x4, 8x8) from ditheringShader.glsl
+                            float bayer2x2[4];
+                            float bayer4x4[16];
+                            float bayer8x8[64];
+                            void main() {
+                                float lum = v_uv.x * 0.7 + v_uv.y * 0.3;
+                                float threshold = 0.0;
+                                int x = int(v_uv.x * resolution.x);
+                                int y = int(v_uv.y * resolution.y);
+                                if (matrixSize == 2.0) {
+                                    int idx = y % 2 * 2 + x % 2;
+                                    bayer2x2[0]=0.0; bayer2x2[1]=0.5; bayer2x2[2]=0.75; bayer2x2[3]=0.25;
+                                    threshold = bayer2x2[idx];
+                                } else if (matrixSize == 4.0) {
+                                    int idx = y % 4 * 4 + x % 4;
+                                    bayer4x4[0]=0.0; bayer4x4[1]=0.5; bayer4x4[2]=0.75; bayer4x4[3]=0.25;
+                                    bayer4x4[4]=0.5; bayer4x4[5]=0.75; bayer4x4[6]=0.25; bayer4x4[7]=0.0;
+                                    bayer4x4[8]=0.75; bayer4x4[9]=0.25; bayer4x4[10]=0.0; bayer4x4[11]=0.5;
+                                    bayer4x4[12]=0.25; bayer4x4[13]=0.0; bayer4x4[14]=0.5; bayer4x4[15]=0.75;
+                                    threshold = bayer4x4[idx];
+                                } else {
+                                    threshold = 0.5;
+                                }
+                                if (lum < threshold + bias) {
+                                    gl_FragColor = vec4(0.0,0.0,0.0,1.0);
+                                } else {
+                                    gl_FragColor = vec4(0.7,1.0,0.9,1.0);
+                                }
+                            }
+                        `;
+                        function compileShader(type, src) {
+                            const shader = gl.createShader(type);
+                            gl.shaderSource(shader, src);
+                            gl.compileShader(shader);
+                            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                                throw new Error(gl.getShaderInfoLog(shader));
+                            }
+                            return shader;
+                        }
+                        const vertShader = compileShader(gl.VERTEX_SHADER, vertSrc);
+                        const fragShader = compileShader(gl.FRAGMENT_SHADER, fragSrc);
+                        const prog = gl.createProgram();
+                        gl.attachShader(prog, vertShader);
+                        gl.attachShader(prog, fragShader);
+                        gl.linkProgram(prog);
+                        gl.useProgram(prog);
+                        // Set up geometry
+                        const posLoc = gl.getAttribLocation(prog, 'a_position');
+                        const buf = gl.createBuffer();
+                        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                            -1, -1, 1, -1, -1, 1, 1, 1
+                        ]), gl.STATIC_DRAW);
+                        gl.enableVertexAttribArray(posLoc);
+                        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+                        // Set uniforms
+                        gl.uniform1f(gl.getUniformLocation(prog, 'matrixSize'), 4.0);
+                        gl.uniform1f(gl.getUniformLocation(prog, 'bias'), 0.1);
+                        gl.uniform2f(gl.getUniformLocation(prog, 'resolution'), w, h);
+                        // Draw
+                        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                    } catch (e) {
+                        // fallback: fill with color
+                        const ctx = glitchCanvas.getContext('2d');
+                        if (ctx) {
+                            ctx.fillStyle = '#44ffdd';
+                            ctx.fillRect(0,0,glitchCanvas.width,glitchCanvas.height);
+                        }
                     }
                 }
 
-                // --- Fade Out Animation (5) ---
-                setTimeout(() => {
-                    // Fade out overlay and reset burst
-                    if (overlay) {
-                        overlay.style.transition = 'opacity 0.7s cubic-bezier(.7,1.7,.7,1)';
-                        overlay.style.opacity = '0';
-                    }
-                    if (fragmentBlocks.length) {
-                        fragmentBlocks.forEach((block) => {
-                            block.style.transition = 'none';
-                            block.style.transform = 'none';
-                            block.style.opacity = '1';
-                        });
-                    }
-                    setTimeout(() => {
-                        if (overlay) overlay.style.display = 'none';
-                        if (card) card.style.boxShadow = '';
-                    }, 700);
-                }, 1200);
-
-                // Animate fragment counter
-                const counter = document.getElementById("fragment-counter");
-                if (counter) {
-                    counter.style.transition = "background 0.4s, color 0.4s";
-                    counter.style.background = "#44ffdd";
-                    counter.style.color = "#222";
-                    setTimeout(() => {
-                        counter.style.background = "transparent";
-                        counter.style.color = "#fff";
-                    }, 400);
-                }
-                updateFragmentCounter();
-                renderRoute(getCurrentPath());
-            }
-
-        let glitchAnimId = null;
-        function startGlitchVisual() {
-            const ctx = glitchCanvas.getContext("2d");
-            const draw = () => {
-                const { innerWidth: w, innerHeight: h } = window;
-                glitchCanvas.width = w;
-                glitchCanvas.height = h;
-                ctx.clearRect(0, 0, w, h);
-                for (let i = 0; i < 140; i++) {
-                    const x = Math.random() * w;
-                    const y = Math.random() * h;
-                    const width = Math.random() * 40 + 10;
-                    const height = Math.random() * 6 + 2;
-                    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, 255, 0.35)`;
-                    ctx.fillRect(x, y, width, height);
-                }
-                glitchAnimId = requestAnimationFrame(draw);
-            };
-            draw();
-        }
-
-        function stopGlitchVisual() {
-            if (glitchAnimId) cancelAnimationFrame(glitchAnimId);
-        }
-
-        function hashString(value) {
-            let hash = 2166136261;
-            for (let i = 0; i < value.length; i++) {
-                hash ^= value.charCodeAt(i);
-                hash = Math.imul(hash, 16777619);
-            }
-            return hash >>> 0;
-        }
-
-        function mulberry32(seed) {
+                // --- Fragment Dither Shader Effect REMOVED ---
+                // Shader implementation removed; overlay remains fully transparent.
             return function () {
                 let t = seed += 0x6D2B79F5;
                 t = Math.imul(t ^ t >>> 15, t | 1);
@@ -946,11 +946,7 @@
             const count = document.getElementById("fragment-count");
             if (count) count.textContent = state.fragments;
             if (counter) {
-                if (state.fragments > 0) {
-                    counter.style.display = 'flex';
-                } else {
-                    counter.style.display = 'none';
-                }
+                counter.style.display = 'flex'; // Always show, even at zero
             }
             // When fragment count changes, check if phase should increase
             const newPhase = getUnlockPhaseFromFragments(state.fragments);
@@ -1065,7 +1061,7 @@
                     feedback.textContent = "✓ Final phase unlocked! Reloading...";
                     setTimeout(() => location.reload(), 1200);
                 } else {
-                    feedback.textContent = "Incorrect phrase. Try again.";
+                    feedback.textContent = "0 Results found.";
                 }
             }
             });
