@@ -47,7 +47,7 @@ async function setup() {
 	CELL_SIZE = Math.floor(Math.min(WIDTH, HEIGHT) / GRID_SIZE);
 	createCanvas(WIDTH, HEIGHT);
 	pixelDensity(1);
-	// Load country grid map from GitHub raw URL
+	// Load country grid map from GitHub raw URL for reliability
 	const countryGridUrl = 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/api/country-grid-map.json';
 	countryGridMap = await fetch(countryGridUrl).then(r => r.json());
 	// Initialize grid
@@ -69,8 +69,6 @@ async function setup() {
 // --- DRAW LOOP ---
 
 function draw() {
-	// Wait until grid is ready
-	if (!grid || !grid[0] || !grid[0][0]) return;
 	// Draw the world map as background, stretched to fit
 	if (worldMapImg) {
 		image(worldMapImg, 0, 0, WIDTH, HEIGHT);
@@ -81,32 +79,6 @@ function draw() {
 	updateHeat();
 	updateStorms();
 	drawPixels();
-	drawStormOverlays();
-}
-// Draw swirling, pulsing storm overlays
-function drawStormOverlays() {
-	if (!storms || storms.length === 0) return;
-	push();
-	noFill();
-	for (const s of storms) {
-		let px = map(s.x, 0, GRID_SIZE, 0, WIDTH);
-		let py = map(s.y, 0, GRID_SIZE, 0, HEIGHT);
-		let baseR = map(s.radius, 0, GRID_SIZE, 0, min(WIDTH, HEIGHT));
-		let pulse = 8 + 8 * sin((s.age || 0) * 0.3);
-		let alpha = map(s.strength, 0, 5, 0, 120);
-		stroke(255, 255, 180, alpha);
-		strokeWeight(2 + pulse * 0.1);
-		// Swirl effect: draw multiple arcs
-		for (let a = 0; a < TWO_PI; a += PI / 3) {
-			let swirlR = baseR + pulse * sin((s.age || 0) * 0.2 + a);
-			arc(px, py, swirlR, swirlR, a + (s.age || 0) * 0.1, a + PI / 2 + (s.age || 0) * 0.1);
-		}
-		// Central flash
-		noStroke();
-		fill(255, 255, 180, alpha * 0.7);
-		ellipse(px, py, baseR * 0.5 + pulse * 0.2);
-	}
-	pop();
 }
 function movePixelsByWind() {
 	// Move temperature field by wind (wrap around edges)
@@ -146,7 +118,7 @@ function windowResized() {
 async function fetchData() {
 	// --- Cloudflare Radar by Country ---
 	try {
-		const cfRes = await fetch('/api/radar-countries');
+        const cfRes = await fetch('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/api/radar-countries.json');
 		const cfData = await cfRes.json();
 		// cfData.result is an array of { country: 'US', pct: 12.3 }
 		countryTraffic = {};
@@ -170,14 +142,15 @@ async function fetchData() {
 		currentTraffic = constrain(currentTraffic, 0, 100);
 	}
 
-	// --- Wikipedia Recent Changes ---
+	// --- Wikipedia Recent Changes (real data) ---
 	try {
-		const wikiRes = await fetch('https://wikimedia.org/api/rest_v1/metrics/edited-pages/top/en.wikipedia/all-access/1-day');
+		// Use the current Wikimedia API for top pageviews as a proxy for "storm" events
+		const wikiRes = await fetch('https://wikimedia.org/api/rest_v1/metrics/pageviews/top/en.wikipedia/all-access/1-day');
 		const wikiData = await wikiRes.json();
 		// If spike, create a storm
-		if (wikiData.items && wikiData.items[0] && wikiData.items[0].results) {
-			let top = wikiData.items[0].results[0].edits;
-			if (top > 1000) { // arbitrary spike threshold
+		if (wikiData.items && wikiData.items[0] && wikiData.items[0].articles) {
+			let top = wikiData.items[0].articles[0].views;
+			if (top > 100000) { // arbitrary spike threshold for pageviews
 				createStorm();
 			}
 		}
