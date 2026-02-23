@@ -69,6 +69,8 @@ async function setup() {
 // --- DRAW LOOP ---
 
 function draw() {
+	// Wait until grid is ready
+	if (!grid || !grid[0] || !grid[0][0]) return;
 	// Draw the world map as background, stretched to fit
 	if (worldMapImg) {
 		image(worldMapImg, 0, 0, WIDTH, HEIGHT);
