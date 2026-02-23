@@ -118,9 +118,9 @@ function windowResized() {
 
 // --- API FETCHING ---
 async function fetchData() {
-	// --- Cloudflare Radar by Country ---
+	// --- Cloudflare Radar by Country (live via serverless function) ---
 	try {
-        const cfRes = await fetch('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/api/radar-countries.json');
+		const cfRes = await fetch('/api/radar-countries');
 		const cfData = await cfRes.json();
 		// cfData.result is an array of { country: 'US', pct: 12.3 }
 		countryTraffic = {};
