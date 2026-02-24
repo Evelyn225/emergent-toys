@@ -95,7 +95,7 @@ let params = {
 };
 let flameLayer;
 let needsRedraw = true;
-let flameDrawState = null;
+let flameDrawState = null; // no longer used
 
 function setup() {
     pixelDensity(1);
@@ -103,7 +103,8 @@ function setup() {
     noSmooth();
     flameLayer = createGraphics(512, 512);
     flameLayer.noSmooth();
-    startFractalAnimation();
+    drawFractalFlameAll(flameLayer, params);
+    needsRedraw = true;
 }
 
 function windowResized() {
@@ -113,62 +114,42 @@ function windowResized() {
 
 function redrawFractal() {
     flameLayer.clear();
-    startFractalAnimation();
-}
-
-function startFractalAnimation() {
-    // Set up state for incremental drawing
-    flameDrawState = {
-        w: 512,
-        h: 512,
-        cx: 256,
-        cy: 256,
-        points: 360000,
-        spread: 512,
-        spiralA: params.spiralA,
-        spiralB: params.spiralB,
-        spiralTheta: params.spiralTheta,
-        spiralSin: params.spiralSin,
-        tileSize: params.tileSize,
-        palette: params.palette,
-        colorSeed: random(1000),
-        x: random(-2, 2),
-        y: random(-2, 2),
-        i: 0,
-        batch: 3000 // points per frame
-    };
+    drawFractalFlameAll(flameLayer, params);
     needsRedraw = true;
 }
 
+
+// No longer needed: startFractalAnimation
+
 function draw() {
-    if (flameDrawState) {
-        drawFractalFlameAnimated(flameLayer, flameDrawState);
-        background(0, 0, 0);
-        image(flameLayer, 0, 0, width, height);
-        if (flameDrawState.i >= flameDrawState.points) {
-            flameDrawState = null;
-        }
-    } else if (needsRedraw) {
+    if (needsRedraw) {
         background(0, 0, 0);
         image(flameLayer, 0, 0, width, height);
         needsRedraw = false;
     }
 }
 
-function drawFractalFlameAnimated(gfx, state) {
+
+function drawFractalFlameAll(gfx, params) {
     gfx.colorMode(HSB, 360, 255, 255, 255);
     gfx.noStroke();
-    let {w, h, cx, cy, points, spread, spiralA, spiralB, spiralTheta, spiralSin, tileSize, palette, colorSeed} = state;
-    let x = state.x, y = state.y;
-    let i = state.i;
-    let batch = state.batch;
-    for (let b = 0; b < batch && i < points; b++, i++) {
-        let r = sqrt(x*x + y*y) + random(-0.0005, 0.0005);
-        let theta = atan2(y, x);
-        let newR = r * (spiralA + spiralB * sin(theta*3 + i*0.0001 + colorSeed));
-        let newTheta = theta + spiralTheta + spiralSin * sin(r*2 + i*0.0002 + colorSeed);
-        x = newR * cos(newTheta) + 0.25 * sin(i*0.01 + colorSeed);
-        y = newR * sin(newTheta) + 0.25 * cos(i*0.013 + colorSeed);
+    let w = 512, h = 512, cx = 256, cy = 256, points = 360000, spread = 512;
+    let spiralA = params.spiralA;
+    let spiralB = params.spiralB;
+    let spiralTheta = params.spiralTheta;
+    let spiralSin = params.spiralSin;
+    let tileSize = params.tileSize;
+    let palette = params.palette;
+    let colorSeed = Math.random() * 1000;
+    let x = Math.random() * 4 - 2;
+    let y = Math.random() * 4 - 2;
+    for (let i = 0; i < points; i++) {
+        let r = Math.sqrt(x*x + y*y) + (Math.random() * 0.001 - 0.0005);
+        let theta = Math.atan2(y, x);
+        let newR = r * (spiralA + spiralB * Math.sin(theta*3 + i*0.0001 + colorSeed));
+        let newTheta = theta + spiralTheta + spiralSin * Math.sin(r*2 + i*0.0002 + colorSeed);
+        x = newR * Math.cos(newTheta) + 0.25 * Math.sin(i*0.01 + colorSeed);
+        y = newR * Math.sin(newTheta) + 0.25 * Math.cos(i*0.013 + colorSeed);
         let px = cx + x * spread;
         let py = cy + y * spread;
         px = Math.floor(px / tileSize) * tileSize;
@@ -178,32 +159,32 @@ function drawFractalFlameAnimated(gfx, state) {
         let hue, sat, bri;
         switch (palette) {
             case 'rainbow':
-                hue = (360 * t + 120 * sin(theta*2 + i*0.0005 + colorSeed)) % 360;
+                hue = (360 * t + 120 * Math.sin(theta*2 + i*0.0005 + colorSeed)) % 360;
                 sat = 220;
                 bri = 255;
                 break;
             case 'blood':
-                hue = 1 + 5 * t + 6 * sin(i*0.0005 + colorSeed);
+                hue = 1 + 5 * t + 6 * Math.sin(i*0.0005 + colorSeed);
                 sat = 240 - 40 * t; 
-                bri = 110 + 40 * t + 10 * sin(i*0.0002 + colorSeed);
+                bri = 110 + 40 * t + 10 * Math.sin(i*0.0002 + colorSeed);
                 break;
             case 'ice':
-                hue = 180 + 60 * t + 10 * sin(i*0.0005 + colorSeed);
+                hue = 180 + 60 * t + 10 * Math.sin(i*0.0005 + colorSeed);
                 sat = 120 + 80 * (1-t);
                 bri = 200 + 35 * t;
                 break;
             case 'forest':
-                hue = 90 + 40 * t + 10 * sin(i*2 + colorSeed);
+                hue = 90 + 40 * t + 10 * Math.sin(i*2 + colorSeed);
                 sat = 180 - 40 * t;
                 bri = 22 + 100 * t;
                 break;
             case 'mana':
-                hue = 250 + 4 * t + 20 * Math.pow(t,4) + 2 * sin(i*0.0005 + colorSeed);
+                hue = 250 + 4 * t + 20 * Math.pow(t,4) + 2 * Math.sin(i*0.0005 + colorSeed);
                 sat = 170 - 10 * t;
-                bri = 170 + 1 * sin(t);
+                bri = 170 + 1 * Math.sin(t);
                 break;
             case 'pastel':
-                hue = (360 * t + 120 * sin(theta + i*0.0005)) % 360;
+                hue = (360 * t + 120 * Math.sin(theta + i*0.0005)) % 360;
                 sat = 130 - 10 * t;
                 bri = 200 + 10 * t;
                 break;
@@ -217,16 +198,13 @@ function drawFractalFlameAnimated(gfx, state) {
                 sat = 220;
                 bri = 255;
         }
-        let alpha = 22 + 52 * sin(i*0.0001 + r*3 + colorSeed);
+        let alpha = 22 + 52 * Math.sin(i*0.0001 + r*3 + colorSeed);
         if (px >= 0 && px < w && py >= 0 && py < h) {
             gfx.fill(hue, sat, bri, alpha);
             gfx.rect(px, py, tileSize, tileSize);
         }
     }
-    state.x = x;
-    state.y = y;
-    state.i = i;
-    gfx.colorMode(RGB, 255, 255, 255, 255);
+    gfx.colorMode(gfx.RGB, 255, 255, 255, 255);
 }
 
 // --- UI Controls ---
