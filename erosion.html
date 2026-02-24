@@ -1,0 +1,518 @@
+	
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Erosion Simulation</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+</head>
+<body style="margin:0;overflow:hidden;background:#222;">
+<script>
+// --- Parameters ---
+const CELL_SIZE = 5;
+const TYPE_AIR = 0;
+const TYPE_ROCK = 1;
+const TYPE_SOIL = 2;
+const TYPE_WATER = 3;
+const MAX_SEDIMENT = 3;
+// Color constants (moved outside loop for performance)
+const DRY = [170, 130, 60];
+const DAMP = [110, 80, 40];
+const MUD = [80, 60, 30];
+const CLEAN = [40, 110, 210];
+const MUDDY = [90, 80, 60];
+let cols, rows;
+let grid;
+let noiseMap = [];
+let particles = [];
+function setup() {
+	createCanvas(windowWidth, windowHeight);
+	pixelDensity(1);
+	frameRate(30);
+	cols = floor(width / CELL_SIZE);
+	rows = floor(height / CELL_SIZE);
+	grid = [];
+	noiseMap = [];
+	// --- Worldgen: Multi-layer noise, cliffs, boulders, craters ---
+	// 1. Multi-layer noise for dramatic terrain
+	// 4. Cliffs/overhangs: sharp thresholding
+	// 6. Random boulders
+	// 8. Craters/sinkholes
+	// Precompute craters
+	let craterCount = 4 + floor(random(3));
+	let craters = [];
+	for (let i = 0; i < craterCount; i++) {
+		craters.push({
+			x: floor(random(cols * 0.15, cols * 0.85)),
+			y: floor(random(rows * 0.2, rows * 0.85)),
+			r: floor(random(8, 18))
+		});
+	}
+	for (let x = 0; x < cols; x++) {
+		grid[x] = [];
+		noiseMap[x] = [];
+		for (let y = 0; y < rows; y++) {
+			// Multi-layer noise
+			let n1 = noise(x * 0.018, y * 0.018) * 1.2;
+			let n2 = noise(x * 0.07, y * 0.07) * 0.9;
+			let n3 = noise(x * 0.22, y * 0.22) * 0.7;
+			let n4 = noise(x * 0.45, y * 0.45) * 0.4;
+			let terrain = (n1 + n2 + n3 + n4) / 2.2;
+			noiseMap[x][y] = noise(x * 0.1, y * 0.1);
+			let h = y / rows;
+			// 4. Cliffs/overhangs: smooth transition
+			let cliffNoise = noise(x * 0.13, y * 0.13);
+			let cliff = constrain((cliffNoise - 0.62) * 4, 0, 1); // smooth ramp from 0 to 1
+			// 8. Craters/sinkholes
+			let inCrater = false;
+			for (let c of craters) {
+				let dx = x - c.x;
+				let dy = y - c.y;
+				let dist = sqrt(dx * dx + dy * dy);
+				if (dist < c.r) {
+					// Lower terrain in crater
+					terrain -= 0.22 * (1 - dist / c.r);
+					inCrater = true;
+				}
+			}
+			// Assign cell type (no boulders)
+			let rockJitter = (noise(x * 0.18, y * 0.18 + 100) - 0.5) * 0.08;
+			let cellType;
+			if (h > 0.86 - 0.32 * terrain - 0.16 * cliff + rockJitter) {
+				cellType = TYPE_ROCK;
+			} else if (h > 0.04 + 0.48 * terrain + 0.02 * cliff) {
+				cellType = TYPE_SOIL;
+			} else {
+				cellType = TYPE_AIR;
+			}
+			grid[x][y] = { type: cellType };
+		}
+	}
+	// --- Terraria-style cave generation ---
+	// --- Terraria-style cave generation (after terrain assignment) ---
+	// Guarantee 1 pixel of solid rock at the bottom
+	for (let x = 0; x < cols; x++) {
+		grid[x][rows - 1] = { type: TYPE_ROCK };
+	}
+	// --- Noise-based caves ---
+	let caveScale = 0.099;
+	let caveThreshold = 0.4 + random(-0.025, 0.025);
+	let caveBand = 0.16 + random(-0.02, 0.02);
+	for (let x = 0; x < cols; x++) {
+		for (let y = Math.floor(rows * 0.10); y < rows - 1; y++) {
+			if (grid[x][y].type === TYPE_ROCK) {
+				let n = noise(x * caveScale, y * caveScale + 1000);
+				// Add a bowl bias: lower y (deeper) = more likely to be cave
+				let bowlBias = 0.12 * Math.pow((y - rows * 0.5) / (rows * 0.5), 2); // quadratic bowl
+				let localThreshold = caveThreshold - bowlBias;
+				if (n > localThreshold && n < localThreshold + caveBand) {
+					grid[x][y] = { type: TYPE_AIR };
+				}
+			}
+		}
+	}
+	// --- Add a few thin caves ---
+	let thinCaveCount = 1 + floor(random(3));
+	for (let i = 0; i < thinCaveCount; i++) {
+		// Random start/end points
+		let startY = floor(random(rows * 0.25, rows * 0.75));
+		let startX = floor(random(cols * 0.10, cols * 0.35));
+		let length = floor(random(cols * 0.2, cols * 0.45));
+		let y = startY;
+		for (let x = startX; x < startX + length && x < cols; x++) {
+			// Add noise to y for wiggle
+			let noiseOffset = noise(x * 0.42, i * 100) * 3 - 1.5;
+			let caveY = Math.round(y + noiseOffset);
+			for (let dy = 0; dy < 3; dy++) {
+				let yy = caveY + dy;
+				if (yy >= 0 && yy < rows - 1 && grid[x][yy].type === TYPE_ROCK) {
+					grid[x][yy] = { type: TYPE_AIR };
+				}
+			}
+		}
+	}
+	// --- Ensure caves are connected: flood fill from edges ---
+	let visited = Array.from({ length: cols }, () => Array(rows).fill(false));
+	let queue = [];
+	// Start from left and right edges (and optionally top)
+	for (let y = Math.floor(rows * 0.10); y < rows - 1; y++) {
+		if (grid[0][y].type === TYPE_AIR) { queue.push([0, y]); visited[0][y] = true; }
+		if (grid[cols - 1][y].type === TYPE_AIR) { queue.push([cols - 1, y]); visited[cols - 1][y] = true; }
+	}
+	for (let x = 0; x < cols; x++) {
+		if (grid[x][Math.floor(rows * 0.10)].type === TYPE_AIR) {
+			queue.push([x, Math.floor(rows * 0.10)]);
+			visited[x][Math.floor(rows * 0.10)] = true;
+		}
+	}
+	// BFS flood fill
+	while (queue.length > 0) {
+		let [cx, cy] = queue.shift();
+		let dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+		for (let [dx, dy] of dirs) {
+			let nx = cx + dx, ny = cy + dy;
+			if (nx >= 0 && nx < cols && ny >= 0 && ny < rows - 1 && !visited[nx][ny] && grid[nx][ny].type === TYPE_AIR) {
+				visited[nx][ny] = true;
+				queue.push([nx, ny]);
+			}
+		}
+	}
+	// --- Randomly add water to caves (bottom 10 pixels only) ---
+	for (let x = 0; x < cols; x++) {
+		for (let y = rows - 22; y < rows - 1; y++) {
+			if (y >= 0 && y < rows - 1 && grid[x][y].type === TYPE_AIR && random() < 0.2) {
+				grid[x][y] = { type: TYPE_WATER, sediment: 0, lifetime: 0 };
+			}
+		}
+	}
+	// --- Settle world before starting draw loop ---
+	settleWorld();
+}
+// Runs gravity simulation until all dirt is settled, no rendering
+function settleWorld() {
+	let moved = true;
+	while (moved) {
+		moved = false;
+		for (let y = rows - 2; y >= 0; y--) {
+			for (let x = 0; x < cols; x++) {
+				let cell = grid[x][y];
+				if (!cell || cell.type !== TYPE_SOIL) continue;
+				// Dirt falls if unsupported
+				if (y + 1 < rows && grid[x][y + 1].type === TYPE_AIR) {
+					let damp = cell.damp;
+					grid[x][y + 1] = { type: TYPE_SOIL };
+					if (damp) grid[x][y + 1].damp = true;
+					grid[x][y] = { type: TYPE_AIR };
+					moved = true;
+					continue;
+				}
+				// Diagonal slide for dirt (randomize direction)
+				let dirs = Math.random() < 0.5 ? [-1, 1] : [1, -1];
+				for (let d of dirs) {
+					let nx = x + d;
+					if (nx >= 0 && nx < cols && y + 1 < rows && grid[nx][y + 1].type === TYPE_AIR) {
+						let damp = cell.damp;
+						grid[nx][y + 1] = { type: TYPE_SOIL };
+						if (damp) grid[nx][y + 1].damp = true;
+						grid[x][y] = { type: TYPE_AIR };
+						moved = true;
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
+function draw() {
+	// Place water in a circle around mouse with interpolation
+	if (mouseIsPressed && mouseButton === LEFT) {
+		let prev = {
+			x: constrain(floor(pmouseX / CELL_SIZE), 0, cols - 1),
+			y: constrain(floor(pmouseY / CELL_SIZE), 0, rows - 1)
+		};
+		let curr = {
+			x: constrain(floor(mouseX / CELL_SIZE), 0, cols - 1),
+			y: constrain(floor(mouseY / CELL_SIZE), 0, rows - 1)
+		};
+		let steps = max(abs(curr.x - prev.x), abs(curr.y - prev.y), 1);
+		let radius = 3; // in cells
+		for (let i = 0; i <= steps; i++) {
+			let ix = floor(lerp(prev.x, curr.x, i / steps));
+			let iy = floor(lerp(prev.y, curr.y, i / steps));
+			for (let dx = -radius; dx <= radius; dx++) {
+				for (let dy = -radius; dy <= radius; dy++) {
+					let nx = ix + dx;
+					let ny = iy + dy;
+					if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+						if ((dx * dx + dy * dy) <= radius * radius) {
+							if (grid[nx][ny].type === TYPE_AIR) {
+								grid[nx][ny] = { type: TYPE_WATER, sediment: 0, lifetime: 0 };
+								// Splash particle effect
+								for (let p = 0; p < 1; p++) {
+									particles.push({
+										x: (nx + 0.5) * CELL_SIZE,
+										y: (ny + 0.5) * CELL_SIZE,
+										vx: random(-0.5, 0.5),
+										vy: random(-1.2, -0.3),
+										life: 10 + random(6),
+										color: [180, 220, 255, 180]
+									});
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	// Main update loop
+	updateSimulation();
+
+	// Fast pixel rendering
+	loadPixels();
+	for (let y = 0; y < rows; y++) {
+		for (let x = 0; x < cols; x++) {
+			let cell = grid[x][y];
+			let n = noiseMap[x][y];
+			let r = 0, g = 0, b = 0, a = 255;
+			// Hard color steps and speckles
+			if (cell.type === TYPE_ROCK) {
+				// Stone base color
+				r = 60; g = 60; b = 90;
+				// Speckle: random lighter/darker pixel
+				let speckle = Math.floor(noise(x * 0.18, y * 0.18 + 100) * 1000) % 3;
+				if (speckle === 0) { r += 18; g += 18; b += 10; }
+				else if (speckle === 1) { r -= 12; g -= 12; b -= 8; }
+			} else if (cell.type === TYPE_SOIL) {
+				// Soil: dry or mud
+				let moist = cell.damp ||
+					(x > 0 && grid[x - 1][y].type === TYPE_WATER) ||
+					(x < cols - 1 && grid[x + 1][y].type === TYPE_WATER) ||
+					(y > 0 && grid[x][y - 1].type === TYPE_WATER) ||
+					(y < rows - 1 && grid[x][y + 1].type === TYPE_WATER);
+				if (moist) {
+					r = MUD[0]; g = MUD[1]; b = MUD[2];
+				} else {
+					r = DRY[0]; g = DRY[1]; b = DRY[2];
+				}
+				// Speckle: random lighter/darker pixel
+				let speckle = Math.floor(noise(x * 0.13, y * 0.13 + 200) * 1000) % 3;
+				if (speckle === 0) { r += 18; g += 12; b += 6; }
+				else if (speckle === 1) { r -= 16; g -= 10; b -= 4; }
+			} else if (cell.type === TYPE_WATER) {
+				let sediment = cell.sediment || 0;
+				let t = constrain(sediment / MAX_SEDIMENT, 0, 1);
+				r = lerp(CLEAN[0], MUDDY[0], t) + (n - 0.5) * 10;
+				g = lerp(CLEAN[1], MUDDY[1], t) + (n - 0.5) * 10;
+				b = lerp(CLEAN[2], MUDDY[2], t) + (n - 0.5) * 10;
+				r = constrain(r, 0, 255);
+				g = constrain(g, 0, 255);
+				b = constrain(b, 0, 255);
+				a = 120;
+				// Overlay brownish sediment speckles for muddy water
+				if (t > 0.15) {
+					let speckle = noise(x * 0.7 + frameCount * 0.03, y * 0.7 - frameCount * 0.02);
+					if (speckle < t * 0.7) {
+						// Blend in a brownish color
+						r = lerp(r, 120, t * 0.7);
+						g = lerp(g, 90, t * 0.7);
+						b = lerp(b, 50, t * 0.7);
+					}
+				}
+				// Foam effect: lighter color on top if water below
+				let isTopWater = (y === 0 || grid[x][y - 1].type !== TYPE_WATER);
+				let hasWaterBelow = (y < rows - 1 && grid[x][y + 1].type === TYPE_WATER);
+				if (isTopWater && hasWaterBelow) {
+					r = lerp(r, 230, 0.55);
+					g = lerp(g, 240, 0.55);
+					b = lerp(b, 255, 0.65);
+				}
+			} else {
+				// Air/empty
+				r = 30; g = 25; b = 20;
+			}
+			// Draw each cell as a block of CELL_SIZE x CELL_SIZE pixels
+			for (let dx = 0; dx < CELL_SIZE; dx++) {
+				for (let dy = 0; dy < CELL_SIZE; dy++) {
+					let px = x * CELL_SIZE + dx;
+					let py = y * CELL_SIZE + dy;
+					if (px >= width || py >= height) continue;
+					let idx = 4 * (px + py * width);
+					pixels[idx] = r;
+					pixels[idx + 1] = g;
+					pixels[idx + 2] = b;
+					pixels[idx + 3] = (cell.type === TYPE_WATER) ? a : 255;
+				}
+			}
+		}
+	}
+	updatePixels();
+
+	// Draw and update particles (splash, erosion, etc)
+	for (let i = particles.length - 1; i >= 0; i--) {
+		let p = particles[i];
+		p.x += p.vx;
+		p.y += p.vy;
+		p.vy += 0.2; // gravity
+		p.life--;
+		// Fade out
+		let alpha = p.color[3] * (p.life / 18);
+		fill(p.color[0], p.color[1], p.color[2], alpha);
+		noStroke();
+		rect(floor(p.x / CELL_SIZE) * CELL_SIZE, floor(p.y / CELL_SIZE) * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+		if (p.life <= 0) particles.splice(i, 1);
+	}
+}
+
+function updateSimulation() {
+	// Pass 1: Dirt gravity/slide
+	for (let y = rows - 2; y >= 0; y--) {
+		for (let x = 0; x < cols; x++) {
+			let cell = grid[x][y];
+			if (!cell || cell.type !== TYPE_SOIL) continue;
+			// Dirt falls if unsupported
+			if (y + 1 < rows && grid[x][y + 1].type === TYPE_AIR) {
+				let damp = cell.damp;
+				grid[x][y + 1] = { type: TYPE_SOIL };
+				if (damp) grid[x][y + 1].damp = true;
+				grid[x][y] = { type: TYPE_AIR };
+				continue;
+			}
+			// Diagonal slide for dirt
+			let dirs = random() < 0.5 ? [-1, 1] : [1, -1];
+			for (let d of dirs) {
+				let nx = x + d;
+				if (nx >= 0 && nx < cols && y + 1 < rows && grid[nx][y + 1].type === TYPE_AIR) {
+					let damp = cell.damp;
+					grid[nx][y + 1] = { type: TYPE_SOIL };
+					if (damp) grid[nx][y + 1].damp = true;
+					grid[x][y] = { type: TYPE_AIR };
+					break;
+				}
+			}
+		}
+	}
+
+	// Pass 2: Water and erosion (original logic)
+	for (let y = rows - 2; y >= 0; y--) {
+		for (let x = 0; x < cols; x++) {
+			let cell = grid[x][y];
+			if (!cell || cell.type === TYPE_ROCK) continue;
+			// --- SOIL and WATER update logic ---
+			// Erode soil if water is above
+			if (cell.type === TYPE_SOIL) {
+				// If water above, erode
+				   if (y > 0 && grid[x][y - 1].type === TYPE_WATER && (grid[x][y - 1].sediment || 0) < MAX_SEDIMENT && random() < 0.05) {
+					grid[x][y - 1].sediment = (grid[x][y - 1].sediment || 0) + 1;
+					// Mark this dirt as damp
+					grid[x][y] = { type: TYPE_AIR };
+					// Erosion particle effect
+					for (let p = 0; p < 1; p++) {
+						particles.push({
+							x: (x + 0.5) * CELL_SIZE,
+							y: (y + 0.5) * CELL_SIZE,
+							vx: random(-0.3, 0.3),
+							vy: random(-1.0, -0.1),
+							life: 8 + random(5),
+							color: [170, 130, 60, 180]
+						});
+					}
+				}
+				continue;
+			}
+			if (cell.type !== TYPE_WATER) continue;
+
+			// Gravity FIRST (strict)
+			if (y + 1 < rows && grid[x][y + 1].type === TYPE_AIR) {
+				grid[x][y + 1] = cell;
+				grid[x][y] = { type: TYPE_AIR };
+				continue;
+			}
+
+			// Diagonal slide (stronger)
+			let dirs = random() < 0.5 ? [-1, 1] : [1, -1];
+			let didMove = false;
+			for (let d of dirs) {
+				let nx = x + d;
+				if (nx >= 0 && nx < cols && y + 1 < rows && grid[nx][y + 1].type === TYPE_AIR) {
+					grid[nx][y + 1] = cell;
+					grid[x][y] = { type: TYPE_AIR };
+					didMove = true;
+					break;
+				}
+			}
+			if (didMove) continue;
+
+			// Prevent topmost water in a pool from moving sideways
+			let isTopWater = (y === 0 || grid[x][y - 1].type !== TYPE_WATER);
+			let hasWaterBelow = (y < rows - 1 && grid[x][y + 1].type === TYPE_WATER);
+			if (isTopWater && hasWaterBelow) {
+				continue;
+			}
+
+			// Multi-step sideways flow (up to 10 cells for more pooling)
+			let d = random() < 0.5 ? -1 : 1;
+			let didMoveSideways = false;
+			for (let dist = 1; dist <= 10; dist++) {
+				let nx = x + d * dist;
+				if (nx >= 0 && nx < cols) {
+					if (grid[nx][y].type === TYPE_AIR) {
+						grid[nx][y] = cell;
+						grid[x][y] = { type: TYPE_AIR };
+						didMoveSideways = true;
+						break;
+					}
+				} else {
+					break;
+				}
+			}
+			if (didMoveSideways) continue;
+
+			// Slow probabilistic sediment deposition
+			if (
+				(cell.sediment || 0) > 0 &&
+				y + 1 < rows &&
+				grid[x][y + 1].type !== TYPE_AIR &&
+				random() < 0.02
+			) {
+				grid[x][y] = { type: TYPE_SOIL, damp: true };
+			}
+			else if (cell.sediment && cell.sediment > 0) {
+				// fallback: if blocked, deposit instantly (prevents stuck water)
+				let blocked = true;
+				let dirs = [
+					[0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]
+				];
+				for (let d of dirs) {
+					let nx = x + d[0];
+					let ny = y + d[1];
+					if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+						let t = grid[nx][ny].type;
+						if (t === TYPE_AIR || t === TYPE_WATER) {
+							blocked = false;
+							break;
+						}
+					}
+				}
+				if (blocked) {
+					grid[x][y] = { type: TYPE_SOIL, damp: true };
+				}
+			}
+
+			// Only increment lifetime if water is blocked on all sides
+			let blocked = true;
+			let dirs3 = [
+				[0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]
+			];
+			for (let d of dirs3) {
+				let nx = x + d[0];
+				let ny = y + d[1];
+				if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+					let t = grid[nx][ny].type;
+					if (t === TYPE_AIR || t === TYPE_WATER) {
+						blocked = false;
+						break;
+					}
+				}
+			}
+			if (blocked) {
+				cell.lifetime = (cell.lifetime || 0) + 1;
+				if (cell.lifetime > 1200) {
+					grid[x][y] = { type: TYPE_AIR };
+				}
+			} else {
+				cell.lifetime = 0;
+			}
+		}
+	}
+}
+
+function windowResized() {
+	resizeCanvas(windowWidth, windowHeight);
+	setup();
+}
+</script>
+</body>
+</html>
