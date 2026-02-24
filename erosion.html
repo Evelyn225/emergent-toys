@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -9,14 +10,38 @@
 </head>
 
 <body style="margin:0;overflow:hidden;background:#222;">
+    <a href="index.html" id="home-button" style="position: fixed; top: 10px; right: 10px; z-index: 1000; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.1) rotate(5deg)'; this.style.background='rgba(110, 150, 185, 0.8)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
+        <div id="controls-overlay" style="position:fixed;top:12px;left:12px;z-index:10;pointer-events:auto;user-select:none;font-family:sans-serif;font-size:16px;color:#fff8; background:rgba(30,30,30,0.18);padding:18px 28px 18px 18px;border-radius:12px;box-shadow:0 2px 12px #0004;transition:opacity 0.25s;">
+            <span id="controls-x" style="position:absolute;top:8px;right:12px;font-size:18px;cursor:pointer;color:#fff6;transition: transform 0.15s cubic-bezier(0.68, -0.55, 0.265, 1.55);" onmouseover="this.style.color='rgba(189, 59, 59, 1)'; this.style.textShadow='0 0 8px rgba(189, 59, 59, 0.8)'" onmouseout="this.style.color='#fff6'; this.style.textShadow='none';" onmousedown="this.style.transform='scale(0.8)'">✕</span>
+            <b style="font-size:18px;color:#fffB;">Controls</b><br>
+            <span style="font-size:15px;">
+            <b>Left click</b>: Draw water<br>
+            <b>Right click</b>: Draw rock<br>
+            <b>Ctrl + Left click</b>: Delete<br>
+            <b>Ctrl + Right click</b>: Draw sand<br>
+            </span>
+        </div>
     <script>
+                // Hide controls overlay when X is clicked
+                window.addEventListener('DOMContentLoaded', () => {
+                    const overlay = document.getElementById('controls-overlay');
+                    const closeBtn = document.getElementById('controls-x');
+                    if (closeBtn && overlay) {
+                        closeBtn.onclick = () => {
+                            overlay.style.opacity = 0;
+                            setTimeout(() => { overlay.style.display = 'none'; }, 350);
+                        };
+                    }
+                });
+        // Disable right-click context menu
+        window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
         // --- Parameters ---
         const CELL_SIZE = 5;
         const TYPE_AIR = 0;
         const TYPE_ROCK = 1;
         const TYPE_SOIL = 2;
         const TYPE_WATER = 3;
-        const MAX_SEDIMENT = 3;
+        const MAX_SEDIMENT = 1;
         // Color constants (moved outside loop for performance)
         const DRY = [170, 130, 60];
         const DAMP = [110, 80, 40];
@@ -27,6 +52,45 @@
         let grid;
         let noiseMap = [];
         let particles = [];
+
+                // Helper to deposit or transfer sediment from a cell at (x, y)
+                function handleSediment(x, y, sedimentLeft) {
+                    if (!sedimentLeft) return 0;
+                    let placed = 0;
+                    let adjDirs = [[0,1],[-1,0],[1,0],[0,-1],[-1,1],[1,1],[-1,-1],[1,-1]];
+                    // 1. Try to transfer to adjacent water cells (if they have room)
+                    for (let d of adjDirs) {
+                        if (placed >= sedimentLeft) break;
+                        let nx = x + d[0];
+                        let ny = y + d[1];
+                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                            let ncell = grid[nx][ny];
+                            if (ncell.type === TYPE_WATER && (ncell.sediment || 0) < MAX_SEDIMENT) {
+                                ncell.sediment = 1;
+                                placed++;
+                            }
+                        }
+                    }
+                    // 2. Deposit any remaining as soil in adjacent air
+                    for (let d of adjDirs) {
+                        if (placed >= sedimentLeft) break;
+                        let nx = x + d[0];
+                        let ny = y + d[1];
+                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                            if (grid[nx][ny].type === TYPE_AIR) {
+                                grid[nx][ny] = { type: TYPE_SOIL, damp: true };
+                                placed++;
+                            }
+                        }
+                    }
+                    // 3. If not all sediment could be placed, try to place one at current cell
+                    if (placed < sedimentLeft && grid[x][y].type === TYPE_WATER) {
+                        grid[x][y] = { type: TYPE_SOIL, damp: true };
+                        placed++;
+                    }
+                    // Any remaining sediment is lost (no space)
+                    return placed;
+                }
         function setup() {
             createCanvas(windowWidth, windowHeight);
             pixelDensity(1);
@@ -82,7 +146,8 @@
                     let cellType;
                     if (h > 0.86 - 0.32 * terrain - 0.16 * cliff + rockJitter) {
                         cellType = TYPE_ROCK;
-                    } else if (h > 0.04 + 0.48 * terrain + 0.02 * cliff) {
+                    } else if (h > 0.12 + 0.5 * terrain + 0.02 * cliff) {
+                        // Raised lower threshold, reduced upper threshold for less dirt
                         cellType = TYPE_SOIL;
                     } else {
                         cellType = TYPE_AIR;
@@ -91,12 +156,10 @@
                 }
             }
             // --- Terraria-style cave generation ---
-            // --- Terraria-style cave generation (after terrain assignment) ---
             // Guarantee 1 pixel of solid rock at the bottom
             for (let x = 0; x < cols; x++) {
                 grid[x][rows - 1] = { type: TYPE_ROCK };
             }
-            // --- Noise-based caves ---
             let caveScale = 0.099;
             let caveThreshold = 0.4 + random(-0.025, 0.025);
             let caveBand = 0.16 + random(-0.02, 0.02);
@@ -207,8 +270,20 @@
         }
 
         function draw() {
-            // Place water in a circle around mouse with interpolation
-            if (mouseIsPressed && mouseButton === LEFT) {
+            // Place water (left click, large brush) or rock (right click, small brush) with interpolation
+            let overlay = document.getElementById('controls-overlay');
+            let homeBtn = document.getElementById('home-button');
+            let mouseOverOverlay = false;
+            let mouseOverHome = false;
+            if (overlay && overlay.style.display !== 'none' && typeof mouseX !== 'undefined' && typeof mouseY !== 'undefined') {
+                let rect = overlay.getBoundingClientRect();
+                mouseOverOverlay = mouseX >= rect.left && mouseX <= rect.right && mouseY >= rect.top && mouseY <= rect.bottom;
+            }
+            if (homeBtn && typeof mouseX !== 'undefined' && typeof mouseY !== 'undefined') {
+                let rect = homeBtn.getBoundingClientRect();
+                mouseOverHome = mouseX >= rect.left && mouseX <= rect.right && mouseY >= rect.top && mouseY <= rect.bottom;
+            }
+            if (mouseIsPressed && (mouseButton === LEFT || mouseButton === RIGHT) && !mouseOverOverlay && !mouseOverHome) {
                 let prev = {
                     x: constrain(floor(pmouseX / CELL_SIZE), 0, cols - 1),
                     y: constrain(floor(pmouseY / CELL_SIZE), 0, rows - 1)
@@ -218,7 +293,17 @@
                     y: constrain(floor(mouseY / CELL_SIZE), 0, rows - 1)
                 };
                 let steps = max(abs(curr.x - prev.x), abs(curr.y - prev.y), 1);
-                let radius = 3; // in cells
+                let isCtrl = keyIsDown(CONTROL) || keyIsDown(17);
+                let radius;
+                if (isCtrl && mouseButton === LEFT) {
+                    radius = 1; // delete brush = rock brush size (small)
+                } else if (isCtrl && mouseButton === RIGHT) {
+                    radius = 1; // sand brush = rock brush size (small)
+                } else if (mouseButton === RIGHT) {
+                    radius = 1; // rock brush (small)
+                } else {
+                    radius = 3; // water brush (large)
+                }
                 for (let i = 0; i <= steps; i++) {
                     let ix = floor(lerp(prev.x, curr.x, i / steps));
                     let iy = floor(lerp(prev.y, curr.y, i / steps));
@@ -228,18 +313,82 @@
                             let ny = iy + dy;
                             if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
                                 if ((dx * dx + dy * dy) <= radius * radius) {
-                                    if (grid[nx][ny].type === TYPE_AIR) {
-                                        grid[nx][ny] = { type: TYPE_WATER, sediment: 0, lifetime: 0 };
-                                        // Splash particle effect
+                                    if (isCtrl && mouseButton === LEFT) {
+                                        // Ctrl+Left click: delete (set to air)
+                                        if (grid[nx][ny].type !== TYPE_AIR) {
+                                            grid[nx][ny] = { type: TYPE_AIR };
+                                            // Delete particle effect (dust puff)
+                                            for (let p = 0; p < 1; p++) {
+                                                particles.push({
+                                                    x: (nx + 0.5) * CELL_SIZE,
+                                                    y: (ny + 0.5) * CELL_SIZE,
+                                                    vx: random(-0.7, 0.7),
+                                                    vy: random(-1.0, -0.2),
+                                                    life: 12 + random(8),
+                                                    color: [200, 200, 200, 120]
+                                                });
+                                            }
+                                        } else {
+                                            grid[nx][ny] = { type: TYPE_AIR };
+                                            // Fiery particle effect for deleting air
+                                            for (let p = 0; p < 1; p++) {
+                                                particles.push({
+                                                    x: (nx + 0.5) * CELL_SIZE,
+                                                    y: (ny + 0.5) * CELL_SIZE,
+                                                    vx: random(-0.3, 0.3),
+                                                    vy: random(-2.2, -1.1), // much stronger upward motion
+                                                    life: 10 + random(8),
+                                                    color: [255, random(80,180), 0, 160],
+                                                    flame: true
+                                                });
+                                            }
+                                        }
+                                    } else if (isCtrl && mouseButton === RIGHT) {
+                                        // Ctrl+Right click: draw sand (soil)
+                                        grid[nx][ny] = { type: TYPE_SOIL };
+                                        // Sand particle effect
+                                        if (random(5) <= 1) {
+                                            // More vertical sand burst
                                         for (let p = 0; p < 1; p++) {
                                             particles.push({
-                                                x: (nx + 0.5) * CELL_SIZE,
-                                                y: (ny + 0.5) * CELL_SIZE,
-                                                vx: random(-0.5, 0.5),
-                                                vy: random(-1.2, -0.3),
+                                                x: (nx + 0.5) * CELL_SIZE + random(-1, 1),
+                                                y: (ny + 0.5) * CELL_SIZE + random(-1, 1),
+                                                vx: random(-0.7, 0.7),
+                                                vy: random(-0.5, 7.5),
                                                 life: 10 + random(6),
-                                                color: [180, 220, 255, 180]
+                                                color: [210, 180, 100, 140]
                                             });
+                                        }
+                                    }
+                                    } else if (mouseButton === RIGHT) {
+                                        // Draw rock (right click)
+                                        grid[nx][ny] = { type: TYPE_ROCK };
+                                        // Rock chip particle effect
+                                        for (let p = 0; p < 1; p++) {
+                                            particles.push({
+                                                x: (nx + 0.5) * CELL_SIZE + random(-1.5, 1.5),
+                                                y: (ny + 0.5) * CELL_SIZE + random(-1.5, 1.5),
+                                                vx: random(-0.35, 0.35),
+                                                vy: random(-0.8, -0.1),
+                                                life: 10 + random(6),
+                                                color: [120, 120, 140, 160]
+                                            });
+                                        }
+                                    } else {
+                                        // Draw water (left click)
+                                        if (grid[nx][ny].type === TYPE_AIR) {
+                                            grid[nx][ny] = { type: TYPE_WATER, sediment: 0, lifetime: 0 };
+                                            // Splash particle effect
+                                            for (let p = 0; p < 1; p++) {
+                                                particles.push({
+                                                    x: (nx + 0.5) * CELL_SIZE,
+                                                    y: (ny + 0.5) * CELL_SIZE,
+                                                    vx: random(-0.5, 0.5),
+                                                    vy: random(-1.2, -0.3),
+                                                    life: 10 + random(6),
+                                                    color: [180, 220, 255, 180]
+                                                });
+                                            }
                                         }
                                     }
                                 }
@@ -336,7 +485,13 @@
                 let p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
-                p.vy += 0.2; // gravity
+                if (p.flame) {
+                    p.vy -= 0.2; // reverse gravity for flame
+                } else if (p.color[0] === 210 && p.color[1] === 180 && p.color[2] === 100) {
+                    p.vy += 0.38; // stronger gravity for sand
+                } else {
+                    p.vy += 0.2; // normal gravity
+                }
                 p.life--;
                 // Fade out
                 let alpha = p.color[3] * (p.life / 18);
@@ -376,16 +531,14 @@
                 }
             }
 
-            // Pass 2: Water and erosion (original logic)
+            // Pass 2: Water and erosion 
             for (let y = rows - 2; y >= 0; y--) {
                 for (let x = 0; x < cols; x++) {
                     let cell = grid[x][y];
                     if (!cell || cell.type === TYPE_ROCK) continue;
-                    // --- SOIL and WATER update logic ---
-                    // Erode soil if water is above
+                    // Erode soil if water is adjacent
                     if (cell.type === TYPE_SOIL) {
-                        // If water above, erode
-                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && (grid[x][y - 1].sediment || 0) < MAX_SEDIMENT && random() < 0.05) {
+                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && (grid[x][y - 1].sediment || 0) < MAX_SEDIMENT && random() < 0.12) {
                             grid[x][y - 1].sediment = (grid[x][y - 1].sediment || 0) + 1;
                             // Mark this dirt as damp
                             grid[x][y] = { type: TYPE_AIR };
@@ -404,9 +557,28 @@
                         continue;
                     }
                     if (cell.type !== TYPE_WATER) continue;
+                    // Make soil above and diagonally above water damp
+                    // Only damp soil directly above or directly left/right (not diagonals)
+                    let dampDirs = [
+                        [0, -1], [-1, 0], [1, 0]
+                    ];
+                    for (let d of dampDirs) {
+                        let nx = x + d[0];
+                        let ny = y + d[1];
+                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                            if (grid[nx][ny].type === TYPE_SOIL) {
+                                grid[nx][ny].damp = true;
+                            }
+                        }
+                    }
 
                     // Gravity FIRST (strict)
                     if (y + 1 < rows && grid[x][y + 1].type === TYPE_AIR) {
+                        // If overwriting a water cell with sediment, transfer or deposit all sediment
+                        let dest = grid[x][y + 1];
+                        if (dest.type === TYPE_WATER && (dest.sediment || 0) > 0) {
+                            handleSediment(x, y + 1, dest.sediment || 0);
+                        }
                         grid[x][y + 1] = cell;
                         grid[x][y] = { type: TYPE_AIR };
                         continue;
@@ -418,6 +590,11 @@
                     for (let d of dirs) {
                         let nx = x + d;
                         if (nx >= 0 && nx < cols && y + 1 < rows && grid[nx][y + 1].type === TYPE_AIR) {
+                            // If overwriting a water cell with sediment, transfer or deposit all sediment
+                            let dest = grid[nx][y + 1];
+                            if (dest.type === TYPE_WATER && (dest.sediment || 0) > 0) {
+                                handleSediment(nx, y + 1, dest.sediment || 0);
+                            }
                             grid[nx][y + 1] = cell;
                             grid[x][y] = { type: TYPE_AIR };
                             didMove = true;
@@ -439,7 +616,32 @@
                     for (let dist = 1; dist <= 10; dist++) {
                         let nx = x + d * dist;
                         if (nx >= 0 && nx < cols) {
+                            // Check for rock boundaries of thickness >= 2
+                            let blocked = false;
+                            let consecutiveRocks = 0;
+                            for (let step = 1; step <= dist; step++) {
+                                let checkX = x + d * step;
+                                if (checkX < 0 || checkX >= cols) {
+                                    blocked = true;
+                                    break;
+                                }
+                                if (grid[checkX][y].type === TYPE_ROCK) {
+                                    consecutiveRocks++;
+                                    if (consecutiveRocks >= 2) {
+                                        blocked = true;
+                                        break;
+                                    }
+                                } else {
+                                    consecutiveRocks = 0;
+                                }
+                            }
+                            if (blocked) break;
                             if (grid[nx][y].type === TYPE_AIR) {
+                                // If overwriting a water cell with sediment, transfer or deposit all sediment
+                                let dest = grid[nx][y];
+                                if (dest.type === TYPE_WATER && (dest.sediment || 0) > 0) {
+                                    handleSediment(nx, y, dest.sediment || 0);
+                                }
                                 grid[nx][y] = cell;
                                 grid[x][y] = { type: TYPE_AIR };
                                 didMoveSideways = true;
@@ -451,17 +653,22 @@
                     }
                     if (didMoveSideways) continue;
 
-                    // Slow probabilistic sediment deposition
+                    // Slow probabilistic sediment deposition: drop 1 sediment at a time
                     if (
                         (cell.sediment || 0) > 0 &&
                         y + 1 < rows &&
                         grid[x][y + 1].type !== TYPE_AIR &&
                         random() < 0.02
                     ) {
-                        grid[x][y] = { type: TYPE_SOIL, damp: true };
+                        // Place 1 soil below if possible
+                        grid[x][y + 1] = { type: TYPE_SOIL, damp: true };
+                        // Reduce sediment by 1, but keep water present
+                        let newSed = (cell.sediment || 0) - 1;
+                        grid[x][y] = { ...cell, sediment: Math.max(0, newSed) };
+                        continue;
                     }
-                    else if (cell.sediment && cell.sediment > 0) {
-                        // fallback: if blocked, deposit instantly (prevents stuck water)
+                    // fallback: if blocked, deposit 1 sediment (prevents stuck water)
+                    if (cell.sediment && cell.sediment > 0) {
                         let blocked = true;
                         let dirs = [
                             [0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]
@@ -478,7 +685,12 @@
                             }
                         }
                         if (blocked) {
-                            grid[x][y] = { type: TYPE_SOIL, damp: true };
+                            // Place 1 soil at current position
+                            grid[x][y] = { ...cell, sediment: cell.sediment - 1 };
+                            if (grid[x][y].sediment <= 0) {
+                                grid[x][y] = { type: TYPE_SOIL, damp: true };
+                            }
+                            continue;
                         }
                     }
 
@@ -501,7 +713,11 @@
                     if (blocked) {
                         cell.lifetime = (cell.lifetime || 0) + 1;
                         if (cell.lifetime > 1200) {
-                            grid[x][y] = { type: TYPE_AIR };
+                            // On evaporation, transfer or deposit all sediment
+                            handleSediment(x, y, cell.sediment || 0);
+                            if (grid[x][y].type === TYPE_WATER) {
+                                grid[x][y] = { type: TYPE_AIR };
+                            }
                         }
                     } else {
                         cell.lifetime = 0;
