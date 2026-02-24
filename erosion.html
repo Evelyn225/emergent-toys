@@ -251,9 +251,25 @@
                             moved = true;
                             continue;
                         }
+                        // Only damp soil directly above, left, or right of water (not diagonally)
+                        if (cell.damp) {
+                            if (y > 0 && grid[x][y - 1].type === TYPE_SOIL) {
+                                grid[x][y - 1].damp = true;
+                            }
+                            if (x > 0 && grid[x - 1][y].type === TYPE_SOIL) {
+                                grid[x - 1][y].damp = true;
+                            }
+                            if (x < cols - 1 && grid[x + 1][y].type === TYPE_SOIL) {
+                                grid[x + 1][y].damp = true;
+                            }
+                        }
                         // Diagonal slide for dirt (randomize direction)
-                        let dirs = Math.random() < 0.5 ? [-1, 1] : [1, -1];
-                        for (let d of dirs) {
+                        let sideDirs = [-1, 1];
+                        for (let i = sideDirs.length - 1; i > 0; i--) {
+                            let j = Math.floor(Math.random() * (i + 1));
+                            [sideDirs[i], sideDirs[j]] = [sideDirs[j], sideDirs[i]];
+                        }
+                        for (let d of sideDirs) {
                             let nx = x + d;
                             if (nx >= 0 && nx < cols && y + 1 < rows && grid[nx][y + 1].type === TYPE_AIR) {
                                 let damp = cell.damp;
@@ -505,6 +521,57 @@
         }
 
         function updateSimulation() {
+                                    // Sediment diffusion: randomly exchange sediment between neighboring water cells
+                                    for (let y = 1; y < rows - 1; y++) {
+                                        for (let x = 1; x < cols - 1; x++) {
+                                            let cell = grid[x][y];
+                                            if (cell.type === TYPE_WATER && (cell.sediment || 0) > 0) {
+                                                // Deposit sediment if solid below or at sides, chance-based
+                                                let solidBelow = (y + 1 < rows) && (grid[x][y + 1].type === TYPE_SOIL || grid[x][y + 1].type === TYPE_ROCK);
+                                                let solidLeft = (x > 0) && (grid[x - 1][y].type === TYPE_SOIL || grid[x - 1][y].type === TYPE_ROCK);
+                                                let solidRight = (x < cols - 1) && (grid[x + 1][y].type === TYPE_SOIL || grid[x + 1][y].type === TYPE_ROCK);
+                                                if ((solidBelow || solidLeft || solidRight) && Math.random() < 0.06) {
+                                                    grid[x][y] = { type: TYPE_SOIL, damp: true };
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                    }
+                        // Sediment diffusion: randomly exchange sediment between neighboring water cells
+                        for (let y = 1; y < rows - 1; y++) {
+                            for (let x = 1; x < cols - 1; x++) {
+                                let cell = grid[x][y];
+                                if (cell.type === TYPE_WATER && (cell.sediment || 0) > 0) {
+                                    // Sediment can move in all 4 directions with higher probability
+                                    let dirs = [
+                                        [0, 1],  // down
+                                        [0, -1], // up
+                                        [-1, 0], // left
+                                        [1, 0]   // right
+                                    ];
+                                    // Shuffle directions for more natural movement
+                                    for (let i = dirs.length - 1; i > 0; i--) {
+                                        let j = Math.floor(Math.random() * (i + 1));
+                                        [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+                                    }
+                                    for (let d of dirs) {
+                                        let nx = x + d[0];
+                                        let ny = y + d[1];
+                                        if (
+                                            nx > 0 && nx < cols - 1 && ny > 0 && ny < rows - 1 &&
+                                            grid[nx][ny].type === TYPE_WATER && (grid[nx][ny].sediment || 0) < MAX_SEDIMENT
+                                        ) {
+                                            // Move sediment with higher probability
+                                            if (Math.random() < 0.55) {
+                                                cell.sediment = (cell.sediment || 0) - 1;
+                                                grid[nx][ny].sediment = (grid[nx][ny].sediment || 0) + 1;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
             // Pass 1: Dirt gravity/slide
             for (let y = rows - 2; y >= 0; y--) {
                 for (let x = 0; x < cols; x++) {
@@ -512,20 +579,23 @@
                     if (!cell || cell.type !== TYPE_SOIL) continue;
                     // Dirt falls if unsupported
                     if (y + 1 < rows && grid[x][y + 1].type === TYPE_AIR) {
-                        let damp = cell.damp;
+                        // Preserve damp property
                         grid[x][y + 1] = { type: TYPE_SOIL };
-                        if (damp) grid[x][y + 1].damp = true;
+                        if (cell.damp) grid[x][y + 1].damp = true;
                         grid[x][y] = { type: TYPE_AIR };
                         continue;
                     }
-                    // Diagonal slide for dirt
-                    let dirs = random() < 0.5 ? [-1, 1] : [1, -1];
-                    for (let d of dirs) {
+                    // Diagonal slide for dirt (randomize direction)
+                    let sideDirs = [-1, 1];
+                    for (let i = sideDirs.length - 1; i > 0; i--) {
+                        let j = Math.floor(Math.random() * (i + 1));
+                        [sideDirs[i], sideDirs[j]] = [sideDirs[j], sideDirs[i]];
+                    }
+                    for (let d of sideDirs) {
                         let nx = x + d;
                         if (nx >= 0 && nx < cols && y + 1 < rows && grid[nx][y + 1].type === TYPE_AIR) {
-                            let damp = cell.damp;
                             grid[nx][y + 1] = { type: TYPE_SOIL };
-                            if (damp) grid[nx][y + 1].damp = true;
+                            if (cell.damp) grid[nx][y + 1].damp = true;
                             grid[x][y] = { type: TYPE_AIR };
                             break;
                         }
@@ -537,11 +607,66 @@
             for (let y = rows - 2; y >= 0; y--) {
                 for (let x = 0; x < cols; x++) {
                     let cell = grid[x][y];
-                    if (!cell || cell.type === TYPE_ROCK) continue;
+                    if (!cell) continue;
+                    // --- Rock erosion: allow, but very slow ---
+                    if (cell.type === TYPE_ROCK) {
+                        // Erode rock if water is adjacent (very low probability)
+                        let eroded = false;
+                        // Above
+                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && random() < 0.00008) {
+                            grid[x][y] = { type: TYPE_SOIL, damp: true };
+                            eroded = true;
+                        }
+                        // Left
+                        if (!eroded && x > 0 && grid[x - 1][y].type === TYPE_WATER && random() < 0.00008) {
+                            grid[x][y] = { type: TYPE_SOIL, damp: true };
+                            eroded = true;
+                        }
+                        // Right
+                        if (!eroded && x < cols - 1 && grid[x + 1][y].type === TYPE_WATER && random() < 0.00008) {
+                            grid[x][y] = { type: TYPE_SOIL, damp: true };
+                            eroded = true;
+                        }
+                        if (eroded) {
+                            // Rock chip particle effect
+                            for (let p = 0; p < 1; p++) {
+                                particles.push({
+                                    x: (x + 0.5) * CELL_SIZE + random(-1.5, 1.5),
+                                    y: (y + 0.5) * CELL_SIZE + random(-1.5, 1.5),
+                                    vx: random(-0.35, 0.35),
+                                    vy: random(-0.8, -0.1),
+                                    life: 10 + random(6),
+                                    color: [120, 120, 140, 160]
+                                });
+                            }
+                        }
+                        continue;
+                    }
+                    // Sand: can hold 1 sediment, turns to soil if next to solid
+                    if (cell.type === TYPE_SOIL && cell.sediment === 1) {
+                        // Check for adjacent solid (soil or rock)
+                        let solidNearby = false;
+                        let solidDirs = [[0,1],[0,-1],[1,0],[-1,0]];
+                        for (let d of solidDirs) {
+                            let nx = x + d[0];
+                            let ny = y + d[1];
+                            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                                let t = grid[nx][ny].type;
+                                if (t === TYPE_SOIL || t === TYPE_ROCK) {
+                                    solidNearby = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (solidNearby) {
+                            grid[x][y] = { type: TYPE_SOIL, damp: true };
+                            continue;
+                        }
+                    }
                     // Erode soil if water is adjacent
                     if (cell.type === TYPE_SOIL) {
                         // Erode from above
-                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && (grid[x][y - 1].sediment || 0) < MAX_SEDIMENT && random() < 0.16) {
+                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && (grid[x][y - 1].sediment || 0) < MAX_SEDIMENT && random() < 0.5) {
                             grid[x][y - 1].sediment = (grid[x][y - 1].sediment || 0) + 1;
                             grid[x][y] = { type: TYPE_AIR };
                             for (let p = 0; p < 1; p++) {
@@ -556,7 +681,7 @@
                             }
                         }
                         // Erode from left
-                        if (x > 0 && grid[x - 1][y].type === TYPE_WATER && (grid[x - 1][y].sediment || 0) < MAX_SEDIMENT && random() < 0.16) {
+                        if (x > 0 && grid[x - 1][y].type === TYPE_WATER && (grid[x - 1][y].sediment || 0) < MAX_SEDIMENT && random() < 0.5) {
                             grid[x - 1][y].sediment = (grid[x - 1][y].sediment || 0) + 1;
                             grid[x][y] = { type: TYPE_AIR };
                             for (let p = 0; p < 1; p++) {
@@ -571,7 +696,7 @@
                             }
                         }
                         // Erode from right
-                        if (x < cols - 1 && grid[x + 1][y].type === TYPE_WATER && (grid[x + 1][y].sediment || 0) < MAX_SEDIMENT && random() < 0.16) {
+                        if (x < cols - 1 && grid[x + 1][y].type === TYPE_WATER && (grid[x + 1][y].sediment || 0) < MAX_SEDIMENT && random() < 0.5) {
                             grid[x + 1][y].sediment = (grid[x + 1][y].sediment || 0) + 1;
                             grid[x][y] = { type: TYPE_AIR };
                             for (let p = 0; p < 1; p++) {
@@ -589,50 +714,64 @@
                     }
                     if (cell.type !== TYPE_WATER) continue;
                     // Make soil above and diagonally above water damp
-                    // Only damp soil directly above or directly left/right (not diagonals)
-                    let dampDirs = [
-                        [0, -1], [-1, 0], [1, 0]
-                    ];
-                    for (let d of dampDirs) {
-                        let nx = x + d[0];
-                        let ny = y + d[1];
-                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
-                            if (grid[nx][ny].type === TYPE_SOIL) {
-                                grid[nx][ny].damp = true;
-                            }
-                        }
+                    // Only damp soil directly above, left, or right (not diagonally)
+                    if (y > 0 && grid[x][y - 1].type === TYPE_SOIL) {
+                        grid[x][y - 1].damp = true;
+                    }
+                    if (x > 0 && grid[x - 1][y].type === TYPE_SOIL) {
+                        grid[x - 1][y].damp = true;
+                    }
+                    if (x < cols - 1 && grid[x + 1][y].type === TYPE_SOIL) {
+                        grid[x + 1][y].damp = true;
                     }
 
                     // Gravity FIRST (strict)
                     if (y + 1 < rows && grid[x][y + 1].type === TYPE_AIR) {
-                        // If overwriting a water cell with sediment, transfer or deposit all sediment
-                        let dest = grid[x][y + 1];
-                        if (dest.type === TYPE_WATER && (dest.sediment || 0) > 0) {
-                            handleSediment(x, y + 1, dest.sediment || 0);
-                        }
-                        grid[x][y + 1] = cell;
+                        // Move water and its sediment down
+                        grid[x][y + 1] = { ...cell };
                         grid[x][y] = { type: TYPE_AIR };
                         continue;
+                    } else if (y + 1 < rows && grid[x][y + 1].type === TYPE_WATER) {
+                        // Exchange sediment with water below
+                        let below = grid[x][y + 1];
+                        let avgSed = ((cell.sediment || 0) + (below.sediment || 0)) / 2;
+                        cell.sediment = Math.floor(avgSed);
+                        below.sediment = Math.ceil(avgSed);
                     }
+                    // Prevent water from overwriting sand/soil/rock
+                    if (y + 1 < rows && grid[x][y + 1].type !== TYPE_AIR && grid[x][y + 1].type !== TYPE_WATER) {
+                        // Block movement
+                        continue;
+                    } else {
 
                     // Diagonal slide (stronger)
-                    let dirs = random() < 0.5 ? [-1, 1] : [1, -1];
+                    let diagDirs = [-1, 1];
+                    // Shuffle diagDirs to randomize order
+                    for (let i = diagDirs.length - 1; i > 0; i--) {
+                        let j = Math.floor(Math.random() * (i + 1));
+                        [diagDirs[i], diagDirs[j]] = [diagDirs[j], diagDirs[i]];
+                    }
                     let didMove = false;
-                    for (let d of dirs) {
+                    for (let d of diagDirs) {
                         let nx = x + d;
-                        if (nx >= 0 && nx < cols && y + 1 < rows && grid[nx][y + 1].type === TYPE_AIR) {
-                            // If overwriting a water cell with sediment, transfer or deposit all sediment
-                            let dest = grid[nx][y + 1];
-                            if (dest.type === TYPE_WATER && (dest.sediment || 0) > 0) {
-                                handleSediment(nx, y + 1, dest.sediment || 0);
-                            }
-                            grid[nx][y + 1] = cell;
+                        if (
+                            nx >= 0 && nx < cols && y + 1 < rows &&
+                            grid[nx][y + 1].type === TYPE_AIR &&
+                            !(grid[x][y + 1].type !== TYPE_AIR && grid[nx][y].type !== TYPE_AIR)
+                        ) {
+                            grid[nx][y + 1] = { ...cell };
                             grid[x][y] = { type: TYPE_AIR };
                             didMove = true;
                             break;
+                        } else if (nx >= 0 && nx < cols && y + 1 < rows && grid[nx][y + 1].type === TYPE_WATER) {
+                            let diag = grid[nx][y + 1];
+                            let avgSed = ((cell.sediment || 0) + (diag.sediment || 0)) / 2;
+                            cell.sediment = Math.floor(avgSed);
+                            diag.sediment = Math.ceil(avgSed);
                         }
                     }
                     if (didMove) continue;
+                    }
 
                     // Prevent topmost water in a pool from moving sideways
                     let isTopWater = (y === 0 || grid[x][y - 1].type !== TYPE_WATER);
@@ -642,45 +781,72 @@
                     }
 
                     // Multi-step sideways flow (up to 10 cells for more pooling)
-                    let d = random() < 0.5 ? -1 : 1;
+                    let sideDirs = [-1, 1];
+                    // Shuffle sideDirs to randomize order
+                    for (let i = sideDirs.length - 1; i > 0; i--) {
+                        let j = Math.floor(Math.random() * (i + 1));
+                        [sideDirs[i], sideDirs[j]] = [sideDirs[j], sideDirs[i]];
+                    }
                     let didMoveSideways = false;
-                    for (let dist = 1; dist <= 10; dist++) {
-                        let nx = x + d * dist;
-                        if (nx >= 0 && nx < cols) {
-                            // Check for rock boundaries of thickness >= 2
-                            let blocked = false;
-                            let consecutiveRocks = 0;
-                            for (let step = 1; step <= dist; step++) {
-                                let checkX = x + d * step;
-                                if (checkX < 0 || checkX >= cols) {
-                                    blocked = true;
-                                    break;
-                                }
-                                if (grid[checkX][y].type === TYPE_ROCK) {
-                                    consecutiveRocks++;
-                                    if (consecutiveRocks >= 2) {
+                    for (let d of sideDirs) {
+                        for (let dist = 1; dist <= 6; dist++) {
+                            let nx = x + d * dist;
+                            if (nx >= 0 && nx < cols) {
+                                // Check for rock in direct and all diagonal paths between current and target cell
+                                let blocked = false;
+                                for (let step = 1; step <= dist; step++) {
+                                    let checkX = x + d * step;
+                                    if (checkX < 0 || checkX >= cols) {
                                         blocked = true;
                                         break;
                                     }
-                                } else {
-                                    consecutiveRocks = 0;
+                                    // Check direct path
+                                    if (grid[checkX][y].type === TYPE_ROCK) {
+                                        blocked = true;
+                                        break;
+                                    }
+                                    
+                                    // Check diagonals above and below
+                                    if (y > 0 && grid[checkX][y - 1].type === TYPE_ROCK) {
+                                        blocked = true;
+                                        break;
+                                    }
+                                    if (y < rows - 1 && grid[checkX][y + 1].type === TYPE_ROCK) {
+                                        blocked = true;
+                                        break;
+                                    }
+                                    // Check diagonals between steps (prevents slipping through corners)
+                                    if (step > 1) {
+                                        let prevX = x + d * (step - 1);
+                                        if (y > 0 && grid[prevX][y - 1].type === TYPE_ROCK && grid[checkX][y].type !== TYPE_ROCK) {
+                                            blocked = true;
+                                            break;
+                                        }
+                                        if (y < rows - 1 && grid[prevX][y + 1].type === TYPE_ROCK && grid[checkX][y].type !== TYPE_ROCK) {
+                                            blocked = true;
+                                            break;
+                                        }
+                                    }
                                 }
-                            }
-                            if (blocked) break;
-                            if (grid[nx][y].type === TYPE_AIR) {
-                                // If overwriting a water cell with sediment, transfer or deposit all sediment
-                                let dest = grid[nx][y];
-                                if (dest.type === TYPE_WATER && (dest.sediment || 0) > 0) {
-                                    handleSediment(nx, y, dest.sediment || 0);
+                                if (blocked) break;
+                                if (grid[nx][y].type === TYPE_AIR) {
+                                    // Move water and its sediment sideways
+                                    grid[nx][y] = { ...cell };
+                                    grid[x][y] = { type: TYPE_AIR };
+                                    didMoveSideways = true;
+                                    break;
+                                } else if (grid[nx][y].type === TYPE_WATER) {
+                                    // Exchange sediment with sideways water
+                                    let side = grid[nx][y];
+                                    let avgSed = ((cell.sediment || 0) + (side.sediment || 0)) / 2;
+                                    cell.sediment = Math.floor(avgSed);
+                                    side.sediment = Math.ceil(avgSed);
                                 }
-                                grid[nx][y] = cell;
-                                grid[x][y] = { type: TYPE_AIR };
-                                didMoveSideways = true;
+                            } else {
                                 break;
                             }
-                        } else {
-                            break;
                         }
+                        if (didMoveSideways) break;
                     }
                     if (didMoveSideways) continue;
 
@@ -742,8 +908,15 @@
                         }
                     }
                     if (blocked) {
-                        cell.lifetime = (cell.lifetime || 0) + 1;
-                        if (cell.lifetime > 1200) {
+                        // If water is blocked and sitting above soil, always erode: convert soil below to water, current water to soil (picking up sediment)
+                        if (y + 1 < rows && grid[x][y + 1].type === TYPE_SOIL) {
+                            // Water picks up the soil below, becomes soil, and the soil below becomes water
+                            grid[x][y] = { type: TYPE_SOIL, damp: true };
+                            grid[x][y + 1] = { type: TYPE_WATER, sediment: 0, lifetime: 0 };
+                            continue;
+                        }
+                        cell.lifetime = (cell.lifetime || 0) + (cell.sediment ? 1 : 8); // evaporate faster if no sediment
+                        if ((cell.sediment ? cell.lifetime > 1200 : cell.lifetime > 150)) {
                             // On evaporation, transfer or deposit all sediment
                             handleSediment(x, y, cell.sediment || 0);
                             if (grid[x][y].type === TYPE_WATER) {
