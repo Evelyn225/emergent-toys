@@ -70,7 +70,7 @@
     <label for="sliderSin">Spiral Sin: <span id="valSin"></span></label>
     <input type="range" id="sliderSin" min="0.01" max="3.0" step="0.01" value="1.3">
     <label for="sliderTile">Tile Size: <span id="valTile"></span></label>
-    <input type="range" id="sliderTile" min="1" max="8" step="1" value="3"><br>
+    <input type="range" id="sliderTile" min="1" max="8" step="1" value="2"><br>
     <select id="paletteSelect">
         <option value="rainbow">Rainbow</option>
         <option value="blood">Blood</option>
@@ -90,7 +90,7 @@ let params = {
     spiralB: 0.4,
     spiralTheta: 1.2,
     spiralSin: 1.3,
-    tileSize: 3,
+    tileSize: 2,
     palette: 'rainbow'
 };
 let flameLayer;
@@ -130,26 +130,31 @@ function draw() {
 }
 
 
+
 function drawFractalFlameAll(gfx, params) {
     gfx.colorMode(HSB, 360, 255, 255, 255);
     gfx.noStroke();
-    let w = 512, h = 512, cx = 256, cy = 256, points = 360000, spread = 512;
-    let spiralA = params.spiralA;
-    let spiralB = params.spiralB;
-    let spiralTheta = params.spiralTheta;
-    let spiralSin = params.spiralSin;
-    let tileSize = params.tileSize;
-    let palette = params.palette;
+    let w = 512, h = 512;
+    let cx = w / 2, cy = h / 2;
+    let points = 400000;
+    let spread = w;
+    let spiralA = 0.78 + Math.random() * 0.15;
+    let spiralB = 0.22 + Math.random() * 0.15;
+    let spiralTheta = 1.2 + Math.random() * 0.8;
+    let spiralSin = 0.8 + Math.random() * 0.5;
+    let startX = Math.random() * 2 - 1;
+    let startY = Math.random() * 2 - 1;
     let colorSeed = Math.random() * 1000;
-    let x = Math.random() * 4 - 2;
-    let y = Math.random() * 4 - 2;
+    let x = startX, y = startY;
+    let tileSize = params.tileSize || 4;
+    let palette = params.palette || 'rainbow';
     for (let i = 0; i < points; i++) {
-        let r = Math.sqrt(x*x + y*y) + (Math.random() * 0.001 - 0.0005);
+        let r = Math.sqrt(x*x + y*y);
         let theta = Math.atan2(y, x);
         let newR = r * (spiralA + spiralB * Math.sin(theta*3 + i*0.0001 + colorSeed));
         let newTheta = theta + spiralTheta + spiralSin * Math.sin(r*2 + i*0.0002 + colorSeed);
-        x = newR * Math.cos(newTheta) + 0.25 * Math.sin(i*0.01 + colorSeed);
-        y = newR * Math.sin(newTheta) + 0.25 * Math.cos(i*0.013 + colorSeed);
+        x = newR * Math.cos(newTheta) + 0.2 * Math.sin(i*0.01 + colorSeed);
+        y = newR * Math.sin(newTheta) + 0.2 * Math.cos(i*0.013 + colorSeed);
         let px = cx + x * spread;
         let py = cy + y * spread;
         px = Math.floor(px / tileSize) * tileSize;
@@ -159,9 +164,9 @@ function drawFractalFlameAll(gfx, params) {
         let hue, sat, bri;
         switch (palette) {
             case 'rainbow':
-                hue = (360 * t + 120 * Math.sin(theta*2 + i*0.0005 + colorSeed)) % 360;
-                sat = 220;
-                bri = 255;
+                hue = (180 + 120 * Math.sin(theta*2 + i*0.0005 + colorSeed) + i*0.01) % 360;
+                sat = 200 + 55 * Math.sin(i*0.0003 + r*2 + colorSeed);
+                bri = 200 + 55 * Math.cos(i*0.0002 + theta*3 + colorSeed);
                 break;
             case 'blood':
                 hue = 1 + 5 * t + 6 * Math.sin(i*0.0005 + colorSeed);
@@ -194,11 +199,11 @@ function drawFractalFlameAll(gfx, params) {
                 bri = 180 + 75 * t;
                 break;
             default:
-                hue = (360 * t) % 360;
-                sat = 220;
-                bri = 255;
+                hue = (180 + 120 * Math.sin(theta*2 + i*0.0005 + colorSeed) + i*0.01) % 360;
+                sat = 200 + 55 * Math.sin(i*0.0003 + r*2 + colorSeed);
+                bri = 200 + 55 * Math.cos(i*0.0002 + theta*3 + colorSeed);
         }
-        let alpha = 22 + 52 * Math.sin(i*0.0001 + r*3 + colorSeed);
+        let alpha = 22 + 32 * Math.sin(i*0.0001 + r*3 + colorSeed);
         if (px >= 0 && px < w && py >= 0 && py < h) {
             gfx.fill(hue, sat, bri, alpha);
             gfx.rect(px, py, tileSize, tileSize);
