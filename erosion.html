@@ -298,7 +298,7 @@
                 if (isCtrl && mouseButton === LEFT) {
                     radius = 1; // delete brush = rock brush size (small)
                 } else if (isCtrl && mouseButton === RIGHT) {
-                    radius = 1; // sand brush = rock brush size (small)
+                    radius = 2; // sand brush (medium)
                 } else if (mouseButton === RIGHT) {
                     radius = 1; // rock brush (small)
                 } else {
@@ -345,21 +345,23 @@
                                         }
                                     } else if (isCtrl && mouseButton === RIGHT) {
                                         // Ctrl+Right click: draw sand (soil)
-                                        grid[nx][ny] = { type: TYPE_SOIL };
-                                        // Sand particle effect
-                                        if (random(5) <= 1) {
-                                            // More vertical sand burst
-                                        for (let p = 0; p < 1; p++) {
-                                            particles.push({
-                                                x: (nx + 0.5) * CELL_SIZE + random(-1, 1),
-                                                y: (ny + 0.5) * CELL_SIZE + random(-1, 1),
-                                                vx: random(-0.7, 0.7),
-                                                vy: random(-0.5, 7.5),
-                                                life: 10 + random(6),
-                                                color: [210, 180, 100, 140]
-                                            });
+                                        if (grid[nx][ny].type === TYPE_AIR) {
+                                            grid[nx][ny] = { type: TYPE_SOIL };
+                                            // Sand particle effect
+                                            if (random(5) <= 1) {
+                                                // More vertical sand burst
+                                                for (let p = 0; p < 1; p++) {
+                                                    particles.push({
+                                                        x: (nx + 0.5) * CELL_SIZE + random(-1, 1),
+                                                        y: (ny + 0.5) * CELL_SIZE + random(-1, 1),
+                                                        vx: random(-0.7, 0.7),
+                                                        vy: random(-0.5, 6.5),
+                                                        life: 14 + random(6),
+                                                        color: [210, 180, 100, 140]
+                                                    });
+                                                }
+                                            }
                                         }
-                                    }
                                     } else if (mouseButton === RIGHT) {
                                         // Draw rock (right click)
                                         grid[nx][ny] = { type: TYPE_ROCK };
