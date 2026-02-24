@@ -789,7 +789,7 @@
                     }
                     let didMoveSideways = false;
                     for (let d of sideDirs) {
-                        for (let dist = 1; dist <= 6; dist++) {
+                        for (let dist = 1; dist <= 10; dist++) {
                             let nx = x + d * dist;
                             if (nx >= 0 && nx < cols) {
                                 // Check for rock in direct and all diagonal paths between current and target cell
@@ -805,7 +805,6 @@
                                         blocked = true;
                                         break;
                                     }
-                                    
                                     // Check diagonals above and below
                                     if (y > 0 && grid[checkX][y - 1].type === TYPE_ROCK) {
                                         blocked = true;
