@@ -538,11 +538,40 @@
                     if (!cell || cell.type === TYPE_ROCK) continue;
                     // Erode soil if water is adjacent
                     if (cell.type === TYPE_SOIL) {
-                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && (grid[x][y - 1].sediment || 0) < MAX_SEDIMENT && random() < 0.12) {
+                        // Erode from above
+                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && (grid[x][y - 1].sediment || 0) < MAX_SEDIMENT && random() < 0.16) {
                             grid[x][y - 1].sediment = (grid[x][y - 1].sediment || 0) + 1;
-                            // Mark this dirt as damp
                             grid[x][y] = { type: TYPE_AIR };
-                            // Erosion particle effect
+                            for (let p = 0; p < 1; p++) {
+                                particles.push({
+                                    x: (x + 0.5) * CELL_SIZE,
+                                    y: (y + 0.5) * CELL_SIZE,
+                                    vx: random(-0.3, 0.3),
+                                    vy: random(-1.0, -0.1),
+                                    life: 8 + random(5),
+                                    color: [170, 130, 60, 180]
+                                });
+                            }
+                        }
+                        // Erode from left
+                        if (x > 0 && grid[x - 1][y].type === TYPE_WATER && (grid[x - 1][y].sediment || 0) < MAX_SEDIMENT && random() < 0.16) {
+                            grid[x - 1][y].sediment = (grid[x - 1][y].sediment || 0) + 1;
+                            grid[x][y] = { type: TYPE_AIR };
+                            for (let p = 0; p < 1; p++) {
+                                particles.push({
+                                    x: (x + 0.5) * CELL_SIZE,
+                                    y: (y + 0.5) * CELL_SIZE,
+                                    vx: random(-0.3, 0.3),
+                                    vy: random(-1.0, -0.1),
+                                    life: 8 + random(5),
+                                    color: [170, 130, 60, 180]
+                                });
+                            }
+                        }
+                        // Erode from right
+                        if (x < cols - 1 && grid[x + 1][y].type === TYPE_WATER && (grid[x + 1][y].sediment || 0) < MAX_SEDIMENT && random() < 0.16) {
+                            grid[x + 1][y].sediment = (grid[x + 1][y].sediment || 0) + 1;
+                            grid[x][y] = { type: TYPE_AIR };
                             for (let p = 0; p < 1; p++) {
                                 particles.push({
                                     x: (x + 0.5) * CELL_SIZE,
