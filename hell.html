@@ -606,10 +606,22 @@
                     if (!allUsedImages.includes(url)) allUsedImages.push(url);
                 }
             }
-            // If no more uniques, fill with random from cache
+            // If no more uniques, fill with random from cache, shuffle cache for randomness
+            function shuffle(arr) {
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                }
+                return arr;
+            }
             if (noMoreUniques && allUsedImages.length > 0) {
+                // Generate each new row as a fresh random sample from the cache
+                let cols = virtualGrid.cols || 4;
                 while (images.length < count) {
-                    images.push(getRandomFrom(allUsedImages));
+                    let row = shuffle(allUsedImages.slice());
+                    for (let i = 0; i < cols && images.length < count; i++) {
+                        images.push(row[i % row.length]);
+                    }
                 }
             } else {
                 while (images.length < count && allUsedImages.length > 0) {
@@ -666,21 +678,32 @@
 
         function renderVirtualGrid() {
             // Only render visible rows
-            const { cols, rows, tileW, tileH, rowOffset, images, allUsedImages } = virtualGrid;
+            const { cols, rows, tileW, tileH, allUsedImages } = virtualGrid;
+            // Use smoothRowOffset for sliding
+            let baseRow = Math.floor(smoothRowOffset);
+            let slide = smoothRowOffset - baseRow;
             gridDiv.innerHTML = '';
             // If we need more images for the visible rows, trigger fetch
-            let maxIdx = (rowOffset + rows) * cols;
-            if (images.length < maxIdx) {
-                // Fetch more images for missing rows
-                fetchMoreRows(rowOffset + rows);
+            let maxIdx = (baseRow + rows + 1) * cols;
+            if (virtualGrid.images.length < maxIdx) {
+                fetchMoreRows(baseRow + rows + 1);
             }
-            for (let r = 0; r < rows; r++) {
+            // Create a wrapper for sliding
+            let wrapper = document.createElement('div');
+            wrapper.style.display = 'grid';
+            wrapper.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
+            wrapper.style.gridTemplateRows = `repeat(${rows + 1}, ${tileH}px)`;
+            wrapper.style.width = (cols * tileW) + 'px';
+            wrapper.style.height = ((rows + 1) * tileH) + 'px';
+            wrapper.style.transform = `translateY(${-slide * tileH}px)`;
+            wrapper.style.transition = 'transform 0.15s linear(0, 0.009,0.035 2.1%, 0.141, 0.723 12.9%, 0.938 16.7%, 1.017,1.077, 1.121,  1.149 24.3%,  1.159,1.163,1.161,1.154 29.9%,1.129 32.8%,1.051 39.6%,1.017 43.1%,0.991,0.977 51%,0.974 53.8%,0.975 57.1%,0.997 69.8%,1.003 76.9%,1.004 83.8%, 1)';
+            for (let r = 0; r < rows + 1; r++) {
                 for (let c = 0; c < cols; c++) {
-                    const idx = (rowOffset + r) * cols + c;
+                    const idx = (baseRow + r) * cols + c;
                     let img;
-                    if (images[idx]) {
+                    if (virtualGrid.images[idx]) {
                         img = document.createElement('img');
-                        img.src = images[idx];
+                        img.src = virtualGrid.images[idx];
                         img.style.width = tileW + 'px';
                         img.style.height = tileH + 'px';
                         img.style.objectFit = 'cover';
@@ -708,20 +731,42 @@
                         img.style.background = '#000';
                         img.style.display = 'block';
                     }
-                    gridDiv.appendChild(img);
+                    wrapper.appendChild(img);
                 }
             }
+            // Style gridDiv for overflow
+            gridDiv.style.overflow = 'hidden';
+            gridDiv.appendChild(wrapper);
         }
 
         // Infinite scroll logic
         let isScrolling = false;
         let lastY = null;
         let scrollRemainder = 0;
-        function handleVirtualScroll(deltaRows) {
-            let newOffset = virtualGrid.rowOffset + deltaRows;
-            if (newOffset < 0) newOffset = 0;
-            virtualGrid.rowOffset = newOffset;
+        // Smooth scrolling state
+        let smoothRowOffset = 0;
+        let targetRowOffset = 0;
+        let isAnimatingScroll = false;
+        function animateVirtualScroll() {
+            if (!isAnimatingScroll) return;
+            const speed = 0.18; // Animation speed (0.0-1.0)
+            let diff = targetRowOffset - smoothRowOffset;
+            if (Math.abs(diff) < 0.01) {
+                smoothRowOffset = targetRowOffset;
+                isAnimatingScroll = false;
+                renderVirtualGrid();
+                return;
+            }
+            smoothRowOffset += diff * speed;
             renderVirtualGrid();
+            requestAnimationFrame(animateVirtualScroll);
+        }
+        function handleVirtualScroll(deltaRows) {
+            targetRowOffset = Math.max(0, targetRowOffset + deltaRows);
+            if (!isAnimatingScroll) {
+                isAnimatingScroll = true;
+                requestAnimationFrame(animateVirtualScroll);
+            }
         }
 
         async function fetchMoreRows(minRowsNeeded = null) {
@@ -734,12 +779,50 @@
             // Only fetch one row at a time if scrolling
             if (missing > 0) {
                 missing = Math.min(missing, virtualGrid.cols); // fetch only one row
-                const { images, allUsedImages, lastBatch } = await fetchImages(virtualGrid.cat, virtualGrid.sub, missing, virtualGrid.images);
-                virtualGrid.images = virtualGrid.images.concat(images);
-                for (let url of allUsedImages) {
+                // Only use cache if noMoreUniques is true
+                let useCache = false;
+                if (virtualGrid.noMoreUniques === undefined) virtualGrid.noMoreUniques = false;
+                let fetchResult = await fetchImages(virtualGrid.cat, virtualGrid.sub, missing, virtualGrid.images);
+                // Track if noMoreUniques is true
+                if (fetchResult.noMoreUniques) virtualGrid.noMoreUniques = true;
+                let imagesToAdd = [];
+                if (virtualGrid.noMoreUniques && fetchResult.allUsedImages.length > 0) {
+                    // Track previously generated rows
+                    if (!virtualGrid.generatedRows) virtualGrid.generatedRows = [];
+                    let cache = fetchResult.allUsedImages.slice();
+                    let maxAttempts = 20;
+                    let row = [];
+                    let attempts = 0;
+                    while (attempts < maxAttempts) {
+                        let used = new Set();
+                        row = [];
+                        let tempCache = cache.slice();
+                        while (row.length < virtualGrid.cols && tempCache.length > 0) {
+                            let idx = Math.floor(Math.random() * tempCache.length);
+                            let img = tempCache[idx];
+                            if (!used.has(img)) {
+                                row.push(img);
+                                used.add(img);
+                            }
+                            tempCache.splice(idx, 1);
+                        }
+                        // Check if this row pattern was already generated
+                        let rowKey = row.join('|');
+                        if (!virtualGrid.generatedRows.includes(rowKey)) {
+                            virtualGrid.generatedRows.push(rowKey);
+                            break;
+                        }
+                        attempts++;
+                    }
+                    imagesToAdd = row;
+                } else {
+                    imagesToAdd = fetchResult.images;
+                }
+                virtualGrid.images = virtualGrid.images.concat(imagesToAdd);
+                for (let url of fetchResult.allUsedImages) {
                     if (!virtualGrid.allUsedImages.includes(url)) virtualGrid.allUsedImages.push(url);
                 }
-                for (let url of lastBatch) {
+                for (let url of fetchResult.lastBatch) {
                     if (!virtualGrid.lastBatch.includes(url)) virtualGrid.lastBatch.push(url);
                 }
             }
