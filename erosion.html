@@ -222,10 +222,10 @@
                     }
                 }
             }
-            // --- Randomly add water to caves (bottom 10 pixels only) ---
+            // --- Randomly add water to caves ---
             for (let x = 0; x < cols; x++) {
-                for (let y = rows - 22; y < rows - 1; y++) {
-                    if (y >= 0 && y < rows - 1 && grid[x][y].type === TYPE_AIR && random() < 0.2) {
+                for (let y = rows - 26; y < rows - 1; y++) {
+                    if (y >= 0 && y < rows - 1 && grid[x][y].type === TYPE_AIR && random() < 0.53) {
                         grid[x][y] = { type: TYPE_WATER, sediment: 0, lifetime: 0 };
                     }
                 }
@@ -360,7 +360,7 @@
                                                     x: (nx + 0.5) * CELL_SIZE,
                                                     y: (ny + 0.5) * CELL_SIZE,
                                                     vx: random(-0.3, 0.3),
-                                                    vy: random(-2.2, -1.1), // much stronger upward motion
+                                                    vy: random(-2.2, -1.1),
                                                     life: 10 + random(8),
                                                     color: [255, random(80,180), 0, 160],
                                                     flame: true
@@ -574,8 +574,8 @@
                                             nx > 0 && nx < cols - 1 && ny > 0 && ny < rows - 1 &&
                                             grid[nx][ny].type === TYPE_WATER && (grid[nx][ny].sediment || 0) < MAX_SEDIMENT
                                         ) {
-                                            // Move sediment with even higher probability, including upward
-                                            if (Math.random() < 0.85) {
+                                            // Move sediment with high probability
+                                            if (Math.random() < 0.82) {
                                                 cell.sediment = (cell.sediment || 0) - 1;
                                                 grid[nx][ny].sediment = (grid[nx][ny].sediment || 0) + 1;    
                                                 break;
@@ -618,26 +618,26 @@
 
             // Pass 2: Water and erosion 
             for (let y = rows - 2; y >= 0; y--) {
-    for (let col = 0; col < cols; col++) {
-        let x = (frameCount % 2 === 0) ? col : (cols - 1 - col);
-        let cell = grid[x][y];
+                for (let col = 0; col < cols; col++) {
+                    let x = (frameCount % 2 === 0) ? col : (cols - 1 - col);
+                    let cell = grid[x][y];
                     if (!cell) continue;
                     // --- Rock erosion: allow, but very slow ---
                     if (cell.type === TYPE_ROCK) {
                         // Erode rock if water is adjacent (very low probability)
                         let eroded = false;
                         // Above
-                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && random() < 0.00008) {
+                        if (y > 0 && grid[x][y - 1].type === TYPE_WATER && random() < 0.00007) {
                             grid[x][y] = { type: TYPE_SOIL, damp: true };
                             eroded = true;
                         }
                         // Left
-                        if (!eroded && x > 0 && grid[x - 1][y].type === TYPE_WATER && random() < 0.00008) {
+                        if (!eroded && x > 0 && grid[x - 1][y].type === TYPE_WATER && random() < 0.00003) {
                             grid[x][y] = { type: TYPE_SOIL, damp: true };
                             eroded = true;
                         }
                         // Right
-                        if (!eroded && x < cols - 1 && grid[x + 1][y].type === TYPE_WATER && random() < 0.00008) {
+                        if (!eroded && x < cols - 1 && grid[x + 1][y].type === TYPE_WATER && random() < 0.00003) {
                             grid[x][y] = { type: TYPE_SOIL, damp: true };
                             eroded = true;
                         }
