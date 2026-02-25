@@ -341,13 +341,21 @@
                                                     vx: random(-0.7, 0.7),
                                                     vy: random(-1.0, -0.2),
                                                     life: 16 + random(8),
-                                                    color: [200, 200, 200, 120]
+                                                    color: [110, 110, 110, 95]
                                                 });
                                             }
                                         } else {
-                                            grid[nx][ny] = { type: TYPE_AIR };
                                             // Fiery particle effect for deleting air
                                             for (let p = 0; p < 1; p++) {
+                                                particles.push({
+                                                    x: (nx + 0.5) * CELL_SIZE,
+                                                    y: (ny + 0.5) * CELL_SIZE,
+                                                    vx: random(-0.1, 0.1),
+                                                    vy: random(-3.8, -1.5),
+                                                    life: 12 + random(8),
+                                                    color: [100, 100, 100, 90],
+                                                    flame:true
+                                                });
                                                 particles.push({
                                                     x: (nx + 0.5) * CELL_SIZE,
                                                     y: (ny + 0.5) * CELL_SIZE,
@@ -357,6 +365,7 @@
                                                     color: [255, random(80,180), 0, 160],
                                                     flame: true
                                                 });
+                                                
                                             }
                                         }
                                     } else if (isCtrl && mouseButton === RIGHT) {
