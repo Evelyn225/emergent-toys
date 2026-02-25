@@ -391,6 +391,24 @@
             ]
         };
 
+        // Define getRowImages before any grid logic
+        function getRowImages(rowIndex, cols, cache) {
+            if (cache.length === 0) return Array(cols).fill(null);
+            let seeded = [...cache];
+            let seed = rowIndex * 2654435761;
+            function seededRand(max) {
+                seed = (seed ^ (seed << 13)) >>> 0;
+                seed = (seed ^ (seed >> 7)) >>> 0;
+                seed = (seed ^ (seed << 17)) >>> 0;
+                return seed % max;
+            }
+            for (let i = seeded.length - 1; i > 0; i--) {
+                const j = seededRand(i + 1);
+                [seeded[i], seeded[j]] = [seeded[j], seeded[i]];
+            }
+            return Array.from({ length: cols }, (_, i) => seeded[i % seeded.length]);
+        }
+
         // Populate subcategory select
         function updateSubcategories() {
             const cat = categorySelect.value;
@@ -665,8 +683,7 @@
             virtualGrid.fetching = true;
             const { images, allUsedImages, lastBatch } = await fetchImages(virtualGrid.cat, virtualGrid.sub, needed, []);
             if (thisVersion !== gridUpdateVersion) return;
-            virtualGrid.images = images;
-            virtualGrid.allUsedImages = allUsedImages;
+            virtualGrid.allUsedImages = [...new Set([...allUsedImages])];
             virtualGrid.lastBatch = lastBatch;
             virtualGrid.cols = cols;
             virtualGrid.rows = rows;
@@ -683,11 +700,13 @@
             let baseRow = Math.floor(smoothRowOffset);
             let slide = smoothRowOffset - baseRow;
             gridDiv.innerHTML = '';
+
             // If we need more images for the visible rows, trigger fetch
             let maxIdx = (baseRow + rows + 1) * cols;
             if (virtualGrid.images.length < maxIdx) {
                 fetchMoreRows(baseRow + rows + 1);
             }
+
             // Create a wrapper for sliding
             let wrapper = document.createElement('div');
             wrapper.style.display = 'grid';
@@ -696,45 +715,33 @@
             wrapper.style.width = (cols * tileW) + 'px';
             wrapper.style.height = ((rows + 1) * tileH) + 'px';
             wrapper.style.transform = `translateY(${-slide * tileH}px)`;
-            wrapper.style.transition = 'transform 0.15s linear(0, 0.009,0.035 2.1%, 0.141, 0.723 12.9%, 0.938 16.7%, 1.017,1.077, 1.121,  1.149 24.3%,  1.159,1.163,1.161,1.154 29.9%,1.129 32.8%,1.051 39.6%,1.017 43.1%,0.991,0.977 51%,0.974 53.8%,0.975 57.1%,0.997 69.8%,1.003 76.9%,1.004 83.8%, 1)';
+            wrapper.style.transition = 'transform 0.15s linear(0, 0.009,0.035 2.1%, 0.141, 0.723 12.9%, 0.938 16.7%, 1.017,1.077, 1.121, 1.149 24.3%, 1.159,1.163,1.161,1.154 29.9%,1.129 32.8%,1.051 39.6%,1.017 43.1%,0.991,0.977 51%,0.974 53.8%,0.975 57.1%,0.997 69.8%,1.003 76.9%,1.004 83.8%, 1)';
             for (let r = 0; r < rows + 1; r++) {
+                const rowImages = getRowImages(baseRow + r, cols, allUsedImages);
                 for (let c = 0; c < cols; c++) {
-                    const idx = (baseRow + r) * cols + c;
-                    let img;
-                    if (virtualGrid.images[idx]) {
-                        img = document.createElement('img');
-                        img.src = virtualGrid.images[idx];
-                        img.style.width = tileW + 'px';
-                        img.style.height = tileH + 'px';
-                        img.style.objectFit = 'cover';
-                        img.style.display = 'block';
-                        img.draggable = false;
-                        img.onerror = function () {
-                            let tries = 0;
-                            function tryReplace() {
-                                tries++;
-                                const brokenUrl = img.src;
-                                const available = allUsedImages.filter(url => url !== brokenUrl);
-                                if (available.length === 0 || tries > 5) {
-                                    img.style.display = 'none';
-                                    return;
-                                }
-                                const newUrl = getRandomFrom(available);
-                                img.src = newUrl;
-                            }
-                            tryReplace();
+                    const url = rowImages[c];
+                    let el;
+                    if (url) {
+                        el = document.createElement('img');
+                        el.src = url;
+                        el.style.width = tileW + 'px';
+                        el.style.height = tileH + 'px';
+                        el.style.objectFit = 'cover';
+                        el.style.display = 'block';
+                        el.draggable = false;
+                        el.onerror = function () {
+                            const available = allUsedImages.filter(u => u !== url);
+                            if (available.length > 0) el.src = getRandomFrom(available);
+                            else el.style.display = 'none';
                         };
                     } else {
-                        img = document.createElement('div');
-                        img.style.width = tileW + 'px';
-                        img.style.height = tileH + 'px';
-                        img.style.background = '#000';
-                        img.style.display = 'block';
+                        el = document.createElement('div');
+                        el.style.cssText = `width:${tileW}px;height:${tileH}px;background:#000;display:block`;
                     }
-                    wrapper.appendChild(img);
+                    wrapper.appendChild(el);
                 }
             }
-            // Style gridDiv for overflow
+
             gridDiv.style.overflow = 'hidden';
             gridDiv.appendChild(wrapper);
         }
@@ -786,33 +793,16 @@
                 // Track if noMoreUniques is true
                 if (fetchResult.noMoreUniques) virtualGrid.noMoreUniques = true;
                 let imagesToAdd = [];
-                if (virtualGrid.noMoreUniques && fetchResult.allUsedImages.length > 0) {
-                    // Track previously generated rows
-                    if (!virtualGrid.generatedRows) virtualGrid.generatedRows = [];
-                    let cache = fetchResult.allUsedImages.slice();
-                    let maxAttempts = 20;
+                if (virtualGrid.noMoreUniques && virtualGrid.allUsedImages.length > 0) {
+                    // Always use the largest cache for random selection
+                    if (fetchResult.allUsedImages.length > virtualGrid.allUsedImages.length) {
+                        virtualGrid.allUsedImages = fetchResult.allUsedImages.slice();
+                    }
+                    let cache = virtualGrid.allUsedImages;
                     let row = [];
-                    let attempts = 0;
-                    while (attempts < maxAttempts) {
-                        let used = new Set();
-                        row = [];
-                        let tempCache = cache.slice();
-                        while (row.length < virtualGrid.cols && tempCache.length > 0) {
-                            let idx = Math.floor(Math.random() * tempCache.length);
-                            let img = tempCache[idx];
-                            if (!used.has(img)) {
-                                row.push(img);
-                                used.add(img);
-                            }
-                            tempCache.splice(idx, 1);
-                        }
-                        // Check if this row pattern was already generated
-                        let rowKey = row.join('|');
-                        if (!virtualGrid.generatedRows.includes(rowKey)) {
-                            virtualGrid.generatedRows.push(rowKey);
-                            break;
-                        }
-                        attempts++;
+                    for (let j = 0; j < virtualGrid.cols; j++) {
+                        let idx = Math.floor(Math.random() * cache.length);
+                        row.push(cache[idx]);
                     }
                     imagesToAdd = row;
                 } else {
