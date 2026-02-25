@@ -336,7 +336,7 @@
                     void refreshBtn.offsetWidth; // Force reflow
                     refreshBtn.classList.add('spinning');
                     setTimeout(() => refreshBtn.classList.remove('spinning'), 700);
-                    updateGrid();
+                    updateVirtualGrid(true);
                 }
             });
         }
@@ -417,18 +417,104 @@
             });
         }
 
-        categorySelect.addEventListener('change', () => {
+        // 18+ NSFW confirmation logic
+        let nsfwConfirmed = false;
+        function showNsfwPopup() {
+            return new Promise((resolve) => {
+                // Create overlay
+                const overlay = document.createElement('div');
+                overlay.style.position = 'fixed';
+                overlay.style.top = '0';
+                overlay.style.left = '0';
+                overlay.style.width = '100vw';
+                overlay.style.height = '100vh';
+                overlay.style.background = 'rgba(0,0,0,0.85)';
+                overlay.style.zIndex = '9999';
+                overlay.style.display = 'flex';
+                overlay.style.alignItems = 'center';
+                overlay.style.justifyContent = 'center';
+                overlay.style.flexDirection = 'column';
+                // Popup box
+                const popup = document.createElement('div');
+                popup.style.background = 'rgba(40, 10, 30, 0.98)';
+                popup.style.color = '#fff';
+                popup.style.padding = '32px 28px 24px 28px';
+                popup.style.borderRadius = '16px';
+                popup.style.boxShadow = '0 4px 32px #000b';
+                popup.style.textAlign = 'center';
+                popup.style.maxWidth = '90vw';
+                popup.style.fontFamily = "'Fira Sans', 'Segoe UI', 'Roboto', 'Arial', sans-serif";
+                // Message
+                const msg = document.createElement('div');
+                msg.style.fontSize = '1.25rem';
+                msg.style.marginBottom = '18px';
+                msg.style.fontWeight = 'bold';
+                msg.textContent = 'NSFW Content Warning';
+                const submsg = document.createElement('div');
+                submsg.style.fontSize = '1rem';
+                submsg.style.marginBottom = '22px';
+                submsg.textContent = 'You must confirm you are 18+ to view NSFW images.';
+                // Buttons
+                const btns = document.createElement('div');
+                btns.style.display = 'flex';
+                btns.style.justifyContent = 'center';
+                btns.style.gap = '18px';
+                const yesBtn = document.createElement('button');
+                yesBtn.textContent = 'I am 18 or older';
+                yesBtn.style.background = '#a01883';
+                yesBtn.style.color = '#fff';
+                yesBtn.style.border = 'none';
+                yesBtn.style.borderRadius = '8px';
+                yesBtn.style.padding = '10px 22px';
+                yesBtn.style.fontSize = '1rem';
+                yesBtn.style.cursor = 'pointer';
+                yesBtn.style.fontWeight = 'bold';
+                yesBtn.style.boxShadow = '0 2px 8px #ff69b488';
+                yesBtn.addEventListener('click', () => {
+                    document.body.removeChild(overlay);
+                    resolve(true);
+                });
+                const noBtn = document.createElement('button');
+                noBtn.textContent = 'Cancel';
+                noBtn.style.background = '#333';
+                noBtn.style.color = '#fff';
+                noBtn.style.border = 'none';
+                noBtn.style.borderRadius = '8px';
+                noBtn.style.padding = '10px 22px';
+                noBtn.style.fontSize = '1rem';
+                noBtn.style.cursor = 'pointer';
+                noBtn.style.fontWeight = 'bold';
+                noBtn.style.boxShadow = '0 2px 8px #0008';
+                noBtn.addEventListener('click', () => {
+                    document.body.removeChild(overlay);
+                    resolve(false);
+                });
+                btns.appendChild(yesBtn);
+                btns.appendChild(noBtn);
+                popup.appendChild(msg);
+                popup.appendChild(submsg);
+                popup.appendChild(btns);
+                overlay.appendChild(popup);
+                document.body.appendChild(overlay);
+            });
+        }
+
+        categorySelect.addEventListener('change', async () => {
+            if (categorySelect.value === 'nsfw' && !nsfwConfirmed) {
+                const ok = await showNsfwPopup();
+                if (ok) {
+                    nsfwConfirmed = true;
+                } else {
+                    // Revert to SFW
+                    categorySelect.value = 'sfw';
+                    updateSubcategories();
+                    return;
+                }
+            }
             updateSubcategories();
             // Do not call updateGrid here; wait for subcategory selection
         });
-        subcategorySelect.addEventListener('change', function () {
-            // If placeholder is selected, reset to placeholder and do nothing
-            if (subcategorySelect.value === '') {
-                subcategorySelect.selectedIndex = 0;
-                return;
-            }
-            updateGrid();
-        });
+        // ...existing code...
 
         // Initial subcategory population
         // Initial subcategory population
@@ -450,7 +536,7 @@
                     }
                 }
                 if (found) {
-                    updateGrid();
+                    updateVirtualGrid(true);
                 }
                 initialLoad = false;
             }
@@ -467,48 +553,35 @@
             const sub = subcategorySelect.value;
             return `https://api.waifu.pics/many/${cat}/${sub}`;
         }
+        // Virtualized infinite scroll grid implementation
         let gridUpdateVersion = 0;
-        async function updateGrid() {
-            const thisVersion = ++gridUpdateVersion;
-            // Remove old images
-            gridDiv.innerHTML = '';
-            // If no subcategory is selected, do nothing
-            if (!subcategorySelect.value) return;
-            // Get viewport size
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            // Calculate columns and rows so tiles fit evenly and none get cut off
-            let cols = Math.max(2, Math.floor(w / tileSize));
-            let rows = Math.max(2, Math.floor(h / tileSize));
-            // Adjust tile size so tiles fill the screen exactly
-            let tileW = Math.floor(w / cols);
-            let tileH = Math.floor(h / rows);
-            // Adjust grid size to fill viewport exactly
-            const gridW = tileW * cols;
-            const gridH = tileH * rows;
-            gridDiv.style.position = 'fixed';
-            gridDiv.style.left = '0';
-            gridDiv.style.top = '0';
-            gridDiv.style.width = gridW + 'px';
-            gridDiv.style.height = gridH + 'px';
-            gridDiv.style.pointerEvents = 'none';
-            gridDiv.style.zIndex = '10';
-            gridDiv.style.display = 'grid';
-            gridDiv.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
-            gridDiv.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
+        let virtualGrid = {
+            cols: 0,
+            rows: 0,
+            tileW: 0,
+            tileH: 0,
+            rowOffset: 0, // The virtual row offset (how far we've scrolled)
+            images: [],
+            allUsedImages: [],
+            lastBatch: [],
+            fetching: false,
+            cat: '',
+            sub: '',
+        };
 
-            // Fetch and place images using the 'many' endpoint, maximizing for unique images
-            const apiUrl = getApiUrl();
-            const cat = categorySelect.value;
-            const sub = subcategorySelect.value;
-            const needed = cols * rows;
-            let uniqueImages = new Set();
+        function getRandomFrom(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        async function fetchImages(cat, sub, count, excludeArr) {
+            const apiUrl = `https://api.waifu.pics/many/${cat}/${sub}`;
+            let uniqueImages = new Set(excludeArr || []);
             let tries = 0;
-            let maxTries = 8; // up to 8*30 = 240 images max
+            let maxTries = 8;
             let lastBatch = [];
-            while (uniqueImages.size < needed && tries < maxTries) {
-                let excludeArr = Array.from(uniqueImages);
-                let body = excludeArr.length > 0 ? { exclude: excludeArr } : {};
+            let noMoreUniques = false;
+            while (uniqueImages.size < count && tries < maxTries && !noMoreUniques) {
+                let body = uniqueImages.size > 0 ? { exclude: Array.from(uniqueImages) } : {};
                 let resp = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -520,40 +593,236 @@
                 for (let url of files) {
                     uniqueImages.add(url);
                 }
-                // If the API returns fewer than 30, break early (no more uniques available)
-                if (files.length < 30) break;
+                // If the API returns fewer than 30, assume no more unique images are available
+                if (files.length < 30) {
+                    noMoreUniques = true;
+                }
                 tries++;
             }
             let images = Array.from(uniqueImages);
-            // If not enough uniques, fill with random duplicates from all used images
-            function getRandomFrom(arr) {
-                return arr[Math.floor(Math.random() * arr.length)];
-            }
-            // Use all images ever fetched for filling
             let allUsedImages = images.slice();
             if (lastBatch && lastBatch.length > 0) {
                 for (let url of lastBatch) {
                     if (!allUsedImages.includes(url)) allUsedImages.push(url);
                 }
             }
-            while (images.length < needed && allUsedImages.length > 0) {
-                images.push(getRandomFrom(allUsedImages));
+            // If no more uniques, fill with random from cache
+            if (noMoreUniques && allUsedImages.length > 0) {
+                while (images.length < count) {
+                    images.push(getRandomFrom(allUsedImages));
+                }
+            } else {
+                while (images.length < count && allUsedImages.length > 0) {
+                    images.push(getRandomFrom(allUsedImages));
+                }
             }
+            return { images, allUsedImages, lastBatch };
+        }
+
+        async function updateVirtualGrid(resetOffset = true) {
+            const thisVersion = ++gridUpdateVersion;
+            // If no subcategory is selected, do nothing
+            if (!subcategorySelect.value) return;
+            // Get viewport size
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            let cols = Math.max(2, Math.floor(w / tileSize));
+            let rows = Math.max(2, Math.floor(h / tileSize));
+            let tileW = Math.floor(w / cols);
+            let tileH = Math.floor(h / rows);
+            const gridW = tileW * cols;
+            const gridH = tileH * rows;
+            gridDiv.style.position = 'fixed';
+            gridDiv.style.left = '0';
+            gridDiv.style.top = '0';
+            gridDiv.style.width = gridW + 'px';
+            gridDiv.style.height = gridH + 'px';
+            gridDiv.style.pointerEvents = 'auto'; // Enable pointer events for scroll
+            gridDiv.style.zIndex = '10';
+            gridDiv.style.display = 'grid';
+            gridDiv.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
+            gridDiv.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
+
+            // Reset offset if needed
+            if (resetOffset) virtualGrid.rowOffset = 0;
+
+            // Fetch enough images for 3x the visible rows (for smoothness)
+            const needed = cols * rows * 3;
+            virtualGrid.cat = categorySelect.value;
+            virtualGrid.sub = subcategorySelect.value;
+            virtualGrid.fetching = true;
+            const { images, allUsedImages, lastBatch } = await fetchImages(virtualGrid.cat, virtualGrid.sub, needed, []);
             if (thisVersion !== gridUpdateVersion) return;
-            // Render images
-            for (let i = 0; i < needed; i++) {
-                const img = document.createElement('img');
-                img.src = images[i];
-                img.style.width = tileW + 'px';
-                img.style.height = tileH + 'px';
-                img.style.objectFit = 'cover';
-                img.style.display = 'block';
-                img.draggable = false;
-                gridDiv.appendChild(img);
+            virtualGrid.images = images;
+            virtualGrid.allUsedImages = allUsedImages;
+            virtualGrid.lastBatch = lastBatch;
+            virtualGrid.cols = cols;
+            virtualGrid.rows = rows;
+            virtualGrid.tileW = tileW;
+            virtualGrid.tileH = tileH;
+            virtualGrid.fetching = false;
+            renderVirtualGrid();
+        }
+
+        function renderVirtualGrid() {
+            // Only render visible rows
+            const { cols, rows, tileW, tileH, rowOffset, images, allUsedImages } = virtualGrid;
+            gridDiv.innerHTML = '';
+            // If we need more images for the visible rows, trigger fetch
+            let maxIdx = (rowOffset + rows) * cols;
+            if (images.length < maxIdx) {
+                // Fetch more images for missing rows
+                fetchMoreRows(rowOffset + rows);
+            }
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const idx = (rowOffset + r) * cols + c;
+                    let img;
+                    if (images[idx]) {
+                        img = document.createElement('img');
+                        img.src = images[idx];
+                        img.style.width = tileW + 'px';
+                        img.style.height = tileH + 'px';
+                        img.style.objectFit = 'cover';
+                        img.style.display = 'block';
+                        img.draggable = false;
+                        img.onerror = function () {
+                            let tries = 0;
+                            function tryReplace() {
+                                tries++;
+                                const brokenUrl = img.src;
+                                const available = allUsedImages.filter(url => url !== brokenUrl);
+                                if (available.length === 0 || tries > 5) {
+                                    img.style.display = 'none';
+                                    return;
+                                }
+                                const newUrl = getRandomFrom(available);
+                                img.src = newUrl;
+                            }
+                            tryReplace();
+                        };
+                    } else {
+                        img = document.createElement('div');
+                        img.style.width = tileW + 'px';
+                        img.style.height = tileH + 'px';
+                        img.style.background = '#000';
+                        img.style.display = 'block';
+                    }
+                    gridDiv.appendChild(img);
+                }
             }
         }
 
-        window.addEventListener('resize', updateGrid);
+        // Infinite scroll logic
+        let isScrolling = false;
+        let lastY = null;
+        let scrollRemainder = 0;
+        function handleVirtualScroll(deltaRows) {
+            let newOffset = virtualGrid.rowOffset + deltaRows;
+            if (newOffset < 0) newOffset = 0;
+            virtualGrid.rowOffset = newOffset;
+            renderVirtualGrid();
+        }
+
+        async function fetchMoreRows(minRowsNeeded = null) {
+            if (virtualGrid.fetching) return;
+            virtualGrid.fetching = true;
+            // Calculate how many images are needed for the requested rows
+            let neededRows = minRowsNeeded ? minRowsNeeded : (virtualGrid.rowOffset + virtualGrid.rows);
+            let neededImages = neededRows * virtualGrid.cols;
+            let missing = neededImages - virtualGrid.images.length;
+            // Only fetch one row at a time if scrolling
+            if (missing > 0) {
+                missing = Math.min(missing, virtualGrid.cols); // fetch only one row
+                const { images, allUsedImages, lastBatch } = await fetchImages(virtualGrid.cat, virtualGrid.sub, missing, virtualGrid.images);
+                virtualGrid.images = virtualGrid.images.concat(images);
+                for (let url of allUsedImages) {
+                    if (!virtualGrid.allUsedImages.includes(url)) virtualGrid.allUsedImages.push(url);
+                }
+                for (let url of lastBatch) {
+                    if (!virtualGrid.lastBatch.includes(url)) virtualGrid.lastBatch.push(url);
+                }
+            }
+            virtualGrid.fetching = false;
+            renderVirtualGrid(); // Re-render after fetching
+        }
+
+        // Mouse wheel scroll
+        function enableGridScrollEvents() {
+            // Scroll only one row per event, smooth animation
+            function scrollByRow(rowDelta) {
+                if (rowDelta === 0) return;
+                handleVirtualScroll(rowDelta > 0 ? 1 : -1);
+            }
+            gridDiv.addEventListener('wheel', function (e) {
+                e.preventDefault();
+                let delta = e.deltaY;
+                let pxPerRow = virtualGrid.tileH || 100;
+                let rowDelta = Math.sign(delta); // Only scroll one row per event
+                scrollByRow(rowDelta);
+            }, { passive: false });
+
+            // Touch scroll
+            let touchAccum = 0;
+            gridDiv.addEventListener('touchstart', function (e) {
+                if (e.touches.length === 1) {
+                    lastY = e.touches[0].clientY;
+                    touchAccum = 0;
+                }
+            });
+            gridDiv.addEventListener('touchmove', function (e) {
+                if (e.touches.length === 1 && lastY !== null) {
+                    let newY = e.touches[0].clientY;
+                    let deltaY = lastY - newY;
+                    let pxPerRow = virtualGrid.tileH || 100;
+                    touchAccum += deltaY;
+                    if (Math.abs(touchAccum) >= pxPerRow) {
+                        let rowDelta = Math.sign(touchAccum);
+                        scrollByRow(rowDelta);
+                        touchAccum = 0;
+                    }
+                    lastY = newY;
+                }
+                e.preventDefault();
+            }, { passive: false });
+            gridDiv.addEventListener('touchend', function () {
+                lastY = null;
+                touchAccum = 0;
+            });
+        }
+
+        // Enable scroll events after DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', enableGridScrollEvents);
+        } else {
+            enableGridScrollEvents();
+        }
+
+        // Update grid on resize
+        window.addEventListener('resize', function () {
+            updateVirtualGrid(false);
+        });
+
+        // Update grid on tile size change
+        if (tileSizeSlider) {
+            tileSizeSlider.addEventListener('input', function () {
+                updateVirtualGrid(false);
+            });
+            tileSizeSlider.addEventListener('change', function () {
+                updateVirtualGrid(false);
+            });
+        }
+
+        // Update grid on subcategory/category change
+        subcategorySelect.addEventListener('change', function () {
+            if (subcategorySelect.value === '') {
+                subcategorySelect.selectedIndex = 0;
+                return;
+            }
+            updateVirtualGrid(true);
+        });
+
+        // Initial grid setup
         // Do not call updateGrid() on load; wait for user to select a subcategory
     </script>
 </body>
