@@ -132,7 +132,7 @@ app.post('/api/bug-chat', async (req, res) => {
         });
         
         const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
+            model: "gpt-4o-mini",
             messages: messages
         });
 
@@ -146,7 +146,7 @@ app.post('/api/bug-chat', async (req, res) => {
 app.post('/api/bug-chat.js', async (req, res) => {
     try {
         const { bugType, message, conversationHistory } = req.body;
-        
+
         // Build messages array with conversation history
         const messages = [
             {
@@ -154,7 +154,7 @@ app.post('/api/bug-chat.js', async (req, res) => {
                 content: `You are a ${bugType}. Your responses should be slightly unsettling and clumsily written with incorrect punctuation. Keep responses brief (2-3 sentences) try to impersonate a bug with very basic knowledge. Occasionally mention things only bugs would know about. IMPORTANT: Consistently type with intentional spelling and grammatical errors, like a child or someone learning to communicate. For example: "i see u in th w ind... the lefs tell me scrts. . u r special human..." Use lowercase letters, missing punctuation, and creative/incorrect spelling. This adds to your otherworldly nature.`
             }
         ];
-        
+
         // Add conversation history if provided
         if (conversationHistory && Array.isArray(conversationHistory)) {
             conversationHistory.forEach(msg => {
@@ -164,15 +164,15 @@ app.post('/api/bug-chat.js', async (req, res) => {
                 });
             });
         }
-        
+
         // Add current user message
         messages.push({
             role: "user",
             content: message
         });
-        
+
         const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
+            model: "gpt-4o-mini",
             messages: messages
         });
 

@@ -16,6 +16,7 @@ yarn-error.log*
 *.swp
 *.swo
 .DS_Store
+CLAUDE.md
 
 # Build and distribution
 dist/
