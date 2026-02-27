@@ -39,6 +39,13 @@
     </div>
 
     <div id="themeScreen" class="theme-screen">
+        <button id="themeScreenClose" style="display:none; position:absolute; top:14px; right:14px;
+            background:transparent; color:rgba(255,255,255,0.4); border:1px solid rgba(255,255,255,0.12);
+            border-radius:3px; font-size:16px; width:30px; height:30px; cursor:pointer;
+            font-family:'Iosevka',monospace; align-items:center; justify-content:center;
+            transition:background 0.15s,border-color 0.15s,color 0.15s;"
+            onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='rgba(255,255,255,0.25)';this.style.color='rgba(255,255,255,0.9)'"
+            onmouseout="this.style.background='transparent';this.style.borderColor='rgba(255,255,255,0.12)';this.style.color='rgba(255,255,255,0.4)'">✕</button>
         <div class="theme-modal">
             <div class="theme-eyebrow">▓ terminal</div>
             <div class="theme-title">The Web Wizard's Casino</div>
@@ -168,7 +175,25 @@
         };
         let isGenerating = false;
         let hasContent = false;
+        let currentIframe = null;
         let consoleCommandInterval = null;
+
+        function pauseCurrentSite() {
+            if (!currentIframe) return;
+            try { currentIframe.contentWindow.noLoop(); } catch(e) {}
+            currentIframe.style.visibility = 'hidden';
+        }
+
+        function resumeCurrentSite() {
+            if (!currentIframe) return;
+            currentIframe.style.visibility = 'visible';
+            try { currentIframe.contentWindow.loop(); } catch(e) {}
+        }
+
+        function updateThemeScreenClose() {
+            const btn = document.getElementById('themeScreenClose');
+            if (btn) btn.style.display = hasContent ? 'flex' : 'none';
+        }
 
         // Helper function to set regenerate button text with wave animation
         function setRegenerateButtonText(text) {
@@ -389,8 +414,10 @@
                 iframeDoc.open();
                 iframeDoc.write(gen.code);
                 iframeDoc.close();
+                currentIframe = iframe;
                 disableGeneratedContextMenu(container, iframe);
                 hasContent = true;
+                updateThemeScreenClose();
             }, 120); // Delay to ensure overlay is hidden first
         }
         
@@ -400,6 +427,7 @@
             while (container.firstChild) {
                 container.removeChild(container.firstChild);
             }
+            currentIframe = null;
             // Remove any lingering p5.js instances
             if (window.p5Instance) {
                 window.p5Instance.remove();
@@ -436,6 +464,7 @@
             // Hide theme screen, show loading overlay
             themeScreen.style.display = 'none';
             loadingOverlay.classList.remove('hidden');
+            pauseCurrentSite();
             topBar.style.display = 'flex';
             setRegenerateButtonText('generating...');
             regenerateButton.disabled = true;
@@ -672,11 +701,13 @@ ${firstPassCode}
                     // Overlay is open — only dismiss if a site exists
                     if (hasContent) {
                         themeScreen.style.display = 'none';
+                        resumeCurrentSite();
                     }
                     // else: first visit, cannot dismiss
                 } else {
                     // Overlay is closed — open it (do NOT clear generatedContent)
                     themeScreen.style.display = 'flex';
+                    pauseCurrentSite();
                 }
             });
             document.getElementById('saveButton').addEventListener('click', addToFavorites);
@@ -701,6 +732,11 @@ ${firstPassCode}
                     errorDiv.textContent = 'Site error: ' + event.message;
                     container.appendChild(errorDiv);
                 }
+            });
+
+            document.getElementById('themeScreenClose').addEventListener('click', () => {
+                document.getElementById('themeScreen').style.display = 'none';
+                resumeCurrentSite();
             });
 
             randomThemeButton.addEventListener('click', async () => {
