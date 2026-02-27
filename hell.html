@@ -11,317 +11,475 @@
     <link rel="icon" type="image/png" sizes="16x16"
         href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-    <title>Hellscape</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+    <title>Anime Hellscape</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
     <style>
-        #subcategory-select option[disabled][selected] {
-            color: #000 !important;
+        :root {
+            --bg:        #060203;
+            --panel:     rgba(12, 3, 3, 0.78);
+            --red:       #ff2800;
+            --ember:     #ff6a00;
+            --red-dim:   rgba(255, 50, 0, 0.38);
+            --red-glow:  rgba(255, 40, 0, 0.18);
+            --text:      rgba(255, 195, 165, 0.92);
+            --label:     rgba(255, 110, 70, 0.5);
+            --control-bg: rgba(24, 6, 4, 0.98);
         }
 
-        #minimizeMenuBtn {
-            background: none;
-            border: none;
-            color: #fff;
-            width: 24px;
-            height: 24px;
-            font-size: 22px;
-            line-height: 22px;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: var(--bg);
+            font-family: 'DM Mono', monospace;
+        }
+
+        /* ── Menu bar ─────────────────────────────────── */
+
+        #menu-bar {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 102;
+            background: var(--panel);
+            color: var(--text);
+            border: 1px solid var(--red-dim);
+            border-radius: 5px;
+            box-shadow:
+                0 0 48px var(--red-glow),
+                0 6px 32px rgba(0,0,0,0.95),
+                inset 0 1px 0 rgba(255, 80, 0, 0.07);
+            padding: 16px 18px 16px 18px;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 218px;
+            transition: height 0.08s linear, width 0.2s ease, padding 0.35s ease;
+        }
+
+        /* Subtle scanline texture */
+        #menu-bar::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 3px,
+                rgba(0,0,0,0.06) 3px,
+                rgba(0,0,0,0.06) 4px
+            );
+            pointer-events: none;
+            border-radius: inherit;
+        }
+
+        #menu-title {
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: var(--red);
+            text-shadow:
+                0 0 12px rgba(255, 40, 0, 0.7),
+                0 0 28px rgba(255, 40, 0, 0.3);
+            text-transform: uppercase;
+            padding-right: 22px;
+            line-height: 1.2;
+        }
+
+        .menu-divider {
+            height: 1px;
+            background: linear-gradient(90deg, var(--red-dim), transparent);
+            margin: -2px 0;
+            opacity: 0.6;
+        }
+
+        .ctrl-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .ctrl-label {
+            font-size: 9px;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--label);
+            font-weight: 400;
+        }
+
+        /* Selects */
+        #category-select,
+        #subcategory-select {
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            border-radius: 3px;
+            padding: 6px 9px;
+            background: var(--control-bg);
+            color: var(--text);
+            border: 1px solid var(--red-dim);
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            transition: border-color 0.18s, box-shadow 0.18s;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,80,30,0.55)'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 9px center;
+            padding-right: 26px;
+        }
+
+        #category-select:hover,
+        #subcategory-select:hover {
+            border-color: rgba(255, 70, 20, 0.65);
+            box-shadow: 0 0 10px rgba(255, 50, 0, 0.2);
+        }
+
+        #category-select:focus,
+        #subcategory-select:focus {
+            border-color: rgba(255, 80, 20, 0.8);
+            box-shadow: 0 0 0 2px rgba(255, 40, 0, 0.12);
+        }
+
+        #category-select option,
+        #subcategory-select option {
+            background: #180604;
+            color: var(--text);
+        }
+
+        #subcategory-select option[disabled] {
+            color: rgba(255,120,80,0.35);
+        }
+
+        /* Tile size slider */
+        #tile-size-slider {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--red-dim), rgba(255,100,0,0.2));
+            border-radius: 2px;
+            outline: none;
+            margin: 6px 0 2px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #tile-size-slider:hover {
+            background: linear-gradient(90deg, rgba(255, 60, 0, 0.7), rgba(255,120,0,0.35));
+        }
+
+        #tile-size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--ember);
+            border: 2px solid rgba(255,200,150,0.5);
+            box-shadow: 0 0 8px rgba(255, 100, 0, 0.6), 0 0 20px rgba(255, 60, 0, 0.3);
+            cursor: pointer;
+            transition: box-shadow 0.18s, transform 0.12s;
+        }
+
+        #tile-size-slider::-webkit-slider-thumb:hover {
+            box-shadow: 0 0 14px rgba(255, 120, 0, 0.9), 0 0 28px rgba(255, 60, 0, 0.4);
+            transform: scale(1.15);
+        }
+
+        #tile-size-slider:active::-webkit-slider-thumb {
+            background: var(--red);
+            box-shadow: 0 0 18px rgba(255, 40, 0, 0.9), 0 0 36px rgba(255, 0, 0, 0.4);
+        }
+
+        #tile-size-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--ember);
+            border: 2px solid rgba(255,200,150,0.5);
+            box-shadow: 0 0 8px rgba(255, 100, 0, 0.6);
+            cursor: pointer;
+        }
+
+        #tile-size-slider::-moz-range-track {
+            height: 3px;
+            background: var(--red-dim);
+        }
+
+        .slider-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        #tile-size-value {
+            font-size: 11px;
+            color: rgba(255, 160, 100, 0.7);
+            letter-spacing: 0.05em;
+        }
+
+        /* Refresh button */
+        #refreshBtn {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            background: rgba(255, 35, 0, 0.07);
+            color: rgba(255, 140, 80, 0.85);
+            border: 1px solid var(--red-dim);
+            border-radius: 3px;
+            padding: 7px 12px;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: none;
-            padding: 0;
-            border-radius: 50%;
-            opacity: 0.85;
-            transition: opacity 0.2s;
+            gap: 7px;
+            margin-top: 2px;
+        }
+
+        #refreshBtn:hover {
+            background: rgba(255, 35, 0, 0.14);
+            border-color: rgba(255, 70, 20, 0.7);
+            color: rgba(255, 180, 120, 0.98);
+            box-shadow: 0 0 16px rgba(255, 40, 0, 0.22);
+        }
+
+        #refreshBtn:active {
+            transform: scale(0.97);
+            background: rgba(255, 35, 0, 0.2);
+        }
+
+        #refreshBtn .spin {
+            display: inline-block;
+            font-size: 14px;
+            transition: none;
+        }
+
+        #refreshBtn.spinning .spin {
+            animation: spin-refresh 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes spin-refresh {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Minimize button */
+        #minimizeMenuBtn {
             position: absolute;
-            top: 4px;
+            top: 5px;
             right: 6px;
+            background: none;
+            border: none;
+            color: var(--label);
+            width: 20px;
+            height: 20px;
+            font-size: 19px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
             z-index: 103;
+            transition: color 0.15s, text-shadow 0.15s;
+            font-family: 'DM Mono', monospace;
         }
 
         #minimizeMenuBtn:hover {
-            opacity: 1;
-            text-shadow: #ffff 0 0 4px;
-            scale: 1.15;
+            color: var(--red);
+            text-shadow: 0 0 8px rgba(255, 40, 0, 0.7);
         }
 
+        /* Minimized state */
         #menu-bar.minimized {
-            width: 36px !important;
-            height: 35px !important;
+            width: 34px !important;
+            height: 32px !important;
             min-width: unset !important;
             min-height: unset !important;
             padding: 0 !important;
-            box-shadow: 0 2px 8px #0008;
             overflow: hidden;
             display: flex;
             align-items: flex-start;
             justify-content: flex-end;
         }
 
-        #menu-bar>*:not(#minimizeMenuBtn) {
+        #menu-bar > *:not(#minimizeMenuBtn) {
             opacity: 1;
             pointer-events: auto;
         }
 
-        #menu-bar.minimized>*:not(#minimizeMenuBtn) {
+        #menu-bar.minimized > *:not(#minimizeMenuBtn) {
             transition: none !important;
             opacity: 0 !important;
             pointer-events: none;
         }
 
-        #menu-bar:not(.minimized)>*:not(#minimizeMenuBtn) {
-            transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        #menu-bar:not(.minimized) > *:not(#minimizeMenuBtn) {
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             opacity: 1 !important;
             pointer-events: auto;
         }
 
-        #menu-bar {
-            transition: height 0.08s linear, width 0.2s ease, padding 0.4s ease;
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 102;
-            background: rgba(136, 77, 114, 0.9);
-            color: #fff;
-            border-radius: 10px;
-            box-shadow: 0 2px 12px #0008;
-            padding: 16px 18px 14px 18px;
-            font-family: 'Inter', sans-serif;
-            font-size: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            min-width: 220px;
-        }
+        /* ── Custom dropdowns ─────────────────────────── */
 
-        #subcategory-select {
-            font-size: 14px;
-            border-radius: 6px;
-            padding: 4px 8px;
-            background: rgb(112, 67, 96);
-            color: #fff;
-            border: 1px solid #ffffff;
-            transition: all ease 0.2s;
-        }
-
-        #subcategory-select:hover {
-            box-shadow: 0 0 8px #ff88ff88;
-            background: rgb(153, 98, 127);
-        }
-
-        #subcategory-select:active {
-            scale: 0.97;
-        }
-
-        #category-select {
-            font-size: 14px;
-            border-radius: 6px;
-            padding: 4px 8px;
-            background: rgb(112, 67, 96);
-            color: #fff;
-            border: 1px solid #ffffff;
-            transition: all ease 0.2s;
-        }
-
-        #category-select:active {
-            scale: 0.97;
-        }
-
-        #category-select:hover {
-            box-shadow: 0 0 8px #ff88ff88;
-            background: rgb(153, 98, 127);
-        }
-
-        #refreshBtn {
-            background: rgba(255, 255, 255, 0.12);
-            color: #fff;
-            border: 1px solid #fff;
-            border-radius: 6px;
-            margin-top: 2px;
-            font-size: 16px;
-            padding: 2px 10px;
-            cursor: pointer;
-            transition: all ease 0.2s;
-        }
-
-        #refreshBtn:hover {
-            background: rgba(255, 255, 255, 0.226);
-            box-shadow: 0 0 8px #ff88ff88;
-        }
-
-        #refreshBtn:active {
-            scale: 0.97;
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        #refreshBtn .spin {
-            display: inline-block;
-            transition: none;
-        }
-
-        #refreshBtn.spinning .spin {
-            animation: spin-refresh 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-
-        @keyframes spin-refresh {
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        body {
-            margin: 0;
-            overflow: hidden;
-            background: #000000;
-        }
-
-        body,
-        #menu-bar,
-        #category-select,
-        #subcategory-select,
-        #refreshBtn {
-            font-family: 'Fira Sans', 'Segoe UI', 'Roboto', 'Arial', sans-serif;
-        }
-
-        #tile-size-slider {
-            appearance: none;
-            -webkit-appearance: none;
+        .hell-select {
+            position: relative;
             width: 100%;
-            height: 4px;
-            background: #ff88ff88;
-            border-radius: 2px;
+        }
+
+        .hell-select-trigger {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            padding: 6px 9px;
+            background: var(--control-bg);
+            color: var(--text);
+            border: 1px solid var(--red-dim);
+            border-radius: 3px;
+            cursor: pointer;
+            text-align: left;
             outline: none;
-            margin: 4px;
-            padding: 0;
-            box-shadow: none;
-            transition: background 0.2s;
+            transition: border-color 0.18s, box-shadow 0.18s;
         }
 
-        #tile-size-slider:hover {
-            background: #ff88ffcc;
+        .hell-select-trigger:hover {
+            border-color: rgba(255, 70, 20, 0.65);
+            box-shadow: 0 0 10px rgba(255, 50, 0, 0.2);
         }
 
-        #tile-size-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #ff88ff88;
-            border: 2px solid #fff;
-            box-shadow: 0 2px 8px #ff88ff88;
-            cursor: pointer;
-            transition: background 0.2s, box-shadow 0.2s;
+        .hell-select.open .hell-select-trigger {
+            border-color: rgba(255, 80, 20, 0.8);
+            box-shadow: 0 0 0 2px rgba(255, 40, 0, 0.12);
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
         }
 
-        #tile-size-slider:active::-webkit-slider-thumb {
-            background: #a01883;
-            box-shadow: 0 0 0 4px #ff69b422;
+        .hell-select-arrow {
+            font-size: 9px;
+            color: rgba(255, 80, 30, 0.55);
+            transition: transform 0.18s;
+            flex-shrink: 0;
+            margin-left: 6px;
         }
 
-        #tile-size-slider::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #ff88ff88;
-            border: 2px solid #fff;
-            box-shadow: 0 2px 8px #ff69b488;
-            cursor: pointer;
-            transition: background 0.2s, box-shadow 0.2s;
+        .hell-select.open .hell-select-arrow {
+            transform: rotate(180deg);
         }
 
-        #tile-size-slider:active::-moz-range-thumb {
-            background: #c94ace;
-            box-shadow: 0 0 0 4px #ff69b422;
-        }
-
-        #tile-size-slider::-ms-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #ff88ff88;
-            border: 2px solid #fff;
-            box-shadow: 0 2px 8px #ff69b488;
-            cursor: pointer;
-            transition: background 0.2s, box-shadow 0.2s;
-        }
-
-        #tile-size-slider:active::-ms-thumb {
-            background: #c94ace;
-            box-shadow: 0 0 0 4px #ff69b422;
-        }
-
-        #tile-size-slider::-ms-fill-lower {
-            background: #c94ace;
-        }
-
-        #tile-size-slider::-ms-fill-upper {
-            background: #c94ace;
-        }
-
-        #tile-size-slider:focus {
-            outline: none;
-        }
-
-        #tile-size-slider::-webkit-slider-thumb {
-            box-shadow: 0 2px 8px #ff69b488;
-        }
-
-        #tile-size-slider::-webkit-slider-runnable-track {
-            height: 4px;
-            background: transparent;
-        }
-
-        #tile-size-slider::-moz-range-track {
-            height: 4px;
-            background: #ff88ff88;
-        }
-
-        #tile-size-slider::-ms-fill-lower,
-        #tile-size-slider::-ms-fill-upper {
-            background: #ff88ff88;
-        }
-
-        #tile-size-slider::-ms-tooltip {
+        .hell-select-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: rgba(10, 2, 2, 0.99);
+            border: 1px solid rgba(255, 80, 20, 0.8);
+            border-top: none;
+            border-radius: 0 0 3px 3px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.95), 0 0 20px rgba(255,30,0,0.08);
+            z-index: 300;
+            max-height: 180px;
+            overflow-y: auto;
             display: none;
+            scrollbar-width: thin;
+            scrollbar-color: var(--red-dim) transparent;
+        }
+
+        .hell-select-options::-webkit-scrollbar { width: 3px; }
+        .hell-select-options::-webkit-scrollbar-thumb {
+            background: var(--red-dim);
+            border-radius: 2px;
+        }
+
+        .hell-select.open .hell-select-options {
+            display: block;
+        }
+
+        .hell-option {
+            padding: 7px 9px;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            color: var(--text);
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 50, 0, 0.07);
+            transition: background 0.1s, color 0.1s;
+        }
+
+        .hell-option:last-child { border-bottom: none; }
+
+        .hell-option:hover {
+            background: rgba(255, 40, 0, 0.12);
+            color: rgba(255, 215, 185, 0.98);
+        }
+
+        .hell-option.selected {
+            color: var(--red);
+            background: rgba(255, 40, 0, 0.07);
         }
     </style>
 </head>
 
 <body>
+    <!-- Home button -->
     <a href="index.html"
-        style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; text-decoration: none; font-family: 'Inter', sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;"
-        onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(140, 85, 120, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'"
-        onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.3)'"
+        style="position: fixed; top: 10px; right: 10px; z-index: 1000; padding: 8px; background: rgba(0,0,0,0.8); color: white;
+               border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; text-decoration: none;
+               font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+               line-height: 1; display: flex; align-items: center; justify-content: center;"
+        onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(180,15,80,0.8)'; this.style.borderColor='rgba(255,255,255,0.6)'"
+        onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0,0,0,0.8)'; this.style.borderColor='rgba(255,255,255,0.3)'"
         onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
-        onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img
-            src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home"
-            style="width: 18px; height: 18px; object-fit: contain;"></a>
+        onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
+        <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+             alt="home" style="width: 18px; height: 18px; object-fit: contain;">
+    </a>
 
     <div id="menu-bar">
         <button id="minimizeMenuBtn">–</button>
-        <div style="margin-bottom: 8px; font-weight: bold; font-size: 20px; letter-spacing: 1px;">Image Menu</div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <label for="category-select">SFW/NSFW:</label>
-            <select id="category-select" style="font-size: 17px; border-radius: 6px; padding: 4px 8px;">
+        <div id="menu-title">⛧ Anime Hellscape ⛧</div>
+        <div class="menu-divider"></div>
+        <div class="ctrl-group">
+            <span class="ctrl-label">SFW/NSFW</span>
+            <select id="category-select" style="display:none">
                 <option value="sfw">SFW</option>
                 <option value="nsfw">NSFW</option>
             </select>
+            <div class="hell-select" id="category-dropdown">
+                <button class="hell-select-trigger" type="button" id="category-trigger">
+                    <span id="category-value">SFW</span>
+                    <span class="hell-select-arrow">▼</span>
+                </button>
+                <div class="hell-select-options" id="category-options"></div>
+            </div>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <label for="subcategory-select">Category:</label>
-            <select id="subcategory-select" style="font-size: 17px; border-radius: 6px; padding: 4px 8px;"></select>
+        <div class="ctrl-group">
+            <span class="ctrl-label">Category</span>
+            <select id="subcategory-select" style="display:none"></select>
+            <div class="hell-select" id="subcategory-dropdown">
+                <button class="hell-select-trigger" type="button" id="subcategory-trigger">
+                    <span id="subcategory-value">— select —</span>
+                    <span class="hell-select-arrow">▼</span>
+                </button>
+                <div class="hell-select-options" id="subcategory-options"></div>
+            </div>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <label for="tile-size-slider">Tile Size: <span id="tile-size-value">200</span>px</label>
-            <input type="range" id="tile-size-slider" min="80" max="400" value="200" step="1" style="width: 100%;">
-
+        <div class="ctrl-group">
+            <div class="slider-row">
+                <span class="ctrl-label">Tile Size</span>
+                <span id="tile-size-value">200</span>
+            </div>
+            <input type="range" id="tile-size-slider" min="80" max="400" value="200" step="1">
         </div>
         <button id="refreshBtn">Refresh <span class="spin">⟳</span></button>
-
     </div>
 
     <div id="waifu-grid"></div>
@@ -416,7 +574,7 @@
             // Add a placeholder option (enabled, not disabled)
             const placeholder = document.createElement('option');
             placeholder.value = '';
-            placeholder.textContent = '-- Select --';
+            placeholder.textContent = '— select —';
             placeholder.selected = true;
             placeholder.style.color = '#000';
             placeholder.disabled = true;
@@ -439,76 +597,126 @@
         let nsfwConfirmed = false;
         function showNsfwPopup() {
             return new Promise((resolve) => {
-                // Create overlay
                 const overlay = document.createElement('div');
-                overlay.style.position = 'fixed';
-                overlay.style.top = '0';
-                overlay.style.left = '0';
-                overlay.style.width = '100vw';
-                overlay.style.height = '100vh';
-                overlay.style.background = 'rgba(0,0,0,0.85)';
-                overlay.style.zIndex = '9999';
-                overlay.style.display = 'flex';
-                overlay.style.alignItems = 'center';
-                overlay.style.justifyContent = 'center';
-                overlay.style.flexDirection = 'column';
-                // Popup box
+                overlay.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: rgba(4, 0, 0, 0.94);
+                    z-index: 9999; display: flex; align-items: center; justify-content: center;
+                    font-family: 'DM Mono', monospace;
+                `;
+
                 const popup = document.createElement('div');
-                popup.style.background = 'rgba(40, 10, 30, 0.98)';
-                popup.style.color = '#fff';
-                popup.style.padding = '32px 28px 24px 28px';
-                popup.style.borderRadius = '16px';
-                popup.style.boxShadow = '0 4px 32px #000b';
-                popup.style.textAlign = 'center';
-                popup.style.maxWidth = '90vw';
-                popup.style.fontFamily = "'Fira Sans', 'Segoe UI', 'Roboto', 'Arial', sans-serif";
-                // Message
+                popup.style.cssText = `
+                    background: rgba(10, 2, 2, 0.99);
+                    border: 1px solid rgba(255, 50, 0, 0.45);
+                    box-shadow: 0 0 60px rgba(255, 30, 0, 0.22), 0 8px 48px rgba(0,0,0,0.95);
+                    border-radius: 5px;
+                    padding: 36px 32px 28px;
+                    text-align: center;
+                    max-width: min(440px, 90vw);
+                    width: 100%;
+                `;
+
+                const sigil = document.createElement('div');
+                sigil.textContent = '⛧';
+                sigil.style.cssText = `
+                    font-size: 36px; color: rgba(255,40,0,0.6);
+                    text-shadow: 0 0 20px rgba(255,30,0,0.5);
+                    margin-bottom: 14px; line-height: 1;
+                `;
+
+                const title = document.createElement('div');
+                title.textContent = 'Age Gate';
+                title.style.cssText = `
+                    font-family: 'Cinzel Decorative', serif;
+                    font-size: 18px; font-weight: 700;
+                    color: #ff2800;
+                    text-shadow: 0 0 16px rgba(255,40,0,0.5);
+                    letter-spacing: 0.1em;
+                    margin-bottom: 10px;
+                `;
+
+                const divider = document.createElement('div');
+                divider.style.cssText = `
+                    height: 1px;
+                    background: linear-gradient(90deg, transparent, rgba(255,50,0,0.4), transparent);
+                    margin: 14px 0;
+                `;
+
                 const msg = document.createElement('div');
-                msg.style.fontSize = '1.25rem';
-                msg.style.marginBottom = '18px';
-                msg.style.fontWeight = 'bold';
-                msg.textContent = 'NSFW Content Warning';
+                msg.textContent = 'NSFW content awaits beyond this point.';
+                msg.style.cssText = `
+                    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+                    color: rgba(255, 160, 100, 0.8); margin-bottom: 6px;
+                `;
+
                 const submsg = document.createElement('div');
-                submsg.style.fontSize = '1rem';
-                submsg.style.marginBottom = '22px';
-                submsg.textContent = 'You must confirm you are 18+ to view NSFW images.';
-                // Buttons
+                submsg.textContent = 'You must be 18 or older to continue.';
+                submsg.style.cssText = `
+                    font-size: 11px; color: rgba(255,100,60,0.45);
+                    letter-spacing: 0.06em; margin-bottom: 26px;
+                `;
+
                 const btns = document.createElement('div');
-                btns.style.display = 'flex';
-                btns.style.justifyContent = 'center';
-                btns.style.gap = '18px';
+                btns.style.cssText = `display: flex; justify-content: center; gap: 12px;`;
+
                 const yesBtn = document.createElement('button');
-                yesBtn.textContent = 'I am 18 or older';
-                yesBtn.style.background = '#a01883';
-                yesBtn.style.color = '#fff';
-                yesBtn.style.border = 'none';
-                yesBtn.style.borderRadius = '8px';
-                yesBtn.style.padding = '10px 22px';
-                yesBtn.style.fontSize = '1rem';
-                yesBtn.style.cursor = 'pointer';
-                yesBtn.style.fontWeight = 'bold';
-                yesBtn.style.boxShadow = '0 2px 8px #ff69b488';
+                yesBtn.textContent = 'Enter';
+                yesBtn.style.cssText = `
+                    font-family: 'DM Mono', monospace;
+                    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+                    background: rgba(255, 35, 0, 0.1);
+                    color: rgba(255, 150, 90, 0.95);
+                    border: 1px solid rgba(255, 50, 0, 0.5);
+                    border-radius: 3px; padding: 9px 22px; cursor: pointer;
+                    transition: background 0.15s, box-shadow 0.15s, color 0.15s;
+                `;
+                yesBtn.addEventListener('mouseover', () => {
+                    yesBtn.style.background = 'rgba(255,35,0,0.2)';
+                    yesBtn.style.boxShadow = '0 0 18px rgba(255,40,0,0.3)';
+                    yesBtn.style.color = 'rgba(255,200,140,0.98)';
+                });
+                yesBtn.addEventListener('mouseout', () => {
+                    yesBtn.style.background = 'rgba(255,35,0,0.1)';
+                    yesBtn.style.boxShadow = 'none';
+                    yesBtn.style.color = 'rgba(255,150,90,0.95)';
+                });
                 yesBtn.addEventListener('click', () => {
                     document.body.removeChild(overlay);
                     resolve(true);
                 });
+
                 const noBtn = document.createElement('button');
-                noBtn.textContent = 'Cancel';
-                noBtn.style.background = '#333';
-                noBtn.style.color = '#fff';
-                noBtn.style.border = 'none';
-                noBtn.style.borderRadius = '8px';
-                noBtn.style.padding = '10px 22px';
-                noBtn.style.fontSize = '1rem';
-                noBtn.style.cursor = 'pointer';
-                noBtn.style.fontWeight = 'bold';
-                noBtn.style.boxShadow = '0 2px 8px #0008';
+                noBtn.textContent = 'Retreat';
+                noBtn.style.cssText = `
+                    font-family: 'DM Mono', monospace;
+                    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+                    background: transparent;
+                    color: rgba(255,100,60,0.35);
+                    border: 1px solid rgba(255,80,40,0.15);
+                    border-radius: 3px; padding: 9px 22px; cursor: pointer;
+                    transition: background 0.15s, color 0.15s, border-color 0.15s;
+                `;
+                noBtn.addEventListener('mouseover', () => {
+                    noBtn.style.background = 'rgba(255,255,255,0.04)';
+                    noBtn.style.color = 'rgba(255,130,80,0.65)';
+                    noBtn.style.borderColor = 'rgba(255,80,40,0.3)';
+                });
+                noBtn.addEventListener('mouseout', () => {
+                    noBtn.style.background = 'transparent';
+                    noBtn.style.color = 'rgba(255,100,60,0.35)';
+                    noBtn.style.borderColor = 'rgba(255,80,40,0.15)';
+                });
                 noBtn.addEventListener('click', () => {
                     document.body.removeChild(overlay);
                     resolve(false);
                 });
+
                 btns.appendChild(yesBtn);
                 btns.appendChild(noBtn);
+                popup.appendChild(sigil);
+                popup.appendChild(title);
+                popup.appendChild(divider);
                 popup.appendChild(msg);
                 popup.appendChild(submsg);
                 popup.appendChild(btns);
@@ -897,6 +1105,73 @@
 
         // Initial grid setup
         // Do not call updateGrid() on load; wait for user to select a subcategory
+
+        // ── Custom dropdown init ──────────────────────────────────────
+        function initHellSelect(nativeSelect, triggerId, optionsId, valueId) {
+            const wrapper = document.getElementById(triggerId).closest('.hell-select');
+            const trigger = document.getElementById(triggerId);
+            const optionsList = document.getElementById(optionsId);
+            const valueEl = document.getElementById(valueId);
+
+            function syncOptions() {
+                optionsList.innerHTML = '';
+                const currentVal = nativeSelect.value;
+                for (const opt of nativeSelect.options) {
+                    if (opt.disabled) continue;
+                    const div = document.createElement('div');
+                    div.className = 'hell-option' + (opt.value === currentVal ? ' selected' : '');
+                    div.textContent = opt.textContent;
+                    div.dataset.value = opt.value;
+                    div.addEventListener('click', () => {
+                        nativeSelect.value = opt.value;
+                        nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        wrapper.classList.remove('open');
+                    });
+                    optionsList.appendChild(div);
+                }
+                // Reflect selected label
+                const sel = nativeSelect.options[nativeSelect.selectedIndex];
+                valueEl.textContent = (sel && !sel.disabled) ? sel.textContent : '— select —';
+            }
+
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const wasOpen = wrapper.classList.contains('open');
+                document.querySelectorAll('.hell-select.open').forEach(el => el.classList.remove('open'));
+                if (!wasOpen) {
+                    syncOptions();
+                    wrapper.classList.add('open');
+                }
+            });
+
+            // Keep label in sync when native value changes via JS
+            nativeSelect.addEventListener('change', () => {
+                const sel = nativeSelect.options[nativeSelect.selectedIndex];
+                valueEl.textContent = (sel && !sel.disabled) ? sel.textContent : '— select —';
+                optionsList.querySelectorAll('.hell-option').forEach(d => {
+                    d.classList.toggle('selected', d.dataset.value === nativeSelect.value);
+                });
+            });
+
+            // Re-sync when updateSubcategories() rewrites the native options
+            new MutationObserver(syncOptions).observe(nativeSelect, { childList: true });
+
+            syncOptions();
+        }
+
+        // Close on outside click
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.hell-select.open').forEach(el => el.classList.remove('open'));
+        });
+
+        initHellSelect(
+            document.getElementById('category-select'),
+            'category-trigger', 'category-options', 'category-value'
+        );
+        initHellSelect(
+            document.getElementById('subcategory-select'),
+            'subcategory-trigger', 'subcategory-options', 'subcategory-value'
+        );
     </script>
 </body>
 
