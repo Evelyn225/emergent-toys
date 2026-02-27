@@ -616,6 +616,28 @@
   window.addEventListener('mouseup', (e) => {
     pressEnd();
   });
+
+  // Touch handlers — passive:false so we can preventDefault (suppresses context menu + mouse synthesis)
+  document.addEventListener('touchstart', (e) => {
+    if (e.target.closest('a') || e.target.closest('#ref-toggle') || e.target.closest('#ref-panel')) return;
+    e.preventDefault();
+    pressBegin();
+  }, { passive: false });
+
+  document.addEventListener('touchend', (e) => {
+    if (e.target.closest('a') || e.target.closest('#ref-toggle') || e.target.closest('#ref-panel')) return;
+    e.preventDefault();
+    pressEnd();
+  }, { passive: false });
+
+  document.addEventListener('touchcancel', () => {
+    pressEnd();
+  });
+
+  // Block context menu so long-press doesn't interrupt the hold
+  document.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
 </script>
 </body>
 </html>
