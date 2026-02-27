@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>Morse</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #000; font-family: 'DM Mono', monospace; user-select: none; cursor: crosshair; }
+
+    #screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+    }
+
+    #glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at center, rgba(240,180,41,0.06), transparent 70%);
+      opacity: 0;
+      transition: opacity 0.08s ease;
+    }
+
+    #instructions {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: rgba(255,255,255,0.45);
+      font-size: 13px;
+      font-weight: 300;
+      letter-spacing: 0.1em;
+      line-height: 2;
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+    }
+
+    #instructions.hidden {
+      opacity: 0;
+    }
+
+    #instructions .key-hint {
+      color: rgba(240,180,41,0.7);
+    }
+
+    #output-area {
+      font-size: clamp(2rem, 6vw, 4rem);
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      color: #fff;
+      min-height: 1.2em;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 90vw;
+      text-align: center;
+    }
+
+    #cursor {
+      color: #f0b429;
+      animation: blink 1s steps(1) infinite;
+      margin-left: 2px;
+    }
+
+    .char {
+      display: inline-block;
+      animation: letterFlash 0.4s ease forwards;
+    }
+
+    #symbol-area {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 24px;
+    }
+
+    .dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #f0b429;
+      box-shadow: 0 0 8px rgba(240,180,41,0.7);
+      animation: symbolIn 0.12s ease forwards;
+    }
+
+    .dash {
+      width: 48px;
+      height: 16px;
+      border-radius: 8px;
+      background: #f0b429;
+      box-shadow: 0 0 8px rgba(240,180,41,0.7);
+      animation: symbolIn 0.12s ease forwards;
+    }
+
+    #predict-label {
+      font-size: 1.4rem;
+      font-weight: 300;
+      color: rgba(240,180,41,0.6);
+      letter-spacing: 0.15em;
+      min-height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #progress-wrap {
+      position: relative;
+      width: 280px;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      overflow: visible;
+    }
+
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #f0b429;
+      border-radius: 2px;
+      box-shadow: 0 0 6px rgba(240,180,41,0.5);
+      transition: none;
+    }
+
+    #dot-dash-tick {
+      position: absolute;
+      left: 16.67%;
+      top: -4px;
+      width: 2px;
+      height: 12px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 1px;
+    }
+
+    @keyframes symbolIn {
+      from { opacity: 0; transform: scale(0.4); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes letterFlash {
+      0%   { color: #f0b429; }
+      100% { color: #fff; }
+    }
+
+    @keyframes blink {
+      0%,49%  { opacity: 1; }
+      50%,100% { opacity: 0; }
+    }
+
+    /* ── Reference panel ── */
+    #ref-toggle {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 500;
+      width: 36px;
+      height: 36px;
+      background: rgba(0,0,0,0.8);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 4px;
+      color: #f0b429;
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      letter-spacing: -1px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+      user-select: none;
+    }
+    #ref-toggle:hover {
+      background: rgba(240,180,41,0.15);
+      border-color: rgba(240,180,41,0.5);
+      transform: scale(1.12);
+    }
+    #ref-toggle.active {
+      background: rgba(240,180,41,0.18);
+      border-color: rgba(240,180,41,0.7);
+    }
+
+    #ref-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 272px;
+      background: rgba(7,4,0,0.97);
+      border-right: 1px solid rgba(240,180,41,0.18);
+      z-index: 400;
+      transform: translateX(-100%);
+      transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #ref-panel.open {
+      transform: translateX(0);
+      box-shadow: 4px 0 32px rgba(0,0,0,0.7), 1px 0 0 rgba(240,180,41,0.08);
+    }
+
+    #ref-header {
+      padding: 58px 18px 14px;
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: rgba(240,180,41,0.45);
+      border-bottom: 1px solid rgba(240,180,41,0.1);
+      flex-shrink: 0;
+    }
+
+    #ref-scroll {
+      overflow-y: auto;
+      flex: 1;
+      padding: 14px 14px 20px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(240,180,41,0.25) transparent;
+    }
+    #ref-scroll::-webkit-scrollbar { width: 4px; }
+    #ref-scroll::-webkit-scrollbar-track { background: transparent; }
+    #ref-scroll::-webkit-scrollbar-thumb { background: rgba(240,180,41,0.25); border-radius: 2px; }
+
+    .ref-section-label {
+      font-size: 8px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.18);
+      margin: 0 2px 8px;
+    }
+
+    .ref-grid {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 18px;
+    }
+    .ref-grid-alpha { grid-template-columns: repeat(4, 1fr); }
+    .ref-grid-digit { grid-template-columns: repeat(2, 1fr); }
+
+    .ref-entry {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 7px 7px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.015);
+      transition: border-color 0.15s, background 0.15s;
+      cursor: default;
+    }
+    .ref-entry:hover {
+      border-color: rgba(240,180,41,0.35);
+      background: rgba(240,180,41,0.06);
+    }
+
+    .ref-letter {
+      font-size: 15px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.85);
+    }
+
+    .ref-symbols {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex-wrap: wrap;
+      min-height: 6px;
+    }
+
+    .ref-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #f0b429;
+      opacity: 0.75;
+      flex-shrink: 0;
+      display: inline-block;
+    }
+
+    .ref-dash {
+      width: 13px;
+      height: 5px;
+      border-radius: 2.5px;
+      background: #f0b429;
+      opacity: 0.75;
+      flex-shrink: 0;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+<a href="index.html"
+  style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         padding: 8px; background: rgba(0,0,0,0.8); color: white;
+         border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
+         text-decoration: none; font-family: sans-serif; font-size: 18px;
+         transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+         line-height: 1; display: flex; align-items: center; justify-content: center;"
+  onmouseover="this.style.transform='scale(1.2) rotate(5deg)';
+               this.style.background='rgba(240,180,41,0.8)';
+               this.style.borderColor='rgba(255,255,255,0.6)'"
+  onmouseout="this.style.transform='scale(1) rotate(0deg)';
+              this.style.background='rgba(0,0,0,0.8)';
+              this.style.borderColor='rgba(255,255,255,0.3)'"
+  onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
+  onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
+  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+       alt="home" style="width: 18px; height: 18px; object-fit: contain;">
+</a>
+
+<button id="ref-toggle" title="morse alphabet">·−</button>
+
+<div id="ref-panel">
+  <div id="ref-header">morse alphabet</div>
+  <div id="ref-scroll">
+    <div class="ref-section-label">letters</div>
+    <div class="ref-grid ref-grid-alpha" id="ref-grid-alpha"></div>
+    <div class="ref-section-label">digits</div>
+    <div class="ref-grid ref-grid-digit" id="ref-grid-digit"></div>
+  </div>
+</div>
+
+<div id="screen">
+  <div id="glow"></div>
+
+  <div id="instructions">
+    <div>hold any key or click to transmit</div>
+    <div><span class="key-hint">short</span> press = dot &nbsp;·&nbsp; <span class="key-hint">long</span> press = dash</div>
+    <div>pause to commit letter &nbsp;·&nbsp; <span class="key-hint">backspace</span> to delete &nbsp;·&nbsp; <span class="key-hint">esc</span> to clear</div>
+  </div>
+
+  <div id="output-area">
+    <span id="decoded-text"></span><span id="cursor">_</span>
+  </div>
+
+  <div id="symbol-area"></div>
+
+  <div id="predict-label">·</div>
+
+  <div id="progress-wrap">
+    <div id="progress-bar"></div>
+    <div id="dot-dash-tick"></div>
+  </div>
+</div>
+
+<script>
+  const DOT_THRESHOLD    = 200;
+  const LETTER_GAP       = 450;
+  const WORD_GAP         = 1200;
+  const PROGRESS_FULL_MS = 1200;
+
+  const MORSE = {
+    '.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F',
+    '--.':'G','....':'H','..':'I','.---':'J','-.-':'K','.-..':'L',
+    '--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R',
+    '...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X',
+    '-.--':'Y','--..':'Z',
+    '-----':'0','.----':'1','..---':'2','...--':'3','....-':'4',
+    '.....':'5','-....':'6','--...':'7','---..':'8','----.':'9'
+  };
+
+  // DOM refs
+  const elGlow        = document.getElementById('glow');
+  const elInstructions = document.getElementById('instructions');
+  const elDecodedText = document.getElementById('decoded-text');
+  const elSymbolArea  = document.getElementById('symbol-area');
+  const elPredictLabel = document.getElementById('predict-label');
+  const elProgressBar = document.getElementById('progress-bar');
+
+  // State
+  let symbols        = [];
+  let decoded        = '';
+  let keyHeld        = false;
+  let pressStart     = 0;
+  let letterTimer    = null;
+  let wordTimer      = null;
+  let progressRaf    = null;
+  let progressStart  = 0;
+  let instructionsGone = false;
+
+  // Audio
+  let audioCtx = null;
+  let currentOsc = null;
+  let currentGain = null;
+
+  function ensureAudioCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+
+  function startTone() {
+    ensureAudioCtx();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    currentGain = audioCtx.createGain();
+    currentGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    currentGain.gain.linearRampToValueAtTime(0.25, audioCtx.currentTime + 0.01);
+    currentGain.connect(audioCtx.destination);
+
+    currentOsc = audioCtx.createOscillator();
+    currentOsc.type = 'sine';
+    currentOsc.frequency.setValueAtTime(650, audioCtx.currentTime);
+    currentOsc.connect(currentGain);
+    currentOsc.start();
+  }
+
+  function stopTone() {
+    if (!currentOsc || !currentGain) return;
+    const now = audioCtx.currentTime;
+    currentGain.gain.linearRampToValueAtTime(0, now + 0.02);
+    currentOsc.stop(now + 0.025);
+    currentOsc = null;
+    currentGain = null;
+  }
+
+  // Progress bar
+  function startProgressBar() {
+    cancelAnimationFrame(progressRaf);
+    progressStart = performance.now();
+    function tick(now) {
+      const pct = Math.min((now - progressStart) / PROGRESS_FULL_MS, 1);
+      elProgressBar.style.width = (pct * 100) + '%';
+      if (pct < 1) progressRaf = requestAnimationFrame(tick);
+    }
+    progressRaf = requestAnimationFrame(tick);
+  }
+
+  function stopProgressBar() {
+    cancelAnimationFrame(progressRaf);
+    progressRaf = null;
+    elProgressBar.style.width = '0%';
+  }
+
+  // Symbol management
+  function addSymbol(type) {
+    symbols.push(type);
+    const el = document.createElement('div');
+    el.className = type === '.' ? 'dot' : 'dash';
+    elSymbolArea.appendChild(el);
+    updatePredictLabel();
+  }
+
+  function updatePredictLabel() {
+    const key = symbols.join('');
+    const letter = MORSE[key];
+    elPredictLabel.textContent = letter ? letter : (key.length > 0 ? '?' : '·');
+  }
+
+  function commitLetter() {
+    clearAllTimers();
+    const key = symbols.join('');
+    const letter = MORSE[key] || '?';
+    if (key.length > 0) {
+      decoded += letter;
+      const span = document.createElement('span');
+      span.className = 'char';
+      span.textContent = letter;
+      elDecodedText.appendChild(span);
+    }
+    clearSymbolArea();
+  }
+
+  function addSpace() {
+    clearAllTimers();
+    // Don't add double spaces
+    if (decoded.length > 0 && decoded[decoded.length - 1] !== ' ') {
+      decoded += ' ';
+      const span = document.createElement('span');
+      span.className = 'char';
+      span.textContent = '\u00a0'; // non-breaking space
+      elDecodedText.appendChild(span);
+    }
+    clearSymbolArea();
+  }
+
+  function clearSymbolArea() {
+    elSymbolArea.innerHTML = '';
+    symbols = [];
+    updatePredictLabel();
+  }
+
+  function clearAllTimers() {
+    clearTimeout(letterTimer);
+    clearTimeout(wordTimer);
+    letterTimer = null;
+    wordTimer = null;
+  }
+
+  function doBackspace() {
+    clearAllTimers();
+    clearSymbolArea();
+    if (elDecodedText.lastChild) {
+      elDecodedText.removeChild(elDecodedText.lastChild);
+      decoded = decoded.slice(0, -1);
+    }
+  }
+
+  function doEscape() {
+    clearAllTimers();
+    clearSymbolArea();
+    decoded = '';
+    elDecodedText.innerHTML = '';
+  }
+
+  // Shared press logic
+  function pressBegin() {
+    if (keyHeld) return;
+    if (!instructionsGone) {
+      instructionsGone = true;
+      elInstructions.classList.add('hidden');
+    }
+    clearAllTimers();
+    keyHeld = true;
+    pressStart = Date.now();
+    startTone();
+    elGlow.style.opacity = '1';
+    startProgressBar();
+  }
+
+  function pressEnd() {
+    if (!keyHeld) return;
+    keyHeld = false;
+    stopTone();
+    elGlow.style.opacity = '0';
+    stopProgressBar();
+
+    const duration = Date.now() - pressStart;
+    addSymbol(duration < DOT_THRESHOLD ? '.' : '-');
+
+    letterTimer = setTimeout(commitLetter, LETTER_GAP);
+    wordTimer   = setTimeout(addSpace, WORD_GAP);
+  }
+
+  // Key handlers
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      doBackspace();
+      return;
+    }
+    if (e.key === 'Escape') {
+      doEscape();
+      return;
+    }
+    if (e.repeat) return;
+    pressBegin();
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Backspace' || e.key === 'Escape') return;
+    pressEnd();
+  });
+
+  // ── Reference panel ──
+  const elRefToggle = document.getElementById('ref-toggle');
+  const elRefPanel  = document.getElementById('ref-panel');
+
+  // Build lookup: letter → morse code string
+  const CHAR_TO_MORSE = {};
+  for (const [code, letter] of Object.entries(MORSE)) {
+    CHAR_TO_MORSE[letter] = code;
+  }
+
+  function symbolsHtml(code) {
+    return code.split('').map(s =>
+      s === '.' ? '<span class="ref-dot"></span>' : '<span class="ref-dash"></span>'
+    ).join('');
+  }
+
+  function buildEntry(char) {
+    const code = CHAR_TO_MORSE[char];
+    return `<div class="ref-entry">
+      <div class="ref-letter">${char}</div>
+      <div class="ref-symbols">${symbolsHtml(code)}</div>
+    </div>`;
+  }
+
+  document.getElementById('ref-grid-alpha').innerHTML =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(buildEntry).join('');
+
+  document.getElementById('ref-grid-digit').innerHTML =
+    '0123456789'.split('').map(buildEntry).join('');
+
+  elRefToggle.addEventListener('click', () => {
+    const open = elRefPanel.classList.toggle('open');
+    elRefToggle.classList.toggle('active', open);
+  });
+
+  // Mouse handlers (ignore clicks on the home button, toggle, and ref panel)
+  document.addEventListener('mousedown', (e) => {
+    if (e.target.closest('a') || e.target.closest('#ref-toggle') || e.target.closest('#ref-panel')) return;
+    e.preventDefault();
+    pressBegin();
+  });
+
+  // Listen on window so releasing outside the page still registers
+  window.addEventListener('mouseup', (e) => {
+    pressEnd();
+  });
+</script>
+</body>
+</html>
