@@ -10,10 +10,11 @@
     <title>Interactive Voronoi Diagram</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
     <script src="https://unpkg.com/d3-delaunay@6"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             margin: 0;
-            padding: 0;
             overflow: hidden;
             background: #000;
         }
@@ -22,25 +23,38 @@
         }
         #controls {
             position: fixed;
-            left: 20px;
-            top: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 8px;
-            color: white;
-            z-index: 100;
+            left: 12px;
+            top: 12px;
+            background: rgba(0, 0, 0, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 10px;
+            z-index: 102;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
         }
         button {
-            background: #444;
-            color: white;
-            border: none;
-            padding: 8px 15px;
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             border-radius: 4px;
+            padding: 7px 13px;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.07em;
             cursor: pointer;
-            margin: 5px;
+            transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+            text-align: left;
         }
         button:hover {
-            background: #555;
+            background: rgba(20, 250, 170, 0.1);
+            border-color: rgba(20, 250, 170, 0.4);
+            color: rgba(20, 250, 170, 0.95);
+        }
+        button:active {
+            transform: scale(0.96);
+            background: rgba(20, 250, 170, 0.16);
         }
     </style>
 </head>
