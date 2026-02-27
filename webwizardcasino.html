@@ -190,6 +190,8 @@
                             document.getElementById('themeScreen').style.display = 'flex';
                             document.getElementById('topBar').style.display = 'flex';
                             document.getElementById('generatedContent').innerHTML = '';
+                            currentGeneration = { theme: '', code: '' };
+                            updateSaveButton();
                             setRegenerateButtonText('generate');
                         }
                     };
@@ -205,9 +207,9 @@
                         document.getElementById('topBar').style.display = 'flex';
                         document.getElementById('generatedContent').innerHTML = '';
                         currentGeneration = { theme: '', code: '' };
+                        updateSaveButton();
                         setRegenerateButtonText('generate');
                         regenerateButton.disabled = false;
-                        updateSaveButton();
                     };
                     regenerateButton._handlerAttached = true;
                 }
