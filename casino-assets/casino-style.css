@@ -167,7 +167,7 @@ body {
     height: 52px;
     background: rgba(12,12,12,0.97);
     border-bottom: 1px solid rgba(255,255,255,0.08);
-    z-index: 10000;
+    z-index: 13000;
     display: flex;
     align-items: center;
     padding: 0 14px;
@@ -313,7 +313,7 @@ body {
     background: rgba(10,10,10,0.98);
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 6px;
-    z-index: 20000;
+    z-index: 11000;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -447,7 +447,7 @@ body {
     flex-direction: column;
     justify-content: flex-start;
     align-items: flex-start;
-    z-index: 999999;
+    z-index: 12000;
     font-family: 'Iosevka', monospace;
     color: #ffffff;
     overflow: hidden;
