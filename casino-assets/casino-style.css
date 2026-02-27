@@ -447,7 +447,7 @@ body {
     flex-direction: column;
     justify-content: flex-start;
     align-items: flex-start;
-    z-index: 9999;
+    z-index: 999999;
     font-family: 'Iosevka', monospace;
     color: #ffffff;
     overflow: hidden;
