@@ -19,17 +19,33 @@
 
 <body>
     <div id="topBar" style="display:none;">
-        <button id="regenerateButton">generate</button>
-        <a href="index.html" id="homeButton" style="padding: 12px 12px; background: transparent; color: rgba(255, 255, 255, 0.8); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; cursor: pointer; font-size: 18px; font-family: 'Iosevka', monospace; text-decoration: none; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); display: flex; align-items: center; line-height: 1;" onmouseover="this.style.transform='scale(1.2)'; this.style.background='rgba(255, 255, 255, 0.15)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='transparent'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">🏠</a>
+        <span id="barTitle">web wizard's casino</span>
+        <div id="barActions">
+            <button id="saveButton" class="bar-btn" style="display:none;">★ save</button>
+            <button id="favoritesButton" class="bar-btn">saved</button>
+            <button id="regenerateButton">generate</button>
+            <a href="index.html" id="homeButton">
+                <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+                     alt="home" style="width:16px;height:16px;object-fit:contain;display:block;">
+            </a>
+        </div>
+    </div>
+
+    <div id="favoritesPanel">
+        <div id="favoritesHeader">saved sites</div>
+        <div id="favoritesList">
+            <div id="favoritesEmpty">No saved sites yet.<br>Generate a site and click ★ save.</div>
+        </div>
     </div>
 
     <div id="themeScreen" class="theme-screen">
         <div class="theme-modal">
-            <div class="theme-title">The Web Wizard's Casino Terminal</div>
-            <div class="theme-desc">Enter a theme for your generative site, or let the wizard choose one for you.</div>
+            <div class="theme-eyebrow">▓ terminal</div>
+            <div class="theme-title">The Web Wizard's Casino</div>
+            <div class="theme-desc">Enter a theme and the wizard will conjure a generative p5.js experience.</div>
             <div class="theme-input-row">
                 <input id="themeInput" type="text" placeholder="Enter a theme..." class="theme-input">
-                <button id="randomThemeButton" class="theme-random-btn">random_theme</button>
+                <button id="randomThemeButton" class="theme-random-btn">random</button>
             </div>
             <button id="startGenerationButton" class="theme-generate-btn">generate site</button>
         </div>
@@ -188,8 +204,10 @@
                         document.getElementById('themeScreen').style.display = 'flex';
                         document.getElementById('topBar').style.display = 'flex';
                         document.getElementById('generatedContent').innerHTML = '';
+                        currentGeneration = { theme: '', code: '' };
                         setRegenerateButtonText('generate');
                         regenerateButton.disabled = false;
+                        updateSaveButton();
                     };
                     regenerateButton._handlerAttached = true;
                 }
@@ -388,6 +406,7 @@
             // Hide overlay first, then inject site
             loadingOverlay.classList.add('hidden');
             setTimeout(() => {
+                updateSaveButton();
                 if (isFullHTML) {
                     container.innerHTML = gen.code;
                     disableGeneratedContextMenu(container);
@@ -443,6 +462,15 @@
             const themeInput = document.getElementById('themeInput');
             const themeScreen = document.getElementById('themeScreen');
             const topBar = document.getElementById('topBar');
+            // Require a theme — no silent random fallback
+            if (!themeInput.value.trim()) {
+                themeInput.classList.remove('input-error');
+                void themeInput.offsetWidth; // force reflow to restart animation
+                themeInput.classList.add('input-error');
+                themeInput.addEventListener('animationend', () => themeInput.classList.remove('input-error'), { once: true });
+                themeInput.focus();
+                return;
+            }
             // Hide theme screen, show loading overlay
             themeScreen.style.display = 'none';
             loadingOverlay.classList.remove('hidden');
@@ -473,12 +501,7 @@
                 }, 120); // Even slower update
             }, 2000); // Delay progress bar start by 2000ms
             document.getElementById('consoleOutput').innerHTML = '';
-            // Ensure theme variable is always defined and in scope
             let themeValue = themeInput.value.trim();
-            if (!themeValue) {
-                themeValue = await getRandomTheme();
-                themeInput.value = themeValue;
-            }
             const themeStatus = document.getElementById('themeStatus');
             themeStatus.textContent = themeValue;
             themeStatus.style.display = 'block';
@@ -569,8 +592,10 @@ ${firstPassCode}
                     setRegenerateButtonText('generate');
                     regenerateButton.disabled = false;
                     isGenerating = false;
+                    updateSaveButton();
                 }, 0);
             } catch (error) {
+                stopConsoleCommands();
                 addConsoleCommand('Error: ' + error.message, 'error');
                 setProgressBar(100);
                 clearInterval(progressInterval);
@@ -581,6 +606,115 @@ ${firstPassCode}
                 document.getElementById('themeStatus').style.display = 'block';
             }
         }
+
+        // ── Favorites ────────────────────────────────────────────
+        const FAV_KEY = 'wwc-favorites';
+        const MAX_FAVS = 30;
+
+        function getFavorites() {
+            try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); }
+            catch { return []; }
+        }
+
+        function saveFavorites(arr) {
+            localStorage.setItem(FAV_KEY, JSON.stringify(arr));
+        }
+
+        function formatRelDate(iso) {
+            const diff = Date.now() - new Date(iso).getTime();
+            if (diff < 60000)      return 'just now';
+            if (diff < 3600000)    return Math.floor(diff / 60000) + 'm ago';
+            if (diff < 86400000)   return Math.floor(diff / 3600000) + 'h ago';
+            return Math.floor(diff / 86400000) + 'd ago';
+        }
+
+        function isCurrentSaved() {
+            if (!currentGeneration.code) return false;
+            return getFavorites().some(f => f.code === currentGeneration.code);
+        }
+
+        function updateSaveButton() {
+            const btn = document.getElementById('saveButton');
+            if (!btn) return;
+            const hasSite = !!currentGeneration.code;
+            btn.style.display = hasSite ? 'flex' : 'none';
+            if (hasSite) {
+                const saved = isCurrentSaved();
+                btn.textContent = saved ? '✓ saved' : '★ save';
+                btn.classList.toggle('is-saved', saved);
+            }
+        }
+
+        function renderFavorites() {
+            const favs = getFavorites();
+            const list = document.getElementById('favoritesList');
+            const empty = document.getElementById('favoritesEmpty');
+            const favBtn = document.getElementById('favoritesButton');
+            if (!list) return;
+
+            favBtn.textContent = favs.length > 0 ? `saved (${favs.length})` : 'saved';
+            favBtn.classList.toggle('has-items', favs.length > 0);
+
+            list.querySelectorAll('.fav-item').forEach(el => el.remove());
+            empty.style.display = favs.length === 0 ? 'block' : 'none';
+
+            [...favs].reverse().forEach(fav => {
+                const item = document.createElement('div');
+                item.className = 'fav-item';
+                item.innerHTML = `
+                    <div class="fav-meta">
+                        <span class="fav-theme" title="${fav.theme.replace(/"/g,'&quot;')}">${fav.theme}</span>
+                        <span class="fav-date">${formatRelDate(fav.savedAt)}</span>
+                    </div>
+                    <button class="fav-btn load-btn">load</button>
+                    <button class="fav-btn delete-btn">×</button>
+                `;
+                item.querySelector('.load-btn').addEventListener('click', () => loadFavorite(fav));
+                item.querySelector('.delete-btn').addEventListener('click', () => deleteFavorite(fav.id));
+                list.appendChild(item);
+            });
+        }
+
+        function addToFavorites() {
+            if (!currentGeneration.code || isCurrentSaved()) return;
+            const favs = getFavorites();
+            if (favs.length >= MAX_FAVS) favs.shift();
+            favs.push({ id: Date.now().toString(), theme: currentGeneration.theme, code: currentGeneration.code, savedAt: new Date().toISOString() });
+            saveFavorites(favs);
+            renderFavorites();
+            updateSaveButton();
+        }
+
+        function deleteFavorite(id) {
+            saveFavorites(getFavorites().filter(f => f.id !== id));
+            renderFavorites();
+            updateSaveButton();
+        }
+
+        function loadFavorite(fav) {
+            closeFavoritesPanel();
+            currentGeneration = { theme: fav.theme, code: fav.code };
+            document.getElementById('themeScreen').style.display = 'none';
+            document.getElementById('topBar').style.display = 'flex';
+            setDisplayedGeneration(currentGeneration);
+        }
+
+        function toggleFavoritesPanel() {
+            const panel = document.getElementById('favoritesPanel');
+            if (panel.classList.contains('open')) {
+                closeFavoritesPanel();
+            } else {
+                renderFavorites();
+                panel.classList.add('open');
+                document.getElementById('favoritesButton').classList.add('panel-open');
+            }
+        }
+
+        function closeFavoritesPanel() {
+            document.getElementById('favoritesPanel').classList.remove('open');
+            document.getElementById('favoritesButton').classList.remove('panel-open');
+        }
+        // ─────────────────────────────────────────────────────────
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -612,6 +746,18 @@ ${firstPassCode}
                     // Do NOT hide loadingOverlay here; it will be hidden after generation completes
                 }
             });
+            document.getElementById('saveButton').addEventListener('click', addToFavorites);
+            document.getElementById('favoritesButton').addEventListener('click', toggleFavoritesPanel);
+            document.addEventListener('click', (e) => {
+                const panel = document.getElementById('favoritesPanel');
+                const btn = document.getElementById('favoritesButton');
+                if (panel.classList.contains('open') && !panel.contains(e.target) && !btn.contains(e.target)) {
+                    closeFavoritesPanel();
+                }
+            });
+            renderFavorites();
+            updateSaveButton();
+
             randomThemeButton.addEventListener('click', async () => {
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
                 setRegenerateButtonText('generate');
