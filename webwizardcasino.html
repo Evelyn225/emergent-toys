@@ -167,6 +167,7 @@
             code: ''
         };
         let isGenerating = false;
+        let hasContent = false;
         let consoleCommandInterval = null;
 
         // Helper function to set regenerate button text with wave animation
@@ -180,39 +181,9 @@
                     return `<span class="button-wave-char" style="animation-delay: ${delay}s">${char}</span>`;
                 }).join('');
                 regenerateButton.disabled = false;
-                // Only attach handler if not already attached
-                if (!regenerateButton._handlerAttached) {
-                    regenerateButton.onclick = () => {
-                        if (isGenerating) {
-                            document.getElementById('loadingOverlay').classList.remove('hidden');
-                            document.getElementById('themeScreen').style.display = 'none';
-                        } else {
-                            document.getElementById('themeScreen').style.display = 'flex';
-                            document.getElementById('topBar').style.display = 'flex';
-                            document.getElementById('generatedContent').innerHTML = '';
-                            currentGeneration = { theme: '', code: '' };
-                            updateSaveButton();
-                            setRegenerateButtonText('generate');
-                        }
-                    };
-                    regenerateButton._handlerAttached = true;
-                }
             } else {
                 regenerateButton.textContent = text;
                 regenerateButton.disabled = false;
-                // Only attach handler if not already attached
-                if (!regenerateButton._handlerAttached) {
-                    regenerateButton.onclick = () => {
-                        document.getElementById('themeScreen').style.display = 'flex';
-                        document.getElementById('topBar').style.display = 'flex';
-                        document.getElementById('generatedContent').innerHTML = '';
-                        currentGeneration = { theme: '', code: '' };
-                        updateSaveButton();
-                        setRegenerateButtonText('generate');
-                        regenerateButton.disabled = false;
-                    };
-                    regenerateButton._handlerAttached = true;
-                }
             }
         }
 
@@ -431,6 +402,7 @@
                 } else {
                     container.textContent = gen.code;
                 }
+                hasContent = true;
             }, 120); // Delay to ensure overlay is hidden first
         }
         
@@ -555,47 +527,17 @@ ${firstPassCode}
                     theme: themeValue,
                     code: improvedCode
                 };
-                // Only show new site immediately
+                // Complete progress and UI state immediately
+                progress = 100;
+                setProgressBar(100);
+                clearInterval(progressInterval);
+                document.getElementById('themeStatus').style.display = 'none';
+                setRegenerateButtonText('generate');
+                regenerateButton.disabled = false;
+                isGenerating = false;
+                updateSaveButton();
+                // Single canonical injection
                 setDisplayedGeneration(currentGeneration);
-                setTimeout(() => {
-                    generatedContent.innerHTML = improvedCode;
-                    disableGeneratedContextMenu(generatedContent);
-                    // Execute any script tags in the generated HTML (no template literal injection)
-                    const scripts = generatedContent.querySelectorAll('script');
-                    scripts.forEach(oldScript => {
-                        const newScript = document.createElement('script');
-                        for (const attr of oldScript.attributes) {
-                            newScript.setAttribute(attr.name, attr.value);
-                        }
-                        if (oldScript.textContent) {
-                            newScript.textContent = oldScript.textContent;
-                        }
-                        oldScript.parentNode.replaceChild(newScript, oldScript);
-                    });
-                            // Global error handler for generated content
-                            window.addEventListener('error', function(event) {
-                                const container = document.getElementById('generatedContent');
-                                if (!container) return;
-                                // Check if error target is inside generatedContent
-                                if (event.target && container.contains(event.target)) {
-                                    const errorDiv = document.createElement('div');
-                                    errorDiv.className = 'error-overlay';
-                                    errorDiv.textContent = 'Site error: ' + event.message;
-                                    container.appendChild(errorDiv);
-                                }
-                            });
-                    // Complete progress bar
-                    progress = 100;
-                    setProgressBar(100);
-                    clearInterval(progressInterval);
-                    loadingOverlay.classList.add('hidden');
-                    // Hide themeStatus after loading
-                    document.getElementById('themeStatus').style.display = 'none';
-                    setRegenerateButtonText('generate');
-                    regenerateButton.disabled = false;
-                    isGenerating = false;
-                    updateSaveButton();
-                }, 0);
             } catch (error) {
                 stopConsoleCommands();
                 addConsoleCommand('Error: ' + error.message, 'error');
@@ -733,19 +675,20 @@ ${firstPassCode}
             document.getElementById('loadingOverlay').classList.add('hidden');
 
             regenerateButton.addEventListener('click', () => {
-                // Show loading overlay if site is generating
+                const themeScreen = document.getElementById('themeScreen');
                 if (isGenerating) {
+                    // During generation: show the loading overlay, hide theme screen
                     document.getElementById('loadingOverlay').classList.remove('hidden');
-                    document.getElementById('themeScreen').style.display = 'none';
+                    themeScreen.style.display = 'none';
+                } else if (themeScreen.style.display === 'flex') {
+                    // Overlay is open — only dismiss if a site exists
+                    if (hasContent) {
+                        themeScreen.style.display = 'none';
+                    }
+                    // else: first visit, cannot dismiss
                 } else {
-                    // Show theme screen, hide generated content, reset button
-                    document.getElementById('themeScreen').style.display = 'flex';
-                    document.getElementById('topBar').style.display = 'flex';
-                    document.getElementById('generatedContent').innerHTML = '';
-                    // Always reset regenerate button when theme screen is shown
-                    setRegenerateButtonText('generate');
-                    regenerateButton.disabled = false;
-                    // Do NOT hide loadingOverlay here; it will be hidden after generation completes
+                    // Overlay is closed — open it (do NOT clear generatedContent)
+                    themeScreen.style.display = 'flex';
                 }
             });
             document.getElementById('saveButton').addEventListener('click', addToFavorites);
@@ -759,6 +702,18 @@ ${firstPassCode}
             });
             renderFavorites();
             updateSaveButton();
+
+            // Global error handler for generated content (registered once)
+            window.addEventListener('error', function(event) {
+                const container = document.getElementById('generatedContent');
+                if (!container) return;
+                if (event.target && container.contains(event.target)) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error-overlay';
+                    errorDiv.textContent = 'Site error: ' + event.message;
+                    container.appendChild(errorDiv);
+                }
+            });
 
             randomThemeButton.addEventListener('click', async () => {
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
