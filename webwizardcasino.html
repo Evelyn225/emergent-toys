@@ -466,6 +466,8 @@
             loadingOverlay.classList.remove('hidden');
             pauseCurrentSite();
             topBar.style.display = 'flex';
+            document.getElementById('saveButton').style.display = 'none';
+            document.getElementById('favoritesButton').style.display = 'none';
             setRegenerateButtonText('generating...');
             regenerateButton.disabled = true;
             // ...existing code...
@@ -552,6 +554,7 @@ ${firstPassCode}
                 setRegenerateButtonText('generate');
                 regenerateButton.disabled = false;
                 isGenerating = false;
+                document.getElementById('favoritesButton').style.display = '';
                 updateSaveButton();
                 // Single canonical injection
                 setDisplayedGeneration(currentGeneration);
@@ -563,6 +566,7 @@ ${firstPassCode}
                 setRegenerateButtonText('generate');
                 regenerateButton.disabled = false;
                 isGenerating = false;
+                document.getElementById('favoritesButton').style.display = '';
                 // Show themeStatus even on error
                 document.getElementById('themeStatus').style.display = 'block';
             }
@@ -634,6 +638,17 @@ ${firstPassCode}
                 item.querySelector('.delete-btn').addEventListener('click', () => deleteFavorite(fav.id));
                 list.appendChild(item);
             });
+        }
+
+        function toggleSaveCurrent() {
+            if (!currentGeneration.code) return;
+            if (isCurrentSaved()) {
+                saveFavorites(getFavorites().filter(f => f.code !== currentGeneration.code));
+                renderFavorites();
+                updateSaveButton();
+            } else {
+                addToFavorites();
+            }
         }
 
         function addToFavorites() {
@@ -710,7 +725,7 @@ ${firstPassCode}
                     pauseCurrentSite();
                 }
             });
-            document.getElementById('saveButton').addEventListener('click', addToFavorites);
+            document.getElementById('saveButton').addEventListener('click', toggleSaveCurrent);
             document.getElementById('favoritesButton').addEventListener('click', toggleFavoritesPanel);
             document.addEventListener('click', (e) => {
                 const panel = document.getElementById('favoritesPanel');
