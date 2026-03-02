@@ -134,7 +134,7 @@
     - MUST include draw() function that calls background() at the start
     - Must visually incorporate the theme "${theme}" in the sketch
     - MUST literally include the theme word(s) ${theme} as text in the content somewhere
-    - Create something substantial: 250+ lines of creative code
+    - Create something substantial: 500+ lines of creative code
     - Have more than one element of interactivity, preferably mouse or keyboard based
     - Use p5 drawing functions: rect(), ellipse(), line(), fill(), stroke(), etc
     - Can use: noise(), sin(), cos(), random(), map(), etc for animation
@@ -521,10 +521,16 @@
                 const secondPassPrompt = `
 You previously generated this site for the theme: "${themeValue}". Please review and improve it:
 
-1. Flesh out the site further, making it more substantial and creative. The current code is merely a skeleton of what the site could be. Expand on it and make it more fully realized. This site should better fit the idea: "${themeValue}".
+1. Expand and enrich this working implementation — preserve everything that already functions. Make it more substantial and fully realized, deepening how it expresses the theme: "${themeValue}".
 2. Carefully check for any referenced functions, variables, or classes that are not fully implemented, and implement them.
 3. Ensure all p5.js code is complete and functional.
 4. Output only the improved HTML/CSS/JS code, no explanations.
+
+OUTPUT FORMAT (strictly enforced):
+- Raw HTML/CSS/JS only — no markdown, no code fences, no backticks
+- Do NOT wrap output in \`\`\`html or any other block
+- Output must begin with the first < character, nothing before it
+- Do NOT include <html>, <head>, or <body> tags
 
 Theme: ${themeValue}
 
