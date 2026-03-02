@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>Corridor Crawler</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #status {
+      position: fixed;
+      bottom: 16px;
+      right: 18px;
+      z-index: 200;
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      color: #000;
+      background: #fff;
+      padding: 5px 10px;
+      pointer-events: none;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      z-index: 102;
+      background: #fff;
+      width: 230px;
+      font-family: 'DM Mono', monospace;
+      color: #000;
+    }
+
+    .ctrl-section {
+      padding: 10px 16px 10px;
+    }
+
+    .ctrl-head {
+      font-size: 8px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 8px;
+    }
+
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 7px;
+    }
+
+    .ctrl-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .ctrl-row>span {
+      font-size: 11px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .ctrl-divider {
+      height: 1px;
+      background: #ebebeb;
+    }
+
+    .btn-group {
+      display: flex;
+    }
+
+    .btn-group button {
+      background: #fff;
+      color: #000;
+      border: 1px solid #000;
+      border-right: none;
+      padding: 3px 9px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .btn-group button:last-child {
+      border-right: 1px solid #000;
+    }
+
+    .btn-group button:hover:not(.active) {
+      background: #f0f0f0;
+    }
+
+    .btn-group button.active {
+      background: #000;
+      color: #fff;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      flex: 1;
+      height: 1px;
+      background: #bbb;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #000;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Home button -->
+  <a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         padding: 8px; background: rgba(0,0,0,0.8); color: white;
+         border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
+         text-decoration: none; font-family: sans-serif; font-size: 18px;
+         transition: all 0.15s cubic-bezier(0.68,-0.55,0.265,1.55);
+         line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.1)';
+               this.style.background='rgba(240,246,240,0.8)';
+               this.style.borderColor='rgba(255,255,255,0.6)'" onmouseout="this.style.transform='scale(1)';
+              this.style.background='rgba(0,0,0,0.8)';
+              this.style.borderColor='rgba(255,255,255,0.3)'" onmousedown="this.style.transform='scale(0.9)'"
+    onmouseup="this.style.transform='scale(1.1)'">
+    <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home"
+      style="width: 18px; height: 18px; object-fit: contain;">
+  </a>
+
+  <div id="status">AUTO</div>
+
+  <div class="controls">
+    <div class="ctrl-section">
+      <div class="ctrl-head">Dither</div>
+      <div class="ctrl-row">
+        <span>matrix</span>
+        <div class="btn-group">
+          <button id="btn2">2</button>
+          <button id="btn4">4</button>
+          <button id="btn8" class="active">8</button>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <span>bias</span>
+        <input type="range" id="biasSlider" min="-0.3" max="0.3" step="0.01" value="0.0">
+      </div>
+    </div>
+
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-section">
+      <div class="ctrl-head">Render</div>
+      <div class="ctrl-row">
+        <span>deform</span>
+        <input type="range" id="deformSlider" min="0" max="0.9" step="0.02" value="0.34">
+      </div>
+      <div class="ctrl-row">
+        <span>depth</span>
+        <input type="range" id="fogSlider" min="15" max="160" step="5" value="80">
+      </div>
+    </div>
+
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-section">
+      <div class="ctrl-head">Motion</div>
+      <div class="ctrl-row">
+        <span>drift</span>
+        <input type="range" id="speedSlider" min="0.01" max="0.15" step="0.005" value="0.05">
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js?module';
+    import { PointerLockControls } from 'https://unpkg.com/three@0.155.0/examples/jsm/controls/PointerLockControls.js?module';
+
+    // --- Vertex shader - simplex noise displaced by WORLD-SPACE position (no time) ---
+    // Using world space guarantees zero seams at segment boundaries.
+    const vertexShader = /* glsl */`
+vec3 mod289v3(vec3 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+vec4 mod289v4(vec4 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+vec4 permute(vec4 x) { return mod289v4(((x*34.0)+1.0)*x); }
+vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314 * r; }
+
+float snoise(vec3 v) {
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i  = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g  = step(x0.yzx, x0.xyz);
+  vec3 l  = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+  i = mod289v3(i);
+  vec4 p = permute(permute(permute(
+    i.z + vec4(0.0,i1.z,i2.z,1.0))
+    + i.y + vec4(0.0,i1.y,i2.y,1.0))
+    + i.x + vec4(0.0,i1.x,i2.x,1.0));
+  float n_ = 0.142857142857;
+  vec3  ns = n_ * D.wyz - D.xzx;
+  vec4 j  = p - 49.0*floor(p*ns.z*ns.z);
+  vec4 x_ = floor(j*ns.z);
+  vec4 y_ = floor(j - 7.0*x_);
+  vec4 x  = x_*ns.x + ns.yyyy;
+  vec4 y  = y_*ns.x + ns.yyyy;
+  vec4 h  = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0)*2.0 + 1.0;
+  vec4 s1 = floor(b1)*2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+  vec3 p0 = vec3(a0.xy,h.x);
+  vec3 p1 = vec3(a0.zw,h.y);
+  vec3 p2 = vec3(a1.xy,h.z);
+  vec3 p3 = vec3(a1.zw,h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot(m*m, vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}
+
+uniform float amplitude;
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+
+void main() {
+  // Sample noise in world space so neighboring pooled segments match.
+  vec4 worldPos = modelMatrix * vec4(position, 1.0);
+  float n0 = snoise(worldPos.xyz * 0.22);
+  float n1 = snoise(worldPos.xyz * 0.11);
+  float d = (0.68 * n0 + 0.32 * n1) * amplitude;
+
+  // Push along a shared corridor-space direction rather than per-face normals,
+  // so floor/walls/ceiling stay visually stitched at their edges.
+  vec2 cross = vec2(worldPos.x / 3.0, (worldPos.y - 2.0) / 2.0);
+  float lenCross = length(cross);
+  vec3 blendDir = lenCross > 0.0001
+    ? normalize(vec3(cross, 0.0))
+    : vec3(0.0, 1.0, 0.0);
+
+  vec3 displacedWorld = worldPos.xyz + blendDir * d;
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  vWorldPos = displacedWorld;
+  gl_Position = projectionMatrix * viewMatrix * vec4(displacedWorld, 1.0);
+}
+`;
+
+    // --- Fragment shader - Bayer ordered dithering, two-color output --------------
+    const fragmentShader = /* glsl */`
+precision highp float;
+uniform float matrixSize;
+uniform float bias;
+uniform float fogNear;
+uniform float fogFar;
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+
+const mat2 bayer2 = mat2(0.0,2.0, 3.0,1.0) / 4.0;
+
+const mat4 bayer4 = mat4(
+   0.0, 8.0, 2.0,10.0,
+  12.0, 4.0,14.0, 6.0,
+   3.0,11.0, 1.0, 9.0,
+  15.0, 7.0,13.0, 5.0
+) / 16.0;
+
+const float bayer8[64] = float[64](
+   0.0/64.0,48.0/64.0,12.0/64.0,60.0/64.0, 3.0/64.0,51.0/64.0,15.0/64.0,63.0/64.0,
+  32.0/64.0,16.0/64.0,44.0/64.0,28.0/64.0,35.0/64.0,19.0/64.0,47.0/64.0,31.0/64.0,
+   8.0/64.0,56.0/64.0, 4.0/64.0,52.0/64.0,11.0/64.0,59.0/64.0, 7.0/64.0,55.0/64.0,
+  40.0/64.0,24.0/64.0,36.0/64.0,20.0/64.0,43.0/64.0,27.0/64.0,39.0/64.0,23.0/64.0,
+   2.0/64.0,50.0/64.0,14.0/64.0,62.0/64.0, 1.0/64.0,49.0/64.0,13.0/64.0,61.0/64.0,
+  34.0/64.0,18.0/64.0,46.0/64.0,30.0/64.0,33.0/64.0,17.0/64.0,45.0/64.0,29.0/64.0,
+  10.0/64.0,58.0/64.0, 6.0/64.0,54.0/64.0, 9.0/64.0,57.0/64.0, 5.0/64.0,53.0/64.0,
+  42.0/64.0,26.0/64.0,38.0/64.0,22.0/64.0,41.0/64.0,25.0/64.0,37.0/64.0,21.0/64.0
+);
+
+float orderedDitherWithBias(float lum, float b) {
+  int x = int(mod(gl_FragCoord.x, matrixSize));
+  int y = int(mod(gl_FragCoord.y, matrixSize));
+  float threshold = 0.0;
+  if (matrixSize == 2.0)      threshold = bayer2[y][x];
+  else if (matrixSize == 4.0) threshold = bayer4[y][x];
+  else                        threshold = bayer8[y * 8 + x];
+  return lum < threshold + b ? 0.0 : 1.0;
+}
+
+float orderedDither(float lum) {
+  return orderedDitherWithBias(lum, bias);
+}
+
+void main() {
+  vec3 lightDir = normalize(vec3(0.3, 1.0, 0.4));
+  float diffuse = max(dot(normalize(vNormal), lightDir), 0.0);
+  float lum = 0.3 + 0.7 * diffuse;
+  float t = orderedDither(lum);
+
+  float dist = distance(cameraPosition, vWorldPos);
+  float fog = smoothstep(fogNear, fogFar, dist);
+  float fogDither = orderedDitherWithBias(clamp(fog, 0.0, 1.0), 0.0);
+
+  vec3 dark  = vec3(0.133, 0.137, 0.137);
+  vec3 light = vec3(0.941, 0.965, 0.941);
+  vec3 shaded = mix(dark, light, t);
+
+  gl_FragColor = vec4(mix(shaded, dark, fogDither), 1.0);
+}
+`;
+
+    // Frontier shader: dark TV-static wall at the edge of generated space.
+    const frontierVertexShader = /* glsl */`
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+    const frontierFragmentShader = /* glsl */`
+precision highp float;
+uniform float time;
+varying vec2 vUv;
+
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 345.45));
+  p += dot(p, p + 34.345);
+  return fract(p.x * p.y);
+}
+
+void main() {
+  vec2 px = floor(gl_FragCoord.xy * 0.95 + vec2(time * 130.0, -time * 90.0));
+  float n0 = hash21(px);
+  float n1 = hash21(px + vec2(17.0, 91.0));
+  float snow = step(0.58, n0);
+  float flicker = step(0.83, n1) * 0.25;
+
+  float lum = mix(0.025, 0.22, snow) + flicker;
+  float edgeMask = smoothstep(0.62, 0.12, length(vUv - 0.5));
+  float alpha = clamp(0.78 * edgeMask + 0.16 * snow, 0.0, 0.96);
+
+  gl_FragColor = vec4(vec3(lum), alpha);
+}
+`;
+
+    // --- Renderer / scene --------------------------------------------------------
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(1); // pixel-exact dithering
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x222323, 0.030);
+    scene.background = new THREE.Color(0x222323);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0, 1.8, 0);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(0.3, 1.0, 0.5);
+    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // --- Shared uniforms (all materials read from same objects) -------------------
+    const uMatrixSize = { value: 8.0 };
+    const uBias = { value: 0.0 };
+    const uTime = { value: 0.0 };
+    const uFogNear = { value: 12.0 };
+    const uFogFar = { value: 80.0 };
+
+    function makeMat(amplitude, side = THREE.FrontSide) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          amplitude: { value: amplitude },
+          matrixSize: uMatrixSize,
+          bias: uBias,
+          fogNear: uFogNear,
+          fogFar: uFogFar,
+        },
+        vertexShader,
+        fragmentShader,
+        side,
+      });
+    }
+
+    // Two materials: heavy displacement for large surfaces, subtle for structure
+    const surfaceMat = makeMat(0.34);
+    const structMat = makeMat(0.07);
+
+    // --- Corridor constants -------------------------------------------------------
+    const W = 6;    // corridor width
+    const H = 4;    // corridor height
+    const SEG_LEN = 8;    // segment depth
+    const MAX_POOL = 20; // hard cap on loaded segments
+
+    // --- Segment types ------------------------------------------------------------
+    // Each type adds different structural geometry on top of the base tunnel shell.
+    //
+    //  bare     - nothing, just the displaced shell; cave-like
+    //  ribbed   - two rib frames (pillars + beam + floor groove)
+    //  double   - four rib frames, denser spacing
+    //  arch     - single round arch at midpoint + narrow ribs at ends
+    //  pipe     - ceiling conduit with support brackets
+    //  alcove   - rectangular relief panels projecting from walls
+    //  service  - dense side-wall service tiles + conduits
+    //  bulkhead - side-mounted bulkhead panels + angled braces
+
+    const TYPES = [
+      'bare',
+      'ribbed', 'ribbed',
+      'double',
+      'arch', 'arch',
+      'pipe',
+      'alcove',
+      'tilegrid', 'tilegrid',
+      'monolith',
+      'service', 'service',
+      'bulkhead'
+    ];
+    // ribbed appears twice to make it the most common type
+
+    class CorridorSegment {
+      constructor(posZ) {
+        this.group = new THREE.Group();
+        this.group.position.z = posZ;
+        this._build();
+        scene.add(this.group);
+      }
+
+      _build() {
+        this.type = TYPES[Math.floor(Math.random() * TYPES.length)];
+
+        // - Tunnel shell --------------------------------------------
+        // Floor
+        const fGeo = new THREE.PlaneGeometry(W, SEG_LEN, 14, 12);
+        const floor = new THREE.Mesh(fGeo, surfaceMat);
+        floor.rotation.x = -Math.PI / 2;
+        this.group.add(floor);
+
+        // Ceiling
+        const cGeo = new THREE.PlaneGeometry(W, SEG_LEN, 14, 12);
+        const ceil = new THREE.Mesh(cGeo, surfaceMat);
+        ceil.rotation.x = Math.PI / 2;
+        ceil.position.y = H;
+        this.group.add(ceil);
+
+        // Left wall
+        const wGeo = new THREE.PlaneGeometry(SEG_LEN, H, 12, 10);
+        const lw = new THREE.Mesh(wGeo, surfaceMat);
+        lw.rotation.y = Math.PI / 2;
+        lw.position.set(-W / 2, H / 2, 0);
+        this.group.add(lw);
+
+        // Right wall
+        const rw = new THREE.Mesh(new THREE.PlaneGeometry(SEG_LEN, H, 12, 10), surfaceMat);
+        rw.rotation.y = -Math.PI / 2;
+        rw.position.set(W / 2, H / 2, 0);
+        this.group.add(rw);
+
+        // - Type-specific geometry ------------------------------------
+        switch (this.type) {
+          case 'ribbed': this._ribs([-SEG_LEN * 0.25, SEG_LEN * 0.25]); break;
+          case 'double': this._ribs([-3, -1, 1, 3]); break;
+          case 'arch': this._arch(); break;
+          case 'pipe': this._pipe(); break;
+          case 'alcove': this._alcoves(); break;
+          case 'tilegrid': this._tilegrid(); break;
+          case 'monolith': this._monolith(); break;
+          case 'service': this._service(); break;
+          case 'bulkhead': this._bulkhead(); break;
+          // 'bare': no extras
+        }
+      }
+
+      // A rib frame: two corner pillars, one ceiling beam, one floor channel
+      _ribs(zList) {
+        for (const z of zList) {
+          // Left pillar
+          const lp = new THREE.Mesh(new THREE.BoxGeometry(0.3, H, 0.3), structMat);
+          lp.position.set(-W / 2 + 0.15, H / 2, z);
+          this.group.add(lp);
+          // Right pillar
+          const rp = new THREE.Mesh(new THREE.BoxGeometry(0.3, H, 0.3), structMat);
+          rp.position.set(W / 2 - 0.15, H / 2, z);
+          this.group.add(rp);
+          // Ceiling beam
+          const bm = new THREE.Mesh(new THREE.BoxGeometry(W, 0.22, 0.28), structMat);
+          bm.position.set(0, H - 0.11, z);
+          this.group.add(bm);
+          // Floor channel
+          const fc = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.14, 0.28), structMat);
+          fc.position.set(0, 0.07, z);
+          this.group.add(fc);
+        }
+      }
+
+      // A low-poly cylindrical arch spanning wall-to-wall at corridor midpoint
+      _arch() {
+        const archR = W / 2 - 0.2;
+        const tubeR = 0.26;
+
+        // Faceted torus arc = cylindrical arch with intentionally low segment counts.
+        const archGeo = new THREE.TorusGeometry(archR, tubeR, 5, 10, Math.PI);
+        const arch = new THREE.Mesh(archGeo, structMat);
+        arch.position.set(0, 0, 0);
+        this.group.add(arch);
+
+        // Heavy base springers at both feet.
+        const springL = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.92, 0.72), structMat);
+        springL.position.set(-W / 2 + 0.4, 0.45, 0);
+        this.group.add(springL);
+        const springR = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.92, 0.72), structMat);
+        springR.position.set(W / 2 - 0.4, 0.45, 0);
+        this.group.add(springR);
+
+        this._ribs([-SEG_LEN * 0.4, SEG_LEN * 0.4]);
+
+        const ks = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.56, 0.36), structMat);
+        ks.position.set(0, archR + tubeR - 0.08, 0);
+        this.group.add(ks);
+      }
+
+      // A ceiling conduit pipe running the full segment length
+      _pipe() {
+        // Main duct
+        const duct = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.38, SEG_LEN), structMat);
+        duct.position.set(1.0, H - 0.19, 0);
+        this.group.add(duct);
+
+        // Support brackets every 2 units
+        for (let z = -3; z <= 3; z += 2) {
+          const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.12), structMat);
+          hanger.position.set(1.0, H - 0.56, z);
+          this.group.add(hanger);
+        }
+
+        // Smaller secondary conduit on opposite side
+        const duct2 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, SEG_LEN), structMat);
+        duct2.position.set(-1.4, H - 0.11, 0);
+        this.group.add(duct2);
+      }
+
+      // Rectangular relief panels projecting from both walls
+      _alcoves() {
+        const panelW = 0.08;
+        const panelH = 1.9;
+        const panelD = 1.1;
+
+        for (const z of [-SEG_LEN * 0.25, SEG_LEN * 0.25]) {
+          // Left wall panel (projects inward)
+          const lp = new THREE.Mesh(new THREE.BoxGeometry(panelW, panelH, panelD), surfaceMat);
+          lp.position.set(-W / 2 + panelW / 2, 1.3, z);
+          this.group.add(lp);
+
+          // Right wall panel
+          const rp = new THREE.Mesh(new THREE.BoxGeometry(panelW, panelH, panelD), surfaceMat);
+          rp.position.set(W / 2 - panelW / 2, 1.3, z);
+          this.group.add(rp);
+
+          // Header slab above each panel pair
+          const hdr = new THREE.Mesh(new THREE.BoxGeometry(W * 0.72, 0.06, panelD), surfaceMat);
+          hdr.position.set(0, 1.3 + panelH / 2 + 0.03, z);
+          this.group.add(hdr);
+        }
+
+        // Thin floor sill running full length
+        const sill = new THREE.Mesh(new THREE.BoxGeometry(W - 0.42, 0.04, SEG_LEN), surfaceMat);
+        sill.position.set(0, 0.02, 0);
+        this.group.add(sill);
+      }
+
+      // Brutalist tile matrix: offset wall tiles + blocky ceiling coffers
+      _tilegrid() {
+        const zCols = [-3.0, -1.0, 1.0, 3.0];
+        const yRows = [0.55, 1.35, 2.15, 2.95];
+        const tileH = 0.62;
+        const tileD = 1.45;
+
+        for (const side of [-1, 1]) {
+          for (let r = 0; r < yRows.length; r++) {
+            for (let c = 0; c < zCols.length; c++) {
+              const deep = ((r + c) % 2 === 0);
+              const thickness = deep ? 0.32 : 0.2;
+              const tile = new THREE.Mesh(new THREE.BoxGeometry(thickness, tileH, tileD), structMat);
+              tile.position.set(side * (W / 2 - thickness / 2), yRows[r], zCols[c]);
+              this.group.add(tile);
+            }
+          }
+        }
+
+        for (const z of zCols) {
+          for (const x of [-2.1, -1.2, 1.2, 2.1]) {
+            const drop = 0.14;
+            const coffer = new THREE.Mesh(new THREE.BoxGeometry(1.45, drop, 1.45), structMat);
+            coffer.position.set(x, H - drop / 2, z);
+            this.group.add(coffer);
+          }
+        }
+
+        // Side rails keep the center line unobstructed.
+        for (const side of [-1, 1]) {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, SEG_LEN), structMat);
+          rail.position.set(side * (W / 2 - 0.11), H - 0.11, 0);
+          this.group.add(rail);
+        }
+      }
+
+      // Alternating monolith tiles with slab bands
+      _monolith() {
+        for (let i = 0; i < 5; i++) {
+          const z = -3.2 + i * 1.6;
+          const side = (i % 2 === 0) ? -1 : 1;
+          const w = 0.62;
+          const h = 1.5 + (i % 3) * 0.28;
+          const d = 1.05;
+
+          const block = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), structMat);
+          block.position.set(side * (W / 2 - w / 2), h / 2, z);
+          this.group.add(block);
+        }
+
+        for (const z of [-2.9, -0.95, 0.95, 2.9]) {
+          const floorBand = new THREE.Mesh(new THREE.BoxGeometry(W - 0.12, 0.2, 0.86), structMat);
+          floorBand.position.set(0, 0.1, z);
+          this.group.add(floorBand);
+
+          const ceilBand = new THREE.Mesh(new THREE.BoxGeometry(W - 0.12, 0.2, 0.86), structMat);
+          ceilBand.position.set(0, H - 0.1, z);
+          this.group.add(ceilBand);
+        }
+
+        // Side-mounted channels instead of a center spine so the corridor stays open.
+        for (const side of [-1, 1]) {
+          const channel = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.3, SEG_LEN), structMat);
+          channel.position.set(side * (W / 2 - 0.12), 1.45, 0);
+          this.group.add(channel);
+        }
+
+        // Offset braces to keep the monolith style aggressive without blocking center view.
+        for (let i = 0; i < 4; i++) {
+          const z = -2.8 + i * 1.85;
+          const side = (i % 2 === 0) ? -1 : 1;
+          const brace = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.32, 0.9), structMat);
+          brace.position.set(side * (W / 2 - 0.34), 2.05, z);
+          brace.rotation.z = side * -0.55;
+          this.group.add(brace);
+        }
+      }
+
+      // Dense side-wall service tiles and conduits; center path stays clear.
+      _service() {
+        const zSlots = [-3.1, -1.55, 0.0, 1.55, 3.1];
+        const yRows = [0.75, 1.85, 2.95];
+
+        for (const side of [-1, 1]) {
+          for (const z of zSlots) {
+            for (let i = 0; i < yRows.length; i++) {
+              const thick = i === 1 ? 0.12 : 0.08;
+              const panel = new THREE.Mesh(new THREE.BoxGeometry(thick, 0.76, 1.0), surfaceMat);
+              panel.position.set(side * (W / 2 - thick / 2), yRows[i], z);
+              this.group.add(panel);
+            }
+          }
+        }
+
+        // Side conduits and edge cable trays.
+        for (const side of [-1, 1]) {
+          const conduit = new THREE.Mesh(new THREE.BoxGeometry(0.06, H - 0.4, 0.12), surfaceMat);
+          conduit.position.set(side * (W / 2 - 0.03), H / 2, 0);
+          this.group.add(conduit);
+
+          const tray = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, SEG_LEN), surfaceMat);
+          tray.position.set(side * (W / 2 - 0.06), H - 0.035, 0);
+          this.group.add(tray);
+        }
+      }
+
+      // Repeating side bulkhead tiles with angled braces; no center blockers.
+      _bulkhead() {
+        const rings = [-3.0, -1.0, 1.0, 3.0];
+
+        for (const z of rings) {
+          for (const side of [-1, 1]) {
+            const panel = new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.6, 0.8), structMat);
+            panel.position.set(side * (W / 2 - 0.17), 1.1, z);
+            this.group.add(panel);
+
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.24, 0.92), structMat);
+            cap.position.set(side * (W / 2 - 0.23), 2.05, z);
+            this.group.add(cap);
+
+            const brace = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.18), structMat);
+            brace.position.set(side * (W / 2 - 0.45), 1.55, z);
+            brace.rotation.z = side * -0.62;
+            this.group.add(brace);
+          }
+        }
+
+        // Corner crown tiles near the ceiling edges.
+        for (const side of [-1, 1]) {
+          for (const z of [-2.8, 0.0, 2.8]) {
+            const crown = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.18, 1.2), structMat);
+            crown.position.set(side * (W / 2 - 0.34), H - 0.09, z);
+            this.group.add(crown);
+          }
+        }
+      }
+
+      // Recycle: dispose old geometry, rebuild at new world Z
+      recycle(newZ) {
+        this.group.traverse(obj => {
+          if (obj.isMesh) obj.geometry.dispose();
+        });
+        this.group.clear();
+        this.group.position.z = newZ;
+        this._build();
+      }
+    }
+
+    // --- Pool init ---------------------------------------------------------------
+    // Segments start ahead of camera (which is at z=0 looking toward -Z).
+    // Segment i has its center at z = -(SEG_LEN/2 + i*SEG_LEN).
+    const pool = [];
+    for (let i = 0; i < 12; i++) {
+      pool.push(new CorridorSegment(-(SEG_LEN / 2 + i * SEG_LEN)));
+    }
+
+    const frontierMat = new THREE.ShaderMaterial({
+      uniforms: { time: uTime },
+      vertexShader: frontierVertexShader,
+      fragmentShader: frontierFragmentShader,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const frontierPlane = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.8, H + 0.5), frontierMat);
+    frontierPlane.position.set(0, H * 0.5, -(12 * SEG_LEN) - 1.0);
+    scene.add(frontierPlane);
+
+    // Grow or shrink pool to match targetSize. Keeps the segments closest to
+    // the camera and disposes those farthest ahead when shrinking.
+    function syncPool(targetSize) {
+      targetSize = Math.max(4, Math.min(MAX_POOL, targetSize));
+      // Grow: add new segments at the far end
+      while (pool.length < targetSize) {
+        const frontZ = pool.reduce((mn, s) => Math.min(mn, s.group.position.z), 0);
+        pool.push(new CorridorSegment(frontZ - SEG_LEN));
+      }
+      // Shrink: remove the segment farthest ahead (most negative Z)
+      while (pool.length > targetSize) {
+        pool.sort((a, b) => a.group.position.z - b.group.position.z);
+        const seg = pool.shift();
+        seg.group.traverse(obj => { if (obj.isMesh) obj.geometry.dispose(); });
+        scene.remove(seg.group);
+      }
+    }
+
+    // --- PointerLockControls -----------------------------------------------------
+    const controls = new PointerLockControls(camera, renderer.domElement);
+    scene.add(controls.getObject());
+
+    renderer.domElement.style.cursor = 'pointer';
+    renderer.domElement.addEventListener('click', () => controls.lock());
+
+    const statusEl = document.getElementById('status');
+    controls.addEventListener('lock', () => { statusEl.textContent = 'PILOTING'; renderer.domElement.style.cursor = 'none'; });
+    controls.addEventListener('unlock', () => { statusEl.textContent = 'AUTO'; renderer.domElement.style.cursor = 'pointer'; });
+
+    const keys = { w: false, s: false, a: false, d: false };
+    document.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+    document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+    // --- UI wiring ---------------------------------------------------------------
+    let driftSpeed = 0.05;
+    const SIDE_YAW_LIMIT = Math.PI * 0.45 - 0.05; // allow side-looking, block turning fully backward
+    const clampEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+    const speedSlider = document.getElementById('speedSlider');
+    const minDrift = parseFloat(speedSlider.min);
+    const maxDrift = parseFloat(speedSlider.max);
+    speedSlider.addEventListener('input', () => {
+      driftSpeed = Math.min(maxDrift, Math.max(minDrift, parseFloat(speedSlider.value)));
+    });
+
+    document.getElementById('biasSlider').addEventListener('input', e => {
+      uBias.value = parseFloat(e.target.value);
+    });
+
+    document.getElementById('deformSlider').addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      surfaceMat.uniforms.amplitude.value = v;
+      structMat.uniforms.amplitude.value = v * 0.2;
+    });
+
+    document.getElementById('fogSlider').addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      uFogFar.value = v;
+      // Sync Three.js exponential fog so the background fade matches
+      scene.fog.density = 1.8 / v;
+      // Load/unload tiles to match the visible depth
+      syncPool(Math.max(4, Math.min(MAX_POOL, Math.ceil(v / SEG_LEN) + 2)));
+    });
+
+    function setMatrix(n) {
+      uMatrixSize.value = n;
+      [2, 4, 8].forEach(v => document.getElementById('btn' + v).classList.toggle('active', v === n));
+    }
+    document.getElementById('btn2').addEventListener('click', () => setMatrix(2));
+    document.getElementById('btn4').addEventListener('click', () => setMatrix(4));
+    document.getElementById('btn8').addEventListener('click', () => setMatrix(8));
+
+    // --- Animation loop ----------------------------------------------------------
+    function animate() {
+      requestAnimationFrame(animate);
+      uTime.value = performance.now() * 0.001;
+
+      // WASD adjustments when player has control
+      if (controls.isLocked) {
+        clampEuler.setFromQuaternion(camera.quaternion, 'YXZ');
+        clampEuler.y = Math.max(-SIDE_YAW_LIMIT, Math.min(SIDE_YAW_LIMIT, clampEuler.y));
+        camera.quaternion.setFromEuler(clampEuler);
+        if (keys.w) driftSpeed = Math.min(driftSpeed + 0.0015, maxDrift);
+        if (keys.s) driftSpeed = Math.max(driftSpeed - 0.0015, minDrift);
+        if (keys.a) camera.position.x = Math.max(camera.position.x - 0.05, -2.4);
+        if (keys.d) camera.position.x = Math.min(camera.position.x + 0.05, 2.4);
+        speedSlider.value = String(Math.min(maxDrift, Math.max(minDrift, driftSpeed)));
+      }
+
+      camera.position.z -= driftSpeed;
+      camera.position.y = 1.8; // fixed eye height
+
+      // Recycle any segment that has passed one full length behind the camera
+      for (const seg of pool) {
+        if (seg.group.position.z > camera.position.z + SEG_LEN) {
+          let frontZ = Infinity;
+          for (const s of pool) frontZ = Math.min(frontZ, s.group.position.z);
+          seg.recycle(frontZ - SEG_LEN);
+        }
+      }
+
+      // Dark static wall slightly ahead of the newest generated segment.
+      let newestZ = Infinity;
+      for (const s of pool) newestZ = Math.min(newestZ, s.group.position.z);
+      frontierPlane.position.z = newestZ - SEG_LEN * 0.5 - 0.25;
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+
+</html>
