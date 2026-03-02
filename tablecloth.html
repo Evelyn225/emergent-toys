@@ -31,6 +31,7 @@
 
         let logicalWidth = window.innerWidth;
         let logicalHeight = window.innerHeight;
+        let vignetteGradient = null;
 
         function resizeCanvas() {
             const dpr = window.devicePixelRatio || 1;
@@ -65,7 +66,6 @@
         };
 
         let time = 0;
-        let vignetteGradient = null;
         const ripples = [];
         let lastMousePos = { x: 0, y: 0, time: 0 };
         let mouseRippleCounter = 0;
