@@ -301,7 +301,6 @@
                 pop();
             }
 
-            // Declare tip and tipDist at the top
             let tip = arm.segments[arm.segments.length - 1].b;
             let tipDist = dist(ball.x, ball.y, tip.x, tip.y);
 
@@ -372,7 +371,6 @@
                 throwCooldown = 60; // Prevent reattachment
             }
 
-            // Ball physics
             if (!ball.isHeld) {
                 ball.x += ball.vx;
                 ball.y += ball.vy;
@@ -433,7 +431,6 @@
                 }
             }
 
-            // Draw ball
             noStroke();
             fill(ball.isHeld ? 'orange' : 'lime');
             ellipse(ball.x, ball.y, ball.radius * 2, ball.radius * 2);
