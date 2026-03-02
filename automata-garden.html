@@ -38,10 +38,10 @@
             top: 20px;
             left: 20px;
             background: var(--panel);
-            padding: 24px 20px 20px;
+            padding: 12px 14px 14px;
             z-index: 100;
             border: 1px solid var(--border);
-            width: 210px;
+            width: 170px;
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
         }
@@ -56,6 +56,15 @@
             align-items: center;
             justify-content: center;
         }
+        
+        .controls.minimized #controlsContent {
+            display: none;
+        }
+
+        .controls.minimized::before,
+        .controls.minimized::after {
+            display: none;
+        }
 
         .controls.minimized #minimizeControlsBtn {
             position: static;
@@ -65,7 +74,7 @@
             display: none;
         }
 
-        #minimizeControlsBtn {
+        #minimizeControlsBtn {  
             background: none;
             border: none;
             color: var(--text-dim);
@@ -77,6 +86,7 @@
             align-items: center;
             justify-content: center;
             padding: 0;
+            margin-left:2px;
             border-radius: 2px;
             position: absolute;
             top: 6px;
@@ -95,8 +105,8 @@
         .controls::before {
             content: '';
             position: absolute;
-            top: -1px;
-            left: -1px;
+            top: -3px;
+            left: -3px;
             width: 50px;
             height: 50px;
 background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'%3E%3Cpath d='M 4 46 C 4 28 18 12 46 4' stroke='%2378a852' stroke-width='1' fill='none' stroke-linecap='round' opacity='0.6'/%3E%3Cg transform='translate(6 36) rotate(108)'%3E%3Cellipse cx='0' cy='-5' rx='2' ry='5' fill='%2378a852' opacity='0.42'/%3E%3C/g%3E%3Cg transform='translate(14.5 21.3) rotate(314)'%3E%3Cellipse cx='0' cy='-4.5' rx='1.8' ry='4.5' fill='%2378a852' opacity='0.32'/%3E%3C/g%3E%3C/svg%3E");
@@ -108,8 +118,8 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         .controls::after {
             content: '';
             position: absolute;
-            bottom: -1px;
-            right: -1px;
+            bottom: -3px;
+            right: -3px;
             width: 50px;
             height: 50px;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'%3E%3Cpath d='M 4 46 C 4 28 18 12 46 4' stroke='%2378a852' stroke-width='1' fill='none' stroke-linecap='round' opacity='0.6'/%3E%3Cg transform='translate(6 36) rotate(108)'%3E%3Cellipse cx='0' cy='-5' rx='2' ry='5' fill='%2378a852' opacity='0.42'/%3E%3C/g%3E%3Cg transform='translate(14.5 21.3) rotate(314)'%3E%3Cellipse cx='0' cy='-4.5' rx='1.8' ry='4.5' fill='%2378a852' opacity='0.32'/%3E%3C/g%3E%3C/svg%3E");
@@ -120,50 +130,102 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         }
 
         .control-group {
-            margin-bottom: 14px;
-            padding-bottom: 14px;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
             border-bottom: 1px solid rgba(88, 130, 55, 0.14);
         }
 
         label {
             display: block;
-            margin-bottom: 7px;
+            margin-bottom: 5px;
             font-family: 'Cormorant SC', 'Cormorant Garamond', Georgia, serif;
-            font-size: 11.5px;
+            font-size: 10.5px;
             font-weight: 300;
             letter-spacing: 0.13em;
             color: var(--text-dim);
         }
 
-        select {
+        /* Custom dropdown */
+        .custom-select {
+            position: relative;
             width: 100%;
-            padding: 7px 26px 7px 9px;
-            background: rgba(8, 16, 6, 0.75);
-            color: var(--text);
-            border: 1px solid var(--border);
-            border-radius: 1px;
             font-family: 'Cormorant Garamond', Georgia, serif;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 300;
-            appearance: none;
-            -webkit-appearance: none;
-            cursor: pointer;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M 3 5.5 L 8 10.5 L 13 5.5' stroke='%2378a852' stroke-width='1.1' fill='none' stroke-linecap='round' stroke-linejoin='round' opacity='0.65'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 7px center;
-            background-size: 16px;
-            transition: border-color 0.2s;
-            outline: none;
+            color: var(--text);
+            user-select: none;
         }
 
-        select:hover, select:focus {
+        .custom-select-trigger {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 8px 5px 7px;
+            background: rgba(8, 16, 6, 0.75);
+            border: 1px solid var(--border);
+            border-radius: 1px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            gap: 4px;
+        }
+
+        .custom-select-trigger:hover,
+        .custom-select.open .custom-select-trigger {
             border-color: var(--border-hover);
+        }
+
+        .custom-select-chevron {
+            flex-shrink: 0;
+            width: 10px;
+            height: 6px;
+            opacity: 0.65;
+            transition: transform 0.18s;
+        }
+
+        .custom-select.open .custom-select-chevron {
+            transform: rotate(180deg);
+        }
+
+        .custom-select-options {
+            display: none;
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            right: 0;
+            background: rgba(6, 13, 4, 0.97);
+            border: 1px solid var(--border-hover);
+            border-radius: 1px;
+            z-index: 200;
+            overflow: hidden;
+        }
+
+        .custom-select.open .custom-select-options {
+            display: block;
+        }
+
+        .custom-select-option {
+            padding: 5px 9px;
+            cursor: pointer;
+            color: var(--text-dim);
+            transition: background 0.12s, color 0.12s;
+            border-left: 2px solid transparent;
+        }
+
+        .custom-select-option:hover {
+            background: rgba(88, 138, 55, 0.12);
+            color: var(--text);
+            border-left-color: var(--green);
+        }
+
+        .custom-select-option.selected {
+            color: var(--text);
+            border-left-color: rgba(120, 168, 82, 0.5);
         }
 
         button {
             width: 100%;
-            padding: 8px 10px;
-            margin-bottom: 8px;
+            padding: 5px 8px;
+            margin-bottom: 5px;
             background: transparent;
             color: var(--text);
             border: 1px solid var(--border);
@@ -194,6 +256,12 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         button:active {
             transform: scale(0.98);
             background: rgba(88, 138, 55, 0.14);
+        }
+
+        #clear:active {
+            background: rgba(180, 120, 128, 0.18);
+            border-color: var(--rose);
+            color: var(--rose);
         }
 
         input[type="range"] {
@@ -290,20 +358,29 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         <button id="minimizeControlsBtn">–</button>
         <div id="controlsContent">
             <div class="control-group">
-                <label for="automataType">Automata Type:</label>
-                <select id="automataType">
-                    <option value="flowers">Flowers</option>
-                    <option value="grass">Grass</option>                
-                    <option value="moss">Moss</option>
-                    <option value="coral">Coral</option>
-                    <option value="fern">Fern</option>
-                    <option value="crystal">Crystal</option>
-                </select>
+                <label>Automata Type:</label>
+                <div class="custom-select" id="automataType">
+                    <div class="custom-select-trigger">
+                        <span class="custom-select-label">Flowers</span>
+                        <svg class="custom-select-chevron" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M1 1L5 5L9 1" stroke="#78a852" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="custom-select-options">
+                        <div class="custom-select-option selected" data-value="flowers">Flowers</div>
+                        <div class="custom-select-option" data-value="grass">Grass</div>
+                        <div class="custom-select-option" data-value="moss">Moss</div>
+                        <div class="custom-select-option" data-value="coral">Coral</div>
+                        <div class="custom-select-option" data-value="fern">Fern</div>
+                        <div class="custom-select-option" data-value="crystal">Crystal</div>
+                    </div>
+                </div>
             </div>
             <div class="control-group">
                 <label for="speed">Speed:</label>
                 <input type="range" id="speed" min="1" max="30" value="15">
             </div>
+            <button id="windToggle">Wind: On</button>
             <button id="randomize">Randomize Garden</button>
             <button id="clear">Clear Garden</button>
         </div>
@@ -325,7 +402,7 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         let currentAutomata = 'flowers';
         let lastMousePosition = { x: 0, y: 0 };
         let windGusts = [];
-        let nextWindTime = 3000; // ms: first gust 3s after load
+        let nextWindTime = 6000; // ms: first gust 6s after load
 
         // Automata rules — object order = birth priority (first wins contested cells)
         // Each type has a UNIQUE birth condition so they occupy distinct density niches:
@@ -355,11 +432,17 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
             crystal: [192, 52, 32],
         };
 
+        // Offscreen buffer for color-bleed glow pass
+        const glowBuffer = document.createElement('canvas');
+        const glowCtx    = glowBuffer.getContext('2d');
+
         function resize() {
             width = window.innerWidth;
             height = window.innerHeight;
-            canvas.width = width;
+            canvas.width  = width;
             canvas.height = height;
+            glowBuffer.width  = width;
+            glowBuffer.height = height;
             initGrid();
         }
 
@@ -382,7 +465,7 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
                 // Get appropriate size for this type
                 let baseSize;
                 switch(type) {
-                    case 'flowers': baseSize = 4; break;
+                    case 'flowers': baseSize = 3; break;
                     case 'grass':   baseSize = 5; break; // reduced from 8 — was pre-loading dominance
                     case 'moss':    baseSize = 4; break; // increased from 2 — needs mass to hold territory
                     case 'coral':   baseSize = 5; break;
@@ -483,6 +566,10 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
             ctx.fillStyle = '#071005';
             ctx.fillRect(0, 0, width, height);
 
+            // — Glow pass: render cells to offscreen buffer at full size (no gap),
+            //   then composite with blur for soft color bleed between adjacent types —
+            glowCtx.clearRect(0, 0, width, height);
+
             for (let i = 0; i < grid.length; i++) {
                 for (let j = 0; j < grid[i].length; j++) {
                     const cell = grid[i][j];
@@ -490,18 +577,34 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
 
                     const [h, s, l] = typeHSL[cell];
                     const age = ageGrid[i][j];
-
-                    // Newly born cells glow brighter; mature cells settle to deep base color
                     const freshBoost = Math.max(0, 14 - Math.min(age, 14)) * 2.2;
+                    const hVar = ((i * 17) ^ (j * 13)) % 11 - 5;
+                    // Glow pass: boosted lightness, full cell size (bleeds into gap)
+                    glowCtx.fillStyle = `hsl(${h + hVar},${s}%,${Math.min(78, l + freshBoost + 14)}%)`;
+                    glowCtx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
+                }
+            }
 
-                    // Subtle positional hue & lightness scatter — breaks up flat patches
+            // Blur the glow buffer and composite it at low opacity — GPU-accelerated
+            ctx.filter = 'blur(4px)';
+            ctx.globalAlpha = 0.4;
+            ctx.drawImage(glowBuffer, 0, 0);
+            ctx.filter = 'none';
+            ctx.globalAlpha = 1;
+
+            // — Normal pass: crisp cells on top with 1px soil gap —
+            for (let i = 0; i < grid.length; i++) {
+                for (let j = 0; j < grid[i].length; j++) {
+                    const cell = grid[i][j];
+                    if (cell === null) continue;
+
+                    const [h, s, l] = typeHSL[cell];
+                    const age = ageGrid[i][j];
+                    const freshBoost = Math.max(0, 14 - Math.min(age, 14)) * 2.2;
                     const hVar = ((i * 17) ^ (j * 13)) % 11 - 5;
                     const lVar = ((i *  7) ^ (j * 11)) %  7 - 3;
 
-                    const finalL = Math.min(72, l + freshBoost + lVar);
-                    ctx.fillStyle = `hsl(${h + hVar},${s}%,${finalL}%)`;
-
-                    // 1px soil gap between cells — background reads as dark earth
+                    ctx.fillStyle = `hsl(${h + hVar},${s}%,${Math.min(72, l + freshBoost + lVar)}%)`;
                     ctx.fillRect(i * cellSize + 1, j * cellSize + 1, cellSize - 1, cellSize - 1);
                 }
             }
@@ -581,12 +684,33 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         canvas.addEventListener('mouseleave', () => isDrawing = false);
         canvas.addEventListener('mouseout', () => isDrawing = false);
 
-        document.getElementById('automataType').addEventListener('change', (e) => {
-            currentAutomata = e.target.value;
+        // Custom dropdown logic
+        const automataDropdown = document.getElementById('automataType');
+        automataDropdown.querySelector('.custom-select-trigger').addEventListener('click', () => {
+            automataDropdown.classList.toggle('open');
+        });
+        automataDropdown.querySelectorAll('.custom-select-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                currentAutomata = opt.dataset.value;
+                automataDropdown.querySelector('.custom-select-label').textContent = opt.textContent;
+                automataDropdown.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                automataDropdown.classList.remove('open');
+            });
+        });
+        document.addEventListener('click', e => {
+            if (!automataDropdown.contains(e.target)) automataDropdown.classList.remove('open');
         });
 
         document.getElementById('speed').addEventListener('input', (e) => {
             frameRate = parseInt(e.target.value);
+        });
+
+        let windEnabled = true;
+        document.getElementById('windToggle').addEventListener('click', function() {
+            windEnabled = !windEnabled;
+            this.textContent = windEnabled ? 'Wind: On' : 'Wind: Off';
+            if (!windEnabled) windGusts = [];
         });
 
         document.getElementById('randomize').addEventListener('click', randomize);
@@ -596,16 +720,17 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         // shifting cells one step as it passes rather than moving everything at once.
         function spawnGust() {
             if (!grid.length || !grid[0].length) return;
-            const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+            // 8 directions including diagonals
+            const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
             const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
             const cols = grid.length, rows = grid[0].length;
             windGusts.push({
                 dx, dy,
-                speed: 5 + Math.floor(Math.random() * 7),   // cells the front advances per frame
-                strength: 0.22 + Math.random() * 0.28,      // probability of moving each cell at peak
+                speed: 1 + Math.floor(Math.random() * 2),   // 1-2 cells/frame — slow, visible sweep
+                strength: 0.55 + Math.random() * 0.25,
                 wavePos: 0,
-                waveWidth: 14,                               // depth of the gust front
-                totalDist: dx !== 0 ? cols : rows,
+                waveWidth: 35,
+                totalDist: Math.abs(dx) * cols + Math.abs(dy) * rows,
                 done: false
             });
         }
@@ -614,29 +739,18 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
             const cols = grid.length, rows = grid[0].length;
             const wp = gust.wavePos, ww = gust.waveWidth;
 
-            // Restrict iteration to the thin strip the wave front currently occupies
-            let xMin = 0, xMax = cols - 1, yMin = 0, yMax = rows - 1;
-            if (gust.dx ===  1) { xMin = Math.max(0, Math.floor(wp - ww)); xMax = Math.min(cols - 1, Math.ceil(wp)); }
-            if (gust.dx === -1) { xMin = Math.max(0, Math.floor(cols - 1 - wp)); xMax = Math.min(cols - 1, Math.ceil(cols - 1 - wp + ww)); }
-            if (gust.dy ===  1) { yMin = Math.max(0, Math.floor(wp - ww)); yMax = Math.min(rows - 1, Math.ceil(wp)); }
-            if (gust.dy === -1) { yMin = Math.max(0, Math.floor(rows - 1 - wp)); yMax = Math.min(rows - 1, Math.ceil(rows - 1 - wp + ww)); }
-
             // Iterate in reverse of wind direction to avoid shifting a cell twice
-            const xStart = gust.dx >= 0 ? xMax : xMin,  xEnd = gust.dx >= 0 ? xMin - 1 : xMax + 1,  xStep = gust.dx >= 0 ? -1 : 1;
-            const yStart = gust.dy >= 0 ? yMax : yMin,  yEnd = gust.dy >= 0 ? yMin - 1 : yMax + 1,  yStep = gust.dy >= 0 ? -1 : 1;
+            const xStart = gust.dx >= 0 ? cols - 1 : 0, xEnd = gust.dx >= 0 ? -1 : cols, xStep = gust.dx >= 0 ? -1 : 1;
+            const yStart = gust.dy >= 0 ? rows - 1 : 0, yEnd = gust.dy >= 0 ? -1 : rows, yStep = gust.dy >= 0 ? -1 : 1;
 
             for (let x = xStart; x !== xEnd; x += xStep) {
                 for (let y = yStart; y !== yEnd; y += yStep) {
                     if (grid[x][y] === null) continue;
 
-                    // Each cell's position along the sweep axis (distance from upstream edge)
-                    let pos;
-                    if      (gust.dx ===  1) pos = x;
-                    else if (gust.dx === -1) pos = cols - 1 - x;
-                    else if (gust.dy ===  1) pos = y;
-                    else                     pos = rows - 1 - y;
-
-                    const dist = wp - pos;
+                    // Distance from upstream edge — works for all 8 directions
+                    const posX = gust.dx > 0 ? x : gust.dx < 0 ? cols - 1 - x : 0;
+                    const posY = gust.dy > 0 ? y : gust.dy < 0 ? rows - 1 - y : 0;
+                    const dist = wp - (posX + posY);
                     if (dist < 0 || dist > ww) continue;
 
                     // Probability peaks at the leading edge, fades behind it
@@ -645,22 +759,22 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
                     const nx = x + gust.dx, ny = y + gust.dy;
                     if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
 
-                    // Only shift into empty space — keeps dense patches intact
-                    if (grid[nx][ny] === null) {
-                        grid[nx][ny]    = grid[x][y];
-                        ageGrid[nx][ny] = ageGrid[x][y];
-                        grid[x][y]    = null;
-                        ageGrid[x][y] = 0;
-                    }
+                    // Swap cells — preserves population, no erasure
+                    const tmpType = grid[nx][ny];
+                    const tmpAge  = ageGrid[nx][ny];
+                    grid[nx][ny]    = grid[x][y];
+                    ageGrid[nx][ny] = 0;        // moved cell flashes bright via freshBoost
+                    grid[x][y]    = tmpType;    // displaced cell goes back (null if empty)
+                    ageGrid[x][y] = tmpAge;
                 }
             }
         }
 
-        // Returns true while any gust is active (used to trigger extra redraws)
+        // Returns true while any gust is active
         function updateWind(timestamp) {
             if (timestamp >= nextWindTime) {
                 spawnGust();
-                nextWindTime = timestamp + 4000 + Math.random() * 7000; // 4–11s between gusts
+                nextWindTime = timestamp + 16000 + Math.random() * 24000;
             }
             windGusts = windGusts.filter(g => !g.done);
             for (const gust of windGusts) {
@@ -679,7 +793,7 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
             const elapsed = timestamp - lastUpdate;
 
             // Wind runs every animation frame (~60fps) for smooth sweep movement
-            const windActive = isRunning && updateWind(timestamp);
+            const windActive = isRunning && windEnabled && updateWind(timestamp);
 
             if (elapsed > (1000 / frameRate)) {
                 if (isRunning) {
@@ -697,7 +811,11 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         // Initialize
         resize();
         clear();
-        document.getElementById('automataType').value = 'flowers'; // Reset menu to Grass
+        // Reset custom dropdown to flowers
+        automataDropdown.querySelector('.custom-select-label').textContent = 'Flowers';
+        automataDropdown.querySelectorAll('.custom-select-option').forEach(o => {
+            o.classList.toggle('selected', o.dataset.value === 'flowers');
+        });
         document.getElementById('speed').value = '15'; // Reset speed to default
         currentAutomata = 'flowers';
         frameRate = 10; // Set initial frame rate
