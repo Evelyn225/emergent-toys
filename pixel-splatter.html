@@ -10,78 +10,404 @@
         <title>Pixel Splatter</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
         <style>
+            :root {
+                --bg-0: #060709;
+                --panel: rgba(11, 13, 17, 0.9);
+                --panel-border: rgba(255, 255, 255, 0.18);
+                --text: #f2f2f2;
+                --muted: rgba(242, 242, 242, 0.68);
+                --accent: #ff6b8a;
+                --shadow: 0 8px 20px rgba(0, 0, 0, 0.32);
+                --radius: 10px;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
             body {
                 margin: 0;
                 overflow: hidden;
-                background: #000000;
+                color: var(--text);
+                font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+                background: var(--bg-0);
             }
+
             #controls {
                 position: fixed;
-                left: 10px;
-                top: 10px;
+                left: 8px;
+                top: 8px;
                 z-index: 200;
-                background: rgba(0,0,0,0.7);
-                color: #fff;
-                padding: 10px 20px 12px 10px;
-                border-radius: 12px;
-                font-family: 'Inter', sans-serif;
-                font-size: 14px;
-                box-shadow: 0 2px 16px #0008;
+                width: min(188px, calc(100vw - 16px));
+                padding: 8px;
+                border-radius: var(--radius);
+                border: 1px solid var(--panel-border);
+                background: var(--panel);
+                box-shadow: var(--shadow);
                 user-select: none;
             }
-            #controls label {
-                display: block;
-                margin-top: 8px;
-                margin-bottom: 2px;
+
+            #controls.minimized {
+                width: 26px !important;
+                height: 26px !important;
+                padding: 0 !important;
+                overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
-            #controls input[type=range] {
-                width: 160px;
+
+            #controls.minimized #controlsContent {
+                display: none;
             }
-            #redraw-btn {
-                margin-top: 10px;
-                padding: 6px 18px;
-                font-size: 1em;
-                border-radius: 6px;
+
+            #controls.minimized #minimizeControlsBtn {
+                position: static;
+                margin: 0;
+                width: 100%;
+                height: 100%;
+                border-radius: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 15px;
+                transform: none;
+            }
+
+            #controls.minimized #minimizeControlsBtn:hover {
+                transform: none;
+            }
+
+            #minimizeControlsBtn {
+                position: absolute;
+                top: 4px;
+                right: 4px;
+                width: 16px;
+                height: 16px;
+                padding: 0;
                 border: none;
-                background: #e23;
+                background: none;
+                color: var(--muted);
+                font-size: 20px;
+                line-height: 1;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: color 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+            }
+
+            #minimizeControlsBtn .min-icon {
+                position: relative;
+                width: 10px;
+                height: 10px;
+                display: block;
+                pointer-events: none;
+            }
+
+            #minimizeControlsBtn .min-icon::before,
+            #minimizeControlsBtn .min-icon::after {
+                content: '';
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                background: currentColor;
+                transform: translate(-50%, -50%);
+                border-radius: 2px;
+            }
+
+            #minimizeControlsBtn .min-icon::before {
+                width: 9px;
+                height: 1.6px;
+            }
+
+            #minimizeControlsBtn .min-icon::after {
+                width: 1.6px;
+                height: 9px;
+                opacity: 0;
+            }
+
+            #controls.minimized #minimizeControlsBtn .min-icon::after {
+                opacity: 1;
+            }
+
+            #minimizeControlsBtn:hover {
+                color: var(--text);
+                background: rgba(255, 255, 255, 0.08);
+                transform: scale(1.08);
+            }
+
+            .panel-title {
+                margin: 0 16px 7px 0;
+                font-size: 12px;
+                line-height: 1.05;
+                letter-spacing: 0.02em;
+                font-weight: 600;
+            }
+
+            .field {
+                margin-bottom: 7px;
+            }
+
+            .field label {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 4px;
+                font-size: 10px;
+                color: var(--muted);
+            }
+
+            .value-pill {
+                min-width: 34px;
+                text-align: center;
+                padding: 1px 4px;
+                border-radius: 999px;
+                font-size: 9px;
+                color: var(--text);
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.14);
+            }
+
+            #controls input[type=range] {
+                width: 100%;
+                margin: 0;
+                appearance: none;
+                height: 4px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.2);
+                outline: none;
+            }
+
+            #controls input[type=range]::-webkit-slider-thumb {
+                appearance: none;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                border: 1px solid rgba(255, 255, 255, 0.8);
+                background: var(--accent);
+                cursor: pointer;
+            }
+
+            #controls input[type=range]::-moz-range-thumb {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                border: 1px solid rgba(255, 255, 255, 0.8);
+                background: var(--accent);
+                cursor: pointer;
+            }
+
+            .custom-select {
+                position: relative;
+                margin-top: 6px;
+                margin-bottom: 10px;
+            }
+
+            .select-trigger {
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 6px;
+                padding: 7px 8px;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: rgba(255, 255, 255, 0.04);
+                color: var(--text);
+                font-size: 11px;
+                font-family: inherit;
+                cursor: pointer;
+                transition: border-color 160ms ease, background-color 160ms ease;
+            }
+
+            .select-trigger:hover,
+            .select-trigger:focus-visible {
+                border-color: rgba(255, 95, 132, 0.8);
+                background: rgba(255, 95, 132, 0.12);
+                outline: none;
+            }
+
+            .select-caret {
+                color: var(--muted);
+                font-size: 14px;
+                line-height: 1;
+            }
+
+            .select-options {
+                list-style: none;
+                margin: 4px 0 0;
+                padding: 4px;
+                position: absolute;
+                left: 0;
+                right: 0;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: rgba(8, 10, 14, 0.98);
+                box-shadow: 0 8px 16px rgba(0, 0, 0, 0.34);
+                display: none;
+                z-index: 260;
+            }
+
+            .custom-select[data-open='true'] .select-options {
+                display: block;
+            }
+
+            .select-option {
+                width: 100%;
+                border: 0;
+                margin: 0;
+                border-radius: 6px;
+                background: transparent;
+                color: var(--muted);
+                padding: 6px 7px;
+                text-align: left;
+                font-size: 10px;
+                font-family: inherit;
+                cursor: pointer;
+                transition: background-color 140ms ease, color 140ms ease;
+            }
+
+            .select-option:hover,
+            .select-option:focus-visible,
+            .select-option.is-selected {
+                color: var(--text);
+                background: rgba(255, 95, 132, 0.2);
+                outline: none;
+            }
+
+            #redraw-btn {
+                width: 100%;
+                padding: 8px 10px;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: rgba(255, 107, 138, 0.2);
                 color: #fff;
                 cursor: pointer;
                 font-family: inherit;
-                transition: background 0.2s,transform 0.1s;
+                font-size: 11px;
+                letter-spacing: 0.04em;
+                font-weight: 600;
+                text-transform: uppercase;
+                transition: transform 120ms ease, background-color 180ms ease, border-color 180ms ease;
             }
+
             #redraw-btn:hover {
-                background: #c11;
+                background: rgba(255, 107, 138, 0.34);
+                border-color: rgba(255, 107, 138, 0.9);
             }
+
             #redraw-btn:active {
-                transform: scale(0.95);
+                transform: translateY(1px) scale(0.98);
+            }
+
+            .home-link {
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                z-index: 220;
+                width: 36px;
+                height: 36px;
+                display: grid;
+                place-items: center;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                background: rgba(0, 0, 0, 0.7);
+                transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease;
+                text-decoration: none;
+                font-size:18px;
+                line-height: 1;
+            }
+
+            .home-link:hover {
+                transform: translateY(-2px);
+                border-color: rgba(255, 95, 132, 0.9);
+                background: rgba(255, 95, 132, 0.24);
+            }
+
+            .home-link:active {
+                transform: translateY(0) scale(0.97);
+            }
+
+            .home-link img {
+                width: 18px;
+                height: 18px;
+                object-fit: contain;
+            }
+
+            @media (max-width: 700px) {
+                #controls {
+                    width: min(176px, calc(100vw - 14px));
+                    left: 7px;
+                    top: 7px;
+                    padding: 7px;
+                }
+
+                .panel-title {
+                    font-size: 11px;
+                }
+
+                .home-link {
+                    top: 7px;
+                    right: 7px;
+                }
             }
         </style>
     </head>
 <body>
-<a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; text-decoration: none; font-family: 'Inter', sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(180, 15, 80, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.6)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='rgba(255, 255, 255, 0.3)'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
+<a href="index.html" class="home-link" aria-label="Back to home">
+    <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home">
+</a>
 
 <div id="controls">
-    <label for="sliderA">Spiral A: <span id="valA"></span></label>
-    <input type="range" id="sliderA" min="0.1" max="1.0" step="0.01" value="0.25">
-    <label for="sliderB">Spiral B: <span id="valB"></span></label>
-    <input type="range" id="sliderB" min="0.01" max="1.5" step="0.01" value="0.4">
-    <label for="sliderTheta">Spiral Theta: <span id="valTheta"></span></label>
-    <input type="range" id="sliderTheta" min="0.1" max="6.0" step="0.01" value="1.2">
-    <label for="sliderSin">Spiral Sin: <span id="valSin"></span></label>
-    <input type="range" id="sliderSin" min="0.01" max="3.0" step="0.01" value="1.3">
-    <label for="sliderTile">Tile Size: <span id="valTile"></span></label>
-    <input type="range" id="sliderTile" min="1" max="8" step="1" value="2"><br>
-    <select id="paletteSelect">
-        <option value="rainbow">Rainbow</option>
-        <option value="blood">Blood</option>
-        <option value="ice">Ice</option>
-        <option value="forest">Forest</option>
-        <option value="mana">Mana</option>
-        <option value="pastel">Pastel</option>
-        <option value="mono">Monochrome</option>
-    </select><br>
-    
-    <button id="redraw-btn">Redraw</button>
+    <button id="minimizeControlsBtn" type="button" aria-label="Minimize controls"><span class="min-icon" aria-hidden="true"></span></button>
+    <div id="controlsContent">
+        <h1 class="panel-title">Pixel Splatter</h1>
+
+        <div class="field">
+            <label for="sliderA">Spiral A <span id="valA" class="value-pill"></span></label>
+            <input type="range" id="sliderA" min="0.1" max="1.0" step="0.01" value="0.25">
+        </div>
+
+        <div class="field">
+            <label for="sliderB">Spiral B <span id="valB" class="value-pill"></span></label>
+            <input type="range" id="sliderB" min="0.01" max="1.5" step="0.01" value="0.4">
+        </div>
+
+        <div class="field">
+            <label for="sliderTheta">Spiral Theta <span id="valTheta" class="value-pill"></span></label>
+            <input type="range" id="sliderTheta" min="0.1" max="6.0" step="0.01" value="1.2">
+        </div>
+
+        <div class="field">
+            <label for="sliderSin">Spiral Sin <span id="valSin" class="value-pill"></span></label>
+            <input type="range" id="sliderSin" min="0.01" max="3.0" step="0.01" value="1.3">
+        </div>
+
+        <div class="field">
+            <label for="sliderTile">Tile Size <span id="valTile" class="value-pill"></span></label>
+            <input type="range" id="sliderTile" min="1" max="8" step="1" value="2">
+        </div>
+
+        <div class="custom-select" id="paletteMenu" data-open="false">
+            <button type="button" class="select-trigger" id="paletteButton" aria-haspopup="listbox" aria-expanded="false">
+                <span id="paletteLabel">Rainbow</span>
+                <span class="select-caret">▾</span>
+            </button>
+            <ul class="select-options" id="paletteOptions" role="listbox" aria-label="Color palette">
+                <li><button type="button" class="select-option" data-value="rainbow">Rainbow</button></li>
+                <li><button type="button" class="select-option" data-value="blood">Blood</button></li>
+                <li><button type="button" class="select-option" data-value="ice">Ice</button></li>
+                <li><button type="button" class="select-option" data-value="forest">Forest</button></li>
+                <li><button type="button" class="select-option" data-value="mana">Mana</button></li>
+                <li><button type="button" class="select-option" data-value="pastel">Pastel</button></li>
+                <li><button type="button" class="select-option" data-value="mono">Monochrome</button></li>
+            </ul>
+        </div>
+
+        <button id="redraw-btn">Redraw</button>
+    </div>
 </div>
 
 <script>
@@ -93,29 +419,46 @@ let params = {
     tileSize: 2,
     palette: 'rainbow'
 };
+
+const paletteNames = {
+    rainbow: 'Rainbow',
+    blood: 'Blood',
+    ice: 'Ice',
+    forest: 'Forest',
+    mana: 'Mana',
+    pastel: 'Pastel',
+    mono: 'Monochrome'
+};
+
 let flameLayer;
 let needsRedraw = true;
-let flameDrawState = null;
+const RENDER_SIZE = 384;
+const POINT_COUNT_DESKTOP = 220000;
+const POINT_COUNT_MOBILE = 140000;
 
 function setup() {
     pixelDensity(1);
     createCanvas(windowWidth, windowHeight);
     noSmooth();
-    flameLayer = createGraphics(512, 512);
+    flameLayer = createGraphics(RENDER_SIZE, RENDER_SIZE);
     flameLayer.noSmooth();
     drawFractalFlameAll(flameLayer, params);
     needsRedraw = true;
+    noLoop();
+    redraw();
 }
 
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
     needsRedraw = true;
+    redraw();
 }
 
 function redrawFractal() {
     flameLayer.clear();
     drawFractalFlameAll(flameLayer, params);
     needsRedraw = true;
+    redraw();
 }
 
 
@@ -132,9 +475,9 @@ function draw() {
 function drawFractalFlameAll(gfx, params) {
     gfx.colorMode(HSB, 360, 255, 255, 255);
     gfx.noStroke();
-    let w = 512, h = 512;
+    let w = gfx.width, h = gfx.height;
     let cx = w / 2, cy = h / 2;
-    let points = 400000;
+    let points = windowWidth < 700 ? POINT_COUNT_MOBILE : POINT_COUNT_DESKTOP;
     let spread = w;
     let spiralA = 0.78 + Math.random() * 0.15;
     let spiralB = 0.22 + Math.random() * 0.15;
@@ -168,7 +511,7 @@ function drawFractalFlameAll(gfx, params) {
                 break;
             case 'blood':
                 hue = 1 + 5 * t + 6 * Math.sin(i*0.0005 + colorSeed);
-                sat = 240 - 40 * t; 
+                sat = 240 - 40 * t;
                 bri = 110 + 40 * t + 10 * Math.sin(i*0.0002 + colorSeed);
                 break;
             case 'ice':
@@ -222,6 +565,103 @@ function updateSliderDisplays() {
     setVal('valSin', params.spiralSin.toFixed(2));
     setVal('valTile', params.tileSize);
 }
+
+function setupPaletteMenu() {
+    const menu = document.getElementById('paletteMenu');
+    const button = document.getElementById('paletteButton');
+    const label = document.getElementById('paletteLabel');
+    const caret = button ? button.querySelector('.select-caret') : null;
+    const options = Array.from(document.querySelectorAll('.select-option'));
+
+    const setPalette = (value) => {
+        if (!paletteNames[value]) {
+            return;
+        }
+
+        params.palette = value;
+        label.textContent = paletteNames[value];
+        options.forEach((option) => {
+            option.classList.toggle('is-selected', option.dataset.value === value);
+        });
+    };
+
+    const closeMenu = () => {
+        menu.dataset.open = 'false';
+        button.setAttribute('aria-expanded', 'false');
+        if (caret) caret.textContent = '▾';
+    };
+
+    const openMenu = () => {
+        menu.dataset.open = 'true';
+        button.setAttribute('aria-expanded', 'true');
+        if (caret) caret.textContent = '▴';
+    };
+
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isOpen = menu.dataset.open === 'true';
+        if (isOpen) {
+            closeMenu();
+        } else {
+            openMenu();
+        }
+    });
+
+    button.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openMenu();
+            const selected = options.find((option) => option.dataset.value === params.palette) || options[0];
+            if (selected) {
+                selected.focus();
+            }
+        }
+    });
+
+    options.forEach((option) => {
+        option.addEventListener('click', () => {
+            setPalette(option.dataset.value);
+            closeMenu();
+        });
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!menu.contains(event.target)) {
+            closeMenu();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeMenu();
+            button.focus();
+        }
+    });
+
+    setPalette(params.palette);
+    if (caret) caret.textContent = '▾';
+}
+
+function setupControlMinimize() {
+    const controlsPanel = document.getElementById('controls');
+    const controlsContent = document.getElementById('controlsContent');
+    const minimizeBtn = document.getElementById('minimizeControlsBtn');
+    let controlsMinimized = false;
+
+    if (minimizeBtn && controlsPanel && controlsContent) {
+        minimizeBtn.addEventListener('click', () => {
+            controlsMinimized = !controlsMinimized;
+            if (controlsMinimized) {
+                controlsPanel.classList.add('minimized');
+                minimizeBtn.setAttribute('aria-label', 'Expand controls');
+            } else {
+                controlsPanel.classList.remove('minimized');
+                minimizeBtn.setAttribute('aria-label', 'Minimize controls');
+            }
+        });
+    }
+}
+
 function setupSliders() {
     const sliders = [
         {id: 'sliderA', key: 'spiralA'},
@@ -230,24 +670,22 @@ function setupSliders() {
         {id: 'sliderSin', key: 'spiralSin'},
         {id: 'sliderTile', key: 'tileSize'}
     ];
-    sliders.forEach(s => {
+
+    sliders.forEach((s) => {
         const el = document.getElementById(s.id);
         el.value = params[s.key];
         el.addEventListener('input', () => {
-            params[s.key] = (s.key === 'tileSize') ? parseInt(el.value) : parseFloat(el.value);
+            params[s.key] = (s.key === 'tileSize') ? parseInt(el.value, 10) : parseFloat(el.value);
             updateSliderDisplays();
         });
     });
-    // Palette dropdown
-    const paletteSel = document.getElementById('paletteSelect');
-    paletteSel.value = params.palette;
-    paletteSel.addEventListener('change', () => {
-        params.palette = paletteSel.value;
-        updateSliderDisplays();
-    });
+
+    setupPaletteMenu();
+    setupControlMinimize();
     updateSliderDisplays();
     document.getElementById('redraw-btn').onclick = redrawFractal;
 }
+
 window.addEventListener('DOMContentLoaded', setupSliders);
 </script>
 </body>
