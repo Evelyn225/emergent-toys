@@ -7,85 +7,309 @@
     <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Cormorant+SC:wght@300;400&display=swap" rel="stylesheet">
     <title>Cellular Automata Garden</title>
     <style>
+        :root {
+            --bg: #071005;
+            --panel: rgba(4, 8, 3, 0.9);
+            --border: rgba(95, 138, 62, 0.28);
+            --border-hover: rgba(130, 180, 85, 0.52);
+            --text: rgba(210, 228, 188, 0.96);
+            --text-dim: rgba(150, 178, 118, 0.75);
+            --green: #78a852;
+            --rose: #b47880;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             margin: 0;
             overflow: hidden;
-            background: #1a1a1a;
-            font-family: Arial, sans-serif;
-            color: #fff;
+            background: var(--bg);
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            color: var(--text);
         }
-        canvas {
-            display: block;
-        }
+
+        canvas { display: block; }
+
         .controls {
             position: fixed;
             top: 20px;
             left: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
+            background: var(--panel);
+            padding: 24px 20px 20px;
             z-index: 100;
+            border: 1px solid var(--border);
+            width: 210px;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
         }
+
+        /* minimize/maximize behavior */
+        .controls.minimized {
+            width: 28px !important;
+            height: 28px !important;
+            padding: 0 !important;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .controls.minimized #minimizeControlsBtn {
+            position: static;
+        }
+
+        .controls.minimized #controlsContent {
+            display: none;
+        }
+
+        #minimizeControlsBtn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            width: 20px;
+            height: 12px;
+            font-size: 22px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border-radius: 2px;
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            cursor: pointer;
+            transition: color 0.15s, transform 0.15s;
+            font-family: 'Cormorant SC', 'Cormorant Garamond', Georgia, serif;
+        }
+
+        #minimizeControlsBtn:hover {
+            color: var(--green);
+            transform: scale(1.15);
+        }
+
+        /* Top-left vine flourish */
+        .controls::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            width: 50px;
+            height: 50px;
+background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'%3E%3Cpath d='M 4 46 C 4 28 18 12 46 4' stroke='%2378a852' stroke-width='1' fill='none' stroke-linecap='round' opacity='0.6'/%3E%3Cg transform='translate(6 36) rotate(108)'%3E%3Cellipse cx='0' cy='-5' rx='2' ry='5' fill='%2378a852' opacity='0.42'/%3E%3C/g%3E%3Cg transform='translate(14.5 21.3) rotate(314)'%3E%3Cellipse cx='0' cy='-4.5' rx='1.8' ry='4.5' fill='%2378a852' opacity='0.32'/%3E%3C/g%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+            pointer-events: none;
+        }
+
+        /* Bottom-right vine flourish (mirrored) */
+        .controls::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            right: -1px;
+            width: 50px;
+            height: 50px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'%3E%3Cpath d='M 4 46 C 4 28 18 12 46 4' stroke='%2378a852' stroke-width='1' fill='none' stroke-linecap='round' opacity='0.6'/%3E%3Cg transform='translate(6 36) rotate(108)'%3E%3Cellipse cx='0' cy='-5' rx='2' ry='5' fill='%2378a852' opacity='0.42'/%3E%3C/g%3E%3Cg transform='translate(14.5 21.3) rotate(314)'%3E%3Cellipse cx='0' cy='-4.5' rx='1.8' ry='4.5' fill='%2378a852' opacity='0.32'/%3E%3C/g%3E%3C/svg%3E");
+
+            background-repeat: no-repeat;
+            transform: rotate(180deg);
+            pointer-events: none;
+        }
+
         .control-group {
-            margin-bottom: 15px;
+            margin-bottom: 14px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(88, 130, 55, 0.14);
         }
+
         label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 7px;
+            font-family: 'Cormorant SC', 'Cormorant Garamond', Georgia, serif;
+            font-size: 11.5px;
+            font-weight: 300;
+            letter-spacing: 0.13em;
+            color: var(--text-dim);
         }
-        select, button {
+
+        select {
             width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-            border-radius: 4px;
-        }
-        button {
+            padding: 7px 26px 7px 9px;
+            background: rgba(8, 16, 6, 0.75);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 1px;
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 15px;
+            font-weight: 300;
+            appearance: none;
+            -webkit-appearance: none;
             cursor: pointer;
-            transition: background 0.3s;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M 3 5.5 L 8 10.5 L 13 5.5' stroke='%2378a852' stroke-width='1.1' fill='none' stroke-linecap='round' stroke-linejoin='round' opacity='0.65'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 7px center;
+            background-size: 16px;
+            transition: border-color 0.2s;
+            outline: none;
         }
+
+        select:hover, select:focus {
+            border-color: var(--border-hover);
+        }
+
+        button {
+            width: 100%;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 1px;
+            font-family: 'Cormorant SC', 'Cormorant Garamond', Georgia, serif;
+            font-size: 13px;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: border-color 0.18s, color 0.18s, background 0.18s;
+            outline: none;
+        }
+
+        button:first-of-type {
+            margin-top: 2px;
+        }
+
+        button:last-child {
+            margin-bottom: 0;
+        }
+
         button:hover {
-            background: #444;
+            border-color: var(--border-hover);
+            color: rgba(218, 235, 195, 0.95);
+            background: rgba(88, 138, 55, 0.08);
         }
+
+        button:active {
+            transform: scale(0.98);
+            background: rgba(88, 138, 55, 0.14);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 1px;
+            background: rgba(88, 130, 55, 0.32);
+            outline: none;
+            border: none;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            background: var(--green);
+            opacity: 0.75;
+            cursor: pointer;
+            transition: opacity 0.15s, transform 0.15s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            opacity: 1;
+            transform: scale(1.25);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            background: var(--green);
+            opacity: 0.75;
+            cursor: pointer;
+            border: none;
+        }
+
         .info {
             position: fixed;
             bottom: 20px;
             left: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 14px;
-            max-width: 300px;
+            display: inline-block;
+            background: rgba(4, 8, 3, 0.85);
+            border: 1px solid var(--border);
+            padding: 16px 16px;
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 13.5px;
+            font-style: italic;
+            font-weight: 300;
+            color: var(--text-dim);
+            max-width: 272px;
+            line-height: 1.65;
+            backdrop-filter: blur(10px);
+            opacity: 1;
+            transition: opacity 0.2s ease;
+            /* leave display inline-block; hiding handled in script */
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* close button for info panel */
+        #closeInfoBtn {
+            width: 12px;
+            height: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 2px;
+            right: 6px;
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 25px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0;
+            transition: color 0.15s, transform 0.15s;
+            font-family: 'Cormorant SC', 'Cormorant Garamond', Georgia, serif;
+            z-index: 102;
+        }
+
+        #closeInfoBtn:hover {
+            color: var(--rose);
+            transform: scale(1.15);
         }
     </style>
 </head>
 <body>
-    <a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #555; border-radius: 10px; text-decoration: none; font-family: Arial, sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(100, 255, 100, 0.8)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#555'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
+    <a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #555; border-radius: 10px; text-decoration: none; font-family: Arial, sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(130, 180, 85, 0.85)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#555'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
     <canvas id="garden"></canvas>
-    <div class="controls">
-        <div class="control-group">
-            <label for="automataType">Automata Type:</label>
-            <select id="automataType">
-                <option value="flowers">Flowers</option>
-                <option value="grass">Grass</option>                
-                <option value="moss">Moss</option>
-                <option value="coral">Coral</option>
-                <option value="fern">Fern</option>
-                <option value="crystal">Crystal</option>
-            </select>
+    <div class="controls" id="controls">
+        <button id="minimizeControlsBtn">–</button>
+        <div id="controlsContent">
+            <div class="control-group">
+                <label for="automataType">Automata Type:</label>
+                <select id="automataType">
+                    <option value="flowers">Flowers</option>
+                    <option value="grass">Grass</option>                
+                    <option value="moss">Moss</option>
+                    <option value="coral">Coral</option>
+                    <option value="fern">Fern</option>
+                    <option value="crystal">Crystal</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="speed">Speed:</label>
+                <input type="range" id="speed" min="1" max="30" value="15">
+            </div>
+            <button id="randomize">Randomize Garden</button>
+            <button id="clear">Clear Garden</button>
         </div>
-        <div class="control-group">
-            <label for="speed">Speed:</label>
-            <input type="range" id="speed" min="1" max="30" value="15">
-        </div>
-        <button id="randomize">Randomize Garden</button>
-        <button id="clear">Clear Garden</button>
     </div>
-    <div class="info">
+    <div class="info" id="info">
+        <button id="closeInfoBtn">×</button>
         Click and drag to draw cells. Each automata type has different rules for cell survival and birth.
     </div>
 
@@ -95,45 +319,40 @@
         let width, height;
         let cellSize = 4;
         let grid = [];
+        let ageGrid = [];
         let isRunning = true;
         let isDrawing = false;
         let currentAutomata = 'flowers';
         let lastMousePosition = { x: 0, y: 0 };
+        let windGusts = [];
+        let nextWindTime = 3000; // ms: first gust 3s after load
 
-        // Automata rules
+        // Automata rules — object order = birth priority (first wins contested cells)
+        // Each type has a UNIQUE birth condition so they occupy distinct density niches:
+        //   crystal — S1-8/B45:  near-immortal once placed; born only at dense 4-5 neighbors → static formations
+        //   flowers — S234/B36:  robust High Life; born at 3 or 6 neighbors → spirals + dynamic clusters
+        //   fern    — S123/B2:   born from sparse pairs; dies in crowds → thin lace tendrils (unlike grass)
+        //   coral   — S45678/B3: born standard; survives only dense → compact self-pruning islands
+        //   grass   — S2345/B3:  stable medium patches; birth after coral so grass fills remaining space
+        //   moss    — S345678/B3: dense velvet masses; last priority, holds initial territory but doesn't flood
         const rules = {
-            flowers: {
-                survive: [1,4,7,8],
-                birth: [2,6,7,8],
-                survive: [2,5],
-                birth: [3,5],
-                name: "Flowers"
-            },
-            grass: {
-                survive: [1,7,8],
-                birth: [2],
-                name: "Grass"
-            },
-            moss: {
-                survive: [2,3,4,5,6,7],
-                birth: [3],
-                name: "Moss"
-            },
-            coral: {
-                survive: [2,3,8],
-                birth: [3],
-                name: "Coral"
-            },
-            fern: {
-                survive: [3,5,6,7],
-                birth: [4,6],
-                name: "Fern"
-            },
-            crystal: {
-                survive: [2,6,7,8],
-                birth: [3],
-                name: "Crystal"
-            }
+            crystal: { survive: [1,2,3,4,5,6,7,8], birth: [4,5],   name: "Crystal" },
+            flowers: { survive: [2,3,4],            birth: [3,6],   name: "Flowers" },
+            fern:    { survive: [1,2],            birth: [3],     name: "Fern"    },
+            coral:   { survive: [4,5,6,7,8],        birth: [3],     name: "Coral"   },
+            grass:   { survive: [2,3,4,5],          birth: [3],     name: "Grass"   },
+            moss:    { survive: [3,4,5,6,7,8],      birth: [3],     name: "Moss"    },
+        };
+
+        // HSL base colors per type: [hue, saturation%, lightness%]
+        // Age effect: newly born cells are brighter, maturing cells deepen to base
+        const typeHSL = {
+            flowers: [335, 55, 50],
+            grass:   [115, 52, 24],
+            moss:    [125, 44, 16],
+            coral:   [ 18, 65, 40],
+            fern:    [140, 58, 28],
+            crystal: [192, 52, 32],
         };
 
         function resize() {
@@ -147,7 +366,8 @@
         function initGrid() {
             const cols = Math.floor(width / cellSize);
             const rows = Math.floor(height / cellSize);
-            grid = Array(cols).fill().map(() => Array(rows).fill(null));
+            grid    = Array(cols).fill().map(() => Array(rows).fill(null));
+            ageGrid = Array(cols).fill().map(() => Array(rows).fill(0));
         }
 
         function randomize() {
@@ -162,26 +382,13 @@
                 // Get appropriate size for this type
                 let baseSize;
                 switch(type) {
-                    case 'flowers':
-                        baseSize = 4;
-                        break;
-                    case 'grass':
-                        baseSize = 8;
-                        break;
-                    case 'moss':
-                        baseSize = 2;
-                        break;
-                    case 'coral':
-                        baseSize = 5;
-                        break;
-                    case 'fern':
-                        baseSize = 7;
-                        break;
-                    case 'crystal':
-                        baseSize = 1;
-                        break;
-                    default:
-                        baseSize = 4;
+                    case 'flowers': baseSize = 4; break;
+                    case 'grass':   baseSize = 5; break; // reduced from 8 — was pre-loading dominance
+                    case 'moss':    baseSize = 4; break; // increased from 2 — needs mass to hold territory
+                    case 'coral':   baseSize = 5; break;
+                    case 'fern':    baseSize = 3; break; // reduced from 7 — B2 rule spreads from small seeds
+                    case 'crystal': baseSize = 5; break; // increased from 1 — needs density to survive
+                    default:        baseSize = 4;
                 }
                 
                 for (let s = 0; s < numSplotches; s++) {
@@ -214,6 +421,7 @@
             for (let i = 0; i < grid.length; i++) {
                 for (let j = 0; j < grid[i].length; j++) {
                     grid[i][j] = null;
+                    ageGrid[i][j] = 0;
                 }
             }
         }
@@ -234,8 +442,9 @@
         }
 
         function update() {
-            const newGrid = Array(grid.length).fill().map(() => Array(grid[0].length).fill(null));
-            
+            const newGrid    = Array(grid.length).fill().map(() => Array(grid[0].length).fill(null));
+            const newAgeGrid = Array(grid.length).fill().map(() => Array(grid[0].length).fill(0));
+
             // First pass: handle survival
             for (let i = 0; i < grid.length; i++) {
                 for (let j = 0; j < grid[i].length; j++) {
@@ -244,6 +453,7 @@
                         const neighbors = countNeighbors(i, j, cell);
                         if (rules[cell].survive.includes(neighbors)) {
                             newGrid[i][j] = cell;
+                            newAgeGrid[i][j] = Math.min(ageGrid[i][j] + 1, 200);
                         }
                     }
                 }
@@ -257,67 +467,42 @@
                             const neighbors = countNeighbors(i, j, type);
                             if (rules[type].birth.includes(neighbors)) {
                                 newGrid[i][j] = type;
+                                newAgeGrid[i][j] = 1;
                                 break; // Only one type can be born in a cell
                             }
                         }
                     }
                 }
             }
-            
-            grid = newGrid;
+
+            grid    = newGrid;
+            ageGrid = newAgeGrid;
         }
 
         function draw() {
-            ctx.fillStyle = '#1a1a1a';
+            ctx.fillStyle = '#071005';
             ctx.fillRect(0, 0, width, height);
 
             for (let i = 0; i < grid.length; i++) {
                 for (let j = 0; j < grid[i].length; j++) {
                     const cell = grid[i][j];
-                    if (cell === 'flowers') {
-                        // Flower colors
-                        const flowerColors = [
-                            '#FF69B4', // Hot Pink
-                            '#FF1493', // Deep Pink
-                            '#FFB6C1', // Light Pink
-                            '#FFC0CB', // Pink
-                            '#FF69B4'  // Hot Pink
-                        ];
-                        const colorIndex = Math.floor((i + j) / 10) % flowerColors.length;
-                        ctx.fillStyle = flowerColors[colorIndex];
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
-                    } else if (cell === 'moss') {
-                        // Dark green for Moss
-                        ctx.fillStyle = '#006400';
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
-                    } else if (cell === 'grass') {
-                        // Green for Grass
-                        ctx.fillStyle = '#80FF80';
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
-                    } else if (cell === 'coral') {
-                        // Coral colors
-                        const coralColors = [
-                            '#FF7F50', // Coral
-                            '#FF6347', // Tomato
-                            '#FF4500'  // Orange Red
-                        ];
-                        const colorIndex = Math.floor((i + j) / 8) % coralColors.length;
-                        ctx.fillStyle = coralColors[colorIndex];
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
-                    } else if (cell === 'fern') {
-                        ctx.fillStyle = '#228D3C'; // Forest Green
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
-                    } else if (cell === 'crystal') {
-                        // Crystal colors
-                        const crystalColors = [
-                            '#00FFFF', // Cyan
-                            '#40E0D0', // Turquoise
-                            '#48D1CC'  // Medium Turquoise
-                        ];
-                        const colorIndex = Math.floor((i + j) / 6) % crystalColors.length;
-                        ctx.fillStyle = crystalColors[colorIndex];
-                        ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
-                    }
+                    if (cell === null) continue;
+
+                    const [h, s, l] = typeHSL[cell];
+                    const age = ageGrid[i][j];
+
+                    // Newly born cells glow brighter; mature cells settle to deep base color
+                    const freshBoost = Math.max(0, 14 - Math.min(age, 14)) * 2.2;
+
+                    // Subtle positional hue & lightness scatter — breaks up flat patches
+                    const hVar = ((i * 17) ^ (j * 13)) % 11 - 5;
+                    const lVar = ((i *  7) ^ (j * 11)) %  7 - 3;
+
+                    const finalL = Math.min(72, l + freshBoost + lVar);
+                    ctx.fillStyle = `hsl(${h + hVar},${s}%,${finalL}%)`;
+
+                    // 1px soil gap between cells — background reads as dark earth
+                    ctx.fillRect(i * cellSize + 1, j * cellSize + 1, cellSize - 1, cellSize - 1);
                 }
             }
         }
@@ -407,6 +592,85 @@
         document.getElementById('randomize').addEventListener('click', randomize);
         document.getElementById('clear').addEventListener('click', clear);
 
+        // Wind drift — a wave front sweeps across the grid in a random direction,
+        // shifting cells one step as it passes rather than moving everything at once.
+        function spawnGust() {
+            if (!grid.length || !grid[0].length) return;
+            const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+            const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+            const cols = grid.length, rows = grid[0].length;
+            windGusts.push({
+                dx, dy,
+                speed: 5 + Math.floor(Math.random() * 7),   // cells the front advances per frame
+                strength: 0.22 + Math.random() * 0.28,      // probability of moving each cell at peak
+                wavePos: 0,
+                waveWidth: 14,                               // depth of the gust front
+                totalDist: dx !== 0 ? cols : rows,
+                done: false
+            });
+        }
+
+        function applyGust(gust) {
+            const cols = grid.length, rows = grid[0].length;
+            const wp = gust.wavePos, ww = gust.waveWidth;
+
+            // Restrict iteration to the thin strip the wave front currently occupies
+            let xMin = 0, xMax = cols - 1, yMin = 0, yMax = rows - 1;
+            if (gust.dx ===  1) { xMin = Math.max(0, Math.floor(wp - ww)); xMax = Math.min(cols - 1, Math.ceil(wp)); }
+            if (gust.dx === -1) { xMin = Math.max(0, Math.floor(cols - 1 - wp)); xMax = Math.min(cols - 1, Math.ceil(cols - 1 - wp + ww)); }
+            if (gust.dy ===  1) { yMin = Math.max(0, Math.floor(wp - ww)); yMax = Math.min(rows - 1, Math.ceil(wp)); }
+            if (gust.dy === -1) { yMin = Math.max(0, Math.floor(rows - 1 - wp)); yMax = Math.min(rows - 1, Math.ceil(rows - 1 - wp + ww)); }
+
+            // Iterate in reverse of wind direction to avoid shifting a cell twice
+            const xStart = gust.dx >= 0 ? xMax : xMin,  xEnd = gust.dx >= 0 ? xMin - 1 : xMax + 1,  xStep = gust.dx >= 0 ? -1 : 1;
+            const yStart = gust.dy >= 0 ? yMax : yMin,  yEnd = gust.dy >= 0 ? yMin - 1 : yMax + 1,  yStep = gust.dy >= 0 ? -1 : 1;
+
+            for (let x = xStart; x !== xEnd; x += xStep) {
+                for (let y = yStart; y !== yEnd; y += yStep) {
+                    if (grid[x][y] === null) continue;
+
+                    // Each cell's position along the sweep axis (distance from upstream edge)
+                    let pos;
+                    if      (gust.dx ===  1) pos = x;
+                    else if (gust.dx === -1) pos = cols - 1 - x;
+                    else if (gust.dy ===  1) pos = y;
+                    else                     pos = rows - 1 - y;
+
+                    const dist = wp - pos;
+                    if (dist < 0 || dist > ww) continue;
+
+                    // Probability peaks at the leading edge, fades behind it
+                    if (Math.random() > gust.strength * (1 - dist / ww)) continue;
+
+                    const nx = x + gust.dx, ny = y + gust.dy;
+                    if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+
+                    // Only shift into empty space — keeps dense patches intact
+                    if (grid[nx][ny] === null) {
+                        grid[nx][ny]    = grid[x][y];
+                        ageGrid[nx][ny] = ageGrid[x][y];
+                        grid[x][y]    = null;
+                        ageGrid[x][y] = 0;
+                    }
+                }
+            }
+        }
+
+        // Returns true while any gust is active (used to trigger extra redraws)
+        function updateWind(timestamp) {
+            if (timestamp >= nextWindTime) {
+                spawnGust();
+                nextWindTime = timestamp + 4000 + Math.random() * 7000; // 4–11s between gusts
+            }
+            windGusts = windGusts.filter(g => !g.done);
+            for (const gust of windGusts) {
+                applyGust(gust);
+                gust.wavePos += gust.speed;
+                if (gust.wavePos > gust.totalDist + gust.waveWidth) gust.done = true;
+            }
+            return windGusts.length > 0;
+        }
+
         // Animation loop
         let frameRate = 30;
         let lastUpdate = 0;
@@ -414,12 +678,18 @@
             if (!lastUpdate) lastUpdate = timestamp;
             const elapsed = timestamp - lastUpdate;
 
+            // Wind runs every animation frame (~60fps) for smooth sweep movement
+            const windActive = isRunning && updateWind(timestamp);
+
             if (elapsed > (1000 / frameRate)) {
                 if (isRunning) {
                     update();
                     draw();
                 }
                 lastUpdate = timestamp;
+            } else if (windActive) {
+                // Redraw between CA frames so the gust visibly sweeps across
+                draw();
             }
             requestAnimationFrame(animate);
         }
@@ -428,9 +698,38 @@
         resize();
         clear();
         document.getElementById('automataType').value = 'flowers'; // Reset menu to Grass
-        document.getElementById('speed').value = '1'; // Reset speed to default
+        document.getElementById('speed').value = '15'; // Reset speed to default
         currentAutomata = 'flowers';
         frameRate = 10; // Set initial frame rate
         animate(0);
+
+        // UI helpers: minimize controls and close info
+        window.addEventListener('DOMContentLoaded', function () {
+            const controlsPanel = document.getElementById('controls');
+            const controlsContent = document.getElementById('controlsContent');
+            const minimizeBtn = document.getElementById('minimizeControlsBtn');
+            let controlsMinimized = false;
+            if (minimizeBtn && controlsPanel && controlsContent) {
+                minimizeBtn.addEventListener('click', function () {
+                    controlsMinimized = !controlsMinimized;
+                    if (controlsMinimized) {
+                        controlsPanel.classList.add('minimized');
+                        minimizeBtn.textContent = '+';
+                    } else {
+                        controlsPanel.classList.remove('minimized');
+                        minimizeBtn.textContent = '–';
+                    }
+                });
+            }
+            const infoPanel = document.getElementById('info');
+            const closeInfoBtn = document.getElementById('closeInfoBtn');
+            if (closeInfoBtn && infoPanel) {
+                closeInfoBtn.addEventListener('click', function () {
+                    // fade out then hide
+                    infoPanel.style.opacity = '0';
+                    setTimeout(() => { infoPanel.style.display = 'none'; }, 220);
+                });
+            }
+        });
     </script>
 </body>
