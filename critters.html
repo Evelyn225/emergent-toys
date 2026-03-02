@@ -506,12 +506,11 @@
                 removeTypingIndicator();
                 await addMessage(introMessage, 'bug');
                 
-                // Store in bug memory
                 bugMemory.get(currentBug.name).push({
                     role: "assistant",
                     content: introMessage
                 });
-                
+
                 console.log('Intro message added and stored');
             } catch (error) {
                 removeTypingIndicator();
@@ -540,7 +539,6 @@
             try {
                 console.log('Sending message to: /api/bug-chat.js');
                 
-                // Build conversation history from bugMemory
                 let conversationHistory = [];
                 if (bugMemory.has(currentBug.name)) {
                     conversationHistory = bugMemory.get(currentBug.name);
@@ -567,16 +565,13 @@
                 if (data.message) {
                     removeTypingIndicator();
                     addMessage(data.message, 'bug');
-                    // Store in bug memory with role
                     if (!bugMemory.has(currentBug.name)) {
                         bugMemory.set(currentBug.name, []);
                     }
-                    // Add user message first
                     bugMemory.get(currentBug.name).push({
                         role: "user",
                         content: message
                     });
-                    // Then add assistant response
                     bugMemory.get(currentBug.name).push({
                         role: "assistant",
                         content: data.message
@@ -593,7 +588,6 @@
             }
         }
 
-        // Initialize the chat
         displayBug();
         setInterval(updateSignalStrength, 3000);
         setInterval(updateNetworkStatus, 5000);
