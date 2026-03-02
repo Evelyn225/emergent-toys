@@ -102,6 +102,12 @@
             return offset;
         }
 
+        // Returns a brightness multiplier in ~[0.55, 1.35] based on quad warp tilt.
+        function shadeFactor(warpTopY, warpBottomY, blockH) {
+            const slope = (warpTopY - warpBottomY) / blockH;
+            return Math.min(1.35, Math.max(0.55, 1.0 + slope * 2.2));
+        }
+
         function drawWarpedGrid() {
             // Base fill
             ctx.fillStyle = '#ffffff';
@@ -127,7 +133,6 @@
             for (let y = startY; y <= logicalHeight + block; y += block) {
                 for (let x = startX; x <= logicalWidth + block; x += block) {
                     const isRed = (Math.floor(x / block) + Math.floor(y / block)) % 2 === 0;
-                    ctx.fillStyle = isRed ? '#C94B4B' : '#FFFFFF';
 
                     // Match exact grid line displacement
                     const r1 = rippleDisplacement(x, y);
@@ -144,6 +149,21 @@
                     const y3 = (y + block) + Math.sin((x + block) * freq + t) * amp + r3;
                     const x4 = x + Math.sin((y + block) * freq + t) * amp + r4;
                     const y4 = (y + block) + Math.sin(x * freq + t) * amp + r4;
+
+                    const sf = shadeFactor(y1, y4, block);
+
+                    let fillColor;
+                    if (isRed) {
+                        const r = Math.round(Math.min(255, 201 * sf));
+                        const g = Math.round(Math.min(255, 75 * sf));
+                        const b = Math.round(Math.min(255, 75 * sf));
+                        fillColor = `rgb(${r},${g},${b})`;
+                    } else {
+                        const light = Math.min(255, Math.round(255 * sf));
+                        const warmShadow = Math.max(0, Math.round(255 - (255 - 220) * (1 - sf)));
+                        fillColor = `rgb(${light},${warmShadow},${Math.round(light * 0.96)})`;
+                    }
+                    ctx.fillStyle = fillColor;
 
                     ctx.beginPath();
                     ctx.moveTo(x1, y1);
