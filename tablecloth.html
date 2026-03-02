@@ -41,6 +41,13 @@
             canvas.width = Math.round(logicalWidth * dpr);
             canvas.height = Math.round(logicalHeight * dpr);
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const vcx = logicalWidth / 2;
+            const vcy = logicalHeight / 2;
+            const vr = Math.sqrt((logicalWidth / 2) ** 2 + (logicalHeight / 2) ** 2);
+            vignetteGradient = ctx.createRadialGradient(vcx, vcy, 0, vcx, vcy, vr);
+            vignetteGradient.addColorStop(0,   'rgba(255, 240, 220, 0.0)');
+            vignetteGradient.addColorStop(0.5, 'rgba(120,  30,  10, 0.08)');
+            vignetteGradient.addColorStop(1,   'rgba(60,   10,   0, 0.48)');
         }
 
         resizeCanvas();
@@ -58,6 +65,7 @@
         };
 
         let time = 0;
+        let vignetteGradient = null;
         const ripples = [];
         let lastMousePos = { x: 0, y: 0, time: 0 };
         let mouseRippleCounter = 0;
@@ -236,15 +244,8 @@
             }
 
             // Radial vignette — overhead light simulation
-            const cx = logicalWidth / 2;
-            const cy = logicalHeight / 2;
-            const outerR = Math.max(logicalWidth, logicalHeight) * 0.78;
-            const vignette = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR);
-            vignette.addColorStop(0,   'rgba(255, 240, 220, 0.0)');
-            vignette.addColorStop(0.5, 'rgba(120,  30,  10, 0.08)');
-            vignette.addColorStop(1,   'rgba(60,   10,   0, 0.48)');
             ctx.globalAlpha = 1;
-            ctx.fillStyle = vignette;
+            ctx.fillStyle = vignetteGradient;
             ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
             // Draw paw cursor
