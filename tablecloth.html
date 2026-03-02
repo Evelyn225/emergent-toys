@@ -235,6 +235,18 @@
                 ctx.globalAlpha = 1;
             }
 
+            // Radial vignette — overhead light simulation
+            const cx = logicalWidth / 2;
+            const cy = logicalHeight / 2;
+            const outerR = Math.max(logicalWidth, logicalHeight) * 0.78;
+            const vignette = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR);
+            vignette.addColorStop(0,   'rgba(255, 240, 220, 0.0)');
+            vignette.addColorStop(0.5, 'rgba(120,  30,  10, 0.08)');
+            vignette.addColorStop(1,   'rgba(60,   10,   0, 0.48)');
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = vignette;
+            ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
             // Draw paw cursor
             if (lastMousePos.x > 0 || lastMousePos.y > 0) {
                 drawCursor(lastMousePos.x, lastMousePos.y, mouseAngle);
