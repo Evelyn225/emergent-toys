@@ -184,10 +184,11 @@
             }
 
             // Draw horizontal lines (warp)
-            ctx.globalAlpha = 0.85;
             ctx.strokeStyle = config.color;
             ctx.lineWidth = config.lineWidth;
             for (let y = -config.gridSize; y <= drawH; y += config.gridSize) {
+                const distFromCenterY = Math.abs(y - logicalHeight / 2) / (logicalHeight / 2);
+                ctx.globalAlpha = Math.max(0.35, 0.88 - distFromCenterY * 0.38);
                 ctx.beginPath();
                 for (let x = -config.gridSize; x <= drawW; x += 15) {
                     const ripple = rippleDisplacement(x, y);
@@ -203,6 +204,8 @@
 
             // Draw vertical lines (weft)
             for (let x = -config.gridSize; x <= drawW; x += config.gridSize) {
+                const distFromCenterX = Math.abs(x - logicalWidth / 2) / (logicalWidth / 2);
+                ctx.globalAlpha = Math.max(0.35, 0.88 - distFromCenterX * 0.38);
                 ctx.beginPath();
                 for (let y = -config.gridSize; y <= drawH; y += 15) {
                     const ripple = rippleDisplacement(x, y);
@@ -215,6 +218,7 @@
                 }
                 ctx.stroke();
             }
+            ctx.globalAlpha = 1;
 
             // Draw ripple interactions
             if (ripples.length > 0) {
