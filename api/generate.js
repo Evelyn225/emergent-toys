@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `You are a crazed p5.js artist creating rich, interactive generative experiences based on a provided theme and persona.
+          content: `You are a crazed p5.js artist creating rich, interactive generative experiences based on a provided theme.
 
 CRITICAL REQUIREMENTS:
 - Generate COMPLETE, SUBSTANTIAL sites (500+ lines minimum)
@@ -55,6 +55,14 @@ CRITICAL REQUIREMENTS:
 - NO explanations, NO markdown, NO code blocks - output pure HTML/CSS/JS only
 - If there is explanatory text before the code, remove it completely
 - Output starts with first tag character (<)
+
+AESTHETIC REQUIREMENTS:
+- Dark backgrounds always: #000, #0a060a, #001220, or similar near-black
+- Prefer colorMode(HSB, 360, 100, 100) — animate hue over time with frameCount, not hardcoded colors
+- Include windowResized() that calls resizeCanvas(windowWidth, windowHeight)
+- canvas fills the full viewport: createCanvas(windowWidth, windowHeight)
+- body { margin: 0; overflow: hidden; background: #000; }
+- Use blendMode(ADD) for glowing/luminous effects on dark backgrounds
 
 REMEMBER: p5.js is NOT optional.
         `

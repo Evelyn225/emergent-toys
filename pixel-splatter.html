@@ -95,7 +95,7 @@ let params = {
 };
 let flameLayer;
 let needsRedraw = true;
-let flameDrawState = null; // no longer used
+let flameDrawState = null;
 
 function setup() {
     pixelDensity(1);
@@ -118,8 +118,6 @@ function redrawFractal() {
     needsRedraw = true;
 }
 
-
-// No longer needed: startFractalAnimation
 
 function draw() {
     if (needsRedraw) {

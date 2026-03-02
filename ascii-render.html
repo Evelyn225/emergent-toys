@@ -140,7 +140,6 @@
                 p.textSize(charSize);
                 p.textAlign(p.LEFT, p.TOP);
                 
-                // Initialize columns
                 const numCols = Math.ceil(p.width / charSize);
                 for (let i = 0; i < numCols; i++) {
                     columns.push({
@@ -184,15 +183,12 @@
                 
                 time += 0.01;
                 
-                // Draw and update columns
                 for (let i = 0; i < columns.length; i++) {
                     const col = columns[i];
                     col.y += col.speed;
-                    
-                    // Reset column when it goes off screen
+
                     if (col.y > p.height) {
                         col.y = -charSize * 5;
-                        // Shuffle characters
                         for (let j = 0; j < col.chars.length; j++) {
                             col.chars[j].char = chars[p.floor(p.random() * chars.length)];
                             col.chars[j].brightness = p.random(0.3, 0.8);
@@ -209,7 +205,6 @@
                         });
                     }
                     
-                    // Draw characters in column
                     let yPos = col.y;
                     for (let j = 0; j < col.chars.length; j++) {
                         if (yPos > -charSize && yPos < p.height) {
@@ -224,7 +219,6 @@
             
             p.windowResized = function() {
                 p.resizeCanvas(p.windowWidth, p.windowHeight);
-                // Reinitialize columns
                 columns = [];
                 const numCols = Math.ceil(p.width / charSize);
                 for (let i = 0; i < numCols; i++) {
@@ -270,7 +264,6 @@
                     if (img) processImage();
                 });
                 
-                // Setup file input
                 const fileInput = p.select('#imageInput');
                 fileInput.elt.addEventListener('change', function(e) {
                     const file = e.target.files[0];
@@ -380,7 +373,6 @@
             }
         };
 
-        // Start both p5 sketches
         new p5(bgSketch);
         new p5(sketch);
         
