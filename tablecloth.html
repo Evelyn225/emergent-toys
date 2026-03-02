@@ -57,7 +57,7 @@
         // Pattern configuration
         const config = {
             gridSize: 28,
-            warpAmplitude: 18,
+            warpAmplitude: 32,
             warpFrequency: 0.02,
             color: '#0c0c0c',
             accentColor: '#0c0c0c',
@@ -110,15 +110,9 @@
             return offset;
         }
 
-        // Returns a brightness multiplier in ~[0.55, 1.35] based on quad warp tilt.
-        function shadeFactor(warpTopY, warpBottomY, blockH) {
-            const slope = (warpTopY - warpBottomY) / blockH;
-            return Math.min(1.35, Math.max(0.55, 1.0 + slope * 2.2));
-        }
-
         function drawWarpedGrid() {
             // Base fill
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = '#c94b4b';
             ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
             ctx.strokeStyle = config.color;
@@ -128,50 +122,46 @@
             const t = time * 2;
             const freq = config.warpFrequency;
             const amp = config.warpAmplitude;
-            const drawW = logicalWidth + config.gridSize;
-            const drawH = logicalHeight + config.gridSize;
+            // Build warped mesh — compute every intersection point once,
+            // then share those exact points between cell fills and grid lines
+            const gs = config.gridSize;
+            const cols = Math.ceil((logicalWidth  + gs * 2) / gs) + 1;
+            const rows = Math.ceil((logicalHeight + gs * 2) / gs) + 1;
+            const ox = -gs, oy = -gs;
 
-            // Red/white check pattern that follows the warp + ripples
-            const block = config.gridSize * 3.02; // Slightly larger to better match visual grid spacing
+            const pts = [];
+            for (let row = 0; row < rows; row++) {
+                pts[row] = [];
+                const gy = oy + row * gs;
+                for (let col = 0; col < cols; col++) {
+                    const gx = ox + col * gs;
+                    const rip = rippleDisplacement(gx, gy);
+                    pts[row][col] = [
+                        gx + Math.sin(gy * freq + t) * amp + rip,
+                        gy + Math.sin(gx * freq + t) * amp + rip
+                    ];
+                }
+            }
+
+            // Fill cells using mesh corners
             ctx.globalAlpha = 0.95;
-            // Start at grid-aligned positions
-            const startY = Math.floor(-block / config.gridSize) * config.gridSize;
-            const startX = Math.floor(-block / config.gridSize) * config.gridSize;
-            for (let y = startY; y <= logicalHeight + block; y += block) {
-                for (let x = startX; x <= logicalWidth + block; x += block) {
-                    const isRed = (Math.floor(x / block) + Math.floor(y / block)) % 2 === 0;
+            for (let row = 0; row < rows - 1; row++) {
+                for (let col = 0; col < cols - 1; col++) {
+                    const isRed = (row + col) % 2 === 0;
+                    const [x1, y1] = pts[row][col];
+                    const [x2, y2] = pts[row][col + 1];
+                    const [x3, y3] = pts[row + 1][col + 1];
+                    const [x4, y4] = pts[row + 1][col];
 
-                    // Match exact grid line displacement
-                    const r1 = rippleDisplacement(x, y);
-                    const r2 = rippleDisplacement(x + block, y);
-                    const r3 = rippleDisplacement(x + block, y + block);
-                    const r4 = rippleDisplacement(x, y + block);
-
-                    // X warps based on Y position (vertical lines), Y warps based on X position (horizontal lines)
-                    const x1 = x + Math.sin(y * freq + t) * amp + r1;
-                    const y1 = y + Math.sin(x * freq + t) * amp + r1;
-                    const x2 = (x + block) + Math.sin(y * freq + t) * amp + r2;
-                    const y2 = y + Math.sin((x + block) * freq + t) * amp + r2;
-                    const x3 = (x + block) + Math.sin((y + block) * freq + t) * amp + r3;
-                    const y3 = (y + block) + Math.sin((x + block) * freq + t) * amp + r3;
-                    const x4 = x + Math.sin((y + block) * freq + t) * amp + r4;
-                    const y4 = (y + block) + Math.sin(x * freq + t) * amp + r4;
-
-                    const sf = shadeFactor(y1, y4, block);
-
-                    let fillColor;
+                    const grad = ctx.createLinearGradient(x1, y1, x3, y3);
                     if (isRed) {
-                        const r = Math.round(Math.min(255, 201 * sf));
-                        const g = Math.round(Math.min(255, 75 * sf));
-                        const b = Math.round(Math.min(255, 75 * sf));
-                        fillColor = `rgb(${r},${g},${b})`;
+                        grad.addColorStop(0, '#e86060');
+                        grad.addColorStop(1, '#7a1e1e');
                     } else {
-                        const light = Math.min(255, Math.round(255 * sf));
-                        const warmShadow = Math.min(255, Math.max(0, Math.round(255 - (255 - 220) * (1 - sf))));
-                        fillColor = `rgb(${light},${warmShadow},${Math.round(light * 0.96)})`;
+                        grad.addColorStop(0, '#fff6ee');
+                        grad.addColorStop(1, '#c0a898');
                     }
-                    ctx.fillStyle = fillColor;
-
+                    ctx.fillStyle = grad;
                     ctx.beginPath();
                     ctx.moveTo(x1, y1);
                     ctx.lineTo(x2, y2);
@@ -182,38 +172,30 @@
                 }
             }
 
-            // Draw horizontal lines (warp)
+            // Draw grid lines using the same mesh points
             ctx.strokeStyle = config.color;
             ctx.lineWidth = config.lineWidth;
-            for (let y = -config.gridSize; y <= drawH; y += config.gridSize) {
-                const distFromCenterY = Math.abs(y - logicalHeight / 2) / (logicalHeight / 2);
-                ctx.globalAlpha = Math.max(0.35, 0.88 - distFromCenterY * 0.38);
+
+            for (let row = 0; row < rows; row++) {
+                const gy = oy + row * gs;
+                const distY = Math.abs(gy - logicalHeight / 2) / (logicalHeight / 2);
+                ctx.globalAlpha = Math.max(0.35, 0.88 - distY * 0.38);
                 ctx.beginPath();
-                for (let x = -config.gridSize; x <= drawW; x += 15) {
-                    const ripple = rippleDisplacement(x, y);
-                    const warpY = y + Math.sin(x * freq + t) * amp + ripple;
-                    if (x === 0) {
-                        ctx.moveTo(x, warpY);
-                    } else {
-                        ctx.lineTo(x, warpY);
-                    }
+                for (let col = 0; col < cols; col++) {
+                    const [px, py] = pts[row][col];
+                    col === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
                 }
                 ctx.stroke();
             }
 
-            // Draw vertical lines (weft)
-            for (let x = -config.gridSize; x <= drawW; x += config.gridSize) {
-                const distFromCenterX = Math.abs(x - logicalWidth / 2) / (logicalWidth / 2);
-                ctx.globalAlpha = Math.max(0.35, 0.88 - distFromCenterX * 0.38);
+            for (let col = 0; col < cols; col++) {
+                const gx = ox + col * gs;
+                const distX = Math.abs(gx - logicalWidth / 2) / (logicalWidth / 2);
+                ctx.globalAlpha = Math.max(0.35, 0.88 - distX * 0.38);
                 ctx.beginPath();
-                for (let y = -config.gridSize; y <= drawH; y += 15) {
-                    const ripple = rippleDisplacement(x, y);
-                    const warpX = x + Math.sin(y * freq + t) * amp + ripple;
-                    if (y === 0) {
-                        ctx.moveTo(warpX, y);
-                    } else {
-                        ctx.lineTo(warpX, y);
-                    }
+                for (let row = 0; row < rows; row++) {
+                    const [px, py] = pts[row][col];
+                    row === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
                 }
                 ctx.stroke();
             }
