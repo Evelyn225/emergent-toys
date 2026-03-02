@@ -1,25 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16"
+        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
     <title>Liquid Particles Flow</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background: #001220;
         }
+
+        #slider-wrap {
+            position: fixed;
+            left: 24px;
+            bottom: 24px;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            user-select: none;
+        }
+
+        #slider-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.7);
+            text-shadow: 0 1px 4px #000, 0 0 8px #000;
+        }
+
+        #influenceSlider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 140px;
+            height: 2px;
+            border-radius: 1px;
+            outline: none;
+            cursor: pointer;
+            background: linear-gradient(to right,
+                    rgba(100, 200, 255, 0.75) 0%,
+                    rgba(100, 200, 255, 0.75) var(--pct, 35%),
+                    rgba(255, 255, 255, 0.15) var(--pct, 35%),
+                    rgba(255, 255, 255, 0.15) 100%);
+        }
+
+        #influenceSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 8px rgba(100, 200, 255, 0.9), 0 0 2px rgba(100, 200, 255, 0.5);
+            cursor: pointer;
+            transition: box-shadow 0.15s;
+        }
+
+        #influenceSlider::-webkit-slider-thumb:hover {
+            box-shadow: 0 0 14px rgba(100, 200, 255, 1), 0 0 4px rgba(100, 200, 255, 0.7);
+        }
+
+        #influenceSlider::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: none;
+            background: #fff;
+            box-shadow: 0 0 8px rgba(100, 200, 255, 0.9);
+            cursor: pointer;
+        }
+
+        #slider-value {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.06em;
+            color: rgba(255, 255, 255, 0.7);
+            text-shadow: 0 1px 4px #000, 0 0 8px #000;
+        }
     </style>
 </head>
+
 <body>
-    <a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 1000; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(100, 200, 255, 0.8)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
-    <input id="influenceSlider" type="range" min="80" max="600" value="260" style="position: fixed; left: 24px; bottom: 24px; width: 120px; z-index: 1001; background: transparent; accent-color: #fff;">
+    <a href="index.html"
+        style="position: fixed; top: 10px; right: 10px; z-index: 1000; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;"
+        onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(100, 200, 255, 0.8)'; this.style.borderColor='#888'"
+        onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'"
+        onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
+        onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img
+            src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home"
+            style="width: 18px; height: 18px; object-fit: contain;"></a>
+    <div id="slider-wrap">
+        <span id="slider-label">Influence</span>
+        <input id="influenceSlider" type="range" min="80" max="600" value="260">
+        <span id="slider-value">260</span>
+    </div>
     <script>
         const particles = [];
         const numParticles = 14000;
@@ -54,11 +140,30 @@
                 });
             }
             startTime = millis(); // Record start time
-            // Slider event
+
             const slider = document.getElementById('influenceSlider');
+            const valueLabel = document.getElementById('slider-value');
+
+            function updateSlider(val) {
+                val = Math.max(80, Math.min(600, val));
+                slider.value = val;
+                influenceRadius = val;
+                valueLabel.textContent = val;
+                const pct = ((val - 80) / (600 - 80) * 100).toFixed(1) + '%';
+                slider.style.setProperty('--pct', pct);
+            }
+
             slider.addEventListener('input', (e) => {
-                influenceRadius = parseInt(e.target.value);
+                updateSlider(parseInt(e.target.value));
             });
+
+            window.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const step = e.deltaY > 0 ? -10 : 10;
+                updateSlider(influenceRadius + step);
+            }, { passive: false });
+
+            updateSlider(260);
         }
 
         function draw() {
@@ -76,7 +181,7 @@
 
             // Update global hue for new particles
             let timeSinceStart = (millis() - startTime) / 1000; // Convert to seconds
-            let maxHueRange = (timeSinceStart)%360; // Only go through half the spectrum
+            let maxHueRange = (timeSinceStart) % 360; // Only go through half the spectrum
             globalHue = maxHueRange * Math.abs(sin(time * 0.5)); // Oscillate back and forth
 
             // Create center points for vortex effects
@@ -90,10 +195,10 @@
             particles.forEach(particle => {
                 // Complex flow field combining noise and vortex influences
                 let angle = noise(
-                    particle.pos.x * noiseScale + noiseOffset, 
-                    particle.pos.y * noiseScale + noiseOffset, 
+                    particle.pos.x * noiseScale + noiseOffset,
+                    particle.pos.y * noiseScale + noiseOffset,
                     time
-                ) * TWO_PI*2;
+                ) * TWO_PI * 2;
 
                 // Add vortex influence
                 let vortexInfluence = createVector(0, 0);
@@ -102,7 +207,7 @@
                     let dy = particle.pos.y - vortex.y;
                     let distance = sqrt(dx * dx + dy * dy);
                     let strength = 50 / (distance + 50);
-                    let vortexAngle = atan2(dy, dx) + PI/2;
+                    let vortexAngle = atan2(dy, dx) + PI / 2;
                     vortexInfluence.x += cos(vortexAngle) * strength;
                     vortexInfluence.y += sin(vortexAngle) * strength;
                 });
@@ -199,4 +304,5 @@
         }
     </script>
 </body>
-</html> 
+
+</html>
