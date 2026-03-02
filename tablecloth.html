@@ -10,22 +10,14 @@
     <title>Warping Tablecloth Pattern</title>
     <style>
         body {
-            background-image: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/tiles_bg.jpg');
-            background-repeat: repeat;
             margin: 0;
             overflow: hidden;
-            background-color: #f5f0e8;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            background: #c94b4b;
         }
         canvas {
-            border: 1px solid #ccc;
-            background: linear-gradient(135deg, #ffffff 0%, #f8f6f1 100%);
-            max-width: 95vw;
-            height: auto;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            position: fixed;
+            top: 0;
+            left: 0;
             cursor: none;
         }
     </style>
@@ -37,25 +29,18 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // Base canvas size (logical) and responsive scaling
-        const baseSize = { width: 1200, height: 700 };
-        let logicalWidth = baseSize.width;
-        let logicalHeight = baseSize.height;
+        let logicalWidth = window.innerWidth;
+        let logicalHeight = window.innerHeight;
 
         function resizeCanvas() {
-            const maxW = window.innerWidth * 0.95;
-            const maxH = window.innerHeight * 0.9;
-            const scale = Math.min(maxW / baseSize.width, maxH / baseSize.height, 1);
-            logicalWidth = Math.round(baseSize.width * scale);
-            logicalHeight = Math.round(baseSize.height * scale);
-
             const dpr = window.devicePixelRatio || 1;
-            canvas.style.width = `${logicalWidth}px`;
-            canvas.style.height = `${logicalHeight}px`;
+            logicalWidth = window.innerWidth;
+            logicalHeight = window.innerHeight;
+            canvas.style.width = logicalWidth + 'px';
+            canvas.style.height = logicalHeight + 'px';
             canvas.width = Math.round(logicalWidth * dpr);
             canvas.height = Math.round(logicalHeight * dpr);
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            // no cached background; everything is redrawn each frame
         }
 
         resizeCanvas();
