@@ -200,6 +200,90 @@
         max-width: 64px;
       }
     }
+
+    /* ─── Splash intro ─── */
+    #splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #050505;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2.5rem;
+      cursor: default;
+      user-select: none;
+    }
+
+    #splash-terminal {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      font-weight: 300;
+      color: rgba(240, 246, 240, 0.55);
+      line-height: 1.9;
+      width: 340px;
+      min-height: 7em;
+    }
+
+    #splash-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 3.8rem;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      background: linear-gradient(45deg, rgb(240, 246, 240), #a8a8a8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      opacity: 0;
+      transform: translateY(-120px);
+      will-change: transform, opacity;
+    }
+
+    #splash-cursor {
+      -webkit-text-fill-color: rgba(240, 246, 240, 0.9);
+      animation: cursor-blink 1s steps(1) infinite;
+      margin-left: 0.05em;
+    }
+
+    /* slam-down keyframe */
+    @keyframes splash-slam {
+      0%   { opacity: 0; transform: translateY(-120px); }
+      60%  { opacity: 1; transform: translateY(8px); }
+      80%  { transform: translateY(-4px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* impact flash keyframe */
+    @keyframes splash-impact {
+      0%   { text-shadow: none; }
+      20%  { text-shadow: -3px 0 rgba(255,0,80,0.8), 3px 0 rgba(0,180,255,0.8); }
+      60%  { text-shadow: -1px 0 rgba(255,0,80,0.4), 1px 0 rgba(0,180,255,0.4); }
+      100% { text-shadow: none; }
+    }
+
+    /* screen-shake on impact */
+    @keyframes splash-shake {
+      0%   { transform: translate(0); }
+      20%  { transform: translate(-4px, 2px); }
+      40%  { transform: translate(4px, -2px); }
+      60%  { transform: translate(-2px, 1px); }
+      80%  { transform: translate(2px, -1px); }
+      100% { transform: translate(0); }
+    }
+
+    /* glitch flicker on terminal text */
+    @keyframes splash-flicker {
+      0%, 94%, 100% { opacity: 1; }
+      95%            { opacity: 0.4; }
+      97%            { opacity: 0.9; }
+    }
+
+    /* slide-up exit */
+    @keyframes splash-exit {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-100vh); }
+    }
   </style>
 </head>
 
