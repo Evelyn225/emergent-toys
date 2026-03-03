@@ -30,3 +30,8 @@ temp/
 # Local audio generation sources
 audio/server-hum-generator.js
 audio/interference.mp3
+
+# Documentation and workspace
+docs/
+.claude/
+*.stackdump
