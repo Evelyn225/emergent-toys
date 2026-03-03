@@ -2,7 +2,7 @@
 <html>
 
 <head>
-      <!-- Open Graph -->
+  <!-- Open Graph -->
   <meta property="og:title" content="Eve Net" />
   <meta property="og:image" content="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/cover.png"/>
   <meta property="og:url" content="https://evenet.fun" />
@@ -11,559 +11,336 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Eve Net" />
   <meta name="twitter:image" content="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/cover.png"/>
-  
-    <link rel="apple-touch-icon" sizes="180x180"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
-    <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
-    <title>H̷̡͈̙̳̼̳̲̅̋͂̋͝͝Ë̸̠̤̰́̄̚H̴͓͎̪͗͒̔̏͘E̶̗̙̱̖͎͊̋̈́̅̈́H̸͉̗͈̍̕E̶̤̼͌̎͊H̴̢̹̩̙̞͑̀̾͒̕E̵̟̋̋̎͘̚</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
 
-        body {
-            margin: 0;
-            overflow: hidden;
-            background: #000;
-            font-family: 'DM Mono', monospace;
-            font-weight: 300;
-            color: #fff;
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-        }
+  <link rel="apple-touch-icon" sizes="180x180"
+      href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+      href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+      href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>H̷̡͈̙̳̼̳̲̅̋͂̋͝͝Ë̸̠̤̰́̄̚H̴͓͎̪͗͒̔̏͘E̶̗̙̱̖͎͊̋̈́̅̈́H̸͉̗͈̍̕E̶̤̼͌̎͊H̴̢̹̩̙̞͑̀̾͒̕E̵̟̋̋̎͘̚</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 
-        #p5-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        #p5-container canvas {
-            position: absolute !important;
-        }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #050505 ;
+      font-family: 'DM Mono', monospace;
+      font-weight: 300;
+      color: #f0f6f0 ;
+    }
 
-        .content {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-            display: flex;
-            align-items: top;
-            justify-content: center;
-            background: linear-gradient(to bottom,
-                    rgba(0, 0, 0, 0.4) 0%,
-                    rgba(0, 0, 0, 0.2) 40%,
-                    rgba(0, 0, 0, 0.2) 60%,
-                    rgba(0, 0, 0, 0.4) 100%);
-        }
+    /* ─── Centered hero ─── */
+    .hero {
+      position: fixed;
+      top: 10%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+      text-align: center;
+      pointer-events: none;
+    }
 
-        .hero {
-            text-align: center;
-            padding: 2rem;
-            padding-top: 2rem;
-            max-width: 800px;
-            position: relative;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
+    .hero h1 {
+      font-size: 3.8rem;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
 
-        .hero h1 {
-            font-size: 3.8rem;
-            margin-bottom: 1.5rem;
-            line-height: 1.2;
-            background: linear-gradient(45deg, #fff, #a8a8a8);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
-            font-weight: 400;
-            letter-spacing: -0.02em;
-            min-height: 5rem;
-        }
+    #hero-title {
+      background: linear-gradient(45deg, rgb(240, 246, 240) , #a8a8a8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
 
-        .typing-cursor {
-            display: inline-block;
-            margin-left: 0.1em;
-            color: rgba(255, 255, 255, 0.9);
-            animation: cursor-blink 1s steps(1) infinite;
-        }
+    .typing-cursor {
+      display: inline-block;
+      -webkit-text-fill-color: rgba(240, 246, 240,0.9);
+      animation: cursor-blink 1s steps(1) infinite;
+      margin-left: 0.05em;
+    }
 
-        @keyframes cursor-blink {
+    @keyframes cursor-blink {
+      0%,  49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
 
-            0%,
-            49% {
-                opacity: 1;
-            }
+    /* ─── Dock ─── */
+    .dock-wrapper {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 3;
+    }
 
-            50%,
-            100% {
-                opacity: 0;
-            }
-        }
+    .dock {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0;
+      padding: 2.5rem 2rem 2.8rem;
+    }
 
-        .bottom-content {
-            margin-top: auto;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 1.2rem;
-            padding-bottom: 6rem;
-        }
+    /* ─── Individual dock icon ─── */
+    .dock-icon {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      width: 80px;
+      padding: 6px 4px;
+      text-decoration: none;
+      color: rgba(255,255,255,0.85);
+      transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      /* staggered entry */
+      opacity: 0;
+      animation: dock-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
 
-        .hero p {
-            font-size: 1.2rem;
-            max-width: 600px;
-            opacity: 0.9;
-            line-height: 1.6;
-            color: rgba(255, 255, 255, 0.8);
-            letter-spacing: -0.02em;
-            font-weight: 300;
-            background: rgba(0, 0, 0, 0.7);
-            display: inline-block;
-            padding: .5rem 1rem;
-            border-radius: 4px;
-            backdrop-filter: blur(5px);
-            margin: 0;
-        }
+    @keyframes dock-in {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: none; }
+    }
 
-        @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 2rem;
-                min-height: 3rem;
-            }
+    .dock-icon:nth-child(1)  { animation-delay: 0.05s; }
+    .dock-icon:nth-child(2)  { animation-delay: 0.08s; }
+    .dock-icon:nth-child(3)  { animation-delay: 0.11s; }
+    .dock-icon:nth-child(4)  { animation-delay: 0.14s; }
+    .dock-icon:nth-child(5)  { animation-delay: 0.17s; }
+    .dock-icon:nth-child(6)  { animation-delay: 0.20s; }
+    .dock-icon:nth-child(7)  { animation-delay: 0.23s; }
+    .dock-icon:nth-child(8)  { animation-delay: 0.26s; }
+    .dock-icon:nth-child(9)  { animation-delay: 0.29s; }
+    .dock-icon:nth-child(10) { animation-delay: 0.32s; }
+    .dock-icon:nth-child(11) { animation-delay: 0.35s; }
+    .dock-icon:nth-child(12) { animation-delay: 0.38s; }
+    .dock-icon:nth-child(13) { animation-delay: 0.41s; }
+    .dock-icon:nth-child(14) { animation-delay: 0.44s; }
+    .dock-icon:nth-child(15) { animation-delay: 0.47s; }
+    .dock-icon:nth-child(16) { animation-delay: 0.50s; }
+    .dock-icon:nth-child(17) { animation-delay: 0.53s; }
+    .dock-icon:nth-child(18) { animation-delay: 0.56s; }
+    .dock-icon:nth-child(19) { animation-delay: 0.59s; }
 
-            .bottom-content {
-                margin-top: auto;
-                padding-bottom: 2rem;
-            }
-        }
+    .dock-icon:hover {
+      color: rgba(240, 246, 240,1);
+    }
 
-        .links-container {
-            padding-top: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-            justify-content: center;
-            width: 100vw;
-            max-width: none;
-            box-sizing: border-box;
-            padding-left: 5vw;
-            padding-right: 5vw;
-        }
+    /* Folder emoji */
+    .icon-emoji {
+      font-size: 2rem;
+      line-height: 1;
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  filter 0.18s linear;
+    }
 
-        .site-link {
-            color: rgba(255, 255, 255, 0.9);
-            text-decoration: none;
-            transition: all 1s linear(0,
-                    0.009,
-                    0.035 2.1%,
-                    0.141,
-                    0.281 6.7%,
-                    0.723 12.9%,
-                    0.938 16.7%,
-                    1.017,
-                    1.077,
-                    1.121,
-                    1.149 24.3%,
-                    1.159,
-                    1.163,
-                    1.161,
-                    1.154 29.9%,
-                    1.129 32.8%,
-                    1.051 39.6%,
-                    1.017 43.1%,
-                    0.991,
-                    0.977 51%,
-                    0.974 53.8%,
-                    0.975 57.1%,
-                    0.997 69.8%,
-                    1.003 76.9%,
-                    1.004 83.8%,
-                    1);
-            white-space: normal;
-            width: 120px;
-            padding: 8px;
-            max-width: 120px;
-            min-width: 120px;
-            flex: 0 0 120px;
-            flex-shrink: 0;
-            text-align: center;
-            font-size: 1.1rem;
-        }
+    .dock-icon:hover .icon-emoji {
+      transform: scale(1.13) translateY(-4px);
+    }
 
-        .site-link:hover {
-            color: rgba(255, 255, 255, 1);
-            transform: scale(1.13);
-            text-shadow: rgba(255, 255, 255, 0.6) 3px 3px 0px, rgba(255, 255, 255, 0.4) 5px 5px 0px, rgba(255, 255, 255, 0.2) 7px 7px 0px;
-            flex-grow: inherit;
-        }
+    .dock-icon:active .icon-emoji {
+      transform: scale(0.9);
+      transition-duration: 0.08s;
+    }
 
-        .site-link:focus {
-            outline: 2px solid rgba(255, 255, 255, 0.9);
-            outline-offset: 4px;
-            border-radius: 4px;
-            color: #fff;
-        }
+    /* Label */
+    .icon-label {
+      font-size: 10.5px;
+      font-weight: 300;
+      text-align: center;
+      line-height: 1.35;
+      letter-spacing: 0.01em;
+      color: inherit;
+      text-shadow: 0 1px 8px rgba(0,0,0,0.95);
+      transition: text-shadow 0.18s linear;
+      max-width: 76px;
+      word-break: break-word;
+    }
 
-        .site-link:focus:not(:focus-visible) {
-            outline: none;
-        }
+    .dock-icon:hover .icon-label {
+      color: rgba(240, 246, 240,0.7);
+    }
+    .dock-icon:focus .icon-label {
+      color: rgba(240, 246, 240,0.7);
+    }
 
-        .site-link:active {
-            transform: scale(0.96);
-            color: #fff;
-            text-shadow: none;
-            font-style: oblique;
-        }
 
-        .site-link:focus-visible {
-            outline: 2px solid rgba(255, 255, 255, 0.9);
-            outline-offset: 4px;
-            border-radius: 4px;
-            color: #fff;
-        }
+    /* Focus ring */
+    .dock-icon:focus { outline: none; }
+    .dock-icon:focus-visible .icon-emoji {
+      filter: drop-shadow(0 0 6px rgba(255,255,255,0.7));
+    }
 
-        
-    </style>
+    @media (max-width: 520px) {
+      .hero h1 { font-size: 2.4rem; }
+
+      .dock {
+        padding: 0.5rem 1rem 1.4rem;
+      }
+
+      .dock-icon {
+        width: 68px;
+      }
+
+      .icon-emoji {
+        font-size: 1.7rem;
+      }
+
+      .icon-label {
+        font-size: 9px;
+        max-width: 64px;
+      }
+    }
+  </style>
 </head>
 
 <body>
-    <div id="p5-container"></div>
-    <div class="content">
-        <div class="hero">
-            <h1><span id="hero-title"></span><span class="typing-cursor">_</span></h1>
-            <div class="bottom-content">
-                <nav class="links-container" role="region" aria-label="Project navigation" tabindex="0">
-                    <a href="Sands.html" class="site-link">sand playground</a>
-                    <a href="critters.html" class="site-link">bug hotline</a>
-                    <a href="fireworks.html" class="site-link">fireworks</a>
-                    <a href="pixel-splatter.html" class="site-link">weh</a>
-                    <a href="hell.html" class="site-link">anime hell</a>
-                    <a href="fluid.html" class="site-link">fluid</a>
-                    <a href="webwizardcasino.html" class="site-link">the web wizard's casino</a>
-                    <a href="automata-garden.html" class="site-link">automata garden</a>
-                    <a href="erosion.html" class="site-link">erosion toy</a>
-                    <a href="wave-collapse.html" class="site-link">wave collapse</a>
-                    <a href="catch.html" class="site-link">tentacle catch</a>
-                    <a href="philosophers-stone.html" class="site-link">reaction diffusion</a>
-                    <a href="vornoi.html" class="site-link">vornoi</a>
-                    <a href="morse.html" class="site-link">morse code</a>
-                    <a href="lissajous.html" class="site-link">lissajous</a>
-                    <a href="net-sanctuary-project.html" class="site-link">net sanctuary project</a>
-                    <a href="ascii-render.html" class="site-link">ascii rendering</a>
-                    <a href="tablecloth.html" class="site-link">tablecloth</a>
-                    <a href="corridor.html" class="site-link">corridor crawler</a>
-                </nav>
-            </div>
-        </div>
+  <!-- Splash intro overlay -->
+  <div id="splash" aria-hidden="true">
+    <div id="splash-terminal"></div>
+    <div id="splash-title">EVE NET<span id="splash-cursor">_</span></div>
+  </div>
+
+  <!-- Centered hero title -->
+  <div class="hero">
+    <h1><span id="hero-title"></span><span class="typing-cursor">_</span></h1>
+  </div>
+
+  <!-- Dock -->
+  <nav class="dock-wrapper" role="region" aria-label="Project navigation" tabindex="0">
+    <div class="dock">
+      <a href="Sands.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">sand playground</span>
+      </a>
+      <a href="critters.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">bug hotline</span>
+      </a>
+      <a href="fireworks.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">fireworks</span>
+      </a>
+      <a href="pixel-splatter.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">weh</span>
+      </a>
+      <a href="hell.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">anime hell</span>
+      </a>
+      <a href="fluid.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">fluid</span>
+      </a>
+      <a href="webwizardcasino.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">the web wizard's casino</span>
+      </a>
+      <a href="automata-garden.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">automata garden</span>
+      </a>
+      <a href="erosion.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">erosion toy</span>
+      </a>
+      <a href="wave-collapse.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">wave collapse</span>
+      </a>
+      <a href="catch.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">tentacle catch</span>
+      </a>
+      <a href="philosophers-stone.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">reaction diffusion</span>
+      </a>
+      <a href="vornoi.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">vornoi</span>
+      </a>
+      <a href="morse.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">morse code</span>
+      </a>
+      <a href="lissajous.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">lissajous</span>
+      </a>
+      <a href="net-sanctuary-project.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">net sanctuary project</span>
+      </a>
+      <a href="ascii-render.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">ascii rendering</span>
+      </a>
+      <a href="tablecloth.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">tablecloth</span>
+      </a>
+      <a href="corridor.html" class="dock-icon">
+        <div class="icon-emoji">📁</div>
+        <span class="icon-label">corridor crawler</span>
+      </a>
     </div>
+  </nav>
 
-    <script>
-        const titleText = "Eve Net";
-        const titleTarget = document.getElementById("hero-title");
-        let titleIndex = 0;
+  <script>
+    const titleText = "Eve Net";
+    const titleTarget = document.getElementById("hero-title");
+    let titleIndex = 0;
 
-        function typeTitle() {
-            if (!titleTarget) return;
-            titleTarget.textContent = titleText.slice(0, titleIndex);
-            titleIndex += 1;
-            if (titleIndex <= titleText.length) {
-                setTimeout(typeTitle, 90);
-            }
-        }
+    function typeTitle() {
+      if (!titleTarget) return;
+      titleTarget.textContent = titleText.slice(0, titleIndex);
+      titleIndex += 1;
+      if (titleIndex <= titleText.length) {
+        setTimeout(typeTitle, 90);
+      }
+    }
 
-        if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", typeTitle);
-        } else {
-            typeTitle();
-        }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", typeTitle);
+    } else {
+      typeTitle();
+    }
 
-        let angle = 20;
-        let time = 20;
+    // Keyboard navigation
+    const dockWrapper = document.querySelector('.dock-wrapper');
+    dockWrapper.addEventListener('keydown', (e) => {
+      const icons = Array.from(document.querySelectorAll('.dock-icon'));
+      const focused = document.activeElement;
+      const idx = icons.indexOf(focused);
 
-
-        function setup() {
-            let canvas = createCanvas(windowWidth, windowHeight, WEBGL);
-            canvas.parent('p5-container');
-            colorMode(HSB);
-            strokeWeight(1);
-            setAttributes('antialias', true);
-            frameRate(30);
-            perspective(PI / 3, width / height, 1, 10000); // Extended frustum with very close near plane
-        }
-
-        function draw() {
-            background(0);
-
-            // Camera movement with optimized calculations
-            let camRadius = 400;
-            let camX = camRadius * cos(angle);
-
-            // Camera height calculation
-            let baseHeight = -32; // Center point of oscillation
-            let amplitude = 25; // How far it moves from the center
-            let rawY = sin(time * 0.2);
-            // Reshape the sine wave to spend less time at extremes
-            let modifiedY = (rawY * Math.abs(rawY)) * amplitude + baseHeight;
-            let camY = min(modifiedY, -5); // Only clamp the upper bound
-
-            let camZ = camRadius * sin(angle);
-
-            // Draw grid
-            push();
-            strokeWeight(0.5);
-            stroke(45, 45, 90, 10); // White with low opacity
-            noFill();
-
-            // Calculate grid size based on view
-            let backgroundGridSize = 1000;
-            let gridSpacing = 80;
-
-            // Center the grid but offset forward towards camera and down for floor visibility
-            translate(-backgroundGridSize / 2, 50, -backgroundGridSize / 2 + 100);
-
-            // Distance culling around camera to reduce draw cost
-            let cullRadius = 600;
-            let cullRadiusSq = cullRadius * cullRadius;
-            let gridZOffset = 100;
-
-            // Draw X-Z plane grid (horizontal)
-            for (let x = 0; x <= backgroundGridSize; x += gridSpacing) {
-                let worldX = x - backgroundGridSize / 2;
-                let dx = worldX - camX;
-                if (Math.abs(dx) > cullRadius) continue;
-
-                let maxZDelta = sqrt(cullRadiusSq - dx * dx);
-                let zWorldMin = camZ - maxZDelta;
-                let zWorldMax = camZ + maxZDelta;
-
-                let zStart = zWorldMin + backgroundGridSize / 2 - gridZOffset;
-                let zEnd = zWorldMax + backgroundGridSize / 2 - gridZOffset;
-                zStart = constrain(zStart, 0, backgroundGridSize);
-                zEnd = constrain(zEnd, 0, backgroundGridSize);
-                if (zEnd <= zStart) continue;
-
-                beginShape(LINES);
-                vertex(x, 0, zStart);
-                vertex(x, 0, zEnd);
-                endShape();
-            }
-
-            for (let z = 0; z <= backgroundGridSize; z += gridSpacing) {
-                let worldZ = z - backgroundGridSize / 2 + gridZOffset;
-                let dz = worldZ - camZ;
-                if (Math.abs(dz) > cullRadius) continue;
-
-                let maxXDelta = sqrt(cullRadiusSq - dz * dz);
-                let xWorldMin = camX - maxXDelta;
-                let xWorldMax = camX + maxXDelta;
-
-                let xStart = xWorldMin + backgroundGridSize / 2;
-                let xEnd = xWorldMax + backgroundGridSize / 2;
-                xStart = constrain(xStart, 0, backgroundGridSize);
-                xEnd = constrain(xEnd, 0, backgroundGridSize);
-                if (xEnd <= xStart) continue;
-
-                beginShape(LINES);
-                vertex(xStart, 0, z);
-                vertex(xEnd, 0, z);
-                endShape();
-            }
-
-            // Culling circle outline on the grid plane
-            let circleCenterX = camX + backgroundGridSize / 2;
-            let circleCenterZ = camZ + backgroundGridSize / 2 - gridZOffset;
-            let circleSteps = 120;
-            beginShape();
-            for (let i = 0; i <= circleSteps; i += 1) {
-                let t = (TWO_PI * i) / circleSteps;
-                let cx = circleCenterX + cos(t) * cullRadius;
-                let cz = circleCenterZ + sin(t) * cullRadius;
-                vertex(cx, 0, cz);
-            }
-            endShape();
-
-            pop();
-
-            ambientLight(100);
-            pointLight(255, 255, 255, 300 * sin(time * 0.1), 200, 300 * cos(time * 0.1));
-
-            camera(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
-
-            // Move entire scene up more to compensate for grid
-            translate(0, -90, 0);
-
-            // Global scale animation
-            let globalScale = 1 + sin(time * 0.2) * 0.2;
-            scale(globalScale);
-
-            // Set grid size
-            let gridSize = 8;
-            let cubeSize = 8;
-            let spacing = cubeSize * 1.2;
-
-            // Pre-calculate time-based values
-            let timeScale = 0.15;
-            let basePower = 8 + sin(time * timeScale) * 2;
-            let secondaryPower = 3 + cos(time * timeScale * 0.7) * 1.5;
-
-            // Create a grid of cubes with distance-based culling
-            let maxDistance = gridSize * spacing * 0.8;
-
-            push(); // Save the global transformation state
-
-            // Add gentle overall rotation to the structure
-            let globalRotationY = time * 0.1;
-            let globalRotationX = sin(time * 0.05) * 0.1;
-            rotateY(globalRotationY);
-            rotateX(globalRotationX);
-
-            for (let x = -gridSize; x <= gridSize; x += 2) {
-                for (let y = -gridSize; y <= gridSize; y += 2) {
-                    for (let z = -gridSize; z <= gridSize; z += 2) {
-                        let pos = createVector(x * spacing, y * spacing, z * spacing);
-                        let distFromCenter = pos.mag();
-
-                        if (distFromCenter > maxDistance) continue;
-
-                        let normalizedDist = distFromCenter / maxDistance;
-                        let depthFactor = (z + gridSize) / (gridSize * 2); // 0 to 1 based on depth
-
-                        let orbitOffset = createVector(
-                            sin(time * 0.2 + y * 0.02) * 0.15,
-                            cos(time * 0.25 + x * 0.02) * 0.15,
-                            sin(time * 0.3 + z * 0.02) * 0.15
-                        );
-
-                        let mandelbulbValue = getOptimizedMandelbulbValue(
-                            (pos.x / maxDistance) + orbitOffset.x,
-                            (pos.y / maxDistance) + orbitOffset.y,
-                            (pos.z / maxDistance) + orbitOffset.z,
-                            basePower,
-                            secondaryPower
-                        );
-
-                        if (mandelbulbValue < 1.8) {
-                            push();
-                            translate(pos.x, pos.y, pos.z);
-
-                            // Depth-based rotation
-                            let rotationAmplitude = map(depthFactor, 0, 1, 0.5, 1.5);
-                            let rotationPhase = time * 0.5 + normalizedDist * PI;
-
-                            // Coordinate rotations with global movement
-                            rotateX(sin(rotationPhase + globalRotationX) * 0.2 * rotationAmplitude);
-                            rotateY(cos(rotationPhase + globalRotationY) * 0.2 * rotationAmplitude);
-                            rotateZ(sin(rotationPhase * 0.5) * 0.1 * rotationAmplitude);
-
-                            // Scale variation based on depth
-                            let depthScale = map(depthFactor, 0, 1, 1.1, 0.9);
-                            let scale = map(mandelbulbValue, 0, 1.8, 1.1, 0.5) * depthScale;
-
-                            // Color with depth influence
-                            let hue = (mandelbulbValue * 120 + normalizedDist * 180 + depthFactor * 60 + time * 8) % 360;
-                            let sat = map(normalizedDist, 0, 1, 90, 60);
-                            let bright = map(mandelbulbValue / 10, 0, 1.8, 90, 40);
-
-                            stroke(hue, sat * 0.6, bright * 0.8, 0.6);
-                            strokeWeight(0.2);
-                            fill(hue, sat, bright, .25);
-
-                            box(cubeSize * scale);
-                            pop();
-                        }
-                    }
-                }
-            }
-
-            pop(); // Restore the transformation state
-
-            angle += 0.005;
-            time += 0.025;
-        }
-
-        function getOptimizedMandelbulbValue(x, y, z, power, secondaryPower) {
-            let pos = createVector(x, y, z);
-            let originalPos = pos.copy();
-            let iterations = 4;
-
-            for (let i = 0; i < iterations; i++) {
-                let r = pos.mag();
-                if (r > 2) return r;
-
-                let theta = acos(pos.z / r);
-                let phi = atan2(pos.y, pos.x);
-
-                let rPow = pow(r, power);
-                let sinTheta = sin(theta * power);
-
-                let blend = 0.5 + 0.5 * sin(r * PI);
-                pos.x = mix(rPow * sinTheta * cos(phi * power),
-                    r * sin(theta * secondaryPower) * cos(phi * secondaryPower), blend);
-                pos.y = mix(rPow * sinTheta * sin(phi * power),
-                    r * sin(theta * secondaryPower) * sin(phi * secondaryPower), blend);
-                pos.z = mix(rPow * cos(theta * power),
-                    r * cos(theta * secondaryPower), blend);
-
-                pos.add(p5.Vector.mult(originalPos, 0.9));
-            }
-
-            return pos.mag();
-        }
-
-        function mix(a, b, t) {
-            return a * (1 - t) + b * t;
-        }
-
-        function windowResized() {
-            resizeCanvas(windowWidth, windowHeight);
-        }
-
-        // Keyboard navigation for links container
-        const linksContainer = document.querySelector('.links-container');
-        linksContainer.addEventListener('keydown', (e) => {
-            const links = Array.from(document.querySelectorAll('.site-link'));
-            const focusedElement = document.activeElement;
-            const currentIndex = links.indexOf(focusedElement);
-
-            if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                if (currentIndex < links.length - 1) {
-                    links[currentIndex + 1].focus();
-                }
-            } else if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                if (currentIndex > 0) {
-                    links[currentIndex - 1].focus();
-                } else if (currentIndex === -1 && links.length > 0) {
-                    links[0].focus();
-                }
-            } else if (e.key === 'Home') {
-                e.preventDefault();
-                links[0].focus();
-            } else if (e.key === 'End') {
-                e.preventDefault();
-                links[links.length - 1].focus();
-            }
-        });
-    </script>
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (idx < icons.length - 1) icons[idx + 1].focus();
+        else if (idx === -1 && icons.length > 0) icons[0].focus();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (idx > 0) icons[idx - 1].focus();
+        else if (idx === -1 && icons.length > 0) icons[0].focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        icons[0].focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        icons[icons.length - 1].focus();
+      }
+    });
+  </script>
 </body>
 
 </html>
