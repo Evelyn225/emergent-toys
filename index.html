@@ -464,16 +464,57 @@
     }, { once: true });
   }
 
-  // Slide the overlay up and off
+  // Slide the overlay up; fly title to hero position; then load the page
   function exitSplash() {
     if (splashDone) return;
     splashDone = true;
+
+    // Immediately snap dock icons to hidden — prevents flash when overlay clears
+    document.querySelectorAll('.dock-icon').forEach(el => {
+      el.style.animation = 'none';
+      el.style.opacity   = '0';
+    });
+
+    // Detach splash title from overlay so it stays while overlay slides away
+    const rect     = titleEl.getBoundingClientRect();
+    const cursorEl = document.getElementById('splash-cursor');
+    if (cursorEl) cursorEl.style.visibility = 'hidden';
+
+    titleEl.style.position  = 'fixed';
+    titleEl.style.top       = rect.top  + 'px';
+    titleEl.style.left      = rect.left + 'px';
+    titleEl.style.width     = rect.width + 'px';
+    titleEl.style.margin    = '0';
+    titleEl.style.transform = 'none';
+    titleEl.style.animation = 'none';
+    titleEl.style.opacity   = '1';
+    titleEl.style.zIndex    = '9998';
+    document.body.appendChild(titleEl);
+
+    // Slide overlay up (title is no longer a child, stays in place)
     splashEl.style.animation = 'splash-exit 0.45s ease-in-out forwards';
     splashEl.addEventListener('animationend', (e) => {
       if (e.animationName !== 'splash-exit') return;
       splashEl.style.display = 'none';
-      startPage();
     });
+
+    // Fly title to hero position: center at (50vw, 10vh)
+    const targetTop  = window.innerHeight * 0.10 - rect.height / 2;
+    const targetLeft = window.innerWidth  * 0.50 - rect.width  / 2;
+
+    titleEl.offsetHeight; // force layout so current pos is the 'from' state
+    titleEl.style.transition = 'top 0.55s cubic-bezier(0.22, 1, 0.36, 1), left 0.55s cubic-bezier(0.22, 1, 0.36, 1)';
+    titleEl.style.top  = targetTop  + 'px';
+    titleEl.style.left = targetLeft + 'px';
+
+    // After title arrives, crossfade to hero and load the page
+    setTimeout(() => {
+      document.querySelector('.hero').style.visibility = 'visible';
+      titleEl.style.transition = 'opacity 0.3s ease-out';
+      titleEl.style.opacity = '0';
+      setTimeout(() => { if (titleEl.parentNode) titleEl.remove(); }, 300);
+      startPage();
+    }, 620);
   }
 
   // Skip on click or keydown
@@ -490,8 +531,6 @@
   // ── Main page init (runs after splash exits) ──────────────────
   function startPage() {
     dockReady = true;
-    // Reveal hero (was hidden behind splash)
-    document.querySelector('.hero').style.visibility = 'visible';
 
     // Hero typing
     const titleText   = "Eve Net";
