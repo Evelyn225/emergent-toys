@@ -454,6 +454,7 @@
   function slamTitle(onDone) {
     titleEl.style.animation = 'splash-slam 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards';
     titleEl.addEventListener('animationend', () => {
+      if (splashDone) return;
       // chromatic aberration impact flash
       titleEl.style.animation = 'splash-impact 0.35s ease-out forwards';
       // screen shake on the whole overlay
@@ -507,6 +508,7 @@
       el.offsetHeight; // reflow
       const delay = 0.05 + i * 0.03;
       el.style.animation = `dock-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) ${delay}s forwards`;
+      requestAnimationFrame(() => { el.style.transition = ''; });
     });
   }
 
