@@ -43,6 +43,7 @@
       z-index: 2;
       text-align: center;
       pointer-events: none;
+      visibility: hidden;
     }
 
     .hero h1 {
@@ -487,6 +488,9 @@
 
   // ── Main page init (runs after splash exits) ──────────────────
   function startPage() {
+    // Reveal hero (was hidden behind splash)
+    document.querySelector('.hero').style.visibility = '';
+
     // Hero typing
     const titleText   = "Eve Net";
     const titleTarget = document.getElementById("hero-title");
