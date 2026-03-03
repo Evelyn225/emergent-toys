@@ -227,52 +227,6 @@
       min-height: 7em;
     }
 
-    #splash-title {
-      font-family: 'DM Mono', monospace;
-      font-size: 3.8rem;
-      font-weight: 300;
-      letter-spacing: -0.03em;
-      background: linear-gradient(45deg, rgb(240, 246, 240), #a8a8a8);
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      opacity: 0;
-      transform: translateY(-120px);
-      will-change: transform, opacity;
-    }
-
-    #splash-cursor {
-      -webkit-text-fill-color: rgba(240, 246, 240, 0.9);
-      animation: cursor-blink 1s steps(1) infinite;
-      margin-left: 0.05em;
-    }
-
-    /* slam-down keyframe */
-    @keyframes splash-slam {
-      0%   { opacity: 0; transform: translateY(-120px); }
-      60%  { opacity: 1; transform: translateY(8px); }
-      80%  { transform: translateY(-4px); }
-      100% { opacity: 1; transform: translateY(0); }
-    }
-
-    /* impact flash keyframe */
-    @keyframes splash-impact {
-      0%   { filter: none; }
-      20%  { filter: drop-shadow(-3px 0 rgba(255,0,80,0.9)) drop-shadow(3px 0 rgba(0,180,255,0.9)); }
-      60%  { filter: drop-shadow(-1px 0 rgba(255,0,80,0.4)) drop-shadow(1px 0 rgba(0,180,255,0.4)); }
-      100% { filter: none; }
-    }
-
-    /* screen-shake on impact */
-    @keyframes splash-shake {
-      0%   { transform: translate(0); }
-      20%  { transform: translate(-4px, 2px); }
-      40%  { transform: translate(4px, -2px); }
-      60%  { transform: translate(-2px, 1px); }
-      80%  { transform: translate(2px, -1px); }
-      100% { transform: translate(0); }
-    }
-
     /* glitch flicker on terminal text */
     @keyframes splash-flicker {
       0%, 94%, 100% { opacity: 1; }
@@ -293,7 +247,6 @@
   <!-- Splash intro overlay -->
   <div id="splash" aria-hidden="true">
     <div id="splash-terminal"></div>
-    <div id="splash-title">EVE NET<span id="splash-cursor">_</span></div>
   </div>
 
   <!-- Centered hero title -->
@@ -397,7 +350,6 @@
   const GLITCH_CHARS = '!@#$%^&*<>?/\\|{}[]~`';
   const splashEl    = document.getElementById('splash');
   const terminalEl  = document.getElementById('splash-terminal');
-  const titleEl     = document.getElementById('splash-title');
 
   let splashDone = false;
 
@@ -451,70 +403,23 @@
     nextLine();
   }
 
-  // Slam the title down
-  function slamTitle(onDone) {
-    titleEl.style.animation = 'splash-slam 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards';
-    titleEl.addEventListener('animationend', () => {
-      if (splashDone) return;
-      // chromatic aberration impact flash
-      titleEl.style.animation = 'splash-impact 0.35s ease-out forwards';
-      // screen shake on the whole overlay
-      splashEl.style.animation = 'splash-shake 0.25s ease-out forwards';
-      setTimeout(onDone, 700);
-    }, { once: true });
-  }
-
-  // Slide the overlay up; fly title to hero position; then load the page
+  // Slide the overlay up then load the page
   function exitSplash() {
     if (splashDone) return;
     splashDone = true;
 
-    // Immediately snap dock icons to hidden — prevents flash when overlay clears
+    // Snap dock icons hidden before overlay clears — prevents flash
     document.querySelectorAll('.dock-icon').forEach(el => {
       el.style.animation = 'none';
       el.style.opacity   = '0';
     });
 
-    // Detach splash title from overlay so it stays while overlay slides away
-    const rect     = titleEl.getBoundingClientRect();
-    const cursorEl = document.getElementById('splash-cursor');
-    if (cursorEl) cursorEl.style.visibility = 'hidden';
-
-    titleEl.style.position  = 'fixed';
-    titleEl.style.top       = rect.top  + 'px';
-    titleEl.style.left      = rect.left + 'px';
-    titleEl.style.width     = rect.width + 'px';
-    titleEl.style.margin    = '0';
-    titleEl.style.transform = 'none';
-    titleEl.style.animation = 'none';
-    titleEl.style.opacity   = '1';
-    titleEl.style.zIndex    = '9998';
-    document.body.appendChild(titleEl);
-
-    // Slide overlay up (title is no longer a child, stays in place)
     splashEl.style.animation = 'splash-exit 0.45s ease-in-out forwards';
     splashEl.addEventListener('animationend', (e) => {
       if (e.animationName !== 'splash-exit') return;
       splashEl.style.display = 'none';
-    });
-
-    // Fly title to hero position: center at (50vw, 10vh)
-    const targetTop  = window.innerHeight * 0.10 - rect.height / 2;
-    const targetLeft = window.innerWidth  * 0.50 - rect.width  / 2;
-
-    titleEl.offsetHeight; // force layout so current pos is the 'from' state
-    titleEl.style.transition = 'top 0.55s cubic-bezier(0.22, 1, 0.36, 1), left 0.55s cubic-bezier(0.22, 1, 0.36, 1)';
-    titleEl.style.top  = targetTop  + 'px';
-    titleEl.style.left = targetLeft + 'px';
-
-    // After title arrives, crossfade to hero and load the page
-    setTimeout(() => {
-      document.querySelector('.hero').style.visibility = 'visible';
-      titleEl.style.transition = 'opacity 0.3s ease-out';
-      titleEl.style.opacity = '0';
-      setTimeout(() => { if (titleEl.parentNode) titleEl.remove(); }, 300);
       startPage();
-    }, 620);
+    });
   }
 
   // Skip on click or keydown
@@ -522,15 +427,12 @@
   document.addEventListener('keydown',  () => exitSplash(), { once: true });
 
   // Kick off sequence
-  runBootLog(() => {
-    setTimeout(() => slamTitle(() => {
-      setTimeout(exitSplash, 500);
-    }), 200);
-  });
+  runBootLog(() => setTimeout(exitSplash, 300));
 
   // ── Main page init (runs after splash exits) ──────────────────
   function startPage() {
     dockReady = true;
+    document.querySelector('.hero').style.visibility = 'visible';
 
     // Hero typing
     const titleText   = "Eve Net";
