@@ -339,38 +339,44 @@ void main() {
 }
 `;
 
-    // Frontier shader: dark TV-static wall at the edge of generated space.
-    const frontierVertexShader = /* glsl */`
-varying vec2 vUv;
-void main() {
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
 
-    const frontierFragmentShader = /* glsl */`
+    // --- Light fixture shader — same dither logic, fixed near-white luminance ----
+    const litFragmentShader = /* glsl */`
 precision highp float;
-uniform float time;
-varying vec2 vUv;
+uniform float matrixSize;
+uniform float bias;
 
-float hash21(vec2 p) {
-  p = fract(p * vec2(123.34, 345.45));
-  p += dot(p, p + 34.345);
-  return fract(p.x * p.y);
-}
+const mat2 bayer2 = mat2(0.0,2.0, 3.0,1.0) / 4.0;
+
+const mat4 bayer4 = mat4(
+   0.0, 8.0, 2.0,10.0,
+  12.0, 4.0,14.0, 6.0,
+   3.0,11.0, 1.0, 9.0,
+  15.0, 7.0,13.0, 5.0
+) / 16.0;
+
+const float bayer8[64] = float[64](
+   0.0/64.0,48.0/64.0,12.0/64.0,60.0/64.0, 3.0/64.0,51.0/64.0,15.0/64.0,63.0/64.0,
+  32.0/64.0,16.0/64.0,44.0/64.0,28.0/64.0,35.0/64.0,19.0/64.0,47.0/64.0,31.0/64.0,
+   8.0/64.0,56.0/64.0, 4.0/64.0,52.0/64.0,11.0/64.0,59.0/64.0, 7.0/64.0,55.0/64.0,
+  40.0/64.0,24.0/64.0,36.0/64.0,20.0/64.0,43.0/64.0,27.0/64.0,39.0/64.0,23.0/64.0,
+   2.0/64.0,50.0/64.0,14.0/64.0,62.0/64.0, 1.0/64.0,49.0/64.0,13.0/64.0,61.0/64.0,
+  34.0/64.0,18.0/64.0,46.0/64.0,30.0/64.0,33.0/64.0,17.0/64.0,45.0/64.0,29.0/64.0,
+  10.0/64.0,58.0/64.0, 6.0/64.0,54.0/64.0, 9.0/64.0,57.0/64.0, 5.0/64.0,53.0/64.0,
+  42.0/64.0,26.0/64.0,38.0/64.0,22.0/64.0,41.0/64.0,25.0/64.0,37.0/64.0,21.0/64.0
+);
 
 void main() {
-  vec2 px = floor(gl_FragCoord.xy * 0.95 + vec2(time * 130.0, -time * 90.0));
-  float n0 = hash21(px);
-  float n1 = hash21(px + vec2(17.0, 91.0));
-  float snow = step(0.58, n0);
-  float flicker = step(0.83, n1) * 0.25;
-
-  float lum = mix(0.025, 0.22, snow) + flicker;
-  float edgeMask = smoothstep(0.62, 0.12, length(vUv - 0.5));
-  float alpha = clamp(0.78 * edgeMask + 0.16 * snow, 0.0, 0.96);
-
-  gl_FragColor = vec4(vec3(lum), alpha);
+  int x = int(mod(gl_FragCoord.x, matrixSize));
+  int y = int(mod(gl_FragCoord.y, matrixSize));
+  float threshold = 0.0;
+  if (matrixSize == 2.0)      threshold = bayer2[y][x];
+  else if (matrixSize == 4.0) threshold = bayer4[y][x];
+  else                        threshold = bayer8[y * 8 + x];
+  float t = 0.93 < threshold + bias ? 0.0 : 1.0;
+  vec3 dark  = vec3(0.133, 0.137, 0.137);
+  vec3 light = vec3(0.941, 0.965, 0.941);
+  gl_FragColor = vec4(mix(dark, light, t), 1.0);
 }
 `;
 
@@ -401,7 +407,6 @@ void main() {
     // --- Shared uniforms (all materials read from same objects) -------------------
     const uMatrixSize = { value: 8.0 };
     const uBias = { value: 0.0 };
-    const uTime = { value: 0.0 };
     const uFogNear = { value: 12.0 };
     const uFogFar = { value: 80.0 };
 
@@ -420,8 +425,21 @@ void main() {
       });
     }
 
+    // Light fixture material — dithers at near-white luminance, no displacement
+    const litMat = new THREE.ShaderMaterial({
+      uniforms: { matrixSize: uMatrixSize, bias: uBias },
+      vertexShader: `
+        void main() {
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: litFragmentShader,
+    });
+
     // Two materials: heavy displacement for large surfaces, subtle for structure
-    const surfaceMat = makeMat(0.34);
+    // DoubleSide on surfaceMat so transitional panels (end caps, step walls, passage
+    // walls) render correctly from both directions without geometry gaps.
+    const surfaceMat = makeMat(0.34, THREE.DoubleSide);
     const structMat = makeMat(0.07);
 
     // --- Corridor constants -------------------------------------------------------
@@ -438,9 +456,20 @@ void main() {
     //  double   - four rib frames, denser spacing
     //  arch     - single round arch at midpoint + narrow ribs at ends
     //  pipe     - ceiling conduit with support brackets
-    //  alcove   - rectangular relief panels projecting from walls
+    //  niche    - 2 tall rectangular niches carved per side (wider shell, W/2 inner walls + return walls)
+    //  bay      - 2 wide shallow bays with a bench, same carved-out approach
+    //  cell     - 3 cramped cells per side, dropped ceiling at 2.4, feels dungeon-like
+    //  pool     - left wall opens to a large sunken pool (litMat floor, columns, asymmetric shell)
+    //  cramped  - walls narrow + ceiling drops in center section, compression ribs, brutalist
+    //  backroom - false ceiling at 2.8 with recessed litMat tile grid, suspension rods, wainscot
     //  service  - dense side-wall service tiles + conduits
-    //  bulkhead - side-mounted bulkhead panels + angled braces
+    //  bulkhead  - side-mounted bulkhead panels + angled braces
+    //  lit       - ceiling light bars (dithered near-white) with mounting brackets
+    //  cathedral - double-height vaulted hall with arch ribs (custom shell)
+    //  chamber   - widens mid-segment then narrows back (custom shell)
+    //  crossing  - side passages open through both walls (custom shell)
+    //  hall      - wide open colonnade with pillar rows, no inner walls (custom shell)
+    //  silo      - walls narrow, ceiling soars; shaft-like vertical space (custom shell)
 
     const TYPES = [
       'bare',
@@ -448,11 +477,25 @@ void main() {
       'double',
       'arch', 'arch',
       'pipe',
-      'alcove',
+      'niche',
+      'bay',
+      'cell',
       'tilegrid', 'tilegrid',
       'monolith',
       'service', 'service',
-      'bulkhead'
+      'bulkhead',
+      'lit',
+      'cathedral',
+      'chamber',
+      'crossing',
+      'hall',
+      'silo',
+      'triple',
+      'cluster',
+      'tallrib',
+      'pool', 'pool',
+      'cramped',
+      'backroom', 'backroom',
     ];
     // ribbed appears twice to make it the most common type
 
@@ -467,46 +510,90 @@ void main() {
       _build() {
         this.type = TYPES[Math.floor(Math.random() * TYPES.length)];
 
-        // - Tunnel shell --------------------------------------------
-        // Floor
-        const fGeo = new THREE.PlaneGeometry(W, SEG_LEN, 14, 12);
-        const floor = new THREE.Mesh(fGeo, surfaceMat);
+        // Types that build their own complete shell geometry
+        const CUSTOM_SHELL = new Set(['cathedral', 'chamber', 'crossing', 'hall', 'silo', 'tallrib', 'niche', 'bay', 'cell', 'pool']);
+        if (!CUSTOM_SHELL.has(this.type)) this._buildShell(W, H);
+
+        switch (this.type) {
+          case 'ribbed':    this._ribs([-SEG_LEN * 0.25, SEG_LEN * 0.25]); break;
+          case 'double':    this._ribs([-3, -1, 1, 3]); break;
+          case 'triple':    this._ribs([-2.5, 0, 2.5]); break;
+          case 'cluster':   this._ribs([-3.5, -2.5, -1.5, 1.5, 2.5, 3.5]); break;
+          case 'tallrib':   this._tallrib(); break;
+          case 'arch':      this._arch(); break;
+          case 'pipe':      this._pipe(); break;
+          case 'niche':     this._niche(); break;
+          case 'bay':       this._bay(); break;
+          case 'cell':      this._cell(); break;
+          case 'pool':      this._pool(); break;
+          case 'cramped':   this._cramped(); break;
+          case 'backroom':  this._backroom(); break;
+          case 'tilegrid':  this._tilegrid(); break;
+          case 'monolith':  this._monolith(); break;
+          case 'service':   this._service(); break;
+          case 'bulkhead':  this._bulkhead(); break;
+          case 'lit':       this._lit(); break;
+          case 'cathedral': this._cathedral(); break;
+          case 'chamber':   this._chamber(); break;
+          case 'crossing':  this._crossing(); break;
+          case 'hall':      this._hall();     break;
+          case 'silo':      this._silo();     break;
+          // 'bare': no extras
+        }
+      }
+
+      // Double-height shell with full-height ribs — taller, heavier version of ribbed
+      _tallrib() {
+        const CH = H * 2;
+        this._buildShell(W, CH);
+
+        // End caps closing the upper void at segment boundaries (same as cathedral)
+        for (const zSign of [-1, 1]) {
+          const cap = new THREE.Mesh(new THREE.PlaneGeometry(W, CH - H, 12, 8), surfaceMat);
+          cap.rotation.y = zSign > 0 ? Math.PI : 0;
+          cap.position.set(0, H + (CH - H) / 2, zSign * (SEG_LEN / 2 - 0.025));
+          this.group.add(cap);
+        }
+
+        // Full-height ribs: thick pillars span floor to ceiling, heavy beams
+        for (const z of [-2.5, 0, 2.5]) {
+          for (const side of [-1, 1]) {
+            const pil = new THREE.Mesh(new THREE.BoxGeometry(0.36, CH, 0.36), structMat);
+            pil.position.set(side * (W / 2 - 0.18), CH / 2, z);
+            this.group.add(pil);
+          }
+          const bm = new THREE.Mesh(new THREE.BoxGeometry(W, 0.32, 0.36), structMat);
+          bm.position.set(0, CH - 0.16, z);
+          this.group.add(bm);
+          // Mid-height cross-beam adds a second horizontal band
+          const mid = new THREE.Mesh(new THREE.BoxGeometry(W, 0.2, 0.24), structMat);
+          mid.position.set(0, H - 0.1, z);
+          this.group.add(mid);
+          const fc = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, 0.36), structMat);
+          fc.position.set(0, 0.09, z);
+          this.group.add(fc);
+        }
+      }
+
+      _buildShell(w, h) {
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, SEG_LEN, 14, 12), surfaceMat);
         floor.rotation.x = -Math.PI / 2;
         this.group.add(floor);
 
-        // Ceiling
-        const cGeo = new THREE.PlaneGeometry(W, SEG_LEN, 14, 12);
-        const ceil = new THREE.Mesh(cGeo, surfaceMat);
+        const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, SEG_LEN, 14, 12), surfaceMat);
         ceil.rotation.x = Math.PI / 2;
-        ceil.position.y = H;
+        ceil.position.y = h;
         this.group.add(ceil);
 
-        // Left wall
-        const wGeo = new THREE.PlaneGeometry(SEG_LEN, H, 12, 10);
-        const lw = new THREE.Mesh(wGeo, surfaceMat);
+        const lw = new THREE.Mesh(new THREE.PlaneGeometry(SEG_LEN, h, 12, 10), surfaceMat);
         lw.rotation.y = Math.PI / 2;
-        lw.position.set(-W / 2, H / 2, 0);
+        lw.position.set(-w / 2, h / 2, 0);
         this.group.add(lw);
 
-        // Right wall
-        const rw = new THREE.Mesh(new THREE.PlaneGeometry(SEG_LEN, H, 12, 10), surfaceMat);
+        const rw = new THREE.Mesh(new THREE.PlaneGeometry(SEG_LEN, h, 12, 10), surfaceMat);
         rw.rotation.y = -Math.PI / 2;
-        rw.position.set(W / 2, H / 2, 0);
+        rw.position.set(w / 2, h / 2, 0);
         this.group.add(rw);
-
-        // - Type-specific geometry ------------------------------------
-        switch (this.type) {
-          case 'ribbed': this._ribs([-SEG_LEN * 0.25, SEG_LEN * 0.25]); break;
-          case 'double': this._ribs([-3, -1, 1, 3]); break;
-          case 'arch': this._arch(); break;
-          case 'pipe': this._pipe(); break;
-          case 'alcove': this._alcoves(); break;
-          case 'tilegrid': this._tilegrid(); break;
-          case 'monolith': this._monolith(); break;
-          case 'service': this._service(); break;
-          case 'bulkhead': this._bulkhead(); break;
-          // 'bare': no extras
-        }
       }
 
       // A rib frame: two corner pillars, one ceiling beam, one floor channel
@@ -551,10 +638,6 @@ void main() {
         this.group.add(springR);
 
         this._ribs([-SEG_LEN * 0.4, SEG_LEN * 0.4]);
-
-        const ks = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.56, 0.36), structMat);
-        ks.position.set(0, archR + tubeR - 0.08, 0);
-        this.group.add(ks);
       }
 
       // A ceiling conduit pipe running the full segment length
@@ -577,33 +660,342 @@ void main() {
         this.group.add(duct2);
       }
 
-      // Rectangular relief panels projecting from both walls
-      _alcoves() {
-        const panelW = 0.08;
-        const panelH = 1.9;
-        const panelD = 1.1;
+      // Two tall rectangular niches per side — wider shell with W/2 inner walls + return walls
+      _niche() {
+        const D = 1.0;
+        const CW = W + 2 * D;
+        const AHW = 1.0; // alcove half-width in Z; each niche is 2 units wide
+        const openings = [[-2.5 - AHW, -2.5 + AHW], [2.5 - AHW, 2.5 + AHW]];
+        // [[-3.5,-1.5], [1.5,3.5]]
 
-        for (const z of [-SEG_LEN * 0.25, SEG_LEN * 0.25]) {
-          // Left wall panel (projects inward)
-          const lp = new THREE.Mesh(new THREE.BoxGeometry(panelW, panelH, panelD), surfaceMat);
-          lp.position.set(-W / 2 + panelW / 2, 1.3, z);
-          this.group.add(lp);
+        this._buildShell(CW, H);
 
-          // Right wall panel
-          const rp = new THREE.Mesh(new THREE.BoxGeometry(panelW, panelH, panelD), surfaceMat);
-          rp.position.set(W / 2 - panelW / 2, 1.3, z);
-          this.group.add(rp);
-
-          // Header slab above each panel pair
-          const hdr = new THREE.Mesh(new THREE.BoxGeometry(W * 0.72, 0.06, panelD), surfaceMat);
-          hdr.position.set(0, 1.3 + panelH / 2 + 0.03, z);
-          this.group.add(hdr);
+        // End caps closing the D-wide side wings at segment boundaries
+        for (const zSign of [-1, 1]) {
+          for (const side of [-1, 1]) {
+            const cap = new THREE.Mesh(new THREE.PlaneGeometry(D, H, 4, 6), surfaceMat);
+            cap.rotation.y = zSign > 0 ? Math.PI : 0;
+            cap.position.set(side * (W / 2 + D / 2), H / 2, zSign * (SEG_LEN / 2 - 0.025));
+            this.group.add(cap);
+          }
         }
 
-        // Thin floor sill running full length
-        const sill = new THREE.Mesh(new THREE.BoxGeometry(W - 0.42, 0.04, SEG_LEN), surfaceMat);
-        sill.position.set(0, 0.02, 0);
-        this.group.add(sill);
+        for (const side of [-1, 1]) {
+          // Inner wall panels at x=±W/2, full height, between niches
+          let z = -SEG_LEN / 2;
+          for (const [s, e] of openings) {
+            const len = s - z;
+            if (len > 0.01) {
+              const p = new THREE.Mesh(new THREE.PlaneGeometry(len, H, 8, 6), surfaceMat);
+              p.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+              p.position.set(side * W / 2, H / 2, (z + s) / 2);
+              this.group.add(p);
+            }
+            z = e;
+          }
+          const tail = SEG_LEN / 2 - z;
+          if (tail > 0.01) {
+            const p = new THREE.Mesh(new THREE.PlaneGeometry(tail, H, 8, 6), surfaceMat);
+            p.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            p.position.set(side * W / 2, H / 2, (z + SEG_LEN / 2) / 2);
+            this.group.add(p);
+          }
+
+          // Return walls (perpendicular to Z, at niche edges) + shelf inside
+          for (const [s, e] of openings) {
+            for (const zEdge of [s, e]) {
+              const ret = new THREE.Mesh(new THREE.PlaneGeometry(D, H, 4, 6), surfaceMat);
+              ret.position.set(side * (W / 2 + D / 2), H / 2, zEdge);
+              this.group.add(ret);
+            }
+            const ledge = new THREE.Mesh(new THREE.BoxGeometry(D * 0.8, 0.1, (e - s) * 0.7), structMat);
+            ledge.position.set(side * (W / 2 + D / 2), 1.1, (s + e) / 2);
+            this.group.add(ledge);
+          }
+        }
+      }
+
+      // Two wide shallow bays per side with a bench — same carved-out approach, D=0.7
+      _bay() {
+        const D = 0.7;
+        const CW = W + 2 * D;
+        const AHW = 1.5; // each bay is 3 units wide
+        const openings = [[-2.2 - AHW, -2.2 + AHW], [2.2 - AHW, 2.2 + AHW]];
+        // [[-3.7,-0.7], [0.7,3.7]]
+
+        this._buildShell(CW, H);
+
+        for (const zSign of [-1, 1]) {
+          for (const side of [-1, 1]) {
+            const cap = new THREE.Mesh(new THREE.PlaneGeometry(D, H, 4, 6), surfaceMat);
+            cap.rotation.y = zSign > 0 ? Math.PI : 0;
+            cap.position.set(side * (W / 2 + D / 2), H / 2, zSign * (SEG_LEN / 2 - 0.025));
+            this.group.add(cap);
+          }
+        }
+
+        for (const side of [-1, 1]) {
+          let z = -SEG_LEN / 2;
+          for (const [s, e] of openings) {
+            const len = s - z;
+            if (len > 0.01) {
+              const p = new THREE.Mesh(new THREE.PlaneGeometry(len, H, 8, 6), surfaceMat);
+              p.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+              p.position.set(side * W / 2, H / 2, (z + s) / 2);
+              this.group.add(p);
+            }
+            z = e;
+          }
+          const tail = SEG_LEN / 2 - z;
+          if (tail > 0.01) {
+            const p = new THREE.Mesh(new THREE.PlaneGeometry(tail, H, 8, 6), surfaceMat);
+            p.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            p.position.set(side * W / 2, H / 2, (z + SEG_LEN / 2) / 2);
+            this.group.add(p);
+          }
+
+          for (const [s, e] of openings) {
+            const bayLen = e - s;
+            for (const zEdge of [s, e]) {
+              const ret = new THREE.Mesh(new THREE.PlaneGeometry(D, H, 4, 6), surfaceMat);
+              ret.position.set(side * (W / 2 + D / 2), H / 2, zEdge);
+              this.group.add(ret);
+            }
+            // Bench along the back wall
+            const bench = new THREE.Mesh(new THREE.BoxGeometry(D * 0.85, 0.55, bayLen * 0.9), structMat);
+            bench.position.set(side * (W / 2 + D / 2), 0.275, (s + e) / 2);
+            this.group.add(bench);
+          }
+        }
+      }
+
+      // Three cramped cells per side — dropped ceiling at 2.4, dungeon-like
+      _cell() {
+        const D = 0.8;
+        const CW = W + 2 * D;
+        const cellH = 2.4; // dropped ceiling inside each cell
+        const AHW = 0.65;  // each cell opening is 1.3 units wide
+        const openings = [[-2.8 - AHW, -2.8 + AHW], [-AHW, AHW], [2.8 - AHW, 2.8 + AHW]];
+        // [[-3.45,-2.15], [-0.65,0.65], [2.15,3.45]]
+
+        this._buildShell(CW, H);
+
+        for (const zSign of [-1, 1]) {
+          for (const side of [-1, 1]) {
+            const cap = new THREE.Mesh(new THREE.PlaneGeometry(D, H, 4, 6), surfaceMat);
+            cap.rotation.y = zSign > 0 ? Math.PI : 0;
+            cap.position.set(side * (W / 2 + D / 2), H / 2, zSign * (SEG_LEN / 2 - 0.025));
+            this.group.add(cap);
+          }
+        }
+
+        for (const side of [-1, 1]) {
+          let z = -SEG_LEN / 2;
+          for (const [s, e] of openings) {
+            // Non-cell zone: full-height inner wall
+            const len = s - z;
+            if (len > 0.01) {
+              const p = new THREE.Mesh(new THREE.PlaneGeometry(len, H, 8, 6), surfaceMat);
+              p.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+              p.position.set(side * W / 2, H / 2, (z + s) / 2);
+              this.group.add(p);
+            }
+            // Cell zone: top band from cellH to H (above the opening)
+            const cellLen = e - s;
+            const bandH = H - cellH;
+            const band = new THREE.Mesh(new THREE.PlaneGeometry(cellLen, bandH, 6, 4), surfaceMat);
+            band.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            band.position.set(side * W / 2, cellH + bandH / 2, (s + e) / 2);
+            this.group.add(band);
+            // Dropped ceiling strip inside cell
+            const cc = new THREE.Mesh(new THREE.PlaneGeometry(D, cellLen, 4, 4), surfaceMat);
+            cc.rotation.x = Math.PI / 2;
+            cc.position.set(side * (W / 2 + D / 2), cellH, (s + e) / 2);
+            this.group.add(cc);
+            // Return walls at cell opening edges (only cellH tall)
+            for (const zEdge of [s, e]) {
+              const ret = new THREE.Mesh(new THREE.PlaneGeometry(D, cellH, 4, 5), surfaceMat);
+              ret.position.set(side * (W / 2 + D / 2), cellH / 2, zEdge);
+              this.group.add(ret);
+            }
+            z = e;
+          }
+          // Trailing non-cell zone
+          const tail = SEG_LEN / 2 - z;
+          if (tail > 0.01) {
+            const p = new THREE.Mesh(new THREE.PlaneGeometry(tail, H, 8, 6), surfaceMat);
+            p.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            p.position.set(side * W / 2, H / 2, (z + SEG_LEN / 2) / 2);
+            this.group.add(p);
+          }
+        }
+      }
+
+      // Left wall opens to a large sunken pool; right wall stays standard
+      _pool() {
+        const PW = 2.5;   // pool width extending to the left
+        const PD = 0.4;   // pool depth below corridor floor
+
+        // Corridor floor (standard width)
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, SEG_LEN, 14, 12), surfaceMat);
+        floor.rotation.x = -Math.PI / 2;
+        this.group.add(floor);
+
+        // Pool floor — surfaceMat keeps it dark and deep
+        const poolFloor = new THREE.Mesh(new THREE.PlaneGeometry(PW, SEG_LEN, 10, 12), surfaceMat);
+        poolFloor.rotation.x = -Math.PI / 2;
+        poolFloor.position.set(-(W / 2 + PW / 2), -PD, 0);
+        this.group.add(poolFloor);
+
+        // Ceiling spans full width (corridor + pool)
+        const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W + PW, SEG_LEN, 14, 12), surfaceMat);
+        ceil.rotation.x = Math.PI / 2;
+        ceil.position.set(-(PW / 2), H, 0);
+        this.group.add(ceil);
+
+        // Right wall (standard position)
+        const rw = new THREE.Mesh(new THREE.PlaneGeometry(SEG_LEN, H, 12, 10), surfaceMat);
+        rw.rotation.y = -Math.PI / 2;
+        rw.position.set(W / 2, H / 2, 0);
+        this.group.add(rw);
+
+        // Left outer wall — taller to reach the sunken pool floor
+        const lw = new THREE.Mesh(new THREE.PlaneGeometry(SEG_LEN, H + PD, 12, 10), surfaceMat);
+        lw.rotation.y = Math.PI / 2;
+        lw.position.set(-(W / 2 + PW), (H - PD) / 2, 0);
+        this.group.add(lw);
+
+        // Pool step face: vertical strip at x=-W/2 from y=-PD to y=0
+        const step = new THREE.Mesh(new THREE.PlaneGeometry(SEG_LEN, PD, 12, 3), surfaceMat);
+        step.rotation.y = -Math.PI / 2;
+        step.position.set(-W / 2, -PD / 2, 0);
+        this.group.add(step);
+
+        // End caps at segment z-boundaries for the pool cross-section
+        for (const zSign of [-1, 1]) {
+          const cap = new THREE.Mesh(new THREE.PlaneGeometry(PW, H + PD, 6, 8), surfaceMat);
+          cap.rotation.y = zSign > 0 ? Math.PI : 0;
+          cap.position.set(-(W / 2 + PW / 2), (H - PD) / 2, zSign * (SEG_LEN / 2 - 0.025));
+          this.group.add(cap);
+        }
+
+        // Stone curb/lip at the corridor-to-pool edge
+        const curb = new THREE.Mesh(new THREE.BoxGeometry(0.1, PD + 0.06, SEG_LEN), structMat);
+        curb.position.set(-W / 2 + 0.05, -PD / 2 + 0.03, 0);
+        this.group.add(curb);
+
+        // Columns rising from pool floor to ceiling
+        for (const z of [-2.5, 2.5]) {
+          const col = new THREE.Mesh(new THREE.BoxGeometry(0.28, H + PD, 0.28), structMat);
+          col.position.set(-(W / 2 + PW / 2), (H - PD) / 2, z);
+          this.group.add(col);
+        }
+      }
+
+      // Standard shell but walls close in + ceiling drops in the center — claustrophobic passage
+      _cramped() {
+        const NW = 3.5;  // narrow width
+        const CH = 2.6;  // dropped ceiling height
+        const TZ = 2.5;  // z half-length of the narrow section
+
+        // Dropped ceiling at y=CH, NW wide, spanning center section
+        const ic = new THREE.Mesh(new THREE.PlaneGeometry(NW, TZ * 2, 10, 8), surfaceMat);
+        ic.rotation.x = Math.PI / 2;
+        ic.position.set(0, CH, 0);
+        this.group.add(ic);
+
+        // Overhang shelves: fill from ±NW/2 to ±W/2 at y=CH, center section
+        for (const side of [-1, 1]) {
+          const sh = new THREE.Mesh(new THREE.PlaneGeometry((W - NW) / 2, TZ * 2, 4, 6), surfaceMat);
+          sh.rotation.x = Math.PI / 2;
+          sh.position.set(side * (NW / 2 + (W - NW) / 4), CH, 0);
+          this.group.add(sh);
+        }
+
+        // Inner side walls at x=±NW/2, height CH, center section only
+        for (const side of [-1, 1]) {
+          const iw = new THREE.Mesh(new THREE.PlaneGeometry(TZ * 2, CH, 8, 7), surfaceMat);
+          iw.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+          iw.position.set(side * NW / 2, CH / 2, 0);
+          this.group.add(iw);
+        }
+
+        // Threshold faces at z=±TZ (what you see approaching the narrow passage)
+        for (const zSign of [-1, 1]) {
+          // Side step panels: x from ±NW/2 to ±W/2, height CH
+          for (const side of [-1, 1]) {
+            const sp = new THREE.Mesh(new THREE.PlaneGeometry((W - NW) / 2, CH, 4, 6), surfaceMat);
+            sp.rotation.y = zSign > 0 ? Math.PI : 0;
+            sp.position.set(side * (NW / 2 + (W - NW) / 4), CH / 2, zSign * TZ);
+            this.group.add(sp);
+          }
+          // Upper ceiling step: full W wide, from y=CH to y=H
+          const up = new THREE.Mesh(new THREE.PlaneGeometry(W, H - CH, 10, 4), surfaceMat);
+          up.rotation.y = zSign > 0 ? Math.PI : 0;
+          up.position.set(0, CH + (H - CH) / 2, zSign * TZ);
+          this.group.add(up);
+        }
+
+        // Compression ribs: heavy beams across dropped ceiling + side pillars
+        for (const z of [-1.5, 0, 1.5]) {
+          const beam = new THREE.Mesh(new THREE.BoxGeometry(NW, 0.3, 0.28), structMat);
+          beam.position.set(0, CH - 0.15, z);
+          this.group.add(beam);
+          for (const side of [-1, 1]) {
+            const pil = new THREE.Mesh(new THREE.BoxGeometry(0.24, CH, 0.28), structMat);
+            pil.position.set(side * NW / 2, CH / 2, z);
+            this.group.add(pil);
+          }
+        }
+      }
+
+      // False ceiling with recessed fluorescent grid — liminal backrooms feel
+      _backroom() {
+        const DROP = 2.8;         // false ceiling height
+        const GAP  = H - DROP;    // void above false ceiling (1.2)
+
+        // Dropped false ceiling — inset 0.02 each side so edges never share a vertex with wall planes
+        const dc = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.04, SEG_LEN - 0.04, 12, 10), surfaceMat);
+        dc.rotation.x = Math.PI / 2;
+        dc.position.y = DROP;
+        this.group.add(dc);
+
+        // Recessed fluorescent tiles: 2 columns × 3 rows, 0.04 below the ceiling surface
+        // so they're never coplanar with the dropped ceiling plane above them
+        for (const x of [-W * 0.22, W * 0.22]) {
+          for (const z of [-2.5, 0, 2.5]) {
+            const tile = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.6), litMat);
+            tile.rotation.x = Math.PI / 2;   // normal faces down — visible from below
+            tile.position.set(x, DROP - 0.04, z);
+            this.group.add(tile);
+          }
+        }
+
+        // Thin ceiling grid frame strips dividing the tile bays (box geometry — no coplanar face)
+        for (const z of [-1.6, 1.6]) {
+          const strip = new THREE.Mesh(new THREE.BoxGeometry(W - 0.08, 0.04, 0.06), structMat);
+          strip.position.set(0, DROP - 0.02, z);
+          this.group.add(strip);
+        }
+        const midStrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, SEG_LEN - 0.08), structMat);
+        midStrip.position.set(0, DROP - 0.02, 0);
+        this.group.add(midStrip);
+
+        // Suspension rods from false ceiling up to real ceiling — x=±2.9, 0.1 gap from wall plane
+        for (const z of [-3, -1, 1, 3]) {
+          for (const side of [-1, 1]) {
+            const rod = new THREE.Mesh(new THREE.BoxGeometry(0.04, GAP, 0.04), structMat);
+            rod.position.set(side * (W / 2 - 0.1), DROP + GAP / 2, z);
+            this.group.add(rod);
+          }
+        }
+
+        // Wainscot rail — box center x=±2.95, outer edge ±2.98, wall plane at ±3: 0.02 gap
+        for (const side of [-1, 1]) {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, SEG_LEN - 0.05), structMat);
+          rail.position.set(side * (W / 2 - 0.05), 0.85, 0);
+          this.group.add(rail);
+        }
       }
 
       // Brutalist tile matrix: offset wall tiles + blocky ceiling coffers
@@ -725,11 +1117,6 @@ void main() {
             const cap = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.24, 0.92), structMat);
             cap.position.set(side * (W / 2 - 0.23), 2.05, z);
             this.group.add(cap);
-
-            const brace = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.18), structMat);
-            brace.position.set(side * (W / 2 - 0.45), 1.55, z);
-            brace.rotation.z = side * -0.62;
-            this.group.add(brace);
           }
         }
 
@@ -740,6 +1127,368 @@ void main() {
             crown.position.set(side * (W / 2 - 0.34), H - 0.09, z);
             this.group.add(crown);
           }
+        }
+      }
+
+      // Double-height vaulted hall with leaning arch ribs
+      _cathedral() {
+        const CH = H * 2;
+        this._buildShell(W, CH);
+
+        for (const z of [-3, 0, 3]) {
+          // Pair of diagonal struts leaning from wall base toward central keystone
+          for (const side of [-1, 1]) {
+            const strut = new THREE.Mesh(new THREE.BoxGeometry(0.26, CH * 0.78, 0.26), structMat);
+            strut.position.set(side * (W / 2 - 0.13), CH * 0.39, z);
+            strut.rotation.z = side * -0.3;
+            this.group.add(strut);
+          }
+          // Keystone block at peak
+          const key = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.42), structMat);
+          key.position.set(0, CH - 0.62, z);
+          this.group.add(key);
+        }
+
+        // Clerestory ledge at mid-height on each side
+        for (const side of [-1, 1]) {
+          const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.42, SEG_LEN), structMat);
+          ledge.position.set(side * (W / 2 - 0.11), H + 0.21, 0);
+          this.group.add(ledge);
+        }
+
+        // End caps closing the upper volume at z=±4 (above standard corridor height)
+        // Without these the void above H=4 is visible through the segment boundaries
+        for (const zSign of [-1, 1]) {
+          const cap = new THREE.Mesh(new THREE.PlaneGeometry(W, CH - H, 12, 8), surfaceMat);
+          cap.rotation.y = zSign > 0 ? Math.PI : 0;
+          cap.position.set(0, H + (CH - H) / 2, zSign * (SEG_LEN / 2 - 0.025));
+          this.group.add(cap);
+        }
+
+        // Narrow floor plinth
+        const plinth = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.16, SEG_LEN), structMat);
+        plinth.position.set(0, 0.08, 0);
+        this.group.add(plinth);
+      }
+
+      // Room that widens mid-segment then narrows back, with step transitions
+      _chamber() {
+        const CW = W + 5;   // wide section width = 11
+        const EW = (CW - W) / 2; // extra width per side = 2.5
+        const TZ = 2.5;     // exact value avoids float-precision seams
+
+        // Center floor/ceiling (full segment length, standard width)
+        for (const [rx, y] of [[-Math.PI / 2, 0], [Math.PI / 2, H]]) {
+          const p = new THREE.Mesh(new THREE.PlaneGeometry(W, SEG_LEN, 12, 10), surfaceMat);
+          p.rotation.x = rx;
+          p.position.y = y;
+          this.group.add(p);
+        }
+
+        for (const side of [-1, 1]) {
+          const xStep = side * (W / 2 + EW / 2);
+
+          // Side floor/ceiling extensions (middle zone only)
+          for (const [rx, y] of [[-Math.PI / 2, 0], [Math.PI / 2, H]]) {
+            const p = new THREE.Mesh(new THREE.PlaneGeometry(EW, TZ * 2, 5, 6), surfaceMat);
+            p.rotation.x = rx;
+            p.position.set(xStep, y, 0);
+            this.group.add(p);
+          }
+
+          // Outer walls at standard x=±W/2, outside the expansion zone
+          for (const zSign of [-1, 1]) {
+            const outerLen = SEG_LEN / 2 - TZ;
+            const ow = new THREE.Mesh(new THREE.PlaneGeometry(outerLen, H, 4, 8), surfaceMat);
+            ow.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            ow.position.set(side * W / 2, H / 2, zSign * (TZ + outerLen / 2));
+            this.group.add(ow);
+          }
+
+          // Wide inner wall at x=±CW/2 (middle zone)
+          const iw = new THREE.Mesh(new THREE.PlaneGeometry(TZ * 2, H, 8, 8), surfaceMat);
+          iw.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+          iw.position.set(side * CW / 2, H / 2, 0);
+          this.group.add(iw);
+
+          // Step walls at ±TZ — face +Z so they're visible to the approaching player
+          for (const zSign of [-1, 1]) {
+            const sw = new THREE.Mesh(new THREE.PlaneGeometry(EW, H, 4, 6), surfaceMat);
+            sw.rotation.y = 0;
+            sw.position.set(xStep, H / 2, zSign * TZ);
+            this.group.add(sw);
+          }
+        }
+
+        // Corner columns — inner corners (x=±W/2) AND outer corners (x=±CW/2)
+        // fill the T-junction gaps where step wall meets outer/inner wall
+        for (const side of [-1, 1]) {
+          for (const zSign of [-1, 1]) {
+            const ic = new THREE.Mesh(new THREE.BoxGeometry(0.45, H, 0.45), structMat);
+            ic.position.set(side * W / 2, H / 2, zSign * TZ);
+            this.group.add(ic);
+            const oc = new THREE.Mesh(new THREE.BoxGeometry(0.45, H, 0.45), structMat);
+            oc.position.set(side * CW / 2, H / 2, zSign * TZ);
+            this.group.add(oc);
+          }
+        }
+      }
+
+      // Side passages open through both walls at the segment midpoint
+      _crossing() {
+        const PD = 3.0;           // passage depth (how far it extends sideways)
+        const PW = SEG_LEN * 0.5; // passage opening width along z = 4
+
+        // Main corridor floor/ceiling
+        for (const [rx, y] of [[-Math.PI / 2, 0], [Math.PI / 2, H]]) {
+          const p = new THREE.Mesh(new THREE.PlaneGeometry(W, SEG_LEN, 12, 10), surfaceMat);
+          p.rotation.x = rx;
+          p.position.y = y;
+          this.group.add(p);
+        }
+
+        for (const side of [-1, 1]) {
+          // Side passage floor/ceiling
+          for (const [rx, y] of [[-Math.PI / 2, 0], [Math.PI / 2, H]]) {
+            const p = new THREE.Mesh(new THREE.PlaneGeometry(PD, PW, 6, 8), surfaceMat);
+            p.rotation.x = rx;
+            p.position.set(side * (W / 2 + PD / 2), y, 0);
+            this.group.add(p);
+          }
+
+          // Back wall of side passage (closes off the depth)
+          const bw = new THREE.Mesh(new THREE.PlaneGeometry(PW, H, 8, 8), surfaceMat);
+          bw.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+          bw.position.set(side * (W / 2 + PD), H / 2, 0);
+          this.group.add(bw);
+
+          // Passage side walls at z=±PW/2 (face inward, closing z edges)
+          for (const zSign of [-1, 1]) {
+            const pw = new THREE.Mesh(new THREE.PlaneGeometry(PD, H, 5, 8), surfaceMat);
+            pw.rotation.y = zSign > 0 ? Math.PI : 0;
+            pw.position.set(side * (W / 2 + PD / 2), H / 2, zSign * PW / 2);
+            this.group.add(pw);
+          }
+
+          // Standard walls outside the passage opening (z > PW/2 and z < -PW/2)
+          for (const zSign of [-1, 1]) {
+            const outerLen = SEG_LEN / 2 - PW / 2;
+            const ow = new THREE.Mesh(new THREE.PlaneGeometry(outerLen, H, 4, 8), surfaceMat);
+            ow.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            ow.position.set(side * W / 2, H / 2, zSign * (PW / 2 + outerLen / 2));
+            this.group.add(ow);
+          }
+        }
+
+        // Pillars at passage entrances (inner) and back corners (outer)
+        // to fill T-junction gaps where passage walls meet the main/back walls
+        for (const side of [-1, 1]) {
+          for (const zSign of [-1, 1]) {
+            const ic = new THREE.Mesh(new THREE.BoxGeometry(0.45, H, 0.45), structMat);
+            ic.position.set(side * W / 2, H / 2, zSign * PW / 2);
+            this.group.add(ic);
+            const oc = new THREE.Mesh(new THREE.BoxGeometry(0.45, H, 0.45), structMat);
+            oc.position.set(side * (W / 2 + PD), H / 2, zSign * PW / 2);
+            this.group.add(oc);
+          }
+        }
+      }
+
+      // Open colonnade hall — wide with columns instead of solid inner walls
+      _hall() {
+        const CW = 11;
+        const EW = (CW - W) / 2; // 2.5
+        const TZ = 2.5;
+        const outerLen = SEG_LEN / 2 - TZ; // 1.5
+
+        // Center floor + ceiling (full length, standard width)
+        for (const [rx, y] of [[-Math.PI / 2, 0], [Math.PI / 2, H]]) {
+          const p = new THREE.Mesh(new THREE.PlaneGeometry(W, SEG_LEN, 12, 10), surfaceMat);
+          p.rotation.x = rx; p.position.y = y;
+          this.group.add(p);
+        }
+
+        for (const side of [-1, 1]) {
+          // Side floor/ceiling extensions (middle zone)
+          for (const [rx, y] of [[-Math.PI / 2, 0], [Math.PI / 2, H]]) {
+            const p = new THREE.Mesh(new THREE.PlaneGeometry(EW, TZ * 2, 4, 6), surfaceMat);
+            p.rotation.x = rx;
+            p.position.set(side * (W / 2 + EW / 2), y, 0);
+            this.group.add(p);
+          }
+
+          // Outer narrow walls (outside TZ)
+          for (const zSign of [-1, 1]) {
+            const ow = new THREE.Mesh(new THREE.PlaneGeometry(outerLen, H, 4, 8), surfaceMat);
+            ow.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            ow.position.set(side * W / 2, H / 2, zSign * (TZ + outerLen / 2));
+            this.group.add(ow);
+          }
+
+          // Step walls closing the floor/ceiling extensions at z=±TZ
+          for (const zSign of [-1, 1]) {
+            const sw = new THREE.Mesh(new THREE.PlaneGeometry(EW, H, 4, 6), surfaceMat);
+            sw.rotation.y = 0;
+            sw.position.set(side * (W / 2 + EW / 2), H / 2, zSign * TZ);
+            this.group.add(sw);
+          }
+
+          // Colonnade columns at outer edge — no solid wall, just pillars
+          for (const z of [-3.0, -1.0, 1.0, 3.0]) {
+            const col = new THREE.Mesh(new THREE.BoxGeometry(0.6, H, 0.6), structMat);
+            col.position.set(side * (CW / 2 - 0.3), H / 2, z);
+            this.group.add(col);
+          }
+
+          // Ceiling beam along column tops
+          const beam = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.28, TZ * 2), structMat);
+          beam.position.set(side * (CW / 2 - 0.275), H - 0.14, 0);
+          this.group.add(beam);
+        }
+
+        // Inner corner columns at step junctions + outer corners at column row end
+        for (const side of [-1, 1]) {
+          for (const zSign of [-1, 1]) {
+            const ic = new THREE.Mesh(new THREE.BoxGeometry(0.45, H, 0.45), structMat);
+            ic.position.set(side * W / 2, H / 2, zSign * TZ);
+            this.group.add(ic);
+            const oc = new THREE.Mesh(new THREE.BoxGeometry(0.6, H, 0.6), structMat);
+            oc.position.set(side * (CW / 2 - 0.3), H / 2, zSign * TZ);
+            this.group.add(oc);
+          }
+        }
+      }
+
+      // Narrow-and-tall silo shaft — walls close in, ceiling soars
+      _silo() {
+        const WN = 3.5; // narrow inner width
+        const CH = 8.0; // silo ceiling height
+        const TZ = 2.5;
+        const EW = (W - WN) / 2;     // step-in per side = 1.25
+        const outerLen = SEG_LEN / 2 - TZ; // 1.5
+        const wingW = EW;             // ceiling wing width per side = 1.25
+
+        // Full-width floor
+        const flr = new THREE.Mesh(new THREE.PlaneGeometry(W, SEG_LEN, 12, 10), surfaceMat);
+        flr.rotation.x = -Math.PI / 2;
+        this.group.add(flr);
+
+        // Ceiling: side wings (full length) + center outer caps + silo top
+        for (const side of [-1, 1]) {
+          const wing = new THREE.Mesh(new THREE.PlaneGeometry(wingW, SEG_LEN, 4, 10), surfaceMat);
+          wing.rotation.x = Math.PI / 2;
+          wing.position.set(side * (WN / 2 + wingW / 2), H, 0);
+          this.group.add(wing);
+        }
+        for (const zSign of [-1, 1]) {
+          const cap = new THREE.Mesh(new THREE.PlaneGeometry(WN, outerLen, 4, 4), surfaceMat);
+          cap.rotation.x = Math.PI / 2;
+          cap.position.set(0, H, zSign * (TZ + outerLen / 2));
+          this.group.add(cap);
+        }
+        const siloTop = new THREE.Mesh(new THREE.PlaneGeometry(WN, TZ * 2, 8, 8), surfaceMat);
+        siloTop.rotation.x = Math.PI / 2;
+        siloTop.position.set(0, CH, 0);
+        this.group.add(siloTop);
+
+        // Upper end caps at z=±TZ sealing top of silo (DoubleSide handles both views)
+        for (const zSign of [-1, 1]) {
+          const uc = new THREE.Mesh(new THREE.PlaneGeometry(WN, CH - H, 6, 6), surfaceMat);
+          uc.rotation.y = 0;
+          uc.position.set(0, H + (CH - H) / 2, zSign * TZ);
+          this.group.add(uc);
+        }
+
+        for (const side of [-1, 1]) {
+          // Standard outer walls (outer zones)
+          for (const zSign of [-1, 1]) {
+            const ow = new THREE.Mesh(new THREE.PlaneGeometry(outerLen, H, 4, 8), surfaceMat);
+            ow.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            ow.position.set(side * W / 2, H / 2, zSign * (TZ + outerLen / 2));
+            this.group.add(ow);
+          }
+
+          // Inner narrow wall — standard height (middle zone, y=0 to H)
+          const iw = new THREE.Mesh(new THREE.PlaneGeometry(TZ * 2, H, 8, 8), surfaceMat);
+          iw.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+          iw.position.set(side * WN / 2, H / 2, 0);
+          this.group.add(iw);
+
+          // Tall silo wall — upper section (y=H to CH)
+          const tw = new THREE.Mesh(new THREE.PlaneGeometry(TZ * 2, CH - H, 8, 8), surfaceMat);
+          tw.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+          tw.position.set(side * WN / 2, H + (CH - H) / 2, 0);
+          this.group.add(tw);
+
+          // Step walls at z=±TZ (x from WN/2 out to W/2, standard height)
+          for (const zSign of [-1, 1]) {
+            const sw = new THREE.Mesh(new THREE.PlaneGeometry(EW, H, 3, 6), surfaceMat);
+            sw.rotation.y = 0;
+            sw.position.set(side * (WN / 2 + EW / 2), H / 2, zSign * TZ);
+            this.group.add(sw);
+          }
+
+          // Corner columns: inner (WN/2) + outer (W/2) at z=±TZ
+          for (const zSign of [-1, 1]) {
+            const ic = new THREE.Mesh(new THREE.BoxGeometry(0.42, H, 0.42), structMat);
+            ic.position.set(side * WN / 2, H / 2, zSign * TZ);
+            this.group.add(ic);
+            const oc = new THREE.Mesh(new THREE.BoxGeometry(0.42, H, 0.42), structMat);
+            oc.position.set(side * W / 2, H / 2, zSign * TZ);
+            this.group.add(oc);
+          }
+
+          // Tall corner columns at inner corners (WN/2, z=±TZ, full height CH)
+          for (const zSign of [-1, 1]) {
+            const tc = new THREE.Mesh(new THREE.BoxGeometry(0.3, CH - H, 0.3), structMat);
+            tc.position.set(side * WN / 2, H + (CH - H) / 2, zSign * TZ);
+            this.group.add(tc);
+          }
+        }
+
+        // Horizontal ring bands at two heights inside the silo
+        for (const y of [5.5, 7.0]) {
+          for (const side of [-1, 1]) {
+            const wb = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, TZ * 2), structMat);
+            wb.position.set(side * WN / 2, y, 0);
+            this.group.add(wb);
+          }
+          for (const zSign of [-1, 1]) {
+            const zb = new THREE.Mesh(new THREE.BoxGeometry(WN, 0.22, 0.16), structMat);
+            zb.position.set(0, y, zSign * TZ);
+            this.group.add(zb);
+          }
+        }
+
+        // Lit ceiling bar at the top
+        const litBar = new THREE.Mesh(new THREE.BoxGeometry(WN * 0.5, 0.05, TZ * 0.4), litMat);
+        litBar.position.set(0, CH - 0.025, 0);
+        this.group.add(litBar);
+      }
+
+      // Ceiling light bars — dithered near-white to match rendering style
+      _lit() {
+        const zSlots = [-3.0, 0.0, 3.0];
+
+        for (const z of zSlots) {
+          // Main light bar spanning most of the ceiling width
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(W - 1.4, 0.05, 0.52), litMat);
+          bar.position.set(0, H - 0.025, z);
+          this.group.add(bar);
+
+          // Mounting brackets on each side
+          for (const side of [-1, 1]) {
+            const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.28, 0.58), structMat);
+            bracket.position.set(side * (W / 2 - 0.82), H - 0.14, z);
+            this.group.add(bracket);
+          }
+        }
+
+        // Floor baseboard channels keeping the center clear
+        for (const side of [-1, 1]) {
+          const base = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, SEG_LEN), structMat);
+          base.position.set(side * (W / 2 - 0.04), 0.07, 0);
+          this.group.add(base);
         }
       }
 
@@ -761,18 +1510,6 @@ void main() {
     for (let i = 0; i < 12; i++) {
       pool.push(new CorridorSegment(-(SEG_LEN / 2 + i * SEG_LEN)));
     }
-
-    const frontierMat = new THREE.ShaderMaterial({
-      uniforms: { time: uTime },
-      vertexShader: frontierVertexShader,
-      fragmentShader: frontierFragmentShader,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const frontierPlane = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.8, H + 0.5), frontierMat);
-    frontierPlane.position.set(0, H * 0.5, -(12 * SEG_LEN) - 1.0);
-    scene.add(frontierPlane);
 
     // Grow or shrink pool to match targetSize. Keeps the segments closest to
     // the camera and disposes those farthest ahead when shrinking.
@@ -849,7 +1586,6 @@ void main() {
     // --- Animation loop ----------------------------------------------------------
     function animate() {
       requestAnimationFrame(animate);
-      uTime.value = performance.now() * 0.001;
 
       // WASD adjustments when player has control
       if (controls.isLocked) {
@@ -876,10 +1612,6 @@ void main() {
       }
 
       // Dark static wall slightly ahead of the newest generated segment.
-      let newestZ = Infinity;
-      for (const s of pool) newestZ = Math.min(newestZ, s.group.position.z);
-      frontierPlane.position.z = newestZ - SEG_LEN * 0.5 - 0.25;
-
       renderer.render(scene, camera);
     }
 
