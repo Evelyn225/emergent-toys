@@ -24,14 +24,15 @@
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATON.CUR'), auto !important; }
+    a:hover, .dock-icon:hover { cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATONRED.CUR'), auto !important; }
 
     body {
       margin: 0;
       overflow: hidden;
-      background: #050505 ;
+      background: #fff;
       font-family: 'DM Mono', monospace;
       font-weight: 300;
-      color: #f0f6f0 ;
+      color: #111;
     }
 
     /* ─── Centered hero ─── */
@@ -44,6 +45,8 @@
       text-align: center;
       pointer-events: none;
       visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.5s ease;
     }
 
     .hero h1 {
@@ -54,7 +57,7 @@
     }
 
     #hero-title {
-      background: linear-gradient(45deg, rgb(240, 246, 240) , #a8a8a8);
+      background: linear-gradient(45deg, #0d0d0d, #555);
       -webkit-background-clip: text;
       background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -62,7 +65,7 @@
 
     .typing-cursor {
       display: inline-block;
-      -webkit-text-fill-color: rgba(240, 246, 240,0.9);
+      -webkit-text-fill-color: rgba(17, 17, 17, 0.9);
       animation: cursor-blink 1s steps(1) infinite;
       margin-left: 0.05em;
     }
@@ -98,7 +101,7 @@
       width: 80px;
       padding: 6px 4px;
       text-decoration: none;
-      color: rgba(255,255,255,0.85);
+      color: rgba(0,0,0,0.75);
       transition: color 0.15s;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
@@ -134,7 +137,7 @@
     .dock-icon:nth-child(19) { animation-delay: 0.59s; }
 
     .dock-icon:hover {
-      color: rgba(240, 246, 240,1);
+      color: rgba(0,0,0,1);
     }
 
     /* Folder emoji */
@@ -162,24 +165,32 @@
       line-height: 1.35;
       letter-spacing: 0.01em;
       color: inherit;
-      text-shadow: 0 1px 8px rgba(0,0,0,0.95);
+      text-shadow: none;
       transition: text-shadow 0.18s linear;
       max-width: 76px;
       word-break: break-word;
     }
 
     .dock-icon:hover .icon-label {
-      color: rgba(240, 246, 240,0.7);
+      color: rgba(0,0,0,0.55);
     }
     .dock-icon:focus .icon-label {
-      color: rgba(240, 246, 240,0.7);
+      color: rgba(0,0,0,0.55);
     }
 
 
     /* Focus ring */
     .dock-icon:focus { outline: none; }
     .dock-icon:focus-visible .icon-emoji {
-      filter: drop-shadow(0 0 6px rgba(255,255,255,0.7));
+      filter: drop-shadow(0 0 6px rgba(0,0,0,0.35));
+    }
+
+    /* ─── Terminal background canvas ─── */
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
     }
 
     @media (max-width: 520px) {
@@ -208,7 +219,7 @@
       position: fixed;
       inset: 0;
       z-index: 9999;
-      background: #050505;
+      background: #fff;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -222,17 +233,10 @@
       font-family: 'DM Mono', monospace;
       font-size: 13px;
       font-weight: 300;
-      color: rgba(240, 246, 240, 0.55);
+      color: rgba(0, 0, 0, 0.55);
       line-height: 1.9;
       width: 340px;
       min-height: 7em;
-    }
-
-    /* glitch flicker on terminal text */
-    @keyframes splash-flicker {
-      0%, 94%, 100% { opacity: 1; }
-      95%            { opacity: 0.4; }
-      97%            { opacity: 0.9; }
     }
 
     /* full-viewport cursor surface — sits below all content */
@@ -259,11 +263,79 @@
       from { transform: translateY(0); }
       to   { transform: translateY(-100vh); }
     }
+
+    /* ─── Dark mode overrides ─── */
+    [data-theme="dark"] body {
+      background: #050505;
+      color: #f0f6f0;
+    }
+    [data-theme="dark"] #hero-title {
+      background: linear-gradient(45deg, rgb(240, 246, 240), #a8a8a8);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+    [data-theme="dark"] .typing-cursor {
+      -webkit-text-fill-color: rgba(240, 246, 240, 0.9);
+    }
+    [data-theme="dark"] .dock-icon {
+      color: rgba(255, 255, 255, 0.85);
+    }
+    [data-theme="dark"] .dock-icon:hover {
+      color: rgba(240, 246, 240, 1);
+    }
+    [data-theme="dark"] .icon-label {
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
+    }
+    [data-theme="dark"] .dock-icon:hover .icon-label,
+    [data-theme="dark"] .dock-icon:focus .icon-label {
+      color: rgba(240, 246, 240, 0.7);
+    }
+    [data-theme="dark"] .dock-icon:focus-visible .icon-emoji {
+      filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7));
+    }
+    [data-theme="dark"] #splash {
+      background: #050505;
+    }
+    [data-theme="dark"] #splash-terminal {
+      color: rgba(240, 246, 240, 0.55);
+    }
+
+    /* ─── Theme toggle button ─── */
+    #theme-toggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 10001;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      background: rgba(0, 0, 0, 0.06);
+      color: #111;
+      font-size: 15px;
+      line-height: 1;
+      cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATON.CUR'), auto !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, border-color 0.2s,
+                  transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+      user-select: none;
+    }
+    #theme-toggle:hover  { transform: scale(1.15); }
+    #theme-toggle:active { transform: scale(0.9); transition-duration: 0.08s; }
+    [data-theme="dark"] #theme-toggle {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: #f0f6f0;
+    }
   </style>
   <noscript><style>#splash { display: none; }</style></noscript>
 </head>
 
 <body>
+  <button id="theme-toggle" aria-label="Toggle colour theme">🌙</button>
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
   <div id="cursor-layer" aria-hidden="true"></div>
   <!-- Splash intro overlay -->
   <div id="splash" aria-hidden="true">
@@ -279,85 +351,173 @@
   <nav class="dock-wrapper" role="region" aria-label="Project navigation" tabindex="0">
     <div class="dock">
       <a href="Sands.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">⏳</div>
         <span class="icon-label">sand playground</span>
       </a>
       <a href="critters.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🐛</div>
         <span class="icon-label">bug hotline</span>
       </a>
       <a href="fireworks.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🎆</div>
         <span class="icon-label">fireworks</span>
       </a>
       <a href="pixel-splatter.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
-        <span class="icon-label">weh</span>
+        <div class="icon-emoji">🔮</div>
+        <span class="icon-label">Pixel Splatter</span>
       </a>
       <a href="hell.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🔥</div>
         <span class="icon-label">anime hell</span>
       </a>
       <a href="fluid.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">💧</div>
         <span class="icon-label">fluid</span>
       </a>
       <a href="webwizardcasino.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🎰</div>
         <span class="icon-label">the web wizard's casino</span>
       </a>
       <a href="automata-garden.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🌱</div>
         <span class="icon-label">automata garden</span>
       </a>
       <a href="erosion.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🏔️</div>
         <span class="icon-label">erosion toy</span>
       </a>
       <a href="wave-collapse.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🌊</div>
         <span class="icon-label">wave collapse</span>
       </a>
       <a href="catch.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🦑</div>
         <span class="icon-label">tentacle catch</span>
       </a>
       <a href="philosophers-stone.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">⚗️</div>
         <span class="icon-label">reaction diffusion</span>
       </a>
       <a href="vornoi.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🔬</div>
         <span class="icon-label">vornoi</span>
       </a>
       <a href="morse.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">📡</div>
         <span class="icon-label">morse code</span>
       </a>
       <a href="lissajous.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">〰️</div>
         <span class="icon-label">lissajous</span>
       </a>
       <a href="net-sanctuary-project.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🌐</div>
         <span class="icon-label">net sanctuary project</span>
       </a>
       <a href="ascii-render.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">💻</div>
         <span class="icon-label">ascii rendering</span>
       </a>
       <a href="tablecloth.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🧶</div>
         <span class="icon-label">tablecloth</span>
       </a>
       <a href="corridor.html" class="dock-icon">
-        <div class="icon-emoji">📁</div>
+        <div class="icon-emoji">🚪</div>
         <span class="icon-label">corridor crawler</span>
       </a>
     </div>
   </nav>
 
   <script>
+  // ── Theme toggle ──────────────────────────────────────────────
+  function isDark() { return document.documentElement.dataset.theme === 'dark'; }
+
+  function applyTheme(dark) {
+    document.documentElement.dataset.theme = dark ? 'dark' : '';
+    document.getElementById('theme-toggle').textContent = dark ? '☀' : '🌙';
+  }
+
+  // Init: localStorage → light default
+  const savedTheme = localStorage.getItem('evenet-theme');
+  applyTheme(savedTheme === 'dark');
+
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const dark = !isDark();
+    applyTheme(dark);
+    localStorage.setItem('evenet-theme', dark ? 'dark' : 'light');
+  });
+
+  // ── Background terminal streams ───────────────────────────────
+  const bgCanvas = document.getElementById('bg-canvas');
+  const bgCtx    = bgCanvas.getContext('2d');
+
+  const BG_WORDS = [
+    'kernel init', 'alloc()', '0xff3a', 'noise[3]', 'spawn()',
+    'delta_t', 'vertex[]', 'fragment', 'gl.draw', 'loop {',
+    '} end', '[OK]', 'err 404', 'timeout', 'retry...',
+    'mesh.gen', 'buf.flush', 'rng.seed', './run.sh', 'build',
+    'chmod +x', 'ls -la', 'grep -r', 'ping...', '200 OK',
+    'null', 'void', 'async', 'emit()', 'resolve',
+    'wave fn', 'collapse', 'entropy', 'cell[x,y]', 'alive',
+    'dead', 'diffuse', 'erode()', 'p.noise', 'sin(t)',
+    'cos(t)', 'lerp()', 'map(x)', 'HSB()', 'blendMode',
+    'ADD', 'frameCount', 'drawCall', 'shader.frag', 'uniform',
+  ];
+
+  function initBg() {
+    bgCanvas.width  = window.innerWidth;
+    bgCanvas.height = window.innerHeight;
+
+    const FONT_H    = 12;
+    const LINE_H    = FONT_H * 2.2;
+    const COL_W     = 130;
+    const NUM_COLS  = Math.ceil(bgCanvas.width  / COL_W) + 1;
+    const NUM_LINES = Math.ceil(bgCanvas.height / LINE_H) + 4;
+
+    const cols = Array.from({ length: NUM_COLS }, (_, i) => ({
+      x:     i * COL_W + 10 + (Math.random() * 40 - 20),
+      y:     Math.random() * bgCanvas.height * -1,
+      speed: 0.25 + Math.random() * 0.45,
+      lines: Array.from({ length: NUM_LINES }, () =>
+        BG_WORDS[Math.floor(Math.random() * BG_WORDS.length)]
+      ),
+    }));
+
+    function tickBg() {
+      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+      bgCtx.font      = `300 ${FONT_H}px 'DM Mono', monospace`;
+      bgCtx.fillStyle = isDark() ? 'rgba(240, 246, 240, 0.08)' : 'rgba(0, 0, 0, 0.18)';
+      bgCtx.textAlign = 'left';
+
+      for (const col of cols) {
+        col.y += col.speed;
+
+        const totalH = col.lines.length * LINE_H;
+        if (col.y > bgCanvas.height + LINE_H) {
+          col.y -= totalH + bgCanvas.height;
+          const ri = Math.floor(Math.random() * col.lines.length);
+          col.lines[ri] = BG_WORDS[Math.floor(Math.random() * BG_WORDS.length)];
+        }
+
+        col.lines.forEach((text, i) => {
+          const fy = col.y + i * LINE_H;
+          if (fy < -LINE_H || fy > bgCanvas.height + LINE_H) return;
+          bgCtx.fillText(text, col.x, fy);
+        });
+      }
+      requestAnimationFrame(tickBg);
+    }
+    tickBg();
+
+    window.addEventListener('resize', () => {
+      bgCanvas.width  = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+    });
+  }
+
+  initBg();
+
   // ── Splash intro ──────────────────────────────────────────────
   const BOOT_LINES = [
     'initializing eve.net kernel...',
@@ -426,7 +586,9 @@
   // ── Main page init (runs after splash exits) ──────────────────
   function startPage() {
     dockReady = true;
-    document.querySelector('.hero').style.visibility = 'visible';
+    const hero = document.querySelector('.hero');
+    hero.style.visibility = 'visible';
+    requestAnimationFrame(() => { hero.style.opacity = '1'; });
 
     // Hero typing
     const titleText   = "Eve Net";
@@ -462,7 +624,8 @@
     el.textContent = '+';
     const size = 9 + Math.random() * 9;
     el.style.fontSize  = size + 'px';
-    el.style.color     = `rgba(240,246,240,${0.5 + Math.random() * 0.45})`;
+    const alpha = 0.4 + Math.random() * 0.4;
+    el.style.color = isDark() ? `rgba(240,246,240,${alpha})` : `rgba(17,17,17,${alpha})`;
     el.style.left      = x + 'px';
     el.style.top       = y + 'px';
     document.body.appendChild(el);
@@ -484,7 +647,7 @@
     const now = performance.now();
     if (now - lastSpawn < 30) return; // max ~33 particles/sec
     lastSpawn = now;
-    if (Math.random() > 0.55) return; // ~45% spawn chance per tick
+    if (Math.random() > 0.90) return; // ~10% spawn chance per tick
     spawnParticle(e.clientX, e.clientY);
   });
 
