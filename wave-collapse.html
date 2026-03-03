@@ -3,503 +3,885 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wave Collapse Image Pattern</title>
-  <link href="https://fonts.googleapis.com/css?family=Titillium+Web:400,600,700&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>Wave Collapse</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Oxanium:wght@300;400;600;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg:         #030c16;
+      --cyan:       #00c8f0;
+      --cyan-dim:   rgba(0, 200, 240, 0.25);
+      --cyan-glow:  rgba(0, 200, 240, 0.07);
+      --cyan-mid:   #00788f;
+      --border:     rgba(0, 200, 240, 0.20);
+      --text:       #5a9ab8;
+      --text-bright:#b4dcea;
+      --grid-line:  rgba(0, 160, 220, 0.07);
+      --header-h:   72px;
+      --toolbar-h:  64px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      font-family: 'Titillium Web', Arial, sans-serif;
-      background: #0a060a;
-      color: #f5f5f5;
-      margin: 0;
-      min-height: 100vh;
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 40px 40px;
+      color: var(--text);
+      font-family: 'Syne Mono', 'Courier New', monospace;
+      height: 100vh;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-start;
     }
-    h1 {
-      font-size: 2.2em;
-      font-weight: 700;
-      margin: 32px 0 18px 0;
-      letter-spacing: 0.04em;
-      color: #fff;
-    }
+
+    /* ── bg pixel canvas ── */
     canvas#bg-pixels {
       position: fixed;
-      top: 0;
-      left: 0;
+      inset: 0;
       width: 100vw !important;
       height: 100vh !important;
-      z-index: -1;
+      z-index: 0;
       image-rendering: pixelated;
-      box-shadow: none !important;
-      border-radius: 0 !important;
-      background: none !important;
       display: block;
-      margin: 0;
+      opacity: 0.6;
     }
-    canvas:not(#bg-pixels) {
-      width: 512px;
-      height: 512px;
-      max-width: 100vw;
-      max-height: 100vw;
-      aspect-ratio: 1 / 1;
-      box-shadow: 0 2px 30px rgba(0, 0, 0, 0.95);
-      border-radius: 4px;
-      background: #140e14;
-      display: block;
-      margin: 0 auto 24px auto;
+
+    /* ── top header ── */
+    header {
       position: relative;
-      box-sizing: border-box;
-    }
-    @media (max-width: 700px) {
-      canvas:not(#bg-pixels) {
-        width: 80vw;
-        height: 80vw;
-        max-width: 600px;
-        max-height: 600px;
-      }
-    }
-    .controls-bar {
+      z-index: 10;
+      width: 100%;
+      height: var(--header-h);
       display: flex;
-      gap: 16px;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      margin-bottom: 24px;
-      margin-top: 8px;
+      gap: 3px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(3, 12, 22, 0.85);
+      backdrop-filter: blur(6px);
+      flex-shrink: 0;
     }
-    @media (max-width: 700px) {
-      .controls-bar {
-        flex-direction: column;
-        gap: 8px;
-        width: 34vw;
-        max-width: 400px;
-        margin-left: auto;
-        margin-right: auto;
-      }
+
+    .header-eyebrow {
+      font-family: 'Syne Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      color: var(--cyan-mid);
+      text-transform: uppercase;
     }
-    input[type="file"] {
-      background: none;
-      color: #fff;
-      border: none;
-      font-size: 1em;
-      font-family: inherit;
-      padding: 0;
-      margin: 0;
-      outline: none;
+
+    h1 {
+      font-family: 'Oxanium', sans-serif;
+      font-weight: 700;
+      font-size: clamp(1rem, 2.5vw, 1.45rem);
+      letter-spacing: 0.18em;
+      color: var(--text-bright);
+      text-transform: uppercase;
     }
-    button {
-      background: #140e14;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 1em;
-      font-weight: 600;
-      padding: 6px 14px;
-      margin: 0;
-      transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-      box-shadow: 0 1px 6px #0004;
+
+    /* ── canvas area (fills between header and toolbar) ── */
+    #canvas-area {
+      position: relative;
+      z-index: 10;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      width: 100%;
+    }
+
+    /* canvas frame with corner brackets */
+    .canvas-frame {
+      position: relative;
+      display: inline-block;
+      line-height: 0;
+    }
+
+    .canvas-frame canvas:not(#bg-pixels) {
+      display: block;
+      max-width: min(512px, 90vw);
+      max-height: calc(100vh - var(--header-h) - var(--toolbar-h) - 32px);
+      aspect-ratio: 1 / 1;
+      width: auto;
+      height: auto;
+      image-rendering: pixelated;
+    }
+
+    /* corner brackets */
+    .corner {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-color: var(--cyan);
+      border-style: solid;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+    .canvas-frame:hover .corner { opacity: 1; }
+
+    .corner.tl { top: -3px;    left: -3px;   border-width: 2px 0 0 2px; }
+    .corner.tr { top: -3px;    right: -3px;  border-width: 2px 2px 0 0; }
+    .corner.bl { bottom: -3px; left: -3px;   border-width: 0 0 2px 2px; }
+    .corner.br { bottom: -3px; right: -3px;  border-width: 0 2px 2px 0; }
+
+    /* scan-line overlay on canvas */
+    .canvas-frame::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0, 0, 0, 0.06) 3px,
+        rgba(0, 0, 0, 0.06) 4px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ── bottom toolbar ── */
+    #toolbar {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      height: var(--toolbar-h);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      border-top: 1px solid var(--border);
+      background: rgba(3, 12, 22, 0.92);
+      backdrop-filter: blur(8px);
+      flex-shrink: 0;
+      padding: 0 20px;
+    }
+
+    /* vert divider */
+    .t-sep {
+      width: 1px;
+      height: 28px;
+      background: var(--border);
+      margin: 0 16px;
+      flex-shrink: 0;
+    }
+
+    /* all toolbar buttons share this base */
+    .t-btn {
+      font-family: 'Syne Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text);
+      background: transparent;
+      border: 1px solid var(--border);
+      padding: 8px 18px;
       cursor: pointer;
-      outline: none;
-      letter-spacing: 0.02em;
-      transition: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      transition: all 0.14s;
+      white-space: nowrap;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      text-decoration: none;
     }
-    button:active {
-      transform: scale(0.95);
+
+    .t-btn:hover:not([disabled]) {
+      color: var(--cyan);
+      border-color: var(--cyan-dim);
+      background: var(--cyan-glow);
+      box-shadow: 0 0 12px rgba(0, 200, 240, 0.1);
     }
-    button:hover {
-      background: #20171e;
-      box-shadow: 0 4px 12px #0008;
+
+    .t-btn:active:not([disabled]) {
+      transform: scale(0.97);
     }
-    button[disabled] {
-      opacity: 0.5;
+
+    .t-btn[disabled] {
+      opacity: 0.35;
       cursor: default;
     }
-    @media (max-width: 700px) {
-      button {
-        font-size: 0.9em;
-        padding: 6px 0.5em;
-        min-width: 0;
-        max-width: 100%;
-        width: 100%;
-        box-sizing: border-box;
-        margin-left: 0;
-        margin-right: 0;
-      }
+
+    /* file input inside label */
+    .t-btn input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
     }
+
+    .t-btn.file-label {
+      position: relative;
+    }
+
+    /* primary action — collapse button */
+    .t-btn.primary {
+      color: var(--cyan);
+      border-color: rgba(0, 200, 240, 0.45);
+    }
+    .t-btn.primary:hover:not([disabled]) {
+      background: rgba(0, 200, 240, 0.12);
+      box-shadow: 0 0 16px rgba(0, 200, 240, 0.18);
+    }
+
+    /* status pill */
+    #status-text {
+      font-family: 'Syne Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--cyan-mid);
+      padding: 4px 10px;
+      border: 1px solid rgba(0, 120, 143, 0.35);
+      white-space: nowrap;
+      min-width: 120px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    #status-text.active {
+      color: var(--cyan);
+      border-color: var(--cyan-dim);
+      background: var(--cyan-glow);
+      text-shadow: 0 0 8px var(--cyan);
+    }
+
+    /* icon-like prefix */
+    .t-btn .btn-icon {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    /* ── home button ── */
+    #home-btn {
+      position: fixed;
+      top: 10px; right: 10px;
+      z-index: 1000;
+      padding: 8px;
+      background: rgba(0,0,0,0.8);
+      border: 1px solid rgba(0, 200, 240, 0.25);
+      border-radius: 4px;
+      text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #home-btn:hover {
+      transform: scale(1.2) rotate(5deg);
+      background: rgba(0, 160, 200, 0.85);
+      border-color: rgba(0, 220, 255, 0.7);
+    }
+    #home-btn:active { transform: scale(0.9) rotate(-5deg); }
+
   </style>
 </head>
 <body>
-  <canvas id="bg-pixels" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;image-rendering:pixelated;"></canvas>
-  <h1>Wave Collapse Image Pattern</h1>
-  <div class="controls-bar">
-    <input type="file" id="imgInput" accept="image/*">
-    <button id="fractalBtn">Generate Image</button>
-    <button id="collapseBtn" disabled>Wave Collapse!</button>
+
+  <a id="home-btn" href="index.html"
+    onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
+    onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
+    <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+         alt="home" style="width:18px;height:18px;object-fit:contain;">
+  </a>
+
+  <!-- pixel bg -->
+  <canvas id="bg-pixels"></canvas>
+
+  <!-- header -->
+  <header>
+    <span class="header-eyebrow">[ WFC ] — superposition tile synthesis</span>
+    <h1>Wave Function Collapse</h1>
+  </header>
+
+  <!-- canvas area -->
+  <div id="canvas-area">
+    <div class="canvas-frame" id="canvas-frame">
+      <span class="corner tl"></span>
+      <span class="corner tr"></span>
+      <span class="corner bl"></span>
+      <span class="corner br"></span>
+      <!-- p5 canvas injected here -->
+    </div>
   </div>
+
+  <!-- toolbar -->
+  <div id="toolbar">
+    <label class="t-btn file-label" title="Load source image">
+      <input type="file" id="imgInput" accept="image/*">
+      <span class="btn-icon">⊕</span> Load Source
+    </label>
+
+    <div class="t-sep"></div>
+
+    <button class="t-btn" id="fractalBtn">
+      <span class="btn-icon">◈</span> Generate
+    </button>
+
+    <div class="t-sep"></div>
+
+    <button class="t-btn primary" id="collapseBtn" disabled>
+      <span class="btn-icon">⟳</span> Collapse
+    </button>
+
+    <div class="t-sep"></div>
+
+    <span id="status-text">READY</span>
+  </div>
+
   <script>
-    // --- Pixelated background ---
+    // ── Pixel background ──────────────────────────────────────────────────────
     function drawPixelBg() {
-      const bg = document.getElementById('bg-pixels');
-      // Match grid resolution (tileSize)
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      const t = tileSize || 8;
+      const bg  = document.getElementById('bg-pixels');
+      const w   = window.innerWidth;
+      const h   = window.innerHeight;
+      const t   = tileSize || 8;
       const cols = Math.ceil(w / t);
       const rows = Math.ceil(h / t);
-      bg.width = cols;
+      bg.width  = cols;
       bg.height = rows;
       const ctx = bg.getContext('2d');
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
-          // Slightly random very dark purple shade
-          const base = 9 + Math.floor(Math.random() * 5); // 9-13 for R/B
-          const purple = 3 + Math.floor(Math.random() * 5); // 3-7 for G
-          ctx.fillStyle = `rgb(${base},${purple},${base})`;
-          ctx.fillRect(x, y, 0.8, 0.8); 
+          const r = Math.floor(Math.random() * 3) + 1;
+          const g = Math.floor(Math.random() * 8) + 8;
+          const b = Math.floor(Math.random() * 10) + 18;
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.fillRect(x, y, 0.8, 0.8);
         }
       }
     }
     window.addEventListener('resize', drawPixelBg);
     window.addEventListener('DOMContentLoaded', drawPixelBg);
-    // Redraw bg if tileSize changes (after WFC start)
-    const origStartWFC = startWFC;
-    startWFC = function() { drawPixelBg(); origStartWFC.apply(this, arguments); };
+
+    // ── Status helper ─────────────────────────────────────────────────────────
+    function setStatus(msg, active) {
+      const el = document.getElementById('status-text');
+      el.textContent = msg;
+      el.classList.toggle('active', !!active);
+    }
+
+    // ── WFC state ─────────────────────────────────────────────────────────────
     let img;
     let input, collapseBtn, fractalBtn;
     let canvas;
-    let tileSize = 8; // 512/8 = 64
-    let tiles = [];
-    let grid = [];
-    let wfcReady = false;
-    let animating = false;
+    let tileSize = 8;
     let tilesX, tilesY;
-    let loaderDiv;
+
+    const MAX_TILES = 300;  // cap — keeps init O(small) and WFC interesting
+
+    let wfcTiles  = [];   // [{pixels:Uint8Array, edges, count}]
+    let wfcCompat = [];   // [{top:Int16Array, right:Int16Array, bottom:Int16Array, left:Int16Array}]
+    let wfcN      = 0;    // number of unique tiles after capping
+    let cellPoss  = null; // Uint8Array(tilesY*tilesX*wfcN) — flat possibility grid
+    let cellCnt   = null; // Uint16Array(tilesY*tilesX)     — option count per cell
+    let wfcAnimId = null;
+
+    const WFC_DIRS = [
+      { dx:  0, dy: -1, dir: 'top'    },
+      { dx:  1, dy:  0, dir: 'right'  },
+      { dx:  0, dy:  1, dir: 'bottom' },
+      { dx: -1, dy:  0, dir: 'left'   },
+    ];
+
+    function startWFC() {
+      if (!img) return;
+      if (wfcAnimId) { cancelAnimationFrame(wfcAnimId); wfcAnimId = null; }
+      drawPixelBg();
+      setStatus('EXTRACTING…', true);
+
+      setTimeout(() => {
+        // Re-composite on solid bg to normalise any remaining transparency,
+        // then read pixels — bypasses p5 pixelDensity complications.
+        background(3, 12, 22);
+        image(img, 0, 0, width, height);
+        const ctx  = canvas.elt.getContext('2d');
+        const { data } = ctx.getImageData(0, 0, width, height);
+
+        const { tiles, srcGrid, srcGW, srcGH } = fastExtractTiles(data, width, height, tileSize);
+        wfcTiles  = tiles;
+        wfcCompat = fastBuildAdjacency(tiles, srcGrid, srcGW, srcGH);
+        wfcN      = wfcTiles.length;
+
+        if (wfcN === 0) { setStatus('ERROR: no tiles', false); return; }
+
+        tilesX = Math.ceil(width  / tileSize);
+        tilesY = Math.ceil(height / tileSize);
+        const cells = tilesX * tilesY;
+
+        // Flat typed arrays — grid init is a single fill(), not N×cells Set insertions
+        cellPoss = new Uint8Array(cells * wfcN).fill(1);
+        cellCnt  = new Uint16Array(cells).fill(wfcN);
+
+        setStatus(`COLLAPSING · ${wfcN} tiles`, true);
+        runWFCStep();
+      }, 20);
+    }
+
+    // ── Tile extraction ───────────────────────────────────────────────────────
+    // Deduplicates by full pixel content (FNV-1a hash), records each tile's
+    // source-grid position so adjacency can be built from actual neighbours.
+    function fastExtractTiles(pixels, W, H, T) {
+      const gW      = Math.floor(W / T);
+      const gH      = Math.floor(H / T);
+      const tileMap = new Map();  // hash → tile index
+      const tiles   = [];
+      const srcGrid = new Int32Array(gW * gH);  // source tile index per cell
+
+      for (let gy = 0; gy < gH; gy++) {
+        for (let gx = 0; gx < gW; gx++) {
+          const px = new Uint8Array(T * T * 4);
+          let h = 0x811c9dc5;
+          for (let y = 0; y < T; y++) {
+            for (let x = 0; x < T; x++) {
+              const si = ((gy * T + y) * W + (gx * T + x)) * 4;
+              const di = (y * T + x) * 4;
+              px[di]   = pixels[si];
+              px[di+1] = pixels[si+1];
+              px[di+2] = pixels[si+2];
+              px[di+3] = 255;
+              // FNV-1a over RGB
+              h ^= pixels[si];   h = Math.imul(h, 0x01000193) >>> 0;
+              h ^= pixels[si+1]; h = Math.imul(h, 0x01000193) >>> 0;
+              h ^= pixels[si+2]; h = Math.imul(h, 0x01000193) >>> 0;
+            }
+          }
+          let idx;
+          if (tileMap.has(h)) {
+            idx = tileMap.get(h);
+            tiles[idx].count++;
+          } else {
+            idx = tiles.length;
+            tileMap.set(h, idx);
+            tiles.push({ pixels: px, count: 1 });
+          }
+          srcGrid[gy * gW + gx] = idx;
+        }
+      }
+
+      // Keep top MAX_TILES by frequency; remap srcGrid to new indices.
+      const order = Array.from({ length: tiles.length }, (_, i) => i)
+                         .sort((a, b) => tiles[b].count - tiles[a].count);
+      const kept  = order.slice(0, MAX_TILES);
+      const remap = new Int32Array(tiles.length).fill(-1);
+      const out   = [];
+      kept.forEach((oldIdx, newIdx) => { remap[oldIdx] = newIdx; out.push(tiles[oldIdx]); });
+      for (let i = 0; i < srcGrid.length; i++) srcGrid[i] = remap[srcGrid[i]];
+
+      return { tiles: out, srcGrid, srcGW: gW, srcGH: gH };
+    }
+
+    // ── Source-position adjacency ─────────────────────────────────────────────
+    // Builds compat from which tile types were literally neighbours in the source.
+    // No quantisation, no false positives — eliminates vertical streak artifacts.
+    function fastBuildAdjacency(tiles, srcGrid, gW, gH) {
+      const N      = tiles.length;
+      const compat = Array.from({ length: N }, () => ({
+        top: new Set(), right: new Set(), bottom: new Set(), left: new Set()
+      }));
+
+      for (let ty = 0; ty < gH; ty++) {
+        for (let tx = 0; tx < gW; tx++) {
+          const a = srcGrid[ty * gW + tx];
+          if (a < 0) continue;
+          if (tx + 1 < gW) {
+            const b = srcGrid[ty * gW + tx + 1];
+            if (b >= 0) { compat[a].right.add(b); compat[b].left.add(a); }
+          }
+          if (ty + 1 < gH) {
+            const b = srcGrid[(ty + 1) * gW + tx];
+            if (b >= 0) { compat[a].bottom.add(b); compat[b].top.add(a); }
+          }
+        }
+      }
+
+      return Array.from({ length: N }, (_, i) => ({
+        top:    new Int16Array(compat[i].top),
+        right:  new Int16Array(compat[i].right),
+        bottom: new Int16Array(compat[i].bottom),
+        left:   new Int16Array(compat[i].left),
+      }));
+    }
 
     function setup() {
       let size = 512;
       if (window.innerWidth < 700) size = Math.max(window.innerWidth * 0.8, 180);
       canvas = createCanvas(size, size);
-      background(30);
-      input = select('#imgInput');
+      canvas.parent('canvas-frame');
+      pixelDensity(1);
+      background(3, 12, 22);
+      input       = select('#imgInput');
       collapseBtn = select('#collapseBtn');
-      fractalBtn = select('#fractalBtn');
+      fractalBtn  = select('#fractalBtn');
       input.changed(handleFile);
       collapseBtn.mousePressed(startWFC);
       fractalBtn.mousePressed(generateFractalArt);
       noSmooth();
-        // loaderDiv is no longer needed
     }
-    // --- Fractal Art Generator ---
+
+    // ── Fractal / moiré art generator ─────────────────────────────────────────
     function generateFractalArt() {
-      // Use requestAnimationFrame to allow spinner to animate
+      setStatus('GENERATING…', true);
       requestAnimationFrame(() => {
         setTimeout(() => {
-          // Generate a fractal flame/IFS spiral fractal
           let gfx = createGraphics(512, 512);
           gfx.background(0, 0, 0, 255);
           drawFractalFlame(gfx);
           img = gfx.get();
           image(img, 0, 0, width, height);
           collapseBtn.removeAttribute('disabled');
-            // Loader is no longer needed
+          setStatus('SOURCE READY', true);
         }, 10);
       });
     }
 
-    // Simple fractal flame/IFS spiral generator
     function drawFractalFlame(gfx) {
-      gfx.colorMode(HSB, 360, 255, 255, 255);
-      gfx.noStroke();
-      let w = 512, h = 512;
-      let cx = w/2, cy = h/2;
-      let points = 400000; // denser
-      // Add randomness to parameters
-      let spread = w; // always fill canvas
-      let jitter = 70 + random(50);
-      let spiralA = 0.78 + random(0.15);
-      let spiralB = 0.22 + random(0.15);
-      let spiralTheta = 1.2 + random(0.8);
-      let spiralSin = 0.8 + random(0.5);
-      let startX = random(-1, 1);
-      let startY = random(-1, 1);
-      let colorSeed = random(1000);
-      let x = startX, y = startY;
-      // Snap to tile grid
-      let tileSize = 4; // use the same tileSize as the main render, or make this a parameter if needed
-      for (let i = 0; i < points; i++) {
-        // Spiral IFS: polar coordinates with nonlinearity
-        let r = sqrt(x*x + y*y);
-        let theta = atan2(y, x);
-        // Nonlinear spiral transformation
-        let newR = r * (spiralA + spiralB * sin(theta*3 + i*0.0001 + colorSeed));
-        let newTheta = theta + spiralTheta + spiralSin * sin(r*2 + i*0.0002 + colorSeed);
-        x = newR * cos(newTheta) + 0.2 * sin(i*0.01 + colorSeed);
-        y = newR * sin(newTheta) + 0.2 * cos(i*0.013 + colorSeed);
-        // Map to screen
-        let px = cx + x * spread;
-        let py = cy + y * spread;
-        // Snap px, py to tile grid
-        px = Math.floor(px / tileSize) * tileSize;
-        py = Math.floor(py / tileSize) * tileSize;
-        // Colorful spiral
-        let hue = (180 + 120 * sin(theta*2 + i*0.0005 + colorSeed) + i*0.01) % 360;
-        let sat = 200 + 55 * sin(i*0.0003 + r*2 + colorSeed);
-        let bri = 200 + 55 * cos(i*0.0002 + theta*3 + colorSeed);
-        let alpha = 22 + 32 * sin(i*0.0001 + r*3 + colorSeed);
-        if (px >= 0 && px < w && py >= 0 && py < h) {
-          gfx.fill(hue, sat, bri, alpha);
-          gfx.rect(px, py, tileSize, tileSize);
+      const type = Math.floor(random(3));
+      if      (type === 0) drawCircuitBoard(gfx);
+      else if (type === 1) drawCrystalLattice(gfx);
+      else                 drawWaveField(gfx);
+    }
+
+    // ── Generator 1: Circuit board pipe traces ────────────────────────────────
+    // Uses an 8×8 grid (matching tileSize) so WFC tiles align exactly with cells.
+    // Connections between adjacent cells are decided randomly — tiles with a trace
+    // running to an edge will match tiles where that trace continues from that edge.
+    function drawCircuitBoard(gfx) {
+      const W = 512, H = 512, GRID = 8;
+      const cols = W / GRID, rows = H / GRID;
+      gfx.colorMode(RGB, 255, 255, 255, 255);
+      gfx.background(3, 12, 22);
+
+      // Random connection matrix: hEdge[r][c] = horizontal connection right of cell (r,c)
+      const density = random(0.28, 0.52);
+      const hEdge = Array.from({length: rows},   () => Array.from({length: cols-1}, () => random() < density));
+      const vEdge = Array.from({length: rows-1}, () => Array.from({length: cols},   () => random() < density));
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * GRID, y = r * GRID;
+          const cx = x + GRID/2, cy = y + GRID/2;
+          const right = c < cols-1 && hEdge[r][c];
+          const left  = c > 0      && hEdge[r][c-1];
+          const down  = r < rows-1 && vEdge[r][c];
+          const up    = r > 0      && vEdge[r-1][c];
+          const count = (right?1:0) + (left?1:0) + (down?1:0) + (up?1:0);
+          if (count === 0) continue;
+
+          // Vary brightness: a few high-signal traces stand out
+          const bright = random() < 0.18;
+          const alpha  = bright ? 230 : 155;
+          const green  = bright ? 210 : 130;
+          const blue   = bright ? 255 : 185;
+          gfx.stroke(0, green, blue, alpha);
+          gfx.strokeWeight(bright ? 2.5 : 1.8);
+          gfx.noFill();
+
+          if (right) gfx.line(cx, cy, x + GRID, cy);
+          if (left)  gfx.line(cx, cy, x,        cy);
+          if (down)  gfx.line(cx, cy, cx,        y + GRID);
+          if (up)    gfx.line(cx, cy, cx,        y);
+
+          // Junction dot at multi-way intersections
+          if (count >= 2) {
+            gfx.fill(0, green, blue, alpha);
+            gfx.noStroke();
+            gfx.circle(cx, cy, count >= 3 ? 4.5 : 3);
+          }
         }
       }
-      gfx.colorMode(RGB, 255, 255, 255, 255);
+
+      // Faint grid overlay to reinforce the PCB look
+      gfx.stroke(0, 50, 70, 35);
+      gfx.strokeWeight(0.5);
+      gfx.noFill();
+      for (let c = 0; c <= cols; c++) gfx.line(c * GRID, 0, c * GRID, H);
+      for (let r = 0; r <= rows; r++) gfx.line(0, r * GRID, W, r * GRID);
     }
-    
+
+    // ── Generator 2: Crystal Voronoi lattice ──────────────────────────────────
+    // Uses createImage() for pixel manipulation — gfx.loadPixels() on a Graphics
+    // object doesn't reliably flush writes back, but createImage is designed for this.
+    function drawCrystalLattice(gfx) {
+      const W = 512, H = 512;
+      const N = 28 + Math.floor(random(18));  // 28-46 seeds
+
+      // Give each seed a colour tier so cells are visually distinguishable.
+      // Tiers cycle through four clearly different brightness zones.
+      const PALETTE = [
+        [  3,  18,  45 ],  // tier 0 — dark blue
+        [  2,  50, 100 ],  // tier 1 — mid teal
+        [  0,  95, 150 ],  // tier 2 — ocean
+        [  0, 155, 200 ],  // tier 3 — light cyan-teal
+      ];
+
+      const sx   = Array.from({length: N}, () => random(W));
+      const sy   = Array.from({length: N}, () => random(H));
+      // Shuffle tier assignments so adjacent seeds often differ
+      const tier = Array.from({length: N}, (_, i) => (i * 3 + Math.floor(random(2))) % 4);
+
+      const im = createImage(W, H);
+      im.loadPixels();
+
+      for (let py = 0; py < H; py++) {
+        for (let px = 0; px < W; px++) {
+          let d1sq = Infinity, d2sq = Infinity, nearest = 0;
+          for (let i = 0; i < N; i++) {
+            const dx = px - sx[i], dy = py - sy[i];
+            const dsq = dx*dx + dy*dy;
+            if (dsq < d1sq) { d2sq = d1sq; d1sq = dsq; nearest = i; }
+            else if (dsq < d2sq) { d2sq = dsq; }
+          }
+
+          // ratio → 1 at the Voronoi boundary, → 0 deep inside a cell
+          const ratio    = d2sq === Infinity ? 0 : d1sq / d2sq;
+          const isEdge   = ratio > 0.88;
+          const glowEdge = ratio > 0.65;
+
+          let r, g, b;
+          if (isEdge) {
+            // Hard boundary — bright cyan line
+            r = 0; g = 210; b = 248;
+          } else if (glowEdge) {
+            // Soft glow fading from cyan to cell colour
+            const t  = (ratio - 0.65) / 0.23;           // 0 → 1 toward edge
+            const c  = PALETTE[tier[nearest]];
+            r = Math.round(c[0] + t * (0   - c[0]));
+            g = Math.round(c[1] + t * (210 - c[1]));
+            b = Math.round(c[2] + t * (248 - c[2]));
+          } else {
+            // Cell interior — base tier colour + small per-seed nudge
+            const c   = PALETTE[tier[nearest]];
+            const nud = (nearest % 6) - 3;              // -3 … +2 brightness nudge
+            r = Math.max(0, c[0] + nud);
+            g = Math.max(0, c[1] + nud * 3);
+            b = Math.max(0, c[2] + nud * 3);
+          }
+
+          const idx = (py * W + px) * 4;
+          im.pixels[idx]   = r;
+          im.pixels[idx+1] = g;
+          im.pixels[idx+2] = b;
+          im.pixels[idx+3] = 255;
+        }
+      }
+
+      im.updatePixels();
+      gfx.image(im, 0, 0);
+    }
+
+    // ── Generator 3: Quantized wave interference field ────────────────────────
+    function drawWaveField(gfx) {
+      const W = 512, H = 512;
+
+      const waves = [
+        { a: random(TWO_PI), f: random(0.022, 0.055), p: random(TWO_PI), w: 1.0 },
+        { a: random(TWO_PI), f: random(0.018, 0.048), p: random(TWO_PI), w: 0.9 },
+        { a: random(TWO_PI), f: random(0.012, 0.032), p: random(TWO_PI), w: 0.6 },
+        { a: random(TWO_PI), f: random(0.007, 0.018), p: random(TWO_PI), w: 0.4 },
+      ];
+      const totalAmp = waves.reduce((s, w) => s + w.w, 0);
+      const LEVELS   = 7;
+
+      // Pre-compute per-wave direction components outside the inner loop
+      const wcos = waves.map(wv => wv.w * Math.cos(wv.a));
+      const wsin = waves.map(wv => wv.w * Math.sin(wv.a));
+
+      const im = createImage(W, H);
+      im.loadPixels();
+
+      for (let py = 0; py < H; py++) {
+        for (let px = 0; px < W; px++) {
+          let val = 0;
+          for (let wi = 0; wi < waves.length; wi++) {
+            const wv = waves[wi];
+            val += wv.w * sin((wcos[wi] * px + wsin[wi] * py) * wv.f + wv.p);
+          }
+          const norm  = (val / totalAmp + 1) * 0.5;
+          const level = Math.floor(norm * LEVELS);
+
+          let r, g, b;
+          switch (level) {
+            case 0:  r =  2; g =   8; b =  18; break;
+            case 1:  r =  2; g =  18; b =  38; break;
+            case 2:  r =  2; g =  38; b =  68; break;
+            case 3:  r =  2; g =  70; b = 105; break;
+            case 4:  r =  4; g = 110; b = 155; break;
+            case 5:  r =  8; g = 165; b = 205; break;
+            default: r = 20; g = 210; b = 248; break;
+          }
+
+          const idx = (py * W + px) * 4;
+          im.pixels[idx]   = r;
+          im.pixels[idx+1] = g;
+          im.pixels[idx+2] = b;
+          im.pixels[idx+3] = 255;
+        }
+      }
+
+      im.updatePixels();
+      gfx.image(im, 0, 0);
+    }
+
     function handleFile() {
       const file = input.elt.files[0];
       if (file && file.type.startsWith('image')) {
         clear();
-        background(30);
+        background(3, 12, 22);
+        setStatus('LOADING…', true);
         loadImage(URL.createObjectURL(file), loaded => {
-          // Always resize to 512x512 for consistency
-          let gfx = createGraphics(512, 512);
-          gfx.background(0,0,0,0);
+          let gfx   = createGraphics(512, 512);
+          gfx.background(3, 12, 22);
           let scale = Math.min(512 / loaded.width, 512 / loaded.height);
-          let w = Math.round(loaded.width * scale);
-          let h = Math.round(loaded.height * scale);
+          let w     = Math.round(loaded.width  * scale);
+          let h     = Math.round(loaded.height * scale);
           gfx.image(loaded, 0, 0, w, h);
           img = gfx.get();
           image(img, 0, 0, width, height);
           collapseBtn.removeAttribute('disabled');
+          setStatus('SOURCE READY', true);
         });
       }
     }
 
-    function startWFC() {
-      if (!img) return;
-      setTimeout(() => {
-        // 1. Extract unique tiles and their edges
-        tiles = extractTiles(img, tileSize);
-        // 2. Build adjacency rules
-        buildAdjacency(tiles);
-        // 3. Initialize grid to fill canvas
-        tilesX = Math.ceil(width / tileSize);
-        tilesY = Math.ceil(height / tileSize);
-        grid = [];
-        for (let y = 0; y < tilesY; y++) {
-          let row = [];
-          for (let x = 0; x < tilesX; x++) {
-            row.push({collapsed: false, options: [...Array(tiles.length).keys()]});
-          }
-          grid.push(row);
-        }
-        wfcReady = true;
-        // Simple fast collapse
-        simpleWFCCollapse();
-      }, 10);
-    }
+    // ── Animated WFC collapse — entropy-guided, flat typed-array grid ─────────
+    function runWFCStep() {
+      const BATCH = 200;
+      const N  = wfcN;
+      const gW = tilesX, gH = tilesY;
+      const allowed = new Uint8Array(N); // reused every propagation — no per-step alloc
 
-    // Simple, fast WFC: collapse all cells randomly, ignoring entropy/propagation
-    function simpleWFCCollapse() {
-      for (let y = 0; y < grid.length; y++) {
-        for (let x = 0; x < grid[0].length; x++) {
-          let cell = grid[y][x];
-          let pick = floor(random(tiles.length));
-          cell.options = [pick];
-          cell.collapsed = true;
+      for (let step = 0; step < BATCH; step++) {
+        // Linear scan for min-entropy uncollapsed cell
+        let minEnt = Infinity, minIdx = -1;
+        for (let i = 0, len = gW * gH; i < len; i++) {
+          const s = cellCnt[i];
+          if (s > 1 && s < minEnt) { minEnt = s; minIdx = i; }
         }
+        if (minIdx === -1) {
+          renderWFCGrid();
+          setStatus('COMPLETE', false);
+          return;
+        }
+
+        // Uniform-random collapse — frequency weighting biases to dominant tiles,
+        // producing all-one-color output for images with large uniform regions.
+        const base = minIdx * N;
+        const avail = [];
+        for (let t = 0; t < N; t++) if (cellPoss[base + t]) avail.push(t);
+        const chosen = avail[Math.floor(Math.random() * avail.length)] ?? 0;
+        cellPoss.fill(0, base, base + N);
+        cellPoss[base + chosen] = 1;
+        cellCnt[minIdx] = 1;
+
+        // Propagate from collapsed cell
+        const sx = minIdx % gW, sy = (minIdx / gW) | 0;
+        wfcPropagate(sx, sy, allowed);
       }
-      renderGrid();
-        // Loader is no longer needed
+
+      renderWFCGrid();
+      wfcAnimId = requestAnimationFrame(runWFCStep);
     }
 
-    // --- WFC Helper Functions ---
+    function wfcPropagate(sx, sy, allowed) {
+      const N  = wfcN;
+      const gW = tilesX, gH = tilesY;
+      const inQ   = new Uint8Array(gW * gH);
+      const queue = [sx + sy * gW];
+      inQ[queue[0]] = 1;
+      let head = 0;
 
-    function extractTiles(img, size) {
-      // Use a hash for uniqueness
-      let unique = [];
-      let hashes = new Set();
-      for (let y = 0; y <= img.height - size; y += size) {
-        for (let x = 0; x <= img.width - size; x += size) {
-          let t = img.get(x, y, size, size);
-          t.loadPixels();
-          let hash = '';
-          for (let i = 0; i < t.pixels.length; i++) { 
-            hash += t.pixels[i];
+      while (head < queue.length) {
+        const idx = queue[head++];
+        const cx  = idx % gW, cy = (idx / gW) | 0;
+        const base = idx * N;
+
+        for (const { dx, dy, dir } of WFC_DIRS) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= gW || ny >= gH) continue;
+          const ni = nx + ny * gW;
+          if (cellCnt[ni] <= 1) continue;
+
+          // Union of tiles permitted in this direction by our current options
+          allowed.fill(0);
+          for (let t = 0; t < N; t++) {
+            if (!cellPoss[base + t]) continue;
+            for (const ct of wfcCompat[t][dir]) allowed[ct] = 1;
           }
-          if (!hashes.has(hash)) {
-            hashes.add(hash);
-            let edges = getEdges(t);
-            unique.push({image: t, edges: edges, compatible: {top: [], right: [], bottom: [], left: []}});
-          }
-        }
-      }
-      return unique;
-    }
 
-    function getEdges(tile) {
-      let top = [], right = [], bottom = [], left = [];
-      for (let i = 0; i < tile.width; i++) top.push(tile.get(i, 0).toString());
-      for (let i = 0; i < tile.width; i++) bottom.push(tile.get(i, tile.height-1).toString());
-      for (let i = 0; i < tile.height; i++) left.push(tile.get(0, i).toString());
-      for (let i = 0; i < tile.width; i++) right.push(tile.get(tile.width-1, i).toString());
-      return {top, right, bottom, left};
-    }
-
-    function compareTiles(a, b) {
-      if (a.width !== b.width || a.height !== b.height) return false;
-      a.loadPixels(); b.loadPixels();
-      for (let i = 0; i < a.pixels.length; i++) {
-        if (a.pixels[i] !== b.pixels[i]) return false;
-      }
-      return true;
-    }
-
-    function buildAdjacency(tiles) {
-      // Simplest: compare only the color of the edge pixels
-      for (let i = 0; i < tiles.length; i++) {
-        for (let j = 0; j < tiles.length; j++) {
-          if (simpleEdgeMatch(tiles[i].edges.right, tiles[j].edges.left)) tiles[i].compatible.right.push(j);
-          if (simpleEdgeMatch(tiles[i].edges.left, tiles[j].edges.right)) tiles[i].compatible.left.push(j);
-          if (simpleEdgeMatch(tiles[i].edges.top, tiles[j].edges.bottom)) tiles[i].compatible.top.push(j);
-          if (simpleEdgeMatch(tiles[i].edges.bottom, tiles[j].edges.top)) tiles[i].compatible.bottom.push(j);
-        }
-      }
-        // Simple nearest neighbor pixel color check
-        function simpleEdgeMatch(a, b) {
-          if (a.length !== b.length) return false;
-          let tolerance = 64;
-          for (let i = 0; i < a.length; i++) {
-            // Parse color strings to arrays
-            let ca = a[i].split(',').map(Number);
-            let cb = b[i].split(',').map(Number);
-            // Compute Euclidean distance in RGB
-            let dist = Math.sqrt(
-              Math.pow(ca[0] - cb[0], 2) +
-              Math.pow(ca[1] - cb[1], 2) +
-              Math.pow(ca[2] - cb[2], 2)
-            );
-            if (dist > tolerance) return false;
-          }
-          return true;
-        }
-    }
-
-    function edgesMatch(a, b) {
-      if (a.length !== b.length) return false;
-      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-      return true;
-    }
-
-    function findLowestEntropyCell() {
-      let min = Infinity;
-      let candidates = [];
-      for (let y = 0; y < grid.length; y++) {
-        for (let x = 0; x < grid[0].length; x++) {
-          let cell = grid[y][x];
-          if (!cell.collapsed && cell.options.length < min && cell.options.length > 1) {
-            min = cell.options.length;
-            candidates = [{x, y}];
-          } else if (!cell.collapsed && cell.options.length === min) {
-            candidates.push({x, y});
-          }
-        }
-      }
-      if (candidates.length === 0) return null;
-      return random(candidates);
-    }
-
-    function collapseCell(x, y) {
-      let cell = grid[y][x];
-      let pick = random(cell.options);
-      cell.options = [pick];
-      cell.collapsed = true;
-    }
-
-    function propagate() {
-      // Queue-based propagation: only update immediate neighbors, avoid duplicate queue entries
-      const dirs = [
-        {dx: 0, dy: -1, dir: 'top', opp: 'bottom'},
-        {dx: 1, dy: 0, dir: 'right', opp: 'left'},
-        {dx: 0, dy: 1, dir: 'bottom', opp: 'top'},
-        {dx: -1, dy: 0, dir: 'left', opp: 'right'}
-      ];
-      // Initialize queue with all collapsed cells
-      let queue = [];
-      let inQueue = new Set();
-      function queueKey(x, y) { return x + ',' + y; }
-      for (let y = 0; y < grid.length; y++) {
-        for (let x = 0; x < grid[0].length; x++) {
-          if (grid[y][x].collapsed) {
-            queue.push({x, y});
-            inQueue.add(queueKey(x, y));
-          }
-        }
-      }
-      let iter = 0;
-      const maxIter = 10000;
-      while (queue.length > 0 && iter < maxIter) {
-        const {x, y} = queue.shift();
-        inQueue.delete(queueKey(x, y));
-        let cell = grid[y][x];
-        for (let d of dirs) {
-          let nx = x + d.dx, ny = y + d.dy;
-          if (nx < 0 || ny < 0 || nx >= grid[0].length || ny >= grid.length) continue;
-          let neighbor = grid[ny][nx];
-          if (!neighbor || neighbor.collapsed) continue;
-          // Collect all compatible options for this direction
-          let allowed = new Set(cell.options.flatMap(o => tiles[o].compatible[d.dir]));
-          let neighborOpts = neighbor.options.filter(opt => allowed.has(opt));
-          if (neighborOpts.length < neighbor.options.length) {
-            neighbor.options = neighborOpts;
-            // If neighbor collapses, enqueue its neighbors immediately
-            if (neighbor.options.length === 1) {
-              neighbor.collapsed = true;
-              for (let nd of dirs) {
-                let nnx = nx + nd.dx, nny = ny + nd.dy;
-                if (nnx < 0 || nny < 0 || nnx >= grid[0].length || nny >= grid.length) continue;
-                let nkey = queueKey(nnx, nny);
-                if (!inQueue.has(nkey)) {
-                  queue.push({x: nnx, y: nny});
-                  inQueue.add(nkey);
-                }
-              }
+          // Remove impossible options from neighbour
+          let changed = false;
+          const nbase = ni * N;
+          for (let t = 0; t < N; t++) {
+            if (cellPoss[nbase + t] && !allowed[t]) {
+              cellPoss[nbase + t] = 0;
+              cellCnt[ni]--;
+              changed = true;
             }
-            // Enqueue neighbor if not already in queue
-            let nkey = queueKey(nx, ny);
-            if (!inQueue.has(nkey)) {
-              queue.push({x: nx, y: ny});
-              inQueue.add(nkey);
+          }
+          // Contradiction — pick random tile but don't propagate it further;
+          // spreading an arbitrary choice creates cascading streak artifacts.
+          if (cellCnt[ni] === 0) {
+            const fb = Math.floor(Math.random() * N);
+            cellPoss[nbase + fb] = 1;
+            cellCnt[ni] = 1;
+            changed = false;
+          }
+
+          if (changed && !inQ[ni]) { inQ[ni] = 1; queue.push(ni); }
+        }
+      }
+    }
+
+    // ── Single putImageData call per frame — no p5 overhead ──────────────────
+    function renderWFCGrid() {
+      const T  = tileSize, N = wfcN, gW = tilesX;
+      const ctx = canvas.elt.getContext('2d');
+      const buf = ctx.createImageData(width, height);
+      const out = buf.data;
+
+      for (let cy = 0; cy < tilesY; cy++) {
+        for (let cx = 0; cx < tilesX; cx++) {
+          const ci   = cy * gW + cx;
+          const base = ci * N;
+          let ti = 0;
+          for (let t = 0; t < N; t++) { if (cellPoss[base + t]) { ti = t; break; } }
+          const tp = wfcTiles[ti].pixels;
+
+          for (let ty = 0; ty < T; ty++) {
+            const oy = cy * T + ty;
+            if (oy >= height) break;
+            const dstRow = oy * width;
+            const srcRow = ty * T;
+            for (let tx = 0; tx < T; tx++) {
+              const ox = cx * T + tx;
+              if (ox >= width) break;
+              const di = (dstRow + ox) << 2;
+              const si = (srcRow + tx) << 2;
+              out[di]   = tp[si];
+              out[di+1] = tp[si+1];
+              out[di+2] = tp[si+2];
+              out[di+3] = 255;
             }
           }
         }
-        iter++;
       }
-      if (iter === maxIter) {
-        console.warn('Propagation stopped early to prevent infinite loop.');
-      }
-    }
-
-    function renderGrid() {
-      background(30);
-      for (let y = 0; y < grid.length; y++) {
-        for (let x = 0; x < grid[0].length; x++) {
-          let cell = grid[y][x];
-          if (cell.collapsed && cell.options.length > 0) {
-            let t = tiles[cell.options[0]].image;
-            let drawW = Math.min(tileSize, width - x * tileSize);
-            let drawH = Math.min(tileSize, height - y * tileSize);
-            image(t, x * tileSize, y * tileSize, drawW, drawH);
-          } else {
-            // Optionally, draw unresolved cells as gray
-            fill(60);
-            noStroke();
-            rect(x * tileSize, y * tileSize, tileSize, tileSize);
-          }
-        }
-      }
+      ctx.putImageData(buf, 0, 0);
     }
   </script>
 </body>
