@@ -243,6 +243,17 @@
       cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATON.CUR'), auto !important;
     }
 
+    /* cursor particles */
+    .cursor-particle {
+      position: fixed;
+      font-family: 'DM Mono', monospace;
+      pointer-events: none;
+      z-index: 500;
+      user-select: none;
+      transform-origin: center;
+      will-change: transform, opacity;
+    }
+
     /* slide-up exit */
     @keyframes splash-exit {
       from { transform: translateY(0); }
@@ -441,6 +452,62 @@
       requestAnimationFrame(() => { el.style.transition = ''; });
     });
   }
+
+  // ── Cursor particles ──────────────────────────────────────────
+  const activeParticles = [];
+
+  function spawnParticle(x, y) {
+    const el = document.createElement('span');
+    el.className = 'cursor-particle';
+    el.textContent = '+';
+    const size = 9 + Math.random() * 9;
+    el.style.fontSize  = size + 'px';
+    el.style.color     = `rgba(240,246,240,${0.5 + Math.random() * 0.45})`;
+    el.style.left      = x + 'px';
+    el.style.top       = y + 'px';
+    document.body.appendChild(el);
+
+    activeParticles.push({
+      el,
+      x, y,
+      vx: (Math.random() - 0.5) * 1.2,
+      vy: -0.6 - Math.random() * 1.4,
+      rotation: Math.random() * 360,
+      rotSpeed: (Math.random() - 0.5) * 10,
+      life: 1,
+      decay: 0.018 + Math.random() * 0.018,
+    });
+  }
+
+  let lastSpawn = 0;
+  document.addEventListener('mousemove', (e) => {
+    const now = performance.now();
+    if (now - lastSpawn < 30) return; // max ~33 particles/sec
+    lastSpawn = now;
+    if (Math.random() > 0.55) return; // ~45% spawn chance per tick
+    spawnParticle(e.clientX, e.clientY);
+  });
+
+  (function tickParticles() {
+    for (let i = activeParticles.length - 1; i >= 0; i--) {
+      const p = activeParticles[i];
+      p.vy      += 0.06;            // gravity
+      p.x       += p.vx;
+      p.y       += p.vy;
+      p.rotation += p.rotSpeed;
+      p.life    -= p.decay;
+      if (p.life <= 0) {
+        p.el.remove();
+        activeParticles.splice(i, 1);
+      } else {
+        p.el.style.left      = p.x + 'px';
+        p.el.style.top       = p.y + 'px';
+        p.el.style.opacity   = p.life;
+        p.el.style.transform = `rotate(${p.rotation}deg)`;
+      }
+    }
+    requestAnimationFrame(tickParticles);
+  })();
 
   // ── Keyboard nav (unchanged) ──────────────────────────────────
   let dockReady = false;
