@@ -383,49 +383,157 @@
   </nav>
 
   <script>
-    const titleText = "Eve Net";
-    const titleTarget = document.getElementById("hero-title");
-    let titleIndex = 0;
+  // ── Splash intro ──────────────────────────────────────────────
+  const BOOT_LINES = [
+    'initializing eve.net kernel...',
+    'loading experimental modules     [OK]',
+    'spawning generative instances     [OK]',
+    'calibrating noise fields          [OK]',
+    'mounting toy filesystem           [OK]',
+    'ready.',
+  ];
 
+  const GLITCH_CHARS = '!@#$%^&*<>?/\\|{}[]~`';
+  const splashEl    = document.getElementById('splash');
+  const terminalEl  = document.getElementById('splash-terminal');
+  const titleEl     = document.getElementById('splash-title');
+
+  let splashDone = false;
+
+  function randChar() {
+    return GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
+  }
+
+  // Scramble a line for `ms` ms then resolve to `text`
+  function glitchLine(lineEl, text, ms) {
+    const start = performance.now();
+    function tick(now) {
+      const elapsed = now - start;
+      if (elapsed >= ms) { lineEl.textContent = text; return; }
+      const progress = elapsed / ms;
+      const resolved = text.slice(0, Math.floor(progress * text.length));
+      const rest = text.slice(resolved.length)
+        .split('').map(() => randChar()).join('');
+      lineEl.textContent = resolved + rest;
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // Type boot lines sequentially
+  function runBootLog(onDone) {
+    let i = 0;
+    function nextLine() {
+      if (i >= BOOT_LINES.length) { onDone(); return; }
+      const p = document.createElement('p');
+      p.style.margin = '0';
+      terminalEl.appendChild(p);
+
+      const text = BOOT_LINES[i];
+      i++;
+
+      // 1-in-3 chance of a glitch burst on this line
+      const doGlitch = Math.random() < 0.33;
+      if (doGlitch) {
+        glitchLine(p, text, 120);
+        setTimeout(nextLine, 280);
+      } else {
+        // simple typewriter
+        let j = 0;
+        const interval = setInterval(() => {
+          p.textContent = text.slice(0, j);
+          j++;
+          if (j > text.length) { clearInterval(interval); setTimeout(nextLine, 180); }
+        }, 28);
+      }
+    }
+    nextLine();
+  }
+
+  // Slam the title down
+  function slamTitle(onDone) {
+    titleEl.style.animation = 'splash-slam 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards';
+    titleEl.addEventListener('animationend', () => {
+      // chromatic aberration impact flash
+      titleEl.style.animation = 'splash-impact 0.35s ease-out forwards';
+      // screen shake on the whole overlay
+      splashEl.style.animation = 'splash-shake 0.25s ease-out forwards';
+      setTimeout(onDone, 700);
+    }, { once: true });
+  }
+
+  // Slide the overlay up and off
+  function exitSplash() {
+    if (splashDone) return;
+    splashDone = true;
+    splashEl.style.animation = 'splash-exit 0.45s ease-in-out forwards';
+    splashEl.addEventListener('animationend', () => {
+      splashEl.style.display = 'none';
+      startPage();
+    }, { once: true });
+  }
+
+  // Skip on click or keydown
+  document.addEventListener('click',   () => exitSplash(), { once: true });
+  document.addEventListener('keydown',  () => exitSplash(), { once: true });
+
+  // Kick off sequence
+  runBootLog(() => {
+    setTimeout(() => slamTitle(() => {
+      setTimeout(exitSplash, 500);
+    }), 200);
+  });
+
+  // ── Main page init (runs after splash exits) ──────────────────
+  function startPage() {
+    // Hero typing
+    const titleText   = "Eve Net";
+    const titleTarget = document.getElementById("hero-title");
+    let titleIndex    = 0;
     function typeTitle() {
       if (!titleTarget) return;
       titleTarget.textContent = titleText.slice(0, titleIndex);
-      titleIndex += 1;
-      if (titleIndex <= titleText.length) {
-        setTimeout(typeTitle, 90);
-      }
+      titleIndex++;
+      if (titleIndex <= titleText.length) setTimeout(typeTitle, 90);
     }
+    typeTitle();
 
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", typeTitle);
-    } else {
-      typeTitle();
-    }
-
-    // Keyboard navigation
-    const dockWrapper = document.querySelector('.dock-wrapper');
-    dockWrapper.addEventListener('keydown', (e) => {
-      const icons = Array.from(document.querySelectorAll('.dock-icon'));
-      const focused = document.activeElement;
-      const idx = icons.indexOf(focused);
-
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        if (idx < icons.length - 1) icons[idx + 1].focus();
-        else if (idx === -1 && icons.length > 0) icons[0].focus();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        if (idx > 0) icons[idx - 1].focus();
-        else if (idx === -1 && icons.length > 0) icons[0].focus();
-      } else if (e.key === 'Home') {
-        e.preventDefault();
-        icons[0].focus();
-      } else if (e.key === 'End') {
-        e.preventDefault();
-        icons[icons.length - 1].focus();
-      }
+    // Re-trigger dock-in animations (reset then re-apply)
+    document.querySelectorAll('.dock-icon').forEach((el, i) => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(16px)';
+      el.style.transition = 'none';
+      el.style.animation = 'none';
+      el.offsetHeight; // reflow
+      const delay = 0.05 + i * 0.03;
+      el.style.animation = `dock-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) ${delay}s forwards`;
     });
-  </script>
+  }
+
+  // ── Keyboard nav (unchanged) ──────────────────────────────────
+  const dockWrapper = document.querySelector('.dock-wrapper');
+  dockWrapper.addEventListener('keydown', (e) => {
+    const icons   = Array.from(document.querySelectorAll('.dock-icon'));
+    const focused = document.activeElement;
+    const idx     = icons.indexOf(focused);
+
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (idx < icons.length - 1) icons[idx + 1].focus();
+      else if (idx === -1 && icons.length > 0) icons[0].focus();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (idx > 0) icons[idx - 1].focus();
+      else if (idx === -1 && icons.length > 0) icons[0].focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      icons[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      icons[icons.length - 1].focus();
+    }
+  });
+</script>
 </body>
 
 </html>
