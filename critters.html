@@ -39,6 +39,7 @@
             box-sizing: border-box;
             color: var(--neon-green);
             min-height: 100vh;
+            min-height: 100dvh;
             overflow: hidden;
             display: flex;
             justify-content: center;
@@ -65,8 +66,8 @@
             z-index: 10;
             width: 100%;
             max-width: 1000px;
-            height: calc(100vh - 80px);
-            max-height: calc(100vh - 80px);
+            height: calc(90dvh - 85px);
+            max-height: calc(90dvh - 85px);
             background: var(--panel-bg);
             border: 1px solid var(--neon-green);
             border-radius: 4px;
@@ -79,6 +80,21 @@
             gap: 25px;
             backdrop-filter: blur(5px);
             overflow: hidden;
+        }
+
+        @media (max-height: 900px) and (min-width: 801px) {
+            .chat-container {
+                padding: 20px;
+                gap: 16px;
+            }
+
+            .right-panel {
+                gap: 12px;
+            }
+
+            .chat-box {
+                padding: 14px;
+            }
         }
 
         /* Glitch effect decorative lines */
@@ -140,10 +156,10 @@
         .left-panel::after {
             content: '';
             position: absolute;
-            left: 8px;
-            bottom: 8px;
-            width: 42px;
-            height: 42px;
+            left: -18px;
+            bottom: -50px;
+            width: 60px;
+            height: 44px;
             background: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/bughotline.png') center / contain no-repeat;
             opacity: 0.9;
             pointer-events: none;
@@ -676,20 +692,172 @@
         }
 
         @media (max-width: 800px) {
+            body {
+                padding: 12px 8px;
+                min-height: 100dvh;
+                overflow-y: auto;
+                overflow-x: hidden;
+                align-items: flex-start;
+            }
+
             .chat-container {
                 grid-template-columns: 1fr;
-                padding: 15px;
+                gap: 12px;
+                padding: 12px;
+                height: auto;
+                max-height: none;
+                overflow: visible;
+            }
+
+            .header {
+                padding-bottom: 10px;
+                margin-bottom: 2px;
+            }
+
+            .header-title h1 {
+                font-size: clamp(24px, 8vw, 30px);
+                letter-spacing: 2px;
+            }
+
+            .header-title p {
+                font-size: 10px;
+                letter-spacing: 1px;
+            }
+
+            .header-system-info {
+                font-size: 10px;
+                line-height: 1.2;
             }
 
             .left-panel {
+                gap: 12px;
                 border-right: none;
                 border-bottom: 1px dashed rgba(0, 255, 0, 0.3);
                 padding-right: 0;
-                padding-bottom: 20px;
+                padding-bottom: 12px;
+            }
+
+            .left-panel::after {
+                display: none;
+            }
+
+            .status-module {
+                padding: 10px;
+            }
+
+            .connection-row {
+                font-size: 11px;
+            }
+
+            #bugName {
+                font-size: 12px;
+            }
+
+            .network-status {
+                font-size: 9px;
+                margin-top: 10px;
+                padding-top: 8px;
+            }
+
+            .bug-display {
+                height: 170px;
+            }
+
+            .right-panel {
+                gap: 10px;
             }
 
             .chat-box {
-                height: 300px;
+                height: 220px;
+                min-height: 220px;
+                padding: 12px;
+            }
+
+            .chat-box::before {
+                font-size: 9px;
+                margin-bottom: 12px;
+                padding: 4px 6px;
+            }
+
+            .message {
+                margin: 10px 0;
+                padding: 9px 10px;
+                font-size: 12px;
+            }
+
+            .user-message {
+                margin-left: 8%;
+            }
+
+            .bug-message {
+                margin-right: 8%;
+            }
+
+            .raw-message {
+                font-size: 10px;
+            }
+
+            .translated-message {
+                font-size: 13px;
+            }
+
+            .input-container {
+                gap: 8px;
+            }
+
+            .input-container::before {
+                left: 10px;
+                font-size: 12px;
+            }
+
+            input[type="text"] {
+                font-size: 14px;
+                padding: 10px 10px 10px 26px;
+            }
+
+            button {
+                padding: 0 14px;
+                font-size: 12px;
+                letter-spacing: 1px;
+            }
+
+            body>a[href="index.html"] {
+                top: 8px !important;
+                right: 8px !important;
+                padding: 6px !important;
+            }
+
+            body>a[href="index.html"] img {
+                width: 14px !important;
+                height: 14px !important;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+
+            .header-system-info {
+                align-self: flex-end;
+                font-size: 9px;
+            }
+
+            .bug-display {
+                height: 150px;
+            }
+
+            .chat-box {
+                height: 190px;
+                min-height: 190px;
+            }
+        }
+
+        @media (max-height: 700px) {
+            .left-panel::after {
+                display: none;
             }
         }
     </style>
