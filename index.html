@@ -23,7 +23,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/baton.cur'), auto !important; }
 
     body {
       margin: 0;
@@ -102,6 +102,7 @@
       transition: color 0.15s;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
+      cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/baton.cur'), auto !important;
       /* staggered entry */
       opacity: 0;
       animation: dock-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -213,7 +214,7 @@
       align-items: center;
       justify-content: center;
       gap: 2.5rem;
-      cursor: default;
+      cursor: url('images/baton.cur'), auto !important;
       user-select: none;
     }
 
@@ -343,35 +344,15 @@
     'loading experimental modules     [OK]',
     'spawning generative instances     [OK]',
     'calibrating noise fields          [OK]',
-    'mounting toy filesystem           [OK]',
+    'mounting filesystem           [OK]',
     'ready.',
   ];
 
-  const GLITCH_CHARS = '!@#$%^&*<>?/\\|{}[]~`';
   const splashEl    = document.getElementById('splash');
   const terminalEl  = document.getElementById('splash-terminal');
 
   let splashDone = false;
 
-  function randChar() {
-    return GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
-  }
-
-  // Scramble a line for `ms` ms then resolve to `text`
-  function glitchLine(lineEl, text, ms) {
-    const start = performance.now();
-    function tick(now) {
-      const elapsed = now - start;
-      if (elapsed >= ms) { lineEl.textContent = text; return; }
-      const progress = elapsed / ms;
-      const resolved = text.slice(0, Math.floor(progress * text.length));
-      const rest = text.slice(resolved.length)
-        .split('').map(() => randChar()).join('');
-      lineEl.textContent = resolved + rest;
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  }
 
   // Type boot lines sequentially
   function runBootLog(onDone) {
@@ -385,20 +366,13 @@
       const text = BOOT_LINES[i];
       i++;
 
-      // 1-in-3 chance of a glitch burst on this line
-      const doGlitch = Math.random() < 0.33;
-      if (doGlitch) {
-        glitchLine(p, text, 120);
-        setTimeout(nextLine, 280);
-      } else {
-        // simple typewriter
-        let j = 0;
-        const interval = setInterval(() => {
-          p.textContent = text.slice(0, j);
-          j++;
-          if (j > text.length) { clearInterval(interval); setTimeout(nextLine, 180); }
-        }, 28);
-      }
+      // simple typewriter
+      let j = 0;
+      const interval = setInterval(() => {
+        p.textContent = text.slice(0, j);
+        j++;
+        if (j > text.length) { clearInterval(interval); setTimeout(nextLine, 180); }
+      }, 18);
     }
     nextLine();
   }
