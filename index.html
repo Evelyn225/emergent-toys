@@ -25,10 +25,6 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATON.CUR'), auto !important; }
 
-    html, body {
-      cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATON.CUR'), auto !important;
-    }
-
     body {
       margin: 0;
       overflow: hidden;
@@ -239,6 +235,14 @@
       97%            { opacity: 0.9; }
     }
 
+    /* full-viewport cursor surface — sits below all content */
+    #cursor-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATON.CUR'), auto !important;
+    }
+
     /* slide-up exit */
     @keyframes splash-exit {
       from { transform: translateY(0); }
@@ -249,6 +253,7 @@
 </head>
 
 <body>
+  <div id="cursor-layer" aria-hidden="true"></div>
   <!-- Splash intro overlay -->
   <div id="splash" aria-hidden="true">
     <div id="splash-terminal"></div>
