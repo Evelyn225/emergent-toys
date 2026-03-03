@@ -1,430 +1,778 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
-    <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
-    <title>ASCII Art Generator</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 240px 20px 20px 20px;
-            background: #1a1a1a;
-            color: #fff;
-            font-family: monospace;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            position: relative;
-            overflow-x: hidden;
-        }
-        #ascii-bg-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            pointer-events: none;
-        }
-        #controls {
-            position: fixed;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%) translateY(0);
-            z-index: 100;
-            margin: 6px 0;
-            padding: 8px;
-            background: rgba(187, 187, 187, 0.08);
-            backdrop-filter: blur(5px);
-            border-radius: 8px;
-            text-align: center;
-            width: 90%;
-            max-width: 420px;
-            transition: transform 0.3s ease-out;
-        }
-        #controls.hidden {
-            transform: translateX(-50%) translateY(calc(-100%));
-        }
-        .control-row {
-            margin: 0px 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        button, input {
-            margin: 6px;
-            padding: 4px 14px;
-            background: #3a3a3a;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #4a4a4a;
-        }
-        #ascii-container {
-            font-family: 'Courier New', monospace;
-            font-size: 9px;
-            line-height: 9px;
-            white-space: pre;
-            letter-spacing: 1px;
-            background: #000;
-            padding: 5px;
-            border-radius: 4px;
-            width: fit-content;
-            height: fit-content;
-            display: none;
-        }
-        #ascii-container.visible {
-            display: block;
-        }
-        #output-wrapper {
-            display: flex;
-            justify-content: center;
-            width: 100%;
-            padding: 0 20px;
-            box-sizing: border-box;
-            position: relative;
-            z-index: 1;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>ASCII Render</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --amber:        #ffb000;
+      --amber-bright: #ffd060;
+      --amber-dim:    #553a00;
+      --amber-mid:    #996600;
+      --amber-glow:   rgba(255, 176, 0, 0.10);
+      --amber-border: rgba(255, 176, 0, 0.30);
+      --bg:           #060401;
+      --sidebar-w:    258px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--amber);
+      font-family: 'DM Mono', 'Courier New', monospace;
+      font-size: 13px;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* CRT scanlines */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.10) 2px,
+        rgba(0, 0, 0, 0.10) 4px
+      );
+      pointer-events: none;
+      z-index: 990;
+    }
+
+    /* CRT vignette */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.65) 100%);
+      pointer-events: none;
+      z-index: 991;
+    }
+
+    /* ── background p5 canvas ── */
+    #ascii-bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ──────────────────────────────────────────
+       SIDEBAR
+    ────────────────────────────────────────── */
+    #sidebar {
+      position: fixed;
+      left: 0; top: 0;
+      width: var(--sidebar-w);
+      height: 100vh;
+      z-index: 100;
+      background: rgba(6, 4, 1, 0.94);
+      border-right: 1px solid var(--amber-border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* title bar */
+    .term-titlebar {
+      padding: 11px 14px 10px;
+      border-bottom: 1px solid var(--amber-border);
+      background: rgba(255, 176, 0, 0.06);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .term-titlebar-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--amber-bright);
+      text-shadow: 0 0 10px var(--amber);
+    }
+
+    .term-cursor {
+      width: 8px;
+      height: 14px;
+      background: var(--amber-bright);
+      box-shadow: 0 0 6px var(--amber);
+      animation: blink-block 1.1s step-end infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes blink-block {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    /* scrollable body area */
+    .sidebar-body {
+      flex: 1;
+      padding: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .sidebar-body::-webkit-scrollbar { width: 3px; }
+    .sidebar-body::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-body::-webkit-scrollbar-thumb { background: var(--amber-dim); }
+
+    /* sections */
+    .s-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--amber-border);
+    }
+
+    .s-label {
+      font-size: 9px;
+      font-weight: 400;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--amber-mid);
+      margin-bottom: 10px;
+    }
+
+    /* ── file input ── */
+    .file-zone {
+      display: block;
+      border: 1px solid var(--amber-border);
+      padding: 10px 12px;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+    }
+
+    .file-zone:hover {
+      background: var(--amber-glow);
+      border-color: rgba(255,176,0,0.6);
+      box-shadow: 0 0 12px rgba(255,176,0,0.1);
+    }
+
+    .file-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .file-prompt {
+      font-size: 12px;
+      color: var(--amber);
+      display: block;
+      margin-bottom: 3px;
+      pointer-events: none;
+    }
+
+    .file-prompt::before { content: '> '; color: var(--amber-mid); }
+
+    #file-name-display {
+      font-size: 10px;
+      color: var(--amber-dim);
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* ── density slider ── */
+    .density-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+
+    .density-val {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--amber-bright);
+      text-shadow: 0 0 8px var(--amber);
+    }
+
+    .density-bar-wrap {
+      margin-bottom: 8px;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      color: var(--amber-dim);
+      font-family: 'Courier New', monospace;
+    }
+
+    .density-bar-fill {
+      color: var(--amber);
+      text-shadow: 0 0 4px rgba(255,176,0,0.4);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 2px;
+      background: var(--amber-dim);
+      border-radius: 0;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      background: var(--amber-bright);
+      border-radius: 0;
+      cursor: pointer;
+      box-shadow: 0 0 8px var(--amber);
+      transform: rotate(45deg);
+    }
+
+    /* ── toggle rows ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 0;
+    }
+
+    .toggle-row + .toggle-row {
+      border-top: 1px solid rgba(255,176,0,0.08);
+    }
+
+    .t-label {
+      font-size: 11px;
+      color: var(--amber);
+      letter-spacing: 0.06em;
+    }
+
+    .pill-toggle {
+      position: relative;
+      width: 44px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .pill-toggle input {
+      position: absolute;
+      opacity: 0;
+      width: 0; height: 0;
+    }
+
+    .pill-track {
+      position: absolute;
+      inset: 0;
+      border: 1px solid var(--amber-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      font-weight: 500;
+      color: var(--amber-dim);
+      transition: all 0.15s;
+      background: transparent;
+    }
+
+    .pill-track::after { content: 'OFF'; }
+
+    .pill-toggle input:checked + .pill-track {
+      border-color: var(--amber);
+      background: rgba(255,176,0,0.08);
+      color: var(--amber-bright);
+      text-shadow: 0 0 6px var(--amber);
+      box-shadow: 0 0 8px rgba(255,176,0,0.15);
+    }
+
+    .pill-toggle input:checked + .pill-track::after { content: 'ON'; }
+
+    /* ── copy button ── */
+    #copyButton {
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      color: var(--amber);
+      border: 1px solid var(--amber-border);
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+
+    #copyButton:hover {
+      background: var(--amber-glow);
+      border-color: var(--amber);
+      color: var(--amber-bright);
+      box-shadow: 0 0 12px rgba(255,176,0,0.15);
+      text-shadow: 0 0 8px var(--amber);
+    }
+
+    #copyButton:active { transform: scale(0.98); }
+
+    /* ── status bar ── */
+    .status-bar {
+      padding: 8px 16px;
+      border-top: 1px solid var(--amber-border);
+      background: rgba(0,0,0,0.3);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      color: var(--amber-mid);
+    }
+
+    #status-text::before { content: '> '; }
+
+    /* ──────────────────────────────────────────
+       MAIN OUTPUT AREA
+    ────────────────────────────────────────── */
+    #output-wrapper {
+      position: fixed;
+      left: var(--sidebar-w);
+      top: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    #ascii-container {
+      font-family: 'Courier New', monospace;
+      font-size: 9px;
+      line-height: 9px;
+      white-space: pre;
+      letter-spacing: 1px;
+      color: var(--amber);
+      text-shadow: 0 0 5px rgba(255, 176, 0, 0.45);
+      padding: 5px;
+      display: none;
+    }
+
+    #ascii-container.visible {
+      display: block;
+    }
+
+    /* ── empty state ── */
+    #empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #ascii-container.visible ~ #empty-state {
+      display: none;
+    }
+
+    .es-art {
+      font-family: 'Courier New', monospace;
+      font-size: 9px;
+      line-height: 13px;
+      white-space: pre;
+      color: var(--amber-dim);
+      text-align: center;
+    }
+
+    .es-hint {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--amber-dim);
+    }
+
+    .es-arrow {
+      font-size: 12px;
+      color: var(--amber-mid);
+      animation: pulse-arrow 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-arrow {
+      0%, 100% { opacity: 0.4; transform: translateX(0); }
+      50%       { opacity: 1;   transform: translateX(-5px); }
+    }
+  </style>
 </head>
 <body>
-    <a href="index.html" style="position: fixed; top: 10px; right: 10px; z-index: 101; padding: 6px 6px; background: rgba(58, 58, 58, 0.9); color: white; border: 1px solid #4a4a4a; border-radius: 4px; text-decoration: none; font-family: monospace; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(150, 150, 150, 0.9)'; this.style.borderColor='#888'" onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(58, 58, 58, 0.9)'; this.style.borderColor='#4a4a4a'" onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'" onmouseup="this.style.transform='scale(1.2) rotate(5deg)'"><img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width: 18px; height: 18px; object-fit: contain;"></a>
-    <div id="ascii-bg-canvas"></div>
-    <div id="controls">
-        <input type="file" id="imageInput" accept="image/*">
-        <div class="control-row">
-            <label for="densitySlider">Character Density: </label>
-            <input type="range" id="densitySlider" min="1" max="8" value="4">
+
+  <!-- Home button -->
+  <a href="index.html"
+    style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+           padding: 8px; background: rgba(0,0,0,0.8); color: white;
+           border: 1px solid rgba(255,176,0,0.3); border-radius: 4px;
+           text-decoration: none; font-size: 18px;
+           transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+           line-height: 1; display: flex; align-items: center; justify-content: center;"
+    onmouseover="this.style.transform='scale(1.2) rotate(5deg)';
+                 this.style.background='rgba(220,130,0,0.85)';
+                 this.style.borderColor='rgba(255,200,0,0.7)'"
+    onmouseout="this.style.transform='scale(1) rotate(0deg)';
+                this.style.background='rgba(0,0,0,0.8)';
+                this.style.borderColor='rgba(255,176,0,0.3)'"
+    onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
+    onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
+    <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+         alt="home" style="width: 18px; height: 18px; object-fit: contain;">
+  </a>
+
+  <!-- p5 background mount -->
+  <div id="ascii-bg-canvas"></div>
+
+  <!-- ── SIDEBAR ── -->
+  <div id="sidebar">
+    <div class="term-titlebar">
+      <div class="term-cursor"></div>
+      <span class="term-titlebar-label">ASCII-RENDER.EXE</span>
+    </div>
+
+    <div class="sidebar-body">
+
+      <!-- File -->
+      <div class="s-section">
+        <div class="s-label">Input</div>
+        <label class="file-zone">
+          <input type="file" id="imageInput" accept="image/*">
+          <span class="file-prompt">load_image</span>
+          <span id="file-name-display">no file selected</span>
+        </label>
+      </div>
+
+      <!-- Density -->
+      <div class="s-section">
+        <div class="s-label">
+          <div class="density-header">
+            <span>Character Density</span>
+            <span class="density-val" id="density-display">4</span>
+          </div>
         </div>
-        <div class="control-row">
-            <label for="animateToggle">Background Animation: </label>
+        <div class="density-bar-wrap">
+          <span id="density-bar-fill" class="density-bar-fill">████████</span><span id="density-bar-empty">░░░░░░░░</span>
+        </div>
+        <input type="range" id="densitySlider" min="1" max="8" value="4">
+      </div>
+
+      <!-- Toggles -->
+      <div class="s-section">
+        <div class="s-label">Animations</div>
+        <div class="toggle-row">
+          <span class="t-label">Background</span>
+          <label class="pill-toggle">
             <input type="checkbox" id="animateToggle" checked>
+            <div class="pill-track"></div>
+          </label>
         </div>
-        <div class="control-row">
-            <label for="pauseToggle">Image Animation: </label>
+        <div class="toggle-row">
+          <span class="t-label">Image cycle</span>
+          <label class="pill-toggle">
             <input type="checkbox" id="pauseToggle" checked>
+            <div class="pill-track"></div>
+          </label>
         </div>
-        <div class="control-row">
-            <button id="copyButton">Copy ASCII Art</button>
-        </div>
+      </div>
+
+      <!-- Copy -->
+      <div class="s-section">
+        <button id="copyButton">copy ascii art</button>
+      </div>
+
     </div>
-    <div id="output-wrapper">
-        <div id="ascii-container"></div>
+
+    <div class="status-bar">
+      <span id="status-text">ready</span>
     </div>
+  </div>
 
-    <script>
-        // Terminal-style ASCII Background using p5.js
-        window.bgAnimationEnabled = true;
-        window.imagePaused = false;
-        let bgSketch = function(p) {
-            const chars = ['@', '#', 'W', '8', 'B', 'M', 'R', 'P', 'D', 'Q', 'K', 'X', 'N', 'H', 'G', 'O', 'Z', 'U', 'A', 'S', 'E', '5', '2', 'Y', 'C', 'L', 'F', 'T', 'J', 'I', '3', '1', '/', '|', '\\', '-', '+', '~', ';', ':', ',', '.', ' '];
-            let columns = [];
-            let charSize = 14;
-            let time = 0;
-            
-            p.setup = function() {
-                const canvas = p.createCanvas(p.windowWidth, p.windowHeight);
-                canvas.parent('ascii-bg-canvas');
-                p.textFont('Courier New');
-                p.textSize(charSize);
-                p.textAlign(p.LEFT, p.TOP);
-                
-                const numCols = Math.ceil(p.width / charSize);
-                for (let i = 0; i < numCols; i++) {
-                    columns.push({
-                        y: p.random(-p.height, 0),
-                        speed: 0.3 + p.random() * 0.4,
-                        chars: [],
-                        charIndex: p.floor(p.random() * chars.length),
-                        updateRate: 2 + p.random() * 3
-                    });
-                    
-                    // Pre-populate some characters
-                    const numChars = Math.ceil(p.height / charSize) + 5;
-                    for (let j = 0; j < numChars; j++) {
-                        columns[i].chars.push({
-                            char: chars[p.floor(p.random() * chars.length)],
-                            brightness: p.random(0.3, 0.8)
-                        });
-                    }
-                }
-            };
-            
-            p.draw = function() {
-                p.background(26, 26, 26, 255);
-                
-                if (!window.bgAnimationEnabled) {
-                    // Just draw static characters when animation is disabled
-                    for (let i = 0; i < columns.length; i++) {
-                        const col = columns[i];
-                        let yPos = col.y;
-                        for (let j = 0; j < col.chars.length; j++) {
-                            if (yPos > -charSize && yPos < p.height) {
-                                const alpha = p.map(col.chars[j].brightness, 0.3, 0.8, 100, 200);
-                                p.fill(150, 150, 150, alpha);
-                                p.text(col.chars[j].char, i * charSize, yPos);
-                            }
-                            yPos += charSize;
-                        }
-                    }
-                    return;
-                }
-                
-                time += 0.01;
-                
-                for (let i = 0; i < columns.length; i++) {
-                    const col = columns[i];
-                    col.y += col.speed;
+  <!-- ── OUTPUT ── -->
+  <div id="output-wrapper">
+    <div id="ascii-container"></div>
+    <div id="empty-state">
+      <pre class="es-art">##@@@@@@@@@@@@@@@@@@##
+#@                  @#
+@   load an image    @
+@   to get started   @
+#@                  @#
+##@@@@@@@@@@@@@@@@@@##</pre>
+      <span class="es-hint">← drop a file in the panel</span>
+      <span class="es-arrow">◄◄◄</span>
+    </div>
+  </div>
 
-                    if (col.y > p.height) {
-                        col.y = -charSize * 5;
-                        for (let j = 0; j < col.chars.length; j++) {
-                            col.chars[j].char = chars[p.floor(p.random() * chars.length)];
-                            col.chars[j].brightness = p.random(0.3, 0.8);
-                        }
-                    }
-                    
-                    // Update characters slowly (terminal-like)
-                    if (p.frameCount % Math.floor(col.updateRate) === 0) {
-                        // Shift characters up
-                        col.chars.shift();
-                        col.chars.push({
-                            char: chars[p.floor(p.random() * chars.length)],
-                            brightness: p.random(0.3, 0.8)
-                        });
-                    }
-                    
-                    let yPos = col.y;
-                    for (let j = 0; j < col.chars.length; j++) {
-                        if (yPos > -charSize && yPos < p.height) {
-                            const alpha = p.map(col.chars[j].brightness, 0.3, 0.8, 100, 200);
-                            p.fill(150, 150, 150, alpha);
-                            p.text(col.chars[j].char, i * charSize, yPos);
-                        }
-                        yPos += charSize;
-                    }
-                }
-            };
-            
-            p.windowResized = function() {
-                p.resizeCanvas(p.windowWidth, p.windowHeight);
-                columns = [];
-                const numCols = Math.ceil(p.width / charSize);
-                for (let i = 0; i < numCols; i++) {
-                    columns.push({
-                        y: p.random(-p.height, 0),
-                        speed: 0.3 + p.random() * 0.4,
-                        chars: [],
-                        charIndex: p.floor(p.random() * chars.length),
-                        updateRate: 2 + p.random() * 3
-                    });
-                    const numChars = Math.ceil(p.height / charSize) + 5;
-                    for (let j = 0; j < numChars; j++) {
-                        columns[i].chars.push({
-                            char: chars[p.floor(p.random() * chars.length)],
-                            brightness: p.random(0.3, 0.8)
-                        });
-                    }
-                }
-            };
-        };
-        
-        // Main sketch for image processing
-        let sketch = function(p) {
-            let img;
-            let asciiDiv;
-            let statusDiv;
-            let density = 4;
-            let animationFrame;
-            const asciiChars = ['@', '#', 'W', '8', 'B', 'M', 'R', 'P', 'D', 'Q', 'K', 'X', 'N', 'H', 'G', 'O', 'Z', 'U', 'A', 'S', 'E', '5', '2', 'Y', 'C', 'L', 'F', 'T', 'J', 'I', '3', '1', '/', '|', '\\', '-', '+', '~', ';', ':', ',', '.', ' '];
-            
-            p.setup = function() {
-                p.noCanvas();
-                asciiDiv = p.select('#ascii-container');
-                statusDiv = p.select('#status');
-                
-                // Setup density slider with finer control
-                const densitySlider = p.select('#densitySlider');
-                densitySlider.elt.min = "1";
-                densitySlider.elt.max = "8";
-                densitySlider.elt.value = "4";
-                densitySlider.input(() => {
-                    density = parseInt(densitySlider.value());
-                    if (img) processImage();
-                });
-                
-                const fileInput = p.select('#imageInput');
-                fileInput.elt.addEventListener('change', function(e) {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            p.loadImage(e.target.result, 
-                                function(loadedImg) {
-                                    img = loadedImg;
-                                    processImage();
-                                },
-                                function(err) {
-                                    statusDiv.html('Error loading image: ' + err);
-                                }
-                            );
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                });
-            };
-            
-            function processImage() {
-                if (!img) return;
-                
-                try {
-                    // Calculate dimensions maintaining aspect ratio with higher resolution
-                    let w, h;
-                    const maxWidth = Math.min(400, window.innerWidth / (density * 0.75));
-                    const maxHeight = Math.min(300, window.innerHeight * 0.7);
-                    
-                    if (img.width / img.height > maxWidth / maxHeight) {
-                        w = maxWidth;
-                        h = p.floor((w * img.height) / img.width);
-                    } else {
-                        h = maxHeight;
-                        w = p.floor((h * img.width) / img.height);
-                    }
-                    
-                    // Create scaled buffer
-                    const buffer = p.createGraphics(w, h);
-                    buffer.background(0);
-                    buffer.image(img, 0, 0, w, h);
-                    buffer.loadPixels();
-                    
-                    // Validate buffer has pixels
-                    if (!buffer.pixels || buffer.pixels.length === 0) {
-                        statusDiv.html('Error: Could not load image pixels');
-                        return;
-                    }
-                    
-                    // Convert to ASCII with more precise brightness mapping
-                    let asciiImage = '';
-                    for (let y = 0; y < h; y += density) {
-                        for (let x = 0; x < w; x += density) {
-                            let avgBrightness = 0;
-                            let samplesCount = 0;
-                            
-                            // Get more precise sampling
-                            for (let dy = 0; dy < density && y + dy < h; dy++) {
-                                for (let dx = 0; dx < density && x + dx < w; dx++) {
-                                    const pixelIndex = ((y + dy) * w + (x + dx)) * 4;
-                                    // Validate pixel index is within bounds
-                                    if (pixelIndex + 2 < buffer.pixels.length) {
-                                        // Use weighted RGB for more accurate brightness
-                                        const r = (buffer.pixels[pixelIndex] || 0) * 0.299;
-                                        const g = (buffer.pixels[pixelIndex + 1] || 0) * 0.587;
-                                        const b = (buffer.pixels[pixelIndex + 2] || 0) * 0.114;
-                                        avgBrightness += r + g + b;
-                                        samplesCount++;
-                                    }
-                                }
-                            }
-                            
-                            if (samplesCount > 0) {
-                                avgBrightness /= samplesCount;
-                            }
-                            // More precise character mapping with extended character set
-                            const charIndex = Math.min(Math.max(Math.floor(p.map(avgBrightness, 0, 255, 0, asciiChars.length - 1)), 0), asciiChars.length - 1);
-                            asciiImage += asciiChars[charIndex];
-                        }
-                        asciiImage += '\n';
-                    }
-                    
-                    asciiDiv.html(asciiImage);
-                    asciiDiv.addClass('visible');
-                    
-                    // Always animate
-                    if (animationFrame) {
-                        clearTimeout(animationFrame);
-                    }
-                    animationFrame = setTimeout(() => {
-                        if (!window.imagePaused) {
-                            asciiChars.unshift(asciiChars.pop());
-                            processImage();
-                        } else {
-                            // Even when paused, schedule the next check
-                            animationFrame = setTimeout(() => {
-                                processImage();
-                            }, 150);
-                        }
-                    }, 150);
-                    
-                } catch (error) {
-                    console.error(error);
-                    statusDiv.html('Error processing image: ' + error.message);
-                }
-            }
-        };
+  <script>
+    // ── Background animation (amber phosphor rain) ──────────────────────────
+    window.bgAnimationEnabled = true;
+    window.imagePaused = false;
 
-        new p5(bgSketch);
-        new p5(sketch);
-        
-        // Scroll detection for menu
-        let lastScrollY = window.scrollY;
-        const controls = document.getElementById('controls');
-        
-        window.addEventListener('scroll', () => {
-            const currentScrollY = window.scrollY;
-            
-            if (currentScrollY > lastScrollY && currentScrollY > 50) {
-                // Scrolling down - hide menu
-                controls.classList.add('hidden');
-            } else if (currentScrollY < lastScrollY) {
-                // Scrolling up - show menu
-                controls.classList.remove('hidden');
+    let bgSketch = function(p) {
+      const chars = ['@','#','W','8','B','M','R','P','D','Q','K','X','N','H','G','O','Z','U','A','S','E','5','2','Y','C','L','F','T','J','I','3','1','/','|','\\','-','+','~',';',':',',','.',' '];
+      let columns = [];
+      let charSize = 14;
+
+      p.setup = function() {
+        const canvas = p.createCanvas(p.windowWidth, p.windowHeight);
+        canvas.parent('ascii-bg-canvas');
+        p.textFont('Courier New');
+        p.textSize(charSize);
+        p.textAlign(p.LEFT, p.TOP);
+        buildColumns();
+      };
+
+      function buildColumns() {
+        columns = [];
+        const numCols = Math.ceil(p.width / charSize);
+        for (let i = 0; i < numCols; i++) {
+          const col = {
+            y: p.random(-p.height, 0),
+            speed: 0.3 + p.random() * 0.4,
+            chars: [],
+            updateRate: 2 + p.random() * 3
+          };
+          const numChars = Math.ceil(p.height / charSize) + 5;
+          for (let j = 0; j < numChars; j++) {
+            col.chars.push({
+              char: chars[p.floor(p.random() * chars.length)],
+              brightness: p.random(0.2, 0.7)
+            });
+          }
+          columns.push(col);
+        }
+      }
+
+      p.draw = function() {
+        p.background(6, 4, 1, 255);
+
+        if (!window.bgAnimationEnabled) {
+          for (let i = 0; i < columns.length; i++) {
+            const col = columns[i];
+            let yPos = col.y;
+            for (let j = 0; j < col.chars.length; j++) {
+              if (yPos > -charSize && yPos < p.height) {
+                const alpha = p.map(col.chars[j].brightness, 0.2, 0.7, 18, 50);
+                p.fill(255, 176, 0, alpha);
+                p.text(col.chars[j].char, i * charSize, yPos);
+              }
+              yPos += charSize;
             }
-            
-            lastScrollY = currentScrollY;
-        });
-        
-        // Animation toggle
-        const animateToggle = document.getElementById('animateToggle');
-        animateToggle.addEventListener('change', (e) => {
-            window.bgAnimationEnabled = e.target.checked;
-        });
-        
-        // Image animation toggle
-        const pauseToggle = document.getElementById('pauseToggle');
-        pauseToggle.addEventListener('change', (e) => {
-            window.imagePaused = !e.target.checked;
-        });
-        
-        // Copy ASCII art to clipboard
-        const copyButton = document.getElementById('copyButton');
-        copyButton.addEventListener('click', () => {
-            const asciiDiv = document.getElementById('ascii-container');
-            const text = asciiDiv.innerText;
-            if (text) {
-                navigator.clipboard.writeText(text).then(() => {
-                    copyButton.textContent = 'Copied!';
-                    setTimeout(() => {
-                        copyButton.textContent = 'Copy ASCII Art';
-                    }, 2000);
-                }).catch(err => {
-                    console.error('Failed to copy:', err);
-                });
+          }
+          return;
+        }
+
+        for (let i = 0; i < columns.length; i++) {
+          const col = columns[i];
+          col.y += col.speed;
+
+          if (col.y > p.height) {
+            col.y = -charSize * 5;
+            for (let j = 0; j < col.chars.length; j++) {
+              col.chars[j].char = chars[p.floor(p.random() * chars.length)];
+              col.chars[j].brightness = p.random(0.2, 0.7);
             }
+          }
+
+          if (p.frameCount % Math.floor(col.updateRate) === 0) {
+            col.chars.shift();
+            col.chars.push({
+              char: chars[p.floor(p.random() * chars.length)],
+              brightness: p.random(0.2, 0.7)
+            });
+          }
+
+          let yPos = col.y;
+          for (let j = 0; j < col.chars.length; j++) {
+            if (yPos > -charSize && yPos < p.height) {
+              const alpha = p.map(col.chars[j].brightness, 0.2, 0.7, 18, 50);
+              p.fill(255, 176, 0, alpha);
+              p.text(col.chars[j].char, i * charSize, yPos);
+            }
+            yPos += charSize;
+          }
+        }
+      };
+
+      p.windowResized = function() {
+        p.resizeCanvas(p.windowWidth, p.windowHeight);
+        buildColumns();
+      };
+    };
+
+    // ── Image processing sketch ──────────────────────────────────────────────
+    let sketch = function(p) {
+      let img;
+      let asciiDiv;
+      let statusDiv;
+      let density = 4;
+      let animationFrame;
+      const asciiChars = ['@','#','W','8','B','M','R','P','D','Q','K','X','N','H','G','O','Z','U','A','S','E','5','2','Y','C','L','F','T','J','I','3','1','/','|','\\','-','+','~',';',':',',','.',' '];
+
+      p.setup = function() {
+        p.noCanvas();
+        asciiDiv  = p.select('#ascii-container');
+        statusDiv = p.select('#status-text');
+
+        const densitySlider = p.select('#densitySlider');
+        densitySlider.elt.min   = '1';
+        densitySlider.elt.max   = '8';
+        densitySlider.elt.value = '4';
+        densitySlider.input(() => {
+          density = parseInt(densitySlider.value());
+          updateDensityUI(density);
+          if (img) processImage();
         });
-        
-        // Force the checkboxes to be checked on page load
-        animateToggle.checked = true;
-        pauseToggle.checked = true;
-    </script>
+
+        const fileInput = p.select('#imageInput');
+        fileInput.elt.addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          if (file) {
+            document.getElementById('file-name-display').textContent = file.name;
+            statusDiv.html('loading...');
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              p.loadImage(e.target.result,
+                function(loadedImg) {
+                  img = loadedImg;
+                  statusDiv.html('rendering');
+                  processImage();
+                },
+                function(err) {
+                  statusDiv.html('error: ' + err);
+                }
+              );
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+      };
+
+      function processImage() {
+        if (!img) return;
+        try {
+          let w, h;
+          const outputEl = document.getElementById('output-wrapper');
+          const availW = outputEl.clientWidth;
+          const availH = outputEl.clientHeight;
+          const maxWidth  = Math.min(400, availW  / (density * 0.75));
+          const maxHeight = Math.min(300, availH  * 0.85);
+
+          if (img.width / img.height > maxWidth / maxHeight) {
+            w = maxWidth;
+            h = p.floor((w * img.height) / img.width);
+          } else {
+            h = maxHeight;
+            w = p.floor((h * img.width) / img.height);
+          }
+
+          const buffer = p.createGraphics(w, h);
+          buffer.background(0);
+          buffer.image(img, 0, 0, w, h);
+          buffer.loadPixels();
+
+          if (!buffer.pixels || buffer.pixels.length === 0) {
+            statusDiv.html('error: no pixels');
+            return;
+          }
+
+          let asciiImage = '';
+          for (let y = 0; y < h; y += density) {
+            for (let x = 0; x < w; x += density) {
+              let avgBrightness = 0;
+              let samplesCount = 0;
+              for (let dy = 0; dy < density && y + dy < h; dy++) {
+                for (let dx = 0; dx < density && x + dx < w; dx++) {
+                  const idx = ((y + dy) * w + (x + dx)) * 4;
+                  if (idx + 2 < buffer.pixels.length) {
+                    avgBrightness += (buffer.pixels[idx] || 0) * 0.299
+                                   + (buffer.pixels[idx+1] || 0) * 0.587
+                                   + (buffer.pixels[idx+2] || 0) * 0.114;
+                    samplesCount++;
+                  }
+                }
+              }
+              if (samplesCount > 0) avgBrightness /= samplesCount;
+              const charIndex = Math.min(
+                Math.max(Math.floor(p.map(avgBrightness, 0, 255, 0, asciiChars.length - 1)), 0),
+                asciiChars.length - 1
+              );
+              asciiImage += asciiChars[charIndex];
+            }
+            asciiImage += '\n';
+          }
+
+          asciiDiv.html(asciiImage);
+          asciiDiv.addClass('visible');
+          statusDiv.html('running');
+
+          if (animationFrame) clearTimeout(animationFrame);
+          animationFrame = setTimeout(() => {
+            if (!window.imagePaused) {
+              asciiChars.unshift(asciiChars.pop());
+              processImage();
+            } else {
+              animationFrame = setTimeout(() => { processImage(); }, 150);
+            }
+          }, 150);
+
+          buffer.remove();
+        } catch (err) {
+          console.error(err);
+          statusDiv.html('error: ' + err.message);
+        }
+      }
+    };
+
+    // ── Density bar UI helper ────────────────────────────────────────────────
+    function updateDensityUI(val) {
+      document.getElementById('density-display').textContent = val;
+      const filled = Math.round((val / 8) * 16);
+      document.getElementById('density-bar-fill').textContent = '█'.repeat(filled);
+      document.getElementById('density-bar-empty').textContent = '░'.repeat(16 - filled);
+    }
+
+    // ── Boot ─────────────────────────────────────────────────────────────────
+    new p5(bgSketch);
+    new p5(sketch);
+
+    // Animation toggles
+    document.getElementById('animateToggle').addEventListener('change', e => {
+      window.bgAnimationEnabled = e.target.checked;
+    });
+
+    document.getElementById('pauseToggle').addEventListener('change', e => {
+      window.imagePaused = !e.target.checked;
+    });
+
+    // Copy
+    document.getElementById('copyButton').addEventListener('click', () => {
+      const btn = document.getElementById('copyButton');
+      const text = document.getElementById('ascii-container').innerText;
+      if (text) {
+        navigator.clipboard.writeText(text).then(() => {
+          btn.textContent = '✓ copied';
+          setTimeout(() => { btn.textContent = 'copy ascii art'; }, 2000);
+        }).catch(() => {});
+      }
+    });
+
+    // Init density bar
+    updateDensityUI(4);
+
+    // Force checkboxes checked
+    document.getElementById('animateToggle').checked = true;
+    document.getElementById('pauseToggle').checked  = true;
+  </script>
 </body>
+</html>
