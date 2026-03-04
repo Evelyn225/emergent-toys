@@ -22,6 +22,11 @@
         onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
         <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home"
             style="width: 18px; height: 18px; object-fit: contain;"></a>
+    <div id="vol-slider" style="position:fixed;bottom:16px;left:16px;z-index:200;cursor:pointer;user-select:none;font-family:'Courier New',monospace;color:rgba(255,255,255,0.5);letter-spacing:2px;line-height:1.6;">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.15em;margin-bottom:2px;">volume</div>
+        <div id="vol-bar" style="font-size:13px;"></div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
     <script>
         class Segment {
@@ -136,39 +141,76 @@
         let throwMeFade = 1.0;
         let hintX, hintY;
 
-        let ballHitSounds = [];
+        let audioCtx = null;
+        let audioBuffers = [];
         let lastHitFrame = -60;
-        const HIT_COOLDOWN = 12; // frames between sounds
-        const HIT_THRESHOLD = 1.7; // minimum vy to trigger sound
-        let audioUnlocked = false;
+        const HIT_COOLDOWN = 12;
+        const HIT_THRESHOLD = 1.7;
+        let masterVolume = 0.8;
+
+        (function initVolSlider() {
+            const STEPS = 10;
+            const bar = document.getElementById('vol-bar');
+            function render() {
+                const filled = Math.round(masterVolume * STEPS);
+                let out = '';
+                for (let i = 0; i < STEPS; i++) {
+                    if (i < filled - 1) out += '▓';
+                    else if (i === filled - 1) out += (filled === STEPS ? '▓' : '▒');
+                    else out += '░';
+                }
+                bar.textContent = out;
+            }
+            function setFromEvent(e) {
+                const rect = bar.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                masterVolume = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                render();
+            }
+            let draggingVol = false;
+            bar.addEventListener('mousedown', e => { draggingVol = true; setFromEvent(e); e.stopPropagation(); });
+            window.addEventListener('mousemove', e => { if (draggingVol) setFromEvent(e); });
+            window.addEventListener('mouseup', () => { draggingVol = false; });
+            bar.addEventListener('touchstart', e => { draggingVol = true; setFromEvent(e); e.preventDefault(); }, { passive: false });
+            window.addEventListener('touchmove', e => { if (draggingVol) setFromEvent(e); }, { passive: false });
+            window.addEventListener('touchend', () => { draggingVol = false; });
+            render();
+        })();
 
         function unlockAudio() {
-            if (audioUnlocked || ballHitSounds.length === 0) return;
-            audioUnlocked = true;
-            for (let s of ballHitSounds) {
-                s.volume = 0;
-                s.play().then(() => { s.pause(); s.currentTime = 0; s.volume = 1; }).catch(() => {});
-            }
+            if (audioCtx) { audioCtx.resume(); return; }
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
 
         async function loadBallSounds() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             for (let i = 1; i <= 5; i++) {
                 try {
                     let resp = await fetch(`https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/audio/ballhit${i}.wav`);
-                    let blob = await resp.blob();
-                    let a = new Audio(URL.createObjectURL(blob));
-                    ballHitSounds.push(a);
+                    let arrayBuffer = await resp.arrayBuffer();
+                    let decoded = await audioCtx.decodeAudioData(arrayBuffer);
+                    audioBuffers.push(decoded);
                 } catch(e) {}
             }
         }
 
         function playBallHit(speed) {
             if (frameCount - lastHitFrame < HIT_COOLDOWN) return;
+            if (!audioCtx || audioBuffers.length === 0) return;
             lastHitFrame = frameCount;
-            let s = ballHitSounds[Math.floor(Math.random() * ballHitSounds.length)];
-            s.currentTime = 0;
-            s.volume = Math.min(1, speed / 20);
-            s.play().catch(() => {});
+            let buffer = audioBuffers[Math.floor(Math.random() * audioBuffers.length)];
+            let source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            let gain = audioCtx.createGain();
+            let targetVol = Math.min(1, (speed / 18) * masterVolume);
+            let t = audioCtx.currentTime;
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(targetVol, t + 0.005);
+            gain.gain.setValueAtTime(targetVol, t + buffer.duration - 0.015);
+            gain.gain.linearRampToValueAtTime(0, t + buffer.duration);
+            source.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(t);
         }
 
         function createArm() {
