@@ -134,14 +134,17 @@
 
         let ballHitSounds = [];
         let lastHitFrame = -60;
-        const HIT_COOLDOWN = 18; // frames between sounds
-        const HIT_THRESHOLD = 3.5; // minimum vy to trigger sound
+        const HIT_COOLDOWN = 10; // frames between sounds
+        const HIT_THRESHOLD = 1.5; // minimum vy to trigger sound
 
-        function loadBallSounds() {
+        async function loadBallSounds() {
             for (let i = 1; i <= 5; i++) {
-                let a = new Audio(`https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/audio/ballhit${i}.wav`);
-                a.preload = 'auto';
-                ballHitSounds.push(a);
+                try {
+                    let resp = await fetch(`https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/audio/ballhit${i}.wav`);
+                    let blob = await resp.blob();
+                    let a = new Audio(URL.createObjectURL(blob));
+                    ballHitSounds.push(a);
+                } catch(e) {}
             }
         }
 
