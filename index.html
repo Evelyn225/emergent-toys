@@ -33,8 +33,21 @@
       font-family: 'DM Mono', monospace;
       font-weight: 300;
       color: #111;
+      background-image: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/index_bg.png');
     }
-
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: inherit;
+      background-size: cover;
+      background-position: left 50% top 32%;
+      filter: blur(20px) brightness(1.85) contrast(0.95);
+      background-blend-mode: luminosity;
+      transform: scale(1.5);
+      background-repeat: no-repeat;
+      z-index: -1;
+    }
     /* ─── Centered hero ─── */
     .hero {
       position: fixed;
@@ -50,15 +63,16 @@
     }
 
     .hero h1 {
-      font-size: 3.8rem;
-      font-weight: 300;
+      font-size: 5rem;
+      font-weight: 400;
       letter-spacing: -0.03em;
       line-height: 1.1;
+      white-space: nowrap;
     }
 
     #hero-title {
-      background: linear-gradient(45deg, #0d0d0d, #555);
-      -webkit-background-clip: text;
+      background: #0c0c0c;
+      text-shadow: 1px 1px 2px #0c0c0c;
       background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -98,7 +112,7 @@
       flex-direction: column;
       align-items: center;
       gap: 5px;
-      width: 80px;
+      width: 89px;
       padding: 6px 4px;
       text-decoration: none;
       color: rgba(0,0,0,0.75);
@@ -158,30 +172,28 @@
 
     /* Label */
     .icon-label {
-      font-size: 10.5px;
-      font-weight: 300;
+      font-size: 12px;
+      font-weight: 520;
       text-align: center;
-      line-height: 1.35;
-      letter-spacing: 0.01em;
+      line-height: 1.3;
+      letter-spacing: 0.00em;
       color: inherit;
-      text-shadow: none;
+      text-shadow: 0px 0px 2px rgba(240, 240, 240, 0.45);
       transition: text-shadow 0.18s linear;
       max-width: 76px;
       word-break: break-word;
     }
 
-    .dock-icon:hover .icon-label {
-      color: rgba(0,0,0,0.55);
-    }
+    .dock-icon:hover .icon-label,
     .dock-icon:focus .icon-label {
-      color: rgba(0,0,0,0.55);
+      color: rgba(56, 75, 74, 0.6);
     }
 
 
     /* Focus ring */
     .dock-icon:focus { outline: none; }
     .dock-icon:focus-visible .icon-emoji {
-      filter: drop-shadow(0 0 6px rgba(0,0,0,0.35));
+      filter: drop-shadow(0 0 6px rgba(0,0,0,0.65));
     }
 
     /* ─── Terminal background canvas ─── */
@@ -195,21 +207,40 @@
     @media (max-width: 520px) {
       .hero h1 { font-size: 2.4rem; }
 
+      .dock-wrapper {
+        top: auto;
+        bottom: 0;
+        height: 80vh;
+        overflow-y: auto;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        -webkit-overflow-scrolling: touch;
+      }
+
       .dock {
-        padding: 0.5rem 1rem 1.4rem;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px 4px;
+        padding: 1rem 0.5rem 2rem;
+        width: 100%;
+        align-content: start;
+        flex-wrap: unset;
+        justify-content: unset;
       }
 
       .dock-icon {
-        width: 68px;
+        width: auto;
+        padding: 6px 2px;
       }
 
       .icon-emoji {
-        font-size: 1.7rem;
+        font-size: 2.6rem;
       }
 
       .icon-label {
-        font-size: 9px;
-        max-width: 64px;
+        font-size: 12px;
+        max-width: 80px;
       }
     }
 
@@ -218,7 +249,7 @@
       position: fixed;
       inset: 0;
       z-index: 9999;
-      background: #fff;
+      background: #c8caca;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -231,7 +262,7 @@
       font-family: 'DM Mono', monospace;
       font-size: 13px;
       font-weight: 300;
-      color: rgba(0, 0, 0, 0.55);
+      color: rgba(0, 0, 0, 0.75);
       line-height: 1.9;
       width: 340px;
       min-height: 7em;
@@ -264,10 +295,14 @@
     /* ─── Dark mode overrides ─── */
     [data-theme="dark"] body {
       background: #050505;
-      color: #f0f6f0;
+      color: #f0f6f0;     
+      background-image: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/cover_4x.png');
+      background-position: left 0% top 70%;
+      background-blend-mode: luminosity;
     }
     [data-theme="dark"] #hero-title {
-      background: linear-gradient(45deg, rgb(240, 246, 240), #a8a8a8);
+      background: #f0f6f0;
+      text-shadow: 1px 1px 2px rgb(240, 246, 240, 0.2);
       -webkit-background-clip: text;
       background-clip: text;
     }
@@ -281,20 +316,20 @@
       color: rgba(240, 246, 240, 1);
     }
     [data-theme="dark"] .icon-label {
-      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
+      text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.75);
     }
     [data-theme="dark"] .dock-icon:hover .icon-label,
     [data-theme="dark"] .dock-icon:focus .icon-label {
-      color: rgba(240, 246, 240, 0.7);
+      color: rgba(240, 246, 240, 0.6);
     }
     [data-theme="dark"] .dock-icon:focus-visible .icon-emoji {
       filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7));
     }
     [data-theme="dark"] #splash {
-      background: #050505;
+      background: #0c0c0c;
     }
     [data-theme="dark"] #splash-terminal {
-      color: rgba(240, 246, 240, 0.55);
+      color: rgba(240, 246, 240, 0.75);
     }
 
     /* ─── Theme toggle button ─── */
@@ -306,7 +341,7 @@
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      border: 1px solid rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(0, 0, 0, 0.4);
       background: rgba(0, 0, 0, 0.06);
       color: #111;
       font-size: 15px;
@@ -321,7 +356,7 @@
     #theme-toggle:hover  { transform: scale(1.15); }
     #theme-toggle:active { transform: scale(0.9); transition-duration: 0.08s; }
     [data-theme="dark"] #theme-toggle {
-      border-color: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
       background: rgba(255, 255, 255, 0.08);
       color: #f0f6f0;
     }
@@ -330,7 +365,8 @@
 </head>
 
 <body>
-  <button id="theme-toggle" aria-label="Toggle colour theme">🌙</button>
+  <!--<img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/cover_4x.png" alt="" style="display:none">-->
+  <button id="theme-toggle" aria-label="Toggle colour theme">☀</button>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
   <div id="cursor-layer" aria-hidden="true"></div>
   <!-- Splash intro overlay -->
@@ -434,9 +470,9 @@
     document.getElementById('theme-toggle').textContent = dark ? '☀' : '🌙';
   }
 
-  // Init: localStorage → light default
+  // Init: localStorage → dark default
   const savedTheme = localStorage.getItem('evenet-theme');
-  applyTheme(savedTheme === 'dark');
+  applyTheme(savedTheme !== 'light');
 
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const dark = !isDark();
@@ -459,7 +495,7 @@
     'dead', 'diffuse', 'erode()', 'p.noise', 'sin(t)',
     'cos(t)', 'lerp()', 'map(x)', 'HSB()', 'blendMode',
     'ADD', 'frameCount', 'drawCall', 'shader.frag', 'uniform',
-    'const pi = 3.14', 'rm -rf', 'tar -xzf', 'git commit',
+    'rm -rf', 'tar -xzf', 'git commit', 'async await',
     'npm install', 'JSON.parse()', 'sudo !!', 'route -n', 'inode_free()',
     'irq_exit: 44', 'yield', 'setTimeout()'
   ];
@@ -468,25 +504,30 @@
     bgCanvas.width  = window.innerWidth;
     bgCanvas.height = window.innerHeight;
 
-    const FONT_H    = 12;
-    const LINE_H    = FONT_H * 2.2;
-    const COL_W     = 130;
-    const NUM_COLS  = Math.ceil(bgCanvas.width  / COL_W) + 1;
-    const NUM_LINES = Math.ceil(bgCanvas.height / LINE_H) + 4;
+    const FONT_H = 12;
+    const LINE_H = FONT_H * 2.2;
+    const COL_W  = 130;
 
-    const cols = Array.from({ length: NUM_COLS }, (_, i) => ({
-      x:     i * COL_W + 10 + (Math.random() * 40 - 20),
-      y:     Math.random() * bgCanvas.height * -1,
-      speed: 0.25 + Math.random() * 0.45,
-      lines: Array.from({ length: NUM_LINES }, () =>
-        BG_WORDS[Math.floor(Math.random() * BG_WORDS.length)]
-      ),
-    }));
+    function buildCols() {
+      const numCols  = Math.floor(bgCanvas.width  / COL_W);
+      const numLines = Math.ceil(bgCanvas.height / LINE_H) + 4;
+      const slotW    = bgCanvas.width / numCols;
+      return Array.from({ length: numCols }, (_, i) => ({
+        x:     i * slotW + 10,
+        y:     Math.random() * bgCanvas.height * -1,
+        speed: 0.25 + Math.random() * 0.45,
+        lines: Array.from({ length: numLines }, () =>
+          BG_WORDS[Math.floor(Math.random() * BG_WORDS.length)]
+        ),
+      }));
+    }
+
+    const cols = buildCols();
 
     function tickBg() {
       bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
       bgCtx.font      = `300 ${FONT_H}px 'DM Mono', monospace`;
-      bgCtx.fillStyle = isDark() ? 'rgba(240, 246, 240, 0.08)' : 'rgba(0, 0, 0, 0.18)';
+      bgCtx.fillStyle = isDark() ? 'rgba(240, 246, 240, 0.2)' : 'rgba(0, 0, 0, 0.45)';
       bgCtx.textAlign = 'left';
 
       for (const col of cols) {
@@ -512,6 +553,9 @@
     window.addEventListener('resize', () => {
       bgCanvas.width  = window.innerWidth;
       bgCanvas.height = window.innerHeight;
+      const rebuilt = buildCols();
+      cols.length = 0;
+      cols.push(...rebuilt);
     });
   }
 
