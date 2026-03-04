@@ -81,11 +81,11 @@
         }
 
         class Tentacle {
-            constructor(x, y) {
+            constructor(x, y, numSegments, len) {
                 this.segments = [];
                 this.base = createVector(x, y);
-                this.numSegments = 48;
-                this.len = 14;
+                this.numSegments = numSegments;
+                this.len = len;
                 // First segment
                 this.segments[0] = new Segment(x, y, this.len, 0);
                 for (let i = 1; i < this.numSegments; i++) {
@@ -131,11 +131,25 @@
         let throwLiftStart = null;
         let throwContactTimer = 0;
         let throwCooldown = 0;
+        let mouseHistory = [];
+        let ballActivated = false;
+        let throwMeFade = 1.0;
+        let hintX, hintY;
 
         let ballHitSounds = [];
         let lastHitFrame = -60;
-        const HIT_COOLDOWN = 10; // frames between sounds
+        const HIT_COOLDOWN = 12; // frames between sounds
         const HIT_THRESHOLD = 1.7; // minimum vy to trigger sound
+        let audioUnlocked = false;
+
+        function unlockAudio() {
+            if (audioUnlocked || ballHitSounds.length === 0) return;
+            audioUnlocked = true;
+            for (let s of ballHitSounds) {
+                s.volume = 0;
+                s.play().then(() => { s.pause(); s.currentTime = 0; s.volume = 1; }).catch(() => {});
+            }
+        }
 
         async function loadBallSounds() {
             for (let i = 1; i <= 5; i++) {
@@ -157,10 +171,18 @@
             s.play().catch(() => {});
         }
 
+        function createArm() {
+            const segLen = 14;
+            const numSegs = Math.max(30, Math.round(52 * (width / 1920)));
+            return new Tentacle(width + 60, height / 2, numSegs, segLen);
+        }
+
         function setup() {
             createCanvas(windowWidth, windowHeight);
-            arm = new Tentacle(width - 2, height / 2);
+            arm = createArm();
             resetBall();
+            hintX = 120;
+            hintY = height / 2;
             loadBallSounds();
             // Speech bubble setup
             window.speechMessages = [
@@ -215,14 +237,20 @@
 
         function windowResized() {
             resizeCanvas(windowWidth, windowHeight);
-            arm = new Tentacle(width - 80, height / 2);
-            resetBall();
+            arm = createArm();
+            if (!ballActivated) {
+                hintX = 120;
+                hintY = height / 2;
+                resetBall();
+            }
         }
 
         function mousePressed() {
+            unlockAudio();
             let d = dist(mouseX, mouseY, ball.x, ball.y);
             // Prevent grabbing if ball is held by tentacle or in throw sequence
             if (d < (ball.radius || 32) && !ball.isHeld && !ball.isReturning && !throwStage) {
+                ballActivated = true;
                 dragging = true;
                 ball.isHeld = true;
                 ball.isReturning = false;
@@ -230,6 +258,7 @@
                 dragOffset.y = ball.y - mouseY;
                 ball.vx = 0;
                 ball.vy = 0;
+                mouseHistory = [];
             }
         }
 
@@ -237,6 +266,8 @@
             if (dragging && ball.isHeld) {
                 ball.x = mouseX + dragOffset.x;
                 ball.y = mouseY + dragOffset.y;
+                mouseHistory.push({ x: mouseX, y: mouseY, t: frameCount });
+                if (mouseHistory.length > 6) mouseHistory.shift();
             }
         }
 
@@ -244,9 +275,18 @@
             if (dragging && ball.isHeld) {
                 dragging = false;
                 ball.isHeld = false;
-                // Throw ball based on drag velocity
-                ball.vx = (mouseX - pmouseX) * 0.75;
-                ball.vy = (mouseY - pmouseY) * 0.75;
+                // Average velocity over recent history frames
+                let vx = 0, vy = 0;
+                if (mouseHistory.length >= 2) {
+                    let oldest = mouseHistory[0];
+                    let newest = mouseHistory[mouseHistory.length - 1];
+                    let dt = Math.max(1, newest.t - oldest.t);
+                    vx = (newest.x - oldest.x) / dt;
+                    vy = (newest.y - oldest.y) / dt;
+                }
+                ball.vx = vx * 0.9;
+                ball.vy = vy * 0.9;
+                mouseHistory = [];
             }
         }
 
@@ -397,7 +437,7 @@
                 throwCooldown = 60; // Prevent reattachment
             }
 
-            if (!ball.isHeld) {
+            if (!ball.isHeld && ballActivated) {
                 ball.x += ball.vx;
                 ball.y += ball.vy;
                 // No gravity during lift phase
@@ -464,6 +504,33 @@
             noStroke();
             fill(ball.isHeld ? 'orange' : 'lime');
             ellipse(ball.x, ball.y, ball.radius * 2, ball.radius * 2);
+
+            // "throw me" hint
+            if (throwMeFade > 0) {
+                if (ballActivated) throwMeFade = max(0, throwMeFade - 0.035);
+                let bob = sin(frameCount * 0.07) * 5;
+                let a = throwMeFade * 255;
+                let tipX = hintX;
+                let tipY = hintY + ball.radius + 5 + bob;
+                let labelY = tipY + 38;
+                push();
+                stroke(255, 255, 255, a);
+                strokeWeight(2);
+                noFill();
+                line(tipX, labelY - 8, tipX, tipY + 10);
+                // arrowhead pointing up
+                let hs = 9;
+                line(tipX, tipY, tipX - hs * cos(-HALF_PI - 0.45), tipY - hs * sin(-HALF_PI - 0.45));
+                line(tipX, tipY, tipX - hs * cos(-HALF_PI + 0.45), tipY - hs * sin(-HALF_PI + 0.45));
+                // label
+                noStroke();
+                fill(255, 255, 255, a);
+                textFont('DM Mono, monospace');
+                textSize(13);
+                textAlign(CENTER, TOP);
+                text('throw me', tipX, labelY);
+                pop();
+            }
 
             // If ball returns to user side, reset
             if (ball.isReturning && ball.x < 80) {
