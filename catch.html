@@ -132,10 +132,32 @@
         let throwContactTimer = 0;
         let throwCooldown = 0;
 
+        let ballHitSounds = [];
+        let lastHitFrame = -60;
+        const HIT_COOLDOWN = 18; // frames between sounds
+        const HIT_THRESHOLD = 3.5; // minimum vy to trigger sound
+
+        function loadBallSounds() {
+            for (let i = 1; i <= 5; i++) {
+                let a = new Audio(`https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/audio/ballhit${i}.wav`);
+                a.preload = 'auto';
+                ballHitSounds.push(a);
+            }
+        }
+
+        function playBallHit() {
+            if (frameCount - lastHitFrame < HIT_COOLDOWN) return;
+            lastHitFrame = frameCount;
+            let s = ballHitSounds[Math.floor(Math.random() * ballHitSounds.length)];
+            s.currentTime = 0;
+            s.play().catch(() => {});
+        }
+
         function setup() {
             createCanvas(windowWidth, windowHeight);
             arm = new Tentacle(width - 2, height / 2);
             resetBall();
+            loadBallSounds();
             // Speech bubble setup
             window.speechMessages = [
                 "I dont have any eyes so I'm finding this ball through smell",
@@ -413,6 +435,7 @@
                 ball.vx *= -0.5;
             }
             if (ball.y > height - ball.radius) {
+                if (ball.vy > HIT_THRESHOLD) playBallHit();
                 ball.y = height - ball.radius;
                 ball.vy *= -0.5;
             }
