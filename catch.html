@@ -135,7 +135,7 @@
         let ballHitSounds = [];
         let lastHitFrame = -60;
         const HIT_COOLDOWN = 10; // frames between sounds
-        const HIT_THRESHOLD = 1.5; // minimum vy to trigger sound
+        const HIT_THRESHOLD = 1.7; // minimum vy to trigger sound
 
         async function loadBallSounds() {
             for (let i = 1; i <= 5; i++) {
@@ -148,11 +148,12 @@
             }
         }
 
-        function playBallHit() {
+        function playBallHit(speed) {
             if (frameCount - lastHitFrame < HIT_COOLDOWN) return;
             lastHitFrame = frameCount;
             let s = ballHitSounds[Math.floor(Math.random() * ballHitSounds.length)];
             s.currentTime = 0;
+            s.volume = Math.min(1, speed / 20);
             s.play().catch(() => {});
         }
 
@@ -175,7 +176,7 @@
                 "Your mom made this game for us to play togetiher",
                 "I can tell you're getting tired of me",
                 "I wish I could see you throw the ball",
-                "you're getting better at throwing",
+                "You're getting better at throwing",
                 "I hope you know I love you",
                 "I can feel the excitement when you throw the ball really hard",
                 "Every throw is a secret every catch is a confession",
@@ -430,19 +431,22 @@
                 throwContactTimer = 0;
             }
             if (ball.x < ball.radius) {
+                if (Math.abs(ball.vx) > HIT_THRESHOLD) playBallHit(Math.abs(ball.vx));
                 ball.x = ball.radius;
                 ball.vx *= -0.5;
             }
             if (ball.x > width - ball.radius) {
+                if (Math.abs(ball.vx) > HIT_THRESHOLD) playBallHit(Math.abs(ball.vx));
                 ball.x = width - ball.radius;
                 ball.vx *= -0.5;
             }
             if (ball.y > height - ball.radius) {
-                if (ball.vy > HIT_THRESHOLD) playBallHit();
+                if (ball.vy > HIT_THRESHOLD) playBallHit(ball.vy);
                 ball.y = height - ball.radius;
                 ball.vy *= -0.5;
             }
             if (ball.y < ball.radius) {
+                if (Math.abs(ball.vy) > HIT_THRESHOLD) playBallHit(Math.abs(ball.vy));
                 ball.y = ball.radius;
                 ball.vy *= -0.5;
             }
