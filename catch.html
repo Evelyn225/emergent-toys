@@ -134,6 +134,8 @@
         let throwLiftTarget = null;
         let throwLiftProgress = 0;
         let throwLiftStart = null;
+        let throwLiftStartVel = null;
+        let throwCatchVel = null;
         let throwContactTimer = 0;
         let throwCooldown = 0;
         let mouseHistory = [];
@@ -335,7 +337,6 @@
         function draw() {
             background(0);
             arm.followBall(ball);
-            arm.show();
 
             // Speech bubble logic
             if (!speechBubble.active && speechBubbleInterval-- <= 0) {
@@ -416,12 +417,14 @@
                 // Ball is lifted up and back
                 if (!throwLiftTarget) {
                     let tip = arm.segments[arm.segments.length - 1].b;
-                    // Use ball's current velocity to determine lift direction
-                    let liftDirX = ball.vx * 90; // amplify influence
-                    let liftDirY = ball.vy * 90;
+                    // Use captured velocity from the catch moment for lift direction
+                    const sourceVel = throwCatchVel || { vx: ball.vx, vy: ball.vy };
+                    // Dad stands on the right; throw should go back left.
+                    let liftDirX = -Math.abs(sourceVel.vx) * 90;
+                    let liftDirY = sourceVel.vy * 45;
                     // Clamp lift direction to reasonable values
-                    liftDirX = constrain(liftDirX, -80, 80);
-                    liftDirY = constrain(liftDirY, -80, 80);
+                    liftDirX = constrain(liftDirX, -60, 80);
+                    liftDirY = constrain(liftDirY, -10, 38);
                     let liftX = tip.x + liftDirX;
                     let desiredLiftY = tip.y + liftDirY - 60;
                     let liftY = min(max(desiredLiftY, ball.radius + 20), height - ball.radius - 20);
@@ -429,7 +432,7 @@
                     throwLiftProgress = 0;
                     throwLiftStart = { x: ball.x, y: ball.y };
                     // Store velocity at start of lift
-                    throwLiftStartVel = { vx: ball.vx, vy: ball.vy };
+                    throwLiftStartVel = { vx: sourceVel.vx, vy: sourceVel.vy };
                 }
                 // Progress from 0 to 1 over throwTimer duration
                 let totalFrames = 24;
@@ -440,7 +443,7 @@
                 ball.x = lerp(throwLiftStart.x, throwLiftTarget.x, throwLiftProgress);
                 ball.y = lerp(throwLiftStart.y, throwLiftTarget.y, throwLiftProgress);
 
-                if (typeof throwLiftStartVel !== 'undefined') {
+                if (throwLiftStartVel) {
                     let liftMoveX = ball.x - prevX;
                     let liftMoveY = ball.y - prevY;
                     ball.vx = lerp(throwLiftStartVel.vx, liftMoveX, throwLiftProgress);
@@ -450,10 +453,6 @@
                 if (throwTimer <= 0 || throwLiftProgress >= 1) {
                     throwStage = 'throw';
                     throwTimer = 0;
-                    throwLiftTarget = null;
-                    throwLiftProgress = 0;
-                    throwLiftStart = null;
-                    throwLiftStartVel = undefined;
                 }
             } else if (throwStage === 'throw') {
                 // Ball is thrown forward, force depends on lift direction
@@ -463,35 +462,38 @@
                 let throwForceX = 0, throwForceY = 0;
                 if (throwLiftTarget && throwLiftStart) {
                     throwForceX = (throwLiftTarget.x - throwLiftStart.x) * 0.5;
+                    throwForceX = -Math.abs(throwForceX);
                     throwForceY = (throwLiftTarget.y - throwLiftStart.y) * 0.5;
+                    
                 } else {
                     // Fallback: throw left and up with extra force
-                    throwForceX = -24 + random(-4, 4);
-                    throwForceY = -18 + random(-4, 4);
+                    throwForceX = random(-2, 2);
+                    throwForceY = random(-1, 2.5);
                 }
-                ball.vx = throwForceX + random(-4, 4);
-                ball.vy = throwForceY + random(-4, 4);
+                ball.vx = throwForceX + random(-1.5, 1.5);
+                ball.vy = throwForceY + random(-1, 2.5);
                 throwStage = null;
                 throwTimer = 0;
                 throwLiftTarget = null;
                 throwLiftProgress = 0;
                 throwLiftStart = null;
+                throwLiftStartVel = null;
+                throwCatchVel = null;
                 throwCooldown = 60; // Prevent reattachment
             }
 
             if (!ball.isHeld && ballActivated) {
-                ball.x += ball.vx;
-                ball.y += ball.vy;
-                // No gravity during lift phase
-                if (!(throwStage === 'lift')) {
+                // Keep normal movement except during scripted lift
+                if (throwStage !== 'lift') {
+                    ball.x += ball.vx;
+                    ball.y += ball.vy;
                     ball.vy += gravity;
                 }
             }
             // If ball is being held by arm, let tentacle tip follow ball's velocity and gravity
             if (!ball.isHeld && !ball.isReturning && tipDist < ball.radius + 8 && !throwStage && throwCooldown === 0) {
+                throwCatchVel = { vx: ball.vx, vy: ball.vy };
                 ball.isReturning = true;
-                ball.x = tip.x;
-                ball.y = tip.y;
                 // Start contact timer
                 if (throwContactTimer === 0) throwContactTimer = 40;
             }
@@ -511,6 +513,7 @@
             // Reset contact timer if ball is not returning
             if (!ball.isReturning) {
                 throwContactTimer = 0;
+                throwCatchVel = null;
             }
             if (ball.x < ball.radius) {
                 if (Math.abs(ball.vx) > HIT_THRESHOLD) playBallHit(Math.abs(ball.vx));
@@ -533,15 +536,17 @@
                 ball.vy *= -0.5;
             }
 
+            arm.followBall(ball);
+
+            // Keep visual/physical lock to the tentacle tip during contact window,
+            // but preserve velocity so motion continues naturally before throw.
             if (ball.isReturning && !ball.isHeld && throwStage !== 'throw' && throwStage !== 'lift') {
-                ball.vy += gravity;
                 let tip = arm.segments[arm.segments.length - 1].b;
-                // Prevent constraint if ball was just thrown
-                if (ball.vx === 0 && ball.vy === 0) {
-                    ball.x = tip.x;
-                    ball.y = tip.y;
-                }
+                ball.x = tip.x;
+                ball.y = tip.y;
             }
+
+            arm.show();
 
             noStroke();
             fill(ball.isHeld ? 'orange' : 'lime');
