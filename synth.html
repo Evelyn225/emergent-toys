@@ -12,10 +12,6 @@
   <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
   <title>Patch Synth</title>
   <style>
-    @font-face {
-      font-family: 'Comico';
-      src: url('Comico-Regular.ttf') format('truetype');
-    }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -34,15 +30,15 @@
           #1c1105 0px, #2a1a0a 1px, #1a0f05 3px, #221408 4px, #1c1105 6px
         );
       background-color: #1a0f05;
-      font-family: 'Comico', 'Courier New', monospace;
+      font-family:'Courier New', monospace;
     }
 
     /* ─── Rack outer frame ─── */
     .rack {
       position: relative;
-      margin: 8px auto 0;
-      width: 1300px;
-      max-width: 98vw;
+      margin: 40px auto 20px;
+      width: calc(var(--rack-hp) * var(--hp) + 24px);
+      max-width: 99vw;
       background: linear-gradient(180deg, #2a1a0a 0%, #1c1005 40%, #2a1a0a 100%);
       border-radius: 10px;
       box-shadow:
@@ -50,7 +46,7 @@
         0 0 0 7px #6a4820,
         0 0 40px rgba(0,0,0,0.9),
         inset 0 2px 4px rgba(255,200,100,0.1);
-      padding: 0 12px 12px;
+      padding: 10px 12px 12px;
     }
 
     /* ─── Rail (top and bottom of each row) ─── */
@@ -103,6 +99,9 @@
       display: flex;
       gap: 0;
       min-height: 260px;
+      width: calc(var(--rack-hp) * var(--hp));
+      overflow: hidden;
+      flex-wrap: nowrap;
     }
 
     /* ─── Module panel (faceplate) ─── */
@@ -124,7 +123,7 @@
     .panel:first-child { border-left: none; }
 
     .panel-title {
-      font-family: 'Comico', monospace;
+      font-family: 'Satoshi', monospace;
       font-size: 11px;
       font-weight: normal;
       color: rgba(20,10,0,0.85);
@@ -163,23 +162,21 @@
     }
     .knob-pip {
       position: absolute;
-      top: 4px;
+      bottom: 50%;
       left: 50%;
-      transform: translateX(-50%);
       width: 3px;
-      height: 8px;
+      height: 12px;
       background: rgba(255,240,200,0.9);
-      border-radius: 2px;
-      transform-origin: bottom center;
+      border-radius: 2px 2px 0 0;
+      transform-origin: 50% 100%;
       pointer-events: none;
     }
     .knob.small .knob-pip {
-      top: 3px;
       width: 2px;
-      height: 6px;
+      height: 9px;
     }
     .knob-label {
-      font-family: 'Comico', monospace;
+      font-family: 'Satoshi', monospace;
       font-size: 9px;
       color: rgba(20,10,0,0.75);
       text-transform: uppercase;
@@ -191,11 +188,10 @@
 
     /* ─── Waveform selector ─── */
     .wave-selector {
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 3px;
       margin: 4px 0;
-      flex-wrap: wrap;
-      justify-content: center;
     }
     .wave-btn {
       width: 26px;
@@ -255,6 +251,13 @@
       position: relative;
       transition: box-shadow 0.15s;
     }
+    /* Invisible hitbox extension — pseudo-element fires events on .jack */
+    .jack::before {
+      content: '';
+      position: absolute;
+      inset: -7px;
+      border-radius: 50%;
+    }
     .jack.input {
       box-shadow:
         inset 0 2px 4px rgba(0,0,0,0.8),
@@ -275,7 +278,7 @@
         0 0 0 3px rgba(0,0,0,0.3);
     }
     .jack-label {
-      font-family: 'Comico', monospace;
+      font-family: 'Satoshi', monospace;
       font-size: 8px;
       color: rgba(20,10,0,0.65);
       text-transform: uppercase;
@@ -345,10 +348,10 @@
     /* ─── Patch info overlay ─── */
     #patch-hint {
       position: fixed;
-      bottom: 146px;
+      bottom: 16px;
       left: 50%;
       transform: translateX(-50%);
-      font-family: 'Comico', monospace;
+      font-family: 'Satoshi', monospace;
       font-size: 11px;
       color: rgba(240,235,220,0.5);
       pointer-events: none;
@@ -358,25 +361,12 @@
       white-space: nowrap;
     }
 
-    /* ─── Piano keyboard ─── */
-    #keyboard-wrap {
-      position: fixed;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 100;
-      padding: 6px 12px 8px;
-      background: linear-gradient(180deg, #1a1008, #0a0804);
-      border-top: 2px solid #4a3015;
-      border-left: 2px solid #4a3015;
-      border-right: 2px solid #4a3015;
-      border-radius: 6px 6px 0 0;
-      box-shadow: 0 -4px 20px rgba(0,0,0,0.7);
-    }
+    /* ─── Piano keyboard (inside rack panel) ─── */
     #keyboard {
       position: relative;
       height: 110px;
       user-select: none;
+      margin-top: 4px;
     }
     .key {
       position: absolute;
@@ -398,9 +388,19 @@
       padding-bottom: 6px;
     }
     .white-key span {
-      font-family: 'Comico', monospace;
+      font-family: 'Satoshi', monospace;
       font-size: 8px;
       color: rgba(0,0,0,0.4);
+      pointer-events: none;
+    }
+    .black-key span {
+      position: absolute;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Satoshi', monospace;
+      font-size: 6px;
+      color: rgba(255,255,255,0.45);
       pointer-events: none;
     }
     .white-key:hover { background: linear-gradient(180deg, #f0ece4, #faf6ee); }
@@ -422,9 +422,98 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.8), inset 0 2px 4px rgba(80,120,255,0.4);
     }
 
+    /* ─── Clear patches button ─── */
+    #clear-patches-btn:hover {
+      background: linear-gradient(180deg, #3a2510, #2a1a08) !important;
+      color: rgba(240,235,220,0.95) !important;
+      border-color: #7a5025 !important;
+    }
+    #clear-patches-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* ─── HP Grid ─── */
+    :root { --hp: 20px; --rack-hp: 70; }
+    .hp-25 { width: calc(25 * var(--hp)); flex-shrink: 0; }
+    .hp-4  { width: calc(4  * var(--hp)); flex-shrink: 0; }
+    .hp-5  { width: calc(5  * var(--hp)); flex-shrink: 0; }
+    .hp-6  { width: calc(6  * var(--hp)); flex-shrink: 0; }
+    .hp-8  { width: calc(8  * var(--hp)); flex-shrink: 0; }
+    .hp-10 { width: calc(10 * var(--hp)); flex-shrink: 0; }
+    .hp-22 { width: calc(22 * var(--hp)); flex-shrink: 0; }
+
+    /* ─── Panel drag ─── */
+    .panel { transition: transform 0.12s ease; }
+    .panel.dragging-ghost {
+      position: fixed; z-index: 900; opacity: 0.9;
+      pointer-events: none; cursor: grabbing;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.8);
+      transform: scale(1.03);
+    }
+    .panel-placeholder {
+      flex-shrink: 0;
+      border: 2px dashed rgba(255,200,100,0.3);
+      border-radius: 4px;
+      background: rgba(255,200,100,0.04);
+      min-height: 260px;
+    }
+    .panel-title { cursor: grab; }
+
+    /* ─── Close button ─── */
+    .panel-close {
+      position: absolute; top: 3px; right: 3px;
+      width: 14px; height: 14px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.45);
+      border-radius: 50%;
+      opacity: 0.45; cursor: pointer;
+      font-size: 11px; font-weight: bold; line-height: 1;
+      color: rgba(255,220,180,0.9);
+      transition: opacity 0.1s, background 0.1s;
+      z-index: 20; user-select: none;
+    }
+    .panel-close:hover {
+      opacity: 1;
+      background: rgba(200,50,50,0.8);
+      color: #fff;
+    }
+
+    /* ─── Add module bar ─── */
+    #add-module-bar {
+      text-align: center;
+      margin: 8px auto 20px;
+      width: calc(var(--rack-hp) * var(--hp) + 24px);
+      max-width: 99vw;
+    }
+    #add-module-toggle {
+      background: rgba(255,255,255,0.08);
+      color: rgba(240,235,220,0.8);
+      border: 1px solid rgba(255,200,100,0.3);
+      border-radius: 5px; padding: 6px 18px;
+      font-family: 'Satoshi', monospace; font-size: 11px;
+      letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #add-module-toggle:hover { background: rgba(255,200,100,0.15); }
+    #add-module-drawer {
+      display: none; flex-wrap: wrap; gap: 6px;
+      justify-content: center; padding: 10px; margin-top: 6px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,200,100,0.15); border-radius: 6px;
+    }
+    #add-module-drawer button {
+      background: rgba(255,255,255,0.08); color: rgba(240,235,220,0.75);
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 4px;
+      padding: 5px 10px; font-family: 'Satoshi', monospace; font-size: 10px;
+      letter-spacing: 0.06em; cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    #add-module-drawer button:hover { background: rgba(255,200,100,0.2); }
+    #add-module-drawer button:active { transform: scale(0.96); }
+
     /* ─── Active cable color bands ─── */
     .panel-row-label {
-      font-family: 'Comico', monospace;
+      font-family: 'Satoshi', monospace;
       font-size: 9px;
       color: rgba(240,235,220,0.45);
       letter-spacing: 0.15em;
@@ -451,7 +540,7 @@
        alt="home" style="width:18px;height:18px;object-fit:contain;">
 </a>
 
-<div id="patch-hint">drag from output jack → input jack to patch &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; hold SPACE for gate</div>
+<div id="patch-hint">drag from output jack → input jack to patch &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; KBD: keys play notes &nbsp;|&nbsp; FREE: raw signal</div>
 
 <div class="rack" id="rack">
 
@@ -459,8 +548,8 @@
   <div class="rail"><div class="rail-screws" id="rail-screws-top-1"></div></div>
   <div class="row" id="row1">
     <!-- VCO 1 -->
-    <div class="panel" id="mod-vco1" style="width:106px">
-      <div class="panel-title">VCO 1</div>
+    <div class="panel hp-5" id="mod-vco1" data-hp="5">
+      <div class="panel-title">VCO</div>
       <div class="knob-wrap">
         <div class="knob" data-module="vco1" data-param="freq" data-min="20" data-max="2000" data-default="220" data-scale="exp">
           <div class="knob-pip"></div>
@@ -493,8 +582,8 @@
     </div>
 
     <!-- VCO 2 -->
-    <div class="panel" id="mod-vco2" style="width:106px">
-      <div class="panel-title">VCO 2</div>
+    <div class="panel hp-5" id="mod-vco2" data-hp="5">
+      <div class="panel-title">VCO</div>
       <div class="knob-wrap">
         <div class="knob" data-module="vco2" data-param="freq" data-min="20" data-max="2000" data-default="330" data-scale="exp">
           <div class="knob-pip"></div>
@@ -527,7 +616,7 @@
     </div>
 
     <!-- VCF -->
-    <div class="panel" id="mod-vcf" style="width:90px">
+    <div class="panel hp-5" id="mod-vcf" data-hp="5">
       <div class="panel-title">VCF</div>
       <div class="knob-wrap">
         <div class="knob" data-module="vcf" data-param="cutoff" data-min="20" data-max="18000" data-default="2000" data-scale="exp">
@@ -565,7 +654,7 @@
     </div>
 
     <!-- VCA -->
-    <div class="panel" id="mod-vca" style="width:80px">
+    <div class="panel hp-5" id="mod-vca" data-hp="5">
       <div class="panel-title">VCA</div>
       <div class="knob-wrap">
         <div class="knob" data-module="vca" data-param="gain" data-min="0" data-max="1" data-default="0.5" data-scale="lin">
@@ -593,9 +682,9 @@
     </div>
 
     <!-- ADSR -->
-    <div class="panel" id="mod-adsr" style="width:110px">
+    <div class="panel hp-5" id="mod-adsr" data-hp="5">
       <div class="panel-title">ADSR</div>
-      <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;justify-items:center">
         <div class="knob-wrap">
           <div class="knob small" data-module="adsr" data-param="attack" data-min="0.001" data-max="4" data-default="0.01" data-scale="exp">
             <div class="knob-pip"></div>
@@ -635,7 +724,7 @@
     </div>
 
     <!-- LFO -->
-    <div class="panel" id="mod-lfo" style="width:106px">
+    <div class="panel hp-5" id="mod-lfo" data-hp="5">
       <div class="panel-title">LFO</div>
       <div class="knob-wrap">
         <div class="knob" data-module="lfo" data-param="rate" data-min="0.1" data-max="20" data-default="1" data-scale="exp">
@@ -665,7 +754,7 @@
     </div>
 
     <!-- Noise -->
-    <div class="panel" id="mod-noise" style="width:80px">
+    <div class="panel hp-5" id="mod-noise" data-hp="5">
       <div class="panel-title">Noise</div>
       <div style="flex:1"></div>
       <div class="panel-divider"></div>
@@ -682,7 +771,7 @@
     </div>
 
     <!-- Chorus -->
-    <div class="panel" id="mod-chorus" style="width:100px">
+    <div class="panel hp-5" id="mod-chorus" data-hp="5">
       <div class="panel-title">Chorus</div>
       <div class="knob-wrap">
         <div class="knob small" data-module="chorus" data-param="rate" data-min="0.1" data-max="8" data-default="0.5" data-scale="exp">
@@ -727,7 +816,7 @@
   <div class="rail" style="margin-top:8px"><div class="rail-screws" id="rail-screws-top-2"></div></div>
   <div class="row" id="row2">
     <!-- S&H -->
-    <div class="panel" id="mod-sh" style="width:80px">
+    <div class="panel hp-5" id="mod-sh" data-hp="5">
       <div class="panel-title">S&amp;H</div>
       <div style="flex:1"></div>
       <div class="panel-divider"></div>
@@ -750,7 +839,7 @@
     </div>
 
     <!-- Mixer (4ch) -->
-    <div class="panel" id="mod-mixer" style="width:120px">
+    <div class="panel hp-10" id="mod-mixer" data-hp="10">
       <div class="panel-title">Mixer</div>
       <div style="display:flex;gap:4px;justify-content:center">
         <div class="knob-wrap">
@@ -806,8 +895,8 @@
     </div>
 
     <!-- Ring Mod -->
-    <div class="panel" id="mod-ringmod" style="width:90px">
-      <div class="panel-title">Ring Mod</div>
+    <div class="panel hp-5" id="mod-ringmod" data-hp="5">
+      <div class="panel-title">Ring<br>Mod</div>
       <div style="flex:1"></div>
       <div class="panel-divider"></div>
       <div class="jack-row">
@@ -829,7 +918,7 @@
     </div>
 
     <!-- Reverb -->
-    <div class="panel" id="mod-reverb" style="width:90px">
+    <div class="panel hp-5" id="mod-reverb" data-hp="5">
       <div class="panel-title">Reverb</div>
       <div class="knob-wrap">
         <div class="knob" data-module="reverb" data-param="mix" data-min="0" data-max="1" data-default="0.5" data-scale="lin">
@@ -857,7 +946,7 @@
     </div>
 
     <!-- Delay -->
-    <div class="panel" id="mod-delay" style="width:110px">
+    <div class="panel hp-5" id="mod-delay" data-hp="5">
       <div class="panel-title">Delay</div>
       <div style="display:flex;gap:4px;justify-content:center">
         <div class="knob-wrap">
@@ -893,7 +982,7 @@
     </div>
 
     <!-- Compressor -->
-    <div class="panel" id="mod-comp" style="width:110px">
+    <div class="panel hp-5" id="mod-comp" data-hp="5">
       <div class="panel-title">Comp</div>
       <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
         <div class="knob-wrap">
@@ -935,7 +1024,7 @@
     </div>
 
     <!-- Oscilloscope -->
-    <div class="panel" id="mod-scope" style="width:100px">
+    <div class="panel hp-5" id="mod-scope" data-hp="5">
       <div class="panel-title">Scope</div>
       <canvas id="scope-canvas" width="80" height="60" style="display:block;margin:4px auto;border-radius:3px;background:#050a05;box-shadow:inset 0 1px 4px rgba(0,0,0,0.9);"></canvas>
       <div class="panel-divider"></div>
@@ -948,7 +1037,7 @@
     </div>
 
     <!-- Output -->
-    <div class="panel" id="mod-output" style="width:100px">
+    <div class="panel hp-5" id="mod-output" data-hp="5" data-fixed="true">
       <div class="panel-title">Output</div>
       <div class="knob-wrap">
         <div class="knob" data-module="output" data-param="volume" data-min="0" data-max="1" data-default="0.8" data-scale="lin">
@@ -969,30 +1058,69 @@
         </div>
       </div>
     </div>
+    <!-- Keyboard -->
+    <div class="panel hp-25" id="mod-keyboard" data-hp="25" data-fixed="true">
+      <div class="panel-title">Keyboard</div>
+      <div class="wave-selector" id="kb-mode-selector">
+        <div class="wave-btn active" id="kb-mode-kbd" onclick="setKeyboardMode(true)">KBD</div>
+        <div class="wave-btn" id="kb-mode-free" onclick="setKeyboardMode(false)">FREE</div>
+      </div>
+      <div class="panel-divider"></div>
+      <div id="keyboard"></div>
+    </div>
   </div>
   <div class="rail"><div class="rail-screws" id="rail-screws-bot-2"></div></div>
 
 </div><!-- /.rack -->
 
-<div id="keyboard-wrap">
-  <div id="keyboard"></div>
+<div id="add-module-bar">
+  <button id="add-module-toggle">+ Add Module</button>
+  <div id="add-module-drawer"></div>
+</div>
+
+<div style="text-align:center;margin:10px auto 0;width:calc(70 * 20px + 24px);max-width:99vw;">
+  <button id="clear-patches-btn" onclick="clearAllPatches()"
+    style="background:linear-gradient(180deg,#2a1a0a,#1c1005);
+           color:rgba(240,235,220,0.7);
+           border:1px solid #4a3015;
+           border-radius:5px;
+           padding:6px 18px;
+           font-family:'Satoshi',monospace;
+           font-size:11px;
+           letter-spacing:0.1em;
+           text-transform:uppercase;
+           cursor:pointer;
+           transition:background 0.15s,color 0.15s;">
+    Clear All Patches
+  </button>
 </div>
 
 <script>
+
 // ═══════════════════════════════════════════════════
-// RAIL SCREWS
+// KEYBOARD MODE
 // ═══════════════════════════════════════════════════
-function populateScrews(containerId) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  const n = Math.floor(el.parentElement.offsetWidth / 32);
-  for (let i = 0; i < n; i++) {
-    const s = document.createElement('div');
-    s.className = 'screw';
-    el.appendChild(s);
+let keyboardMode = true;
+
+function setKeyboardMode(mode) {
+  keyboardMode = mode;
+  document.getElementById('kb-mode-kbd').classList.toggle('active', mode);
+  document.getElementById('kb-mode-free').classList.toggle('active', !mode);
+  if (!ctx || !nodes.adsr || !nodes.masterGate) return;
+  // Always disconnect first to avoid duplicate connections on repeated toggles
+  try { nodes.adsr.const.disconnect(nodes.masterGate.gain); } catch(e) {}
+  const now = ctx.currentTime;
+  nodes.masterGate.gain.cancelScheduledValues(now);
+  if (!keyboardMode) {
+    // FREE: open gate directly; ADSR output is left untouched for any patches
+    nodes.masterGate.gain.setValueAtTime(1, now);
+    document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
+  } else {
+    // KBD: close gate and hand control back to ADSR
+    nodes.masterGate.gain.setValueAtTime(0, now);
+    nodes.adsr.const.connect(nodes.masterGate.gain);
   }
 }
-['rail-screws-top-1','rail-screws-bot-1','rail-screws-top-2','rail-screws-bot-2'].forEach(populateScrews);
 
 // ═══════════════════════════════════════════════════
 // WEB AUDIO ENGINE
@@ -1090,26 +1218,15 @@ function initAudio() {
   });
 
   // ── S&H ──
-  // ChannelMerger separates signal (ch0) and trigger (ch1) before the processor
   const shSigIn  = ctx.createGain();
   const shTrigIn = ctx.createGain();
-  const shMerger = ctx.createChannelMerger(2);
-  shSigIn.connect(shMerger,  0, 0);
-  shTrigIn.connect(shMerger, 0, 1);
-  const shNode = ctx.createScriptProcessor(256, 2, 1);
-  shMerger.connect(shNode);
-  let shHeld = 0, shLastTrig = 0;
-  shNode.onaudioprocess = (e) => {
-    const sig  = e.inputBuffer.getChannelData(0);
-    const trig = e.inputBuffer.getChannelData(1);
-    const out  = e.outputBuffer.getChannelData(0);
-    for (let i = 0; i < sig.length; i++) {
-      if (trig[i] > 0.5 && shLastTrig <= 0.5) shHeld = sig[i];
-      shLastTrig = trig[i];
-      out[i] = shHeld;
-    }
-  };
-  nodes.sh = { node: shNode, sigIn: shSigIn, trigIn: shTrigIn };
+  nodes.sh = { sigIn: shSigIn, trigIn: shTrigIn };
+  registerSHWorklet().then(() => {
+    const shNode = new AudioWorkletNode(ctx, 'sh-processor', { numberOfInputs: 2, numberOfOutputs: 1 });
+    shSigIn.connect(shNode, 0, 0);
+    shTrigIn.connect(shNode, 0, 1);
+    nodes.sh.node = shNode;
+  });
 
   // ── Mixer ──
   const mixGains = [1,2,3,4].map(() => {
@@ -1214,13 +1331,18 @@ function initAudio() {
   analyser = ctx.createAnalyser();
   analyser.fftSize = 256;
   const outputVol = ctx.createGain();
-  outputVol.gain.value = 0.8;
+  outputVol.gain.setValueAtTime(0, ctx.currentTime);
+  outputVol.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.08);
   const outputL = ctx.createGain();
   const outputR = ctx.createGain();
   // masterGate sits between analyser and outputVol — ADSR controls it
   const masterGate = ctx.createGain();
-  masterGate.gain.value = 0; // silent until a key is pressed
-  nodes.adsr.const.connect(masterGate.gain);
+  if (keyboardMode) {
+    masterGate.gain.value = 0; // silent until a key is pressed
+    nodes.adsr.const.connect(masterGate.gain);
+  } else {
+    masterGate.gain.value = 1; // FREE mode: gate always open
+  }
   outputL.connect(analyser);
   outputR.connect(analyser);
   analyser.connect(masterGate);
@@ -1230,21 +1352,38 @@ function initAudio() {
   nodes.masterGate = masterGate;
 }
 
-function buildIR(secs) {
-  if (!ctx || !nodes.reverb) return;
-  const sr = ctx.sampleRate;
-  const len = sr * secs;
-  const ir = ctx.createBuffer(2, len, sr);
-  for (let c = 0; c < 2; c++) {
-    const d = ir.getChannelData(c);
-    for (let i = 0; i < len; i++) {
-      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+
+let _shWorkletLoaded = false;
+async function registerSHWorklet() {
+  if (_shWorkletLoaded) return;
+  _shWorkletLoaded = true;
+  const code = `
+    class SampleAndHoldProcessor extends AudioWorkletProcessor {
+      constructor() { super(); this._held = 0; this._lastTrig = 0; }
+      process(inputs, outputs) {
+        const sig  = inputs[0] && inputs[0][0];
+        const trig = inputs[1] && inputs[1][0];
+        const out  = outputs[0][0];
+        for (let i = 0; i < out.length; i++) {
+          const s = sig  ? sig[i]  : 0;
+          const t = trig ? trig[i] : 0;
+          if (t > 0.5 && this._lastTrig <= 0.5) this._held = s;
+          this._lastTrig = t;
+          out[i] = this._held;
+        }
+        return true;
+      }
     }
-  }
-  nodes.reverb.conv.buffer = ir;
+    registerProcessor('sh-processor', SampleAndHoldProcessor);
+  `;
+  const blob = new Blob([code], { type: 'application/javascript' });
+  await ctx.audioWorklet.addModule(URL.createObjectURL(blob));
 }
 
+let _noiseWorkletLoaded = false;
 async function registerNoiseWorklet() {
+  if (_noiseWorkletLoaded) return;
+  _noiseWorkletLoaded = true;
   const whiteCode = `
     class WhiteNoiseProcessor extends AudioWorkletProcessor {
       process(inputs, outputs) {
@@ -1326,55 +1465,54 @@ function applyKnobValue(knobEl, value) {
 
   if (!ctx || !nodes[mod]) return;
   const n = nodes[mod];
+  const type = mod.replace(/\d+$/, '');
 
   // Route knob value to audio param
-  if (mod === 'vco1') {
+  if (type === 'vco') {
     if (param === 'freq') n.osc.frequency.value = value;
     if (param === 'fine') n.osc.detune.value = value;
-  } else if (mod === 'vco2') {
-    if (param === 'freq') n.osc.frequency.value = value;
-    if (param === 'fine') n.osc.detune.value = value;
-  } else if (mod === 'vcf') {
+  } else if (type === 'vcf') {
     if (param === 'cutoff') { n.lp.frequency.value = value; n.hp.frequency.value = value; }
     if (param === 'resonance') { n.lp.Q.value = value; n.hp.Q.value = value; }
-  } else if (mod === 'vca') {
+  } else if (type === 'vca') {
     if (param === 'gain') n.gain.gain.value = value;
-  } else if (mod === 'adsr') {
+  } else if (type === 'adsr') {
     n[param] = value;
-  } else if (mod === 'lfo') {
+  } else if (type === 'lfo') {
     if (param === 'rate') n.osc.frequency.value = value;
     if (param === 'depth') n.depthGain.gain.value = value;
-  } else if (mod === 'mixer') {
+  } else if (type === 'mixer') {
     const idx = parseInt(param.replace('level','')) - 1;
     if (n.gains[idx]) n.gains[idx].gain.value = value;
-  } else if (mod === 'reverb') {
+  } else if (type === 'reverb') {
     if (param === 'mix') {
       n.wetGain.gain.value = value;
       n.dryGain.gain.value = 1 - value;
       n.mix = value;
     }
-    if (param === 'size') { n.size = value; buildIR(value); }
-  } else if (mod === 'delay') {
+    if (param === 'size') { n.size = value; buildIR(value, mod); }
+  } else if (type === 'delay') {
     if (param === 'time') n.node.delayTime.value = value;
     if (param === 'feedback') n.fb.gain.value = value;
     if (param === 'mix') { n.wet.gain.value = value; n.dry.gain.value = 1 - value; }
-  } else if (mod === 'chorus') {
+  } else if (type === 'chorus') {
     if (param === 'rate') n.lfo.frequency.value = value;
     if (param === 'depth') { n.depthL.gain.value = value; n.depthR.gain.value = value; }
     if (param === 'mix') { n.wetL.gain.value = value; n.wetR.gain.value = value; }
-  } else if (mod === 'comp') {
+  } else if (type === 'comp') {
     if (param === 'threshold') n.node.threshold.value = value;
     if (param === 'ratio') n.node.ratio.value = value;
     if (param === 'attack') n.node.attack.value = value;
     if (param === 'release') n.node.release.value = value;
-  } else if (mod === 'output') {
+  } else if (type === 'output') {
     if (param === 'volume') n.vol.gain.value = value;
   }
 }
 
 // Init knob visual positions
-function initKnobs() {
-  document.querySelectorAll('.knob').forEach(knobEl => {
+function initKnobs(root) {
+  root = root || document;
+  root.querySelectorAll('.knob').forEach(knobEl => {
     const val = parseFloat(knobEl.dataset.default);
     const min = parseFloat(knobEl.dataset.min);
     const max = parseFloat(knobEl.dataset.max);
@@ -1412,20 +1550,22 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseup', () => { activeKnob = null; });
 
 // Wave selectors
-document.querySelectorAll('.wave-selector').forEach(sel => {
-  const mod = sel.dataset.module;
-  sel.querySelectorAll('.wave-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      sel.querySelectorAll('.wave-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      if (!ctx) return;
-      const wave = btn.dataset.wave;
-      if (mod === 'vco1') nodes.vco1.osc.type = wave;
-      if (mod === 'vco2') nodes.vco2.osc.type = wave;
-      if (mod === 'lfo') nodes.lfo.osc.type = wave;
+function initWaveSelectors(root) {
+  root = root || document;
+  root.querySelectorAll('.wave-selector').forEach(sel => {
+    const mod = sel.dataset.module;
+    sel.querySelectorAll('.wave-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        sel.querySelectorAll('.wave-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (!ctx) return;
+        const wave = btn.dataset.wave;
+        const modType = mod.replace(/\d+$/, '');
+        if ((modType === 'vco' || modType === 'lfo') && nodes[mod]) nodes[mod].osc.type = wave;
+      });
     });
   });
-});
+}
 
 // ═══════════════════════════════════════════════════
 // PATCHING SYSTEM
@@ -1438,56 +1578,55 @@ let mousePos = { x: 0, y: 0 };
 function getAudioNode(mod, jack, type) {
   if (!ctx || !nodes[mod]) return null;
   const n = nodes[mod];
+  const modType = mod.replace(/\d+$/, '');
   // outputs
   if (type === 'output') {
-    if (mod === 'vco1') return n.out;
-    if (mod === 'vco2') return n.out;
-    if (mod === 'vcf') {
+    if (modType === 'vco') return n.out;
+    if (modType === 'vcf') {
       if (jack === 'lp') return n.lp;
       if (jack === 'hp') return n.hp;
     }
-    if (mod === 'vca') return n.gain;
-    if (mod === 'adsr') return n.const;
-    if (mod === 'lfo') return n.depthGain;
-    if (mod === 'noise') {
+    if (modType === 'vca') return n.gain;
+    if (modType === 'adsr') return n.const;
+    if (modType === 'lfo') return n.depthGain;
+    if (modType === 'noise') {
       if (jack === 'white') return n.white;
       if (jack === 'pink') return n.pink;
     }
-    if (mod === 'sh') return n.node;
-    if (mod === 'mixer') return n.out;
-    if (mod === 'ringmod') return n.out;
-    if (mod === 'reverb') return n.wetGain;
-    if (mod === 'delay') return n.mix;
-    if (mod === 'chorus') {
+    if (modType === 'sh') return n.node;
+    if (modType === 'mixer') return n.out;
+    if (modType === 'ringmod') return n.out;
+    if (modType === 'reverb') return n.wetGain;
+    if (modType === 'delay') return n.mix;
+    if (modType === 'chorus') {
       if (jack === 'outL') return n.wetL;
       if (jack === 'outR') return n.wetR;
     }
-    if (mod === 'comp') return n.node;
+    if (modType === 'comp') return n.node;
   }
   // inputs (return AudioNode that accepts connection)
   if (type === 'input') {
-    if (mod === 'vco1' && jack === 'pitchcv') return n.pitchCvGain;
-    if (mod === 'vco2' && jack === 'pitchcv') return n.pitchCvGain;
-    if (mod === 'vcf' && jack === 'audioin') return n.in;        // GainNode splitter → LP+HP
-    if (mod === 'vcf' && jack === 'cutoffcv') return n.cvGain;   // GainNode → frequency AudioParam
-    if (mod === 'vca' && jack === 'audioin') return n.gain;       // GainNode, audio flows through
-    if (mod === 'vca' && jack === 'cv') return n.gain.gain;       // AudioParam, direct modulation
-    if (mod === 'adsr' && jack === 'gate') return null;           // handled by spacebar
-    if (mod === 'sh' && jack === 'sigin')  return n.sigIn;
-    if (mod === 'sh' && jack === 'trigin') return n.trigIn;
-    if (mod === 'mixer') {
+    if (modType === 'vco' && jack === 'pitchcv') return n.pitchCvGain;
+    if (modType === 'vcf' && jack === 'audioin') return n.in;
+    if (modType === 'vcf' && jack === 'cutoffcv') return n.cvGain;
+    if (modType === 'vca' && jack === 'audioin') return n.gain;
+    if (modType === 'vca' && jack === 'cv') return n.gain.gain;
+    if (modType === 'adsr' && jack === 'gate') return null;
+    if (modType === 'sh' && jack === 'sigin')  return n.sigIn;
+    if (modType === 'sh' && jack === 'trigin') return n.trigIn;
+    if (modType === 'mixer') {
       const idx = ['in1','in2','in3','in4'].indexOf(jack);
       return n.gains[idx] || null;
     }
-    if (mod === 'ringmod' && jack === 'carrier') return n.impl;        // GainNode, audio through
-    if (mod === 'ringmod' && jack === 'mod') return n.impl.gain;       // AudioParam, drives multiply
-    if (mod === 'reverb' && jack === 'audioin') return n.in;           // GainNode → conv + dry
-    if (mod === 'delay' && jack === 'audioin') return n.in;
-    if (mod === 'chorus' && jack === 'audioin') return n.in;
-    if (mod === 'comp' && jack === 'audioin') return n.node;
-    if (mod === 'scope' && jack === 'audioin') return n.analyser;
-    if (mod === 'output' && jack === 'inL') return n.inL;
-    if (mod === 'output' && jack === 'inR') return n.inR;
+    if (modType === 'ringmod' && jack === 'carrier') return n.impl;
+    if (modType === 'ringmod' && jack === 'mod') return n.impl.gain;
+    if (modType === 'reverb' && jack === 'audioin') return n.in;
+    if (modType === 'delay' && jack === 'audioin') return n.in;
+    if (modType === 'chorus' && jack === 'audioin') return n.in;
+    if (modType === 'comp' && jack === 'audioin') return n.node;
+    if (modType === 'scope' && jack === 'audioin') return n.analyser;
+    if (modType === 'output' && jack === 'inL') return n.inL;
+    if (modType === 'output' && jack === 'inR') return n.inR;
   }
   return null;
 }
@@ -1499,22 +1638,24 @@ function jackCenter(el) {
 }
 
 // Setup jack events
-document.querySelectorAll('.jack').forEach(jackEl => {
-  jackEl.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    initAudio();
-    const mod = jackEl.dataset.module;
-    const jack = jackEl.dataset.jack;
-    const type = jackEl.dataset.type;
-    const pt = jackCenter(jackEl);
-    dragging = { fromMod: mod, fromJack: jack, fromType: type, fromEl: jackEl, fromPt: pt };
-    canvas.classList.add('dragging');
+function initJacks(root) {
+  root = root || document;
+  root.querySelectorAll('.jack').forEach(jackEl => {
+    jackEl.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      initAudio();
+      const mod = jackEl.dataset.module;
+      const jack = jackEl.dataset.jack;
+      const type = jackEl.dataset.type;
+      const pt = jackCenter(jackEl);
+      dragging = { fromMod: mod, fromJack: jack, fromType: type, fromEl: jackEl, fromPt: pt };
+      canvas.classList.add('dragging');
+    });
+    jackEl.addEventListener('mouseenter', () => jackEl.classList.add('hover'));
+    jackEl.addEventListener('mouseleave', () => jackEl.classList.remove('hover'));
   });
-
-  jackEl.addEventListener('mouseenter', () => jackEl.classList.add('hover'));
-  jackEl.addEventListener('mouseleave', () => jackEl.classList.remove('hover'));
-});
+}
 
 document.addEventListener('mousemove', (e) => {
   const c = canvas.getBoundingClientRect();
@@ -1576,6 +1717,10 @@ function removePatch(idx) {
     try { p.srcNode.disconnect(p.dstNode); } catch(e) {}
   }
   patches.splice(idx, 1);
+}
+
+function clearAllPatches() {
+  while (patches.length) removePatch(0);
 }
 
 const canvas = document.getElementById('cable-canvas');
@@ -1756,7 +1901,7 @@ const vuCtx = vuCanvas.getContext('2d');
 
 function drawVU() {
   vuCtx.clearRect(0, 0, 60, 80);
-  if (analyser) {
+  if (analyser && (!keyboardMode || noteActive)) {
     const buf = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteTimeDomainData(buf);
     let peak = 0;
@@ -1789,6 +1934,7 @@ function drawVU() {
 // ═══════════════════════════════════════════════════
 function gateOn() {
   if (!ctx || !nodes.adsr) return;
+  if (!keyboardMode) return;
   const a = nodes.adsr;
   const now = ctx.currentTime;
   a.gateOn = true;
@@ -1800,6 +1946,7 @@ function gateOn() {
 
 function gateOff() {
   if (!ctx || !nodes.adsr) return;
+  if (!keyboardMode) return;
   const a = nodes.adsr;
   const now = ctx.currentTime;
   a.gateOn = false;
@@ -1810,6 +1957,8 @@ function gateOff() {
 
 function noteOn(midi) {
   initAudio();
+  noteActive = true;
+  if (!keyboardMode) return;
   const freq = 440 * Math.pow(2, (midi - 69) / 12);
   if (nodes.vco1) nodes.vco1.osc.frequency.value = freq;
   if (nodes.vco2) nodes.vco2.osc.frequency.value = freq;
@@ -1820,20 +1969,45 @@ function noteOn(midi) {
 }
 
 function noteOff() {
+  noteActive = false;
   gateOff();
   document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
 }
 
-// Spacebar = gate without changing pitch
+// ─── QWERTY piano key map (GarageBand layout) ───
+// Lower octave: Z X C V B N M  /  black: S D G H J
+// Upper octave: Q W E R T Y U I  /  black: 2 3 5 6 7
+const KEY_TO_MIDI = {
+  'KeyZ':48, 'KeyS':49, 'KeyX':50, 'KeyD':51, 'KeyC':52,
+  'KeyV':53, 'KeyG':54, 'KeyB':55, 'KeyH':56, 'KeyN':57,
+  'KeyJ':58, 'KeyM':59,
+  'KeyQ':60, 'Digit2':61, 'KeyW':62, 'Digit3':63, 'KeyE':64,
+  'KeyR':65, 'Digit5':66, 'KeyT':67, 'Digit6':68, 'KeyY':69,
+  'Digit7':70, 'KeyU':71, 'KeyI':72
+};
+const MIDI_TO_KEYLABEL = {};
+Object.entries(KEY_TO_MIDI).forEach(([code, midi]) => {
+  MIDI_TO_KEYLABEL[midi] = code.replace('Key','').replace('Digit','');
+});
+
+const heldKeys = new Set();
+let noteActive = false;
+
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && !e.repeat) {
+  if (e.repeat) return;
+  const midi = KEY_TO_MIDI[e.code];
+  if (midi !== undefined) {
     e.preventDefault();
-    initAudio();
-    gateOn();
+    heldKeys.add(e.code);
+    noteOn(midi);
   }
 });
 document.addEventListener('keyup', (e) => {
-  if (e.code === 'Space') gateOff();
+  const midi = KEY_TO_MIDI[e.code];
+  if (midi !== undefined) {
+    heldKeys.delete(e.code);
+    if (heldKeys.size === 0) noteOff();
+  }
 });
 
 // ═══════════════════════════════════════════════════
@@ -1860,11 +2034,9 @@ function buildKeyboard() {
     el.dataset.midi = midi;
     el.style.left = `${whiteCount * WHITE_W}px`;
     el.style.width = `${WHITE_W - 2}px`;
-    if (note === 0) {
-      const sp = document.createElement('span');
-      sp.textContent = `C${Math.floor(midi / 12) - 1}`;
-      el.appendChild(sp);
-    }
+    const sp = document.createElement('span');
+    sp.textContent = MIDI_TO_KEYLABEL[midi] || '';
+    el.appendChild(sp);
     el.addEventListener('mousedown', (e) => { e.preventDefault(); initAudio(); noteOn(parseInt(el.dataset.midi)); });
     el.addEventListener('mouseup', noteOff);
     el.addEventListener('mouseleave', (e) => { if (e.buttons & 1) noteOff(); });
@@ -1883,6 +2055,9 @@ function buildKeyboard() {
     const left = octave * 7 * WHITE_W + BLACK_POS[note] * WHITE_W - BLACK_W / 2;
     el.style.left = `${left}px`;
     el.style.width = `${BLACK_W}px`;
+    const bsp = document.createElement('span');
+    bsp.textContent = MIDI_TO_KEYLABEL[midi] || '';
+    el.appendChild(bsp);
     el.addEventListener('mousedown', (e) => { e.preventDefault(); initAudio(); noteOn(parseInt(el.dataset.midi)); });
     el.addEventListener('mouseup', noteOff);
     el.addEventListener('mouseleave', (e) => { if (e.buttons & 1) noteOff(); });
@@ -1907,7 +2082,7 @@ function drawScope() {
   scopeCtx.beginPath(); scopeCtx.moveTo(0, 30); scopeCtx.lineTo(80, 30); scopeCtx.stroke();
   scopeCtx.beginPath(); scopeCtx.moveTo(40, 0); scopeCtx.lineTo(40, 60); scopeCtx.stroke();
 
-  if (nodes.scope && nodes.scope.analyser) {
+  if (nodes.scope && nodes.scope.analyser && patches.some(p => p.inMod === 'scope') && (!keyboardMode || noteActive)) {
     const buf = new Uint8Array(nodes.scope.analyser.fftSize);
     nodes.scope.analyser.getByteTimeDomainData(buf);
     scopeCtx.strokeStyle = '#00ff44';
@@ -1927,10 +2102,686 @@ function drawScope() {
 }
 
 // ═══════════════════════════════════════════════════
+// RAIL SCREWS — refresh after panel changes
+// ═══════════════════════════════════════════════════
+function refreshScrews() {
+  ['rail-screws-top-1','rail-screws-bot-1','rail-screws-top-2','rail-screws-bot-2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '';
+    const n = Math.floor(el.parentElement.offsetWidth / 32);
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement('div');
+      s.className = 'screw';
+      el.appendChild(s);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// MODULE INSTANCE TRACKING
+// ═══════════════════════════════════════════════════
+const instanceCounts = { vco:2, vcf:1, vca:1, adsr:1, lfo:1, noise:1, chorus:1,
+  sh:1, mixer:1, ringmod:1, reverb:1, delay:1, comp:1, scope:1, output:1, keyboard:1,
+  // types without static panels start at 0 so first added gets key 'type1'
+};
+
+function nextInstanceKey(type) {
+  instanceCounts[type] = (instanceCounts[type] || 0) + 1;
+  return type + instanceCounts[type];
+}
+
+function getRowHP(rowEl) {
+  return Array.from(rowEl.querySelectorAll('.panel:not(.panel-placeholder)')).reduce((s, p) => s + (parseInt(p.dataset.hp) || 0), 0);
+}
+
+// ═══════════════════════════════════════════════════
+// MODULE HTML FACTORIES
+// ═══════════════════════════════════════════════════
+function vcoHTML(key, defaultFreq) {
+  defaultFreq = defaultFreq || 220;
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">VCO</div>
+    <div class="knob-wrap">
+      <div class="knob" data-module="${key}" data-param="freq" data-min="20" data-max="2000" data-default="${defaultFreq}" data-scale="exp"><div class="knob-pip"></div></div>
+      <div class="knob-label">Freq</div>
+    </div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="fine" data-min="-50" data-max="50" data-default="0" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Fine</div>
+    </div>
+    <div class="wave-selector" data-module="${key}">
+      <div class="wave-btn active" data-wave="sine">∿</div>
+      <div class="wave-btn" data-wave="square">⊓</div>
+      <div class="wave-btn" data-wave="sawtooth">⊿</div>
+      <div class="wave-btn" data-wave="triangle">△</div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="out" data-type="output" title="Out"></div><div class="jack-label">Out</div></div>
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="pitchcv" data-type="input" title="Pitch CV"></div><div class="jack-label">P.CV</div></div>
+    </div>
+  </div>`;
+}
+
+function lfoHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">LFO</div>
+    <div class="knob-wrap">
+      <div class="knob" data-module="${key}" data-param="rate" data-min="0.1" data-max="20" data-default="1" data-scale="exp"><div class="knob-pip"></div></div>
+      <div class="knob-label">Rate</div>
+    </div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="depth" data-min="0" data-max="1" data-default="0.5" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Depth</div>
+    </div>
+    <div class="wave-selector" data-module="${key}">
+      <div class="wave-btn active" data-wave="sine">∿</div>
+      <div class="wave-btn" data-wave="triangle">△</div>
+      <div class="wave-btn" data-wave="square">⊓</div>
+      <div class="wave-btn" data-wave="sawtooth">⊿</div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="cvout" data-type="output" title="CV Out"></div><div class="jack-label">CV</div></div>
+    </div>
+  </div>`;
+}
+
+function vcfHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">VCF</div>
+    <div class="knob-wrap">
+      <div class="knob" data-module="${key}" data-param="cutoff" data-min="20" data-max="18000" data-default="2000" data-scale="exp"><div class="knob-pip"></div></div>
+      <div class="knob-label">Cutoff</div>
+    </div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="resonance" data-min="0" data-max="30" data-default="1" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Res</div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="audioin" data-type="input" title="Audio In"></div><div class="jack-label">In</div></div>
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="cutoffcv" data-type="input" title="Cutoff CV"></div><div class="jack-label">CV</div></div>
+    </div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="lp" data-type="output" title="LP Out"></div><div class="jack-label">LP</div></div>
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="hp" data-type="output" title="HP Out"></div><div class="jack-label">HP</div></div>
+    </div>
+  </div>`;
+}
+
+function reverbHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">Reverb</div>
+    <div class="knob-wrap">
+      <div class="knob" data-module="${key}" data-param="mix" data-min="0" data-max="1" data-default="0.5" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Mix</div>
+    </div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="size" data-min="0.1" data-max="5" data-default="2" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Size</div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="audioin" data-type="input" title="In"></div><div class="jack-label">In</div></div>
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="wetout" data-type="output" title="Wet"></div><div class="jack-label">Wet</div></div>
+    </div>
+  </div>`;
+}
+
+function delayHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">Delay</div>
+    <div style="display:flex;gap:4px;justify-content:center">
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="time" data-min="0.01" data-max="2" data-default="0.3" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Time</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="feedback" data-min="0" data-max="0.95" data-default="0.4" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">FB</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="mix" data-min="0" data-max="1" data-default="0.5" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Mix</div></div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="audioin" data-type="input" title="In"></div><div class="jack-label">In</div></div>
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="out" data-type="output" title="Out"></div><div class="jack-label">Out</div></div>
+    </div>
+  </div>`;
+}
+
+function chorusHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">Chorus</div>
+    <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="rate" data-min="0.1" data-max="8" data-default="0.5" data-scale="exp"><div class="knob-pip"></div></div><div class="knob-label">Rate</div></div>
+    <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="depth" data-min="0" data-max="0.012" data-default="0.003" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Depth</div></div>
+    <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="mix" data-min="0" data-max="1" data-default="0.5" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Mix</div></div>
+    <div class="panel-divider"></div>
+    <div class="jack-row"><div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="audioin" data-type="input" title="In"></div><div class="jack-label">In</div></div></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="outL" data-type="output" title="L"></div><div class="jack-label">L</div></div>
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="outR" data-type="output" title="R"></div><div class="jack-label">R</div></div>
+    </div>
+  </div>`;
+}
+
+function mixerHTML(key) {
+  return `<div class="panel hp-10" id="mod-${key}" data-hp="10">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">Mixer</div>
+    <div style="display:flex;gap:4px;justify-content:center">
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="level1" data-min="0" data-max="1.5" data-default="0.8" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">1</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="level2" data-min="0" data-max="1.5" data-default="0.8" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">2</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="level3" data-min="0" data-max="1.5" data-default="0.8" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">3</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="level4" data-min="0" data-max="1.5" data-default="0.8" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">4</div></div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="in1" data-type="input" title="1"></div><div class="jack-label">1</div></div>
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="in2" data-type="input" title="2"></div><div class="jack-label">2</div></div>
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="in3" data-type="input" title="3"></div><div class="jack-label">3</div></div>
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="in4" data-type="input" title="4"></div><div class="jack-label">4</div></div>
+    </div>
+    <div class="jack-row"><div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="out" data-type="output" title="Out"></div><div class="jack-label">Out</div></div></div>
+  </div>`;
+}
+
+function compHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">Comp</div>
+    <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="threshold" data-min="-60" data-max="0" data-default="-24" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Thresh</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="ratio" data-min="1" data-max="20" data-default="4" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Ratio</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="attack" data-min="0.001" data-max="1" data-default="0.003" data-scale="exp"><div class="knob-pip"></div></div><div class="knob-label">Atk</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="release" data-min="0.01" data-max="2" data-default="0.25" data-scale="exp"><div class="knob-pip"></div></div><div class="knob-label">Rel</div></div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="audioin" data-type="input" title="In"></div><div class="jack-label">In</div></div>
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="out" data-type="output" title="Out"></div><div class="jack-label">Out</div></div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+// MODULE AUDIO FACTORIES
+// ═══════════════════════════════════════════════════
+function createVcoAudio(key) {
+  const osc = ctx.createOscillator();
+  osc.type = 'sine'; osc.frequency.value = 220; osc.start();
+  const gain = ctx.createGain(); gain.gain.value = 0.8;
+  osc.connect(gain);
+  const pitchCv = ctx.createGain(); pitchCv.gain.value = 200;
+  pitchCv.connect(osc.frequency);
+  nodes[key] = { osc, out: gain, pitchCvGain: pitchCv };
+}
+
+function createLfoAudio(key) {
+  const osc = ctx.createOscillator();
+  osc.type = 'sine'; osc.frequency.value = 1; osc.start();
+  const depthGain = ctx.createGain(); depthGain.gain.value = 0.5;
+  osc.connect(depthGain);
+  nodes[key] = { osc, depthGain };
+}
+
+function createVcfAudio(key) {
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2000; lp.Q.value = 1;
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2000; hp.Q.value = 1;
+  const input = ctx.createGain(); input.connect(lp); input.connect(hp);
+  const cvGain = ctx.createGain(); cvGain.gain.value = 4000;
+  cvGain.connect(lp.frequency); cvGain.connect(hp.frequency);
+  nodes[key] = { lp, hp, cvGain, in: input };
+}
+
+function createReverbAudio(key) {
+  const conv = ctx.createConvolver();
+  const wetGain = ctx.createGain(); wetGain.gain.value = 0.5;
+  const dryGain = ctx.createGain(); dryGain.gain.value = 0.5;
+  const input = ctx.createGain(); input.connect(conv); input.connect(dryGain);
+  conv.connect(wetGain);
+  nodes[key] = { in: input, conv, wetGain, dryGain, mix: 0.5, size: 2 };
+  buildIR(2, key);
+}
+
+function buildIR(secs, key) {
+  const target = key ? nodes[key] : nodes.reverb;
+  if (!ctx || !target) return;
+  const sr = ctx.sampleRate, len = sr * secs;
+  const ir = ctx.createBuffer(2, len, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+  }
+  target.conv.buffer = ir;
+}
+
+function createDelayAudio(key) {
+  const node = ctx.createDelay(4); node.delayTime.value = 0.3;
+  const fb = ctx.createGain(); fb.gain.value = 0.4;
+  const wet = ctx.createGain(); wet.gain.value = 0.5;
+  const dry = ctx.createGain(); dry.gain.value = 0.5;
+  const input = ctx.createGain(); input.connect(node); input.connect(dry);
+  node.connect(fb); fb.connect(node); node.connect(wet);
+  const mix = ctx.createGain(); wet.connect(mix); dry.connect(mix);
+  nodes[key] = { in: input, node, fb, wet, dry, mix };
+}
+
+function createChorusAudio(key) {
+  const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.5; lfo.start();
+  const depthL = ctx.createGain(); depthL.gain.value = 0.003;
+  const inv = ctx.createGain(); inv.gain.value = -1;
+  const depthR = ctx.createGain(); depthR.gain.value = 0.003;
+  lfo.connect(depthL); lfo.connect(inv); inv.connect(depthR);
+  const delL = ctx.createDelay(0.05); delL.delayTime.value = 0.020;
+  const delR = ctx.createDelay(0.05); delR.delayTime.value = 0.025;
+  depthL.connect(delL.delayTime); depthR.connect(delR.delayTime);
+  const input = ctx.createGain(); input.connect(delL); input.connect(delR);
+  const wetL = ctx.createGain(); wetL.gain.value = 0.5;
+  const wetR = ctx.createGain(); wetR.gain.value = 0.5;
+  delL.connect(wetL); delR.connect(wetR);
+  nodes[key] = { in: input, lfo, depthL, depthR, wetL, wetR };
+}
+
+function createMixerAudio(key) {
+  const gains = [1,2,3,4].map(() => { const g = ctx.createGain(); g.gain.value = 0.8; return g; });
+  const out = ctx.createGain(); gains.forEach(g => g.connect(out));
+  nodes[key] = { gains, out };
+}
+
+function createCompAudio(key) {
+  const node = ctx.createDynamicsCompressor();
+  node.threshold.value = -24; node.ratio.value = 4; node.attack.value = 0.003; node.release.value = 0.25;
+  nodes[key] = { node };
+}
+
+function createVcaAudio(key) {
+  const gain = ctx.createGain(); gain.gain.value = 0.5;
+  nodes[key] = { gain };
+}
+
+function createAdsrAudio(key) {
+  const adsrConst = ctx.createConstantSource();
+  adsrConst.offset.value = 0; adsrConst.start();
+  nodes[key] = { const: adsrConst, attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3, gateOn: false };
+}
+
+function createNoiseAudio(key) {
+  registerNoiseWorklet().then(() => {
+    const whiteNode = new AudioWorkletNode(ctx, 'white-noise-processor');
+    const pinkNode  = new AudioWorkletNode(ctx, 'pink-noise-processor');
+    nodes[key] = { white: whiteNode, pink: pinkNode };
+  });
+}
+
+function createShAudio(key) {
+  const sigIn  = ctx.createGain();
+  const trigIn = ctx.createGain();
+  nodes[key] = { sigIn, trigIn };
+  registerSHWorklet().then(() => {
+    const shNode = new AudioWorkletNode(ctx, 'sh-processor', { numberOfInputs: 2, numberOfOutputs: 1 });
+    sigIn.connect(shNode, 0, 0);
+    trigIn.connect(shNode, 0, 1);
+    nodes[key].node = shNode;
+  });
+}
+
+function createRingmodAudio(key) {
+  const impl = ctx.createGain(); impl.gain.value = 0;
+  nodes[key] = { impl, out: impl };
+}
+
+function createScopeAudio(key) {
+  const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
+  nodes[key] = { analyser };
+  // Start self-contained draw loop for this scope canvas
+  const startDraw = () => {
+    const canvas = document.getElementById('scope-canvas-' + key);
+    if (!canvas) return;
+    const sctx = canvas.getContext('2d');
+    (function draw() {
+      if (!document.getElementById('scope-canvas-' + key)) return;
+      sctx.fillStyle = '#050a05'; sctx.fillRect(0, 0, 80, 60);
+      sctx.strokeStyle = 'rgba(0,100,0,0.35)'; sctx.lineWidth = 0.5;
+      sctx.beginPath(); sctx.moveTo(0,30); sctx.lineTo(80,30); sctx.stroke();
+      sctx.beginPath(); sctx.moveTo(40,0); sctx.lineTo(40,60); sctx.stroke();
+      if (nodes[key] && patches.some(p => p.inMod === key)) {
+        const buf = new Uint8Array(analyser.fftSize);
+        analyser.getByteTimeDomainData(buf);
+        sctx.strokeStyle = '#00ff44'; sctx.lineWidth = 1.5;
+        sctx.shadowBlur = 4; sctx.shadowColor = '#00ff44';
+        sctx.beginPath();
+        for (let i = 0; i < buf.length; i++) {
+          const x = (i / (buf.length - 1)) * 80;
+          const y = ((buf[i] - 128) / 128) * -25 + 30;
+          if (i === 0) sctx.moveTo(x, y); else sctx.lineTo(x, y);
+        }
+        sctx.stroke(); sctx.shadowBlur = 0;
+      }
+      requestAnimationFrame(draw);
+    })();
+  };
+  // Canvas may not exist yet if called before DOM insert; defer one tick
+  setTimeout(startDraw, 0);
+}
+
+// HTML factories for missing modules
+function adsrHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">ADSR</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;justify-items:center">
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="attack"  data-min="0.001" data-max="4" data-default="0.01" data-scale="exp"><div class="knob-pip"></div></div><div class="knob-label">A</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="decay"   data-min="0.001" data-max="4" data-default="0.1"  data-scale="exp"><div class="knob-pip"></div></div><div class="knob-label">D</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="sustain" data-min="0"     data-max="1" data-default="0.7"  data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">S</div></div>
+      <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="release" data-min="0.001" data-max="6" data-default="0.3"  data-scale="exp"><div class="knob-pip"></div></div><div class="knob-label">R</div></div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="gate"  data-type="input"  title="Gate"></div><div class="jack-label">Gate</div></div>
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="cvout" data-type="output" title="CV Out"></div><div class="jack-label">CV</div></div>
+    </div>
+  </div>`;
+}
+
+function vcaHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">VCA</div>
+    <div class="knob-wrap">
+      <div class="knob" data-module="${key}" data-param="gain" data-min="0" data-max="1" data-default="0.5" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Gain</div>
+    </div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="audioin" data-type="input"  title="In"></div><div class="jack-label">In</div></div>
+      <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="cv"      data-type="input"  title="CV"></div><div class="jack-label">CV</div></div>
+    </div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="out"     data-type="output" title="Out"></div><div class="jack-label">Out</div></div>
+    </div>
+  </div>`;
+}
+
+function noiseHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">Noise</div>
+    <div style="flex:1"></div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="white" data-type="output" title="White"></div><div class="jack-label">White</div></div>
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="pink"  data-type="output" title="Pink"></div><div class="jack-label">Pink</div></div>
+    </div>
+  </div>`;
+}
+
+function shHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">S&amp;H</div>
+    <div style="flex:1"></div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="sigin"  data-type="input"  title="Signal"></div><div class="jack-label">Sig</div></div>
+      <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="trigin" data-type="input"  title="Trig"></div><div class="jack-label">Trig</div></div>
+    </div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="out"    data-type="output" title="Out"></div><div class="jack-label">Out</div></div>
+    </div>
+  </div>`;
+}
+
+function ringmodHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">Ring<br>Mod</div>
+    <div style="flex:1"></div>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="carrier" data-type="input"  title="Carrier"></div><div class="jack-label">Car</div></div>
+      <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="mod"     data-type="input"  title="Mod"></div><div class="jack-label">Mod</div></div>
+    </div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="out"     data-type="output" title="Out"></div><div class="jack-label">Out</div></div>
+    </div>
+  </div>`;
+}
+
+function scopeHTML(key) {
+  return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
+    <span class="panel-close" title="Remove">×</span>
+    <div class="panel-title">Scope</div>
+    <canvas id="scope-canvas-${key}" width="80" height="60" style="display:block;margin:4px auto;border-radius:3px;background:#050a05;box-shadow:inset 0 1px 4px rgba(0,0,0,0.9);"></canvas>
+    <div class="panel-divider"></div>
+    <div class="jack-row">
+      <div class="jack-wrap"><div class="jack input" data-module="${key}" data-jack="audioin" data-type="input" title="In"></div><div class="jack-label">In</div></div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+// MODULE REGISTRY
+// ═══════════════════════════════════════════════════
+const MODULE_DEF = {
+  vco:     { name:'VCO',      hpClass:'hp-5',  createHTML: k => vcoHTML(k),     createAudio: createVcoAudio },
+  vcf:     { name:'VCF',      hpClass:'hp-5',  createHTML: k => vcfHTML(k),     createAudio: createVcfAudio },
+  vca:     { name:'VCA',      hpClass:'hp-5',  createHTML: k => vcaHTML(k),     createAudio: createVcaAudio },
+  adsr:    { name:'ADSR',     hpClass:'hp-5',  createHTML: k => adsrHTML(k),    createAudio: createAdsrAudio },
+  lfo:     { name:'LFO',      hpClass:'hp-5',  createHTML: k => lfoHTML(k),     createAudio: createLfoAudio },
+  noise:   { name:'Noise',    hpClass:'hp-5',  createHTML: k => noiseHTML(k),   createAudio: createNoiseAudio },
+  chorus:  { name:'Chorus',   hpClass:'hp-5',  createHTML: k => chorusHTML(k),  createAudio: createChorusAudio },
+  sh:      { name:'S&H',      hpClass:'hp-5',  createHTML: k => shHTML(k),      createAudio: createShAudio },
+  mixer:   { name:'Mixer',    hpClass:'hp-10', createHTML: k => mixerHTML(k),   createAudio: createMixerAudio },
+  ringmod: { name:'Ring Mod', hpClass:'hp-5',  createHTML: k => ringmodHTML(k), createAudio: createRingmodAudio },
+  reverb:  { name:'Reverb',   hpClass:'hp-5',  createHTML: k => reverbHTML(k),  createAudio: createReverbAudio },
+  delay:   { name:'Delay',    hpClass:'hp-5',  createHTML: k => delayHTML(k),   createAudio: createDelayAudio },
+  comp:    { name:'Comp',     hpClass:'hp-5',  createHTML: k => compHTML(k),    createAudio: createCompAudio },
+  scope:   { name:'Scope',    hpClass:'hp-5',  createHTML: k => scopeHTML(k),   createAudio: createScopeAudio },
+};
+
+// ═══════════════════════════════════════════════════
+// ADD / REMOVE MODULE
+// ═══════════════════════════════════════════════════
+const rowEls = () => Array.from(document.querySelectorAll('.row'));
+const MAX_HP = 70;
+const HP_PX = 20; // matches --hp CSS variable
+
+function addModule(type) {
+  const def = MODULE_DEF[type];
+  if (!def) return;
+  const key = nextInstanceKey(type);
+  const hpCost = parseInt(def.hpClass.replace('hp-',''));
+  const rows = rowEls();
+  let targetRow = null;
+  for (const row of rows) {
+    if (getRowHP(row) + hpCost <= MAX_HP) { targetRow = row; break; }
+  }
+  if (!targetRow) {
+    const btn = document.getElementById('add-module-toggle');
+    const orig = btn.textContent;
+    btn.textContent = 'Rack full!';
+    btn.style.color = 'rgba(255,100,100,0.9)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 2000);
+    return;
+  }
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = def.createHTML(key).trim();
+  const panelEl = wrapper.firstElementChild;
+  targetRow.appendChild(panelEl);
+  initKnobs(panelEl);
+  initWaveSelectors(panelEl);
+  initJacks(panelEl);
+  initCloseButtons(panelEl);
+  if (ctx) def.createAudio(key);
+  refreshScrews();
+}
+
+function removeModule(panelEl) {
+  const key = panelEl.id.replace('mod-','');
+  // Remove all patches connected to this module
+  for (let i = patches.length - 1; i >= 0; i--) {
+    const p = patches[i];
+    if (p.outMod === key || p.inMod === key) removePatch(i);
+  }
+  // Disconnect audio nodes
+  if (nodes[key]) {
+    Object.values(nodes[key]).forEach(n => {
+      if (n && typeof n.disconnect === 'function') { try { n.disconnect(); } catch(e) {} }
+    });
+    delete nodes[key];
+  }
+  panelEl.remove();
+  refreshScrews();
+}
+
+function initCloseButtons(root) {
+  root = root || document;
+  // Add close button to any panel that doesn't already have one
+  const panels = root.classList && root.classList.contains('panel')
+    ? [root]
+    : Array.from(root.querySelectorAll('.panel'));
+  panels.forEach(panel => {
+    if (panel.dataset.fixed) return; // output, keyboard: no close button
+    if (!panel.querySelector('.panel-close')) {
+      const btn = document.createElement('span');
+      btn.className = 'panel-close';
+      btn.title = 'Remove';
+      btn.textContent = '×';
+      panel.insertBefore(btn, panel.firstChild);
+    }
+  });
+  root.querySelectorAll('.panel-close').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const panel = btn.closest('.panel');
+      if (panel) removeModule(panel);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// ADD MODULE MENU
+// ═══════════════════════════════════════════════════
+function buildAddMenu() {
+  const drawer = document.getElementById('add-module-drawer');
+  Object.entries(MODULE_DEF).forEach(([type, def]) => {
+    const btn = document.createElement('button');
+    btn.textContent = `${def.name}`;
+    btn.onclick = () => { initAudio(); addModule(type); };
+    drawer.appendChild(btn);
+  });
+  document.getElementById('add-module-toggle').onclick = () => {
+    const d = document.getElementById('add-module-drawer');
+    d.style.display = d.style.display === 'flex' ? 'none' : 'flex';
+  };
+}
+
+// ═══════════════════════════════════════════════════
+// PANEL DRAG SYSTEM
+// ═══════════════════════════════════════════════════
+let panelDrag = null;
+
+function canStartPanelDrag(target) {
+  return !target.closest('.knob,.jack,.wave-btn,button,canvas,.key,input,select,.panel-close');
+}
+
+document.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  // Don't intercept jack midpoint re-drag (handled elsewhere)
+  const panel = e.target.closest('.panel');
+  if (!panel) return;
+  if (!canStartPanelDrag(e.target)) return;
+  // Check not a placeholder
+  if (panel.classList.contains('panel-placeholder')) return;
+
+  e.preventDefault();
+  const rect = panel.getBoundingClientRect();
+  const offsetX = e.clientX - rect.left;
+  const offsetY = e.clientY - rect.top;
+
+  // Create ghost (clone)
+  const ghost = panel.cloneNode(true);
+  ghost.classList.add('dragging-ghost');
+  ghost.style.width = rect.width + 'px';
+  ghost.style.left = e.clientX - offsetX + 'px';
+  ghost.style.top = e.clientY - offsetY + 'px';
+  document.body.appendChild(ghost);
+
+  // Create placeholder
+  const placeholder = document.createElement('div');
+  placeholder.className = 'panel-placeholder';
+  placeholder.style.width = rect.width + 'px';
+  panel.parentElement.insertBefore(placeholder, panel);
+  panel.remove();
+
+  const draggedHP = parseInt(panel.dataset.hp) || 5;
+  panelDrag = { panel, ghost, placeholder, offsetX, offsetY, draggedHP };
+}, true);
+
+document.addEventListener('mousemove', (e) => {
+  if (!panelDrag) return;
+  const { ghost, placeholder, offsetX, offsetY, draggedHP } = panelDrag;
+  ghost.style.left = e.clientX - offsetX + 'px';
+  ghost.style.top = e.clientY - offsetY + 'px';
+
+  // Find which row the mouse is closest to (vertically)
+  const rows = rowEls();
+  const cy = e.clientY;
+  let bestRow = null, bestDist = Infinity;
+  for (const row of rows) {
+    const r = row.getBoundingClientRect();
+    if (cy >= r.top && cy <= r.bottom) { bestRow = row; break; }
+    const dist = Math.min(Math.abs(cy - r.top), Math.abs(cy - r.bottom));
+    if (dist < bestDist) { bestDist = dist; bestRow = row; }
+  }
+  if (!bestRow) return;
+
+  // HP capacity check: HP already in row (excl. placeholder) + dragged HP <= MAX_HP
+  const rowHPFilled = Array.from(bestRow.querySelectorAll('.panel:not(.panel-placeholder)'))
+    .reduce((s, p) => s + (parseInt(p.dataset.hp) || 0), 0);
+  if (rowHPFilled + draggedHP > MAX_HP) return; // don't move placeholder here
+
+  // HP-grid snapping: find insertion point by HP accumulation from row left
+  const rowRect = bestRow.getBoundingClientRect();
+  const mouseHP = Math.max(0, e.clientX - rowRect.left) / HP_PX;
+  const rowPanels = Array.from(bestRow.querySelectorAll('.panel:not(.panel-placeholder)'));
+  let accHP = 0, insertBefore = null;
+  for (const p of rowPanels) {
+    const ph = parseInt(p.dataset.hp) || 5;
+    if (mouseHP <= accHP + ph / 2) { insertBefore = p; break; }
+    accHP += ph;
+  }
+
+  if (insertBefore) {
+    bestRow.insertBefore(placeholder, insertBefore);
+  } else {
+    bestRow.appendChild(placeholder);
+  }
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (!panelDrag) return;
+  const { panel, ghost, placeholder } = panelDrag;
+  panelDrag = null;
+  ghost.remove();
+  placeholder.parentElement.insertBefore(panel, placeholder);
+  placeholder.remove();
+  refreshScrews();
+}, true);
+
+// ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
 initKnobs();
+initWaveSelectors();
+initJacks();
+initCloseButtons();
 buildKeyboard();
+buildAddMenu();
+refreshScrews();
 drawLoop();
 drawVU();
 drawScope();
