@@ -2032,6 +2032,7 @@ document.addEventListener('mousedown', (e) => {
   if (idx === -1) return;
   e.preventDefault();
   e.stopPropagation();
+  e.stopImmediatePropagation();
   const p = patches[idx];
   const savedColor = p.color;
   const outEl = p.outEl, outMod = p.outMod, outJack = p.outJack;
