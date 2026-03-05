@@ -1249,12 +1249,12 @@
         </div>
         <div style="display:flex;align-items:center;gap:8px;justify-self:end;padding-left:32px;">
           <div class="knob-wrap" style="margin:0;">
-            <div class="knob small" data-module="keyboard" data-param="glide" data-min="0" data-max="0.12" data-default="0.006" data-scale="lin">
+            <div class="knob small" data-module="keyboard" data-param="glide" data-min="0" data-max="0.12" data-default="0.000" data-scale="lin">
               <div class="knob-pip"></div>
             </div>
             <div class="knob-label">Glide</div>
           </div>
-          <div class="knob-label" id="kb-glide-ms" style="font-size:10px;letter-spacing:0.08em;min-width:32px;text-align:left;">6ms</div>
+          <div class="knob-label" id="kb-glide-ms" style="font-size:10px;letter-spacing:0.08em;min-width:32px;text-align:left;">0ms</div>
         </div>
       </div>
       <div class="panel-divider"></div>
@@ -1289,7 +1289,7 @@
 // KEYBOARD MODE
 // ═══════════════════════════════════════════════════
 let keyboardMode = true;
-let keyboardGlideSec = 0.006;
+let keyboardGlideSec = 0.000;
 
 function updateKeyboardGlideReadout(sec) {
   const el = document.getElementById('kb-glide-ms');
