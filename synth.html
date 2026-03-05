@@ -12,6 +12,17 @@
   <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
   <title>Patch Synth</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Audiowide&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+    :root {
+      --hp: 20px;
+      --rack-hp: 70;
+      --menu-accent: #ffb14a;
+      --menu-accent-strong: #ff7433;
+      --menu-text: rgba(255,236,206,0.92);
+      --menu-bg: rgba(16,9,5,0.9);
+      --menu-border: rgba(255,190,110,0.28);
+    }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -30,7 +41,8 @@
           #1c1105 0px, #2a1a0a 1px, #1a0f05 3px, #221408 4px, #1c1105 6px
         );
       background-color: #1a0f05;
-      font-family:'Courier New', monospace;
+      font-family: 'IBM Plex Mono', monospace;
+      padding-left: 240px;
     }
 
     /* ─── Rack outer frame ─── */
@@ -61,10 +73,9 @@
     }
 
     .rail-screws {
-      display: flex;
+      position: relative;
       width: 100%;
-      justify-content: space-between;
-      padding: 0 8px;
+      height: 100%;
     }
 
     .screw {
@@ -74,7 +85,9 @@
       background: radial-gradient(circle at 35% 30%, #d0d0d0, #707070);
       box-shadow: 0 1px 3px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.4);
       flex-shrink: 0;
-      position: relative;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
       cursor: default;
     }
     .screw::before {
@@ -422,18 +435,182 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.8), inset 0 2px 4px rgba(80,120,255,0.4);
     }
 
-    /* ─── Clear patches button ─── */
-    #clear-patches-btn:hover {
-      background: linear-gradient(180deg, #3a2510, #2a1a08) !important;
-      color: rgba(240,235,220,0.95) !important;
-      border-color: #7a5025 !important;
+    /* ─── Left control menu ─── */
+    #control-menu {
+      position: fixed;
+      left: 14px;
+      top: 14px;
+      width: 212px;
+      z-index: 850;
+      border-radius: 14px;
+      border: 1px solid var(--menu-border);
+      background: linear-gradient(180deg, rgba(38,20,10,0.92) 0%, var(--menu-bg) 100%);
+      box-shadow:
+        0 14px 30px rgba(0,0,0,0.45),
+        inset 0 0 0 1px rgba(255,255,255,0.06),
+        inset 0 16px 24px rgba(255,165,80,0.08);
+      backdrop-filter: blur(5px);
+      padding: 12px;
+      display: grid;
+      gap: 12px;
     }
-    #clear-patches-btn:active {
-      transform: scale(0.97);
+    .control-menu-head {
+      border-bottom: 1px solid rgba(255,185,120,0.14);
+      padding-bottom: 10px;
+      display: grid;
+      gap: 5px;
+    }
+    .control-menu-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    #module-bay-toggle {
+      width: 22px;
+      height: 22px;
+      border: 1px solid rgba(255,198,130,0.35);
+      border-radius: 6px;
+      background: linear-gradient(180deg, rgba(255,182,94,0.18), rgba(35,20,10,0.88));
+      color: rgba(255,236,206,0.9);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 15px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.12s, border-color 0.14s, background 0.14s;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    #module-bay-toggle:hover {
+      border-color: rgba(255,198,130,0.7);
+      background: linear-gradient(180deg, rgba(255,190,110,0.26), rgba(50,28,14,0.95));
+    }
+    #module-bay-toggle:active {
+      transform: scale(0.96);
+    }
+    .control-menu-eyebrow {
+      font-family: 'Audiowide', cursive;
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255,201,132,0.66);
+    }
+    .control-menu-title {
+      font-family: 'Audiowide', cursive;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+      color: var(--menu-text);
+      text-shadow: 0 0 12px rgba(255,170,90,0.28);
+    }
+    #add-module-status {
+      font-size: 9px;
+      line-height: 1.45;
+      letter-spacing: 0.03em;
+      color: rgba(240,228,208,0.64);
+      min-height: 2.9em;
+      transition: color 0.18s;
+    }
+    #add-module-status.warning {
+      color: rgba(255,148,124,0.96);
+    }
+    #add-module-drawer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      max-height: 53vh;
+      overflow-y: auto;
+      padding: 2px 2px 0 0;
+    }
+    #add-module-drawer button {
+      border: 1px solid rgba(255,198,130,0.2);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(255,192,120,0.14) 0%, rgba(31,18,10,0.84) 100%);
+      color: var(--menu-text);
+      padding: 8px 8px 9px;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 0.12s, border-color 0.14s, box-shadow 0.14s, background 0.14s;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      display: grid;
+      gap: 3px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    #add-module-drawer button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255,194,118,0.55);
+      box-shadow: 0 5px 12px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.1);
+      background:
+        linear-gradient(180deg, rgba(255,183,94,0.22) 0%, rgba(42,23,12,0.9) 100%);
+    }
+    #add-module-drawer button:active { transform: translateY(0) scale(0.98); }
+    #add-module-drawer button .module-name {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    #add-module-drawer button .module-hp {
+      font-size: 9px;
+      color: rgba(255,226,182,0.62);
+    }
+    .control-menu-foot {
+      border-top: 1px solid rgba(255,185,120,0.16);
+      padding-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    #control-menu.collapsed {
+      gap: 6px;
+      padding-bottom: 10px;
+    }
+    #control-menu.collapsed .control-menu-head {
+      border-bottom: none;
+      padding-bottom: 0;
+      gap: 0;
+    }
+    #control-menu.collapsed #add-module-status,
+    #control-menu.collapsed #add-module-drawer,
+    #control-menu.collapsed .control-menu-foot {
+      display: none;
+    }
+    #patch-count {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255,215,170,0.66);
+    }
+
+    /* ─── Clear patches button ─── */
+    #clear-patches-btn {
+      border: 1px solid rgba(255,148,118,0.5);
+      border-radius: 9px;
+      background: linear-gradient(180deg, rgba(150,49,30,0.9) 0%, rgba(95,26,18,0.88) 100%);
+      color: rgba(255,228,219,0.95);
+      padding: 9px 12px;
+      font-family: 'Audiowide', cursive;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.12s, filter 0.14s, box-shadow 0.14s, opacity 0.14s;
+      box-shadow: 0 5px 12px rgba(0,0,0,0.28);
+    }
+    #clear-patches-btn:hover {
+      filter: brightness(1.08);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.32), 0 0 14px rgba(255,118,83,0.22);
+    }
+    #clear-patches-btn:active { transform: scale(0.97); }
+    #clear-patches-btn:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+      filter: grayscale(0.3);
+      box-shadow: none;
     }
 
     /* ─── HP Grid ─── */
-    :root { --hp: 20px; --rack-hp: 70; }
     .hp-25 { width: calc(25 * var(--hp)); flex-shrink: 0; }
     .hp-4  { width: calc(4  * var(--hp)); flex-shrink: 0; }
     .hp-5  { width: calc(5  * var(--hp)); flex-shrink: 0; }
@@ -478,39 +655,6 @@
       color: #fff;
     }
 
-    /* ─── Add module bar ─── */
-    #add-module-bar {
-      text-align: center;
-      margin: 8px auto 20px;
-      width: calc(var(--rack-hp) * var(--hp) + 24px);
-      max-width: 99vw;
-    }
-    #add-module-toggle {
-      background: rgba(255,255,255,0.08);
-      color: rgba(240,235,220,0.8);
-      border: 1px solid rgba(255,200,100,0.3);
-      border-radius: 5px; padding: 6px 18px;
-      font-family: 'Satoshi', monospace; font-size: 11px;
-      letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
-      transition: background 0.15s;
-    }
-    #add-module-toggle:hover { background: rgba(255,200,100,0.15); }
-    #add-module-drawer {
-      display: none; flex-wrap: wrap; gap: 6px;
-      justify-content: center; padding: 10px; margin-top: 6px;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,200,100,0.15); border-radius: 6px;
-    }
-    #add-module-drawer button {
-      background: rgba(255,255,255,0.08); color: rgba(240,235,220,0.75);
-      border: 1px solid rgba(255,255,255,0.2); border-radius: 4px;
-      padding: 5px 10px; font-family: 'Satoshi', monospace; font-size: 10px;
-      letter-spacing: 0.06em; cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-    }
-    #add-module-drawer button:hover { background: rgba(255,200,100,0.2); }
-    #add-module-drawer button:active { transform: scale(0.96); }
-
     /* ─── Active cable color bands ─── */
     .panel-row-label {
       font-family: 'Satoshi', monospace;
@@ -523,6 +667,42 @@
       top: 50%;
       transform: translateY(-50%) rotate(-90deg);
       white-space: nowrap;
+    }
+
+    @media (max-width: 1500px) {
+      :root { --hp: 18px; }
+    }
+
+    @media (max-width: 1320px) {
+      :root { --hp: 16px; }
+    }
+
+    @media (max-width: 1200px) {
+      :root { --hp: 14px; }
+      body { padding-left: 0; }
+      #control-menu {
+        top: 12px;
+        left: 12px;
+        right: 66px;
+        width: auto;
+        max-height: 46vh;
+      }
+      #add-module-drawer { max-height: 24vh; }
+      .rack { margin-top: 280px; }
+      #patch-hint { font-size: 10px; bottom: 10px; }
+    }
+
+    @media (max-width: 920px) {
+      :root { --hp: 12px; }
+    }
+
+    @media (max-width: 760px) {
+      :root { --hp: 10px; }
+      #control-menu { max-height: 50vh; padding: 10px; }
+      #add-module-drawer button .module-name { font-size: 9px; }
+      #add-module-drawer button .module-hp { font-size: 8px; }
+      #clear-patches-btn { font-size: 9px; padding: 8px 10px; }
+      .rack { margin-top: 290px; }
     }
   </style>
 </head>
@@ -1040,7 +1220,7 @@
     <div class="panel hp-5" id="mod-output" data-hp="5" data-fixed="true">
       <div class="panel-title">Output</div>
       <div class="knob-wrap">
-        <div class="knob" data-module="output" data-param="volume" data-min="0" data-max="1" data-default="0.8" data-scale="lin">
+        <div class="knob" data-module="output" data-param="volume" data-min="0" data-max="1" data-default="0.5" data-scale="lin">
           <div class="knob-pip"></div>
         </div>
         <div class="knob-label">Volume</div>
@@ -1061,9 +1241,21 @@
     <!-- Keyboard -->
     <div class="panel hp-25" id="mod-keyboard" data-hp="25" data-fixed="true">
       <div class="panel-title">Keyboard</div>
-      <div class="wave-selector" id="kb-mode-selector">
-        <div class="wave-btn active" id="kb-mode-kbd" onclick="setKeyboardMode(true)">KBD</div>
-        <div class="wave-btn" id="kb-mode-free" onclick="setKeyboardMode(false)">FREE</div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;column-gap:12px;margin:2px 0 4px;">
+        <div></div>
+        <div class="wave-selector" id="kb-mode-selector" style="margin:0;">
+          <div class="wave-btn active" id="kb-mode-kbd" onclick="setKeyboardMode(true)">KBD</div>
+          <div class="wave-btn" id="kb-mode-free" onclick="setKeyboardMode(false)">FREE</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;justify-self:end;padding-left:32px;">
+          <div class="knob-wrap" style="margin:0;">
+            <div class="knob small" data-module="keyboard" data-param="glide" data-min="0" data-max="0.12" data-default="0.006" data-scale="lin">
+              <div class="knob-pip"></div>
+            </div>
+            <div class="knob-label">Glide</div>
+          </div>
+          <div class="knob-label" id="kb-glide-ms" style="font-size:10px;letter-spacing:0.08em;min-width:32px;text-align:left;">6ms</div>
+        </div>
       </div>
       <div class="panel-divider"></div>
       <div id="keyboard"></div>
@@ -1073,27 +1265,23 @@
 
 </div><!-- /.rack -->
 
-<div id="add-module-bar">
-  <button id="add-module-toggle">+ Add Module</button>
-  <div id="add-module-drawer"></div>
-</div>
-
-<div style="text-align:center;margin:10px auto 0;width:calc(70 * 20px + 24px);max-width:99vw;">
-  <button id="clear-patches-btn" onclick="clearAllPatches()"
-    style="background:linear-gradient(180deg,#2a1a0a,#1c1005);
-           color:rgba(240,235,220,0.7);
-           border:1px solid #4a3015;
-           border-radius:5px;
-           padding:6px 18px;
-           font-family:'Satoshi',monospace;
-           font-size:11px;
-           letter-spacing:0.1em;
-           text-transform:uppercase;
-           cursor:pointer;
-           transition:background 0.15s,color 0.15s;">
-    Clear All Patches
-  </button>
-</div>
+<aside id="control-menu" aria-label="Patch controls">
+  <div class="control-menu-head">
+    <div class="control-menu-top">
+      <div>
+        <p class="control-menu-eyebrow">Patch Synth</p>
+        <h2 class="control-menu-title">Module Bay</h2>
+      </div>
+      <button id="module-bay-toggle" type="button" aria-expanded="true" aria-label="Minimize module bay" title="Minimize module bay">-</button>
+    </div>
+    <p id="add-module-status" data-default="Select a module to insert into the rack.">Select a module to insert into the rack.</p>
+  </div>
+  <div id="add-module-drawer" aria-label="Add module menu"></div>
+  <div class="control-menu-foot">
+    <span id="patch-count">0 cables live</span>
+    <button id="clear-patches-btn" onclick="clearAllPatches()">Clear All Patches</button>
+  </div>
+</aside>
 
 <script>
 
@@ -1101,6 +1289,13 @@
 // KEYBOARD MODE
 // ═══════════════════════════════════════════════════
 let keyboardMode = true;
+let keyboardGlideSec = 0.006;
+
+function updateKeyboardGlideReadout(sec) {
+  const el = document.getElementById('kb-glide-ms');
+  if (!el) return;
+  el.textContent = `${Math.round(sec * 1000)}ms`;
+}
 
 function setKeyboardMode(mode) {
   keyboardMode = mode;
@@ -1332,7 +1527,7 @@ function initAudio() {
   analyser.fftSize = 256;
   const outputVol = ctx.createGain();
   outputVol.gain.setValueAtTime(0, ctx.currentTime);
-  outputVol.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.08);
+  outputVol.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.1);
   const outputL = ctx.createGain();
   const outputR = ctx.createGain();
   // masterGate sits between analyser and outputVol — ADSR controls it
@@ -1463,6 +1658,12 @@ function applyKnobValue(knobEl, value) {
   setKnobAngle(knobEl, angle);
   knobEl.dataset.value = value;
 
+  if (mod === 'keyboard' && param === 'glide') {
+    keyboardGlideSec = value;
+    updateKeyboardGlideReadout(keyboardGlideSec);
+    return;
+  }
+
   if (!ctx || !nodes[mod]) return;
   const n = nodes[mod];
   const type = mod.replace(/\d+$/, '');
@@ -1573,6 +1774,51 @@ function initWaveSelectors(root) {
 const patches = [];
 let dragging = null; // { fromJack, fromEl, fromPt }
 let mousePos = { x: 0, y: 0 };
+let addMenuStatusTimer = null;
+
+function setModuleBayCollapsed(collapsed) {
+  const menuEl = document.getElementById('control-menu');
+  const toggleBtn = document.getElementById('module-bay-toggle');
+  if (!menuEl || !toggleBtn) return;
+  menuEl.classList.toggle('collapsed', !!collapsed);
+  toggleBtn.textContent = collapsed ? '+' : '-';
+  toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+  const label = collapsed ? 'Maximize module bay' : 'Minimize module bay';
+  toggleBtn.setAttribute('aria-label', label);
+  toggleBtn.title = label;
+}
+
+function initModuleBayToggle() {
+  const menuEl = document.getElementById('control-menu');
+  const toggleBtn = document.getElementById('module-bay-toggle');
+  if (!menuEl || !toggleBtn) return;
+  toggleBtn.addEventListener('click', () => {
+    setModuleBayCollapsed(!menuEl.classList.contains('collapsed'));
+  });
+  setModuleBayCollapsed(false);
+}
+
+function updatePatchUiState() {
+  const countEl = document.getElementById('patch-count');
+  const clearBtn = document.getElementById('clear-patches-btn');
+  const count = patches.length;
+  if (countEl) countEl.textContent = `${count} cable${count === 1 ? '' : 's'} live`;
+  if (clearBtn) clearBtn.disabled = count === 0;
+}
+
+function setAddMenuStatus(message, isWarning = false) {
+  const statusEl = document.getElementById('add-module-status');
+  if (!statusEl) return;
+  const defaultText = statusEl.dataset.default || 'Select a module to insert into the rack.';
+  statusEl.textContent = message || defaultText;
+  statusEl.classList.toggle('warning', !!isWarning);
+  if (!message) return;
+  clearTimeout(addMenuStatusTimer);
+  addMenuStatusTimer = setTimeout(() => {
+    statusEl.textContent = defaultText;
+    statusEl.classList.remove('warning');
+  }, 1700);
+}
 
 // Get audio source/target for a jack
 function getAudioNode(mod, jack, type) {
@@ -1632,7 +1878,20 @@ function getAudioNode(mod, jack, type) {
 }
 
 function jackCenter(el) {
-  const r = el.getBoundingClientRect();
+  if (!el) return { x: 0, y: 0 };
+  let targetEl = el;
+  if (!el.isConnected && panelDrag && panelDrag.panel && panelDrag.ghost && panelDrag.panel.contains(el)) {
+    const mod = el.dataset.module;
+    const jack = el.dataset.jack;
+    const type = el.dataset.type;
+    const ghostMatch = Array.from(panelDrag.ghost.querySelectorAll('.jack')).find(j =>
+      j.dataset.module === mod &&
+      j.dataset.jack === jack &&
+      j.dataset.type === type
+    );
+    if (ghostMatch) targetEl = ghostMatch;
+  }
+  const r = targetEl.getBoundingClientRect();
   const c = canvas.getBoundingClientRect();
   return { x: r.left - c.left + r.width/2, y: r.top - c.top + r.height/2 };
 }
@@ -1706,6 +1965,7 @@ document.addEventListener('mouseup', (e) => {
         inMod, inJack, inEl,
         color, connected, srcNode, dstNode
       });
+      updatePatchUiState();
     }
   }
   dragging = null;
@@ -1713,10 +1973,12 @@ document.addEventListener('mouseup', (e) => {
 
 function removePatch(idx) {
   const p = patches[idx];
+  if (!p) return;
   if (p.connected && p.srcNode && p.dstNode) {
     try { p.srcNode.disconnect(p.dstNode); } catch(e) {}
   }
   patches.splice(idx, 1);
+  updatePatchUiState();
 }
 
 function clearAllPatches() {
@@ -1932,16 +2194,34 @@ function drawVU() {
 // ═══════════════════════════════════════════════════
 // GATE / NOTE ON/OFF
 // ═══════════════════════════════════════════════════
+
+// Hold current interpolated value before cancelling — avoids jump-to-last-set pop
+function smoothCancel(param, now) {
+  if (param.cancelAndHoldAtTime) {
+    param.cancelAndHoldAtTime(now);
+  } else {
+    const cur = param.value;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(cur, now);
+  }
+}
+
+function smoothRamp(param, target, now, rampSec) {
+  smoothCancel(param, now);
+  param.linearRampToValueAtTime(target, now + rampSec);
+}
+
 function gateOn() {
   if (!ctx || !nodes.adsr) return;
   if (!keyboardMode) return;
   const a = nodes.adsr;
   const now = ctx.currentTime;
   a.gateOn = true;
-  a.const.offset.cancelScheduledValues(now);
-  a.const.offset.setValueAtTime(0, now);
-  a.const.offset.linearRampToValueAtTime(1, now + a.attack);
-  a.const.offset.linearRampToValueAtTime(a.sustain, now + a.attack + a.decay);
+  smoothCancel(a.const.offset, now);
+  // Slightly longer minimum ramps reduce fast-note click artifacts.
+  const atk = Math.max(0.006, a.attack);
+  a.const.offset.linearRampToValueAtTime(1, now + atk);
+  a.const.offset.linearRampToValueAtTime(a.sustain, now + atk + a.decay);
 }
 
 function gateOff() {
@@ -1950,19 +2230,22 @@ function gateOff() {
   const a = nodes.adsr;
   const now = ctx.currentTime;
   a.gateOn = false;
-  a.const.offset.cancelScheduledValues(now);
-  a.const.offset.setValueAtTime(a.const.offset.value, now);
-  a.const.offset.linearRampToValueAtTime(0, now + a.release);
+  smoothCancel(a.const.offset, now);
+  a.const.offset.linearRampToValueAtTime(0, now + Math.max(0.01, a.release));
 }
 
-function noteOn(midi) {
+function noteOn(midi, opts = {}) {
   initAudio();
+  const wasActive = noteActive;
   noteActive = true;
   if (!keyboardMode) return;
+  const retrigger = opts.retrigger !== false;
   const freq = 440 * Math.pow(2, (midi - 69) / 12);
-  if (nodes.vco1) nodes.vco1.osc.frequency.value = freq;
-  if (nodes.vco2) nodes.vco2.osc.frequency.value = freq;
-  gateOn();
+  const now = ctx.currentTime;
+  const pitchGlide = Math.max(0, keyboardGlideSec);
+  if (nodes.vco1) smoothRamp(nodes.vco1.osc.frequency, freq, now, pitchGlide);
+  if (nodes.vco2) smoothRamp(nodes.vco2.osc.frequency, freq, now, pitchGlide);
+  if (retrigger || !wasActive) gateOn();
   document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
   const keyEl = document.querySelector(`.key[data-midi="${midi}"]`);
   if (keyEl) keyEl.classList.add('active');
@@ -1992,6 +2275,29 @@ Object.entries(KEY_TO_MIDI).forEach(([code, midi]) => {
 
 const heldKeys = new Set();
 let noteActive = false;
+let mouseKeyDragActive = false;
+let mouseDragMidi = null;
+
+function playMouseDraggedKey(midi) {
+  if (!mouseKeyDragActive) return;
+  if (mouseDragMidi === midi) return;
+  const firstKeyInDrag = mouseDragMidi === null;
+  mouseDragMidi = midi;
+  noteOn(midi, { retrigger: firstKeyInDrag });
+}
+
+function startMouseKeyDrag(midi) {
+  mouseKeyDragActive = true;
+  mouseDragMidi = null;
+  playMouseDraggedKey(midi);
+}
+
+function stopMouseKeyDrag() {
+  if (!mouseKeyDragActive) return;
+  mouseKeyDragActive = false;
+  mouseDragMidi = null;
+  if (heldKeys.size === 0) noteOff();
+}
 
 document.addEventListener('keydown', (e) => {
   if (e.repeat) return;
@@ -2009,19 +2315,28 @@ document.addEventListener('keyup', (e) => {
     if (heldKeys.size === 0) noteOff();
   }
 });
+document.addEventListener('mouseup', stopMouseKeyDrag);
+window.addEventListener('blur', stopMouseKeyDrag);
 
 // ═══════════════════════════════════════════════════
 // PIANO KEYBOARD
 // ═══════════════════════════════════════════════════
 function buildKeyboard() {
   const kb = document.getElementById('keyboard');
-  const WHITE_W = 28;
-  const BLACK_W = 17;
+  if (!kb) return;
+  kb.innerHTML = '';
   const BLACK_NOTES = new Set([1, 3, 6, 8, 10]);
   // Black key x offset within an octave, in white-key-width units, center position
   const BLACK_POS = { 1: 0.65, 3: 1.65, 6: 3.65, 8: 4.65, 10: 5.65 };
   const startMidi = 48; // C3
   const endMidi   = 72; // C5
+  const WHITE_COUNT_TOTAL = 15;
+  const panel = document.getElementById('mod-keyboard');
+  const panelInnerWidth = panel
+    ? Math.max(220, panel.clientWidth - 16) // panel padding + border slack
+    : 420;
+  const WHITE_W = Math.max(14, Math.floor(panelInnerWidth / WHITE_COUNT_TOTAL));
+  const BLACK_W = Math.max(8, Math.floor(WHITE_W * 0.62));
 
   let whiteCount = 0;
 
@@ -2033,13 +2348,24 @@ function buildKeyboard() {
     el.className = 'key white-key';
     el.dataset.midi = midi;
     el.style.left = `${whiteCount * WHITE_W}px`;
-    el.style.width = `${WHITE_W - 2}px`;
+    el.style.width = `${WHITE_W}px`;
     const sp = document.createElement('span');
     sp.textContent = MIDI_TO_KEYLABEL[midi] || '';
     el.appendChild(sp);
-    el.addEventListener('mousedown', (e) => { e.preventDefault(); initAudio(); noteOn(parseInt(el.dataset.midi)); });
-    el.addEventListener('mouseup', noteOff);
-    el.addEventListener('mouseleave', (e) => { if (e.buttons & 1) noteOff(); });
+    el.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      initAudio();
+      startMouseKeyDrag(parseInt(el.dataset.midi, 10));
+    });
+    el.addEventListener('mouseenter', (e) => {
+      if (!(e.buttons & 1)) return;
+      playMouseDraggedKey(parseInt(el.dataset.midi, 10));
+    });
+    el.addEventListener('mouseup', (e) => {
+      if (e.button !== 0) return;
+      stopMouseKeyDrag();
+    });
     kb.appendChild(el);
     whiteCount++;
   }
@@ -2058,9 +2384,20 @@ function buildKeyboard() {
     const bsp = document.createElement('span');
     bsp.textContent = MIDI_TO_KEYLABEL[midi] || '';
     el.appendChild(bsp);
-    el.addEventListener('mousedown', (e) => { e.preventDefault(); initAudio(); noteOn(parseInt(el.dataset.midi)); });
-    el.addEventListener('mouseup', noteOff);
-    el.addEventListener('mouseleave', (e) => { if (e.buttons & 1) noteOff(); });
+    el.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      initAudio();
+      startMouseKeyDrag(parseInt(el.dataset.midi, 10));
+    });
+    el.addEventListener('mouseenter', (e) => {
+      if (!(e.buttons & 1)) return;
+      playMouseDraggedKey(parseInt(el.dataset.midi, 10));
+    });
+    el.addEventListener('mouseup', (e) => {
+      if (e.button !== 0) return;
+      stopMouseKeyDrag();
+    });
     kb.appendChild(el);
   }
 
@@ -2105,15 +2442,42 @@ function drawScope() {
 // RAIL SCREWS — refresh after panel changes
 // ═══════════════════════════════════════════════════
 function refreshScrews() {
-  ['rail-screws-top-1','rail-screws-bot-1','rail-screws-top-2','rail-screws-bot-2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = '';
-    const n = Math.floor(el.parentElement.offsetWidth / 32);
-    for (let i = 0; i < n; i++) {
+  const railToRow = {
+    'rail-screws-top-1': 'row1',
+    'rail-screws-bot-1': 'row1',
+    'rail-screws-top-2': 'row2',
+    'rail-screws-bot-2': 'row2',
+  };
+  const rootStyle = getComputedStyle(document.documentElement);
+  const rackHp = parseFloat(rootStyle.getPropertyValue('--rack-hp')) || 70;
+  const stepHp = 2.5;
+  const edgeInsetHp = 1.25; // Pull screws slightly inward from module/rack edges
+  const firstHp = edgeInsetHp;
+  const lastHp = Math.max(firstHp, rackHp - edgeInsetHp);
+  const screwCount = Math.floor((lastHp - firstHp) / stepHp) + 1;
+  const screwHalf = 7;
+
+  Object.entries(railToRow).forEach(([railId, rowId]) => {
+    const rail = document.getElementById(railId);
+    const row = document.getElementById(rowId);
+    if (!rail || !row) return;
+    rail.innerHTML = '';
+
+    const railRect = rail.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const hpPx = rowRect.width / rackHp;
+    const rowLeftInRail = rowRect.left - railRect.left;
+    const minX = rowLeftInRail + screwHalf;
+    const maxX = rowLeftInRail + rowRect.width - screwHalf;
+
+    for (let i = 0; i < screwCount; i++) {
+      const hpPos = firstHp + i * stepHp;
+      const rawX = rowLeftInRail + hpPos * hpPx;
+      const x = Math.max(minX, Math.min(maxX, rawX));
       const s = document.createElement('div');
       s.className = 'screw';
-      el.appendChild(s);
+      s.style.left = `${x}px`;
+      rail.appendChild(s);
     }
   });
 }
@@ -2590,33 +2954,48 @@ const MAX_HP = 70;
 const HP_PX = 20; // matches --hp CSS variable
 
 function addModule(type) {
-  const def = MODULE_DEF[type];
-  if (!def) return;
-  const key = nextInstanceKey(type);
-  const hpCost = parseInt(def.hpClass.replace('hp-',''));
+  const inst = createModuleInstance(type);
+  if (!inst) return;
+  const { def, key, hpCost, panelEl } = inst;
   const rows = rowEls();
   let targetRow = null;
   for (const row of rows) {
     if (getRowHP(row) + hpCost <= MAX_HP) { targetRow = row; break; }
   }
   if (!targetRow) {
-    const btn = document.getElementById('add-module-toggle');
-    const orig = btn.textContent;
-    btn.textContent = 'Rack full!';
-    btn.style.color = 'rgba(255,100,100,0.9)';
-    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 2000);
+    rollbackModuleInstance(type);
+    setAddMenuStatus('Rack full. Remove or move a module first.', true);
     return;
   }
+  targetRow.appendChild(panelEl);
+  finalizeModuleInsert(panelEl, def, key);
+}
+
+function createModuleInstance(type) {
+  const def = MODULE_DEF[type];
+  if (!def) return null;
+  const key = nextInstanceKey(type);
+  const hpCost = parseInt(def.hpClass.replace('hp-', ''));
   const wrapper = document.createElement('div');
   wrapper.innerHTML = def.createHTML(key).trim();
   const panelEl = wrapper.firstElementChild;
-  targetRow.appendChild(panelEl);
+  return { type, def, key, hpCost, panelEl };
+}
+
+function rollbackModuleInstance(type) {
+  if (!type) return;
+  if (!(type in instanceCounts)) return;
+  instanceCounts[type] = Math.max(0, instanceCounts[type] - 1);
+}
+
+function finalizeModuleInsert(panelEl, def, key) {
   initKnobs(panelEl);
   initWaveSelectors(panelEl);
   initJacks(panelEl);
   initCloseButtons(panelEl);
   if (ctx) def.createAudio(key);
   refreshScrews();
+  setAddMenuStatus(`${def.name} added.`);
 }
 
 function removeModule(panelEl) {
@@ -2667,26 +3046,83 @@ function initCloseButtons(root) {
 // ═══════════════════════════════════════════════════
 function buildAddMenu() {
   const drawer = document.getElementById('add-module-drawer');
+  if (!drawer) return;
+  drawer.innerHTML = '';
   Object.entries(MODULE_DEF).forEach(([type, def]) => {
     const btn = document.createElement('button');
-    btn.textContent = `${def.name}`;
-    btn.onclick = () => { initAudio(); addModule(type); };
+    btn.type = 'button';
+    btn.innerHTML = `<span class="module-name">${def.name}</span>`;
+    btn.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      menuSpawnIntent = { type, startX: e.clientX, startY: e.clientY };
+    });
+    btn.addEventListener('dragstart', (e) => e.preventDefault());
+    btn.addEventListener('click', () => { initAudio(); addModule(type); });
     drawer.appendChild(btn);
   });
-  document.getElementById('add-module-toggle').onclick = () => {
-    const d = document.getElementById('add-module-drawer');
-    d.style.display = d.style.display === 'flex' ? 'none' : 'flex';
-  };
 }
 
 // ═══════════════════════════════════════════════════
 // PANEL DRAG SYSTEM
 // ═══════════════════════════════════════════════════
 let panelDrag = null;
+let menuSpawnIntent = null;
 
 function canStartPanelDrag(target) {
-  return !target.closest('.knob,.jack,.wave-btn,button,canvas,.key,input,select,.panel-close');
+  return !target.closest('.knob,.jack,.wave-btn,button,canvas,.key,#keyboard,input,select,.panel-close');
 }
+
+function startSpawnModuleDrag(type, clientX, clientY) {
+  const inst = createModuleInstance(type);
+  if (!inst) return;
+  const { panelEl, hpCost, def, key } = inst;
+  const measureHost = document.createElement('div');
+  measureHost.style.position = 'fixed';
+  measureHost.style.left = '-9999px';
+  measureHost.style.top = '-9999px';
+  measureHost.style.visibility = 'hidden';
+  measureHost.style.pointerEvents = 'none';
+  measureHost.appendChild(panelEl);
+  document.body.appendChild(measureHost);
+  const rect = panelEl.getBoundingClientRect();
+  const width = rect.width || (hpCost * HP_PX);
+  const height = rect.height || 260;
+  measureHost.remove();
+
+  const ghost = panelEl.cloneNode(true);
+  ghost.classList.add('dragging-ghost');
+  ghost.style.width = width + 'px';
+  const offsetX = Math.round(width * 0.5);
+  const offsetY = Math.round(Math.min(30, height * 0.18));
+  ghost.style.left = clientX - offsetX + 'px';
+  ghost.style.top = clientY - offsetY + 'px';
+  document.body.appendChild(ghost);
+
+  const placeholder = document.createElement('div');
+  placeholder.className = 'panel-placeholder';
+  placeholder.style.width = width + 'px';
+
+  panelDrag = { panel: panelEl, ghost, placeholder, offsetX, offsetY, draggedHP: hpCost, newModule: true, type, def, key };
+  setAddMenuStatus(`Drop to place ${def.name}.`);
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!menuSpawnIntent || panelDrag) return;
+  if (!(e.buttons & 1)) {
+    menuSpawnIntent = null;
+    return;
+  }
+  const dx = e.clientX - menuSpawnIntent.startX;
+  const dy = e.clientY - menuSpawnIntent.startY;
+  if (Math.hypot(dx, dy) < 6) return;
+  initAudio();
+  startSpawnModuleDrag(menuSpawnIntent.type, e.clientX, e.clientY);
+  menuSpawnIntent = null;
+}, true);
+
+document.addEventListener('mouseup', () => {
+  menuSpawnIntent = null;
+}, true);
 
 document.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
@@ -2764,12 +3200,21 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('mouseup', (e) => {
   if (!panelDrag) return;
-  const { panel, ghost, placeholder } = panelDrag;
+  const { panel, ghost, placeholder, newModule, type, def, key } = panelDrag;
   panelDrag = null;
   ghost.remove();
-  placeholder.parentElement.insertBefore(panel, placeholder);
-  placeholder.remove();
-  refreshScrews();
+  if (placeholder.parentElement) {
+    placeholder.parentElement.insertBefore(panel, placeholder);
+    placeholder.remove();
+    if (newModule) {
+      finalizeModuleInsert(panel, def, key);
+    } else {
+      refreshScrews();
+    }
+  } else if (newModule) {
+    rollbackModuleInstance(type);
+    setAddMenuStatus('Module placement canceled.', true);
+  }
 }, true);
 
 // ═══════════════════════════════════════════════════
@@ -2780,11 +3225,19 @@ initWaveSelectors();
 initJacks();
 initCloseButtons();
 buildKeyboard();
+updateKeyboardGlideReadout(keyboardGlideSec);
 buildAddMenu();
+initModuleBayToggle();
+updatePatchUiState();
 refreshScrews();
 drawLoop();
 drawVU();
 drawScope();
+
+window.addEventListener('resize', () => {
+  buildKeyboard();
+  refreshScrews();
+});
 
 // Init audio on first interaction
 document.addEventListener('click', () => initAudio(), { once: false });
