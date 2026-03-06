@@ -720,7 +720,7 @@
        alt="home" style="width:18px;height:18px;object-fit:contain;">
 </a>
 
-<div id="patch-hint">drag from output jack → input jack to patch &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; KBD: keys play notes &nbsp;|&nbsp; MIDI: controller notes &nbsp;|&nbsp; FREE: raw signal</div>
+<div id="patch-hint">drag from output jack → input jack to patch &nbsp;|&nbsp; shift+click cable to move nearest end &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; KBD: keys play notes &nbsp;|&nbsp; FREE: raw signal &nbsp;|&nbsp; MIDI Controllers Supported</div>
 
 <div class="rack" id="rack">
 
@@ -2078,58 +2078,108 @@ function clearAllPatches() {
 }
 
 const canvas = document.getElementById('cable-canvas');
+const CABLE_ALPHA = 0.8;
+const CABLE_DRAG_ALPHA = 0.58;
+const CABLE_HIT_RADIUS = 12;
+const CABLE_HIT_STEPS = 48;
 
-// Compute the canvas-space midpoint of a cable (must match drawCable math exactly)
-function cableMidpoint(A, B) {
+function getCableCurve(A, B) {
   const dist = Math.hypot(B.x - A.x, B.y - A.y);
   const sag = Math.min(220, dist * 0.45 + 50);
   const midX = (A.x + B.x) / 2;
   const midY = (A.y + B.y) / 2 + sag;
   const cp1 = { x: A.x * 0.5 + midX * 0.5, y: A.y * 0.3 + midY * 0.7 };
   const cp2 = { x: B.x * 0.5 + midX * 0.5, y: B.y * 0.3 + midY * 0.7 };
-  const t = 0.5;
+  return { A, B, cp1, cp2 };
+}
+
+function bezierPoint(curve, t) {
+  const { A, B, cp1, cp2 } = curve;
+  const u = 1 - t;
   return {
-    x: Math.pow(1-t,3)*A.x + 3*Math.pow(1-t,2)*t*cp1.x + 3*(1-t)*t*t*cp2.x + t*t*t*B.x,
-    y: Math.pow(1-t,3)*A.y + 3*Math.pow(1-t,2)*t*cp1.y + 3*(1-t)*t*t*cp2.y + t*t*t*B.y
+    x: (u * u * u * A.x) + (3 * u * u * t * cp1.x) + (3 * u * t * t * cp2.x) + (t * t * t * B.x),
+    y: (u * u * u * A.y) + (3 * u * u * t * cp1.y) + (3 * u * t * t * cp2.y) + (t * t * t * B.y)
   };
 }
 
-// Find patch whose midpoint handle is within 14px of a client coord
-function findPatchNearMidpoint(clientX, clientY) {
-  const c = canvas.getBoundingClientRect();
-  const px = clientX - c.left, py = clientY - c.top;
-  for (let i = patches.length - 1; i >= 0; i--) {
-    const p = patches[i];
-    const mid = cableMidpoint(jackCenter(p.outEl), jackCenter(p.inEl));
-    if (Math.hypot(px - mid.x, py - mid.y) < 14) return i;
-  }
-  return -1;
+function pointToSegmentDistance(px, py, ax, ay, bx, by) {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const ab2 = (abx * abx) + (aby * aby);
+  if (ab2 <= 0.0001) return { distance: Math.hypot(px - ax, py - ay), t: 0 };
+  const apx = px - ax;
+  const apy = py - ay;
+  const t = Math.max(0, Math.min(1, ((apx * abx) + (apy * aby)) / ab2));
+  const nx = ax + (abx * t);
+  const ny = ay + (aby * t);
+  return { distance: Math.hypot(px - nx, py - ny), t };
 }
 
-// Right-click any midpoint dot → remove cable.
+// Hit-test along full cable curve; returns nearest patch + curve position.
+function findPatchNearCable(clientX, clientY) {
+  const c = canvas.getBoundingClientRect();
+  const px = clientX - c.left, py = clientY - c.top;
+  let best = null;
+  for (let i = patches.length - 1; i >= 0; i--) {
+    const p = patches[i];
+    const curve = getCableCurve(jackCenter(p.outEl), jackCenter(p.inEl));
+    let prev = bezierPoint(curve, 0);
+    let bestDist = Infinity;
+    let bestT = 0;
+    for (let s = 1; s <= CABLE_HIT_STEPS; s++) {
+      const segEndT = s / CABLE_HIT_STEPS;
+      const curr = bezierPoint(curve, segEndT);
+      const seg = pointToSegmentDistance(px, py, prev.x, prev.y, curr.x, curr.y);
+      if (seg.distance < bestDist) {
+        bestDist = seg.distance;
+        const segStartT = (s - 1) / CABLE_HIT_STEPS;
+        bestT = segStartT + ((segEndT - segStartT) * seg.t);
+      }
+      prev = curr;
+    }
+    if (bestDist <= CABLE_HIT_RADIUS && (!best || bestDist < best.distance)) {
+      best = { idx: i, t: bestT, distance: bestDist };
+    }
+  }
+  return best;
+}
+
+// Right-click any cable segment → remove cable.
 // Must use capture phase because canvas has pointer-events:none normally.
 document.addEventListener('contextmenu', (e) => {
-  const idx = findPatchNearMidpoint(e.clientX, e.clientY);
-  if (idx !== -1) {
-    e.preventDefault();
-    removePatch(idx);
-  }
+  const hit = findPatchNearCable(e.clientX, e.clientY);
+  if (!hit) return;
+  e.preventDefault();
+  removePatch(hit.idx);
 }, true);
 
-// Mousedown on midpoint dot → re-drag that cable's destination.
+// Shift + mousedown on a cable segment → move whichever end is nearest to click.
 // Capture phase so it intercepts before the jack mousedown handlers.
 document.addEventListener('mousedown', (e) => {
-  if (e.button !== 0) return;
-  const idx = findPatchNearMidpoint(e.clientX, e.clientY);
-  if (idx === -1) return;
+  if (e.button !== 0 || !e.shiftKey) return;
+  const hit = findPatchNearCable(e.clientX, e.clientY);
+  if (!hit) return;
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
-  const p = patches[idx];
+  const p = patches[hit.idx];
   const savedColor = p.color;
-  const outEl = p.outEl, outMod = p.outMod, outJack = p.outJack;
-  removePatch(idx);
-  dragging = { fromMod: outMod, fromJack: outJack, fromType: 'output', fromEl: outEl, color: savedColor };
+  const c = canvas.getBoundingClientRect();
+  const px = e.clientX - c.left;
+  const py = e.clientY - c.top;
+  const outPt = jackCenter(p.outEl);
+  const inPt = jackCenter(p.inEl);
+  const distToOut = Math.hypot(px - outPt.x, py - outPt.y);
+  const distToIn = Math.hypot(px - inPt.x, py - inPt.y);
+  const moveOutputSide = distToOut <= distToIn;
+  removePatch(hit.idx);
+  if (moveOutputSide) {
+    // Keep input anchored; drag output end to a new output jack.
+    dragging = { fromMod: p.inMod, fromJack: p.inJack, fromType: 'input', fromEl: p.inEl, color: savedColor };
+  } else {
+    // Keep output anchored; drag input end to a new input jack.
+    dragging = { fromMod: p.outMod, fromJack: p.outJack, fromType: 'output', fromEl: p.outEl, color: savedColor };
+  }
   canvas.classList.add('dragging');
 }, true);
 
@@ -2147,19 +2197,8 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 function drawCable(A, B, color, alpha) {
-  // Natural cable sag: pull control points down toward gravity midpoint
-  const dx = B.x - A.x;
-  const dy = B.y - A.y;
-  const dist = Math.hypot(dx, dy);
-  // Sag is always downward; for very vertical cables use a side offset too
-  const sag = Math.min(220, dist * 0.45 + 50);
-  // Midpoint of cable, pulled down by gravity
-  const midX = (A.x + B.x) / 2;
-  const midY = (A.y + B.y) / 2 + sag;
-  // Control points aimed toward the gravity midpoint
-  const cp1 = { x: A.x * 0.5 + midX * 0.5, y: A.y * 0.3 + midY * 0.7 };
-  const cp2 = { x: B.x * 0.5 + midX * 0.5, y: B.y * 0.3 + midY * 0.7 };
-
+  const curve = getCableCurve(A, B);
+  const { cp1, cp2 } = curve;
   const a = alpha || 1;
 
   // Parse color for lighter highlight
@@ -2203,29 +2242,6 @@ function drawCable(A, B, color, alpha) {
 
   cctx.restore();
 
-  // Midpoint handle — use shared function (must match hit-test math)
-  const { x: mx, y: my } = cableMidpoint(A, B);
-  cctx.save();
-  cctx.globalAlpha = a;
-  // outer glow ring
-  cctx.beginPath();
-  cctx.arc(mx, my, 9, 0, Math.PI*2);
-  cctx.fillStyle = 'rgba(0,0,0,0.5)';
-  cctx.fill();
-  // colored dot
-  cctx.beginPath();
-  cctx.arc(mx, my, 7, 0, Math.PI*2);
-  cctx.fillStyle = color;
-  cctx.shadowBlur = 10;
-  cctx.shadowColor = color;
-  cctx.fill();
-  // dark center
-  cctx.beginPath();
-  cctx.arc(mx, my, 3, 0, Math.PI*2);
-  cctx.fillStyle = 'rgba(0,0,0,0.7)';
-  cctx.shadowBlur = 0;
-  cctx.fill();
-  cctx.restore();
 }
 
 function drawLoop() {
@@ -2235,14 +2251,14 @@ function drawLoop() {
   patches.forEach(p => {
     const A = jackCenter(p.outEl);
     const B = jackCenter(p.inEl);
-    drawCable(A, B, p.color, 1);
+    drawCable(A, B, p.color, CABLE_ALPHA);
   });
 
   // in-progress drag
   if (dragging) {
     const A = jackCenter(dragging.fromEl);
     const B = mousePos;
-    drawCable(A, B, dragging.color || '#ffffff', 0.65);
+    drawCable(A, B, dragging.color || '#ffffff', CABLE_DRAG_ALPHA);
   }
 
   requestAnimationFrame(drawLoop);
