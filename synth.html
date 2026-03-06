@@ -789,9 +789,9 @@
         <div class="knob-label">Level</div>
       </div>
       <div class="wave-selector" data-module="vco2">
-        <div class="wave-btn active" data-wave="sawtooth">⊿</div>
         <div class="wave-btn" data-wave="sine">∿</div>
         <div class="wave-btn" data-wave="square">⊓</div>
+        <div class="wave-btn active" data-wave="sawtooth">⊿</div>
         <div class="wave-btn" data-wave="triangle">△</div>
       </div>
       <div class="panel-divider"></div>
@@ -944,9 +944,9 @@
       </div>
       <div class="wave-selector" data-module="lfo">
         <div class="wave-btn active" data-wave="sine">∿</div>
-        <div class="wave-btn" data-wave="triangle">△</div>
         <div class="wave-btn" data-wave="square">⊓</div>
         <div class="wave-btn" data-wave="sawtooth">⊿</div>
+        <div class="wave-btn" data-wave="triangle">△</div>
       </div>
       <div class="panel-divider"></div>
       <div class="jack-row">
@@ -2078,8 +2078,8 @@ function clearAllPatches() {
 }
 
 const canvas = document.getElementById('cable-canvas');
-const CABLE_ALPHA = 0.8;
-const CABLE_DRAG_ALPHA = 0.58;
+const CABLE_ALPHA = 0.48;
+const CABLE_DRAG_ALPHA = 0.32;
 const CABLE_HIT_RADIUS = 12;
 const CABLE_HIT_STEPS = 48;
 
@@ -2871,9 +2871,9 @@ function lfoHTML(key) {
     </div>
     <div class="wave-selector" data-module="${key}">
       <div class="wave-btn active" data-wave="sine">∿</div>
-      <div class="wave-btn" data-wave="triangle">△</div>
       <div class="wave-btn" data-wave="square">⊓</div>
       <div class="wave-btn" data-wave="sawtooth">⊿</div>
+      <div class="wave-btn" data-wave="triangle">△</div>
     </div>
     <div class="panel-divider"></div>
     <div class="jack-row">
