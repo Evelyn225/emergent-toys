@@ -720,7 +720,7 @@
        alt="home" style="width:18px;height:18px;object-fit:contain;">
 </a>
 
-<div id="patch-hint">drag from output jack → input jack to patch &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; KBD: keys play notes &nbsp;|&nbsp; FREE: raw signal</div>
+<div id="patch-hint">drag from output jack → input jack to patch &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; KBD: keys play notes &nbsp;|&nbsp; MIDI: controller notes &nbsp;|&nbsp; FREE: raw signal</div>
 
 <div class="rack" id="rack">
 
@@ -741,6 +741,12 @@
           <div class="knob-pip"></div>
         </div>
         <div class="knob-label">Fine</div>
+      </div>
+      <div class="knob-wrap">
+        <div class="knob small" data-module="vco1" data-param="level" data-min="0" data-max="1" data-default="0.8" data-scale="lin">
+          <div class="knob-pip"></div>
+        </div>
+        <div class="knob-label">Level</div>
       </div>
       <div class="wave-selector" data-module="vco1">
         <div class="wave-btn active" data-wave="sine">∿</div>
@@ -776,6 +782,12 @@
         </div>
         <div class="knob-label">Fine</div>
       </div>
+      <div class="knob-wrap">
+        <div class="knob small" data-module="vco2" data-param="level" data-min="0" data-max="1" data-default="0.8" data-scale="lin">
+          <div class="knob-pip"></div>
+        </div>
+        <div class="knob-label">Level</div>
+      </div>
       <div class="wave-selector" data-module="vco2">
         <div class="wave-btn active" data-wave="sawtooth">⊿</div>
         <div class="wave-btn" data-wave="sine">∿</div>
@@ -804,13 +816,19 @@
         </div>
         <div class="knob-label">Cutoff</div>
       </div>
-      <div class="knob-wrap">
-        <div class="knob small" data-module="vcf" data-param="resonance" data-min="0" data-max="30" data-default="1" data-scale="lin">
-          <div class="knob-pip"></div>
-        </div>
-        <div class="knob-label">Res</div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="vcf" data-param="resonance" data-min="0" data-max="30" data-default="1" data-scale="lin">
+        <div class="knob-pip"></div>
       </div>
-      <div class="panel-divider"></div>
+      <div class="knob-label">Res</div>
+    </div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="vcf" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin">
+        <div class="knob-pip"></div>
+      </div>
+      <div class="knob-label">Level</div>
+    </div>
+    <div class="panel-divider"></div>
       <div class="jack-row">
         <div class="jack-wrap">
           <div class="jack input" data-module="vcf" data-jack="audioin" data-type="input" title="Audio In"></div>
@@ -918,6 +936,12 @@
         </div>
         <div class="knob-label">Depth</div>
       </div>
+      <div class="knob-wrap">
+        <div class="knob small" data-module="lfo" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin">
+          <div class="knob-pip"></div>
+        </div>
+        <div class="knob-label">Level</div>
+      </div>
       <div class="wave-selector" data-module="lfo">
         <div class="wave-btn active" data-wave="sine">∿</div>
         <div class="wave-btn" data-wave="triangle">△</div>
@@ -936,7 +960,12 @@
     <!-- Noise -->
     <div class="panel hp-5" id="mod-noise" data-hp="5">
       <div class="panel-title">Noise</div>
-      <div style="flex:1"></div>
+      <div class="knob-wrap">
+        <div class="knob small" data-module="noise" data-param="level" data-min="0" data-max="1" data-default="0.8" data-scale="lin">
+          <div class="knob-pip"></div>
+        </div>
+        <div class="knob-label">Level</div>
+      </div>
       <div class="panel-divider"></div>
       <div class="jack-row">
         <div class="jack-wrap">
@@ -998,7 +1027,12 @@
     <!-- S&H -->
     <div class="panel hp-5" id="mod-sh" data-hp="5">
       <div class="panel-title">S&amp;H</div>
-      <div style="flex:1"></div>
+      <div class="knob-wrap">
+        <div class="knob small" data-module="sh" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin">
+          <div class="knob-pip"></div>
+        </div>
+        <div class="knob-label">Level</div>
+      </div>
       <div class="panel-divider"></div>
       <div class="jack-row">
         <div class="jack-wrap">
@@ -1077,7 +1111,12 @@
     <!-- Ring Mod -->
     <div class="panel hp-5" id="mod-ringmod" data-hp="5">
       <div class="panel-title">Ring<br>Mod</div>
-      <div style="flex:1"></div>
+      <div class="knob-wrap">
+        <div class="knob small" data-module="ringmod" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin">
+          <div class="knob-pip"></div>
+        </div>
+        <div class="knob-label">Level</div>
+      </div>
       <div class="panel-divider"></div>
       <div class="jack-row">
         <div class="jack-wrap">
@@ -1298,6 +1337,7 @@ function updateKeyboardGlideReadout(sec) {
 }
 
 function setKeyboardMode(mode) {
+  if (!mode) resetKeyboardInputState();
   keyboardMode = mode;
   document.getElementById('kb-mode-kbd').classList.toggle('active', mode);
   document.getElementById('kb-mode-free').classList.toggle('active', !mode);
@@ -1309,7 +1349,6 @@ function setKeyboardMode(mode) {
   if (!keyboardMode) {
     // FREE: open gate directly; ADSR output is left untouched for any patches
     nodes.masterGate.gain.setValueAtTime(1, now);
-    document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
   } else {
     // KBD: close gate and hand control back to ADSR
     nodes.masterGate.gain.setValueAtTime(0, now);
@@ -1368,6 +1407,12 @@ function initAudio() {
   vcfHP.type = 'highpass';
   vcfHP.frequency.value = 2000;
   vcfHP.Q.value = 1;
+  const vcfLPOut = ctx.createGain();
+  vcfLPOut.gain.value = 1;
+  const vcfHPOut = ctx.createGain();
+  vcfHPOut.gain.value = 1;
+  vcfLP.connect(vcfLPOut);
+  vcfHP.connect(vcfHPOut);
   // Single input node fans out to both filters so patching one cable drives both
   const vcfIn = ctx.createGain();
   vcfIn.connect(vcfLP);
@@ -1377,7 +1422,7 @@ function initAudio() {
   vcfCvGain.gain.value = 4000;
   vcfCvGain.connect(vcfLP.frequency);
   vcfCvGain.connect(vcfHP.frequency);
-  nodes.vcf = { lp: vcfLP, hp: vcfHP, cvGain: vcfCvGain, in: vcfIn };
+  nodes.vcf = { lp: vcfLP, hp: vcfHP, lpOut: vcfLPOut, hpOut: vcfHPOut, cvGain: vcfCvGain, in: vcfIn };
 
   // ── VCA ──
   const vcaGain = ctx.createGain();
@@ -1402,24 +1447,38 @@ function initAudio() {
   lfoOsc.start();
   const lfoDepthGain = ctx.createGain();
   lfoDepthGain.gain.value = 0.5;
+  const lfoOutGain = ctx.createGain();
+  lfoOutGain.gain.value = 1;
   lfoOsc.connect(lfoDepthGain);
-  nodes.lfo = { osc: lfoOsc, depthGain: lfoDepthGain };
+  lfoDepthGain.connect(lfoOutGain);
+  nodes.lfo = { osc: lfoOsc, depthGain: lfoDepthGain, out: lfoOutGain };
 
   // ── Noise (AudioWorklet) ──
+  const noiseWhiteOut = ctx.createGain();
+  noiseWhiteOut.gain.value = 0.8;
+  const noisePinkOut = ctx.createGain();
+  noisePinkOut.gain.value = 0.8;
+  nodes.noise = { white: noiseWhiteOut, pink: noisePinkOut };
   registerNoiseWorklet().then(() => {
     const whiteNode = new AudioWorkletNode(ctx, 'white-noise-processor');
     const pinkNode = new AudioWorkletNode(ctx, 'pink-noise-processor');
-    nodes.noise = { white: whiteNode, pink: pinkNode };
+    whiteNode.connect(noiseWhiteOut);
+    pinkNode.connect(noisePinkOut);
+    nodes.noise.whiteSource = whiteNode;
+    nodes.noise.pinkSource = pinkNode;
   });
 
   // ── S&H ──
   const shSigIn  = ctx.createGain();
   const shTrigIn = ctx.createGain();
-  nodes.sh = { sigIn: shSigIn, trigIn: shTrigIn };
+  const shOut = ctx.createGain();
+  shOut.gain.value = 1;
+  nodes.sh = { sigIn: shSigIn, trigIn: shTrigIn, out: shOut };
   registerSHWorklet().then(() => {
     const shNode = new AudioWorkletNode(ctx, 'sh-processor', { numberOfInputs: 2, numberOfOutputs: 1 });
     shSigIn.connect(shNode, 0, 0);
     shTrigIn.connect(shNode, 0, 1);
+    shNode.connect(shOut);
     nodes.sh.node = shNode;
   });
 
@@ -1438,7 +1497,10 @@ function initAudio() {
   // output = carrier × modulator (classic ring mod)
   const ringImpl = ctx.createGain();
   ringImpl.gain.value = 0; // silence until modulator patched
-  nodes.ringmod = { impl: ringImpl, out: ringImpl };
+  const ringOut = ctx.createGain();
+  ringOut.gain.value = 1;
+  ringImpl.connect(ringOut);
+  nodes.ringmod = { impl: ringImpl, out: ringOut };
 
   // ── Reverb ──
   const reverbConv = ctx.createConvolver();
@@ -1671,10 +1733,22 @@ function applyKnobValue(knobEl, value) {
   // Route knob value to audio param
   if (type === 'vco') {
     if (param === 'freq') n.osc.frequency.value = value;
-    if (param === 'fine') n.osc.detune.value = value;
+    if (param === 'fine') {
+      n.osc.detune.value = value;
+      if (n.keyboardVoices) {
+        n.keyboardVoices.forEach(voice => {
+          voice.osc.detune.value = value;
+        });
+      }
+    }
+    if (param === 'level' && n.out) n.out.gain.value = value;
   } else if (type === 'vcf') {
     if (param === 'cutoff') { n.lp.frequency.value = value; n.hp.frequency.value = value; }
     if (param === 'resonance') { n.lp.Q.value = value; n.hp.Q.value = value; }
+    if (param === 'level') {
+      if (n.lpOut && n.lpOut.gain) n.lpOut.gain.value = value;
+      if (n.hpOut && n.hpOut.gain) n.hpOut.gain.value = value;
+    }
   } else if (type === 'vca') {
     if (param === 'gain') n.gain.gain.value = value;
   } else if (type === 'adsr') {
@@ -1682,6 +1756,16 @@ function applyKnobValue(knobEl, value) {
   } else if (type === 'lfo') {
     if (param === 'rate') n.osc.frequency.value = value;
     if (param === 'depth') n.depthGain.gain.value = value;
+    if (param === 'level' && n.out) n.out.gain.value = value;
+  } else if (type === 'noise') {
+    if (param === 'level') {
+      if (n.white && n.white.gain) n.white.gain.value = value;
+      if (n.pink && n.pink.gain) n.pink.gain.value = value;
+    }
+  } else if (type === 'sh') {
+    if (param === 'level' && n.out && n.out.gain) n.out.gain.value = value;
+  } else if (type === 'ringmod') {
+    if (param === 'level' && n.out && n.out.gain) n.out.gain.value = value;
   } else if (type === 'mixer') {
     const idx = parseInt(param.replace('level','')) - 1;
     if (n.gains[idx]) n.gains[idx].gain.value = value;
@@ -1755,6 +1839,7 @@ function initWaveSelectors(root) {
   root = root || document;
   root.querySelectorAll('.wave-selector').forEach(sel => {
     const mod = sel.dataset.module;
+    if (!mod) return; // e.g. keyboard mode selector uses .wave-selector styling only
     sel.querySelectorAll('.wave-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         sel.querySelectorAll('.wave-btn').forEach(b => b.classList.remove('active'));
@@ -1762,7 +1847,14 @@ function initWaveSelectors(root) {
         if (!ctx) return;
         const wave = btn.dataset.wave;
         const modType = mod.replace(/\d+$/, '');
-        if ((modType === 'vco' || modType === 'lfo') && nodes[mod]) nodes[mod].osc.type = wave;
+        if ((modType === 'vco' || modType === 'lfo') && nodes[mod]) {
+          nodes[mod].osc.type = wave;
+          if (modType === 'vco' && nodes[mod].keyboardVoices) {
+            nodes[mod].keyboardVoices.forEach(voice => {
+              voice.osc.type = wave;
+            });
+          }
+        }
       });
     });
   });
@@ -1829,17 +1921,17 @@ function getAudioNode(mod, jack, type) {
   if (type === 'output') {
     if (modType === 'vco') return n.out;
     if (modType === 'vcf') {
-      if (jack === 'lp') return n.lp;
-      if (jack === 'hp') return n.hp;
+      if (jack === 'lp') return n.lpOut || n.lp;
+      if (jack === 'hp') return n.hpOut || n.hp;
     }
     if (modType === 'vca') return n.gain;
     if (modType === 'adsr') return n.const;
-    if (modType === 'lfo') return n.depthGain;
+    if (modType === 'lfo') return n.out || n.depthGain;
     if (modType === 'noise') {
       if (jack === 'white') return n.white;
       if (jack === 'pink') return n.pink;
     }
-    if (modType === 'sh') return n.node;
+    if (modType === 'sh') return n.out || n.node;
     if (modType === 'mixer') return n.out;
     if (modType === 'ringmod') return n.out;
     if (modType === 'reverb') return n.wetGain;
@@ -2235,27 +2327,132 @@ function gateOff() {
   a.const.offset.linearRampToValueAtTime(0, now + Math.max(0.01, a.release));
 }
 
-function noteOn(midi, opts = {}) {
-  initAudio();
-  const wasActive = noteActive;
-  noteActive = true;
-  if (!keyboardMode) return;
-  const retrigger = opts.retrigger !== false;
-  const freq = 440 * Math.pow(2, (midi - 69) / 12);
-  const now = ctx.currentTime;
-  const pitchGlide = Math.max(0, keyboardGlideSec);
-  if (nodes.vco1) smoothRamp(nodes.vco1.osc.frequency, freq, now, pitchGlide);
-  if (nodes.vco2) smoothRamp(nodes.vco2.osc.frequency, freq, now, pitchGlide);
-  if (retrigger || !wasActive) gateOn();
-  document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
-  const keyEl = document.querySelector(`.key[data-midi="${midi}"]`);
-  if (keyEl) keyEl.classList.add('active');
+function midiToFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
-function noteOff() {
+function getActiveMidiByOrder() {
+  return Array.from(activeMidiNotes.entries())
+    .sort((a, b) => a[1].order - b[1].order)
+    .map(([midi]) => midi);
+}
+
+function syncKeyboardHighlights() {
+  const active = new Set(activeMidiNotes.keys());
+  document.querySelectorAll('.key').forEach(keyEl => {
+    const midi = parseInt(keyEl.dataset.midi, 10);
+    keyEl.classList.toggle('active', active.has(midi));
+  });
+}
+
+function releaseVcoPolyVoice(vcoNode, midi) {
+  if (!ctx || !vcoNode || !vcoNode.keyboardVoices) return;
+  const voice = vcoNode.keyboardVoices.get(midi);
+  if (!voice) return;
+  vcoNode.keyboardVoices.delete(midi);
+  const now = ctx.currentTime;
+  smoothCancel(voice.gain.gain, now);
+  voice.gain.gain.linearRampToValueAtTime(0, now + 0.01);
+  setTimeout(() => {
+    try {
+      if (vcoNode.pitchCvGain) vcoNode.pitchCvGain.disconnect(voice.osc.frequency);
+    } catch(e) {}
+    try { voice.osc.stop(); } catch(e) {}
+    try { voice.osc.disconnect(); } catch(e) {}
+    try { voice.gain.disconnect(); } catch(e) {}
+  }, 30);
+}
+
+function syncVcoPolyphony() {
+  if (!ctx) return;
+  const activeOrdered = getActiveMidiByOrder();
+  const activeSet = new Set(activeOrdered);
+  const leadMidi = activeOrdered.length ? activeOrdered[activeOrdered.length - 1] : null;
+  const now = ctx.currentTime;
+  const pitchGlide = Math.max(0, keyboardGlideSec);
+
+  ['vco1', 'vco2'].forEach(mod => {
+    const vcoNode = nodes[mod];
+    if (!vcoNode || !vcoNode.osc || !vcoNode.out) return;
+    if (!vcoNode.keyboardVoices) vcoNode.keyboardVoices = new Map();
+
+    if (leadMidi !== null) {
+      smoothRamp(vcoNode.osc.frequency, midiToFreq(leadMidi), now, pitchGlide);
+    }
+
+    Array.from(vcoNode.keyboardVoices.keys()).forEach(midi => {
+      if (!activeSet.has(midi) || midi === leadMidi) {
+        releaseVcoPolyVoice(vcoNode, midi);
+      }
+    });
+
+    activeOrdered.forEach(midi => {
+      if (midi === leadMidi) return;
+      let voice = vcoNode.keyboardVoices.get(midi);
+      if (!voice) {
+        const osc = ctx.createOscillator();
+        osc.type = vcoNode.osc.type;
+        osc.detune.value = vcoNode.osc.detune.value;
+        osc.frequency.value = midiToFreq(midi);
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        osc.connect(gain);
+        gain.connect(vcoNode.out);
+        if (vcoNode.pitchCvGain) vcoNode.pitchCvGain.connect(osc.frequency);
+        osc.start();
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(1, now + 0.006);
+        voice = { osc, gain };
+        vcoNode.keyboardVoices.set(midi, voice);
+      }
+      smoothRamp(voice.osc.frequency, midiToFreq(midi), now, pitchGlide);
+    });
+  });
+}
+
+function pressMidi(midi, opts = {}) {
+  if (!keyboardMode) return;
+  const retrigger = opts.retrigger !== false;
+  const hadAny = activeMidiNotes.size > 0;
+  const entry = activeMidiNotes.get(midi);
+  if (entry) {
+    entry.count += 1;
+    entry.order = ++noteOrderCounter;
+  } else {
+    activeMidiNotes.set(midi, { count: 1, order: ++noteOrderCounter });
+  }
+  noteActive = activeMidiNotes.size > 0;
+  syncVcoPolyphony();
+  syncKeyboardHighlights();
+  if (retrigger || !hadAny) gateOn();
+}
+
+function releaseMidi(midi) {
+  const entry = activeMidiNotes.get(midi);
+  if (!entry) return;
+  entry.count -= 1;
+  if (entry.count <= 0) activeMidiNotes.delete(midi);
+  noteActive = activeMidiNotes.size > 0;
+  syncVcoPolyphony();
+  syncKeyboardHighlights();
+  if (activeMidiNotes.size === 0) gateOff();
+}
+
+function noteOn(midi, opts = {}) {
+  initAudio();
+  pressMidi(midi, opts);
+}
+
+function noteOff(midi) {
+  if (typeof midi === 'number') {
+    releaseMidi(midi);
+    return;
+  }
+  activeMidiNotes.clear();
   noteActive = false;
+  syncVcoPolyphony();
+  syncKeyboardHighlights();
   gateOff();
-  document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
 }
 
 // ─── QWERTY piano key map (GarageBand layout) ───
@@ -2274,20 +2471,29 @@ Object.entries(KEY_TO_MIDI).forEach(([code, midi]) => {
   MIDI_TO_KEYLABEL[midi] = code.replace('Key','').replace('Digit','');
 });
 
-const heldKeys = new Set();
+const heldKeys = new Map();
+const activeMidiNotes = new Map();
+let noteOrderCounter = 0;
 let noteActive = false;
 let mouseKeyDragActive = false;
 let mouseDragMidi = null;
+let midiAccess = null;
+let midiInitInFlight = false;
+let midiInitFailedLogged = false;
+const midiHeldByInput = new Map();
 
 function playMouseDraggedKey(midi) {
   if (!mouseKeyDragActive) return;
   if (mouseDragMidi === midi) return;
-  const firstKeyInDrag = mouseDragMidi === null;
+  const previousMidi = mouseDragMidi;
+  const firstKeyInDrag = previousMidi === null;
+  if (previousMidi !== null) releaseMidi(previousMidi);
   mouseDragMidi = midi;
-  noteOn(midi, { retrigger: firstKeyInDrag });
+  pressMidi(midi, { retrigger: firstKeyInDrag });
 }
 
 function startMouseKeyDrag(midi) {
+  if (!keyboardMode) return;
   mouseKeyDragActive = true;
   mouseDragMidi = null;
   playMouseDraggedKey(midi);
@@ -2296,8 +2502,20 @@ function startMouseKeyDrag(midi) {
 function stopMouseKeyDrag() {
   if (!mouseKeyDragActive) return;
   mouseKeyDragActive = false;
+  if (mouseDragMidi !== null) releaseMidi(mouseDragMidi);
   mouseDragMidi = null;
-  if (heldKeys.size === 0) noteOff();
+}
+
+function resetKeyboardInputState() {
+  heldKeys.clear();
+  midiHeldByInput.clear();
+  mouseKeyDragActive = false;
+  mouseDragMidi = null;
+  activeMidiNotes.clear();
+  noteActive = false;
+  syncVcoPolyphony();
+  syncKeyboardHighlights();
+  gateOff();
 }
 
 document.addEventListener('keydown', (e) => {
@@ -2305,19 +2523,103 @@ document.addEventListener('keydown', (e) => {
   const midi = KEY_TO_MIDI[e.code];
   if (midi !== undefined) {
     e.preventDefault();
-    heldKeys.add(e.code);
-    noteOn(midi);
+    if (heldKeys.has(e.code)) return;
+    heldKeys.set(e.code, midi);
+    initAudio();
+    pressMidi(midi);
   }
 });
 document.addEventListener('keyup', (e) => {
-  const midi = KEY_TO_MIDI[e.code];
+  const midi = heldKeys.get(e.code);
   if (midi !== undefined) {
     heldKeys.delete(e.code);
-    if (heldKeys.size === 0) noteOff();
+    releaseMidi(midi);
   }
 });
 document.addEventListener('mouseup', stopMouseKeyDrag);
-window.addEventListener('blur', stopMouseKeyDrag);
+window.addEventListener('blur', resetKeyboardInputState);
+
+// ═══════════════════════════════════════════════════════════════
+// MIDI INPUT
+// ═══════════════════════════════════════════════════════════════
+function releaseMidiInputNotes(inputId) {
+  const held = midiHeldByInput.get(inputId);
+  if (!held) return;
+  held.forEach(note => releaseMidi(note));
+  midiHeldByInput.delete(inputId);
+}
+
+function onMidiMessage(event) {
+  const data = event.data;
+  if (!data || data.length < 2) return;
+  const status = data[0] & 0xF0;
+  const note = data[1];
+  const velocity = data.length > 2 ? data[2] : 0;
+  const inputId = (event.currentTarget && event.currentTarget.id) || 'midi';
+  let held = midiHeldByInput.get(inputId);
+  if (!held) {
+    held = new Set();
+    midiHeldByInput.set(inputId, held);
+  }
+
+  // Note On
+  if (status === 0x90 && velocity > 0) {
+    if (held.has(note)) return;
+    held.add(note);
+    initAudio();
+    pressMidi(note);
+    return;
+  }
+
+  // Note Off (or Note On with zero velocity)
+  if (status === 0x80 || (status === 0x90 && velocity === 0)) {
+    if (!held.has(note)) return;
+    held.delete(note);
+    releaseMidi(note);
+  }
+}
+
+function refreshMidiInputs() {
+  if (!midiAccess) return;
+  midiAccess.inputs.forEach(input => {
+    if (input.state === 'connected') {
+      input.onmidimessage = onMidiMessage;
+    } else {
+      input.onmidimessage = null;
+      releaseMidiInputNotes(input.id);
+    }
+  });
+}
+
+function onMidiStateChange(event) {
+  const port = event.port;
+  if (!port || port.type !== 'input') return;
+  if (port.state === 'connected') {
+    port.onmidimessage = onMidiMessage;
+    return;
+  }
+  port.onmidimessage = null;
+  releaseMidiInputNotes(port.id);
+}
+
+async function initMidiInput() {
+  if (midiAccess || midiInitInFlight) return;
+  if (!navigator.requestMIDIAccess) return;
+  midiInitInFlight = true;
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+    midiInitFailedLogged = false;
+    refreshMidiInputs();
+    midiAccess.onstatechange = onMidiStateChange;
+  } catch (err) {
+    if (!midiInitFailedLogged) {
+      console.warn('MIDI input unavailable.', err);
+      midiInitFailedLogged = true;
+    }
+  } finally {
+    midiInitInFlight = false;
+  }
+}
 
 // ═══════════════════════════════════════════════════
 // PIANO KEYBOARD
@@ -2403,6 +2705,7 @@ function buildKeyboard() {
   }
 
   kb.style.width = `${whiteCount * WHITE_W}px`;
+  syncKeyboardHighlights();
 }
 
 // ═══════════════════════════════════════════════════
@@ -2516,6 +2819,10 @@ function vcoHTML(key, defaultFreq) {
       <div class="knob small" data-module="${key}" data-param="fine" data-min="-50" data-max="50" data-default="0" data-scale="lin"><div class="knob-pip"></div></div>
       <div class="knob-label">Fine</div>
     </div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="0.8" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Level</div>
+    </div>
     <div class="wave-selector" data-module="${key}">
       <div class="wave-btn active" data-wave="sine">∿</div>
       <div class="wave-btn" data-wave="square">⊓</div>
@@ -2542,6 +2849,10 @@ function lfoHTML(key) {
       <div class="knob small" data-module="${key}" data-param="depth" data-min="0" data-max="1" data-default="0.5" data-scale="lin"><div class="knob-pip"></div></div>
       <div class="knob-label">Depth</div>
     </div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Level</div>
+    </div>
     <div class="wave-selector" data-module="${key}">
       <div class="wave-btn active" data-wave="sine">∿</div>
       <div class="wave-btn" data-wave="triangle">△</div>
@@ -2566,6 +2877,10 @@ function vcfHTML(key) {
     <div class="knob-wrap">
       <div class="knob small" data-module="${key}" data-param="resonance" data-min="0" data-max="30" data-default="1" data-scale="lin"><div class="knob-pip"></div></div>
       <div class="knob-label">Res</div>
+    </div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Level</div>
     </div>
     <div class="panel-divider"></div>
     <div class="jack-row">
@@ -2688,17 +3003,23 @@ function createLfoAudio(key) {
   const osc = ctx.createOscillator();
   osc.type = 'sine'; osc.frequency.value = 1; osc.start();
   const depthGain = ctx.createGain(); depthGain.gain.value = 0.5;
+  const out = ctx.createGain(); out.gain.value = 1;
   osc.connect(depthGain);
-  nodes[key] = { osc, depthGain };
+  depthGain.connect(out);
+  nodes[key] = { osc, depthGain, out };
 }
 
 function createVcfAudio(key) {
   const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2000; lp.Q.value = 1;
   const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2000; hp.Q.value = 1;
+  const lpOut = ctx.createGain(); lpOut.gain.value = 1;
+  const hpOut = ctx.createGain(); hpOut.gain.value = 1;
+  lp.connect(lpOut);
+  hp.connect(hpOut);
   const input = ctx.createGain(); input.connect(lp); input.connect(hp);
   const cvGain = ctx.createGain(); cvGain.gain.value = 4000;
   cvGain.connect(lp.frequency); cvGain.connect(hp.frequency);
-  nodes[key] = { lp, hp, cvGain, in: input };
+  nodes[key] = { lp, hp, lpOut, hpOut, cvGain, in: input };
 }
 
 function createReverbAudio(key) {
@@ -2774,28 +3095,38 @@ function createAdsrAudio(key) {
 }
 
 function createNoiseAudio(key) {
+  const whiteOut = ctx.createGain(); whiteOut.gain.value = 0.8;
+  const pinkOut = ctx.createGain(); pinkOut.gain.value = 0.8;
+  nodes[key] = { white: whiteOut, pink: pinkOut };
   registerNoiseWorklet().then(() => {
     const whiteNode = new AudioWorkletNode(ctx, 'white-noise-processor');
     const pinkNode  = new AudioWorkletNode(ctx, 'pink-noise-processor');
-    nodes[key] = { white: whiteNode, pink: pinkNode };
+    whiteNode.connect(whiteOut);
+    pinkNode.connect(pinkOut);
+    nodes[key].whiteSource = whiteNode;
+    nodes[key].pinkSource = pinkNode;
   });
 }
 
 function createShAudio(key) {
   const sigIn  = ctx.createGain();
   const trigIn = ctx.createGain();
-  nodes[key] = { sigIn, trigIn };
+  const out = ctx.createGain(); out.gain.value = 1;
+  nodes[key] = { sigIn, trigIn, out };
   registerSHWorklet().then(() => {
     const shNode = new AudioWorkletNode(ctx, 'sh-processor', { numberOfInputs: 2, numberOfOutputs: 1 });
     sigIn.connect(shNode, 0, 0);
     trigIn.connect(shNode, 0, 1);
+    shNode.connect(out);
     nodes[key].node = shNode;
   });
 }
 
 function createRingmodAudio(key) {
   const impl = ctx.createGain(); impl.gain.value = 0;
-  nodes[key] = { impl, out: impl };
+  const out = ctx.createGain(); out.gain.value = 1;
+  impl.connect(out);
+  nodes[key] = { impl, out };
 }
 
 function createScopeAudio(key) {
@@ -2874,7 +3205,10 @@ function noiseHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
     <span class="panel-close" title="Remove">×</span>
     <div class="panel-title">Noise</div>
-    <div style="flex:1"></div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="0.8" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Level</div>
+    </div>
     <div class="panel-divider"></div>
     <div class="jack-row">
       <div class="jack-wrap"><div class="jack output" data-module="${key}" data-jack="white" data-type="output" title="White"></div><div class="jack-label">White</div></div>
@@ -2887,7 +3221,10 @@ function shHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
     <span class="panel-close" title="Remove">×</span>
     <div class="panel-title">S&amp;H</div>
-    <div style="flex:1"></div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Level</div>
+    </div>
     <div class="panel-divider"></div>
     <div class="jack-row">
       <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="sigin"  data-type="input"  title="Signal"></div><div class="jack-label">Sig</div></div>
@@ -2903,7 +3240,10 @@ function ringmodHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
     <span class="panel-close" title="Remove">×</span>
     <div class="panel-title">Ring<br>Mod</div>
-    <div style="flex:1"></div>
+    <div class="knob-wrap">
+      <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin"><div class="knob-pip"></div></div>
+      <div class="knob-label">Level</div>
+    </div>
     <div class="panel-divider"></div>
     <div class="jack-row">
       <div class="jack-wrap"><div class="jack input"  data-module="${key}" data-jack="carrier" data-type="input"  title="Carrier"></div><div class="jack-label">Car</div></div>
@@ -3234,6 +3574,7 @@ refreshScrews();
 drawLoop();
 drawVU();
 drawScope();
+initMidiInput();
 
 window.addEventListener('resize', () => {
   buildKeyboard();
@@ -3241,8 +3582,8 @@ window.addEventListener('resize', () => {
 });
 
 // Init audio on first interaction
-document.addEventListener('click', () => initAudio(), { once: false });
-document.addEventListener('keydown', () => initAudio(), { once: false });
+document.addEventListener('click', () => { initAudio(); initMidiInput(); }, { once: false });
+document.addEventListener('keydown', () => { initAudio(); initMidiInput(); }, { once: false });
 </script>
 </body>
 </html>
