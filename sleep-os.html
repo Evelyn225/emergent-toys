@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sleepOS v0.9β</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ── CRT overlay ──────────────────────────────────────────────── */
+#crt {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 99999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent, transparent 2px,
+    rgba(0,8,0,0.10) 2px, rgba(0,8,0,0.10) 4px
+  );
+}
+#crt::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%);
+}
+
+/* ── Global type ─────────────────────────────────────────────── */
+body {
+  overflow: hidden;
+  font-family: 'MS Sans Serif', 'Segoe UI', Tahoma, sans-serif;
+  font-size: 11px;
+  background: #000;
+}
+
+/* ── BIOS ─────────────────────────────────────────────────────── */
+#bios {
+  position: fixed; inset: 0;
+  background: #000; z-index: 9999;
+  display: flex; align-items: flex-start; justify-content: flex-start;
+  padding: 2rem 2.5rem;
+  font-family: 'VT323', monospace;
+  font-size: 18px; color: #aaa;
+  overflow: hidden;
+}
+#bios-text { white-space: pre; line-height: 1.45; }
+
+/* ── Desktop ─────────────────────────────────────────────────── */
+#desktop {
+  position: fixed; inset: 0; bottom: 28px;
+  display: none;
+}
+#desktop-bg {
+  position: absolute; inset: 0;
+  background: #008080;
+}
+
+/* ── Desktop icons ───────────────────────────────────────────── */
+#icons-layer {
+  position: absolute; inset: 0;
+  padding: 8px 6px;
+  display: flex; flex-direction: column; flex-wrap: wrap;
+  align-content: flex-start; gap: 2px;
+}
+.desktop-icon {
+  width: 74px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 4px; cursor: default;
+  border: 1px solid transparent;
+}
+.desktop-icon:hover { border: 1px dotted rgba(255,255,255,0.55); background: rgba(0,0,128,0.28); }
+.desktop-icon.selected { border: 1px dotted #fff; background: rgba(0,0,128,0.5); }
+.di-img { font-size: 30px; line-height: 1; }
+.di-name {
+  font-size: 11px; color: #fff;
+  text-align: center; text-shadow: 1px 1px 1px #000;
+  word-break: break-word; line-height: 1.2;
+}
+.desktop-icon.selected .di-name { background: #000080; }
+
+/* ── Windows layer ───────────────────────────────────────────── */
+#windows-layer { position: absolute; inset: 0; }
+
+/* ── OS Window ───────────────────────────────────────────────── */
+.os-window {
+  position: absolute;
+  display: flex; flex-direction: column;
+  background: #c0c0c0;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  box-shadow: 1px 1px 0 #000;
+  min-width: 180px; min-height: 80px;
+}
+.os-window.inactive .win-titlebar { background: #808080; }
+.win-titlebar {
+  background: linear-gradient(to right, #000080, #1084d0);
+  color: #fff; padding: 2px 2px 2px 4px;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: default; user-select: none;
+  height: 18px; flex-shrink: 0; gap: 4px;
+}
+.win-title-text {
+  display: flex; align-items: center; gap: 4px;
+  overflow: hidden; white-space: nowrap; flex: 1;
+  font-size: 11px; font-weight: bold;
+}
+.win-icon { font-size: 12px; }
+.win-controls { display: flex; gap: 1px; flex-shrink: 0; }
+.win-btn {
+  width: 16px; height: 14px;
+  background: #c0c0c0;
+  border: 1px solid; border-color: #fff #808080 #808080 #fff;
+  font-size: 9px; color: #000;
+  display: flex; align-items: center; justify-content: center;
+  cursor: default; padding: 0; line-height: 1; flex-shrink: 0;
+}
+.win-btn:active { border-color: #808080 #fff #fff #808080; }
+.win-menubar {
+  background: #c0c0c0; padding: 1px 2px;
+  display: flex; border-bottom: 1px solid #808080; flex-shrink: 0;
+}
+.menu-item { padding: 1px 5px; cursor: default; font-size: 11px; }
+.menu-item:hover { background: #000080; color: #fff; }
+.win-body { flex: 1; overflow: hidden; position: relative; background: #c0c0c0; }
+.win-statusbar {
+  height: 18px; background: #c0c0c0;
+  border-top: 1px solid #808080;
+  display: flex; align-items: center; padding: 0 4px;
+  font-size: 11px; flex-shrink: 0;
+}
+.statusbar-panel {
+  border: 1px solid; border-color: #808080 #fff #fff #808080;
+  padding: 0 4px; height: 14px; display: flex; align-items: center; margin-right: 2px;
+}
+
+/* ── Taskbar ─────────────────────────────────────────────────── */
+#taskbar {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 28px;
+  background: #c0c0c0; border-top: 2px solid; border-color: #fff #808080 #808080 #fff;
+  display: none; align-items: center; padding: 2px; z-index: 9000; gap: 2px;
+}
+#start-btn {
+  height: 22px; padding: 0 8px;
+  background: #c0c0c0;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  font-weight: bold; font-size: 11px; cursor: default;
+  display: flex; align-items: center; gap: 4px;
+  white-space: nowrap; flex-shrink: 0;
+}
+#start-btn:active, #start-btn.pressed { border-color: #808080 #fff #fff #808080; }
+.tb-divider {
+  width: 2px; height: 22px; flex-shrink: 0;
+  border-left: 1px solid #808080; border-right: 1px solid #fff; margin: 0 2px;
+}
+#taskbar-programs { flex: 1; display: flex; align-items: center; gap: 2px; overflow: hidden; }
+.taskbar-btn {
+  height: 22px; padding: 0 6px;
+  background: #c0c0c0;
+  border: 1px solid; border-color: #fff #808080 #808080 #fff;
+  font-size: 11px; cursor: default;
+  display: flex; align-items: center; gap: 4px;
+  white-space: nowrap; overflow: hidden; max-width: 150px;
+}
+.taskbar-btn.focused { border-color: #808080 #fff #fff #808080; background: #b4b4b4; }
+.taskbar-btn span:last-child { overflow: hidden; text-overflow: ellipsis; }
+#system-tray {
+  height: 22px;
+  border: 1px solid; border-color: #808080 #fff #fff #808080;
+  display: flex; align-items: center; padding: 0 6px; gap: 6px;
+  font-size: 11px; flex-shrink: 0;
+}
+
+/* ── Start Menu ──────────────────────────────────────────────── */
+#start-menu {
+  position: fixed; bottom: 28px; left: 0;
+  width: 200px;
+  background: #c0c0c0;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  z-index: 9001; display: none; flex-direction: row;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+}
+#sm-sidebar {
+  width: 22px;
+  background: linear-gradient(to top, #808080, #c0c0c0);
+  display: flex; align-items: flex-end; padding-bottom: 4px;
+}
+#sm-sidebar span {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font-size: 10px; font-weight: bold; color: rgba(255,255,255,0.45);
+  letter-spacing: 2px;
+}
+#sm-items { flex: 1; padding: 2px 0; }
+.sm-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px 4px 4px; cursor: default; font-size: 11px;
+}
+.sm-item:hover { background: #000080; color: #fff; }
+.sm-icon { font-size: 16px; flex-shrink: 0; }
+.sm-sep { height: 1px; margin: 2px 4px; background: linear-gradient(to right, #808080, #fff); }
+
+/* ── File manager ────────────────────────────────────────────── */
+.file-grid {
+  display: flex; flex-wrap: wrap; gap: 0; padding: 4px;
+  align-content: flex-start;
+}
+.file-item {
+  width: 72px; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; padding: 4px 2px;
+  cursor: default; border: 1px solid transparent; text-align: center;
+}
+.file-item:hover { border-color: #000080; background: rgba(0,0,128,0.1); }
+.file-item.selected { background: #000080; color: #fff; border-color: #000080; }
+.fi-icon { font-size: 24px; }
+.fi-name { font-size: 10px; word-break: break-word; line-height: 1.2; }
+
+/* ── Terminal ─────────────────────────────────────────────────── */
+.term-wrap {
+  background: #000; color: #00cc00;
+  font-family: 'VT323', 'Courier New', monospace; font-size: 15px;
+  padding: 4px; height: 100%;
+  display: flex; flex-direction: column;
+}
+.term-out { flex: 1; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+.term-in-line { display: flex; align-items: center; }
+.term-prompt { color: #00cc00; white-space: nowrap; }
+.term-input {
+  flex: 1; background: transparent; border: none;
+  color: #00cc00; font-family: inherit; font-size: inherit;
+  outline: none; caret-color: #00cc00;
+}
+
+/* ── Sysmon ───────────────────────────────────────────────────── */
+.sm-row {
+  display: flex; align-items: center; padding: 2px 4px;
+  font-size: 11px; border-bottom: 1px solid #d0d0d0;
+}
+.sm-row:nth-child(even) { background: #e8e8e8; }
+.sm-lbl { width: 120px; color: #333; }
+.sm-track {
+  flex: 1; height: 10px; background: #fff;
+  border: 1px solid; border-color: #808080 #fff #fff #808080;
+  position: relative; overflow: hidden;
+}
+.sm-fill { height: 100%; background: #000080; position: absolute; left: 0; top: 0; transition: width 1.2s ease; }
+.sm-val { width: 38px; text-align: right; font-size: 10px; color: #444; }
+
+/* ── Dialog ───────────────────────────────────────────────────── */
+.dlg-body { padding: 12px; display: flex; gap: 12px; align-items: flex-start; }
+.dlg-icon { font-size: 32px; flex-shrink: 0; line-height: 1; }
+.dlg-text { font-size: 11px; line-height: 1.6; flex: 1; }
+.dlg-btns { padding: 8px; display: flex; justify-content: center; gap: 8px; border-top: 1px solid #d0d0d0; }
+.dlg-btn {
+  min-width: 75px; height: 23px; background: #c0c0c0;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  font-size: 11px; cursor: default;
+  display: flex; align-items: center; justify-content: center; padding: 0 8px;
+}
+.dlg-btn:active { border-color: #808080 #fff #fff #808080; }
+.dlg-btn.primary { border-width: 2px; box-shadow: inset 0 0 0 1px #000; }
+
+/* ── Glitch overlay ──────────────────────────────────────────── */
+#glitch { position: fixed; inset: 0; z-index: 99998; pointer-events: none; display: none; }
+@keyframes glitch-shift {
+  0%   { transform: translate(0,0); filter: none; }
+  15%  { transform: translate(-3px,0); filter: hue-rotate(90deg) saturate(3); }
+  30%  { transform: translate(3px,-1px); filter: hue-rotate(-60deg); }
+  50%  { transform: translate(-2px,2px); filter: none; }
+  70%  { transform: translate(2px,0); filter: saturate(0.2); }
+  100% { transform: translate(0,0); filter: none; }
+}
+.glitching { animation: glitch-shift 0.18s steps(1) 3; }
+
+/* ── Welcome text window ─────────────────────────────────────── */
+.note-body {
+  background: #fff; height: 100%; overflow: auto;
+  padding: 8px; font-family: 'Courier New', monospace;
+  font-size: 11px; line-height: 1.7;
+}
+</style>
+</head>
+<body>
+
+<!-- CRT overlay -->
+<div id="crt" aria-hidden="true"></div>
+<!-- Glitch div -->
+<div id="glitch"></div>
+
+<!-- BIOS boot screen -->
+<div id="bios"><div id="bios-text"></div></div>
+
+<!-- Desktop -->
+<div id="desktop">
+  <div id="desktop-bg"></div>
+  <div id="icons-layer"></div>
+  <div id="windows-layer"></div>
+</div>
+
+<!-- Taskbar -->
+<div id="taskbar">
+  <button id="start-btn" onclick="toggleStart()">🖥 Start</button>
+  <div class="tb-divider"></div>
+  <div id="taskbar-programs"></div>
+  <div id="system-tray">
+    <span title="sleepOS network active">📶</span>
+    <span id="clock">--:--</span>
+  </div>
+</div>
+
+<!-- Start Menu -->
+<div id="start-menu">
+  <div id="sm-sidebar"><span>sleepOS</span></div>
+  <div id="sm-items">
+    <div class="sm-item" onclick="closeStart();openWelcome()">
+      <span class="sm-icon">📄</span><span>Welcome</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();openFiles()">
+      <span class="sm-icon">📁</span><span>Projects</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();openTerminal()">
+      <span class="sm-icon">💻</span><span>Terminal</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();openSysmon()">
+      <span class="sm-icon">📊</span><span>System Monitor</span>
+    </div>
+    <div class="sm-sep"></div>
+    <div class="sm-item" onclick="window.location='index.html'">
+      <span class="sm-icon">🌐</span><span>Return to Eve Net</span>
+    </div>
+    <div class="sm-sep"></div>
+    <div class="sm-item" onclick="closeStart();doShutdown()">
+      <span class="sm-icon">⏻</span><span>Shut Down...</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────────────────────────
+const PROJECTS = [
+  { name: 'sand playground',    emoji: '⏳', file: 'Sands.html' },
+  { name: 'bug hotline',        emoji: '🐛', file: 'critters.html' },
+  { name: 'fireworks',          emoji: '🎆', file: 'fireworks.html' },
+  { name: 'pixel splatter',     emoji: '🔮', file: 'pixel-splatter.html' },
+  { name: 'anime hell',         emoji: '🔥', file: 'hell.html' },
+  { name: 'fluid',              emoji: '💧', file: 'fluid.html' },
+  { name: 'web wizard casino',  emoji: '🎰', file: 'webwizardcasino.html' },
+  { name: 'automata garden',    emoji: '🌱', file: 'automata-garden.html' },
+  { name: 'erosion toy',        emoji: '🏔️',  file: 'erosion.html' },
+  { name: 'wave collapse',      emoji: '🌊', file: 'wave-collapse.html' },
+  { name: 'tentacle catch',     emoji: '🦑', file: 'catch.html' },
+  { name: 'reaction diffusion', emoji: '⚗️',  file: 'philosophers-stone.html' },
+  { name: 'voronoi',            emoji: '🔬', file: 'vornoi.html' },
+  { name: 'morse code',         emoji: '📡', file: 'morse.html' },
+  { name: 'lissajous',          emoji: '〰️', file: 'lissajous.html' },
+  { name: 'net sanctuary',      emoji: '🌐', file: 'net-sanctuary-project.html' },
+  { name: 'ascii render',       emoji: '💻', file: 'ascii-render.html' },
+  { name: 'tablecloth',         emoji: '🧶', file: 'tablecloth.html' },
+  { name: 'corridor crawler',   emoji: '🚪', file: 'corridor.html' },
+  { name: 'patch synth',        emoji: '🎛️',  file: 'synth.html' },
+];
+
+const DESKTOP_ICONS = [
+  { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
+  { name: 'PROJECTS.DIR',   emoji: '📁', action: 'openFiles' },
+  { name: 'TERMINAL.EXE',   emoji: '💻', action: 'openTerminal' },
+  { name: 'SYSMON.EXE',     emoji: '📊', action: 'openSysmon' },
+  { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
+  { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
+  { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
+];
+
+const BIOS_LINES = [
+  'sleepOS BIOS v2.33b  (C) MMXXI Eve Networks Corp.',
+  '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+  '',
+  'CPU: SOMA-686 @ 666 MHz                [DETECTED]',
+  'Co-processor: present (unresponsive)',
+  '',
+  'Testing RAM...',
+  '  Segment A: OK',
+  '  Segment B: OK',
+  '  Segment C: WARN — residual data found',
+  '  262144 KB total',
+  '',
+  'Scanning devices...',
+  '  IDE 0 Master : WD Corpus-40GB  (ATA-6)',
+  '  IDE 0 Slave  : CD-ROM VOID-52x  (no disc)',
+  '  USB: 1 device attached (unrecognized)',
+  '',
+  'Running POST diagnostics...',
+  '  Memory coherence  : 87.3%',
+  '  Clock drift       : +/- 2.3 years  [WARNING]',
+  '  Daemon count      : 7 (3 unrecognized)',
+  '  Soul integrity    : DEGRADED',
+  '',
+  'Loading sleepOS v0.903b2...',
+  '',
+  '                        [ press any key to skip ]',
+];
+
+const SYSTEM_MSGS = [
+  { icon:'⚠️', title:'sleepOS', text:'A memory address returned a value outside the range of plausible reality.\n\nThis has been logged.' },
+  { icon:'💡', title:'Tip of the Day', text:'Did you know? sleepOS runs 7 background daemons. 3 of them are of unknown origin.\n\nThis is considered normal.' },
+  { icon:'⚠️', title:'System Notice', text:'Soul Integrity has decreased by 0.4%.\n\nThis is expected behavior. No action is required.' },
+  { icon:'🔔', title:'Reminder', text:'You have been inside sleepOS for some time now.\n\nEverything is fine.' },
+  { icon:'💡', title:'Tip of the Day', text:'Did you know? The file void.tmp has existed since before this system was installed.\n\nIts size cannot be determined.' },
+  { icon:'⚠️', title:'System Warning', text:'An unknown process is observing your session.\n\nThis feature cannot be disabled.' },
+  { icon:'🔔', title:'sleepOS', text:'Entropy levels are elevated in Sector 7.\n\nSector 7 cannot be located on this machine.' },
+  { icon:'⚠️', title:'Memory Warning', text:'The process dream_fragment.exe has allocated more memory than physically exists.\n\nThe system has accommodated this.' },
+  { icon:'🔔', title:'sleepOS', text:'You are the 1st visitor today.\n\nYou are also the last.' },
+];
+
+// ─────────────────────────────────────────────────────────────────
+// BIOS BOOT
+// ─────────────────────────────────────────────────────────────────
+const biosTextEl = document.getElementById('bios-text');
+let biosIdx = 0, biosChar = 0, biosTimer, bisDone = false;
+
+function biosFinish() {
+  if (bisDone) return; bisDone = true;
+  clearTimeout(biosTimer);
+  const biosEl = document.getElementById('bios');
+  biosEl.style.transition = 'opacity 0.6s';
+  biosEl.style.opacity = '0';
+  setTimeout(() => { biosEl.style.display = 'none'; startDesktop(); }, 600);
+}
+
+function biosType() {
+  if (bisDone) return;
+  if (biosIdx >= BIOS_LINES.length) { biosTimer = setTimeout(biosFinish, 700); return; }
+  const line = BIOS_LINES[biosIdx];
+  if (biosChar <= line.length) {
+    if (biosChar > 0) {
+      // Replace last line
+      const lines = biosTextEl.textContent.split('\n');
+      lines[lines.length - 1] = line.slice(0, biosChar);
+      biosTextEl.textContent = lines.join('\n');
+    }
+    biosChar++;
+    biosTimer = setTimeout(biosType, line === '' ? 0 : 11);
+  } else {
+    biosTextEl.textContent += '\n';
+    biosIdx++; biosChar = 0;
+    biosTimer = setTimeout(biosType, line === '' ? 25 : 55);
+  }
+}
+
+document.addEventListener('keydown', biosFinish, { once: true });
+document.addEventListener('click',   biosFinish, { once: true });
+setTimeout(biosType, 250);
+
+// ─────────────────────────────────────────────────────────────────
+// WINDOW MANAGEMENT
+// ─────────────────────────────────────────────────────────────────
+let zTop = 100;
+const wins = {};
+
+function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
+                 menubar = true, statusbar = true }) {
+  if (wins[id]) { focusWin(id); unminWin(id); return null; }
+
+  // Default position: slightly random cascade
+  const count = Object.keys(wins).length;
+  if (x === undefined) x = 80 + count * 22;
+  if (y === undefined) y = 44 + count * 22;
+
+  const el = document.createElement('div');
+  el.className = 'os-window inactive';
+  el.id = 'win-' + id;
+  el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`;
+
+  el.innerHTML = `
+    <div class="win-titlebar" id="tb-${id}">
+      <div class="win-title-text">
+        <span class="win-icon">${icon}</span>
+        <span id="wtitle-${id}">${title}</span>
+      </div>
+      <div class="win-controls">
+        <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
+        <button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>
+        <button class="win-btn" title="Close"    onclick="closeWin('${id}')">✕</button>
+      </div>
+    </div>
+    ${menubar ? `<div class="win-menubar" id="mb-${id}"></div>` : ''}
+    <div class="win-body" id="wb-${id}"></div>
+    ${statusbar ? `<div class="win-statusbar"><div class="statusbar-panel" id="ws-${id}">Ready</div></div>` : ''}
+  `;
+
+  document.getElementById('windows-layer').appendChild(el);
+  wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
+
+  makeDraggable(el, document.getElementById('tb-' + id));
+  addTbBtn(id, title, icon);
+  el.addEventListener('mousedown', () => focusWin(id));
+
+  focusWin(id);
+  return el;
+}
+
+function focusWin(id) {
+  const w = wins[id]; if (!w) return;
+  w.el.style.zIndex = ++zTop;
+  Object.values(wins).forEach(v => v.el.classList.add('inactive'));
+  w.el.classList.remove('inactive');
+  document.querySelectorAll('.taskbar-btn').forEach(b => b.classList.remove('focused'));
+  const btn = document.getElementById('tbtn-' + id);
+  if (btn) btn.classList.add('focused');
+}
+
+function minWin(id) {
+  const w = wins[id]; if (!w) return;
+  w.minimized = true; w.el.style.display = 'none';
+  const btn = document.getElementById('tbtn-' + id);
+  if (btn) btn.classList.remove('focused');
+}
+
+function unminWin(id) {
+  const w = wins[id]; if (!w) return;
+  w.minimized = false; w.el.style.display = 'flex'; focusWin(id);
+}
+
+function maxWin(id) {
+  const w = wins[id]; if (!w) return;
+  if (w.maximized) {
+    w.el.style.cssText = w.origStyle; w.maximized = false;
+  } else {
+    w.origStyle = w.el.style.cssText;
+    const d = document.getElementById('desktop');
+    w.el.style.left   = '0';
+    w.el.style.top    = '0';
+    w.el.style.width  = d.offsetWidth + 'px';
+    w.el.style.height = d.offsetHeight + 'px';
+    w.el.style.zIndex = ++zTop;
+    w.maximized = true;
+  }
+}
+
+function closeWin(id) {
+  const w = wins[id]; if (!w) return;
+  if (w._interval) clearInterval(w._interval);
+  w.el.remove(); delete wins[id];
+  const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
+}
+
+function makeDraggable(win, handle) {
+  let sx, sy, sl, st;
+  handle.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    sx = e.clientX; sy = e.clientY;
+    sl = win.offsetLeft; st = win.offsetTop;
+    const onMove = (e) => {
+      win.style.left = Math.max(0, sl + e.clientX - sx) + 'px';
+      win.style.top  = Math.max(0, st + e.clientY - sy) + 'px';
+    };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function addTbBtn(id, title, icon) {
+  const btn = document.createElement('button');
+  btn.className = 'taskbar-btn focused';
+  btn.id = 'tbtn-' + id;
+  btn.innerHTML = `<span>${icon}</span><span>${title}</span>`;
+  btn.addEventListener('click', () => {
+    const w = wins[id]; if (!w) return;
+    if (w.minimized) { unminWin(id); }
+    else if (w.el.classList.contains('inactive')) { focusWin(id); }
+    else { minWin(id); }
+  });
+  document.getElementById('taskbar-programs').appendChild(btn);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CLOCK
+// ─────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const glitch = Math.random() < 0.004;
+  const h = glitch ? Math.floor(Math.random() * 24) : now.getHours();
+  const m = glitch ? Math.floor(Math.random() * 60) : now.getMinutes();
+  document.getElementById('clock').textContent = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ─────────────────────────────────────────────────────────────────
+// START MENU
+// ─────────────────────────────────────────────────────────────────
+let startOpen = false;
+function toggleStart() {
+  startOpen = !startOpen;
+  document.getElementById('start-menu').style.display = startOpen ? 'flex' : 'none';
+  document.getElementById('start-btn').classList.toggle('pressed', startOpen);
+}
+function closeStart() { if (startOpen) toggleStart(); }
+document.addEventListener('mousedown', (e) => {
+  if (startOpen && !e.target.closest('#start-menu') && e.target.id !== 'start-btn')
+    closeStart();
+});
+
+// ─────────────────────────────────────────────────────────────────
+// DESKTOP ICONS
+// ─────────────────────────────────────────────────────────────────
+function setupIcons() {
+  const layer = document.getElementById('icons-layer');
+  DESKTOP_ICONS.forEach(ic => {
+    const div = document.createElement('div');
+    div.className = 'desktop-icon';
+    div.innerHTML = `<div class="di-img">${ic.emoji}</div><div class="di-name">${ic.name}</div>`;
+    let clicks = 0, clickT;
+    div.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clicks++;
+      document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
+      div.classList.add('selected');
+      if (clicks === 1) {
+        clickT = setTimeout(() => { clicks = 0; }, 380);
+      } else {
+        clearTimeout(clickT); clicks = 0;
+        window[ic.action]?.();
+      }
+    });
+    layer.appendChild(div);
+  });
+  document.getElementById('desktop').addEventListener('click', (e) => {
+    if (!e.target.closest('.desktop-icon') && !e.target.closest('.os-window'))
+      document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// WINDOW CONTENT
+// ─────────────────────────────────────────────────────────────────
+
+function openWelcome() {
+  if (!mkWin({ id:'welcome', title:'WELCOME.README — Notepad', icon:'📄', w:420, h:320, x:100, y:55 })) return;
+  document.getElementById('wb-welcome').innerHTML = `
+    <div class="note-body">
+<span style="color:#000080;font-weight:bold">== sleepOS v0.9β — WELCOME FILE ==</span>
+<span style="color:#808080">Build: 2024.11.13-EXPERIMENTAL / SOMA-686</span>
+
+Welcome to sleepOS.
+
+This operating system is an experimental environment
+for generative and interactive computation.
+All processes here are alive in some sense of the word.
+
+<b>Navigation:</b>
+  - Double-click desktop icons to open programs
+  - PROJECTS.DIR contains all interactive applications
+  - TERMINAL.EXE accepts command-line input
+  - SYSMON.EXE monitors system vitals
+  - Start Menu provides quick access to all programs
+
+<b>Known Issues:</b>
+  [!] Clock drift: temporal reference is unreliable
+  [!] 3 daemon processes are of unrecognized origin
+  [!] Soul integrity is at 87.3% and decreasing
+  [!] void.tmp cannot be read, deleted, or ignored
+  [!] ?????.exe should not be executed
+
+<b>Security:</b>
+  An unknown process is observing your session.
+  This is not a bug. This cannot be disabled.
+
+Have a productive session.
+
+— SYSTEM
+    </div>`;
+  const ws = document.getElementById('ws-welcome');
+  if (ws) ws.textContent = 'WELCOME.README  —  623 bytes';
+}
+
+function openFiles() {
+  if (!mkWin({ id:'files', title:'PROJECTS.DIR — File Manager', icon:'📁', w:580, h:400, x:120, y:70 })) return;
+  const mb = document.getElementById('mb-files');
+  mb.innerHTML = `<span class="menu-item">File</span><span class="menu-item">Edit</span><span class="menu-item">View</span><span class="menu-item">Help</span>`;
+
+  const body = document.getElementById('wb-files');
+  body.style.cssText = 'overflow:auto;border:2px solid;border-color:#808080 #fff #fff #808080;margin:4px;background:#fff;';
+
+  const grid = document.createElement('div');
+  grid.className = 'file-grid';
+
+  PROJECTS.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    item.innerHTML = `<div class="fi-icon">${p.emoji}</div><div class="fi-name">${p.name}</div>`;
+    let clicks = 0, clickT;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clicks++;
+      document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+      item.classList.add('selected');
+      const ws = document.getElementById('ws-files');
+      if (ws) ws.textContent = p.name + '  —  double-click to open';
+      if (clicks === 1) {
+        clickT = setTimeout(() => { clicks = 0; }, 380);
+      } else {
+        clearTimeout(clickT); clicks = 0;
+        window.open(p.file, '_blank');
+      }
+    });
+    grid.appendChild(item);
+  });
+  body.appendChild(grid);
+
+  const ws = document.getElementById('ws-files');
+  if (ws) ws.textContent = PROJECTS.length + ' objects';
+}
+
+function openTerminal() {
+  if (!mkWin({ id:'terminal', title:'TERMINAL.EXE — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) return;
+  const body = document.getElementById('wb-terminal');
+  body.style.padding = '0'; body.style.overflow = 'hidden';
+  body.innerHTML = `
+    <div class="term-wrap" id="tw">
+      <div class="term-out" id="to"></div>
+      <div class="term-in-line">
+        <span class="term-prompt">C:\sleepOS&gt;&nbsp;</span>
+        <input class="term-input" id="ti" type="text" autocomplete="off" spellcheck="false">
+      </div>
+    </div>`;
+
+  const out = document.getElementById('to');
+  const inp = document.getElementById('ti');
+
+  const print = (text, color) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    if (color) div.style.color = color;
+    out.appendChild(div);
+    out.scrollTop = out.scrollHeight;
+  };
+
+  print('sleepOS Command Processor v2.33');
+  print('Copyright (C) MMXXI Eve Networks Corp.');
+  print('');
+  print('Type HELP for available commands.');
+  print('');
+
+  let cmdHistory = [], histIdx = -1;
+
+  const CMDS = {
+    help: () => {
+      [
+        'Available commands:',
+        '  HELP     — show this help',
+        '  DIR, LS  — list directory',
+        '  PS       — list running processes',
+        '  CAT      — read a file (try: cat welcome.readme)',
+        '  PING     — ping a host (try: ping evenet.fun)',
+        '  ECHO     — echo text',
+        '  VER      — show OS version',
+        '  WHO      — current user info',
+        '  DATE     — system date',
+        '  CLS      — clear screen',
+        '  EXIT     — close terminal',
+      ].forEach(l => print(l));
+    },
+    dir: () => {
+      print('Volume in drive C is CORPUS');
+      print('Volume Serial Number is DEAD-C0DE');
+      print('');
+      print('Directory of C:\\sleepOS');
+      print('');
+      [
+        '11/13/2024  10:31    <DIR>    .',
+        '11/13/2024  10:31    <DIR>    ..',
+        '11/13/2024  10:31    <DIR>    PROJECTS',
+        '11/13/2024  10:31      623    WELCOME.README',
+        '11/13/2024  10:31    4,096    TERMINAL.EXE',
+        '11/13/2024  10:31    8,192    SYSMON.EXE',
+        '11/13/2024  03:17        0    void.tmp',
+        '11/13/2024  ??:??       ??    daemon.core',
+        '11/13/2024  ??:??       ??    ?????.exe',
+        '',
+        '  8 File(s)    [error reading total size]',
+        '  3 Dir(s)     [error reading free space]',
+      ].forEach(l => print(l));
+    },
+    ls: (args) => CMDS.dir(args),
+    ps: () => {
+      print('  PID   CPU    MEM   PROCESS');
+      print('  ---   ---    ---   -------');
+      [
+        ['0001', '0.0%', ' 2.1%', 'System Idle'],
+        ['0004', '0.3%', ' 4.8%', 'kernel.exe'],
+        ['0088', '1.2%', '12.4%', 'sleep_gui.exe'],
+        ['0112', '0.8%', ' 8.3%', 'dream_fragment.exe'],
+        ['0247', '3.1%', '22.7%', 'noise_engine.exe'],
+        ['0333', '0.0%', ' 0.1%', 'UNKNOWN'],
+        ['0334', '0.0%', ' 0.1%', 'UNKNOWN'],
+        ['0335', '0.0%', ' 0.1%', 'UNKNOWN'],
+        ['0512', '7.4%', '31.2%', 'soul_daemon.exe'],
+        ['0999', '0.0%', '  ???', 'void.exe'],
+      ].forEach(([pid, cpu, mem, name]) => {
+        const isUnk = name === 'UNKNOWN';
+        print(`  ${pid}  ${cpu}  ${mem}  ${name}`, isUnk ? '#ff4444' : undefined);
+      });
+    },
+    ver: () => {
+      print('sleepOS Version 0.9\u03b2 (Build 2024.11.13-EXPERIMENTAL)');
+      print('Soul Architecture: SOMA-686  /  Corpus Mode: ACTIVE');
+    },
+    who: () => {
+      print('Current user : VISITOR\\UNKNOWN');
+      print('Domain       : sleepOS.CORPUS');
+      print('Session ID   : 0x' + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6,'0'));
+      print('Observers    : unknown (cannot enumerate)');
+    },
+    date: () => {
+      const now = new Date();
+      print('System date: ' + now.toDateString());
+      print('NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.');
+    },
+    ping: (args) => {
+      const host = args || 'evenet.fun';
+      print(`Pinging ${host} with 32 bytes of data:`);
+      [400, 800, 1200].forEach((t, i) =>
+        setTimeout(() => print(`Reply from ${host}: bytes=32 time=${9+i*3}ms TTL=128`), t));
+      setTimeout(() => {
+        print(`Reply from ${host}: bytes=32 time=???ms TTL=???`);
+        print('');
+        print(`Ping statistics for ${host}:`);
+        print('  Packets: Sent = 4, Received = 4, Lost = 0 (0.0% loss)');
+        print('Approximate round trip times: Min=9ms  Max=???ms  Avg=???ms');
+      }, 1700);
+    },
+    echo: (args) => { if (args) print(args); },
+    cls: () => { out.innerHTML = ''; },
+    cat: (args) => {
+      const f = (args||'').toLowerCase().trim();
+      if (f === 'welcome.readme') {
+        print('sleepOS v0.903b2 — WELCOME FILE');
+        print('(open WELCOME.README for full contents)');
+      } else if (f === 'void.tmp') {
+        print('');
+        setTimeout(() => { print(''); setTimeout(() => { print('[process terminated]', '#ff4444'); }, 600); }, 400);
+      } else if (f === 'daemon.core') {
+        print('Error: Cannot read daemon.core', '#ff4444');
+        print('  The file is currently being written.');
+        print('  It is always being written.');
+      } else {
+        print('File not found: ' + (args || '(no argument given)'));
+      }
+    },
+    exit: () => closeWin('terminal'),
+  };
+
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp') {
+      if (histIdx < cmdHistory.length - 1) histIdx++;
+      inp.value = cmdHistory[cmdHistory.length - 1 - histIdx] || '';
+      e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      histIdx = Math.max(-1, histIdx - 1);
+      inp.value = histIdx < 0 ? '' : cmdHistory[cmdHistory.length - 1 - histIdx];
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      const raw = inp.value.trim(); inp.value = ''; histIdx = -1;
+      print('C:\\sleepOS> ' + raw);
+      if (raw) { cmdHistory.push(raw); if (cmdHistory.length > 50) cmdHistory.shift(); }
+      const parts = raw.split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const args = parts.slice(1).join(' ');
+      if (!cmd) { /* nothing */ }
+      else if (CMDS[cmd]) { CMDS[cmd](args); }
+      else { print(`'${parts[0]}' is not recognized as an internal or external command.`); }
+      print('');
+    }
+  });
+
+  document.getElementById('tw').addEventListener('click', () => inp.focus());
+  setTimeout(() => inp.focus(), 80);
+}
+
+function openSysmon() {
+  if (!mkWin({ id:'sysmon', title:'SYSMON.EXE — System Monitor', icon:'📊', w:400, h:310, x:160, y:110 })) return;
+  const mb = document.getElementById('mb-sysmon');
+  mb.innerHTML = `<span class="menu-item">View</span><span class="menu-item">Options</span>`;
+
+  const body = document.getElementById('wb-sysmon');
+  body.style.cssText = 'background:#c0c0c0;overflow:hidden;';
+
+  const METRICS = [
+    { key:'cpu',       label:'CPU Usage',      val:34 },
+    { key:'ram',       label:'Memory (RAM)',    val:61 },
+    { key:'soul',      label:'Soul Integrity',  val:87 },
+    { key:'dream',     label:'Dream Cache',     val:23 },
+    { key:'entropy',   label:'Entropy Level',   val:74 },
+    { key:'void',      label:'Void Pressure',   val:12 },
+    { key:'daemon',    label:'Daemon Activity', val:45 },
+    { key:'coherence', label:'Coherence',       val:91 },
+  ];
+
+  const inner = document.createElement('div');
+  inner.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;height:calc(100% - 8px);margin:4px;overflow:auto;background:#c0c0c0;';
+  inner.innerHTML = METRICS.map(m => `
+    <div class="sm-row">
+      <div class="sm-lbl">${m.label}</div>
+      <div class="sm-track"><div class="sm-fill" id="bar-${m.key}" style="width:${m.val}%"></div></div>
+      <div class="sm-val" id="val-${m.key}">${m.val}%</div>
+    </div>`).join('') + `
+    <div style="padding:4px 4px 2px;font-size:10px;color:#444;border-top:1px solid #d0d0d0;">
+      <b>Active processes:</b> 10 running, 3 unrecognized &nbsp;|&nbsp; <b>Uptime:</b> <span id="uptime">--:--:--</span>
+    </div>`;
+
+  body.appendChild(inner);
+
+  const state = {};
+  METRICS.forEach(m => { state[m.key] = m.val; });
+
+  const interval = setInterval(() => {
+    if (!wins['sysmon']) { clearInterval(interval); return; }
+    METRICS.forEach(m => {
+      let v = state[m.key] + (Math.random() - 0.5) * 7;
+      if (m.key === 'soul')      v = Math.min(92, Math.max(60, v - 0.05));
+      if (m.key === 'void' && Math.random() < 0.06) v = 75 + Math.random() * 24;
+      v = Math.max(1, Math.min(99, v));
+      state[m.key] = v;
+      const bar = document.getElementById('bar-' + m.key);
+      const val = document.getElementById('val-' + m.key);
+      if (bar) { bar.style.width = v.toFixed(0) + '%'; bar.style.background = (m.key === 'void' && v > 70) ? '#cc0000' : '#000080'; }
+      if (val) val.textContent = v.toFixed(0) + '%';
+    });
+    const sec = Math.floor(performance.now() / 1000);
+    const up = document.getElementById('uptime');
+    if (up) up.textContent = `${String(Math.floor(sec/3600)).padStart(2,'0')}:${String(Math.floor((sec%3600)/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
+  }, 1500);
+
+  wins['sysmon']._interval = interval;
+}
+
+function openDaemon() {
+  if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:220, x:200, y:140, menubar:false, statusbar:false })) return;
+  document.getElementById('wb-daemon').innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon" style="font-size:44px;line-height:1;">👁️</div>
+      <div class="dlg-text" style="line-height:1.9;">
+        <b>File:</b> daemon.core<br>
+        <b>Size:</b> [REDACTED]<br>
+        <b>Created:</b> before system boot<br>
+        <b>Modified:</b> always<br>
+        <b>Owner:</b> SYSTEM\\???<br>
+        <b>Status:</b> <span style="color:#cc0000;font-weight:bold">ACTIVE</span>
+      </div>
+    </div>
+    <div style="font-size:10px;color:#555;border-top:1px solid #d0d0d0;padding:6px 12px;">
+      This file cannot be read, moved, deleted, or ignored.<br>It watches all active processes.
+    </div>
+    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('daemon')">OK</button></div>`;
+}
+
+function openVoid() {
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:260, h:180, x:220, y:160, menubar:false, statusbar:false })) return;
+  const body = document.getElementById('wb-void');
+  body.style.cssText = 'background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;';
+  body.innerHTML = `
+    <div style="color:#0a0a0a;font-size:64px;">⬛</div>
+    <div id="void-text" style="color:#0d0d0d;font-size:11px;font-family:'Courier New',monospace;text-align:center;transition:color 4s ease;">
+      empty<br><span style="color:#070707">or not</span>
+    </div>`;
+  setTimeout(() => {
+    const t = document.getElementById('void-text');
+    if (t) { t.style.color = '#1a3a1a'; }
+  }, 200);
+}
+
+let unknownCount = 0;
+function openUnknown() {
+  const wid = 'unk-warn-' + Date.now();
+  if (!mkWin({ id:wid, title:'Warning', icon:'⚠️', w:300, h:155, x:200+Math.random()*100, y:120+Math.random()*80, menubar:false, statusbar:false })) return;
+  document.getElementById('wb-' + wid).innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon">⚠️</div>
+      <div class="dlg-text">
+        sleepOS cannot determine the nature of this file.<br><br>
+        Attempting to run <b>?????.exe</b> may have unintended consequences.
+      </div>
+    </div>
+    <div class="dlg-btns">
+      <button class="dlg-btn primary" onclick="closeWin('${wid}');runUnknown()">Run Anyway</button>
+      <button class="dlg-btn" onclick="closeWin('${wid}')">Cancel</button>
+    </div>`;
+}
+
+function runUnknown() {
+  unknownCount++;
+  const msgs = [
+    'File executed.\nNothing happened.\n\n(Are you sure?)',
+    'File executed again.\n\nSomething may have changed.',
+    `File executed ${unknownCount} times.\n\nPlease stop.`,
+    `File executed ${unknownCount} times.\n\nThis is not recommended.`,
+    'You cannot run this file.\nYou never could.\nYou are already inside it.',
+    'File executed.\nFile not found.\nFile was never here.',
+  ];
+  const idx = Math.min(unknownCount - 1, msgs.length - 1);
+  const rid = 'unk-result-' + Date.now();
+  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:280, h:155, x:160+Math.random()*180, y:90+Math.random()*120, menubar:false, statusbar:false })) return;
+  document.getElementById('wb-' + rid).innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon">❓</div>
+      <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
+    </div>
+    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SYSTEM ALERTS
+// ─────────────────────────────────────────────────────────────────
+let alertIdx = 0;
+function spawnAlert() {
+  const m = SYSTEM_MSGS[alertIdx % SYSTEM_MSGS.length]; alertIdx++;
+  const id = 'alert-' + Date.now();
+  const dw = document.getElementById('desktop').offsetWidth;
+  const dh = document.getElementById('desktop').offsetHeight;
+  if (!mkWin({ id, title:m.title, icon:m.icon, w:320, h:165,
+               x:60 + Math.random()*(dw-380), y:40 + Math.random()*(dh-200),
+               menubar:false, statusbar:false })) return;
+  document.getElementById('wb-' + id).innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon">${m.icon}</div>
+      <div class="dlg-text" style="white-space:pre-line;">${m.text}</div>
+    </div>
+    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${id}')">OK</button></div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// GLITCH EFFECT
+// ─────────────────────────────────────────────────────────────────
+function triggerGlitch() {
+  const desktop = document.getElementById('desktop');
+  desktop.classList.add('glitching');
+  setTimeout(() => desktop.classList.remove('glitching'), 650);
+
+  // Brief scanline intensify
+  const crt = document.getElementById('crt');
+  crt.style.opacity = '2';
+  setTimeout(() => { crt.style.opacity = '1'; }, 180);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SHUTDOWN
+// ─────────────────────────────────────────────────────────────────
+function doShutdown() {
+  const id = 'shutdown';
+  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'⏻', w:300, h:165,
+               x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
+               menubar:false, statusbar:false })) return;
+  document.getElementById('wb-shutdown').innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon">⏻</div>
+      <div class="dlg-text">
+        What do you want the computer to do?<br><br>
+        <select id="shutdown-sel" style="width:180px;font-size:11px;margin-top:2px;">
+          <option value="off">Shut down</option>
+          <option value="restart">Restart</option>
+          <option value="back">Return to Eve Net</option>
+        </select>
+      </div>
+    </div>
+    <div class="dlg-btns">
+      <button class="dlg-btn primary" onclick="confirmShutdown()">OK</button>
+      <button class="dlg-btn" onclick="closeWin('shutdown')">Cancel</button>
+    </div>`;
+}
+
+function confirmShutdown() {
+  const sel = document.getElementById('shutdown-sel');
+  const val = sel ? sel.value : 'back';
+  closeWin('shutdown');
+
+  const bios = document.getElementById('bios');
+  bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';
+  bios.innerHTML = `<div id="bios-text" style="font-family:'VT323',monospace;font-size:18px;color:#888;white-space:pre;line-height:1.5;">
+sleepOS — ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
+
+Stopping soul_daemon.exe...              [OK]
+Stopping dream_fragment.exe...           [OK]
+Stopping unknown (PID 0333)...           [TIMEOUT]
+Stopping unknown (PID 0334)...           [TIMEOUT]
+Stopping unknown (PID 0335)...           [TIMEOUT]
+Flushing corpus cache...                 [OK]
+Unloading kernel modules...              [OK]
+
+It is now safe to turn off your computer.
+  </div>`;
+  document.getElementById('desktop').style.display = 'none';
+  document.getElementById('taskbar').style.display = 'none';
+  setTimeout(() => { bios.style.opacity = '1'; }, 30);
+  setTimeout(() => { window.location.href = val === 'back' ? 'index.html' : 'sleep-os.html'; }, 3200);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// STARTUP
+// ─────────────────────────────────────────────────────────────────
+function startDesktop() {
+  document.getElementById('desktop').style.display = 'block';
+  document.getElementById('taskbar').style.display = 'flex';
+  setupIcons();
+
+  // Open welcome window after short delay
+  setTimeout(() => openWelcome(), 350);
+
+  // Schedule random alerts (30–90s intervals)
+  function scheduleAlert() {
+    setTimeout(() => { spawnAlert(); scheduleAlert(); }, 30000 + Math.random() * 60000);
+  }
+  scheduleAlert();
+
+  // Schedule glitch effects (25–55s)
+  function scheduleGlitch() {
+    setTimeout(() => { triggerGlitch(); scheduleGlitch(); }, 25000 + Math.random() * 30000);
+  }
+  scheduleGlitch();
+}
+</script>
+</body>
+</html>
