@@ -274,6 +274,46 @@ body {
   padding: 8px; font-family: 'Courier New', monospace;
   font-size: 11px; line-height: 1.7;
 }
+
+/* ── Mobile / touch ──────────────────────────────────────────── */
+@media (pointer: coarse), (max-width: 700px) {
+  body { font-size: 14px; }
+
+  #icons-layer { padding: 10px 8px; gap: 4px; }
+  .desktop-icon { width: 90px; padding: 6px; gap: 4px; }
+  .di-img { font-size: 40px; }
+  .di-name { font-size: 13px; }
+
+  #taskbar { height: 44px; padding: 3px; }
+  #desktop { bottom: 44px; }
+  #start-menu { bottom: 44px; }
+  #start-btn { height: 36px; font-size: 14px; padding: 0 12px; }
+  .taskbar-btn { height: 36px; font-size: 13px; padding: 0 8px; max-width: 120px; }
+  .tb-divider { height: 36px; }
+  #system-tray { height: 36px; font-size: 14px; padding: 0 8px; }
+
+  .win-titlebar { height: 34px; padding: 2px 4px; }
+  .win-btn { width: 30px; height: 28px; font-size: 15px; }
+  .win-title-text { font-size: 13px; }
+  .win-icon { font-size: 16px; }
+  .win-menubar { padding: 2px 4px; }
+  .menu-item { padding: 4px 10px; font-size: 13px; }
+  .win-statusbar { height: 24px; font-size: 13px; }
+
+  .file-item { width: 90px; padding: 8px 4px; }
+  .fi-icon { font-size: 30px; }
+  .fi-name { font-size: 12px; }
+
+  .sm-lbl { width: 100px; font-size: 12px; }
+  .sm-val { font-size: 12px; }
+
+  .dlg-body { padding: 14px; }
+  .dlg-text { font-size: 14px; line-height: 1.7; }
+  .dlg-btn { min-width: 90px; height: 34px; font-size: 14px; }
+
+  .term-wrap { font-size: 16px; }
+  .note-body { font-size: 13px; }
+}
 </style>
 </head>
 <body>
@@ -458,10 +498,18 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
 
-  // Default position: slightly random cascade
+  // Default position: slightly random cascade; on mobile fill viewport
   const count = Object.keys(wins).length;
-  if (x === undefined) x = 80 + count * 22;
-  if (y === undefined) y = 44 + count * 22;
+  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  const taskbarH = isMobile ? 44 : 28;
+  if (isMobile) {
+    x = 0; y = 0;
+    w = window.innerWidth;
+    h = window.innerHeight - taskbarH;
+  } else {
+    if (x === undefined) x = 80 + count * 22;
+    if (y === undefined) y = 44 + count * 22;
+  }
 
   const el = document.createElement('div');
   el.className = 'os-window inactive';
@@ -491,6 +539,7 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
   makeDraggable(el, document.getElementById('tb-' + id));
   addTbBtn(id, title, icon);
   el.addEventListener('mousedown', () => focusWin(id));
+  el.addEventListener('touchstart', () => focusWin(id), { passive: true });
 
   focusWin(id);
   return el;
@@ -543,19 +592,36 @@ function closeWin(id) {
 
 function makeDraggable(win, handle) {
   let sx, sy, sl, st;
+
+  function startDrag(cx, cy) {
+    sx = cx; sy = cy;
+    sl = win.offsetLeft; st = win.offsetTop;
+  }
+  function moveDrag(cx, cy) {
+    win.style.left = Math.max(0, sl + cx - sx) + 'px';
+    win.style.top  = Math.max(0, st + cy - sy) + 'px';
+  }
+
   handle.addEventListener('mousedown', (e) => {
     if (e.target.tagName === 'BUTTON') return;
     e.preventDefault();
-    sx = e.clientX; sy = e.clientY;
-    sl = win.offsetLeft; st = win.offsetTop;
-    const onMove = (e) => {
-      win.style.left = Math.max(0, sl + e.clientX - sx) + 'px';
-      win.style.top  = Math.max(0, st + e.clientY - sy) + 'px';
-    };
+    startDrag(e.clientX, e.clientY);
+    const onMove = (e) => moveDrag(e.clientX, e.clientY);
     const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
+
+  handle.addEventListener('touchstart', (e) => {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    const t = e.touches[0];
+    startDrag(t.clientX, t.clientY);
+    const onMove = (e) => { e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); };
+    const onEnd = () => { handle.removeEventListener('touchmove', onMove); handle.removeEventListener('touchend', onEnd); };
+    handle.addEventListener('touchmove', onMove, { passive: false });
+    handle.addEventListener('touchend', onEnd);
+  }, { passive: false });
 }
 
 function addTbBtn(id, title, icon) {
@@ -594,10 +660,12 @@ function toggleStart() {
   document.getElementById('start-btn').classList.toggle('pressed', startOpen);
 }
 function closeStart() { if (startOpen) toggleStart(); }
-document.addEventListener('mousedown', (e) => {
+function handleOutsideStart(e) {
   if (startOpen && !e.target.closest('#start-menu') && e.target.id !== 'start-btn')
     closeStart();
-});
+}
+document.addEventListener('mousedown', handleOutsideStart);
+document.addEventListener('touchstart', handleOutsideStart, { passive: true });
 
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICONS
@@ -608,7 +676,7 @@ function setupIcons() {
     const div = document.createElement('div');
     div.className = 'desktop-icon';
     div.innerHTML = `<div class="di-img">${ic.emoji}</div><div class="di-name">${ic.name}</div>`;
-    let clicks = 0, clickT;
+    let clicks = 0, clickT, lastTap = 0;
     div.addEventListener('click', (e) => {
       e.stopPropagation();
       clicks++;
@@ -621,6 +689,17 @@ function setupIcons() {
         window[ic.action]?.();
       }
     });
+    // Touch: single tap selects, double-tap opens (or single tap if already selected)
+    div.addEventListener('touchend', (e) => {
+      e.preventDefault(); // prevent click from also firing
+      const now = Date.now();
+      document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
+      div.classList.add('selected');
+      if (now - lastTap < 400) {
+        window[ic.action]?.();
+      }
+      lastTap = now;
+    }, { passive: false });
     layer.appendChild(div);
   });
   document.getElementById('desktop').addEventListener('click', (e) => {
