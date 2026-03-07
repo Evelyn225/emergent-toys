@@ -848,7 +848,12 @@ function openTerminal() {
         '  WHO, WHOAMI     — current user info',
         '  DATE            — system date',
         '  CLS             — clear screen',
+        '  START [program] — run an executable or project',
         '  EXIT            — close terminal',
+        '',
+        'You can also type executables directly:',
+        '  sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
+        '  or any project name (try: fireworks, fluid, ...)',
       ].forEach(l => print(l));
     },
     dir: () => {
@@ -1080,6 +1085,35 @@ function openTerminal() {
         print('File not found: ' + (args || '(no argument given)'));
       }
     },
+    start: (args) => {
+      if (!args) { print('Usage: START [program]'); return; }
+      // re-use the exe dispatch by simulating a command run
+      const key = args.toLowerCase().trim();
+      const EXES_start = {
+        'welcome.readme': openWelcome,
+        'welcome':        openWelcome,
+        'sysmon.exe':     openSysmon,
+        'sysmon':         openSysmon,
+        'daemon.core':    openDaemon,
+        'void.tmp':       openVoid,
+        '?????.exe':      openUnknown,
+      };
+      const proj = PROJECTS.find(p =>
+        p.file.toLowerCase() === key ||
+        p.file.toLowerCase().replace('.html','') === key ||
+        p.name.toLowerCase() === key ||
+        p.name.toLowerCase().replace(/ /g,'-') === key
+      );
+      if (EXES_start[key]) {
+        print(`Starting ${args}...`);
+        setTimeout(EXES_start[key], 300);
+      } else if (proj) {
+        print(`Launching ${proj.name}...`);
+        setTimeout(() => window.open(proj.file, '_blank'), 400);
+      } else {
+        print(`Cannot find program: ${args}`);
+      }
+    },
     exit: () => closeWin('terminal'),
   };
 
@@ -1099,9 +1133,36 @@ function openTerminal() {
       const parts = raw.split(/\s+/);
       const cmd = parts[0].toLowerCase();
       const args = parts.slice(1).join(' ');
+
+      // Executable lookup table
+      const EXES = {
+        'welcome.readme': () => { print('Opening WELCOME.README...'); setTimeout(openWelcome, 300); },
+        'welcome':        () => { print('Opening WELCOME.README...'); setTimeout(openWelcome, 300); },
+        'sysmon.exe':     () => { print('Starting SYSMON.EXE...'); setTimeout(openSysmon, 300); },
+        'sysmon':         () => { print('Starting SYSMON.EXE...'); setTimeout(openSysmon, 300); },
+        'terminal.exe':   () => { print('TERMINAL.EXE is already running.'); print('You are inside it.'); },
+        'daemon.core':    () => { print('Opening daemon.core...'); print('It is already open.'); print('It has always been open.'); setTimeout(openDaemon, 400); },
+        'void.tmp':       () => { print('Opening void.tmp...'); setTimeout(openVoid, 300); },
+        '?????.exe':      () => { print('Executing ?????.exe...'); setTimeout(openUnknown, 300); },
+        '?????':          () => { print('Executing ?????.exe...'); setTimeout(openUnknown, 300); },
+      };
+      // Also allow running project files by name
+      const project = PROJECTS.find(p =>
+        p.file.toLowerCase() === cmd ||
+        p.file.toLowerCase().replace('.html','') === cmd ||
+        p.name.toLowerCase() === cmd ||
+        p.name.toLowerCase().replace(/ /g,'-') === cmd
+      );
+
       if (!cmd) { /* nothing */ }
       else if (CMDS[cmd]) { CMDS[cmd](args); }
-      else { print(`'${parts[0]}' is not recognized as an internal or external command.`); }
+      else if (EXES[cmd]) { EXES[cmd](); }
+      else if (project) {
+        print(`Launching ${project.name}...`);
+        print('Opening in new tab.');
+        setTimeout(() => window.open(project.file, '_blank'), 400);
+      }
+      else { print(`'${parts[0]}' is not recognized as an internal or external command.`); print(`Type HELP for a list of commands, or DIR to list executables.`); }
       print('');
     }
   });
