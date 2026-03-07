@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EVENET OS v0.9β</title>
+<title>sleepOS v0.9β</title>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -299,14 +299,14 @@ body {
   <div class="tb-divider"></div>
   <div id="taskbar-programs"></div>
   <div id="system-tray">
-    <span title="EVENET network active">📶</span>
+    <span title="sleepOS network active">📶</span>
     <span id="clock">--:--</span>
   </div>
 </div>
 
 <!-- Start Menu -->
 <div id="start-menu">
-  <div id="sm-sidebar"><span>EVENET OS</span></div>
+  <div id="sm-sidebar"><span>sleepOS</span></div>
   <div id="sm-items">
     <div class="sm-item" onclick="closeStart();openWelcome()">
       <span class="sm-icon">📄</span><span>Welcome</span>
@@ -369,7 +369,7 @@ const DESKTOP_ICONS = [
 ];
 
 const BIOS_LINES = [
-  'EVENET BIOS v2.33b  (C) MMXXI Eve Networks Corp.',
+  'sleepOS BIOS v2.33b  (C) MMXXI Eve Networks Corp.',
   '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
   '',
   'CPU: SOMA-686 @ 666 MHz                [DETECTED]',
@@ -392,21 +392,21 @@ const BIOS_LINES = [
   '  Daemon count      : 7 (3 unrecognized)',
   '  Soul integrity    : DEGRADED',
   '',
-  'Loading EVENET OS v0.9\u03b2...',
+  'Loading sleepOS v0.903b2...',
   '',
   '                        [ press any key to skip ]',
 ];
 
 const SYSTEM_MSGS = [
-  { icon:'⚠️', title:'EVENET OS', text:'A memory address returned a value outside the range of plausible reality.\n\nThis has been logged.' },
-  { icon:'💡', title:'Tip of the Day', text:'Did you know? EVENET OS runs 7 background daemons. 3 of them are of unknown origin.\n\nThis is considered normal.' },
+  { icon:'⚠️', title:'sleepOS', text:'A memory address returned a value outside the range of plausible reality.\n\nThis has been logged.' },
+  { icon:'💡', title:'Tip of the Day', text:'Did you know? sleepOS runs 7 background daemons. 3 of them are of unknown origin.\n\nThis is considered normal.' },
   { icon:'⚠️', title:'System Notice', text:'Soul Integrity has decreased by 0.4%.\n\nThis is expected behavior. No action is required.' },
-  { icon:'🔔', title:'Reminder', text:'You have been inside EVENET OS for some time now.\n\nEverything is fine.' },
+  { icon:'🔔', title:'Reminder', text:'You have been inside sleepOS for some time now.\n\nEverything is fine.' },
   { icon:'💡', title:'Tip of the Day', text:'Did you know? The file void.tmp has existed since before this system was installed.\n\nIts size cannot be determined.' },
   { icon:'⚠️', title:'System Warning', text:'An unknown process is observing your session.\n\nThis feature cannot be disabled.' },
-  { icon:'🔔', title:'EVENET OS', text:'Entropy levels are elevated in Sector 7.\n\nSector 7 cannot be located on this machine.' },
+  { icon:'🔔', title:'sleepOS', text:'Entropy levels are elevated in Sector 7.\n\nSector 7 cannot be located on this machine.' },
   { icon:'⚠️', title:'Memory Warning', text:'The process dream_fragment.exe has allocated more memory than physically exists.\n\nThe system has accommodated this.' },
-  { icon:'🔔', title:'EVENET OS', text:'You are the 1st visitor today.\n\nYou are also the last.' },
+  { icon:'🔔', title:'sleepOS', text:'You are the 1st visitor today.\n\nYou are also the last.' },
 ];
 
 // ─────────────────────────────────────────────────────────────────
@@ -637,10 +637,10 @@ function openWelcome() {
   if (!mkWin({ id:'welcome', title:'WELCOME.README — Notepad', icon:'📄', w:420, h:320, x:100, y:55 })) return;
   document.getElementById('wb-welcome').innerHTML = `
     <div class="note-body">
-<span style="color:#000080;font-weight:bold">== EVENET OS v0.9β — WELCOME FILE ==</span>
+<span style="color:#000080;font-weight:bold">== sleepOS v0.9β — WELCOME FILE ==</span>
 <span style="color:#808080">Build: 2024.11.13-EXPERIMENTAL / SOMA-686</span>
 
-Welcome to EVENET OS.
+Welcome to sleepOS.
 
 This operating system is an experimental environment
 for generative and interactive computation.
@@ -718,7 +718,7 @@ function openTerminal() {
     <div class="term-wrap" id="tw">
       <div class="term-out" id="to"></div>
       <div class="term-in-line">
-        <span class="term-prompt">C:\EVENET&gt;&nbsp;</span>
+        <span class="term-prompt">C:\sleepOS&gt;&nbsp;</span>
         <input class="term-input" id="ti" type="text" autocomplete="off" spellcheck="false">
       </div>
     </div>`;
@@ -734,7 +734,7 @@ function openTerminal() {
     out.scrollTop = out.scrollHeight;
   };
 
-  print('EVENET Command Processor v2.33');
+  print('sleepOS Command Processor v2.33');
   print('Copyright (C) MMXXI Eve Networks Corp.');
   print('');
   print('Type HELP for available commands.');
@@ -763,7 +763,7 @@ function openTerminal() {
       print('Volume in drive C is CORPUS');
       print('Volume Serial Number is DEAD-C0DE');
       print('');
-      print('Directory of C:\\EVENET');
+      print('Directory of C:\\sleepOS');
       print('');
       [
         '11/13/2024  10:31    <DIR>    .',
@@ -787,7 +787,7 @@ function openTerminal() {
       [
         ['0001', '0.0%', ' 2.1%', 'System Idle'],
         ['0004', '0.3%', ' 4.8%', 'kernel.exe'],
-        ['0088', '1.2%', '12.4%', 'evenet_gui.exe'],
+        ['0088', '1.2%', '12.4%', 'sleep_gui.exe'],
         ['0112', '0.8%', ' 8.3%', 'dream_fragment.exe'],
         ['0247', '3.1%', '22.7%', 'noise_engine.exe'],
         ['0333', '0.0%', ' 0.1%', 'UNKNOWN'],
@@ -801,12 +801,12 @@ function openTerminal() {
       });
     },
     ver: () => {
-      print('EVENET OS Version 0.9\u03b2 (Build 2024.11.13-EXPERIMENTAL)');
+      print('sleepOS Version 0.9\u03b2 (Build 2024.11.13-EXPERIMENTAL)');
       print('Soul Architecture: SOMA-686  /  Corpus Mode: ACTIVE');
     },
     who: () => {
       print('Current user : VISITOR\\UNKNOWN');
-      print('Domain       : EVENET.CORPUS');
+      print('Domain       : sleepOS.CORPUS');
       print('Session ID   : 0x' + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6,'0'));
       print('Observers    : unknown (cannot enumerate)');
     },
@@ -833,7 +833,7 @@ function openTerminal() {
     cat: (args) => {
       const f = (args||'').toLowerCase().trim();
       if (f === 'welcome.readme') {
-        print('EVENET OS v0.9\u03b2 — WELCOME FILE');
+        print('sleepOS v0.903b2 — WELCOME FILE');
         print('(open WELCOME.README for full contents)');
       } else if (f === 'void.tmp') {
         print('');
@@ -860,7 +860,7 @@ function openTerminal() {
       e.preventDefault();
     } else if (e.key === 'Enter') {
       const raw = inp.value.trim(); inp.value = ''; histIdx = -1;
-      print('C:\\EVENET> ' + raw);
+      print('C:\\sleepOS> ' + raw);
       if (raw) { cmdHistory.push(raw); if (cmdHistory.length > 50) cmdHistory.shift(); }
       const parts = raw.split(/\s+/);
       const cmd = parts[0].toLowerCase();
@@ -976,7 +976,7 @@ function openUnknown() {
     <div class="dlg-body">
       <div class="dlg-icon">⚠️</div>
       <div class="dlg-text">
-        EVENET OS cannot determine the nature of this file.<br><br>
+        sleepOS cannot determine the nature of this file.<br><br>
         Attempting to run <b>?????.exe</b> may have unintended consequences.
       </div>
     </div>
@@ -1046,7 +1046,7 @@ function triggerGlitch() {
 // ─────────────────────────────────────────────────────────────────
 function doShutdown() {
   const id = 'shutdown';
-  if (!mkWin({ id, title:'Shut Down EVENET OS', icon:'⏻', w:300, h:165,
+  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'⏻', w:300, h:165,
                x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
                menubar:false, statusbar:false })) return;
   document.getElementById('wb-shutdown').innerHTML = `
@@ -1075,7 +1075,7 @@ function confirmShutdown() {
   const bios = document.getElementById('bios');
   bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';
   bios.innerHTML = `<div id="bios-text" style="font-family:'VT323',monospace;font-size:18px;color:#888;white-space:pre;line-height:1.5;">
-EVENET OS — ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
+sleepOS — ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
 
 Stopping soul_daemon.exe...              [OK]
 Stopping dream_fragment.exe...           [OK]
@@ -1090,7 +1090,7 @@ It is now safe to turn off your computer.
   document.getElementById('desktop').style.display = 'none';
   document.getElementById('taskbar').style.display = 'none';
   setTimeout(() => { bios.style.opacity = '1'; }, 30);
-  setTimeout(() => { window.location.href = val === 'back' ? 'index.html' : 'retro-os.html'; }, 3200);
+  setTimeout(() => { window.location.href = val === 'back' ? 'index.html' : 'sleep-os.html'; }, 3200);
 }
 
 // ─────────────────────────────────────────────────────────────────
