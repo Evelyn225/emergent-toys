@@ -484,8 +484,9 @@ function biosType() {
   }
 }
 
-document.addEventListener('keydown', biosFinish, { once: true });
-document.addEventListener('click',   biosFinish, { once: true });
+document.addEventListener('keydown',   biosFinish, { once: true });
+document.addEventListener('click',     biosFinish, { once: true });
+document.addEventListener('touchend',  biosFinish, { once: true });
 setTimeout(biosType, 250);
 
 // ─────────────────────────────────────────────────────────────────
@@ -689,16 +690,12 @@ function setupIcons() {
         window[ic.action]?.();
       }
     });
-    // Touch: single tap selects, double-tap opens (or single tap if already selected)
+    // Touch: single tap opens directly
     div.addEventListener('touchend', (e) => {
       e.preventDefault(); // prevent click from also firing
-      const now = Date.now();
       document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
       div.classList.add('selected');
-      if (now - lastTap < 400) {
-        window[ic.action]?.();
-      }
-      lastTap = now;
+      window[ic.action]?.();
     }, { passive: false });
     layer.appendChild(div);
   });
@@ -781,6 +778,12 @@ function openFiles() {
         window.open(p.file, '_blank');
       }
     });
+    item.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+      item.classList.add('selected');
+      window.open(p.file, '_blank');
+    }, { passive: false });
     grid.appendChild(item);
   });
   body.appendChild(grid);
