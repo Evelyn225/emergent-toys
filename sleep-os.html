@@ -197,6 +197,21 @@ body {
 .sm-icon { font-size: 16px; flex-shrink: 0; }
 .sm-sep { height: 1px; margin: 2px 4px; background: linear-gradient(to right, #808080, #fff); }
 
+/* ── Dropdown menus ──────────────────────────────────────────── */
+.menu-dropdown {
+  position: fixed; background: #c0c0c0;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  z-index: 99999; min-width: 130px; padding: 2px 0;
+  box-shadow: 2px 2px 0 #000;
+}
+.menu-dd-item {
+  padding: 2px 4px 2px 20px; font-size: 11px;
+  cursor: default; white-space: nowrap; user-select: none;
+}
+.menu-dd-item:hover { background: #000080; color: #fff; }
+.menu-dd-item.disabled { color: #808080; pointer-events: none; }
+.menu-dd-sep { border: none; border-top: 1px solid #808080; margin: 2px 0; }
+
 /* ── File manager ────────────────────────────────────────────── */
 .file-grid {
   display: flex; flex-wrap: wrap; gap: 0; padding: 4px;
@@ -211,6 +226,28 @@ body {
 .file-item.selected { background: #000080; color: #fff; border-color: #000080; }
 .fi-icon { font-size: 24px; }
 .fi-name { font-size: 10px; word-break: break-word; line-height: 1.2; }
+/* list view */
+.file-list { padding: 4px; }
+.file-list-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 1px 4px; cursor: default; font-size: 11px;
+  border: 1px solid transparent;
+}
+.file-list-item:hover { background: rgba(0,0,128,0.1); border-color: #000080; }
+.file-list-item.selected { background: #000080; color: #fff; border-color: #000080; }
+.fli-icon { font-size: 14px; flex-shrink: 0; }
+/* details view */
+.file-details { width: 100%; border-collapse: collapse; font-size: 11px; }
+.file-details thead th {
+  background: #c0c0c0; border-bottom: 1px solid #808080;
+  padding: 2px 8px; text-align: left; position: sticky; top: 0;
+  border-right: 1px solid #808080; cursor: default; user-select: none;
+}
+.file-details tbody tr { cursor: default; }
+.file-details tbody tr:hover { background: rgba(0,0,128,0.1); }
+.file-details tbody tr.selected td { background: #000080; color: #fff; }
+.file-details td { padding: 1px 8px; border-right: 1px solid #d0d0d0; }
+.fd-icon { font-size: 12px; width: 24px; }
 
 /* ── Terminal ─────────────────────────────────────────────────── */
 .term-wrap {
@@ -750,46 +787,148 @@ Have a productive session.
 
 function openFiles() {
   if (!mkWin({ id:'files', title:'PROJECTS.DIR — File Manager', icon:'📁', w:580, h:400, x:120, y:70 })) return;
-  const mb = document.getElementById('mb-files');
-  mb.innerHTML = `<span class="menu-item">File</span><span class="menu-item">Edit</span><span class="menu-item">View</span><span class="menu-item">Help</span>`;
 
+  const mb   = document.getElementById('mb-files');
   const body = document.getElementById('wb-files');
+  const ws   = document.getElementById('ws-files');
   body.style.cssText = 'overflow:auto;border:2px solid;border-color:#808080 #fff #fff #808080;margin:4px;background:#fff;';
 
-  const grid = document.createElement('div');
-  grid.className = 'file-grid';
+  let selected = null;
+  let viewMode = 'icons'; // 'icons' | 'list' | 'details'
 
-  PROJECTS.forEach(p => {
-    const item = document.createElement('div');
-    item.className = 'file-item';
-    item.innerHTML = `<div class="fi-icon">${p.emoji}</div><div class="fi-name">${p.name}</div>`;
-    let clicks = 0, clickT;
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      clicks++;
-      document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
-      item.classList.add('selected');
-      const ws = document.getElementById('ws-files');
-      if (ws) ws.textContent = p.name + '  —  double-click to open';
-      if (clicks === 1) {
-        clickT = setTimeout(() => { clicks = 0; }, 380);
+  // ── dropdown helper ─────────────────────────────────────────
+  function closeDropdown() {
+    const old = document.getElementById('active-dropdown');
+    if (old) old.remove();
+  }
+  function showDropdown(anchor, items) {
+    closeDropdown();
+    const rect = anchor.getBoundingClientRect();
+    const dd = document.createElement('div');
+    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+    dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+    items.forEach(item => {
+      if (item === '-') {
+        const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
       } else {
-        clearTimeout(clickT); clicks = 0;
-        window.open(p.file, '_blank');
+        const el = document.createElement('div');
+        el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
+        el.textContent = item.label;
+        if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
+        dd.appendChild(el);
       }
     });
-    item.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
-      item.classList.add('selected');
-      window.open(p.file, '_blank');
-    }, { passive: false });
-    grid.appendChild(item);
-  });
-  body.appendChild(grid);
+    document.body.appendChild(dd);
+    setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
+  }
 
-  const ws = document.getElementById('ws-files');
-  if (ws) ws.textContent = PROJECTS.length + ' objects';
+  // ── render ──────────────────────────────────────────────────
+  function getSelected() { return selected; }
+  function setSelected(p, itemEl, containerSel) {
+    body.querySelectorAll(containerSel).forEach(f => f.classList.remove('selected'));
+    itemEl.classList.add('selected');
+    selected = p;
+  }
+
+  function makeItem(p, mode) {
+    const item = document.createElement(mode === 'details' ? 'tr' : 'div');
+    if (mode === 'icons') {
+      item.className = 'file-item';
+      item.innerHTML = `<div class="fi-icon">${p.emoji}</div><div class="fi-name">${p.name}</div>`;
+    } else if (mode === 'list') {
+      item.className = 'file-list-item';
+      item.innerHTML = `<span class="fli-icon">${p.emoji}</span><span>${p.name}</span>`;
+    } else {
+      item.innerHTML = `<td class="fd-icon">${p.emoji}</td><td>${p.name}</td><td>HTML Application</td><td>${p.file}</td>`;
+    }
+    const containerSel = mode === 'icons' ? '.file-item' : mode === 'list' ? '.file-list-item' : 'tbody tr';
+    let clicks = 0, clickT;
+    item.addEventListener('click', e => {
+      e.stopPropagation(); clicks++;
+      setSelected(p, item, containerSel);
+      if (ws) ws.textContent = p.name + '  —  double-click to open';
+      if (clicks === 1) { clickT = setTimeout(() => { clicks = 0; }, 380); }
+      else { clearTimeout(clickT); clicks = 0; window.open(p.file, '_blank'); }
+    });
+    item.addEventListener('touchend', e => {
+      e.preventDefault(); setSelected(p, item, containerSel); window.open(p.file, '_blank');
+    }, { passive: false });
+    return item;
+  }
+
+  function renderView() {
+    body.innerHTML = '';
+    selected = null;
+    if (viewMode === 'icons') {
+      const grid = document.createElement('div'); grid.className = 'file-grid';
+      PROJECTS.forEach(p => grid.appendChild(makeItem(p, 'icons')));
+      body.appendChild(grid);
+    } else if (viewMode === 'list') {
+      const list = document.createElement('div'); list.className = 'file-list';
+      PROJECTS.forEach(p => list.appendChild(makeItem(p, 'list')));
+      body.appendChild(list);
+    } else {
+      const tbl = document.createElement('table'); tbl.className = 'file-details';
+      tbl.innerHTML = '<thead><tr><th></th><th>Name</th><th>Type</th><th>File</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      PROJECTS.forEach(p => tbody.appendChild(makeItem(p, 'details')));
+      tbl.appendChild(tbody); body.appendChild(tbl);
+    }
+    if (ws) ws.textContent = PROJECTS.length + ' objects';
+  }
+
+  // ── menus ───────────────────────────────────────────────────
+  const FILE_ITEMS = [
+    { label: 'Open',       action: () => { if (selected) window.open(selected.file, '_blank'); else if (ws) ws.textContent = 'No file selected.'; } },
+    { label: 'Properties', action: () => {
+      if (!selected) { if (ws) ws.textContent = 'No file selected.'; return; }
+      alert(`Name:\t${selected.name}\nFile:\t${selected.file}\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\`);
+    }},
+    '-',
+    { label: 'Close', action: () => closeWin('files') },
+  ];
+  const EDIT_ITEMS = [
+    { label: 'Select All', action: () => {
+      const sel = viewMode === 'icons' ? '.file-item' : viewMode === 'list' ? '.file-list-item' : 'tbody tr';
+      body.querySelectorAll(sel).forEach(el => el.classList.add('selected'));
+      selected = PROJECTS[PROJECTS.length - 1];
+      if (ws) ws.textContent = PROJECTS.length + ' objects selected';
+    }},
+    { label: 'Copy Name', action: () => {
+      if (!selected) { if (ws) ws.textContent = 'Nothing selected.'; return; }
+      navigator.clipboard.writeText(selected.name).catch(() => {});
+      if (ws) ws.textContent = 'Copied: ' + selected.name;
+    }},
+  ];
+  function VIEW_ITEMS() {
+    return [
+      { label: (viewMode==='icons'   ? '• ':'  ') + 'Large Icons', action: () => { viewMode='icons';   renderView(); } },
+      { label: (viewMode==='list'    ? '• ':'  ') + 'List',         action: () => { viewMode='list';    renderView(); } },
+      { label: (viewMode==='details' ? '• ':'  ') + 'Details',      action: () => { viewMode='details'; renderView(); } },
+      '-',
+      { label: '  Refresh', action: () => renderView() },
+    ];
+  }
+  const HELP_ITEMS = [
+    { label: 'Help Topics', action: () => alert('PROJECTS.DIR Help\n\nDouble-click any project to open it in a new tab.\nFile > Open  — opens selected project\nFile > Properties  — shows file info\nView  — switch between Large Icons, List, Details\nEdit > Select All  — selects all projects\nEdit > Copy Name  — copies selected name') },
+    '-',
+    { label: 'About PROJECTS.DIR', action: () => alert('PROJECTS.DIR — File Manager\nsleepOS v1.0\n\n' + PROJECTS.length + ' interactive projects.\nAll of them are watching.') },
+  ];
+
+  mb.innerHTML = '';
+  [
+    { label: 'File', items: () => FILE_ITEMS },
+    { label: 'Edit', items: () => EDIT_ITEMS },
+    { label: 'View', items: VIEW_ITEMS },
+    { label: 'Help', items: () => HELP_ITEMS },
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items()); });
+    mb.appendChild(span);
+  });
+
+  renderView();
 }
 
 function openTerminal() {
