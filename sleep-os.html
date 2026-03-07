@@ -280,6 +280,26 @@ body {
 .sm-fill { height: 100%; background: #000080; position: absolute; left: 0; top: 0; transition: width 1.2s ease; }
 .sm-val { width: 38px; text-align: right; font-size: 10px; color: #444; }
 
+/* ── Browser ─────────────────────────────────────────────────── */
+.browser-toolbar {
+  display: flex; align-items: center; gap: 2px; padding: 2px 4px;
+  background: #c0c0c0; border-bottom: 1px solid #808080; flex-shrink: 0;
+}
+.br-btn {
+  min-width: 22px; height: 22px; padding: 0 4px; cursor: default;
+  background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  font-size: 11px; font-family: inherit;
+}
+.br-btn:active { border-color: #808080 #fff #fff #808080; }
+.br-btn:disabled { color: #808080; }
+.br-vsep { width: 1px; background: #808080; height: 20px; margin: 0 2px; flex-shrink: 0; }
+.br-addr-label { font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+.br-addr {
+  flex: 1; height: 18px; font-size: 11px; padding: 0 2px;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+  background: #fff; font-family: inherit;
+}
+
 /* ── Dialog ───────────────────────────────────────────────────── */
 .dlg-body { padding: 12px; display: flex; gap: 12px; align-items: flex-start; }
 .dlg-icon { font-size: 32px; flex-shrink: 0; line-height: 1; }
@@ -441,6 +461,7 @@ const DESKTOP_ICONS = [
   { name: 'PROJECTS.DIR',   emoji: '📁', action: 'openFiles' },
   { name: 'TERMINAL.EXE',   emoji: '💻', action: 'openTerminal' },
   { name: 'SYSMON.EXE',     emoji: '📊', action: 'openSysmon' },
+  { name: 'BROWSER.EXE',    emoji: '🌐', action: 'openBrowser' },
   { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
@@ -534,20 +555,25 @@ let zTop = 100;
 const wins = {};
 
 function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
-                 menubar = true, statusbar = true }) {
+                 menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
 
-  // Default position: slightly random cascade; on mobile fill viewport
+  // Default position: slightly random cascade; on mobile fill viewport (except small popups)
   const count = Object.keys(wins).length;
   const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
   const taskbarH = isMobile ? 44 : 28;
-  if (isMobile) {
+  if (isMobile && !popup) {
     x = 0; y = 0;
     w = window.innerWidth;
     h = window.innerHeight - taskbarH;
   } else {
     if (x === undefined) x = 80 + count * 22;
     if (y === undefined) y = 44 + count * 22;
+    // Center popups on mobile
+    if (isMobile && popup) {
+      x = Math.max(4, Math.floor((window.innerWidth - w) / 2));
+      y = Math.max(4, Math.floor((window.innerHeight - taskbarH - h) / 3));
+    }
   }
 
   const el = document.createElement('div');
@@ -1233,6 +1259,8 @@ function openTerminal() {
         'welcome':        openWelcome,
         'sysmon.exe':     openSysmon,
         'sysmon':         openSysmon,
+        'browser.exe':    openBrowser,
+        'browser':        openBrowser,
         'daemon.core':    openDaemon,
         'void.tmp':       openVoid,
         '?????.exe':      openUnknown,
@@ -1279,6 +1307,8 @@ function openTerminal() {
         'welcome':        () => { print('Opening WELCOME.README...'); setTimeout(openWelcome, 300); },
         'sysmon.exe':     () => { print('Starting SYSMON.EXE...'); setTimeout(openSysmon, 300); },
         'sysmon':         () => { print('Starting SYSMON.EXE...'); setTimeout(openSysmon, 300); },
+        'browser.exe':    () => { print('Starting BROWSER.EXE...'); setTimeout(openBrowser, 300); },
+        'browser':        () => { print('Starting BROWSER.EXE...'); setTimeout(openBrowser, 300); },
         'terminal.exe':   () => { print('TERMINAL.EXE is already running.'); print('You are inside it.'); },
         'daemon.core':    () => { print('Opening daemon.core...'); print('It is already open.'); print('It has always been open.'); setTimeout(openDaemon, 400); },
         'void.tmp':       () => { print('Opening void.tmp...'); setTimeout(openVoid, 300); },
@@ -1368,7 +1398,7 @@ function openSysmon() {
 }
 
 function openDaemon() {
-  if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:220, x:200, y:140, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:220, x:200, y:140, menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-daemon').innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon" style="font-size:44px;line-height:1;">👁️</div>
@@ -1388,7 +1418,7 @@ function openDaemon() {
 }
 
 function openVoid() {
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:260, h:180, x:220, y:160, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:260, h:180, x:220, y:160, menubar:false, statusbar:false, popup:true })) return;
   const body = document.getElementById('wb-void');
   body.style.cssText = 'background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;';
   body.innerHTML = `
@@ -1405,7 +1435,7 @@ function openVoid() {
 let unknownCount = 0;
 function openUnknown() {
   const wid = 'unk-warn-' + Date.now();
-  if (!mkWin({ id:wid, title:'Warning', icon:'⚠️', w:300, h:155, x:200+Math.random()*100, y:120+Math.random()*80, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:wid, title:'Warning', icon:'⚠️', w:300, h:155, x:200+Math.random()*100, y:120+Math.random()*80, menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-' + wid).innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">⚠️</div>
@@ -1432,13 +1462,189 @@ function runUnknown() {
   ];
   const idx = Math.min(unknownCount - 1, msgs.length - 1);
   const rid = 'unk-result-' + Date.now();
-  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:280, h:155, x:160+Math.random()*180, y:90+Math.random()*120, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:280, h:155, x:160+Math.random()*180, y:90+Math.random()*120, menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-' + rid).innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">❓</div>
       <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
     </div>
     <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BROWSER
+// ─────────────────────────────────────────────────────────────────
+function openBrowser() {
+  if (!mkWin({ id:'browser', title:'sleepWEB — Web Browser', icon:'🌐', w:640, h:460, x:80, y:50 })) return;
+
+  const mb   = document.getElementById('mb-browser');
+  const body = document.getElementById('wb-browser');
+  const ws   = document.getElementById('ws-browser');
+  body.style.cssText = 'display:flex;flex-direction:column;padding:0;overflow:hidden;';
+
+  let hist = [], histIdx = -1;
+
+  // ── home page ──────────────────────────────────────────────────
+  function buildHome() {
+    const links = PROJECTS.map(p =>
+      `<a class="lnk" href="${p.file}" target="_blank">${p.emoji} ${p.name}</a>`
+    ).join('');
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      body{margin:0;background:#c0c0c0;font-family:'Courier New',monospace;font-size:12px;}
+      h1{background:#000080;color:#fff;margin:0;padding:6px 12px;font-size:13px;}
+      .sec{padding:6px 12px;}.sec h2{font-size:11px;margin:6px 0 4px;border-bottom:1px solid #808080;}
+      .grid{display:flex;flex-wrap:wrap;gap:3px;}
+      .lnk{background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;
+           padding:1px 7px;font-size:11px;text-decoration:none;color:#000;display:inline-block;}
+      .lnk:hover{background:#000080;color:#fff;}
+    </style></head><body>
+    <h1>🌐 sleepWEB — Start Page</h1>
+    <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${links}</div></div>
+    <div class="sec"><h2>The Web (may not load in frame)</h2><div class="grid">
+      <a class="lnk" href="https://en.wikipedia.org/wiki/Special:Random" target="_blank">📖 Wikipedia: Random</a>
+      <a class="lnk" href="https://archive.org" target="_blank">📦 Internet Archive</a>
+      <a class="lnk" href="https://neal.fun" target="_blank">🎮 Neal.fun</a>
+      <a class="lnk" href="https://poolsuite.net" target="_blank">📻 Poolsuite FM</a>
+    </div></div>
+    </body></html>`;
+  }
+
+  // ── toolbar ────────────────────────────────────────────────────
+  const toolbar = document.createElement('div');
+  toolbar.className = 'browser-toolbar';
+  toolbar.innerHTML = `
+    <button class="br-btn" id="br-back" title="Back" disabled>◀</button>
+    <button class="br-btn" id="br-fwd"  title="Forward" disabled>▶</button>
+    <button class="br-btn" id="br-stop" title="Stop">✕</button>
+    <button class="br-btn" id="br-ref"  title="Refresh">↻</button>
+    <button class="br-btn" id="br-home" title="Home">🏠</button>
+    <div class="br-vsep"></div>
+    <span class="br-addr-label">Address:</span>
+    <input class="br-addr" id="br-url" type="text" value="home:">
+    <button class="br-btn" id="br-go">Go</button>`;
+  body.appendChild(toolbar);
+
+  // ── iframe + error overlay ─────────────────────────────────────
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'flex:1;position:relative;overflow:hidden;background:#fff;';
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+  iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation';
+  wrap.appendChild(iframe);
+
+  const errDiv = document.createElement('div');
+  errDiv.id = 'br-err';
+  errDiv.style.cssText = 'display:none;position:absolute;inset:0;background:#c0c0c0;padding:30px;';
+  errDiv.innerHTML = `<div style="background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:16px;max-width:360px;margin:auto;font-size:11px;">
+    <div style="font-size:24px;margin-bottom:8px;">🚫</div>
+    <b>This page cannot be displayed</b><br><br>
+    This site blocked embedding. It may have opened in a new tab instead.<br><br>
+    <button class="dlg-btn primary" onclick="this.closest('#br-err').style.display='none'">OK</button>
+  </div>`;
+  wrap.appendChild(errDiv);
+  body.appendChild(wrap);
+
+  // ── navigate ───────────────────────────────────────────────────
+  function updateNav() {
+    document.getElementById('br-back').disabled = histIdx <= 0;
+    document.getElementById('br-fwd').disabled  = histIdx >= hist.length - 1;
+  }
+
+  function navigate(url, push = true) {
+    errDiv.style.display = 'none';
+    if (!url || url === 'home:') {
+      url = 'home:';
+      document.getElementById('br-url').value = 'home:';
+      iframe.removeAttribute('src');
+      iframe.srcdoc = buildHome();
+      if (ws) ws.textContent = 'sleepWEB Start Page';
+    } else {
+      if (!/^https?:\/\/|^data:|^about:/.test(url)) url = 'https://' + url;
+      document.getElementById('br-url').value = url;
+      iframe.removeAttribute('srcdoc');
+      iframe.src = url;
+      if (ws) ws.textContent = 'Connecting to ' + url.split('/')[2];
+    }
+    if (push) { hist = hist.slice(0, histIdx + 1); hist.push(url); histIdx = hist.length - 1; }
+    updateNav();
+  }
+
+  iframe.addEventListener('load', () => {
+    if (ws && iframe.src && iframe.src !== 'about:blank') ws.textContent = 'Done';
+  });
+  iframe.addEventListener('error', () => { errDiv.style.display = 'block'; if (ws) ws.textContent = 'Error'; });
+
+  // ── button wiring ──────────────────────────────────────────────
+  document.getElementById('br-back').addEventListener('click', () => {
+    if (histIdx > 0) { histIdx--; navigate(hist[histIdx], false); }
+  });
+  document.getElementById('br-fwd').addEventListener('click', () => {
+    if (histIdx < hist.length - 1) { histIdx++; navigate(hist[histIdx], false); }
+  });
+  document.getElementById('br-stop').addEventListener('click', () => {
+    iframe.src = 'about:blank'; if (ws) ws.textContent = 'Stopped.';
+  });
+  document.getElementById('br-ref').addEventListener('click', () => {
+    const u = hist[histIdx]; if (u === 'home:') { iframe.srcdoc = buildHome(); } else { iframe.src = iframe.src; }
+    if (ws) ws.textContent = 'Refreshing...';
+  });
+  document.getElementById('br-home').addEventListener('click', () => navigate('home:'));
+  document.getElementById('br-go').addEventListener('click', () => navigate(document.getElementById('br-url').value.trim()));
+  document.getElementById('br-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') navigate(document.getElementById('br-url').value.trim());
+  });
+
+  // ── menu bar ───────────────────────────────────────────────────
+  function brDropdown(anchor, items) {
+    const old = document.getElementById('active-dropdown'); if (old) old.remove();
+    const rect = anchor.getBoundingClientRect();
+    const dd = document.createElement('div');
+    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+    dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+    items.forEach(item => {
+      if (item === '-') {
+        const s = document.createElement('div'); s.className = 'menu-dd-sep'; dd.appendChild(s);
+      } else {
+        const el = document.createElement('div'); el.className = 'menu-dd-item'; el.textContent = item.label;
+        el.addEventListener('mousedown', e => { e.stopPropagation(); dd.remove(); item.action(); });
+        dd.appendChild(el);
+      }
+    });
+    document.body.appendChild(dd);
+    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+  }
+
+  mb.innerHTML = '';
+  [
+    { label: 'File', items: [
+      { label: 'Open Location...', action: () => { const u = prompt('Enter URL:'); if (u) navigate(u); } },
+      '-',
+      { label: 'Close', action: () => closeWin('browser') },
+    ]},
+    { label: 'View', items: [
+      { label: 'Home',    action: () => navigate('home:') },
+      { label: 'Refresh', action: () => document.getElementById('br-ref').click() },
+      { label: 'Stop',    action: () => document.getElementById('br-stop').click() },
+      '-',
+      { label: 'View Source', action: () => {
+        try {
+          const src = iframe.contentDocument.documentElement.outerHTML;
+          const w = window.open(''); w.document.write('<pre style="white-space:pre-wrap;font-size:12px;">' + src.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>');
+        } catch(e) { alert('Cannot view source of cross-origin pages.'); }
+      }},
+    ]},
+    { label: 'Help', items: [
+      { label: 'About sleepWEB', action: () => alert('sleepWEB — Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.') },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); brDropdown(span, items); });
+    mb.appendChild(span);
+  });
+
+  navigate('home:');
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1452,7 +1658,7 @@ function spawnAlert() {
   const dh = document.getElementById('desktop').offsetHeight;
   if (!mkWin({ id, title:m.title, icon:m.icon, w:320, h:165,
                x:60 + Math.random()*(dw-380), y:40 + Math.random()*(dh-200),
-               menubar:false, statusbar:false })) return;
+               menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-' + id).innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">${m.icon}</div>
@@ -1482,7 +1688,7 @@ function doShutdown() {
   const id = 'shutdown';
   if (!mkWin({ id, title:'Shut Down sleepOS', icon:'⏻', w:300, h:165,
                x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
-               menubar:false, statusbar:false })) return;
+               menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-shutdown').innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">⏻</div>
