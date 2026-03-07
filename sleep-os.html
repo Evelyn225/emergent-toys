@@ -78,9 +78,10 @@ body {
 .desktop-icon.selected .di-name { background: #000080; }
 
 /* ── Windows layer ───────────────────────────────────────────── */
-#windows-layer { position: absolute; inset: 0; }
+#windows-layer { position: absolute; inset: 0; pointer-events: none; }
 
 /* ── OS Window ───────────────────────────────────────────────── */
+.os-window { pointer-events: auto; }
 .os-window {
   position: absolute;
   display: flex; flex-direction: column;
@@ -677,26 +678,25 @@ function setupIcons() {
     const div = document.createElement('div');
     div.className = 'desktop-icon';
     div.innerHTML = `<div class="di-img">${ic.emoji}</div><div class="di-name">${ic.name}</div>`;
-    let clicks = 0, clickT, lastTap = 0;
-    div.addEventListener('click', (e) => {
+    let clicks = 0, clickT;
+    div.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      clicks++;
       document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
       div.classList.add('selected');
-      if (clicks === 1) {
-        clickT = setTimeout(() => { clicks = 0; }, 380);
-      } else {
-        clearTimeout(clickT); clicks = 0;
+      if (e.pointerType !== 'mouse') {
+        // touch/pen: open on single tap
         window[ic.action]?.();
+      } else {
+        // mouse: require double-click
+        clicks++;
+        if (clicks === 1) {
+          clickT = setTimeout(() => { clicks = 0; }, 380);
+        } else {
+          clearTimeout(clickT); clicks = 0;
+          window[ic.action]?.();
+        }
       }
     });
-    // Touch: single tap opens directly
-    div.addEventListener('touchend', (e) => {
-      e.preventDefault(); // prevent click from also firing
-      document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
-      div.classList.add('selected');
-      window[ic.action]?.();
-    }, { passive: false });
     layer.appendChild(div);
   });
   document.getElementById('desktop').addEventListener('click', (e) => {
@@ -828,17 +828,27 @@ function openTerminal() {
     help: () => {
       [
         'Available commands:',
-        '  HELP     — show this help',
-        '  DIR, LS  — list directory',
-        '  PS       — list running processes',
-        '  CAT      — read a file (try: cat welcome.readme)',
-        '  PING     — ping a host (try: ping evenet.fun)',
-        '  ECHO     — echo text',
-        '  VER      — show OS version',
-        '  WHO      — current user info',
-        '  DATE     — system date',
-        '  CLS      — clear screen',
-        '  EXIT     — close terminal',
+        '  HELP            — show this help',
+        '  DIR, LS         — list directory',
+        '  CD [path]       — change directory',
+        '  MKDIR [name]    — create directory',
+        '  DEL, RM [file]  — delete a file',
+        '  COPY [src] [dst]— copy a file',
+        '  MOVE, MV        — move a file',
+        '  TYPE [file]     — print file contents',
+        '  TREE            — directory tree',
+        '  PS              — list running processes',
+        '  TASKKILL [pid]  — terminate a process',
+        '  IPCONFIG        — network configuration',
+        '  SET             — show environment variables',
+        '  CAT [file]      — read a file',
+        '  PING [host]     — ping a host',
+        '  ECHO [text]     — echo text',
+        '  VER             — show OS version',
+        '  WHO, WHOAMI     — current user info',
+        '  DATE            — system date',
+        '  CLS             — clear screen',
+        '  EXIT            — close terminal',
       ].forEach(l => print(l));
     },
     dir: () => {
@@ -912,6 +922,148 @@ function openTerminal() {
     },
     echo: (args) => { if (args) print(args); },
     cls: () => { out.innerHTML = ''; },
+    whoami: (args) => CMDS.who(args),
+    type: (args) => CMDS.cat(args),
+    cd: (args) => {
+      const dest = (args || '').trim();
+      if (!dest || dest === '.' || dest === 'C:\\sleepOS') {
+        print('C:\\sleepOS');
+      } else if (dest === '..') {
+        print('Access denied.');
+        print('There is no parent directory. This is the only directory.');
+      } else if (dest.toLowerCase() === 'projects') {
+        print('C:\\sleepOS\\PROJECTS');
+        print('');
+        print('The PROJECTS directory contains 20 items.');
+        print('They are all watching you navigate here.');
+      } else {
+        print(`The system cannot find the path specified: ${dest}`);
+        print('NOTE: sleepOS has only one directory. This is intentional.');
+      }
+    },
+    mkdir: (args) => {
+      if (!args) { print('Usage: MKDIR [name]'); return; }
+      print(`Creating directory '${args}'...`);
+      setTimeout(() => {
+        print(`Directory created: C:\\sleepOS\\${args.toUpperCase()}`);
+        print('WARNING: The new directory is indistinguishable from void.tmp.');
+        print('Recommend deletion.');
+      }, 600);
+    },
+    del: (args) => {
+      const f = (args || '').toLowerCase().trim();
+      if (!f) { print('Usage: DEL [filename]'); return; }
+      if (f === 'void.tmp') {
+        print(`Deleting ${args}...`);
+        setTimeout(() => {
+          print('Delete failed.', '#ff4444');
+          print('void.tmp cannot be deleted.');
+          print('void.tmp has always been here.');
+          print('void.tmp will always be here.');
+        }, 500);
+      } else if (f === 'daemon.core') {
+        print(`Deleting ${args}...`);
+        setTimeout(() => { print('Access denied.', '#ff4444'); print('The file is currently in use by: SYSTEM, UNKNOWN, UNKNOWN, UNKNOWN'); }, 400);
+      } else if (f === '?????.exe') {
+        print('You cannot delete this file.');
+        print('It deleted itself before you asked.');
+        print('It is still here.');
+      } else {
+        print(`File not found: ${args}`);
+      }
+    },
+    rm: (args) => CMDS.del(args),
+    copy: (args) => {
+      const parts = (args || '').trim().split(/\s+/);
+      if (parts.length < 2) { print('Usage: COPY [source] [destination]'); return; }
+      print(`Copying '${parts[0]}' to '${parts[1]}'...`);
+      setTimeout(() => {
+        print('1 file(s) copied.');
+        print(`WARNING: The copy is not identical to the original.`);
+        print('This is considered normal.');
+      }, 700);
+    },
+    move: (args) => {
+      if (!args) { print('Usage: MOVE [source] [destination]'); return; }
+      print('Move failed.', '#ff4444');
+      print('Files in sleepOS cannot be moved.');
+      print('They are already where they need to be.');
+    },
+    mv: (args) => CMDS.move(args),
+    tree: () => {
+      [
+        'C:\\sleepOS',
+        '├── WELCOME.README',
+        '├── TERMINAL.EXE',
+        '├── SYSMON.EXE',
+        '├── void.tmp',
+        '├── daemon.core              [UNREADABLE]',
+        '├── ?????.exe                [DO NOT EXECUTE]',
+        '└── PROJECTS\\',
+        '    ├── sand playground',
+        '    ├── bug hotline',
+        '    ├── fireworks',
+        '    ├── ... (17 more objects)',
+        '    └── [1 object cannot be listed]',
+      ].forEach(l => print(l));
+    },
+    taskkill: (args) => {
+      const pid = (args || '').replace(/\D/g,'');
+      if (!pid) { print('Usage: TASKKILL [pid]'); return; }
+      const unknown = ['333','334','335'];
+      if (unknown.includes(pid)) {
+        print(`Terminating PID ${pid}...`);
+        setTimeout(() => {
+          print(`Process ${pid} cannot be terminated.`, '#ff4444');
+          print('The process has acknowledged the request.');
+          print('It has chosen not to comply.');
+        }, 800);
+      } else if (pid === '999') {
+        print('Terminating void.exe...');
+        setTimeout(() => { print('The void does not terminate.', '#ff4444'); }, 600);
+      } else if (pid === '512') {
+        print('Terminating soul_daemon.exe...');
+        setTimeout(() => {
+          print('soul_daemon.exe terminated.', '#ff4444');
+          print('Soul Integrity: CRITICAL');
+          print('Restarting soul_daemon.exe... [automatic]');
+        }, 500);
+      } else {
+        print(`Process with PID ${pid} not found.`);
+      }
+    },
+    ipconfig: () => {
+      [
+        'sleepOS IP Configuration',
+        '',
+        'Adapter: SOMA-686 NIC',
+        '  Connection-specific DNS  : corpus.internal',
+        '  IPv4 Address             : 0.0.0.0',
+        '  Subnet Mask              : 255.255.255.???',
+        '  Default Gateway          : [unreachable]',
+        '  DNS Servers              : unknown (responding)',
+        '',
+        'Adapter: VOID Interface',
+        '  Status                   : Connected',
+        '  Address                  : [cannot be expressed]',
+        '  Packets in               : ∞',
+        '  Packets out              : 0',
+      ].forEach(l => print(l));
+    },
+    set: () => {
+      [
+        'COMPUTERNAME=SOMA-686',
+        'USERNAME=VISITOR',
+        'OS=sleepOS 0.9b2',
+        'SOUL_INTEGRITY=87',
+        'DAEMON_COUNT=7',
+        'DAEMON_KNOWN=4',
+        'TEMPORAL_DRIFT=+/-2.3yr',
+        'VOID_PRESSURE=12',
+        'OBSERVER_COUNT=[classified]',
+        'PATH=C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+      ].forEach(l => print(l));
+    },
     cat: (args) => {
       const f = (args||'').toLowerCase().trim();
       if (f === 'welcome.readme') {
