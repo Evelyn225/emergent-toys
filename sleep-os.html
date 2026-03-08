@@ -1694,15 +1694,57 @@ function runUnknown() {
     'File executed.\nFile not found.\nFile was never here.',
   ];
   const idx = Math.min(unknownCount - 1, msgs.length - 1);
+
+  // Run 3: CRT scanline flash only
+  if (unknownCount === 3) {
+    const crt = document.getElementById('crt');
+    crt.style.opacity = '2';
+    setTimeout(() => { crt.style.opacity = '1'; }, 220);
+  }
+  // Run 5: one random desktop icon emoji goes blank
+  if (unknownCount === 5) {
+    const imgs = [...document.querySelectorAll('.di-img')];
+    if (imgs.length) {
+      const t = imgs[Math.floor(Math.random() * imgs.length)];
+      t.dataset.orig = t.textContent;
+      t.textContent = '';
+    }
+  }
+  // Run 6: start button label becomes "?????" for 4s
+  if (unknownCount === 6) {
+    const sb = document.getElementById('start-btn');
+    if (sb) {
+      const orig = sb.textContent;
+      sb.textContent = '?????';
+      setTimeout(() => { sb.textContent = orig; }, 4000);
+    }
+  }
+
   if (unknownCount >= 7) applyUnknownEffect(unknownCount);
+
   const rid = 'unk-result-' + Date.now();
   if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:400, h:260, x:160+Math.random()*120, y:80+Math.random()*80, menubar:false, statusbar:false })) return;
-  document.getElementById('wb-' + rid).innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon">❓</div>
-      <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
-    </div>
-    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
+
+  // Run 4: OK button is void — unresponsive for 3s, then activates
+  if (unknownCount === 4) {
+    document.getElementById('wb-' + rid).innerHTML = `
+      <div class="dlg-body">
+        <div class="dlg-icon">❓</div>
+        <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
+      </div>
+      <div class="dlg-btns"><button id="void-ok-${rid}" class="dlg-btn primary" style="opacity:0.35;pointer-events:none;">OK</button></div>`;
+    setTimeout(() => {
+      const btn = document.getElementById('void-ok-' + rid);
+      if (btn) { btn.style.opacity = '1'; btn.style.pointerEvents = ''; btn.onclick = () => closeWin(rid); }
+    }, 3000);
+  } else {
+    document.getElementById('wb-' + rid).innerHTML = `
+      <div class="dlg-body">
+        <div class="dlg-icon">❓</div>
+        <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
+      </div>
+      <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
