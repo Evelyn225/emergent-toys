@@ -1487,7 +1487,7 @@ function openBrowser() {
   // ── home page ──────────────────────────────────────────────────
   function buildHome() {
     const links = PROJECTS.map(p =>
-      `<a class="lnk" href="${p.file}" target="_blank">${p.emoji} ${p.name}</a>`
+      `<a class="lnk" href="${p.file}" target="_self">${p.emoji} ${p.name}</a>`
     ).join('');
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       body{margin:0;background:#c0c0c0;font-family:'Courier New',monospace;font-size:12px;}
@@ -1536,13 +1536,30 @@ function openBrowser() {
   const errDiv = document.createElement('div');
   errDiv.id = 'br-err';
   errDiv.style.cssText = 'display:none;position:absolute;inset:0;background:#c0c0c0;padding:30px;';
-  errDiv.innerHTML = `<div style="background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:16px;max-width:360px;margin:auto;font-size:11px;">
-    <div style="font-size:24px;margin-bottom:8px;">🚫</div>
-    <b>This page cannot be displayed</b><br><br>
-    This site blocked embedding. It may have opened in a new tab instead.<br><br>
-    <button class="dlg-btn primary" onclick="this.closest('#br-err').style.display='none'">OK</button>
-  </div>`;
+  const errBox = document.createElement('div');
+  errBox.style.cssText = 'background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:16px;max-width:380px;margin:auto;font-size:11px;';
+  errDiv.appendChild(errBox);
   wrap.appendChild(errDiv);
+
+  function showError(url) {
+    errBox.innerHTML = `
+      <div style="font-size:24px;margin-bottom:8px;">🚫</div>
+      <b>This page cannot be displayed</b><br><br>
+      <span style="word-break:break-all;color:#444;">${url}</span><br><br>
+      This site sent <code style="background:#eee;padding:1px 3px;">X-Frame-Options</code> or
+      <code style="background:#eee;padding:1px 3px;">Content-Security-Policy</code> headers that
+      block embedding.<br><br>
+      To fix this on <b>your own sites</b>, add this header:<br>
+      <code style="background:#eee;padding:2px 4px;display:block;margin:4px 0;">X-Frame-Options: ALLOWALL</code>
+      <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;">
+        <button class="dlg-btn primary" id="br-err-tab">Open in New Tab</button>
+        <button class="dlg-btn" id="br-err-ok">OK</button>
+      </div>`;
+    errDiv.style.display = 'block';
+    document.getElementById('br-err-tab').onclick = () => window.open(url, '_blank');
+    document.getElementById('br-err-ok').onclick  = () => { errDiv.style.display = 'none'; };
+    if (ws) ws.textContent = 'Error: site blocked embedding';
+  }
   body.appendChild(wrap);
 
   // ── navigate ───────────────────────────────────────────────────
@@ -1550,6 +1567,8 @@ function openBrowser() {
     document.getElementById('br-back').disabled = histIdx <= 0;
     document.getElementById('br-fwd').disabled  = histIdx >= hist.length - 1;
   }
+
+  let lastAttemptedUrl = '';
 
   function navigate(url, push = true) {
     errDiv.style.display = 'none';
@@ -1561,19 +1580,31 @@ function openBrowser() {
       if (ws) ws.textContent = 'sleepWEB Start Page';
     } else {
       if (!/^https?:\/\/|^data:|^about:/.test(url)) url = 'https://' + url;
+      lastAttemptedUrl = url;
       document.getElementById('br-url').value = url;
       iframe.removeAttribute('srcdoc');
       iframe.src = url;
-      if (ws) ws.textContent = 'Connecting to ' + url.split('/')[2];
+      if (ws) ws.textContent = 'Connecting to ' + (url.split('/')[2] || url);
     }
     if (push) { hist = hist.slice(0, histIdx + 1); hist.push(url); histIdx = hist.length - 1; }
     updateNav();
   }
 
   iframe.addEventListener('load', () => {
-    if (ws && iframe.src && iframe.src !== 'about:blank') ws.textContent = 'Done';
+    // Sync address bar with actual iframe URL (same-origin pages only)
+    try {
+      const loc = iframe.contentWindow.location.href;
+      if (loc && loc !== 'about:blank' && loc !== 'about:srcdoc') {
+        document.getElementById('br-url').value = loc;
+        if (hist[histIdx] !== loc) {
+          hist = hist.slice(0, histIdx + 1); hist.push(loc); histIdx = hist.length - 1;
+          updateNav();
+        }
+      }
+    } catch(e) { /* cross-origin — leave address bar as-is */ }
+    if (ws) ws.textContent = 'Done';
   });
-  iframe.addEventListener('error', () => { errDiv.style.display = 'block'; if (ws) ws.textContent = 'Error'; });
+  iframe.addEventListener('error', () => showError(lastAttemptedUrl));
 
   // ── button wiring ──────────────────────────────────────────────
   document.getElementById('br-back').addEventListener('click', () => {
