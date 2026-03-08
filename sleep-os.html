@@ -1398,7 +1398,7 @@ function openSysmon() {
 }
 
 function openDaemon() {
-  if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:220, x:200, y:140, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:220, x:200, y:140, menubar:false, statusbar:false })) return;
   document.getElementById('wb-daemon').innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon" style="font-size:44px;line-height:1;">👁️</div>
@@ -1418,7 +1418,7 @@ function openDaemon() {
 }
 
 function openVoid() {
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:260, h:180, x:220, y:160, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:260, h:180, x:220, y:160, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-void');
   body.style.cssText = 'background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;';
   body.innerHTML = `
@@ -1774,18 +1774,6 @@ function startDesktop() {
 
   // Open welcome window after short delay
   setTimeout(() => openWelcome(), 350);
-
-  // Schedule random alerts (30–90s intervals)
-  function scheduleAlert() {
-    setTimeout(() => { spawnAlert(); scheduleAlert(); }, 30000 + Math.random() * 60000);
-  }
-  scheduleAlert();
-
-  // Schedule glitch effects (25–55s)
-  function scheduleGlitch() {
-    setTimeout(() => { triggerGlitch(); scheduleGlitch(); }, 25000 + Math.random() * 30000);
-  }
-  scheduleGlitch();
 }
 </script>
 </body>
