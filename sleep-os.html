@@ -347,6 +347,12 @@ body {
   padding: 8px; font-family: 'Courier New', monospace;
   font-size: 11px; line-height: 1.7;
 }
+.note-textarea {
+  display: block; width: 100%; height: 100%; box-sizing: border-box;
+  background: #fff; padding: 8px;
+  font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.7;
+  border: none; outline: none; resize: none; overflow: auto;
+}
 
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
@@ -385,7 +391,7 @@ body {
   .dlg-btn { min-width: 90px; height: 34px; font-size: 14px; }
 
   .term-wrap { font-size: 16px; }
-  .note-body { font-size: 13px; }
+  .note-body, .note-textarea { font-size: 13px; }
 }
 </style>
 </head>
@@ -423,6 +429,9 @@ body {
   <div id="sm-items">
     <div class="sm-item" onclick="closeStart();openWelcome()">
       <span class="sm-icon">📄</span><span>Welcome</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();openNotepad()">
+      <span class="sm-icon">📝</span><span>Notepad</span>
     </div>
     <div class="sm-item" onclick="closeStart();openFiles()">
       <span class="sm-icon">📁</span><span>Projects</span>
@@ -476,6 +485,7 @@ const PROJECTS = [
 
 const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
+  { name: 'NOTEPAD.EXE',    emoji: '📝', action: 'openNotepad' },
   { name: 'PROJECTS.DIR',   emoji: '📁', action: 'openFiles' },
   { name: 'TERMINAL.EXE',   emoji: '💻', action: 'openTerminal' },
   { name: 'SYSMON.EXE',     emoji: '📊', action: 'openSysmon' },
@@ -678,6 +688,35 @@ setTimeout(biosType, 250);
 // ─────────────────────────────────────────────────────────────────
 let zTop = 100;
 const wins = {};
+
+// Shared virtual filesystem (terminal + notepad)
+const termFS = { dirs: new Set(), files: new Map() };
+
+// Shared dropdown menu helpers
+function closeDropdown() {
+  const old = document.getElementById('active-dropdown');
+  if (old) old.remove();
+}
+function showDropdown(anchor, items) {
+  closeDropdown();
+  const rect = anchor.getBoundingClientRect();
+  const dd = document.createElement('div');
+  dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+  dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+  items.forEach(item => {
+    if (item === '-') {
+      const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
+    } else {
+      const el = document.createElement('div');
+      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
+      el.textContent = item.label;
+      if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
+      dd.appendChild(el);
+    }
+  });
+  document.body.appendChild(dd);
+  setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
+}
 
 function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
@@ -900,12 +939,9 @@ function setupIcons() {
 // WINDOW CONTENT
 // ─────────────────────────────────────────────────────────────────
 
-function openWelcome() {
-  if (!mkWin({ id:'welcome', title:'WELCOME.README — Notepad', icon:'📄', w:420, h:320, x:100, y:55 })) return;
-  document.getElementById('wb-welcome').innerHTML = `
-    <div class="note-body">
-<span style="color:#000080;font-weight:bold">== sleepOS v0.9β — WELCOME FILE ==</span>
-<span style="color:#808080">Build: 2024.11.13-EXPERIMENTAL / SOMA-686</span>
+const WELCOME_DEFAULT =
+`== sleepOS v0.9\u03b2 \u2014 WELCOME FILE ==
+Build: 2024.11.13-EXPERIMENTAL / SOMA-686
 
 Welcome to sleepOS.
 
@@ -913,30 +949,134 @@ This operating system is an experimental environment
 for generative and interactive computation.
 All processes here are alive in some sense of the word.
 
-<b>Navigation:</b>
+Navigation:
   - Double-click desktop icons to open programs
   - PROJECTS.DIR contains all interactive applications
   - TERMINAL.EXE accepts command-line input
   - SYSMON.EXE monitors system vitals
   - Start Menu provides quick access to all programs
 
-<b>Known Issues:</b>
+Known Issues:
   [!] Clock drift: temporal reference is unreliable
   [!] 3 daemon processes are of unrecognized origin
   [!] Soul integrity is at 87.3% and decreasing
   [!] void.tmp cannot be read, deleted, or ignored
   [!] ?????.exe should not be executed
 
-<b>Security:</b>
+Security:
   An unknown process is observing your session.
   This is not a bug. This cannot be disabled.
 
 Have a productive session.
 
-— SYSTEM
-    </div>`;
-  const ws = document.getElementById('ws-welcome');
-  if (ws) ws.textContent = 'WELCOME.README  —  623 bytes';
+\u2014 SYSTEM`;
+
+function openWelcome() {
+  if (!mkWin({ id:'welcome', title:'WELCOME.README \u2014 Notepad', icon:'📄', w:420, h:320, x:100, y:55 })) return;
+  const body = document.getElementById('wb-welcome');
+  const ws   = document.getElementById('ws-welcome');
+  const mb   = document.getElementById('mb-welcome');
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'note-textarea';
+  ta.value = localStorage.getItem('sleepOS-welcome') ?? WELCOME_DEFAULT;
+  body.appendChild(ta);
+
+  const updateStatus = () => {
+    if (ws) ws.textContent = `WELCOME.README  \u2014  ${ta.value.length} bytes`;
+  };
+  ta.addEventListener('input', updateStatus);
+  updateStatus();
+
+  function buildMenu() {
+    mb.innerHTML = '';
+    [
+      { label: 'File', items: [
+        { label: 'New Notepad',  action: () => openNotepad() },
+        '-',
+        { label: 'Save',         action: () => { localStorage.setItem('sleepOS-welcome', ta.value); updateStatus(); } },
+        { label: 'Revert',       action: () => { ta.value = WELCOME_DEFAULT; updateStatus(); } },
+        '-',
+        { label: 'Close',        action: () => closeWin('welcome') },
+      ]},
+      { label: 'Edit', items: [
+        { label: 'Select All',   action: () => { ta.focus(); ta.select(); } },
+        '-',
+        { label: 'Word Wrap', disabled: true },
+      ]},
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item'; span.textContent = label;
+      span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+      mb.appendChild(span);
+    });
+  }
+  buildMenu();
+}
+
+// Notepad counter for unique window IDs
+let _notepadCount = 0;
+
+function openNotepad(filename) {
+  const id = filename ? 'notepad-' + filename : 'notepad-' + (++_notepadCount);
+  const displayName = filename || 'untitled.txt';
+  const initial = filename ? (termFS.files.get(filename) ?? '') : '';
+  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:420, h:320 })) return;
+
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'note-textarea';
+  ta.value = initial;
+  body.appendChild(ta);
+
+  let currentFile = filename || null;
+
+  const updateStatus = () => {
+    if (ws) ws.textContent = (currentFile || 'untitled.txt') + '  \u2014  ' + ta.value.length + ' bytes';
+  };
+  ta.addEventListener('input', updateStatus);
+  updateStatus();
+
+  function save(fname) {
+    termFS.files.set(fname, ta.value);
+    currentFile = fname;
+    const titleEl = document.getElementById('wtitle-' + id);
+    if (titleEl) titleEl.textContent = fname + ' \u2014 Notepad';
+    updateStatus();
+  }
+
+  function promptSaveAs() {
+    const name = prompt('Save as:', currentFile || 'untitled.txt');
+    if (name) save(name.trim());
+  }
+
+  function buildMenu() {
+    mb.innerHTML = '';
+    [
+      { label: 'File', items: [
+        { label: 'New',       action: () => openNotepad() },
+        '-',
+        { label: 'Save',      action: () => currentFile ? save(currentFile) : promptSaveAs() },
+        { label: 'Save As\u2026', action: promptSaveAs },
+        '-',
+        { label: 'Close',     action: () => closeWin(id) },
+      ]},
+      { label: 'Edit', items: [
+        { label: 'Select All', action: () => { ta.focus(); ta.select(); } },
+      ]},
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item'; span.textContent = label;
+      span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+      mb.appendChild(span);
+    });
+  }
+  buildMenu();
 }
 
 function openFiles() {
@@ -949,32 +1089,6 @@ function openFiles() {
 
   let selected = null;
   let viewMode = 'icons'; // 'icons' | 'list' | 'details'
-
-  // ── dropdown helper ─────────────────────────────────────────
-  function closeDropdown() {
-    const old = document.getElementById('active-dropdown');
-    if (old) old.remove();
-  }
-  function showDropdown(anchor, items) {
-    closeDropdown();
-    const rect = anchor.getBoundingClientRect();
-    const dd = document.createElement('div');
-    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
-    dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
-    items.forEach(item => {
-      if (item === '-') {
-        const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
-      } else {
-        const el = document.createElement('div');
-        el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
-        el.textContent = item.label;
-        if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
-        dd.appendChild(el);
-      }
-    });
-    document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
-  }
 
   // ── render ──────────────────────────────────────────────────
   function getSelected() { return selected; }
@@ -1116,7 +1230,6 @@ function openTerminal() {
   print('');
 
   let cmdHistory = [], histIdx = -1;
-  const termFS = { dirs: new Set(), files: new Map() };
 
   const CMDS = {
     help: () => {
@@ -1144,11 +1257,12 @@ function openTerminal() {
         '  WHO, WHOAMI     — current user info',
         '  DATE            — system date',
         '  CLS             — clear screen',
+        '  NOTEPAD [file]  — open Notepad (optionally open a file)',
         '  START [program] — run an executable or project',
         '  EXIT            — close terminal',
         '',
         'You can also type executables directly:',
-        '  sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
+        '  notepad.exe, sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
         '  or any project name (try: fireworks, fluid, ...)',
       ].forEach(l => print(l));
     },
@@ -1429,6 +1543,8 @@ function openTerminal() {
       const EXES_start = {
         'welcome.readme': openWelcome,
         'welcome':        openWelcome,
+        'notepad.exe':    openNotepad,
+        'notepad':        openNotepad,
         'sysmon.exe':     openSysmon,
         'sysmon':         openSysmon,
         'browser.exe':    openBrowser,
@@ -1454,6 +1570,12 @@ function openTerminal() {
       } else {
         print(`Cannot find program: ${args}`);
       }
+    },
+    notepad: (args) => {
+      const fname = args ? args.trim() : null;
+      if (fname && !termFS.files.has(fname)) { print(`File not found: ${fname}`); return; }
+      print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
+      setTimeout(() => openNotepad(fname || undefined), 300);
     },
     exit: () => closeWin('terminal'),
   };
@@ -1500,6 +1622,8 @@ function openTerminal() {
         'defrag.exe':     () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
         'defrag':         () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
         'terminal.exe':   () => { print('TERMINAL.EXE is already running.'); print('You are inside it.'); },
+        'notepad.exe':    () => { print('Opening Notepad...'); setTimeout(openNotepad, 300); },
+        'notepad':        () => { print('Opening Notepad...'); setTimeout(openNotepad, 300); },
         'daemon.core':    () => { print('Opening daemon.core...'); print('It is already open.'); print('It has always been open.'); setTimeout(openDaemon, 400); },
         'void.tmp':       () => { print('Opening void.tmp...'); setTimeout(openVoid, 300); },
         '?????.exe':      () => { print('Executing ?????.exe...'); setTimeout(openUnknown, 300); },
