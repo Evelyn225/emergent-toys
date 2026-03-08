@@ -462,7 +462,8 @@ const DESKTOP_ICONS = [
   { name: 'TERMINAL.EXE',   emoji: '💻', action: 'openTerminal' },
   { name: 'SYSMON.EXE',     emoji: '📊', action: 'openSysmon' },
   { name: 'BROWSER.EXE',    emoji: '🌐', action: 'openBrowser' },
-  { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
+  { name: 'DEFRAG.EXE',    emoji: '🧩', action: 'openDefrag' },
+  { name: 'daemon.core',   emoji: '👁️',  action: 'openDaemon' },
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
 ];
@@ -708,6 +709,9 @@ function addTbBtn(id, title, icon) {
 // ─────────────────────────────────────────────────────────────────
 function updateClock() {
   const now = new Date();
+  if (window._clockCorrupted && Math.random() < 0.75) {
+    document.getElementById('clock').textContent = '??:??'; return;
+  }
   const glitch = Math.random() < 0.004;
   const h = glitch ? Math.floor(Math.random() * 24) : now.getHours();
   const m = glitch ? Math.floor(Math.random() * 60) : now.getMinutes();
@@ -1261,6 +1265,8 @@ function openTerminal() {
         'sysmon':         openSysmon,
         'browser.exe':    openBrowser,
         'browser':        openBrowser,
+        'defrag.exe':     openDefrag,
+        'defrag':         openDefrag,
         'daemon.core':    openDaemon,
         'void.tmp':       openVoid,
         '?????.exe':      openUnknown,
@@ -1309,6 +1315,8 @@ function openTerminal() {
         'sysmon':         () => { print('Starting SYSMON.EXE...'); setTimeout(openSysmon, 300); },
         'browser.exe':    () => { print('Starting BROWSER.EXE...'); setTimeout(openBrowser, 300); },
         'browser':        () => { print('Starting BROWSER.EXE...'); setTimeout(openBrowser, 300); },
+        'defrag.exe':     () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
+        'defrag':         () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
         'terminal.exe':   () => { print('TERMINAL.EXE is already running.'); print('You are inside it.'); },
         'daemon.core':    () => { print('Opening daemon.core...'); print('It is already open.'); print('It has always been open.'); setTimeout(openDaemon, 400); },
         'void.tmp':       () => { print('Opening void.tmp...'); setTimeout(openVoid, 300); },
@@ -1397,8 +1405,208 @@ function openSysmon() {
   wins['sysmon']._interval = interval;
 }
 
+function openDefrag() {
+  if (!mkWin({ id:'defrag', title:'DEFRAG.EXE — Disk Defragmenter', icon:'🧩', w:560, h:400, x:100, y:60 })) return;
+
+  const mb   = document.getElementById('mb-defrag');
+  const body = document.getElementById('wb-defrag');
+  const ws   = document.getElementById('ws-defrag');
+  body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:5px;font-size:11px;overflow:hidden;';
+
+  const COLS = 40, ROWS = 16, TOTAL = COLS * ROWS;
+  // States: 0=free, 1=used(blue), 2=optimized(green), 3=active(red)
+  const cells = Array.from({ length: TOTAL }, () => Math.random() < 0.68 ? 1 : 0);
+  const USED_TOTAL = cells.filter(c => c === 1).length;
+  const COLORS = { 0:'#ffffff', 1:'#0000aa', 2:'#00aa00', 3:'#cc2200' };
+
+  // ── Drive info ─────────────────────────────────────────────────
+  const infoRow = document.createElement('div');
+  infoRow.style.cssText = 'display:flex;gap:16px;align-items:center;border:2px solid;border-color:#808080 #fff #fff #808080;padding:3px 8px;background:#fff;flex-shrink:0;';
+  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">0% optimized</span>`;
+  body.appendChild(infoRow);
+
+  // ── Canvas grid ────────────────────────────────────────────────
+  const gridWrap = document.createElement('div');
+  gridWrap.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;background:#111;flex:1;min-height:0;overflow:hidden;';
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'display:block;';
+  gridWrap.appendChild(canvas);
+  body.appendChild(gridWrap);
+
+  function drawGrid() {
+    const W = gridWrap.clientWidth, H = gridWrap.clientHeight;
+    if (!W || !H) return;
+    const bw = Math.floor(W / COLS), bh = Math.floor(H / ROWS);
+    if (!bw || !bh) return;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < TOTAL; i++) {
+      ctx.fillStyle = COLORS[cells[i]];
+      ctx.fillRect((i % COLS) * bw + 1, Math.floor(i / COLS) * bh + 1, bw - 2, bh - 2);
+    }
+  }
+
+  // ── Progress bar ───────────────────────────────────────────────
+  const pbWrap = document.createElement('div');
+  pbWrap.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;height:18px;background:#c0c0c0;position:relative;overflow:hidden;flex-shrink:0;';
+  const pbFill = document.createElement('div');
+  pbFill.style.cssText = 'position:absolute;left:0;top:0;height:100%;width:0%;background:#000080;';
+  const pbLabel = document.createElement('div');
+  pbLabel.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;mix-blend-mode:difference;';
+  pbLabel.textContent = '0%';
+  pbWrap.appendChild(pbFill); pbWrap.appendChild(pbLabel);
+  body.appendChild(pbWrap);
+
+  // ── File label ─────────────────────────────────────────────────
+  const fileLabel = document.createElement('div');
+  fileLabel.style.cssText = 'font-size:10px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;height:13px;';
+  fileLabel.textContent = 'Press Start to begin defragmentation.';
+  body.appendChild(fileLabel);
+
+  // ── Buttons ────────────────────────────────────────────────────
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-shrink:0;';
+  const startBtn = document.createElement('button');
+  startBtn.className = 'dlg-btn primary'; startBtn.textContent = 'Start';
+  const stopBtn = document.createElement('button');
+  stopBtn.className = 'dlg-btn'; stopBtn.textContent = 'Stop'; stopBtn.disabled = true;
+  btnRow.appendChild(startBtn); btnRow.appendChild(stopBtn);
+  body.appendChild(btnRow);
+
+  // ── Legend ─────────────────────────────────────────────────────
+  const legend = document.createElement('div');
+  legend.style.cssText = 'display:flex;gap:10px;font-size:10px;align-items:center;flex-shrink:0;';
+  [['#ffffff','Free'],['#0000aa','Used'],['#00aa00','Optimized'],['#cc2200','Reading']].forEach(([c,l]) => {
+    const wrap = document.createElement('span');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:3px;';
+    const sq = document.createElement('span');
+    sq.style.cssText = `width:12px;height:12px;background:${c};border:1px solid #808080;display:inline-block;flex-shrink:0;`;
+    wrap.appendChild(sq); wrap.appendChild(document.createTextNode(l));
+    legend.appendChild(wrap);
+  });
+  body.appendChild(legend);
+
+  // ── Animation ──────────────────────────────────────────────────
+  const FILES = [
+    'C:\\WINDOWS\\SYSTEM\\kernel32.dll',    'C:\\DREAMS\\fragment_001.tmp',
+    'C:\\USERS\\you\\desktop\\memory.old',  'C:\\VOID\\unresolved.dat',
+    'C:\\DREAMS\\fragment_047.tmp',         'C:\\WINDOWS\\TEMP\\~DF3A2.tmp',
+    'C:\\USERS\\you\\documents\\letter_unsent.txt', 'C:\\DREAMS\\fragment_112.tmp',
+    'C:\\SYSTEM32\\observer.dll',           'C:\\DREAMS\\fragment_????.tmp',
+    'C:\\USERS\\you\\pictures\\face.bmp',   'C:\\VOID\\pending.inf',
+    'C:\\DREAMS\\core_loop.dat',            'C:\\SLEEP\\log_0000.bin',
+    'C:\\USERS\\you\\desktop\\todo.txt',    'C:\\DREAMS\\fragment_[CORRUPTED]',
+    'C:\\WINDOWS\\SYSTEM\\time.dll',        'C:\\VOID\\[FILE NAME UNREADABLE]',
+  ];
+
+  let running = false, timer = null, optimized = 0, fileIdx = 0;
+  let leftPtr = 0, rightPtr = TOTAL - 1, activeCell = -1;
+
+  function updateProgress() {
+    const pct = Math.min(100, Math.round((optimized / USED_TOTAL) * 100));
+    pbFill.style.width = pct + '%';
+    pbLabel.textContent = pct + '%';
+    document.getElementById('df-pct').textContent = pct + '% optimized';
+    if (ws) ws.textContent = 'Defragmenting C:\\ — ' + pct + '%';
+  }
+
+  function step() {
+    if (!wins['defrag']) { clearTimeout(timer); return; }
+
+    // Resolve previous active cell → optimized
+    if (activeCell >= 0) { cells[activeCell] = 2; optimized++; activeCell = -1; }
+
+    // Advance pointers
+    while (leftPtr < TOTAL && cells[leftPtr] !== 0) leftPtr++;
+    while (rightPtr >= 0  && cells[rightPtr] !== 1) rightPtr--;
+
+    if (leftPtr >= rightPtr) {
+      // Finalize any remaining used-in-place blocks
+      for (let i = 0; i < TOTAL; i++) if (cells[i] === 1) { cells[i] = 2; optimized++; }
+      running = false; startBtn.disabled = false; stopBtn.disabled = true;
+      pbFill.style.width = '100%'; pbLabel.textContent = '100%';
+      document.getElementById('df-pct').textContent = '100% optimized';
+      fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
+      if (ws) ws.textContent = 'Complete — 1 file could not be moved';
+      drawGrid();
+      return;
+    }
+
+    // Move rightPtr block to leftPtr (show as red at destination)
+    cells[rightPtr] = 0;
+    cells[leftPtr]  = 3;
+    activeCell = leftPtr;
+    leftPtr++; rightPtr--;
+
+    if (fileIdx % 5 === 0) fileLabel.textContent = 'Moving: ' + FILES[fileIdx % FILES.length];
+    fileIdx++;
+
+    drawGrid();
+    updateProgress();
+    timer = setTimeout(step, 55);
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (running) return;
+    running = true; startBtn.disabled = true; stopBtn.disabled = false;
+    fileLabel.textContent = 'Analyzing C:\\ ...';
+    if (ws) ws.textContent = 'Analyzing...';
+    setTimeout(step, 700);
+  });
+  stopBtn.addEventListener('click', () => {
+    running = false; clearTimeout(timer);
+    if (activeCell >= 0) { cells[activeCell] = 1; activeCell = -1; }
+    startBtn.disabled = false; stopBtn.disabled = true;
+    fileLabel.textContent = 'Defragmentation stopped.';
+    if (ws) ws.textContent = 'Stopped';
+    drawGrid();
+  });
+
+  // ── Menus ──────────────────────────────────────────────────────
+  function dfDropdown(anchor, items) {
+    const old = document.getElementById('active-dropdown'); if (old) old.remove();
+    const rect = anchor.getBoundingClientRect();
+    const dd = document.createElement('div');
+    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+    dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+    items.forEach(item => {
+      if (item === '-') { const s = document.createElement('div'); s.className = 'menu-dd-sep'; dd.appendChild(s); }
+      else {
+        const el = document.createElement('div'); el.className = 'menu-dd-item'; el.textContent = item.label;
+        el.addEventListener('mousedown', e => { e.stopPropagation(); dd.remove(); item.action(); });
+        dd.appendChild(el);
+      }
+    });
+    document.body.appendChild(dd);
+    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+  }
+
+  mb.innerHTML = '';
+  [
+    { label: 'Drive', items: [
+      { label: 'C:\\ (2,147 MB)  ✓', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
+      { label: 'D:\\ — [NOT FOUND]', action: () => alert('Drive D:\\ is not available.\n\nIt may have never existed.') },
+      '-',
+      { label: 'Exit', action: () => closeWin('defrag') },
+    ]},
+    { label: 'Help', items: [
+      { label: 'Help Topics', action: () => alert('DEFRAG.EXE — Help\n\nClick Start to defragment drive C:\\.\n\nDisk defragmentation rearranges fragmented\ndata so your disk works more efficiently.\n\nNote: some system files cannot be moved.') },
+      '-',
+      { label: 'About DEFRAG.EXE', action: () => alert('DEFRAG.EXE — Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\n1 file cannot be moved.\nIt has always been there.') },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); dfDropdown(span, items); });
+    mb.appendChild(span);
+  });
+
+  setTimeout(drawGrid, 80);
+}
+
 function openDaemon() {
-  if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:220, x:200, y:140, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:220, x:200, y:140, menubar:false, statusbar:false })) return;
   document.getElementById('wb-daemon').innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon" style="font-size:44px;line-height:1;">👁️</div>
@@ -1418,7 +1626,7 @@ function openDaemon() {
 }
 
 function openVoid() {
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:260, h:180, x:220, y:160, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:260, h:180, x:220, y:160, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-void');
   body.style.cssText = 'background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;';
   body.innerHTML = `
@@ -1450,6 +1658,31 @@ function openUnknown() {
     </div>`;
 }
 
+function applyUnknownEffect(n) {
+  triggerGlitch();
+  if (n === 7) {
+    // Clock corrupts
+    window._clockCorrupted = true;
+  } else if (n === 8) {
+    // Desktop icon names become ?????
+    document.querySelectorAll('.di-name').forEach(el => { el.textContent = '?????'; });
+  } else if (n === 9) {
+    // All open window titles and taskbar buttons become ?????.exe
+    document.querySelectorAll('[id^="wtitle-"]').forEach(el => { el.textContent = '?????.exe'; });
+    document.querySelectorAll('.taskbar-btn span:last-child').forEach(el => { el.textContent = '?????.exe'; });
+  } else if (n >= 10) {
+    // Desktop darkens further each run
+    let ov = document.getElementById('unk-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'unk-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:#000;pointer-events:none;z-index:99990;opacity:0;transition:opacity 2s;';
+      document.body.appendChild(ov);
+    }
+    ov.style.opacity = Math.min(0.88, (parseFloat(ov.style.opacity) || 0) + 0.09);
+  }
+}
+
 function runUnknown() {
   unknownCount++;
   const msgs = [
@@ -1461,14 +1694,57 @@ function runUnknown() {
     'File executed.\nFile not found.\nFile was never here.',
   ];
   const idx = Math.min(unknownCount - 1, msgs.length - 1);
+
+  // Run 3: CRT scanline flash only
+  if (unknownCount === 3) {
+    const crt = document.getElementById('crt');
+    crt.style.opacity = '2';
+    setTimeout(() => { crt.style.opacity = '1'; }, 220);
+  }
+  // Run 5: one random desktop icon emoji goes blank
+  if (unknownCount === 5) {
+    const imgs = [...document.querySelectorAll('.di-img')];
+    if (imgs.length) {
+      const t = imgs[Math.floor(Math.random() * imgs.length)];
+      t.dataset.orig = t.textContent;
+      t.textContent = '';
+    }
+  }
+  // Run 6: start button label becomes "?????" for 4s
+  if (unknownCount === 6) {
+    const sb = document.getElementById('start-btn');
+    if (sb) {
+      const orig = sb.textContent;
+      sb.textContent = '?????';
+      setTimeout(() => { sb.textContent = orig; }, 4000);
+    }
+  }
+
+  if (unknownCount >= 7) applyUnknownEffect(unknownCount);
+
   const rid = 'unk-result-' + Date.now();
-  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:280, h:155, x:160+Math.random()*180, y:90+Math.random()*120, menubar:false, statusbar:false, popup:true })) return;
-  document.getElementById('wb-' + rid).innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon">❓</div>
-      <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
-    </div>
-    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
+  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:400, h:260, x:160+Math.random()*120, y:80+Math.random()*80, menubar:false, statusbar:false })) return;
+
+  // Run 4: OK button is void — unresponsive for 3s, then activates
+  if (unknownCount === 4) {
+    document.getElementById('wb-' + rid).innerHTML = `
+      <div class="dlg-body">
+        <div class="dlg-icon">❓</div>
+        <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
+      </div>
+      <div class="dlg-btns"><button id="void-ok-${rid}" class="dlg-btn primary" style="opacity:0.35;pointer-events:none;">OK</button></div>`;
+    setTimeout(() => {
+      const btn = document.getElementById('void-ok-' + rid);
+      if (btn) { btn.style.opacity = '1'; btn.style.pointerEvents = ''; btn.onclick = () => closeWin(rid); }
+    }, 3000);
+  } else {
+    document.getElementById('wb-' + rid).innerHTML = `
+      <div class="dlg-body">
+        <div class="dlg-icon">❓</div>
+        <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
+      </div>
+      <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1487,7 +1763,7 @@ function openBrowser() {
   // ── home page ──────────────────────────────────────────────────
   function buildHome() {
     const links = PROJECTS.map(p =>
-      `<a class="lnk" href="${p.file}" target="_blank">${p.emoji} ${p.name}</a>`
+      `<a class="lnk" href="${p.file}" target="_self">${p.emoji} ${p.name}</a>`
     ).join('');
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       body{margin:0;background:#c0c0c0;font-family:'Courier New',monospace;font-size:12px;}
@@ -1536,13 +1812,30 @@ function openBrowser() {
   const errDiv = document.createElement('div');
   errDiv.id = 'br-err';
   errDiv.style.cssText = 'display:none;position:absolute;inset:0;background:#c0c0c0;padding:30px;';
-  errDiv.innerHTML = `<div style="background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:16px;max-width:360px;margin:auto;font-size:11px;">
-    <div style="font-size:24px;margin-bottom:8px;">🚫</div>
-    <b>This page cannot be displayed</b><br><br>
-    This site blocked embedding. It may have opened in a new tab instead.<br><br>
-    <button class="dlg-btn primary" onclick="this.closest('#br-err').style.display='none'">OK</button>
-  </div>`;
+  const errBox = document.createElement('div');
+  errBox.style.cssText = 'background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:16px;max-width:380px;margin:auto;font-size:11px;';
+  errDiv.appendChild(errBox);
   wrap.appendChild(errDiv);
+
+  function showError(url) {
+    errBox.innerHTML = `
+      <div style="font-size:24px;margin-bottom:8px;">🚫</div>
+      <b>This page cannot be displayed</b><br><br>
+      <span style="word-break:break-all;color:#444;">${url}</span><br><br>
+      This site sent <code style="background:#eee;padding:1px 3px;">X-Frame-Options</code> or
+      <code style="background:#eee;padding:1px 3px;">Content-Security-Policy</code> headers that
+      block embedding.<br><br>
+      To fix this on <b>your own sites</b>, add this header:<br>
+      <code style="background:#eee;padding:2px 4px;display:block;margin:4px 0;">X-Frame-Options: ALLOWALL</code>
+      <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;">
+        <button class="dlg-btn primary" id="br-err-tab">Open in New Tab</button>
+        <button class="dlg-btn" id="br-err-ok">OK</button>
+      </div>`;
+    errDiv.style.display = 'block';
+    document.getElementById('br-err-tab').onclick = () => window.open(url, '_blank');
+    document.getElementById('br-err-ok').onclick  = () => { errDiv.style.display = 'none'; };
+    if (ws) ws.textContent = 'Error: site blocked embedding';
+  }
   body.appendChild(wrap);
 
   // ── navigate ───────────────────────────────────────────────────
@@ -1550,6 +1843,8 @@ function openBrowser() {
     document.getElementById('br-back').disabled = histIdx <= 0;
     document.getElementById('br-fwd').disabled  = histIdx >= hist.length - 1;
   }
+
+  let lastAttemptedUrl = '';
 
   function navigate(url, push = true) {
     errDiv.style.display = 'none';
@@ -1561,19 +1856,31 @@ function openBrowser() {
       if (ws) ws.textContent = 'sleepWEB Start Page';
     } else {
       if (!/^https?:\/\/|^data:|^about:/.test(url)) url = 'https://' + url;
+      lastAttemptedUrl = url;
       document.getElementById('br-url').value = url;
       iframe.removeAttribute('srcdoc');
       iframe.src = url;
-      if (ws) ws.textContent = 'Connecting to ' + url.split('/')[2];
+      if (ws) ws.textContent = 'Connecting to ' + (url.split('/')[2] || url);
     }
     if (push) { hist = hist.slice(0, histIdx + 1); hist.push(url); histIdx = hist.length - 1; }
     updateNav();
   }
 
   iframe.addEventListener('load', () => {
-    if (ws && iframe.src && iframe.src !== 'about:blank') ws.textContent = 'Done';
+    // Sync address bar with actual iframe URL (same-origin pages only)
+    try {
+      const loc = iframe.contentWindow.location.href;
+      if (loc && loc !== 'about:blank' && loc !== 'about:srcdoc') {
+        document.getElementById('br-url').value = loc;
+        if (hist[histIdx] !== loc) {
+          hist = hist.slice(0, histIdx + 1); hist.push(loc); histIdx = hist.length - 1;
+          updateNav();
+        }
+      }
+    } catch(e) { /* cross-origin — leave address bar as-is */ }
+    if (ws) ws.textContent = 'Done';
   });
-  iframe.addEventListener('error', () => { errDiv.style.display = 'block'; if (ws) ws.textContent = 'Error'; });
+  iframe.addEventListener('error', () => showError(lastAttemptedUrl));
 
   // ── button wiring ──────────────────────────────────────────────
   document.getElementById('br-back').addEventListener('click', () => {
@@ -1743,18 +2050,6 @@ function startDesktop() {
 
   // Open welcome window after short delay
   setTimeout(() => openWelcome(), 350);
-
-  // Schedule random alerts (30–90s intervals)
-  function scheduleAlert() {
-    setTimeout(() => { spawnAlert(); scheduleAlert(); }, 30000 + Math.random() * 60000);
-  }
-  scheduleAlert();
-
-  // Schedule glitch effects (25–55s)
-  function scheduleGlitch() {
-    setTimeout(() => { triggerGlitch(); scheduleGlitch(); }, 25000 + Math.random() * 30000);
-  }
-  scheduleGlitch();
 }
 </script>
 </body>
