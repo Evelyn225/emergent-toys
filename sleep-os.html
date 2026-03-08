@@ -317,6 +317,20 @@ body {
 /* ── Glitch overlay ──────────────────────────────────────────── */
 #glitch { position: fixed; inset: 0; z-index: 99998; pointer-events: none; display: none; }
 @keyframes void-blink { 50% { opacity: 0; } }
+/* ── Wallpaper swatches ──────────────────────────────────────── */
+.wp-swatch .wp-thumb { border: 2px solid #808080; }
+.wp-swatch.wp-selected > div:first-child { border-color: #000080; outline: 1px solid #fff; }
+.wp-swatch:hover > div:first-child { border-color: #000080; }
+@keyframes eb-battle { 0% { background-position: 0 0; } 100% { background-position: 108px 0; } }
+@keyframes eb-cave {
+  0%   { filter: hue-rotate(0deg)   brightness(1);   }
+  50%  { filter: hue-rotate(40deg)  brightness(1.35); }
+  100% { filter: hue-rotate(-25deg) brightness(0.75); }
+}
+@keyframes eb-magicant {
+  0%,100% { filter: hue-rotate(0deg)  brightness(1);   }
+  50%     { filter: hue-rotate(15deg) brightness(1.1); }
+}
 @keyframes glitch-shift {
   0%   { transform: translate(0,0); filter: none; }
   15%  { transform: translate(-3px,0); filter: hue-rotate(90deg) saturate(3); }
@@ -419,6 +433,9 @@ body {
     <div class="sm-item" onclick="closeStart();openSysmon()">
       <span class="sm-icon">📊</span><span>System Monitor</span>
     </div>
+    <div class="sm-item" onclick="closeStart();openAppearance()">
+      <span class="sm-icon">🖼️</span><span>Appearance</span>
+    </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="window.location='index.html'">
       <span class="sm-icon">🌐</span><span>Return to Eve Net</span>
@@ -468,6 +485,111 @@ const DESKTOP_ICONS = [
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
 ];
+
+// ─────────────────────────────────────────────────────────────────
+// WALLPAPERS
+// ─────────────────────────────────────────────────────────────────
+const WALLPAPERS = [
+  {
+    id: 'default', name: 'Default', emoji: '🟦',
+    bg: 'background:#008080;'
+  },
+  {
+    id: 'magicant', name: 'Magicant', emoji: '🌸',
+    bg: `background:
+      radial-gradient(ellipse 180px 65px at 20% 28%, rgba(255,255,255,0.75) 0%, transparent 65%),
+      radial-gradient(ellipse 120px 45px at 66% 20%, rgba(255,255,255,0.55) 0%, transparent 65%),
+      radial-gradient(ellipse 90px 35px at 48% 58%, rgba(255,255,255,0.4) 0%, transparent 65%),
+      linear-gradient(180deg,#c84890 0%,#e070b0 22%,#f0a0d0 48%,#f8d0ee 75%,#fce4ff 100%);
+    animation:eb-magicant 7s ease-in-out infinite alternate;`
+  },
+  {
+    id: 'onett', name: 'Onett', emoji: '🌤️',
+    bg: `background:
+      radial-gradient(ellipse 155px 50px at 22% 26%, rgba(255,255,255,0.82) 0%, transparent 58%),
+      radial-gradient(ellipse 95px 38px at 62% 18%, rgba(255,255,255,0.62) 0%, transparent 58%),
+      linear-gradient(180deg,#3a80cc 0%,#5aaae0 32%,#88c8f0 40%,#52b050 42%,#3a9038 54%,#2a7028 100%);`
+  },
+  {
+    id: 'battle', name: 'Battle!', emoji: '⚡',
+    bg: `background: repeating-linear-gradient(
+      -45deg,
+      #cc0000 0px,  #cc0000 18px,
+      #e04000 18px, #e04000 36px,
+      #e89000 36px, #e89000 54px,
+      #18a838 54px, #18a838 72px,
+      #1858cc 72px, #1858cc 90px,
+      #7800c0 90px, #7800c0 108px
+    );
+    animation:eb-battle 0.65s linear infinite;`
+  },
+  {
+    id: 'summers', name: 'Summers', emoji: '🏖️',
+    bg: `background:
+      radial-gradient(ellipse 300% 35% at 50% 43%, rgba(255,150,30,0.28) 0%, transparent 100%),
+      linear-gradient(180deg,
+        #a83000 0%,#d86020 12%,#f09040 24%,#f8c858 34%,
+        #5090d8 35%,#3070b8 54%,
+        #c0a050 55%,#d0b468 100%);`
+  },
+  {
+    id: 'saturn', name: 'Saturn Valley', emoji: '🪨',
+    bg: `background:
+      radial-gradient(circle at 28% 72%, rgba(130,65,10,0.7) 0%, transparent 42%),
+      radial-gradient(circle at 72% 82%, rgba(90,35,5,0.55) 0%, transparent 38%),
+      radial-gradient(circle at 58% 18%, rgba(150,85,20,0.45) 0%, transparent 52%),
+      linear-gradient(180deg,#180600 0%,#3a1504 22%,#582808 48%,#7a3c12 68%,#481c04 100%);`
+  },
+  {
+    id: 'cave', name: 'Cave of the Past', emoji: '🕳️',
+    bg: `background:
+      radial-gradient(circle at 50% 50%, #1a0038 0%, #0c0022 45%, #000006 100%);
+    animation:eb-cave 5s ease-in-out infinite alternate;`
+  },
+];
+
+let currentWallpaper = 'default';
+
+function applyWallpaper(id) {
+  const wp = WALLPAPERS.find(w => w.id === id);
+  if (!wp) return;
+  currentWallpaper = id;
+  const bg = document.getElementById('desktop-bg');
+  bg.style.cssText = wp.bg;
+  // Re-render swatch selection if window open
+  document.querySelectorAll('.wp-swatch').forEach(s => {
+    s.classList.toggle('wp-selected', s.dataset.id === id);
+  });
+}
+
+function openAppearance() {
+  if (!mkWin({ id:'appearance', title:'Appearance', icon:'🖼️', w:370, h:270, x:130, y:90, menubar:false, statusbar:false })) return;
+  const body = document.getElementById('wb-appearance');
+  body.style.cssText = 'padding:10px;overflow:auto;';
+  body.innerHTML = `
+    <div style="font-size:11px;margin-bottom:8px;">Wallpaper:</div>
+    <div id="wp-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>`;
+  const grid = document.getElementById('wp-grid');
+  WALLPAPERS.forEach(wp => {
+    const item = document.createElement('div');
+    item.dataset.id = wp.id;
+    item.className = 'wp-swatch' + (wp.id === currentWallpaper ? ' wp-selected' : '');
+    item.style.cssText = 'cursor:default;display:flex;flex-direction:column;align-items:center;gap:3px;';
+    const thumb = document.createElement('div');
+    thumb.style.cssText = `width:72px;height:50px;border:2px solid #808080;box-sizing:border-box;overflow:hidden;flex-shrink:0;`;
+    // Apply just background (and animation) to thumb via a nested div
+    const fill = document.createElement('div');
+    fill.style.cssText = `width:100%;height:100%;${wp.bg}`;
+    thumb.appendChild(fill);
+    const label = document.createElement('div');
+    label.textContent = wp.name;
+    label.style.cssText = 'font-size:10px;text-align:center;line-height:1.3;max-width:72px;word-break:break-word;';
+    item.appendChild(thumb);
+    item.appendChild(label);
+    item.addEventListener('click', () => applyWallpaper(wp.id));
+    grid.appendChild(item);
+  });
+}
 
 const BIOS_LINES = [
   'sleepOS BIOS v2.33b  (C) MMXXI Eve Networks Corp.',
