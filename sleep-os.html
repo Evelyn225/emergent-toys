@@ -1116,6 +1116,7 @@ function openTerminal() {
   print('');
 
   let cmdHistory = [], histIdx = -1;
+  const termFS = { dirs: new Set(), files: new Map() };
 
   const CMDS = {
     help: () => {
@@ -1125,7 +1126,9 @@ function openTerminal() {
         '  DIR, LS         — list directory',
         '  CD [path]       — change directory',
         '  MKDIR [name]    — create directory',
-        '  DEL, RM [file]  — delete a file',
+        '  TOUCH [name]    — create empty file',
+        '  ECHO text>file  — write text to file (>> to append)',
+        '  DEL, RM [file]  — delete a file or directory',
         '  COPY [src] [dst]— copy a file',
         '  MOVE, MV        — move a file',
         '  TYPE [file]     — print file contents',
@@ -1165,10 +1168,20 @@ function openTerminal() {
         '11/13/2024  03:17        0    void.tmp',
         '11/13/2024  ??:??       ??    daemon.core',
         '11/13/2024  ??:??       ??    ?????.exe',
-        '',
-        '  8 File(s)    [error reading total size]',
-        '  3 Dir(s)     [error reading free space]',
       ].forEach(l => print(l));
+      const now = new Date();
+      const dateStr = `${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')}/${now.getFullYear()}`;
+      const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      termFS.dirs.forEach(d => print(`${dateStr}  ${timeStr}    <DIR>    ${d}`));
+      termFS.files.forEach((content, name) => {
+        const size = content.length.toString().padStart(7,' ');
+        print(`${dateStr}  ${timeStr}  ${size}    ${name}`);
+      });
+      print('');
+      const totalFiles = 8 + termFS.files.size;
+      const totalDirs = 3 + termFS.dirs.size;
+      print(`  ${totalFiles} File(s)    [error reading total size]`);
+      print(`  ${totalDirs} Dir(s)     [error reading free space]`);
     },
     ls: (args) => CMDS.dir(args),
     ps: () => {
@@ -1241,18 +1254,26 @@ function openTerminal() {
     },
     mkdir: (args) => {
       if (!args) { print('Usage: MKDIR [name]'); return; }
-      print(`Creating directory '${args}'...`);
-      setTimeout(() => {
-        print(`Directory created: C:\\sleepOS\\${args.toUpperCase()}`);
-        print('WARNING: The new directory is indistinguishable from void.tmp.');
-        print('Recommend deletion.');
-      }, 600);
+      const name = args.trim().toUpperCase();
+      if (termFS.dirs.has(name) || ['PROJECTS','.','..'].includes(name)) {
+        print(`A subdirectory or file ${name} already exists.`); return;
+      }
+      termFS.dirs.add(name);
+      print(`Directory created: C:\\sleepOS\\${name}`);
+    },
+    touch: (args) => {
+      if (!args) { print('Usage: TOUCH [filename]'); return; }
+      const name = args.trim();
+      if (termFS.files.has(name)) { print(`File already exists: ${name}`); return; }
+      termFS.files.set(name, '');
+      print(`Created: ${name}`);
     },
     del: (args) => {
-      const f = (args || '').toLowerCase().trim();
+      const raw = (args || '').trim();
+      const f = raw.toLowerCase();
       if (!f) { print('Usage: DEL [filename]'); return; }
       if (f === 'void.tmp') {
-        print(`Deleting ${args}...`);
+        print(`Deleting ${raw}...`);
         setTimeout(() => {
           print('Delete failed.', '#ff4444');
           print('void.tmp cannot be deleted.');
@@ -1260,14 +1281,20 @@ function openTerminal() {
           print('void.tmp will always be here.');
         }, 500);
       } else if (f === 'daemon.core') {
-        print(`Deleting ${args}...`);
+        print(`Deleting ${raw}...`);
         setTimeout(() => { print('Access denied.', '#ff4444'); print('The file is currently in use by: SYSTEM, UNKNOWN, UNKNOWN, UNKNOWN'); }, 400);
       } else if (f === '?????.exe') {
         print('You cannot delete this file.');
         print('It deleted itself before you asked.');
         print('It is still here.');
+      } else if (termFS.files.has(raw)) {
+        termFS.files.delete(raw);
+        print(`Deleted: ${raw}`);
+      } else if (termFS.dirs.has(raw.toUpperCase())) {
+        termFS.dirs.delete(raw.toUpperCase());
+        print(`Removed directory: ${raw.toUpperCase()}`);
       } else {
-        print(`File not found: ${args}`);
+        print(`File not found: ${raw}`);
       }
     },
     rm: (args) => CMDS.del(args),
@@ -1289,7 +1316,7 @@ function openTerminal() {
     },
     mv: (args) => CMDS.move(args),
     tree: () => {
-      [
+      const staticEntries = [
         'C:\\sleepOS',
         '├── WELCOME.README',
         '├── TERMINAL.EXE',
@@ -1297,13 +1324,25 @@ function openTerminal() {
         '├── void.tmp',
         '├── daemon.core              [UNREADABLE]',
         '├── ?????.exe                [DO NOT EXECUTE]',
-        '└── PROJECTS\\',
-        '    ├── sand playground',
-        '    ├── bug hotline',
-        '    ├── fireworks',
-        '    ├── ... (17 more objects)',
-        '    └── [1 object cannot be listed]',
-      ].forEach(l => print(l));
+      ];
+      staticEntries.forEach(l => print(l));
+      const userDirs = [...termFS.dirs];
+      const userFiles = [...termFS.files.keys()];
+      const allUser = [...userDirs.map(d => `<DIR> ${d}`), ...userFiles];
+      allUser.forEach((name, i) => {
+        const last = i === allUser.length - 1 && userDirs.length === 0;
+        print(`├── ${name}`);
+      });
+      userDirs.forEach((d, i) => {
+        const last = i === userDirs.length - 1;
+        print(`${last ? '└' : '├'}── ${d}\\`);
+      });
+      print('└── PROJECTS\\');
+      print('    ├── sand playground');
+      print('    ├── bug hotline');
+      print('    ├── fireworks');
+      print('    ├── ... (17 more objects)');
+      print('    └── [1 object cannot be listed]');
     },
     taskkill: (args) => {
       const pid = (args || '').replace(/\D/g,'');
@@ -1363,7 +1402,8 @@ function openTerminal() {
       ].forEach(l => print(l));
     },
     cat: (args) => {
-      const f = (args||'').toLowerCase().trim();
+      const raw = (args||'').trim();
+      const f = raw.toLowerCase();
       if (f === 'welcome.readme') {
         print('sleepOS v0.903b2 — WELCOME FILE');
         print('(open WELCOME.README for full contents)');
@@ -1374,8 +1414,12 @@ function openTerminal() {
         print('Error: Cannot read daemon.core', '#ff4444');
         print('  The file is currently being written.');
         print('  It is always being written.');
+      } else if (termFS.files.has(raw)) {
+        const content = termFS.files.get(raw);
+        if (content === '') { print('(empty file)'); }
+        else { content.split('\n').forEach(l => print(l)); }
       } else {
-        print('File not found: ' + (args || '(no argument given)'));
+        print('File not found: ' + (raw || '(no argument given)'));
       }
     },
     start: (args) => {
@@ -1427,6 +1471,20 @@ function openTerminal() {
       const raw = inp.value.trim(); inp.value = ''; histIdx = -1;
       print('C:\\sleepOS> ' + raw);
       if (raw) { cmdHistory.push(raw); if (cmdHistory.length > 50) cmdHistory.shift(); }
+
+      // Handle echo text > filename redirection
+      const redirectMatch = raw.match(/^echo\s+(.*?)\s*>>\s*(.+)$/i) || raw.match(/^echo\s+(.*?)\s*>\s*(.+)$/i);
+      if (redirectMatch) {
+        const append = raw.match(/^echo\s+(.*?)\s*>>\s*(.+)$/i) !== null;
+        const content = redirectMatch[1].replace(/^"|"$/g,'');
+        const fname = redirectMatch[2].trim();
+        const existing = termFS.files.get(fname) ?? '';
+        termFS.files.set(fname, append && existing ? existing + '\n' + content : content);
+        print(`${append ? 'Appended' : 'Wrote'}: ${fname}`);
+        print('');
+        return;
+      }
+
       const parts = raw.split(/\s+/);
       const cmd = parts[0].toLowerCase();
       const args = parts.slice(1).join(' ');
