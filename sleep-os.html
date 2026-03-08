@@ -709,6 +709,9 @@ function addTbBtn(id, title, icon) {
 // ─────────────────────────────────────────────────────────────────
 function updateClock() {
   const now = new Date();
+  if (window._clockCorrupted && Math.random() < 0.75) {
+    document.getElementById('clock').textContent = '??:??'; return;
+  }
   const glitch = Math.random() < 0.004;
   const h = glitch ? Math.floor(Math.random() * 24) : now.getHours();
   const m = glitch ? Math.floor(Math.random() * 60) : now.getMinutes();
@@ -1655,6 +1658,31 @@ function openUnknown() {
     </div>`;
 }
 
+function applyUnknownEffect(n) {
+  triggerGlitch();
+  if (n === 7) {
+    // Clock corrupts
+    window._clockCorrupted = true;
+  } else if (n === 8) {
+    // Desktop icon names become ?????
+    document.querySelectorAll('.di-name').forEach(el => { el.textContent = '?????'; });
+  } else if (n === 9) {
+    // All open window titles and taskbar buttons become ?????.exe
+    document.querySelectorAll('[id^="wtitle-"]').forEach(el => { el.textContent = '?????.exe'; });
+    document.querySelectorAll('.taskbar-btn span:last-child').forEach(el => { el.textContent = '?????.exe'; });
+  } else if (n >= 10) {
+    // Desktop darkens further each run
+    let ov = document.getElementById('unk-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'unk-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:#000;pointer-events:none;z-index:99990;opacity:0;transition:opacity 2s;';
+      document.body.appendChild(ov);
+    }
+    ov.style.opacity = Math.min(0.88, (parseFloat(ov.style.opacity) || 0) + 0.09);
+  }
+}
+
 function runUnknown() {
   unknownCount++;
   const msgs = [
@@ -1666,6 +1694,7 @@ function runUnknown() {
     'File executed.\nFile not found.\nFile was never here.',
   ];
   const idx = Math.min(unknownCount - 1, msgs.length - 1);
+  if (unknownCount >= 7) applyUnknownEffect(unknownCount);
   const rid = 'unk-result-' + Date.now();
   if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:400, h:260, x:160+Math.random()*120, y:80+Math.random()*80, menubar:false, statusbar:false })) return;
   document.getElementById('wb-' + rid).innerHTML = `
