@@ -1934,10 +1934,10 @@ function openBrowser() {
     <h1>🌐 sleepWEB — Start Page</h1>
     <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${links}</div></div>
     <div class="sec"><h2>The Web (may not load in frame)</h2><div class="grid">
-      <a class="lnk" href="https://en.wikipedia.org/wiki/Special:Random" target="_blank">📖 Wikipedia: Random</a>
-      <a class="lnk" href="https://archive.org" target="_blank">📦 Internet Archive</a>
-      <a class="lnk" href="https://neal.fun" target="_blank">🎮 Neal.fun</a>
-      <a class="lnk" href="https://poolsuite.net" target="_blank">📻 Poolsuite FM</a>
+      <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://en.wikipedia.org/wiki/Special:Random'},'*');return false;">📖 Wikipedia: Random</a>
+      <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://archive.org'},'*');return false;">📦 Internet Archive</a>
+      <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://neal.fun'},'*');return false;">🎮 Neal.fun</a>
+      <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://poolsuite.net'},'*');return false;">📻 Poolsuite FM</a>
     </div></div>
     </body></html>`;
   }
