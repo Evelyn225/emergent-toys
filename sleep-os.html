@@ -1820,7 +1820,7 @@ function renderVoid() {
 let unknownCount = 0;
 function openUnknown() {
   const wid = 'unk-warn-' + Date.now();
-  if (!mkWin({ id:wid, title:'Warning', icon:'⚠️', w:300, h:155, x:200+Math.random()*100, y:120+Math.random()*80, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:wid, title:'Warning', icon:'⚠️', w:300, h:195, x:200+Math.random()*100, y:120+Math.random()*80, menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-' + wid).innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">⚠️</div>
@@ -1920,7 +1920,7 @@ function openBrowser() {
   // ── home page ──────────────────────────────────────────────────
   function buildHome() {
     const links = PROJECTS.map(p =>
-      `<a class="lnk" href="${p.file}" target="_self">${p.emoji} ${p.name}</a>`
+      `<a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'${p.file}'},'*');return false;">${p.emoji} ${p.name}</a>`
     ).join('');
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       body{margin:0;background:#c0c0c0;font-family:'Courier New',monospace;font-size:12px;}
@@ -2038,6 +2038,19 @@ function openBrowser() {
     if (ws) ws.textContent = 'Done';
   });
   iframe.addEventListener('error', () => showError(lastAttemptedUrl));
+
+  // ── handle nav messages from srcdoc home page ──────────────────
+  function onBrowserMsg(e) {
+    if (e.data && e.data.type === 'browser-nav') navigate(e.data.url);
+  }
+  window.addEventListener('message', onBrowserMsg);
+  // clean up when window closes
+  const winEl = document.getElementById('win-browser');
+  if (winEl) new MutationObserver((_, obs) => {
+    if (!document.getElementById('win-browser')) {
+      window.removeEventListener('message', onBrowserMsg); obs.disconnect();
+    }
+  }).observe(document.getElementById('desktop'), { childList: true });
 
   // ── button wiring ──────────────────────────────────────────────
   document.getElementById('br-back').addEventListener('click', () => {
