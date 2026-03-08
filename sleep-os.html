@@ -462,7 +462,8 @@ const DESKTOP_ICONS = [
   { name: 'TERMINAL.EXE',   emoji: '💻', action: 'openTerminal' },
   { name: 'SYSMON.EXE',     emoji: '📊', action: 'openSysmon' },
   { name: 'BROWSER.EXE',    emoji: '🌐', action: 'openBrowser' },
-  { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
+  { name: 'DEFRAG.EXE',    emoji: '🧩', action: 'openDefrag' },
+  { name: 'daemon.core',   emoji: '👁️',  action: 'openDaemon' },
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
 ];
@@ -1261,6 +1262,8 @@ function openTerminal() {
         'sysmon':         openSysmon,
         'browser.exe':    openBrowser,
         'browser':        openBrowser,
+        'defrag.exe':     openDefrag,
+        'defrag':         openDefrag,
         'daemon.core':    openDaemon,
         'void.tmp':       openVoid,
         '?????.exe':      openUnknown,
@@ -1309,6 +1312,8 @@ function openTerminal() {
         'sysmon':         () => { print('Starting SYSMON.EXE...'); setTimeout(openSysmon, 300); },
         'browser.exe':    () => { print('Starting BROWSER.EXE...'); setTimeout(openBrowser, 300); },
         'browser':        () => { print('Starting BROWSER.EXE...'); setTimeout(openBrowser, 300); },
+        'defrag.exe':     () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
+        'defrag':         () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
         'terminal.exe':   () => { print('TERMINAL.EXE is already running.'); print('You are inside it.'); },
         'daemon.core':    () => { print('Opening daemon.core...'); print('It is already open.'); print('It has always been open.'); setTimeout(openDaemon, 400); },
         'void.tmp':       () => { print('Opening void.tmp...'); setTimeout(openVoid, 300); },
@@ -1397,6 +1402,166 @@ function openSysmon() {
   wins['sysmon']._interval = interval;
 }
 
+function openDefrag() {
+  if (!mkWin({ id:'defrag', title:'DEFRAG.EXE — Disk Defragmenter', icon:'🧩', w:560, h:400, x:100, y:60 })) return;
+
+  const mb = document.getElementById('mb-defrag');
+  mb.innerHTML = `<span class="menu-item">Drive</span><span class="menu-item">Help</span>`;
+
+  const body = document.getElementById('wb-defrag');
+  const ws   = document.getElementById('ws-defrag');
+  body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
+
+  const COLS = 40, ROWS = 18;
+  const TOTAL = COLS * ROWS;
+  // States: 0=free(white), 1=used(blue), 2=optimized(green), 3=active(red)
+  const cells = Array.from({ length: TOTAL }, (_, i) => i < TOTAL * 0.68 ? 1 : 0);
+  // Shuffle to scatter
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+
+  const COLORS = ['#fff', '#0000aa', '#00aa00', '#aa0000'];
+
+  // Drive info row
+  const infoRow = document.createElement('div');
+  infoRow.style.cssText = 'display:flex;gap:16px;align-items:center;border:2px solid;border-color:#808080 #fff #fff #808080;padding:4px 8px;background:#fff;';
+  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-pct" style="margin-left:auto;">0% optimized</span>`;
+  body.appendChild(infoRow);
+
+  // Grid
+  const gridWrap = document.createElement('div');
+  gridWrap.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;padding:4px;background:#000;flex:1;overflow:hidden;';
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'display:block;width:100%;height:100%;image-rendering:pixelated;';
+  gridWrap.appendChild(canvas);
+  body.appendChild(gridWrap);
+
+  function drawGrid() {
+    const W = gridWrap.clientWidth - 8, H = gridWrap.clientHeight - 8;
+    canvas.width = COLS; canvas.height = ROWS;
+    const ctx = canvas.getContext('2d');
+    for (let i = 0; i < TOTAL; i++) {
+      ctx.fillStyle = COLORS[cells[i]];
+      ctx.fillRect(i % COLS, Math.floor(i / COLS), 1, 1);
+    }
+  }
+
+  // Progress bar
+  const pbWrap = document.createElement('div');
+  pbWrap.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;height:18px;background:#c0c0c0;position:relative;overflow:hidden;';
+  const pbFill = document.createElement('div');
+  pbFill.style.cssText = 'position:absolute;left:0;top:0;height:100%;width:0%;background:#000080;transition:width 0.4s linear;';
+  const pbLabel = document.createElement('div');
+  pbLabel.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;mix-blend-mode:difference;color:#fff;';
+  pbLabel.textContent = '0%';
+  pbWrap.appendChild(pbFill); pbWrap.appendChild(pbLabel);
+  body.appendChild(pbWrap);
+
+  // File status
+  const fileLabel = document.createElement('div');
+  fileLabel.style.cssText = 'font-size:10px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  fileLabel.textContent = 'Press Start to begin defragmentation.';
+  body.appendChild(fileLabel);
+
+  // Buttons
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;';
+  const startBtn = document.createElement('button');
+  startBtn.className = 'dlg-btn primary'; startBtn.textContent = 'Start';
+  const stopBtn  = document.createElement('button');
+  stopBtn.className = 'dlg-btn'; stopBtn.textContent = 'Stop'; stopBtn.disabled = true;
+  btnRow.appendChild(startBtn); btnRow.appendChild(stopBtn);
+  body.appendChild(btnRow);
+
+  const FILES = [
+    'C:\\WINDOWS\\SYSTEM\\kernel32.dll', 'C:\\DREAMS\\fragment_001.tmp',
+    'C:\\USERS\\you\\desktop\\memory.old', 'C:\\VOID\\unresolved.dat',
+    'C:\\DREAMS\\fragment_047.tmp', 'C:\\WINDOWS\\TEMP\\~DF3A2.tmp',
+    'C:\\USERS\\you\\documents\\letter_unsent.txt', 'C:\\DREAMS\\fragment_112.tmp',
+    'C:\\SYSTEM32\\observer.dll', 'C:\\DREAMS\\fragment_????.tmp',
+    'C:\\USERS\\you\\pictures\\face.bmp', 'C:\\VOID\\pending.inf',
+    'C:\\DREAMS\\core_loop.dat', 'C:\\SLEEP\\log_0000.bin',
+    'C:\\USERS\\you\\desktop\\todo.txt', 'C:\\DREAMS\\fragment_[CORRUPTED]',
+    'C:\\WINDOWS\\SYSTEM\\time.dll', 'C:\\VOID\\[FILE NAME UNREADABLE]',
+    'C:\\USERS\\you\\documents\\this_file.txt',
+  ];
+  const FINAL_MSG = [
+    'Defragmentation complete.',
+    '1 file could not be moved.',
+    '',
+    'C:\\VOID\\[FILE NAME UNREADABLE] is in use by another process.',
+    'It has always been in use.',
+  ];
+
+  let running = false, timer = null, progress = 0, optimized = 0, fileIdx = 0;
+  let activeCell = -1;
+
+  function step() {
+    if (!wins['defrag']) { clearTimeout(timer); return; }
+    // Move one block: find first non-optimized used block, mark active briefly
+    let moved = false;
+    for (let i = 0; i < TOTAL; i++) {
+      if (cells[i] === 1) {
+        if (activeCell >= 0) cells[activeCell] = 0;
+        activeCell = i;
+        cells[i] = 3; // active/red
+        setTimeout(() => {
+          if (cells[i] === 3) { cells[i] = 2; optimized++; drawGrid(); }
+        }, 120);
+        moved = true; break;
+      }
+    }
+    progress = Math.min(100, Math.round((optimized / (TOTAL * 0.68)) * 100));
+    pbFill.style.width = progress + '%';
+    pbLabel.textContent = progress + '%';
+    document.getElementById('df-pct').textContent = progress + '% optimized';
+    fileLabel.textContent = 'Reading: ' + (FILES[fileIdx % FILES.length]);
+    fileIdx++;
+    drawGrid();
+
+    if (!moved || progress >= 100) {
+      // Done
+      running = false; startBtn.disabled = false; stopBtn.disabled = true;
+      pbFill.style.width = '100%'; pbLabel.textContent = '100%';
+      fileLabel.textContent = FINAL_MSG.join('  ');
+      if (ws) ws.textContent = 'Complete — 1 file could not be moved';
+      return;
+    }
+    timer = setTimeout(step, 60 + Math.random() * 60);
+    if (ws) ws.textContent = 'Defragmenting C:\\ — ' + progress + '%';
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (running) return;
+    running = true; startBtn.disabled = true; stopBtn.disabled = false;
+    fileLabel.textContent = 'Analyzing drive...';
+    if (ws) ws.textContent = 'Defragmenting C:\\ — 0%';
+    setTimeout(step, 600);
+  });
+  stopBtn.addEventListener('click', () => {
+    running = false; clearTimeout(timer);
+    startBtn.disabled = false; stopBtn.disabled = true;
+    fileLabel.textContent = 'Defragmentation stopped.';
+    if (ws) ws.textContent = 'Stopped';
+  });
+
+  // Legend
+  const legend = document.createElement('div');
+  legend.style.cssText = 'display:flex;gap:10px;font-size:10px;align-items:center;';
+  [['#fff','Free'],['#0000aa','Used'],['#00aa00','Optimized'],['#aa0000','Reading']].forEach(([c,l]) => {
+    const swatch = document.createElement('span');
+    swatch.style.cssText = `display:inline-block;width:10px;height:10px;background:${c};border:1px solid #808080;margin-right:2px;`;
+    const span = document.createElement('span');
+    span.appendChild(swatch); span.appendChild(document.createTextNode(l));
+    legend.appendChild(span);
+  });
+  body.appendChild(legend);
+
+  setTimeout(drawGrid, 50);
+}
+
 function openDaemon() {
   if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:220, x:200, y:140, menubar:false, statusbar:false })) return;
   document.getElementById('wb-daemon').innerHTML = `
@@ -1462,7 +1627,7 @@ function runUnknown() {
   ];
   const idx = Math.min(unknownCount - 1, msgs.length - 1);
   const rid = 'unk-result-' + Date.now();
-  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:280, h:155, x:160+Math.random()*180, y:90+Math.random()*120, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:400, h:260, x:160+Math.random()*120, y:80+Math.random()*80, menubar:false, statusbar:false })) return;
   document.getElementById('wb-' + rid).innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">❓</div>
