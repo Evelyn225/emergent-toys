@@ -408,6 +408,35 @@ body {
   border: none; outline: none; resize: none; overflow: auto;
 }
 
+/* ── Syntax-highlighting editor (notepad) ─────────────────────── */
+.editor-wrap {
+  position: relative; flex: 1; min-height: 0; overflow: hidden;
+}
+.editor-wrap .note-textarea {
+  position: absolute; inset: 0; height: auto;
+  color: transparent; caret-color: #000;
+  background: transparent;
+  z-index: 2; tab-size: 2;
+}
+.editor-highlight {
+  position: absolute; inset: 0;
+  padding: 8px; box-sizing: border-box;
+  font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-all;
+  overflow: auto; pointer-events: none;
+  background: #fff; color: #000; z-index: 1;
+}
+/* token colours */
+.tok-kw  { color: #0000cc; }
+.tok-str { color: #a31515; }
+.tok-num { color: #098658; }
+.tok-cmt { color: #6a9955; font-style: italic; }
+.tok-tag { color: #800000; }
+.tok-att { color: #dd4400; }
+.tok-fn  { color: #795e26; }
+.tok-var { color: #001080; }
+.tok-hdr { color: #0000cc; font-weight: bold; }
+
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 14px; }
@@ -1432,6 +1461,120 @@ function openWelcome() {
   buildMenu();
 }
 
+// ── Syntax highlighting ───────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function detectLang(fname) {
+  if (!fname) return 'txt';
+  const ext = (fname.split('.').pop() || '').toLowerCase();
+  return { js:'js', mjs:'js', ts:'js', jsx:'js', tsx:'js',
+           html:'html', htm:'html',
+           css:'css', scss:'css',
+           json:'json',
+           md:'md', markdown:'md',
+           py:'py',
+           script:'script' }[ext] || 'txt';
+}
+
+const LANG_LABELS = { js:'JavaScript', html:'HTML', css:'CSS', json:'JSON', md:'Markdown', py:'Python', script:'.script', txt:'Plain Text' };
+
+// Each rule: { re (global regex), cls (CSS class) }
+const LANG_RULES = {
+  js: [
+    { re: /\/\*[\s\S]*?\*\//g,          cls: 'tok-cmt' },
+    { re: /\/\/[^\n]*/g,                 cls: 'tok-cmt' },
+    { re: /`(?:[^`\\]|\\.)*`/g,          cls: 'tok-str' },
+    { re: /"(?:[^"\\]|\\.)*"/g,          cls: 'tok-str' },
+    { re: /'(?:[^'\\]|\\.)*'/g,          cls: 'tok-str' },
+    { re: /\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|delete|typeof|instanceof|in|of|this|class|extends|import|export|default|try|catch|finally|throw|async|await|true|false|null|undefined|void|static|get|set|from)\b/g, cls: 'tok-kw' },
+    { re: /\b([A-Za-z_$][\w$]*)\s*(?=\()/g, cls: 'tok-fn' },
+    { re: /\b0x[\da-fA-F]+|\b\d+(\.\d+)?([eE][+-]?\d+)?\b/g, cls: 'tok-num' },
+  ],
+  html: [
+    { re: /<!--[\s\S]*?-->/g,            cls: 'tok-cmt' },
+    { re: /"[^"]*"/g,                    cls: 'tok-str' },
+    { re: /'[^']*'/g,                    cls: 'tok-str' },
+    { re: /\b[a-zA-Z-]+=(?=["'])/g,     cls: 'tok-att' },
+    { re: /<\/?[A-Za-z][A-Za-z0-9]*|>/g, cls: 'tok-tag' },
+  ],
+  css: [
+    { re: /\/\*[\s\S]*?\*\//g,           cls: 'tok-cmt' },
+    { re: /"[^"]*"|'[^']*'/g,            cls: 'tok-str' },
+    { re: /#[0-9a-fA-F]{3,8}\b/g,        cls: 'tok-num' },
+    { re: /\b\d+(\.\d+)?(px|em|rem|%|vh|vw|vmin|vmax|pt|cm|mm|s|ms|deg|fr)?\b/g, cls: 'tok-num' },
+    { re: /[.#:[\]A-Za-z*][^{;]*(?=\{)/g, cls: 'tok-fn' },
+    { re: /[\w-]+(?=\s*:)/g,             cls: 'tok-kw' },
+  ],
+  json: [
+    { re: /"(?:[^"\\]|\\.)*"\s*(?=:)/g,  cls: 'tok-att' },
+    { re: /"(?:[^"\\]|\\.)*"/g,           cls: 'tok-str' },
+    { re: /\b(true|false|null)\b/g,       cls: 'tok-kw' },
+    { re: /-?\b\d+(\.\d+)?([eE][+-]?\d+)?\b/g, cls: 'tok-num' },
+  ],
+  md: [
+    { re: /^#{1,6} .+/gm,               cls: 'tok-hdr' },
+    { re: /`[^`]+`/g,                    cls: 'tok-cmt' },
+    { re: /\*\*[^*\n]+\*\*|__[^_\n]+__/g, cls: 'tok-kw' },
+    { re: /\*[^*\n]+\*|_[^_\n]+_/g,     cls: 'tok-str' },
+    { re: /^\s*[-*+] /gm,               cls: 'tok-fn' },
+    { re: /\[[^\]]+\]\([^)]+\)/g,        cls: 'tok-fn' },
+  ],
+  py: [
+    { re: /"""[\s\S]*?"""|'''[\s\S]*?'''/g, cls: 'tok-str' },
+    { re: /#[^\n]*/g,                    cls: 'tok-cmt' },
+    { re: /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, cls: 'tok-str' },
+    { re: /\b(def|class|return|if|elif|else|for|while|in|not|and|or|is|import|from|as|try|except|finally|raise|with|lambda|pass|break|continue|yield|True|False|None|global|nonlocal|del|assert|async|await)\b/g, cls: 'tok-kw' },
+    { re: /\b([A-Za-z_]\w*)\s*(?=\()/g, cls: 'tok-fn' },
+    { re: /\b\d+(\.\d+)?\b/g,           cls: 'tok-num' },
+  ],
+  script: [
+    { re: /#[^\n]*/g,                    cls: 'tok-cmt' },
+    { re: /\/\/[^\n]*/g,                 cls: 'tok-cmt' },
+    { re: /\b(print|echo|set|wait|clear|touch|mkdir|del|rm|open|notepad|start|run)\b/gi, cls: 'tok-kw' },
+    { re: /\[(red|green|yellow|cyan|blue|white)\]/gi, cls: 'tok-fn' },
+    { re: /\$\w+/g,                      cls: 'tok-var' },
+    { re: /\b\d+\b/g,                    cls: 'tok-num' },
+  ],
+  txt: [],
+};
+
+function highlight(text, lang) {
+  const rules = LANG_RULES[lang] || [];
+  if (!rules.length) return escHtml(text);
+
+  // Collect all non-overlapping token intervals
+  const intervals = [];
+  for (let ri = 0; ri < rules.length; ri++) {
+    const { re, cls } = rules[ri];
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      intervals.push({ start: m.index, end: m.index + m[0].length, cls, ri });
+    }
+  }
+  // Sort by start; ties broken by rule order (lower ri = higher priority)
+  intervals.sort((a, b) => a.start !== b.start ? a.start - b.start : a.ri - b.ri);
+
+  // Sweep: drop intervals that overlap an already-chosen one
+  const chosen = [];
+  let coveredTo = 0;
+  for (const iv of intervals) {
+    if (iv.start >= coveredTo) { chosen.push(iv); coveredTo = iv.end; }
+  }
+
+  let result = '';
+  let cur = 0;
+  for (const iv of chosen) {
+    if (iv.start > cur) result += escHtml(text.slice(cur, iv.start));
+    result += `<span class="${iv.cls}">${escHtml(text.slice(iv.start, iv.end))}</span>`;
+    cur = iv.end;
+  }
+  if (cur < text.length) result += escHtml(text.slice(cur));
+  return result;
+}
+
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
@@ -1439,29 +1582,108 @@ function openNotepad(filename) {
   const id = filename ? 'notepad-' + filename : 'notepad-' + (++_notepadCount);
   const displayName = filename || 'untitled.txt';
   const initial = filename ? (termFS.files.get(filename) ?? '') : '';
-  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:420, h:320 })) return;
+  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
 
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
   body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
 
+  // ── editor container (highlight div + textarea overlay) ──────
+  const wrap = document.createElement('div');
+  wrap.className = 'editor-wrap';
+
+  const hl = document.createElement('div');
+  hl.className = 'editor-highlight';
+
   const ta = document.createElement('textarea');
   ta.className = 'note-textarea';
   ta.value = initial;
-  body.appendChild(ta);
+  ta.spellcheck = false;
+
+  wrap.appendChild(hl);
+  wrap.appendChild(ta);
+  body.appendChild(wrap);
 
   let currentFile = filename || null;
+  let lang = detectLang(filename);
+
+  function renderHighlight() {
+    hl.innerHTML = highlight(ta.value, lang) + '\n'; // trailing \n keeps last-line height correct
+    syncScroll();
+  }
+  function syncScroll() {
+    hl.scrollTop  = ta.scrollTop;
+    hl.scrollLeft = ta.scrollLeft;
+  }
+
+  renderHighlight();
+
+  const lineCount = () => ta.value.split('\n').length;
 
   const updateStatus = () => {
-    if (ws) ws.textContent = (currentFile || 'untitled.txt') + '  \u2014  ' + ta.value.length + ' bytes';
+    if (!ws) return;
+    const fname = currentFile || 'untitled.txt';
+    ws.textContent = `${fname}  —  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
   };
-  ta.addEventListener('input', updateStatus);
+
+  ta.addEventListener('input', () => { renderHighlight(); updateStatus(); });
+  ta.addEventListener('scroll', syncScroll);
   updateStatus();
+
+  // ── IDE keybindings ──────────────────────────────────────────
+  ta.addEventListener('keydown', e => {
+    // Tab → insert 2 spaces
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = ta.selectionStart, en = ta.selectionEnd;
+      ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(en);
+      ta.selectionStart = ta.selectionEnd = s + 2;
+      renderHighlight(); updateStatus();
+    }
+    // Enter → auto-indent (match leading whitespace of current line)
+    if (e.key === 'Enter') {
+      const s = ta.selectionStart;
+      const lineStart = ta.value.lastIndexOf('\n', s - 1) + 1;
+      const indent = ta.value.slice(lineStart).match(/^[ \t]*/)[0];
+      if (indent.length) {
+        e.preventDefault();
+        ta.value = ta.value.slice(0, s) + '\n' + indent + ta.value.slice(ta.selectionEnd);
+        ta.selectionStart = ta.selectionEnd = s + 1 + indent.length;
+        renderHighlight(); updateStatus();
+      }
+    }
+    // Ctrl+S / Cmd+S → save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      currentFile ? save(currentFile) : promptSaveAs();
+    }
+    // Ctrl+/ → toggle line comment
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault();
+      const cmt = { js:'//', html:'<!--', css:'/*', py:'#', script:'#', md:'', txt:'', json:'' }[lang] || '//';
+      if (!cmt) return;
+      const s = ta.selectionStart;
+      const lineStart = ta.value.lastIndexOf('\n', s - 1) + 1;
+      const lineEnd = ta.value.indexOf('\n', s);
+      const line = ta.value.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+      const trimmed = line.trimStart();
+      const prefix = line.slice(0, line.length - trimmed.length);
+      let newLine;
+      if (trimmed.startsWith(cmt)) newLine = prefix + trimmed.slice(cmt.length);
+      else newLine = prefix + cmt + trimmed;
+      ta.value = ta.value.slice(0, lineStart) + newLine + (lineEnd === -1 ? '' : ta.value.slice(lineEnd));
+      ta.selectionStart = ta.selectionEnd = s + (newLine.length - line.length);
+      renderHighlight(); updateStatus();
+    }
+  });
 
   function save(fname) {
     termFS.files.set(fname, ta.value);
     currentFile = fname;
+    // re-detect lang if filename changed
+    const newLang = detectLang(fname);
+    if (newLang !== lang) { lang = newLang; renderHighlight(); }
     const titleEl = document.getElementById('wtitle-' + id);
     if (titleEl) titleEl.textContent = fname + ' \u2014 Notepad';
     updateStatus();
@@ -1472,20 +1694,29 @@ function openNotepad(filename) {
     if (name) save(name.trim());
   }
 
+  function setLang(l) { lang = l; renderHighlight(); updateStatus(); }
+
   function buildMenu() {
     mb.innerHTML = '';
     [
       { label: 'File', items: [
-        { label: 'New',       action: () => openNotepad() },
+        { label: 'New',           action: () => openNotepad() },
         '-',
-        { label: 'Save',      action: () => currentFile ? save(currentFile) : promptSaveAs() },
+        { label: 'Save  Ctrl+S', action: () => currentFile ? save(currentFile) : promptSaveAs() },
         { label: 'Save As\u2026', action: promptSaveAs },
         '-',
-        { label: 'Close',     action: () => closeWin(id) },
+        { label: 'Close',         action: () => closeWin(id) },
       ]},
       { label: 'Edit', items: [
-        { label: 'Select All', action: () => { ta.focus(); ta.select(); } },
+        { label: 'Select All',    action: () => { ta.focus(); ta.select(); } },
+        '-',
+        { label: 'Toggle Comment  Ctrl+/', action: () => ta.dispatchEvent(Object.assign(new KeyboardEvent('keydown',{key:'/',ctrlKey:true,bubbles:true}))) },
       ]},
+      { label: 'Language', items: Object.entries(LANG_LABELS).map(([k,v]) => ({
+          label: (lang === k ? '\u2713 ' : '\u00a0\u00a0') + v,
+          action: () => setLang(k),
+        }))
+      },
     ].forEach(({ label, items }) => {
       const span = document.createElement('span');
       span.className = 'menu-item'; span.textContent = label;
@@ -1494,6 +1725,9 @@ function openNotepad(filename) {
     });
   }
   buildMenu();
+  // Rebuild language menu when lang changes so checkmark updates
+  const origSetLang = setLang;
+  setLang = (l) => { origSetLang(l); buildMenu(); };
 }
 
 function openExplorer(startPath) {
