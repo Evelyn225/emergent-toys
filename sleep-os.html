@@ -1007,11 +1007,15 @@ function fmtSize(bytes) {
   return (bytes/(1024*1024)).toFixed(1) + ' MB';
 }
 
-function triggerUpload() {
+let _uploadCwd = '';
+function triggerUpload(dir) {
+  _uploadCwd = dir || '';
   document.getElementById('file-upload-input').click();
 }
 
 function handleFileUpload(fileList) {
+  const target = fsGetDir(_uploadCwd) || { files: termFS.files, blobs: termFS.blobs };
+  const dirLabel = _uploadCwd ? `C:\\sleepOS\\${_uploadCwd}\\` : 'C:\\sleepOS';
   const added = [];
   [...fileList].forEach(file => {
     const url = URL.createObjectURL(file);
@@ -1024,23 +1028,24 @@ function handleFileUpload(fileList) {
                : 'binary';
     if (kind === 'text') {
       const reader = new FileReader();
-      reader.onload = e => termFS.files.set(file.name, e.target.result);
+      reader.onload = e => target.files.set(file.name, e.target.result);
       reader.readAsText(file);
     } else {
-      termFS.blobs.set(file.name, { url, kind, size: file.size, mime: file.type });
+      target.blobs.set(file.name, { url, kind, size: file.size, mime: file.type });
     }
     added.push(file.name);
   });
   if (added.length) {
-    showUploadConfirm(added);
+    showUploadConfirm(added, dirLabel);
     document.dispatchEvent(new CustomEvent('fs-changed'));
   }
 }
 
-function showUploadConfirm(names) {
+function showUploadConfirm(names, dirLabel) {
+  dirLabel = dirLabel || 'C:\\sleepOS';
   const msg = names.length === 1
-    ? `"${names[0]}" uploaded to C:\\sleepOS`
-    : `${names.length} files uploaded to C:\\sleepOS`;
+    ? `"${names[0]}" uploaded to ${dirLabel}`
+    : `${names.length} files uploaded to ${dirLabel}`;
   const id = 'upload-confirm-' + Date.now();
   if (!mkWin({ id, title: 'Upload Complete', icon: '📤', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
   const body = document.getElementById('wb-' + id);
