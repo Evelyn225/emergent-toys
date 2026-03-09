@@ -94,6 +94,16 @@ body {
   box-shadow: 1px 1px 0 #000;
   min-width: 180px; min-height: 80px;
 }
+/* ── Resize handles ──────────────────────────────────────────── */
+.win-rz { position:absolute; z-index:100; }
+.win-rz-n  { top:-3px;    left:6px;  right:6px;  height:6px;  cursor:n-resize;  }
+.win-rz-s  { bottom:-3px; left:6px;  right:6px;  height:6px;  cursor:s-resize;  }
+.win-rz-e  { top:6px; bottom:6px; right:-3px;  width:6px;   cursor:e-resize;  }
+.win-rz-w  { top:6px; bottom:6px; left:-3px;   width:6px;   cursor:w-resize;  }
+.win-rz-nw { top:-3px;    left:-3px;  width:10px; height:10px; cursor:nw-resize; }
+.win-rz-ne { top:-3px;    right:-3px; width:10px; height:10px; cursor:ne-resize; }
+.win-rz-sw { bottom:-3px; left:-3px;  width:10px; height:10px; cursor:sw-resize; }
+.win-rz-se { bottom:-3px; right:-3px; width:10px; height:10px; cursor:se-resize; }
 .os-window.inactive .win-titlebar { background: #808080; }
 .win-titlebar {
   background: linear-gradient(to right, #000080, #1084d0);
@@ -368,6 +378,26 @@ body {
   margin: 4px; padding: 6px;
 }
 .exp-grid { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+/* Explorer list view */
+.exp-list-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 1px 4px; cursor: pointer; border: 1px solid transparent;
+  font-family: 'Courier New', monospace; font-size: 11px;
+  white-space: nowrap; overflow: hidden;
+}
+.exp-list-item:hover { background: rgba(0,0,128,0.1); border-color: #000080; }
+.exp-list-item.selected { background: #000080; color: #fff; border-color: #000080; }
+/* Explorer details view */
+.exp-det-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.exp-det-tbl thead th {
+  background: #c0c0c0; border-bottom: 1px solid #808080;
+  padding: 2px 6px; text-align: left; position: sticky; top: 0;
+  border-right: 1px solid #808080; cursor: default; user-select: none;
+}
+.exp-det-item { cursor: pointer; }
+.exp-det-item:hover td { background: rgba(0,0,128,0.1); }
+.exp-det-item.selected td { background: #000080; color: #fff; }
+.exp-det-item td { padding: 1px 6px; border-right: 1px solid #e0e0e0; }
 .exp-item {
   display: flex; flex-direction: column; align-items: center;
   width: 72px; padding: 4px; cursor: pointer; border: 1px solid transparent;
@@ -797,33 +827,34 @@ const termFS = {
   files:   new Map(),
   blobs:   new Map(),
   subdirs: new Map([['DOCS', {
-    dirs: new Set(), blobs: new Map(),
+    dirs: new Set(), blobs: new Map(), subdirs: new Map(),
     files: new Map([
       ['README.txt', [
-        '== sleepOS Filesystem Guide ==',
+        '== sleepOS Filesystem — README ==',
         '',
-        'C:\\sleepOS is the root directory.',
-        '',
-        'SYSTEM DIRECTORIES:',
-        '  DOCS\\         — Documentation (this folder)',
-        '  PROJECTS\\     — Interactive apps (read-only)',
+        'ROOT: C:\\sleepOS',
+        '  DOCS\\      — documentation (this folder)',
+        '  PROJECTS\\  — interactive apps (read-only)',
         '',
         'SYSTEM FILES (read-only):',
-        '  WELCOME.README, TERMINAL.EXE, SYSMON.EXE',
-        '  void.tmp, daemon.core, ?????.exe',
+        '  WELCOME.README  NOTEPAD.EXE  TERMINAL.EXE',
+        '  SYSMON.EXE  BROWSER.EXE  DEFRAG.EXE',
+        '  void.tmp  daemon.core  ?????.exe',
         '',
         'USER FILES:',
-        '  Any files you create with TOUCH, NOTEPAD,',
-        '  or ECHO > appear here and in the Explorer.',
+        '  Create with TOUCH, NOTEPAD, or ECHO >.',
+        '  Upload via right-click > Upload File.',
+        '  New items go into your current folder.',
         '',
-        'NAVIGATION (terminal):',
-        '  CD DOCS         — enter this folder',
-        '  CD ..           — go up to root',
-        '  DIR             — list current directory',
-        '  CAT <file>      — read a file',
+        'TERMINAL (quick ref):',
+        '  DIR / LS      list files',
+        '  CD <dir>      enter folder  |  CD ..  go up',
+        '  CAT <file>    read file',
+        '  TOUCH <file>  create file',
+        '  MKDIR <dir>   create folder',
+        '  DEL <file>    delete',
         '',
-        'See SCRIPTING.txt for the script language.',
-        'See COMMANDS.txt for all terminal commands.',
+        'See SCRIPTING.txt for the .script language.',
       ].join('\n')],
       ['SCRIPTING.txt', [
         '== sleepOS Script Language (.script files) ==',
@@ -924,9 +955,19 @@ const termFS = {
 };
 
 // Helper: get a directory object by name ('' = root)
-function fsGetDir(name) {
-  if (!name) return { dirs: termFS.dirs, files: termFS.files, blobs: termFS.blobs };
-  return termFS.subdirs.get(name.toUpperCase()) || null;
+function fsGetDir(path) {
+  if (!path) return termFS;
+  const parts = String(path).toUpperCase().replace(/\//g,'\\').split('\\').filter(Boolean);
+  let node = termFS;
+  for (const part of parts) {
+    if (!node.subdirs) node.subdirs = new Map();
+    if (!node.subdirs.has(part)) {
+      if (node.dirs.has(part)) node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+      else return null;
+    }
+    node = node.subdirs.get(part);
+  }
+  return node;
 }
 
 function fsNormalizeDir(name) {
@@ -1339,6 +1380,10 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
   el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`;
 
   el.innerHTML = `
+    <div class="win-rz win-rz-n"></div><div class="win-rz win-rz-s"></div>
+    <div class="win-rz win-rz-e"></div><div class="win-rz win-rz-w"></div>
+    <div class="win-rz win-rz-nw"></div><div class="win-rz win-rz-ne"></div>
+    <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>
     <div class="win-titlebar" id="tb-${id}">
       <div class="win-title-text">
         <span class="win-icon">${icon}</span>
@@ -1359,6 +1404,7 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
   wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
 
   makeDraggable(el, document.getElementById('tb-' + id));
+  makeResizable(el, id);
   addTbBtn(id, title, icon);
   el.addEventListener('mousedown', () => focusWin(id));
   el.addEventListener('touchstart', () => focusWin(id), { passive: true });
@@ -1446,6 +1492,34 @@ function makeDraggable(win, handle) {
   }, { passive: false });
 }
 
+function makeResizable(win, id) {
+  const MIN_W = 180, MIN_H = 80;
+  win.querySelectorAll('.win-rz').forEach(handle => {
+    const a = [...handle.classList].find(c => c.startsWith('win-rz-') && c !== 'win-rz').replace('win-rz-','');
+    handle.addEventListener('mousedown', e => {
+      const w = wins[id]; if (w && w.maximized) return; // don't resize while maximized
+      e.preventDefault(); e.stopPropagation();
+      focusWin(id);
+      const x0 = e.clientX, y0 = e.clientY;
+      const W0 = win.offsetWidth, H0 = win.offsetHeight;
+      const L0 = win.offsetLeft,  T0 = win.offsetTop;
+      const onMove = e => {
+        const dx = e.clientX - x0, dy = e.clientY - y0;
+        let W = W0, H = H0, L = L0, T = T0;
+        if (a.includes('e')) W = Math.max(MIN_W, W0 + dx);
+        if (a.includes('s')) H = Math.max(MIN_H, H0 + dy);
+        if (a.includes('w')) { W = Math.max(MIN_W, W0 - dx); L = L0 + W0 - W; }
+        if (a.includes('n')) { H = Math.max(MIN_H, H0 - dy); T = T0 + H0 - H; }
+        win.style.width = W+'px'; win.style.height = H+'px';
+        win.style.left  = L+'px'; win.style.top    = T+'px';
+      };
+      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
 function addTbBtn(id, title, icon) {
   const btn = document.createElement('button');
   btn.className = 'taskbar-btn focused';
@@ -1454,6 +1528,7 @@ function addTbBtn(id, title, icon) {
   btn.addEventListener('click', () => {
     const w = wins[id]; if (!w) return;
     if (w.minimized) { unminWin(id); }
+    else if (w.maximized) { maxWin(id); }   // restore to pre-maximize size
     else if (w.el.classList.contains('inactive')) { focusWin(id); }
     else { minWin(id); }
   });
@@ -1575,34 +1650,28 @@ function setupIcons() {
 // ─────────────────────────────────────────────────────────────────
 
 const WELCOME_DEFAULT =
-`== sleepOS v0.9\u03b2 \u2014 WELCOME FILE ==
-Build: 2024.11.13-EXPERIMENTAL / SOMA-686
+`== sleepOS v0.9\u03b2 \u2014 WELCOME ==
 
-Welcome to sleepOS.
+You are running sleepOS, an experimental interactive desktop.
 
-This operating system is an experimental environment
-for generative and interactive computation.
-All processes here are alive in some sense of the word.
+Programs:
+  PROJECTS.DIR  \u2014 interactive apps (double-click to browse)
+  NOTEPAD.EXE   \u2014 text editor with syntax highlighting
+  TERMINAL.EXE  \u2014 command line (type HELP for commands)
+  BROWSER.EXE   \u2014 web browser
+  SYSMON.EXE    \u2014 system monitor
+  DEFRAG.EXE    \u2014 disk defragmenter
 
-Navigation:
-  - Double-click desktop icons to open programs
-  - PROJECTS.DIR contains all interactive applications
-  - TERMINAL.EXE accepts command-line input
-  - SYSMON.EXE monitors system vitals
-  - Start Menu provides quick access to all programs
+Files:
+  Right-click the desktop or any folder to create
+  files and folders, or upload from your machine.
+  Everything persists within your session.
 
-Known Issues:
-  [!] Clock drift: temporal reference is unreliable
-  [!] 3 daemon processes are of unrecognized origin
-  [!] Soul integrity is at 87.3% and decreasing
+Known issues:
+  [!] Clock drift is intentional
   [!] void.tmp cannot be read, deleted, or ignored
   [!] ?????.exe should not be executed
-
-Security:
-  An unknown process is observing your session.
-  This is not a bug. This cannot be disabled.
-
-Have a productive session.
+  [!] Something is watching this session
 
 \u2014 SYSTEM`;
 
@@ -2102,6 +2171,7 @@ function openExplorer(startPath) {
   body.appendChild(pane);
 
   let selected = null;
+  let viewMode = 'icons'; // 'icons' | 'list' | 'details'
 
   function getIcon(name, kind) {
     if (kind === 'image') return '🖼️';
@@ -2129,8 +2199,12 @@ function openExplorer(startPath) {
 
   function openItem(name, kind, sysfile) {
     if (kind === 'dir') {
-      if (name === 'PROJECTS') { openFiles(); return; }
-      cwd = name; render(); return;
+      cwd = cwd ? cwd + '\\' + name : name; render(); return;
+    }
+    if (cwd === 'PROJECTS') {
+      const p = PROJECTS.find(p => p.name === name);
+      if (p) window.open(p.file, '_blank');
+      return;
     }
     if (sysfile) {
       const SYS = {
@@ -2153,27 +2227,44 @@ function openExplorer(startPath) {
     osConfirm(`Delete "${selected.name}"?`, 'Delete', ok => {
       if (!ok) return;
       const dir = fsGetDir(cwd);
-      if (selected.kind === 'dir') { termFS.dirs.delete(selected.name); termFS.subdirs.delete(selected.name); }
+      if (selected.kind === 'dir') { dir.dirs.delete(selected.name); dir.subdirs?.delete(selected.name); }
       else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); }
       else dir.files.delete(selected.name);
       render();
     }, '🗑️');
   }
 
+  function typeLabel(kind) {
+    return kind === 'dir' ? 'File Folder' : kind === 'image' ? 'Image File' :
+           kind === 'video' ? 'Video File' : kind === 'audio' ? 'Audio File' :
+           kind === 'binary' ? 'Binary File' : 'Text File';
+  }
+
   function makeItem(name, kind, sysfile) {
-    const el = document.createElement('div');
-    el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
-    el.innerHTML = `<div class="exp-icon">${getIcon(name, kind)}</div><span>${name}</span>`;
+    const icon = getIcon(name, kind);
+    let el;
+    if (viewMode === 'list') {
+      el = document.createElement('div');
+      el.className = 'exp-list-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = `<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">${icon}</span><span>${name}</span>`;
+    } else if (viewMode === 'details') {
+      el = document.createElement('tr');
+      el.className = 'exp-det-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = `<td style="font-size:12px;width:22px;">${icon}</td><td>${name}</td><td>${typeLabel(kind)}</td>`;
+    } else {
+      el = document.createElement('div');
+      el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = `<div class="exp-icon">${icon}</div><span>${name}</span>`;
+    }
+    const deselAll = () => pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(i => i.classList.remove('selected'));
     el.addEventListener('click', () => {
-      pane.querySelectorAll('.exp-item').forEach(i => i.classList.remove('selected'));
-      el.classList.add('selected'); selected = { name, kind, sysfile };
+      deselAll(); el.classList.add('selected'); selected = { name, kind, sysfile };
       if (ws) ws.textContent = name;
     });
     el.addEventListener('dblclick', () => openItem(name, kind, sysfile));
     el.addEventListener('contextmenu', e => {
       e.preventDefault(); e.stopPropagation();
-      pane.querySelectorAll('.exp-item').forEach(i => i.classList.remove('selected'));
-      el.classList.add('selected'); selected = { name, kind, sysfile };
+      deselAll(); el.classList.add('selected'); selected = { name, kind, sysfile };
       if (ws) ws.textContent = name;
       const canDelete = !sysfile;
       const isScript = !sysfile && name.toLowerCase().endsWith('.script');
@@ -2191,11 +2282,12 @@ function openExplorer(startPath) {
             if (!n || n === name) return;
             const dir = fsGetDir(cwd);
             if (kind === 'dir') {
-              termFS.dirs.delete(name);
-              const sub = termFS.subdirs.get(name);
-              termFS.dirs.add(n.toUpperCase());
-              if (sub) termFS.subdirs.set(n.toUpperCase(), sub);
-              termFS.subdirs.delete(name);
+              dir.dirs.delete(name);
+              const sub = dir.subdirs?.get(name);
+              dir.dirs.add(n.toUpperCase());
+              if (!dir.subdirs) dir.subdirs = new Map();
+              if (sub) dir.subdirs.set(n.toUpperCase(), sub);
+              dir.subdirs.delete(name);
             } else if (dir.blobs.has(name)) {
               const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
             } else {
@@ -2217,54 +2309,131 @@ function openExplorer(startPath) {
     return el;
   }
 
+  // ── project item (for cwd === 'PROJECTS') ────────────────────
+  function makeProjectItem(p) {
+    const deselAll = () => pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(i => i.classList.remove('selected'));
+    const openProj = () => window.open(p.file, '_blank');
+    let el;
+    if (viewMode === 'details') {
+      el = document.createElement('tr');
+      el.className = 'exp-det-item';
+      el.innerHTML = `<td style="font-size:12px;width:22px;">${p.emoji}</td><td>${p.name}</td><td>HTML Application</td>`;
+    } else if (viewMode === 'list') {
+      el = document.createElement('div');
+      el.className = 'exp-list-item';
+      el.innerHTML = `<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">${p.emoji}</span><span>${p.name}</span>`;
+    } else {
+      el = document.createElement('div');
+      el.className = 'exp-item';
+      el.innerHTML = `<div class="exp-icon">${p.emoji}</div><span>${p.name}</span>`;
+    }
+    el.addEventListener('click', () => {
+      deselAll(); el.classList.add('selected');
+      selected = { name: p.name, kind: 'file', sysfile: true, _proj: p };
+      if (ws) ws.textContent = p.name + '  \u2014  double-click to open';
+    });
+    el.addEventListener('dblclick', openProj);
+    el.addEventListener('touchend', e => { e.preventDefault(); openProj(); }, { passive: false });
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      deselAll(); el.classList.add('selected');
+      selected = { name: p.name, kind: 'file', sysfile: true, _proj: p };
+      showCtxMenu(e.clientX, e.clientY, [
+        { label: '▶ Open', action: openProj },
+        '-',
+        { label: 'Properties', action: () => osAlert(`Name:\t${p.name}\nFile:\t${p.file}\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\`, 'Properties', '📄') },
+        '-',
+        { label: '📋 Copy Name', action: () => navigator.clipboard?.writeText(p.name) },
+      ]);
+    });
+    return el;
+  }
+
   function render() {
     pane.innerHTML = ''; selected = null;
-    const grid = document.createElement('div'); grid.className = 'exp-grid';
     const fullPath = cwd ? `C:\\sleepOS\\${cwd}` : 'C:\\sleepOS';
     addrEl.value = fullPath;
     const titleEl = document.getElementById('wtitle-explorer');
     if (titleEl) titleEl.textContent = `FILE EXPLORER \u2014 ${fullPath}`;
 
+    // ── PROJECTS virtual directory ────────────────────────────
+    if (cwd === 'PROJECTS') {
+      const build = fn => {
+        if (viewMode === 'details') {
+          const tbl = document.createElement('table'); tbl.className = 'exp-det-tbl';
+          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+          const tbody = document.createElement('tbody');
+          PROJECTS.forEach(p => tbody.appendChild(fn(p))); tbl.appendChild(tbody); pane.appendChild(tbl);
+        } else if (viewMode === 'list') {
+          const list = document.createElement('div'); list.style.cssText = 'display:flex;flex-direction:column;';
+          PROJECTS.forEach(p => list.appendChild(fn(p))); pane.appendChild(list);
+        } else {
+          const grid = document.createElement('div'); grid.className = 'exp-grid';
+          PROJECTS.forEach(p => grid.appendChild(fn(p))); pane.appendChild(grid);
+        }
+      };
+      build(makeProjectItem);
+      if (ws) ws.textContent = PROJECTS.length + ' objects';
+      return;
+    }
+
+    // Collect filesystem items
+    const items = [];
     if (!cwd) {
-      // Root: show system files + DOCS + user dirs/files/blobs
-      ['PROJECTS'].forEach(d => grid.appendChild(makeItem(d, 'dir', true)));
-      ['DOCS', ...termFS.dirs].filter((v, i, a) => a.indexOf(v) === i).forEach(d => {
-        if (d !== 'PROJECTS') grid.appendChild(makeItem(d, 'dir', false));
+      items.push({name:'PROJECTS', kind:'dir', sysfile:true});
+      ['DOCS', ...termFS.dirs].filter((v,i,a) => a.indexOf(v)===i).forEach(d => {
+        if (d !== 'PROJECTS') items.push({name:d, kind:'dir', sysfile:false});
       });
-      [
-        {name:'WELCOME.README', sys:true}, {name:'TERMINAL.EXE', sys:true},
-        {name:'SYSMON.EXE', sys:true},     {name:'NOTEPAD.EXE', sys:true},
-        {name:'BROWSER.EXE', sys:true},    {name:'DEFRAG.EXE', sys:true},
-        {name:'void.tmp', sys:true},       {name:'daemon.core', sys:true},
-        {name:'?????.exe', sys:true},
-      ].forEach(({name, sys}) => grid.appendChild(makeItem(name, 'file', sys)));
-      termFS.files.forEach((_, name) => grid.appendChild(makeItem(name, 'file', false)));
-      termFS.blobs.forEach((b, name) => grid.appendChild(makeItem(name, b.kind, false)));
+      [{name:'WELCOME.README'},{name:'TERMINAL.EXE'},{name:'SYSMON.EXE'},{name:'NOTEPAD.EXE'},
+       {name:'BROWSER.EXE'},{name:'DEFRAG.EXE'},{name:'void.tmp'},{name:'daemon.core'},{name:'?????.exe'}
+      ].forEach(({name}) => items.push({name, kind:'file', sysfile:true}));
+      termFS.files.forEach((_, name) => items.push({name, kind:'file', sysfile:false}));
+      termFS.blobs.forEach((b, name) => items.push({name, kind:b.kind, sysfile:false}));
     } else {
       const dir = fsGetDir(cwd);
       if (!dir) { cwd = ''; render(); return; }
-      dir.dirs.forEach(d => grid.appendChild(makeItem(d, 'dir', false)));
-      dir.files.forEach((_, name) => grid.appendChild(makeItem(name, 'file', false)));
-      dir.blobs.forEach((b, name) => grid.appendChild(makeItem(name, b.kind, false)));
+      dir.dirs.forEach(d => items.push({name:d, kind:'dir', sysfile:false}));
+      dir.files.forEach((_, name) => items.push({name, kind:'file', sysfile:false}));
+      dir.blobs.forEach((b, name) => items.push({name, kind:b.kind, sysfile:false}));
     }
-    pane.appendChild(grid);
-    if (ws) ws.textContent = grid.children.length + ' objects';
+
+    // Build container based on viewMode
+    if (viewMode === 'details') {
+      const tbl = document.createElement('table'); tbl.className = 'exp-det-tbl';
+      tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      items.forEach(({name, kind, sysfile}) => tbody.appendChild(makeItem(name, kind, sysfile)));
+      tbl.appendChild(tbody); pane.appendChild(tbl);
+    } else if (viewMode === 'list') {
+      const list = document.createElement('div');
+      list.style.cssText = 'display:flex;flex-direction:column;';
+      items.forEach(({name, kind, sysfile}) => list.appendChild(makeItem(name, kind, sysfile)));
+      pane.appendChild(list);
+    } else {
+      const grid = document.createElement('div'); grid.className = 'exp-grid';
+      items.forEach(({name, kind, sysfile}) => grid.appendChild(makeItem(name, kind, sysfile)));
+      pane.appendChild(grid);
+    }
+    if (ws) ws.textContent = items.length + ' objects';
   }
 
-  upBtn.addEventListener('click', () => { cwd = ''; render(); });
+  upBtn.addEventListener('click', () => { const i = cwd.lastIndexOf('\\'); cwd = i >= 0 ? cwd.slice(0, i) : ''; render(); });
   refreshBtn.addEventListener('click', () => render());
 
   // ── pane background right-click ───────────────────────────────
   pane.addEventListener('contextmenu', e => {
-    if (e.target !== pane && !e.target.classList.contains('exp-grid')) return;
+    if (e.target !== pane && !e.target.classList.contains('exp-grid') && e.target.tagName !== 'TABLE' && e.target.tagName !== 'TBODY') return;
     e.preventDefault();
-    showCtxMenu(e.clientX, e.clientY, [
+    const inProjects = cwd === 'PROJECTS';
+    showCtxMenu(e.clientX, e.clientY, inProjects ? [
+      { label: '🔄 Refresh', action: render },
+    ] : [
       { label: '💻 Open Terminal Here', action: () => openTerminal(cwd) },
       '-',
-      { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { termFS.dirs.add(n.toUpperCase()); render(); } }) },
-      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const dir = fsGetDir(cwd); if (dir) { dir.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
+      { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); render(); } } }) },
+      { label: '📄 New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
       '-',
-      { label: '📤 Upload File…',  action: triggerUpload },
+      { label: '📤 Upload File…',  action: () => triggerUpload(cwd) },
       '-',
       { label: '🔄 Refresh',       action: render },
     ]);
@@ -2273,19 +2442,71 @@ function openExplorer(startPath) {
   // ── menus ────────────────────────────────────────────────────
   mb.innerHTML = '';
   [
-    { label: 'File', items: () => [
-      { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { termFS.dirs.add(n.toUpperCase()); render(); } }) },
-      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const dir = fsGetDir(cwd); if (dir) { dir.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
+    { label: 'File', items: () => cwd === 'PROJECTS' ? [
+      { label: 'Open', disabled: !selected, action: () => { if (selected?._proj) window.open(selected._proj.file, '_blank'); } },
+      '-',
+      { label: 'Close', action: () => closeWin('explorer') },
+    ] : [
+      { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
       '-',
       { label: 'Open',         action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
       { label: 'Delete',       action: deleteSelected },
       '-',
-      { label: 'Upload File\u2026', action: triggerUpload },
+      { label: 'Upload File\u2026', action: () => triggerUpload(cwd) },
       '-',
       { label: 'Close', action: () => closeWin('explorer') },
     ]},
+    { label: 'Edit', items: () => [
+      { label: 'Select All', action: () => {
+        pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(el => el.classList.add('selected'));
+        if (ws) ws.textContent = 'All objects selected';
+      }},
+      { label: 'Invert Selection', action: () => {
+        pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(el => el.classList.toggle('selected'));
+        if (ws) ws.textContent = 'Selection inverted';
+      }},
+      '-',
+      { label: 'Copy Name', action: () => {
+        if (!selected) return;
+        navigator.clipboard?.writeText(selected.name);
+        if (ws) ws.textContent = 'Copied: ' + selected.name;
+      }},
+      { label: 'Copy Path', action: () => {
+        if (!selected) return;
+        const path = `C:\\sleepOS\\${cwd ? cwd + '\\' : ''}${selected.name}`;
+        navigator.clipboard?.writeText(path);
+        if (ws) ws.textContent = 'Copied: ' + path;
+      }},
+      '-',
+      { label: 'Rename', disabled: !selected || selected?.sysfile || cwd === 'PROJECTS', action: () => {
+        if (!selected || selected.sysfile) return;
+        const { name, kind } = selected;
+        osPrompt('Rename to:', name, 'Rename', n => {
+          if (!n || n === name) return;
+          const dir = fsGetDir(cwd);
+          if (kind === 'dir') {
+            dir.dirs.delete(name); const sub = dir.subdirs?.get(name);
+            dir.dirs.add(n.toUpperCase());
+            if (!dir.subdirs) dir.subdirs = new Map();
+            if (sub) dir.subdirs.set(n.toUpperCase(), sub);
+            dir.subdirs.delete(name);
+          } else if (dir.blobs.has(name)) {
+            const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
+          } else {
+            const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
+          }
+          render();
+        });
+      }},
+      { label: 'Delete', disabled: !selected || selected?.sysfile || cwd === 'PROJECTS', action: deleteSelected },
+    ]},
     { label: 'View', items: () => [
-      { label: 'Refresh', action: render },
+      { label: (viewMode==='icons'   ? '• ' : '  ') + 'Large Icons', action: () => { viewMode='icons';   render(); } },
+      { label: (viewMode==='list'    ? '• ' : '  ') + 'List',         action: () => { viewMode='list';    render(); } },
+      { label: (viewMode==='details' ? '• ' : '  ') + 'Details',      action: () => { viewMode='details'; render(); } },
+      '-',
+      { label: '  Refresh', action: render },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -2301,128 +2522,14 @@ function openExplorer(startPath) {
   document.addEventListener('fs-changed', onFsChanged);
 }
 
-function openFiles() {
-  if (!mkWin({ id:'files', title:'PROJECTS.DIR — File Manager', icon:'📁', w:580, h:400, x:120, y:70 })) return;
+function openFiles() { openExplorer('PROJECTS'); }
 
-  const mb   = document.getElementById('mb-files');
-  const body = document.getElementById('wb-files');
-  const ws   = document.getElementById('ws-files');
-  body.style.cssText = 'overflow:auto;border:2px solid;border-color:#808080 #fff #fff #808080;margin:4px;background:#fff;';
-
-  let selected = null;
-  let viewMode = 'icons'; // 'icons' | 'list' | 'details'
-
-  // ── render ──────────────────────────────────────────────────
-  function getSelected() { return selected; }
-  function setSelected(p, itemEl, containerSel) {
-    body.querySelectorAll(containerSel).forEach(f => f.classList.remove('selected'));
-    itemEl.classList.add('selected');
-    selected = p;
-  }
-
-  function makeItem(p, mode) {
-    const item = document.createElement(mode === 'details' ? 'tr' : 'div');
-    if (mode === 'icons') {
-      item.className = 'file-item';
-      item.innerHTML = `<div class="fi-icon">${p.emoji}</div><div class="fi-name">${p.name}</div>`;
-    } else if (mode === 'list') {
-      item.className = 'file-list-item';
-      item.innerHTML = `<span class="fli-icon">${p.emoji}</span><span>${p.name}</span>`;
-    } else {
-      item.innerHTML = `<td class="fd-icon">${p.emoji}</td><td>${p.name}</td><td>HTML Application</td><td>${p.file}</td>`;
-    }
-    const containerSel = mode === 'icons' ? '.file-item' : mode === 'list' ? '.file-list-item' : 'tbody tr';
-    let clicks = 0, clickT;
-    item.addEventListener('click', e => {
-      e.stopPropagation(); clicks++;
-      setSelected(p, item, containerSel);
-      if (ws) ws.textContent = p.name + '  —  double-click to open';
-      if (clicks === 1) { clickT = setTimeout(() => { clicks = 0; }, 380); }
-      else { clearTimeout(clickT); clicks = 0; window.open(p.file, '_blank'); }
-    });
-    item.addEventListener('touchend', e => {
-      e.preventDefault(); setSelected(p, item, containerSel); window.open(p.file, '_blank');
-    }, { passive: false });
-    return item;
-  }
-
-  function renderView() {
-    body.innerHTML = '';
-    selected = null;
-    if (viewMode === 'icons') {
-      const grid = document.createElement('div'); grid.className = 'file-grid';
-      PROJECTS.forEach(p => grid.appendChild(makeItem(p, 'icons')));
-      body.appendChild(grid);
-    } else if (viewMode === 'list') {
-      const list = document.createElement('div'); list.className = 'file-list';
-      PROJECTS.forEach(p => list.appendChild(makeItem(p, 'list')));
-      body.appendChild(list);
-    } else {
-      const tbl = document.createElement('table'); tbl.className = 'file-details';
-      tbl.innerHTML = '<thead><tr><th></th><th>Name</th><th>Type</th><th>File</th></tr></thead>';
-      const tbody = document.createElement('tbody');
-      PROJECTS.forEach(p => tbody.appendChild(makeItem(p, 'details')));
-      tbl.appendChild(tbody); body.appendChild(tbl);
-    }
-    if (ws) ws.textContent = PROJECTS.length + ' objects';
-  }
-
-  // ── menus ───────────────────────────────────────────────────
-  const FILE_ITEMS = [
-    { label: 'Open',       action: () => { if (selected) window.open(selected.file, '_blank'); else if (ws) ws.textContent = 'No file selected.'; } },
-    { label: 'Properties', action: () => {
-      if (!selected) { if (ws) ws.textContent = 'No file selected.'; return; }
-      osAlert(`Name:\t${selected.name}\nFile:\t${selected.file}\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\`, 'Properties', '📄');
-    }},
-    '-',
-    { label: 'Close', action: () => closeWin('files') },
-  ];
-  const EDIT_ITEMS = [
-    { label: 'Select All', action: () => {
-      const sel = viewMode === 'icons' ? '.file-item' : viewMode === 'list' ? '.file-list-item' : 'tbody tr';
-      body.querySelectorAll(sel).forEach(el => el.classList.add('selected'));
-      selected = PROJECTS[PROJECTS.length - 1];
-      if (ws) ws.textContent = PROJECTS.length + ' objects selected';
-    }},
-    { label: 'Copy Name', action: () => {
-      if (!selected) { if (ws) ws.textContent = 'Nothing selected.'; return; }
-      navigator.clipboard.writeText(selected.name).catch(() => {});
-      if (ws) ws.textContent = 'Copied: ' + selected.name;
-    }},
-  ];
-  function VIEW_ITEMS() {
-    return [
-      { label: (viewMode==='icons'   ? '• ':'  ') + 'Large Icons', action: () => { viewMode='icons';   renderView(); } },
-      { label: (viewMode==='list'    ? '• ':'  ') + 'List',         action: () => { viewMode='list';    renderView(); } },
-      { label: (viewMode==='details' ? '• ':'  ') + 'Details',      action: () => { viewMode='details'; renderView(); } },
-      '-',
-      { label: '  Refresh', action: () => renderView() },
-    ];
-  }
-  const HELP_ITEMS = [
-    { label: 'Help Topics', action: () => osAlert('PROJECTS.DIR Help\n\nDouble-click any project to open it in a new tab.\nFile > Open  — opens selected project\nFile > Properties  — shows file info\nView  — switch between Large Icons, List, Details\nEdit > Select All  — selects all projects\nEdit > Copy Name  — copies selected name', 'Help Topics', '❓') },
-    '-',
-    { label: 'About PROJECTS.DIR', action: () => osAlert('PROJECTS.DIR — File Manager\nsleepOS v1.0\n\n' + PROJECTS.length + ' interactive projects.\nAll of them are watching.', 'About', '📁') },
-  ];
-
-  mb.innerHTML = '';
-  [
-    { label: 'File', items: () => FILE_ITEMS },
-    { label: 'Edit', items: () => EDIT_ITEMS },
-    { label: 'View', items: VIEW_ITEMS },
-    { label: 'Help', items: () => HELP_ITEMS },
-  ].forEach(({ label, items }) => {
-    const span = document.createElement('span');
-    span.className = 'menu-item'; span.textContent = label;
-    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items()); });
-    mb.appendChild(span);
-  });
-
-  renderView();
-}
-
+let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 function openTerminal(startDir) {
-  if (!mkWin({ id:'terminal', title:'TERMINAL.EXE — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:'terminal', title:'TERMINAL.EXE — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
+    if (startDir && _termNav) _termNav(startDir);
+    return;
+  }
   const body = document.getElementById('wb-terminal');
   body.style.padding = '0'; body.style.overflow = 'hidden';
   body.innerHTML = `
@@ -2474,6 +2581,11 @@ function openTerminal(startDir) {
     const el = document.getElementById('term-prompt');
     if (el) el.textContent = getPromptStr() + '\u00a0';
   }
+
+  // Allow openTerminal(dir) to navigate us when already open
+  _termNav = (dir) => { cwd = dir.toUpperCase(); updatePrompt(); print(`\nChanged directory to C:\\sleepOS\\${cwd}`); };
+
+  updatePrompt(); // set prompt correctly if startDir was given
 
   const CMDS = {
     help: () => {
@@ -2587,18 +2699,31 @@ function openTerminal(startDir) {
       print('System date: ' + now.toDateString());
       print('NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.');
     },
-    ping: (args) => {
-      const host = args || 'evenet.fun';
+    ping: async (args) => {
+      const host = (args || 'evenet.fun').trim().replace(/^https?:\/\//i,'').replace(/[/?#].*$/,'');
       print(`Pinging ${host} with 32 bytes of data:`);
-      [400, 800, 1200].forEach((t, i) =>
-        setTimeout(() => print(`Reply from ${host}: bytes=32 time=${9+i*3}ms TTL=128`), t));
-      setTimeout(() => {
-        print(`Reply from ${host}: bytes=32 time=???ms TTL=???`);
-        print('');
-        print(`Ping statistics for ${host}:`);
-        print('  Packets: Sent = 4, Received = 4, Lost = 0 (0.0% loss)');
-        print('Approximate round trip times: Min=9ms  Max=???ms  Avg=???ms');
-      }, 1700);
+      const times = []; let received = 0;
+      for (let i = 0; i < 4; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 1000));
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4000);
+        const t0 = performance.now();
+        try {
+          await fetch(`https://${host}/`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+          clearTimeout(tid);
+          const ms = Math.round(performance.now() - t0);
+          times.push(ms); received++;
+          print(`Reply from ${host}: bytes=32 time=${ms}ms TTL=57`);
+        } catch(e) {
+          clearTimeout(tid);
+          print(`Request timeout for ${host}.`);
+        }
+      }
+      print('');
+      print(`Ping statistics for ${host}:`);
+      const lost = 4 - received;
+      print(`  Packets: Sent = 4, Received = ${received}, Lost = ${lost} (${Math.round(lost/4*100)}% loss)`);
+      if (times.length) print(`Approximate round trip times: Min=${Math.min(...times)}ms  Max=${Math.max(...times)}ms  Avg=${Math.round(times.reduce((a,b)=>a+b)/times.length)}ms`);
     },
     echo: (args) => { if (args) print(args); },
     cls: () => { out.innerHTML = ''; },
@@ -2606,15 +2731,15 @@ function openTerminal(startDir) {
     type: (args) => CMDS.cat(args),
     cd: (args) => {
       const dest = (args || '').trim();
-      if (!dest || dest === '.' || dest === 'C:\\sleepOS') {
-        cwd = ''; updatePrompt(); print(getPromptStr().replace('>',''));
+      if (!dest || dest === '.' || dest === 'C:\\sleepOS' || dest === '\\') {
+        cwd = ''; updatePrompt(); return;
       } else if (dest === '..') {
         if (!cwd) { print('Already at root.'); return; }
-        cwd = ''; updatePrompt(); print('C:\\sleepOS');
+        const i = cwd.lastIndexOf('\\'); cwd = i >= 0 ? cwd.slice(0, i) : ''; updatePrompt(); return;
       } else {
-        const name = dest.toUpperCase();
-        const dir = fsGetDir(name);
-        if (dir) { cwd = name; updatePrompt(); print(`C:\\sleepOS\\${name}`); }
+        const newCwd = cwd ? cwd + '\\' + dest.toUpperCase() : dest.toUpperCase();
+        const dir = fsGetDir(newCwd);
+        if (dir) { cwd = newCwd; updatePrompt(); }
         else { print(`The system cannot find the path specified: ${dest}`); }
       }
     },
@@ -2626,9 +2751,8 @@ function openTerminal(startDir) {
         print(`A subdirectory or file ${name} already exists.`); return;
       }
       dir.dirs.add(name);
-      if (!cwd) {
-        termFS.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map() });
-      }
+      if (!dir.subdirs) dir.subdirs = new Map();
+      dir.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
       print(`Directory created: ${getPromptStr().replace('>','')}\\${name}`);
     },
     touch: (args) => {
@@ -2666,7 +2790,7 @@ function openTerminal(startDir) {
         } else if (dir.blobs.has(raw)) {
           const b = dir.blobs.get(raw); URL.revokeObjectURL(b.url); dir.blobs.delete(raw); print(`Deleted: ${raw}`);
         } else if (dir.dirs.has(upper)) {
-          dir.dirs.delete(upper); termFS.subdirs.delete(upper); print(`Removed directory: ${upper}`);
+          dir.dirs.delete(upper); dir.subdirs?.delete(upper); print(`Removed directory: ${upper}`);
         } else {
           print(`File not found: ${raw}`);
         }
@@ -2700,7 +2824,7 @@ function openTerminal(startDir) {
       termFS.dirs.forEach(d => {
         if (d === 'DOCS') return;
         print(`├── ${d}\\`);
-        const sub = termFS.subdirs.get(d);
+        const sub = termFS.subdirs?.get(d);
         if (sub) {
           [...sub.files.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
           [...sub.blobs.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
@@ -3574,20 +3698,36 @@ function openBrowser() {
     updateNav();
   }
 
-  iframe.addEventListener('load', () => {
-    // Sync address bar with actual iframe URL (same-origin pages only)
+  function syncUrl() {
     try {
       const loc = iframe.contentWindow.location.href;
       if (loc && loc !== 'about:blank' && loc !== 'about:srcdoc') {
-        document.getElementById('br-url').value = loc;
-        if (hist[histIdx] !== loc) {
-          hist = hist.slice(0, histIdx + 1); hist.push(loc); histIdx = hist.length - 1;
-          updateNav();
+        const bar = document.getElementById('br-url');
+        if (bar && bar.value !== loc) {
+          bar.value = loc;
+          if (hist[histIdx] !== loc) {
+            hist = hist.slice(0, histIdx + 1); hist.push(loc); histIdx = hist.length - 1;
+            updateNav();
+          }
         }
       }
-    } catch(e) { /* cross-origin — leave address bar as-is */ }
+    } catch(e) { /* cross-origin — cannot read URL */ }
+  }
+
+  // Poll to catch SPA pushState/hash navigation and link clicks
+  const _urlPoll = setInterval(syncUrl, 600);
+
+  iframe.addEventListener('load', () => {
+    syncUrl();
     if (ws) ws.textContent = 'Done';
   });
+
+  // Clear poll when browser window closes
+  document.getElementById('win-browser')?.addEventListener('remove', () => clearInterval(_urlPoll), { once: true });
+  // Use MutationObserver to detect window removal
+  new MutationObserver((_, obs) => {
+    if (!document.getElementById('win-browser')) { clearInterval(_urlPoll); obs.disconnect(); }
+  }).observe(document.getElementById('desktop'), { childList: true });
   iframe.addEventListener('error', () => showError(lastAttemptedUrl));
 
   // ── handle nav messages from srcdoc home page ──────────────────
