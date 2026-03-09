@@ -568,26 +568,26 @@ body {
 // DATA
 // ─────────────────────────────────────────────────────────────────
 const PROJECTS = [
-  { name: 'sand playground',    emoji: '⏳', file: 'Sands.html' },
-  { name: 'bug hotline',        emoji: '🐛', file: 'critters.html' },
-  { name: 'fireworks',          emoji: '🎆', file: 'fireworks.html' },
-  { name: 'pixel splatter',     emoji: '🔮', file: 'pixel-splatter.html' },
-  { name: 'anime hell',         emoji: '🔥', file: 'hell.html' },
-  { name: 'fluid',              emoji: '💧', file: 'fluid.html' },
-  { name: 'web wizard casino',  emoji: '🎰', file: 'webwizardcasino.html' },
-  { name: 'automata garden',    emoji: '🌱', file: 'automata-garden.html' },
-  { name: 'erosion toy',        emoji: '🏔️',  file: 'erosion.html' },
-  { name: 'wave collapse',      emoji: '🌊', file: 'wave-collapse.html' },
-  { name: 'tentacle catch',     emoji: '🦑', file: 'catch.html' },
-  { name: 'reaction diffusion', emoji: '⚗️',  file: 'philosophers-stone.html' },
-  { name: 'voronoi',            emoji: '🔬', file: 'vornoi.html' },
-  { name: 'morse code',         emoji: '📡', file: 'morse.html' },
-  { name: 'lissajous',          emoji: '〰️', file: 'lissajous.html' },
-  { name: 'net sanctuary',      emoji: '🌐', file: 'net-sanctuary-project.html' },
-  { name: 'ascii render',       emoji: '💻', file: 'ascii-render.html' },
-  { name: 'tablecloth',         emoji: '🧶', file: 'tablecloth.html' },
-  { name: 'corridor crawler',   emoji: '🚪', file: 'corridor.html' },
-  { name: 'patch synth',        emoji: '🎛️',  file: 'synth.html' },
+  { name: 'sand playground',    emoji: '⏳', file: 'evenet.fun/sands.html' },
+  { name: 'bug hotline',        emoji: '🐛', file: 'evenet.fun/critters.html' },
+  { name: 'fireworks',          emoji: '🎆', file: 'evenet.fun/fireworks.html' },
+  { name: 'pixel splatter',     emoji: '🔮', file: 'evenet.fun/pixel-splatter.html' },
+  { name: 'anime hell',         emoji: '🔥', file: 'evenet.fun/hell.html' },
+  { name: 'fluid',              emoji: '💧', file: 'evenet.fun/fluid.html' },
+  { name: 'web wizard casino',  emoji: '🎰', file: 'evenet.fun/webwizardcasino.html' },
+  { name: 'automata garden',    emoji: '🌱', file: 'evenet.fun/automata-garden.html' },
+  { name: 'erosion toy',        emoji: '🏔️',  file: 'evenet.fun/erosion.html' },
+  { name: 'wave collapse',      emoji: '🌊', file: 'evenet.fun/wave-collapse.html' },
+  { name: 'tentacle catch',     emoji: '🦑', file: 'evenet.fun/catch.html' },
+  { name: 'reaction diffusion', emoji: '⚗️',  file: 'evenet.fun/philosophers-stone.html' },
+  { name: 'voronoi',            emoji: '🔬', file: 'evenet.fun/vornoi.html' },
+  { name: 'morse code',         emoji: '📡', file: 'evenet.fun/morse.html' },
+  { name: 'lissajous',          emoji: '〰️', file: 'evenet.fun/lissajous.html' },
+  { name: 'net sanctuary',      emoji: '🌐', file: 'evenet.fun/net-sanctuary-project.html' },
+  { name: 'ascii render',       emoji: '💻', file: 'evenet.fun/ascii-render.html' },
+  { name: 'tablecloth',         emoji: '🧶', file: 'evenet.fun/tablecloth.html' },
+  { name: 'corridor crawler',   emoji: '🚪', file: 'evenet.fun/corridor.html' },
+  { name: 'patch synth',        emoji: '🎛️',  file: 'evenet.fun/synth.html' },
 ];
 
 const DESKTOP_ICONS = [
@@ -945,6 +945,47 @@ function fsGetDir(name) {
   return termFS.subdirs.get(key);
 }
 
+function fsNormalizeDir(name) {
+  return String(name || '')
+    .trim()
+    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '')
+    .toUpperCase();
+}
+
+function fsSplitPath(path, fallbackDir) {
+  const cleaned = String(path || '')
+    .trim()
+    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '');
+  if (!cleaned) return { dirName: fsNormalizeDir(fallbackDir), fileName: '' };
+  const parts = cleaned.split('\\').filter(Boolean);
+  if (parts.length === 1) return { dirName: fsNormalizeDir(fallbackDir), fileName: parts[0] };
+  return {
+    dirName: fsNormalizeDir(parts.slice(0, -1).join('\\')),
+    fileName: parts[parts.length - 1],
+  };
+}
+
+function fsGetEntry(path, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  if (dir.files.has(fileName)) return { dir, dirName, fileName, kind: 'text', value: dir.files.get(fileName) };
+  if (dir.blobs.has(fileName)) return { dir, dirName, fileName, kind: 'blob', value: dir.blobs.get(fileName) };
+  return null;
+}
+
+function fsWriteTextFile(path, value, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  dir.files.set(fileName, value);
+  return { dir, dirName, fileName };
+}
+
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
 
@@ -1071,18 +1112,21 @@ function showUploadConfirm(names, dirLabel) {
     <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
 }
 
-function openMediaFile(filename) {
-  const blob = termFS.blobs.get(filename);
+function openMediaFile(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null;
   if (!blob) { return; }
-  if (blob.kind === 'image') openImageViewer(filename);
-  else if (blob.kind === 'video') openVideoPlayer(filename);
-  else if (blob.kind === 'audio') openAudioPlayer(filename);
-  else osAlert('Cannot open binary file:\n' + filename, 'Cannot Open', '🚫');
+  if (blob.kind === 'image') openImageViewer(entry.fileName, entry.dirName);
+  else if (blob.kind === 'video') openVideoPlayer(entry.fileName, entry.dirName);
+  else if (blob.kind === 'audio') openAudioPlayer(entry.fileName, entry.dirName);
+  else osAlert('Cannot open binary file:\n' + entry.fileName, 'Cannot Open', 'X');
 }
 
-function openImageViewer(filename) {
-  const blob = termFS.blobs.get(filename); if (!blob) return;
-  const id = 'img-' + filename.replace(/\W/g,'_');
+function openImageViewer(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
+  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const id = 'img-' + pathKey.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: '🖼️', w: 520, h: 400 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
@@ -1091,7 +1135,7 @@ function openImageViewer(filename) {
   const wrap = document.createElement('div'); wrap.className = 'media-body';
   const img  = document.createElement('img'); img.src = blob.url;
   wrap.appendChild(img); body.appendChild(wrap);
-  if (ws) ws.textContent = filename + '  \u2014  ' + fmtSize(blob.size);
+  if (ws) ws.textContent = entry.fileName + '  \u2014  ' + fmtSize(blob.size);
   if (mb) {
     const span = document.createElement('span');
     span.className = 'menu-item'; span.textContent = 'File';
@@ -1109,9 +1153,11 @@ function openImageViewer(filename) {
   }
 }
 
-function openVideoPlayer(filename) {
-  const blob = termFS.blobs.get(filename); if (!blob) return;
-  const id = 'vid-' + filename.replace(/\W/g,'_');
+function openVideoPlayer(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
+  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const id = 'vid-' + pathKey.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎬', w: 540, h: 420 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
@@ -1122,7 +1168,7 @@ function openVideoPlayer(filename) {
   video.src = blob.url; video.controls = true;
   video.style.cssText = 'width:100%;height:100%;';
   wrap.appendChild(video); body.appendChild(wrap);
-  if (ws) ws.textContent = filename + '  \u2014  ' + fmtSize(blob.size);
+  if (ws) ws.textContent = entry.fileName + '  \u2014  ' + fmtSize(blob.size);
   if (mb) {
     const span = document.createElement('span');
     span.className = 'menu-item'; span.textContent = 'File';
@@ -1133,13 +1179,15 @@ function openVideoPlayer(filename) {
   }
 }
 
-function openAudioPlayer(filename) {
-  const blob = termFS.blobs.get(filename); if (!blob) return;
-  const id = 'aud-' + filename.replace(/\W/g,'_');
+function openAudioPlayer(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
+  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const id = 'aud-' + pathKey.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎵', w: 320, h: 120, menubar: false })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;';
-  body.innerHTML = `<div style="font-family:'Courier New',monospace;font-size:11px;margin-bottom:4px;">🎵 ${filename}</div>`;
+  body.innerHTML = `<div style="font-family:'Courier New',monospace;font-size:11px;margin-bottom:4px;">${entry.fileName}</div>`;
   const audio = document.createElement('audio');
   audio.src = blob.url; audio.controls = true; audio.style.width = '100%';
   body.appendChild(audio);
@@ -1891,11 +1939,13 @@ function openSaveDialog(defaultName, callback) {
   setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
-function openNotepad(filename, fileDir) {
-  const id = filename ? 'notepad-' + filename : 'notepad-' + (++_notepadCount);
-  const displayName = filename || 'untitled.txt';
-  const fsDir = fsGetDir(fileDir || '') || fsGetDir('');
-  const initial = filename ? (fsDir.files.get(filename) ?? '') : '';
+function openNotepad(filename, dirName) {
+  const entry = filename ? fsGetEntry(filename, dirName) : null;
+  const { dirName: initialDir, fileName } = fsSplitPath(filename, dirName);
+  const pathKey = filename ? ((initialDir ? initialDir + '\\' : '') + fileName) : String(++_notepadCount);
+  const id = 'notepad-' + pathKey.replace(/\W/g,'_');
+  const displayName = fileName || 'untitled.txt';
+  const initial = entry && entry.kind === 'text' ? entry.value : '';
   if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
 
   const body = document.getElementById('wb-' + id);
@@ -1919,8 +1969,9 @@ function openNotepad(filename, fileDir) {
   wrap.appendChild(ta);
   body.appendChild(wrap);
 
-  let currentFile = filename || null;
-  let lang = detectLang(filename);
+  let currentFile = fileName || null;
+  let currentDir = currentFile ? initialDir : fsNormalizeDir(dirName);
+  let lang = detectLang(fileName || filename);
 
   function renderHighlight() {
     hl.innerHTML = highlight(ta.value, lang) + '\n'; // trailing \n keeps last-line height correct
@@ -1993,31 +2044,30 @@ function openNotepad(filename, fileDir) {
   });
 
   function save(fname) {
-    fsDir.files.set(fname, ta.value);
-    currentFile = fname;
+    const saved = fsWriteTextFile(fname, ta.value, currentDir);
+    if (!saved) return;
+    currentFile = saved.fileName;
+    currentDir = saved.dirName;
     // re-detect lang if filename changed
-    const newLang = detectLang(fname);
+    const newLang = detectLang(currentFile);
     if (newLang !== lang) { lang = newLang; renderHighlight(); }
     const titleEl = document.getElementById('wtitle-' + id);
-    if (titleEl) titleEl.textContent = fname + ' \u2014 Notepad';
+    if (titleEl) titleEl.textContent = currentFile + ' \u2014 Notepad';
     updateStatus();
   }
 
   function promptSaveAs() {
     openSaveDialog(currentFile || 'untitled.txt', (fname, dir) => {
-      if (dir) {
-        const subDir = fsGetDir(dir);
-        if (subDir) {
-          subDir.files.set(fname, ta.value);
-          currentFile = fname;
-          const titleEl = document.getElementById('wtitle-' + id);
-          if (titleEl) titleEl.textContent = fname + ' \u2014 Notepad';
-          updateStatus();
-          document.dispatchEvent(new CustomEvent('fs-changed'));
-        }
-      } else {
-        save(fname);
-      }
+      const saved = fsWriteTextFile(fname, ta.value, dir || currentDir);
+      if (!saved) return;
+      currentFile = saved.fileName;
+      currentDir = saved.dirName;
+      const newLang = detectLang(currentFile);
+      if (newLang !== lang) { lang = newLang; renderHighlight(); }
+      const titleEl = document.getElementById('wtitle-' + id);
+      if (titleEl) titleEl.textContent = currentFile + ' \u2014 Notepad';
+      updateStatus();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
     });
   }
 
@@ -2138,7 +2188,7 @@ function openExplorer(startPath) {
       return;
     }
     const dir = fsGetDir(cwd);
-    if (dir.blobs.has(name)) openMediaFile(name);
+    if (dir.blobs.has(name)) openMediaFile(name, cwd);
     else if (dir.files.has(name)) openNotepad(name, cwd);
   }
 
@@ -2857,13 +2907,13 @@ function openTerminal(startDir) {
     open: (args) => {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: OPEN [filename]'); return; }
-      const dir = fsGetDir(cwd);
-      if (dir.blobs.has(raw)) {
+      const entry = fsGetEntry(raw, cwd);
+      if (entry && entry.kind === 'blob') {
         print(`Opening ${raw}...`);
-        setTimeout(() => openMediaFile(raw), 300);
-      } else if (dir.files.has(raw)) {
+        setTimeout(() => openMediaFile(raw, cwd), 300);
+      } else if (entry && entry.kind === 'text') {
         print(`Opening ${raw}...`);
-        setTimeout(() => openNotepad(raw), 300);
+        setTimeout(() => openNotepad(raw, cwd), 300);
       } else {
         print(`File not found: ${raw}`);
         print('Use DIR to list available files.');
@@ -2880,9 +2930,12 @@ function openTerminal(startDir) {
     },
     notepad: (args) => {
       const fname = args ? args.trim() : null;
-      if (fname && !termFS.files.has(fname)) { print(`File not found: ${fname}`); return; }
+      if (fname) {
+        const entry = fsGetEntry(fname, cwd);
+        if (!entry || entry.kind !== 'text') { print(`File not found: ${fname}`); return; }
+      }
       print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
-      setTimeout(() => openNotepad(fname || undefined), 300);
+      setTimeout(() => openNotepad(fname || undefined, cwd), 300);
     },
     exit: () => closeWin('terminal'),
   };
