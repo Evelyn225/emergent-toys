@@ -341,6 +341,25 @@ body {
 }
 .glitching { animation: glitch-shift 0.18s steps(1) 3; }
 
+/* ── Drop zone overlay ───────────────────────────────────────── */
+#drop-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,128,0.55); border: 4px dashed #fff;
+  align-items: center; justify-content: center;
+  color: #fff; font-family: 'Courier New', monospace; font-size: 22px;
+  pointer-events: none;
+}
+#drop-overlay.active { display: flex; }
+
+/* ── Image viewer / Video player ─────────────────────────────── */
+.media-body {
+  width: 100%; height: 100%; background: #111;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.media-body img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.media-body video { width: 100%; height: 100%; background: #000; }
+
 /* ── Welcome text window ─────────────────────────────────────── */
 .note-body {
   background: #fff; height: 100%; overflow: auto;
@@ -405,6 +424,10 @@ body {
 <!-- BIOS boot screen -->
 <div id="bios"><div id="bios-text"></div></div>
 
+<!-- Drop overlay -->
+<div id="drop-overlay">📁 Drop files to upload to sleepOS</div>
+<input id="file-upload-input" type="file" accept="image/*,video/*,audio/*,text/*" multiple style="display:none">
+
 <!-- Desktop -->
 <div id="desktop">
   <div id="desktop-bg"></div>
@@ -444,6 +467,9 @@ body {
     </div>
     <div class="sm-item" onclick="closeStart();openAppearance()">
       <span class="sm-icon">🖼️</span><span>Appearance</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();triggerUpload()">
+      <span class="sm-icon">📤</span><span>Upload File...</span>
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="window.location='index.html'">
@@ -689,8 +715,150 @@ setTimeout(biosType, 250);
 let zTop = 100;
 const wins = {};
 
-// Shared virtual filesystem (terminal + notepad)
-const termFS = { dirs: new Set(), files: new Map() };
+// Shared virtual filesystem (terminal + notepad + media)
+const termFS = { dirs: new Set(), files: new Map(), blobs: new Map() };
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function triggerUpload() {
+  document.getElementById('file-upload-input').click();
+}
+
+function handleFileUpload(fileList) {
+  const added = [];
+  [...fileList].forEach(file => {
+    const url = URL.createObjectURL(file);
+    const kind = file.type.startsWith('image/') ? 'image'
+               : file.type.startsWith('video/') ? 'video'
+               : file.type.startsWith('audio/') ? 'audio'
+               : file.type.startsWith('text/')  ? 'text'
+               : 'binary';
+    if (kind === 'text') {
+      const reader = new FileReader();
+      reader.onload = e => termFS.files.set(file.name, e.target.result);
+      reader.readAsText(file);
+    } else {
+      termFS.blobs.set(file.name, { url, kind, size: file.size, mime: file.type });
+    }
+    added.push(file.name);
+  });
+  if (added.length) showUploadConfirm(added);
+}
+
+function showUploadConfirm(names) {
+  const msg = names.length === 1
+    ? `"${names[0]}" uploaded to C:\\sleepOS`
+    : `${names.length} files uploaded to C:\\sleepOS`;
+  const id = 'upload-confirm-' + Date.now();
+  if (!mkWin({ id, title: 'Upload Complete', icon: '📤', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:14px;font-family:\'Courier New\',monospace;font-size:12px;';
+  body.innerHTML = `<div style="margin-bottom:12px;">📁 ${msg}</div>
+    <div style="margin-bottom:8px;color:#555;">Use OPEN &lt;filename&gt; in terminal, or type the filename to view.</div>
+    <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
+}
+
+function openMediaFile(filename) {
+  const blob = termFS.blobs.get(filename);
+  if (!blob) { return; }
+  if (blob.kind === 'image') openImageViewer(filename);
+  else if (blob.kind === 'video') openVideoPlayer(filename);
+  else if (blob.kind === 'audio') openAudioPlayer(filename);
+  else alert('Cannot open binary file: ' + filename);
+}
+
+function openImageViewer(filename) {
+  const blob = termFS.blobs.get(filename); if (!blob) return;
+  const id = 'img-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: '🖼️', w: 520, h: 400 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;';
+  const wrap = document.createElement('div'); wrap.className = 'media-body';
+  const img  = document.createElement('img'); img.src = blob.url;
+  wrap.appendChild(img); body.appendChild(wrap);
+  if (ws) ws.textContent = filename + '  \u2014  ' + fmtSize(blob.size);
+  if (mb) {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = 'File';
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, [
+      { label: 'Close', action: () => closeWin(id) },
+    ]); });
+    mb.appendChild(span);
+    const viewSpan = document.createElement('span');
+    viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+    viewSpan.addEventListener('click', e => { e.stopPropagation(); showDropdown(viewSpan, [
+      { label: 'Actual Size',  action: () => { img.style.maxWidth='none'; img.style.maxHeight='none'; } },
+      { label: 'Fit to Window', action: () => { img.style.maxWidth='100%'; img.style.maxHeight='100%'; } },
+    ]); });
+    mb.appendChild(viewSpan);
+  }
+}
+
+function openVideoPlayer(filename) {
+  const blob = termFS.blobs.get(filename); if (!blob) return;
+  const id = 'vid-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎬', w: 540, h: 420 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;';
+  const wrap  = document.createElement('div'); wrap.className = 'media-body';
+  const video = document.createElement('video');
+  video.src = blob.url; video.controls = true;
+  video.style.cssText = 'width:100%;height:100%;';
+  wrap.appendChild(video); body.appendChild(wrap);
+  if (ws) ws.textContent = filename + '  \u2014  ' + fmtSize(blob.size);
+  if (mb) {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = 'File';
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, [
+      { label: 'Close', action: () => { video.pause(); closeWin(id); } },
+    ]); });
+    mb.appendChild(span);
+  }
+}
+
+function openAudioPlayer(filename) {
+  const blob = termFS.blobs.get(filename); if (!blob) return;
+  const id = 'aud-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎵', w: 320, h: 120, menubar: false })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;';
+  body.innerHTML = `<div style="font-family:'Courier New',monospace;font-size:11px;margin-bottom:4px;">🎵 ${filename}</div>`;
+  const audio = document.createElement('audio');
+  audio.src = blob.url; audio.controls = true; audio.style.width = '100%';
+  body.appendChild(audio);
+}
+
+// Drag-and-drop onto the desktop
+let _dragCount = 0;
+document.addEventListener('dragenter', e => {
+  if ([...e.dataTransfer.types].includes('Files')) {
+    _dragCount++;
+    document.getElementById('drop-overlay').classList.add('active');
+  }
+});
+document.addEventListener('dragleave', () => {
+  _dragCount = Math.max(0, _dragCount - 1);
+  if (_dragCount === 0) document.getElementById('drop-overlay').classList.remove('active');
+});
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  _dragCount = 0;
+  document.getElementById('drop-overlay').classList.remove('active');
+  if (e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files);
+});
+document.getElementById('file-upload-input').addEventListener('change', function() {
+  if (this.files.length) handleFileUpload(this.files);
+  this.value = '';
+});
 
 // Shared dropdown menu helpers
 function closeDropdown() {
@@ -1257,6 +1425,7 @@ function openTerminal() {
         '  WHO, WHOAMI     — current user info',
         '  DATE            — system date',
         '  CLS             — clear screen',
+        '  OPEN [file]     — open a file (image/video in viewer, text in Notepad)',
         '  NOTEPAD [file]  — open Notepad (optionally open a file)',
         '  START [program] — run an executable or project',
         '  EXIT            — close terminal',
@@ -1291,8 +1460,12 @@ function openTerminal() {
         const size = content.length.toString().padStart(7,' ');
         print(`${dateStr}  ${timeStr}  ${size}    ${name}`);
       });
+      termFS.blobs.forEach((blob, name) => {
+        const size = fmtSize(blob.size).padStart(7,' ');
+        print(`${dateStr}  ${timeStr}  ${size}    ${name}  [${blob.kind}]`);
+      });
       print('');
-      const totalFiles = 8 + termFS.files.size;
+      const totalFiles = 8 + termFS.files.size + termFS.blobs.size;
       const totalDirs = 3 + termFS.dirs.size;
       print(`  ${totalFiles} File(s)    [error reading total size]`);
       print(`  ${totalDirs} Dir(s)     [error reading free space]`);
@@ -1404,6 +1577,11 @@ function openTerminal() {
       } else if (termFS.files.has(raw)) {
         termFS.files.delete(raw);
         print(`Deleted: ${raw}`);
+      } else if (termFS.blobs.has(raw)) {
+        const b = termFS.blobs.get(raw);
+        URL.revokeObjectURL(b.url);
+        termFS.blobs.delete(raw);
+        print(`Deleted: ${raw}`);
       } else if (termFS.dirs.has(raw.toUpperCase())) {
         termFS.dirs.delete(raw.toUpperCase());
         print(`Removed directory: ${raw.toUpperCase()}`);
@@ -1440,11 +1618,10 @@ function openTerminal() {
         '├── ?????.exe                [DO NOT EXECUTE]',
       ];
       staticEntries.forEach(l => print(l));
-      const userDirs = [...termFS.dirs];
+      const userDirs  = [...termFS.dirs];
       const userFiles = [...termFS.files.keys()];
-      const allUser = [...userDirs.map(d => `<DIR> ${d}`), ...userFiles];
-      allUser.forEach((name, i) => {
-        const last = i === allUser.length - 1 && userDirs.length === 0;
+      const userBlobs = [...termFS.blobs.entries()].map(([n, b]) => `${n}  [${b.kind}]`);
+      [...userDirs.map(d => `<DIR> ${d}`), ...userFiles, ...userBlobs].forEach(name => {
         print(`├── ${name}`);
       });
       userDirs.forEach((d, i) => {
@@ -1532,6 +1709,10 @@ function openTerminal() {
         const content = termFS.files.get(raw);
         if (content === '') { print('(empty file)'); }
         else { content.split('\n').forEach(l => print(l)); }
+      } else if (termFS.blobs.has(raw)) {
+        const b = termFS.blobs.get(raw);
+        print(`Binary file: ${raw} (${b.kind}, ${fmtSize(b.size)})`);
+        print(`Use OPEN ${raw} to view it.`);
       } else {
         print('File not found: ' + (raw || '(no argument given)'));
       }
@@ -1569,6 +1750,20 @@ function openTerminal() {
         setTimeout(() => window.open(proj.file, '_blank'), 400);
       } else {
         print(`Cannot find program: ${args}`);
+      }
+    },
+    open: (args) => {
+      const raw = (args || '').trim();
+      if (!raw) { print('Usage: OPEN [filename]'); return; }
+      if (termFS.blobs.has(raw)) {
+        print(`Opening ${raw}...`);
+        setTimeout(() => openMediaFile(raw), 300);
+      } else if (termFS.files.has(raw)) {
+        print(`Opening ${raw} in Notepad...`);
+        setTimeout(() => openNotepad(raw), 300);
+      } else {
+        print(`File not found: ${raw}`);
+        print('Use DIR to list available files.');
       }
     },
     notepad: (args) => {
