@@ -374,7 +374,7 @@ body {
 .exp-item.selected { background: #000080; color: #fff; border-color: #000080; }
 .exp-item .exp-icon { font-size: 28px; margin-bottom: 2px; pointer-events: none; }
 .exp-item span { pointer-events: none; }
-.exp-sysfile { opacity: 0.6; }
+.exp-sysfile {  }
 
 /* ── Drop zone overlay ───────────────────────────────────────── */
 #drop-overlay {
@@ -1758,7 +1758,7 @@ function openExplorer(startPath) {
     if (kind === 'audio') return '🎵';
     if (kind === 'dir') {
       if (name === 'PROJECTS') return '📁';
-      if (name === 'DOCS')     return '📚';
+      if (name === 'DOCS')     return '📁';
       return '📁';
     }
     const NAME_ICONS = {
