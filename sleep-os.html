@@ -4,9 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>sleepOS v0.9β</title>
-<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
+@font-face {
+  font-family: 'W95font';
+  src: url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),
+       url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'W95font';
+  src: url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),
+       url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+:root {
+  --sleep-font: 'W95font', sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--sleep-font); }
 
 /* ── CRT overlay ──────────────────────────────────────────────── */
 #crt {
@@ -27,7 +45,7 @@
 /* ── Global type ─────────────────────────────────────────────── */
 body {
   overflow: hidden;
-  font-family: 'MS Sans Serif', 'Segoe UI', Tahoma, sans-serif;
+  font-family: var(--sleep-font);
   font-size: 11px;
   background: #000;
 }
@@ -38,7 +56,7 @@ body {
   background: #000; z-index: 9999;
   display: flex; align-items: flex-start; justify-content: flex-start;
   padding: 2rem 2.5rem;
-  font-family: 'VT323', monospace;
+  font-family: var(--sleep-font);
   font-size: 18px; color: #aaa;
   overflow: hidden;
 }
@@ -266,7 +284,7 @@ body {
 /* ── Terminal ─────────────────────────────────────────────────── */
 .term-wrap {
   background: #000; color: #00cc00;
-  font-family: 'VT323', 'Courier New', monospace; font-size: 15px;
+  font-family: var(--sleep-font); font-size: 15px;
   padding: 4px; height: 100%;
   display: flex; flex-direction: column;
 }
@@ -275,7 +293,7 @@ body {
 .term-prompt { color: #00cc00; white-space: nowrap; }
 .term-input {
   flex: 1; background: transparent; border: none;
-  color: #00cc00; font-family: inherit; font-size: inherit;
+  color: #00cc00; font-family: var(--sleep-font); font-size: inherit;
   outline: none; caret-color: #00cc00;
 }
 
@@ -302,7 +320,7 @@ body {
 .br-btn {
   min-width: 22px; height: 22px; padding: 0 4px; cursor: default;
   background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff;
-  font-size: 11px; font-family: inherit;
+  font-size: 11px; font-family: var(--sleep-font);
 }
 .br-btn:active { border-color: #808080 #fff #fff #808080; }
 .br-btn:disabled { color: #808080; }
@@ -311,7 +329,7 @@ body {
 .br-addr {
   flex: 1; height: 18px; font-size: 11px; padding: 0 2px;
   border: 2px solid; border-color: #808080 #fff #fff #808080;
-  background: #fff; font-family: inherit;
+  background: #fff; font-family: var(--sleep-font);
 }
 
 /* ── Dialog ───────────────────────────────────────────────────── */
@@ -362,13 +380,13 @@ body {
   background: #d4d0c8;
 }
 .exp-toolbar button {
-  font-family: inherit; font-size: 11px; padding: 2px 8px;
+  font-family: var(--sleep-font); font-size: 11px; padding: 2px 8px;
   background: #d4d0c8; border: 2px solid;
   border-color: #fff #808080 #808080 #fff; cursor: pointer;
 }
 .exp-toolbar button:active { border-color: #808080 #fff #fff #808080; }
 .exp-addr {
-  flex: 1; font-family: 'Courier New', monospace; font-size: 11px;
+  flex: 1; font-family: var(--sleep-font); font-size: 11px;
   padding: 1px 4px; border: 2px solid; border-color: #808080 #fff #fff #808080;
   background: #fff;
 }
@@ -382,7 +400,7 @@ body {
 .exp-list-item {
   display: flex; align-items: center; gap: 6px;
   padding: 1px 4px; cursor: pointer; border: 1px solid transparent;
-  font-family: 'Courier New', monospace; font-size: 11px;
+  font-family: var(--sleep-font); font-size: 11px;
   white-space: nowrap; overflow: hidden;
 }
 .exp-list-item:hover { background: rgba(0,0,128,0.1); border-color: #000080; }
@@ -401,7 +419,7 @@ body {
 .exp-item {
   display: flex; flex-direction: column; align-items: center;
   width: 72px; padding: 4px; cursor: pointer; border: 1px solid transparent;
-  font-family: 'Courier New', monospace; font-size: 10px; text-align: center;
+  font-family: var(--sleep-font); font-size: 10px; text-align: center;
   word-break: break-all;
 }
 .exp-item:hover { background: #000080; color: #fff; border-color: #000080; }
@@ -415,7 +433,7 @@ body {
   display: none; position: fixed; inset: 0; z-index: 99999;
   background: rgba(0,0,128,0.55); border: 4px dashed #fff;
   align-items: center; justify-content: center;
-  color: #fff; font-family: 'Courier New', monospace; font-size: 22px;
+  color: #fff; font-family: var(--sleep-font); font-size: 22px;
   pointer-events: none;
 }
 #drop-overlay.active { display: flex; }
@@ -432,13 +450,13 @@ body {
 /* ── Welcome text window ─────────────────────────────────────── */
 .note-body {
   background: #fff; height: 100%; overflow: auto;
-  padding: 8px; font-family: 'Courier New', monospace;
+  padding: 8px; font-family: var(--sleep-font);
   font-size: 11px; line-height: 1.7;
 }
 .note-textarea {
   display: block; width: 100%; height: 100%; box-sizing: border-box;
   background: #fff; padding: 8px;
-  font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.7;
+  font-family: var(--sleep-font); font-size: 11px; line-height: 1.7;
   border: none; outline: none; resize: none; overflow: auto;
 }
 
@@ -455,7 +473,7 @@ body {
 .editor-highlight {
   position: absolute; inset: 0;
   padding: 8px; box-sizing: border-box;
-  font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.7;
+  font-family: var(--sleep-font); font-size: 11px; line-height: 1.7;
   white-space: pre-wrap; word-break: break-all;
   overflow: auto; pointer-events: none;
   background: #fff; color: #000; z-index: 1;
@@ -1131,7 +1149,7 @@ function showUploadConfirm(names, dirLabel) {
   const id = 'upload-confirm-' + Date.now();
   if (!mkWin({ id, title: 'Upload Complete', icon: '📤', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
   const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:14px;font-family:\'Courier New\',monospace;font-size:12px;';
+  body.style.cssText = 'padding:14px;font-family: var(--sleep-font);font-size:12px;';
   body.innerHTML = `<div style="margin-bottom:12px;">📁 ${msg}</div>
     <div style="margin-bottom:8px;color:#555;">Use OPEN &lt;filename&gt; in terminal, or type the filename to view.</div>
     <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
@@ -1212,7 +1230,7 @@ function openAudioPlayer(filename, dirName) {
   if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎵', w: 320, h: 120, menubar: false })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;';
-  body.innerHTML = `<div style="font-family:'Courier New',monospace;font-size:11px;margin-bottom:4px;">${entry.fileName}</div>`;
+  body.innerHTML = `<div style="font-family: var(--sleep-font);font-size:11px;margin-bottom:4px;">${entry.fileName}</div>`;
   const audio = document.createElement('audio');
   audio.src = blob.url; audio.controls = true; audio.style.width = '100%';
   body.appendChild(audio);
@@ -1339,7 +1357,7 @@ function osPrompt(msg, def, title, cb, icon) {
   msgDiv.style.whiteSpace = 'pre-wrap'; msgDiv.textContent = msg;
   const inp = document.createElement('input');
   inp.type = 'text'; inp.value = def;
-  inp.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;padding:2px 4px;font-family:\'Courier New\',monospace;font-size:11px;background:#fff;width:100%;box-sizing:border-box;';
+  inp.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;padding:2px 4px;font-family: var(--sleep-font);font-size:11px;background:#fff;width:100%;box-sizing:border-box;';
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;';
   const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
@@ -1855,7 +1873,7 @@ function runScriptInPopup(name, source) {
   const id = 'script-out-' + Date.now();
   if (!mkWin({ id, title: name + ' — Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'background:#000;padding:6px;overflow:auto;font-family:\'Courier New\',monospace;font-size:12px;color:#ccc;';
+  body.style.cssText = 'background:#000;padding:6px;overflow:auto;font-family: var(--sleep-font);font-size:12px;color:#ccc;';
   const print = (text, color) => {
     const div = document.createElement('div');
     div.textContent = text || '\u00a0';
@@ -1882,7 +1900,7 @@ function openSaveDialog(defaultName, callback) {
   const locLabel = document.createElement('span');
   locLabel.textContent = 'Save in:'; locLabel.style.whiteSpace = 'nowrap';
   const locDisp = document.createElement('div');
-  locDisp.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff;padding:1px 4px;font-family:\'Courier New\',monospace;font-size:11px;';
+  locDisp.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff;padding:1px 4px;font-family: var(--sleep-font);font-size:11px;';
   locRow.appendChild(locLabel); locRow.appendChild(locDisp);
   body.appendChild(locRow);
 
@@ -1898,7 +1916,7 @@ function openSaveDialog(defaultName, callback) {
   nameLabel.textContent = 'File name:'; nameLabel.style.whiteSpace = 'nowrap';
   const nameInput = document.createElement('input');
   nameInput.type = 'text'; nameInput.value = defaultName;
-  nameInput.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;padding:1px 4px;font-family:\'Courier New\',monospace;font-size:11px;background:#fff;';
+  nameInput.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;padding:1px 4px;font-family: var(--sleep-font);font-size:11px;background:#fff;';
   nameRow.appendChild(nameLabel); nameRow.appendChild(nameInput);
   body.appendChild(nameRow);
 
@@ -3439,8 +3457,8 @@ function renderVoid() {
     body.innerHTML = `
       <div id="void-feed" style="width:100%;flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:8px 10px 4px;box-sizing:border-box;gap:3px;"></div>
       <div style="width:100%;padding:4px 10px 8px;box-sizing:border-box;display:flex;align-items:center;gap:4px;border-top:1px solid #0d0d0d;">
-        <span style="color:#1a3a1a;font-family:'Courier New',monospace;font-size:11px;">_</span>
-        <input id="void-input" type="text" style="flex:1;background:#000;border:none;color:#1a3a1a;font-family:'Courier New',monospace;font-size:11px;outline:none;caret-color:#1a3a1a;" autocomplete="off" spellcheck="false" />
+        <span style="color:#1a3a1a;font-family: var(--sleep-font);font-size:11px;">_</span>
+        <input id="void-input" type="text" style="flex:1;background:#000;border:none;color:#1a3a1a;font-family: var(--sleep-font);font-size:11px;outline:none;caret-color:#1a3a1a;" autocomplete="off" spellcheck="false" />
       </div>`;
     const input = document.getElementById('void-input');
     if (input) {
@@ -3453,7 +3471,7 @@ function renderVoid() {
         const feed = document.getElementById('void-feed');
         if (!feed) return;
         const sent = document.createElement('div');
-        sent.style.cssText = 'color:#1a3a1a;font-size:11px;font-family:"Courier New",monospace;text-align:right;opacity:0.5;';
+        sent.style.cssText = 'color:#1a3a1a;font-size:11px;font-family: var(--sleep-font);text-align:right;opacity:0.5;';
         sent.textContent = val;
         feed.appendChild(sent);
         const responses = ['','.','.','still here','i hear you','...','yes','no','both','neither',"don't",'why','always','never','now','before you asked','i know'];
@@ -3461,7 +3479,7 @@ function renderVoid() {
           const r = responses[Math.floor(Math.random() * responses.length)];
           if (r) {
             const resp = document.createElement('div');
-            resp.style.cssText = 'color:#070f07;font-size:11px;font-family:"Courier New",monospace;transition:color 2s;';
+            resp.style.cssText = 'color:#070f07;font-size:11px;font-family: var(--sleep-font);transition:color 2s;';
             resp.textContent = r;
             feed.appendChild(resp);
             setTimeout(() => { resp.style.color = '#1a3a1a'; }, 80);
@@ -3474,15 +3492,15 @@ function renderVoid() {
     // Awakened: text visible, blinking cursor
     body.innerHTML = `
       <div style="color:#0a0a0a;font-size:56px;line-height:1;">⬛</div>
-      <div style="color:#1a3a1a;font-size:11px;font-family:'Courier New',monospace;text-align:center;margin-top:8px;">
+      <div style="color:#1a3a1a;font-size:11px;font-family: var(--sleep-font);text-align:center;margin-top:8px;">
         empty<br><span style="color:#0d200d;">or not</span>
       </div>
-      <div style="color:#1a3a1a;font-size:13px;font-family:'Courier New',monospace;margin-top:6px;animation:void-blink 1.1s step-end infinite;">_</div>`;
+      <div style="color:#1a3a1a;font-size:13px;font-family: var(--sleep-font);margin-top:6px;animation:void-blink 1.1s step-end infinite;">_</div>`;
   } else {
     // Base: nearly invisible
     body.innerHTML = `
       <div style="color:#0a0a0a;font-size:64px;">⬛</div>
-      <div id="void-text" style="color:#0d0d0d;font-size:11px;font-family:'Courier New',monospace;text-align:center;transition:color 4s ease;">
+      <div id="void-text" style="color:#0d0d0d;font-size:11px;font-family: var(--sleep-font);text-align:center;transition:color 4s ease;">
         empty<br><span style="color:#070707">or not</span>
       </div>`;
     setTimeout(() => {
@@ -3597,8 +3615,10 @@ function openBrowser() {
     const links = PROJECTS.map(p =>
       `<a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'${p.file}'},'*');return false;">${p.emoji} ${p.name}</a>`
     ).join('');
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-      body{margin:0;background:#c0c0c0;font-family:'Courier New',monospace;font-size:12px;}
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
+@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
+:root{--sleep-font:'W95font',sans-serif;}
+      body{margin:0;background:#c0c0c0;font-family: var(--sleep-font);font-size:12px;}
       h1{background:#000080;color:#fff;margin:0;padding:6px 12px;font-size:13px;}
       .sec{padding:6px 12px;}.sec h2{font-size:11px;margin:6px 0 4px;border-bottom:1px solid #808080;}
       .grid{display:flex;flex-wrap:wrap;gap:3px;}
@@ -3939,7 +3959,7 @@ function confirmShutdown() {
 
   const bios = document.getElementById('bios');
   bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';
-  bios.innerHTML = `<div id="bios-text" style="font-family:'VT323',monospace;font-size:18px;color:#888;white-space:pre;line-height:1.5;">
+  bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#888;white-space:pre;line-height:1.5;">
 sleepOS — ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
 
 Stopping soul_daemon.exe...              [OK]
