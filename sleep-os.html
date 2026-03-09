@@ -43,6 +43,10 @@ body {
   overflow: hidden;
 }
 #bios-text { white-space: pre; line-height: 1.45; }
+@media (min-width: 900px) {
+  #bios { align-items: center; justify-content: center; padding: 0; }
+  #bios-text { padding: 2rem 2.5rem; }
+}
 
 /* ── Desktop ─────────────────────────────────────────────────── */
 #desktop {
@@ -1052,7 +1056,7 @@ function openMediaFile(filename) {
   if (blob.kind === 'image') openImageViewer(filename);
   else if (blob.kind === 'video') openVideoPlayer(filename);
   else if (blob.kind === 'audio') openAudioPlayer(filename);
-  else alert('Cannot open binary file: ' + filename);
+  else osAlert('Cannot open binary file:\n' + filename, 'Cannot Open', '🚫');
 }
 
 function openImageViewer(filename) {
@@ -1192,6 +1196,66 @@ function showCtxMenu(x, y, items) {
   if (r.right  > window.innerWidth)  dd.style.left = (x - r.width)  + 'px';
   if (r.bottom > window.innerHeight) dd.style.top  = (y - r.height) + 'px';
   setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
+}
+
+// ── OS-native dialog replacements (no browser prompt/alert/confirm) ──
+function _osDlgPos(w, h) {
+  return { x: Math.max(20, Math.floor(window.innerWidth/2)  - Math.floor(w/2)),
+           y: Math.max(20, Math.floor(window.innerHeight/2) - Math.floor(h/2)) };
+}
+function osAlert(msg, title, icon) {
+  title = title || 'sleepOS'; icon = icon || '🔔';
+  const id = 'os-alert-' + Date.now();
+  const p = _osDlgPos(320, 175);
+  if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  const b = document.getElementById('wb-' + id);
+  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
+  const ok = document.getElementById(id + '-ok');
+  ok.onclick = () => closeWin(id);
+  ok.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') closeWin(id); });
+  setTimeout(() => ok.focus(), 40);
+}
+function osConfirm(msg, title, cb, icon) {
+  title = title || 'Confirm'; icon = icon || '❓';
+  const id = 'os-confirm-' + Date.now();
+  const p = _osDlgPos(320, 175);
+  if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  const b = document.getElementById('wb-' + id);
+  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
+  const row = document.getElementById(id + '-btns');
+  const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
+  const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = 'Cancel';
+  ok.onclick  = () => { closeWin(id); cb(true);  };
+  can.onclick = () => { closeWin(id); cb(false); };
+  [ok, can].forEach(btn => btn.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btn.click();
+    if (e.key === 'Escape') can.click();
+  }));
+  row.appendChild(ok); row.appendChild(can);
+  setTimeout(() => ok.focus(), 40);
+}
+function osPrompt(msg, def, title, cb, icon) {
+  title = title || 'Input'; icon = icon || '✏️'; def = def ?? '';
+  const id = 'os-prompt-' + Date.now();
+  const p = _osDlgPos(340, 185);
+  if (!mkWin({ id, title, icon, w:340, h:185, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  const b = document.getElementById('wb-' + id);
+  b.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:8px;font-size:11px;';
+  const msgDiv = document.createElement('div');
+  msgDiv.style.whiteSpace = 'pre-wrap'; msgDiv.textContent = msg;
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = def;
+  inp.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;padding:2px 4px;font-family:\'Courier New\',monospace;font-size:11px;background:#fff;width:100%;box-sizing:border-box;';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;';
+  const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
+  const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = 'Cancel';
+  ok.onclick  = () => { const v = inp.value; closeWin(id); cb(v.trim() || null); };
+  can.onclick = () => { closeWin(id); cb(null); };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') ok.click(); if (e.key === 'Escape') can.click(); });
+  row.appendChild(ok); row.appendChild(can);
+  b.appendChild(msgDiv); b.appendChild(inp); b.appendChild(row);
+  setTimeout(() => { inp.focus(); inp.select(); }, 40);
 }
 
 function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
@@ -1443,7 +1507,7 @@ function setupIcons() {
       '-',
       { label: '🖼️ Change Wallpaper', action: openAppearance },
       '-',
-      { label: 'ℹ️ Properties', action: () => alert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686') },
+      { label: 'ℹ️ Properties', action: () => osAlert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686', 'Properties', 'ℹ️') },
     ]);
   });
 
@@ -1665,6 +1729,119 @@ function highlight(text, lang) {
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
+function runScriptInPopup(name, source) {
+  const id = 'script-out-' + Date.now();
+  if (!mkWin({ id, title: name + ' — Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'background:#000;padding:6px;overflow:auto;font-family:\'Courier New\',monospace;font-size:12px;color:#ccc;';
+  const print = (text, color) => {
+    const div = document.createElement('div');
+    div.textContent = text || '\u00a0';
+    if (color) div.style.color = color;
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+  };
+  print('Running ' + name + '...', '#888');
+  print('');
+  execScript(source, print);
+}
+
+function openSaveDialog(defaultName, callback) {
+  const id = 'saveas-' + Date.now();
+  if (!mkWin({ id, title: 'Save As', icon: '💾', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
+
+  let saveCwd = '';
+
+  // ── "Save in:" bar ────────────────────────────────────────────
+  const locRow = document.createElement('div');
+  locRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+  const locLabel = document.createElement('span');
+  locLabel.textContent = 'Save in:'; locLabel.style.whiteSpace = 'nowrap';
+  const locDisp = document.createElement('div');
+  locDisp.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff;padding:1px 4px;font-family:\'Courier New\',monospace;font-size:11px;';
+  locRow.appendChild(locLabel); locRow.appendChild(locDisp);
+  body.appendChild(locRow);
+
+  // ── File list ────────────────────────────────────────────────
+  const fileList = document.createElement('div');
+  fileList.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff;overflow:auto;padding:4px;display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;min-height:0;';
+  body.appendChild(fileList);
+
+  // ── File name row ────────────────────────────────────────────
+  const nameRow = document.createElement('div');
+  nameRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+  const nameLabel = document.createElement('span');
+  nameLabel.textContent = 'File name:'; nameLabel.style.whiteSpace = 'nowrap';
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text'; nameInput.value = defaultName;
+  nameInput.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;padding:1px 4px;font-family:\'Courier New\',monospace;font-size:11px;background:#fff;';
+  nameRow.appendChild(nameLabel); nameRow.appendChild(nameInput);
+  body.appendChild(nameRow);
+
+  // ── Buttons ──────────────────────────────────────────────────
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;flex-shrink:0;';
+  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary'; saveBtn.textContent = 'Save';
+  const cancelBtn = document.createElement('button'); cancelBtn.className = 'dlg-btn';        cancelBtn.textContent = 'Cancel';
+  btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
+  body.appendChild(btnRow);
+
+  function makeFLItem(emoji, label) {
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:68px;padding:3px;cursor:default;border:1px solid transparent;font-size:10px;text-align:center;word-break:break-word;';
+    el.innerHTML = `<div style="font-size:22px;">${emoji}</div><span>${label}</span>`;
+    el.addEventListener('mouseover', () => { el.style.background='#000080'; el.style.color='#fff'; });
+    el.addEventListener('mouseout',  () => { el.style.background='';        el.style.color=''; });
+    return el;
+  }
+
+  function renderSaveList() {
+    fileList.innerHTML = '';
+    locDisp.textContent = saveCwd ? `C:\\sleepOS\\${saveCwd}` : 'C:\\sleepOS';
+
+    if (saveCwd) {
+      const up = makeFLItem('📁', '..');
+      up.addEventListener('dblclick', () => { saveCwd = ''; renderSaveList(); });
+      fileList.appendChild(up);
+    }
+
+    const dir = fsGetDir(saveCwd);
+    const dirs = saveCwd ? [...(dir?.dirs ?? [])]
+                         : ['DOCS', ...termFS.dirs].filter((v, i, a) => a.indexOf(v) === i);
+    dirs.forEach(d => {
+      const el = makeFLItem('📁', d);
+      el.addEventListener('dblclick', () => { saveCwd = d; renderSaveList(); });
+      fileList.appendChild(el);
+    });
+
+    (dir?.files ?? termFS.files).forEach((_, name) => {
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      const emoji = { script:'📜', txt:'📄', md:'📋', js:'📜', py:'🐍' }[ext] || '📄';
+      const el = makeFLItem(emoji, name);
+      el.addEventListener('click', () => { nameInput.value = name; });
+      el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
+      fileList.appendChild(el);
+    });
+  }
+
+  saveBtn.addEventListener('click', () => {
+    const fname = nameInput.value.trim();
+    if (!fname) return;
+    closeWin(id);
+    callback(fname, saveCwd);
+  });
+  cancelBtn.addEventListener('click', () => closeWin(id));
+  nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  saveBtn.click();
+    if (e.key === 'Escape') cancelBtn.click();
+  });
+
+  renderSaveList();
+  setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+}
+
 function openNotepad(filename) {
   const id = filename ? 'notepad-' + filename : 'notepad-' + (++_notepadCount);
   const displayName = filename || 'untitled.txt';
@@ -1777,8 +1954,21 @@ function openNotepad(filename) {
   }
 
   function promptSaveAs() {
-    const name = prompt('Save as:', currentFile || 'untitled.txt');
-    if (name) save(name.trim());
+    openSaveDialog(currentFile || 'untitled.txt', (fname, dir) => {
+      if (dir) {
+        const subDir = fsGetDir(dir);
+        if (subDir) {
+          subDir.files.set(fname, ta.value);
+          currentFile = fname;
+          const titleEl = document.getElementById('wtitle-' + id);
+          if (titleEl) titleEl.textContent = fname + ' \u2014 Notepad';
+          updateStatus();
+          document.dispatchEvent(new CustomEvent('fs-changed'));
+        }
+      } else {
+        save(fname);
+      }
+    });
   }
 
   function setLang(l) { lang = l; renderHighlight(); updateStatus(); }
@@ -1904,12 +2094,14 @@ function openExplorer(startPath) {
 
   function deleteSelected() {
     if (!selected || selected.sysfile) return;
-    if (!confirm(`Delete "${selected.name}"?`)) return;
-    const dir = fsGetDir(cwd);
-    if (selected.kind === 'dir') { termFS.dirs.delete(selected.name); termFS.subdirs.delete(selected.name); }
-    else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); }
-    else dir.files.delete(selected.name);
-    render();
+    osConfirm(`Delete "${selected.name}"?`, 'Delete', ok => {
+      if (!ok) return;
+      const dir = fsGetDir(cwd);
+      if (selected.kind === 'dir') { termFS.dirs.delete(selected.name); termFS.subdirs.delete(selected.name); }
+      else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); }
+      else dir.files.delete(selected.name);
+      render();
+    }, '🗑️');
   }
 
   function makeItem(name, kind, sysfile) {
@@ -1928,25 +2120,33 @@ function openExplorer(startPath) {
       el.classList.add('selected'); selected = { name, kind, sysfile };
       if (ws) ws.textContent = name;
       const canDelete = !sysfile;
+      const isScript = !sysfile && name.toLowerCase().endsWith('.script');
       showCtxMenu(e.clientX, e.clientY, [
         { label: kind === 'dir' ? '📂 Open Folder' : '▶ Open', action: () => openItem(name, kind, sysfile) },
+        ...(isScript ? [{ label: '📜 Run Script', action: () => {
+          const dir = fsGetDir(cwd);
+          const src = dir.files.get(name);
+          if (src !== undefined) runScriptInPopup(name, src);
+        }}] : []),
         '-',
         { label: '✏️ Rename', disabled: sysfile, action: () => {
           if (sysfile) return;
-          const n = prompt('Rename to:', name); if (!n || n === name) return;
-          const dir = fsGetDir(cwd);
-          if (kind === 'dir') {
-            termFS.dirs.delete(name);
-            const sub = termFS.subdirs.get(name);
-            termFS.dirs.add(n.toUpperCase());
-            if (sub) termFS.subdirs.set(n.toUpperCase(), sub);
-            termFS.subdirs.delete(name);
-          } else if (dir.blobs.has(name)) {
-            const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
-          } else {
-            const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
-          }
-          render();
+          osPrompt('Rename to:', name, 'Rename', n => {
+            if (!n || n === name) return;
+            const dir = fsGetDir(cwd);
+            if (kind === 'dir') {
+              termFS.dirs.delete(name);
+              const sub = termFS.subdirs.get(name);
+              termFS.dirs.add(n.toUpperCase());
+              if (sub) termFS.subdirs.set(n.toUpperCase(), sub);
+              termFS.subdirs.delete(name);
+            } else if (dir.blobs.has(name)) {
+              const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
+            } else {
+              const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
+            }
+            render();
+          });
         }},
         { label: '🗑️ Delete', disabled: !canDelete, action: deleteSelected },
         '-',
@@ -2003,8 +2203,10 @@ function openExplorer(startPath) {
     if (e.target !== pane && !e.target.classList.contains('exp-grid')) return;
     e.preventDefault();
     showCtxMenu(e.clientX, e.clientY, [
-      { label: '📁 New Folder',    action: () => { const n = prompt('Folder name:'); if (n) { termFS.dirs.add(n.toUpperCase()); render(); } } },
-      { label: '📄 New Text File', action: () => { const n = prompt('File name:', 'untitled.txt'); if (n) { termFS.files.set(n,''); openNotepad(n); render(); } } },
+      { label: '💻 Open Terminal Here', action: () => openTerminal(cwd) },
+      '-',
+      { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { termFS.dirs.add(n.toUpperCase()); render(); } }) },
+      { label: '📄 New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { termFS.files.set(n,''); openNotepad(n); render(); } }) },
       '-',
       { label: '📤 Upload File…',  action: triggerUpload },
       '-',
@@ -2016,8 +2218,8 @@ function openExplorer(startPath) {
   mb.innerHTML = '';
   [
     { label: 'File', items: () => [
-      { label: 'New Folder',   action: () => { const n = prompt('Folder name:'); if (n) { termFS.dirs.add(n.toUpperCase()); render(); } } },
-      { label: 'New Text File',action: () => { const n = prompt('File name:', 'untitled.txt'); if (n) { termFS.files.set(n,''); openNotepad(n); render(); } } },
+      { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { termFS.dirs.add(n.toUpperCase()); render(); } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { termFS.files.set(n,''); openNotepad(n); render(); } }) },
       '-',
       { label: 'Open',         action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
       { label: 'Delete',       action: deleteSelected },
@@ -2114,7 +2316,7 @@ function openFiles() {
     { label: 'Open',       action: () => { if (selected) window.open(selected.file, '_blank'); else if (ws) ws.textContent = 'No file selected.'; } },
     { label: 'Properties', action: () => {
       if (!selected) { if (ws) ws.textContent = 'No file selected.'; return; }
-      alert(`Name:\t${selected.name}\nFile:\t${selected.file}\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\`);
+      osAlert(`Name:\t${selected.name}\nFile:\t${selected.file}\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\`, 'Properties', '📄');
     }},
     '-',
     { label: 'Close', action: () => closeWin('files') },
@@ -2142,9 +2344,9 @@ function openFiles() {
     ];
   }
   const HELP_ITEMS = [
-    { label: 'Help Topics', action: () => alert('PROJECTS.DIR Help\n\nDouble-click any project to open it in a new tab.\nFile > Open  — opens selected project\nFile > Properties  — shows file info\nView  — switch between Large Icons, List, Details\nEdit > Select All  — selects all projects\nEdit > Copy Name  — copies selected name') },
+    { label: 'Help Topics', action: () => osAlert('PROJECTS.DIR Help\n\nDouble-click any project to open it in a new tab.\nFile > Open  — opens selected project\nFile > Properties  — shows file info\nView  — switch between Large Icons, List, Details\nEdit > Select All  — selects all projects\nEdit > Copy Name  — copies selected name', 'Help Topics', '❓') },
     '-',
-    { label: 'About PROJECTS.DIR', action: () => alert('PROJECTS.DIR — File Manager\nsleepOS v1.0\n\n' + PROJECTS.length + ' interactive projects.\nAll of them are watching.') },
+    { label: 'About PROJECTS.DIR', action: () => osAlert('PROJECTS.DIR — File Manager\nsleepOS v1.0\n\n' + PROJECTS.length + ' interactive projects.\nAll of them are watching.', 'About', '📁') },
   ];
 
   mb.innerHTML = '';
@@ -2163,7 +2365,7 @@ function openFiles() {
   renderView();
 }
 
-function openTerminal() {
+function openTerminal(startDir) {
   if (!mkWin({ id:'terminal', title:'TERMINAL.EXE — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-terminal');
   body.style.padding = '0'; body.style.overflow = 'hidden';
@@ -2207,7 +2409,7 @@ function openTerminal() {
   print('');
 
   let cmdHistory = [], histIdx = -1;
-  let cwd = ''; // '' = root, 'DOCS' = DOCS dir, etc.
+  let cwd = startDir ? startDir.toUpperCase() : ''; // '' = root, 'DOCS' = DOCS dir, etc.
 
   function getPromptStr() {
     return cwd ? `C:\\sleepOS\\${cwd}>` : 'C:\\sleepOS>';
@@ -2781,14 +2983,46 @@ function openDefrag() {
 
   const COLS = 40, ROWS = 16, TOTAL = COLS * ROWS;
   // States: 0=free, 1=used(blue), 2=optimized(green), 3=active(red)
-  const cells = Array.from({ length: TOTAL }, () => Math.random() < 0.68 ? 1 : 0);
-  const USED_TOTAL = cells.filter(c => c === 1).length;
   const COLORS = { 0:'#ffffff', 1:'#0000aa', 2:'#00aa00', 3:'#cc2200' };
+  const DEFRAG_KEY = 'sleepOS-defrag-time';
+
+  const lastDefragTs = parseInt(localStorage.getItem(DEFRAG_KEY) || '0');
+  const msSince = lastDefragTs ? Date.now() - lastDefragTs : null;
+
+  // 0 = perfectly optimized, 1 = fully fragmented
+  function computeFragLevel(ms) {
+    if (ms === null) return 0.68;           // never defragged: default messy
+    const hours = ms / 3600000;
+    if (hours < 0.01) return 0.02;         // < ~36s: basically clean
+    return Math.min(0.90, 0.02 + 0.88 * Math.pow(hours / 168, 0.38)); // grows over ~1 week
+  }
+  const fragLevel = computeFragLevel(msSince);
+
+  // Build initial cell states: used blocks are green or blue based on frag level
+  const cells = Array.from({ length: TOTAL }, () => {
+    if (Math.random() > 0.68) return 0;                           // free
+    return Math.random() < fragLevel ? 1 : 2;                     // fragmented or clean
+  });
+  const USED_TOTAL = cells.filter(c => c > 0).length;
+
+  function timeAgo(ms) {
+    if (!ms) return 'never';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} min ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} hr${h !== 1 ? 's' : ''} ago`;
+    const d = Math.floor(h / 24);
+    return `${d} day${d !== 1 ? 's' : ''} ago`;
+  }
+
+  const initOptPct = Math.round((1 - fragLevel) * 100);
 
   // ── Drive info ─────────────────────────────────────────────────
   const infoRow = document.createElement('div');
   infoRow.style.cssText = 'display:flex;gap:16px;align-items:center;border:2px solid;border-color:#808080 #fff #fff #808080;padding:3px 8px;background:#fff;flex-shrink:0;';
-  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">0% optimized</span>`;
+  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-last" style="color:#555;">Last defrag: ${timeAgo(msSince)}</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">${initOptPct}% optimized</span>`;
   body.appendChild(infoRow);
 
   // ── Canvas grid ────────────────────────────────────────────────
@@ -2817,17 +3051,21 @@ function openDefrag() {
   const pbWrap = document.createElement('div');
   pbWrap.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;height:18px;background:#c0c0c0;position:relative;overflow:hidden;flex-shrink:0;';
   const pbFill = document.createElement('div');
-  pbFill.style.cssText = 'position:absolute;left:0;top:0;height:100%;width:0%;background:#000080;';
+  pbFill.style.cssText = `position:absolute;left:0;top:0;height:100%;width:${initOptPct}%;background:#000080;`;
   const pbLabel = document.createElement('div');
   pbLabel.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;mix-blend-mode:difference;';
-  pbLabel.textContent = '0%';
+  pbLabel.textContent = initOptPct + '%';
   pbWrap.appendChild(pbFill); pbWrap.appendChild(pbLabel);
   body.appendChild(pbWrap);
 
   // ── File label ─────────────────────────────────────────────────
   const fileLabel = document.createElement('div');
   fileLabel.style.cssText = 'font-size:10px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;height:13px;';
-  fileLabel.textContent = 'Press Start to begin defragmentation.';
+  fileLabel.textContent = fragLevel < 0.05
+    ? 'Disk is optimized. No defragmentation necessary.'
+    : fragLevel < 0.3
+      ? `Disk is ${Math.round(fragLevel * 100)}% fragmented. Some defragmentation recommended.`
+      : `Disk is ${Math.round(fragLevel * 100)}% fragmented. Defragmentation recommended.`;
   body.appendChild(fileLabel);
 
   // ── Buttons ────────────────────────────────────────────────────
@@ -2866,7 +3104,7 @@ function openDefrag() {
     'C:\\WINDOWS\\SYSTEM\\time.dll',        'C:\\VOID\\[FILE NAME UNREADABLE]',
   ];
 
-  let running = false, timer = null, optimized = 0, fileIdx = 0;
+  let running = false, timer = null, optimized = cells.filter(c => c === 2).length, fileIdx = 0;
   let leftPtr = 0, rightPtr = TOTAL - 1, activeCell = -1;
 
   function updateProgress() {
@@ -2895,6 +3133,9 @@ function openDefrag() {
       document.getElementById('df-pct').textContent = '100% optimized';
       fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
       if (ws) ws.textContent = 'Complete — 1 file could not be moved';
+      localStorage.setItem(DEFRAG_KEY, Date.now().toString());
+      const lastEl = document.getElementById('df-last');
+      if (lastEl) lastEl.textContent = 'Last defrag: just now';
       drawGrid();
       return;
     }
@@ -2961,14 +3202,14 @@ function openDefrag() {
   [
     { label: 'Drive', items: [
       { label: 'C:\\ (2,147 MB)  ✓', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
-      { label: 'D:\\ — [NOT FOUND]', action: () => alert('Drive D:\\ is not available.\n\nIt may have never existed.') },
+      { label: 'D:\\ — [NOT FOUND]', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', '⚠️') },
       '-',
       { label: 'Exit', action: () => closeWin('defrag') },
     ]},
     { label: 'Help', items: [
-      { label: 'Help Topics', action: () => alert('DEFRAG.EXE — Help\n\nClick Start to defragment drive C:\\.\n\nDisk defragmentation rearranges fragmented\ndata so your disk works more efficiently.\n\nNote: some system files cannot be moved.') },
+      { label: 'Help Topics', action: () => osAlert('DEFRAG.EXE — Help\n\nClick Start to defragment drive C:\\.\n\nDisk defragmentation rearranges fragmented\ndata so your disk works more efficiently.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
       '-',
-      { label: 'About DEFRAG.EXE', action: () => alert('DEFRAG.EXE — Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\n1 file cannot be moved.\nIt has always been there.') },
+      { label: 'About DEFRAG.EXE', action: () => osAlert('DEFRAG.EXE — Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\n1 file cannot be moved.\nIt has always been there.', 'About DEFRAG.EXE', '🧩') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -3328,11 +3569,12 @@ function openBrowser() {
   function addToFavorites() {
     const url = currentUrl();
     if (url === 'home:') return;
-    const title = prompt('Save to Favorites as:', document.getElementById('br-url').value);
-    if (!title) return;
-    browserFavorites.push({ title, url });
-    saveFavorites();
-    if (ws) ws.textContent = 'Added to Favorites.';
+    osPrompt('Save to Favorites as:', document.getElementById('br-url').value, 'Add to Favorites', title => {
+      if (!title) return;
+      browserFavorites.push({ title, url });
+      saveFavorites();
+      if (ws) ws.textContent = 'Added to Favorites.';
+    }, '⭐');
   }
 
   document.getElementById('br-fav').addEventListener('click', addToFavorites);
@@ -3376,7 +3618,7 @@ function openBrowser() {
   mb.innerHTML = '';
   [
     { label: 'File', items: [
-      { label: 'Open Location...', action: () => { const u = prompt('Enter URL:'); if (u) navigate(u); } },
+      { label: 'Open Location...', action: () => osPrompt('Enter URL:', 'https://', 'Open Location', u => { if (u) navigate(u); }, '🌐') },
       '-',
       { label: 'Close', action: () => closeWin('browser') },
     ]},
@@ -3389,11 +3631,11 @@ function openBrowser() {
         try {
           const src = iframe.contentDocument.documentElement.outerHTML;
           const w = window.open(''); w.document.write('<pre style="white-space:pre-wrap;font-size:12px;">' + src.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>');
-        } catch(e) { alert('Cannot view source of cross-origin pages.'); }
+        } catch(e) { osAlert('Cannot view source of cross-origin pages.', 'View Source', '🚫'); }
       }},
     ]},
     { label: 'Help', items: [
-      { label: 'About sleepWEB', action: () => alert('sleepWEB — Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.') },
+      { label: 'About sleepWEB', action: () => osAlert('sleepWEB — Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', '🌐') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -3410,8 +3652,11 @@ function openBrowser() {
     const items = [
       { label: '⭐ Add to Favorites', action: addToFavorites },
       { label: '🗑️ Clear All Favorites', action: () => {
-        if (!browserFavorites.length || !confirm('Clear all favorites?')) return;
-        browserFavorites.length = 0; saveFavorites();
+        if (!browserFavorites.length) return;
+        osConfirm('Clear all favorites?', 'Confirm', ok => {
+          if (!ok) return;
+          browserFavorites.length = 0; saveFavorites();
+        }, '🗑️');
       }},
     ];
     if (browserFavorites.length) {
