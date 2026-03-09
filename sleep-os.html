@@ -43,6 +43,10 @@ body {
   overflow: hidden;
 }
 #bios-text { white-space: pre; line-height: 1.45; }
+@media (min-width: 900px) {
+  #bios { align-items: center; justify-content: center; padding: 0; }
+  #bios-text { padding: 2rem 2.5rem; }
+}
 
 /* ── Desktop ─────────────────────────────────────────────────── */
 #desktop {
@@ -2781,14 +2785,46 @@ function openDefrag() {
 
   const COLS = 40, ROWS = 16, TOTAL = COLS * ROWS;
   // States: 0=free, 1=used(blue), 2=optimized(green), 3=active(red)
-  const cells = Array.from({ length: TOTAL }, () => Math.random() < 0.68 ? 1 : 0);
-  const USED_TOTAL = cells.filter(c => c === 1).length;
   const COLORS = { 0:'#ffffff', 1:'#0000aa', 2:'#00aa00', 3:'#cc2200' };
+  const DEFRAG_KEY = 'sleepOS-defrag-time';
+
+  const lastDefragTs = parseInt(localStorage.getItem(DEFRAG_KEY) || '0');
+  const msSince = lastDefragTs ? Date.now() - lastDefragTs : null;
+
+  // 0 = perfectly optimized, 1 = fully fragmented
+  function computeFragLevel(ms) {
+    if (ms === null) return 0.68;           // never defragged: default messy
+    const hours = ms / 3600000;
+    if (hours < 0.01) return 0.02;         // < ~36s: basically clean
+    return Math.min(0.90, 0.02 + 0.88 * Math.pow(hours / 168, 0.38)); // grows over ~1 week
+  }
+  const fragLevel = computeFragLevel(msSince);
+
+  // Build initial cell states: used blocks are green or blue based on frag level
+  const cells = Array.from({ length: TOTAL }, () => {
+    if (Math.random() > 0.68) return 0;                           // free
+    return Math.random() < fragLevel ? 1 : 2;                     // fragmented or clean
+  });
+  const USED_TOTAL = cells.filter(c => c > 0).length;
+
+  function timeAgo(ms) {
+    if (!ms) return 'never';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} min ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} hr${h !== 1 ? 's' : ''} ago`;
+    const d = Math.floor(h / 24);
+    return `${d} day${d !== 1 ? 's' : ''} ago`;
+  }
+
+  const initOptPct = Math.round((1 - fragLevel) * 100);
 
   // ── Drive info ─────────────────────────────────────────────────
   const infoRow = document.createElement('div');
   infoRow.style.cssText = 'display:flex;gap:16px;align-items:center;border:2px solid;border-color:#808080 #fff #fff #808080;padding:3px 8px;background:#fff;flex-shrink:0;';
-  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">0% optimized</span>`;
+  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-last" style="color:#555;">Last defrag: ${timeAgo(msSince)}</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">${initOptPct}% optimized</span>`;
   body.appendChild(infoRow);
 
   // ── Canvas grid ────────────────────────────────────────────────
@@ -2817,17 +2853,21 @@ function openDefrag() {
   const pbWrap = document.createElement('div');
   pbWrap.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;height:18px;background:#c0c0c0;position:relative;overflow:hidden;flex-shrink:0;';
   const pbFill = document.createElement('div');
-  pbFill.style.cssText = 'position:absolute;left:0;top:0;height:100%;width:0%;background:#000080;';
+  pbFill.style.cssText = `position:absolute;left:0;top:0;height:100%;width:${initOptPct}%;background:#000080;`;
   const pbLabel = document.createElement('div');
   pbLabel.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;mix-blend-mode:difference;';
-  pbLabel.textContent = '0%';
+  pbLabel.textContent = initOptPct + '%';
   pbWrap.appendChild(pbFill); pbWrap.appendChild(pbLabel);
   body.appendChild(pbWrap);
 
   // ── File label ─────────────────────────────────────────────────
   const fileLabel = document.createElement('div');
   fileLabel.style.cssText = 'font-size:10px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;height:13px;';
-  fileLabel.textContent = 'Press Start to begin defragmentation.';
+  fileLabel.textContent = fragLevel < 0.05
+    ? 'Disk is optimized. No defragmentation necessary.'
+    : fragLevel < 0.3
+      ? `Disk is ${Math.round(fragLevel * 100)}% fragmented. Some defragmentation recommended.`
+      : `Disk is ${Math.round(fragLevel * 100)}% fragmented. Defragmentation recommended.`;
   body.appendChild(fileLabel);
 
   // ── Buttons ────────────────────────────────────────────────────
@@ -2866,7 +2906,7 @@ function openDefrag() {
     'C:\\WINDOWS\\SYSTEM\\time.dll',        'C:\\VOID\\[FILE NAME UNREADABLE]',
   ];
 
-  let running = false, timer = null, optimized = 0, fileIdx = 0;
+  let running = false, timer = null, optimized = cells.filter(c => c === 2).length, fileIdx = 0;
   let leftPtr = 0, rightPtr = TOTAL - 1, activeCell = -1;
 
   function updateProgress() {
@@ -2895,6 +2935,9 @@ function openDefrag() {
       document.getElementById('df-pct').textContent = '100% optimized';
       fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
       if (ws) ws.textContent = 'Complete — 1 file could not be moved';
+      localStorage.setItem(DEFRAG_KEY, Date.now().toString());
+      const lastEl = document.getElementById('df-last');
+      if (lastEl) lastEl.textContent = 'Last defrag: just now';
       drawGrid();
       return;
     }
