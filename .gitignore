@@ -35,3 +35,5 @@ audio/interference.mp3
 docs/
 .claude/
 *.stackdump
+.mcp.json
+.claude-flow/
