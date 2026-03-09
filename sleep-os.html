@@ -355,6 +355,7 @@ body {
 .wp-swatch .wp-thumb { border: 2px solid #808080; }
 .wp-swatch.wp-selected > div:first-child { border-color: #000080; outline: 1px solid #fff; }
 .wp-swatch:hover > div:first-child { border-color: #000080; }
+.wp-swatch .wp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 @keyframes eb-battle { 0% { background-position: 0 0; } 100% { background-position: 153px 153px; } }
 @keyframes eb-cave {
   0%   { filter: hue-rotate(0deg)   brightness(1);   }
@@ -735,7 +736,92 @@ const DESKTOP_ICONS = [
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
 ];
 
-const customDesktopIcons = []; // user-created shortcuts (session)
+const DESKTOP_SHORTCUTS_KEY = 'sleepOS-desktop-shortcuts';
+const customDesktopIcons = [];
+function normalizeShortcutPath(path) {
+  return String(path || '')
+    .trim()
+    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '');
+}
+function normalizeDesktopShortcut(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const target = entry.target && typeof entry.target === 'object' ? entry.target : null;
+  if (!target) return null;
+  const kind = target.kind === 'dir' ? 'dir' : 'file';
+  const path = normalizeShortcutPath(target.path);
+  const name = String(entry.name || target.name || path.split('\\').pop() || '').trim();
+  const emoji = String(entry.emoji || '').trim();
+  if (!name || !emoji) return null;
+  if (!path && !target.sysfile) return null;
+  return {
+    name,
+    emoji,
+    custom: true,
+    target: {
+      name,
+      path,
+      kind,
+      sysfile: !!target.sysfile,
+    },
+  };
+}
+function saveDesktopShortcuts() {
+  try {
+    localStorage.setItem(DESKTOP_SHORTCUTS_KEY, JSON.stringify(customDesktopIcons.map(({ name, emoji, target }) => ({
+      name,
+      emoji,
+      target,
+    }))));
+  } catch (e) {}
+}
+function loadDesktopShortcuts() {
+  customDesktopIcons.length = 0;
+  try {
+    const raw = JSON.parse(localStorage.getItem(DESKTOP_SHORTCUTS_KEY) || '[]');
+    raw.map(normalizeDesktopShortcut).filter(Boolean).forEach(icon => customDesktopIcons.push(icon));
+  } catch (e) {}
+}
+loadDesktopShortcuts();
+function openSystemFile(name) {
+  const SYS = {
+    'WELCOME.README': openWelcome,
+    'TERMINAL.exe': openTerminal,
+    'SYSMON.exe': openSysmon,
+    'NOTEPAD.exe': openNotepad,
+    'BROWSER.exe': openBrowser,
+    'DEFRAG.exe': openDefrag,
+    'void.tmp': openVoid,
+    'daemon.core': openDaemon,
+    '?????.exe': openUnknown,
+  };
+  if (!SYS[name]) return false;
+  SYS[name]();
+  return true;
+}
+function openDesktopShortcutTarget(target) {
+  if (!target || typeof target !== 'object') return;
+  const path = normalizeShortcutPath(target.path);
+  const name = String(target.name || path.split('\\').pop() || '').trim();
+  if (target.sysfile) {
+    if (!openSystemFile(name || path)) {
+      osAlert('Shortcut target not found:\n' + (name || path || 'Unknown target'), 'Missing Shortcut', 'X');
+    }
+    return;
+  }
+  if (target.kind === 'dir') {
+    openExplorer(path);
+    return;
+  }
+  const entry = fsGetEntry(path);
+  if (!entry) {
+    osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
+    return;
+  }
+  if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
+  else openNotepad(entry.fileName, entry.dirName);
+}
 const DEFAULT_BROWSER_FAVORITES = [
   { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: '&#128214;' },
   { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: '&#128230;' },
@@ -793,17 +879,12 @@ const WALLPAPERS = [
   {
     id: 'magicant', name: 'Magicant', emoji: '🌸',
     bg: `background:
-      radial-gradient(ellipse 180px 65px at 20% 28%, rgba(255,255,255,0.75) 0%, transparent 65%),
-      radial-gradient(ellipse 120px 45px at 66% 20%, rgba(255,255,255,0.55) 0%, transparent 65%),
-      radial-gradient(ellipse 90px 35px at 48% 58%, rgba(255,255,255,0.4) 0%, transparent 65%),
       linear-gradient(180deg,#c84890 0%,#e070b0 22%,#f0a0d0 48%,#f8d0ee 75%,#fce4ff 100%);
     animation:eb-magicant 7s ease-in-out infinite alternate;`
   },
   {
-    id: 'onett', name: 'Onett', emoji: '🌤️',
+    id: 'hills', name: 'Hills', emoji: '🌤️',
     bg: `background:
-      radial-gradient(ellipse 155px 50px at 22% 26%, rgba(255,255,255,0.82) 0%, transparent 58%),
-      radial-gradient(ellipse 95px 38px at 62% 18%, rgba(255,255,255,0.62) 0%, transparent 58%),
       linear-gradient(180deg,#3a80cc 0%,#5aaae0 32%,#88c8f0 40%,#52b050 42%,#3a9038 54%,#2a7028 100%);`
   },
   {
@@ -845,46 +926,177 @@ const WALLPAPERS = [
   },
 ];
 
+const WALLPAPER_FILE_PREFIX = 'FILE:';
 let currentWallpaper = 'default';
 
-function applyWallpaper(id) {
-  const wp = WALLPAPERS.find(w => w.id === id);
-  if (!wp) return;
-  currentWallpaper = id;
+function isWallpaperFileId(id) {
+  return typeof id === 'string' && id.startsWith(WALLPAPER_FILE_PREFIX);
+}
+
+function wallpaperFileId(path, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  return fileName ? WALLPAPER_FILE_PREFIX + blobRelativePath(dirName, fileName) : '';
+}
+
+function wallpaperFilePath(id) {
+  return isWallpaperFileId(id) ? id.slice(WALLPAPER_FILE_PREFIX.length) : '';
+}
+
+function getUploadedWallpaperChoices() {
+  const items = [];
+  function walk(dir, dirPath) {
+    if (!dir) return;
+    dir.blobs?.forEach((blob, fileName) => {
+      if (blob.kind !== 'image') return;
+      const relPath = blobRelativePath(dirPath, fileName);
+      items.push({
+        id: WALLPAPER_FILE_PREFIX + relPath,
+        name: fileName,
+        path: relPath,
+        url: blob.url,
+      });
+    });
+    if (!dir.subdirs) return;
+    [...dir.subdirs.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([subName, subdir]) => walk(subdir, dirPath ? dirPath + '\\' + subName : subName));
+  }
+  walk(termFS, '');
+  return items.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function renderWallpaperSwatch(grid, choice) {
+  const item = document.createElement('div');
+  item.dataset.id = choice.id;
+  item.className = 'wp-swatch' + (choice.id === currentWallpaper ? ' wp-selected' : '');
+  item.title = choice.path ? `C:\\sleepOS\\${choice.path}` : choice.name;
+  item.style.cssText = 'cursor:default;display:flex;flex-direction:column;align-items:center;gap:3px;';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'wp-thumb';
+  thumb.style.cssText = 'width:72px;height:50px;box-sizing:border-box;overflow:hidden;flex-shrink:0;background:#c0c0c0;';
+
+  if (choice.url) {
+    const img = document.createElement('img');
+    img.src = choice.url;
+    img.alt = choice.name;
+    img.draggable = false;
+    thumb.appendChild(img);
+  } else {
+    const fill = document.createElement('div');
+    fill.style.cssText = `width:100%;height:100%;${choice.bg}`;
+    thumb.appendChild(fill);
+  }
+
+  const label = document.createElement('div');
+  label.style.cssText = 'font-size:10px;text-align:center;line-height:1.25;max-width:84px;word-break:break-word;';
+  label.textContent = choice.path ? choice.name.replace(/\.[^.]+$/, '') : choice.name;
+  item.appendChild(thumb);
+  item.appendChild(label);
+
+  if (choice.path && choice.path !== choice.name) {
+    const meta = document.createElement('div');
+    meta.textContent = choice.path.replace(/\\[^\\]+$/, '') || 'Root';
+    meta.style.cssText = 'font-size:9px;color:#555;text-align:center;line-height:1.1;max-width:84px;word-break:break-word;';
+    item.appendChild(meta);
+  }
+
+  item.addEventListener('click', () => applyWallpaper(choice.id));
+  grid.appendChild(item);
+}
+
+function renderAppearanceWindow() {
+  const body = document.getElementById('wb-appearance');
+  if (!body) return;
+  const uploads = getUploadedWallpaperChoices();
+  body.style.cssText = 'padding:10px;overflow:auto;';
+  body.innerHTML = `
+    <div style="font-size:11px;margin-bottom:8px;">Wallpaper</div>
+    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Built-in</div>
+    <div id="wp-grid-builtins" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;"></div>
+    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Uploaded Images</div>
+    <div id="wp-grid-uploaded" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>
+    <div id="wp-upload-note" style="font-size:10px;line-height:1.4;margin-top:10px;color:#333;"></div>`;
+
+  const builtinsGrid = document.getElementById('wp-grid-builtins');
+  WALLPAPERS.forEach(wp => renderWallpaperSwatch(builtinsGrid, wp));
+
+  const uploadedGrid = document.getElementById('wp-grid-uploaded');
+  const note = document.getElementById('wp-upload-note');
+  if (uploads.length) {
+    uploads.forEach(choice => renderWallpaperSwatch(uploadedGrid, choice));
+    note.textContent = 'Right-click any image in File Explorer and choose Set as Wallpaper.';
+  } else {
+    uploadedGrid.innerHTML = `<div style="grid-column:1 / -1;padding:8px 10px;border:2px solid;border-color:#808080 #fff #fff #808080;background:#d4d0c8;font-size:10px;line-height:1.4;">Uploaded image files will appear here and can be used as wallpaper.</div>`;
+    note.textContent = 'Use File Explorer to upload an image, then right-click it to set it as wallpaper.';
+  }
+}
+
+function refreshAppearanceWindow() {
+  if (document.getElementById('wb-appearance')) renderAppearanceWindow();
+}
+
+function applyWallpaper(id, options = {}) {
+  const { deferMissing = false } = options;
   const bg = document.getElementById('desktop-bg');
-  bg.style.cssText = wp.bg;
-  localStorage.setItem(WP_KEY, id);
-  // Re-render swatch selection if window open
+  if (!bg) return false;
+
+  const wp = WALLPAPERS.find(w => w.id === id);
+  if (wp) {
+    currentWallpaper = id;
+    bg.style.cssText = wp.bg;
+    localStorage.setItem(WP_KEY, id);
+    document.querySelectorAll('.wp-swatch').forEach(s => {
+      s.classList.toggle('wp-selected', s.dataset.id === id);
+    });
+    return true;
+  }
+
+  if (isWallpaperFileId(id)) {
+    const entry = fsGetEntry(wallpaperFilePath(id));
+    const blob = entry && entry.kind === 'blob' ? entry.value : null;
+    if (blob?.kind === 'image') {
+      currentWallpaper = id;
+      bg.style.cssText = `background-color:#c0c0c0;background-image:url("${blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;`;
+      localStorage.setItem(WP_KEY, id);
+      document.querySelectorAll('.wp-swatch').forEach(s => {
+        s.classList.toggle('wp-selected', s.dataset.id === id);
+      });
+      return true;
+    }
+    if (deferMissing) return false;
+  }
+
+  if (id !== 'default') return applyWallpaper('default');
   document.querySelectorAll('.wp-swatch').forEach(s => {
     s.classList.toggle('wp-selected', s.dataset.id === id);
   });
+  return false;
+}
+
+function handleWallpaperFileRename(dirPath, oldName, newName) {
+  const oldId = WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, oldName);
+  const savedId = localStorage.getItem(WP_KEY);
+  if (currentWallpaper === oldId || savedId === oldId) {
+    applyWallpaper(WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, newName));
+  } else {
+    refreshAppearanceWindow();
+  }
+}
+
+function handleWallpaperFileDelete(dirPath, name) {
+  const id = WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, name);
+  const savedId = localStorage.getItem(WP_KEY);
+  if (currentWallpaper === id || savedId === id) {
+    applyWallpaper('default');
+  } else {
+    refreshAppearanceWindow();
+  }
 }
 
 function openAppearance() {
-  if (!mkWin({ id:'appearance', title:'Appearance', icon:'\u{1F5BC}\uFE0F', w:370, h:270, x:130, y:90, menubar:false, statusbar:false })) return;
-  const body = document.getElementById('wb-appearance');
-  body.style.cssText = 'padding:10px;overflow:auto;';
-  body.innerHTML =     `<div style="font-size:11px;margin-bottom:8px;">Wallpaper:</div>
-     <div id="wp-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>`;
-  const grid = document.getElementById('wp-grid');
-  WALLPAPERS.forEach(wp => {
-    const item = document.createElement('div');
-    item.dataset.id = wp.id;
-    item.className = 'wp-swatch' + (wp.id === currentWallpaper ? ' wp-selected' : '');
-    item.style.cssText = 'cursor:default;display:flex;flex-direction:column;align-items:center;gap:3px;';
-    const thumb = document.createElement('div');
-    thumb.style.cssText = `width:72px;height:50px;border:2px solid #808080;box-sizing:border-box;overflow:hidden;flex-shrink:0;`;
-    const fill = document.createElement('div');
-    fill.style.cssText = `width:100%;height:100%;${wp.bg}`;
-    thumb.appendChild(fill);
-    const label = document.createElement('div');
-    label.textContent = wp.name;
-    label.style.cssText = 'font-size:10px;text-align:center;line-height:1.3;max-width:72px;word-break:break-word;';
-    item.appendChild(thumb);
-    item.appendChild(label);
-    item.addEventListener('click', () => applyWallpaper(wp.id));
-    grid.appendChild(item);
-  });
+  if (!mkWin({ id:'appearance', title:'Appearance', icon:'\u{1F5BC}\uFE0F', w:410, h:360, x:130, y:90, menubar:false, statusbar:false }) && !document.getElementById('wb-appearance')) return;
+  renderAppearanceWindow();
 }
 
 function openSettings() {
@@ -1426,6 +1638,10 @@ async function loadBlobsFromIndexedDb() {
     restoreBlobIntoFs(dirPath, fileName, item.kind, item.size, item.mime, item.blob);
   });
   if (items.length) document.dispatchEvent(new CustomEvent('fs-changed'));
+  const savedWp = localStorage.getItem(WP_KEY);
+  if (savedWp && isWallpaperFileId(savedWp)) {
+    if (!applyWallpaper(savedWp)) applyWallpaper('default');
+  }
 }
 loadBlobsFromStorage();
 
@@ -1443,6 +1659,8 @@ function applySettings() {
   document.querySelectorAll('.vp-dither').forEach(d => d.style.display = osSettings.videoDither ? '' : 'none');
   updateClock();
 }
+
+document.addEventListener('fs-changed', refreshAppearanceWindow);
 
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
@@ -2159,9 +2377,10 @@ function iconLabel(name) {
 function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
-  div.innerHTML = `<div class="di-img">${ic.emoji}</div><div class="di-name">${iconLabel(ic.name)}</div>`;
+  div.innerHTML = '<div class="di-img">' + ic.emoji + '</div><div class="di-name">' + iconLabel(ic.name) + '</div>';
   function activate() {
     if (ic.action) window[ic.action]?.();
+    else if (ic.target) openDesktopShortcutTarget(ic.target);
     else if (ic.openFn) ic.openFn();
   }
   let clicks = 0, clickT;
@@ -2185,12 +2404,13 @@ function makeDesktopIconEl(ic) {
     e.preventDefault(); e.stopPropagation();
     document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
     div.classList.add('selected');
-    const items = [{ label: '▶ Open', action: activate }];
+    const items = [{ label: 'Open', action: activate }];
     if (ic.custom) {
       items.push('-');
-      items.push({ label: '🗑️ Remove Shortcut', action: () => {
+      items.push({ label: 'Remove Shortcut', action: () => {
         const idx = customDesktopIcons.indexOf(ic);
         if (idx > -1) customDesktopIcons.splice(idx, 1);
+        saveDesktopShortcuts();
         div.remove();
       }});
     }
@@ -2199,14 +2419,16 @@ function makeDesktopIconEl(ic) {
   return div;
 }
 
-function addDesktopShortcut(name, emoji, openFn) {
-  const ic = { name, emoji, openFn, custom: true };
+function addDesktopShortcut(name, emoji, target, openFn) {
+  const ic = { name, emoji, target: target || null, openFn, custom: true };
   customDesktopIcons.push(ic);
+  saveDesktopShortcuts();
   document.getElementById('icons-layer').appendChild(makeDesktopIconEl(ic));
 }
 
 function setupIcons() {
   const layer = document.getElementById('icons-layer');
+  layer.innerHTML = '';
   [...DESKTOP_ICONS, ...customDesktopIcons].forEach(ic => layer.appendChild(makeDesktopIconEl(ic)));
 
   // Desktop background right-click
@@ -2678,90 +2900,262 @@ function openNotepad(filename, dirName) {
 }
 
 function openExplorer(startPath) {
-  if (!mkWin({ id:'explorer', title:'FILE EXPLORER — C:\\sleepOS', icon:'🗂️', w:560, h:400, x:110, y:65 })) return;
+  if (!mkWin({ id:'explorer', title:'FILE EXPLORER \u2014 C:\\sleepOS', icon:'\u{1F5C2}\uFE0F', w:560, h:400, x:110, y:65 })) return;
   const body = document.getElementById('wb-explorer');
   const ws   = document.getElementById('ws-explorer');
   const mb   = document.getElementById('mb-explorer');
   body.style.cssText = 'padding:0;display:flex;flex-direction:column;overflow:hidden;';
 
-  let cwd = (startPath || '').toUpperCase(); // '' = root
+  let cwd = (startPath || '').toUpperCase();
 
-  // ── toolbar ──────────────────────────────────────────────────
   const toolbar = document.createElement('div');
   toolbar.className = 'exp-toolbar';
-  const upBtn      = document.createElement('button'); upBtn.textContent = '⬆ Up';
-  const refreshBtn = document.createElement('button'); refreshBtn.textContent = '↻ Refresh';
+  const upBtn      = document.createElement('button'); upBtn.textContent = '\u2B06 Up';
+  const refreshBtn = document.createElement('button'); refreshBtn.textContent = '\u21BB Refresh';
   const addrEl     = document.createElement('input'); addrEl.className = 'exp-addr'; addrEl.readOnly = true;
   toolbar.appendChild(upBtn); toolbar.appendChild(refreshBtn); toolbar.appendChild(addrEl);
   body.appendChild(toolbar);
 
-  // ── file pane ────────────────────────────────────────────────
-  const pane = document.createElement('div'); pane.className = 'exp-body';
+  const pane = document.createElement('div');
+  pane.className = 'exp-body';
   body.appendChild(pane);
 
   let selected = null;
-  let viewMode = 'icons'; // 'icons' | 'list' | 'details'
+  let viewMode = 'icons';
+  let selectedKeys = new Set();
+  let selectionItems = new Map();
+  let selectionNodes = new Map();
+  let emptyStatusText = '';
+  const ITEM_SELECTOR = '.exp-item,.exp-list-item,.exp-det-item';
 
   function getIcon(name, kind) {
-    if (kind === 'image') return '🖼️';
-    if (kind === 'video') return '🎬';
-    if (kind === 'audio') return '🎵';
-    if (kind === 'dir') {
-      if (name === 'PROJECTS') return '📁';
-      if (name === 'DOCS')     return '📁';
-      return '📁';
-    }
+    if (kind === 'image') return '\u{1F5BC}\uFE0F';
+    if (kind === 'video') return '\u{1F3AC}';
+    if (kind === 'audio') return '\u{1F3B5}';
+    if (kind === 'dir') return '\u{1F4C1}';
     const NAME_ICONS = {
-      'TERMINAL.exe':  '💻', 'SYSMON.exe':    '📊',
-      'NOTEPAD.exe':   '📝', 'BROWSER.exe':   '🌐',
-      'DEFRAG.exe':    '🧩', 'WELCOME.README':'📄',
-      'void.tmp':      '⬛', 'daemon.core':   '👁️',
-      '?????.exe':     '❓',
+      'TERMINAL.exe': '\u{1F4BB}',
+      'SYSMON.exe': '\u{1F4CA}',
+      'NOTEPAD.exe': '\u{1F4DD}',
+      'BROWSER.exe': '\u{1F310}',
+      'DEFRAG.exe': '\u{1F9E9}',
+      'WELCOME.README': '\u{1F4C4}',
+      'void.tmp': '\u2B1B',
+      'daemon.core': '\u{1F441}\uFE0F',
+      '?????.exe': '?',
     };
     if (NAME_ICONS[name]) return NAME_ICONS[name];
     const ext = (name.split('.').pop() || '').toLowerCase();
-    return { exe:'⚙️', script:'📜', txt:'📄', readme:'📄', md:'📋',
-             json:'📋', js:'📜', ts:'📜', jsx:'📜', tsx:'📜',
-             html:'🌐', htm:'🌐', css:'🎨', py:'🐍',
-             tmp:'🗑️', log:'📋', csv:'📊', core:'💥' }[ext] || '📄';
+    return {
+      exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
+      json:'\u{1F4CB}', js:'\u{1F4DC}', ts:'\u{1F4DC}', jsx:'\u{1F4DC}', tsx:'\u{1F4DC}',
+      html:'\u{1F310}', htm:'\u{1F310}', css:'\u{1F3A8}', py:'\u{1F40D}',
+      tmp:'\u{1F5D1}\uFE0F', log:'\u{1F4CB}', csv:'\u{1F4CA}', core:'\u{1F4A5}'
+    }[ext] || '\u{1F4C4}';
+  }
+
+  function selectionKey(item) {
+    return (item.sysfile ? '1' : '0') + '|' + item.kind + '|' + item.name;
+  }
+
+  function registerSelectionNode(el, item) {
+    const key = selectionKey(item);
+    selectionItems.set(key, item);
+    selectionNodes.set(key, el);
+  }
+
+  function getSelectedItems() {
+    return Array.from(selectedKeys).map(key => selectionItems.get(key)).filter(Boolean);
+  }
+
+  function getSingleSelectedItem() {
+    const items = getSelectedItems();
+    return items.length === 1 ? items[0] : null;
+  }
+
+  function getDeletableSelectedItems() {
+    return getSelectedItems().filter(item => !item.sysfile && !item._proj);
+  }
+
+  function makeFsPath(name) {
+    return cwd ? cwd + '\\' + name : name;
+  }
+
+  function getSelectedNamesText() {
+    return getSelectedItems().map(item => item.name).join('\n');
+  }
+
+  function getSelectedPathsText() {
+    return getSelectedItems().map(item => 'C:\\sleepOS\\' + (cwd ? cwd + '\\' : '') + item.name).join('\n');
+  }
+
+  function updateSelectionStatus() {
+    if (!ws) return;
+    const items = getSelectedItems();
+    if (!items.length) {
+      ws.textContent = emptyStatusText;
+      return;
+    }
+    if (items.length === 1) {
+      ws.textContent = items[0]._proj ? items[0].name + '  \u2014  double-click to open' : items[0].name;
+      return;
+    }
+    ws.textContent = items.length + ' objects selected';
+  }
+
+  function syncSelectionUi() {
+    selectionNodes.forEach((node, key) => node.classList.toggle('selected', selectedKeys.has(key)));
+    const items = getSelectedItems();
+    if (selected && !selectedKeys.has(selectionKey(selected))) selected = null;
+    if (!selected && items.length) selected = items[items.length - 1];
+    updateSelectionStatus();
+  }
+
+  function clearSelection() {
+    selectedKeys = new Set();
+    selected = null;
+    syncSelectionUi();
+  }
+
+  function replaceSelection(item) {
+    selectedKeys = new Set([selectionKey(item)]);
+    selected = item;
+    syncSelectionUi();
+  }
+
+  function toggleSelection(item) {
+    const key = selectionKey(item);
+    const next = new Set(selectedKeys);
+    if (next.has(key)) {
+      next.delete(key);
+      if (selected && selectionKey(selected) === key) selected = null;
+    } else {
+      next.add(key);
+      selected = item;
+    }
+    selectedKeys = next;
+    if (!selected && selectedKeys.size) {
+      const items = getSelectedItems();
+      selected = items[items.length - 1] || null;
+    }
+    syncSelectionUi();
+  }
+
+  function selectAllVisibleItems() {
+    selectedKeys = new Set(selectionItems.keys());
+    selected = getSelectedItems()[0] || null;
+    syncSelectionUi();
+  }
+
+  function invertSelection() {
+    const next = new Set();
+    selectionItems.forEach((_, key) => {
+      if (!selectedKeys.has(key)) next.add(key);
+    });
+    selectedKeys = next;
+    selected = getSelectedItems()[0] || null;
+    syncSelectionUi();
+  }
+
+  function ensureContextSelection(item) {
+    const key = selectionKey(item);
+    if (!selectedKeys.has(key) || selectedKeys.size <= 1) replaceSelection(item);
+    else {
+      selected = item;
+      syncSelectionUi();
+    }
+  }
+
+  function renameItem(item) {
+    if (!item || item.sysfile || item._proj) return;
+    osPrompt('Rename to:', item.name, 'Rename', nextName => {
+      if (!nextName || nextName === item.name) return;
+      const dir = fsGetDir(cwd);
+      if (!dir) return;
+      if (item.kind === 'dir') {
+        dir.dirs.delete(item.name);
+        const sub = dir.subdirs?.get(item.name);
+        dir.dirs.add(nextName.toUpperCase());
+        if (!dir.subdirs) dir.subdirs = new Map();
+        if (sub) dir.subdirs.set(nextName.toUpperCase(), sub);
+        dir.subdirs.delete(item.name);
+      } else if (dir.blobs.has(item.name)) {
+        const blob = dir.blobs.get(item.name);
+        dir.blobs.delete(item.name);
+        dir.blobs.set(nextName, blob);
+        renameBlobEntry(cwd, item.name, nextName);
+        if (blob?.kind === 'image') handleWallpaperFileRename(cwd, item.name, nextName);
+      } else {
+        const content = dir.files.get(item.name);
+        dir.files.delete(item.name);
+        dir.files.set(nextName, content ?? '');
+      }
+      schedSave();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+      render();
+    });
+  }
+
+  function createDesktopShortcutForItem(item) {
+    if (!item || item._proj) return;
+    addDesktopShortcut(item.name, getIcon(item.name, item.kind), {
+      name: item.name,
+      path: makeFsPath(item.name),
+      kind: item.kind,
+      sysfile: !!item.sysfile,
+    });
+    if (ws) ws.textContent = 'Shortcut created: ' + item.name;
   }
 
   function openItem(name, kind, sysfile) {
     if (kind === 'dir') {
-      cwd = cwd ? cwd + '\\' + name : name; render(); return;
+      cwd = makeFsPath(name);
+      render();
+      return;
     }
     if (cwd === 'PROJECTS') {
-      const p = PROJECTS.find(p => p.name === name);
-      if (p) window.open(p.file, '_blank');
+      const project = PROJECTS.find(p => p.name === name);
+      if (project) window.open(project.file, '_blank');
       return;
     }
     if (sysfile) {
-      const SYS = {
-        'WELCOME.README': openWelcome,  'TERMINAL.exe': openTerminal,
-        'SYSMON.exe':     openSysmon,   'NOTEPAD.exe':  openNotepad,
-        'BROWSER.exe':    openBrowser,  'DEFRAG.exe':   openDefrag,
-        'void.tmp':       openVoid,     'daemon.core':  openDaemon,
-        '?????.exe':      openUnknown,
-      };
-      if (SYS[name]) SYS[name]();
+      openSystemFile(name);
       return;
     }
     const dir = fsGetDir(cwd);
+    if (!dir) return;
     if (dir.blobs.has(name)) openMediaFile(name, cwd);
     else if (dir.files.has(name)) openNotepad(name, cwd);
   }
 
   function deleteSelected() {
-    if (!selected || selected.sysfile) return;
-    osConfirm(`Delete "${selected.name}"?`, 'Delete', ok => {
+    const items = getDeletableSelectedItems();
+    if (!items.length) return;
+    const prompt = items.length === 1 ? 'Delete "' + items[0].name + '"?' : 'Delete ' + items.length + ' selected items?';
+    osConfirm(prompt, 'Delete', ok => {
       if (!ok) return;
       const dir = fsGetDir(cwd);
-      if (selected.kind === 'dir') { dir.dirs.delete(selected.name); dir.subdirs?.delete(selected.name); }
-      else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); removeBlobEntry(cwd, selected.name); }
-      else dir.files.delete(selected.name);
+      if (!dir) return;
+      items.forEach(item => {
+        if (item.kind === 'dir') {
+          dir.dirs.delete(item.name);
+          dir.subdirs?.delete(item.name);
+          return;
+        }
+        if (dir.blobs.has(item.name)) {
+          const blob = dir.blobs.get(item.name);
+          if (blob?.kind === 'image') handleWallpaperFileDelete(cwd, item.name);
+          URL.revokeObjectURL(blob.url);
+          dir.blobs.delete(item.name);
+          removeBlobEntry(cwd, item.name);
+          return;
+        }
+        dir.files.delete(item.name);
+      });
       schedSave();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
       render();
-    }, '🗑️');
+    }, '\u{1F5D1}\uFE0F');
   }
 
   function typeLabel(kind) {
@@ -2771,206 +3165,210 @@ function openExplorer(startPath) {
   }
 
   function makeItem(name, kind, sysfile) {
+    const item = { name, kind, sysfile };
     const icon = getIcon(name, kind);
     let el;
     if (viewMode === 'list') {
       el = document.createElement('div');
       el.className = 'exp-list-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = `<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">${icon}</span><span>${iconLabel(name)}</span>`;
+      el.innerHTML = '<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">' + icon + '</span><span>' + iconLabel(name) + '</span>';
     } else if (viewMode === 'details') {
       el = document.createElement('tr');
       el.className = 'exp-det-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = `<td style="font-size:12px;width:22px;">${icon}</td><td>${iconLabel(name)}</td><td>${typeLabel(kind)}</td>`;
+      el.innerHTML = '<td style="font-size:12px;width:22px;">' + icon + '</td><td>' + iconLabel(name) + '</td><td>' + typeLabel(kind) + '</td>';
     } else {
       el = document.createElement('div');
       el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = `<div class="exp-icon">${icon}</div><span>${iconLabel(name)}</span>`;
+      el.innerHTML = '<div class="exp-icon">' + icon + '</div><span>' + iconLabel(name) + '</span>';
     }
-    const deselAll = () => pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(i => i.classList.remove('selected'));
-    el.addEventListener('click', () => {
-      deselAll(); el.classList.add('selected'); selected = { name, kind, sysfile };
-      if (ws) ws.textContent = name;
+    registerSelectionNode(el, item);
+    el.addEventListener('click', e => {
+      if (e.ctrlKey || e.metaKey) toggleSelection(item);
+      else replaceSelection(item);
     });
     el.addEventListener('dblclick', () => openItem(name, kind, sysfile));
     el.addEventListener('contextmenu', e => {
-      e.preventDefault(); e.stopPropagation();
-      deselAll(); el.classList.add('selected'); selected = { name, kind, sysfile };
-      if (ws) ws.textContent = name;
-      const canDelete = !sysfile;
-      const isScript = !sysfile && name.toLowerCase().endsWith('.script');
+      e.preventDefault();
+      e.stopPropagation();
+      ensureContextSelection(item);
+      const singleSelected = getSingleSelectedItem();
+      const canDelete = getDeletableSelectedItems().length > 0;
+      const isScript = !!singleSelected && !singleSelected.sysfile && singleSelected.name.toLowerCase().endsWith('.script');
+      const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && singleSelected.kind === 'image';
       showCtxMenu(e.clientX, e.clientY, [
-        { label: kind === 'dir' ? '📂 Open Folder' : '▶ Open', action: () => openItem(name, kind, sysfile) },
-        ...(isScript ? [{ label: '📜 Run Script', action: () => {
+        { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(name, kind, sysfile) },
+        ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(wallpaperFileId(singleSelected.name, cwd)) }] : []),
+        ...(isScript ? [{ label: 'Run Script', action: () => {
           const dir = fsGetDir(cwd);
-          const src = dir.files.get(name);
-          if (src !== undefined) runScriptInPopup(name, src);
+          const src = dir?.files.get(singleSelected.name);
+          if (src !== undefined) runScriptInPopup(singleSelected.name, src);
         }}] : []),
         '-',
-        { label: '✏️ Rename', disabled: sysfile, action: () => {
-          if (sysfile) return;
-          osPrompt('Rename to:', name, 'Rename', n => {
-            if (!n || n === name) return;
-            const dir = fsGetDir(cwd);
-            if (kind === 'dir') {
-              dir.dirs.delete(name);
-              const sub = dir.subdirs?.get(name);
-              dir.dirs.add(n.toUpperCase());
-              if (!dir.subdirs) dir.subdirs = new Map();
-              if (sub) dir.subdirs.set(n.toUpperCase(), sub);
-              dir.subdirs.delete(name);
-            } else if (dir.blobs.has(name)) {
-              const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b); renameBlobEntry(cwd, name, n);
-            } else {
-              const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
-            }
-            schedSave();
-            render();
-          });
-        }},
-        { label: '🗑️ Delete', disabled: !canDelete, action: deleteSelected },
+        { label: 'Rename', disabled: !singleSelected || !!singleSelected.sysfile, action: () => renameItem(singleSelected) },
+        { label: 'Delete', disabled: !canDelete, action: deleteSelected },
         '-',
-        { label: '📌 Create Desktop Shortcut', action: () => {
-          const icon = getIcon(name, kind);
-          addDesktopShortcut(name, icon, () => openItem(name, kind, sysfile));
-        }},
+        { label: 'Create Desktop Shortcut', disabled: !singleSelected, action: () => createDesktopShortcutForItem(singleSelected) },
         '-',
-        { label: '📋 Copy Name', action: () => navigator.clipboard?.writeText(name) },
+        { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || name) },
       ]);
     });
     return el;
   }
 
-  // ── project item (for cwd === 'PROJECTS') ────────────────────
-  function makeProjectItem(p) {
-    const deselAll = () => pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(i => i.classList.remove('selected'));
-    const openProj = () => window.open(p.file, '_blank');
+  function makeProjectItem(project) {
+    const item = { name: project.name, kind: 'file', sysfile: true, _proj: project };
+    const openProject = () => window.open(project.file, '_blank');
     let el;
     if (viewMode === 'details') {
       el = document.createElement('tr');
       el.className = 'exp-det-item';
-      el.innerHTML = `<td style="font-size:12px;width:22px;">${p.emoji}</td><td>${p.name}</td><td>HTML Application</td>`;
+      el.innerHTML = '<td style="font-size:12px;width:22px;">' + project.emoji + '</td><td>' + project.name + '</td><td>HTML Application</td>';
     } else if (viewMode === 'list') {
       el = document.createElement('div');
       el.className = 'exp-list-item';
-      el.innerHTML = `<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">${p.emoji}</span><span>${p.name}</span>`;
+      el.innerHTML = '<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">' + project.emoji + '</span><span>' + project.name + '</span>';
     } else {
       el = document.createElement('div');
       el.className = 'exp-item';
-      el.innerHTML = `<div class="exp-icon">${p.emoji}</div><span>${p.name}</span>`;
+      el.innerHTML = '<div class="exp-icon">' + project.emoji + '</div><span>' + project.name + '</span>';
     }
-    el.addEventListener('click', () => {
-      deselAll(); el.classList.add('selected');
-      selected = { name: p.name, kind: 'file', sysfile: true, _proj: p };
-      if (ws) ws.textContent = p.name + '  \u2014  double-click to open';
+    registerSelectionNode(el, item);
+    el.addEventListener('click', e => {
+      if (e.ctrlKey || e.metaKey) toggleSelection(item);
+      else replaceSelection(item);
     });
-    el.addEventListener('dblclick', openProj);
-    el.addEventListener('touchend', e => { e.preventDefault(); openProj(); }, { passive: false });
+    el.addEventListener('dblclick', openProject);
+    el.addEventListener('touchend', e => { e.preventDefault(); openProject(); }, { passive: false });
     el.addEventListener('contextmenu', e => {
-      e.preventDefault(); e.stopPropagation();
-      deselAll(); el.classList.add('selected');
-      selected = { name: p.name, kind: 'file', sysfile: true, _proj: p };
+      e.preventDefault();
+      e.stopPropagation();
+      ensureContextSelection(item);
       showCtxMenu(e.clientX, e.clientY, [
-        { label: '▶ Open', action: openProj },
+        { label: 'Open', action: openProject },
         '-',
-        { label: 'Properties', action: () => osAlert(`Name:\t${p.name}\nFile:\t${p.file}\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\`, 'Properties', '📄') },
+        { label: 'Properties', action: () => osAlert('Name:\t' + project.name + '\nFile:\t' + project.file + '\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\', 'Properties', '??') },
         '-',
-        { label: '📋 Copy Name', action: () => navigator.clipboard?.writeText(p.name) },
+        { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || project.name) },
       ]);
     });
     return el;
   }
 
   function render() {
-    pane.innerHTML = ''; selected = null;
-    const fullPath = cwd ? `C:\\sleepOS\\${cwd}` : 'C:\\sleepOS';
+    pane.innerHTML = '';
+    selected = null;
+    selectedKeys = new Set();
+    selectionItems = new Map();
+    selectionNodes = new Map();
+    const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
     addrEl.value = fullPath;
     const titleEl = document.getElementById('wtitle-explorer');
-    if (titleEl) titleEl.textContent = `FILE EXPLORER \u2014 ${fullPath}`;
+    if (titleEl) titleEl.textContent = 'FILE EXPLORER ? ' + fullPath;
 
-    // ── PROJECTS virtual directory ────────────────────────────
     if (cwd === 'PROJECTS') {
       const build = fn => {
         if (viewMode === 'details') {
-          const tbl = document.createElement('table'); tbl.className = 'exp-det-tbl';
+          const tbl = document.createElement('table');
+          tbl.className = 'exp-det-tbl';
           tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
           const tbody = document.createElement('tbody');
-          PROJECTS.forEach(p => tbody.appendChild(fn(p))); tbl.appendChild(tbody); pane.appendChild(tbl);
+          PROJECTS.forEach(project => tbody.appendChild(fn(project)));
+          tbl.appendChild(tbody);
+          pane.appendChild(tbl);
         } else if (viewMode === 'list') {
-          const list = document.createElement('div'); list.style.cssText = 'display:flex;flex-direction:column;';
-          PROJECTS.forEach(p => list.appendChild(fn(p))); pane.appendChild(list);
+          const list = document.createElement('div');
+          list.style.cssText = 'display:flex;flex-direction:column;';
+          PROJECTS.forEach(project => list.appendChild(fn(project)));
+          pane.appendChild(list);
         } else {
-          const grid = document.createElement('div'); grid.className = 'exp-grid';
-          PROJECTS.forEach(p => grid.appendChild(fn(p))); pane.appendChild(grid);
+          const grid = document.createElement('div');
+          grid.className = 'exp-grid';
+          PROJECTS.forEach(project => grid.appendChild(fn(project)));
+          pane.appendChild(grid);
         }
       };
       build(makeProjectItem);
-      if (ws) ws.textContent = PROJECTS.length + ' objects';
+      emptyStatusText = PROJECTS.length + ' objects';
+      updateSelectionStatus();
       return;
     }
 
-    // Collect filesystem items
     const items = [];
     if (!cwd) {
-      items.push({name:'PROJECTS', kind:'dir', sysfile:true});
-      ['DOCS', ...termFS.dirs].filter((v,i,a) => a.indexOf(v)===i).forEach(d => {
-        if (d !== 'PROJECTS') items.push({name:d, kind:'dir', sysfile:false});
+      items.push({ name:'PROJECTS', kind:'dir', sysfile:true });
+      ['DOCS', ...termFS.dirs].filter((value, index, array) => array.indexOf(value) === index).forEach(dirName => {
+        if (dirName !== 'PROJECTS') items.push({ name:dirName, kind:'dir', sysfile:false });
       });
-      const sysFileNames = new Set(['WELCOME.README','TERMINAL.exe','SYSMON.exe','NOTEPAD.exe',
-       'BROWSER.exe','DEFRAG.exe','void.tmp','daemon.core','?????.exe']);
-      sysFileNames.forEach(name => items.push({name, kind:'file', sysfile:true}));
-      termFS.files.forEach((_, name) => { if (!sysFileNames.has(name)) items.push({name, kind:'file', sysfile:false}); });
-      termFS.blobs.forEach((b, name) => items.push({name, kind:b.kind, sysfile:false}));
+      const sysFileNames = new Set(['WELCOME.README','TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe','void.tmp','daemon.core','?????.exe']);
+      sysFileNames.forEach(name => items.push({ name, kind:'file', sysfile:true }));
+      termFS.files.forEach((_, name) => { if (!sysFileNames.has(name)) items.push({ name, kind:'file', sysfile:false }); });
+      termFS.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
     } else {
       const dir = fsGetDir(cwd);
-      if (!dir) { cwd = ''; render(); return; }
-      dir.dirs.forEach(d => items.push({name:d, kind:'dir', sysfile:false}));
-      dir.files.forEach((_, name) => items.push({name, kind:'file', sysfile:false}));
-      dir.blobs.forEach((b, name) => items.push({name, kind:b.kind, sysfile:false}));
+      if (!dir) {
+        cwd = '';
+        render();
+        return;
+      }
+      dir.dirs.forEach(name => items.push({ name, kind:'dir', sysfile:false }));
+      dir.files.forEach((_, name) => items.push({ name, kind:'file', sysfile:false }));
+      dir.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
     }
 
-    // Build container based on viewMode
     if (viewMode === 'details') {
-      const tbl = document.createElement('table'); tbl.className = 'exp-det-tbl';
+      const tbl = document.createElement('table');
+      tbl.className = 'exp-det-tbl';
       tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
       const tbody = document.createElement('tbody');
-      items.forEach(({name, kind, sysfile}) => tbody.appendChild(makeItem(name, kind, sysfile)));
-      tbl.appendChild(tbody); pane.appendChild(tbl);
+      items.forEach(item => tbody.appendChild(makeItem(item.name, item.kind, item.sysfile)));
+      tbl.appendChild(tbody);
+      pane.appendChild(tbl);
     } else if (viewMode === 'list') {
       const list = document.createElement('div');
       list.style.cssText = 'display:flex;flex-direction:column;';
-      items.forEach(({name, kind, sysfile}) => list.appendChild(makeItem(name, kind, sysfile)));
+      items.forEach(item => list.appendChild(makeItem(item.name, item.kind, item.sysfile)));
       pane.appendChild(list);
     } else {
-      const grid = document.createElement('div'); grid.className = 'exp-grid';
-      items.forEach(({name, kind, sysfile}) => grid.appendChild(makeItem(name, kind, sysfile)));
+      const grid = document.createElement('div');
+      grid.className = 'exp-grid';
+      items.forEach(item => grid.appendChild(makeItem(item.name, item.kind, item.sysfile)));
       pane.appendChild(grid);
     }
-    if (ws) ws.textContent = items.length + ' objects';
+    emptyStatusText = items.length + ' objects';
+    updateSelectionStatus();
   }
 
-  upBtn.addEventListener('click', () => { const i = cwd.lastIndexOf('\\'); cwd = i >= 0 ? cwd.slice(0, i) : ''; render(); });
+  upBtn.addEventListener('click', () => {
+    const i = cwd.lastIndexOf('\\');
+    cwd = i >= 0 ? cwd.slice(0, i) : '';
+    render();
+  });
   refreshBtn.addEventListener('click', () => render());
 
-  // ── pane background right-click ───────────────────────────────
+  pane.addEventListener('click', e => {
+    if (e.target.closest(ITEM_SELECTOR)) return;
+    clearSelection();
+  });
+
   pane.addEventListener('contextmenu', e => {
-    if (e.target !== pane && !e.target.classList.contains('exp-grid') && e.target.tagName !== 'TABLE' && e.target.tagName !== 'TBODY') return;
+    if (e.target.closest(ITEM_SELECTOR)) return;
     e.preventDefault();
+    clearSelection();
     const inProjects = cwd === 'PROJECTS';
     showCtxMenu(e.clientX, e.clientY, inProjects ? [
-      { label: '🔄 Refresh', action: render },
+      { label: 'Refresh', action: render },
     ] : [
-      { label: '💻 Open Terminal Here', action: () => openTerminal(cwd) },
+      { label: 'Open Terminal Here', action: () => openTerminal(cwd) },
       '-',
-      { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); schedSave(); render(); } } }) },
-      { label: '📄 New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); schedSave(); openNotepad(n, cwd); render(); } } }) },
+      { label: 'New Folder', action: () => osPrompt('Folder name:', '', 'New Folder', name => { if (name) { const dir = fsGetDir(cwd); if (dir) { dir.dirs.add(name.toUpperCase()); schedSave(); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const dir = fsGetDir(cwd); if (dir) { dir.files.set(name, ''); schedSave(); openNotepad(name, cwd); render(); } } }) },
       '-',
-      { label: '📤 Upload File…',  action: () => triggerUpload(cwd) },
+      { label: 'Upload File...', action: () => triggerUpload(cwd) },
       '-',
-      { label: '🔄 Refresh',       action: render },
+      { label: 'Refresh', action: render },
     ]);
   });
 
-  // ── menus ────────────────────────────────────────────────────
   mb.innerHTML = '';
   [
     { label: 'File', items: () => cwd === 'PROJECTS' ? [
@@ -2978,79 +3376,57 @@ function openExplorer(startPath) {
       '-',
       { label: 'Close', action: () => closeWin('explorer') },
     ] : [
-      { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); schedSave(); render(); } } }) },
-      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); schedSave(); openNotepad(n, cwd); render(); } } }) },
+      { label: 'New Folder', action: () => osPrompt('Folder name:', '', 'New Folder', name => { if (name) { const dir = fsGetDir(cwd); if (dir) { dir.dirs.add(name.toUpperCase()); schedSave(); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const dir = fsGetDir(cwd); if (dir) { dir.files.set(name, ''); schedSave(); openNotepad(name, cwd); render(); } } }) },
       '-',
-      { label: 'Open',         action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
-      { label: 'Delete',       action: deleteSelected },
+      { label: 'Open', disabled: !selected, action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
+      { label: 'Delete', disabled: !getDeletableSelectedItems().length, action: deleteSelected },
       '-',
-      { label: 'Upload File\u2026', action: () => triggerUpload(cwd) },
+      { label: 'Upload File...', action: () => triggerUpload(cwd) },
       '-',
       { label: 'Close', action: () => closeWin('explorer') },
     ]},
     { label: 'Edit', items: () => [
-      { label: 'Select All', action: () => {
-        pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(el => el.classList.add('selected'));
-        if (ws) ws.textContent = 'All objects selected';
+      { label: 'Select All', action: () => selectAllVisibleItems() },
+      { label: 'Invert Selection', action: () => invertSelection() },
+      '-',
+      { label: 'Copy Name', disabled: !getSelectedItems().length, action: () => {
+        const text = getSelectedNamesText();
+        if (!text) return;
+        navigator.clipboard?.writeText(text);
+        if (ws) ws.textContent = 'Copied';
       }},
-      { label: 'Invert Selection', action: () => {
-        pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(el => el.classList.toggle('selected'));
-        if (ws) ws.textContent = 'Selection inverted';
+      { label: 'Copy Path', disabled: !getSelectedItems().length, action: () => {
+        const text = getSelectedPathsText();
+        if (!text) return;
+        navigator.clipboard?.writeText(text);
+        if (ws) ws.textContent = 'Copied';
       }},
       '-',
-      { label: 'Copy Name', action: () => {
-        if (!selected) return;
-        navigator.clipboard?.writeText(selected.name);
-        if (ws) ws.textContent = 'Copied: ' + selected.name;
-      }},
-      { label: 'Copy Path', action: () => {
-        if (!selected) return;
-        const path = `C:\\sleepOS\\${cwd ? cwd + '\\' : ''}${selected.name}`;
-        navigator.clipboard?.writeText(path);
-        if (ws) ws.textContent = 'Copied: ' + path;
-      }},
-      '-',
-      { label: 'Rename', disabled: !selected || selected?.sysfile || cwd === 'PROJECTS', action: () => {
-        if (!selected || selected.sysfile) return;
-        const { name, kind } = selected;
-        osPrompt('Rename to:', name, 'Rename', n => {
-          if (!n || n === name) return;
-          const dir = fsGetDir(cwd);
-          if (kind === 'dir') {
-            dir.dirs.delete(name); const sub = dir.subdirs?.get(name);
-            dir.dirs.add(n.toUpperCase());
-            if (!dir.subdirs) dir.subdirs = new Map();
-            if (sub) dir.subdirs.set(n.toUpperCase(), sub);
-            dir.subdirs.delete(name);
-          } else if (dir.blobs.has(name)) {
-            const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
-          } else {
-            const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
-          }
-          schedSave();
-          render();
-        });
-      }},
-      { label: 'Delete', disabled: !selected || selected?.sysfile || cwd === 'PROJECTS', action: deleteSelected },
+      { label: 'Rename', disabled: !getSingleSelectedItem() || getSingleSelectedItem()?.sysfile || cwd === 'PROJECTS', action: () => renameItem(getSingleSelectedItem()) },
+      { label: 'Delete', disabled: !getDeletableSelectedItems().length || cwd === 'PROJECTS', action: deleteSelected },
     ]},
     { label: 'View', items: () => [
-      { label: (viewMode==='icons'   ? '• ' : '  ') + 'Large Icons', action: () => { viewMode='icons';   render(); } },
-      { label: (viewMode==='list'    ? '• ' : '  ') + 'List',         action: () => { viewMode='list';    render(); } },
-      { label: (viewMode==='details' ? '• ' : '  ') + 'Details',      action: () => { viewMode='details'; render(); } },
+      { label: (viewMode === 'icons' ? '* ' : '  ') + 'Large Icons', action: () => { viewMode = 'icons'; render(); } },
+      { label: (viewMode === 'list' ? '* ' : '  ') + 'List', action: () => { viewMode = 'list'; render(); } },
+      { label: (viewMode === 'details' ? '* ' : '  ') + 'Details', action: () => { viewMode = 'details'; render(); } },
       '-',
-      { label: '  Refresh', action: render },
+      { label: 'Refresh', action: render },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
-    span.className = 'menu-item'; span.textContent = label;
+    span.className = 'menu-item';
+    span.textContent = label;
     span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items()); });
     mb.appendChild(span);
   });
 
   render();
 
-  // Auto-refresh when files are uploaded
-  function onFsChanged() { if (wins['explorer']) render(); else document.removeEventListener('fs-changed', onFsChanged); }
+  function onFsChanged() {
+    if (wins['explorer']) render();
+    else document.removeEventListener('fs-changed', onFsChanged);
+  }
   document.addEventListener('fs-changed', onFsChanged);
 }
 
@@ -4494,12 +4870,10 @@ function startDesktop() {
   document.getElementById('desktop').style.display = 'block';
   document.getElementById('taskbar').style.display = 'flex';
   const savedWp = localStorage.getItem(WP_KEY);
-  if (savedWp) applyWallpaper(savedWp);
+  if (savedWp) applyWallpaper(savedWp, { deferMissing: isWallpaperFileId(savedWp) });
   applySettings();
   setupIcons();
 }
 </script>
 </body>
 </html>
-
-
