@@ -55,16 +55,16 @@ body {
 #bios {
   position: fixed; inset: 0;
   background: #000; z-index: 9999;
-  display: flex; align-items: flex-start; justify-content: flex-start;
-  padding: 2rem 2.5rem;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
   font-family: var(--sleep-font);
   font-size: 18px; color: #aaa;
   overflow: hidden;
 }
-#bios-text { white-space: pre; line-height: 1.45; }
-@media (min-width: 900px) {
-  #bios { align-items: center; justify-content: center; padding: 0; }
-  #bios-text { padding: 2rem 2.5rem; }
+#bios-text { white-space: pre; line-height: 1.45; padding: 2rem 2.5rem; }
+@media (max-width: 600px) {
+  #bios { font-size: 11px; }
+  #bios-text { padding: 1.25rem 1rem; }
 }
 
 /* ── Desktop ─────────────────────────────────────────────────── */
@@ -80,23 +80,31 @@ body {
 /* ── Desktop icons ───────────────────────────────────────────── */
 #icons-layer {
   position: absolute; inset: 0;
-  padding: 8px 6px;
-  display: flex; flex-direction: column; flex-wrap: wrap;
-  align-content: flex-start; gap: 2px;
+  overflow: hidden;
+}
+/* rubber-band selection rect (desktop + file explorer) */
+.sel-rect {
+  position: absolute;
+  border: 1px solid rgba(0,120,215,0.9);
+  background: rgba(0,120,215,0.2);
+  pointer-events: none;
+  z-index: 500;
 }
 .desktop-icon {
-  width: 90px;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 4px; cursor: default;
+  width: 72px; height: 72px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 3px; cursor: default;
   border: 1px solid transparent;
+  user-select: none; overflow: hidden;
 }
 .desktop-icon:hover { border: 1px dotted rgba(255,255,255,0.55); background: rgba(0,0,128,0.28); }
 .desktop-icon.selected { border: 1px dotted #fff; background: rgba(0,0,128,0.5); }
-.di-img { font-size: 30px; line-height: 1; }
+.di-img { font-size: 24px; line-height: 1; flex-shrink: 0; }
 .di-name {
-  font-size: 11px; color: #fff;
+  font-size: 10px; color: #fff;
   text-align: center; text-shadow: 1px 1px 1px #000;
   word-break: break-word; line-height: 1.2;
+  max-height: 2.4em; overflow: hidden;
 }
 .desktop-icon.selected .di-name { background: #000080; }
 
@@ -594,10 +602,9 @@ body {
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 14px; }
 
-  #icons-layer { padding: 10px 8px; gap: 4px; }
-  .desktop-icon { width: 90px; padding: 6px; gap: 4px; }
-  .di-img { font-size: 40px; }
-  .di-name { font-size: 13px; }
+  .desktop-icon { width: 72px; height: 72px; padding: 4px; gap: 3px; }
+  .di-img { font-size: 26px; }
+  .di-name { font-size: 10px; }
 
   #taskbar { height: 44px; padding: 3px; }
   #desktop { bottom: 44px; }
@@ -2372,12 +2379,85 @@ function iconLabel(name) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// DESKTOP ICON GRID
+// ─────────────────────────────────────────────────────────────────
+const ICON_CELL_W  = 78;   // px per grid cell (horizontal)
+const ICON_CELL_H  = 78;   // px per grid cell (vertical)
+const ICON_PAD_X   = 6;    // layer left/right padding
+const ICON_PAD_Y   = 6;    // layer top/bottom padding
+const ICON_POS_KEY = 'sleepOS-icon-positions';
+let iconPositions  = {};   // { ic.name: { col, row } }
+
+function iconGetGridSize() {
+  const layer = document.getElementById('icons-layer');
+  if (!layer) return { cols: 1, rows: 1 };
+  return {
+    cols: Math.max(1, Math.floor((layer.offsetWidth  - ICON_PAD_X * 2) / ICON_CELL_W)),
+    rows: Math.max(1, Math.floor((layer.offsetHeight - ICON_PAD_Y * 2) / ICON_CELL_H)),
+  };
+}
+
+function iconCellToPixel(col, row) {
+  return { left: ICON_PAD_X + col * ICON_CELL_W, top: ICON_PAD_Y + row * ICON_CELL_H };
+}
+
+function iconPixelToCell(px, py) {
+  return {
+    col: Math.floor((px - ICON_PAD_X + ICON_CELL_W / 2) / ICON_CELL_W),
+    row: Math.floor((py - ICON_PAD_Y + ICON_CELL_H / 2) / ICON_CELL_H),
+  };
+}
+
+function iconDefaultPositions(icons) {
+  const { rows } = iconGetGridSize();
+  const out = {};
+  icons.forEach((ic, i) => { out[ic.name] = { col: Math.floor(i / rows), row: i % rows }; });
+  return out;
+}
+
+function iconFindFreeCell(wantCol, wantRow, excludeName) {
+  const { cols, rows } = iconGetGridSize();
+  const clamp = (c, r) => ({ col: Math.max(0, Math.min(c, cols - 1)), row: Math.max(0, Math.min(r, rows - 1)) });
+  const occ = new Set(
+    Object.entries(iconPositions).filter(([k]) => k !== excludeName).map(([, p]) => p.col + ',' + p.row)
+  );
+  const start = clamp(wantCol, wantRow);
+  const visited = new Set();
+  const q = [start];
+  let iter = 0;
+  while (q.length && iter++ < cols * rows * 2) {
+    const { col, row } = q.shift();
+    const k = col + ',' + row;
+    if (visited.has(k)) continue;
+    visited.add(k);
+    if (!occ.has(k)) return { col, row };
+    for (const [dc, dr] of [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+      const nc = col + dc, nr = row + dr;
+      if (nc >= 0 && nc < cols && nr >= 0 && nr < rows) q.push({ col: nc, row: nr });
+    }
+  }
+  return start;
+}
+
+function saveIconPositions() {
+  localStorage.setItem(ICON_POS_KEY, JSON.stringify(iconPositions));
+}
+
+// ─────────────────────────────────────────────────────────────────
 // DESKTOP ICONS
 // ─────────────────────────────────────────────────────────────────
+const desktopSel = new Set(); // Set of icon div elements currently selected
+
+function clearDesktopSel() {
+  desktopSel.forEach(d => d.classList.remove('selected'));
+  desktopSel.clear();
+}
+
 function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
   div.innerHTML = '<div class="di-img">' + ic.emoji + '</div><div class="di-name">' + iconLabel(ic.name) + '</div>';
+  div._ic = ic;
   function activate() {
     if (ic.action) window[ic.action]?.();
     else if (ic.target) openDesktopShortcutTarget(ic.target);
@@ -2386,32 +2466,112 @@ function makeDesktopIconEl(ic) {
   let clicks = 0, clickT;
   div.addEventListener('pointerdown', e => {
     e.stopPropagation();
-    document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
-    div.classList.add('selected');
-    if (e.pointerType !== 'mouse') {
-      activate();
-    } else {
-      clicks++;
-      if (clicks === 1) {
-        clickT = setTimeout(() => { clicks = 0; }, 380);
+    if (e.button === 2) return; // let contextmenu handle right-clicks
+    if (e.ctrlKey) {
+      // Toggle this icon in the multi-selection
+      if (desktopSel.has(div)) {
+        div.classList.remove('selected');
+        desktopSel.delete(div);
       } else {
-        clearTimeout(clickT); clicks = 0;
-        activate();
+        div.classList.add('selected');
+        desktopSel.add(div);
       }
+      clicks = 0;
+      clearTimeout(clickT);
+      return;
     }
+    clearDesktopSel();
+    div.classList.add('selected');
+    desktopSel.add(div);
+    if (e.pointerType !== 'mouse') { activate(); return; }
+
+    // Drag-to-rearrange tracking
+    const startClientX = e.clientX, startClientY = e.clientY;
+    const divRect = div.getBoundingClientRect();
+    const layer   = document.getElementById('icons-layer');
+    const lr      = layer.getBoundingClientRect();
+    const offX    = e.clientX - divRect.left;
+    const offY    = e.clientY - divRect.top;
+    let dragging  = false;
+
+    const onMove = mv => {
+      if (!dragging) {
+        if (Math.abs(mv.clientX - startClientX) > 5 || Math.abs(mv.clientY - startClientY) > 5) {
+          dragging = true;
+          clicks = 0; clearTimeout(clickT);
+          div.style.zIndex  = '999';
+          div.style.opacity = '0.75';
+        }
+      }
+      if (dragging) {
+        mv.preventDefault();
+        div.style.left = (mv.clientX - lr.left - offX) + 'px';
+        div.style.top  = (mv.clientY - lr.top  - offY) + 'px';
+      }
+    };
+    const onUp = up => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup',   onUp);
+      div.style.zIndex  = '';
+      div.style.opacity = '';
+      if (dragging) {
+        // snap based on icon top-left corner position (Windows-style)
+        const iconLeft = up.clientX - lr.left - offX;
+        const iconTop  = up.clientY - lr.top  - offY;
+        const { col: wc, row: wr } = iconPixelToCell(iconLeft, iconTop);
+        const { col, row } = iconFindFreeCell(wc, wr, ic.name);
+        iconPositions[ic.name] = { col, row };
+        saveIconPositions();
+        const { left, top } = iconCellToPixel(col, row);
+        div.style.left = left + 'px';
+        div.style.top  = top  + 'px';
+      } else {
+        clicks++;
+        if (clicks === 1) {
+          clickT = setTimeout(() => { clicks = 0; }, 380);
+        } else {
+          clearTimeout(clickT); clicks = 0;
+          activate();
+        }
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup',   onUp);
   });
   div.addEventListener('contextmenu', e => {
     e.preventDefault(); e.stopPropagation();
-    document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
-    div.classList.add('selected');
-    const items = [{ label: 'Open', action: activate }];
-    if (ic.custom) {
+    // If right-clicking outside current selection, replace it
+    if (!desktopSel.has(div)) {
+      clearDesktopSel();
+      div.classList.add('selected');
+      desktopSel.add(div);
+    }
+    const selDivs = [...desktopSel];
+    const selIcs  = selDivs.map(d => d._ic);
+    const multi   = selDivs.length > 1;
+    const items   = [];
+    if (multi) {
+      items.push({ label: 'Open All (' + selDivs.length + ')', action: () => selIcs.forEach(i => {
+        if (i.action) window[i.action]?.();
+        else if (i.target) openDesktopShortcutTarget(i.target);
+        else if (i.openFn) i.openFn();
+      })});
+    } else {
+      items.push({ label: 'Open', action: activate });
+    }
+    if (selIcs.some(i => i.custom)) {
       items.push('-');
-      items.push({ label: 'Remove Shortcut', action: () => {
-        const idx = customDesktopIcons.indexOf(ic);
-        if (idx > -1) customDesktopIcons.splice(idx, 1);
+      items.push({ label: multi ? 'Remove Shortcuts' : 'Remove Shortcut', action: () => {
+        selDivs.forEach(d => {
+          if (!d._ic.custom) return;
+          const idx = customDesktopIcons.indexOf(d._ic);
+          if (idx > -1) customDesktopIcons.splice(idx, 1);
+          delete iconPositions[d._ic.name];
+          d.remove();
+        });
+        desktopSel.clear();
         saveDesktopShortcuts();
-        div.remove();
+        saveIconPositions();
       }});
     }
     showCtxMenu(e.clientX, e.clientY, items);
@@ -2423,18 +2583,90 @@ function addDesktopShortcut(name, emoji, target, openFn) {
   const ic = { name, emoji, target: target || null, openFn, custom: true };
   customDesktopIcons.push(ic);
   saveDesktopShortcuts();
-  document.getElementById('icons-layer').appendChild(makeDesktopIconEl(ic));
+  // Find a free cell (prefer column-first after existing icons)
+  const allIcons = [...DESKTOP_ICONS, ...customDesktopIcons];
+  const defaults = iconDefaultPositions(allIcons);
+  const { col: dc, row: dr } = defaults[ic.name] || { col: 0, row: 0 };
+  const { col, row } = iconFindFreeCell(dc, dr, ic.name);
+  iconPositions[ic.name] = { col, row };
+  saveIconPositions();
+  const el = makeDesktopIconEl(ic);
+  el.setAttribute('data-icon-key', ic.name);
+  el.style.position = 'absolute';
+  const { left, top } = iconCellToPixel(col, row);
+  el.style.left = left + 'px';
+  el.style.top  = top  + 'px';
+  document.getElementById('icons-layer').appendChild(el);
 }
 
 function setupIcons() {
+  clearDesktopSel();
   const layer = document.getElementById('icons-layer');
   layer.innerHTML = '';
-  [...DESKTOP_ICONS, ...customDesktopIcons].forEach(ic => layer.appendChild(makeDesktopIconEl(ic)));
+
+  const allIcons = [...DESKTOP_ICONS, ...customDesktopIcons];
+  const saved    = (() => { try { return JSON.parse(localStorage.getItem(ICON_POS_KEY) || '{}'); } catch { return {}; } })();
+  const defaults = iconDefaultPositions(allIcons);
+  iconPositions  = {};
+  allIcons.forEach(ic => { iconPositions[ic.name] = saved[ic.name] || defaults[ic.name] || { col: 0, row: 0 }; });
+
+  allIcons.forEach(ic => {
+    const el = makeDesktopIconEl(ic);
+    el.setAttribute('data-icon-key', ic.name);
+    el.style.position = 'absolute';
+    const { left, top } = iconCellToPixel(iconPositions[ic.name].col, iconPositions[ic.name].row);
+    el.style.left = left + 'px';
+    el.style.top  = top  + 'px';
+    layer.appendChild(el);
+  });
+
+  // Rubber-band selection on empty desktop space
+  layer.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.desktop-icon') || e.target.closest('.os-window')) return;
+    if (!e.ctrlKey) clearDesktopSel();
+    document.body.style.userSelect = 'none';
+    // layer is position:fixed inset:0 so offsetLeft/Top of icons === clientX/Y coords
+    const sx = e.clientX, sy = e.clientY;
+    let didDrag = false;
+    const selDiv = document.createElement('div');
+    selDiv.className = 'sel-rect';
+    selDiv.style.cssText = 'left:' + sx + 'px;top:' + sy + 'px;width:0;height:0;';
+    layer.appendChild(selDiv);
+    const onMove = mv => {
+      didDrag = true;
+      const cx = mv.clientX, cy = mv.clientY;
+      const left = Math.min(sx, cx), top = Math.min(sy, cy);
+      const w = Math.abs(cx - sx),   h   = Math.abs(cy - sy);
+      selDiv.style.left = left + 'px'; selDiv.style.top  = top  + 'px';
+      selDiv.style.width = w   + 'px'; selDiv.style.height = h  + 'px';
+      const sr = { left, top, right: left + w, bottom: top + h };
+      // icons are absolutely positioned in layer — offsetLeft/Top are in layer (= client) coords
+      layer.querySelectorAll('.desktop-icon').forEach(el => {
+        const elL = el.offsetLeft, elT = el.offsetTop;
+        const elR = elL + el.offsetWidth, elB = elT + el.offsetHeight;
+        const hit = sr.left < elR && sr.right > elL && sr.top < elB && sr.bottom > elT;
+        if (hit) { desktopSel.add(el); el.classList.add('selected'); }
+        else if (!e.ctrlKey) { desktopSel.delete(el); el.classList.remove('selected'); }
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      document.body.style.userSelect = '';
+      selDiv.remove();
+      // suppress the click that fires after mouseup so it doesn't clear selection
+      if (didDrag) window.addEventListener('click', e2 => e2.stopPropagation(), { once: true, capture: true });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+  });
 
   // Desktop background right-click
   document.getElementById('desktop').addEventListener('contextmenu', e => {
     if (e.target.closest('.desktop-icon') || e.target.closest('.os-window')) return;
     e.preventDefault();
+    clearDesktopSel();
     showCtxMenu(e.clientX, e.clientY, [
       { label: '💻 Open Terminal',    action: openTerminal },
       { label: '🗂️ Open Explorer',    action: openExplorer },
@@ -2449,9 +2681,39 @@ function setupIcons() {
 
   document.getElementById('desktop').addEventListener('click', e => {
     if (!e.target.closest('.desktop-icon') && !e.target.closest('.os-window'))
-      document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
+      clearDesktopSel();
   });
 }
+
+// Reflow icons when window is resized
+let _iconResizeTimer;
+window.addEventListener('resize', () => {
+  const desktop = document.getElementById('desktop');
+  if (!desktop || desktop.style.display === 'none') return;
+  clearTimeout(_iconResizeTimer);
+  _iconResizeTimer = setTimeout(() => {
+    const { cols, rows } = iconGetGridSize();
+    const layer = document.getElementById('icons-layer');
+    const occupied = new Set();
+    // Process icons in their current column-row order to avoid cascading collisions
+    const entries = Object.entries(iconPositions).sort(([, a], [, b]) => a.col - b.col || a.row - b.row);
+    entries.forEach(([name, pos]) => {
+      let col = Math.min(pos.col, cols - 1);
+      let row = Math.min(pos.row, rows - 1);
+      let k   = col + ',' + row;
+      while (occupied.has(k)) {
+        row++; if (row >= rows) { row = 0; col++; }
+        if (col >= cols) col = cols - 1;
+        k = col + ',' + row;
+      }
+      occupied.add(k);
+      iconPositions[name] = { col, row };
+      const el = layer.querySelector('[data-icon-key="' + CSS.escape(name) + '"]');
+      if (el) { const { left, top } = iconCellToPixel(col, row); el.style.left = left + 'px'; el.style.top = top + 'px'; }
+    });
+    saveIconPositions();
+  }, 150);
+});
 
 // ─────────────────────────────────────────────────────────────────
 // WINDOW CONTENT
@@ -2912,13 +3174,99 @@ function openExplorer(startPath) {
   toolbar.className = 'exp-toolbar';
   const upBtn      = document.createElement('button'); upBtn.textContent = '\u2B06 Up';
   const refreshBtn = document.createElement('button'); refreshBtn.textContent = '\u21BB Refresh';
-  const addrEl     = document.createElement('input'); addrEl.className = 'exp-addr'; addrEl.readOnly = true;
+  const addrEl     = document.createElement('input'); addrEl.className = 'exp-addr';
+  addrEl.title = 'Type a path and press Enter to navigate';
+  addrEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const raw = addrEl.value.trim();
+      const normalized = fsNormalizeDir(raw);
+      if (normalized === '') {
+        cwd = '';
+        render();
+        addrEl.blur();
+      } else if (normalized === 'PROJECTS' || fsGetDir(normalized)) {
+        cwd = normalized;
+        render();
+        addrEl.blur();
+      } else {
+        addrEl.style.background = 'rgba(180,0,0,0.25)';
+        setTimeout(() => { addrEl.style.background = ''; }, 600);
+        const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
+        addrEl.value = fullPath;
+        addrEl.blur();
+      }
+    } else if (e.key === 'Escape') {
+      const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
+      addrEl.value = fullPath;
+      addrEl.blur();
+    }
+  });
+  addrEl.addEventListener('blur', () => {
+    const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
+    addrEl.value = fullPath;
+  });
+  addrEl.addEventListener('focus', () => addrEl.select());
   toolbar.appendChild(upBtn); toolbar.appendChild(refreshBtn); toolbar.appendChild(addrEl);
   body.appendChild(toolbar);
 
   const pane = document.createElement('div');
   pane.className = 'exp-body';
+  pane.style.position = 'relative';
   body.appendChild(pane);
+
+  // Rubber-band selection on empty pane space
+  pane.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    const ITEM_SEL = '.exp-item,.exp-list-item,.exp-det-item';
+    if (e.target.closest(ITEM_SEL)) return;
+    if (!e.ctrlKey) clearSelection();
+    document.body.style.userSelect = 'none';
+    const pr0  = pane.getBoundingClientRect();
+    const st0  = pane.scrollTop;
+    const sx   = e.clientX - pr0.left + st0;
+    const sy   = e.clientY - pr0.top  + st0;
+    let didDrag = false;
+    const selDiv = document.createElement('div');
+    selDiv.className = 'sel-rect';
+    selDiv.style.cssText = 'left:' + sx + 'px;top:' + sy + 'px;width:0;height:0;';
+    pane.appendChild(selDiv);
+    const onMove = mv => {
+      didDrag = true;
+      const pr  = pane.getBoundingClientRect();
+      const st  = pane.scrollTop;
+      const cx  = mv.clientX - pr.left + st;
+      const cy  = mv.clientY - pr.top  + st;
+      const left = Math.min(sx, cx), top = Math.min(sy, cy);
+      const w    = Math.abs(cx - sx),  h  = Math.abs(cy - sy);
+      selDiv.style.left = left + 'px'; selDiv.style.top  = top  + 'px';
+      selDiv.style.width = w   + 'px'; selDiv.style.height = h  + 'px';
+      const sr = { left, top, right: left + w, bottom: top + h };
+      let changed = false;
+      pane.querySelectorAll(ITEM_SEL).forEach(el => {
+        const key = el._selKey;
+        if (!key) return;
+        const er = el.getBoundingClientRect();
+        const el_l = er.left   - pr.left + st;
+        const el_t = er.top    - pr.top  + st;
+        const el_r = er.right  - pr.left + st;
+        const el_b = er.bottom - pr.top  + st;
+        const hit = sr.left < el_r && sr.right > el_l && sr.top < el_b && sr.bottom > el_t;
+        if (hit && !selectedKeys.has(key)) { selectedKeys.add(key); changed = true; }
+        else if (!hit && !e.ctrlKey && selectedKeys.has(key)) { selectedKeys.delete(key); changed = true; }
+      });
+      if (changed) syncSelectionUi();
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      document.body.style.userSelect = '';
+      selDiv.remove();
+      if (didDrag) window.addEventListener('click', e2 => e2.stopPropagation(), { once: true, capture: true });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+  });
 
   let selected = null;
   let viewMode = 'icons';
@@ -2962,6 +3310,7 @@ function openExplorer(startPath) {
     const key = selectionKey(item);
     selectionItems.set(key, item);
     selectionNodes.set(key, el);
+    el._selKey = key;
   }
 
   function getSelectedItems() {
@@ -3191,12 +3540,16 @@ function openExplorer(startPath) {
       e.preventDefault();
       e.stopPropagation();
       ensureContextSelection(item);
+      const allSelected = getSelectedItems();
       const singleSelected = getSingleSelectedItem();
+      const multi = allSelected.length > 1;
       const canDelete = getDeletableSelectedItems().length > 0;
       const isScript = !!singleSelected && !singleSelected.sysfile && singleSelected.name.toLowerCase().endsWith('.script');
       const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && singleSelected.kind === 'image';
       showCtxMenu(e.clientX, e.clientY, [
-        { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(name, kind, sysfile) },
+        multi
+          ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(i => openItem(i.name, i.kind, i.sysfile)) }
+          : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(name, kind, sysfile) },
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(wallpaperFileId(singleSelected.name, cwd)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {
           const dir = fsGetDir(cwd);
@@ -4860,7 +5213,11 @@ It is now safe to turn off your computer.
   document.getElementById('desktop').style.display = 'none';
   document.getElementById('taskbar').style.display = 'none';
   setTimeout(() => { bios.style.opacity = '1'; }, 30);
-  setTimeout(() => { window.location.href = val === 'back' ? 'index.html' : 'sleep-os.html'; }, 3200);
+  setTimeout(() => {
+    if (val === 'back') window.location.href = 'index.html';
+    else if (val === 'restart') window.location.href = 'sleep-os.html';
+    else window.close();
+  }, 3200);
 }
 
 // ─────────────────────────────────────────────────────────────────
