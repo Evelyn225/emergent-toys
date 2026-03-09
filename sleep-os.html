@@ -580,7 +580,6 @@ const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
   { name: 'NOTEPAD.EXE',    emoji: '📝', action: 'openNotepad' },
   { name: 'EXPLORER.EXE',   emoji: '🗂️', action: 'openExplorer' },
-  { name: 'PROJECTS.DIR',   emoji: '📁', action: 'openFiles' },
   { name: 'TERMINAL.EXE',   emoji: '💻', action: 'openTerminal' },
   { name: 'SYSMON.EXE',     emoji: '📊', action: 'openSysmon' },
   { name: 'BROWSER.EXE',    emoji: '🌐', action: 'openBrowser' },
@@ -1754,18 +1753,45 @@ function openExplorer(startPath) {
   let selected = null;
 
   function getIcon(name, kind) {
-    if (kind === 'dir')    return '📁';
-    if (kind === 'image')  return '🖼️';
-    if (kind === 'video')  return '🎬';
-    if (kind === 'audio')  return '🎵';
-    if (name.endsWith('.script')) return '📜';
-    if (name.endsWith('.txt') || name.endsWith('.readme')) return '📄';
-    return '📄';
+    if (kind === 'image') return '🖼️';
+    if (kind === 'video') return '🎬';
+    if (kind === 'audio') return '🎵';
+    if (kind === 'dir') {
+      if (name === 'PROJECTS') return '📁';
+      if (name === 'DOCS')     return '📚';
+      return '📁';
+    }
+    const NAME_ICONS = {
+      'TERMINAL.EXE':  '💻', 'SYSMON.EXE':    '📊',
+      'NOTEPAD.EXE':   '📝', 'BROWSER.EXE':   '🌐',
+      'DEFRAG.EXE':    '🧩', 'WELCOME.README':'📄',
+      'void.tmp':      '⬛', 'daemon.core':   '👁️',
+      '?????.exe':     '❓',
+    };
+    if (NAME_ICONS[name]) return NAME_ICONS[name];
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    return { exe:'⚙️', script:'📜', txt:'📄', readme:'📄', md:'📋',
+             json:'📋', js:'📜', ts:'📜', jsx:'📜', tsx:'📜',
+             html:'🌐', htm:'🌐', css:'🎨', py:'🐍',
+             tmp:'🗑️', log:'📋', csv:'📊', core:'💥' }[ext] || '📄';
   }
 
   function openItem(name, kind, sysfile) {
-    if (kind === 'dir') { cwd = name; render(); return; }
-    if (sysfile) return;
+    if (kind === 'dir') {
+      if (name === 'PROJECTS') { openFiles(); return; }
+      cwd = name; render(); return;
+    }
+    if (sysfile) {
+      const SYS = {
+        'WELCOME.README': openWelcome,  'TERMINAL.EXE': openTerminal,
+        'SYSMON.EXE':     openSysmon,   'NOTEPAD.EXE':  openNotepad,
+        'BROWSER.EXE':    openBrowser,  'DEFRAG.EXE':   openDefrag,
+        'void.tmp':       openVoid,     'daemon.core':  openDaemon,
+        '?????.exe':      openUnknown,
+      };
+      if (SYS[name]) SYS[name]();
+      return;
+    }
     const dir = fsGetDir(cwd);
     if (dir.blobs.has(name)) openMediaFile(name);
     else if (dir.files.has(name)) openNotepad(name);
