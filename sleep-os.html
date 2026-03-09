@@ -807,7 +807,7 @@ const termFS = {
   files:   new Map(),
   blobs:   new Map(),
   subdirs: new Map([['DOCS', {
-    dirs: new Set(), blobs: new Map(),
+    dirs: new Set(), blobs: new Map(), subdirs: new Map(),
     files: new Map([
       ['README.txt', [
         '== sleepOS Filesystem — README ==',
@@ -935,14 +935,19 @@ const termFS = {
 };
 
 // Helper: get a directory object by name ('' = root)
-function fsGetDir(name) {
-  if (!name) return { dirs: termFS.dirs, files: termFS.files, blobs: termFS.blobs };
-  const key = name.toUpperCase();
-  if (!termFS.subdirs.has(key)) {
-    if (termFS.dirs.has(key)) termFS.subdirs.set(key, { dirs: new Set(), files: new Map(), blobs: new Map() });
-    else return null;
+function fsGetDir(path) {
+  if (!path) return termFS;
+  const parts = String(path).toUpperCase().replace(/\//g,'\\').split('\\').filter(Boolean);
+  let node = termFS;
+  for (const part of parts) {
+    if (!node.subdirs) node.subdirs = new Map();
+    if (!node.subdirs.has(part)) {
+      if (node.dirs.has(part)) node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+      else return null;
+    }
+    node = node.subdirs.get(part);
   }
-  return termFS.subdirs.get(key);
+  return node;
 }
 
 function fsNormalizeDir(name) {
@@ -2174,7 +2179,7 @@ function openExplorer(startPath) {
   function openItem(name, kind, sysfile) {
     if (kind === 'dir') {
       if (name === 'PROJECTS') { openFiles(); return; }
-      cwd = name; render(); return;
+      cwd = cwd ? cwd + '\\' + name : name; render(); return;
     }
     if (sysfile) {
       const SYS = {
@@ -2197,7 +2202,7 @@ function openExplorer(startPath) {
     osConfirm(`Delete "${selected.name}"?`, 'Delete', ok => {
       if (!ok) return;
       const dir = fsGetDir(cwd);
-      if (selected.kind === 'dir') { termFS.dirs.delete(selected.name); termFS.subdirs.delete(selected.name); }
+      if (selected.kind === 'dir') { dir.dirs.delete(selected.name); dir.subdirs?.delete(selected.name); }
       else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); }
       else dir.files.delete(selected.name);
       render();
@@ -2235,11 +2240,12 @@ function openExplorer(startPath) {
             if (!n || n === name) return;
             const dir = fsGetDir(cwd);
             if (kind === 'dir') {
-              termFS.dirs.delete(name);
-              const sub = termFS.subdirs.get(name);
-              termFS.dirs.add(n.toUpperCase());
-              if (sub) termFS.subdirs.set(n.toUpperCase(), sub);
-              termFS.subdirs.delete(name);
+              dir.dirs.delete(name);
+              const sub = dir.subdirs?.get(name);
+              dir.dirs.add(n.toUpperCase());
+              if (!dir.subdirs) dir.subdirs = new Map();
+              if (sub) dir.subdirs.set(n.toUpperCase(), sub);
+              dir.subdirs.delete(name);
             } else if (dir.blobs.has(name)) {
               const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
             } else {
@@ -2295,7 +2301,7 @@ function openExplorer(startPath) {
     if (ws) ws.textContent = grid.children.length + ' objects';
   }
 
-  upBtn.addEventListener('click', () => { cwd = ''; render(); });
+  upBtn.addEventListener('click', () => { const i = cwd.lastIndexOf('\\'); cwd = i >= 0 ? cwd.slice(0, i) : ''; render(); });
   refreshBtn.addEventListener('click', () => render());
 
   // ── pane background right-click ───────────────────────────────
@@ -2659,15 +2665,15 @@ function openTerminal(startDir) {
     type: (args) => CMDS.cat(args),
     cd: (args) => {
       const dest = (args || '').trim();
-      if (!dest || dest === '.' || dest === 'C:\\sleepOS') {
-        cwd = ''; updatePrompt(); print(getPromptStr().replace('>',''));
+      if (!dest || dest === '.' || dest === 'C:\\sleepOS' || dest === '\\') {
+        cwd = ''; updatePrompt(); return;
       } else if (dest === '..') {
         if (!cwd) { print('Already at root.'); return; }
-        cwd = ''; updatePrompt(); print('C:\\sleepOS');
+        const i = cwd.lastIndexOf('\\'); cwd = i >= 0 ? cwd.slice(0, i) : ''; updatePrompt(); return;
       } else {
-        const name = dest.toUpperCase();
-        const dir = fsGetDir(name);
-        if (dir) { cwd = name; updatePrompt(); print(`C:\\sleepOS\\${name}`); }
+        const newCwd = cwd ? cwd + '\\' + dest.toUpperCase() : dest.toUpperCase();
+        const dir = fsGetDir(newCwd);
+        if (dir) { cwd = newCwd; updatePrompt(); }
         else { print(`The system cannot find the path specified: ${dest}`); }
       }
     },
@@ -2679,9 +2685,8 @@ function openTerminal(startDir) {
         print(`A subdirectory or file ${name} already exists.`); return;
       }
       dir.dirs.add(name);
-      if (!cwd) {
-        termFS.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map() });
-      }
+      if (!dir.subdirs) dir.subdirs = new Map();
+      dir.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
       print(`Directory created: ${getPromptStr().replace('>','')}\\${name}`);
     },
     touch: (args) => {
@@ -2719,7 +2724,7 @@ function openTerminal(startDir) {
         } else if (dir.blobs.has(raw)) {
           const b = dir.blobs.get(raw); URL.revokeObjectURL(b.url); dir.blobs.delete(raw); print(`Deleted: ${raw}`);
         } else if (dir.dirs.has(upper)) {
-          dir.dirs.delete(upper); termFS.subdirs.delete(upper); print(`Removed directory: ${upper}`);
+          dir.dirs.delete(upper); dir.subdirs?.delete(upper); print(`Removed directory: ${upper}`);
         } else {
           print(`File not found: ${raw}`);
         }
@@ -2753,7 +2758,7 @@ function openTerminal(startDir) {
       termFS.dirs.forEach(d => {
         if (d === 'DOCS') return;
         print(`├── ${d}\\`);
-        const sub = termFS.subdirs.get(d);
+        const sub = termFS.subdirs?.get(d);
         if (sub) {
           [...sub.files.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
           [...sub.blobs.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
