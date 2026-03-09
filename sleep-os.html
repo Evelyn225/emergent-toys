@@ -926,7 +926,12 @@ const termFS = {
 // Helper: get a directory object by name ('' = root)
 function fsGetDir(name) {
   if (!name) return { dirs: termFS.dirs, files: termFS.files, blobs: termFS.blobs };
-  return termFS.subdirs.get(name.toUpperCase()) || null;
+  const key = name.toUpperCase();
+  if (!termFS.subdirs.has(key)) {
+    if (termFS.dirs.has(key)) termFS.subdirs.set(key, { dirs: new Set(), files: new Map(), blobs: new Map() });
+    else return null;
+  }
+  return termFS.subdirs.get(key);
 }
 
 // ── Script executor ──────────────────────────────────────────────
@@ -1847,10 +1852,11 @@ function openSaveDialog(defaultName, callback) {
   setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
-function openNotepad(filename) {
+function openNotepad(filename, fileDir) {
   const id = filename ? 'notepad-' + filename : 'notepad-' + (++_notepadCount);
   const displayName = filename || 'untitled.txt';
-  const initial = filename ? (termFS.files.get(filename) ?? '') : '';
+  const fsDir = fsGetDir(fileDir || '') || fsGetDir('');
+  const initial = filename ? (fsDir.files.get(filename) ?? '') : '';
   if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
 
   const body = document.getElementById('wb-' + id);
@@ -1948,7 +1954,7 @@ function openNotepad(filename) {
   });
 
   function save(fname) {
-    termFS.files.set(fname, ta.value);
+    fsDir.files.set(fname, ta.value);
     currentFile = fname;
     // re-detect lang if filename changed
     const newLang = detectLang(fname);
@@ -2094,7 +2100,7 @@ function openExplorer(startPath) {
     }
     const dir = fsGetDir(cwd);
     if (dir.blobs.has(name)) openMediaFile(name);
-    else if (dir.files.has(name)) openNotepad(name);
+    else if (dir.files.has(name)) openNotepad(name, cwd);
   }
 
   function deleteSelected() {
@@ -2210,10 +2216,10 @@ function openExplorer(startPath) {
     showCtxMenu(e.clientX, e.clientY, [
       { label: '💻 Open Terminal Here', action: () => openTerminal(cwd) },
       '-',
-      { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { termFS.dirs.add(n.toUpperCase()); render(); } }) },
-      { label: '📄 New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { termFS.files.set(n,''); openNotepad(n); render(); } }) },
+      { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); render(); } } }) },
+      { label: '📄 New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
       '-',
-      { label: '📤 Upload File…',  action: triggerUpload },
+      { label: '📤 Upload File…',  action: () => triggerUpload(cwd) },
       '-',
       { label: '🔄 Refresh',       action: render },
     ]);
@@ -2223,13 +2229,13 @@ function openExplorer(startPath) {
   mb.innerHTML = '';
   [
     { label: 'File', items: () => [
-      { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { termFS.dirs.add(n.toUpperCase()); render(); } }) },
-      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { termFS.files.set(n,''); openNotepad(n); render(); } }) },
+      { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
       '-',
       { label: 'Open',         action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
       { label: 'Delete',       action: deleteSelected },
       '-',
-      { label: 'Upload File\u2026', action: triggerUpload },
+      { label: 'Upload File\u2026', action: () => triggerUpload(cwd) },
       '-',
       { label: 'Close', action: () => closeWin('explorer') },
     ]},
@@ -2370,8 +2376,12 @@ function openFiles() {
   renderView();
 }
 
+let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 function openTerminal(startDir) {
-  if (!mkWin({ id:'terminal', title:'TERMINAL.EXE — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:'terminal', title:'TERMINAL.EXE — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
+    if (startDir && _termNav) _termNav(startDir);
+    return;
+  }
   const body = document.getElementById('wb-terminal');
   body.style.padding = '0'; body.style.overflow = 'hidden';
   body.innerHTML = `
@@ -2423,6 +2433,11 @@ function openTerminal(startDir) {
     const el = document.getElementById('term-prompt');
     if (el) el.textContent = getPromptStr() + '\u00a0';
   }
+
+  // Allow openTerminal(dir) to navigate us when already open
+  _termNav = (dir) => { cwd = dir.toUpperCase(); updatePrompt(); print(`\nChanged directory to C:\\sleepOS\\${cwd}`); };
+
+  updatePrompt(); // set prompt correctly if startDir was given
 
   const CMDS = {
     help: () => {
@@ -3520,20 +3535,36 @@ function openBrowser() {
     updateNav();
   }
 
-  iframe.addEventListener('load', () => {
-    // Sync address bar with actual iframe URL (same-origin pages only)
+  function syncUrl() {
     try {
       const loc = iframe.contentWindow.location.href;
       if (loc && loc !== 'about:blank' && loc !== 'about:srcdoc') {
-        document.getElementById('br-url').value = loc;
-        if (hist[histIdx] !== loc) {
-          hist = hist.slice(0, histIdx + 1); hist.push(loc); histIdx = hist.length - 1;
-          updateNav();
+        const bar = document.getElementById('br-url');
+        if (bar && bar.value !== loc) {
+          bar.value = loc;
+          if (hist[histIdx] !== loc) {
+            hist = hist.slice(0, histIdx + 1); hist.push(loc); histIdx = hist.length - 1;
+            updateNav();
+          }
         }
       }
-    } catch(e) { /* cross-origin — leave address bar as-is */ }
+    } catch(e) { /* cross-origin — cannot read URL */ }
+  }
+
+  // Poll to catch SPA pushState/hash navigation and link clicks
+  const _urlPoll = setInterval(syncUrl, 600);
+
+  iframe.addEventListener('load', () => {
+    syncUrl();
     if (ws) ws.textContent = 'Done';
   });
+
+  // Clear poll when browser window closes
+  document.getElementById('win-browser')?.addEventListener('remove', () => clearInterval(_urlPoll), { once: true });
+  // Use MutationObserver to detect window removal
+  new MutationObserver((_, obs) => {
+    if (!document.getElementById('win-browser')) { clearInterval(_urlPoll); obs.disconnect(); }
+  }).observe(document.getElementById('desktop'), { childList: true });
   iframe.addEventListener('error', () => showError(lastAttemptedUrl));
 
   // ── handle nav messages from srcdoc home page ──────────────────
