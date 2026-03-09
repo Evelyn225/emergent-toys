@@ -2199,8 +2199,12 @@ function openExplorer(startPath) {
 
   function openItem(name, kind, sysfile) {
     if (kind === 'dir') {
-      if (name === 'PROJECTS') { openFiles(); return; }
       cwd = cwd ? cwd + '\\' + name : name; render(); return;
+    }
+    if (cwd === 'PROJECTS') {
+      const p = PROJECTS.find(p => p.name === name);
+      if (p) window.open(p.file, '_blank');
+      return;
     }
     if (sysfile) {
       const SYS = {
@@ -2305,6 +2309,46 @@ function openExplorer(startPath) {
     return el;
   }
 
+  // ── project item (for cwd === 'PROJECTS') ────────────────────
+  function makeProjectItem(p) {
+    const deselAll = () => pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(i => i.classList.remove('selected'));
+    const openProj = () => window.open(p.file, '_blank');
+    let el;
+    if (viewMode === 'details') {
+      el = document.createElement('tr');
+      el.className = 'exp-det-item';
+      el.innerHTML = `<td style="font-size:12px;width:22px;">${p.emoji}</td><td>${p.name}</td><td>HTML Application</td>`;
+    } else if (viewMode === 'list') {
+      el = document.createElement('div');
+      el.className = 'exp-list-item';
+      el.innerHTML = `<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">${p.emoji}</span><span>${p.name}</span>`;
+    } else {
+      el = document.createElement('div');
+      el.className = 'exp-item';
+      el.innerHTML = `<div class="exp-icon">${p.emoji}</div><span>${p.name}</span>`;
+    }
+    el.addEventListener('click', () => {
+      deselAll(); el.classList.add('selected');
+      selected = { name: p.name, kind: 'file', sysfile: true, _proj: p };
+      if (ws) ws.textContent = p.name + '  \u2014  double-click to open';
+    });
+    el.addEventListener('dblclick', openProj);
+    el.addEventListener('touchend', e => { e.preventDefault(); openProj(); }, { passive: false });
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      deselAll(); el.classList.add('selected');
+      selected = { name: p.name, kind: 'file', sysfile: true, _proj: p };
+      showCtxMenu(e.clientX, e.clientY, [
+        { label: '▶ Open', action: openProj },
+        '-',
+        { label: 'Properties', action: () => osAlert(`Name:\t${p.name}\nFile:\t${p.file}\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\`, 'Properties', '📄') },
+        '-',
+        { label: '📋 Copy Name', action: () => navigator.clipboard?.writeText(p.name) },
+      ]);
+    });
+    return el;
+  }
+
   function render() {
     pane.innerHTML = ''; selected = null;
     const fullPath = cwd ? `C:\\sleepOS\\${cwd}` : 'C:\\sleepOS';
@@ -2312,7 +2356,28 @@ function openExplorer(startPath) {
     const titleEl = document.getElementById('wtitle-explorer');
     if (titleEl) titleEl.textContent = `FILE EXPLORER \u2014 ${fullPath}`;
 
-    // Collect items
+    // ── PROJECTS virtual directory ────────────────────────────
+    if (cwd === 'PROJECTS') {
+      const build = fn => {
+        if (viewMode === 'details') {
+          const tbl = document.createElement('table'); tbl.className = 'exp-det-tbl';
+          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+          const tbody = document.createElement('tbody');
+          PROJECTS.forEach(p => tbody.appendChild(fn(p))); tbl.appendChild(tbody); pane.appendChild(tbl);
+        } else if (viewMode === 'list') {
+          const list = document.createElement('div'); list.style.cssText = 'display:flex;flex-direction:column;';
+          PROJECTS.forEach(p => list.appendChild(fn(p))); pane.appendChild(list);
+        } else {
+          const grid = document.createElement('div'); grid.className = 'exp-grid';
+          PROJECTS.forEach(p => grid.appendChild(fn(p))); pane.appendChild(grid);
+        }
+      };
+      build(makeProjectItem);
+      if (ws) ws.textContent = PROJECTS.length + ' objects';
+      return;
+    }
+
+    // Collect filesystem items
     const items = [];
     if (!cwd) {
       items.push({name:'PROJECTS', kind:'dir', sysfile:true});
@@ -2359,7 +2424,10 @@ function openExplorer(startPath) {
   pane.addEventListener('contextmenu', e => {
     if (e.target !== pane && !e.target.classList.contains('exp-grid') && e.target.tagName !== 'TABLE' && e.target.tagName !== 'TBODY') return;
     e.preventDefault();
-    showCtxMenu(e.clientX, e.clientY, [
+    const inProjects = cwd === 'PROJECTS';
+    showCtxMenu(e.clientX, e.clientY, inProjects ? [
+      { label: '🔄 Refresh', action: render },
+    ] : [
       { label: '💻 Open Terminal Here', action: () => openTerminal(cwd) },
       '-',
       { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); render(); } } }) },
@@ -2374,7 +2442,11 @@ function openExplorer(startPath) {
   // ── menus ────────────────────────────────────────────────────
   mb.innerHTML = '';
   [
-    { label: 'File', items: () => [
+    { label: 'File', items: () => cwd === 'PROJECTS' ? [
+      { label: 'Open', disabled: !selected, action: () => { if (selected?._proj) window.open(selected._proj.file, '_blank'); } },
+      '-',
+      { label: 'Close', action: () => closeWin('explorer') },
+    ] : [
       { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); render(); } } }) },
       { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
       '-',
@@ -2407,7 +2479,7 @@ function openExplorer(startPath) {
         if (ws) ws.textContent = 'Copied: ' + path;
       }},
       '-',
-      { label: 'Rename', disabled: !selected || selected?.sysfile, action: () => {
+      { label: 'Rename', disabled: !selected || selected?.sysfile || cwd === 'PROJECTS', action: () => {
         if (!selected || selected.sysfile) return;
         const { name, kind } = selected;
         osPrompt('Rename to:', name, 'Rename', n => {
@@ -2427,7 +2499,7 @@ function openExplorer(startPath) {
           render();
         });
       }},
-      { label: 'Delete', disabled: !selected || selected?.sysfile, action: deleteSelected },
+      { label: 'Delete', disabled: !selected || selected?.sysfile || cwd === 'PROJECTS', action: deleteSelected },
     ]},
     { label: 'View', items: () => [
       { label: (viewMode==='icons'   ? '• ' : '  ') + 'Large Icons', action: () => { viewMode='icons';   render(); } },
@@ -2450,125 +2522,7 @@ function openExplorer(startPath) {
   document.addEventListener('fs-changed', onFsChanged);
 }
 
-function openFiles() {
-  if (!mkWin({ id:'files', title:'PROJECTS.DIR — File Manager', icon:'📁', w:580, h:400, x:120, y:70 })) return;
-
-  const mb   = document.getElementById('mb-files');
-  const body = document.getElementById('wb-files');
-  const ws   = document.getElementById('ws-files');
-  body.style.cssText = 'overflow:auto;border:2px solid;border-color:#808080 #fff #fff #808080;margin:4px;background:#fff;';
-
-  let selected = null;
-  let viewMode = 'icons'; // 'icons' | 'list' | 'details'
-
-  // ── render ──────────────────────────────────────────────────
-  function getSelected() { return selected; }
-  function setSelected(p, itemEl, containerSel) {
-    body.querySelectorAll(containerSel).forEach(f => f.classList.remove('selected'));
-    itemEl.classList.add('selected');
-    selected = p;
-  }
-
-  function makeItem(p, mode) {
-    const item = document.createElement(mode === 'details' ? 'tr' : 'div');
-    if (mode === 'icons') {
-      item.className = 'file-item';
-      item.innerHTML = `<div class="fi-icon">${p.emoji}</div><div class="fi-name">${p.name}</div>`;
-    } else if (mode === 'list') {
-      item.className = 'file-list-item';
-      item.innerHTML = `<span class="fli-icon">${p.emoji}</span><span>${p.name}</span>`;
-    } else {
-      item.innerHTML = `<td class="fd-icon">${p.emoji}</td><td>${p.name}</td><td>HTML Application</td><td>${p.file}</td>`;
-    }
-    const containerSel = mode === 'icons' ? '.file-item' : mode === 'list' ? '.file-list-item' : 'tbody tr';
-    let clicks = 0, clickT;
-    item.addEventListener('click', e => {
-      e.stopPropagation(); clicks++;
-      setSelected(p, item, containerSel);
-      if (ws) ws.textContent = p.name + '  —  double-click to open';
-      if (clicks === 1) { clickT = setTimeout(() => { clicks = 0; }, 380); }
-      else { clearTimeout(clickT); clicks = 0; window.open(p.file, '_blank'); }
-    });
-    item.addEventListener('touchend', e => {
-      e.preventDefault(); setSelected(p, item, containerSel); window.open(p.file, '_blank');
-    }, { passive: false });
-    return item;
-  }
-
-  function renderView() {
-    body.innerHTML = '';
-    selected = null;
-    if (viewMode === 'icons') {
-      const grid = document.createElement('div'); grid.className = 'file-grid';
-      PROJECTS.forEach(p => grid.appendChild(makeItem(p, 'icons')));
-      body.appendChild(grid);
-    } else if (viewMode === 'list') {
-      const list = document.createElement('div'); list.className = 'file-list';
-      PROJECTS.forEach(p => list.appendChild(makeItem(p, 'list')));
-      body.appendChild(list);
-    } else {
-      const tbl = document.createElement('table'); tbl.className = 'file-details';
-      tbl.innerHTML = '<thead><tr><th></th><th>Name</th><th>Type</th><th>File</th></tr></thead>';
-      const tbody = document.createElement('tbody');
-      PROJECTS.forEach(p => tbody.appendChild(makeItem(p, 'details')));
-      tbl.appendChild(tbody); body.appendChild(tbl);
-    }
-    if (ws) ws.textContent = PROJECTS.length + ' objects';
-  }
-
-  // ── menus ───────────────────────────────────────────────────
-  const FILE_ITEMS = [
-    { label: 'Open',       action: () => { if (selected) window.open(selected.file, '_blank'); else if (ws) ws.textContent = 'No file selected.'; } },
-    { label: 'Properties', action: () => {
-      if (!selected) { if (ws) ws.textContent = 'No file selected.'; return; }
-      osAlert(`Name:\t${selected.name}\nFile:\t${selected.file}\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\`, 'Properties', '📄');
-    }},
-    '-',
-    { label: 'Close', action: () => closeWin('files') },
-  ];
-  const EDIT_ITEMS = [
-    { label: 'Select All', action: () => {
-      const sel = viewMode === 'icons' ? '.file-item' : viewMode === 'list' ? '.file-list-item' : 'tbody tr';
-      body.querySelectorAll(sel).forEach(el => el.classList.add('selected'));
-      selected = PROJECTS[PROJECTS.length - 1];
-      if (ws) ws.textContent = PROJECTS.length + ' objects selected';
-    }},
-    { label: 'Copy Name', action: () => {
-      if (!selected) { if (ws) ws.textContent = 'Nothing selected.'; return; }
-      navigator.clipboard.writeText(selected.name).catch(() => {});
-      if (ws) ws.textContent = 'Copied: ' + selected.name;
-    }},
-  ];
-  function VIEW_ITEMS() {
-    return [
-      { label: (viewMode==='icons'   ? '• ':'  ') + 'Large Icons', action: () => { viewMode='icons';   renderView(); } },
-      { label: (viewMode==='list'    ? '• ':'  ') + 'List',         action: () => { viewMode='list';    renderView(); } },
-      { label: (viewMode==='details' ? '• ':'  ') + 'Details',      action: () => { viewMode='details'; renderView(); } },
-      '-',
-      { label: '  Refresh', action: () => renderView() },
-    ];
-  }
-  const HELP_ITEMS = [
-    { label: 'Help Topics', action: () => osAlert('PROJECTS.DIR Help\n\nDouble-click any project to open it in a new tab.\nFile > Open  — opens selected project\nFile > Properties  — shows file info\nView  — switch between Large Icons, List, Details\nEdit > Select All  — selects all projects\nEdit > Copy Name  — copies selected name', 'Help Topics', '❓') },
-    '-',
-    { label: 'About PROJECTS.DIR', action: () => osAlert('PROJECTS.DIR — File Manager\nsleepOS v1.0\n\n' + PROJECTS.length + ' interactive projects.\nAll of them are watching.', 'About', '📁') },
-  ];
-
-  mb.innerHTML = '';
-  [
-    { label: 'File', items: () => FILE_ITEMS },
-    { label: 'Edit', items: () => EDIT_ITEMS },
-    { label: 'View', items: VIEW_ITEMS },
-    { label: 'Help', items: () => HELP_ITEMS },
-  ].forEach(({ label, items }) => {
-    const span = document.createElement('span');
-    span.className = 'menu-item'; span.textContent = label;
-    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items()); });
-    mb.appendChild(span);
-  });
-
-  renderView();
-}
+function openFiles() { openExplorer('PROJECTS'); }
 
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 function openTerminal(startDir) {
