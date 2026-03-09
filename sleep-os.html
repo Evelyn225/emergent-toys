@@ -589,6 +589,10 @@ const DESKTOP_ICONS = [
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
 ];
 
+const customDesktopIcons = []; // user-created shortcuts (session)
+let browserFavorites = JSON.parse(localStorage.getItem('sleepOS-favorites') || '[]');
+function saveFavorites() { localStorage.setItem('sleepOS-favorites', JSON.stringify(browserFavorites)); }
+
 // ─────────────────────────────────────────────────────────────────
 // WALLPAPERS
 // ─────────────────────────────────────────────────────────────────
@@ -1165,6 +1169,30 @@ function showDropdown(anchor, items) {
   document.body.appendChild(dd);
   setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
 }
+function showCtxMenu(x, y, items) {
+  closeDropdown();
+  const dd = document.createElement('div');
+  dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+  // Keep menu on screen
+  dd.style.left = x + 'px'; dd.style.top = y + 'px';
+  items.forEach(item => {
+    if (item === '-') {
+      const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
+    } else {
+      const el = document.createElement('div');
+      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
+      el.textContent = item.label;
+      if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
+      dd.appendChild(el);
+    }
+  });
+  document.body.appendChild(dd);
+  // Clamp to viewport
+  const r = dd.getBoundingClientRect();
+  if (r.right  > window.innerWidth)  dd.style.left = (x - r.width)  + 'px';
+  if (r.bottom > window.innerHeight) dd.style.top  = (y - r.height) + 'px';
+  setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
+}
 
 function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
@@ -1350,34 +1378,76 @@ document.addEventListener('touchstart', handleOutsideStart, { passive: true });
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICONS
 // ─────────────────────────────────────────────────────────────────
+function makeDesktopIconEl(ic) {
+  const div = document.createElement('div');
+  div.className = 'desktop-icon';
+  div.innerHTML = `<div class="di-img">${ic.emoji}</div><div class="di-name">${ic.name}</div>`;
+  function activate() {
+    if (ic.action) window[ic.action]?.();
+    else if (ic.openFn) ic.openFn();
+  }
+  let clicks = 0, clickT;
+  div.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
+    div.classList.add('selected');
+    if (e.pointerType !== 'mouse') {
+      activate();
+    } else {
+      clicks++;
+      if (clicks === 1) {
+        clickT = setTimeout(() => { clicks = 0; }, 380);
+      } else {
+        clearTimeout(clickT); clicks = 0;
+        activate();
+      }
+    }
+  });
+  div.addEventListener('contextmenu', e => {
+    e.preventDefault(); e.stopPropagation();
+    document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
+    div.classList.add('selected');
+    const items = [{ label: '▶ Open', action: activate }];
+    if (ic.custom) {
+      items.push('-');
+      items.push({ label: '🗑️ Remove Shortcut', action: () => {
+        const idx = customDesktopIcons.indexOf(ic);
+        if (idx > -1) customDesktopIcons.splice(idx, 1);
+        div.remove();
+      }});
+    }
+    showCtxMenu(e.clientX, e.clientY, items);
+  });
+  return div;
+}
+
+function addDesktopShortcut(name, emoji, openFn) {
+  const ic = { name, emoji, openFn, custom: true };
+  customDesktopIcons.push(ic);
+  document.getElementById('icons-layer').appendChild(makeDesktopIconEl(ic));
+}
+
 function setupIcons() {
   const layer = document.getElementById('icons-layer');
-  DESKTOP_ICONS.forEach(ic => {
-    const div = document.createElement('div');
-    div.className = 'desktop-icon';
-    div.innerHTML = `<div class="di-img">${ic.emoji}</div><div class="di-name">${ic.name}</div>`;
-    let clicks = 0, clickT;
-    div.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
-      div.classList.add('selected');
-      if (e.pointerType !== 'mouse') {
-        // touch/pen: open on single tap
-        window[ic.action]?.();
-      } else {
-        // mouse: require double-click
-        clicks++;
-        if (clicks === 1) {
-          clickT = setTimeout(() => { clicks = 0; }, 380);
-        } else {
-          clearTimeout(clickT); clicks = 0;
-          window[ic.action]?.();
-        }
-      }
-    });
-    layer.appendChild(div);
+  [...DESKTOP_ICONS, ...customDesktopIcons].forEach(ic => layer.appendChild(makeDesktopIconEl(ic)));
+
+  // Desktop background right-click
+  document.getElementById('desktop').addEventListener('contextmenu', e => {
+    if (e.target.closest('.desktop-icon') || e.target.closest('.os-window')) return;
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '💻 Open Terminal',    action: openTerminal },
+      { label: '🗂️ Open Explorer',    action: openExplorer },
+      { label: '📝 Open Notepad',     action: openNotepad },
+      { label: '🌐 Open Browser',     action: openBrowser },
+      '-',
+      { label: '🖼️ Change Wallpaper', action: openAppearance },
+      '-',
+      { label: 'ℹ️ Properties', action: () => alert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686') },
+    ]);
   });
-  document.getElementById('desktop').addEventListener('click', (e) => {
+
+  document.getElementById('desktop').addEventListener('click', e => {
     if (!e.target.closest('.desktop-icon') && !e.target.closest('.os-window'))
       document.querySelectorAll('.desktop-icon').forEach(d => d.classList.remove('selected'));
   });
@@ -1436,6 +1506,21 @@ function openWelcome() {
   };
   ta.addEventListener('input', updateStatus);
   updateStatus();
+
+  ta.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const hasSel = ta.selectionStart !== ta.selectionEnd;
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '✂️ Cut',       disabled: !hasSel, action: () => document.execCommand('cut') },
+      { label: '📋 Copy',      disabled: !hasSel, action: () => document.execCommand('copy') },
+      { label: '📄 Paste',     action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
+      '-',
+      { label: 'Select All',   action: () => { ta.focus(); ta.select(); } },
+      '-',
+      { label: 'Save',         action: () => { localStorage.setItem('sleepOS-welcome', ta.value); updateStatus(); } },
+      { label: 'Revert',       action: () => { ta.value = WELCOME_DEFAULT; updateStatus(); } },
+    ]);
+  });
 
   function buildMenu() {
     mb.innerHTML = '';
@@ -1730,6 +1815,22 @@ function openNotepad(filename) {
   // Rebuild language menu when lang changes so checkmark updates
   const origSetLang = setLang;
   setLang = (l) => { origSetLang(l); buildMenu(); };
+
+  ta.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const hasSel = ta.selectionStart !== ta.selectionEnd;
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '✂️ Cut',              disabled: !hasSel, action: () => document.execCommand('cut') },
+      { label: '📋 Copy',             disabled: !hasSel, action: () => document.execCommand('copy') },
+      { label: '📄 Paste',            action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
+      '-',
+      { label: 'Select All',          action: () => { ta.focus(); ta.select(); } },
+      { label: 'Toggle Comment',      action: () => ta.dispatchEvent(Object.assign(new KeyboardEvent('keydown', { key: '/', ctrlKey: true, bubbles: true }))) },
+      '-',
+      { label: 'Save  Ctrl+S',        action: () => currentFile ? save(currentFile) : promptSaveAs() },
+      { label: 'Save As\u2026',       action: promptSaveAs },
+    ]);
+  });
 }
 
 function openExplorer(startPath) {
@@ -1801,26 +1902,6 @@ function openExplorer(startPath) {
     else if (dir.files.has(name)) openNotepad(name);
   }
 
-  function showCtxMenu(x, y, items) {
-    closeDropdown();
-    const dd = document.createElement('div');
-    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
-    dd.style.left = x + 'px'; dd.style.top = y + 'px';
-    items.forEach(item => {
-      if (item === '-') {
-        const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
-      } else {
-        const el = document.createElement('div');
-        el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
-        el.textContent = item.label;
-        if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
-        dd.appendChild(el);
-      }
-    });
-    document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
-  }
-
   function deleteSelected() {
     if (!selected || selected.sysfile) return;
     if (!confirm(`Delete "${selected.name}"?`)) return;
@@ -1868,6 +1949,11 @@ function openExplorer(startPath) {
           render();
         }},
         { label: '🗑️ Delete', disabled: !canDelete, action: deleteSelected },
+        '-',
+        { label: '📌 Create Desktop Shortcut', action: () => {
+          const icon = getIcon(name, kind);
+          addDesktopShortcut(name, icon, () => openItem(name, kind, sysfile));
+        }},
         '-',
         { label: '📋 Copy Name', action: () => navigator.clipboard?.writeText(name) },
       ]);
@@ -2092,6 +2178,19 @@ function openTerminal() {
 
   const out = document.getElementById('to');
   const inp = document.getElementById('ti');
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const sel = window.getSelection()?.toString();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '📋 Copy',         disabled: !sel, action: () => sel && navigator.clipboard?.writeText(sel) },
+      { label: '📄 Paste',        action: () => navigator.clipboard?.readText().then(t => { inp.value += t; inp.focus(); }) },
+      '-',
+      { label: '🧹 Clear Screen', action: () => { out.innerHTML = ''; } },
+      '-',
+      { label: 'Close',           action: () => closeWin('terminal') },
+    ]);
+  });
 
   const print = (text, color) => {
     const div = document.createElement('div');
@@ -2639,8 +2738,20 @@ function openSysmon() {
   const state = {};
   METRICS.forEach(m => { state[m.key] = m.val; });
 
+  let sysmonPaused = false;
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: sysmonPaused ? '▶ Resume' : '⏸ Pause', action: () => { sysmonPaused = !sysmonPaused; } },
+      '-',
+      { label: 'Close', action: () => closeWin('sysmon') },
+    ]);
+  });
+
   const interval = setInterval(() => {
     if (!wins['sysmon']) { clearInterval(interval); return; }
+    if (sysmonPaused) return;
     METRICS.forEach(m => {
       let v = state[m.key] + (Math.random() - 0.5) * 7;
       if (m.key === 'soul')      v = Math.min(92, Math.max(60, v - 0.05));
@@ -2816,6 +2927,15 @@ function openDefrag() {
     fileLabel.textContent = 'Defragmentation stopped.';
     if (ws) ws.textContent = 'Stopped';
     drawGrid();
+  });
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: running ? '⏹ Stop' : '▶ Start', action: () => running ? stopBtn.click() : startBtn.click() },
+      '-',
+      { label: 'Close', action: () => closeWin('defrag') },
+    ]);
   });
 
   // ── Menus ──────────────────────────────────────────────────────
@@ -3084,7 +3204,8 @@ function openBrowser() {
     <div class="br-vsep"></div>
     <span class="br-addr-label">Address:</span>
     <input class="br-addr" id="br-url" type="text" value="home:">
-    <button class="br-btn" id="br-go">Go</button>`;
+    <button class="br-btn" id="br-go">Go</button>
+    <button class="br-btn" id="br-fav" title="Add to Favorites">⭐</button>`;
   body.appendChild(toolbar);
 
   // ── iframe + error overlay ─────────────────────────────────────
@@ -3202,6 +3323,36 @@ function openBrowser() {
     if (e.key === 'Enter') navigate(document.getElementById('br-url').value.trim());
   });
 
+  // ── favorites helpers ──────────────────────────────────────────
+  function currentUrl() { return hist[histIdx] || 'home:'; }
+  function addToFavorites() {
+    const url = currentUrl();
+    if (url === 'home:') return;
+    const title = prompt('Save to Favorites as:', document.getElementById('br-url').value);
+    if (!title) return;
+    browserFavorites.push({ title, url });
+    saveFavorites();
+    if (ws) ws.textContent = 'Added to Favorites.';
+  }
+
+  document.getElementById('br-fav').addEventListener('click', addToFavorites);
+
+  // ── browser body right-click ───────────────────────────────────
+  body.addEventListener('contextmenu', e => {
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '◀ Back',    disabled: histIdx <= 0,               action: () => document.getElementById('br-back').click() },
+      { label: '▶ Forward', disabled: histIdx >= hist.length - 1, action: () => document.getElementById('br-fwd').click() },
+      { label: '↻ Refresh', action: () => document.getElementById('br-ref').click() },
+      '-',
+      { label: '⭐ Add to Favorites', disabled: currentUrl() === 'home:', action: addToFavorites },
+      '-',
+      { label: '🏠 Home',      action: () => navigate('home:') },
+      { label: '🔗 Open in New Tab', disabled: currentUrl() === 'home:', action: () => window.open(currentUrl(), '_blank') },
+    ]);
+  });
+
   // ── menu bar ───────────────────────────────────────────────────
   function brDropdown(anchor, items) {
     const old = document.getElementById('active-dropdown'); if (old) old.remove();
@@ -3250,6 +3401,29 @@ function openBrowser() {
     span.addEventListener('click', e => { e.stopPropagation(); brDropdown(span, items); });
     mb.appendChild(span);
   });
+
+  // Favorites menu (dynamic — built on open)
+  const favSpan = document.createElement('span');
+  favSpan.className = 'menu-item'; favSpan.textContent = 'Favorites';
+  favSpan.addEventListener('click', e => {
+    e.stopPropagation();
+    const items = [
+      { label: '⭐ Add to Favorites', action: addToFavorites },
+      { label: '🗑️ Clear All Favorites', action: () => {
+        if (!browserFavorites.length || !confirm('Clear all favorites?')) return;
+        browserFavorites.length = 0; saveFavorites();
+      }},
+    ];
+    if (browserFavorites.length) {
+      items.push('-');
+      browserFavorites.forEach((fav, i) => items.push({
+        label: fav.title,
+        action: () => navigate(fav.url),
+      }));
+    }
+    brDropdown(favSpan, items);
+  });
+  mb.appendChild(favSpan);
 
   navigate('home:');
 }
