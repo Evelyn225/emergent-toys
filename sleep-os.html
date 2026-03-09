@@ -378,6 +378,26 @@ body {
   margin: 4px; padding: 6px;
 }
 .exp-grid { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+/* Explorer list view */
+.exp-list-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 1px 4px; cursor: pointer; border: 1px solid transparent;
+  font-family: 'Courier New', monospace; font-size: 11px;
+  white-space: nowrap; overflow: hidden;
+}
+.exp-list-item:hover { background: rgba(0,0,128,0.1); border-color: #000080; }
+.exp-list-item.selected { background: #000080; color: #fff; border-color: #000080; }
+/* Explorer details view */
+.exp-det-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.exp-det-tbl thead th {
+  background: #c0c0c0; border-bottom: 1px solid #808080;
+  padding: 2px 6px; text-align: left; position: sticky; top: 0;
+  border-right: 1px solid #808080; cursor: default; user-select: none;
+}
+.exp-det-item { cursor: pointer; }
+.exp-det-item:hover td { background: rgba(0,0,128,0.1); }
+.exp-det-item.selected td { background: #000080; color: #fff; }
+.exp-det-item td { padding: 1px 6px; border-right: 1px solid #e0e0e0; }
 .exp-item {
   display: flex; flex-direction: column; align-items: center;
   width: 72px; padding: 4px; cursor: pointer; border: 1px solid transparent;
@@ -2151,6 +2171,7 @@ function openExplorer(startPath) {
   body.appendChild(pane);
 
   let selected = null;
+  let viewMode = 'icons'; // 'icons' | 'list' | 'details'
 
   function getIcon(name, kind) {
     if (kind === 'image') return '🖼️';
@@ -2209,20 +2230,37 @@ function openExplorer(startPath) {
     }, '🗑️');
   }
 
+  function typeLabel(kind) {
+    return kind === 'dir' ? 'File Folder' : kind === 'image' ? 'Image File' :
+           kind === 'video' ? 'Video File' : kind === 'audio' ? 'Audio File' :
+           kind === 'binary' ? 'Binary File' : 'Text File';
+  }
+
   function makeItem(name, kind, sysfile) {
-    const el = document.createElement('div');
-    el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
-    el.innerHTML = `<div class="exp-icon">${getIcon(name, kind)}</div><span>${name}</span>`;
+    const icon = getIcon(name, kind);
+    let el;
+    if (viewMode === 'list') {
+      el = document.createElement('div');
+      el.className = 'exp-list-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = `<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">${icon}</span><span>${name}</span>`;
+    } else if (viewMode === 'details') {
+      el = document.createElement('tr');
+      el.className = 'exp-det-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = `<td style="font-size:12px;width:22px;">${icon}</td><td>${name}</td><td>${typeLabel(kind)}</td>`;
+    } else {
+      el = document.createElement('div');
+      el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = `<div class="exp-icon">${icon}</div><span>${name}</span>`;
+    }
+    const deselAll = () => pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(i => i.classList.remove('selected'));
     el.addEventListener('click', () => {
-      pane.querySelectorAll('.exp-item').forEach(i => i.classList.remove('selected'));
-      el.classList.add('selected'); selected = { name, kind, sysfile };
+      deselAll(); el.classList.add('selected'); selected = { name, kind, sysfile };
       if (ws) ws.textContent = name;
     });
     el.addEventListener('dblclick', () => openItem(name, kind, sysfile));
     el.addEventListener('contextmenu', e => {
       e.preventDefault(); e.stopPropagation();
-      pane.querySelectorAll('.exp-item').forEach(i => i.classList.remove('selected'));
-      el.classList.add('selected'); selected = { name, kind, sysfile };
+      deselAll(); el.classList.add('selected'); selected = { name, kind, sysfile };
       if (ws) ws.textContent = name;
       const canDelete = !sysfile;
       const isScript = !sysfile && name.toLowerCase().endsWith('.script');
@@ -2269,36 +2307,49 @@ function openExplorer(startPath) {
 
   function render() {
     pane.innerHTML = ''; selected = null;
-    const grid = document.createElement('div'); grid.className = 'exp-grid';
     const fullPath = cwd ? `C:\\sleepOS\\${cwd}` : 'C:\\sleepOS';
     addrEl.value = fullPath;
     const titleEl = document.getElementById('wtitle-explorer');
     if (titleEl) titleEl.textContent = `FILE EXPLORER \u2014 ${fullPath}`;
 
+    // Collect items
+    const items = [];
     if (!cwd) {
-      // Root: show system files + DOCS + user dirs/files/blobs
-      ['PROJECTS'].forEach(d => grid.appendChild(makeItem(d, 'dir', true)));
-      ['DOCS', ...termFS.dirs].filter((v, i, a) => a.indexOf(v) === i).forEach(d => {
-        if (d !== 'PROJECTS') grid.appendChild(makeItem(d, 'dir', false));
+      items.push({name:'PROJECTS', kind:'dir', sysfile:true});
+      ['DOCS', ...termFS.dirs].filter((v,i,a) => a.indexOf(v)===i).forEach(d => {
+        if (d !== 'PROJECTS') items.push({name:d, kind:'dir', sysfile:false});
       });
-      [
-        {name:'WELCOME.README', sys:true}, {name:'TERMINAL.EXE', sys:true},
-        {name:'SYSMON.EXE', sys:true},     {name:'NOTEPAD.EXE', sys:true},
-        {name:'BROWSER.EXE', sys:true},    {name:'DEFRAG.EXE', sys:true},
-        {name:'void.tmp', sys:true},       {name:'daemon.core', sys:true},
-        {name:'?????.exe', sys:true},
-      ].forEach(({name, sys}) => grid.appendChild(makeItem(name, 'file', sys)));
-      termFS.files.forEach((_, name) => grid.appendChild(makeItem(name, 'file', false)));
-      termFS.blobs.forEach((b, name) => grid.appendChild(makeItem(name, b.kind, false)));
+      [{name:'WELCOME.README'},{name:'TERMINAL.EXE'},{name:'SYSMON.EXE'},{name:'NOTEPAD.EXE'},
+       {name:'BROWSER.EXE'},{name:'DEFRAG.EXE'},{name:'void.tmp'},{name:'daemon.core'},{name:'?????.exe'}
+      ].forEach(({name}) => items.push({name, kind:'file', sysfile:true}));
+      termFS.files.forEach((_, name) => items.push({name, kind:'file', sysfile:false}));
+      termFS.blobs.forEach((b, name) => items.push({name, kind:b.kind, sysfile:false}));
     } else {
       const dir = fsGetDir(cwd);
       if (!dir) { cwd = ''; render(); return; }
-      dir.dirs.forEach(d => grid.appendChild(makeItem(d, 'dir', false)));
-      dir.files.forEach((_, name) => grid.appendChild(makeItem(name, 'file', false)));
-      dir.blobs.forEach((b, name) => grid.appendChild(makeItem(name, b.kind, false)));
+      dir.dirs.forEach(d => items.push({name:d, kind:'dir', sysfile:false}));
+      dir.files.forEach((_, name) => items.push({name, kind:'file', sysfile:false}));
+      dir.blobs.forEach((b, name) => items.push({name, kind:b.kind, sysfile:false}));
     }
-    pane.appendChild(grid);
-    if (ws) ws.textContent = grid.children.length + ' objects';
+
+    // Build container based on viewMode
+    if (viewMode === 'details') {
+      const tbl = document.createElement('table'); tbl.className = 'exp-det-tbl';
+      tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      items.forEach(({name, kind, sysfile}) => tbody.appendChild(makeItem(name, kind, sysfile)));
+      tbl.appendChild(tbody); pane.appendChild(tbl);
+    } else if (viewMode === 'list') {
+      const list = document.createElement('div');
+      list.style.cssText = 'display:flex;flex-direction:column;';
+      items.forEach(({name, kind, sysfile}) => list.appendChild(makeItem(name, kind, sysfile)));
+      pane.appendChild(list);
+    } else {
+      const grid = document.createElement('div'); grid.className = 'exp-grid';
+      items.forEach(({name, kind, sysfile}) => grid.appendChild(makeItem(name, kind, sysfile)));
+      pane.appendChild(grid);
+    }
+    if (ws) ws.textContent = items.length + ' objects';
   }
 
   upBtn.addEventListener('click', () => { const i = cwd.lastIndexOf('\\'); cwd = i >= 0 ? cwd.slice(0, i) : ''; render(); });
@@ -2306,7 +2357,7 @@ function openExplorer(startPath) {
 
   // ── pane background right-click ───────────────────────────────
   pane.addEventListener('contextmenu', e => {
-    if (e.target !== pane && !e.target.classList.contains('exp-grid')) return;
+    if (e.target !== pane && !e.target.classList.contains('exp-grid') && e.target.tagName !== 'TABLE' && e.target.tagName !== 'TBODY') return;
     e.preventDefault();
     showCtxMenu(e.clientX, e.clientY, [
       { label: '💻 Open Terminal Here', action: () => openTerminal(cwd) },
@@ -2334,8 +2385,56 @@ function openExplorer(startPath) {
       '-',
       { label: 'Close', action: () => closeWin('explorer') },
     ]},
+    { label: 'Edit', items: () => [
+      { label: 'Select All', action: () => {
+        pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(el => el.classList.add('selected'));
+        if (ws) ws.textContent = 'All objects selected';
+      }},
+      { label: 'Invert Selection', action: () => {
+        pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(el => el.classList.toggle('selected'));
+        if (ws) ws.textContent = 'Selection inverted';
+      }},
+      '-',
+      { label: 'Copy Name', action: () => {
+        if (!selected) return;
+        navigator.clipboard?.writeText(selected.name);
+        if (ws) ws.textContent = 'Copied: ' + selected.name;
+      }},
+      { label: 'Copy Path', action: () => {
+        if (!selected) return;
+        const path = `C:\\sleepOS\\${cwd ? cwd + '\\' : ''}${selected.name}`;
+        navigator.clipboard?.writeText(path);
+        if (ws) ws.textContent = 'Copied: ' + path;
+      }},
+      '-',
+      { label: 'Rename', disabled: !selected || selected?.sysfile, action: () => {
+        if (!selected || selected.sysfile) return;
+        const { name, kind } = selected;
+        osPrompt('Rename to:', name, 'Rename', n => {
+          if (!n || n === name) return;
+          const dir = fsGetDir(cwd);
+          if (kind === 'dir') {
+            dir.dirs.delete(name); const sub = dir.subdirs?.get(name);
+            dir.dirs.add(n.toUpperCase());
+            if (!dir.subdirs) dir.subdirs = new Map();
+            if (sub) dir.subdirs.set(n.toUpperCase(), sub);
+            dir.subdirs.delete(name);
+          } else if (dir.blobs.has(name)) {
+            const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
+          } else {
+            const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
+          }
+          render();
+        });
+      }},
+      { label: 'Delete', disabled: !selected || selected?.sysfile, action: deleteSelected },
+    ]},
     { label: 'View', items: () => [
-      { label: 'Refresh', action: render },
+      { label: (viewMode==='icons'   ? '• ' : '  ') + 'Large Icons', action: () => { viewMode='icons';   render(); } },
+      { label: (viewMode==='list'    ? '• ' : '  ') + 'List',         action: () => { viewMode='list';    render(); } },
+      { label: (viewMode==='details' ? '• ' : '  ') + 'Details',      action: () => { viewMode='details'; render(); } },
+      '-',
+      { label: '  Refresh', action: render },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -2646,18 +2745,31 @@ function openTerminal(startDir) {
       print('System date: ' + now.toDateString());
       print('NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.');
     },
-    ping: (args) => {
-      const host = args || 'evenet.fun';
+    ping: async (args) => {
+      const host = (args || 'evenet.fun').trim().replace(/^https?:\/\//i,'').replace(/[/?#].*$/,'');
       print(`Pinging ${host} with 32 bytes of data:`);
-      [400, 800, 1200].forEach((t, i) =>
-        setTimeout(() => print(`Reply from ${host}: bytes=32 time=${9+i*3}ms TTL=128`), t));
-      setTimeout(() => {
-        print(`Reply from ${host}: bytes=32 time=???ms TTL=???`);
-        print('');
-        print(`Ping statistics for ${host}:`);
-        print('  Packets: Sent = 4, Received = 4, Lost = 0 (0.0% loss)');
-        print('Approximate round trip times: Min=9ms  Max=???ms  Avg=???ms');
-      }, 1700);
+      const times = []; let received = 0;
+      for (let i = 0; i < 4; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 1000));
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4000);
+        const t0 = performance.now();
+        try {
+          await fetch(`https://${host}/`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+          clearTimeout(tid);
+          const ms = Math.round(performance.now() - t0);
+          times.push(ms); received++;
+          print(`Reply from ${host}: bytes=32 time=${ms}ms TTL=57`);
+        } catch(e) {
+          clearTimeout(tid);
+          print(`Request timeout for ${host}.`);
+        }
+      }
+      print('');
+      print(`Ping statistics for ${host}:`);
+      const lost = 4 - received;
+      print(`  Packets: Sent = 4, Received = ${received}, Lost = ${lost} (${Math.round(lost/4*100)}% loss)`);
+      if (times.length) print(`Approximate round trip times: Min=${Math.min(...times)}ms  Max=${Math.max(...times)}ms  Avg=${Math.round(times.reduce((a,b)=>a+b)/times.length)}ms`);
     },
     echo: (args) => { if (args) print(args); },
     cls: () => { out.innerHTML = ''; },
