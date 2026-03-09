@@ -1507,6 +1507,21 @@ function openWelcome() {
   ta.addEventListener('input', updateStatus);
   updateStatus();
 
+  ta.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const hasSel = ta.selectionStart !== ta.selectionEnd;
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '✂️ Cut',       disabled: !hasSel, action: () => document.execCommand('cut') },
+      { label: '📋 Copy',      disabled: !hasSel, action: () => document.execCommand('copy') },
+      { label: '📄 Paste',     action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
+      '-',
+      { label: 'Select All',   action: () => { ta.focus(); ta.select(); } },
+      '-',
+      { label: 'Save',         action: () => { localStorage.setItem('sleepOS-welcome', ta.value); updateStatus(); } },
+      { label: 'Revert',       action: () => { ta.value = WELCOME_DEFAULT; updateStatus(); } },
+    ]);
+  });
+
   function buildMenu() {
     mb.innerHTML = '';
     [
@@ -1800,6 +1815,22 @@ function openNotepad(filename) {
   // Rebuild language menu when lang changes so checkmark updates
   const origSetLang = setLang;
   setLang = (l) => { origSetLang(l); buildMenu(); };
+
+  ta.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const hasSel = ta.selectionStart !== ta.selectionEnd;
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '✂️ Cut',              disabled: !hasSel, action: () => document.execCommand('cut') },
+      { label: '📋 Copy',             disabled: !hasSel, action: () => document.execCommand('copy') },
+      { label: '📄 Paste',            action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
+      '-',
+      { label: 'Select All',          action: () => { ta.focus(); ta.select(); } },
+      { label: 'Toggle Comment',      action: () => ta.dispatchEvent(Object.assign(new KeyboardEvent('keydown', { key: '/', ctrlKey: true, bubbles: true }))) },
+      '-',
+      { label: 'Save  Ctrl+S',        action: () => currentFile ? save(currentFile) : promptSaveAs() },
+      { label: 'Save As\u2026',       action: promptSaveAs },
+    ]);
+  });
 }
 
 function openExplorer(startPath) {
@@ -2147,6 +2178,19 @@ function openTerminal() {
 
   const out = document.getElementById('to');
   const inp = document.getElementById('ti');
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const sel = window.getSelection()?.toString();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '📋 Copy',         disabled: !sel, action: () => sel && navigator.clipboard?.writeText(sel) },
+      { label: '📄 Paste',        action: () => navigator.clipboard?.readText().then(t => { inp.value += t; inp.focus(); }) },
+      '-',
+      { label: '🧹 Clear Screen', action: () => { out.innerHTML = ''; } },
+      '-',
+      { label: 'Close',           action: () => closeWin('terminal') },
+    ]);
+  });
 
   const print = (text, color) => {
     const div = document.createElement('div');
@@ -2694,8 +2738,20 @@ function openSysmon() {
   const state = {};
   METRICS.forEach(m => { state[m.key] = m.val; });
 
+  let sysmonPaused = false;
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: sysmonPaused ? '▶ Resume' : '⏸ Pause', action: () => { sysmonPaused = !sysmonPaused; } },
+      '-',
+      { label: 'Close', action: () => closeWin('sysmon') },
+    ]);
+  });
+
   const interval = setInterval(() => {
     if (!wins['sysmon']) { clearInterval(interval); return; }
+    if (sysmonPaused) return;
     METRICS.forEach(m => {
       let v = state[m.key] + (Math.random() - 0.5) * 7;
       if (m.key === 'soul')      v = Math.min(92, Math.max(60, v - 0.05));
@@ -2871,6 +2927,15 @@ function openDefrag() {
     fileLabel.textContent = 'Defragmentation stopped.';
     if (ws) ws.textContent = 'Stopped';
     drawGrid();
+  });
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: running ? '⏹ Stop' : '▶ Start', action: () => running ? stopBtn.click() : startBtn.click() },
+      '-',
+      { label: 'Close', action: () => closeWin('defrag') },
+    ]);
   });
 
   // ── Menus ──────────────────────────────────────────────────────
