@@ -341,12 +341,101 @@ body {
 }
 .glitching { animation: glitch-shift 0.18s steps(1) 3; }
 
+/* ── File Explorer ───────────────────────────────────────────── */
+.exp-toolbar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 6px; border-bottom: 1px solid #808080;
+  background: #d4d0c8;
+}
+.exp-toolbar button {
+  font-family: inherit; font-size: 11px; padding: 2px 8px;
+  background: #d4d0c8; border: 2px solid;
+  border-color: #fff #808080 #808080 #fff; cursor: pointer;
+}
+.exp-toolbar button:active { border-color: #808080 #fff #fff #808080; }
+.exp-addr {
+  flex: 1; font-family: 'Courier New', monospace; font-size: 11px;
+  padding: 1px 4px; border: 2px solid; border-color: #808080 #fff #fff #808080;
+  background: #fff;
+}
+.exp-body {
+  flex: 1; overflow: auto; background: #fff;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+  margin: 4px; padding: 6px;
+}
+.exp-grid { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+.exp-item {
+  display: flex; flex-direction: column; align-items: center;
+  width: 72px; padding: 4px; cursor: pointer; border: 1px solid transparent;
+  font-family: 'Courier New', monospace; font-size: 10px; text-align: center;
+  word-break: break-all;
+}
+.exp-item:hover { background: #000080; color: #fff; border-color: #000080; }
+.exp-item.selected { background: #000080; color: #fff; border-color: #000080; }
+.exp-item .exp-icon { font-size: 28px; margin-bottom: 2px; pointer-events: none; }
+.exp-item span { pointer-events: none; }
+.exp-sysfile { opacity: 0.6; }
+
+/* ── Drop zone overlay ───────────────────────────────────────── */
+#drop-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,128,0.55); border: 4px dashed #fff;
+  align-items: center; justify-content: center;
+  color: #fff; font-family: 'Courier New', monospace; font-size: 22px;
+  pointer-events: none;
+}
+#drop-overlay.active { display: flex; }
+
+/* ── Image viewer / Video player ─────────────────────────────── */
+.media-body {
+  width: 100%; height: 100%; background: #111;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.media-body img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.media-body video { width: 100%; height: 100%; background: #000; }
+
 /* ── Welcome text window ─────────────────────────────────────── */
 .note-body {
   background: #fff; height: 100%; overflow: auto;
   padding: 8px; font-family: 'Courier New', monospace;
   font-size: 11px; line-height: 1.7;
 }
+.note-textarea {
+  display: block; width: 100%; height: 100%; box-sizing: border-box;
+  background: #fff; padding: 8px;
+  font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.7;
+  border: none; outline: none; resize: none; overflow: auto;
+}
+
+/* ── Syntax-highlighting editor (notepad) ─────────────────────── */
+.editor-wrap {
+  position: relative; flex: 1; min-height: 0; overflow: hidden;
+}
+.editor-wrap .note-textarea {
+  position: absolute; inset: 0; height: auto;
+  color: transparent; caret-color: #000;
+  background: transparent;
+  z-index: 2; tab-size: 2;
+}
+.editor-highlight {
+  position: absolute; inset: 0;
+  padding: 8px; box-sizing: border-box;
+  font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-all;
+  overflow: auto; pointer-events: none;
+  background: #fff; color: #000; z-index: 1;
+}
+/* token colours */
+.tok-kw  { color: #0000cc; }
+.tok-str { color: #a31515; }
+.tok-num { color: #098658; }
+.tok-cmt { color: #6a9955; font-style: italic; }
+.tok-tag { color: #800000; }
+.tok-att { color: #dd4400; }
+.tok-fn  { color: #795e26; }
+.tok-var { color: #001080; }
+.tok-hdr { color: #0000cc; font-weight: bold; }
 
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
@@ -385,7 +474,7 @@ body {
   .dlg-btn { min-width: 90px; height: 34px; font-size: 14px; }
 
   .term-wrap { font-size: 16px; }
-  .note-body { font-size: 13px; }
+  .note-body, .note-textarea { font-size: 13px; }
 }
 </style>
 </head>
@@ -398,6 +487,10 @@ body {
 
 <!-- BIOS boot screen -->
 <div id="bios"><div id="bios-text"></div></div>
+
+<!-- Drop overlay -->
+<div id="drop-overlay">📁 Drop files to upload to sleepOS</div>
+<input id="file-upload-input" type="file" accept="image/*,video/*,audio/*,text/*,.script,.txt,.md,.csv,.json,.xml,.html,.css,.js" multiple style="display:none">
 
 <!-- Desktop -->
 <div id="desktop">
@@ -424,6 +517,12 @@ body {
     <div class="sm-item" onclick="closeStart();openWelcome()">
       <span class="sm-icon">📄</span><span>Welcome</span>
     </div>
+    <div class="sm-item" onclick="closeStart();openNotepad()">
+      <span class="sm-icon">📝</span><span>Notepad</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();openExplorer()">
+      <span class="sm-icon">🗂️</span><span>File Explorer</span>
+    </div>
     <div class="sm-item" onclick="closeStart();openFiles()">
       <span class="sm-icon">📁</span><span>Projects</span>
     </div>
@@ -435,6 +534,9 @@ body {
     </div>
     <div class="sm-item" onclick="closeStart();openAppearance()">
       <span class="sm-icon">🖼️</span><span>Appearance</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();triggerUpload()">
+      <span class="sm-icon">📤</span><span>Upload File...</span>
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="window.location='index.html'">
@@ -476,7 +578,8 @@ const PROJECTS = [
 
 const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
-  { name: 'PROJECTS.DIR',   emoji: '📁', action: 'openFiles' },
+  { name: 'NOTEPAD.EXE',    emoji: '📝', action: 'openNotepad' },
+  { name: 'EXPLORER.EXE',   emoji: '🗂️', action: 'openExplorer' },
   { name: 'TERMINAL.EXE',   emoji: '💻', action: 'openTerminal' },
   { name: 'SYSMON.EXE',     emoji: '📊', action: 'openSysmon' },
   { name: 'BROWSER.EXE',    emoji: '🌐', action: 'openBrowser' },
@@ -678,6 +781,387 @@ setTimeout(biosType, 250);
 // ─────────────────────────────────────────────────────────────────
 let zTop = 100;
 const wins = {};
+
+// Shared virtual filesystem (terminal + notepad + media + explorer)
+// subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
+const termFS = {
+  dirs:    new Set(['DOCS']),
+  files:   new Map(),
+  blobs:   new Map(),
+  subdirs: new Map([['DOCS', {
+    dirs: new Set(), blobs: new Map(),
+    files: new Map([
+      ['README.txt', [
+        '== sleepOS Filesystem Guide ==',
+        '',
+        'C:\\sleepOS is the root directory.',
+        '',
+        'SYSTEM DIRECTORIES:',
+        '  DOCS\\         — Documentation (this folder)',
+        '  PROJECTS\\     — Interactive apps (read-only)',
+        '',
+        'SYSTEM FILES (read-only):',
+        '  WELCOME.README, TERMINAL.EXE, SYSMON.EXE',
+        '  void.tmp, daemon.core, ?????.exe',
+        '',
+        'USER FILES:',
+        '  Any files you create with TOUCH, NOTEPAD,',
+        '  or ECHO > appear here and in the Explorer.',
+        '',
+        'NAVIGATION (terminal):',
+        '  CD DOCS         — enter this folder',
+        '  CD ..           — go up to root',
+        '  DIR             — list current directory',
+        '  CAT <file>      — read a file',
+        '',
+        'See SCRIPTING.txt for the script language.',
+        'See COMMANDS.txt for all terminal commands.',
+      ].join('\n')],
+      ['SCRIPTING.txt', [
+        '== sleepOS Script Language (.script files) ==',
+        '',
+        'Scripts are plain text files with .script extension.',
+        'Create one with: NOTEPAD myscript.script',
+        'Run one with:    RUN myscript.script',
+        '',
+        '── COMMANDS ─────────────────────────────────',
+        '',
+        '  print <text>       print text to terminal',
+        '  echo <text>        same as print',
+        '  wait <ms>          pause N milliseconds',
+        '  set <var> <value>  assign a variable',
+        '  clear              clear the terminal',
+        '  touch <file>       create an empty file',
+        '  mkdir <dir>        create a directory',
+        '  del <file>         delete a file',
+        '  open <file>        open file in viewer',
+        '  start <program>    launch a program',
+        '  notepad [file]     open Notepad',
+        '  run <script>       run another script',
+        '',
+        '── VARIABLES ────────────────────────────────',
+        '',
+        '  set name Visitor',
+        '  print Hello, $name!',
+        '  → Hello, Visitor!',
+        '',
+        '── COLORS ───────────────────────────────────',
+        '',
+        '  print [red]    error text',
+        '  print [green]  success text',
+        '  print [yellow] warning text',
+        '  print [cyan]   info text',
+        '  print [blue]   note text',
+        '',
+        '── COMMENTS ─────────────────────────────────',
+        '',
+        '  # hash comment',
+        '  // double-slash comment',
+        '',
+        '── EXAMPLE SCRIPT ───────────────────────────',
+        '',
+        '  # hello.script',
+        '  set name sleepOS',
+        '  print [cyan] == Hello from $name ==',
+        '  wait 500',
+        '  print Loading...',
+        '  wait 1000',
+        '  print [green] Done.',
+        '',
+        '── PROGRAMS FOR start/open ──────────────────',
+        '',
+        '  notepad, terminal, sysmon, browser,',
+        '  defrag, explorer, welcome',
+      ].join('\n')],
+      ['COMMANDS.txt', [
+        '== Terminal Commands Reference ==',
+        '',
+        '── FILESYSTEM ───────────────────────────────',
+        '  DIR, LS              list current directory',
+        '  CD <path>            change directory',
+        '  CD ..                go up one level',
+        '  MKDIR <name>         create directory',
+        '  TOUCH <name>         create empty file',
+        '  DEL, RM <file>       delete file/directory',
+        '  CAT, TYPE <file>     read file contents',
+        '  COPY <src> <dst>     copy a file',
+        '  TREE                 show directory tree',
+        '  OPEN <file>          open in viewer/editor',
+        '',
+        '── SCRIPTING ────────────────────────────────',
+        '  RUN <file.script>    execute a script file',
+        '  ECHO text > file     write text to file',
+        '  ECHO text >> file    append to file',
+        '',
+        '── PROGRAMS ─────────────────────────────────',
+        '  NOTEPAD [file]       text editor',
+        '  START <name>         start any program',
+        '  EXIT                 close terminal',
+        '',
+        '── SYSTEM ───────────────────────────────────',
+        '  VER                  OS version',
+        '  WHO, WHOAMI          current user',
+        '  DATE                 system date',
+        '  PS                   running processes',
+        '  TASKKILL <pid>       terminate process',
+        '  IPCONFIG             network config',
+        '  SET                  environment variables',
+        '  PING [host]          ping a host',
+        '  ECHO <text>          print text',
+        '  CLS                  clear screen',
+        '  HELP                 this help',
+      ].join('\n')],
+    ]),
+  }]]),
+};
+
+// Helper: get a directory object by name ('' = root)
+function fsGetDir(name) {
+  if (!name) return { dirs: termFS.dirs, files: termFS.files, blobs: termFS.blobs };
+  return termFS.subdirs.get(name.toUpperCase()) || null;
+}
+
+// ── Script executor ──────────────────────────────────────────────
+const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
+
+function execScript(source, printFn) {
+  const vars = {};
+  let delay = 0;
+  const lines = source.split('\n');
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith('//')) continue;
+
+    // Pre-scan wait to compute delay offset for subsequent commands
+    if (/^wait\s+\d+/i.test(line)) {
+      delay += Math.min(parseInt(line.split(/\s+/)[1]) || 0, 30000);
+      continue;
+    }
+
+    ((d, l) => setTimeout(() => {
+      const resolved = l.replace(/\$(\w+)/g, (_, k) => vars[k] ?? '');
+      const spIdx = resolved.search(/\s/);
+      const cmd = (spIdx === -1 ? resolved : resolved.slice(0, spIdx)).toLowerCase();
+      const arg = spIdx === -1 ? '' : resolved.slice(spIdx + 1).trim();
+
+      switch (cmd) {
+        case 'print': case 'echo': {
+          const m = arg.match(/^\[(\w+)\]\s*/);
+          if (m && SCRIPT_COLORS[m[1]]) printFn(arg.slice(m[0].length), SCRIPT_COLORS[m[1]]);
+          else printFn(arg);
+          break;
+        }
+        case 'set': {
+          const sp = arg.indexOf(' ');
+          if (sp !== -1) vars[arg.slice(0, sp)] = arg.slice(sp + 1);
+          break;
+        }
+        case 'clear': {
+          const out = document.getElementById('to');
+          if (out) out.innerHTML = '';
+          break;
+        }
+        case 'touch':
+          if (arg && !termFS.files.has(arg)) termFS.files.set(arg, '');
+          break;
+        case 'mkdir':
+          if (arg) termFS.dirs.add(arg.toUpperCase());
+          break;
+        case 'del': case 'rm':
+          termFS.files.delete(arg);
+          if (termFS.blobs.has(arg)) { URL.revokeObjectURL(termFS.blobs.get(arg).url); termFS.blobs.delete(arg); }
+          break;
+        case 'open':
+          if (termFS.blobs.has(arg)) openMediaFile(arg);
+          else if (termFS.files.has(arg)) openNotepad(arg);
+          break;
+        case 'notepad': openNotepad(arg || undefined); break;
+        case 'start': {
+          const p = arg.toLowerCase();
+          const map = { notepad: openNotepad, terminal: openTerminal, sysmon: openSysmon,
+                        browser: openBrowser, defrag: openDefrag, explorer: openExplorer,
+                        welcome: openWelcome, files: openFiles };
+          if (map[p]) map[p](); break;
+        }
+        case 'run':
+          if (arg && termFS.files.has(arg)) execScript(termFS.files.get(arg), printFn);
+          else printFn(`Script not found: ${arg}`, '#ff4444');
+          break;
+      }
+    }, d))(delay, line);
+  }
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function triggerUpload() {
+  document.getElementById('file-upload-input').click();
+}
+
+function handleFileUpload(fileList) {
+  const added = [];
+  [...fileList].forEach(file => {
+    const url = URL.createObjectURL(file);
+    const TEXT_EXTS = /\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/i;
+    const isText = file.type.startsWith('text/') || TEXT_EXTS.test(file.name) || file.type === '';
+    const kind = file.type.startsWith('image/') ? 'image'
+               : file.type.startsWith('video/') ? 'video'
+               : file.type.startsWith('audio/') ? 'audio'
+               : isText ? 'text'
+               : 'binary';
+    if (kind === 'text') {
+      const reader = new FileReader();
+      reader.onload = e => termFS.files.set(file.name, e.target.result);
+      reader.readAsText(file);
+    } else {
+      termFS.blobs.set(file.name, { url, kind, size: file.size, mime: file.type });
+    }
+    added.push(file.name);
+  });
+  if (added.length) showUploadConfirm(added);
+}
+
+function showUploadConfirm(names) {
+  const msg = names.length === 1
+    ? `"${names[0]}" uploaded to C:\\sleepOS`
+    : `${names.length} files uploaded to C:\\sleepOS`;
+  const id = 'upload-confirm-' + Date.now();
+  if (!mkWin({ id, title: 'Upload Complete', icon: '📤', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:14px;font-family:\'Courier New\',monospace;font-size:12px;';
+  body.innerHTML = `<div style="margin-bottom:12px;">📁 ${msg}</div>
+    <div style="margin-bottom:8px;color:#555;">Use OPEN &lt;filename&gt; in terminal, or type the filename to view.</div>
+    <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
+}
+
+function openMediaFile(filename) {
+  const blob = termFS.blobs.get(filename);
+  if (!blob) { return; }
+  if (blob.kind === 'image') openImageViewer(filename);
+  else if (blob.kind === 'video') openVideoPlayer(filename);
+  else if (blob.kind === 'audio') openAudioPlayer(filename);
+  else alert('Cannot open binary file: ' + filename);
+}
+
+function openImageViewer(filename) {
+  const blob = termFS.blobs.get(filename); if (!blob) return;
+  const id = 'img-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: '🖼️', w: 520, h: 400 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;';
+  const wrap = document.createElement('div'); wrap.className = 'media-body';
+  const img  = document.createElement('img'); img.src = blob.url;
+  wrap.appendChild(img); body.appendChild(wrap);
+  if (ws) ws.textContent = filename + '  \u2014  ' + fmtSize(blob.size);
+  if (mb) {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = 'File';
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, [
+      { label: 'Close', action: () => closeWin(id) },
+    ]); });
+    mb.appendChild(span);
+    const viewSpan = document.createElement('span');
+    viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+    viewSpan.addEventListener('click', e => { e.stopPropagation(); showDropdown(viewSpan, [
+      { label: 'Actual Size',  action: () => { img.style.maxWidth='none'; img.style.maxHeight='none'; } },
+      { label: 'Fit to Window', action: () => { img.style.maxWidth='100%'; img.style.maxHeight='100%'; } },
+    ]); });
+    mb.appendChild(viewSpan);
+  }
+}
+
+function openVideoPlayer(filename) {
+  const blob = termFS.blobs.get(filename); if (!blob) return;
+  const id = 'vid-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎬', w: 540, h: 420 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;';
+  const wrap  = document.createElement('div'); wrap.className = 'media-body';
+  const video = document.createElement('video');
+  video.src = blob.url; video.controls = true;
+  video.style.cssText = 'width:100%;height:100%;';
+  wrap.appendChild(video); body.appendChild(wrap);
+  if (ws) ws.textContent = filename + '  \u2014  ' + fmtSize(blob.size);
+  if (mb) {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = 'File';
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, [
+      { label: 'Close', action: () => { video.pause(); closeWin(id); } },
+    ]); });
+    mb.appendChild(span);
+  }
+}
+
+function openAudioPlayer(filename) {
+  const blob = termFS.blobs.get(filename); if (!blob) return;
+  const id = 'aud-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎵', w: 320, h: 120, menubar: false })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;';
+  body.innerHTML = `<div style="font-family:'Courier New',monospace;font-size:11px;margin-bottom:4px;">🎵 ${filename}</div>`;
+  const audio = document.createElement('audio');
+  audio.src = blob.url; audio.controls = true; audio.style.width = '100%';
+  body.appendChild(audio);
+}
+
+// Drag-and-drop onto the desktop
+let _dragCount = 0;
+document.addEventListener('dragenter', e => {
+  if ([...e.dataTransfer.types].includes('Files')) {
+    _dragCount++;
+    document.getElementById('drop-overlay').classList.add('active');
+  }
+});
+document.addEventListener('dragleave', () => {
+  _dragCount = Math.max(0, _dragCount - 1);
+  if (_dragCount === 0) document.getElementById('drop-overlay').classList.remove('active');
+});
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  _dragCount = 0;
+  document.getElementById('drop-overlay').classList.remove('active');
+  if (e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files);
+});
+document.getElementById('file-upload-input').addEventListener('change', function() {
+  if (this.files.length) handleFileUpload(this.files);
+  this.value = '';
+});
+
+// Shared dropdown menu helpers
+function closeDropdown() {
+  const old = document.getElementById('active-dropdown');
+  if (old) old.remove();
+}
+function showDropdown(anchor, items) {
+  closeDropdown();
+  const rect = anchor.getBoundingClientRect();
+  const dd = document.createElement('div');
+  dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+  dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+  items.forEach(item => {
+    if (item === '-') {
+      const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
+    } else {
+      const el = document.createElement('div');
+      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
+      el.textContent = item.label;
+      if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
+      dd.appendChild(el);
+    }
+  });
+  document.body.appendChild(dd);
+  setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
+}
 
 function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
@@ -900,12 +1384,9 @@ function setupIcons() {
 // WINDOW CONTENT
 // ─────────────────────────────────────────────────────────────────
 
-function openWelcome() {
-  if (!mkWin({ id:'welcome', title:'WELCOME.README — Notepad', icon:'📄', w:420, h:320, x:100, y:55 })) return;
-  document.getElementById('wb-welcome').innerHTML = `
-    <div class="note-body">
-<span style="color:#000080;font-weight:bold">== sleepOS v0.9β — WELCOME FILE ==</span>
-<span style="color:#808080">Build: 2024.11.13-EXPERIMENTAL / SOMA-686</span>
+const WELCOME_DEFAULT =
+`== sleepOS v0.9\u03b2 \u2014 WELCOME FILE ==
+Build: 2024.11.13-EXPERIMENTAL / SOMA-686
 
 Welcome to sleepOS.
 
@@ -913,30 +1394,491 @@ This operating system is an experimental environment
 for generative and interactive computation.
 All processes here are alive in some sense of the word.
 
-<b>Navigation:</b>
+Navigation:
   - Double-click desktop icons to open programs
   - PROJECTS.DIR contains all interactive applications
   - TERMINAL.EXE accepts command-line input
   - SYSMON.EXE monitors system vitals
   - Start Menu provides quick access to all programs
 
-<b>Known Issues:</b>
+Known Issues:
   [!] Clock drift: temporal reference is unreliable
   [!] 3 daemon processes are of unrecognized origin
   [!] Soul integrity is at 87.3% and decreasing
   [!] void.tmp cannot be read, deleted, or ignored
   [!] ?????.exe should not be executed
 
-<b>Security:</b>
+Security:
   An unknown process is observing your session.
   This is not a bug. This cannot be disabled.
 
 Have a productive session.
 
-— SYSTEM
-    </div>`;
-  const ws = document.getElementById('ws-welcome');
-  if (ws) ws.textContent = 'WELCOME.README  —  623 bytes';
+\u2014 SYSTEM`;
+
+function openWelcome() {
+  if (!mkWin({ id:'welcome', title:'WELCOME.README \u2014 Notepad', icon:'📄', w:420, h:320, x:100, y:55 })) return;
+  const body = document.getElementById('wb-welcome');
+  const ws   = document.getElementById('ws-welcome');
+  const mb   = document.getElementById('mb-welcome');
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'note-textarea';
+  ta.value = localStorage.getItem('sleepOS-welcome') ?? WELCOME_DEFAULT;
+  body.appendChild(ta);
+
+  const updateStatus = () => {
+    if (ws) ws.textContent = `WELCOME.README  \u2014  ${ta.value.length} bytes`;
+  };
+  ta.addEventListener('input', updateStatus);
+  updateStatus();
+
+  function buildMenu() {
+    mb.innerHTML = '';
+    [
+      { label: 'File', items: [
+        { label: 'New Notepad',  action: () => openNotepad() },
+        '-',
+        { label: 'Save',         action: () => { localStorage.setItem('sleepOS-welcome', ta.value); updateStatus(); } },
+        { label: 'Revert',       action: () => { ta.value = WELCOME_DEFAULT; updateStatus(); } },
+        '-',
+        { label: 'Close',        action: () => closeWin('welcome') },
+      ]},
+      { label: 'Edit', items: [
+        { label: 'Select All',   action: () => { ta.focus(); ta.select(); } },
+        '-',
+        { label: 'Word Wrap', disabled: true },
+      ]},
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item'; span.textContent = label;
+      span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+      mb.appendChild(span);
+    });
+  }
+  buildMenu();
+}
+
+// ── Syntax highlighting ───────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function detectLang(fname) {
+  if (!fname) return 'txt';
+  const ext = (fname.split('.').pop() || '').toLowerCase();
+  return { js:'js', mjs:'js', ts:'js', jsx:'js', tsx:'js',
+           html:'html', htm:'html',
+           css:'css', scss:'css',
+           json:'json',
+           md:'md', markdown:'md',
+           py:'py',
+           script:'script' }[ext] || 'txt';
+}
+
+const LANG_LABELS = { js:'JavaScript', html:'HTML', css:'CSS', json:'JSON', md:'Markdown', py:'Python', script:'.script', txt:'Plain Text' };
+
+// Each rule: { re (global regex), cls (CSS class) }
+const LANG_RULES = {
+  js: [
+    { re: /\/\*[\s\S]*?\*\//g,          cls: 'tok-cmt' },
+    { re: /\/\/[^\n]*/g,                 cls: 'tok-cmt' },
+    { re: /`(?:[^`\\]|\\.)*`/g,          cls: 'tok-str' },
+    { re: /"(?:[^"\\]|\\.)*"/g,          cls: 'tok-str' },
+    { re: /'(?:[^'\\]|\\.)*'/g,          cls: 'tok-str' },
+    { re: /\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|delete|typeof|instanceof|in|of|this|class|extends|import|export|default|try|catch|finally|throw|async|await|true|false|null|undefined|void|static|get|set|from)\b/g, cls: 'tok-kw' },
+    { re: /\b([A-Za-z_$][\w$]*)\s*(?=\()/g, cls: 'tok-fn' },
+    { re: /\b0x[\da-fA-F]+|\b\d+(\.\d+)?([eE][+-]?\d+)?\b/g, cls: 'tok-num' },
+  ],
+  html: [
+    { re: /<!--[\s\S]*?-->/g,            cls: 'tok-cmt' },
+    { re: /"[^"]*"/g,                    cls: 'tok-str' },
+    { re: /'[^']*'/g,                    cls: 'tok-str' },
+    { re: /\b[a-zA-Z-]+=(?=["'])/g,     cls: 'tok-att' },
+    { re: /<\/?[A-Za-z][A-Za-z0-9]*|>/g, cls: 'tok-tag' },
+  ],
+  css: [
+    { re: /\/\*[\s\S]*?\*\//g,           cls: 'tok-cmt' },
+    { re: /"[^"]*"|'[^']*'/g,            cls: 'tok-str' },
+    { re: /#[0-9a-fA-F]{3,8}\b/g,        cls: 'tok-num' },
+    { re: /\b\d+(\.\d+)?(px|em|rem|%|vh|vw|vmin|vmax|pt|cm|mm|s|ms|deg|fr)?\b/g, cls: 'tok-num' },
+    { re: /[.#:[\]A-Za-z*][^{;]*(?=\{)/g, cls: 'tok-fn' },
+    { re: /[\w-]+(?=\s*:)/g,             cls: 'tok-kw' },
+  ],
+  json: [
+    { re: /"(?:[^"\\]|\\.)*"\s*(?=:)/g,  cls: 'tok-att' },
+    { re: /"(?:[^"\\]|\\.)*"/g,           cls: 'tok-str' },
+    { re: /\b(true|false|null)\b/g,       cls: 'tok-kw' },
+    { re: /-?\b\d+(\.\d+)?([eE][+-]?\d+)?\b/g, cls: 'tok-num' },
+  ],
+  md: [
+    { re: /^#{1,6} .+/gm,               cls: 'tok-hdr' },
+    { re: /`[^`]+`/g,                    cls: 'tok-cmt' },
+    { re: /\*\*[^*\n]+\*\*|__[^_\n]+__/g, cls: 'tok-kw' },
+    { re: /\*[^*\n]+\*|_[^_\n]+_/g,     cls: 'tok-str' },
+    { re: /^\s*[-*+] /gm,               cls: 'tok-fn' },
+    { re: /\[[^\]]+\]\([^)]+\)/g,        cls: 'tok-fn' },
+  ],
+  py: [
+    { re: /"""[\s\S]*?"""|'''[\s\S]*?'''/g, cls: 'tok-str' },
+    { re: /#[^\n]*/g,                    cls: 'tok-cmt' },
+    { re: /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, cls: 'tok-str' },
+    { re: /\b(def|class|return|if|elif|else|for|while|in|not|and|or|is|import|from|as|try|except|finally|raise|with|lambda|pass|break|continue|yield|True|False|None|global|nonlocal|del|assert|async|await)\b/g, cls: 'tok-kw' },
+    { re: /\b([A-Za-z_]\w*)\s*(?=\()/g, cls: 'tok-fn' },
+    { re: /\b\d+(\.\d+)?\b/g,           cls: 'tok-num' },
+  ],
+  script: [
+    { re: /#[^\n]*/g,                    cls: 'tok-cmt' },
+    { re: /\/\/[^\n]*/g,                 cls: 'tok-cmt' },
+    { re: /\b(print|echo|set|wait|clear|touch|mkdir|del|rm|open|notepad|start|run)\b/gi, cls: 'tok-kw' },
+    { re: /\[(red|green|yellow|cyan|blue|white)\]/gi, cls: 'tok-fn' },
+    { re: /\$\w+/g,                      cls: 'tok-var' },
+    { re: /\b\d+\b/g,                    cls: 'tok-num' },
+  ],
+  txt: [],
+};
+
+function highlight(text, lang) {
+  const rules = LANG_RULES[lang] || [];
+  if (!rules.length) return escHtml(text);
+
+  // Collect all non-overlapping token intervals
+  const intervals = [];
+  for (let ri = 0; ri < rules.length; ri++) {
+    const { re, cls } = rules[ri];
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      intervals.push({ start: m.index, end: m.index + m[0].length, cls, ri });
+    }
+  }
+  // Sort by start; ties broken by rule order (lower ri = higher priority)
+  intervals.sort((a, b) => a.start !== b.start ? a.start - b.start : a.ri - b.ri);
+
+  // Sweep: drop intervals that overlap an already-chosen one
+  const chosen = [];
+  let coveredTo = 0;
+  for (const iv of intervals) {
+    if (iv.start >= coveredTo) { chosen.push(iv); coveredTo = iv.end; }
+  }
+
+  let result = '';
+  let cur = 0;
+  for (const iv of chosen) {
+    if (iv.start > cur) result += escHtml(text.slice(cur, iv.start));
+    result += `<span class="${iv.cls}">${escHtml(text.slice(iv.start, iv.end))}</span>`;
+    cur = iv.end;
+  }
+  if (cur < text.length) result += escHtml(text.slice(cur));
+  return result;
+}
+
+// Notepad counter for unique window IDs
+let _notepadCount = 0;
+
+function openNotepad(filename) {
+  const id = filename ? 'notepad-' + filename : 'notepad-' + (++_notepadCount);
+  const displayName = filename || 'untitled.txt';
+  const initial = filename ? (termFS.files.get(filename) ?? '') : '';
+  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
+
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  // ── editor container (highlight div + textarea overlay) ──────
+  const wrap = document.createElement('div');
+  wrap.className = 'editor-wrap';
+
+  const hl = document.createElement('div');
+  hl.className = 'editor-highlight';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'note-textarea';
+  ta.value = initial;
+  ta.spellcheck = false;
+
+  wrap.appendChild(hl);
+  wrap.appendChild(ta);
+  body.appendChild(wrap);
+
+  let currentFile = filename || null;
+  let lang = detectLang(filename);
+
+  function renderHighlight() {
+    hl.innerHTML = highlight(ta.value, lang) + '\n'; // trailing \n keeps last-line height correct
+    syncScroll();
+  }
+  function syncScroll() {
+    hl.scrollTop  = ta.scrollTop;
+    hl.scrollLeft = ta.scrollLeft;
+  }
+
+  renderHighlight();
+
+  const lineCount = () => ta.value.split('\n').length;
+
+  const updateStatus = () => {
+    if (!ws) return;
+    const fname = currentFile || 'untitled.txt';
+    ws.textContent = `${fname}  —  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
+  };
+
+  ta.addEventListener('input', () => { renderHighlight(); updateStatus(); });
+  ta.addEventListener('scroll', syncScroll);
+  updateStatus();
+
+  // ── IDE keybindings ──────────────────────────────────────────
+  ta.addEventListener('keydown', e => {
+    // Tab → insert 2 spaces
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = ta.selectionStart, en = ta.selectionEnd;
+      ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(en);
+      ta.selectionStart = ta.selectionEnd = s + 2;
+      renderHighlight(); updateStatus();
+    }
+    // Enter → auto-indent (match leading whitespace of current line)
+    if (e.key === 'Enter') {
+      const s = ta.selectionStart;
+      const lineStart = ta.value.lastIndexOf('\n', s - 1) + 1;
+      const indent = ta.value.slice(lineStart).match(/^[ \t]*/)[0];
+      if (indent.length) {
+        e.preventDefault();
+        ta.value = ta.value.slice(0, s) + '\n' + indent + ta.value.slice(ta.selectionEnd);
+        ta.selectionStart = ta.selectionEnd = s + 1 + indent.length;
+        renderHighlight(); updateStatus();
+      }
+    }
+    // Ctrl+S / Cmd+S → save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      currentFile ? save(currentFile) : promptSaveAs();
+    }
+    // Ctrl+/ → toggle line comment
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault();
+      const cmt = { js:'//', html:'<!--', css:'/*', py:'#', script:'#', md:'', txt:'', json:'' }[lang] || '//';
+      if (!cmt) return;
+      const s = ta.selectionStart;
+      const lineStart = ta.value.lastIndexOf('\n', s - 1) + 1;
+      const lineEnd = ta.value.indexOf('\n', s);
+      const line = ta.value.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+      const trimmed = line.trimStart();
+      const prefix = line.slice(0, line.length - trimmed.length);
+      let newLine;
+      if (trimmed.startsWith(cmt)) newLine = prefix + trimmed.slice(cmt.length);
+      else newLine = prefix + cmt + trimmed;
+      ta.value = ta.value.slice(0, lineStart) + newLine + (lineEnd === -1 ? '' : ta.value.slice(lineEnd));
+      ta.selectionStart = ta.selectionEnd = s + (newLine.length - line.length);
+      renderHighlight(); updateStatus();
+    }
+  });
+
+  function save(fname) {
+    termFS.files.set(fname, ta.value);
+    currentFile = fname;
+    // re-detect lang if filename changed
+    const newLang = detectLang(fname);
+    if (newLang !== lang) { lang = newLang; renderHighlight(); }
+    const titleEl = document.getElementById('wtitle-' + id);
+    if (titleEl) titleEl.textContent = fname + ' \u2014 Notepad';
+    updateStatus();
+  }
+
+  function promptSaveAs() {
+    const name = prompt('Save as:', currentFile || 'untitled.txt');
+    if (name) save(name.trim());
+  }
+
+  function setLang(l) { lang = l; renderHighlight(); updateStatus(); }
+
+  function buildMenu() {
+    mb.innerHTML = '';
+    [
+      { label: 'File', items: [
+        { label: 'New',           action: () => openNotepad() },
+        '-',
+        { label: 'Save  Ctrl+S', action: () => currentFile ? save(currentFile) : promptSaveAs() },
+        { label: 'Save As\u2026', action: promptSaveAs },
+        '-',
+        { label: 'Close',         action: () => closeWin(id) },
+      ]},
+      { label: 'Edit', items: [
+        { label: 'Select All',    action: () => { ta.focus(); ta.select(); } },
+        '-',
+        { label: 'Toggle Comment  Ctrl+/', action: () => ta.dispatchEvent(Object.assign(new KeyboardEvent('keydown',{key:'/',ctrlKey:true,bubbles:true}))) },
+      ]},
+      { label: 'Language', items: Object.entries(LANG_LABELS).map(([k,v]) => ({
+          label: (lang === k ? '\u2713 ' : '\u00a0\u00a0') + v,
+          action: () => setLang(k),
+        }))
+      },
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item'; span.textContent = label;
+      span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+      mb.appendChild(span);
+    });
+  }
+  buildMenu();
+  // Rebuild language menu when lang changes so checkmark updates
+  const origSetLang = setLang;
+  setLang = (l) => { origSetLang(l); buildMenu(); };
+}
+
+function openExplorer(startPath) {
+  if (!mkWin({ id:'explorer', title:'FILE EXPLORER — C:\\sleepOS', icon:'🗂️', w:560, h:400, x:110, y:65 })) return;
+  const body = document.getElementById('wb-explorer');
+  const ws   = document.getElementById('ws-explorer');
+  const mb   = document.getElementById('mb-explorer');
+  body.style.cssText = 'padding:0;display:flex;flex-direction:column;overflow:hidden;';
+
+  let cwd = (startPath || '').toUpperCase(); // '' = root
+
+  // ── toolbar ──────────────────────────────────────────────────
+  const toolbar = document.createElement('div');
+  toolbar.className = 'exp-toolbar';
+  const upBtn  = document.createElement('button'); upBtn.textContent = '⬆ Up';
+  const addrEl = document.createElement('input'); addrEl.className = 'exp-addr'; addrEl.readOnly = true;
+  toolbar.appendChild(upBtn); toolbar.appendChild(addrEl);
+  body.appendChild(toolbar);
+
+  // ── file pane ────────────────────────────────────────────────
+  const pane = document.createElement('div'); pane.className = 'exp-body';
+  body.appendChild(pane);
+
+  let selected = null;
+
+  function getIcon(name, kind) {
+    if (kind === 'image') return '🖼️';
+    if (kind === 'video') return '🎬';
+    if (kind === 'audio') return '🎵';
+    if (kind === 'dir') {
+      if (name === 'PROJECTS') return '📁';
+      if (name === 'DOCS')     return '📚';
+      return '📁';
+    }
+    const NAME_ICONS = {
+      'TERMINAL.EXE':  '💻', 'SYSMON.EXE':    '📊',
+      'NOTEPAD.EXE':   '📝', 'BROWSER.EXE':   '🌐',
+      'DEFRAG.EXE':    '🧩', 'WELCOME.README':'📄',
+      'void.tmp':      '⬛', 'daemon.core':   '👁️',
+      '?????.exe':     '❓',
+    };
+    if (NAME_ICONS[name]) return NAME_ICONS[name];
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    return { exe:'⚙️', script:'📜', txt:'📄', readme:'📄', md:'📋',
+             json:'📋', js:'📜', ts:'📜', jsx:'📜', tsx:'📜',
+             html:'🌐', htm:'🌐', css:'🎨', py:'🐍',
+             tmp:'🗑️', log:'📋', csv:'📊', core:'💥' }[ext] || '📄';
+  }
+
+  function openItem(name, kind, sysfile) {
+    if (kind === 'dir') {
+      if (name === 'PROJECTS') { openFiles(); return; }
+      cwd = name; render(); return;
+    }
+    if (sysfile) {
+      const SYS = {
+        'WELCOME.README': openWelcome,  'TERMINAL.EXE': openTerminal,
+        'SYSMON.EXE':     openSysmon,   'NOTEPAD.EXE':  openNotepad,
+        'BROWSER.EXE':    openBrowser,  'DEFRAG.EXE':   openDefrag,
+        'void.tmp':       openVoid,     'daemon.core':  openDaemon,
+        '?????.exe':      openUnknown,
+      };
+      if (SYS[name]) SYS[name]();
+      return;
+    }
+    const dir = fsGetDir(cwd);
+    if (dir.blobs.has(name)) openMediaFile(name);
+    else if (dir.files.has(name)) openNotepad(name);
+  }
+
+  function makeItem(name, kind, sysfile) {
+    const el = document.createElement('div');
+    el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
+    el.innerHTML = `<div class="exp-icon">${getIcon(name, kind)}</div><span>${name}</span>`;
+    el.addEventListener('click', () => {
+      pane.querySelectorAll('.exp-item').forEach(i => i.classList.remove('selected'));
+      el.classList.add('selected'); selected = { name, kind, sysfile };
+      if (ws) ws.textContent = name;
+    });
+    el.addEventListener('dblclick', () => openItem(name, kind, sysfile));
+    return el;
+  }
+
+  function render() {
+    pane.innerHTML = ''; selected = null;
+    const grid = document.createElement('div'); grid.className = 'exp-grid';
+    const fullPath = cwd ? `C:\\sleepOS\\${cwd}` : 'C:\\sleepOS';
+    addrEl.value = fullPath;
+    const titleEl = document.getElementById('wtitle-explorer');
+    if (titleEl) titleEl.textContent = `FILE EXPLORER \u2014 ${fullPath}`;
+
+    if (!cwd) {
+      // Root: show system files + DOCS + user dirs/files/blobs
+      ['PROJECTS'].forEach(d => grid.appendChild(makeItem(d, 'dir', true)));
+      ['DOCS', ...termFS.dirs].filter((v, i, a) => a.indexOf(v) === i).forEach(d => {
+        if (d !== 'PROJECTS') grid.appendChild(makeItem(d, 'dir', false));
+      });
+      [
+        {name:'WELCOME.README', sys:true}, {name:'TERMINAL.EXE', sys:true},
+        {name:'SYSMON.EXE', sys:true},     {name:'NOTEPAD.EXE', sys:true},
+        {name:'BROWSER.EXE', sys:true},    {name:'DEFRAG.EXE', sys:true},
+        {name:'void.tmp', sys:true},       {name:'daemon.core', sys:true},
+        {name:'?????.exe', sys:true},
+      ].forEach(({name, sys}) => grid.appendChild(makeItem(name, 'file', sys)));
+      termFS.files.forEach((_, name) => grid.appendChild(makeItem(name, 'file', false)));
+      termFS.blobs.forEach((b, name) => grid.appendChild(makeItem(name, b.kind, false)));
+    } else {
+      const dir = fsGetDir(cwd);
+      if (!dir) { cwd = ''; render(); return; }
+      dir.dirs.forEach(d => grid.appendChild(makeItem(d, 'dir', false)));
+      dir.files.forEach((_, name) => grid.appendChild(makeItem(name, 'file', false)));
+      dir.blobs.forEach((b, name) => grid.appendChild(makeItem(name, b.kind, false)));
+    }
+    pane.appendChild(grid);
+    if (ws) ws.textContent = grid.children.length + ' objects';
+  }
+
+  upBtn.addEventListener('click', () => { cwd = ''; render(); });
+
+  // ── menus ────────────────────────────────────────────────────
+  mb.innerHTML = '';
+  [
+    { label: 'File', items: () => [
+      { label: 'New Folder',   action: () => { const n = prompt('Folder name:'); if (n) { termFS.dirs.add(n.toUpperCase()); render(); } } },
+      { label: 'New Text File',action: () => { const n = prompt('File name:', 'untitled.txt'); if (n) { termFS.files.set(n,''); openNotepad(n); render(); } } },
+      '-',
+      { label: 'Open',         action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
+      { label: 'Delete',       action: () => {
+        if (!selected || selected.sysfile) return;
+        if (!confirm(`Delete "${selected.name}"?`)) return;
+        const dir = fsGetDir(cwd);
+        if (selected.kind === 'dir') { termFS.dirs.delete(selected.name); termFS.subdirs.delete(selected.name); }
+        else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); }
+        else dir.files.delete(selected.name);
+        render();
+      }},
+      '-',
+      { label: 'Upload File\u2026', action: triggerUpload },
+      '-',
+      { label: 'Close', action: () => closeWin('explorer') },
+    ]},
+    { label: 'View', items: () => [
+      { label: 'Refresh', action: render },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items()); });
+    mb.appendChild(span);
+  });
+
+  render();
 }
 
 function openFiles() {
@@ -949,32 +1891,6 @@ function openFiles() {
 
   let selected = null;
   let viewMode = 'icons'; // 'icons' | 'list' | 'details'
-
-  // ── dropdown helper ─────────────────────────────────────────
-  function closeDropdown() {
-    const old = document.getElementById('active-dropdown');
-    if (old) old.remove();
-  }
-  function showDropdown(anchor, items) {
-    closeDropdown();
-    const rect = anchor.getBoundingClientRect();
-    const dd = document.createElement('div');
-    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
-    dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
-    items.forEach(item => {
-      if (item === '-') {
-        const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
-      } else {
-        const el = document.createElement('div');
-        el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
-        el.textContent = item.label;
-        if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
-        dd.appendChild(el);
-      }
-    });
-    document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
-  }
 
   // ── render ──────────────────────────────────────────────────
   function getSelected() { return selected; }
@@ -1093,7 +2009,7 @@ function openTerminal() {
     <div class="term-wrap" id="tw">
       <div class="term-out" id="to"></div>
       <div class="term-in-line">
-        <span class="term-prompt">C:\sleepOS&gt;&nbsp;</span>
+        <span class="term-prompt" id="term-prompt">C:\sleepOS&gt;&nbsp;</span>
         <input class="term-input" id="ti" type="text" autocomplete="off" spellcheck="false">
       </div>
     </div>`;
@@ -1116,6 +2032,15 @@ function openTerminal() {
   print('');
 
   let cmdHistory = [], histIdx = -1;
+  let cwd = ''; // '' = root, 'DOCS' = DOCS dir, etc.
+
+  function getPromptStr() {
+    return cwd ? `C:\\sleepOS\\${cwd}>` : 'C:\\sleepOS>';
+  }
+  function updatePrompt() {
+    const el = document.getElementById('term-prompt');
+    if (el) el.textContent = getPromptStr() + '\u00a0';
+  }
 
   const CMDS = {
     help: () => {
@@ -1125,7 +2050,9 @@ function openTerminal() {
         '  DIR, LS         — list directory',
         '  CD [path]       — change directory',
         '  MKDIR [name]    — create directory',
-        '  DEL, RM [file]  — delete a file',
+        '  TOUCH [name]    — create empty file',
+        '  ECHO text>file  — write text to file (>> to append)',
+        '  DEL, RM [file]  — delete a file or directory',
         '  COPY [src] [dst]— copy a file',
         '  MOVE, MV        — move a file',
         '  TYPE [file]     — print file contents',
@@ -1141,34 +2068,56 @@ function openTerminal() {
         '  WHO, WHOAMI     — current user info',
         '  DATE            — system date',
         '  CLS             — clear screen',
+        '  OPEN [file]     — open a file (image/video in viewer, text in editor)',
+        '  RUN <file>      — execute a .script file',
+        '  NOTEPAD [file]  — open Notepad (optionally open a file)',
         '  START [program] — run an executable or project',
         '  EXIT            — close terminal',
         '',
+        'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
+        '',
         'You can also type executables directly:',
-        '  sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
+        '  notepad.exe, sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
         '  or any project name (try: fireworks, fluid, ...)',
       ].forEach(l => print(l));
     },
-    dir: () => {
+    dir: (args) => {
+      const targetCwd = args ? args.trim().toUpperCase() : cwd;
+      const dir = fsGetDir(targetCwd);
+      if (!dir) { print(`Directory not found: ${args}`); return; }
+      const path = targetCwd ? `C:\\sleepOS\\${targetCwd}` : 'C:\\sleepOS';
       print('Volume in drive C is CORPUS');
       print('Volume Serial Number is DEAD-C0DE');
       print('');
-      print('Directory of C:\\sleepOS');
+      print(`Directory of ${path}`);
       print('');
-      [
-        '11/13/2024  10:31    <DIR>    .',
-        '11/13/2024  10:31    <DIR>    ..',
-        '11/13/2024  10:31    <DIR>    PROJECTS',
-        '11/13/2024  10:31      623    WELCOME.README',
-        '11/13/2024  10:31    4,096    TERMINAL.EXE',
-        '11/13/2024  10:31    8,192    SYSMON.EXE',
-        '11/13/2024  03:17        0    void.tmp',
-        '11/13/2024  ??:??       ??    daemon.core',
-        '11/13/2024  ??:??       ??    ?????.exe',
-        '',
-        '  8 File(s)    [error reading total size]',
-        '  3 Dir(s)     [error reading free space]',
-      ].forEach(l => print(l));
+      const now = new Date();
+      const ds = `${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')}/${now.getFullYear()}`;
+      const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      if (!targetCwd) {
+        // Root: show system entries
+        [
+          `11/13/2024  10:31    <DIR>    .`,
+          `11/13/2024  10:31    <DIR>    ..`,
+          `11/13/2024  10:31    <DIR>    DOCS`,
+          `11/13/2024  10:31    <DIR>    PROJECTS`,
+          `11/13/2024  10:31      623    WELCOME.README`,
+          `11/13/2024  10:31    4,096    TERMINAL.EXE`,
+          `11/13/2024  10:31    8,192    SYSMON.EXE`,
+          `11/13/2024  03:17        0    void.tmp`,
+          `11/13/2024  ??:??       ??    daemon.core`,
+          `11/13/2024  ??:??       ??    ?????.exe`,
+        ].forEach(l => print(l));
+        termFS.dirs.forEach(d => { if (d !== 'DOCS') print(`${ds}  ${ts}    <DIR>    ${d}`); });
+        termFS.files.forEach((c, n) => print(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
+        termFS.blobs.forEach((b, n) => print(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+      } else {
+        dir.dirs.forEach(d => print(`${ds}  ${ts}    <DIR>    ${d}`));
+        dir.files.forEach((c, n) => print(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
+        dir.blobs.forEach((b, n) => print(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+        if (dir.files.size + dir.blobs.size + dir.dirs.size === 0) print('  (empty directory)');
+      }
+      print('');
     },
     ls: (args) => CMDS.dir(args),
     ps: () => {
@@ -1225,34 +2174,44 @@ function openTerminal() {
     cd: (args) => {
       const dest = (args || '').trim();
       if (!dest || dest === '.' || dest === 'C:\\sleepOS') {
-        print('C:\\sleepOS');
+        cwd = ''; updatePrompt(); print(getPromptStr().replace('>',''));
       } else if (dest === '..') {
-        print('Access denied.');
-        print('There is no parent directory. This is the only directory.');
-      } else if (dest.toLowerCase() === 'projects') {
-        print('C:\\sleepOS\\PROJECTS');
-        print('');
-        print('The PROJECTS directory contains 20 items.');
-        print('They are all watching you navigate here.');
+        if (!cwd) { print('Already at root.'); return; }
+        cwd = ''; updatePrompt(); print('C:\\sleepOS');
       } else {
-        print(`The system cannot find the path specified: ${dest}`);
-        print('NOTE: sleepOS has only one directory. This is intentional.');
+        const name = dest.toUpperCase();
+        const dir = fsGetDir(name);
+        if (dir) { cwd = name; updatePrompt(); print(`C:\\sleepOS\\${name}`); }
+        else { print(`The system cannot find the path specified: ${dest}`); }
       }
     },
     mkdir: (args) => {
       if (!args) { print('Usage: MKDIR [name]'); return; }
-      print(`Creating directory '${args}'...`);
-      setTimeout(() => {
-        print(`Directory created: C:\\sleepOS\\${args.toUpperCase()}`);
-        print('WARNING: The new directory is indistinguishable from void.tmp.');
-        print('Recommend deletion.');
-      }, 600);
+      const name = args.trim().toUpperCase();
+      const dir = fsGetDir(cwd);
+      if (dir.dirs.has(name) || ['PROJECTS','DOCS','.','..'].includes(name)) {
+        print(`A subdirectory or file ${name} already exists.`); return;
+      }
+      dir.dirs.add(name);
+      if (!cwd) {
+        termFS.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map() });
+      }
+      print(`Directory created: ${getPromptStr().replace('>','')}\\${name}`);
+    },
+    touch: (args) => {
+      if (!args) { print('Usage: TOUCH [filename]'); return; }
+      const name = args.trim();
+      const dir = fsGetDir(cwd);
+      if (dir.files.has(name)) { print(`File already exists: ${name}`); return; }
+      dir.files.set(name, '');
+      print(`Created: ${name}`);
     },
     del: (args) => {
-      const f = (args || '').toLowerCase().trim();
+      const raw = (args || '').trim();
+      const f = raw.toLowerCase();
       if (!f) { print('Usage: DEL [filename]'); return; }
       if (f === 'void.tmp') {
-        print(`Deleting ${args}...`);
+        print(`Deleting ${raw}...`);
         setTimeout(() => {
           print('Delete failed.', '#ff4444');
           print('void.tmp cannot be deleted.');
@@ -1260,14 +2219,24 @@ function openTerminal() {
           print('void.tmp will always be here.');
         }, 500);
       } else if (f === 'daemon.core') {
-        print(`Deleting ${args}...`);
+        print(`Deleting ${raw}...`);
         setTimeout(() => { print('Access denied.', '#ff4444'); print('The file is currently in use by: SYSTEM, UNKNOWN, UNKNOWN, UNKNOWN'); }, 400);
       } else if (f === '?????.exe') {
         print('You cannot delete this file.');
         print('It deleted itself before you asked.');
         print('It is still here.');
       } else {
-        print(`File not found: ${args}`);
+        const dir = fsGetDir(cwd);
+        const upper = raw.toUpperCase();
+        if (dir.files.has(raw)) {
+          dir.files.delete(raw); print(`Deleted: ${raw}`);
+        } else if (dir.blobs.has(raw)) {
+          const b = dir.blobs.get(raw); URL.revokeObjectURL(b.url); dir.blobs.delete(raw); print(`Deleted: ${raw}`);
+        } else if (dir.dirs.has(upper)) {
+          dir.dirs.delete(upper); termFS.subdirs.delete(upper); print(`Removed directory: ${upper}`);
+        } else {
+          print(`File not found: ${raw}`);
+        }
       }
     },
     rm: (args) => CMDS.del(args),
@@ -1289,21 +2258,34 @@ function openTerminal() {
     },
     mv: (args) => CMDS.move(args),
     tree: () => {
-      [
-        'C:\\sleepOS',
-        '├── WELCOME.README',
-        '├── TERMINAL.EXE',
-        '├── SYSMON.EXE',
-        '├── void.tmp',
-        '├── daemon.core              [UNREADABLE]',
-        '├── ?????.exe                [DO NOT EXECUTE]',
-        '└── PROJECTS\\',
-        '    ├── sand playground',
-        '    ├── bug hotline',
-        '    ├── fireworks',
-        '    ├── ... (17 more objects)',
-        '    └── [1 object cannot be listed]',
-      ].forEach(l => print(l));
+      print('C:\\sleepOS');
+      // DOCS (always)
+      print('├── DOCS\\');
+      const docs = fsGetDir('DOCS');
+      [...docs.files.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
+      // User dirs
+      termFS.dirs.forEach(d => {
+        if (d === 'DOCS') return;
+        print(`├── ${d}\\`);
+        const sub = termFS.subdirs.get(d);
+        if (sub) {
+          [...sub.files.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
+          [...sub.blobs.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
+        }
+      });
+      // System files
+      ['WELCOME.README','TERMINAL.EXE','SYSMON.EXE','NOTEPAD.EXE','BROWSER.EXE','DEFRAG.EXE',
+       'void.tmp','daemon.core              [UNREADABLE]','?????.exe                [DO NOT EXECUTE]'
+      ].forEach(n => print(`├── ${n}`));
+      // User files
+      termFS.files.forEach((_, n) => print(`├── ${n}`));
+      termFS.blobs.forEach((b, n) => print(`├── ${n}  [${b.kind}]`));
+      // PROJECTS
+      print('└── PROJECTS\\');
+      print('    ├── sand playground');
+      print('    ├── fireworks');
+      print('    ├── ... (more objects)');
+      print('    └── [1 object cannot be listed]');
     },
     taskkill: (args) => {
       const pid = (args || '').replace(/\D/g,'');
@@ -1363,7 +2345,8 @@ function openTerminal() {
       ].forEach(l => print(l));
     },
     cat: (args) => {
-      const f = (args||'').toLowerCase().trim();
+      const raw = (args||'').trim();
+      const f = raw.toLowerCase();
       if (f === 'welcome.readme') {
         print('sleepOS v0.903b2 — WELCOME FILE');
         print('(open WELCOME.README for full contents)');
@@ -1375,7 +2358,27 @@ function openTerminal() {
         print('  The file is currently being written.');
         print('  It is always being written.');
       } else {
-        print('File not found: ' + (args || '(no argument given)'));
+        // Support DIR/filename paths
+        let dirObj, fname;
+        const slash = raw.indexOf('/') !== -1 ? raw.indexOf('/') : raw.indexOf('\\');
+        if (slash !== -1) {
+          dirObj = fsGetDir(raw.slice(0, slash).toUpperCase());
+          fname  = raw.slice(slash + 1);
+        } else {
+          dirObj = fsGetDir(cwd);
+          fname  = raw;
+        }
+        if (dirObj && dirObj.files.has(fname)) {
+          const content = dirObj.files.get(fname);
+          if (content === '') print('(empty file)');
+          else content.split('\n').forEach(l => print(l));
+        } else if (dirObj && dirObj.blobs.has(fname)) {
+          const b = dirObj.blobs.get(fname);
+          print(`Binary file: ${fname} (${b.kind}, ${fmtSize(b.size)})`);
+          print(`Use OPEN ${fname} to view it.`);
+        } else {
+          print('File not found: ' + (raw || '(no argument given)'));
+        }
       }
     },
     start: (args) => {
@@ -1385,6 +2388,10 @@ function openTerminal() {
       const EXES_start = {
         'welcome.readme': openWelcome,
         'welcome':        openWelcome,
+        'notepad.exe':    openNotepad,
+        'notepad':        openNotepad,
+        'explorer.exe':   openExplorer,
+        'explorer':       openExplorer,
         'sysmon.exe':     openSysmon,
         'sysmon':         openSysmon,
         'browser.exe':    openBrowser,
@@ -1411,6 +2418,36 @@ function openTerminal() {
         print(`Cannot find program: ${args}`);
       }
     },
+    open: (args) => {
+      const raw = (args || '').trim();
+      if (!raw) { print('Usage: OPEN [filename]'); return; }
+      const dir = fsGetDir(cwd);
+      if (dir.blobs.has(raw)) {
+        print(`Opening ${raw}...`);
+        setTimeout(() => openMediaFile(raw), 300);
+      } else if (dir.files.has(raw)) {
+        print(`Opening ${raw}...`);
+        setTimeout(() => openNotepad(raw), 300);
+      } else {
+        print(`File not found: ${raw}`);
+        print('Use DIR to list available files.');
+      }
+    },
+    run: (args) => {
+      const fname = (args || '').trim();
+      if (!fname) { print('Usage: RUN <script.script>'); return; }
+      const dir = fsGetDir(cwd);
+      const source = dir.files.get(fname);
+      if (source === undefined) { print(`Script not found: ${fname}`, '#ff4444'); return; }
+      print(`Running ${fname}...`);
+      execScript(source, print);
+    },
+    notepad: (args) => {
+      const fname = args ? args.trim() : null;
+      if (fname && !termFS.files.has(fname)) { print(`File not found: ${fname}`); return; }
+      print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
+      setTimeout(() => openNotepad(fname || undefined), 300);
+    },
     exit: () => closeWin('terminal'),
   };
 
@@ -1425,8 +2462,22 @@ function openTerminal() {
       e.preventDefault();
     } else if (e.key === 'Enter') {
       const raw = inp.value.trim(); inp.value = ''; histIdx = -1;
-      print('C:\\sleepOS> ' + raw);
+      print(getPromptStr() + ' ' + raw);
       if (raw) { cmdHistory.push(raw); if (cmdHistory.length > 50) cmdHistory.shift(); }
+
+      // Handle echo text > filename redirection
+      const redirectMatch = raw.match(/^echo\s+(.*?)\s*>>\s*(.+)$/i) || raw.match(/^echo\s+(.*?)\s*>\s*(.+)$/i);
+      if (redirectMatch) {
+        const append = raw.match(/^echo\s+(.*?)\s*>>\s*(.+)$/i) !== null;
+        const content = redirectMatch[1].replace(/^"|"$/g,'');
+        const fname = redirectMatch[2].trim();
+        const existing = termFS.files.get(fname) ?? '';
+        termFS.files.set(fname, append && existing ? existing + '\n' + content : content);
+        print(`${append ? 'Appended' : 'Wrote'}: ${fname}`);
+        print('');
+        return;
+      }
+
       const parts = raw.split(/\s+/);
       const cmd = parts[0].toLowerCase();
       const args = parts.slice(1).join(' ');
@@ -1442,6 +2493,10 @@ function openTerminal() {
         'defrag.exe':     () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
         'defrag':         () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
         'terminal.exe':   () => { print('TERMINAL.EXE is already running.'); print('You are inside it.'); },
+        'notepad.exe':    () => { print('Opening Notepad...'); setTimeout(openNotepad, 300); },
+        'notepad':        () => { print('Opening Notepad...'); setTimeout(openNotepad, 300); },
+        'explorer.exe':   () => { print('Opening File Explorer...'); setTimeout(openExplorer, 300); },
+        'explorer':       () => { print('Opening File Explorer...'); setTimeout(openExplorer, 300); },
         'daemon.core':    () => { print('Opening daemon.core...'); print('It is already open.'); print('It has always been open.'); setTimeout(openDaemon, 400); },
         'void.tmp':       () => { print('Opening void.tmp...'); setTimeout(openVoid, 300); },
         '?????.exe':      () => { print('Executing ?????.exe...'); setTimeout(openUnknown, 300); },
@@ -1936,7 +2991,6 @@ function openBrowser() {
     <div class="sec"><h2>The Web (may not load in frame)</h2><div class="grid">
       <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://en.wikipedia.org/wiki/Special:Random'},'*');return false;">📖 Wikipedia: Random</a>
       <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://archive.org'},'*');return false;">📦 Internet Archive</a>
-      <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://neal.fun'},'*');return false;">🎮 Neal.fun</a>
       <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://poolsuite.net'},'*');return false;">📻 Poolsuite FM</a>
     </div></div>
     </body></html>`;
