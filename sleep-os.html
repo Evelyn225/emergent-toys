@@ -642,8 +642,46 @@ const DESKTOP_ICONS = [
 ];
 
 const customDesktopIcons = []; // user-created shortcuts (session)
-let browserFavorites = JSON.parse(localStorage.getItem('sleepOS-favorites') || '[]');
-function saveFavorites() { localStorage.setItem('sleepOS-favorites', JSON.stringify(browserFavorites)); }
+const DEFAULT_BROWSER_FAVORITES = [
+  { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: '&#128214;' },
+  { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: '&#128230;' },
+  { title: 'Poolsuite FM',      url: 'https://poolsuite.net', homeIcon: '&#128251;' },
+];
+const DEFAULT_BROWSER_FAVORITE_URLS = new Set(DEFAULT_BROWSER_FAVORITES.map(fav => fav.url.toLowerCase()));
+function normalizeFavoriteEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const url = String(entry.url || '').trim();
+  if (!url) return null;
+  const title = String(entry.title || url).trim() || url;
+  return { title, url };
+}
+function dedupeFavorites(list) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : [])
+    .map(normalizeFavoriteEntry)
+    .filter(entry => {
+      if (!entry) return false;
+      const key = entry.url.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+let browserFavorites = [];
+try {
+  browserFavorites = dedupeFavorites(JSON.parse(localStorage.getItem('sleepOS-favorites') || '[]'));
+} catch {
+  browserFavorites = [];
+}
+function saveFavorites() {
+  browserFavorites = dedupeFavorites(browserFavorites);
+  localStorage.setItem('sleepOS-favorites', JSON.stringify(browserFavorites));
+}
+if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
+  browserFavorites = dedupeFavorites([...DEFAULT_BROWSER_FAVORITES, ...browserFavorites]);
+  saveFavorites();
+  localStorage.setItem('sleepOS-favorites-seeded', '1');
+}
 
 // ─────────────────────────────────────────────────────────────────
 // WALLPAPERS
@@ -3612,9 +3650,21 @@ function openBrowser() {
 
   // ── home page ──────────────────────────────────────────────────
   function buildHome() {
-    const links = PROJECTS.map(p =>
-      `<a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'${p.file}'},'*');return false;">${p.emoji} ${p.name}</a>`
+    const projectLinks = PROJECTS.map(p =>
+      `<a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'${p.file}'},'*');return false;">${p.emoji} ${escHtml(p.name)}</a>`
     ).join('');
+    const favoriteLinks = browserFavorites
+      .filter(fav => !DEFAULT_BROWSER_FAVORITE_URLS.has(fav.url.toLowerCase()))
+      .map(fav => {
+        const safeUrl = JSON.stringify(fav.url).replace(/</g, '\u003c');
+        const safeTitle = escHtml(fav.title || fav.url);
+        return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>&#9734; ${safeTitle}</a>`;
+      }).join('');
+    const webLinks = DEFAULT_BROWSER_FAVORITES.map(fav => {
+      const safeUrl = JSON.stringify(fav.url).replace(/</g, '\u003c');
+      const safeTitle = escHtml(fav.title);
+      return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${fav.homeIcon} ${safeTitle}</a>`;
+    }).join('');
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
 @font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
 :root{--sleep-font:'W95font',sans-serif;}
@@ -3626,17 +3676,12 @@ function openBrowser() {
            padding:1px 7px;font-size:11px;text-decoration:none;color:#000;display:inline-block;}
       .lnk:hover{background:#000080;color:#fff;}
     </style></head><body>
-    <h1>🌐 sleepWEB — Start Page</h1>
-    <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${links}</div></div>
-    <div class="sec"><h2>The Web (may not load in frame)</h2><div class="grid">
-      <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://en.wikipedia.org/wiki/Special:Random'},'*');return false;">📖 Wikipedia: Random</a>
-      <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://archive.org'},'*');return false;">📦 Internet Archive</a>
-      <a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'https://poolsuite.net'},'*');return false;">📻 Poolsuite FM</a>
-    </div></div>
+    <h1>&#127760; sleepWEB &#8212; Start Page</h1>
+    <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${projectLinks}</div></div>
+    <div class="sec"><h2>The Web (may not load in frame)</h2><div class="grid">${webLinks}${favoriteLinks}</div></div>
     </body></html>`;
   }
 
-  // ── toolbar ────────────────────────────────────────────────────
   const toolbar = document.createElement('div');
   toolbar.className = 'browser-toolbar';
   toolbar.innerHTML = `
@@ -3785,15 +3830,23 @@ function openBrowser() {
 
   // ── favorites helpers ──────────────────────────────────────────
   function currentUrl() { return hist[histIdx] || 'home:'; }
+  function refreshHome() {
+    if (currentUrl() === 'home:') iframe.srcdoc = buildHome();
+  }
   function addToFavorites() {
     const url = currentUrl();
     if (url === 'home:') return;
+    if (browserFavorites.some(fav => fav.url.toLowerCase() === url.toLowerCase())) {
+      if (ws) ws.textContent = 'Site is already in Favorites.';
+      return;
+    }
     osPrompt('Save to Favorites as:', document.getElementById('br-url').value, 'Add to Favorites', title => {
       if (!title) return;
       browserFavorites.push({ title, url });
       saveFavorites();
+      refreshHome();
       if (ws) ws.textContent = 'Added to Favorites.';
-    }, '⭐');
+    }, '*');
   }
 
   document.getElementById('br-fav').addEventListener('click', addToFavorites);
@@ -3874,7 +3927,7 @@ function openBrowser() {
         if (!browserFavorites.length) return;
         osConfirm('Clear all favorites?', 'Confirm', ok => {
           if (!ok) return;
-          browserFavorites.length = 0; saveFavorites();
+          browserFavorites.length = 0; saveFavorites(); refreshHome(); if (ws) ws.textContent = 'Favorites cleared.';
         }, '🗑️');
       }},
     ];
