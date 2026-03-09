@@ -47,6 +47,7 @@ body {
   overflow: hidden;
   font-family: var(--sleep-font);
   font-size: 11px;
+  letter-spacing: 0.03em;
   background: #000;
 }
 
@@ -84,7 +85,7 @@ body {
   align-content: flex-start; gap: 2px;
 }
 .desktop-icon {
-  width: 74px;
+  width: 90px;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 4px; cursor: default;
   border: 1px solid transparent;
@@ -226,7 +227,8 @@ body {
   padding: 4px 8px 4px 4px; cursor: default; font-size: 11px;
 }
 .sm-item:hover { background: #000080; color: #fff; }
-.sm-icon { font-size: 16px; flex-shrink: 0; }
+.sm-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; flex-shrink: 0; }
+.sm-icon img { width: 16px; height: 16px; display: block; }
 .sm-sep { height: 1px; margin: 2px 4px; background: linear-gradient(to right, #808080, #fff); }
 
 /* ── Dropdown menus ──────────────────────────────────────────── */
@@ -447,6 +449,104 @@ body {
 .media-body img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .media-body video { width: 100%; height: 100%; background: #000; }
 
+/* ── Video Player ────────────────────────────────────────────── */
+.vp-shell {
+  width: 100%; height: 100%; display: flex; flex-direction: column;
+  box-sizing: border-box; gap: 8px; padding: 8px;
+  background: #c0c0c0;
+  user-select: none;
+}
+.vp-screen {
+  flex: 1; position: relative; overflow: hidden; background: #9f9f9f;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+  box-shadow: inset 1px 1px 0 #404040, inset -1px -1px 0 #dfdfdf;
+}
+.vp-screen video { width: 100%; height: 100%; display: block; object-fit: contain; background: #9f9f9f; }
+.vp-dither {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.18;
+  background-image: radial-gradient(circle at 1px 1px, rgba(0,0,0,0.38) 0.9px, transparent 1px);
+  background-size: 4px 4px;
+}
+.vp-screen-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 38px; pointer-events: none; transition: opacity 0.18s;
+  color: rgba(0,0,128,0.75); text-shadow: 1px 1px 0 #fff;
+}
+.vp-bar {
+  flex-shrink: 0; background: #c0c0c0;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  padding: 6px 8px; display: flex; flex-direction: column; gap: 6px;
+}
+.vp-seek-row { display: flex; align-items: center; gap: 8px; }
+.vp-time {
+  font-size: 10px; color: #222; white-space: nowrap;
+  min-width: 32px; font-variant-numeric: tabular-nums;
+}
+.vp-time.vp-dur { text-align: right; color: #222; }
+.vp-seek {
+  flex: 1; -webkit-appearance: none; height: 12px; border-radius: 0;
+  border: 1px solid #7a7a7a;
+  background: linear-gradient(to right, #000080 var(--pct,0%), #f5f5f5 var(--pct,0%));
+  box-shadow: inset 1px 1px 0 #fff;
+  outline: none; cursor: pointer;
+}
+.vp-seek::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 11px; height: 17px; border-radius: 0;
+  border: 1px solid #000; background: #c0c0c0;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #808080;
+  cursor: pointer;
+}
+.vp-btn-row { display: flex; align-items: center; gap: 4px; }
+.vp-btn {
+  min-width: 26px; height: 24px; box-sizing: border-box; padding: 0 8px;
+  font-size: 14px; color: #111; background: #c0c0c0;
+  cursor: default; line-height: 1;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.vp-btn:hover  { background: #d4d0c8; color: #111; }
+.vp-btn:active { border-color: #808080 #fff #fff #808080; padding-top: 1px; }
+.vp-btn-play   { min-width: 32px; font-size: 18px; }
+.vp-divider    { width: 1px; height: 18px; background: #808080; box-shadow: 1px 0 0 #fff; margin: 0 4px; flex-shrink: 0; }
+.vp-spacer     { flex: 1; }
+.vp-vol {
+  -webkit-appearance: none; height: 12px; width: 68px; border-radius: 0;
+  border: 1px solid #7a7a7a; background: #f5f5f5; outline: none; cursor: pointer;
+}
+.vp-vol::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 9px; height: 15px; border-radius: 0;
+  border: 1px solid #000; background: #c0c0c0; cursor: pointer;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #808080;
+}
+.vp-vol-blocks {
+  min-width: 74px; padding: 2px 6px; line-height: 1.1;
+  font-family: var(--sleep-font); font-size: 11px;
+  cursor: default; white-space: nowrap; letter-spacing: 0;
+  color: #222; background: #fff;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+}
+.vp-meta {
+  font-size: 10px; color: #4a4a4a;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-left: 4px;
+}
+.vp-spacer { flex: 1; }
+
+/* Video player */
+.st-panel { padding: 10px 12px; display: flex; flex-direction: column; gap: 0; }
+.st-section { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #808080; margin: 10px 0 4px; border-bottom: 1px solid #d0d0d0; padding-bottom: 2px; }
+.st-section:first-child { margin-top: 0; }
+.st-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; }
+.st-label { font-size: 11px; color: #000; }
+.st-toggle {
+  min-width: 44px; height: 19px; padding: 0 6px;
+  background: #c0c0c0; cursor: default; font-size: 11px; font-family: inherit;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+}
+.st-toggle:active { border-color: #808080 #fff #fff #808080; }
+.st-toggle.on { background: #000080; color: #fff; border-color: #808080 #fff #fff #808080; }
+.st-footer { display: flex; gap: 6px; padding: 8px 2px 0; border-top: 1px solid #d0d0d0; margin-top: 6px; }
+
 /* ── Welcome text window ─────────────────────────────────────── */
 .note-body {
   background: #fff; height: 100%; overflow: auto;
@@ -553,7 +653,7 @@ body {
 
 <!-- Taskbar -->
 <div id="taskbar">
-  <button id="start-btn" onclick="toggleStart()">🖥 Start</button>
+  <button id="start-btn" onclick="toggleStart()">🛏️ Start</button>
   <div class="tb-divider"></div>
   <div id="taskbar-programs"></div>
   <div id="system-tray">
@@ -566,9 +666,6 @@ body {
 <div id="start-menu">
   <div id="sm-sidebar"><span>sleepOS</span></div>
   <div id="sm-items">
-    <div class="sm-item" onclick="closeStart();openWelcome()">
-      <span class="sm-icon">📄</span><span>Welcome</span>
-    </div>
     <div class="sm-item" onclick="closeStart();openNotepad()">
       <span class="sm-icon">📝</span><span>Notepad</span>
     </div>
@@ -584,15 +681,12 @@ body {
     <div class="sm-item" onclick="closeStart();openSysmon()">
       <span class="sm-icon">📊</span><span>System Monitor</span>
     </div>
-    <div class="sm-item" onclick="closeStart();openAppearance()">
-      <span class="sm-icon">🖼️</span><span>Appearance</span>
-    </div>
-    <div class="sm-item" onclick="closeStart();triggerUpload()">
-      <span class="sm-icon">📤</span><span>Upload File...</span>
+    <div class="sm-item" onclick="closeStart();openSettings()">
+      <span class="sm-icon">&#9881;&#65039;</span><span>Settings</span>
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="window.location='index.html'">
-      <span class="sm-icon">🌐</span><span>Return to Eve Net</span>
+      <span class="sm-icon"><img src="https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/go-home.png" alt=""></span><span>Return to Eve Net</span>
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="closeStart();doShutdown()">
@@ -606,7 +700,7 @@ body {
 // DATA
 // ─────────────────────────────────────────────────────────────────
 const PROJECTS = [
-  { name: 'sand playground',    emoji: '⏳', file: 'evenet.fun/sands.html' },
+  { name: 'sand playground',    emoji: '⏳', file: 'evenet.fun/Sands.html' },
   { name: 'bug hotline',        emoji: '🐛', file: 'evenet.fun/critters.html' },
   { name: 'fireworks',          emoji: '🎆', file: 'evenet.fun/fireworks.html' },
   { name: 'pixel splatter',     emoji: '🔮', file: 'evenet.fun/pixel-splatter.html' },
@@ -630,12 +724,12 @@ const PROJECTS = [
 
 const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
-  { name: 'NOTEPAD.EXE',    emoji: '📝', action: 'openNotepad' },
-  { name: 'EXPLORER.EXE',   emoji: '🗂️', action: 'openExplorer' },
-  { name: 'TERMINAL.EXE',   emoji: '💻', action: 'openTerminal' },
-  { name: 'SYSMON.EXE',     emoji: '📊', action: 'openSysmon' },
-  { name: 'BROWSER.EXE',    emoji: '🌐', action: 'openBrowser' },
-  { name: 'DEFRAG.EXE',    emoji: '🧩', action: 'openDefrag' },
+  { name: 'NOTEPAD.exe',    emoji: '📝', action: 'openNotepad' },
+  { name: 'EXPLORER.exe',   emoji: '🗂️', action: 'openExplorer' },
+  { name: 'TERMINAL.exe',   emoji: '💻', action: 'openTerminal' },
+  { name: 'SYSMON.exe',     emoji: '📊', action: 'openSysmon' },
+  { name: 'BROWSER.exe',    emoji: '🌐', action: 'openBrowser' },
+  { name: 'DEFRAG.exe',    emoji: '🧩', action: 'openDefrag' },
   { name: 'daemon.core',   emoji: '👁️',  action: 'openDaemon' },
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
@@ -682,6 +776,11 @@ if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
   saveFavorites();
   localStorage.setItem('sleepOS-favorites-seeded', '1');
 }
+
+// ── Settings bootstrap (must be early so BIOS skip works) ────────
+const SETTINGS_KEY = 'sleepOS-settings';
+const osSettings = { crtScanlines: true, videoDither: true, clock12h: false, skipBoot: false };
+try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
 
 // ─────────────────────────────────────────────────────────────────
 // WALLPAPERS
@@ -754,6 +853,7 @@ function applyWallpaper(id) {
   currentWallpaper = id;
   const bg = document.getElementById('desktop-bg');
   bg.style.cssText = wp.bg;
+  localStorage.setItem(WP_KEY, id);
   // Re-render swatch selection if window open
   document.querySelectorAll('.wp-swatch').forEach(s => {
     s.classList.toggle('wp-selected', s.dataset.id === id);
@@ -761,12 +861,11 @@ function applyWallpaper(id) {
 }
 
 function openAppearance() {
-  if (!mkWin({ id:'appearance', title:'Appearance', icon:'🖼️', w:370, h:270, x:130, y:90, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:'appearance', title:'Appearance', icon:'\u{1F5BC}\uFE0F', w:370, h:270, x:130, y:90, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-appearance');
   body.style.cssText = 'padding:10px;overflow:auto;';
-  body.innerHTML = `
-    <div style="font-size:11px;margin-bottom:8px;">Wallpaper:</div>
-    <div id="wp-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>`;
+  body.innerHTML =     `<div style="font-size:11px;margin-bottom:8px;">Wallpaper:</div>
+     <div id="wp-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>`;
   const grid = document.getElementById('wp-grid');
   WALLPAPERS.forEach(wp => {
     const item = document.createElement('div');
@@ -775,7 +874,6 @@ function openAppearance() {
     item.style.cssText = 'cursor:default;display:flex;flex-direction:column;align-items:center;gap:3px;';
     const thumb = document.createElement('div');
     thumb.style.cssText = `width:72px;height:50px;border:2px solid #808080;box-sizing:border-box;overflow:hidden;flex-shrink:0;`;
-    // Apply just background (and animation) to thumb via a nested div
     const fill = document.createElement('div');
     fill.style.cssText = `width:100%;height:100%;${wp.bg}`;
     thumb.appendChild(fill);
@@ -788,6 +886,49 @@ function openAppearance() {
     grid.appendChild(item);
   });
 }
+
+function openSettings() {
+  if (!mkWin({ id:'settings', title:'Settings', icon:'\u2699\uFE0F', w:390, h:294, x:145, y:95, menubar:false, statusbar:false })) return;
+  const body = document.getElementById('wb-settings');
+  body.className = 'win-body st-panel';
+
+  body.innerHTML =     `<div class="st-section">Display</div>
+     <div class="st-row"><div class="st-label">CRT scan lines</div><button class="st-toggle" data-setting="crtScanlines"></button></div>
+     <div class="st-row"><div class="st-label">Video dithering</div><button class="st-toggle" data-setting="videoDither"></button></div>
+     <div class="st-section">System</div>
+     <div class="st-row"><div class="st-label">12-hour clock</div><button class="st-toggle" data-setting="clock12h"></button></div>
+
+     <div class="st-row"><div class="st-label">Skip boot screen</div><button class="st-toggle" data-setting="skipBoot"></button></div>
+     <div class="st-footer">
+       <button class="dlg-btn primary" id="settings-open-appearance">Open Appearance</button>
+       <button class="dlg-btn" id="settings-close">Close</button>
+     </div>`;
+
+  function refresh() {
+    body.querySelectorAll('[data-setting]').forEach(btn => {
+      const key = btn.dataset.setting;
+      const enabled = !!osSettings[key];
+      btn.classList.toggle('on', enabled);
+      btn.textContent = enabled ? 'ON' : 'OFF';
+      btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    });
+  }
+
+  body.querySelectorAll('[data-setting]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.setting;
+      osSettings[key] = !osSettings[key];
+      saveSettings();
+      applySettings();
+      refresh();
+    });
+  });
+
+  document.getElementById('settings-open-appearance').addEventListener('click', openAppearance);
+  document.getElementById('settings-close').addEventListener('click', () => closeWin('settings'));
+  refresh();
+}
+
 
 const BIOS_LINES = [
   'sleepOS BIOS v2.33b  (C) MMXXI Eve Networks Corp.',
@@ -814,24 +955,9 @@ const BIOS_LINES = [
   '  Soul integrity    : DEGRADED',
   '',
   'Loading sleepOS v0.903b2...',
-  '',
-  '                        [ press any key to skip ]',
 ];
 
-const SYSTEM_MSGS = [
-  { icon:'⚠️', title:'sleepOS', text:'A memory address returned a value outside the range of plausible reality.\n\nThis has been logged.' },
-  { icon:'💡', title:'Tip of the Day', text:'Did you know? sleepOS runs 7 background daemons. 3 of them are of unknown origin.\n\nThis is considered normal.' },
-  { icon:'⚠️', title:'System Notice', text:'Soul Integrity has decreased by 0.4%.\n\nThis is expected behavior. No action is required.' },
-  { icon:'🔔', title:'Reminder', text:'You have been inside sleepOS for some time now.\n\nEverything is fine.' },
-  { icon:'💡', title:'Tip of the Day', text:'Did you know? The file void.tmp has existed since before this system was installed.\n\nIts size cannot be determined.' },
-  { icon:'⚠️', title:'System Warning', text:'An unknown process is observing your session.\n\nThis feature cannot be disabled.' },
-  { icon:'🔔', title:'sleepOS', text:'Entropy levels are elevated in Sector 7.\n\nSector 7 cannot be located on this machine.' },
-  { icon:'⚠️', title:'Memory Warning', text:'The process dream_fragment.exe has allocated more memory than physically exists.\n\nThe system has accommodated this.' },
-  { icon:'🔔', title:'sleepOS', text:'You are the 1st visitor today.\n\nYou are also the last.' },
-];
-
-// ─────────────────────────────────────────────────────────────────
-// BIOS BOOT
+// BIOS BOOT// BIOS BOOT
 // ─────────────────────────────────────────────────────────────────
 const biosTextEl = document.getElementById('bios-text');
 let biosIdx = 0, biosChar = 0, biosTimer, bisDone = false;
@@ -868,7 +994,9 @@ function biosType() {
 document.addEventListener('keydown',   biosFinish, { once: true });
 document.addEventListener('click',     biosFinish, { once: true });
 document.addEventListener('touchend',  biosFinish, { once: true });
-setTimeout(biosType, 250);
+// Load settings early so skipBoot is available
+try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
+if (osSettings.skipBoot) { biosFinish(); } else { setTimeout(biosType, 250); }
 
 // ─────────────────────────────────────────────────────────────────
 // WINDOW MANAGEMENT
@@ -893,8 +1021,8 @@ const termFS = {
         '  PROJECTS\\  — interactive apps (read-only)',
         '',
         'SYSTEM FILES (read-only):',
-        '  WELCOME.README  NOTEPAD.EXE  TERMINAL.EXE',
-        '  SYSMON.EXE  BROWSER.EXE  DEFRAG.EXE',
+        '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
+        '  SYSMON.exe  BROWSER.exe  DEFRAG.exe',
         '  void.tmp  daemon.core  ?????.exe',
         '',
         'USER FILES:',
@@ -1064,7 +1192,256 @@ function fsWriteTextFile(path, value, fallbackDir) {
   const dir = fsGetDir(dirName);
   if (!dir || !fileName) return null;
   dir.files.set(fileName, value);
+  schedSave();
   return { dir, dirName, fileName };
+}
+
+// ── Filesystem persistence ────────────────────────────────────────
+const FS_KEY = 'sleepOS-fs';
+let _fsSaveTimer = null;
+
+function _serDir(d) {
+  const out = { dirs: [...d.dirs], files: {}, subdirs: {} };
+  d.files.forEach((v, k) => { out.files[k] = v; });
+  if (d.subdirs) d.subdirs.forEach((v, k) => { out.subdirs[k] = _serDir(v); });
+  return out;
+}
+
+function _desDir(o) {
+  const d = { dirs: new Set(o.dirs || []), files: new Map(), blobs: new Map(), subdirs: new Map() };
+  Object.entries(o.files || {}).forEach(([k, v]) => d.files.set(k, v));
+  Object.entries(o.subdirs || {}).forEach(([k, v]) => d.subdirs.set(k, _desDir(v)));
+  return d;
+}
+
+function saveFS() {
+  try {
+    const data = { dirs: [...termFS.dirs], files: {}, subdirs: {} };
+    termFS.files.forEach((v, k) => { data.files[k] = v; });
+    termFS.subdirs.forEach((v, k) => { data.subdirs[k] = _serDir(v); });
+    localStorage.setItem(FS_KEY, JSON.stringify(data));
+  } catch(e) { /* quota exceeded — silently ignore */ }
+}
+
+function schedSave() {
+  clearTimeout(_fsSaveTimer);
+  _fsSaveTimer = setTimeout(saveFS, 400);
+}
+
+function loadFS() {
+  const raw = localStorage.getItem(FS_KEY);
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    if (data.dirs) data.dirs.forEach(d => termFS.dirs.add(d));
+    if (data.files) Object.entries(data.files).forEach(([k, v]) => termFS.files.set(k, v));
+    if (data.subdirs) Object.entries(data.subdirs).forEach(([k, v]) => termFS.subdirs.set(k, _desDir(v)));
+  } catch(e) { /* corrupted save — ignore */ }
+}
+
+loadFS();
+window.addEventListener('beforeunload', saveFS);
+document.addEventListener('fs-changed', schedSave);
+
+// ── Blob persistence (base64 per-file, separate localStorage keys) ─
+const BLOB_PREFIX = 'sleepOS-blob:';
+const BLOB_SIZE_LIMIT = 3 * 1024 * 1024; // skip files > 3 MB uncompressed
+const MEDIA_DB_NAME = 'sleepOS-media';
+const MEDIA_DB_VERSION = 1;
+const MEDIA_DB_STORE = 'blobs';
+let _mediaDbPromise = null;
+
+function blobRelativePath(dirPath, name) {
+  return (dirPath ? dirPath + '\\' : '') + name;
+}
+
+function blobStorageKey(dirPath, name) {
+  return BLOB_PREFIX + blobRelativePath(dirPath, name);
+}
+
+function splitBlobRelativePath(path) {
+  const clean = String(path || '').replace(/\//g, '\\').replace(/^\\+|\\+$/g, '');
+  const lastSlash = clean.lastIndexOf('\\');
+  return {
+    dirPath: lastSlash === -1 ? '' : clean.slice(0, lastSlash),
+    fileName: lastSlash === -1 ? clean : clean.slice(lastSlash + 1),
+  };
+}
+
+function _ab2b64(ab) {
+  const bytes = new Uint8Array(ab);
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 8192)
+    out += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length)));
+  return btoa(out);
+}
+
+function openMediaDb() {
+  if (!window.indexedDB) return Promise.resolve(null);
+  if (_mediaDbPromise) return _mediaDbPromise;
+  _mediaDbPromise = new Promise(resolve => {
+    try {
+      const req = indexedDB.open(MEDIA_DB_NAME, MEDIA_DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(MEDIA_DB_STORE)) {
+          db.createObjectStore(MEDIA_DB_STORE, { keyPath: 'path' });
+        }
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => db.close();
+        resolve(db);
+      };
+      req.onerror = req.onblocked = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+  return _mediaDbPromise;
+}
+
+async function storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      tx.objectStore(MEDIA_DB_STORE).put({
+        path: blobRelativePath(dirPath, name),
+        kind,
+        size,
+        mime,
+        blob: new Blob([arrayBuffer], { type: mime || 'application/octet-stream' }),
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+async function removeBlobEntryFromDb(dirPath, name) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      tx.objectStore(MEDIA_DB_STORE).delete(blobRelativePath(dirPath, name));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+async function renameBlobEntryInDb(dirPath, oldName, newName) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  const oldPath = blobRelativePath(dirPath, oldName);
+  const newPath = blobRelativePath(dirPath, newName);
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      const store = tx.objectStore(MEDIA_DB_STORE);
+      const getReq = store.get(oldPath);
+      getReq.onsuccess = () => {
+        const data = getReq.result;
+        if (!data) return;
+        data.path = newPath;
+        store.put(data);
+        store.delete(oldPath);
+      };
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
+  if (!fileName) return;
+  const dir = fsGetDir(dirPath);
+  if (!dir) return;
+  const prev = dir.blobs.get(fileName);
+  if (prev?.url) URL.revokeObjectURL(prev.url);
+  const blob = rawBlob instanceof Blob ? rawBlob : new Blob([rawBlob], { type: mime || 'application/octet-stream' });
+  dir.blobs.set(fileName, { url: URL.createObjectURL(blob), kind, size, mime });
+}
+
+// Save a single blob entry immediately (called at upload time when we have the raw File)
+function saveBlobEntry(dirPath, name, kind, size, mime, arrayBuffer) {
+  void storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer);
+  if (size > BLOB_SIZE_LIMIT) return;
+  try { localStorage.setItem(blobStorageKey(dirPath, name),
+    JSON.stringify({ kind, size, mime, b64: _ab2b64(arrayBuffer) })); }
+  catch(ex) { /* quota */ }
+}
+
+function removeBlobEntry(dirPath, name) {
+  localStorage.removeItem(blobStorageKey(dirPath, name));
+  void removeBlobEntryFromDb(dirPath, name);
+}
+
+function renameBlobEntry(dirPath, oldName, newName) {
+  const oldKey = blobStorageKey(dirPath, oldName);
+  const newKey = blobStorageKey(dirPath, newName);
+  const data = localStorage.getItem(oldKey);
+  if (data) { try { localStorage.setItem(newKey, data); } catch(ex) {} localStorage.removeItem(oldKey); }
+  void renameBlobEntryInDb(dirPath, oldName, newName);
+}
+
+function loadBlobsFromStorage() {
+  Object.keys(localStorage).filter(k => k.startsWith(BLOB_PREFIX)).forEach(k => {
+    try {
+      const { kind, size, mime, b64 } = JSON.parse(localStorage.getItem(k));
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const { dirPath, fileName } = splitBlobRelativePath(k.slice(BLOB_PREFIX.length));
+      restoreBlobIntoFs(dirPath, fileName, kind, size, mime, new Blob([bytes], { type: mime }));
+    } catch(e) { /* corrupted ? skip */ }
+  });
+  void loadBlobsFromIndexedDb();
+}
+
+async function loadBlobsFromIndexedDb() {
+  const db = await openMediaDb();
+  if (!db) return;
+  const items = await new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readonly');
+      const req = tx.objectStore(MEDIA_DB_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    } catch (e) {
+      resolve([]);
+    }
+  });
+  items.forEach(item => {
+    const { dirPath, fileName } = splitBlobRelativePath(item.path);
+    restoreBlobIntoFs(dirPath, fileName, item.kind, item.size, item.mime, item.blob);
+  });
+  if (items.length) document.dispatchEvent(new CustomEvent('fs-changed'));
+}
+loadBlobsFromStorage();
+
+// ── Wallpaper persistence ─────────────────────────────────────────
+const WP_KEY = 'sleepOS-wallpaper';
+
+// ── Settings helpers ──────────────────────────────────────────────
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(osSettings)); } catch(e) {}
+}
+
+function applySettings() {
+  const crt = document.getElementById('crt');
+  if (crt) crt.style.display = osSettings.crtScanlines ? '' : 'none';
+  document.querySelectorAll('.vp-dither').forEach(d => d.style.display = osSettings.videoDither ? '' : 'none');
+  updateClock();
 }
 
 // ── Script executor ──────────────────────────────────────────────
@@ -1109,14 +1486,15 @@ function execScript(source, printFn) {
           break;
         }
         case 'touch':
-          if (arg && !termFS.files.has(arg)) termFS.files.set(arg, '');
+          if (arg && !termFS.files.has(arg)) { termFS.files.set(arg, ''); schedSave(); }
           break;
         case 'mkdir':
-          if (arg) termFS.dirs.add(arg.toUpperCase());
+          if (arg) { termFS.dirs.add(arg.toUpperCase()); schedSave(); }
           break;
         case 'del': case 'rm':
           termFS.files.delete(arg);
-          if (termFS.blobs.has(arg)) { URL.revokeObjectURL(termFS.blobs.get(arg).url); termFS.blobs.delete(arg); }
+          if (termFS.blobs.has(arg)) { URL.revokeObjectURL(termFS.blobs.get(arg).url); termFS.blobs.delete(arg); removeBlobEntry('', arg); }
+          schedSave();
           break;
         case 'open':
           if (termFS.blobs.has(arg)) openMediaFile(arg);
@@ -1152,8 +1530,9 @@ function triggerUpload(dir) {
 }
 
 function handleFileUpload(fileList) {
-  const target = fsGetDir(_uploadCwd) || { files: termFS.files, blobs: termFS.blobs };
-  const dirLabel = _uploadCwd ? `C:\\sleepOS\\${_uploadCwd}\\` : 'C:\\sleepOS';
+  const dirPath = _uploadCwd || '';
+  const target = fsGetDir(dirPath) || { files: termFS.files, blobs: termFS.blobs };
+  const dirLabel = dirPath ? `C:\\sleepOS\\${dirPath}\\` : 'C:\\sleepOS';
   const added = [];
   [...fileList].forEach(file => {
     const url = URL.createObjectURL(file);
@@ -1166,10 +1545,14 @@ function handleFileUpload(fileList) {
                : 'binary';
     if (kind === 'text') {
       const reader = new FileReader();
-      reader.onload = e => target.files.set(file.name, e.target.result);
+      reader.onload = e => { target.files.set(file.name, e.target.result); schedSave(); document.dispatchEvent(new CustomEvent('fs-changed')); };
       reader.readAsText(file);
     } else {
       target.blobs.set(file.name, { url, kind, size: file.size, mime: file.type });
+      // Persist eagerly while we still have the raw File object
+      const fr = new FileReader();
+      fr.onload = e => saveBlobEntry(dirPath, file.name, kind, file.size, file.type, e.target.result);
+      fr.readAsArrayBuffer(file);
     }
     added.push(file.name);
   });
@@ -1239,24 +1622,136 @@ function openVideoPlayer(filename, dirName) {
   const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
   const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
   const id = 'vid-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎬', w: 540, h: 420 })) return;
+  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' \u2014 Media Player', icon: '🎬', w: 500, h: 390 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
-  body.style.cssText = 'padding:0;overflow:hidden;';
-  const wrap  = document.createElement('div'); wrap.className = 'media-body';
-  const video = document.createElement('video');
-  video.src = blob.url; video.controls = true;
-  video.style.cssText = 'width:100%;height:100%;';
-  wrap.appendChild(video); body.appendChild(wrap);
-  if (ws) ws.textContent = entry.fileName + '  \u2014  ' + fmtSize(blob.size);
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const shell  = document.createElement('div'); shell.className = 'vp-shell';
+
+  // ── Screen ────────────────────────────────────────────────────
+  const screen  = document.createElement('div'); screen.className = 'vp-screen';
+  const video   = document.createElement('video'); video.src = blob.url;
+  const dither  = document.createElement('div'); dither.className = 'vp-dither';
+  dither.style.display = osSettings.videoDither ? '' : 'none';
+  const overlay = document.createElement('div'); overlay.className = 'vp-screen-overlay';
+  overlay.textContent = '▶'; overlay.style.opacity = '1';
+  screen.appendChild(video); screen.appendChild(dither); screen.appendChild(overlay);
+  screen.addEventListener('click', () => video.paused ? video.play() : video.pause());
+
+  // ── Bottom bar ────────────────────────────────────────────────
+  const bar = document.createElement('div'); bar.className = 'vp-bar';
+
+  // Seek row
+  const seekRow = document.createElement('div'); seekRow.className = 'vp-seek-row';
+  const timeEl  = document.createElement('div'); timeEl.className = 'vp-time'; timeEl.textContent = '0:00';
+  const durEl   = document.createElement('div'); durEl.className = 'vp-time vp-dur'; durEl.textContent = '0:00';
+  const seek    = document.createElement('input'); seek.type = 'range'; seek.className = 'vp-seek';
+  seek.min = 0; seek.max = 1000; seek.value = 0;
+  seekRow.appendChild(timeEl); seekRow.appendChild(seek); seekRow.appendChild(durEl);
+
+  // Button row
+  const btnRow = document.createElement('div'); btnRow.className = 'vp-btn-row';
+  const mkBtn = (txt, title, cls, fn) => {
+    const b = document.createElement('div');
+    b.className = 'vp-btn' + (cls ? ' ' + cls : '');
+    b.textContent = txt; b.title = title;
+    b.addEventListener('click', fn); return b;
+  };
+  const div = (cls) => { const d = document.createElement('div'); d.className = cls; return d; };
+
+  const btnRew  = mkBtn('\u23EE', 'Back 10s',    '', () => { video.currentTime = Math.max(0, video.currentTime - 10); });
+  const btnPlay = mkBtn('\u25B6', 'Play/Pause', 'vp-btn-play', () => video.paused ? video.play() : video.pause());
+  const btnStop = mkBtn('\u23F9', 'Stop',        '', () => { video.pause(); video.currentTime = 0; });
+  const btnFwd  = mkBtn('\u23ED', 'Forward 10s', '', () => { video.currentTime = Math.min(video.duration||0, video.currentTime + 10); });
+
+  const muteBtn = mkBtn('\u{1F50A}', 'Mute', '', () => {
+    video.muted = !video.muted;
+    muteBtn.textContent = video.muted ? '\u{1F507}' : '\u{1F50A}';
+    renderVol();
+  });
+
+  // Unicode block volume slider (10 blocks)
+  const volEl = document.createElement('div'); volEl.className = 'vp-vol-blocks'; volEl.title = 'Volume';
+  const VOL_BLOCKS = 10;
+  function renderVol() {
+    const v = video.muted ? 0 : video.volume;
+    const filled = Math.round(v * VOL_BLOCKS);
+    const on = Array(filled + 1).join('&#9632;');
+    const off = Array(VOL_BLOCKS - filled + 1).join('&#9643;');
+    volEl.innerHTML =
+      `<span style="color:#000080">${on}</span>` +
+      `<span style="color:#6a6a6a">${off}</span>`;
+  }
+  function setVolFromX(clientX) {
+    const r = volEl.getBoundingClientRect();
+    video.volume = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    video.muted = false;
+    muteBtn.textContent = '\u{1F50A}';
+    renderVol();
+  }
+  let _volDrag = false;
+  volEl.addEventListener('mousedown', e => { _volDrag = true; setVolFromX(e.clientX); });
+  document.addEventListener('mousemove', e => { if (_volDrag) setVolFromX(e.clientX); });
+  document.addEventListener('mouseup', () => { _volDrag = false; });
+  renderVol();
+
+  const metaEl = document.createElement('div'); metaEl.className = 'vp-meta';
+  metaEl.textContent = iconLabel(entry.fileName) + '  \u00b7  ' + fmtSize(blob.size);
+
+  btnRow.appendChild(btnRew); btnRow.appendChild(btnPlay); btnRow.appendChild(btnStop);
+  btnRow.appendChild(btnFwd); btnRow.appendChild(div('vp-divider'));
+  btnRow.appendChild(muteBtn); btnRow.appendChild(volEl);
+  btnRow.appendChild(div('vp-spacer')); btnRow.appendChild(metaEl);
+
+  bar.appendChild(seekRow); bar.appendChild(btnRow);
+  shell.appendChild(screen); shell.appendChild(bar);
+  body.appendChild(shell);
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function fmtT(s) {
+    if (!isFinite(s)) return '0:00';
+    return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2,'0');
+  }
+  function updateSeekGradient() {
+    const pct = seek.max > 0 ? (seek.value / seek.max * 100).toFixed(1) + '%' : '0%';
+    seek.style.setProperty('--pct', pct);
+  }
+
+  // ── Events ────────────────────────────────────────────────────
+  video.addEventListener('loadedmetadata', () => { durEl.textContent = fmtT(video.duration); });
+  video.addEventListener('timeupdate', () => {
+    timeEl.textContent = fmtT(video.currentTime);
+    if (!seek._dragging && video.duration) { seek.value = (video.currentTime / video.duration) * 1000; updateSeekGradient(); }
+  });
+  video.addEventListener('play',         () => { btnPlay.textContent = '\u23F8'; overlay.style.opacity = '0'; });
+  video.addEventListener('pause',        () => { btnPlay.textContent = '\u25B6'; overlay.style.opacity = '0.35'; });
+  video.addEventListener('ended',        () => { btnPlay.textContent = '\u25B6'; overlay.style.opacity = '1'; });
+  video.addEventListener('volumechange', renderVol);
+
+  seek.addEventListener('mousedown', () => { seek._dragging = true; });
+  seek.addEventListener('input', () => { if (video.duration) { video.currentTime = (seek.value/1000)*video.duration; updateSeekGradient(); } });
+  seek.addEventListener('mouseup', () => { seek._dragging = false; });
+
+  // ── Menu bar ──────────────────────────────────────────────────
+  if (ws) ws.textContent = iconLabel(entry.fileName) + '  \u2014  ' + fmtSize(blob.size);
   if (mb) {
-    const span = document.createElement('span');
-    span.className = 'menu-item'; span.textContent = 'File';
-    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, [
-      { label: 'Close', action: () => { video.pause(); closeWin(id); } },
-    ]); });
-    mb.appendChild(span);
+    [
+      { label: 'File', items: [{ label: 'Close', action: () => { video.pause(); closeWin(id); } }] },
+      { label: 'Playback', items: [
+        { label: 'Play / Pause', action: () => video.paused ? video.play() : video.pause() },
+        { label: 'Stop',         action: () => { video.pause(); video.currentTime = 0; } },
+        '-',
+        { label: '\u21E6 Back 10s',    action: () => { video.currentTime = Math.max(0, video.currentTime - 10); } },
+        { label: '\u21E8 Forward 10s', action: () => { video.currentTime = Math.min(video.duration||0, video.currentTime + 10); } },
+      ]},
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item'; span.textContent = label;
+      span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+      mb.appendChild(span);
+    });
   }
 }
 
@@ -1494,7 +1989,8 @@ function unminWin(id) {
 function maxWin(id) {
   const w = wins[id]; if (!w) return;
   if (w.maximized) {
-    w.el.style.cssText = w.origStyle; w.maximized = false;
+    w.el.style.cssText = w.origStyle;
+    w.maximized = false;
   } else {
     w.origStyle = w.el.style.cssText;
     const d = document.getElementById('desktop');
@@ -1507,6 +2003,21 @@ function maxWin(id) {
   }
 }
 
+function restoreMaximizedForDrag(id, clientX, clientY) {
+  const w = wins[id];
+  if (!w || !w.maximized || !w.origStyle) return;
+  const fullRect = w.el.getBoundingClientRect();
+  const pointerRatio = fullRect.width ? Math.min(0.9, Math.max(0.1, (clientX - fullRect.left) / fullRect.width)) : 0.5;
+  w.el.style.cssText = w.origStyle;
+  w.maximized = false;
+  w.el.style.zIndex = ++zTop;
+  const desktop = document.getElementById('desktop');
+  const maxLeft = Math.max(0, desktop.offsetWidth - w.el.offsetWidth);
+  const maxTop = Math.max(0, desktop.offsetHeight - w.el.offsetHeight);
+  w.el.style.left = Math.max(0, Math.min(maxLeft, clientX - w.el.offsetWidth * pointerRatio)) + 'px';
+  w.el.style.top = Math.max(0, Math.min(maxTop, clientY - 14)) + 'px';
+}
+
 function closeWin(id) {
   const w = wins[id]; if (!w) return;
   if (w._interval) clearInterval(w._interval);
@@ -1516,19 +2027,25 @@ function closeWin(id) {
 
 function makeDraggable(win, handle) {
   let sx, sy, sl, st;
+  const id = win.id.replace('win-', '');
 
   function startDrag(cx, cy) {
     sx = cx; sy = cy;
     sl = win.offsetLeft; st = win.offsetTop;
   }
   function moveDrag(cx, cy) {
-    win.style.left = Math.max(0, sl + cx - sx) + 'px';
-    win.style.top  = Math.max(0, st + cy - sy) + 'px';
+    const desktop = document.getElementById('desktop');
+    const maxLeft = Math.max(0, desktop.offsetWidth - win.offsetWidth);
+    const maxTop = Math.max(0, desktop.offsetHeight - win.offsetHeight);
+    win.style.left = Math.max(0, Math.min(maxLeft, sl + cx - sx)) + 'px';
+    win.style.top  = Math.max(0, Math.min(maxTop, st + cy - sy)) + 'px';
   }
 
   handle.addEventListener('mousedown', (e) => {
     if (e.target.tagName === 'BUTTON') return;
     e.preventDefault();
+    focusWin(id);
+    restoreMaximizedForDrag(id, e.clientX, e.clientY);
     startDrag(e.clientX, e.clientY);
     const onMove = (e) => moveDrag(e.clientX, e.clientY);
     const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
@@ -1539,7 +2056,9 @@ function makeDraggable(win, handle) {
   handle.addEventListener('touchstart', (e) => {
     if (e.target.tagName === 'BUTTON') return;
     e.preventDefault();
+    focusWin(id);
     const t = e.touches[0];
+    restoreMaximizedForDrag(id, t.clientX, t.clientY);
     startDrag(t.clientX, t.clientY);
     const onMove = (e) => { e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); };
     const onEnd = () => { handle.removeEventListener('touchmove', onMove); handle.removeEventListener('touchend', onEnd); };
@@ -1599,10 +2118,14 @@ function updateClock() {
   if (window._clockCorrupted && Math.random() < 0.75) {
     document.getElementById('clock').textContent = '??:??'; return;
   }
-  const glitch = Math.random() < 0.004;
-  const h = glitch ? Math.floor(Math.random() * 24) : now.getHours();
-  const m = glitch ? Math.floor(Math.random() * 60) : now.getMinutes();
-  document.getElementById('clock').textContent = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+  let h = Math.random() < 0.004 ? Math.floor(Math.random() * 24) : now.getHours();
+  const m = Math.random() < 0.004 ? Math.floor(Math.random() * 60) : now.getMinutes();
+  let suffix = '';
+  if (osSettings.clock12h) {
+    suffix = h >= 12 ? ' PM' : ' AM';
+    h = h % 12 || 12;
+  }
+  document.getElementById('clock').textContent = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + suffix;
 }
 setInterval(updateClock, 1000); updateClock();
 
@@ -1623,13 +2146,20 @@ function handleOutsideStart(e) {
 document.addEventListener('mousedown', handleOutsideStart);
 document.addEventListener('touchstart', handleOutsideStart, { passive: true });
 
+// Uppercase stem, preserve extension case: "untitled.txt" → "UNTITLED.txt"
+function iconLabel(name) {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return name.toUpperCase();
+  return name.slice(0, dot).toUpperCase() + name.slice(dot);
+}
+
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICONS
 // ─────────────────────────────────────────────────────────────────
 function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
-  div.innerHTML = `<div class="di-img">${ic.emoji}</div><div class="di-name">${ic.name}</div>`;
+  div.innerHTML = `<div class="di-img">${ic.emoji}</div><div class="di-name">${iconLabel(ic.name)}</div>`;
   function activate() {
     if (ic.action) window[ic.action]?.();
     else if (ic.openFn) ic.openFn();
@@ -1712,11 +2242,11 @@ You are running sleepOS, an experimental interactive desktop.
 
 Programs:
   PROJECTS.DIR  \u2014 interactive apps (double-click to browse)
-  NOTEPAD.EXE   \u2014 text editor with syntax highlighting
-  TERMINAL.EXE  \u2014 command line (type HELP for commands)
-  BROWSER.EXE   \u2014 web browser
-  SYSMON.EXE    \u2014 system monitor
-  DEFRAG.EXE    \u2014 disk defragmenter
+  NOTEPAD.exe   \u2014 text editor with syntax highlighting
+  TERMINAL.exe  \u2014 command line (type HELP for commands)
+  BROWSER.exe   \u2014 web browser
+  SYSMON.exe    \u2014 system monitor
+  DEFRAG.exe    \u2014 disk defragmenter
 
 Files:
   Right-click the desktop or any folder to create
@@ -1731,66 +2261,9 @@ Known issues:
 
 \u2014 SYSTEM`;
 
-function openWelcome() {
-  if (!mkWin({ id:'welcome', title:'WELCOME.README \u2014 Notepad', icon:'📄', w:420, h:320, x:100, y:55 })) return;
-  const body = document.getElementById('wb-welcome');
-  const ws   = document.getElementById('ws-welcome');
-  const mb   = document.getElementById('mb-welcome');
-  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+if (!termFS.files.has('WELCOME.README')) termFS.files.set('WELCOME.README', WELCOME_DEFAULT);
 
-  const ta = document.createElement('textarea');
-  ta.className = 'note-textarea';
-  ta.value = localStorage.getItem('sleepOS-welcome') ?? WELCOME_DEFAULT;
-  body.appendChild(ta);
-
-  const updateStatus = () => {
-    if (ws) ws.textContent = `WELCOME.README  \u2014  ${ta.value.length} bytes`;
-  };
-  ta.addEventListener('input', updateStatus);
-  updateStatus();
-
-  ta.addEventListener('contextmenu', e => {
-    e.preventDefault();
-    const hasSel = ta.selectionStart !== ta.selectionEnd;
-    showCtxMenu(e.clientX, e.clientY, [
-      { label: '✂️ Cut',       disabled: !hasSel, action: () => document.execCommand('cut') },
-      { label: '📋 Copy',      disabled: !hasSel, action: () => document.execCommand('copy') },
-      { label: '📄 Paste',     action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
-      '-',
-      { label: 'Select All',   action: () => { ta.focus(); ta.select(); } },
-      '-',
-      { label: 'Save',         action: () => { localStorage.setItem('sleepOS-welcome', ta.value); updateStatus(); } },
-      { label: 'Revert',       action: () => { ta.value = WELCOME_DEFAULT; updateStatus(); } },
-    ]);
-  });
-
-  function buildMenu() {
-    mb.innerHTML = '';
-    [
-      { label: 'File', items: [
-        { label: 'New Notepad',  action: () => openNotepad() },
-        '-',
-        { label: 'Save',         action: () => { localStorage.setItem('sleepOS-welcome', ta.value); updateStatus(); } },
-        { label: 'Revert',       action: () => { ta.value = WELCOME_DEFAULT; updateStatus(); } },
-        '-',
-        { label: 'Close',        action: () => closeWin('welcome') },
-      ]},
-      { label: 'Edit', items: [
-        { label: 'Select All',   action: () => { ta.focus(); ta.select(); } },
-        '-',
-        { label: 'Word Wrap', disabled: true },
-      ]},
-    ].forEach(({ label, items }) => {
-      const span = document.createElement('span');
-      span.className = 'menu-item'; span.textContent = label;
-      span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
-      mb.appendChild(span);
-    });
-  }
-  buildMenu();
-}
-
-// ── Syntax highlighting ───────────────────────────────────────────
+function openWelcome() { openNotepad('WELCOME.README'); }
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -1823,8 +2296,8 @@ const LANG_RULES = {
   ],
   html: [
     { re: /<!--[\s\S]*?-->/g,            cls: 'tok-cmt' },
-    { re: /"[^"]*"/g,                    cls: 'tok-str' },
-    { re: /'[^']*'/g,                    cls: 'tok-str' },
+    { re: new RegExp("\"(?:[^\"\\\\]|\\\\.)*\"", "g"), cls: 'tok-str' },
+    { re: new RegExp("'(?:[^'\\\\]|\\\\.)*'", "g"), cls: 'tok-str' },
     { re: /\b[a-zA-Z-]+=(?=["'])/g,     cls: 'tok-att' },
     { re: /<\/?[A-Za-z][A-Za-z0-9]*|>/g, cls: 'tok-tag' },
   ],
@@ -2239,9 +2712,9 @@ function openExplorer(startPath) {
       return '📁';
     }
     const NAME_ICONS = {
-      'TERMINAL.EXE':  '💻', 'SYSMON.EXE':    '📊',
-      'NOTEPAD.EXE':   '📝', 'BROWSER.EXE':   '🌐',
-      'DEFRAG.EXE':    '🧩', 'WELCOME.README':'📄',
+      'TERMINAL.exe':  '💻', 'SYSMON.exe':    '📊',
+      'NOTEPAD.exe':   '📝', 'BROWSER.exe':   '🌐',
+      'DEFRAG.exe':    '🧩', 'WELCOME.README':'📄',
       'void.tmp':      '⬛', 'daemon.core':   '👁️',
       '?????.exe':     '❓',
     };
@@ -2264,9 +2737,9 @@ function openExplorer(startPath) {
     }
     if (sysfile) {
       const SYS = {
-        'WELCOME.README': openWelcome,  'TERMINAL.EXE': openTerminal,
-        'SYSMON.EXE':     openSysmon,   'NOTEPAD.EXE':  openNotepad,
-        'BROWSER.EXE':    openBrowser,  'DEFRAG.EXE':   openDefrag,
+        'WELCOME.README': openWelcome,  'TERMINAL.exe': openTerminal,
+        'SYSMON.exe':     openSysmon,   'NOTEPAD.exe':  openNotepad,
+        'BROWSER.exe':    openBrowser,  'DEFRAG.exe':   openDefrag,
         'void.tmp':       openVoid,     'daemon.core':  openDaemon,
         '?????.exe':      openUnknown,
       };
@@ -2284,8 +2757,9 @@ function openExplorer(startPath) {
       if (!ok) return;
       const dir = fsGetDir(cwd);
       if (selected.kind === 'dir') { dir.dirs.delete(selected.name); dir.subdirs?.delete(selected.name); }
-      else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); }
+      else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); removeBlobEntry(cwd, selected.name); }
       else dir.files.delete(selected.name);
+      schedSave();
       render();
     }, '🗑️');
   }
@@ -2302,15 +2776,15 @@ function openExplorer(startPath) {
     if (viewMode === 'list') {
       el = document.createElement('div');
       el.className = 'exp-list-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = `<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">${icon}</span><span>${name}</span>`;
+      el.innerHTML = `<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">${icon}</span><span>${iconLabel(name)}</span>`;
     } else if (viewMode === 'details') {
       el = document.createElement('tr');
       el.className = 'exp-det-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = `<td style="font-size:12px;width:22px;">${icon}</td><td>${name}</td><td>${typeLabel(kind)}</td>`;
+      el.innerHTML = `<td style="font-size:12px;width:22px;">${icon}</td><td>${iconLabel(name)}</td><td>${typeLabel(kind)}</td>`;
     } else {
       el = document.createElement('div');
       el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = `<div class="exp-icon">${icon}</div><span>${name}</span>`;
+      el.innerHTML = `<div class="exp-icon">${icon}</div><span>${iconLabel(name)}</span>`;
     }
     const deselAll = () => pane.querySelectorAll('.exp-item,.exp-list-item,.exp-det-item').forEach(i => i.classList.remove('selected'));
     el.addEventListener('click', () => {
@@ -2345,10 +2819,11 @@ function openExplorer(startPath) {
               if (sub) dir.subdirs.set(n.toUpperCase(), sub);
               dir.subdirs.delete(name);
             } else if (dir.blobs.has(name)) {
-              const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
+              const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b); renameBlobEntry(cwd, name, n);
             } else {
               const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
             }
+            schedSave();
             render();
           });
         }},
@@ -2440,10 +2915,10 @@ function openExplorer(startPath) {
       ['DOCS', ...termFS.dirs].filter((v,i,a) => a.indexOf(v)===i).forEach(d => {
         if (d !== 'PROJECTS') items.push({name:d, kind:'dir', sysfile:false});
       });
-      [{name:'WELCOME.README'},{name:'TERMINAL.EXE'},{name:'SYSMON.EXE'},{name:'NOTEPAD.EXE'},
-       {name:'BROWSER.EXE'},{name:'DEFRAG.EXE'},{name:'void.tmp'},{name:'daemon.core'},{name:'?????.exe'}
-      ].forEach(({name}) => items.push({name, kind:'file', sysfile:true}));
-      termFS.files.forEach((_, name) => items.push({name, kind:'file', sysfile:false}));
+      const sysFileNames = new Set(['WELCOME.README','TERMINAL.exe','SYSMON.exe','NOTEPAD.exe',
+       'BROWSER.exe','DEFRAG.exe','void.tmp','daemon.core','?????.exe']);
+      sysFileNames.forEach(name => items.push({name, kind:'file', sysfile:true}));
+      termFS.files.forEach((_, name) => { if (!sysFileNames.has(name)) items.push({name, kind:'file', sysfile:false}); });
       termFS.blobs.forEach((b, name) => items.push({name, kind:b.kind, sysfile:false}));
     } else {
       const dir = fsGetDir(cwd);
@@ -2486,8 +2961,8 @@ function openExplorer(startPath) {
     ] : [
       { label: '💻 Open Terminal Here', action: () => openTerminal(cwd) },
       '-',
-      { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); render(); } } }) },
-      { label: '📄 New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
+      { label: '📁 New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); schedSave(); render(); } } }) },
+      { label: '📄 New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); schedSave(); openNotepad(n, cwd); render(); } } }) },
       '-',
       { label: '📤 Upload File…',  action: () => triggerUpload(cwd) },
       '-',
@@ -2503,8 +2978,8 @@ function openExplorer(startPath) {
       '-',
       { label: 'Close', action: () => closeWin('explorer') },
     ] : [
-      { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); render(); } } }) },
-      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); openNotepad(n, cwd); render(); } } }) },
+      { label: 'New Folder',    action: () => osPrompt('Folder name:', '', 'New Folder',    n => { if (n) { const d = fsGetDir(cwd); if (d) { d.dirs.add(n.toUpperCase()); schedSave(); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:',   'untitled.txt', 'New Text File', n => { if (n) { const d = fsGetDir(cwd); if (d) { d.files.set(n,''); schedSave(); openNotepad(n, cwd); render(); } } }) },
       '-',
       { label: 'Open',         action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
       { label: 'Delete',       action: deleteSelected },
@@ -2552,6 +3027,7 @@ function openExplorer(startPath) {
           } else {
             const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
           }
+          schedSave();
           render();
         });
       }},
@@ -2582,7 +3058,7 @@ function openFiles() { openExplorer('PROJECTS'); }
 
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 function openTerminal(startDir) {
-  if (!mkWin({ id:'terminal', title:'TERMINAL.EXE — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
+  if (!mkWin({ id:'terminal', title:'TERMINAL.exe — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
     return;
   }
@@ -2703,8 +3179,8 @@ function openTerminal(startDir) {
           `11/13/2024  10:31    <DIR>    DOCS`,
           `11/13/2024  10:31    <DIR>    PROJECTS`,
           `11/13/2024  10:31      623    WELCOME.README`,
-          `11/13/2024  10:31    4,096    TERMINAL.EXE`,
-          `11/13/2024  10:31    8,192    SYSMON.EXE`,
+          `11/13/2024  10:31    4,096    TERMINAL.exe`,
+          `11/13/2024  10:31    8,192    SYSMON.exe`,
           `11/13/2024  03:17        0    void.tmp`,
           `11/13/2024  ??:??       ??    daemon.core`,
           `11/13/2024  ??:??       ??    ?????.exe`,
@@ -2809,6 +3285,7 @@ function openTerminal(startDir) {
       dir.dirs.add(name);
       if (!dir.subdirs) dir.subdirs = new Map();
       dir.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+      schedSave();
       print(`Directory created: ${getPromptStr().replace('>','')}\\${name}`);
     },
     touch: (args) => {
@@ -2817,6 +3294,7 @@ function openTerminal(startDir) {
       const dir = fsGetDir(cwd);
       if (dir.files.has(name)) { print(`File already exists: ${name}`); return; }
       dir.files.set(name, '');
+      schedSave();
       print(`Created: ${name}`);
     },
     del: (args) => {
@@ -2842,11 +3320,11 @@ function openTerminal(startDir) {
         const dir = fsGetDir(cwd);
         const upper = raw.toUpperCase();
         if (dir.files.has(raw)) {
-          dir.files.delete(raw); print(`Deleted: ${raw}`);
+          dir.files.delete(raw); schedSave(); print(`Deleted: ${raw}`);
         } else if (dir.blobs.has(raw)) {
-          const b = dir.blobs.get(raw); URL.revokeObjectURL(b.url); dir.blobs.delete(raw); print(`Deleted: ${raw}`);
+          const b = dir.blobs.get(raw); URL.revokeObjectURL(b.url); dir.blobs.delete(raw); removeBlobEntry(cwd, raw); schedSave(); print(`Deleted: ${raw}`);
         } else if (dir.dirs.has(upper)) {
-          dir.dirs.delete(upper); dir.subdirs?.delete(upper); print(`Removed directory: ${upper}`);
+          dir.dirs.delete(upper); dir.subdirs?.delete(upper); schedSave(); print(`Removed directory: ${upper}`);
         } else {
           print(`File not found: ${raw}`);
         }
@@ -2887,7 +3365,7 @@ function openTerminal(startDir) {
         }
       });
       // System files
-      ['WELCOME.README','TERMINAL.EXE','SYSMON.EXE','NOTEPAD.EXE','BROWSER.EXE','DEFRAG.EXE',
+      ['WELCOME.README','TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe',
        'void.tmp','daemon.core              [UNREADABLE]','?????.exe                [DO NOT EXECUTE]'
       ].forEach(n => print(`├── ${n}`));
       // User files
@@ -2960,10 +3438,7 @@ function openTerminal(startDir) {
     cat: (args) => {
       const raw = (args||'').trim();
       const f = raw.toLowerCase();
-      if (f === 'welcome.readme') {
-        print('sleepOS v0.903b2 — WELCOME FILE');
-        print('(open WELCOME.README for full contents)');
-      } else if (f === 'void.tmp') {
+      if (f === 'void.tmp') {
         print('');
         setTimeout(() => { print(''); setTimeout(() => { print('[process terminated]', '#ff4444'); }, 600); }, 400);
       } else if (f === 'daemon.core') {
@@ -3089,6 +3564,7 @@ function openTerminal(startDir) {
         const fname = redirectMatch[2].trim();
         const existing = termFS.files.get(fname) ?? '';
         termFS.files.set(fname, append && existing ? existing + '\n' + content : content);
+        schedSave();
         print(`${append ? 'Appended' : 'Wrote'}: ${fname}`);
         print('');
         return;
@@ -3102,13 +3578,13 @@ function openTerminal(startDir) {
       const EXES = {
         'welcome.readme': () => { print('Opening WELCOME.README...'); setTimeout(openWelcome, 300); },
         'welcome':        () => { print('Opening WELCOME.README...'); setTimeout(openWelcome, 300); },
-        'sysmon.exe':     () => { print('Starting SYSMON.EXE...'); setTimeout(openSysmon, 300); },
-        'sysmon':         () => { print('Starting SYSMON.EXE...'); setTimeout(openSysmon, 300); },
-        'browser.exe':    () => { print('Starting BROWSER.EXE...'); setTimeout(openBrowser, 300); },
-        'browser':        () => { print('Starting BROWSER.EXE...'); setTimeout(openBrowser, 300); },
-        'defrag.exe':     () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
-        'defrag':         () => { print('Starting DEFRAG.EXE...'); setTimeout(openDefrag, 300); },
-        'terminal.exe':   () => { print('TERMINAL.EXE is already running.'); print('You are inside it.'); },
+        'sysmon.exe':     () => { print('Starting SYSMON.exe...'); setTimeout(openSysmon, 300); },
+        'sysmon':         () => { print('Starting SYSMON.exe...'); setTimeout(openSysmon, 300); },
+        'browser.exe':    () => { print('Starting BROWSER.exe...'); setTimeout(openBrowser, 300); },
+        'browser':        () => { print('Starting BROWSER.exe...'); setTimeout(openBrowser, 300); },
+        'defrag.exe':     () => { print('Starting DEFRAG.exe...'); setTimeout(openDefrag, 300); },
+        'defrag':         () => { print('Starting DEFRAG.exe...'); setTimeout(openDefrag, 300); },
+        'terminal.exe':   () => { print('TERMINAL.exe is already running.'); print('You are inside it.'); },
         'notepad.exe':    () => { print('Opening Notepad...'); setTimeout(openNotepad, 300); },
         'notepad':        () => { print('Opening Notepad...'); setTimeout(openNotepad, 300); },
         'explorer.exe':   () => { print('Opening File Explorer...'); setTimeout(openExplorer, 300); },
@@ -3144,7 +3620,7 @@ function openTerminal(startDir) {
 }
 
 function openSysmon() {
-  if (!mkWin({ id:'sysmon', title:'SYSMON.EXE — System Monitor', icon:'📊', w:400, h:310, x:160, y:110 })) return;
+  if (!mkWin({ id:'sysmon', title:'SYSMON.exe — System Monitor', icon:'📊', w:400, h:310, x:160, y:110 })) return;
   const mb = document.getElementById('mb-sysmon');
   mb.innerHTML = `<span class="menu-item">View</span><span class="menu-item">Options</span>`;
 
@@ -3213,7 +3689,7 @@ function openSysmon() {
 }
 
 function openDefrag() {
-  if (!mkWin({ id:'defrag', title:'DEFRAG.EXE — Disk Defragmenter', icon:'🧩', w:560, h:400, x:100, y:60 })) return;
+  if (!mkWin({ id:'defrag', title:'DEFRAG.exe — Disk Defragmenter', icon:'🧩', w:560, h:400, x:100, y:60 })) return;
 
   const mb   = document.getElementById('mb-defrag');
   const body = document.getElementById('wb-defrag');
@@ -3446,9 +3922,9 @@ function openDefrag() {
       { label: 'Exit', action: () => closeWin('defrag') },
     ]},
     { label: 'Help', items: [
-      { label: 'Help Topics', action: () => osAlert('DEFRAG.EXE — Help\n\nClick Start to defragment drive C:\\.\n\nDisk defragmentation rearranges fragmented\ndata so your disk works more efficiently.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
+      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe — Help\n\nClick Start to defragment drive C:\\.\n\nDisk defragmentation rearranges fragmented\ndata so your disk works more efficiently.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
       '-',
-      { label: 'About DEFRAG.EXE', action: () => osAlert('DEFRAG.EXE — Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\n1 file cannot be moved.\nIt has always been there.', 'About DEFRAG.EXE', '🧩') },
+      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe — Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\n1 file cannot be moved.\nIt has always been there.', 'About DEFRAG.exe', '🧩') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -3946,26 +4422,6 @@ function openBrowser() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// SYSTEM ALERTS
-// ─────────────────────────────────────────────────────────────────
-let alertIdx = 0;
-function spawnAlert() {
-  const m = SYSTEM_MSGS[alertIdx % SYSTEM_MSGS.length]; alertIdx++;
-  const id = 'alert-' + Date.now();
-  const dw = document.getElementById('desktop').offsetWidth;
-  const dh = document.getElementById('desktop').offsetHeight;
-  if (!mkWin({ id, title:m.title, icon:m.icon, w:320, h:165,
-               x:60 + Math.random()*(dw-380), y:40 + Math.random()*(dh-200),
-               menubar:false, statusbar:false, popup:true })) return;
-  document.getElementById('wb-' + id).innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon">${m.icon}</div>
-      <div class="dlg-text" style="white-space:pre-line;">${m.text}</div>
-    </div>
-    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${id}')">OK</button></div>`;
-}
-
-// ─────────────────────────────────────────────────────────────────
 // GLITCH EFFECT
 // ─────────────────────────────────────────────────────────────────
 function triggerGlitch() {
@@ -4037,8 +4493,13 @@ It is now safe to turn off your computer.
 function startDesktop() {
   document.getElementById('desktop').style.display = 'block';
   document.getElementById('taskbar').style.display = 'flex';
+  const savedWp = localStorage.getItem(WP_KEY);
+  if (savedWp) applyWallpaper(savedWp);
+  applySettings();
   setupIcons();
 }
 </script>
 </body>
 </html>
+
+
