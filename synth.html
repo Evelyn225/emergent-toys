@@ -17,18 +17,37 @@
     :root {
       --hp: 20px;
       --rack-hp: 70;
+      --row-height: 260px;
+      --kbd-height: 110px;
+      --kbd-black-height: 68px;
       --menu-accent: #ffb14a;
       --menu-accent-strong: #ff7433;
       --menu-text: rgba(255,236,206,0.92);
       --menu-bg: rgba(16,9,5,0.9);
       --menu-border: rgba(255,190,110,0.28);
+      --panel-pad-x: clamp(3px, calc(var(--hp) * 0.3), 6px);
+      --panel-pad-top: clamp(5px, calc(var(--hp) * 0.4), 8px);
+      --panel-pad-bottom: clamp(6px, calc(var(--hp) * 0.5), 10px);
+      --panel-gap: clamp(2px, calc(var(--hp) * 0.2), 4px);
+      --knob-size: clamp(24px, calc(var(--hp) * 1.7), 34px);
+      --knob-small-size: clamp(16px, calc(var(--hp) * 1.25), 26px);
+      --wave-btn-width: clamp(14px, calc(var(--hp) * 1.15), 26px);
+      --wave-btn-height: clamp(14px, calc(var(--hp) * 0.95), 22px);
+      --wave-btn-font-size: clamp(8px, calc(var(--hp) * 0.5), 11px);
+      --jack-size: clamp(12px, calc(var(--hp) * 0.9), 16px);
+      --jack-gap: clamp(2px, calc(var(--hp) * 0.22), 6px);
+      --jack-hit-inset: clamp(4px, calc(var(--hp) * 0.3), 7px);
+      --panel-title-size: clamp(8px, calc(var(--hp) * 0.55), 11px);
+      --knob-label-size: clamp(7px, calc(var(--hp) * 0.45), 9px);
+      --jack-label-size: clamp(6px, calc(var(--hp) * 0.4), 8px);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       margin: 0;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: hidden;
       height: 100vh;
       background:
         radial-gradient(ellipse at 50% 40%, rgba(60,35,10,0.5) 0%, transparent 70%),
@@ -43,12 +62,14 @@
       background-color: #1a0f05;
       font-family: 'IBM Plex Mono', monospace;
       padding-left: 240px;
+      padding-right: 14px;
+      padding-bottom: 12px;
     }
 
-    /* ─── Rack outer frame ─── */
+    /*  Rack outer frame  */
     .rack {
       position: relative;
-      margin: 40px auto 20px;
+      margin: 30px auto 20px;
       width: calc(var(--rack-hp) * var(--hp) + 24px);
       max-width: 99vw;
       background: linear-gradient(180deg, #2a1a0a 0%, #1c1005 40%, #2a1a0a 100%);
@@ -61,7 +82,7 @@
       padding: 10px 12px 12px;
     }
 
-    /* ─── Rail (top and bottom of each row) ─── */
+    /*  Rail (top and bottom of each row)  */
     .rail {
       height: 24px;
       background: linear-gradient(180deg,
@@ -107,17 +128,17 @@
       background: rgba(0,0,0,0.5);
     }
 
-    /* ─── Eurorack row ─── */
+    /*  Eurorack row  */
     .row {
       display: flex;
       gap: 0;
-      min-height: 260px;
+      min-height: var(--row-height);
       width: calc(var(--rack-hp) * var(--hp));
       overflow: hidden;
       flex-wrap: nowrap;
     }
 
-    /* ─── Module panel (faceplate) ─── */
+    /*  Module panel (faceplate)  */
     .panel {
       position: relative;
       flex-shrink: 0;
@@ -126,18 +147,18 @@
         #d4d4d4 65%, #9a9a9a 80%, #c0c0c0 92%, #6a6a6a 100%);
       border-left: 1px solid #505050;
       border-right: 1px solid #505050;
-      padding: 8px 6px 10px;
+      padding: var(--panel-pad-top) var(--panel-pad-x) var(--panel-pad-bottom);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
-      min-height: 260px;
+      gap: var(--panel-gap);
+      min-height: var(--row-height);
     }
     .panel:first-child { border-left: none; }
 
     .panel-title {
       font-family: 'Satoshi', monospace;
-      font-size: 11px;
+      font-size: var(--panel-title-size);
       font-weight: normal;
       color: rgba(20,10,0,0.85);
       text-transform: uppercase;
@@ -148,7 +169,7 @@
       white-space: nowrap;
     }
 
-    /* ─── Knob ─── */
+    /*  Knob  */
     .knob-wrap {
       display: flex;
       flex-direction: column;
@@ -157,8 +178,8 @@
       margin: 3px 0;
     }
     .knob {
-      width: 34px;
-      height: 34px;
+      width: var(--knob-size);
+      height: var(--knob-size);
       border-radius: 50%;
       background: radial-gradient(circle at 35% 30%, #909090, #303030 70%);
       box-shadow:
@@ -170,27 +191,27 @@
       user-select: none;
     }
     .knob.small {
-      width: 26px;
-      height: 26px;
+      width: var(--knob-small-size);
+      height: var(--knob-small-size);
     }
     .knob-pip {
       position: absolute;
       bottom: 50%;
       left: 50%;
-      width: 3px;
-      height: 12px;
+      width: clamp(2px, calc(var(--knob-size) * 0.09), 3px);
+      height: clamp(8px, calc(var(--knob-size) * 0.35), 12px);
       background: rgba(255,240,200,0.9);
       border-radius: 2px 2px 0 0;
       transform-origin: 50% 100%;
       pointer-events: none;
     }
     .knob.small .knob-pip {
-      width: 2px;
-      height: 9px;
+      width: clamp(1px, calc(var(--knob-small-size) * 0.08), 2px);
+      height: clamp(6px, calc(var(--knob-small-size) * 0.34), 9px);
     }
     .knob-label {
       font-family: 'Satoshi', monospace;
-      font-size: 9px;
+      font-size: var(--knob-label-size);
       color: rgba(20,10,0,0.75);
       text-transform: uppercase;
       letter-spacing: 0.06em;
@@ -199,22 +220,22 @@
       white-space: nowrap;
     }
 
-    /* ─── Waveform selector ─── */
+    /*  Waveform selector  */
     .wave-selector {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 3px;
+      gap: clamp(2px, calc(var(--hp) * 0.15), 3px);
       margin: 4px 0;
     }
     .wave-btn {
-      width: 26px;
-      height: 22px;
+      width: var(--wave-btn-width);
+      height: var(--wave-btn-height);
       background: linear-gradient(180deg, #2a2a2a, #1a1a1a);
       border: 1px solid #111;
       border-bottom: 2px solid #0a0a0a;
       border-radius: 3px;
       color: rgba(200,195,180,0.75);
-      font-size: 11px;
+      font-size: var(--wave-btn-font-size);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -235,7 +256,7 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 6px rgba(200,140,30,0.4);
     }
 
-    /* ─── Jack ─── */
+    /*  Jack  */
     .jack-group {
       display: flex;
       flex-direction: column;
@@ -245,7 +266,7 @@
     }
     .jack-row {
       display: flex;
-      gap: 6px;
+      gap: var(--jack-gap);
       align-items: flex-end;
     }
     .jack-wrap {
@@ -255,8 +276,8 @@
       gap: 2px;
     }
     .jack {
-      width: 16px;
-      height: 16px;
+      width: var(--jack-size);
+      height: var(--jack-size);
       border-radius: 50%;
       background: radial-gradient(circle at 40% 35%, #2a2a2a, #111);
       box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), inset 0 0 0 3px;
@@ -264,11 +285,11 @@
       position: relative;
       transition: box-shadow 0.15s;
     }
-    /* Invisible hitbox extension — pseudo-element fires events on .jack */
+    /* Invisible hitbox extension  pseudo-element fires events on .jack */
     .jack::before {
       content: '';
       position: absolute;
-      inset: -7px;
+      inset: calc(-1 * var(--jack-hit-inset));
       border-radius: 50%;
     }
     .jack.input {
@@ -292,7 +313,7 @@
     }
     .jack-label {
       font-family: 'Satoshi', monospace;
-      font-size: 8px;
+      font-size: var(--jack-label-size);
       color: rgba(20,10,0,0.65);
       text-transform: uppercase;
       letter-spacing: 0.04em;
@@ -301,7 +322,7 @@
       white-space: nowrap;
     }
 
-    /* ─── Panel divider ─── */
+    /*  Panel divider  */
     .panel-divider {
       width: 100%;
       height: 1px;
@@ -309,7 +330,7 @@
       margin: 2px 0;
     }
 
-    /* ─── VU meter ─── */
+    /*  VU meter  */
     #vu-canvas {
       display: block;
       border-radius: 3px;
@@ -317,7 +338,7 @@
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
     }
 
-    /* ─── Output volume knob area ─── */
+    /*  Output volume knob area  */
     .output-vol {
       display: flex;
       flex-direction: column;
@@ -325,7 +346,7 @@
       gap: 2px;
     }
 
-    /* ─── Cable canvas ─── */
+    /*  Cable canvas  */
     #cable-canvas {
       position: fixed;
       top: 0; left: 0;
@@ -338,7 +359,7 @@
       cursor: crosshair;
     }
 
-    /* ─── Home button ─── */
+    /*  Home button  */
     #home-btn {
       position: fixed;
       top: 10px; right: 10px;
@@ -358,7 +379,7 @@
       justify-content: center;
     }
 
-    /* ─── Patch info overlay ─── */
+    /*  Patch info overlay  */
     #patch-hint {
       position: fixed;
       bottom: 16px;
@@ -374,10 +395,10 @@
       white-space: nowrap;
     }
 
-    /* ─── Piano keyboard (inside rack panel) ─── */
+    /*  Piano keyboard (inside rack panel)  */
     #keyboard {
       position: relative;
-      height: 110px;
+      height: var(--kbd-height);
       user-select: none;
       margin-top: 4px;
     }
@@ -392,7 +413,7 @@
       background: linear-gradient(180deg, #e8e4dc, #f4f0e8);
       border: 1px solid #888;
       border-top: none;
-      height: 110px;
+      height: var(--kbd-height);
       z-index: 1;
       box-shadow: 0 4px 6px rgba(0,0,0,0.4), inset 0 -2px 3px rgba(0,0,0,0.1);
       display: flex;
@@ -425,7 +446,7 @@
       background: linear-gradient(180deg, #222, #111);
       border: 1px solid #000;
       border-top: none;
-      height: 68px;
+      height: var(--kbd-black-height);
       z-index: 2;
       box-shadow: 0 6px 8px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
     }
@@ -435,12 +456,13 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.8), inset 0 2px 4px rgba(80,120,255,0.4);
     }
 
-    /* ─── Left control menu ─── */
+    /*  Left control menu  */
     #control-menu {
       position: fixed;
       left: 14px;
       top: 14px;
       width: 212px;
+      max-height: calc(100vh - 28px);
       z-index: 850;
       border-radius: 14px;
       border: 1px solid var(--menu-border);
@@ -453,6 +475,7 @@
       padding: 12px;
       display: grid;
       gap: 12px;
+      overflow: hidden;
     }
     .control-menu-head {
       border-bottom: 1px solid rgba(255,185,120,0.14);
@@ -583,7 +606,7 @@
       color: rgba(255,215,170,0.66);
     }
 
-    /* ─── Clear patches button ─── */
+    /*  Clear patches button  */
     #clear-patches-btn {
       border: 1px solid rgba(255,148,118,0.5);
       border-radius: 9px;
@@ -610,7 +633,7 @@
       box-shadow: none;
     }
 
-    /* ─── HP Grid ─── */
+    /*  HP Grid  */
     .hp-25 { width: calc(25 * var(--hp)); flex-shrink: 0; }
     .hp-4  { width: calc(4  * var(--hp)); flex-shrink: 0; }
     .hp-5  { width: calc(5  * var(--hp)); flex-shrink: 0; }
@@ -619,7 +642,7 @@
     .hp-10 { width: calc(10 * var(--hp)); flex-shrink: 0; }
     .hp-22 { width: calc(22 * var(--hp)); flex-shrink: 0; }
 
-    /* ─── Panel drag ─── */
+    /*  Panel drag  */
     .panel { transition: transform 0.12s ease; }
     .panel.dragging-ghost {
       position: fixed; z-index: 900; opacity: 0.9;
@@ -632,11 +655,11 @@
       border: 2px dashed rgba(255,200,100,0.3);
       border-radius: 4px;
       background: rgba(255,200,100,0.04);
-      min-height: 260px;
+      min-height: var(--row-height);
     }
     .panel-title { cursor: grab; }
 
-    /* ─── Close button ─── */
+    /*  Close button  */
     .panel-close {
       position: absolute; top: 3px; right: 3px;
       width: 14px; height: 14px;
@@ -655,7 +678,7 @@
       color: #fff;
     }
 
-    /* ─── Active cable color bands ─── */
+    /*  Active cable color bands  */
     .panel-row-label {
       font-family: 'Satoshi', monospace;
       font-size: 9px;
@@ -669,40 +692,118 @@
       white-space: nowrap;
     }
 
-    @media (max-width: 1500px) {
+    @media (max-width: 1660px) {
       :root { --hp: 18px; }
     }
 
-    @media (max-width: 1320px) {
+    @media (max-width: 1460px) {
       :root { --hp: 16px; }
+      body { padding-left: 220px; }
+      #control-menu { width: 194px; }
     }
 
-    @media (max-width: 1200px) {
+    @media (max-width: 1240px) {
       :root { --hp: 14px; }
-      body { padding-left: 0; }
-      #control-menu {
-        top: 12px;
-        left: 12px;
-        right: 66px;
-        width: auto;
-        max-height: 46vh;
+      body { padding-left: 198px; }
+      #control-menu { width: 172px; padding: 11px; gap: 10px; }
+      #add-module-drawer { gap: 7px; }
+    }
+
+    @media (max-width: 1060px) {
+      :root { --hp: 12px; }
+      body { padding-left: 178px; }
+      #control-menu { width: 152px; padding: 10px; gap: 9px; }
+      #add-module-status { display: none; }
+      #add-module-drawer button .module-name { font-size: 9px; }
+    }
+
+    @media (max-width: 980px) {
+      :root {
+        --hp: 11px;
+        --row-height: 232px;
+        --kbd-height: 98px;
+        --kbd-black-height: 60px;
       }
-      #add-module-drawer { max-height: 24vh; }
-      .rack { margin-top: 280px; }
+      body { padding-left: 0; padding-right: 10px; }
+      #control-menu {
+        top: 10px;
+        left: 10px;
+        right: 56px;
+        width: auto;
+        max-height: 34vh;
+      }
+      #add-module-drawer { max-height: 16vh; }
+      .rack { margin-top: clamp(126px, 22vh, 188px); }
+      #patch-hint {
+        width: 92vw;
+        text-align: center;
+        white-space: normal;
+        line-height: 1.35;
+        bottom: 8px;
+      }
+    }
+
+    @media (max-width: 840px) {
+      :root {
+        --hp: 10px;
+        --row-height: 214px;
+        --kbd-height: 90px;
+        --kbd-black-height: 54px;
+      }
+      #control-menu { max-height: 36vh; }
+      #add-module-drawer { max-height: 18vh; }
+      #clear-patches-btn { font-size: 9px; padding: 8px 10px; }
+    }
+
+    @media (max-width: 720px) {
+      :root {
+        --hp: 9px;
+        --row-height: 198px;
+        --kbd-height: 82px;
+        --kbd-black-height: 48px;
+      }
+      .rack { margin-top: clamp(118px, 24vh, 186px); }
+      #add-module-drawer { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 620px) {
+      :root { --hp: 8px; }
+      #control-menu { max-height: 38vh; }
+      #add-module-drawer { max-height: 20vh; }
+    }
+
+    @media (max-height: 920px) {
+      :root {
+        --row-height: 236px;
+        --kbd-height: 100px;
+        --kbd-black-height: 62px;
+      }
+    }
+
+    @media (max-height: 820px) {
+      :root {
+        --row-height: 210px;
+        --kbd-height: 90px;
+        --kbd-black-height: 54px;
+      }
       #patch-hint { font-size: 10px; bottom: 10px; }
     }
 
-    @media (max-width: 920px) {
-      :root { --hp: 12px; }
-    }
-
-    @media (max-width: 760px) {
-      :root { --hp: 10px; }
-      #control-menu { max-height: 50vh; padding: 10px; }
-      #add-module-drawer button .module-name { font-size: 9px; }
-      #add-module-drawer button .module-hp { font-size: 8px; }
-      #clear-patches-btn { font-size: 9px; padding: 8px 10px; }
-      .rack { margin-top: 290px; }
+    @media (max-height: 740px) {
+      :root {
+        --row-height: 192px;
+        --kbd-height: 80px;
+        --kbd-black-height: 46px;
+      }
+      .rack { margin-top: 18px; }
+      .rail { height: 20px; }
+      .screw {
+        width: 12px;
+        height: 12px;
+      }
+      .panel-title { font-size: 10px; }
+      .jack-label, .knob-label { font-size: 8px; }
+      #patch-hint { display: none; }
     }
   </style>
 </head>
@@ -720,11 +821,11 @@
        alt="home" style="width:18px;height:18px;object-fit:contain;">
 </a>
 
-<div id="patch-hint">drag from output jack → input jack to patch &nbsp;|&nbsp; shift+click cable to move nearest end &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; KBD: keys play notes &nbsp;|&nbsp; FREE: raw signal &nbsp;|&nbsp; MIDI Controllers Supported</div>
+<div id="patch-hint">drag from output jack &rarr; input jack to patch &nbsp;|&nbsp; shift+click cable to move nearest end &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; KBD: keys play notes &nbsp;|&nbsp; FREE: raw signal &nbsp;|&nbsp; MIDI Controllers Supported</div>
 
 <div class="rack" id="rack">
 
-  <!-- ═══ ROW 1 ═══ -->
+  <!-- """ ROW 1 """ -->
   <div class="rail"><div class="rail-screws" id="rail-screws-top-1"></div></div>
   <div class="row" id="row1">
     <!-- VCO 1 -->
@@ -749,10 +850,10 @@
         <div class="knob-label">Level</div>
       </div>
       <div class="wave-selector" data-module="vco1">
-        <div class="wave-btn active" data-wave="sine">∿</div>
-        <div class="wave-btn" data-wave="square">⊓</div>
-        <div class="wave-btn" data-wave="sawtooth">⊿</div>
-        <div class="wave-btn" data-wave="triangle">△</div>
+        <div class="wave-btn active" data-wave="sine">&#8767;</div>
+        <div class="wave-btn" data-wave="square">&#8851;</div>
+        <div class="wave-btn" data-wave="sawtooth">&#8895;</div>
+        <div class="wave-btn" data-wave="triangle">&#9651;</div>
       </div>
       <div class="panel-divider"></div>
       <div class="jack-row">
@@ -789,10 +890,10 @@
         <div class="knob-label">Level</div>
       </div>
       <div class="wave-selector" data-module="vco2">
-        <div class="wave-btn" data-wave="sine">∿</div>
-        <div class="wave-btn" data-wave="square">⊓</div>
-        <div class="wave-btn active" data-wave="sawtooth">⊿</div>
-        <div class="wave-btn" data-wave="triangle">△</div>
+        <div class="wave-btn" data-wave="sine">&#8767;</div>
+        <div class="wave-btn" data-wave="square">&#8851;</div>
+        <div class="wave-btn active" data-wave="sawtooth">&#8895;</div>
+        <div class="wave-btn" data-wave="triangle">&#9651;</div>
       </div>
       <div class="panel-divider"></div>
       <div class="jack-row">
@@ -943,10 +1044,10 @@
         <div class="knob-label">Level</div>
       </div>
       <div class="wave-selector" data-module="lfo">
-        <div class="wave-btn active" data-wave="sine">∿</div>
-        <div class="wave-btn" data-wave="square">⊓</div>
-        <div class="wave-btn" data-wave="sawtooth">⊿</div>
-        <div class="wave-btn" data-wave="triangle">△</div>
+        <div class="wave-btn active" data-wave="sine">&#8767;</div>
+        <div class="wave-btn" data-wave="square">&#8851;</div>
+        <div class="wave-btn" data-wave="sawtooth">&#8895;</div>
+        <div class="wave-btn" data-wave="triangle">&#9651;</div>
       </div>
       <div class="panel-divider"></div>
       <div class="jack-row">
@@ -1021,7 +1122,7 @@
   </div>
   <div class="rail"><div class="rail-screws" id="rail-screws-bot-1"></div></div>
 
-  <!-- ═══ ROW 2 ═══ -->
+  <!-- """ ROW 2 """ -->
   <div class="rail" style="margin-top:8px"><div class="rail-screws" id="rail-screws-top-2"></div></div>
   <div class="row" id="row2">
     <!-- S&H -->
@@ -1324,9 +1425,9 @@
 
 <script>
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // KEYBOARD MODE
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 let keyboardMode = true;
 let keyboardGlideSec = 0.000;
 
@@ -1356,9 +1457,9 @@ function setKeyboardMode(mode) {
   }
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // WEB AUDIO ENGINE
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 let ctx = null;
 const nodes = {};
 let analyser = null;
@@ -1369,7 +1470,7 @@ function initAudio() {
   if (ctx) return;
   ctx = new (window.AudioContext || window.webkitAudioContext)();
 
-  // ── VCO 1 ──
+  //  VCO 1 
   const vco1Osc = ctx.createOscillator();
   vco1Osc.type = 'sine';
   vco1Osc.frequency.value = 220;
@@ -1378,13 +1479,13 @@ function initAudio() {
   vco1Gain.gain.value = 0.8;
   vco1Osc.connect(vco1Gain);
   nodes.vco1 = { osc: vco1Osc, out: vco1Gain, pitchCvGain: null };
-  // pitch CV input: create a gain that scales CV → frequency modulation
+  // pitch CV input: create a gain that scales CV   frequency modulation
   const vco1PitchCv = ctx.createGain();
   vco1PitchCv.gain.value = 200;
   vco1PitchCv.connect(vco1Osc.frequency);
   nodes.vco1.pitchCvGain = vco1PitchCv;
 
-  // ── VCO 2 ──
+  //  VCO 2 
   const vco2Osc = ctx.createOscillator();
   vco2Osc.type = 'sawtooth';
   vco2Osc.frequency.value = 330;
@@ -1398,7 +1499,7 @@ function initAudio() {
   vco2PitchCv.connect(vco2Osc.frequency);
   nodes.vco2.pitchCvGain = vco2PitchCv;
 
-  // ── VCF ──
+  //  VCF 
   const vcfLP = ctx.createBiquadFilter();
   vcfLP.type = 'lowpass';
   vcfLP.frequency.value = 2000;
@@ -1424,12 +1525,12 @@ function initAudio() {
   vcfCvGain.connect(vcfHP.frequency);
   nodes.vcf = { lp: vcfLP, hp: vcfHP, lpOut: vcfLPOut, hpOut: vcfHPOut, cvGain: vcfCvGain, in: vcfIn };
 
-  // ── VCA ──
+  //  VCA 
   const vcaGain = ctx.createGain();
   vcaGain.gain.value = 0.5;
   nodes.vca = { gain: vcaGain };
 
-  // ── ADSR ──
+  //  ADSR 
   // The ADSR drives a ConstantSourceNode which we ramp
   const adsrConst = ctx.createConstantSource();
   adsrConst.offset.value = 0;
@@ -1440,7 +1541,7 @@ function initAudio() {
     gateOn: false
   };
 
-  // ── LFO ──
+  //  LFO 
   const lfoOsc = ctx.createOscillator();
   lfoOsc.type = 'sine';
   lfoOsc.frequency.value = 1;
@@ -1453,7 +1554,7 @@ function initAudio() {
   lfoDepthGain.connect(lfoOutGain);
   nodes.lfo = { osc: lfoOsc, depthGain: lfoDepthGain, out: lfoOutGain };
 
-  // ── Noise (AudioWorklet) ──
+  //  Noise (AudioWorklet) 
   const noiseWhiteOut = ctx.createGain();
   noiseWhiteOut.gain.value = 0.8;
   const noisePinkOut = ctx.createGain();
@@ -1468,7 +1569,7 @@ function initAudio() {
     nodes.noise.pinkSource = pinkNode;
   });
 
-  // ── S&H ──
+  //  S&H 
   const shSigIn  = ctx.createGain();
   const shTrigIn = ctx.createGain();
   const shOut = ctx.createGain();
@@ -1482,7 +1583,7 @@ function initAudio() {
     nodes.sh.node = shNode;
   });
 
-  // ── Mixer ──
+  //  Mixer 
   const mixGains = [1,2,3,4].map(() => {
     const g = ctx.createGain();
     g.gain.value = 0.8;
@@ -1492,9 +1593,9 @@ function initAudio() {
   mixGains.forEach(g => g.connect(mixMerge));
   nodes.mixer = { gains: mixGains, out: mixMerge };
 
-  // ── Ring Mod ──
-  // carrier audio → ringImpl; modulator audio → ringImpl.gain (AudioParam)
-  // output = carrier × modulator (classic ring mod)
+  //  Ring Mod 
+  // carrier audio   ringImpl; modulator audio   ringImpl.gain (AudioParam)
+  // output = carrier  modulator (classic ring mod)
   const ringImpl = ctx.createGain();
   ringImpl.gain.value = 0; // silence until modulator patched
   const ringOut = ctx.createGain();
@@ -1502,7 +1603,7 @@ function initAudio() {
   ringImpl.connect(ringOut);
   nodes.ringmod = { impl: ringImpl, out: ringOut };
 
-  // ── Reverb ──
+  //  Reverb 
   const reverbConv = ctx.createConvolver();
   const reverbWetGain = ctx.createGain();
   reverbWetGain.gain.value = 0.5;
@@ -1520,7 +1621,7 @@ function initAudio() {
   };
   buildIR(2);
 
-  // ── Delay ──
+  //  Delay 
   const delayNode = ctx.createDelay(4);
   delayNode.delayTime.value = 0.3;
   const delayFB = ctx.createGain();
@@ -1540,7 +1641,7 @@ function initAudio() {
   delayDry.connect(delayMix);
   nodes.delay = { in: delayIn, node: delayNode, fb: delayFB, wet: delayWet, dry: delayDry, mix: delayMix };
 
-  // ── Chorus ──
+  //  Chorus 
   const chorusLfoOsc = ctx.createOscillator();
   chorusLfoOsc.type = 'sine';
   chorusLfoOsc.frequency.value = 0.5;
@@ -1571,7 +1672,7 @@ function initAudio() {
   chorusDelR.connect(chorusWetR);
   nodes.chorus = { in: chorusIn, lfo: chorusLfoOsc, depthL: chorusDepthL, depthR: chorusDepthR, wetL: chorusWetL, wetR: chorusWetR };
 
-  // ── Compressor ──
+  //  Compressor 
   const compNode = ctx.createDynamicsCompressor();
   compNode.threshold.value = -24;
   compNode.ratio.value = 4;
@@ -1579,12 +1680,12 @@ function initAudio() {
   compNode.release.value = 0.25;
   nodes.comp = { node: compNode };
 
-  // ── Oscilloscope ──
+  //  Oscilloscope 
   const scopeAnalyser = ctx.createAnalyser();
   scopeAnalyser.fftSize = 512;
   nodes.scope = { analyser: scopeAnalyser };
 
-  // ── Output ──
+  //  Output 
   analyser = ctx.createAnalyser();
   analyser.fftSize = 256;
   const outputVol = ctx.createGain();
@@ -1592,7 +1693,7 @@ function initAudio() {
   outputVol.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.1);
   const outputL = ctx.createGain();
   const outputR = ctx.createGain();
-  // masterGate sits between analyser and outputVol — ADSR controls it
+  // masterGate sits between analyser and outputVol  ADSR controls it
   const masterGate = ctx.createGain();
   if (keyboardMode) {
     masterGate.gain.value = 0; // silent until a key is pressed
@@ -1679,9 +1780,9 @@ async function registerNoiseWorklet() {
   await ctx.audioWorklet.addModule(URL.createObjectURL(pinkBlob));
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // KNOB INTERACTION
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 let activeKnob = null;
 let knobStartY = 0;
 let knobStartVal = 0;
@@ -1860,9 +1961,9 @@ function initWaveSelectors(root) {
   });
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // PATCHING SYSTEM
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 const patches = [];
 let dragging = null; // { fromJack, fromEl, fromPt }
 let mousePos = { x: 0, y: 0 };
@@ -2023,11 +2124,11 @@ document.addEventListener('mouseup', (e) => {
     const toJack = target.dataset.jack;
     const toType = target.dataset.type;
 
-    // Must connect output → input or input → output
+    // Must connect output   input or input   output
     const fromIsOut = dragging.fromType === 'output';
     const toIsIn = toType === 'input';
     if ((fromIsOut && toIsIn) || (!fromIsOut && !toIsIn)) {
-      // ensure output→input ordering
+      // ensure output input ordering
       let outMod, outJack, outEl, inMod, inJack, inEl;
       if (fromIsOut) {
         outMod=dragging.fromMod; outJack=dragging.fromJack; outEl=dragging.fromEl;
@@ -2144,7 +2245,7 @@ function findPatchNearCable(clientX, clientY) {
   return best;
 }
 
-// Right-click any cable segment → remove cable.
+// Right-click any cable segment   remove cable.
 // Must use capture phase because canvas has pointer-events:none normally.
 document.addEventListener('contextmenu', (e) => {
   const hit = findPatchNearCable(e.clientX, e.clientY);
@@ -2153,7 +2254,7 @@ document.addEventListener('contextmenu', (e) => {
   removePatch(hit.idx);
 }, true);
 
-// Shift + mousedown on a cable segment → move whichever end is nearest to click.
+// Shift + mousedown on a cable segment   move whichever end is nearest to click.
 // Capture phase so it intercepts before the jack mousedown handlers.
 document.addEventListener('mousedown', (e) => {
   if (e.button !== 0 || !e.shiftKey) return;
@@ -2183,9 +2284,9 @@ document.addEventListener('mousedown', (e) => {
   canvas.classList.add('dragging');
 }, true);
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // CABLE CANVAS DRAWING
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 const cctx = canvas.getContext('2d');
 
 function resizeCanvas() {
@@ -2264,9 +2365,9 @@ function drawLoop() {
   requestAnimationFrame(drawLoop);
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // VU METER
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 const vuCanvas = document.getElementById('vu-canvas');
 const vuCtx = vuCanvas.getContext('2d');
 
@@ -2279,7 +2380,7 @@ function drawVU() {
     for (const v of buf) peak = Math.max(peak, Math.abs(v - 128) / 128);
 
     const barH = peak * 80;
-    const hue = 120 - peak * 120; // green → red
+    const hue = 120 - peak * 120; // green   red
     const grad = vuCtx.createLinearGradient(0, 80, 0, 0);
     grad.addColorStop(0, `hsl(${hue},100%,50%)`);
     grad.addColorStop(1, `hsl(${hue-40},100%,70%)`);
@@ -2300,11 +2401,11 @@ function drawVU() {
   requestAnimationFrame(drawVU);
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // GATE / NOTE ON/OFF
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 
-// Hold current interpolated value before cancelling — avoids jump-to-last-set pop
+// Hold current interpolated value before cancelling  avoids jump-to-last-set pop
 function smoothCancel(param, now) {
   if (param.cancelAndHoldAtTime) {
     param.cancelAndHoldAtTime(now);
@@ -2471,7 +2572,7 @@ function noteOff(midi) {
   gateOff();
 }
 
-// ─── QWERTY piano key map (GarageBand layout) ───
+//  QWERTY piano key map (GarageBand layout) 
 // Lower octave: Z X C V B N M  /  black: S D G H J
 // Upper octave: Q W E R T Y U I  /  black: 2 3 5 6 7
 const KEY_TO_MIDI = {
@@ -2555,9 +2656,9 @@ document.addEventListener('keyup', (e) => {
 document.addEventListener('mouseup', stopMouseKeyDrag);
 window.addEventListener('blur', resetKeyboardInputState);
 
-// ═══════════════════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 // MIDI INPUT
-// ═══════════════════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 function releaseMidiInputNotes(inputId) {
   const held = midiHeldByInput.get(inputId);
   if (!held) return;
@@ -2637,9 +2738,9 @@ async function initMidiInput() {
   }
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // PIANO KEYBOARD
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 function buildKeyboard() {
   const kb = document.getElementById('keyboard');
   if (!kb) return;
@@ -2724,9 +2825,9 @@ function buildKeyboard() {
   syncKeyboardHighlights();
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // OSCILLOSCOPE
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 const scopeCanvas = document.getElementById('scope-canvas');
 const scopeCtx = scopeCanvas.getContext('2d');
 
@@ -2758,9 +2859,9 @@ function drawScope() {
   requestAnimationFrame(drawScope);
 }
 
-// ═══════════════════════════════════════════════════
-// RAIL SCREWS — refresh after panel changes
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
+// RAIL SCREWS  refresh after panel changes
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 function refreshScrews() {
   const railToRow = {
     'rail-screws-top-1': 'row1',
@@ -2802,9 +2903,9 @@ function refreshScrews() {
   });
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // MODULE INSTANCE TRACKING
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 const instanceCounts = { vco:2, vcf:1, vca:1, adsr:1, lfo:1, noise:1, chorus:1,
   sh:1, mixer:1, ringmod:1, reverb:1, delay:1, comp:1, scope:1, output:1, keyboard:1,
   // types without static panels start at 0 so first added gets key 'type1'
@@ -2819,13 +2920,13 @@ function getRowHP(rowEl) {
   return Array.from(rowEl.querySelectorAll('.panel:not(.panel-placeholder)')).reduce((s, p) => s + (parseInt(p.dataset.hp) || 0), 0);
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // MODULE HTML FACTORIES
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 function vcoHTML(key, defaultFreq) {
   defaultFreq = defaultFreq || 220;
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">VCO</div>
     <div class="knob-wrap">
       <div class="knob" data-module="${key}" data-param="freq" data-min="20" data-max="2000" data-default="${defaultFreq}" data-scale="exp"><div class="knob-pip"></div></div>
@@ -2840,10 +2941,10 @@ function vcoHTML(key, defaultFreq) {
       <div class="knob-label">Level</div>
     </div>
     <div class="wave-selector" data-module="${key}">
-      <div class="wave-btn active" data-wave="sine">∿</div>
-      <div class="wave-btn" data-wave="square">⊓</div>
-      <div class="wave-btn" data-wave="sawtooth">⊿</div>
-      <div class="wave-btn" data-wave="triangle">△</div>
+      <div class="wave-btn active" data-wave="sine">&#8767;</div>
+      <div class="wave-btn" data-wave="square">&#8851;</div>
+      <div class="wave-btn" data-wave="sawtooth">&#8895;</div>
+      <div class="wave-btn" data-wave="triangle">&#9651;</div>
     </div>
     <div class="panel-divider"></div>
     <div class="jack-row">
@@ -2855,7 +2956,7 @@ function vcoHTML(key, defaultFreq) {
 
 function lfoHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">LFO</div>
     <div class="knob-wrap">
       <div class="knob" data-module="${key}" data-param="rate" data-min="0.1" data-max="20" data-default="1" data-scale="exp"><div class="knob-pip"></div></div>
@@ -2870,10 +2971,10 @@ function lfoHTML(key) {
       <div class="knob-label">Level</div>
     </div>
     <div class="wave-selector" data-module="${key}">
-      <div class="wave-btn active" data-wave="sine">∿</div>
-      <div class="wave-btn" data-wave="square">⊓</div>
-      <div class="wave-btn" data-wave="sawtooth">⊿</div>
-      <div class="wave-btn" data-wave="triangle">△</div>
+      <div class="wave-btn active" data-wave="sine">&#8767;</div>
+      <div class="wave-btn" data-wave="square">&#8851;</div>
+      <div class="wave-btn" data-wave="sawtooth">&#8895;</div>
+      <div class="wave-btn" data-wave="triangle">&#9651;</div>
     </div>
     <div class="panel-divider"></div>
     <div class="jack-row">
@@ -2884,7 +2985,7 @@ function lfoHTML(key) {
 
 function vcfHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">VCF</div>
     <div class="knob-wrap">
       <div class="knob" data-module="${key}" data-param="cutoff" data-min="20" data-max="18000" data-default="2000" data-scale="exp"><div class="knob-pip"></div></div>
@@ -2912,7 +3013,7 @@ function vcfHTML(key) {
 
 function reverbHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">Reverb</div>
     <div class="knob-wrap">
       <div class="knob" data-module="${key}" data-param="mix" data-min="0" data-max="1" data-default="0.5" data-scale="lin"><div class="knob-pip"></div></div>
@@ -2932,7 +3033,7 @@ function reverbHTML(key) {
 
 function delayHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">Delay</div>
     <div style="display:flex;gap:4px;justify-content:center">
       <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="time" data-min="0.01" data-max="2" data-default="0.3" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Time</div></div>
@@ -2949,7 +3050,7 @@ function delayHTML(key) {
 
 function chorusHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">Chorus</div>
     <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="rate" data-min="0.1" data-max="8" data-default="0.5" data-scale="exp"><div class="knob-pip"></div></div><div class="knob-label">Rate</div></div>
     <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="depth" data-min="0" data-max="0.012" data-default="0.003" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Depth</div></div>
@@ -2965,7 +3066,7 @@ function chorusHTML(key) {
 
 function mixerHTML(key) {
   return `<div class="panel hp-10" id="mod-${key}" data-hp="10">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">Mixer</div>
     <div style="display:flex;gap:4px;justify-content:center">
       <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="level1" data-min="0" data-max="1.5" data-default="0.8" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">1</div></div>
@@ -2986,7 +3087,7 @@ function mixerHTML(key) {
 
 function compHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">Comp</div>
     <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
       <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="threshold" data-min="-60" data-max="0" data-default="-24" data-scale="lin"><div class="knob-pip"></div></div><div class="knob-label">Thresh</div></div>
@@ -3002,9 +3103,9 @@ function compHTML(key) {
   </div>`;
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // MODULE AUDIO FACTORIES
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 function createVcoAudio(key) {
   const osc = ctx.createOscillator();
   osc.type = 'sine'; osc.frequency.value = 220; osc.start();
@@ -3182,7 +3283,7 @@ function createScopeAudio(key) {
 // HTML factories for missing modules
 function adsrHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">ADSR</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;justify-items:center">
       <div class="knob-wrap"><div class="knob small" data-module="${key}" data-param="attack"  data-min="0.001" data-max="4" data-default="0.01" data-scale="exp"><div class="knob-pip"></div></div><div class="knob-label">A</div></div>
@@ -3200,7 +3301,7 @@ function adsrHTML(key) {
 
 function vcaHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">VCA</div>
     <div class="knob-wrap">
       <div class="knob" data-module="${key}" data-param="gain" data-min="0" data-max="1" data-default="0.5" data-scale="lin"><div class="knob-pip"></div></div>
@@ -3219,7 +3320,7 @@ function vcaHTML(key) {
 
 function noiseHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">Noise</div>
     <div class="knob-wrap">
       <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="0.8" data-scale="lin"><div class="knob-pip"></div></div>
@@ -3235,7 +3336,7 @@ function noiseHTML(key) {
 
 function shHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">S&amp;H</div>
     <div class="knob-wrap">
       <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin"><div class="knob-pip"></div></div>
@@ -3254,7 +3355,7 @@ function shHTML(key) {
 
 function ringmodHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">Ring<br>Mod</div>
     <div class="knob-wrap">
       <div class="knob small" data-module="${key}" data-param="level" data-min="0" data-max="1" data-default="1" data-scale="lin"><div class="knob-pip"></div></div>
@@ -3273,7 +3374,7 @@ function ringmodHTML(key) {
 
 function scopeHTML(key) {
   return `<div class="panel hp-5" id="mod-${key}" data-hp="5">
-    <span class="panel-close" title="Remove">×</span>
+    <span class="panel-close" title="Remove">&times;</span>
     <div class="panel-title">Scope</div>
     <canvas id="scope-canvas-${key}" width="80" height="60" style="display:block;margin:4px auto;border-radius:3px;background:#050a05;box-shadow:inset 0 1px 4px rgba(0,0,0,0.9);"></canvas>
     <div class="panel-divider"></div>
@@ -3283,9 +3384,9 @@ function scopeHTML(key) {
   </div>`;
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // MODULE REGISTRY
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 const MODULE_DEF = {
   vco:     { name:'VCO',      hpClass:'hp-5',  createHTML: k => vcoHTML(k),     createAudio: createVcoAudio },
   vcf:     { name:'VCF',      hpClass:'hp-5',  createHTML: k => vcfHTML(k),     createAudio: createVcfAudio },
@@ -3303,13 +3404,19 @@ const MODULE_DEF = {
   scope:   { name:'Scope',    hpClass:'hp-5',  createHTML: k => scopeHTML(k),   createAudio: createScopeAudio },
 };
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // ADD / REMOVE MODULE
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 const rowEls = () => Array.from(document.querySelectorAll('.row'));
 const MAX_HP = 70;
-const HP_PX = 20; // matches --hp CSS variable
-
+function getHpPx(rowEl) {
+  if (rowEl) {
+    const rect = rowEl.getBoundingClientRect();
+    if (rect.width > 0) return rect.width / MAX_HP;
+  }
+  const cssHp = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hp'));
+  return Number.isFinite(cssHp) && cssHp > 0 ? cssHp : 20;
+}
 function addModule(type) {
   const inst = createModuleInstance(type);
   if (!inst) return;
@@ -3385,7 +3492,7 @@ function initCloseButtons(root) {
       const btn = document.createElement('span');
       btn.className = 'panel-close';
       btn.title = 'Remove';
-      btn.textContent = '×';
+      btn.textContent = '\u00D7';
       panel.insertBefore(btn, panel.firstChild);
     }
   });
@@ -3398,9 +3505,9 @@ function initCloseButtons(root) {
   });
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // ADD MODULE MENU
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 function buildAddMenu() {
   const drawer = document.getElementById('add-module-drawer');
   if (!drawer) return;
@@ -3419,9 +3526,9 @@ function buildAddMenu() {
   });
 }
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // PANEL DRAG SYSTEM
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 let panelDrag = null;
 let menuSpawnIntent = null;
 
@@ -3442,7 +3549,8 @@ function startSpawnModuleDrag(type, clientX, clientY) {
   measureHost.appendChild(panelEl);
   document.body.appendChild(measureHost);
   const rect = panelEl.getBoundingClientRect();
-  const width = rect.width || (hpCost * HP_PX);
+  const hpPx = getHpPx();
+  const width = rect.width || (hpCost * hpPx);
   const height = rect.height || 260;
   measureHost.remove();
 
@@ -3539,7 +3647,8 @@ document.addEventListener('mousemove', (e) => {
 
   // HP-grid snapping: find insertion point by HP accumulation from row left
   const rowRect = bestRow.getBoundingClientRect();
-  const mouseHP = Math.max(0, e.clientX - rowRect.left) / HP_PX;
+  const hpPx = getHpPx(bestRow);
+  const mouseHP = Math.max(0, e.clientX - rowRect.left) / hpPx;
   const rowPanels = Array.from(bestRow.querySelectorAll('.panel:not(.panel-placeholder)'));
   let accHP = 0, insertBefore = null;
   for (const p of rowPanels) {
@@ -3574,9 +3683,9 @@ document.addEventListener('mouseup', (e) => {
   }
 }, true);
 
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 // INIT
-// ═══════════════════════════════════════════════════
+// """""""""""""""""""""""""""""""""""""""""""""""""""
 initKnobs();
 initWaveSelectors();
 initJacks();
