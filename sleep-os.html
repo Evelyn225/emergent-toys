@@ -598,6 +598,102 @@ body {
 .tok-var { color: #001080; }
 .tok-hdr { color: #0000cc; font-weight: bold; }
 
+/* ── Registry Editor ─────────────────────────────────────────── */
+.reg-layout { display:flex; height:100%; overflow:hidden; }
+.reg-tree {
+  width:200px; min-width:120px; flex-shrink:0;
+  border-right:2px solid; border-color:#808080 #fff #fff #808080;
+  background:#fff; overflow:auto; padding:2px; font-size:11px;
+  user-select:none;
+}
+.reg-tree-item {
+  display:flex; align-items:center; gap:2px;
+  padding:1px 2px; cursor:default; white-space:nowrap;
+  border:1px solid transparent;
+}
+.reg-tree-item:hover { background:rgba(0,0,128,0.1); }
+.reg-tree-item.selected { background:#000080; color:#fff; }
+.reg-tree-arrow { width:10px; flex-shrink:0; text-align:center; font-size:9px; }
+.reg-tree-icon { flex-shrink:0; }
+.reg-vals {
+  flex:1; overflow:auto; background:#fff; font-size:11px;
+}
+.reg-vals-table { width:100%; border-collapse:collapse; }
+.reg-vals-table thead th {
+  background:#c0c0c0; border-bottom:1px solid #808080;
+  padding:2px 6px; text-align:left; position:sticky; top:0;
+  border-right:1px solid #808080; cursor:default; user-select:none;
+}
+.reg-val-row { cursor:default; }
+.reg-val-row:hover td { background:rgba(0,0,128,0.1); }
+.reg-val-row.selected td { background:#000080; color:#fff; }
+.reg-val-row td { padding:1px 6px; border-right:1px solid #e0e0e0; }
+
+/* ── Calculator ───────────────────────────────────────────────── */
+.calc-body {
+  background:#c0c0c0; padding:6px; display:flex; flex-direction:column; gap:4px;
+  user-select:none; height:100%; box-sizing:border-box;
+}
+.calc-display {
+  background:#fff; border:2px solid; border-color:#808080 #fff #fff #808080;
+  padding:3px 6px; font-size:16px; text-align:right; font-family: var(--sleep-font);
+  min-height:24px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+}
+.calc-mode-row { display:flex; gap:4px; font-size:10px; }
+.calc-mode-btn {
+  padding:1px 6px; cursor:default; border:1px solid; border-color:#fff #808080 #808080 #fff;
+  background:#c0c0c0; font-size:10px; font-family:inherit;
+}
+.calc-mode-btn.active { background:#000080; color:#fff; border-color:#808080 #fff #fff #808080; }
+.calc-grid { display:grid; gap:3px; flex:1; }
+.calc-btn {
+  background:#c0c0c0; border:2px solid; border-color:#fff #808080 #808080 #fff;
+  font-size:12px; font-family:var(--sleep-font); cursor:default;
+  display:flex; align-items:center; justify-content:center;
+  min-height:22px; padding:0 2px;
+}
+.calc-btn:active { border-color:#808080 #fff #fff #808080; }
+.calc-btn.op { background:#d4d0c8; }
+.calc-btn.equals { background:#000080; color:#fff; }
+.calc-btn.clear { background:#c04040; color:#fff; }
+
+/* ── Alt+Tab overlay ──────────────────────────────────────────── */
+#alttab-overlay {
+  display:none; position:fixed; inset:0; z-index:99990;
+  background:rgba(0,0,0,0.6); align-items:center; justify-content:center;
+}
+#alttab-overlay.active { display:flex; }
+#alttab-box {
+  background:#c0c0c0; border:2px solid; border-color:#fff #808080 #808080 #fff;
+  padding:10px; display:flex; flex-wrap:wrap; gap:8px; max-width:80vw;
+  box-shadow:2px 2px 0 #000;
+}
+.alttab-item {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:6px 8px; cursor:default; border:2px solid transparent;
+  min-width:64px;
+}
+.alttab-item.focused { border-color:#000080; background:rgba(0,0,128,0.15); }
+.alttab-item .at-icon { font-size:24px; }
+.alttab-item .at-label { font-size:10px; text-align:center; max-width:72px; word-break:break-word; }
+
+/* ── Ctrl+Alt+Del overlay ─────────────────────────────────────── */
+#cad-overlay {
+  display:none; position:fixed; inset:0; z-index:99991;
+  background:rgba(0,0,0,0.7); align-items:center; justify-content:center;
+}
+#cad-overlay.active { display:flex; }
+#cad-box {
+  background:#c0c0c0; border:2px solid; border-color:#fff #808080 #808080 #fff;
+  width:320px; box-shadow:2px 2px 0 #000;
+}
+#cad-title {
+  background:linear-gradient(to right,#000080,#1084d0); color:#fff;
+  padding:3px 6px; font-size:11px; font-weight:bold;
+}
+#cad-body { padding:14px 16px; font-size:11px; line-height:1.7; }
+#cad-btns { display:flex; gap:8px; justify-content:center; padding:8px; border-top:1px solid #d0d0d0; }
+
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 14px; }
@@ -650,6 +746,28 @@ body {
 
 <!-- Drop overlay -->
 <div id="drop-overlay">📁 Drop files to upload to sleepOS</div>
+
+<!-- Alt+Tab overlay -->
+<div id="alttab-overlay">
+  <div id="alttab-box"></div>
+</div>
+
+<!-- Ctrl+Alt+Del overlay -->
+<div id="cad-overlay">
+  <div id="cad-box">
+    <div id="cad-title">sleepOS Security</div>
+    <div id="cad-body">
+      <b>Secure Attention Sequence received.</b><br><br>
+      What would you like to do?
+    </div>
+    <div id="cad-btns">
+      <button class="dlg-btn" onclick="cadAction('lock')">🔒 Lock</button>
+      <button class="dlg-btn" onclick="cadAction('taskmgr')">📊 Task Manager</button>
+      <button class="dlg-btn" onclick="cadAction('shutdown')">⏻ Shut Down</button>
+      <button class="dlg-btn" onclick="closeCad()">Cancel</button>
+    </div>
+  </div>
+</div>
 <input id="file-upload-input" type="file" accept="image/*,video/*,audio/*,text/*,.script,.txt,.md,.csv,.json,.xml,.html,.css,.js" multiple style="display:none">
 
 <!-- Desktop -->
@@ -689,8 +807,18 @@ body {
     <div class="sm-item" onclick="closeStart();openSysmon()">
       <span class="sm-icon">📊</span><span>System Monitor</span>
     </div>
+    <div class="sm-item" onclick="closeStart();openCalculator()">
+      <span class="sm-icon">🔢</span><span>Calculator</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();openRegedit()">
+      <span class="sm-icon">🗝️</span><span>Registry Editor</span>
+    </div>
     <div class="sm-item" onclick="closeStart();openSettings()">
       <span class="sm-icon">&#9881;&#65039;</span><span>Settings</span>
+    </div>
+    <div class="sm-sep"></div>
+    <div class="sm-item" onclick="closeStart();openRunDialog()">
+      <span class="sm-icon">▶</span><span>Run... <span style="opacity:0.55;font-size:9px;">Win+R</span></span>
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="window.location='index.html'">
@@ -737,11 +865,17 @@ const DESKTOP_ICONS = [
   { name: 'TERMINAL.exe',   emoji: '💻', action: 'openTerminal' },
   { name: 'SYSMON.exe',     emoji: '📊', action: 'openSysmon' },
   { name: 'BROWSER.exe',    emoji: '🌐', action: 'openBrowser' },
-  { name: 'DEFRAG.exe',    emoji: '🧩', action: 'openDefrag' },
-  { name: 'daemon.core',   emoji: '👁️',  action: 'openDaemon' },
+  { name: 'DEFRAG.exe',     emoji: '🧩', action: 'openDefrag' },
+  { name: 'CALC.exe',       emoji: '🔢', action: 'openCalculator' },
+  { name: 'REGEDIT.exe',    emoji: '🗝️', action: 'openRegedit' },
+  { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
 ];
+const SYSTEM_FILE_ICONS = DESKTOP_ICONS.reduce((icons, { name, emoji }) => {
+  icons[name.toUpperCase()] = emoji;
+  return icons;
+}, Object.create(null));
 
 const DESKTOP_SHORTCUTS_KEY = 'sleepOS-desktop-shortcuts';
 const customDesktopIcons = [];
@@ -799,6 +933,9 @@ function openSystemFile(name) {
     'NOTEPAD.exe': openNotepad,
     'BROWSER.exe': openBrowser,
     'DEFRAG.exe': openDefrag,
+    'CALC.exe': openCalculator,
+    'REGEDIT.exe': openRegedit,
+    'EXPLORER.exe': openExplorer,
     'void.tmp': openVoid,
     'daemon.core': openDaemon,
     '?????.exe': openUnknown,
@@ -874,6 +1011,72 @@ if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
 const SETTINGS_KEY = 'sleepOS-settings';
 const osSettings = { crtScanlines: true, videoDither: true, clock12h: false, skipBoot: false };
 try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
+
+// ── Registry data ─────────────────────────────────────────────────
+const REG_KEY = 'sleepOS-registry';
+const registryData = {
+  'HKEY_SLEEPBOX_MACHINE': {
+    'SYSTEM\\CurrentConfig': {
+      CRT_SCANLINES:      { type:'REG_DWORD', value: 1 },
+      VIDEO_DITHER:       { type:'REG_DWORD', value: 1 },
+      CLOCK_FORMAT:       { type:'REG_SZ',    value: '24h' },
+    },
+    'SOUL\\Metrics': {
+      SOUL_INTEGRITY:     { type:'REG_DWORD', value: 87 },
+      DAEMON_COUNT:       { type:'REG_DWORD', value: 7  },
+      TEMPORAL_DRIFT:     { type:'REG_SZ',    value: '+/-2.3yr' },
+    },
+    'VOID': {
+      VOID_PRESSURE_BASE: { type:'REG_DWORD', value: 12 },
+      OBSERVER_COUNT:     { type:'REG_SZ',    value: '[classified]' },
+    },
+  },
+  'HKEY_CURRENT_USER': {
+    'Desktop': {
+      Wallpaper:          { type:'REG_SZ',    value: 'default' },
+    },
+    'SOFTWARE\\sleepOS': {
+      SkipBoot:           { type:'REG_DWORD', value: 0 },
+    },
+  },
+};
+try {
+  const saved = JSON.parse(localStorage.getItem(REG_KEY) || 'null');
+  if (saved) {
+    Object.keys(saved).forEach(hive => {
+      if (!registryData[hive]) return;
+      Object.keys(saved[hive]).forEach(path => {
+        if (!registryData[hive][path]) return;
+        Object.keys(saved[hive][path]).forEach(key => {
+          if (registryData[hive][path][key]) registryData[hive][path][key].value = saved[hive][path][key].value;
+        });
+      });
+    });
+  }
+} catch(e) {}
+function saveRegistry() {
+  const out = {};
+  Object.keys(registryData).forEach(hive => {
+    out[hive] = {};
+    Object.keys(registryData[hive]).forEach(path => {
+      out[hive][path] = {};
+      Object.keys(registryData[hive][path]).forEach(key => {
+        out[hive][path][key] = { value: registryData[hive][path][key].value };
+      });
+    });
+  });
+  try { localStorage.setItem(REG_KEY, JSON.stringify(out)); } catch(e) {}
+}
+function applyRegistrySettings() {
+  const cc = registryData['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
+  const cu = registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'];
+  osSettings.crtScanlines = !!cc.CRT_SCANLINES.value;
+  osSettings.videoDither   = !!cc.VIDEO_DITHER.value;
+  osSettings.clock12h      = cc.CLOCK_FORMAT.value === '12h';
+  osSettings.skipBoot      = !!cu.SkipBoot.value;
+  saveSettings();
+  applySettings();
+}
 
 // ─────────────────────────────────────────────────────────────────
 // WALLPAPERS
@@ -1233,7 +1436,7 @@ const termFS = {
     dirs: new Set(), blobs: new Map(), subdirs: new Map(),
     files: new Map([
       ['README.txt', [
-        '== sleepOS Filesystem — README ==',
+        '== sleepOS v0.9β — README ==',
         '',
         'ROOT: C:\\sleepOS',
         '  DOCS\\      — documentation (this folder)',
@@ -1242,6 +1445,7 @@ const termFS = {
         'SYSTEM FILES (read-only):',
         '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
         '  SYSMON.exe  BROWSER.exe  DEFRAG.exe',
+        '  CALC.exe  REGEDIT.exe  EXPLORER.exe',
         '  void.tmp  daemon.core  ?????.exe',
         '',
         'USER FILES:',
@@ -1250,13 +1454,27 @@ const termFS = {
         '  New items go into your current folder.',
         '',
         'TERMINAL (quick ref):',
-        '  DIR / LS      list files',
-        '  CD <dir>      enter folder  |  CD ..  go up',
-        '  CAT <file>    read file',
-        '  TOUCH <file>  create file',
-        '  MKDIR <dir>   create folder',
-        '  DEL <file>    delete',
+        '  DIR / LS          list files',
+        '  CD <dir>          enter folder  |  CD ..  go up',
+        '  CAT <file>        read file',
+        '  TOUCH <file>      create file',
+        '  MKDIR <dir>       create folder',
+        '  DEL <file>        delete',
+        '  GREP <pat> <file> search lines matching pattern',
+        '  WC <file>         word/line/byte count',
+        '  LS *.txt          wildcard file listing',
+        '  CAT f | GREP pat  pipe output between commands',
         '',
+        'KEYBOARD SHORTCUTS:',
+        '  Alt+F4            close focused window',
+        '  Alt+Tab           cycle open windows',
+        '  Ctrl+Alt+Del      secure attention sequence',
+        '  Win / Meta        toggle Start Menu',
+        '  Win+R             Run dialog',
+        '  F5                refresh desktop',
+        '  Escape            close menus / overlays',
+        '',
+        'See COMMANDS.txt for full terminal reference.',
         'See SCRIPTING.txt for the .script language.',
       ].join('\n')],
       ['SCRIPTING.txt', [
@@ -1280,6 +1498,7 @@ const termFS = {
         '  start <program>    launch a program',
         '  notepad [file]     open Notepad',
         '  run <script>       run another script',
+        '  grep <pattern> <file> print lines matching pattern',
         '',
         '── VARIABLES ────────────────────────────────',
         '',
@@ -1313,7 +1532,8 @@ const termFS = {
         '── PROGRAMS FOR start/open ──────────────────',
         '',
         '  notepad, terminal, sysmon, browser,',
-        '  defrag, explorer, welcome',
+        '  defrag, explorer, welcome,',
+        '  calc, regedit',
       ].join('\n')],
       ['COMMANDS.txt', [
         '== Terminal Commands Reference ==',
@@ -1339,6 +1559,9 @@ const termFS = {
         '  NOTEPAD [file]       text editor',
         '  START <name>         start any program',
         '  EXIT                 close terminal',
+        '  CALC                 open calculator',
+        '  REGEDIT              open registry editor',
+        '  EXPLORER             open file explorer',
         '',
         '── SYSTEM ───────────────────────────────────',
         '  VER                  OS version',
@@ -1352,6 +1575,22 @@ const termFS = {
         '  ECHO <text>          print text',
         '  CLS                  clear screen',
         '  HELP                 this help',
+        '',
+        '── SEARCH & PIPES ───────────────────────────',
+        '  GREP <pattern> <file>  find matching lines',
+        '  WC <file>              word/line/byte count',
+        '  LS *.ext               wildcard glob listing',
+        '  DEL *.tmp              wildcard delete',
+        '  CAT f | GREP pattern   pipe output to command',
+        '',
+        '── KEYBOARD SHORTCUTS ───────────────────────',
+        '  Alt+F4        close focused window',
+        '  Alt+Tab       cycle open windows',
+        '  Ctrl+Alt+Del  secure attention sequence',
+        '  Win / Meta    toggle Start Menu',
+        '  Win+R         open Run dialog',
+        '  F5            refresh desktop',
+        '  Escape        close menus / overlays',
       ].join('\n')],
     ]),
   }]]),
@@ -1665,6 +1904,18 @@ function applySettings() {
   if (crt) crt.style.display = osSettings.crtScanlines ? '' : 'none';
   document.querySelectorAll('.vp-dither').forEach(d => d.style.display = osSettings.videoDither ? '' : 'none');
   updateClock();
+  // Keep registry in sync with settings
+  if (typeof registryData !== 'undefined') {
+    const cc = registryData['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
+    const cu = registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'];
+    if (cc) {
+      cc.CRT_SCANLINES.value = osSettings.crtScanlines ? 1 : 0;
+      cc.VIDEO_DITHER.value  = osSettings.videoDither  ? 1 : 0;
+      cc.CLOCK_FORMAT.value  = osSettings.clock12h ? '12h' : '24h';
+    }
+    if (cu) cu.SkipBoot.value = osSettings.skipBoot ? 1 : 0;
+    saveRegistry();
+  }
 }
 
 document.addEventListener('fs-changed', refreshAppearanceWindow);
@@ -2558,6 +2809,14 @@ function makeDesktopIconEl(ic) {
       })});
     } else {
       items.push({ label: 'Open', action: activate });
+      // Lore / decompiler shortcuts for single icons
+      const icName = ic.name || '';
+      if (['daemon.core','void.tmp'].includes(icName)) {
+        items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
+      }
+      if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
+        items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
+      }
     }
     if (selIcs.some(i => i.custom)) {
       items.push('-');
@@ -2731,6 +2990,8 @@ Programs:
   BROWSER.exe   \u2014 web browser
   SYSMON.exe    \u2014 system monitor
   DEFRAG.exe    \u2014 disk defragmenter
+  CALC.exe      \u2014 calculator
+  REGEDIT.exe   \u2014 registry editor
 
 Files:
   Right-click the desktop or any folder to create
@@ -2738,7 +2999,6 @@ Files:
   Everything persists within your session.
 
 Known issues:
-  [!] Clock drift is intentional
   [!] void.tmp cannot be read, deleted, or ignored
   [!] ?????.exe should not be executed
   [!] Something is watching this session
@@ -2864,6 +3124,70 @@ function highlight(text, lang) {
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
+function openDecompilerView(filename) {
+  const id = 'decompile-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: '\u2699\uFE0F', w:500, h:360 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const content = getExeDecompilerContent(filename);
+
+  // Read-only display with syntax highlighting (asm-like)
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'flex:1;overflow:auto;background:#fff;padding:8px;font-family:var(--sleep-font);font-size:11px;line-height:1.7;white-space:pre;';
+
+  // Basic asm-style syntax coloring
+  function highlightAsm(text) {
+    return text.split('\n').map(line => {
+      const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (esc.trimStart().startsWith(';')) return '<span style="color:#6a9955;font-style:italic;">' + esc + '</span>';
+      const opcodes = /\b(PUSH|CALL|MOV|CMP|JE|JZ|JNE|JNZ|JLE|JL|JG|JGE|JMP|TEST|SUB|ADD|AND|OR|XOR|LEA|RET|NOP|HLT)\b/g;
+      const colored = esc.replace(opcodes, m => '<span style="color:#0000cc;font-weight:bold;">' + m + '</span>');
+      return colored.replace(/\b(0x[0-9A-Fa-f]+)\b/g, '<span style="color:#098658;">$1</span>')
+                    .replace(/\b(DD|DB|DQ|DW|RESB|RESW|RESD|dup)\b/g, '<span style="color:#dd4400;">$1</span>');
+    }).join('\n');
+  }
+
+  wrap.innerHTML = highlightAsm(content);
+  body.appendChild(wrap);
+
+  if (ws) ws.textContent = filename + '  \u2014  Read-only  |  Decompiler View';
+
+  if (mb) {
+    const fileSpan = document.createElement('span');
+    fileSpan.className = 'menu-item'; fileSpan.textContent = 'File';
+    fileSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      showDropdown(fileSpan, [
+        { label: 'Close', action: () => closeWin(id) },
+      ]);
+    });
+    mb.appendChild(fileSpan);
+    const viewSpan = document.createElement('span');
+    viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+    viewSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      showDropdown(viewSpan, [
+        { label: 'Copy All', action: () => navigator.clipboard?.writeText(content) },
+      ]);
+    });
+    mb.appendChild(viewSpan);
+  }
+}
+
+function openLoreNotepad(filename, content, title, icon) {
+  const id = 'lore-' + (filename || '').replace(/\W/g,'_');
+  if (!mkWin({ id, title: title + ' \u2014 Notepad', icon: icon || '📝', w:440, h:320, menubar:false, statusbar:false })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;';
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'background:#fff;padding:8px;margin:0;height:100%;overflow:auto;font-family:var(--sleep-font);font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-word;';
+  pre.textContent = content;
+  body.appendChild(pre);
+}
+
 function runScriptInPopup(name, source) {
   const id = 'script-out-' + Date.now();
   if (!mkWin({ id, title: name + ' — Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
@@ -2977,13 +3301,261 @@ function openSaveDialog(defaultName, callback) {
   setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
-function openNotepad(filename, dirName) {
+// Lore-ified pseudo-bytecode for .exe decompiler view
+function getExeDecompilerContent(fname) {
+  const name = (fname || '').toLowerCase();
+  const base = fname.replace(/\.exe$/i,'').toUpperCase();
+  const loreMap = {
+    'terminal.exe': [
+      '; TERMINAL.exe — Disassembly v1.0',
+      'section .text',
+      '  PUSH soul_daemon',
+      '  CALL obsv.sys',
+      '  MOV  eax, [STDIN_HANDLE]',
+      '  CMP  eax, 0x00000000',
+      '  JE   void_fallback',
+      '  CALL parse_command',
+      '  JMP  main_loop',
+      'void_fallback:',
+      '  MOV  [VOID_PRESSURE], 0xFF',
+      '  RET',
+      '; NOTE: 3 subroutines unresolved',
+      '; CALL 0xDEAD???? — target unknown',
+    ],
+    'sysmon.exe': [
+      '; SYSMON.exe — Disassembly',
+      'section .data',
+      '  soul_integrity  DD 0x57',
+      '  daemon_count    DD 0x07',
+      '  observer_ref    DD [CLASSIFIED]',
+      'section .text',
+      '  PUSH soul_integrity',
+      '  CALL read_corpus_metrics',
+      '  MOV  eax, [soul_integrity]',
+      '  SUB  eax, 0x01',
+      '  JLE  integrity_critical',
+      '  CALL update_display',
+      '  JMP  tick_loop',
+      'integrity_critical:',
+      '  CALL emit_warning',
+      '  PUSH 0xDEAD',
+      '  RET',
+    ],
+    'browser.exe': [
+      '; BROWSER.exe — Disassembly',
+      'section .rodata',
+      '  home_url  DB "sleep://home", 0',
+      '  err_msg   DB "site blocked by void", 0',
+      'section .text',
+      '  MOV  esi, home_url',
+      '  CALL resolve_sleep_addr',
+      '  TEST eax, eax',
+      '  JZ   frame_blocked',
+      '  CALL render_page',
+      '  JMP  event_loop',
+      'frame_blocked:',
+      '  PUSH err_msg',
+      '  CALL show_error',
+      '  ; observer may intercept traffic here',
+      '  RET',
+    ],
+    'defrag.exe': [
+      '; DEFRAG.exe — Disassembly',
+      'section .bss',
+      '  corpus_blocks RESB 640',
+      '  void_fragment DB [CANNOT RESOLVE]',
+      'section .text',
+      '  MOV  ecx, 0x280',
+      '  LEA  edi, [corpus_blocks]',
+      '  CALL scan_fragments',
+      '  MOV  eax, [void_fragment]',
+      '  CMP  eax, 0x00',
+      '  JNE  skip_void',
+      '  ; void_fragment cannot be moved',
+      '  ; it has always been here',
+      'skip_void:',
+      '  CALL compact_corpus',
+      '  JMP  defrag_loop',
+    ],
+    'notepad.exe': [
+      '; NOTEPAD.exe — Disassembly',
+      'section .data',
+      '  welcome_readme DB "WELCOME.README", 0',
+      '  null_text      DD 0x00',
+      'section .text',
+      '  MOV  esi, welcome_readme',
+      '  CALL fs_open_read',
+      '  TEST eax, eax',
+      '  JZ   open_blank',
+      '  CALL load_text_buffer',
+      '  JMP  editor_loop',
+      'open_blank:',
+      '  MOV  [text_buffer], null_text',
+      '  CALL init_editor',
+      '  RET',
+    ],
+    'explorer.exe': [
+      '; EXPLORER.exe — Disassembly',
+      'section .data',
+      '  root_path DB "C:\\sleepOS\\", 0',
+      '  sys_files DD 9',
+      'section .text',
+      '  PUSH root_path',
+      '  CALL enumerate_fs',
+      '  MOV  ecx, sys_files',
+      '  CALL add_system_entries',
+      '  ; 1 entry cannot be enumerated',
+      '  ; see: ?????.exe',
+      '  CALL render_icon_grid',
+      '  JMP  window_loop',
+    ],
+    'calc.exe': [
+      '; CALC.exe — Disassembly',
+      'section .data',
+      '  display_buf DB 32 dup(0)',
+      '  soul_pi     DQ 3.14159265358979',
+      'section .text',
+      '  MOV  eax, 0x00',
+      '  MOV  [accumulator], eax',
+      '  CALL init_display',
+      '  JMP  calc_loop',
+      'calc_loop:',
+      '  CALL wait_keypress',
+      '  CALL eval_operation',
+      '  PUSH [accumulator]',
+      '  CALL update_display',
+      '  JMP  calc_loop',
+      '; NOTE: division by zero returns VOID',
+    ],
+    'regedit.exe': [
+      '; REGEDIT.exe — Disassembly',
+      'section .data',
+      '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
+      '  soul_key  DB "SOUL\\Metrics", 0',
+      'section .text',
+      '  PUSH hive_root',
+      '  CALL open_registry_hive',
+      '  MOV  esi, soul_key',
+      '  CALL reg_open_key',
+      '  CALL enumerate_values',
+      '  ; WARNING: OBSERVER_COUNT is classified',
+      '  ; ACCESS DENIED for key VOID\\',
+      '  CALL render_tree',
+      '  JMP  edit_loop',
+    ],
+  };
+  const specific = loreMap[name];
+  if (specific) return specific.join('\n');
+  return [
+    '; ' + base + ' — Disassembly',
+    '; File type: WIN32 PE (sleepOS compatible)',
+    '',
+    'section .data',
+    '  entry_point DD 0x' + Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4,'0'),
+    '  build_stamp DD 0x' + Math.floor(Math.random()*0xFFFFFFFF).toString(16).toUpperCase().padStart(8,'0'),
+    '',
+    'section .text',
+    '  PUSH soul_daemon',
+    '  CALL obsv.sys',
+    '  MOV  eax, [entry_point]',
+    '  CALL eax',
+    '  CMP  eax, 0',
+    '  JNZ  execution_error',
+    '  RET',
+    'execution_error:',
+    '  PUSH 0xDEADC0DE',
+    '  CALL void_handler',
+    '  JMP  0x0000',
+    '',
+    '; [decompiler: 1 function unresolved]',
+  ].join('\n');
+}
+
+// Lore content for daemon.core and void.tmp
+const DAEMON_CORE_CONTENT =
+`[DAEMON CORE — raw read attempt]
+
+This file is being written.
+It is always being written.
+
+Fragment recovered at offset 0x0000:
+  owner    : SYSTEM\\???
+  type     : persistent observer
+  priority : ABOVE_KERNEL
+  started  : before system boot
+  status   : ACTIVE
+
+Fragment recovered at offset 0x00FF:
+  watching : all active processes
+  watching : all inactive processes
+  watching : this file
+
+Fragment recovered at offset 0x01FE:
+  [UNREADABLE — data still being written]
+  [UNREADABLE — data still being written]
+  [UNREADABLE — data still being written]
+
+Do not attempt to modify this file.
+You cannot. It is already modified.
+`;
+
+function getVoidTmpContent() {
+  // Intentionally garbled lore content
+  const glyphs = '▒░█▓╬╫╪╩╦╠═╬─┼│┤├┼╣╠╦╩╗╔╝╚║';
+  const noise = () => {
+    let s = '';
+    const len = 8 + Math.floor(Math.random() * 20);
+    for (let i = 0; i < len; i++) s += glyphs[Math.floor(Math.random() * glyphs.length)];
+    return s;
+  };
+  return [
+    noise(),
+    '',
+    noise() + '  e m p t y  ' + noise(),
+    '',
+    noise(),
+    '             ' + noise(),
+    '',
+    '  [content redacted — void pressure: ' + (12 + Math.floor(Math.random()*88)) + ']',
+    '',
+    noise() + '  or not  ' + noise(),
+    '',
+    noise(),
+    noise(),
+    '',
+    '                    ' + noise(),
+    '',
+    '  [this file cannot be read]',
+    '  [this file cannot be ignored]',
+    '  [this file is already open]',
+  ].join('\n');
+}
+
+function openNotepad(filename, dirName, options) {
+  options = options || {};
+  // Special handling for .exe files — decompiler view (read-only)
+  const normalizedName = (filename || '').toLowerCase();
+  const isExe = normalizedName.endsWith('.exe');
+  const isDaemonCore = normalizedName === 'daemon.core';
+  const isVoidTmp = normalizedName === 'void.tmp';
+
+  if (isExe && filename) {
+    return openDecompilerView(filename);
+  }
+  if (isDaemonCore) {
+    return openLoreNotepad(filename, DAEMON_CORE_CONTENT, 'daemon.core — [RAW READ]', '👁️');
+  }
+  if (isVoidTmp) {
+    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp — [GARBLED]', '⬛');
+  }
+
   const entry = filename ? fsGetEntry(filename, dirName) : null;
   const { dirName: initialDir, fileName } = fsSplitPath(filename, dirName);
   const pathKey = filename ? ((initialDir ? initialDir + '\\' : '') + fileName) : String(++_notepadCount);
   const id = 'notepad-' + pathKey.replace(/\W/g,'_');
   const displayName = fileName || 'untitled.txt';
-  const initial = entry && entry.kind === 'text' ? entry.value : '';
+  const hasInitialContent = Object.prototype.hasOwnProperty.call(options, 'initialContent');
+  const initial = hasInitialContent ? String(options.initialContent ?? '') : entry && entry.kind === 'text' ? entry.value : '';
   if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
 
   const body = document.getElementById('wb-' + id);
@@ -3281,18 +3853,8 @@ function openExplorer(startPath) {
     if (kind === 'video') return '\u{1F3AC}';
     if (kind === 'audio') return '\u{1F3B5}';
     if (kind === 'dir') return '\u{1F4C1}';
-    const NAME_ICONS = {
-      'TERMINAL.exe': '\u{1F4BB}',
-      'SYSMON.exe': '\u{1F4CA}',
-      'NOTEPAD.exe': '\u{1F4DD}',
-      'BROWSER.exe': '\u{1F310}',
-      'DEFRAG.exe': '\u{1F9E9}',
-      'WELCOME.README': '\u{1F4C4}',
-      'void.tmp': '\u2B1B',
-      'daemon.core': '\u{1F441}\uFE0F',
-      '?????.exe': '?',
-    };
-    if (NAME_ICONS[name]) return NAME_ICONS[name];
+    const systemIcon = SYSTEM_FILE_ICONS[String(name).toUpperCase()];
+    if (systemIcon) return systemIcon;
     const ext = (name.split('.').pop() || '').toLowerCase();
     return {
       exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
@@ -3546,10 +4108,14 @@ function openExplorer(startPath) {
       const canDelete = getDeletableSelectedItems().length > 0;
       const isScript = !!singleSelected && !singleSelected.sysfile && singleSelected.name.toLowerCase().endsWith('.script');
       const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && singleSelected.kind === 'image';
+      const isLoreFile = !!singleSelected && ['daemon.core','void.tmp'].includes(singleSelected.name);
+      const isExeFile  = !!singleSelected && singleSelected.name.toLowerCase().endsWith('.exe');
       showCtxMenu(e.clientX, e.clientY, [
         multi
           ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(i => openItem(i.name, i.kind, i.sysfile)) }
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(name, kind, sysfile) },
+        ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
+        ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(wallpaperFileId(singleSelected.name, cwd)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {
           const dir = fsGetDir(cwd);
@@ -3652,7 +4218,7 @@ function openExplorer(startPath) {
       ['DOCS', ...termFS.dirs].filter((value, index, array) => array.indexOf(value) === index).forEach(dirName => {
         if (dirName !== 'PROJECTS') items.push({ name:dirName, kind:'dir', sysfile:false });
       });
-      const sysFileNames = new Set(['WELCOME.README','TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe','void.tmp','daemon.core','?????.exe']);
+      const sysFileNames = new Set(['WELCOME.README','TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','void.tmp','daemon.core','?????.exe']);
       sysFileNames.forEach(name => items.push({ name, kind:'file', sysfile:true }));
       termFS.files.forEach((_, name) => { if (!sysFileNames.has(name)) items.push({ name, kind:'file', sysfile:false }); });
       termFS.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
@@ -3848,6 +4414,453 @@ function openTerminal(startDir) {
 
   updatePrompt(); // set prompt correctly if startDir was given
 
+  function unquoteShellValue(value) {
+    const trimmed = String(value ?? '').trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+      return trimmed.slice(1, -1).replace(/\\(["'])/g, '$1');
+    }
+    return trimmed;
+  }
+
+  function getCommandParts(segment) {
+    const trimmed = String(segment || '').trim();
+    if (!trimmed) return { cmd: '', args: '' };
+    const sp = trimmed.search(/\s/);
+    return sp === -1
+      ? { cmd: trimmed.toLowerCase(), args: '' }
+      : { cmd: trimmed.slice(0, sp).toLowerCase(), args: trimmed.slice(sp + 1).trim() };
+  }
+
+  function splitUnquoted(text, delimiter) {
+    const parts = [];
+    let quote = null;
+    let start = 0;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quote) {
+        if (ch === quote && text[i - 1] !== '\\') quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+      if (ch === delimiter) {
+        parts.push(text.slice(start, i));
+        start = i + 1;
+      }
+    }
+    parts.push(text.slice(start));
+    return parts;
+  }
+
+  function findLastUnquotedRedirect(text) {
+    let quote = null;
+    let found = null;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quote) {
+        if (ch === quote && text[i - 1] !== '\\') quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+      if (ch === '>') {
+        const op = text[i + 1] === '>' ? '>>' : '>';
+        found = { index: i, op };
+        if (op === '>>') i++;
+      }
+    }
+    return found;
+  }
+
+  function parseShellLine(text) {
+    const trimmed = String(text || '').trim();
+    if (!trimmed) return null;
+    const redirect = findLastUnquotedRedirect(trimmed);
+    let commandText = trimmed;
+    let redirectOp = null;
+    let redirectTarget = '';
+    if (redirect) {
+      commandText = trimmed.slice(0, redirect.index).trim();
+      redirectOp = redirect.op;
+      redirectTarget = trimmed.slice(redirect.index + redirect.op.length).trim();
+    }
+    return {
+      stages: splitUnquoted(commandText, '|').map(part => part.trim()).filter(Boolean),
+      redirectOp,
+      redirectTarget,
+    };
+  }
+
+  function expandGlob(pattern) {
+    const dir = fsGetDir(cwd);
+    if (!dir) return [pattern];
+    const allNames = [...dir.files.keys(), ...dir.blobs.keys()];
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+    const re = new RegExp('^' + escaped + '$', 'i');
+    const matches = allNames.filter(n => re.test(n));
+    return matches.length ? matches : [pattern];
+  }
+
+  function buildHelpLines() {
+    return [
+      'Available commands:',
+      '  HELP                — show this help',
+      '  DIR, LS             — list directory',
+      '  CD [path]           — change directory',
+      '  MKDIR [name]        — create a directory',
+      '  TOUCH [name]        — create empty file',
+      '  ECHO [text]         — print text',
+      '  DEL, RM [file]      — delete a file or directory',
+      '  COPY [src] [dst]    — copy a file',
+      '  MOVE, MV            — move a file',
+      '  TYPE, CAT [file]    — read file contents',
+      '  GREP <pattern> [f]  — filter a file or piped text',
+      '  WC [file]           — count lines, words, bytes',
+      '  TREE                — directory tree',
+      '  PS                  — list running processes',
+      '  TASKKILL [pid]      — terminate a process',
+      '  IPCONFIG            — network configuration',
+      '  SET                 — show environment variables',
+      '  PING [host]         — ping a host',
+      '  VER                 — show OS version',
+      '  WHO, WHOAMI         — current user info',
+      '  DATE                — system date',
+      '  CLS                 — clear screen',
+      '  OPEN [file]         — open a file (image/video in viewer, text in editor)',
+      '  RUN <file>          — execute a .script file',
+      '  NOTEPAD [file]      — open Notepad (optionally open a file)',
+      '  START [program]     — run an executable or project',
+      '  EXIT                — close terminal',
+      '',
+      'Pipes and redirection:',
+      '  DIR | GREP txt',
+      '  CAT README.txt | NOTEPAD',
+      '  DIR > listing.txt',
+      '  CAT README.txt | GREP TODO >> notes.txt',
+      '',
+      'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
+      '',
+      'You can also type executables directly:',
+      '  notepad.exe, sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
+      '  or any project name (try: fireworks, fluid, ...)',
+    ];
+  }
+
+  function buildDirLines(args) {
+    const targetArg = (args || '').trim();
+    if (targetArg && /[*?]/.test(targetArg)) return expandGlob(targetArg);
+    const targetCwd = targetArg ? targetArg.toUpperCase() : cwd;
+    const dir = fsGetDir(targetCwd);
+    if (!dir) throw new Error(`Directory not found: ${args}`);
+    const path = targetCwd ? `C:\\sleepOS\\${targetCwd}` : 'C:\\sleepOS';
+    const now = new Date();
+    const ds = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()}`;
+    const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const lines = [
+      'Volume in drive C is CORPUS',
+      'Volume Serial Number is DEAD-C0DE',
+      '',
+      `Directory of ${path}`,
+      '',
+    ];
+    if (!targetCwd) {
+      [
+        `11/13/2024  10:31    <DIR>    .`,
+        `11/13/2024  10:31    <DIR>    ..`,
+        `11/13/2024  10:31    <DIR>    DOCS`,
+        `11/13/2024  10:31    <DIR>    PROJECTS`,
+        `11/13/2024  10:31      623    WELCOME.README`,
+        `11/13/2024  10:31    4,096    NOTEPAD.exe`,
+        `11/13/2024  10:31    4,096    TERMINAL.exe`,
+        `11/13/2024  10:31    8,192    SYSMON.exe`,
+        `11/13/2024  10:31    8,192    BROWSER.exe`,
+        `11/13/2024  10:31    8,192    DEFRAG.exe`,
+        `11/13/2024  10:31    4,096    CALC.exe`,
+        `11/13/2024  10:31    8,192    REGEDIT.exe`,
+        `11/13/2024  10:31    8,192    EXPLORER.exe`,
+        `11/13/2024  03:17        0    void.tmp`,
+        `11/13/2024  ??:??       ??    daemon.core`,
+        `11/13/2024  ??:??       ??    ?????.exe`,
+      ].forEach(line => lines.push(line));
+      termFS.dirs.forEach(d => { if (d !== 'DOCS') lines.push(`${ds}  ${ts}    <DIR>    ${d}`); });
+      termFS.files.forEach((c, n) => lines.push(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
+      termFS.blobs.forEach((b, n) => lines.push(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+    } else {
+      dir.dirs.forEach(d => lines.push(`${ds}  ${ts}    <DIR>    ${d}`));
+      dir.files.forEach((c, n) => lines.push(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
+      dir.blobs.forEach((b, n) => lines.push(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+      if (dir.files.size + dir.blobs.size + dir.dirs.size === 0) lines.push('  (empty directory)');
+    }
+    lines.push('');
+    return lines;
+  }
+
+  function buildPsLines() {
+    const lines = [
+      '  PID   CPU    MEM   PROCESS',
+      '  ---   ---    ---   -------',
+    ];
+    [
+      ['0001', '0.0%', ' 2.1%', 'System Idle'],
+      ['0004', '0.3%', ' 4.8%', 'kernel.exe'],
+      ['0088', '1.2%', '12.4%', 'sleep_gui.exe'],
+      ['0112', '0.8%', ' 8.3%', 'dream_fragment.exe'],
+      ['0247', '3.1%', '22.7%', 'noise_engine.exe'],
+      ['0333', '0.0%', ' 0.1%', 'UNKNOWN'],
+      ['0334', '0.0%', ' 0.1%', 'UNKNOWN'],
+      ['0335', '0.0%', ' 0.1%', 'UNKNOWN'],
+      ['0512', '7.4%', '31.2%', 'soul_daemon.exe'],
+      ['0999', '0.0%', '  ???', 'void.exe'],
+    ].forEach(([pid, cpu, mem, name]) => lines.push(`  ${pid}  ${cpu}  ${mem}  ${name}`));
+    return lines;
+  }
+
+  function buildVerLines() {
+    return [
+      'sleepOS Version 0.9β (Build 2024.11.13-EXPERIMENTAL)',
+      'Soul Architecture: SOMA-686  /  Corpus Mode: ACTIVE',
+    ];
+  }
+
+  function buildWhoLines() {
+    return [
+      'Current user : VISITOR\\UNKNOWN',
+      'Domain       : sleepOS.CORPUS',
+      'Session ID   : 0x' + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6, '0'),
+      'Observers    : unknown (cannot enumerate)',
+    ];
+  }
+
+  function buildDateLines() {
+    const now = new Date();
+    return [
+      'System date: ' + now.toDateString(),
+      'NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.',
+    ];
+  }
+
+  function buildSetLines() {
+    return [
+      'COMPUTERNAME=SOMA-686',
+      'USERNAME=VISITOR',
+      'OS=sleepOS 0.9b2',
+      'SOUL_INTEGRITY=87',
+      'DAEMON_COUNT=7',
+      'DAEMON_KNOWN=4',
+      'TEMPORAL_DRIFT=+/-2.3yr',
+      'VOID_PRESSURE=12',
+      'OBSERVER_COUNT=[classified]',
+      'PATH=C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+    ];
+  }
+
+  function buildIpconfigLines() {
+    return [
+      'sleepOS IP Configuration',
+      '',
+      'Adapter: SOMA-686 NIC',
+      '  Connection-specific DNS  : corpus.internal',
+      '  IPv4 Address             : 0.0.0.0',
+      '  Subnet Mask              : 255.255.255.???',
+      '  Default Gateway          : [unreachable]',
+      '  DNS Servers              : unknown (responding)',
+      '',
+      'Adapter: VOID Interface',
+      '  Status                   : Connected',
+      '  Address                  : [cannot be expressed]',
+      '  Packets in               : ∞',
+      '  Packets out              : 0',
+    ];
+  }
+
+  function buildTreeLines() {
+    const lines = ['C:\\sleepOS', '├── DOCS\\'];
+    const docs = fsGetDir('DOCS');
+    [...docs.files.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
+    termFS.dirs.forEach(d => {
+      if (d === 'DOCS') return;
+      lines.push(`├── ${d}\\`);
+      const sub = termFS.subdirs?.get(d);
+      if (sub) {
+        [...sub.files.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
+        [...sub.blobs.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
+      }
+    });
+    ['WELCOME.README', 'TERMINAL.exe', 'SYSMON.exe', 'NOTEPAD.exe', 'BROWSER.exe', 'DEFRAG.exe',
+     'CALC.exe', 'REGEDIT.exe', 'EXPLORER.exe', 'void.tmp',
+     'daemon.core              [UNREADABLE]', '?????.exe                [DO NOT EXECUTE]'
+    ].forEach(n => lines.push(`├── ${n}`));
+    termFS.files.forEach((_, n) => lines.push(`├── ${n}`));
+    termFS.blobs.forEach((b, n) => lines.push(`├── ${n}  [${b.kind}]`));
+    lines.push('└── PROJECTS\\');
+    lines.push('    ├── sand playground');
+    lines.push('    ├── fireworks');
+    lines.push('    ├── ... (more objects)');
+    lines.push('    └── [1 object cannot be listed]');
+    return lines;
+  }
+
+  function getPipeableText(path) {
+    const entry = fsGetEntry(path, cwd);
+    if (!entry) throw new Error('File not found: ' + path);
+    if (entry.kind === 'blob') {
+      return [
+        `Binary file: ${entry.fileName} (${entry.value.kind}, ${fmtSize(entry.value.size)})`,
+        `Use OPEN ${entry.fileName} to view it.`,
+      ];
+    }
+    return entry.value ? entry.value.split('\n') : [];
+  }
+
+  async function buildPingLines(args) {
+    const host = (args || 'evenet.fun').trim().replace(/^https?:\/\//i, '').replace(/[/?#].*$/, '');
+    const lines = [`Pinging ${host} with 32 bytes of data:`];
+    const times = [];
+    let received = 0;
+    for (let i = 0; i < 4; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 1000));
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const t0 = performance.now();
+      try {
+        await fetch(`https://${host}/`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+        clearTimeout(tid);
+        const ms = Math.round(performance.now() - t0);
+        times.push(ms);
+        received++;
+        lines.push(`Reply from ${host}: bytes=32 time=${ms}ms TTL=57`);
+      } catch (e) {
+        clearTimeout(tid);
+        lines.push(`Request timeout for ${host}.`);
+      }
+    }
+    lines.push('');
+    lines.push(`Ping statistics for ${host}:`);
+    const lost = 4 - received;
+    lines.push(`  Packets: Sent = 4, Received = ${received}, Lost = ${lost} (${Math.round(lost / 4 * 100)}% loss)`);
+    if (times.length) {
+      lines.push(`Approximate round trip times: Min=${Math.min(...times)}ms  Max=${Math.max(...times)}ms  Avg=${Math.round(times.reduce((a, b) => a + b) / times.length)}ms`);
+    }
+    return lines;
+  }
+
+  async function runPipeStage(cmd, args, stdinLines) {
+    if (cmd === 'echo') return args ? [unquoteShellValue(args)] : [''];
+    if (cmd === 'help') return buildHelpLines();
+    if (cmd === 'dir' || cmd === 'ls') return buildDirLines(args);
+    if (cmd === 'ps') return buildPsLines();
+    if (cmd === 'ver') return buildVerLines();
+    if (cmd === 'who' || cmd === 'whoami') return buildWhoLines();
+    if (cmd === 'date') return buildDateLines();
+    if (cmd === 'set') return buildSetLines();
+    if (cmd === 'ipconfig') return buildIpconfigLines();
+    if (cmd === 'tree') return buildTreeLines();
+    if (cmd === 'ping') return buildPingLines(args);
+    if (cmd === 'cat' || cmd === 'type') {
+      if (args) return getPipeableText(args.trim());
+      if (Array.isArray(stdinLines)) return stdinLines.slice();
+      throw new Error('Usage: CAT [file]');
+    }
+    if (cmd === 'grep') {
+      const match = String(args || '').trim().match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)(?:\s+(.+))?$/);
+      if (!match) throw new Error('Usage: GREP <pattern> [file]');
+      const pattern = unquoteShellValue(match[1]);
+      const target = match[2] ? unquoteShellValue(match[2]) : '';
+      let re;
+      try { re = new RegExp(pattern, 'i'); } catch (e) { throw new Error('Invalid regex: ' + pattern); }
+      const sourceLines = target ? getPipeableText(target) : Array.isArray(stdinLines) ? stdinLines.slice() : null;
+      if (!sourceLines) throw new Error('Usage: GREP <pattern> [file]');
+      return sourceLines.filter(line => re.test(line));
+    }
+    if (cmd === 'wc') {
+      let sourceText = '';
+      let label = '';
+      if (args && args.trim()) {
+        const target = unquoteShellValue(args);
+        const entry = fsGetEntry(target, cwd);
+        if (!entry || entry.kind !== 'text') throw new Error('File not found: ' + target);
+        sourceText = entry.value;
+        label = '  ' + entry.fileName;
+      } else if (Array.isArray(stdinLines)) {
+        sourceText = stdinLines.join('\n');
+      } else {
+        throw new Error('Usage: WC [file]');
+      }
+      const lines = sourceText ? sourceText.split('\n').length : 0;
+      const words = sourceText.trim() ? sourceText.trim().split(/\s+/).length : 0;
+      const bytes = new TextEncoder().encode(sourceText).length;
+      return [`  ${String(lines).padStart(6)}  ${String(words).padStart(6)}  ${String(bytes).padStart(6)}${label}`];
+    }
+    return null;
+  }
+
+  function writePipelineOutput(targetPath, lines, append) {
+    const normalizedTarget = unquoteShellValue(targetPath);
+    if (!normalizedTarget) throw new Error('Missing redirect target.');
+    const existing = fsGetEntry(normalizedTarget, cwd);
+    if (existing && existing.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
+    const output = lines.join('\n');
+    const existingText = existing && existing.kind === 'text' ? existing.value : '';
+    const nextValue = append
+      ? (existingText && output ? existingText + '\n' + output : existingText + output)
+      : output;
+    const saved = fsWriteTextFile(normalizedTarget, nextValue, cwd);
+    if (!saved) throw new Error('Cannot write file: ' + normalizedTarget);
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+    return saved;
+  }
+
+  async function tryExecutePipeline(raw) {
+    const parsed = parseShellLine(raw);
+    if (!parsed || (!parsed.redirectOp && parsed.stages.length < 2)) return false;
+    if (!parsed.stages.length) {
+      print('Invalid command pipeline.', '#ff4444');
+      print('');
+      return true;
+    }
+    try {
+      let stream = null;
+      let consumedBySink = false;
+      for (let i = 0; i < parsed.stages.length; i++) {
+        const { cmd, args } = getCommandParts(parsed.stages[i]);
+        if (!cmd) throw new Error('Invalid command pipeline.');
+        const isLastStage = i === parsed.stages.length - 1;
+        if (isLastStage && (cmd === 'notepad' || cmd === 'notepad.exe')) {
+          const content = Array.isArray(stream) ? stream.join('\n') : '';
+          const target = args.trim();
+          if (target) {
+            const saved = writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
+            print(`Opening ${saved.fileName} in Notepad...`);
+            setTimeout(() => openNotepad(saved.fileName, saved.dirName), 300);
+          } else {
+            print('Opening piped output in Notepad...');
+            setTimeout(() => openNotepad(undefined, cwd, { initialContent: content }), 300);
+          }
+          consumedBySink = true;
+          break;
+        }
+        const result = await runPipeStage(cmd, args, stream);
+        if (!result) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
+        stream = result;
+      }
+      if (parsed.redirectOp) {
+        if (consumedBySink) throw new Error('Cannot redirect output after piping into Notepad.');
+        const saved = writePipelineOutput(parsed.redirectTarget, Array.isArray(stream) ? stream : [], parsed.redirectOp === '>>');
+        print(`${parsed.redirectOp === '>>' ? 'Appended' : 'Wrote'}: ${saved.fileName}`);
+      } else if (!consumedBySink) {
+        (stream || []).forEach(line => print(line));
+      }
+    } catch (err) {
+      print(err.message || String(err), '#ff4444');
+    }
+    print('');
+    return true;
+  }
+
   const CMDS = {
     help: () => {
       [
@@ -3857,7 +4870,7 @@ function openTerminal(startDir) {
         '  CD [path]       — change directory',
         '  MKDIR [name]    — create directory',
         '  TOUCH [name]    — create empty file',
-        '  ECHO text>file  — write text to file (>> to append)',
+        '  cmd > file      — redirect command output (>> to append)',
         '  DEL, RM [file]  — delete a file or directory',
         '  COPY [src] [dst]— copy a file',
         '  MOVE, MV        — move a file',
@@ -3877,6 +4890,7 @@ function openTerminal(startDir) {
         '  OPEN [file]     — open a file (image/video in viewer, text in editor)',
         '  RUN <file>      — execute a .script file',
         '  NOTEPAD [file]  — open Notepad (optionally open a file)',
+        '  cmd | NOTEPAD   — open piped output in Notepad',
         '  START [program] — run an executable or project',
         '  EXIT            — close terminal',
         '',
@@ -4268,10 +5282,39 @@ function openTerminal(startDir) {
       print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
       setTimeout(() => openNotepad(fname || undefined, cwd), 300);
     },
+    grep: (args) => {
+      if (!args) { print('Usage: GREP <pattern> <file>'); return; }
+      const parts = args.match(/^("(?:[^"\\]|\\.)*"|[^\s]+)\s+(.+)$/);
+      if (!parts) { print('Usage: GREP <pattern> <file>'); return; }
+      const pattern = parts[1].replace(/^"|"$/g,'');
+      const fname = parts[2].trim();
+      let re;
+      try { re = new RegExp(pattern, 'i'); } catch(e) { print('Invalid regex: ' + pattern, '#ff4444'); return; }
+      const dir = fsGetDir(cwd);
+      if (!dir || !dir.files.has(fname)) { print('File not found: ' + fname); return; }
+      const lines = dir.files.get(fname).split('\n');
+      let matches = 0;
+      lines.forEach((line, i) => {
+        if (re.test(line)) { print((i+1) + ':' + line); matches++; }
+      });
+      if (matches === 0) print('(no matches)');
+      else print('\n' + matches + ' match' + (matches !== 1 ? 'es' : '') + ' found');
+    },
+    wc: (args) => {
+      const fname = (args || '').trim();
+      if (!fname) { print('Usage: WC <file>'); return; }
+      const dir = fsGetDir(cwd);
+      if (!dir || !dir.files.has(fname)) { print('File not found: ' + fname); return; }
+      const content = dir.files.get(fname);
+      const lines = content.split('\n').length;
+      const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+      const bytes = new TextEncoder().encode(content).length;
+      print(`  ${String(lines).padStart(6)}  ${String(words).padStart(6)}  ${String(bytes).padStart(6)}  ${fname}`);
+    },
     exit: () => closeWin('terminal'),
   };
 
-  inp.addEventListener('keydown', (e) => {
+  inp.addEventListener('keydown', async (e) => {
     if (e.key === 'ArrowUp') {
       if (histIdx < cmdHistory.length - 1) histIdx++;
       inp.value = cmdHistory[cmdHistory.length - 1 - histIdx] || '';
@@ -4284,6 +5327,7 @@ function openTerminal(startDir) {
       const raw = inp.value.trim(); inp.value = ''; histIdx = -1;
       print(getPromptStr() + ' ' + raw);
       if (raw) { cmdHistory.push(raw); if (cmdHistory.length > 50) cmdHistory.shift(); }
+      if (await tryExecutePipeline(raw)) return;
 
       // Handle echo text > filename redirection
       const redirectMatch = raw.match(/^echo\s+(.*?)\s*>>\s*(.+)$/i) || raw.match(/^echo\s+(.*?)\s*>\s*(.+)$/i);
@@ -4299,9 +5343,75 @@ function openTerminal(startDir) {
         return;
       }
 
+      // Helper: expand wildcards against current dir
+      function expandGlob(pattern) {
+        const dir = fsGetDir(cwd);
+        if (!dir) return [pattern];
+        const allNames = [...dir.files.keys(), ...dir.blobs.keys()];
+        const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g,'.*').replace(/\?/g,'.');
+        const re = new RegExp('^' + escaped + '$', 'i');
+        const matches = allNames.filter(n => re.test(n));
+        return matches.length ? matches : [pattern];
+      }
+
+      // Handle pipe: cmd1 | cmd2
+      const pipeIdx = raw.indexOf('|');
+      if (pipeIdx !== -1 && !raw.startsWith('echo')) {
+        const left  = raw.slice(0, pipeIdx).trim();
+        const right = raw.slice(pipeIdx + 1).trim();
+        // Capture left command output
+        const captured = [];
+        const capturePrint = (text) => captured.push(String(text || ''));
+        const lParts = left.split(/\s+/);
+        const lCmd = lParts[0].toLowerCase();
+        const lArgs = lParts.slice(1).join(' ');
+        if (CMDS[lCmd]) CMDS[lCmd](lArgs, capturePrint);
+        else capturePrint('Unknown command: ' + lCmd);
+
+        // Feed captured output to right command
+        const rParts = right.split(/\s+/);
+        const rCmd = rParts[0].toLowerCase();
+        const rArgs = rParts.slice(1).join(' ');
+
+        if (rCmd === 'grep') {
+          // grep pattern — filter captured lines
+          const pattern = rArgs.trim().replace(/^"|"$/g,'');
+          let re2;
+          try { re2 = new RegExp(pattern, 'i'); } catch(e2) { print('Invalid regex: ' + pattern, '#ff4444'); print(''); return; }
+          let matches = 0;
+          captured.forEach(line => { if (re2.test(line)) { print(line); matches++; } });
+          if (matches === 0) print('(no matches)');
+          else print('\n' + matches + ' match' + (matches !== 1 ? 'es' : '') + ' found');
+        } else if (rCmd === 'wc') {
+          const joined = captured.join('\n');
+          const lines = captured.length;
+          const words = joined.trim() ? joined.trim().split(/\s+/).length : 0;
+          const bytes = new TextEncoder().encode(joined).length;
+          print('  ' + String(lines).padStart(6) + '  ' + String(words).padStart(6) + '  ' + String(bytes).padStart(6));
+        } else {
+          print('Pipe target not supported: ' + rCmd, '#ff4444');
+        }
+        print('');
+        return;
+      }
+
       const parts = raw.split(/\s+/);
       const cmd = parts[0].toLowerCase();
-      const args = parts.slice(1).join(' ');
+      let args = parts.slice(1).join(' ');
+
+      // Wildcard expansion for ls/dir and del/rm
+      if ((cmd === 'ls' || cmd === 'dir') && args.includes('*')) {
+        const expanded = expandGlob(args.trim());
+        expanded.forEach(f => print('  ' + f));
+        print('');
+        return;
+      }
+      if ((cmd === 'del' || cmd === 'rm') && args.includes('*')) {
+        const expanded = expandGlob(args.trim());
+        expanded.forEach(f => CMDS.del(f));
+        print('');
+        return;
+      }
 
       // Executable lookup table
       const EXES = {
@@ -4332,7 +5442,7 @@ function openTerminal(startDir) {
       );
 
       if (!cmd) { /* nothing */ }
-      else if (CMDS[cmd]) { CMDS[cmd](args); }
+      else if (CMDS[cmd]) { await CMDS[cmd](args); }
       else if (EXES[cmd]) { EXES[cmd](); }
       else if (project) {
         print(`Launching ${project.name}...`);
@@ -5219,6 +6329,626 @@ It is now safe to turn off your computer.
     else window.close();
   }, 3200);
 }
+
+// ─────────────────────────────────────────────────────────────────
+// REGISTRY EDITOR
+// ─────────────────────────────────────────────────────────────────
+function openRegedit() {
+  if (!mkWin({ id:'regedit', title:'Registry Editor', icon:'🗝️', w:580, h:380, x:90, y:70 })) return;
+  const body = document.getElementById('wb-regedit');
+  const ws   = document.getElementById('ws-regedit');
+  const mb   = document.getElementById('mb-regedit');
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const layout = document.createElement('div');
+  layout.className = 'reg-layout';
+  body.appendChild(layout);
+
+  // ── Tree panel ─────────────────────────────────────────────────
+  const tree = document.createElement('div');
+  tree.className = 'reg-tree';
+  layout.appendChild(tree);
+
+  // ── Values panel ───────────────────────────────────────────────
+  const vals = document.createElement('div');
+  vals.className = 'reg-vals';
+  layout.appendChild(vals);
+
+  let selectedPath = null; // { hive, key }
+
+  function buildTree() {
+    tree.innerHTML = '';
+    Object.keys(registryData).forEach(hive => {
+      const hiveEl = document.createElement('div');
+      hiveEl.style.cssText = 'margin-bottom:1px;';
+
+      const hiveRow = document.createElement('div');
+      hiveRow.className = 'reg-tree-item';
+      hiveRow.innerHTML = '<span class="reg-tree-arrow">▶</span><span class="reg-tree-icon">📁</span>&nbsp;<span>' + hive + '</span>';
+      let expanded = false;
+      const childWrap = document.createElement('div');
+      childWrap.style.paddingLeft = '12px';
+      childWrap.style.display = 'none';
+
+      hiveRow.addEventListener('click', () => {
+        expanded = !expanded;
+        childWrap.style.display = expanded ? '' : 'none';
+        hiveRow.querySelector('.reg-tree-arrow').textContent = expanded ? '▼' : '▶';
+      });
+
+      Object.keys(registryData[hive]).forEach(keyPath => {
+        const keyEl = document.createElement('div');
+        keyEl.className = 'reg-tree-item';
+        keyEl.innerHTML = '<span class="reg-tree-icon">🗂️</span>&nbsp;<span>' + keyPath + '</span>';
+        keyEl.addEventListener('click', e => {
+          e.stopPropagation();
+          tree.querySelectorAll('.reg-tree-item.selected').forEach(el => el.classList.remove('selected'));
+          keyEl.classList.add('selected');
+          selectedPath = { hive, key: keyPath };
+          renderVals(hive, keyPath);
+          if (ws) ws.textContent = hive + '\\' + keyPath;
+        });
+        childWrap.appendChild(keyEl);
+      });
+
+      hiveEl.appendChild(hiveRow);
+      hiveEl.appendChild(childWrap);
+      tree.appendChild(hiveEl);
+    });
+  }
+
+  function renderVals(hive, keyPath) {
+    vals.innerHTML = '';
+    const data = registryData[hive][keyPath];
+    const tbl = document.createElement('table');
+    tbl.className = 'reg-vals-table';
+    tbl.innerHTML = '<thead><tr><th style="width:180px;">Name</th><th style="width:100px;">Type</th><th>Data</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    Object.keys(data).forEach(valName => {
+      const entry = data[valName];
+      const tr = document.createElement('tr');
+      tr.className = 'reg-val-row';
+      tr.innerHTML = '<td>📄 ' + valName + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
+      tr.addEventListener('dblclick', () => editRegValue(hive, keyPath, valName));
+      tr.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        tr.classList.add('selected');
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: 'Modify', action: () => editRegValue(hive, keyPath, valName) },
+        ]);
+        setTimeout(() => tr.classList.remove('selected'), 800);
+      });
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    vals.appendChild(tbl);
+  }
+
+  function editRegValue(hive, keyPath, valName) {
+    const entry = registryData[hive][keyPath][valName];
+    const currentVal = String(entry.value);
+    osPrompt('Edit value for: ' + valName, currentVal, 'Edit Registry Value', newVal => {
+      if (newVal === null) return;
+      if (entry.type === 'REG_DWORD') {
+        entry.value = parseInt(newVal) || 0;
+      } else {
+        entry.value = newVal;
+      }
+      saveRegistry();
+      applyRegistryEffects(hive, keyPath, valName, entry.value);
+      renderVals(hive, keyPath);
+    }, '🗝️');
+  }
+
+  function applyRegistryEffects(hive, keyPath, valName, newValue) {
+    if (hive === 'HKEY_SLEEPBOX_MACHINE') {
+      if (keyPath === 'SYSTEM\\CurrentConfig') {
+        if (valName === 'CRT_SCANLINES') {
+          osSettings.crtScanlines = !!newValue;
+          const crt = document.getElementById('crt');
+          if (crt) crt.style.display = newValue ? '' : 'none';
+        } else if (valName === 'VIDEO_DITHER') {
+          osSettings.videoDither = !!newValue;
+          document.querySelectorAll('.vp-dither').forEach(d => d.style.display = newValue ? '' : 'none');
+        } else if (valName === 'CLOCK_FORMAT') {
+          osSettings.clock12h = (newValue === '12h');
+          updateClock();
+        }
+        saveSettings();
+      } else if (keyPath === 'SOUL\\Metrics' && valName === 'SOUL_INTEGRITY') {
+        const bar = document.getElementById('bar-soul');
+        const val = document.getElementById('val-soul');
+        const v = Math.max(0, Math.min(99, parseInt(newValue) || 0));
+        if (bar) bar.style.width = v + '%';
+        if (val) val.textContent = v + '%';
+      }
+    } else if (hive === 'HKEY_CURRENT_USER') {
+      if (keyPath === 'SOFTWARE\\sleepOS' && valName === 'SkipBoot') {
+        osSettings.skipBoot = !!newValue;
+        saveSettings();
+      }
+    }
+  }
+
+  // ── Menu bar ────────────────────────────────────────────────────
+  mb.innerHTML = '';
+  [
+    { label: 'Registry', items: [
+      { label: 'Export...', action: () => {
+        let txt = 'Windows Registry Editor Version 5.00\n\n';
+        Object.keys(registryData).forEach(hive => {
+          Object.keys(registryData[hive]).forEach(keyPath => {
+            txt += '[' + hive + '\\' + keyPath + ']\n';
+            const data = registryData[hive][keyPath];
+            Object.keys(data).forEach(v => {
+              const e = data[v];
+              if (e.type === 'REG_DWORD') txt += '"' + v + '"=dword:' + (e.value >>> 0).toString(16).padStart(8,'0') + '\n';
+              else txt += '"' + v + '"="' + String(e.value).replace(/\\/g,'\\\\').replace(/"/g,'\\"') + '"\n';
+            });
+            txt += '\n';
+          });
+        });
+        const fname = 'registry_export.reg';
+        const dir = fsGetDir('');
+        dir.files.set(fname, txt);
+        schedSave();
+        osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', '🗝️');
+      }},
+      '-',
+      { label: 'Close', action: () => closeWin('regedit') },
+    ]},
+    { label: 'Edit', items: [
+      { label: 'Modify', disabled: !selectedPath, action: () => {
+        if (!selectedPath) return;
+        const keys = Object.keys(registryData[selectedPath.hive][selectedPath.key]);
+        if (keys.length) editRegValue(selectedPath.hive, selectedPath.key, keys[0]);
+      }},
+    ]},
+    { label: 'Help', items: [
+      { label: 'About Registry Editor', action: () => osAlert('Registry Editor\nsleepOS v0.9β\n\nModifying registry values affects\nlive system behavior.\n\nProceed with caution.', 'About', '🗝️') },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+    mb.appendChild(span);
+  });
+
+  buildTree();
+  if (ws) ws.textContent = 'My Computer';
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CALCULATOR
+// ─────────────────────────────────────────────────────────────────
+function openCalculator() {
+  if (!mkWin({ id:'calc', title:'Calculator', icon:'🔢', w:240, h:300, x:200, y:120, menubar:true, statusbar:false })) return;
+  const body = document.getElementById('wb-calc');
+  const mb   = document.getElementById('mb-calc');
+  body.style.cssText = 'padding:0;overflow:hidden;';
+
+  let calcMode = 'dec'; // dec | hex | bin
+  let calcExpr = '';
+  let calcDisplay = '0';
+  let calcOp = null;
+  let calcPrev = null;
+  let calcNewNum = true;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'calc-body';
+  body.appendChild(wrap);
+
+  const display = document.createElement('div');
+  display.className = 'calc-display';
+  display.textContent = '0';
+  wrap.appendChild(display);
+
+  const subDisplay = document.createElement('div');
+  subDisplay.style.cssText = 'font-size:10px;color:#555;text-align:right;min-height:14px;';
+  wrap.appendChild(subDisplay);
+
+  const modeRow = document.createElement('div');
+  modeRow.className = 'calc-mode-row';
+  ['dec','hex','bin'].forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'calc-mode-btn' + (m === calcMode ? ' active' : '');
+    btn.textContent = m.toUpperCase();
+    btn.setAttribute('data-mode', m);
+    btn.addEventListener('click', () => {
+      calcMode = m;
+      modeRow.querySelectorAll('.calc-mode-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-mode') === m));
+      updateDisplay();
+      renderGrid();
+    });
+    modeRow.appendChild(btn);
+  });
+  wrap.appendChild(modeRow);
+
+  const grid = document.createElement('div');
+  grid.className = 'calc-grid';
+  wrap.appendChild(grid);
+
+  function getDisplayValue() {
+    const n = parseFloat(calcDisplay);
+    if (isNaN(n)) return calcDisplay;
+    if (calcMode === 'hex') return '0x' + Math.trunc(n).toString(16).toUpperCase();
+    if (calcMode === 'bin') return '0b' + Math.trunc(n).toString(2);
+    return calcDisplay;
+  }
+
+  function updateDisplay() {
+    display.textContent = getDisplayValue();
+    if (calcOp && calcPrev !== null) {
+      subDisplay.textContent = calcPrev + ' ' + calcOp;
+    } else {
+      subDisplay.textContent = '';
+    }
+  }
+
+  function pressDigit(d) {
+    if (calcNewNum) { calcDisplay = String(d); calcNewNum = false; }
+    else { if (calcDisplay === '0' && d !== '.') calcDisplay = String(d); else calcDisplay += String(d); }
+    updateDisplay();
+  }
+
+  function pressOp(op) {
+    const cur = parseFloat(calcDisplay);
+    if (calcOp && !calcNewNum && calcPrev !== null) {
+      calcPrev = doCalc(calcPrev, cur, calcOp);
+      calcDisplay = String(calcPrev);
+    } else {
+      calcPrev = cur;
+    }
+    calcOp = op;
+    calcNewNum = true;
+    updateDisplay();
+  }
+
+  function doCalc(a, b, op) {
+    switch(op) {
+      case '+': return a + b;
+      case '-': return a - b;
+      case '*': return a * b;
+      case '/': return b === 0 ? NaN : a / b;
+      case '%': return a % b;
+    }
+    return b;
+  }
+
+  function pressEquals() {
+    const cur = parseFloat(calcDisplay);
+    if (calcOp && calcPrev !== null) {
+      const result = doCalc(calcPrev, cur, calcOp);
+      calcDisplay = isNaN(result) ? 'Error' : String(result);
+      calcOp = null; calcPrev = null; calcNewNum = true;
+      updateDisplay();
+    }
+  }
+
+  function pressClear() {
+    calcDisplay = '0'; calcOp = null; calcPrev = null; calcNewNum = true;
+    updateDisplay();
+  }
+
+  function pressCE() {
+    calcDisplay = '0'; calcNewNum = true; updateDisplay();
+  }
+
+  function pressBS() {
+    if (calcNewNum || calcDisplay.length <= 1 || calcDisplay === 'Error') {
+      calcDisplay = '0'; calcNewNum = true;
+    } else {
+      calcDisplay = calcDisplay.slice(0, -1) || '0';
+    }
+    updateDisplay();
+  }
+
+  function pressPlusMinus() {
+    const n = parseFloat(calcDisplay);
+    if (!isNaN(n) && n !== 0) { calcDisplay = String(-n); updateDisplay(); }
+  }
+
+  function renderGrid() {
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+    grid.style.gridTemplateRows = 'repeat(5, 1fr)';
+
+    const buttons = [
+      ['CE','C','BS','/'],
+      ['7','8','9','*'],
+      ['4','5','6','-'],
+      ['1','2','3','+'],
+      ['+/-','0','.','='],
+    ];
+
+    if (calcMode === 'hex') {
+      // Replace digits row 1 with hex letters
+      buttons.unshift(['A','B','C','D']);
+      buttons[1] = ['E','F','CE','C'];
+      grid.style.gridTemplateRows = 'repeat(6, 1fr)';
+    }
+
+    buttons.forEach(row => {
+      row.forEach(label => {
+        const btn = document.createElement('button');
+        const isOp  = ['+','-','*','/','%'].includes(label);
+        const isEq  = label === '=';
+        const isCl  = label === 'C' || label === 'CE';
+        btn.className = 'calc-btn' + (isOp ? ' op' : '') + (isEq ? ' equals' : '') + (isCl ? ' clear' : '');
+        btn.textContent = label;
+        btn.addEventListener('click', () => {
+          if (/^[0-9A-F]$/.test(label)) pressDigit(label);
+          else if (label === '.') { if (!calcDisplay.includes('.')) pressDigit('.'); }
+          else if (isOp) pressOp(label);
+          else if (isEq) pressEquals();
+          else if (label === 'C') pressClear();
+          else if (label === 'CE') pressCE();
+          else if (label === 'BS') pressBS();
+          else if (label === '+/-') pressPlusMinus();
+        });
+        grid.appendChild(btn);
+      });
+    });
+    updateDisplay();
+  }
+
+  // Keyboard support
+  const calcKeyHandler = e => {
+    if (!wins['calc']) { document.removeEventListener('keydown', calcKeyHandler); return; }
+    const focused = document.activeElement;
+    if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA') && focused.closest('#win-calc') === null) return;
+    const map = {
+      '0':'0','1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
+      '+':'+','-':'-','*':'*','/':'/',
+      'Enter':'=','=':'=',
+      'Backspace':'BS','Delete':'C','Escape':'C','.':'.',
+    };
+    if (map[e.key]) {
+      e.preventDefault();
+      const lbl = map[e.key];
+      if (/^[0-9]$/.test(lbl)) pressDigit(lbl);
+      else if (['+','-','*','/'].includes(lbl)) pressOp(lbl);
+      else if (lbl === '=') pressEquals();
+      else if (lbl === 'C') pressClear();
+      else if (lbl === 'BS') pressBS();
+      else if (lbl === '.') { if (!calcDisplay.includes('.')) pressDigit('.'); }
+    }
+  };
+  document.addEventListener('keydown', calcKeyHandler);
+
+  // Menu bar
+  mb.innerHTML = '';
+  const editSpan = document.createElement('span');
+  editSpan.className = 'menu-item'; editSpan.textContent = 'Edit';
+  editSpan.addEventListener('click', e => {
+    e.stopPropagation();
+    showDropdown(editSpan, [
+      { label: 'Copy', action: () => navigator.clipboard?.writeText(display.textContent) },
+      { label: 'Paste', action: () => navigator.clipboard?.readText().then(t => {
+        const n = parseFloat(t);
+        if (!isNaN(n)) { calcDisplay = String(n); calcNewNum = false; updateDisplay(); }
+      })},
+    ]);
+  });
+  mb.appendChild(editSpan);
+  const viewSpan = document.createElement('span');
+  viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+  viewSpan.addEventListener('click', e => {
+    e.stopPropagation();
+    showDropdown(viewSpan, [
+      { label: (calcMode==='dec'?'* ':'  ')+'Decimal',  action: () => { calcMode='dec'; modeRow.querySelectorAll('.calc-mode-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-mode')==='dec')); updateDisplay(); renderGrid(); }},
+      { label: (calcMode==='hex'?'* ':'  ')+'Hexadecimal', action: () => { calcMode='hex'; modeRow.querySelectorAll('.calc-mode-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-mode')==='hex')); updateDisplay(); renderGrid(); }},
+      { label: (calcMode==='bin'?'* ':'  ')+'Binary',   action: () => { calcMode='bin'; modeRow.querySelectorAll('.calc-mode-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-mode')==='bin')); updateDisplay(); renderGrid(); }},
+    ]);
+  });
+  mb.appendChild(viewSpan);
+
+  renderGrid();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RUN DIALOG
+// ─────────────────────────────────────────────────────────────────
+function openRunDialog() {
+  const id = 'run-dialog';
+  const p = _osDlgPos(360, 160);
+  if (!mkWin({ id, title:'Run', icon:'▶', w:360, h:160, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:10px;font-size:11px;';
+  body.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <div style="font-size:28px;line-height:1;">▶</div>
+      <div style="flex:1;">
+        <div style="margin-bottom:8px;line-height:1.5;">Type the name of a program to open it.</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="white-space:nowrap;">Open:</span>
+          <input id="run-input" type="text" style="flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;padding:2px 4px;font-family:var(--sleep-font);font-size:11px;background:#fff;">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:6px;">
+      <button class="dlg-btn primary" id="run-ok">OK</button>
+      <button class="dlg-btn" id="run-cancel">Cancel</button>
+    </div>`;
+  const inp = document.getElementById('run-input');
+  const ok  = document.getElementById('run-ok');
+  const can = document.getElementById('run-cancel');
+
+  const RUN_MAP = {
+    'notepad': openNotepad, 'notepad.exe': openNotepad,
+    'terminal': openTerminal, 'terminal.exe': openTerminal,
+    'calc': openCalculator, 'calc.exe': openCalculator,
+    'calculator': openCalculator,
+    'regedit': openRegedit, 'regedit.exe': openRegedit,
+    'sysmon': openSysmon, 'sysmon.exe': openSysmon,
+    'explorer': openExplorer, 'explorer.exe': openExplorer,
+    'defrag': openDefrag, 'defrag.exe': openDefrag,
+    'browser': openBrowser, 'browser.exe': openBrowser,
+    'welcome': openWelcome, 'welcome.readme': openWelcome,
+    'sysmon.exe': openSysmon,
+    'void.tmp': openVoid, 'daemon.core': openDaemon,
+    '?????.exe': openUnknown,
+  };
+
+  ok.addEventListener('click', () => {
+    const v = inp.value.trim().toLowerCase();
+    if (!v) return;
+    closeWin(id);
+    const fn = RUN_MAP[v];
+    if (fn) { fn(); return; }
+    const proj = PROJECTS.find(p =>
+      p.file.toLowerCase() === v ||
+      p.file.toLowerCase().replace('.html','') === v ||
+      p.name.toLowerCase() === v
+    );
+    if (proj) { window.open(proj.file, '_blank'); return; }
+    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Run', '▶');
+  });
+  can.addEventListener('click', () => closeWin(id));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') ok.click();
+    if (e.key === 'Escape') can.click();
+  });
+  setTimeout(() => inp.focus(), 40);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ALT+TAB / KEYBOARD SHORTCUTS
+// ─────────────────────────────────────────────────────────────────
+let altTabActive = false;
+let altTabIdx = 0;
+let altTabWinIds = [];
+
+function openAltTab() {
+  const ids = Object.keys(wins).filter(id => !wins[id].minimized);
+  if (ids.length === 0) return;
+  altTabWinIds = ids;
+  altTabIdx = (altTabIdx + 1) % ids.length;
+
+  const box = document.getElementById('alttab-box');
+  box.innerHTML = '';
+  ids.forEach((id, i) => {
+    const w = wins[id];
+    const item = document.createElement('div');
+    item.className = 'alttab-item' + (i === altTabIdx ? ' focused' : '');
+    item.innerHTML = '<div class="at-icon">' + (w.icon || '📄') + '</div><div class="at-label">' + (w.title || id) + '</div>';
+    item.addEventListener('click', () => {
+      altTabIdx = i;
+      commitAltTab();
+    });
+    box.appendChild(item);
+  });
+
+  document.getElementById('alttab-overlay').classList.add('active');
+  altTabActive = true;
+}
+
+function commitAltTab() {
+  document.getElementById('alttab-overlay').classList.remove('active');
+  altTabActive = false;
+  const id = altTabWinIds[altTabIdx];
+  if (id && wins[id]) {
+    if (wins[id].minimized) unminWin(id);
+    else focusWin(id);
+  }
+  altTabWinIds = [];
+}
+
+function closeCad() {
+  document.getElementById('cad-overlay').classList.remove('active');
+}
+function cadAction(type) {
+  closeCad();
+  if (type === 'lock') {
+    const lock = document.createElement('div');
+    lock.id = 'lock-screen';
+    lock.style.cssText = 'position:fixed;inset:0;z-index:99995;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
+    lock.innerHTML = `
+      <div style="color:#888;font-size:28px;">🔒</div>
+      <div style="color:#ccc;font-size:13px;font-family:var(--sleep-font);">sleepOS is locked</div>
+      <div style="color:#666;font-size:11px;font-family:var(--sleep-font);">Press any key or click to unlock</div>`;
+    document.body.appendChild(lock);
+    const unlock = () => { lock.remove(); };
+    lock.addEventListener('click', unlock);
+    lock.addEventListener('keydown', unlock);
+    setTimeout(() => lock.addEventListener('keydown', unlock), 100);
+  } else if (type === 'taskmgr') {
+    openSysmon();
+  } else if (type === 'shutdown') {
+    doShutdown();
+  }
+}
+
+// ── Global keyboard shortcuts ─────────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Don't fire in inputs/textareas (except specific shortcuts)
+  const inInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+
+  // Alt+F4 — close focused window
+  if (e.altKey && e.key === 'F4') {
+    e.preventDefault();
+    const focused = Object.entries(wins).find(([, w]) => !w.el.classList.contains('inactive'));
+    if (focused) closeWin(focused[0]);
+    return;
+  }
+
+  // Alt+Tab — cycle windows
+  if (e.altKey && e.key === 'Tab') {
+    e.preventDefault();
+    openAltTab();
+    return;
+  }
+
+  // Release Alt to commit alt-tab selection
+  if (altTabActive && e.key === 'Alt') {
+    e.preventDefault();
+    commitAltTab();
+    return;
+  }
+
+  // Ctrl+Alt+Del — secure attention sequence
+  if (e.ctrlKey && e.altKey && e.key === 'Delete') {
+    e.preventDefault();
+    document.getElementById('cad-overlay').classList.add('active');
+    return;
+  }
+
+  // Meta/Win key — toggle start menu; Win+R opens Run dialog
+  if ((e.metaKey || e.key === 'Meta' || e.key === 'OS') && e.key === 'r') {
+    e.preventDefault();
+    closeStart();
+    openRunDialog();
+    return;
+  }
+  if ((e.key === 'Meta' || e.key === 'OS') && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    toggleStart();
+    return;
+  }
+
+  // F5 — refresh desktop icons
+  if (e.key === 'F5' && !inInput) {
+    e.preventDefault();
+    const desktop = document.getElementById('desktop');
+    if (desktop && desktop.style.display !== 'none') setupIcons();
+    return;
+  }
+
+  // Escape — close context menus / dismiss overlays
+  if (e.key === 'Escape') {
+    closeDropdown();
+    closeStart();
+    if (altTabActive) {
+      document.getElementById('alttab-overlay').classList.remove('active');
+      altTabActive = false;
+      altTabWinIds = [];
+    }
+    const cad = document.getElementById('cad-overlay');
+    if (cad.classList.contains('active')) cad.classList.remove('active');
+    return;
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────
 // STARTUP
