@@ -1669,6 +1669,119 @@ function highlight(text, lang) {
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
+function runScriptInPopup(name, source) {
+  const id = 'script-out-' + Date.now();
+  if (!mkWin({ id, title: name + ' — Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'background:#000;padding:6px;overflow:auto;font-family:\'Courier New\',monospace;font-size:12px;color:#ccc;';
+  const print = (text, color) => {
+    const div = document.createElement('div');
+    div.textContent = text || '\u00a0';
+    if (color) div.style.color = color;
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+  };
+  print('Running ' + name + '...', '#888');
+  print('');
+  execScript(source, print);
+}
+
+function openSaveDialog(defaultName, callback) {
+  const id = 'saveas-' + Date.now();
+  if (!mkWin({ id, title: 'Save As', icon: '💾', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
+
+  let saveCwd = '';
+
+  // ── "Save in:" bar ────────────────────────────────────────────
+  const locRow = document.createElement('div');
+  locRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+  const locLabel = document.createElement('span');
+  locLabel.textContent = 'Save in:'; locLabel.style.whiteSpace = 'nowrap';
+  const locDisp = document.createElement('div');
+  locDisp.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff;padding:1px 4px;font-family:\'Courier New\',monospace;font-size:11px;';
+  locRow.appendChild(locLabel); locRow.appendChild(locDisp);
+  body.appendChild(locRow);
+
+  // ── File list ────────────────────────────────────────────────
+  const fileList = document.createElement('div');
+  fileList.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff;overflow:auto;padding:4px;display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;min-height:0;';
+  body.appendChild(fileList);
+
+  // ── File name row ────────────────────────────────────────────
+  const nameRow = document.createElement('div');
+  nameRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+  const nameLabel = document.createElement('span');
+  nameLabel.textContent = 'File name:'; nameLabel.style.whiteSpace = 'nowrap';
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text'; nameInput.value = defaultName;
+  nameInput.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;padding:1px 4px;font-family:\'Courier New\',monospace;font-size:11px;background:#fff;';
+  nameRow.appendChild(nameLabel); nameRow.appendChild(nameInput);
+  body.appendChild(nameRow);
+
+  // ── Buttons ──────────────────────────────────────────────────
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;flex-shrink:0;';
+  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary'; saveBtn.textContent = 'Save';
+  const cancelBtn = document.createElement('button'); cancelBtn.className = 'dlg-btn';        cancelBtn.textContent = 'Cancel';
+  btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
+  body.appendChild(btnRow);
+
+  function makeFLItem(emoji, label) {
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:68px;padding:3px;cursor:default;border:1px solid transparent;font-size:10px;text-align:center;word-break:break-word;';
+    el.innerHTML = `<div style="font-size:22px;">${emoji}</div><span>${label}</span>`;
+    el.addEventListener('mouseover', () => { el.style.background='#000080'; el.style.color='#fff'; });
+    el.addEventListener('mouseout',  () => { el.style.background='';        el.style.color=''; });
+    return el;
+  }
+
+  function renderSaveList() {
+    fileList.innerHTML = '';
+    locDisp.textContent = saveCwd ? `C:\\sleepOS\\${saveCwd}` : 'C:\\sleepOS';
+
+    if (saveCwd) {
+      const up = makeFLItem('📁', '..');
+      up.addEventListener('dblclick', () => { saveCwd = ''; renderSaveList(); });
+      fileList.appendChild(up);
+    }
+
+    const dir = fsGetDir(saveCwd);
+    const dirs = saveCwd ? [...(dir?.dirs ?? [])]
+                         : ['DOCS', ...termFS.dirs].filter((v, i, a) => a.indexOf(v) === i);
+    dirs.forEach(d => {
+      const el = makeFLItem('📁', d);
+      el.addEventListener('dblclick', () => { saveCwd = d; renderSaveList(); });
+      fileList.appendChild(el);
+    });
+
+    (dir?.files ?? termFS.files).forEach((_, name) => {
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      const emoji = { script:'📜', txt:'📄', md:'📋', js:'📜', py:'🐍' }[ext] || '📄';
+      const el = makeFLItem(emoji, name);
+      el.addEventListener('click', () => { nameInput.value = name; });
+      el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
+      fileList.appendChild(el);
+    });
+  }
+
+  saveBtn.addEventListener('click', () => {
+    const fname = nameInput.value.trim();
+    if (!fname) return;
+    closeWin(id);
+    callback(fname, saveCwd);
+  });
+  cancelBtn.addEventListener('click', () => closeWin(id));
+  nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  saveBtn.click();
+    if (e.key === 'Escape') cancelBtn.click();
+  });
+
+  renderSaveList();
+  setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+}
+
 function openNotepad(filename) {
   const id = filename ? 'notepad-' + filename : 'notepad-' + (++_notepadCount);
   const displayName = filename || 'untitled.txt';
@@ -1781,8 +1894,21 @@ function openNotepad(filename) {
   }
 
   function promptSaveAs() {
-    const name = prompt('Save as:', currentFile || 'untitled.txt');
-    if (name) save(name.trim());
+    openSaveDialog(currentFile || 'untitled.txt', (fname, dir) => {
+      if (dir) {
+        const subDir = fsGetDir(dir);
+        if (subDir) {
+          subDir.files.set(fname, ta.value);
+          currentFile = fname;
+          const titleEl = document.getElementById('wtitle-' + id);
+          if (titleEl) titleEl.textContent = fname + ' \u2014 Notepad';
+          updateStatus();
+          document.dispatchEvent(new CustomEvent('fs-changed'));
+        }
+      } else {
+        save(fname);
+      }
+    });
   }
 
   function setLang(l) { lang = l; renderHighlight(); updateStatus(); }
@@ -1932,8 +2058,14 @@ function openExplorer(startPath) {
       el.classList.add('selected'); selected = { name, kind, sysfile };
       if (ws) ws.textContent = name;
       const canDelete = !sysfile;
+      const isScript = !sysfile && name.toLowerCase().endsWith('.script');
       showCtxMenu(e.clientX, e.clientY, [
         { label: kind === 'dir' ? '📂 Open Folder' : '▶ Open', action: () => openItem(name, kind, sysfile) },
+        ...(isScript ? [{ label: '📜 Run Script', action: () => {
+          const dir = fsGetDir(cwd);
+          const src = dir.files.get(name);
+          if (src !== undefined) runScriptInPopup(name, src);
+        }}] : []),
         '-',
         { label: '✏️ Rename', disabled: sysfile, action: () => {
           if (sysfile) return;
@@ -2007,6 +2139,8 @@ function openExplorer(startPath) {
     if (e.target !== pane && !e.target.classList.contains('exp-grid')) return;
     e.preventDefault();
     showCtxMenu(e.clientX, e.clientY, [
+      { label: '💻 Open Terminal Here', action: () => openTerminal(cwd) },
+      '-',
       { label: '📁 New Folder',    action: () => { const n = prompt('Folder name:'); if (n) { termFS.dirs.add(n.toUpperCase()); render(); } } },
       { label: '📄 New Text File', action: () => { const n = prompt('File name:', 'untitled.txt'); if (n) { termFS.files.set(n,''); openNotepad(n); render(); } } },
       '-',
@@ -2167,7 +2301,7 @@ function openFiles() {
   renderView();
 }
 
-function openTerminal() {
+function openTerminal(startDir) {
   if (!mkWin({ id:'terminal', title:'TERMINAL.EXE — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-terminal');
   body.style.padding = '0'; body.style.overflow = 'hidden';
@@ -2211,7 +2345,7 @@ function openTerminal() {
   print('');
 
   let cmdHistory = [], histIdx = -1;
-  let cwd = ''; // '' = root, 'DOCS' = DOCS dir, etc.
+  let cwd = startDir ? startDir.toUpperCase() : ''; // '' = root, 'DOCS' = DOCS dir, etc.
 
   function getPromptStr() {
     return cwd ? `C:\\sleepOS\\${cwd}>` : 'C:\\sleepOS>';
