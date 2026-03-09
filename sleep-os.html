@@ -94,6 +94,16 @@ body {
   box-shadow: 1px 1px 0 #000;
   min-width: 180px; min-height: 80px;
 }
+/* ── Resize handles ──────────────────────────────────────────── */
+.win-rz { position:absolute; z-index:100; }
+.win-rz-n  { top:-3px;    left:6px;  right:6px;  height:6px;  cursor:n-resize;  }
+.win-rz-s  { bottom:-3px; left:6px;  right:6px;  height:6px;  cursor:s-resize;  }
+.win-rz-e  { top:6px; bottom:6px; right:-3px;  width:6px;   cursor:e-resize;  }
+.win-rz-w  { top:6px; bottom:6px; left:-3px;   width:6px;   cursor:w-resize;  }
+.win-rz-nw { top:-3px;    left:-3px;  width:10px; height:10px; cursor:nw-resize; }
+.win-rz-ne { top:-3px;    right:-3px; width:10px; height:10px; cursor:ne-resize; }
+.win-rz-sw { bottom:-3px; left:-3px;  width:10px; height:10px; cursor:sw-resize; }
+.win-rz-se { bottom:-3px; right:-3px; width:10px; height:10px; cursor:se-resize; }
 .os-window.inactive .win-titlebar { background: #808080; }
 .win-titlebar {
   background: linear-gradient(to right, #000080, #1084d0);
@@ -800,30 +810,31 @@ const termFS = {
     dirs: new Set(), blobs: new Map(),
     files: new Map([
       ['README.txt', [
-        '== sleepOS Filesystem Guide ==',
+        '== sleepOS Filesystem — README ==',
         '',
-        'C:\\sleepOS is the root directory.',
-        '',
-        'SYSTEM DIRECTORIES:',
-        '  DOCS\\         — Documentation (this folder)',
-        '  PROJECTS\\     — Interactive apps (read-only)',
+        'ROOT: C:\\sleepOS',
+        '  DOCS\\      — documentation (this folder)',
+        '  PROJECTS\\  — interactive apps (read-only)',
         '',
         'SYSTEM FILES (read-only):',
-        '  WELCOME.README, TERMINAL.EXE, SYSMON.EXE',
-        '  void.tmp, daemon.core, ?????.exe',
+        '  WELCOME.README  NOTEPAD.EXE  TERMINAL.EXE',
+        '  SYSMON.EXE  BROWSER.EXE  DEFRAG.EXE',
+        '  void.tmp  daemon.core  ?????.exe',
         '',
         'USER FILES:',
-        '  Any files you create with TOUCH, NOTEPAD,',
-        '  or ECHO > appear here and in the Explorer.',
+        '  Create with TOUCH, NOTEPAD, or ECHO >.',
+        '  Upload via right-click > Upload File.',
+        '  New items go into your current folder.',
         '',
-        'NAVIGATION (terminal):',
-        '  CD DOCS         — enter this folder',
-        '  CD ..           — go up to root',
-        '  DIR             — list current directory',
-        '  CAT <file>      — read a file',
+        'TERMINAL (quick ref):',
+        '  DIR / LS      list files',
+        '  CD <dir>      enter folder  |  CD ..  go up',
+        '  CAT <file>    read file',
+        '  TOUCH <file>  create file',
+        '  MKDIR <dir>   create folder',
+        '  DEL <file>    delete',
         '',
-        'See SCRIPTING.txt for the script language.',
-        'See COMMANDS.txt for all terminal commands.',
+        'See SCRIPTING.txt for the .script language.',
       ].join('\n')],
       ['SCRIPTING.txt', [
         '== sleepOS Script Language (.script files) ==',
@@ -1296,6 +1307,10 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
   el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`;
 
   el.innerHTML = `
+    <div class="win-rz win-rz-n"></div><div class="win-rz win-rz-s"></div>
+    <div class="win-rz win-rz-e"></div><div class="win-rz win-rz-w"></div>
+    <div class="win-rz win-rz-nw"></div><div class="win-rz win-rz-ne"></div>
+    <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>
     <div class="win-titlebar" id="tb-${id}">
       <div class="win-title-text">
         <span class="win-icon">${icon}</span>
@@ -1316,6 +1331,7 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
   wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
 
   makeDraggable(el, document.getElementById('tb-' + id));
+  makeResizable(el, id);
   addTbBtn(id, title, icon);
   el.addEventListener('mousedown', () => focusWin(id));
   el.addEventListener('touchstart', () => focusWin(id), { passive: true });
@@ -1403,6 +1419,34 @@ function makeDraggable(win, handle) {
   }, { passive: false });
 }
 
+function makeResizable(win, id) {
+  const MIN_W = 180, MIN_H = 80;
+  win.querySelectorAll('.win-rz').forEach(handle => {
+    const a = [...handle.classList].find(c => c.startsWith('win-rz-') && c !== 'win-rz').replace('win-rz-','');
+    handle.addEventListener('mousedown', e => {
+      const w = wins[id]; if (w && w.maximized) return; // don't resize while maximized
+      e.preventDefault(); e.stopPropagation();
+      focusWin(id);
+      const x0 = e.clientX, y0 = e.clientY;
+      const W0 = win.offsetWidth, H0 = win.offsetHeight;
+      const L0 = win.offsetLeft,  T0 = win.offsetTop;
+      const onMove = e => {
+        const dx = e.clientX - x0, dy = e.clientY - y0;
+        let W = W0, H = H0, L = L0, T = T0;
+        if (a.includes('e')) W = Math.max(MIN_W, W0 + dx);
+        if (a.includes('s')) H = Math.max(MIN_H, H0 + dy);
+        if (a.includes('w')) { W = Math.max(MIN_W, W0 - dx); L = L0 + W0 - W; }
+        if (a.includes('n')) { H = Math.max(MIN_H, H0 - dy); T = T0 + H0 - H; }
+        win.style.width = W+'px'; win.style.height = H+'px';
+        win.style.left  = L+'px'; win.style.top    = T+'px';
+      };
+      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
 function addTbBtn(id, title, icon) {
   const btn = document.createElement('button');
   btn.className = 'taskbar-btn focused';
@@ -1411,6 +1455,7 @@ function addTbBtn(id, title, icon) {
   btn.addEventListener('click', () => {
     const w = wins[id]; if (!w) return;
     if (w.minimized) { unminWin(id); }
+    else if (w.maximized) { maxWin(id); }   // restore to pre-maximize size
     else if (w.el.classList.contains('inactive')) { focusWin(id); }
     else { minWin(id); }
   });
@@ -1532,34 +1577,28 @@ function setupIcons() {
 // ─────────────────────────────────────────────────────────────────
 
 const WELCOME_DEFAULT =
-`== sleepOS v0.9\u03b2 \u2014 WELCOME FILE ==
-Build: 2024.11.13-EXPERIMENTAL / SOMA-686
+`== sleepOS v0.9\u03b2 \u2014 WELCOME ==
 
-Welcome to sleepOS.
+You are running sleepOS, an experimental interactive desktop.
 
-This operating system is an experimental environment
-for generative and interactive computation.
-All processes here are alive in some sense of the word.
+Programs:
+  PROJECTS.DIR  \u2014 interactive apps (double-click to browse)
+  NOTEPAD.EXE   \u2014 text editor with syntax highlighting
+  TERMINAL.EXE  \u2014 command line (type HELP for commands)
+  BROWSER.EXE   \u2014 web browser
+  SYSMON.EXE    \u2014 system monitor
+  DEFRAG.EXE    \u2014 disk defragmenter
 
-Navigation:
-  - Double-click desktop icons to open programs
-  - PROJECTS.DIR contains all interactive applications
-  - TERMINAL.EXE accepts command-line input
-  - SYSMON.EXE monitors system vitals
-  - Start Menu provides quick access to all programs
+Files:
+  Right-click the desktop or any folder to create
+  files and folders, or upload from your machine.
+  Everything persists within your session.
 
-Known Issues:
-  [!] Clock drift: temporal reference is unreliable
-  [!] 3 daemon processes are of unrecognized origin
-  [!] Soul integrity is at 87.3% and decreasing
+Known issues:
+  [!] Clock drift is intentional
   [!] void.tmp cannot be read, deleted, or ignored
   [!] ?????.exe should not be executed
-
-Security:
-  An unknown process is observing your session.
-  This is not a bug. This cannot be disabled.
-
-Have a productive session.
+  [!] Something is watching this session
 
 \u2014 SYSTEM`;
 
