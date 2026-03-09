@@ -461,7 +461,7 @@ body {
 
 <!-- Drop overlay -->
 <div id="drop-overlay">📁 Drop files to upload to sleepOS</div>
-<input id="file-upload-input" type="file" accept="image/*,video/*,audio/*,text/*" multiple style="display:none">
+<input id="file-upload-input" type="file" accept="image/*,video/*,audio/*,text/*,.script,.txt,.md,.csv,.json,.xml,.html,.css,.js" multiple style="display:none">
 
 <!-- Desktop -->
 <div id="desktop">
@@ -979,10 +979,12 @@ function handleFileUpload(fileList) {
   const added = [];
   [...fileList].forEach(file => {
     const url = URL.createObjectURL(file);
+    const TEXT_EXTS = /\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/i;
+    const isText = file.type.startsWith('text/') || TEXT_EXTS.test(file.name) || file.type === '';
     const kind = file.type.startsWith('image/') ? 'image'
                : file.type.startsWith('video/') ? 'video'
                : file.type.startsWith('audio/') ? 'audio'
-               : file.type.startsWith('text/')  ? 'text'
+               : isText ? 'text'
                : 'binary';
     if (kind === 'text') {
       const reader = new FileReader();
