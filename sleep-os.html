@@ -1023,7 +1023,10 @@ function handleFileUpload(fileList) {
     }
     added.push(file.name);
   });
-  if (added.length) showUploadConfirm(added);
+  if (added.length) {
+    showUploadConfirm(added);
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+  }
 }
 
 function showUploadConfirm(names) {
@@ -1741,9 +1744,10 @@ function openExplorer(startPath) {
   // ── toolbar ──────────────────────────────────────────────────
   const toolbar = document.createElement('div');
   toolbar.className = 'exp-toolbar';
-  const upBtn  = document.createElement('button'); upBtn.textContent = '⬆ Up';
-  const addrEl = document.createElement('input'); addrEl.className = 'exp-addr'; addrEl.readOnly = true;
-  toolbar.appendChild(upBtn); toolbar.appendChild(addrEl);
+  const upBtn      = document.createElement('button'); upBtn.textContent = '⬆ Up';
+  const refreshBtn = document.createElement('button'); refreshBtn.textContent = '🔄 Refresh';
+  const addrEl     = document.createElement('input'); addrEl.className = 'exp-addr'; addrEl.readOnly = true;
+  toolbar.appendChild(upBtn); toolbar.appendChild(refreshBtn); toolbar.appendChild(addrEl);
   body.appendChild(toolbar);
 
   // ── file pane ────────────────────────────────────────────────
@@ -1797,6 +1801,36 @@ function openExplorer(startPath) {
     else if (dir.files.has(name)) openNotepad(name);
   }
 
+  function showCtxMenu(x, y, items) {
+    closeDropdown();
+    const dd = document.createElement('div');
+    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+    dd.style.left = x + 'px'; dd.style.top = y + 'px';
+    items.forEach(item => {
+      if (item === '-') {
+        const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
+      } else {
+        const el = document.createElement('div');
+        el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
+        el.textContent = item.label;
+        if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
+        dd.appendChild(el);
+      }
+    });
+    document.body.appendChild(dd);
+    setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
+  }
+
+  function deleteSelected() {
+    if (!selected || selected.sysfile) return;
+    if (!confirm(`Delete "${selected.name}"?`)) return;
+    const dir = fsGetDir(cwd);
+    if (selected.kind === 'dir') { termFS.dirs.delete(selected.name); termFS.subdirs.delete(selected.name); }
+    else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); }
+    else dir.files.delete(selected.name);
+    render();
+  }
+
   function makeItem(name, kind, sysfile) {
     const el = document.createElement('div');
     el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
@@ -1807,6 +1841,37 @@ function openExplorer(startPath) {
       if (ws) ws.textContent = name;
     });
     el.addEventListener('dblclick', () => openItem(name, kind, sysfile));
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      pane.querySelectorAll('.exp-item').forEach(i => i.classList.remove('selected'));
+      el.classList.add('selected'); selected = { name, kind, sysfile };
+      if (ws) ws.textContent = name;
+      const canDelete = !sysfile;
+      showCtxMenu(e.clientX, e.clientY, [
+        { label: kind === 'dir' ? '📂 Open Folder' : '▶ Open', action: () => openItem(name, kind, sysfile) },
+        '-',
+        { label: '✏️ Rename', disabled: sysfile, action: () => {
+          if (sysfile) return;
+          const n = prompt('Rename to:', name); if (!n || n === name) return;
+          const dir = fsGetDir(cwd);
+          if (kind === 'dir') {
+            termFS.dirs.delete(name);
+            const sub = termFS.subdirs.get(name);
+            termFS.dirs.add(n.toUpperCase());
+            if (sub) termFS.subdirs.set(n.toUpperCase(), sub);
+            termFS.subdirs.delete(name);
+          } else if (dir.blobs.has(name)) {
+            const b = dir.blobs.get(name); dir.blobs.delete(name); dir.blobs.set(n, b);
+          } else {
+            const c = dir.files.get(name); dir.files.delete(name); dir.files.set(n, c ?? '');
+          }
+          render();
+        }},
+        { label: '🗑️ Delete', disabled: !canDelete, action: deleteSelected },
+        '-',
+        { label: '📋 Copy Name', action: () => navigator.clipboard?.writeText(name) },
+      ]);
+    });
     return el;
   }
 
@@ -1845,6 +1910,21 @@ function openExplorer(startPath) {
   }
 
   upBtn.addEventListener('click', () => { cwd = ''; render(); });
+  refreshBtn.addEventListener('click', () => render());
+
+  // ── pane background right-click ───────────────────────────────
+  pane.addEventListener('contextmenu', e => {
+    if (e.target !== pane && !e.target.classList.contains('exp-grid')) return;
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '📁 New Folder',    action: () => { const n = prompt('Folder name:'); if (n) { termFS.dirs.add(n.toUpperCase()); render(); } } },
+      { label: '📄 New Text File', action: () => { const n = prompt('File name:', 'untitled.txt'); if (n) { termFS.files.set(n,''); openNotepad(n); render(); } } },
+      '-',
+      { label: '📤 Upload File…',  action: triggerUpload },
+      '-',
+      { label: '🔄 Refresh',       action: render },
+    ]);
+  });
 
   // ── menus ────────────────────────────────────────────────────
   mb.innerHTML = '';
@@ -1854,15 +1934,7 @@ function openExplorer(startPath) {
       { label: 'New Text File',action: () => { const n = prompt('File name:', 'untitled.txt'); if (n) { termFS.files.set(n,''); openNotepad(n); render(); } } },
       '-',
       { label: 'Open',         action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
-      { label: 'Delete',       action: () => {
-        if (!selected || selected.sysfile) return;
-        if (!confirm(`Delete "${selected.name}"?`)) return;
-        const dir = fsGetDir(cwd);
-        if (selected.kind === 'dir') { termFS.dirs.delete(selected.name); termFS.subdirs.delete(selected.name); }
-        else if (dir.blobs.has(selected.name)) { URL.revokeObjectURL(dir.blobs.get(selected.name).url); dir.blobs.delete(selected.name); }
-        else dir.files.delete(selected.name);
-        render();
-      }},
+      { label: 'Delete',       action: deleteSelected },
       '-',
       { label: 'Upload File\u2026', action: triggerUpload },
       '-',
@@ -1879,6 +1951,10 @@ function openExplorer(startPath) {
   });
 
   render();
+
+  // Auto-refresh when files are uploaded
+  function onFsChanged() { if (wins['explorer']) render(); else document.removeEventListener('fs-changed', onFsChanged); }
+  document.addEventListener('fs-changed', onFsChanged);
 }
 
 function openFiles() {
