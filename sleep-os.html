@@ -836,26 +836,26 @@ body {
 // DATA
 // ─────────────────────────────────────────────────────────────────
 const PROJECTS = [
-  { name: 'sand playground',    emoji: '⏳', file: 'evenet.fun/Sands.html' },
-  { name: 'bug hotline',        emoji: '🐛', file: 'evenet.fun/critters.html' },
-  { name: 'fireworks',          emoji: '🎆', file: 'evenet.fun/fireworks.html' },
-  { name: 'pixel splatter',     emoji: '🔮', file: 'evenet.fun/pixel-splatter.html' },
-  { name: 'anime hell',         emoji: '🔥', file: 'evenet.fun/hell.html' },
-  { name: 'fluid',              emoji: '💧', file: 'evenet.fun/fluid.html' },
-  { name: 'web wizard casino',  emoji: '🎰', file: 'evenet.fun/webwizardcasino.html' },
-  { name: 'automata garden',    emoji: '🌱', file: 'evenet.fun/automata-garden.html' },
-  { name: 'erosion toy',        emoji: '🏔️',  file: 'evenet.fun/erosion.html' },
-  { name: 'wave collapse',      emoji: '🌊', file: 'evenet.fun/wave-collapse.html' },
-  { name: 'tentacle catch',     emoji: '🦑', file: 'evenet.fun/catch.html' },
-  { name: 'reaction diffusion', emoji: '⚗️',  file: 'evenet.fun/philosophers-stone.html' },
-  { name: 'voronoi',            emoji: '🔬', file: 'evenet.fun/vornoi.html' },
-  { name: 'morse code',         emoji: '📡', file: 'evenet.fun/morse.html' },
-  { name: 'lissajous',          emoji: '〰️', file: 'evenet.fun/lissajous.html' },
-  { name: 'net sanctuary',      emoji: '🌐', file: 'evenet.fun/net-sanctuary-project.html' },
-  { name: 'ascii render',       emoji: '💻', file: 'evenet.fun/ascii-render.html' },
-  { name: 'tablecloth',         emoji: '🧶', file: 'evenet.fun/tablecloth.html' },
-  { name: 'corridor crawler',   emoji: '🚪', file: 'evenet.fun/corridor.html' },
-  { name: 'patch synth',        emoji: '🎛️',  file: 'evenet.fun/synth.html' },
+  { name: 'sand playground',    emoji: '⏳', file: 'Sands.html' },
+  { name: 'bug hotline',        emoji: '🐛', file: 'critters.html' },
+  { name: 'fireworks',          emoji: '🎆', file: 'fireworks.html' },
+  { name: 'pixel splatter',     emoji: '🔮', file: 'pixel-splatter.html' },
+  { name: 'anime hell',         emoji: '🔥', file: 'hell.html' },
+  { name: 'fluid',              emoji: '💧', file: 'fluido.html' },
+  { name: 'web wizard casino',  emoji: '🎰', file: 'webwizardcasino.html' },
+  { name: 'automata garden',    emoji: '🌱', file: 'automata-garden.html' },
+  { name: 'erosion toy',        emoji: '🏔️',  file: 'erosion.html' },
+  { name: 'wave collapse',      emoji: '🌊', file: 'wave-collapse.html' },
+  { name: 'tentacle catch',     emoji: '🦑', file: 'catch.html' },
+  { name: 'reaction diffusion', emoji: '⚗️',  file: 'philosophers-stone.html' },
+  { name: 'voronoi',            emoji: '🔬', file: 'vornoi.html' },
+  { name: 'morse code',         emoji: '📡', file: 'morse.html' },
+  { name: 'lissajous',          emoji: '〰️', file: 'lissajous.html' },
+  { name: 'net sanctuary',      emoji: '🌐', file: 'net-sanctuary-project.html' },
+  { name: 'ascii render',       emoji: '💻', file: 'ascii-render.html' },
+  { name: 'tablecloth',         emoji: '🧶', file: 'tablecloth.html' },
+  { name: 'corridor crawler',   emoji: '🚪', file: 'corridor.html' },
+  { name: 'patch synth',        emoji: '🎛️',  file: 'synth.html' },
 ];
 
 const DESKTOP_ICONS = [
@@ -1462,8 +1462,13 @@ const termFS = {
         '  DEL <file>        delete',
         '  GREP <pat> <file> search lines matching pattern',
         '  WC <file>         word/line/byte count',
+        '  SET name=value    assign a shell variable',
+        '  INPUT <var>       read a line into a shell variable',
+        '  SLEEP <ms>        pause in milliseconds',
         '  LS *.txt          wildcard file listing',
         '  CAT f | GREP pat  pipe output between commands',
+        '  DIR > out.txt     redirect output to a file',
+        '  CAT f | NOTEPAD   pipe output into Notepad',
         '',
         'KEYBOARD SHORTCUTS:',
         '  Alt+F4            close focused window',
@@ -1473,6 +1478,8 @@ const termFS = {
         '  Win+R             Run dialog',
         '  F5                refresh desktop',
         '  Escape            close menus / overlays',
+        '',
+        'Bonus: RUN DOCS\\REACTOR.script to play a terminal game.',
         '',
         'See COMMANDS.txt for full terminal reference.',
         'See SCRIPTING.txt for the .script language.',
@@ -1490,21 +1497,54 @@ const termFS = {
         '  echo <text>        same as print',
         '  wait <ms>          pause N milliseconds',
         '  set <var> <value>  assign a variable',
-        '  clear              clear the terminal',
+        '  input <var> [text] read a line from the terminal',
+        '  inc <var> [n]      increase a numeric variable',
+        '  dec <var> [n]      decrease a numeric variable',
+        '  add <var> <n>      add n to a numeric variable',
+        '  sub <var> <n>      subtract n from a numeric variable',
+        '  mul <var> <n>      multiply a numeric variable',
+        '  div <var> <n>      divide a numeric variable',
+        '  mod <var> <n>      modulo a numeric variable',
+        '  clear              clear the terminal output',
         '  touch <file>       create an empty file',
         '  mkdir <dir>        create a directory',
         '  del <file>         delete a file',
         '  open <file>        open file in viewer',
         '  start <program>    launch a program',
         '  notepad [file]     open Notepad',
-        '  run <script>       run another script',
-        '  grep <pattern> <file> print lines matching pattern',
+        '  run <script> [..]  run another script in the same context',
+        '  call <label> [..]  call a subroutine label',
+        '  return [code]      return from a subroutine',
+        '  exit [code]        stop the script with a status code',
+        '  grep <pattern> <file> print matching lines',
+        '',
+        '-- CONTROL FLOW --------------------------------------------',
+        '',
+        '  :label             declare a jump target',
+        '  goto <label>       jump to a label',
+        '  if a == b goto x   branch on a comparison',
+        '  if not a == b goto x',
+        '  if exists file goto x',
+        '  if defined name goto x',
+        '  if not exists file goto x',
+        '  if not defined name goto x',
+        '',
+        '  Supported operators: ==  !=  >  >=  <  <=',
+        '  == and != compare strings after $var expansion.',
+        '  >, >=, <, <= require both sides to be numbers.',
         '',
         '── VARIABLES ────────────────────────────────',
         '',
         '  set name Visitor',
         '  print Hello, $name!',
-        '  → Hello, Visitor!',
+        '  -> Hello, Visitor!',
+        '  print Arg 1: $1  / argc=$argc',
+        '  if $status != 0 goto failed',
+        '',
+        '  Child scripts launched with RUN share the same variables.',
+        '  RUN and CALL provide positional args as $0, $1, $2, ...',
+        '  $argc is the arg count. $status / $errorlevel is the last exit code.',
+        '  INPUT only works when the script is launched from TERMINAL.',
         '',
         '── COLORS ───────────────────────────────────',
         '',
@@ -1521,13 +1561,35 @@ const termFS = {
         '',
         '── EXAMPLE SCRIPT ───────────────────────────',
         '',
-        '  # hello.script',
-        '  set name sleepOS',
-        '  print [cyan] == Hello from $name ==',
-        '  wait 500',
-        '  print Loading...',
-        '  wait 1000',
+        '  # loop.script',
+        '  input name "Operator name:"',
+        '  set mode debug',
+        '  set count 1',
+        '  if not exists DOCS goto no_docs',
+        '  if $mode == debug goto debug',
+        '  print Normal mode for $name',
+        '  goto start',
+        '  :debug',
+        '  print [cyan] Debug mode enabled for $name',
+        '  call tick_loop $name',
+        '  if $status != 0 goto failed',
+        '  exit 0',
+        '  :tick_loop',
+        '  :start',
+        '  print [yellow] Doubling counter...',
+        '  :loop',
+        '  print Tick $count',
+        '  mul count 2',
+        '  wait 250',
+        '  if $count <= 4 goto loop',
         '  print [green] Done.',
+        '  return 0',
+        '  :no_docs',
+        '  print [red] DOCS missing',
+        '  exit 2',
+        '  :failed',
+        '  print [red] Subroutine failed',
+        '  exit $status',
         '',
         '── PROGRAMS FOR start/open ──────────────────',
         '',
@@ -1551,7 +1613,9 @@ const termFS = {
         '  OPEN <file>          open in viewer/editor',
         '',
         '── SCRIPTING ────────────────────────────────',
-        '  RUN <file.script>    execute a script file',
+        '  RUN <file.script> [args] execute a script file',
+        '  .script files support labels, subroutines, args,',
+        '  shared variables, existence tests, and exit codes',
         '  ECHO text > file     write text to file',
         '  ECHO text >> file    append to file',
         '',
@@ -1570,10 +1634,17 @@ const termFS = {
         '  PS                   running processes',
         '  TASKKILL <pid>       terminate process',
         '  IPCONFIG             network config',
-        '  SET                  environment variables',
+        '  SET [name[=value]]   show or assign shell variables',
+        '  INPUT <var> [prompt] read a line into a shell variable',
+        '  INC, DEC <var> [n]   adjust numeric shell variables',
+        '  ADD, SUB, MUL, DIV, MOD  arithmetic on shell variables',
         '  PING [host]          ping a host',
+        '  SLEEP <ms>           pause for milliseconds',
         '  ECHO <text>          print text',
+        '  PRINT <text>         alias for ECHO',
+        '  WAIT <ms>            alias for SLEEP',
         '  CLS                  clear screen',
+        '  CLEAR                alias for CLS',
         '  HELP                 this help',
         '',
         '── SEARCH & PIPES ───────────────────────────',
@@ -1582,6 +1653,10 @@ const termFS = {
         '  LS *.ext               wildcard glob listing',
         '  DEL *.tmp              wildcard delete',
         '  CAT f | GREP pattern   pipe output to command',
+        '  cmd > file             write command output to a file',
+        '  cmd >> file            append command output to a file',
+        '  cmd | NOTEPAD          open piped output in Notepad',
+        '  cmd | NOTEPAD file     save piped output and open it',
         '',
         '── KEYBOARD SHORTCUTS ───────────────────────',
         '  Alt+F4        close focused window',
@@ -1591,6 +1666,156 @@ const termFS = {
         '  Win+R         open Run dialog',
         '  F5            refresh desktop',
         '  Escape        close menus / overlays',
+      ].join('\n')],
+      ['REACTOR.script', [
+        '# REACTOR.script',
+        'clear',
+        'print [cyan] REACTOR WATCH',
+        'print You are alone in the control loop.',
+        'print Survive 5 turns without melting down.',
+        'print',
+        'print 1) VENT  - lower heat, costs power',
+        'print 2) BOOST - gain power, raises heat',
+        'print 3) PATCH - repair integrity, costs power',
+        'print',
+        'input pilot "Operator name:"',
+        'set heat 4',
+        'set power 5',
+        'set integrity 6',
+        'set turn 1',
+        'print [green] Good luck, $pilot.',
+        'wait 300',
+        ':loop',
+        'call check_fail',
+        'if $status != 0 goto game_over',
+        'if $turn > 5 goto win',
+        'call hud',
+        'call event_brief',
+        'call choose_action',
+        'if $status != 0 goto loop',
+        'call apply_event',
+        'call check_fail',
+        'if $status != 0 goto game_over',
+        'inc turn 1',
+        'wait 250',
+        'goto loop',
+        ':hud',
+        'print',
+        'print [blue] ------------------------------',
+        'print [blue] TURN $turn / 5',
+        'print Heat: $heat',
+        'print Power: $power',
+        'print Integrity: $integrity',
+        'print [blue] ------------------------------',
+        'return 0',
+        ':event_brief',
+        'if $turn == 1 goto brief_1',
+        'if $turn == 2 goto brief_2',
+        'if $turn == 3 goto brief_3',
+        'if $turn == 4 goto brief_4',
+        'goto brief_5',
+        ':brief_1',
+        'print [yellow] Alert: a solar flare is incoming.',
+        'print [yellow] End of turn effect: heat +2',
+        'return 0',
+        ':brief_2',
+        'print [yellow] Alert: coolant leak in the outer ring.',
+        'print [yellow] End of turn effect: integrity -2',
+        'return 0',
+        ':brief_3',
+        'print [yellow] Alert: ghost load in the battery banks.',
+        'print [yellow] End of turn effect: power -2',
+        'return 0',
+        ':brief_4',
+        'print [yellow] Alert: chamber tremor in progress.',
+        'print [yellow] End of turn effect: heat +1, integrity -1',
+        'return 0',
+        ':brief_5',
+        'print [yellow] Alert: cascade surge across all systems.',
+        'print [yellow] End of turn effect: heat +2, power -1, integrity -1',
+        'return 0',
+        ':choose_action',
+        'print 1) VENT',
+        'print 2) BOOST',
+        'print 3) PATCH',
+        'input choice "Action:"',
+        'if $choice == 1 goto act_vent',
+        'if $choice == 2 goto act_boost',
+        'if $choice == 3 goto act_patch',
+        'print [red] Invalid action. Choose 1, 2, or 3.',
+        'return 1',
+        ':act_vent',
+        'print [cyan] You vent plasma into the dark.',
+        'dec heat 3',
+        'dec power 1',
+        'call clamp_heat',
+        'return 0',
+        ':act_boost',
+        'print [cyan] You push fresh charge into the grid.',
+        'add power 2',
+        'add heat 2',
+        'return 0',
+        ':act_patch',
+        'print [cyan] You patch fractures in the shell.',
+        'add integrity 2',
+        'dec power 2',
+        'return 0',
+        ':clamp_heat',
+        'if $heat >= 0 goto clamp_done',
+        'set heat 0',
+        ':clamp_done',
+        'return 0',
+        ':apply_event',
+        'if $turn == 1 goto event_1',
+        'if $turn == 2 goto event_2',
+        'if $turn == 3 goto event_3',
+        'if $turn == 4 goto event_4',
+        'goto event_5',
+        ':event_1',
+        'add heat 2',
+        'print [yellow] The flare hits. Heat climbs.',
+        'return 0',
+        ':event_2',
+        'sub integrity 2',
+        'print [yellow] Coolant loss scars the outer casing.',
+        'return 0',
+        ':event_3',
+        'sub power 2',
+        'print [yellow] The ghost load drains your reserves.',
+        'return 0',
+        ':event_4',
+        'add heat 1',
+        'sub integrity 1',
+        'print [yellow] The chamber shudders under strain.',
+        'return 0',
+        ':event_5',
+        'add heat 2',
+        'sub power 1',
+        'sub integrity 1',
+        'print [yellow] The final cascade tears through the stack.',
+        'return 0',
+        ':check_fail',
+        'if $heat < 10 goto check_power',
+        'print [red] MELTDOWN. Heat reached $heat.',
+        'return 10',
+        ':check_power',
+        'if $power > 0 goto check_integrity',
+        'print [red] BLACKOUT. Power collapsed.',
+        'return 11',
+        ':check_integrity',
+        'if $integrity > 0 goto safe',
+        'print [red] BREACH. Integrity failed.',
+        'return 12',
+        ':safe',
+        'return 0',
+        ':win',
+        'print',
+        'print [green] Reactor stable after 5 turns.',
+        'print [green] Nice work, $pilot.',
+        'exit 0',
+        ':game_over',
+        'print [red] The control loop goes silent.',
+        'exit $status',
       ].join('\n')],
     ]),
   }]]),
@@ -1672,6 +1897,29 @@ function _desDir(o) {
   return d;
 }
 
+const SEEDED_DOCS_DATA = _serDir(termFS.subdirs.get('DOCS'));
+
+function refreshSeededDocs() {
+  termFS.dirs.add('DOCS');
+  let docs = termFS.subdirs.get('DOCS');
+  if (!docs) {
+    docs = _desDir(SEEDED_DOCS_DATA);
+    termFS.subdirs.set('DOCS', docs);
+    return;
+  }
+  docs.dirs = docs.dirs || new Set();
+  docs.files = docs.files || new Map();
+  docs.blobs = docs.blobs || new Map();
+  docs.subdirs = docs.subdirs || new Map();
+  Object.entries(SEEDED_DOCS_DATA.files || {}).forEach(([name, value]) => {
+    docs.files.set(name, value);
+  });
+  Object.entries(SEEDED_DOCS_DATA.subdirs || {}).forEach(([name, value]) => {
+    docs.dirs.add(name);
+    docs.subdirs.set(name, _desDir(value));
+  });
+}
+
 function saveFS() {
   try {
     const data = { dirs: [...termFS.dirs], files: {}, subdirs: {} };
@@ -1688,12 +1936,16 @@ function schedSave() {
 
 function loadFS() {
   const raw = localStorage.getItem(FS_KEY);
-  if (!raw) return;
+  if (!raw) {
+    refreshSeededDocs();
+    return;
+  }
   try {
     const data = JSON.parse(raw);
     if (data.dirs) data.dirs.forEach(d => termFS.dirs.add(d));
     if (data.files) Object.entries(data.files).forEach(([k, v]) => termFS.files.set(k, v));
     if (data.subdirs) Object.entries(data.subdirs).forEach(([k, v]) => termFS.subdirs.set(k, _desDir(v)));
+    refreshSeededDocs();
   } catch(e) { /* corrupted save — ignore */ }
 }
 
@@ -1922,75 +2174,591 @@ document.addEventListener('fs-changed', refreshAppearanceWindow);
 
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
+const SCRIPT_MAX_STEPS = 10000;
+const SCRIPT_MAX_DEPTH = 16;
+const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
 
-function execScript(source, printFn) {
-  const vars = {};
-  let delay = 0;
-  const lines = source.split('\n');
+function makeScriptError(message, lineNo, sourceName) {
+  const err = new Error(message);
+  err.lineNo = lineNo || 0;
+  err.sourceName = sourceName || '';
+  return err;
+}
 
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#') || line.startsWith('//')) continue;
+function makeAbortError(message) {
+  const err = new Error(message || 'Command interrupted.');
+  err.name = 'AbortError';
+  err.isCommandAbort = true;
+  return err;
+}
 
-    // Pre-scan wait to compute delay offset for subsequent commands
-    if (/^wait\s+\d+/i.test(line)) {
-      delay += Math.min(parseInt(line.split(/\s+/)[1]) || 0, 30000);
+function isAbortError(err) {
+  return !!(err && (err.isCommandAbort || err.name === 'AbortError'));
+}
+
+function throwIfAborted(signal) {
+  if (signal && signal.aborted) {
+    throw signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError();
+  }
+}
+
+function scriptResolveText(text, vars) {
+  return String(text ?? '').replace(/\$(\w+)/g, (_, key) => vars[key] ?? '');
+}
+
+function scriptBuildArgFrame(targetName, args) {
+  const values = Object.create(null);
+  const items = Array.isArray(args) ? args.map(arg => String(arg ?? '')) : [];
+  values['0'] = String(targetName || '');
+  values.argc = String(items.length);
+  items.forEach((value, index) => { values[String(index + 1)] = value; });
+  return { targetName: String(targetName || ''), values };
+}
+
+function scriptLookupVar(state, key) {
+  const name = String(key || '');
+  if (name === 'status' || name === 'errorlevel') return String(state.status ?? 0);
+  const frame = state.frames?.[state.frames.length - 1];
+  if (frame && Object.prototype.hasOwnProperty.call(frame.values, name)) return frame.values[name];
+  return state.vars[name] ?? '';
+}
+
+function scriptHasVar(state, key) {
+  const name = String(key || '');
+  if (name === 'status' || name === 'errorlevel') return true;
+  const frame = state.frames?.[state.frames.length - 1];
+  if (frame && Object.prototype.hasOwnProperty.call(frame.values, name)) return true;
+  return Object.prototype.hasOwnProperty.call(state.vars, name);
+}
+
+function scriptResolveStateText(text, state) {
+  return String(text ?? '').replace(/\$(\w+)/g, (_, key) => scriptLookupVar(state, key));
+}
+
+function scriptUnescape(text) {
+  return String(text ?? '')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'");
+}
+
+function scriptStripOuterQuotes(text) {
+  const trimmed = String(text ?? '').trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return scriptUnescape(trimmed.slice(1, -1));
+  }
+  return trimmed;
+}
+
+function scriptNormalizeLabel(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function scriptParseNumber(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : null;
+}
+
+function scriptParseStatusCode(value, lineNo, fallback) {
+  const text = String(value ?? '').trim();
+  if (!text) return Math.trunc(scriptParseNumber(fallback ?? 0) ?? 0);
+  const num = scriptParseNumber(text);
+  if (num === null) throw makeScriptError('Status code must be numeric.', lineNo);
+  return Math.trunc(num);
+}
+
+function scriptTokenize(text, lineNo) {
+  const source = String(text ?? '');
+  const tokens = [];
+  let token = '';
+  let quote = null;
+  let started = false;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (quote) {
+      started = true;
+      if (ch === '\\' && i + 1 < source.length) {
+        token += source[i + 1];
+        i++;
+        continue;
+      }
+      if (ch === quote) {
+        quote = null;
+        continue;
+      }
+      token += ch;
       continue;
     }
-
-    ((d, l) => setTimeout(() => {
-      const resolved = l.replace(/\$(\w+)/g, (_, k) => vars[k] ?? '');
-      const spIdx = resolved.search(/\s/);
-      const cmd = (spIdx === -1 ? resolved : resolved.slice(0, spIdx)).toLowerCase();
-      const arg = spIdx === -1 ? '' : resolved.slice(spIdx + 1).trim();
-
-      switch (cmd) {
-        case 'print': case 'echo': {
-          const m = arg.match(/^\[(\w+)\]\s*/);
-          if (m && SCRIPT_COLORS[m[1]]) printFn(arg.slice(m[0].length), SCRIPT_COLORS[m[1]]);
-          else printFn(arg);
-          break;
-        }
-        case 'set': {
-          const sp = arg.indexOf(' ');
-          if (sp !== -1) vars[arg.slice(0, sp)] = arg.slice(sp + 1);
-          break;
-        }
-        case 'clear': {
-          const out = document.getElementById('to');
-          if (out) out.innerHTML = '';
-          break;
-        }
-        case 'touch':
-          if (arg && !termFS.files.has(arg)) { termFS.files.set(arg, ''); schedSave(); }
-          break;
-        case 'mkdir':
-          if (arg) { termFS.dirs.add(arg.toUpperCase()); schedSave(); }
-          break;
-        case 'del': case 'rm':
-          termFS.files.delete(arg);
-          if (termFS.blobs.has(arg)) { URL.revokeObjectURL(termFS.blobs.get(arg).url); termFS.blobs.delete(arg); removeBlobEntry('', arg); }
-          schedSave();
-          break;
-        case 'open':
-          if (termFS.blobs.has(arg)) openMediaFile(arg);
-          else if (termFS.files.has(arg)) openNotepad(arg);
-          break;
-        case 'notepad': openNotepad(arg || undefined); break;
-        case 'start': {
-          const p = arg.toLowerCase();
-          const map = { notepad: openNotepad, terminal: openTerminal, sysmon: openSysmon,
-                        browser: openBrowser, defrag: openDefrag, explorer: openExplorer,
-                        welcome: openWelcome, files: openFiles };
-          if (map[p]) map[p](); break;
-        }
-        case 'run':
-          if (arg && termFS.files.has(arg)) execScript(termFS.files.get(arg), printFn);
-          else printFn(`Script not found: ${arg}`, '#ff4444');
-          break;
+    if (/\s/.test(ch)) {
+      if (started) {
+        tokens.push(token);
+        token = '';
+        started = false;
       }
-    }, d))(delay, line);
+      continue;
+    }
+    started = true;
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    token += ch;
   }
+  if (quote) throw makeScriptError('Unterminated quoted string.', lineNo);
+  if (started) tokens.push(token);
+  return tokens;
+}
+
+function scriptIsReservedVarName(name) {
+  return /^(?:status|errorlevel|argc|\d+)$/i.test(String(name || ''));
+}
+
+function scriptPathExists(path, dirName) {
+  const target = String(path || '').trim();
+  if (!target) return false;
+  if (target === '.' || target === '..' || target === '\\' || /^C:\\sleepOS\\?$/i.test(target)) return true;
+  if (fsGetEntry(target, dirName)) return true;
+  return !!fsGetDir(fsNormalizeDir(target));
+}
+
+function scriptEvaluateCondition(text, state, lineNo) {
+  const tokens = scriptTokenize(text, lineNo);
+  let negate = false;
+  if (tokens[0] && tokens[0].toLowerCase() === 'not') {
+    negate = true;
+    tokens.shift();
+  }
+  if (tokens[0] && tokens[0].toLowerCase() === 'exists') {
+    if (tokens.length !== 4 || tokens[2].toLowerCase() !== 'goto') {
+      throw makeScriptError('Usage: if [not] exists <path> goto <label>', lineNo);
+    }
+    const rawPassed = scriptPathExists(tokens[1], state.dirName);
+    return { passed: negate ? !rawPassed : rawPassed, label: tokens[3] };
+  }
+  if (tokens[0] && tokens[0].toLowerCase() === 'defined') {
+    if (tokens.length !== 4 || tokens[2].toLowerCase() !== 'goto') {
+      throw makeScriptError('Usage: if [not] defined <var> goto <label>', lineNo);
+    }
+    const rawPassed = scriptHasVar(state, tokens[1]);
+    return { passed: negate ? !rawPassed : rawPassed, label: tokens[3] };
+  }
+  if (tokens.length !== 5 || tokens[3].toLowerCase() !== 'goto') {
+    throw makeScriptError('Usage: if <left> <op> <right> goto <label>', lineNo);
+  }
+  const rawPassed = scriptCompare(tokens[0], tokens[1], tokens[2], lineNo);
+  return { passed: negate ? !rawPassed : rawPassed, label: tokens[4] };
+}
+
+function scriptMutateNumericVar(vars, key, op, amountRaw, lineNo) {
+  const current = Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : '0';
+  const currentNum = scriptParseNumber(current);
+  if (currentNum === null) throw makeScriptError('Variable is not numeric: ' + key, lineNo);
+  const needsAmount = op === 'mul' || op === 'div' || op === 'mod';
+  if (needsAmount && (amountRaw === undefined || amountRaw === null || String(amountRaw).trim() === '')) {
+    throw makeScriptError('Usage: ' + op + ' <var> <amount>', lineNo);
+  }
+  const amount = amountRaw === undefined || amountRaw === null || String(amountRaw).trim() === '' ? 1 : scriptParseNumber(amountRaw);
+  if (amount === null) throw makeScriptError('Arithmetic operand must be numeric.', lineNo);
+  if ((op === 'div' || op === 'mod') && amount === 0) throw makeScriptError('Division by zero.', lineNo);
+  let nextValue = currentNum;
+  if (op === 'inc' || op === 'add') nextValue = currentNum + amount;
+  else if (op === 'dec' || op === 'sub') nextValue = currentNum - amount;
+  else if (op === 'mul') nextValue = currentNum * amount;
+  else if (op === 'div') nextValue = currentNum / amount;
+  else if (op === 'mod') nextValue = currentNum % amount;
+  else throw makeScriptError('Unsupported arithmetic operation: ' + op, lineNo);
+  vars[key] = String(nextValue);
+  return vars[key];
+}
+
+function scriptEmitError(printFn, sourceName, lineNo, message) {
+  const prefix = sourceName ? sourceName + ': ' : 'Script error: ';
+  const where = lineNo ? 'line ' + lineNo + ': ' : '';
+  printFn(prefix + where + message, '#ff4444');
+}
+
+function scriptFail(err, printFn, sourceName, bubbleErrors) {
+  const scriptErr = err instanceof Error ? err : makeScriptError(String(err), 0, sourceName);
+  if (!scriptErr.sourceName) scriptErr.sourceName = sourceName || '';
+  if (bubbleErrors) throw scriptErr;
+  scriptEmitError(printFn, scriptErr.sourceName || sourceName, scriptErr.lineNo || 0, scriptErr.message || String(scriptErr));
+  return Math.trunc(scriptErr.statusCode ?? 1);
+}
+
+function parseScript(source) {
+  const instructions = [];
+  const labels = Object.create(null);
+  String(source ?? '').replace(/\r/g, '').split('\n').forEach((rawLine, index) => {
+    const lineNo = index + 1;
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || line.startsWith('//')) return;
+    if (line.startsWith(':')) {
+      const match = line.match(SCRIPT_LABEL_RE);
+      if (!match) throw makeScriptError('Invalid label syntax.', lineNo);
+      const label = scriptNormalizeLabel(match[1]);
+      if (Object.prototype.hasOwnProperty.call(labels, label)) {
+        throw makeScriptError('Duplicate label: ' + match[1], lineNo);
+      }
+      labels[label] = instructions.length;
+      return;
+    }
+    const spaceIdx = line.search(/\s/);
+    instructions.push({
+      lineNo,
+      raw: line,
+      cmd: (spaceIdx === -1 ? line : line.slice(0, spaceIdx)).toLowerCase(),
+      arg: spaceIdx === -1 ? '' : line.slice(spaceIdx + 1).trim(),
+    });
+  });
+  return { instructions, labels };
+}
+
+async function scriptSleep(ms, signal) {
+  throwIfAborted(signal);
+  await new Promise((resolve, reject) => {
+    const tid = setTimeout(done, ms);
+    function cleanup() {
+      clearTimeout(tid);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }
+    function done() {
+      cleanup();
+      resolve();
+    }
+    function onAbort() {
+      cleanup();
+      reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
+    }
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function scriptJumpIndex(labels, labelName, lineNo) {
+  const key = scriptNormalizeLabel(labelName);
+  if (!Object.prototype.hasOwnProperty.call(labels, key)) {
+    throw makeScriptError('Unknown label: ' + labelName, lineNo);
+  }
+  return labels[key];
+}
+
+function scriptCompare(left, op, right, lineNo) {
+  if (op === '==') return left === right;
+  if (op === '!=') return left !== right;
+  const leftNum = scriptParseNumber(left);
+  const rightNum = scriptParseNumber(right);
+  if (leftNum === null || rightNum === null) {
+    throw makeScriptError('Numeric comparison requires numeric operands.', lineNo);
+  }
+  if (op === '>') return leftNum > rightNum;
+  if (op === '>=') return leftNum >= rightNum;
+  if (op === '<') return leftNum < rightNum;
+  if (op === '<=') return leftNum <= rightNum;
+  throw makeScriptError('Unsupported comparison operator: ' + op, lineNo);
+}
+
+async function execScriptInstruction(inst, labels, state) {
+  throwIfAborted(state.signal);
+  const resolvedArg = scriptResolveStateText(inst.arg, state).trim();
+  switch (inst.cmd) {
+    case 'print':
+    case 'echo': {
+      const colorMatch = resolvedArg.match(/^\[(\w+)\]\s*/);
+      if (colorMatch && SCRIPT_COLORS[colorMatch[1]]) {
+        state.printFn(resolvedArg.slice(colorMatch[0].length), SCRIPT_COLORS[colorMatch[1]]);
+      } else {
+        state.printFn(resolvedArg);
+      }
+      state.status = 0;
+      return null;
+    }
+    case 'set': {
+      const match = resolvedArg.match(/^(\w+)(?:\s+(.*))?$/);
+      if (!match) throw makeScriptError('Usage: set <var> <value>', inst.lineNo);
+      if (scriptIsReservedVarName(match[1])) throw makeScriptError('Cannot assign reserved variable: ' + match[1], inst.lineNo);
+      state.vars[match[1]] = match[2] ?? '';
+      state.status = 0;
+      return null;
+    }
+    case 'inc':
+    case 'dec':
+    case 'add':
+    case 'sub':
+    case 'mul':
+    case 'div':
+    case 'mod': {
+      const match = resolvedArg.match(/^(\w+)(?:\s+(.+))?$/);
+      if (!match) {
+        const usage = inst.cmd === 'mul' || inst.cmd === 'div' || inst.cmd === 'mod'
+          ? 'Usage: ' + inst.cmd + ' <var> <amount>'
+          : 'Usage: ' + inst.cmd + ' <var> [amount]';
+        throw makeScriptError(usage, inst.lineNo);
+      }
+      if (scriptIsReservedVarName(match[1])) throw makeScriptError('Cannot assign reserved variable: ' + match[1], inst.lineNo);
+      scriptMutateNumericVar(state.vars, match[1], inst.cmd, match[2], inst.lineNo);
+      state.status = 0;
+      return null;
+    }
+    case 'wait': {
+      const ms = scriptParseNumber(resolvedArg);
+      if (ms === null) throw makeScriptError('Usage: wait <ms>', inst.lineNo);
+      await scriptSleep(Math.min(Math.max(Math.floor(ms), 0), 30000), state.signal);
+      state.status = 0;
+      return null;
+    }
+    case 'input': {
+      throwIfAborted(state.signal);
+      if (!state.readLine) throw makeScriptError('INPUT requires an interactive terminal.', inst.lineNo);
+      const match = resolvedArg.match(/^(\w+)(?:\s+(.+))?$/);
+      if (!match) throw makeScriptError('Usage: input <var> [prompt]', inst.lineNo);
+      if (scriptIsReservedVarName(match[1])) throw makeScriptError('Cannot assign reserved variable: ' + match[1], inst.lineNo);
+      const key = match[1];
+      const prompt = match[2] ? scriptStripOuterQuotes(match[2]) : key + ':';
+      state.vars[key] = await state.readLine(prompt);
+      state.status = 0;
+      return null;
+    }
+    case 'goto':
+      if (!resolvedArg) throw makeScriptError('Usage: goto <label>', inst.lineNo);
+      state.status = 0;
+      return { type: 'jump', pc: scriptJumpIndex(labels, resolvedArg, inst.lineNo) };
+    case 'call': {
+      const tokens = scriptTokenize(resolvedArg, inst.lineNo);
+      if (!tokens.length) throw makeScriptError('Usage: call <label> [args...]', inst.lineNo);
+      state.status = 0;
+      return {
+        type: 'call',
+        pc: scriptJumpIndex(labels, tokens[0], inst.lineNo),
+        frame: scriptBuildArgFrame(tokens[0], tokens.slice(1)),
+      };
+    }
+    case 'return':
+      return { type: 'return', code: scriptParseStatusCode(resolvedArg, inst.lineNo, state.status) };
+    case 'exit':
+      return { type: 'exit', code: scriptParseStatusCode(resolvedArg, inst.lineNo, state.status) };
+    case 'if': {
+      const result = scriptEvaluateCondition(resolvedArg, state, inst.lineNo);
+      state.status = result.passed ? 0 : 1;
+      if (result.passed) return { type: 'jump', pc: scriptJumpIndex(labels, result.label, inst.lineNo) };
+      return null;
+    }
+    case 'clear':
+      (state.clearFn || (() => { const out = document.getElementById('to'); if (out) out.innerHTML = ''; }))();
+      state.status = 0;
+      return null;
+    case 'touch': {
+      if (!resolvedArg) throw makeScriptError('Usage: touch <file>', inst.lineNo);
+      const existing = fsGetEntry(resolvedArg, state.dirName);
+      if (!existing) {
+        const saved = fsWriteTextFile(resolvedArg, '', state.dirName);
+        if (!saved) throw makeScriptError('Cannot create file: ' + resolvedArg, inst.lineNo);
+        document.dispatchEvent(new CustomEvent('fs-changed'));
+      }
+      state.status = 0;
+      return null;
+    }
+    case 'mkdir': {
+      if (!resolvedArg) throw makeScriptError('Usage: mkdir <dir>', inst.lineNo);
+      const { dirName, fileName } = fsSplitPath(resolvedArg, state.dirName);
+      const parent = fsGetDir(dirName);
+      const name = String(fileName || '').toUpperCase();
+      if (!parent || !name) throw makeScriptError('Cannot create directory: ' + resolvedArg, inst.lineNo);
+      if (!parent.dirs.has(name)) {
+        parent.dirs.add(name);
+        if (!parent.subdirs) parent.subdirs = new Map();
+        if (!parent.subdirs.has(name)) parent.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+        schedSave();
+        document.dispatchEvent(new CustomEvent('fs-changed'));
+      }
+      state.status = 0;
+      return null;
+    }
+    case 'del':
+    case 'rm': {
+      if (!resolvedArg) throw makeScriptError('Usage: del <file>', inst.lineNo);
+      const { dirName, fileName } = fsSplitPath(resolvedArg, state.dirName);
+      const dir = fsGetDir(dirName);
+      const upper = String(fileName || '').toUpperCase();
+      if (!dir || !fileName) return null;
+      if (dir.files.has(fileName)) dir.files.delete(fileName);
+      else if (dir.blobs.has(fileName)) {
+        const blob = dir.blobs.get(fileName);
+        if (blob?.url) URL.revokeObjectURL(blob.url);
+        dir.blobs.delete(fileName);
+        removeBlobEntry(dirName, fileName);
+      } else if (dir.dirs.has(upper)) {
+        dir.dirs.delete(upper);
+        dir.subdirs?.delete(upper);
+      }
+      schedSave();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+      state.status = 0;
+      return null;
+    }
+    case 'open': {
+      if (!resolvedArg) throw makeScriptError('Usage: open <file>', inst.lineNo);
+      const entry = fsGetEntry(resolvedArg, state.dirName);
+      if (!entry) throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
+      if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
+      else openNotepad(entry.fileName, entry.dirName);
+      state.status = 0;
+      return null;
+    }
+    case 'notepad':
+      openNotepad(resolvedArg || undefined, state.dirName);
+      state.status = 0;
+      return null;
+    case 'start': {
+      const key = resolvedArg.toLowerCase();
+      const map = {
+        notepad: () => openNotepad(undefined, state.dirName),
+        'notepad.exe': () => openNotepad(undefined, state.dirName),
+        terminal: () => openTerminal(state.dirName),
+        'terminal.exe': () => openTerminal(state.dirName),
+        sysmon: openSysmon,
+        'sysmon.exe': openSysmon,
+        browser: openBrowser,
+        'browser.exe': openBrowser,
+        defrag: openDefrag,
+        'defrag.exe': openDefrag,
+        explorer: openExplorer,
+        'explorer.exe': openExplorer,
+        welcome: openWelcome,
+        'welcome.readme': openWelcome,
+        files: openFiles,
+        calc: openCalculator,
+        'calc.exe': openCalculator,
+        regedit: openRegedit,
+        'regedit.exe': openRegedit,
+      };
+      if (!map[key]) throw makeScriptError('Program not found: ' + resolvedArg, inst.lineNo);
+      map[key]();
+      state.status = 0;
+      return null;
+    }
+    case 'run': {
+      const tokens = scriptTokenize(resolvedArg, inst.lineNo);
+      if (!tokens.length) throw makeScriptError('Usage: run <script> [args...]', inst.lineNo);
+      const entry = fsGetEntry(tokens[0], state.dirName);
+      if (!entry || entry.kind !== 'text') throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
+      state.status = await execScript(entry.value, state.printFn, {
+        vars: state.vars,
+        depth: state.depth + 1,
+        dirName: entry.dirName,
+        sourceName: entry.fileName,
+        clearFn: state.clearFn,
+        readLine: state.readLine,
+        signal: state.signal,
+        args: tokens.slice(1),
+      });
+      return null;
+    }
+    case 'grep': {
+      const match = resolvedArg.match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)\s+(.+)$/);
+      if (!match) throw makeScriptError('Usage: grep <pattern> <file>', inst.lineNo);
+      const patternToken = match[1];
+      const pattern = scriptUnescape(patternToken.replace(/^['"]|['"]$/g, ''));
+      const fileName = match[2].replace(/^['"]|['"]$/g, '');
+      const entry = fsGetEntry(fileName, state.dirName);
+      if (!entry || entry.kind !== 'text') throw makeScriptError('File not found: ' + fileName, inst.lineNo);
+      let re;
+      try { re = new RegExp(pattern, 'i'); }
+      catch (e) { throw makeScriptError('Invalid regex: ' + pattern, inst.lineNo); }
+      const lines = entry.value.split('\n');
+      let matches = 0;
+      lines.forEach((line, index) => {
+        if (re.test(line)) {
+          state.printFn((index + 1) + ':' + line);
+          matches++;
+        }
+      });
+      if (matches === 0) state.printFn('(no matches)');
+      else state.printFn(matches + ' match' + (matches === 1 ? '' : 'es') + ' found');
+      state.status = matches === 0 ? 1 : 0;
+      return null;
+    }
+    default:
+      throw makeScriptError('Unknown command: ' + inst.cmd, inst.lineNo);
+  }
+}
+
+async function execScript(source, printFn, options) {
+  options = options || {};
+  const sourceName = options.sourceName || 'script';
+  const depth = options.depth || 0;
+  if (depth >= SCRIPT_MAX_DEPTH) {
+    return scriptFail(makeScriptError('Maximum script recursion depth exceeded.', 0, sourceName), printFn, sourceName, options.bubbleErrors);
+  }
+  let parsed;
+  try {
+    parsed = parseScript(source);
+  } catch (err) {
+    return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+  }
+  const state = {
+    vars: options.vars || Object.create(null),
+    depth,
+    dirName: fsNormalizeDir(options.dirName),
+    printFn,
+    clearFn: options.clearFn || null,
+    readLine: options.readLine || null,
+    signal: options.signal || null,
+    status: Math.trunc(options.initialStatus ?? 0),
+    frames: [scriptBuildArgFrame(options.targetName || sourceName, options.args || [])],
+    callStack: [],
+  };
+  let pc = 0;
+  let steps = 0;
+  while (pc < parsed.instructions.length) {
+    const inst = parsed.instructions[pc];
+    steps++;
+    try {
+      throwIfAborted(state.signal);
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+    }
+    if (steps > SCRIPT_MAX_STEPS) {
+      return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
+    }
+    try {
+      const action = await execScriptInstruction(inst, parsed.labels, state);
+      if (action && action.type === 'jump') {
+        pc = action.pc;
+        continue;
+      }
+      if (action && action.type === 'call') {
+        state.callStack.push({ returnPc: pc + 1 });
+        state.frames.push(action.frame);
+        pc = action.pc;
+        continue;
+      }
+      if (action && action.type === 'return') {
+        if (!state.callStack.length || state.frames.length <= 1) {
+          throw makeScriptError('RETURN without CALL.', inst.lineNo);
+        }
+        const frame = state.callStack.pop();
+        state.frames.pop();
+        state.status = action.code;
+        pc = frame.returnPc;
+        continue;
+      }
+      if (action && action.type === 'exit') {
+        state.status = action.code;
+        return state.status;
+      }
+      if (typeof action === 'number') {
+        pc = action;
+        continue;
+      }
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+    }
+    pc++;
+  }
+  return Math.trunc(state.status ?? 0);
 }
 
 function fmtSize(bytes) {
@@ -3078,7 +3846,9 @@ const LANG_RULES = {
   script: [
     { re: /#[^\n]*/g,                    cls: 'tok-cmt' },
     { re: /\/\/[^\n]*/g,                 cls: 'tok-cmt' },
-    { re: /\b(print|echo|set|wait|clear|touch|mkdir|del|rm|open|notepad|start|run)\b/gi, cls: 'tok-kw' },
+    { re: /^\s*:[A-Za-z_][\w.-]*/gm,     cls: 'tok-fn' },
+    { re: /\b(print|echo|set|input|wait|inc|dec|add|sub|mul|div|mod|clear|touch|mkdir|del|rm|open|notepad|start|run|goto|if|not|exists|defined|call|return|exit|grep)\b/gi, cls: 'tok-kw' },
+    { re: /==|!=|>=|<=|>|</g,            cls: 'tok-att' },
     { re: /\[(red|green|yellow|cyan|blue|white)\]/gi, cls: 'tok-fn' },
     { re: /\$\w+/g,                      cls: 'tok-var' },
     { re: /\b\d+\b/g,                    cls: 'tok-num' },
@@ -3188,7 +3958,7 @@ function openLoreNotepad(filename, content, title, icon) {
   body.appendChild(pre);
 }
 
-function runScriptInPopup(name, source) {
+function runScriptInPopup(name, source, dirName) {
   const id = 'script-out-' + Date.now();
   if (!mkWin({ id, title: name + ' — Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
@@ -3202,7 +3972,20 @@ function runScriptInPopup(name, source) {
   };
   print('Running ' + name + '...', '#888');
   print('');
-  execScript(source, print);
+  execScript(source, print, { sourceName: name, dirName, clearFn: () => { body.innerHTML = ''; } })
+    .then(code => { if (code !== 0) print('Exit code: ' + code, '#dddd00'); });
+}
+
+function quoteTerminalArg(text) {
+  const value = String(text ?? '');
+  if (!value) return '""';
+  if (!/[\s"]/.test(value)) return value;
+  return '"' + value.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
+function runScriptInTerminal(name, dirName, args) {
+  const items = [quoteTerminalArg(name), ...(Array.isArray(args) ? args.map(quoteTerminalArg) : [])];
+  openTerminal(dirName || '', 'RUN ' + items.join(' '));
 }
 
 function openSaveDialog(defaultName, callback) {
@@ -4118,9 +4901,7 @@ function openExplorer(startPath) {
         ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(wallpaperFileId(singleSelected.name, cwd)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {
-          const dir = fsGetDir(cwd);
-          const src = dir?.files.get(singleSelected.name);
-          if (src !== undefined) runScriptInPopup(singleSelected.name, src);
+          runScriptInTerminal(singleSelected.name, cwd);
         }}] : []),
         '-',
         { label: 'Rename', disabled: !singleSelected || !!singleSelected.sysfile, action: () => renameItem(singleSelected) },
@@ -4352,9 +5133,11 @@ function openExplorer(startPath) {
 function openFiles() { openExplorer('PROJECTS'); }
 
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
-function openTerminal(startDir) {
+let _termExec = null;
+function openTerminal(startDir, initialCommand) {
   if (!mkWin({ id:'terminal', title:'TERMINAL.exe — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
+    if (initialCommand && _termExec) _termExec(initialCommand);
     return;
   }
   const body = document.getElementById('wb-terminal');
@@ -4400,13 +5183,63 @@ function openTerminal(startDir) {
 
   let cmdHistory = [], histIdx = -1;
   let cwd = startDir ? startDir.toUpperCase() : ''; // '' = root, 'DOCS' = DOCS dir, etc.
+  const DEFAULT_SHELL_VARS = {
+    COMPUTERNAME: 'SOMA-686',
+    USERNAME: 'VISITOR',
+    OS: 'sleepOS 0.9b2',
+    SOUL_INTEGRITY: '87',
+    DAEMON_COUNT: '7',
+    DAEMON_KNOWN: '4',
+    TEMPORAL_DRIFT: '+/-2.3yr',
+    VOID_PRESSURE: '12',
+    OBSERVER_COUNT: '[classified]',
+    PATH: 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+  };
+  let shellVars = Object.assign(Object.create(null), DEFAULT_SHELL_VARS);
+  let promptOverride = '';
+  let activeCommandController = null;
+  let pendingRead = null;
 
   function getPromptStr() {
     return cwd ? `C:\\sleepOS\\${cwd}>` : 'C:\\sleepOS>';
   }
+  function getActivePromptStr() {
+    return promptOverride || getPromptStr();
+  }
   function updatePrompt() {
     const el = document.getElementById('term-prompt');
-    if (el) el.textContent = getPromptStr() + '\u00a0';
+    if (el) el.textContent = getActivePromptStr() + '\u00a0';
+  }
+  function setPromptOverride(text) {
+    promptOverride = String(text || '').trim();
+    updatePrompt();
+  }
+
+  function getCurrentCommandSignal() {
+    return activeCommandController ? activeCommandController.signal : null;
+  }
+
+  function refreshTerminalInputMode() {
+    inp.readOnly = !!activeCommandController && !pendingRead;
+  }
+
+  function interruptActiveCommand() {
+    if (!activeCommandController && !pendingRead) return false;
+    const err = makeAbortError();
+    if (pendingRead) {
+      const { reject } = pendingRead;
+      pendingRead = null;
+      setPromptOverride('');
+      if (reject) reject(err);
+    }
+    if (activeCommandController && !activeCommandController.signal.aborted) {
+      activeCommandController.abort(err);
+    }
+    inp.value = '';
+    refreshTerminalInputMode();
+    print('^C', '#ff4444');
+    inp.focus();
+    return true;
   }
 
   // Allow openTerminal(dir) to navigate us when already open
@@ -4420,6 +5253,33 @@ function openTerminal(startDir) {
       return trimmed.slice(1, -1).replace(/\\(["'])/g, '$1');
     }
     return trimmed;
+  }
+
+  function parseTerminalDelayMs(value) {
+    const ms = scriptParseNumber(unquoteShellValue(value));
+    if (ms === null || ms < 0) throw new Error('Usage: SLEEP <ms>');
+    return Math.floor(ms);
+  }
+
+  function resolveShellText(text) {
+    return scriptResolveText(String(text ?? ''), shellVars);
+  }
+
+  function normalizeTerminalReadPrompt(text) {
+    const trimmed = String(text || '').trim();
+    return trimmed || 'INPUT:';
+  }
+
+  function readTerminalLine(promptText) {
+    if (pendingRead) throw new Error('Another INPUT request is already pending.');
+    throwIfAborted(getCurrentCommandSignal());
+    const normalizedPrompt = normalizeTerminalReadPrompt(promptText);
+    return new Promise((resolve, reject) => {
+      pendingRead = { promptText: normalizedPrompt, resolve, reject };
+      setPromptOverride(normalizedPrompt);
+      refreshTerminalInputMode();
+      inp.focus();
+    });
   }
 
   function getCommandParts(segment) {
@@ -4495,6 +5355,112 @@ function openTerminal(startDir) {
     };
   }
 
+  function applyShellSet(rawArgs) {
+    const text = String(rawArgs ?? '').trim();
+    if (!text) return buildSetLines();
+
+    let match = text.match(/^(\w+)=(.*)$/);
+    if (match) {
+      const key = match[1];
+      if (match[2] === '') {
+        delete shellVars[key];
+      } else {
+        shellVars[key] = scriptStripOuterQuotes(resolveShellText(match[2]));
+      }
+      return [];
+    }
+
+    match = resolveShellText(text).match(/^(\w+)(?:\s+(.*))?$/);
+    if (!match) throw new Error('Usage: SET [name[=value] | name value]');
+    if (match[2] === undefined) return buildSetLines(match[1]);
+
+    shellVars[match[1]] = scriptStripOuterQuotes(match[2]);
+    return [];
+  }
+
+  function runShellNumericCommand(op, rawArgs) {
+    const resolved = resolveShellText(rawArgs).trim();
+    const match = resolved.match(/^(\w+)(?:\s+(.+))?$/);
+    if (!match) {
+      const usage = op === 'mul' || op === 'div' || op === 'mod'
+        ? `Usage: ${op.toUpperCase()} <var> <amount>`
+        : `Usage: ${op.toUpperCase()} <var> [amount]`;
+      throw new Error(usage);
+    }
+    const nextValue = scriptMutateNumericVar(shellVars, match[1], op, match[2] === undefined ? undefined : scriptStripOuterQuotes(match[2]), 0);
+    return [`${match[1]}=${nextValue}`];
+  }
+
+  async function runShellInputCommand(rawArgs) {
+    const resolved = resolveShellText(rawArgs).trim();
+    const match = resolved.match(/^(\w+)(?:\s+(.+))?$/);
+    if (!match) throw new Error('Usage: INPUT <var> [prompt]');
+    const key = match[1];
+    const prompt = match[2] ? scriptStripOuterQuotes(match[2]) : key + ':';
+    const value = await readTerminalLine(prompt);
+    shellVars[key] = value;
+    return [value];
+  }
+
+  function findTerminalProject(key) {
+    return PROJECTS.find(p =>
+      p.file.toLowerCase() === key ||
+      p.file.toLowerCase().replace('.html', '') === key ||
+      p.name.toLowerCase() === key ||
+      p.name.toLowerCase().replace(/ /g, '-') === key
+    );
+  }
+
+  function launchTerminalTarget(rawTarget) {
+    const key = resolveShellText(rawTarget).trim().toLowerCase();
+    if (!key) return false;
+
+    const openExplorerAtCwd = () => openExplorer(cwd || '');
+    const launchers = {
+      'welcome.readme': { lines: ['Opening WELCOME.README...'], action: openWelcome },
+      welcome: { lines: ['Opening WELCOME.README...'], action: openWelcome },
+      'notepad.exe': { lines: ['Opening Notepad...'], action: () => openNotepad(undefined, cwd) },
+      notepad: { lines: ['Opening Notepad...'], action: () => openNotepad(undefined, cwd) },
+      'terminal.exe': { lines: ['TERMINAL.exe is already running.', 'You are inside it.'] },
+      terminal: { lines: ['TERMINAL.exe is already running.', 'You are inside it.'] },
+      'explorer.exe': { lines: ['Opening File Explorer...'], action: openExplorerAtCwd },
+      explorer: { lines: ['Opening File Explorer...'], action: openExplorerAtCwd },
+      files: { lines: ['Opening Files...'], action: openFiles },
+      'sysmon.exe': { lines: ['Starting SYSMON.exe...'], action: openSysmon },
+      sysmon: { lines: ['Starting SYSMON.exe...'], action: openSysmon },
+      'browser.exe': { lines: ['Starting BROWSER.exe...'], action: openBrowser },
+      browser: { lines: ['Starting BROWSER.exe...'], action: openBrowser },
+      'defrag.exe': { lines: ['Starting DEFRAG.exe...'], action: openDefrag },
+      defrag: { lines: ['Starting DEFRAG.exe...'], action: openDefrag },
+      'calc.exe': { lines: ['Starting CALC.exe...'], action: openCalculator },
+      calc: { lines: ['Starting CALC.exe...'], action: openCalculator },
+      'regedit.exe': { lines: ['Starting REGEDIT.exe...'], action: openRegedit },
+      regedit: { lines: ['Starting REGEDIT.exe...'], action: openRegedit },
+      'daemon.core': {
+        lines: ['Opening daemon.core...', 'It is already open.', 'It has always been open.'],
+        action: openDaemon,
+        delay: 400,
+      },
+      'void.tmp': { lines: ['Opening void.tmp...'], action: openVoid },
+      '?????.exe': { lines: ['Executing ?????.exe...'], action: openUnknown },
+      '?????': { lines: ['Executing ?????.exe...'], action: openUnknown },
+    };
+
+    const entry = launchers[key];
+    if (entry) {
+      (entry.lines || []).forEach(line => print(line));
+      if (entry.action) setTimeout(entry.action, entry.delay ?? 300);
+      return true;
+    }
+
+    const project = findTerminalProject(key);
+    if (!project) return false;
+    print(`Launching ${project.name}...`);
+    print('Opening in new tab.');
+    setTimeout(() => window.open(project.file, '_blank'), 400);
+    return true;
+  }
+
   function expandGlob(pattern) {
     const dir = fsGetDir(cwd);
     if (!dir) return [pattern];
@@ -4526,6 +5492,7 @@ function openTerminal(startDir) {
       '  IPCONFIG            — network configuration',
       '  SET                 — show environment variables',
       '  PING [host]         — ping a host',
+      '  SLEEP <ms>          — pause for a number of milliseconds',
       '  VER                 — show OS version',
       '  WHO, WHOAMI         — current user info',
       '  DATE                — system date',
@@ -4543,6 +5510,7 @@ function openTerminal(startDir) {
       '  CAT README.txt | GREP TODO >> notes.txt',
       '',
       'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
+      '  Scripts now support labels, goto, if, inc, and dec.',
       '',
       'You can also type executables directly:',
       '  notepad.exe, sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
@@ -4716,15 +5684,18 @@ function openTerminal(startDir) {
     return entry.value ? entry.value.split('\n') : [];
   }
 
-  async function buildPingLines(args) {
+  async function buildPingLines(args, signal) {
     const host = (args || 'evenet.fun').trim().replace(/^https?:\/\//i, '').replace(/[/?#].*$/, '');
     const lines = [`Pinging ${host} with 32 bytes of data:`];
     const times = [];
     let received = 0;
     for (let i = 0; i < 4; i++) {
-      if (i > 0) await new Promise(r => setTimeout(r, 1000));
+      throwIfAborted(signal);
+      if (i > 0) await scriptSleep(1000, signal);
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), 4000);
+      const abortFetch = () => ctrl.abort();
+      if (signal) signal.addEventListener('abort', abortFetch, { once: true });
       const t0 = performance.now();
       try {
         await fetch(`https://${host}/`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
@@ -4735,8 +5706,12 @@ function openTerminal(startDir) {
         lines.push(`Reply from ${host}: bytes=32 time=${ms}ms TTL=57`);
       } catch (e) {
         clearTimeout(tid);
+        if (signal) signal.removeEventListener('abort', abortFetch);
+        if (signal?.aborted) throw signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError();
         lines.push(`Request timeout for ${host}.`);
+        continue;
       }
+      if (signal) signal.removeEventListener('abort', abortFetch);
     }
     lines.push('');
     lines.push(`Ping statistics for ${host}:`);
@@ -4748,25 +5723,101 @@ function openTerminal(startDir) {
     return lines;
   }
 
+  function buildHelpLines() {
+    return [
+      'Available commands:',
+      '  HELP                - show this help',
+      '  DIR, LS             - list directory',
+      '  CD [path]           - change directory',
+      '  MKDIR [name]        - create a directory',
+      '  TOUCH [name]        - create empty file',
+      '  ECHO [text]         - print text',
+      '  PRINT [text]        - alias for ECHO',
+      '  DEL, RM [file]      - delete a file or directory',
+      '  COPY [src] [dst]    - copy a file',
+      '  MOVE, MV            - move a file',
+      '  TYPE, CAT [file]    - read file contents',
+      '  GREP <pattern> [f]  - filter a file or piped text',
+      '  WC [file]           - count lines, words, bytes',
+      '  TREE                - directory tree',
+      '  PS                  - list running processes',
+      '  TASKKILL [pid]      - terminate a process',
+      '  IPCONFIG            - network configuration',
+      '  SET [name=value]    - show or assign shell variables',
+      '  INPUT <var> [text]  - read a line into a shell variable',
+      '  INC, DEC <var> [n]  - adjust numeric shell variables',
+      '  ADD, SUB, MUL, DIV, MOD - arithmetic on shell variables',
+      '  PING [host]         - ping a host',
+      '  SLEEP <ms>          - pause for a number of milliseconds',
+      '  WAIT <ms>           - alias for SLEEP',
+      '  VER                 - show OS version',
+      '  WHO, WHOAMI         - current user info',
+      '  DATE                - system date',
+      '  CLS                 - clear screen',
+      '  CLEAR               - alias for CLS',
+      '  OPEN [file]         - open a file (image/video in viewer, text in editor)',
+      '  RUN <file> [args]   - execute a .script file',
+      '  NOTEPAD [file]      - open Notepad (optionally open a file)',
+      '  START [program]     - run an executable or project',
+      '  EXIT                - close terminal',
+      '',
+      'Pipes and redirection:',
+      '  DIR | GREP txt',
+      '  CAT README.txt | NOTEPAD',
+      '  DIR > listing.txt',
+      '  CAT README.txt | GREP TODO >> notes.txt',
+      '',
+      'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
+      '  Scripts support labels, subroutines, args, existence tests, and status codes.',
+      '',
+      'You can also type executables directly:',
+      '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
+      '  welcome.readme, void.tmp, daemon.core, ?????.exe',
+      '  or any project name (try: fireworks, fluid, ...)',
+    ];
+  }
+
+  function buildSetLines(nameFilter) {
+    const keys = Object.keys(shellVars).sort((a, b) => a.localeCompare(b));
+    if (!nameFilter) return keys.map(key => `${key}=${shellVars[key]}`);
+    return Object.prototype.hasOwnProperty.call(shellVars, nameFilter)
+      ? [`${nameFilter}=${shellVars[nameFilter]}`]
+      : [`Variable not defined: ${nameFilter}`];
+  }
+
   async function runPipeStage(cmd, args, stdinLines) {
-    if (cmd === 'echo') return args ? [unquoteShellValue(args)] : [''];
+    cmd = ({ print: 'echo', wait: 'sleep', clear: 'cls' }[cmd] || cmd);
+    if (cmd === 'echo') return [unquoteShellValue(resolveShellText(args))];
     if (cmd === 'help') return buildHelpLines();
-    if (cmd === 'dir' || cmd === 'ls') return buildDirLines(args);
+    if (cmd === 'dir' || cmd === 'ls') return buildDirLines(resolveShellText(args));
     if (cmd === 'ps') return buildPsLines();
     if (cmd === 'ver') return buildVerLines();
     if (cmd === 'who' || cmd === 'whoami') return buildWhoLines();
     if (cmd === 'date') return buildDateLines();
-    if (cmd === 'set') return buildSetLines();
+    if (cmd === 'set') return applyShellSet(args);
+    if (cmd === 'input') return runShellInputCommand(args);
+    if (cmd === 'inc' || cmd === 'dec' || cmd === 'add' || cmd === 'sub' || cmd === 'mul' || cmd === 'div' || cmd === 'mod') {
+      return runShellNumericCommand(cmd, args);
+    }
     if (cmd === 'ipconfig') return buildIpconfigLines();
     if (cmd === 'tree') return buildTreeLines();
-    if (cmd === 'ping') return buildPingLines(args);
+    if (cmd === 'ping') return buildPingLines(resolveShellText(args), getCurrentCommandSignal());
+    if (cmd === 'sleep') {
+      await scriptSleep(parseTerminalDelayMs(resolveShellText(args)), getCurrentCommandSignal());
+      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+    }
+    if (cmd === 'cls') {
+      out.innerHTML = '';
+      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+    }
     if (cmd === 'cat' || cmd === 'type') {
-      if (args) return getPipeableText(args.trim());
+      const target = resolveShellText(args).trim();
+      if (target) return getPipeableText(target);
       if (Array.isArray(stdinLines)) return stdinLines.slice();
       throw new Error('Usage: CAT [file]');
     }
     if (cmd === 'grep') {
-      const match = String(args || '').trim().match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)(?:\s+(.+))?$/);
+      const match = resolveShellText(args).trim().match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)(?:\s+(.+))?$/);
       if (!match) throw new Error('Usage: GREP <pattern> [file]');
       const pattern = unquoteShellValue(match[1]);
       const target = match[2] ? unquoteShellValue(match[2]) : '';
@@ -4779,8 +5830,9 @@ function openTerminal(startDir) {
     if (cmd === 'wc') {
       let sourceText = '';
       let label = '';
-      if (args && args.trim()) {
-        const target = unquoteShellValue(args);
+      const targetArg = resolveShellText(args).trim();
+      if (targetArg) {
+        const target = unquoteShellValue(targetArg);
         const entry = fsGetEntry(target, cwd);
         if (!entry || entry.kind !== 'text') throw new Error('File not found: ' + target);
         sourceText = entry.value;
@@ -4799,7 +5851,7 @@ function openTerminal(startDir) {
   }
 
   function writePipelineOutput(targetPath, lines, append) {
-    const normalizedTarget = unquoteShellValue(targetPath);
+    const normalizedTarget = unquoteShellValue(resolveShellText(targetPath));
     if (!normalizedTarget) throw new Error('Missing redirect target.');
     const existing = fsGetEntry(normalizedTarget, cwd);
     if (existing && existing.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
@@ -4863,6 +5915,8 @@ function openTerminal(startDir) {
 
   const CMDS = {
     help: () => {
+      buildHelpLines().forEach(l => print(l));
+      return;
       [
         'Available commands:',
         '  HELP            — show this help',
@@ -4999,6 +6053,9 @@ function openTerminal(startDir) {
       const lost = 4 - received;
       print(`  Packets: Sent = 4, Received = ${received}, Lost = ${lost} (${Math.round(lost/4*100)}% loss)`);
       if (times.length) print(`Approximate round trip times: Min=${Math.min(...times)}ms  Max=${Math.max(...times)}ms  Avg=${Math.round(times.reduce((a,b)=>a+b)/times.length)}ms`);
+    },
+    sleep: async (args) => {
+      await scriptSleep(parseTerminalDelayMs(args));
     },
     echo: (args) => { if (args) print(args); },
     cls: () => { out.innerHTML = ''; },
@@ -5264,14 +6321,17 @@ function openTerminal(startDir) {
         print('Use DIR to list available files.');
       }
     },
-    run: (args) => {
+    run: async (args) => {
       const fname = (args || '').trim();
       if (!fname) { print('Usage: RUN <script.script>'); return; }
-      const dir = fsGetDir(cwd);
-      const source = dir.files.get(fname);
-      if (source === undefined) { print(`Script not found: ${fname}`, '#ff4444'); return; }
+      const entry = fsGetEntry(fname, cwd);
+      if (!entry || entry.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
       print(`Running ${fname}...`);
-      execScript(source, print);
+      await execScript(entry.value, print, {
+        sourceName: entry.fileName,
+        dirName: entry.dirName,
+        clearFn: () => { out.innerHTML = ''; },
+      });
     },
     notepad: (args) => {
       const fname = args ? args.trim() : null;
@@ -5314,47 +6374,128 @@ function openTerminal(startDir) {
     exit: () => closeWin('terminal'),
   };
 
-  inp.addEventListener('keydown', async (e) => {
-    if (e.key === 'ArrowUp') {
-      if (histIdx < cmdHistory.length - 1) histIdx++;
-      inp.value = cmdHistory[cmdHistory.length - 1 - histIdx] || '';
-      e.preventDefault();
-    } else if (e.key === 'ArrowDown') {
-      histIdx = Math.max(-1, histIdx - 1);
-      inp.value = histIdx < 0 ? '' : cmdHistory[cmdHistory.length - 1 - histIdx];
-      e.preventDefault();
-    } else if (e.key === 'Enter') {
-      const raw = inp.value.trim(); inp.value = ''; histIdx = -1;
-      print(getPromptStr() + ' ' + raw);
-      if (raw) { cmdHistory.push(raw); if (cmdHistory.length > 50) cmdHistory.shift(); }
-      if (await tryExecutePipeline(raw)) return;
+  CMDS.help = () => buildHelpLines().forEach(line => print(line));
+  CMDS.dir = (args) => buildDirLines(args).forEach(line => print(line));
+  CMDS.ls = (args) => CMDS.dir(args);
+  CMDS.ps = () => buildPsLines().forEach(line => print(line));
+  CMDS.ver = () => buildVerLines().forEach(line => print(line));
+  CMDS.who = () => buildWhoLines().forEach(line => print(line));
+  CMDS.whoami = () => CMDS.who();
+  CMDS.date = () => buildDateLines().forEach(line => print(line));
+  CMDS.ping = async (args) => {
+    (await buildPingLines(resolveShellText(args), getCurrentCommandSignal())).forEach(line => print(line));
+  };
+  CMDS.ipconfig = () => buildIpconfigLines().forEach(line => print(line));
+  CMDS.tree = () => buildTreeLines().forEach(line => print(line));
+  CMDS.sleep = async (args) => {
+    await scriptSleep(parseTerminalDelayMs(args), getCurrentCommandSignal());
+  };
+  CMDS.wait = (args) => CMDS.sleep(args);
+  CMDS.echo = (args) => { print(unquoteShellValue(args || '')); };
+  CMDS.print = (args) => CMDS.echo(args);
+  CMDS.cls = () => { out.innerHTML = ''; };
+  CMDS.clear = () => CMDS.cls();
+  CMDS.set = (args) => applyShellSet(args).forEach(line => print(line));
+  CMDS.input = async (args) => {
+    await runShellInputCommand(args);
+  };
+  CMDS.inc = (args) => runShellNumericCommand('inc', args).forEach(line => print(line));
+  CMDS.dec = (args) => runShellNumericCommand('dec', args).forEach(line => print(line));
+  CMDS.add = (args) => runShellNumericCommand('add', args).forEach(line => print(line));
+  CMDS.sub = (args) => runShellNumericCommand('sub', args).forEach(line => print(line));
+  CMDS.mul = (args) => runShellNumericCommand('mul', args).forEach(line => print(line));
+  CMDS.div = (args) => runShellNumericCommand('div', args).forEach(line => print(line));
+  CMDS.mod = (args) => runShellNumericCommand('mod', args).forEach(line => print(line));
+  CMDS.start = (args) => {
+    if (!args || !String(args).trim()) { print('Usage: START [program]'); return; }
+    if (!launchTerminalTarget(args)) print(`Cannot find program: ${args}`);
+  };
+  CMDS.run = async (args) => {
+    const tokens = scriptTokenize(args || '');
+    if (!tokens.length) { print('Usage: RUN <script.script> [args...]'); return; }
+    const fname = tokens[0];
+    const entry = fsGetEntry(fname, cwd);
+    if (!entry || entry.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
+    print(`Running ${fname}...`);
+    const exitCode = await execScript(entry.value, print, {
+      sourceName: entry.fileName,
+      dirName: entry.dirName,
+      vars: shellVars,
+      readLine: readTerminalLine,
+      signal: getCurrentCommandSignal(),
+      args: tokens.slice(1),
+      clearFn: () => { out.innerHTML = ''; },
+    });
+    if (exitCode !== 0) print(`Exit code: ${exitCode}`, '#dddd00');
+  };
 
-      // Handle echo text > filename redirection
-      const redirectMatch = raw.match(/^echo\s+(.*?)\s*>>\s*(.+)$/i) || raw.match(/^echo\s+(.*?)\s*>\s*(.+)$/i);
-      if (redirectMatch) {
-        const append = raw.match(/^echo\s+(.*?)\s*>>\s*(.+)$/i) !== null;
-        const content = redirectMatch[1].replace(/^"|"$/g,'');
-        const fname = redirectMatch[2].trim();
-        const existing = termFS.files.get(fname) ?? '';
-        termFS.files.set(fname, append && existing ? existing + '\n' + content : content);
-        schedSave();
-        print(`${append ? 'Appended' : 'Wrote'}: ${fname}`);
+  async function runTerminalCommand(raw, options) {
+    if (activeCommandController) {
+      print('A command is already running. Press Ctrl+C to interrupt.', '#dddd00');
+      print('');
+      return;
+    }
+    const text = String(raw || '').trim();
+    options = options || {};
+    activeCommandController = new AbortController();
+    refreshTerminalInputMode();
+    histIdx = -1;
+    print(getPromptStr() + ' ' + text);
+    if (text && options.recordHistory !== false) {
+      cmdHistory.push(text);
+      if (cmdHistory.length > 50) cmdHistory.shift();
+    }
+    try {
+      if (await tryExecutePipeline(text)) return;
+
+      const parts = text.split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const args = resolveShellText(parts.slice(1).join(' '));
+      const exeAlias = cmd.endsWith('.exe') ? cmd.slice(0, -4) : '';
+
+      if ((cmd === 'del' || cmd === 'rm') && args.includes('*')) {
+        const expanded = expandGlob(args.trim());
+        expanded.forEach(name => CMDS.del(name));
         print('');
         return;
       }
 
-      // Helper: expand wildcards against current dir
-      function expandGlob(pattern) {
-        const dir = fsGetDir(cwd);
-        if (!dir) return [pattern];
-        const allNames = [...dir.files.keys(), ...dir.blobs.keys()];
-        const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g,'.*').replace(/\?/g,'.');
-        const re = new RegExp('^' + escaped + '$', 'i');
-        const matches = allNames.filter(n => re.test(n));
-        return matches.length ? matches : [pattern];
+      if (!cmd) {
+        // no-op
+      } else if (CMDS[cmd]) {
+        await CMDS[cmd](args);
+      } else if (exeAlias && CMDS[exeAlias]) {
+        await CMDS[exeAlias](args);
+      } else if (!args && launchTerminalTarget(parts[0])) {
+        // launched directly
+      } else {
+        print(`'${parts[0]}' is not recognized as an internal or external command.`);
+        print('Type HELP for a list of commands, or DIR to list executables.');
       }
+    } catch (err) {
+      if (!isAbortError(err)) print(err.message || String(err), '#ff4444');
+    } finally {
+      activeCommandController = null;
+      refreshTerminalInputMode();
+    }
+    print('');
+  }
 
-      // Handle pipe: cmd1 | cmd2
+  _termExec = async (raw) => {
+    if (pendingRead) {
+      print('Finish the current INPUT prompt before starting another command.', '#ff4444');
+      print('');
+      return;
+    }
+    if (activeCommandController) {
+      print('A command is already running. Press Ctrl+C to interrupt.', '#dddd00');
+      print('');
+      return;
+    }
+    await runTerminalCommand(raw, { recordHistory: true });
+  };
+
+  /*
       const pipeIdx = raw.indexOf('|');
       if (pipeIdx !== -1 && !raw.startsWith('echo')) {
         const left  = raw.slice(0, pipeIdx).trim();
@@ -5441,7 +6582,7 @@ function openTerminal(startDir) {
         p.name.toLowerCase().replace(/ /g,'-') === cmd
       );
 
-      if (!cmd) { /* nothing */ }
+      if (!cmd) { }
       else if (CMDS[cmd]) { await CMDS[cmd](args); }
       else if (EXES[cmd]) { EXES[cmd](); }
       else if (project) {
@@ -5453,9 +6594,81 @@ function openTerminal(startDir) {
       print('');
     }
   });
+  */
 
+  inp.addEventListener('keydown', async (e) => {
+    if (pendingRead) {
+      if (e.ctrlKey && !e.altKey && !e.metaKey && String(e.key).toLowerCase() === 'c') {
+        if (interruptActiveCommand()) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const response = inp.value;
+        const { promptText, resolve } = pendingRead;
+        inp.value = '';
+        pendingRead = null;
+        setPromptOverride('');
+        refreshTerminalInputMode();
+        print(promptText + ' ' + response);
+        resolve(response);
+      }
+      return;
+    }
+
+    if (e.ctrlKey && !e.altKey && !e.metaKey && String(e.key).toLowerCase() === 'c') {
+      if (interruptActiveCommand()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (histIdx < cmdHistory.length - 1) histIdx++;
+      inp.value = cmdHistory[cmdHistory.length - 1 - histIdx] || '';
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      histIdx = Math.max(-1, histIdx - 1);
+      inp.value = histIdx < 0 ? '' : cmdHistory[cmdHistory.length - 1 - histIdx];
+      return;
+    }
+
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    if (activeCommandController) {
+      print('A command is already running. Press Ctrl+C to interrupt.', '#dddd00');
+      print('');
+      return;
+    }
+
+    const raw = inp.value.trim();
+    inp.value = '';
+    await runTerminalCommand(raw, { recordHistory: true });
+  }, true);
+
+  refreshTerminalInputMode();
   document.getElementById('tw').addEventListener('click', () => inp.focus());
   setTimeout(() => inp.focus(), 80);
+  if (initialCommand) setTimeout(() => { if (_termExec) _termExec(initialCommand); }, 30);
 }
 
 function openSysmon() {
