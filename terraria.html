@@ -638,21 +638,21 @@ function drawPlayer() {
     srcY = anim.row * FRAME_SIZE;
   }
 
-  // Screen position: sprite is 64px wide, hitbox is 28px wide — center sprite on hitbox
-  const offsetX = (player.w - FRAME_SIZE) / 2; // will be negative (sprite wider than hitbox)
-  const screenX = player.x - cam.x + offsetX;
-  // Align bottom of sprite with bottom of hitbox
-  const screenY = player.y - cam.y + (player.h - FRAME_SIZE);
+  // Scale sprite to match hitbox — draw square at player.h × player.h, centered on hitbox
+  const drawSize = player.h;
+  const screenX = player.x - cam.x + (player.w - drawSize) / 2;
+  const screenY = player.y - cam.y; // top of hitbox = top of draw rect (bottom-aligned naturally)
 
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
   if (player.facing === -1) {
-    ctx.translate(screenX + FRAME_SIZE / 2, 0);
+    ctx.translate(screenX + drawSize / 2, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE,
-                  -FRAME_SIZE / 2, screenY, FRAME_SIZE, FRAME_SIZE);
+                  -drawSize / 2, screenY, drawSize, drawSize);
   } else {
     ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE,
-                  screenX, screenY, FRAME_SIZE, FRAME_SIZE);
+                  screenX, screenY, drawSize, drawSize);
   }
   ctx.restore();
 }
