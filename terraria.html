@@ -133,7 +133,7 @@ cam.y = 50 * TILE - canvas.height / 2;
 function findSpawnY() {
   const cx = Math.floor(WORLD_W / 2);
   for (let y = 0; y < WORLD_H; y++) {
-    if (getBlock(cx, y) !== AIR) return y * TILE - 64; // land on surface
+    if (getBlock(cx, y) !== AIR) return y * TILE - 58; // 58 = player hitbox height
   }
   return 10 * TILE;
 }
@@ -143,14 +143,14 @@ const player = {
   y: findSpawnY(),
   w: 28,   // hitbox width
   h: 58,   // hitbox height
-  vx: 0,
   vy: 0,
   onGround: false,
+  blockedX: false,
   facing: 1,   // 1 = right, -1 = left
 };
 
 const GRAVITY    = 0.5;
-const MAX_FALL   = 14;
+const MAX_FALL   = TILE - 1; // prevents tunneling through 1-tile-thick floors
 const JUMP_VEL   = -11;
 const WALK_SPEED = 2.5;
 const RUN_SPEED  = 5.0;
@@ -169,7 +169,17 @@ function collidesWithWorld(px, py, pw, ph) {
   return false;
 }
 
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) {
+    e.preventDefault();
+  }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
 function updatePlayer() {
+  // Fixed-step physics (tied to frame rate, not ts). Works correctly at 60fps.
   // Horizontal movement
   let speed = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
   let moveX = 0;
@@ -180,6 +190,9 @@ function updatePlayer() {
   player.x += moveX;
   if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
     player.x -= moveX;
+    player.blockedX = true;
+  } else {
+    player.blockedX = false;
   }
 
   // Gravity
@@ -194,7 +207,7 @@ function updatePlayer() {
       player.onGround = true;
     } else {
       // hit ceiling
-      player.y = Math.floor(player.y / TILE + 1) * TILE;
+      player.y = Math.ceil(player.y / TILE) * TILE;
     }
     player.vy = 0;
   } else {
@@ -211,10 +224,6 @@ function updatePlayer() {
   player.x = Math.max(0, Math.min(player.x, WORLD_W * TILE - player.w));
   player.y = Math.max(0, Math.min(player.y, WORLD_H * TILE - player.h));
 }
-
-const keys = {};
-window.addEventListener('keydown', e => { keys[e.code] = true; });
-window.addEventListener('keyup',   e => { keys[e.code] = false; });
 
 function updateCamera() {
   // Center player horizontally, 40% from top vertically
