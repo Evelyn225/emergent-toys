@@ -182,7 +182,7 @@ cam.y = 50 * TILE - canvas.height / 2;
 function findSpawnY() {
   const cx = Math.floor(WORLD_W / 2);
   for (let y = 0; y < WORLD_H; y++) {
-    if (getBlock(cx, y) !== AIR) return y * TILE - 58; // 58 = player hitbox height
+    if (getBlock(cx, y) !== AIR) return y * TILE - 48; // 48 = player hitbox height
   }
   return 10 * TILE;
 }
@@ -190,8 +190,8 @@ function findSpawnY() {
 const player = {
   x: WORLD_W * TILE / 2 - 16,  // world-pixel x (left edge)
   y: findSpawnY(),
-  w: 28,   // hitbox width
-  h: 58,   // hitbox height
+  w: 32,   // hitbox width  (2 tiles)
+  h: 48,   // hitbox height (3 tiles)
   vy: 0,
   onGround: false,
   blockedX: false,
@@ -264,16 +264,46 @@ window.addEventListener('keyup', e => { keys[e.code] = false; });
 // Mouse state (screen coordinates)
 const mouse = { x: 0, y: 0, down: false };
 canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-canvas.addEventListener('mousedown', e => { if (e.button === 0) mouse.down = true; });
-canvas.addEventListener('mouseup',   e => { if (e.button === 0) mouse.down = false; });
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0) mouse.down = true;
+  if (e.button === 2) mouse.rightDown = true;
+});
+canvas.addEventListener('mouseup', e => {
+  if (e.button === 0) mouse.down = false;
+  if (e.button === 2) mouse.rightDown = false;
+});
 canvas.addEventListener('contextmenu', e => e.preventDefault());
+mouse.rightDown = false;
 
 // Mining time per block type (frames at 60fps)
-const MINE_FRAMES = { [GRASS]: 20, [DIRT]: 35, [STONE]: 70, [DSTONE]: 110 };
+const MINE_FRAMES = { [GRASS]: 10, [DIRT]: 18, [STONE]: 35, [DSTONE]: 55 };
 const MINE_RADIUS_PX = 5.5 * TILE; // max reach from player center
 
 // Mining state — tracks which block is being mined and how far along
 const mining = { bx: -1, by: -1, progress: 0, active: false };
+
+// Inventory hotbar — 5 slots, player starts with some blocks
+const SLOT_TYPES = [DIRT, STONE, DSTONE, GRASS];
+const SLOT_NAMES = { [DIRT]: 'Dirt', [STONE]: 'Stone', [DSTONE]: 'D.Stone', [GRASS]: 'Grass' };
+const inventory = {
+  slots: [
+    { type: DIRT,   count: 30 },
+    { type: STONE,  count: 20 },
+    { type: DSTONE, count: 10 },
+    { type: GRASS,  count: 0  },
+  ],
+  selected: 0,
+};
+
+// Scroll wheel + number keys to select hotbar slot
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  inventory.selected = (inventory.selected + (e.deltaY > 0 ? 1 : -1) + inventory.slots.length) % inventory.slots.length;
+}, { passive: false });
+window.addEventListener('keydown', e => {
+  const n = parseInt(e.key);
+  if (n >= 1 && n <= inventory.slots.length) inventory.selected = n - 1;
+});
 
 function updateMining() {
   const camX = Math.round(cam.x);
@@ -313,9 +343,90 @@ function updateMining() {
 
   if (mining.progress >= (MINE_FRAMES[blockType] || 60)) {
     setBlock(wx, wy, AIR);
+    // Add mined block to inventory
+    const slot = inventory.slots.find(s => s.type === blockType);
+    if (slot) slot.count++;
     mining.bx = -1; mining.by = -1; mining.progress = 0;
     mining.active = false;
   }
+}
+
+// Right-click block placement
+let lastPlaceFrame = -1;
+function updatePlacement(frame) {
+  if (!mouse.rightDown || frame === lastPlaceFrame) return;
+  lastPlaceFrame = frame;
+
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+
+  const slot = inventory.slots[inventory.selected];
+  if (!slot || slot.count <= 0) return;
+
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  if (dist > MINE_RADIUS_PX) return;
+  if (getBlock(wx, wy) !== AIR) return;
+
+  // Must be adjacent to a solid block
+  const adjacent = getBlock(wx-1,wy) !== AIR || getBlock(wx+1,wy) !== AIR ||
+                   getBlock(wx,wy-1) !== AIR || getBlock(wx,wy+1) !== AIR;
+  if (!adjacent) return;
+
+  // Don't place inside the player's hitbox
+  const bLeft = wx * TILE, bRight = bLeft + TILE;
+  const bTop  = wy * TILE, bBottom = bTop + TILE;
+  const overlaps = bRight > player.x && bLeft < player.x + player.w &&
+                   bBottom > player.y && bTop  < player.y + player.h;
+  if (overlaps) return;
+
+  setBlock(wx, wy, slot.type);
+  slot.count--;
+}
+
+function drawHotbar() {
+  const SLOT_W = 44, SLOT_H = 44, GAP = 6;
+  const n = inventory.slots.length;
+  const totalW = n * SLOT_W + (n - 1) * GAP;
+  const startX = Math.floor((canvas.width - totalW) / 2);
+  const startY = canvas.height - SLOT_H - 14;
+
+  ctx.save();
+  for (let i = 0; i < n; i++) {
+    const slot = inventory.slots[i];
+    const sx = startX + i * (SLOT_W + GAP);
+    const sy = startY;
+
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(sx, sy, SLOT_W, SLOT_H);
+
+    // Block color swatch
+    if (slot.type !== AIR) {
+      ctx.fillStyle = BLOCK_COLORS[slot.type];
+      ctx.fillRect(sx + 5, sy + 5, SLOT_W - 10, SLOT_H - 10);
+    }
+
+    // Selected border
+    ctx.strokeStyle = i === inventory.selected ? '#fff' : 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = i === inventory.selected ? 2 : 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, SLOT_W - 1, SLOT_H - 1);
+
+    // Slot number
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '10px monospace';
+    ctx.fillText(i + 1, sx + 4, sy + 13);
+
+    // Count
+    ctx.fillStyle = slot.count > 0 ? '#fff' : 'rgba(255,255,255,0.3)';
+    ctx.font = 'bold 11px monospace';
+    const countStr = String(slot.count);
+    ctx.fillText(countStr, sx + SLOT_W - 6 - countStr.length * 7, sy + SLOT_H - 6);
+  }
+  ctx.restore();
 }
 
 function drawMining() {
@@ -554,6 +665,7 @@ function loop(ts) {
 
   updatePlayer(scale);
   updateMining();
+  updatePlacement(lastTime);
   updateAnimation();
   updateCamera(scale);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -561,6 +673,7 @@ function loop(ts) {
   drawWorld();
   drawPlayer();
   drawMining();
+  drawHotbar();
   rafId = requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
