@@ -1426,6 +1426,19 @@ if (osSettings.skipBoot) { biosFinish(); } else { setTimeout(biosType, 250); }
 let zTop = 100;
 const wins = {};
 
+// Shared PID helpers (used by SYSMON and TASKKILL)
+function pidFromId(id) {
+  let h = 2000;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fff;
+  return 2000 + (h % 6000);
+}
+function winIdByPid(pid) {
+  for (const id of Object.keys(wins)) {
+    if (pidFromId(id) === pid) return id;
+  }
+  return null;
+}
+
 // Shared virtual filesystem (terminal + notepad + media + explorer)
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
 const termFS = {
@@ -2581,6 +2594,8 @@ async function execScriptInstruction(inst, labels, state) {
       const dir = fsGetDir(dirName);
       const upper = String(fileName || '').toUpperCase();
       if (!dir || !fileName) return null;
+      const _SYS = new Set(['WELCOME.README','TERMINAL.EXE','SYSMON.EXE','NOTEPAD.EXE','BROWSER.EXE','DEFRAG.EXE','CALC.EXE','REGEDIT.EXE','EXPLORER.EXE']);
+      if (_SYS.has(upper)) throw makeScriptError(`Cannot delete ${fileName}: Access is denied.`, inst.lineNo);
       if (dir.files.has(fileName)) dir.files.delete(fileName);
       else if (dir.blobs.has(fileName)) {
         const blob = dir.blobs.get(fileName);
@@ -6119,7 +6134,11 @@ function openTerminal(startDir, initialCommand) {
       } else {
         const dir = fsGetDir(cwd);
         const upper = raw.toUpperCase();
-        if (dir.files.has(raw)) {
+        const SYS_FILES = new Set(['WELCOME.README','TERMINAL.EXE','SYSMON.EXE','NOTEPAD.EXE','BROWSER.EXE','DEFRAG.EXE','CALC.EXE','REGEDIT.EXE','EXPLORER.EXE']);
+        if (SYS_FILES.has(upper)) {
+          print(`Cannot delete ${raw}: Access is denied.`, '#ff4444');
+          print('System files are protected and cannot be deleted.');
+        } else if (dir.files.has(raw)) {
           dir.files.delete(raw); schedSave(); print(`Deleted: ${raw}`);
         } else if (dir.blobs.has(raw)) {
           const b = dir.blobs.get(raw); URL.revokeObjectURL(b.url); dir.blobs.delete(raw); removeBlobEntry(cwd, raw); schedSave(); print(`Deleted: ${raw}`);
@@ -6179,28 +6198,39 @@ function openTerminal(startDir, initialCommand) {
       print('    └── [1 object cannot be listed]');
     },
     taskkill: (args) => {
-      const pid = (args || '').replace(/\D/g,'');
-      if (!pid) { print('Usage: TASKKILL [pid]'); return; }
-      const unknown = ['333','334','335'];
-      if (unknown.includes(pid)) {
-        print(`Terminating PID ${pid}...`);
+      const pidStr = (args || '').replace(/\D/g,'');
+      if (!pidStr) { print('Usage: TASKKILL <pid>'); return; }
+      const pid = parseInt(pidStr, 10);
+      // System / lore PIDs that can't be killed
+      const SYS_PIDS = { 4:'System', 52:'csrss.exe', 116:'services.exe', 124:'lsass.exe', 280:'svchost.exe', 312:'svchost.exe', 440:'dream_kernel.exe', 666:'daemon.core', 1024:'soul_svc.exe' };
+      if (pid in SYS_PIDS) {
+        print(`Terminating ${SYS_PIDS[pid]} (PID ${pid})...`);
         setTimeout(() => {
-          print(`Process ${pid} cannot be terminated.`, '#ff4444');
-          print('The process has acknowledged the request.');
-          print('It has chosen not to comply.');
-        }, 800);
-      } else if (pid === '999') {
-        print('Terminating void.exe...');
-        setTimeout(() => { print('The void does not terminate.', '#ff4444'); }, 600);
-      } else if (pid === '512') {
-        print('Terminating soul_daemon.exe...');
+          print(`ERROR: Access is denied. (PID ${pid})`, '#ff4444');
+          print('System processes cannot be terminated.');
+        }, 600);
+        return;
+      }
+      if (pid === 512) {
+        print('Terminating void_monitor.exe (PID 512)...');
         setTimeout(() => {
-          print('soul_daemon.exe terminated.', '#ff4444');
-          print('Soul Integrity: CRITICAL');
-          print('Restarting soul_daemon.exe... [automatic]');
+          print('void_monitor.exe terminated.', '#ff4444');
+          print('Void Pressure: UNMONITORED');
+          print('Restarting void_monitor.exe... [automatic]');
         }, 500);
+        return;
+      }
+      // Look up real window by PID
+      const winId = winIdByPid(pid);
+      if (winId && wins[winId]) {
+        const name = wins[winId].title.split(' \u2014')[0].trim();
+        print(`Terminating ${name} (PID ${pid})...`);
+        setTimeout(() => {
+          closeWin(winId);
+          print(`SUCCESS: Process "${name}" (PID ${pid}) terminated.`);
+        }, 400);
       } else {
-        print(`Process with PID ${pid} not found.`);
+        print(`ERROR: The process with PID ${pid} was not found.`, '#ff4444');
       }
     },
     ipconfig: () => {
@@ -6767,11 +6797,6 @@ function openSysmon() {
     { pid:666,  name:'daemon.core',      cpu:2.1, mem:12.3 },
     { pid:1024, name:'soul_svc.exe',     cpu:0.7, mem:6.1  },
   ];
-  function pidFromId(id) {
-    let h = 2000;
-    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fff;
-    return 2000 + (h % 6000);
-  }
   function getProcessList() {
     const procs = [];
     Object.entries(wins).forEach(([id, w]) => {
