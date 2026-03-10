@@ -199,6 +199,7 @@ const player = {
   animState:  'stand',
   animFrame:  0,
   animTick:   0,
+  stairTimer: 0,  // frames remaining in stair-climb animation
 };
 
 const GRAVITY    = 0.5;
@@ -217,11 +218,12 @@ const FRAME_SIZE  = 64;  // px per sprite frame (sheet is SHEET_COLS × FRAME_SI
 const SHEET_COLS  = 8;   // columns in the spritesheet
 
 const ANIM = {
-  stand: { row: 8, colStart: 0 },
-  walk:  { row: 4, colStart: 0 },
+  stand:   { row: 8, colStart: 0 },
+  walk:    { row: 4, colStart: 0 },
   // Run spans row 0 col 4-7 then row 1 col 0-3 — handled in drawPlayer
-  run:   null,
-  jump:  { row: 5, colStart: 2 },
+  run:     null,
+  jump:    { row: 5, colStart: 2 },
+  stairUp: { row: 6, colStart: 0 },
 };
 
 // Check if a world-pixel rect overlaps any solid block
@@ -269,8 +271,16 @@ function updatePlayer(scale = 1) {
   // Apply horizontal, resolve collision
   player.x += moveX;
   if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
-    player.x -= moveX;
-    player.blockedX = true;
+    // Auto step-up: if grounded and 1-block gap above, climb it
+    if (moveX !== 0 && player.onGround &&
+        !collidesWithWorld(player.x, player.y - TILE, player.w, player.h)) {
+      player.y -= TILE;
+      player.stairTimer = 18; // show stair anim for ~18 frames
+      player.blockedX = false;
+    } else {
+      player.x -= moveX;
+      player.blockedX = true;
+    }
   } else {
     player.blockedX = false;
   }
@@ -365,7 +375,10 @@ function updateAnimation() {
   const moving = (keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight']) && !player.blockedX;
   const running = keys['ShiftLeft'] || keys['ShiftRight'];
 
-  if (!player.onGround) {
+  if (player.stairTimer > 0) {
+    player.stairTimer--;
+    newState = 'stairUp';
+  } else if (!player.onGround) {
     newState = 'jump';
   } else if (moving && running) {
     newState = 'run';
@@ -380,8 +393,8 @@ function updateAnimation() {
   }
 
   // Advance frame
-  const FPS = { stand: 4, walk: 10, run: 12, jump: 8 };
-  const FRAME_COUNTS = { stand: 1, walk: 8, run: 8, jump: 6 };
+  const FPS = { stand: 4, walk: 10, run: 12, jump: 8, stairUp: 12 };
+  const FRAME_COUNTS = { stand: 1, walk: 8, run: 8, jump: 6, stairUp: 8 };
 
   const fps = FPS[newState] || 4;
   const ticksPerFrame = Math.round(60 / fps);
