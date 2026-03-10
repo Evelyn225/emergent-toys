@@ -25,6 +25,16 @@ const IRON = 6;
 const WOOD = 7;
 const TREE = 8;
 
+// Non-block item types
+const HELMET      = 10;
+const CHESTPLATE  = 11;
+const LEGGINGS    = 12;
+const BOOTS       = 13;
+const SWORD_STONE = 14;
+const SWORD_IRON  = 15;
+const PICK_STONE  = 16;
+const PICK_IRON   = 17;
+
 const WATER_MAX = 1;
 const WATER_RENDER_EPS = 0.04;
 const WATER_SIDE_FLOW = 0.35;
@@ -55,6 +65,21 @@ const blockDefs = {
   [TREE]: { name: 'Tree', solid: false, mine: 16, drops: WOOD },
 };
 
+const itemDefs = {
+  [HELMET]:      { name: 'Helmet',        equipSlot: 0 },
+  [CHESTPLATE]:  { name: 'Chestplate',    equipSlot: 1 },
+  [LEGGINGS]:    { name: 'Leggings',      equipSlot: 2 },
+  [BOOTS]:       { name: 'Boots',         equipSlot: 3 },
+  [SWORD_STONE]: { name: 'Stone Sword'                 },
+  [SWORD_IRON]:  { name: 'Iron Sword'                  },
+  [PICK_STONE]:  { name: 'Stone Pickaxe'               },
+  [PICK_IRON]:   { name: 'Iron Pickaxe'                },
+};
+
+function getItemName(type) {
+  return blockDefs[type]?.name ?? itemDefs[type]?.name ?? 'Item';
+}
+
 const biomeNames = {
   [BIOME_FOREST]: 'Forest',
   [BIOME_MEADOW]: 'Meadow',
@@ -82,6 +107,13 @@ const cam = { x: 0, y: 0 };
 let lastTime = 0;
 let dayClockMs = DAY_LENGTH_MS * 0.22;
 let waterFlowParity = 0;
+
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+let gameState = 'mainmenu'; // 'mainmenu' | 'playing' | 'paused'
+let currentSaveSlot = -1;
+let saveMessageTimer = 0;
+let menuConfirm = null; // 'newworld' when showing confirm dialog
+const SAVE_KEY_PREFIX = 'terraria_v2_slot_';
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -582,6 +614,66 @@ function createWoodTexture() {
   return texture;
 }
 
+function createSwordTexture(bladeColor, handleColor) {
+  const { texture, g } = makeCanvas();
+  for (let i = 0; i < 9; i++) pixel(g, 13 - i * 1, i, bladeColor, 2, 2);
+  pixel(g, 13, 0, bladeColor, 2, 1);  // tip
+  pixel(g, 3, 9, handleColor, 9, 2);  // guard
+  pixel(g, 7, 11, handleColor, 1, 4); // grip
+  pixel(g, 6, 11, handleColor, 3, 1); // grip top
+  return texture;
+}
+
+function createPickaxeTexture(headColor, handleColor) {
+  const { texture, g } = makeCanvas();
+  for (let i = 0; i < 9; i++) pixel(g, 5 + i, 4 + i, handleColor, 2, 2); // handle
+  pixel(g, 0, 1, headColor, 7, 3);   // head body
+  pixel(g, 0, 0, headColor, 3, 2);   // upper spike
+  pixel(g, 0, 4, headColor, 3, 2);   // lower spike
+  pixel(g, 5, 4, headColor, 2, 2);   // head-to-handle join
+  return texture;
+}
+
+function createHelmetTexture(color) {
+  const { texture, g } = makeCanvas();
+  pixel(g, 2, 2, color, 12, 8);    // crown
+  pixel(g, 1, 3, color, 14, 7);
+  pixel(g, 0, 5, color, 16, 5);
+  pixel(g, 3, 10, color, 10, 4);   // visor frame
+  pixel(g, 2, 10, color, 2, 5);    // cheek left
+  pixel(g, 12, 10, color, 2, 5);   // cheek right
+  pixel(g, 3, 14, color, 10, 2);   // chin
+  pixel(g, 5, 10, '#1a1a2e', 6, 4); // visor slit
+  return texture;
+}
+
+function createChestplateTexture(color) {
+  const { texture, g } = makeCanvas();
+  pixel(g, 3, 0, color, 10, 13);   // body
+  pixel(g, 0, 3, color, 4, 11);    // left arm
+  pixel(g, 12, 3, color, 4, 11);   // right arm
+  pixel(g, 5, 2, '#1a1a2e', 6, 4); // collar
+  return texture;
+}
+
+function createLeggingsTexture(color) {
+  const { texture, g } = makeCanvas();
+  pixel(g, 0, 0, color, 16, 4);    // waist
+  pixel(g, 0, 4, color, 6, 12);    // left leg
+  pixel(g, 10, 4, color, 6, 12);   // right leg
+  pixel(g, 6, 4, '#1a1a2e', 4, 6); // gap
+  return texture;
+}
+
+function createBootsTexture(color) {
+  const { texture, g } = makeCanvas();
+  pixel(g, 1, 0, color, 6, 13);    // left boot
+  pixel(g, 9, 0, color, 6, 13);    // right boot
+  pixel(g, 0, 10, color, 8, 6);    // left sole
+  pixel(g, 8, 10, color, 8, 6);    // right sole
+  return texture;
+}
+
 function buildTextures() {
   tileTextures[GRASS] = createGrassTexture();
   tileTextures[DIRT] = createDirtTexture();
@@ -593,6 +685,15 @@ function buildTextures() {
   tileTextures[TREE] = tileTextures[WOOD];
   wallTextures.shallow = createWallTexture('#59402e', '#402c1f', '#6a4e3a', 81);
   wallTextures.deep = createWallTexture('#342822', '#211813', '#473732', 82);
+
+  tileTextures[SWORD_STONE] = createSwordTexture('#7a7a8a', '#8B6914');
+  tileTextures[SWORD_IRON]  = createSwordTexture('#c0c4cc', '#6a6d78');
+  tileTextures[PICK_STONE]  = createPickaxeTexture('#7a7a8a', '#8B6914');
+  tileTextures[PICK_IRON]   = createPickaxeTexture('#c0c4cc', '#6a6d78');
+  tileTextures[HELMET]      = createHelmetTexture('#d28b4b');
+  tileTextures[CHESTPLATE]  = createChestplateTexture('#d28b4b');
+  tileTextures[LEGGINGS]    = createLeggingsTexture('#d28b4b');
+  tileTextures[BOOTS]       = createBootsTexture('#d28b4b');
 }
 
 function generateWorld() {
@@ -816,11 +917,17 @@ function sampleWaterCoverage(px, py, pw, ph) {
 
 const keys = {};
 window.addEventListener('keydown', event => {
-  if (event.code === 'Tab') {
+  if (event.code === 'Escape') {
     event.preventDefault();
-    if (!event.repeat) toggleInventory();
+    if (!event.repeat) handleEscape();
     return;
   }
+  if (event.code === 'Tab') {
+    event.preventDefault();
+    if (!event.repeat && gameState === 'playing') toggleInventory();
+    return;
+  }
+  if (gameState !== 'playing') return;
   keys[event.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
     event.preventDefault();
@@ -830,10 +937,12 @@ window.addEventListener('keyup', event => {
   keys[event.code] = false;
 });
 
-const mouse = { x: 0, y: 0, down: false, rightDown: false };
+const mouse = { x: 0, y: 0, down: false, rightDown: false, shift: false, ctrl: false };
 function syncMouseFromEvent(event) {
   mouse.x = event.clientX;
   mouse.y = event.clientY;
+  mouse.shift = event.shiftKey;
+  mouse.ctrl = event.ctrlKey;
 }
 
 const HOTBAR_SIZE = 8;
@@ -883,9 +992,74 @@ inventory.hotbar[1] = { type: STONE, count: 24 };
 inventory.hotbar[2] = { type: WOOD, count: 18 };
 inventory.hotbar[3] = { type: COPPER, count: 8 };
 
+// ─── CRAFTING & EQUIPMENT ─────────────────────────────────────────────────────
+
+const CRAFT_SIZE = 9; // 3×3 grid
+const craftingGrid = Array.from({ length: CRAFT_SIZE }, () => createStack());
+let craftingOutput = createStack();
+
+const equipment = Array.from({ length: 4 }, () => createStack());
+const EQUIP_LABELS = ['Head', 'Chest', 'Legs', 'Feet'];
+
+const RECIPES = [
+  // Pickaxes: 3 material in top row, wood handle in middle+bottom center
+  { pattern: [STONE,STONE,STONE, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_STONE,  count: 1 },
+  { pattern: [IRON,IRON,IRON,   AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_IRON,   count: 1 },
+  // Swords: 2 material in center column, wood handle at bottom
+  { pattern: [AIR,STONE,AIR, AIR,STONE,AIR, AIR,WOOD,AIR],   out: SWORD_STONE, count: 1 },
+  { pattern: [AIR,IRON,AIR,  AIR,IRON,AIR,  AIR,WOOD,AIR],   out: SWORD_IRON,  count: 1 },
+  // Copper armor
+  { pattern: [COPPER,COPPER,COPPER, COPPER,AIR,COPPER, AIR,AIR,AIR],             out: HELMET,     count: 1 },
+  { pattern: [COPPER,AIR,COPPER, COPPER,COPPER,COPPER, COPPER,COPPER,COPPER],     out: CHESTPLATE, count: 1 },
+  { pattern: [COPPER,COPPER,COPPER, COPPER,AIR,COPPER, COPPER,AIR,COPPER],        out: LEGGINGS,   count: 1 },
+  { pattern: [AIR,AIR,AIR, COPPER,AIR,COPPER, COPPER,AIR,COPPER],                 out: BOOTS,      count: 1 },
+];
+
+function updateCraftingOutput() {
+  craftingOutput = createStack();
+  for (const recipe of RECIPES) {
+    if (recipe.pattern.every((req, i) => {
+      const have = isEmptyStack(craftingGrid[i]) ? AIR : craftingGrid[i].type;
+      return have === req;
+    })) {
+      craftingOutput = createStack(recipe.out, recipe.count);
+      return;
+    }
+  }
+}
+
+function consumeCraftingIngredients() {
+  for (let i = 0; i < CRAFT_SIZE; i++) {
+    if (!isEmptyStack(craftingGrid[i])) {
+      craftingGrid[i].count--;
+      if (craftingGrid[i].count <= 0) setStack(craftingGrid[i], createStack());
+    }
+  }
+  updateCraftingOutput();
+}
+
+function takeCraftingOutput() {
+  if (isEmptyStack(craftingOutput)) return;
+  if (addToInventory(craftingOutput.type, craftingOutput.count)) {
+    consumeCraftingIngredients();
+  }
+}
+
+function returnCraftingGridToInventory() {
+  for (let i = 0; i < CRAFT_SIZE; i++) {
+    if (!isEmptyStack(craftingGrid[i])) {
+      addToInventory(craftingGrid[i].type, craftingGrid[i].count);
+      setStack(craftingGrid[i], createStack());
+    }
+  }
+  craftingOutput = createStack();
+}
+
 function getInventoryArray(area) {
   if (area === 'hotbar') return inventory.hotbar;
   if (area === 'backpack') return inventory.backpack;
+  if (area === 'craft') return craftingGrid;
+  if (area === 'equip') return equipment;
   return null;
 }
 
@@ -910,21 +1084,32 @@ function returnDraggedStack() {
     clearDragState();
     return;
   }
+  const wasCraft = dragState.sourceArea === 'craft';
   const sourceSlot = getInventorySlot(dragState.sourceArea, dragState.sourceIndex);
   if (sourceSlot) setStack(sourceSlot, dragState.item);
   else addToInventory(dragState.item.type, dragState.item.count);
   clearDragState();
+  if (wasCraft) updateCraftingOutput();
 }
 
 function toggleInventory(forceOpen = !inventory.open) {
   const nextOpen = !!forceOpen;
   if (inventory.open === nextOpen) return;
-  if (!nextOpen && dragState.active) returnDraggedStack();
+  if (!nextOpen) {
+    if (dragState.active) returnDraggedStack();
+    returnCraftingGridToInventory();
+  }
   inventory.open = nextOpen;
 }
 
 function dropDraggedStack(area, index) {
   if (!dragState.active) return;
+
+  // Output slot is read-only
+  if (area === 'craftout') {
+    returnDraggedStack();
+    return;
+  }
 
   const targetSlot = getInventorySlot(area, index);
   if (!targetSlot) {
@@ -932,7 +1117,18 @@ function dropDraggedStack(area, index) {
     return;
   }
 
+  // Equipment slots: only accept items with matching equipSlot
+  if (area === 'equip') {
+    const def = itemDefs[dragState.item.type];
+    if (!def || def.equipSlot !== index) {
+      returnDraggedStack();
+      return;
+    }
+  }
+
   if (area === 'hotbar') inventory.selected = index;
+
+  const srcArea = dragState.sourceArea;
 
   if (area === dragState.sourceArea && index === dragState.sourceIndex) {
     setStack(targetSlot, dragState.item);
@@ -943,6 +1139,7 @@ function dropDraggedStack(area, index) {
   if (isEmptyStack(targetSlot)) {
     setStack(targetSlot, dragState.item);
     clearDragState();
+    if (area === 'craft' || srcArea === 'craft') updateCraftingOutput();
     return;
   }
 
@@ -952,11 +1149,13 @@ function dropDraggedStack(area, index) {
     dragState.item.count -= transfer;
     if (dragState.item.count <= 0) {
       clearDragState();
+      if (area === 'craft' || srcArea === 'craft') updateCraftingOutput();
       return;
     }
     const sourceSlot = getInventorySlot(dragState.sourceArea, dragState.sourceIndex);
     if (sourceSlot) setStack(sourceSlot, dragState.item);
     clearDragState();
+    if (area === 'craft' || srcArea === 'craft') updateCraftingOutput();
     return;
   }
 
@@ -965,13 +1164,114 @@ function dropDraggedStack(area, index) {
   setStack(targetSlot, dragState.item);
   if (sourceSlot) setStack(sourceSlot, swapped);
   clearDragState();
+  if (area === 'craft' || srcArea === 'craft') updateCraftingOutput();
+}
+
+// Shift+click: instantly move entire stack between hotbar↔backpack (or craft/equip → backpack)
+function shiftClickSlot(area, index) {
+  const srcSlot = getInventorySlot(area, index);
+  if (!srcSlot || isEmptyStack(srcSlot)) return;
+
+  let destArrays;
+  if (area === 'hotbar') destArrays = [inventory.backpack];
+  else if (area === 'backpack') destArrays = [inventory.hotbar];
+  else destArrays = [inventory.backpack, inventory.hotbar];
+
+  const type = srcSlot.type;
+  let remaining = srcSlot.count;
+
+  // First pass: merge with existing stacks of same type
+  for (const arr of destArrays) {
+    for (const slot of arr) {
+      if (slot.type !== type || slot.count <= 0 || slot.count >= STACK_LIMIT) continue;
+      const transfer = Math.min(STACK_LIMIT - slot.count, remaining);
+      slot.count += transfer;
+      remaining -= transfer;
+      if (remaining <= 0) break;
+    }
+    if (remaining <= 0) break;
+  }
+
+  // Second pass: fill empty slots
+  if (remaining > 0) {
+    for (const arr of destArrays) {
+      for (const slot of arr) {
+        if (!isEmptyStack(slot)) continue;
+        const transfer = Math.min(STACK_LIMIT, remaining);
+        setStack(slot, createStack(type, transfer));
+        remaining -= transfer;
+        if (remaining <= 0) break;
+      }
+      if (remaining <= 0) break;
+    }
+  }
+
+  if (remaining <= 0) setStack(srcSlot, createStack());
+  else srcSlot.count = remaining;
+
+  if (area === 'craft') updateCraftingOutput();
+}
+
+// Ctrl+click: collect all stacks of same type from hotbar+backpack into cursor
+function ctrlClickSlot(area, index) {
+  const srcSlot = getInventorySlot(area, index);
+  if (!srcSlot || isEmptyStack(srcSlot)) return;
+
+  const type = srcSlot.type;
+  let total = 0;
+
+  for (const slots of [inventory.hotbar, inventory.backpack]) {
+    for (const slot of slots) {
+      if (slot.type !== type) continue;
+      total += slot.count;
+      setStack(slot, createStack());
+    }
+  }
+
+  // Also collect from source if it was craft/equip (those weren't in the loop above)
+  if (area === 'craft' || area === 'equip') {
+    total += srcSlot.count;
+    setStack(srcSlot, createStack());
+    if (area === 'craft') updateCraftingOutput();
+  }
+
+  if (total <= 0) return;
+
+  dragState.active = true;
+  dragState.sourceArea = null;
+  dragState.sourceIndex = -1;
+  dragState.item = createStack(type, Math.min(total, STACK_LIMIT));
 }
 
 function handleInventoryPrimaryDown() {
   const slotRef = getUiSlotAt(mouse.x, mouse.y);
   if (!slotRef) return;
   if (slotRef.area === 'hotbar') inventory.selected = slotRef.index;
-  if (!inventory.open || dragState.active) return;
+  if (!inventory.open) return;
+
+  // Click craft output: take the result
+  if (slotRef.area === 'craftout') {
+    if (!dragState.active) takeCraftingOutput();
+    return;
+  }
+
+  // Shift+click: move entire stack without dragging
+  if (mouse.shift && !dragState.active) {
+    shiftClickSlot(slotRef.area, slotRef.index);
+    return;
+  }
+
+  // Ctrl+click: collect all of same type into cursor
+  if (mouse.ctrl && !dragState.active) {
+    ctrlClickSlot(slotRef.area, slotRef.index);
+    return;
+  }
+
+  // If drag active: deposit on click (don't require hold)
+  if (dragState.active) {
+    dropDraggedStack(slotRef.area, slotRef.index);
+    return;
+  }
 
   const slot = getInventorySlot(slotRef.area, slotRef.index);
   if (isEmptyStack(slot)) return;
@@ -981,6 +1281,54 @@ function handleInventoryPrimaryDown() {
   dragState.sourceIndex = slotRef.index;
   dragState.item = cloneStack(slot);
   setStack(slot, createStack());
+  if (slotRef.area === 'craft') updateCraftingOutput();
+}
+
+// Right-click: pick up half-stack (no drag) or place one item (drag active)
+function handleInventoryRightDown() {
+  if (!inventory.open) return;
+  const slotRef = getUiSlotAt(mouse.x, mouse.y);
+  if (!slotRef || slotRef.area === 'craftout') return;
+
+  if (dragState.active) {
+    // Place one item into target slot
+    const targetSlot = getInventorySlot(slotRef.area, slotRef.index);
+    if (!targetSlot) return;
+
+    if (slotRef.area === 'equip') {
+      const def = itemDefs[dragState.item.type];
+      if (!def || def.equipSlot !== slotRef.index) return;
+    }
+
+    const canPlace = isEmptyStack(targetSlot) ||
+      (targetSlot.type === dragState.item.type && targetSlot.count < STACK_LIMIT);
+
+    if (canPlace) {
+      if (isEmptyStack(targetSlot)) {
+        setStack(targetSlot, createStack(dragState.item.type, 1));
+      } else {
+        targetSlot.count++;
+      }
+      dragState.item.count--;
+      const srcArea = dragState.sourceArea;
+      if (dragState.item.count <= 0) clearDragState();
+      if (slotRef.area === 'craft' || srcArea === 'craft') updateCraftingOutput();
+    }
+  } else {
+    // Pick up half-stack from slot
+    const srcSlot = getInventorySlot(slotRef.area, slotRef.index);
+    if (!srcSlot || isEmptyStack(srcSlot)) return;
+
+    const half = Math.ceil(srcSlot.count / 2);
+    dragState.active = true;
+    dragState.sourceArea = slotRef.area;
+    dragState.sourceIndex = slotRef.index;
+    dragState.item = createStack(srcSlot.type, half);
+    srcSlot.count -= half;
+    if (srcSlot.count <= 0) setStack(srcSlot, createStack());
+
+    if (slotRef.area === 'craft') updateCraftingOutput();
+  }
 }
 
 window.addEventListener('blur', () => {
@@ -995,22 +1343,21 @@ canvas.addEventListener('mousemove', event => {
 });
 canvas.addEventListener('mousedown', event => {
   syncMouseFromEvent(event);
+  if (gameState !== 'playing') {
+    if (event.button === 0) handleMenuClick(event.clientX, event.clientY);
+    return;
+  }
   if (event.button === 0) {
     mouse.down = true;
     handleInventoryPrimaryDown();
   }
-  if (event.button === 2) mouse.rightDown = true;
+  if (event.button === 2) {
+    mouse.rightDown = true;
+    handleInventoryRightDown();
+  }
 });
 window.addEventListener('mouseup', event => {
-  syncMouseFromEvent(event);
-  if (event.button === 0) {
-    if (dragState.active) {
-      const slotRef = getUiSlotAt(mouse.x, mouse.y);
-      if (slotRef) dropDraggedStack(slotRef.area, slotRef.index);
-      else returnDraggedStack();
-    }
-    mouse.down = false;
-  }
+  if (event.button === 0) mouse.down = false;
   if (event.button === 2) mouse.rightDown = false;
 });
 canvas.addEventListener('mouseleave', () => {
@@ -1072,60 +1419,118 @@ function getInventoryMetrics() {
   const slotW = compact ? 34 : canvas.width < 720 ? 40 : 48;
   const slotH = slotW;
   const gap = compact ? 5 : 7;
+  const panelPad = compact ? 10 : 14;
+  const headerH = 28;
+  const labelH = 20;
+
   const hotbarW = HOTBAR_SIZE * slotW + (HOTBAR_SIZE - 1) * gap;
   const hotbarX = Math.floor((canvas.width - hotbarW) / 2);
   const hotbarY = Math.floor(canvas.height - slotH - 18);
-  const headerH = compact ? 26 : 28;
-  const panelPad = compact ? 12 : 14;
-  const gridW = BACKPACK_COLS * slotW + (BACKPACK_COLS - 1) * gap;
-  const gridH = BACKPACK_ROWS * slotH + (BACKPACK_ROWS - 1) * gap;
-  const backpackW = gridW + panelPad * 2;
-  const backpackH = gridH + headerH + panelPad;
-  const backpackX = Math.floor((canvas.width - backpackW) / 2);
-  const backpackY = hotbarY - backpackH - 14;
+
+  // Crafting section dimensions
+  const craftGridSize = 3 * slotW + 2 * gap;  // 3×3 grid width/height
+  const arrowW = compact ? 26 : 34;
+  const craftSectionW = craftGridSize + arrowW + slotW;
+
+  // Equipment section dimensions
+  const equipLabelW = compact ? 32 : 42;
+  const equipSectionW = equipLabelW + gap + slotW;
+  const equipH = 4 * slotH + 3 * gap;
+
+  // Backpack dimensions
+  const backpackGridW = BACKPACK_COLS * slotW + (BACKPACK_COLS - 1) * gap;
+  const backpackGridH = BACKPACK_ROWS * slotH + (BACKPACK_ROWS - 1) * gap;
+
+  // Full panel
+  const upperInnerW = equipSectionW + panelPad + craftSectionW;
+  const panelInnerW = Math.max(upperInnerW, backpackGridW);
+  const panelW = panelInnerW + 2 * panelPad;
+  const panelX = Math.floor((canvas.width - panelW) / 2);
+
+  const upperH = labelH + Math.max(equipH, craftGridSize) + 8;
+  const backpackSectionH = labelH + backpackGridH + 8;
+  const panelH = headerH + upperH + 8 + backpackSectionH + panelPad;
+  const panelY = Math.max(4, hotbarY - panelH - 14);
+
+  // Upper section Y positions
+  const upperY = panelY + headerH;
+  const upperContentY = upperY + labelH;
+
+  // Equipment positions
+  const equipX = panelX + panelPad;
+  const equipSlotX = equipX + equipLabelW + gap;
+
+  // Crafting positions
+  const craftAreaX = equipX + equipSectionW + panelPad;
+  const craftGridX = craftAreaX;
+  const craftArrowX = craftGridX + craftGridSize;
+  const craftOutX = craftArrowX + arrowW;
+  const craftOutY = upperContentY + Math.floor((craftGridSize - slotH) / 2);
+
+  // Backpack section
+  const backpackSectionY = upperY + upperH + 8;
+  const backpackGridX = panelX + panelPad;
+  const backpackGridY = backpackSectionY + labelH;
+
   return {
-    slotW,
-    slotH,
-    gap,
-    iconSize: Math.floor(slotW * 0.52),
-    iconOffsetX: Math.floor((slotW - Math.floor(slotW * 0.52)) / 2),
-    iconOffsetY: Math.floor((slotH - Math.floor(slotW * 0.52)) / 2) - 2,
+    slotW, slotH, gap, panelPad, headerH, labelH,
     hotbar: { x: hotbarX, y: hotbarY, w: hotbarW, h: slotH },
+    panel: { x: panelX, y: panelY, w: panelW, h: panelH },
+    upper: { y: upperY, contentY: upperContentY },
+    equip: { x: equipX, y: upperContentY, slotX: equipSlotX, labelW: equipLabelW, h: equipH },
+    craft: {
+      x: craftAreaX, y: upperContentY,
+      gridX: craftGridX, gridSize: craftGridSize,
+      arrowX: craftArrowX, arrowW,
+      outX: craftOutX, outY: craftOutY,
+    },
     backpack: {
-      x: backpackX,
-      y: backpackY,
-      w: backpackW,
-      h: backpackH,
-      headerH,
-      gridX: backpackX + panelPad,
-      gridY: backpackY + headerH,
+      x: panelX, y: backpackSectionY, w: panelW,
+      labelX: panelX + panelPad, labelY: backpackSectionY + 14,
+      gridX: backpackGridX, gridY: backpackGridY,
     },
   };
 }
 
 function getSlotRect(area, index, metrics = getInventoryMetrics()) {
-  if (area === 'hotbar') {
-    if (index < 0 || index >= inventory.hotbar.length) return null;
-    return {
-      x: Math.floor(metrics.hotbar.x + index * (metrics.slotW + metrics.gap)),
-      y: metrics.hotbar.y,
-      w: metrics.slotW,
-      h: metrics.slotH,
-    };
-  }
+  const { slotW, slotH, gap } = metrics;
 
+  if (area === 'hotbar') {
+    if (index < 0 || index >= HOTBAR_SIZE) return null;
+    return { x: Math.floor(metrics.hotbar.x + index * (slotW + gap)), y: metrics.hotbar.y, w: slotW, h: slotH };
+  }
   if (area === 'backpack') {
-    if (index < 0 || index >= inventory.backpack.length) return null;
+    if (index < 0 || index >= BACKPACK_SIZE) return null;
     const col = index % BACKPACK_COLS;
     const row = Math.floor(index / BACKPACK_COLS);
     return {
-      x: Math.floor(metrics.backpack.gridX + col * (metrics.slotW + metrics.gap)),
-      y: Math.floor(metrics.backpack.gridY + row * (metrics.slotH + metrics.gap)),
-      w: metrics.slotW,
-      h: metrics.slotH,
+      x: Math.floor(metrics.backpack.gridX + col * (slotW + gap)),
+      y: Math.floor(metrics.backpack.gridY + row * (slotH + gap)),
+      w: slotW, h: slotH,
     };
   }
-
+  if (area === 'craft') {
+    if (index < 0 || index >= CRAFT_SIZE) return null;
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+    return {
+      x: Math.floor(metrics.craft.gridX + col * (slotW + gap)),
+      y: Math.floor(metrics.craft.y + row * (slotH + gap)),
+      w: slotW, h: slotH,
+    };
+  }
+  if (area === 'equip') {
+    if (index < 0 || index >= 4) return null;
+    return {
+      x: metrics.equip.slotX,
+      y: Math.floor(metrics.equip.y + index * (slotH + gap)),
+      w: slotW, h: slotH,
+    };
+  }
+  if (area === 'craftout') {
+    if (index !== 0) return null;
+    return { x: metrics.craft.outX, y: metrics.craft.outY, w: slotW, h: slotH };
+  }
   return null;
 }
 
@@ -1133,7 +1538,23 @@ function getUiSlotAt(x, y) {
   const metrics = getInventoryMetrics();
 
   if (inventory.open) {
-    for (let i = 0; i < inventory.backpack.length; i++) {
+    const outRect = getSlotRect('craftout', 0, metrics);
+    if (outRect && isPointInRect(x, y, outRect.x, outRect.y, outRect.w, outRect.h)) {
+      return { area: 'craftout', index: 0 };
+    }
+    for (let i = 0; i < CRAFT_SIZE; i++) {
+      const rect = getSlotRect('craft', i, metrics);
+      if (rect && isPointInRect(x, y, rect.x, rect.y, rect.w, rect.h)) {
+        return { area: 'craft', index: i };
+      }
+    }
+    for (let i = 0; i < 4; i++) {
+      const rect = getSlotRect('equip', i, metrics);
+      if (rect && isPointInRect(x, y, rect.x, rect.y, rect.w, rect.h)) {
+        return { area: 'equip', index: i };
+      }
+    }
+    for (let i = 0; i < BACKPACK_SIZE; i++) {
       const rect = getSlotRect('backpack', i, metrics);
       if (rect && isPointInRect(x, y, rect.x, rect.y, rect.w, rect.h)) {
         return { area: 'backpack', index: i };
@@ -1141,19 +1562,18 @@ function getUiSlotAt(x, y) {
     }
   }
 
-  for (let i = 0; i < inventory.hotbar.length; i++) {
+  for (let i = 0; i < HOTBAR_SIZE; i++) {
     const rect = getSlotRect('hotbar', i, metrics);
     if (rect && isPointInRect(x, y, rect.x, rect.y, rect.w, rect.h)) {
       return { area: 'hotbar', index: i };
     }
   }
-
   return null;
 }
 
 function isPointerOverInventoryUi(x = mouse.x, y = mouse.y) {
   const metrics = getInventoryMetrics();
-  if (inventory.open && isPointInRect(x, y, metrics.backpack.x, metrics.backpack.y, metrics.backpack.w, metrics.backpack.h)) {
+  if (inventory.open && isPointInRect(x, y, metrics.panel.x, metrics.panel.y, metrics.panel.w, metrics.panel.h)) {
     return true;
   }
   return isPointInRect(x, y, metrics.hotbar.x, metrics.hotbar.y, metrics.hotbar.w, metrics.hotbar.h);
@@ -1829,7 +2249,12 @@ function drawInventorySlot(stack, x, y, slotW, slotH, options = {}) {
 
   if (!isEmptyStack(stack)) {
     const icon = getInventoryIconLayout(slotW, slotH);
-    ctx.drawImage(tileTextures[stack.type], x + icon.x, y + icon.y, icon.size, icon.size);
+    if (tileTextures[stack.type]) {
+      ctx.drawImage(tileTextures[stack.type], x + icon.x, y + icon.y, icon.size, icon.size);
+    } else {
+      ctx.fillStyle = '#888';
+      ctx.fillRect(x + icon.x, y + icon.y, icon.size, icon.size);
+    }
   }
 
   if (hotkey) {
@@ -1841,31 +2266,86 @@ function drawInventorySlot(stack, x, y, slotW, slotH, options = {}) {
   ctx.restore();
 }
 
-function drawBackpack() {
+function drawInventoryScreen() {
   if (!inventory.open) return;
 
-  const metrics = getInventoryMetrics();
-  const panel = metrics.backpack;
+  const m = getInventoryMetrics();
+  const panel = m.panel;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(4,7,12,0.28)';
+
+  // Background dim
+  ctx.fillStyle = 'rgba(4,7,12,0.35)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Main panel
   drawPanel(panel.x, panel.y, panel.w, panel.h);
-  ctx.fillStyle = 'rgba(93,132,176,0.16)';
-  ctx.fillRect(panel.x + 2, panel.y + 2, panel.w - 4, panel.headerH - 4);
+
+  // Panel header
+  ctx.fillStyle = 'rgba(93,132,176,0.18)';
+  ctx.fillRect(panel.x + 2, panel.y + 2, panel.w - 4, m.headerH - 4);
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.beginPath();
-  ctx.moveTo(panel.x + 12, panel.y + panel.headerH - 0.5);
-  ctx.lineTo(panel.x + panel.w - 12, panel.y + panel.headerH - 0.5);
+  ctx.moveTo(panel.x + 12, panel.y + m.headerH - 0.5);
+  ctx.lineTo(panel.x + panel.w - 12, panel.y + m.headerH - 0.5);
   ctx.stroke();
-  drawText('BACKPACK', panel.x + 14, panel.y + 18, '#f5f1d0', '13px Minecraft, monospace');
+  drawText('INVENTORY', panel.x + 14, panel.y + 18, '#f5f1d0', '13px Minecraft, monospace');
   drawText('TAB', panel.x + panel.w - 14, panel.y + 18, '#8fb4d9', '11px Minecraft, monospace', 'right');
 
-  for (let i = 0; i < inventory.backpack.length; i++) {
-    const rect = getSlotRect('backpack', i, metrics);
-    const slot = inventory.backpack[i];
-    drawInventorySlot(slot, rect.x, rect.y, rect.w, rect.h);
+  // ── EQUIPMENT SECTION ──────────────────────────────────────
+  const eq = m.equip;
+  drawText('EQUIPMENT', eq.x, m.upper.y + 14, '#c9aa71', '11px Minecraft, monospace');
+  for (let i = 0; i < 4; i++) {
+    const rect = getSlotRect('equip', i, m);
+    const labelY = rect.y + Math.floor(m.slotH * 0.58);
+    drawText(EQUIP_LABELS[i], eq.x, labelY, '#6a8fba', '10px Minecraft, monospace');
+    drawInventorySlot(equipment[i], rect.x, rect.y, m.slotW, m.slotH);
   }
+
+  // ── CRAFTING SECTION ───────────────────────────────────────
+  const cr = m.craft;
+  drawText('CRAFTING', cr.x, m.upper.y + 14, '#c9aa71', '11px Minecraft, monospace');
+
+  // 3×3 grid
+  for (let i = 0; i < CRAFT_SIZE; i++) {
+    const rect = getSlotRect('craft', i, m);
+    drawInventorySlot(craftingGrid[i], rect.x, rect.y, m.slotW, m.slotH);
+  }
+
+  // Arrow (lit when output available)
+  updateCraftingOutput();
+  const arrowCenterX = cr.arrowX + Math.floor(cr.arrowW / 2);
+  const arrowCenterY = cr.y + Math.floor(cr.gridSize / 2);
+  const hasOutput = !isEmptyStack(craftingOutput);
+  ctx.fillStyle = hasOutput ? '#ffd55e' : 'rgba(255,255,255,0.22)';
+  ctx.font = '16px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('▶', arrowCenterX, arrowCenterY + 6);
+  ctx.textAlign = 'left';
+
+  // Output slot
+  const outRect = getSlotRect('craftout', 0, m);
+  drawInventorySlot(craftingOutput, outRect.x, outRect.y, m.slotW, m.slotH, { selected: hasOutput });
+  if (hasOutput) {
+    drawText('CRAFT', outRect.x + Math.floor(m.slotW / 2), outRect.y - 5, '#c9aa71', '9px Minecraft, monospace', 'center');
+  }
+
+  // ── DIVIDER ────────────────────────────────────────────────
+  const divY = m.backpack.y - 4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.beginPath();
+  ctx.moveTo(panel.x + 12, divY);
+  ctx.lineTo(panel.x + panel.w - 12, divY);
+  ctx.stroke();
+
+  // ── BACKPACK SECTION ───────────────────────────────────────
+  const bp = m.backpack;
+  drawText('BACKPACK', bp.labelX, bp.labelY, '#f5f1d0', '13px Minecraft, monospace');
+  for (let i = 0; i < BACKPACK_SIZE; i++) {
+    const rect = getSlotRect('backpack', i, m);
+    drawInventorySlot(inventory.backpack[i], rect.x, rect.y, m.slotW, m.slotH);
+  }
+
   ctx.restore();
 }
 
@@ -1883,7 +2363,7 @@ function drawHotbar() {
   }
 
   if (selected && selected.type !== AIR) {
-    const label = blockDefs[selected.type]?.name || 'Block';
+    const label = getItemName(selected.type);
     drawText(label.toUpperCase(), Math.floor(canvas.width / 2), metrics.hotbar.y - 10, '#f5f1d0', '14px Minecraft, monospace', 'center');
   }
 }
@@ -1896,11 +2376,347 @@ function drawDraggedStack() {
   drawInventorySlot(dragState.item, x, y, metrics.slotW, metrics.slotH, { selected: true });
 }
 
+// ─── SAVE / LOAD ─────────────────────────────────────────────────────────────
+
+function encodeUint8Array(arr) {
+  const CHUNK = 8192;
+  let result = '';
+  for (let i = 0; i < arr.length; i += CHUNK) {
+    result += String.fromCharCode.apply(null, arr.subarray(i, Math.min(arr.length, i + CHUNK)));
+  }
+  return btoa(result);
+}
+
+function decodeUint8Array(b64, target) {
+  const bin = atob(b64);
+  const len = Math.min(bin.length, target.length);
+  for (let i = 0; i < len; i++) target[i] = bin.charCodeAt(i);
+}
+
+function encodeWaterSparse() {
+  const e = [];
+  for (let i = 0; i < water.length; i++) {
+    if (water[i] > 0.001) e.push(i, Math.round(water[i] * 10000) / 10000);
+  }
+  return e;
+}
+
+function decodeWaterSparse(e) {
+  water.fill(0);
+  for (let i = 0; i < e.length; i += 2) water[e[i]] = e[i + 1];
+}
+
+function stackToObj(s) { return { t: s.type, c: s.count }; }
+function objToStack(o) { return createStack(o?.t ?? AIR, o?.c ?? 0); }
+
+function getSaveMetadata(slot) {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY_PREFIX + slot);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return d?.v === 1 ? { savedAt: d.savedAt } : null;
+  } catch { return null; }
+}
+
+function serializeGame() {
+  return JSON.stringify({
+    v: 1,
+    savedAt: Date.now(),
+    world: encodeUint8Array(world),
+    surfaceYs: Array.from(surfaceYs),
+    biomes: Array.from(biomes),
+    water: encodeWaterSparse(),
+    treeCanopies: treeCanopies.map(c => ({ x: c.x, ty: c.trunkTopY, by: c.trunkBaseY, r: c.radius, b: c.biome })),
+    player: { x: player.x, y: player.y, vy: player.vy, health: player.health, maxHealth: player.maxHealth, facing: player.facing },
+    inv: { hotbar: inventory.hotbar.map(stackToObj), backpack: inventory.backpack.map(stackToObj), selected: inventory.selected },
+    equip: equipment.map(stackToObj),
+    cam: { x: cam.x, y: cam.y },
+    dayClockMs,
+  });
+}
+
+function deserializeGame(json) {
+  const d = JSON.parse(json);
+  if (!d || d.v !== 1) return false;
+
+  decodeUint8Array(d.world, world);
+  surfaceYs.set(d.surfaceYs);
+  biomes.set(d.biomes);
+  decodeWaterSparse(d.water);
+  treeCanopies.length = 0;
+  for (const c of d.treeCanopies) {
+    treeCanopies.push({ x: c.x, trunkTopY: c.ty, trunkBaseY: c.by, radius: c.r, biome: c.b });
+  }
+
+  Object.assign(player, {
+    x: d.player.x, y: d.player.y, vy: d.player.vy,
+    health: d.player.health, maxHealth: d.player.maxHealth, facing: d.player.facing,
+    onGround: false, blockedX: false, inWater: false, fullySubmerged: false,
+    drownTick: 0, jumpLatch: false, jumpAnimRestart: false, waterExitFrames: 0,
+    air: PLAYER_MAX_AIR, animState: 'stand', animFrame: 0, animTick: 0,
+  });
+
+  inventory.hotbar = d.inv.hotbar.map(objToStack);
+  inventory.backpack = d.inv.backpack.map(objToStack);
+  inventory.selected = d.inv.selected;
+  inventory.open = false;
+  for (let i = 0; i < 4; i++) equipment[i] = objToStack(d.equip[i]);
+
+  cam.x = d.cam.x;
+  cam.y = d.cam.y;
+  dayClockMs = d.dayClockMs;
+  return true;
+}
+
+function saveGame() {
+  if (currentSaveSlot < 0) return;
+  localStorage.setItem(SAVE_KEY_PREFIX + currentSaveSlot, serializeGame());
+  saveMessageTimer = 150;
+}
+
+function loadGame(slot) {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY_PREFIX + slot);
+    if (!raw) return false;
+    if (!deserializeGame(raw)) return false;
+    buildSkyDecor();
+    currentSaveSlot = slot;
+    return true;
+  } catch (e) {
+    console.error('[terraria] load failed:', e);
+    return false;
+  }
+}
+
+function resetPlayer() {
+  player.x = WORLD_PX / 2 - player.w / 2;
+  player.y = findSpawnY();
+  player.vy = 0; player.health = 5; player.maxHealth = 5;
+  player.onGround = false; player.blockedX = false;
+  player.inWater = false; player.fullySubmerged = false;
+  player.air = PLAYER_MAX_AIR; player.drownTick = 0;
+  player.jumpLatch = false; player.jumpAnimRestart = false;
+  player.waterExitFrames = 0; player.facing = 1;
+  player.animState = 'stand'; player.animFrame = 0; player.animTick = 0;
+  cam.x = clamp(player.x + player.w / 2 - canvas.width / 2, 0, Math.max(0, WORLD_PX - canvas.width));
+  cam.y = clamp(player.y + player.h / 2 - canvas.height * 0.4, 0, Math.max(0, WORLD_H * TILE - canvas.height));
+}
+
+function resetInventory() {
+  for (const s of inventory.hotbar) setStack(s, createStack());
+  for (const s of inventory.backpack) setStack(s, createStack());
+  inventory.selected = 0; inventory.open = false;
+  for (let i = 0; i < 4; i++) setStack(equipment[i], createStack());
+  for (let i = 0; i < CRAFT_SIZE; i++) setStack(craftingGrid[i], createStack());
+  craftingOutput = createStack();
+}
+
+function startNewGame(slot) {
+  currentSaveSlot = slot;
+  generateWorld();
+  buildSkyDecor();
+  resetPlayer();
+  resetInventory();
+  // Starter items
+  inventory.hotbar[0] = createStack(DIRT, 48);
+  inventory.hotbar[1] = createStack(STONE, 24);
+  inventory.hotbar[2] = createStack(WOOD, 18);
+  inventory.hotbar[3] = createStack(COPPER, 8);
+  gameState = 'playing';
+  menuConfirm = null;
+}
+
+function enterGame(slot) {
+  if (loadGame(slot)) { gameState = 'playing'; menuConfirm = null; }
+  else startNewGame(slot);
+}
+
+function handleEscape() {
+  if (gameState === 'mainmenu') return;
+  if (menuConfirm) { menuConfirm = null; return; }
+  if (inventory.open) { toggleInventory(false); return; }
+  if (gameState === 'playing') { gameState = 'paused'; }
+  else if (gameState === 'paused') { gameState = 'playing'; }
+}
+
+// ─── MENUS ────────────────────────────────────────────────────────────────────
+
+function menuSlotLayout() {
+  const panelW = Math.min(460, canvas.width - 40);
+  const slotH = 58;
+  const slotGap = 10;
+  const panelH = 88 + 3 * slotH + 2 * slotGap + 24;
+  const panelX = Math.floor((canvas.width - panelW) / 2);
+  const panelY = Math.floor((canvas.height - panelH) / 2);
+  return { panelX, panelY, panelW, panelH, slotH, slotGap, slotW: panelW - 48, slotX: panelX + 24, firstSlotY: panelY + 88 };
+}
+
+function pauseMenuLayout() {
+  const btns = menuConfirm === 'newworld' ? 2 : 4;
+  const panelW = Math.min(340, canvas.width - 40);
+  const btnH = 46; const btnGap = 10;
+  const innerH = btns * btnH + (btns - 1) * btnGap;
+  const panelH = 62 + innerH + 18;
+  const panelX = Math.floor((canvas.width - panelW) / 2);
+  const panelY = Math.floor((canvas.height - panelH) / 2);
+  return { panelX, panelY, panelW, panelH, btnH, btnGap, btnW: panelW - 40, btnX: panelX + 20, firstBtnY: panelY + 58 };
+}
+
+function drawMainMenu() {
+  drawSky();
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const L = menuSlotLayout();
+  drawPanel(L.panelX, L.panelY, L.panelW, L.panelH);
+
+  // Header tint
+  ctx.fillStyle = 'rgba(40,60,90,0.4)';
+  ctx.fillRect(L.panelX + 2, L.panelY + 2, L.panelW - 4, 80);
+
+  drawText('TERRARIA', L.panelX + L.panelW / 2, L.panelY + 36, '#ffd55e', '28px Minecraft, monospace', 'center');
+  drawText('Eve Net Edition', L.panelX + L.panelW / 2, L.panelY + 58, '#7aacde', '11px Minecraft, monospace', 'center');
+  drawText('Select World', L.panelX + L.panelW / 2, L.panelY + 74, 'rgba(255,255,255,0.35)', '10px Minecraft, monospace', 'center');
+
+  for (let i = 0; i < 3; i++) {
+    const by = L.firstSlotY + i * (L.slotH + L.slotGap);
+    const meta = getSaveMetadata(i);
+    const hov = isPointInRect(mouse.x, mouse.y, L.slotX, by, L.slotW, L.slotH);
+    ctx.fillStyle = hov ? 'rgba(50,80,120,0.85)' : 'rgba(8,12,20,0.8)';
+    ctx.fillRect(L.slotX, by, L.slotW, L.slotH);
+    ctx.strokeStyle = hov ? 'rgba(100,160,220,0.9)' : 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(L.slotX + 0.5, by + 0.5, L.slotW - 1, L.slotH - 1);
+
+    drawText(`World ${i + 1}`, L.slotX + 16, by + 20, '#f5f1d0', '13px Minecraft, monospace');
+    if (meta) {
+      const d = new Date(meta.savedAt);
+      const ds = d.toLocaleDateString() + '  ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      drawText('CONTINUE', L.slotX + L.slotW - 16, by + 20, '#ffd55e', '12px Minecraft, monospace', 'right');
+      drawText(ds, L.slotX + 16, by + 40, 'rgba(150,195,245,0.8)', '10px Minecraft, monospace');
+    } else {
+      drawText('NEW WORLD', L.slotX + L.slotW - 16, by + 20, 'rgba(255,255,255,0.4)', '12px Minecraft, monospace', 'right');
+      drawText('─── empty ───', L.slotX + 16, by + 40, 'rgba(255,255,255,0.2)', '11px Minecraft, monospace');
+    }
+  }
+}
+
+function drawPauseMenu() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const L = pauseMenuLayout();
+  drawPanel(L.panelX, L.panelY, L.panelW, L.panelH);
+  ctx.fillStyle = 'rgba(40,60,90,0.35)';
+  ctx.fillRect(L.panelX + 2, L.panelY + 2, L.panelW - 4, 50);
+
+  const title = menuConfirm === 'newworld' ? 'NEW WORLD?' : 'PAUSED';
+  const titleColor = menuConfirm === 'newworld' ? '#ff9966' : '#ffd55e';
+  drawText(title, L.panelX + L.panelW / 2, L.panelY + 34, titleColor, '18px Minecraft, monospace', 'center');
+
+  if (menuConfirm === 'newworld') {
+    drawText('Unsaved progress will be lost.', L.panelX + L.panelW / 2, L.panelY + 54, 'rgba(255,200,160,0.8)', '10px Minecraft, monospace', 'center');
+  }
+
+  const labels = menuConfirm === 'newworld'
+    ? ['CANCEL', 'CONFIRM']
+    : ['RESUME', 'SAVE GAME', 'NEW WORLD', 'MAIN MENU'];
+  const colors = menuConfirm === 'newworld'
+    ? ['#f5f1d0', '#ff7a7a']
+    : ['#f5f1d0', '#f5f1d0', '#ff9966', '#ff7a7a'];
+
+  for (let i = 0; i < labels.length; i++) {
+    const by = L.firstBtnY + i * (L.btnH + L.btnGap);
+    const hov = isPointInRect(mouse.x, mouse.y, L.btnX, by, L.btnW, L.btnH);
+    const isRed = colors[i] === '#ff7a7a' || colors[i] === '#ff9966';
+    ctx.fillStyle = hov
+      ? (isRed ? 'rgba(140,40,40,0.7)' : 'rgba(50,80,120,0.85)')
+      : 'rgba(8,12,20,0.8)';
+    ctx.fillRect(L.btnX, by, L.btnW, L.btnH);
+    ctx.strokeStyle = hov
+      ? (isRed ? 'rgba(220,80,80,0.9)' : 'rgba(100,160,220,0.9)')
+      : 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(L.btnX + 0.5, by + 0.5, L.btnW - 1, L.btnH - 1);
+    drawText(labels[i], L.btnX + L.btnW / 2, by + L.btnH / 2 + 5, colors[i], '13px Minecraft, monospace', 'center');
+
+    // Save confirmation
+    if (labels[i] === 'SAVE GAME' && saveMessageTimer > 0) {
+      drawText('✓ SAVED!', L.btnX + L.btnW - 12, by + L.btnH / 2 + 5, '#7dff7a', '11px Minecraft, monospace', 'right');
+    }
+  }
+}
+
+function handleMenuClick(x, y) {
+  if (gameState === 'mainmenu') {
+    const L = menuSlotLayout();
+    for (let i = 0; i < 3; i++) {
+      const by = L.firstSlotY + i * (L.slotH + L.slotGap);
+      if (isPointInRect(x, y, L.slotX, by, L.slotW, L.slotH)) {
+        enterGame(i);
+        return;
+      }
+    }
+  } else if (gameState === 'paused') {
+    const L = pauseMenuLayout();
+    if (menuConfirm === 'newworld') {
+      const labels = ['CANCEL', 'CONFIRM'];
+      for (let i = 0; i < 2; i++) {
+        const by = L.firstBtnY + i * (L.btnH + L.btnGap);
+        if (isPointInRect(x, y, L.btnX, by, L.btnW, L.btnH)) {
+          if (i === 0) menuConfirm = null;
+          else startNewGame(currentSaveSlot);
+          return;
+        }
+      }
+    } else {
+      const actions = [
+        () => { gameState = 'playing'; },
+        () => { saveGame(); },
+        () => { menuConfirm = 'newworld'; },
+        () => { if (dragState.active) returnDraggedStack(); inventory.open = false; gameState = 'mainmenu'; },
+      ];
+      for (let i = 0; i < 4; i++) {
+        const by = L.firstBtnY + i * (L.btnH + L.btnGap);
+        if (isPointInRect(x, y, L.btnX, by, L.btnW, L.btnH)) {
+          actions[i]();
+          return;
+        }
+      }
+    }
+  }
+}
+
 function loop(ts) {
   const dt = ts ? Math.min(ts - lastTime, TARGET_DT * 3) : TARGET_DT;
   lastTime = ts || 0;
   const scale = dt / TARGET_DT;
 
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // ── Main Menu ──────────────────────────────────────────────
+  if (gameState === 'mainmenu') {
+    updateWorld(dt);
+    drawMainMenu();
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // ── Pause Menu ─────────────────────────────────────────────
+  if (gameState === 'paused') {
+    if (saveMessageTimer > 0) saveMessageTimer--;
+    drawSky();
+    drawWorld();
+    drawWater();
+    drawTreeCanopies();
+    drawPlayer();
+    drawPauseMenu();
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // ── Playing ────────────────────────────────────────────────
+  if (saveMessageTimer > 0) saveMessageTimer--;
   updateWorld(dt);
   updatePlayer(scale);
   updateMining(scale);
@@ -1908,7 +2724,6 @@ function loop(ts) {
   updateAnimation(scale);
   updateCamera(scale);
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawSky();
   drawWorld();
   drawWater();
@@ -1919,7 +2734,7 @@ function loop(ts) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   drawMining();
-  drawBackpack();
+  drawInventoryScreen();
   drawStatusHud();
   drawHotbar();
   drawDraggedStack();
