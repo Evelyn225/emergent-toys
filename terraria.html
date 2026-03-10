@@ -161,12 +161,15 @@ const RUN_SPEED  = 5.0;
 const spritesheet = new Image();
 spritesheet.src = 'images/platformer_sprites_pixelized_0.png';
 
+const FRAME_SIZE  = 64;  // px per sprite frame (sheet is SHEET_COLS × FRAME_SIZE wide)
+const SHEET_COLS  = 8;   // columns in the spritesheet
+
 const ANIM = {
-  stand: { row: 8, colStart: 0, frames: 1,  fps: 4  },
-  walk:  { row: 4, colStart: 0, frames: 8,  fps: 10 },
+  stand: { row: 8, colStart: 0 },
+  walk:  { row: 4, colStart: 0 },
   // Run spans row 0 col 4-7 then row 1 col 0-3 — handled in drawPlayer
   run:   null,
-  jump:  { row: 5, colStart: 2, frames: 6,  fps: 8  },
+  jump:  { row: 5, colStart: 2 },
 };
 
 // Check if a world-pixel rect overlaps any solid block
@@ -293,7 +296,7 @@ function drawWorld() {
 function updateAnimation() {
   // Determine state
   let newState = 'stand';
-  const moving = keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight'];
+  const moving = (keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight']) && !player.blockedX;
   const running = keys['ShiftLeft'] || keys['ShiftRight'];
 
   if (!player.onGround) {
@@ -311,32 +314,40 @@ function updateAnimation() {
   }
 
   // Advance frame
-  const fps = newState === 'run' ? 12 : newState === 'walk' ? 10 : newState === 'jump' ? 8 : 4;
+  const FPS = { stand: 4, walk: 10, run: 12, jump: 8 };
+  const FRAME_COUNTS = { stand: 1, walk: 8, run: 8, jump: 6 };
+
+  const fps = FPS[newState] || 4;
   const ticksPerFrame = Math.round(60 / fps);
 
   player.animTick++;
   if (player.animTick >= ticksPerFrame) {
     player.animTick = 0;
-    const frameCount = newState === 'run' ? 8 : newState === 'walk' ? 8 : newState === 'jump' ? 6 : 1;
+    const frameCount = FRAME_COUNTS[newState] || 1;
     player.animFrame = (player.animFrame + 1) % frameCount;
   }
 }
 
 function drawPlayer() {
-  if (!spritesheet.complete) return;
+  if (!spritesheet.complete || spritesheet.naturalWidth === 0) {
+    // Fallback: draw a yellow placeholder rectangle while the sheet loads
+    ctx.fillStyle = 'rgba(255,200,0,0.9)';
+    ctx.fillRect(player.x - cam.x, player.y - cam.y, player.w, player.h);
+    return;
+  }
 
-  const FRAME_SIZE = 64;
   let srcX, srcY;
 
   if (player.animState === 'run') {
     // Run: frames 4-11 in the sheet (row 0 col 4-7, row 1 col 0-3)
     const globalFrame = player.animFrame + 4;
-    const col = globalFrame % 8;
-    const row = Math.floor(globalFrame / 8);
+    const col = globalFrame % SHEET_COLS;
+    const row = Math.floor(globalFrame / SHEET_COLS);
     srcX = col * FRAME_SIZE;
     srcY = row * FRAME_SIZE;
   } else {
     const anim = ANIM[player.animState];
+    if (!anim) return;
     srcX = (anim.colStart + player.animFrame) * FRAME_SIZE;
     srcY = anim.row * FRAME_SIZE;
   }
