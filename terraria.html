@@ -182,7 +182,7 @@ cam.y = 50 * TILE - canvas.height / 2;
 function findSpawnY() {
   const cx = Math.floor(WORLD_W / 2);
   for (let y = 0; y < WORLD_H; y++) {
-    if (getBlock(cx, y) !== AIR) return y * TILE - 48; // 48 = player hitbox height
+    if (getBlock(cx, y) !== AIR) return y * TILE - 44; // 44 = player hitbox height
   }
   return 10 * TILE;
 }
@@ -190,8 +190,8 @@ function findSpawnY() {
 const player = {
   x: WORLD_W * TILE / 2 - 16,  // world-pixel x (left edge)
   y: findSpawnY(),
-  w: 32,   // hitbox width  (2 tiles)
-  h: 48,   // hitbox height (3 tiles)
+  w: 22,   // hitbox width  (~1.4 tiles)
+  h: 44,   // hitbox height (~2.75 tiles)
   vy: 0,
   onGround: false,
   blockedX: false,
