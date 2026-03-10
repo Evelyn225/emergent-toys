@@ -129,6 +129,105 @@ const cam = { x: 0, y: 0 };
 cam.x = WORLD_W * TILE / 2 - canvas.width / 2;
 cam.y = 50 * TILE - canvas.height / 2;
 
+// Find spawn point: center of world, surface level
+function findSpawnY() {
+  const cx = Math.floor(WORLD_W / 2);
+  for (let y = 0; y < WORLD_H; y++) {
+    if (getBlock(cx, y) !== AIR) return y * TILE - 64; // land on surface
+  }
+  return 10 * TILE;
+}
+
+const player = {
+  x: WORLD_W * TILE / 2 - 16,  // world-pixel x (left edge)
+  y: findSpawnY(),
+  w: 28,   // hitbox width
+  h: 58,   // hitbox height
+  vx: 0,
+  vy: 0,
+  onGround: false,
+  facing: 1,   // 1 = right, -1 = left
+};
+
+const GRAVITY    = 0.5;
+const MAX_FALL   = 14;
+const JUMP_VEL   = -11;
+const WALK_SPEED = 2.5;
+const RUN_SPEED  = 5.0;
+
+// Check if a world-pixel rect overlaps any solid block
+function collidesWithWorld(px, py, pw, ph) {
+  const left   = Math.floor(px / TILE);
+  const right  = Math.floor((px + pw - 1) / TILE);
+  const top    = Math.floor(py / TILE);
+  const bottom = Math.floor((py + ph - 1) / TILE);
+  for (let ty = top; ty <= bottom; ty++) {
+    for (let tx = left; tx <= right; tx++) {
+      if (getBlock(tx, ty) !== AIR) return true;
+    }
+  }
+  return false;
+}
+
+function updatePlayer() {
+  // Horizontal movement
+  let speed = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
+  let moveX = 0;
+  if (keys['KeyA'] || keys['ArrowLeft'])  { moveX = -speed; player.facing = -1; }
+  if (keys['KeyD'] || keys['ArrowRight']) { moveX =  speed; player.facing =  1; }
+
+  // Apply horizontal, resolve collision
+  player.x += moveX;
+  if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
+    player.x -= moveX;
+  }
+
+  // Gravity
+  player.vy = Math.min(player.vy + GRAVITY, MAX_FALL);
+
+  // Apply vertical, resolve collision
+  player.y += player.vy;
+  if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
+    if (player.vy > 0) {
+      // landing: snap to top of block
+      player.y = Math.floor((player.y + player.h) / TILE) * TILE - player.h;
+      player.onGround = true;
+    } else {
+      // hit ceiling
+      player.y = Math.floor(player.y / TILE + 1) * TILE;
+    }
+    player.vy = 0;
+  } else {
+    player.onGround = false;
+  }
+
+  // Jump
+  if ((keys['Space'] || keys['KeyW']) && player.onGround) {
+    player.vy = JUMP_VEL;
+    player.onGround = false;
+  }
+
+  // Clamp to world bounds
+  player.x = Math.max(0, Math.min(player.x, WORLD_W * TILE - player.w));
+  player.y = Math.max(0, Math.min(player.y, WORLD_H * TILE - player.h));
+}
+
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+function updateCamera() {
+  // Center player horizontally, 40% from top vertically
+  const targetX = player.x + player.w / 2 - canvas.width / 2;
+  const targetY = player.y + player.h / 2 - canvas.height * 0.4;
+  // Smooth follow (lerp)
+  cam.x += (targetX - cam.x) * 0.1;
+  cam.y += (targetY - cam.y) * 0.1;
+  // Clamp to world
+  cam.x = Math.max(0, Math.min(cam.x, WORLD_W * TILE - canvas.width));
+  cam.y = Math.max(0, Math.min(cam.y, WORLD_H * TILE - canvas.height));
+}
+
 const BLOCK_COLORS = {
   [GRASS]:  '#5a9e3a',
   [DIRT]:   '#8B6914',
@@ -170,6 +269,8 @@ function drawWorld() {
 
 let rafId;
 function loop(ts) {
+  updatePlayer();
+  updateCamera();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawSky();
   drawWorld();
