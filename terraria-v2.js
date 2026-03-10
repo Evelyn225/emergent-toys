@@ -1,4 +1,7 @@
 window.__TERRARIA_V2__ = true;
+window.__TERRARIA_ACTIVE_VERSION__ = 'v2';
+document.documentElement.dataset.terrariaEngine = 'v2';
+console.info('[terraria] loaded v2');
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -20,6 +23,21 @@ const DSTONE = 4;
 const COPPER = 5;
 const IRON = 6;
 const WOOD = 7;
+const TREE = 8;
+
+const WATER_MAX = 1;
+const WATER_RENDER_EPS = 0.04;
+const WATER_SIDE_FLOW = 0.35;
+const WATER_STEPS_PER_FRAME = 2;
+const WATER_MOVE_THRESHOLD = 0.003;
+const WATER_SPEED_MULT = 0.72;
+const WATER_GRAVITY_MULT = 0.24;
+const WATER_MAX_FALL = 3.6;
+const WATER_SWIM_ACCEL = 0.78;
+const PLAYER_WET_THRESHOLD = 0.25;
+const PLAYER_SUBMERGED_THRESHOLD = 0.999;
+const PLAYER_MAX_AIR = 60 * 6;
+const DROWN_DAMAGE_FRAMES = 45;
 
 const BIOME_FOREST = 0;
 const BIOME_MEADOW = 1;
@@ -34,6 +52,7 @@ const blockDefs = {
   [COPPER]: { name: 'Copper Ore', solid: true, mine: 44 },
   [IRON]: { name: 'Iron Ore', solid: true, mine: 56 },
   [WOOD]: { name: 'Wood', solid: true, mine: 16 },
+  [TREE]: { name: 'Tree', solid: false, mine: 16, drops: WOOD },
 };
 
 const biomeNames = {
@@ -49,6 +68,7 @@ const biomeGrassTints = {
 };
 
 const world = new Uint8Array(WORLD_W * WORLD_H);
+const water = new Float32Array(WORLD_W * WORLD_H);
 const surfaceYs = new Int16Array(WORLD_W);
 const biomes = new Uint8Array(WORLD_W);
 const treeCanopies = [];
@@ -61,6 +81,7 @@ const cam = { x: 0, y: 0 };
 
 let lastTime = 0;
 let dayClockMs = DAY_LENGTH_MS * 0.22;
+let waterFlowParity = 0;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -147,6 +168,10 @@ function isSolid(type) {
   return !!blockDefs[type]?.solid;
 }
 
+function hasBlock(type) {
+  return type !== AIR;
+}
+
 function getBlock(x, y) {
   if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return STONE;
   return world[x + y * WORLD_W];
@@ -155,6 +180,37 @@ function getBlock(x, y) {
 function setBlock(x, y, type) {
   if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return;
   world[x + y * WORLD_W] = type;
+}
+
+function waterIndex(x, y) {
+  return x + y * WORLD_W;
+}
+
+function getWater(x, y) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return 0;
+  return water[waterIndex(x, y)];
+}
+
+function setWater(x, y, amount) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return;
+  water[waterIndex(x, y)] = clamp(amount, 0, WATER_MAX);
+}
+
+function isWaterCell(x, y, threshold = WATER_RENDER_EPS) {
+  return getWater(x, y) > threshold;
+}
+
+function canWaterOccupy(x, y) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return false;
+  return !isSolid(getBlock(x, y));
+}
+
+function isMineable(type) {
+  return (blockDefs[type]?.mine || 0) > 0;
+}
+
+function getDropType(type) {
+  return blockDefs[type]?.drops || type;
 }
 
 function resize() {
@@ -261,6 +317,81 @@ function spawnOres() {
   }
 }
 
+function columnHasSurfaceWater(x) {
+  const tileX = clamp(x, 0, WORLD_W - 1);
+  const surface = surfaceYs[tileX];
+  for (let y = Math.max(0, surface - 5); y < surface; y++) {
+    if (isWaterCell(tileX, y)) return true;
+  }
+  return false;
+}
+
+function trySpawnSurfacePond(seedX) {
+  let centerX = clamp(seedX, 8, WORLD_W - 9);
+  for (let x = Math.max(6, centerX - 3); x <= Math.min(WORLD_W - 7, centerX + 3); x++) {
+    if (surfaceYs[x] > surfaceYs[centerX]) centerX = x;
+  }
+
+  const centerY = surfaceYs[centerX];
+  let left = -1;
+  let right = -1;
+
+  for (let step = 3; step <= 10; step++) {
+    const x = centerX - step;
+    if (x < 4) break;
+    if (surfaceYs[x] <= centerY - 2) {
+      left = x;
+      break;
+    }
+  }
+
+  for (let step = 3; step <= 10; step++) {
+    const x = centerX + step;
+    if (x > WORLD_W - 5) break;
+    if (surfaceYs[x] <= centerY - 2) {
+      right = x;
+      break;
+    }
+  }
+
+  if (left < 0 || right < 0 || right - left < 5) return false;
+
+  const waterline = Math.max(surfaceYs[left], surfaceYs[right]) + 1;
+  if (centerY - waterline < 2) return false;
+
+  for (let x = left + 1; x < right; x++) {
+    if (surfaceYs[x] < waterline) return false;
+    if (columnHasSurfaceWater(x)) return false;
+  }
+
+  let filled = 0;
+  for (let x = left + 1; x < right; x++) {
+    for (let y = waterline; y < surfaceYs[x]; y++) {
+      if (!canWaterOccupy(x, y)) continue;
+      setWater(x, y, WATER_MAX);
+      filled++;
+    }
+  }
+
+  return filled > 12;
+}
+
+function spawnWaterPools() {
+  water.fill(0);
+  let ponds = 0;
+  const center = Math.floor(WORLD_W / 2);
+  const anchorSeeds = [center - 56, center - 24, center + 24, center + 56];
+
+  for (const seed of anchorSeeds) {
+    if (trySpawnSurfacePond(seed)) ponds++;
+  }
+
+  for (let i = 0; i < 40 && ponds < 10; i++) {
+    const seed = 8 + Math.floor(Math.random() * (WORLD_W - 16));
+    if (trySpawnSurfacePond(seed)) ponds++;
+  }
+}
+
 function plantTrees() {
   treeCanopies.length = 0;
   const center = Math.floor(WORLD_W / 2);
@@ -268,13 +399,14 @@ function plantTrees() {
     if (Math.abs(x - center) < 14) continue;
     if (getBlock(x, surfaceYs[x]) !== GRASS) continue;
     if (Math.abs(surfaceYs[x] - surfaceYs[x - 1]) > 1 || Math.abs(surfaceYs[x] - surfaceYs[x + 1]) > 1) continue;
+    if (columnHasSurfaceWater(x - 1) || columnHasSurfaceWater(x) || columnHasSurfaceWater(x + 1)) continue;
 
     const biome = biomes[x];
     const chance = biome === BIOME_FOREST ? 0.12 : biome === BIOME_MEADOW ? 0.07 : 0.018;
     if (Math.random() > chance) continue;
 
     const trunkHeight = biome === BIOME_FOREST ? 5 + Math.floor(Math.random() * 4) : 4 + Math.floor(Math.random() * 3);
-    for (let y = surfaceYs[x] - 1; y >= surfaceYs[x] - trunkHeight; y--) setBlock(x, y, WOOD);
+    for (let y = surfaceYs[x] - 1; y >= surfaceYs[x] - trunkHeight; y--) setBlock(x, y, TREE);
 
     treeCanopies.push({
       x,
@@ -432,12 +564,14 @@ function buildTextures() {
   tileTextures[COPPER] = createOreTexture('#777981', '#989da6', '#5d6068', '#d28b4b', '#e9ac68', 50);
   tileTextures[IRON] = createOreTexture('#696d77', '#8b929e', '#484d56', '#c0c4cc', '#eff3f9', 60);
   tileTextures[WOOD] = createWoodTexture();
+  tileTextures[TREE] = tileTextures[WOOD];
   wallTextures.shallow = createWallTexture('#59402e', '#402c1f', '#6a4e3a', 81);
   wallTextures.deep = createWallTexture('#342822', '#211813', '#473732', 82);
 }
 
 function generateWorld() {
   world.fill(0);
+  water.fill(0);
   generateBiomeBands();
 
   for (let x = 0; x < WORLD_W; x++) {
@@ -469,6 +603,8 @@ function generateWorld() {
   }
 
   spawnOres();
+  spawnWaterPools();
+  settleWater(120);
   plantTrees();
 }
 
@@ -476,7 +612,7 @@ function findSpawnY() {
   const center = Math.floor(WORLD_W / 2);
   for (let y = 0; y < WORLD_H; y++) {
     const type = getBlock(center, y);
-    if (isSolid(type) && type !== WOOD) return y * TILE - 44;
+    if (isSolid(type)) return y * TILE - 44;
   }
   return 10 * TILE;
 }
@@ -499,6 +635,11 @@ const player = {
   animState: 'stand',
   animFrame: 0,
   animTick: 0,
+  air: PLAYER_MAX_AIR,
+  maxAir: PLAYER_MAX_AIR,
+  inWater: false,
+  fullySubmerged: false,
+  drownTick: 0,
   health: 5,
   maxHealth: 5,
 };
@@ -547,6 +688,100 @@ function checkOnGround(px, py, pw, ph) {
     if (isSolid(getBlock(tx, feetTile))) return true;
   }
   return false;
+}
+
+function simulateWaterStep() {
+  waterFlowParity ^= 1;
+
+  for (let y = WORLD_H - 1; y >= 0; y--) {
+    const leftToRight = ((y + waterFlowParity) & 1) === 0;
+    const startX = leftToRight ? 0 : WORLD_W - 1;
+    const endX = leftToRight ? WORLD_W : -1;
+    const stepX = leftToRight ? 1 : -1;
+
+    for (let x = startX; x !== endX; x += stepX) {
+      const idx = waterIndex(x, y);
+      if (isSolid(getBlock(x, y))) {
+        water[idx] = 0;
+        continue;
+      }
+
+      let amount = water[idx];
+      if (amount <= WATER_MOVE_THRESHOLD) {
+        if (amount > 0) water[idx] = 0;
+        continue;
+      }
+
+      if (canWaterOccupy(x, y + 1)) {
+        const belowIdx = waterIndex(x, y + 1);
+        const capacity = WATER_MAX - water[belowIdx];
+        if (capacity > WATER_MOVE_THRESHOLD) {
+          const flow = Math.min(amount, capacity);
+          water[idx] -= flow;
+          water[belowIdx] += flow;
+          amount -= flow;
+        }
+      }
+
+      if (amount <= WATER_MOVE_THRESHOLD) {
+        water[idx] = 0;
+        continue;
+      }
+
+      const belowSupported = !canWaterOccupy(x, y + 1) || getWater(x, y + 1) >= WATER_MAX - WATER_MOVE_THRESHOLD;
+      if (!belowSupported) continue;
+
+      const dirs = ((x + y + waterFlowParity) & 1) === 0 ? [-1, 1] : [1, -1];
+      for (const dir of dirs) {
+        const nx = x + dir;
+        if (!canWaterOccupy(nx, y)) continue;
+
+        const neighborIdx = waterIndex(nx, y);
+        const neighborAmount = water[neighborIdx];
+        const desired = (amount + neighborAmount) * 0.5;
+        let flow = amount - desired;
+        if (flow <= WATER_MOVE_THRESHOLD) continue;
+
+        flow = Math.min(flow, WATER_SIDE_FLOW, amount);
+        water[idx] -= flow;
+        water[neighborIdx] += flow;
+        amount -= flow;
+
+        if (amount <= WATER_MOVE_THRESHOLD) break;
+      }
+
+      if (water[idx] <= WATER_MOVE_THRESHOLD) water[idx] = 0;
+    }
+  }
+}
+
+function settleWater(iterations) {
+  for (let i = 0; i < iterations; i++) simulateWaterStep();
+}
+
+function isPointInWater(px, py) {
+  const tileX = Math.floor(px / TILE);
+  const tileY = Math.floor(py / TILE);
+  const amount = getWater(tileX, tileY);
+  if (amount <= WATER_RENDER_EPS) return false;
+  const fillTop = tileY * TILE + TILE * (1 - clamp(amount, 0, WATER_MAX));
+  return py >= fillTop;
+}
+
+function sampleWaterCoverage(px, py, pw, ph) {
+  const sampleXs = [px + 3, px + pw * 0.5, px + pw - 3];
+  const sampleYs = [py + 4, py + ph * 0.45, py + ph - 4];
+  let wet = 0;
+  let total = 0;
+
+  for (const sampleY of sampleYs) {
+    for (const sampleX of sampleXs) {
+      total++;
+      if (isPointInWater(sampleX, sampleY)) wet++;
+    }
+  }
+
+  return total > 0 ? wet / total : 0;
 }
 
 const keys = {};
@@ -633,7 +868,7 @@ function updateMining(scale = 1) {
   const pcy = player.y + player.h / 2;
   const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
   const blockType = getBlock(wx, wy);
-  const canMine = mouse.down && dist <= MINE_RADIUS_PX && isSolid(blockType);
+  const canMine = mouse.down && dist <= MINE_RADIUS_PX && isMineable(blockType);
 
   if (!canMine) {
     mining.active = false;
@@ -657,7 +892,7 @@ function updateMining(scale = 1) {
 
   if (mining.progress >= getMineFrames(blockType)) {
     setBlock(wx, wy, AIR);
-    addToInventory(blockType, 1);
+    addToInventory(getDropType(blockType), 1);
     mining.bx = -1;
     mining.by = -1;
     mining.progress = 0;
@@ -678,6 +913,7 @@ function updatePlacement(frame) {
   const wx = Math.floor((mouse.x + camX) / TILE);
   const wy = Math.floor((mouse.y + camY) / TILE);
   if (getBlock(wx, wy) !== AIR) return;
+  if (getWater(wx, wy) > WATER_RENDER_EPS) return;
 
   const pcx = player.x + player.w / 2;
   const pcy = player.y + player.h / 2;
@@ -703,7 +939,10 @@ function updatePlacement(frame) {
 }
 
 function updatePlayer(scale = 1) {
-  const speed = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
+  const waterCoverageStart = sampleWaterCoverage(player.x, player.y, player.w, player.h);
+  const inWaterStart = waterCoverageStart > PLAYER_WET_THRESHOLD;
+  const speedBase = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
+  const speed = speedBase * (inWaterStart ? WATER_SPEED_MULT : 1);
   let moveX = 0;
   if (keys['KeyA'] || keys['ArrowLeft']) {
     moveX = -speed * scale;
@@ -728,7 +967,16 @@ function updatePlayer(scale = 1) {
     player.blockedX = false;
   }
 
-  player.vy = Math.min(player.vy + GRAVITY * scale, MAX_FALL);
+  if (inWaterStart) player.vy *= Math.pow(0.88, scale);
+
+  const gravity = inWaterStart ? GRAVITY * WATER_GRAVITY_MULT : GRAVITY;
+  const maxFall = inWaterStart ? WATER_MAX_FALL : MAX_FALL;
+  player.vy = Math.min(player.vy + gravity * scale, maxFall);
+
+  if (inWaterStart && (keys['Space'] || keys['KeyW'] || keys['ArrowUp'])) {
+    player.vy = Math.max(player.vy - WATER_SWIM_ACCEL * scale, -4.4);
+  }
+
   player.y += player.vy;
   if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
     if (player.vy > 0) {
@@ -741,13 +989,32 @@ function updatePlayer(scale = 1) {
   }
 
   player.onGround = checkOnGround(player.x, player.y, player.w, player.h);
-  if ((keys['Space'] || keys['KeyW']) && player.onGround) {
+  if (!inWaterStart && (keys['Space'] || keys['KeyW'] || keys['ArrowUp']) && player.onGround) {
     player.vy = JUMP_VEL;
     player.onGround = false;
   }
 
   player.x = clamp(player.x, 0, WORLD_PX - player.w);
   player.y = clamp(player.y, 0, WORLD_H * TILE - player.h);
+
+  const waterCoverageEnd = sampleWaterCoverage(player.x, player.y, player.w, player.h);
+  player.inWater = waterCoverageEnd > PLAYER_WET_THRESHOLD;
+  player.fullySubmerged = waterCoverageEnd >= PLAYER_SUBMERGED_THRESHOLD;
+
+  if (player.fullySubmerged) {
+    player.air = Math.max(0, player.air - scale);
+    if (player.air <= 0) {
+      player.drownTick += scale;
+      if (player.drownTick >= DROWN_DAMAGE_FRAMES) {
+        player.drownTick = 0;
+        player.health = Math.max(0, player.health - 1);
+      }
+    }
+  } else {
+    const airRecovery = player.inWater ? 1.6 : 4.5;
+    player.air = Math.min(player.maxAir, player.air + airRecovery * scale);
+    player.drownTick = 0;
+  }
 }
 
 function updateCamera(scale = 1) {
@@ -788,6 +1055,8 @@ function updateAnimation(scale = 1) {
 
 function updateWorld(dt) {
   dayClockMs = mod(dayClockMs + dt, DAY_LENGTH_MS);
+  const steps = clamp(Math.round(dt / TARGET_DT) * WATER_STEPS_PER_FRAME, 1, 4);
+  for (let i = 0; i < steps; i++) simulateWaterStep();
 }
 
 function daylightFactor() {
@@ -921,19 +1190,19 @@ function drawBlockTile(type, tileX, tileY, screenX, screenY) {
     ctx.fillStyle = alphaColor(biomeGrassTints[biomes[tileX]], 0.18);
     ctx.fillRect(screenX, screenY, TILE, 5);
   }
-  if (!isSolid(getBlock(tileX, tileY - 1))) {
+  if (!hasBlock(getBlock(tileX, tileY - 1))) {
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     ctx.fillRect(screenX, screenY, TILE, 2);
   }
-  if (!isSolid(getBlock(tileX - 1, tileY))) {
+  if (!hasBlock(getBlock(tileX - 1, tileY))) {
     ctx.fillStyle = 'rgba(255,255,255,0.05)';
     ctx.fillRect(screenX, screenY, 1, TILE);
   }
-  if (!isSolid(getBlock(tileX + 1, tileY))) {
+  if (!hasBlock(getBlock(tileX + 1, tileY))) {
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fillRect(screenX + TILE - 2, screenY, 2, TILE);
   }
-  if (!isSolid(getBlock(tileX, tileY + 1))) {
+  if (!hasBlock(getBlock(tileX, tileY + 1))) {
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
     ctx.fillRect(screenX, screenY + TILE - 2, TILE, 2);
   }
@@ -961,6 +1230,37 @@ function drawWorld() {
   }
 }
 
+function drawWater() {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const startX = Math.max(0, Math.floor(camX / TILE) - 1);
+  const endX = Math.min(WORLD_W, Math.ceil((camX + canvas.width) / TILE) + 1);
+  const startY = Math.max(0, Math.floor(camY / TILE) - 1);
+  const endY = Math.min(WORLD_H, Math.ceil((camY + canvas.height) / TILE) + 1);
+
+  ctx.save();
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const amount = getWater(x, y);
+      if (amount <= WATER_RENDER_EPS) continue;
+
+      const sx = (x * TILE - camX) | 0;
+      const sy = (y * TILE - camY) | 0;
+      const fillHeight = Math.max(2, Math.min(TILE, Math.round(clamp(amount, 0, WATER_MAX) * TILE)));
+      const top = sy + TILE - fillHeight;
+      const shimmer = 0.16 + ((Math.sin(dayClockMs * 0.008 + x * 0.75 + y * 0.2) + 1) * 0.5) * 0.12;
+
+      ctx.fillStyle = 'rgba(33,108,206,0.64)';
+      ctx.fillRect(sx, top, TILE, fillHeight);
+      ctx.fillStyle = `rgba(178,233,255,${shimmer.toFixed(3)})`;
+      ctx.fillRect(sx, top, TILE, Math.min(2, fillHeight));
+      ctx.fillStyle = 'rgba(7,36,97,0.18)';
+      ctx.fillRect(sx, sy + TILE - 1, TILE, 1);
+    }
+  }
+  ctx.restore();
+}
+
 function drawLeafBlob(x, y, w, h, palette) {
   ctx.fillStyle = palette.base;
   ctx.fillRect(x, y, w, h);
@@ -976,7 +1276,7 @@ function drawTreeCanopies() {
   const camY = Math.round(cam.y);
 
   for (const tree of treeCanopies) {
-    if (getBlock(tree.x, tree.trunkBaseY - 1) !== WOOD) continue;
+    if (getBlock(tree.x, tree.trunkBaseY - 1) !== TREE) continue;
     const palette = tree.biome === BIOME_MEADOW
       ? { base: '#77c64d', light: '#99ea6c', dark: '#467b2c' }
       : tree.biome === BIOME_ROCKY
@@ -1044,7 +1344,7 @@ function drawMining() {
   const pcy = player.y + player.h / 2;
   const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
   const target = getBlock(wx, wy);
-  const inRange = dist <= MINE_RADIUS_PX && isSolid(target);
+  const inRange = dist <= MINE_RADIUS_PX && isMineable(target);
 
   if (inRange) {
     const sx = (wx * TILE - camX) | 0;
@@ -1124,15 +1424,27 @@ function drawStatusHud() {
   const tileX = clamp(Math.floor((player.x + player.w / 2) / TILE), 0, WORLD_W - 1);
   const depth = Math.max(0, Math.floor(player.y / TILE - surfaceYs[tileX]));
   const stage = getDepthLabel(depth);
+  const showAir = player.inWater || player.air < player.maxAir;
 
   for (let i = 0; i < player.maxHealth; i++) {
     drawHeart(18 + i * 22, 18, 16, i < player.health);
   }
 
-  drawPanel(16, 48, 202, 68);
+  drawPanel(16, 48, 202, showAir ? 98 : 68);
   drawText(`Biome: ${biomeNames[biomes[tileX]]}`, 28, 70, '#ffffff', '14px Minecraft, monospace');
   drawText(`Depth: ${stage} +${depth}`, 28, 90, '#d9e6ff', '14px Minecraft, monospace');
   drawText('LMB mine   RMB place', 28, 110, '#8fb4d9', '12px Minecraft, monospace');
+
+  if (showAir) {
+    const airRatio = clamp(player.air / player.maxAir, 0, 1);
+    drawText(`Air ${Math.ceil(airRatio * 100)}%`, 28, 130, '#b8ebff', '12px Minecraft, monospace');
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(28, 136, 160, 10);
+    ctx.fillStyle = mixColor('#ff7a69', '#74d5ff', airRatio);
+    ctx.fillRect(28, 136, Math.round(160 * airRatio), 10);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.strokeRect(28.5, 136.5, 159, 9);
+  }
 }
 
 function drawHotbar() {
@@ -1190,8 +1502,13 @@ function loop(ts) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawSky();
   drawWorld();
+  drawWater();
   drawTreeCanopies();
   drawPlayer();
+  if (player.fullySubmerged) {
+    ctx.fillStyle = 'rgba(24,72,138,0.18)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   drawMining();
   drawStatusHud();
   drawHotbar();

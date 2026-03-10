@@ -41,9 +41,38 @@
 </a>
 
 <canvas id="c"></canvas>
-<script src="terraria-v2.js"></script>
 <script>
-if (!window.__TERRARIA_V2__) {
+window.__TERRARIA_ENGINE_REQUESTED__ = new URLSearchParams(window.location.search).get('engine') || 'v2';
+window.__TERRARIA_V2_LOAD_FAILED__ = false;
+</script>
+<script
+  src="terraria-v2.js"
+  onerror="window.__TERRARIA_V2_LOAD_FAILED__=true; console.error('[terraria] failed to load terraria-v2.js');"
+></script>
+<script>
+const terrariaUseLegacy = window.__TERRARIA_ENGINE_REQUESTED__ === 'v1';
+
+if (!terrariaUseLegacy && !window.__TERRARIA_V2__ && !window.__TERRARIA_V2_LOAD_FAILED__) {
+  const errorBanner = document.createElement('div');
+  errorBanner.textContent = 'Terraria v2 failed to initialize. Add ?engine=v1 to the URL to force the legacy version.';
+  errorBanner.style.position = 'fixed';
+  errorBanner.style.left = '50%';
+  errorBanner.style.top = '16px';
+  errorBanner.style.transform = 'translateX(-50%)';
+  errorBanner.style.zIndex = '2000';
+  errorBanner.style.padding = '10px 14px';
+  errorBanner.style.background = 'rgba(20, 8, 8, 0.92)';
+  errorBanner.style.color = '#ffd1d1';
+  errorBanner.style.border = '1px solid rgba(255, 132, 132, 0.5)';
+  errorBanner.style.font = '12px Minecraft, monospace';
+  document.body.appendChild(errorBanner);
+  console.error('[terraria] terraria-v2.js loaded but did not initialize.');
+}
+
+if (terrariaUseLegacy || (window.__TERRARIA_V2_LOAD_FAILED__ && !window.__TERRARIA_V2__)) {
+window.__TERRARIA_ACTIVE_VERSION__ = 'v1';
+document.documentElement.dataset.terrariaEngine = 'v1';
+console.warn('[terraria] loaded v1 fallback');
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
