@@ -1,0 +1,1202 @@
+window.__TERRARIA_V2__ = true;
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const TILE = 16;
+const WORLD_W = 420;
+const WORLD_H = 170;
+const WORLD_PX = WORLD_W * TILE;
+const DAY_LENGTH_MS = 180000;
+const TARGET_DT = 1000 / 60;
+const TAU = Math.PI * 2;
+
+const AIR = 0;
+const GRASS = 1;
+const DIRT = 2;
+const STONE = 3;
+const DSTONE = 4;
+const COPPER = 5;
+const IRON = 6;
+const WOOD = 7;
+
+const BIOME_FOREST = 0;
+const BIOME_MEADOW = 1;
+const BIOME_ROCKY = 2;
+
+const blockDefs = {
+  [AIR]: { name: 'Empty', solid: false, mine: 0 },
+  [GRASS]: { name: 'Grass', solid: true, mine: 10 },
+  [DIRT]: { name: 'Dirt', solid: true, mine: 18 },
+  [STONE]: { name: 'Stone', solid: true, mine: 34 },
+  [DSTONE]: { name: 'Deep Stone', solid: true, mine: 54 },
+  [COPPER]: { name: 'Copper Ore', solid: true, mine: 44 },
+  [IRON]: { name: 'Iron Ore', solid: true, mine: 56 },
+  [WOOD]: { name: 'Wood', solid: true, mine: 16 },
+};
+
+const biomeNames = {
+  [BIOME_FOREST]: 'Forest',
+  [BIOME_MEADOW]: 'Meadow',
+  [BIOME_ROCKY]: 'Rocky Hills',
+};
+
+const biomeGrassTints = {
+  [BIOME_FOREST]: '#67bf45',
+  [BIOME_MEADOW]: '#8ad860',
+  [BIOME_ROCKY]: '#78ad46',
+};
+
+const world = new Uint8Array(WORLD_W * WORLD_H);
+const surfaceYs = new Int16Array(WORLD_W);
+const biomes = new Uint8Array(WORLD_W);
+const treeCanopies = [];
+const tileTextures = {};
+const wallTextures = {};
+const stars = [];
+const clouds = [];
+const mountainLayers = [];
+const cam = { x: 0, y: 0 };
+
+let lastTime = 0;
+let dayClockMs = DAY_LENGTH_MS * 0.22;
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function mod(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
+}
+
+function hash(n) {
+  return Math.abs((Math.sin(n * 127.1 + 311.7) * 43758.5453123) % 1);
+}
+
+function hash2(x, y, seed = 0) {
+  return hash(x * 374761 + y * 668265 + seed * 69069);
+}
+
+function smoothNoise(x) {
+  const i = Math.floor(x);
+  const f = x - i;
+  const u = f * f * (3 - 2 * f);
+  return hash(i) * (1 - u) + hash(i + 1) * u;
+}
+
+function octaveNoise(x, octaves, persistence) {
+  let value = 0;
+  let amplitude = 1;
+  let frequency = 1;
+  let total = 0;
+  for (let o = 0; o < octaves; o++) {
+    value += smoothNoise(x * frequency) * amplitude;
+    total += amplitude;
+    amplitude *= persistence;
+    frequency *= 2;
+  }
+  return value / total;
+}
+
+function hexToRgb(hex) {
+  const raw = hex.replace('#', '');
+  const full = raw.length === 3 ? raw.split('').map(ch => ch + ch).join('') : raw;
+  return [
+    parseInt(full.slice(0, 2), 16),
+    parseInt(full.slice(2, 4), 16),
+    parseInt(full.slice(4, 6), 16),
+  ];
+}
+
+function mixColor(a, b, t, alpha = 1) {
+  const ra = hexToRgb(a);
+  const rb = hexToRgb(b);
+  const rgb = ra.map((value, i) => Math.round(value + (rb[i] - value) * t));
+  return alpha === 1
+    ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
+    : `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
+
+function alphaColor(hex, alpha) {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function shiftColor(hex, delta) {
+  const [r, g, b] = hexToRgb(hex);
+  const amount = Math.round(255 * delta);
+  return `rgb(${clamp(r + amount, 0, 255)},${clamp(g + amount, 0, 255)},${clamp(b + amount, 0, 255)})`;
+}
+
+function makeCanvas(size = TILE) {
+  const texture = document.createElement('canvas');
+  texture.width = size;
+  texture.height = size;
+  const g = texture.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  return { texture, g };
+}
+
+function pixel(g, x, y, color, w = 1, h = 1) {
+  g.fillStyle = color;
+  g.fillRect(x, y, w, h);
+}
+
+function isSolid(type) {
+  return !!blockDefs[type]?.solid;
+}
+
+function getBlock(x, y) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return STONE;
+  return world[x + y * WORLD_W];
+}
+
+function setBlock(x, y, type) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return;
+  world[x + y * WORLD_W] = type;
+}
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  ctx.imageSmoothingEnabled = false;
+}
+
+function chooseBiome(previous) {
+  let biome = Math.floor(Math.random() * 3);
+  if (biome === previous) {
+    biome = (biome + 1 + Math.floor(Math.random() * 2)) % 3;
+  }
+  return biome;
+}
+
+function generateBiomeBands() {
+  let x = 0;
+  let previous = BIOME_FOREST;
+  while (x < WORLD_W) {
+    const span = 58 + Math.floor(Math.random() * 78);
+    const biome = chooseBiome(previous);
+    for (let i = x; i < Math.min(WORLD_W, x + span); i++) biomes[i] = biome;
+    previous = biome;
+    x += span;
+  }
+
+  const center = Math.floor(WORLD_W / 2);
+  for (let i = 0; i < 24; i++) {
+    biomes[i] = BIOME_FOREST;
+    biomes[WORLD_W - 1 - i] = BIOME_ROCKY;
+  }
+  for (let xPos = center - 18; xPos <= center + 18; xPos++) {
+    biomes[clamp(xPos, 0, WORLD_W - 1)] = BIOME_MEADOW;
+  }
+}
+
+function groundHeightAt(x) {
+  const biome = biomes[x];
+  const primary = octaveNoise((x + 320) / 68, 4, 0.53);
+  const detail = octaveNoise((x + 900) / 15, 2, 0.38);
+  const ridge = biome === BIOME_ROCKY ? octaveNoise((x + 70) / 9, 2, 0.42) * 5 : 0;
+  const biomeOffset = biome === BIOME_ROCKY ? 5 : biome === BIOME_MEADOW ? -2 : 0;
+  return Math.floor(44 + primary * 20 + detail * 4 + ridge + biomeOffset);
+}
+
+function digAirWorm(startX, startY, length, radius, angle, depthGuard = 4) {
+  let wx = startX;
+  let wy = startY;
+  for (let i = 0; i < length; i++) {
+    const r = Math.ceil(radius);
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > radius * radius) continue;
+        const bx = Math.round(wx + dx);
+        const by = Math.round(wy + dy);
+        if (bx < 1 || bx >= WORLD_W - 1 || by < 1 || by >= WORLD_H - 2) continue;
+        if (by >= surfaceYs[clamp(bx, 0, WORLD_W - 1)] + depthGuard) setBlock(bx, by, AIR);
+      }
+    }
+    angle += (Math.random() - 0.5) * 0.48;
+    wx += Math.cos(angle) * 1.45;
+    wy += Math.sin(angle) * 0.72;
+    radius = clamp(radius + (Math.random() - 0.5) * 0.18, 1.1, 4.25);
+    if (wx < 2 || wx > WORLD_W - 3 || wy < 5 || wy > WORLD_H - 5) break;
+  }
+}
+
+function paintOreVein(type, startX, startY, length, radius, angle) {
+  let wx = startX;
+  let wy = startY;
+  for (let i = 0; i < length; i++) {
+    const r = Math.ceil(radius);
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > radius * radius) continue;
+        const bx = Math.round(wx + dx);
+        const by = Math.round(wy + dy);
+        if (bx < 1 || bx >= WORLD_W - 1 || by < 1 || by >= WORLD_H - 2) continue;
+        const current = getBlock(bx, by);
+        if ((current === STONE || current === DSTONE || current === DIRT) && by >= surfaceYs[bx] + 7) {
+          setBlock(bx, by, type);
+        }
+      }
+    }
+    angle += (Math.random() - 0.5) * 0.8;
+    wx += Math.cos(angle) * 1.18;
+    wy += Math.sin(angle) * 0.85;
+    radius = clamp(radius + (Math.random() - 0.5) * 0.14, 1, 3.3);
+    if (wx < 2 || wx > WORLD_W - 3 || wy < 7 || wy > WORLD_H - 6) break;
+  }
+}
+
+function spawnOres() {
+  for (let i = 0; i < 56; i++) {
+    const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
+    const y = surfaceYs[x] + 8 + Math.floor(Math.random() * 42);
+    paintOreVein(COPPER, x, y, 18 + Math.floor(Math.random() * 16), 1.25 + Math.random() * 0.8, Math.random() * TAU);
+  }
+  for (let i = 0; i < 34; i++) {
+    const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
+    const y = surfaceYs[x] + 30 + Math.floor(Math.random() * 55);
+    paintOreVein(IRON, x, y, 18 + Math.floor(Math.random() * 18), 1.2 + Math.random() * 0.9, Math.random() * TAU);
+  }
+}
+
+function plantTrees() {
+  treeCanopies.length = 0;
+  const center = Math.floor(WORLD_W / 2);
+  for (let x = 6; x < WORLD_W - 6; x++) {
+    if (Math.abs(x - center) < 14) continue;
+    if (getBlock(x, surfaceYs[x]) !== GRASS) continue;
+    if (Math.abs(surfaceYs[x] - surfaceYs[x - 1]) > 1 || Math.abs(surfaceYs[x] - surfaceYs[x + 1]) > 1) continue;
+
+    const biome = biomes[x];
+    const chance = biome === BIOME_FOREST ? 0.12 : biome === BIOME_MEADOW ? 0.07 : 0.018;
+    if (Math.random() > chance) continue;
+
+    const trunkHeight = biome === BIOME_FOREST ? 5 + Math.floor(Math.random() * 4) : 4 + Math.floor(Math.random() * 3);
+    for (let y = surfaceYs[x] - 1; y >= surfaceYs[x] - trunkHeight; y--) setBlock(x, y, WOOD);
+
+    treeCanopies.push({
+      x,
+      trunkTopY: surfaceYs[x] - trunkHeight,
+      trunkBaseY: surfaceYs[x],
+      radius: biome === BIOME_FOREST ? 2 + Math.floor(Math.random() * 2) : 2,
+      biome,
+    });
+
+    x += 4 + Math.floor(Math.random() * 6);
+  }
+}
+
+function buildMountainLayer(base, amplitude, scaleX, seed, parallax, dayColor, nightColor) {
+  const profile = new Float32Array(WORLD_W);
+  for (let x = 0; x < WORLD_W; x++) {
+    const broad = octaveNoise((x + seed) / scaleX, 4, 0.54);
+    const detail = octaveNoise((x + seed * 3) / 14, 2, 0.4);
+    profile[x] = base + broad * amplitude + detail * amplitude * 0.16;
+  }
+  return { profile, parallax, dayColor, nightColor };
+}
+
+function buildSkyDecor() {
+  stars.length = 0;
+  clouds.length = 0;
+  mountainLayers.length = 0;
+
+  for (let i = 0; i < 110; i++) {
+    stars.push({ u: Math.random(), v: Math.random() * 0.58, size: Math.random() > 0.87 ? 2 : 1, twinkle: Math.random() * TAU });
+  }
+  for (let i = 0; i < 14; i++) {
+    clouds.push({ x: Math.random() * WORLD_PX, y: 26 + Math.random() * 160, w: 68 + Math.random() * 90, h: 20 + Math.random() * 30, speed: 0.3 + Math.random() * 0.7 });
+  }
+
+  mountainLayers.push(buildMountainLayer(0.48, 0.13, 74, 180, 0.18, '#7da0bd', '#273147'));
+  mountainLayers.push(buildMountainLayer(0.56, 0.16, 50, 520, 0.28, '#627c98', '#20293d'));
+  mountainLayers.push(buildMountainLayer(0.66, 0.14, 32, 870, 0.42, '#44596d', '#172031'));
+}
+
+function createWallTexture(base, dark, light, seed) {
+  const { texture, g } = makeCanvas();
+  g.fillStyle = base;
+  g.fillRect(0, 0, TILE, TILE);
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const n = hash2(x, y, seed);
+      if (n > 0.86) pixel(g, x, y, light);
+      else if (n < 0.16) pixel(g, x, y, dark);
+    }
+  }
+  return texture;
+}
+
+function createGrassTexture() {
+  const { texture, g } = makeCanvas();
+  g.fillStyle = '#8d5b25';
+  g.fillRect(0, 0, TILE, TILE);
+
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const n = hash2(x, y, 11);
+      if (n > 0.84) pixel(g, x, y, '#a86d31');
+      else if (n < 0.14) pixel(g, x, y, '#6e4319');
+    }
+  }
+
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const light = y < 2 ? '#7dd650' : '#5fae35';
+      pixel(g, x, y, hash2(x, y, 12) > 0.84 ? '#9cec71' : light);
+    }
+  }
+  for (let x = 0; x < TILE; x += 2) pixel(g, x, 4, '#437b25');
+  for (let x = 1; x < TILE; x += 4) pixel(g, x, 0, '#b0f77d');
+
+  return texture;
+}
+
+function createDirtTexture() {
+  const { texture, g } = makeCanvas();
+  g.fillStyle = '#85521f';
+  g.fillRect(0, 0, TILE, TILE);
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const n = hash2(x, y, 20);
+      if (n > 0.86) pixel(g, x, y, '#a46b32');
+      else if (n < 0.16) pixel(g, x, y, '#653c15');
+      else if (n > 0.62 && hash2(x, y, 21) > 0.74) pixel(g, x, y, '#745425');
+    }
+  }
+  return texture;
+}
+
+function createStoneTexture(base, light, dark, seed) {
+  const { texture, g } = makeCanvas();
+  g.fillStyle = base;
+  g.fillRect(0, 0, TILE, TILE);
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const n = hash2(x, y, seed);
+      if (n > 0.86) pixel(g, x, y, light);
+      else if (n < 0.14) pixel(g, x, y, dark);
+      else if (n > 0.46 && n < 0.52) pixel(g, x, y, shiftColor(base, -0.03));
+    }
+  }
+  for (let i = 0; i < 4; i++) {
+    const x = 1 + Math.floor(hash(seed + i * 7) * 12);
+    const y = 2 + Math.floor(hash(seed + i * 11) * 10);
+    pixel(g, x, y, dark, 1, 2);
+    pixel(g, x + 1, y + 1, dark);
+  }
+  return texture;
+}
+
+function createOreTexture(base, light, dark, nuggetA, nuggetB, seed) {
+  const texture = createStoneTexture(base, light, dark, seed);
+  const g = texture.getContext('2d');
+  for (let y = 2; y < TILE - 2; y++) {
+    for (let x = 1; x < TILE - 1; x++) {
+      const n = hash2(x, y, seed + 90);
+      if (n > 0.91) {
+        pixel(g, x, y, nuggetA);
+        if (hash2(x, y, seed + 91) > 0.55) pixel(g, x + 1, y, nuggetB);
+        if (hash2(x, y, seed + 92) > 0.6) pixel(g, x, y + 1, shiftColor(nuggetA, -0.15));
+      }
+    }
+  }
+  return texture;
+}
+
+function createWoodTexture() {
+  const { texture, g } = makeCanvas();
+  g.fillStyle = '#8f622e';
+  g.fillRect(0, 0, TILE, TILE);
+  for (let x = 0; x < TILE; x++) {
+    const stripe = x % 4 === 0 ? '#6c451f' : x % 4 === 2 ? '#aa773b' : null;
+    if (stripe) pixel(g, x, 0, stripe, 1, TILE);
+  }
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const n = hash2(x, y, 70);
+      if (n > 0.88) pixel(g, x, y, '#bb8748');
+      else if (n < 0.12) pixel(g, x, y, '#5a3818');
+    }
+  }
+  return texture;
+}
+
+function buildTextures() {
+  tileTextures[GRASS] = createGrassTexture();
+  tileTextures[DIRT] = createDirtTexture();
+  tileTextures[STONE] = createStoneTexture('#7d7f88', '#9ea3ad', '#5e616a', 30);
+  tileTextures[DSTONE] = createStoneTexture('#55525f', '#6d6b78', '#393744', 40);
+  tileTextures[COPPER] = createOreTexture('#777981', '#989da6', '#5d6068', '#d28b4b', '#e9ac68', 50);
+  tileTextures[IRON] = createOreTexture('#696d77', '#8b929e', '#484d56', '#c0c4cc', '#eff3f9', 60);
+  tileTextures[WOOD] = createWoodTexture();
+  wallTextures.shallow = createWallTexture('#59402e', '#402c1f', '#6a4e3a', 81);
+  wallTextures.deep = createWallTexture('#342822', '#211813', '#473732', 82);
+}
+
+function generateWorld() {
+  world.fill(0);
+  generateBiomeBands();
+
+  for (let x = 0; x < WORLD_W; x++) {
+    const surface = groundHeightAt(x);
+    const dirtDepth = biomes[x] === BIOME_ROCKY ? 3 : 5 + Math.floor(hash(x * 13) * 3);
+    surfaceYs[x] = surface;
+    for (let y = 0; y < WORLD_H; y++) {
+      if (y < surface) setBlock(x, y, AIR);
+      else if (y === surface) setBlock(x, y, GRASS);
+      else if (y < surface + dirtDepth) setBlock(x, y, DIRT);
+      else if (y < surface + 60) setBlock(x, y, STONE);
+      else setBlock(x, y, DSTONE);
+    }
+  }
+
+  for (let i = 0; i < 10; i++) {
+    const x = 6 + Math.floor(Math.random() * (WORLD_W - 12));
+    digAirWorm(x, surfaceYs[x], 70 + Math.floor(Math.random() * 50), 1.1 + Math.random() * 0.9, Math.PI / 2 + (Math.random() - 0.5) * 0.55, 0);
+  }
+  for (let i = 0; i < 24; i++) {
+    const x = 6 + Math.floor(Math.random() * (WORLD_W - 12));
+    const y = surfaceYs[x] + 12 + Math.floor(Math.random() * 55);
+    digAirWorm(x, y, 105 + Math.floor(Math.random() * 85), 1.45 + Math.random() * 1.2, Math.random() * TAU, 5);
+  }
+  for (let i = 0; i < 10; i++) {
+    const x = 6 + Math.floor(Math.random() * (WORLD_W - 12));
+    const y = surfaceYs[x] + 58 + Math.floor(Math.random() * 28);
+    digAirWorm(x, y, 90 + Math.floor(Math.random() * 65), 2.3 + Math.random() * 1.4, Math.random() * TAU, 8);
+  }
+
+  spawnOres();
+  plantTrees();
+}
+
+function findSpawnY() {
+  const center = Math.floor(WORLD_W / 2);
+  for (let y = 0; y < WORLD_H; y++) {
+    const type = getBlock(center, y);
+    if (isSolid(type) && type !== WOOD) return y * TILE - 44;
+  }
+  return 10 * TILE;
+}
+
+resize();
+window.addEventListener('resize', resize);
+generateWorld();
+buildSkyDecor();
+buildTextures();
+
+const player = {
+  x: WORLD_PX / 2 - 16,
+  y: findSpawnY(),
+  w: 22,
+  h: 44,
+  vy: 0,
+  onGround: false,
+  blockedX: false,
+  facing: 1,
+  animState: 'stand',
+  animFrame: 0,
+  animTick: 0,
+  health: 5,
+  maxHealth: 5,
+};
+
+cam.x = WORLD_PX / 2 - canvas.width / 2;
+cam.y = 48 * TILE - canvas.height / 2;
+
+const GRAVITY = 0.52;
+const MAX_FALL = TILE - 1;
+const JUMP_VEL = -11.4;
+const WALK_SPEED = 2.45;
+const RUN_SPEED = 4.85;
+
+const spritesheet = new Image();
+spritesheet.src = 'images/platformer_sprites_pixelized_0.png';
+
+const FRAME_SIZE = 64;
+const SHEET_COLS = 8;
+
+const ANIM = {
+  stand: { row: 8, colStart: 0 },
+  walk: { row: 4, colStart: 0 },
+  run: null,
+  jump: { row: 5, colStart: 2 },
+  mine: { row: 1, colStart: 4 },
+};
+
+function collidesWithWorld(px, py, pw, ph) {
+  const left = Math.floor(px / TILE);
+  const right = Math.floor((px + pw - 1) / TILE);
+  const top = Math.floor(py / TILE);
+  const bottom = Math.floor((py + ph - 1) / TILE);
+  for (let ty = top; ty <= bottom; ty++) {
+    for (let tx = left; tx <= right; tx++) {
+      if (isSolid(getBlock(tx, ty))) return true;
+    }
+  }
+  return false;
+}
+
+function checkOnGround(px, py, pw, ph) {
+  const feetTile = Math.floor((py + ph) / TILE);
+  const left = Math.floor(px / TILE);
+  const right = Math.floor((px + pw - 1) / TILE);
+  for (let tx = left; tx <= right; tx++) {
+    if (isSolid(getBlock(tx, feetTile))) return true;
+  }
+  return false;
+}
+
+const keys = {};
+window.addEventListener('keydown', event => {
+  keys[event.code] = true;
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
+    event.preventDefault();
+  }
+});
+window.addEventListener('keyup', event => {
+  keys[event.code] = false;
+});
+
+const mouse = { x: 0, y: 0, down: false, rightDown: false };
+window.addEventListener('blur', () => {
+  for (const key of Object.keys(keys)) keys[key] = false;
+  mouse.down = false;
+  mouse.rightDown = false;
+});
+
+canvas.addEventListener('mousemove', event => {
+  mouse.x = event.clientX;
+  mouse.y = event.clientY;
+});
+canvas.addEventListener('mousedown', event => {
+  if (event.button === 0) mouse.down = true;
+  if (event.button === 2) mouse.rightDown = true;
+});
+canvas.addEventListener('mouseup', event => {
+  if (event.button === 0) mouse.down = false;
+  if (event.button === 2) mouse.rightDown = false;
+});
+canvas.addEventListener('mouseleave', () => {
+  mouse.down = false;
+  mouse.rightDown = false;
+});
+canvas.addEventListener('contextmenu', event => event.preventDefault());
+
+const HOTBAR_SIZE = 8;
+const inventory = {
+  slots: Array.from({ length: HOTBAR_SIZE }, () => ({ type: AIR, count: 0 })),
+  selected: 0,
+};
+
+inventory.slots[0] = { type: DIRT, count: 48 };
+inventory.slots[1] = { type: STONE, count: 24 };
+inventory.slots[2] = { type: WOOD, count: 18 };
+inventory.slots[3] = { type: COPPER, count: 8 };
+
+function addToInventory(type, amount = 1) {
+  if (type === AIR || amount <= 0) return false;
+  let slot = inventory.slots.find(candidate => candidate.type === type && candidate.count > 0 && candidate.count < 999);
+  if (!slot) slot = inventory.slots.find(candidate => candidate.type === AIR || candidate.count === 0);
+  if (!slot) return false;
+  if (slot.type === AIR || slot.count === 0) slot.type = type;
+  slot.count += amount;
+  return true;
+}
+
+const MINE_RADIUS_PX = 6 * TILE;
+const mining = { bx: -1, by: -1, progress: 0, active: false };
+
+canvas.addEventListener('wheel', event => {
+  event.preventDefault();
+  inventory.selected = mod(inventory.selected + (event.deltaY > 0 ? 1 : -1), inventory.slots.length);
+}, { passive: false });
+
+window.addEventListener('keydown', event => {
+  const value = parseInt(event.key, 10);
+  if (value >= 1 && value <= inventory.slots.length) inventory.selected = value - 1;
+});
+
+function getMineFrames(type) {
+  return blockDefs[type]?.mine || 60;
+}
+
+function updateMining(scale = 1) {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  const blockType = getBlock(wx, wy);
+  const canMine = mouse.down && dist <= MINE_RADIUS_PX && isSolid(blockType);
+
+  if (!canMine) {
+    mining.active = false;
+    if (!mouse.down || wx !== mining.bx || wy !== mining.by) {
+      mining.bx = -1;
+      mining.by = -1;
+      mining.progress = 0;
+    }
+    return;
+  }
+
+  if (wx !== mining.bx || wy !== mining.by) {
+    mining.bx = wx;
+    mining.by = wy;
+    mining.progress = 0;
+  }
+
+  player.facing = wx * TILE + TILE / 2 >= pcx ? 1 : -1;
+  mining.active = true;
+  mining.progress += scale;
+
+  if (mining.progress >= getMineFrames(blockType)) {
+    setBlock(wx, wy, AIR);
+    addToInventory(blockType, 1);
+    mining.bx = -1;
+    mining.by = -1;
+    mining.progress = 0;
+    mining.active = false;
+  }
+}
+
+let lastPlaceFrame = -1;
+function updatePlacement(frame) {
+  if (!mouse.rightDown || frame === lastPlaceFrame) return;
+  lastPlaceFrame = frame;
+
+  const slot = inventory.slots[inventory.selected];
+  if (!slot || slot.type === AIR || slot.count <= 0) return;
+
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+  if (getBlock(wx, wy) !== AIR) return;
+
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  if (dist > MINE_RADIUS_PX) return;
+
+  const adjacent = isSolid(getBlock(wx - 1, wy)) || isSolid(getBlock(wx + 1, wy)) ||
+                   isSolid(getBlock(wx, wy - 1)) || isSolid(getBlock(wx, wy + 1));
+  if (!adjacent) return;
+
+  const blockLeft = wx * TILE;
+  const blockTop = wy * TILE;
+  const overlaps = blockLeft + TILE > player.x && blockLeft < player.x + player.w &&
+                   blockTop + TILE > player.y && blockTop < player.y + player.h;
+  if (overlaps) return;
+
+  setBlock(wx, wy, slot.type);
+  slot.count--;
+  if (slot.count <= 0) {
+    slot.count = 0;
+    slot.type = AIR;
+  }
+}
+
+function updatePlayer(scale = 1) {
+  const speed = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
+  let moveX = 0;
+  if (keys['KeyA'] || keys['ArrowLeft']) {
+    moveX = -speed * scale;
+    player.facing = -1;
+  }
+  if (keys['KeyD'] || keys['ArrowRight']) {
+    moveX = speed * scale;
+    player.facing = 1;
+  }
+
+  player.x += moveX;
+  if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
+    if (moveX !== 0 && player.onGround &&
+        !collidesWithWorld(player.x, player.y - TILE, player.w, player.h)) {
+      player.y -= TILE;
+      player.blockedX = false;
+    } else {
+      player.x -= moveX;
+      player.blockedX = true;
+    }
+  } else {
+    player.blockedX = false;
+  }
+
+  player.vy = Math.min(player.vy + GRAVITY * scale, MAX_FALL);
+  player.y += player.vy;
+  if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
+    if (player.vy > 0) {
+      player.y = Math.floor((player.y + player.h) / TILE) * TILE - player.h;
+      player.vy = 0;
+    } else {
+      player.y = Math.ceil(player.y / TILE) * TILE;
+      player.vy = 0;
+    }
+  }
+
+  player.onGround = checkOnGround(player.x, player.y, player.w, player.h);
+  if ((keys['Space'] || keys['KeyW']) && player.onGround) {
+    player.vy = JUMP_VEL;
+    player.onGround = false;
+  }
+
+  player.x = clamp(player.x, 0, WORLD_PX - player.w);
+  player.y = clamp(player.y, 0, WORLD_H * TILE - player.h);
+}
+
+function updateCamera(scale = 1) {
+  const targetX = player.x + player.w / 2 - canvas.width / 2;
+  const targetY = player.y + player.h / 2 - canvas.height * 0.4;
+  cam.x += (targetX - cam.x) * 0.1 * scale;
+  cam.y += (targetY - cam.y) * 0.1 * scale;
+  cam.x = clamp(cam.x, 0, Math.max(0, WORLD_PX - canvas.width));
+  cam.y = clamp(cam.y, 0, Math.max(0, WORLD_H * TILE - canvas.height));
+}
+
+function updateAnimation(scale = 1) {
+  let newState = 'stand';
+  const moving = (keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight']) && !player.blockedX;
+  const running = keys['ShiftLeft'] || keys['ShiftRight'];
+
+  if (!player.onGround) newState = 'jump';
+  else if (mining.active) newState = 'mine';
+  else if (moving && running) newState = 'run';
+  else if (moving) newState = 'walk';
+
+  if (newState !== player.animState) {
+    player.animState = newState;
+    player.animFrame = 0;
+    player.animTick = 0;
+  }
+
+  const fps = { stand: 4, walk: 10, run: 12, jump: 8, mine: 10 }[newState] || 4;
+  const frameCount = { stand: 1, walk: 8, run: 8, jump: 6, mine: 4 }[newState] || 1;
+  const ticksPerFrame = Math.round(60 / fps);
+
+  player.animTick += scale;
+  if (player.animTick >= ticksPerFrame) {
+    player.animTick = 0;
+    player.animFrame = (player.animFrame + 1) % frameCount;
+  }
+}
+
+function updateWorld(dt) {
+  dayClockMs = mod(dayClockMs + dt, DAY_LENGTH_MS);
+}
+
+function daylightFactor() {
+  return clamp((Math.sin(dayClockMs / DAY_LENGTH_MS * TAU - Math.PI / 2) + 1) / 2, 0, 1);
+}
+
+function drawStars(daylight) {
+  const alpha = Math.pow(1 - daylight, 1.6);
+  if (alpha <= 0.01) return;
+
+  ctx.save();
+  for (const star of stars) {
+    const twinkle = 0.6 + 0.4 * Math.sin(dayClockMs * 0.002 + star.twinkle);
+    ctx.fillStyle = `rgba(255,255,255,${(alpha * twinkle).toFixed(3)})`;
+    const x = Math.floor(star.u * canvas.width);
+    const y = Math.floor(star.v * canvas.height);
+    ctx.fillRect(x, y, star.size, star.size);
+    if (star.size > 1) {
+      ctx.fillRect(x + 1, y - 1, 1, 1);
+      ctx.fillRect(x - 1, y + 1, 1, 1);
+    }
+  }
+  ctx.restore();
+}
+
+function drawSunAndMoon(daylight) {
+  const phase = dayClockMs / DAY_LENGTH_MS;
+  const sunX = canvas.width * phase;
+  const sunY = canvas.height * (0.82 - Math.sin(phase * Math.PI) * 0.56);
+  const moonPhase = mod(phase + 0.5, 1);
+  const moonX = canvas.width * moonPhase;
+  const moonY = canvas.height * (0.82 - Math.sin(moonPhase * Math.PI) * 0.56);
+
+  ctx.save();
+  if (daylight > 0.08) {
+    ctx.fillStyle = alphaColor('#fff6c2', 0.18 + daylight * 0.16);
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, 38, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = mixColor('#ffd55f', '#fff4c0', daylight);
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, 18, 0, TAU);
+    ctx.fill();
+  }
+  if (daylight < 0.92) {
+    const moonAlpha = Math.pow(1 - daylight, 1.1);
+    ctx.fillStyle = alphaColor('#d9e7ff', 0.2 * moonAlpha);
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 26, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = alphaColor('#f4f8ff', 0.9 * moonAlpha);
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 14, 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCloudShape(x, y, w, h, daylight) {
+  const shadow = mixColor('#9cb3cf', '#d9ecff', daylight, 0.4 + daylight * 0.22);
+  const body = mixColor('#d7e6f6', '#ffffff', daylight, 0.55 + daylight * 0.22);
+  ctx.fillStyle = shadow;
+  ctx.fillRect(Math.floor(x + 8), Math.floor(y + h * 0.6), Math.floor(w * 0.75), Math.floor(h * 0.34));
+  ctx.fillStyle = body;
+  ctx.fillRect(Math.floor(x), Math.floor(y + h * 0.35), Math.floor(w * 0.52), Math.floor(h * 0.38));
+  ctx.fillRect(Math.floor(x + w * 0.24), Math.floor(y), Math.floor(w * 0.38), Math.floor(h * 0.5));
+  ctx.fillRect(Math.floor(x + w * 0.48), Math.floor(y + h * 0.16), Math.floor(w * 0.36), Math.floor(h * 0.42));
+}
+
+function drawClouds(daylight) {
+  ctx.save();
+  for (const cloud of clouds) {
+    const offsetX = mod(cloud.x + dayClockMs * 0.012 * cloud.speed, WORLD_PX + 220) - 110;
+    const x = offsetX - cam.x * 0.22;
+    const y = cloud.y + Math.sin(dayClockMs * 0.001 + cloud.speed) * 2;
+    drawCloudShape(x, y, cloud.w, cloud.h, daylight);
+  }
+  ctx.restore();
+}
+
+function drawMountains(daylight) {
+  ctx.save();
+  for (const layer of mountainLayers) {
+    ctx.beginPath();
+    ctx.moveTo(-20, canvas.height);
+    for (let x = 0; x < WORLD_W; x += 2) {
+      const screenX = x * TILE - cam.x * layer.parallax;
+      const screenY = canvas.height * layer.profile[x];
+      ctx.lineTo(screenX, screenY);
+    }
+    ctx.lineTo(WORLD_PX - cam.x * layer.parallax + 20, canvas.height);
+    ctx.closePath();
+    ctx.fillStyle = mixColor(layer.nightColor, layer.dayColor, daylight);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawSky() {
+  const daylight = daylightFactor();
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, mixColor('#08111d', '#69b7f5', daylight));
+  gradient.addColorStop(0.72, mixColor('#20344d', '#dff1ff', daylight));
+  gradient.addColorStop(1, mixColor('#2a3044', '#f3d79c', daylight * 0.7));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawStars(daylight);
+  drawSunAndMoon(daylight);
+  drawMountains(daylight);
+  drawClouds(daylight);
+
+  const nightOverlay = ((1 - daylight) * 0.12).toFixed(3);
+  ctx.fillStyle = `rgba(0,0,0,${nightOverlay})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawCaveWall(tileX, tileY, screenX, screenY) {
+  const depth = tileY - surfaceYs[tileX];
+  const wall = depth > 34 ? wallTextures.deep : wallTextures.shallow;
+  ctx.drawImage(wall, screenX, screenY);
+  const darkness = clamp((depth - 6) / 72, 0, 0.46);
+  ctx.fillStyle = `rgba(5,8,16,${darkness})`;
+  ctx.fillRect(screenX, screenY, TILE, TILE);
+}
+
+function drawBlockTile(type, tileX, tileY, screenX, screenY) {
+  ctx.drawImage(tileTextures[type], screenX, screenY);
+
+  if (type === GRASS) {
+    ctx.fillStyle = alphaColor(biomeGrassTints[biomes[tileX]], 0.18);
+    ctx.fillRect(screenX, screenY, TILE, 5);
+  }
+  if (!isSolid(getBlock(tileX, tileY - 1))) {
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(screenX, screenY, TILE, 2);
+  }
+  if (!isSolid(getBlock(tileX - 1, tileY))) {
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(screenX, screenY, 1, TILE);
+  }
+  if (!isSolid(getBlock(tileX + 1, tileY))) {
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(screenX + TILE - 2, screenY, 2, TILE);
+  }
+  if (!isSolid(getBlock(tileX, tileY + 1))) {
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(screenX, screenY + TILE - 2, TILE, 2);
+  }
+}
+
+function drawWorld() {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const startX = Math.max(0, Math.floor(camX / TILE) - 1);
+  const endX = Math.min(WORLD_W, Math.ceil((camX + canvas.width) / TILE) + 1);
+  const startY = Math.max(0, Math.floor(camY / TILE) - 1);
+  const endY = Math.min(WORLD_H, Math.ceil((camY + canvas.height) / TILE) + 1);
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const type = getBlock(x, y);
+      const sx = (x * TILE - camX) | 0;
+      const sy = (y * TILE - camY) | 0;
+      if (type === AIR) {
+        if (y > surfaceYs[x]) drawCaveWall(x, y, sx, sy);
+        continue;
+      }
+      drawBlockTile(type, x, y, sx, sy);
+    }
+  }
+}
+
+function drawLeafBlob(x, y, w, h, palette) {
+  ctx.fillStyle = palette.base;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = palette.light;
+  ctx.fillRect(x + 2, y + 2, Math.max(0, w - 4), Math.max(0, Math.floor(h * 0.28)));
+  ctx.fillStyle = palette.dark;
+  ctx.fillRect(x, y + h - 2, w, 2);
+  ctx.fillRect(x + w - 2, y, 2, h);
+}
+
+function drawTreeCanopies() {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+
+  for (const tree of treeCanopies) {
+    if (getBlock(tree.x, tree.trunkBaseY - 1) !== WOOD) continue;
+    const palette = tree.biome === BIOME_MEADOW
+      ? { base: '#77c64d', light: '#99ea6c', dark: '#467b2c' }
+      : tree.biome === BIOME_ROCKY
+        ? { base: '#6aab45', light: '#8fcb64', dark: '#3f6f28' }
+        : { base: '#63b440', light: '#8cde65', dark: '#3e6f27' };
+
+    const topX = tree.x * TILE - camX + TILE / 2;
+    const topY = tree.trunkTopY * TILE - camY;
+    const size = tree.radius * 8;
+    const blobs = [
+      { x: topX - size - 8, y: topY - size * 0.2, w: size + 8, h: size * 0.8 },
+      { x: topX - size * 0.35, y: topY - size - 4, w: size + 10, h: size * 0.9 },
+      { x: topX + size * 0.15, y: topY - size * 0.4, w: size, h: size * 0.78 },
+      { x: topX - size * 0.7, y: topY + 1, w: size + 18, h: size * 0.58 },
+    ];
+
+    for (const blob of blobs) {
+      drawLeafBlob(Math.floor(blob.x), Math.floor(blob.y), Math.floor(blob.w), Math.floor(blob.h), palette);
+    }
+  }
+}
+
+function drawPlayer() {
+  if (!spritesheet.complete || spritesheet.naturalWidth === 0) {
+    ctx.fillStyle = 'rgba(255,200,0,0.9)';
+    ctx.fillRect(player.x - cam.x, player.y - cam.y, player.w, player.h);
+    return;
+  }
+
+  let srcX;
+  let srcY;
+  if (player.animState === 'run') {
+    const globalFrame = player.animFrame + 4;
+    srcX = (globalFrame % SHEET_COLS) * FRAME_SIZE;
+    srcY = Math.floor(globalFrame / SHEET_COLS) * FRAME_SIZE;
+  } else {
+    const anim = ANIM[player.animState];
+    if (!anim) return;
+    srcX = (anim.colStart + player.animFrame) * FRAME_SIZE;
+    srcY = anim.row * FRAME_SIZE;
+  }
+
+  const drawSize = player.h;
+  const screenX = player.x - cam.x + (player.w - drawSize) / 2;
+  const screenY = player.y - cam.y;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (player.facing === -1) {
+    ctx.translate(screenX + drawSize / 2, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE, -drawSize / 2, screenY, drawSize, drawSize);
+  } else {
+    ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE, screenX, screenY, drawSize, drawSize);
+  }
+  ctx.restore();
+}
+
+function drawMining() {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  const target = getBlock(wx, wy);
+  const inRange = dist <= MINE_RADIUS_PX && isSolid(target);
+
+  if (inRange) {
+    const sx = (wx * TILE - camX) | 0;
+    const sy = (wy * TILE - camY) | 0;
+    const pulse = 0.45 + Math.sin(dayClockMs * 0.01) * 0.15;
+    ctx.strokeStyle = `rgba(255,255,255,${pulse.toFixed(2)})`;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+  }
+
+  if (mining.bx >= 0) {
+    const sx = (mining.bx * TILE - camX) | 0;
+    const sy = (mining.by * TILE - camY) | 0;
+    const type = getBlock(mining.bx, mining.by);
+    const progress = type === AIR ? 1 : clamp(mining.progress / getMineFrames(type), 0, 1);
+    ctx.fillStyle = `rgba(0,0,0,${(progress * 0.58).toFixed(2)})`;
+    ctx.fillRect(sx, sy, TILE, TILE);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillRect(sx, sy + TILE + 2, TILE, 4);
+    ctx.fillStyle = mixColor('#ff6545', '#7cff7a', progress);
+    ctx.fillRect(sx, sy + TILE + 2, Math.round(TILE * progress), 4);
+  }
+}
+
+function drawPanel(x, y, w, h) {
+  ctx.fillStyle = 'rgba(8,11,18,0.7)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+}
+
+function drawText(text, x, y, color = '#ffffff', font = '14px Minecraft, monospace', align = 'left') {
+  ctx.font = font;
+  ctx.textAlign = align;
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillText(text, x + 2, y + 2);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.textAlign = 'left';
+}
+
+const HEART_PATTERN = [
+  '01100110',
+  '11111111',
+  '11111111',
+  '01111110',
+  '00111100',
+  '00011000',
+];
+
+function drawHeart(x, y, size, filled) {
+  const pixelSize = Math.max(1, Math.floor(size / HEART_PATTERN[0].length));
+  for (let row = 0; row < HEART_PATTERN.length; row++) {
+    for (let col = 0; col < HEART_PATTERN[row].length; col++) {
+      if (HEART_PATTERN[row][col] !== '1') continue;
+      ctx.fillStyle = filled ? '#ff5757' : 'rgba(255,255,255,0.18)';
+      ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+      if (filled && row < 2) {
+        ctx.fillStyle = 'rgba(255,255,255,0.14)';
+        ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, 1);
+      }
+    }
+  }
+}
+
+function getDepthLabel(depth) {
+  if (depth < 6) return 'Surface';
+  if (depth < 28) return 'Underground';
+  return 'Caverns';
+}
+
+function drawStatusHud() {
+  const tileX = clamp(Math.floor((player.x + player.w / 2) / TILE), 0, WORLD_W - 1);
+  const depth = Math.max(0, Math.floor(player.y / TILE - surfaceYs[tileX]));
+  const stage = getDepthLabel(depth);
+
+  for (let i = 0; i < player.maxHealth; i++) {
+    drawHeart(18 + i * 22, 18, 16, i < player.health);
+  }
+
+  drawPanel(16, 48, 202, 68);
+  drawText(`Biome: ${biomeNames[biomes[tileX]]}`, 28, 70, '#ffffff', '14px Minecraft, monospace');
+  drawText(`Depth: ${stage} +${depth}`, 28, 90, '#d9e6ff', '14px Minecraft, monospace');
+  drawText('LMB mine   RMB place', 28, 110, '#8fb4d9', '12px Minecraft, monospace');
+}
+
+function drawHotbar() {
+  const slotW = canvas.width < 720 ? 40 : 48;
+  const slotH = slotW;
+  const gap = 7;
+  const totalW = inventory.slots.length * slotW + (inventory.slots.length - 1) * gap;
+  const startX = Math.floor((canvas.width - totalW) / 2);
+  const startY = canvas.height - slotH - 18;
+  const selected = inventory.slots[inventory.selected];
+
+  for (let i = 0; i < inventory.slots.length; i++) {
+    const slot = inventory.slots[i];
+    const sx = startX + i * (slotW + gap);
+    const sy = startY;
+
+    ctx.fillStyle = i === inventory.selected ? 'rgba(46,57,82,0.9)' : 'rgba(10,12,18,0.72)';
+    ctx.fillRect(sx, sy, slotW, slotH);
+    ctx.strokeStyle = i === inventory.selected ? '#ffef9c' : 'rgba(255,255,255,0.16)';
+    ctx.strokeRect(sx + 0.5, sy + 0.5, slotW - 1, slotH - 1);
+    if (i === inventory.selected) {
+      ctx.strokeStyle = 'rgba(255,213,94,0.5)';
+      ctx.strokeRect(sx + 1.5, sy + 1.5, slotW - 3, slotH - 3);
+    }
+
+    if (slot.type !== AIR) {
+      const iconSize = Math.floor(slotW * 0.52);
+      ctx.drawImage(tileTextures[slot.type], sx + Math.floor((slotW - iconSize) / 2), sy + 8, iconSize, iconSize);
+    }
+
+    drawText(String(i + 1), sx + 5, sy + 13, 'rgba(255,255,255,0.7)', '10px Minecraft, monospace');
+    if (slot.count > 0) {
+      drawText(String(slot.count), sx + slotW - 6, sy + slotH - 7, '#ffffff', '12px Minecraft, monospace', 'right');
+    }
+  }
+
+  if (selected && selected.type !== AIR) {
+    const label = blockDefs[selected.type]?.name || 'Block';
+    drawText(label.toUpperCase(), canvas.width / 2, startY - 10, '#f5f1d0', '14px Minecraft, monospace', 'center');
+  }
+}
+
+function loop(ts) {
+  const dt = ts ? Math.min(ts - lastTime, TARGET_DT * 3) : TARGET_DT;
+  lastTime = ts || 0;
+  const scale = dt / TARGET_DT;
+
+  updateWorld(dt);
+  updatePlayer(scale);
+  updateMining(scale);
+  updatePlacement(lastTime);
+  updateAnimation(scale);
+  updateCamera(scale);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawSky();
+  drawWorld();
+  drawTreeCanopies();
+  drawPlayer();
+  drawMining();
+  drawStatusHud();
+  drawHotbar();
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
