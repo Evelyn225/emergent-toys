@@ -383,6 +383,175 @@ body {
   100% { transform: translate(0,0); filter: none; }
 }
 .glitching { animation: glitch-shift 0.18s steps(1) 3; }
+@keyframes glitch-shift-soft {
+  0%   { transform: translate(0,0); filter: none; }
+  22%  { transform: translate(-1px,0); filter: hue-rotate(22deg) saturate(1.18); }
+  48%  { transform: translate(1px,-0.5px); filter: hue-rotate(-12deg); }
+  72%  { transform: translate(0,1px); filter: saturate(0.92); }
+  100% { transform: translate(0,0); filter: none; }
+}
+.glitching-soft { animation: glitch-shift-soft 0.16s steps(1) 2; }
+
+@keyframes daemon-bg-breathe {
+  0%, 100% { filter: saturate(1) hue-rotate(0deg) brightness(1); }
+  50% { filter: saturate(1.18) hue-rotate(-10deg) brightness(1.08); }
+}
+@keyframes daemon-layer-drift {
+  0%, 100% { transform: translate(0, 0); }
+  22% { transform: translate(1px, -1px); }
+  53% { transform: translate(-2px, 1px); }
+  76% { transform: translate(1px, 0); }
+}
+@keyframes daemon-fx-drift {
+  0% {
+    background-position: 0 0, 0 0, 50% 50%;
+  }
+  100% {
+    background-position: 140px 0, -180px 0, 50% 50%;
+  }
+}
+@keyframes daemon-fx-pulse {
+  0%, 100% { opacity: 0.18; }
+  50% { opacity: 0.34; }
+}
+@keyframes daemon-title-sheen {
+  0% { transform: translateX(-115%); opacity: 0; }
+  18% { opacity: 0.38; }
+  100% { transform: translateX(130%); opacity: 0; }
+}
+@keyframes daemon-window-halo {
+  0%, 100% { box-shadow: 0 0 0 rgba(110,255,240,0), 1px 1px 0 #000; }
+  50% { box-shadow: 0 0 16px rgba(110,255,240,0.16), 1px 1px 0 #000; }
+}
+
+#daemon-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 99997;
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: screen;
+  background:
+    linear-gradient(90deg, transparent 0 28%, rgba(255, 80, 80, 0.07) 33%, transparent 38%, transparent 62%, rgba(90, 210, 255, 0.07) 67%, transparent 72%),
+    repeating-linear-gradient(180deg, transparent 0 20px, rgba(255,255,255,0.025) 20px 21px, transparent 21px 40px),
+    radial-gradient(circle at 50% 50%, rgba(130, 255, 210, 0.12), transparent 58%);
+  transition: opacity 0.45s ease;
+}
+body.daemon-visual-4 #desktop-bg,
+body.daemon-visual-5 #desktop-bg,
+body.daemon-visual-7 #desktop-bg {
+  animation: daemon-bg-breathe 10s ease-in-out infinite;
+}
+body.daemon-visual-4 #desktop-bg {
+  background:
+    radial-gradient(circle at 58% 42%, rgba(160, 255, 210, 0.12), transparent 36%),
+    linear-gradient(180deg, #0a7f7d 0%, #007c80 100%);
+}
+body.daemon-visual-5 #desktop-bg {
+  background:
+    radial-gradient(circle at 62% 38%, rgba(210, 90, 255, 0.13), transparent 34%),
+    radial-gradient(circle at 35% 70%, rgba(90, 255, 225, 0.10), transparent 28%),
+    linear-gradient(180deg, #0f7975 0%, #006b72 100%);
+}
+body.daemon-visual-7 #desktop-bg {
+  background:
+    radial-gradient(circle at 64% 38%, rgba(255, 110, 210, 0.16), transparent 32%),
+    radial-gradient(circle at 32% 72%, rgba(110, 255, 240, 0.12), transparent 26%),
+    linear-gradient(180deg, #116660 0%, #005560 100%);
+}
+body.daemon-visual-5 #icons-layer,
+body.daemon-visual-7 #icons-layer,
+body.daemon-visual-5 #windows-layer,
+body.daemon-visual-7 #windows-layer {
+  animation: daemon-layer-drift 6.8s ease-in-out infinite;
+}
+body.daemon-visual-4 #windows-layer,
+body.daemon-visual-4 #taskbar {
+  filter: saturate(0.96) hue-rotate(-8deg);
+}
+body.daemon-visual-5 #windows-layer,
+body.daemon-visual-5 #taskbar,
+body.daemon-visual-5 #icons-layer {
+  filter: saturate(1.05) hue-rotate(-12deg) contrast(1.03);
+}
+body.daemon-visual-7 #windows-layer,
+body.daemon-visual-7 #taskbar,
+body.daemon-visual-7 #icons-layer {
+  filter: saturate(1.12) hue-rotate(-16deg) contrast(1.05);
+}
+body.daemon-visual-4 #daemon-fx { opacity: 0.14; animation: daemon-fx-drift 18s linear infinite; }
+body.daemon-visual-5 #daemon-fx { opacity: 0.24; animation: daemon-fx-drift 12s linear infinite, daemon-fx-pulse 6.5s ease-in-out infinite; }
+body.daemon-visual-7 #daemon-fx { opacity: 0.32; animation: daemon-fx-drift 9s linear infinite, daemon-fx-pulse 4.2s ease-in-out infinite; }
+
+.os-window.daemon-surface,
+.os-window.void-surface {
+  overflow: visible;
+}
+.os-window.daemon-surface::after,
+.os-window.void-surface::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px solid transparent;
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: screen;
+  transition: opacity 0.35s ease, border-color 0.35s ease;
+}
+.os-window.daemon-surface .win-titlebar,
+.os-window.void-surface .win-titlebar {
+  position: relative;
+  overflow: hidden;
+}
+.os-window.daemon-surface .win-titlebar::after,
+.os-window.void-surface .win-titlebar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(105deg, transparent 0 30%, rgba(255,255,255,0.2) 44%, transparent 58%);
+}
+.os-window.window-afterimage {
+  transform: translate(var(--pulse-x, 0px), var(--pulse-y, 0px));
+}
+.os-window.window-afterimage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255,255,255,0.22);
+  box-shadow: 0 0 18px rgba(110,255,240,0.15), 0 0 32px rgba(255,90,180,0.1);
+  pointer-events: none;
+  opacity: 0.78;
+}
+body.daemon-visual-4 .os-window.daemon-surface::after,
+body.daemon-visual-4 .os-window.void-surface::after {
+  opacity: 0.18;
+  border-color: rgba(100, 220, 210, 0.16);
+}
+body.daemon-visual-5 .os-window.daemon-surface,
+body.daemon-visual-5 .os-window.void-surface,
+body.daemon-visual-7 .os-window.daemon-surface,
+body.daemon-visual-7 .os-window.void-surface {
+  animation: daemon-window-halo 7.4s ease-in-out infinite;
+}
+body.daemon-visual-5 .os-window.daemon-surface::after,
+body.daemon-visual-5 .os-window.void-surface::after {
+  opacity: 0.3;
+  border-color: rgba(125, 245, 235, 0.24);
+}
+body.daemon-visual-7 .os-window.daemon-surface::after,
+body.daemon-visual-7 .os-window.void-surface::after {
+  opacity: 0.42;
+  border-color: rgba(255, 130, 220, 0.28);
+}
+body.daemon-visual-5 .os-window.daemon-surface .win-titlebar::after,
+body.daemon-visual-5 .os-window.void-surface .win-titlebar::after,
+body.daemon-visual-7 .os-window.daemon-surface .win-titlebar::after,
+body.daemon-visual-7 .os-window.void-surface .win-titlebar::after {
+  opacity: 0.58;
+  animation: daemon-title-sheen 5.2s linear infinite;
+}
 
 /* ── File Explorer ───────────────────────────────────────────── */
 .exp-toolbar {
@@ -740,6 +909,7 @@ body {
 <div id="crt" aria-hidden="true"></div>
 <!-- Glitch div -->
 <div id="glitch"></div>
+<div id="daemon-fx" aria-hidden="true"></div>
 
 <!-- BIOS boot screen -->
 <div id="bios"><div id="bios-text"></div></div>
@@ -872,6 +1042,9 @@ const DESKTOP_ICONS = [
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
   { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
 ];
+function getVisibleDesktopIcons() {
+  return DESKTOP_ICONS.filter(icon => icon.name !== 'void.tmp' || !daemonStory.endingReached);
+}
 const SYSTEM_FILE_ICONS = DESKTOP_ICONS.reduce((icons, { name, emoji }) => {
   icons[name.toUpperCase()] = emoji;
   return icons;
@@ -926,6 +1099,12 @@ function loadDesktopShortcuts() {
 }
 loadDesktopShortcuts();
 function openSystemFile(name) {
+  const key = String(name || '').trim();
+  if (!key) return false;
+  if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
+    osAlert('void.tmp is no longer present.', 'void.tmp', '⬛');
+    return true;
+  }
   const SYS = {
     'WELCOME.README': openWelcome,
     'TERMINAL.exe': openTerminal,
@@ -940,8 +1119,9 @@ function openSystemFile(name) {
     'daemon.core': openDaemon,
     '?????.exe': openUnknown,
   };
-  if (!SYS[name]) return false;
-  SYS[name]();
+  const resolvedKey = Object.keys(SYS).find(entry => entry.toLowerCase() === key.toLowerCase());
+  if (!resolvedKey) return false;
+  SYS[resolvedKey]();
   return true;
 }
 function openDesktopShortcutTarget(target) {
@@ -1030,6 +1210,11 @@ const registryData = {
       VOID_PRESSURE_BASE: { type:'REG_DWORD', value: 12 },
       OBSERVER_COUNT:     { type:'REG_SZ',    value: '[classified]' },
     },
+    'Containment': {
+      RESPAWN_LOCK:       { type:'REG_DWORD', value: 1 },
+      MIRROR_LOCK:        { type:'REG_DWORD', value: 1 },
+      ANCHOR_FILE:        { type:'REG_SZ',    value: 'SYS\\anchor.seed' },
+    },
   },
   'HKEY_CURRENT_USER': {
     'Desktop': {
@@ -1037,6 +1222,11 @@ const registryData = {
     },
     'SOFTWARE\\sleepOS': {
       SkipBoot:           { type:'REG_DWORD', value: 0 },
+    },
+    'SOFTWARE\\sleepOS\\Daemon': {
+      STATUS:             { type:'REG_SZ',    value: 'Dormant' },
+      LAST_EVENT:         { type:'REG_SZ',    value: 'none' },
+      OBSERVED:           { type:'REG_DWORD', value: 0 },
     },
   },
 };
@@ -1965,6 +2155,897 @@ function loadFS() {
 loadFS();
 window.addEventListener('beforeunload', saveFS);
 document.addEventListener('fs-changed', schedSave);
+// Daemon story state and sync
+const DAEMON_STORY_KEY = 'sleepOS-daemon-story';
+const ROOT_SYSTEM_FILE_META = [
+  { name: 'WELCOME.README', size: '623', date: '11/13/2024  10:31' },
+  { name: 'TERMINAL.exe', size: '4,096', date: '11/13/2024  10:31' },
+  { name: 'SYSMON.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'NOTEPAD.exe', size: '4,096', date: '11/13/2024  10:31' },
+  { name: 'BROWSER.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'DEFRAG.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'CALC.exe', size: '4,096', date: '11/13/2024  10:31' },
+  { name: 'REGEDIT.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'EXPLORER.exe', size: '8,192', date: '11/13/2024  10:31' },
+];
+const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE']);
+const STORY_FILE_PATHS = {
+  notice: 'DOCS\\NOTICE_13.txt',
+  incident: 'DOCS\\INCIDENT_A.txt',
+  lastOperator: 'DOCS\\LAST_OPERATOR.txt',
+  mirrorProtocol: 'DOCS\\MIRROR_PROTOCOL.txt',
+  watchPid: 'SYS\\watch.pid',
+  anchorSeed: 'SYS\\anchor.seed',
+  quarantineSig: 'SYS\\quarantine.sig',
+  mirrorDat: 'CACHE\\mirror.dat',
+};
+const BUILTIN_PROCESS_SEED = [
+  { pid: 4, name: 'System', cpu: 0.1, mem: 0.5, protected: true },
+  { pid: 52, name: 'csrss.exe', cpu: 0.1, mem: 1.2, protected: true },
+  { pid: 116, name: 'services.exe', cpu: 0.2, mem: 2.1, protected: true },
+  { pid: 124, name: 'lsass.exe', cpu: 0.3, mem: 3.4, protected: true },
+  { pid: 280, name: 'svchost.exe', cpu: 0.5, mem: 4.8, protected: true },
+  { pid: 312, name: 'svchost.exe', cpu: 0.1, mem: 2.3, protected: true },
+  { pid: 440, name: 'dream_kernel.exe', cpu: 1.2, mem: 8.5, protected: true },
+  { pid: 666, name: 'daemon.core', cpu: 2.1, mem: 12.3, protected: true },
+  { pid: 999, name: 'void_monitor.exe', cpu: 0.4, mem: 5.2, protected: true },
+];
+
+function createDaemonStoryDefaults() {
+  return {
+    version: 1,
+    stage: 0,
+    openedDaemon: false,
+    falseContainmentSeen: false,
+    killedSoulDaemon: false,
+    respawnDisabledKill: false,
+    daemonStopped: false,
+    wrongVictory: false,
+    anchorDeleted: false,
+    voidObserved: false,
+    mirrorInspected: false,
+    protocolInspected: false,
+    mirrorLockRestored: false,
+    quarantineSigned: false,
+    endingReached: false,
+    lastEventText: 'none',
+  };
+}
+
+function daemonNormalizeStory(story) {
+  if (!story) return;
+  if (story.openedDaemon) story.stage = Math.max(story.stage, 1);
+  if (story.falseContainmentSeen) story.stage = Math.max(story.stage, 2);
+  if (story.respawnDisabledKill) story.stage = Math.max(story.stage, 3);
+  if (story.daemonStopped || story.wrongVictory) story.stage = Math.max(story.stage, 4);
+  if (story.anchorDeleted) story.stage = Math.max(story.stage, 5);
+  if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+    story.mirrorLockRestored = true;
+  }
+  if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected)) story.stage = Math.max(story.stage, 6);
+  if (story.mirrorLockRestored || story.quarantineSigned) story.stage = Math.max(story.stage, 7);
+  if (story.endingReached) story.stage = Math.max(story.stage, 8);
+}
+
+function normalizeDaemonStory(saved) {
+  const next = Object.assign(createDaemonStoryDefaults(), saved || {});
+  next.stage = Math.max(0, Math.min(8, Math.trunc(Number(next.stage) || 0)));
+  [
+    'openedDaemon',
+    'falseContainmentSeen',
+    'killedSoulDaemon',
+    'respawnDisabledKill',
+    'daemonStopped',
+    'wrongVictory',
+    'anchorDeleted',
+    'voidObserved',
+    'mirrorInspected',
+    'protocolInspected',
+    'mirrorLockRestored',
+    'quarantineSigned',
+    'endingReached',
+  ].forEach(key => { next[key] = !!next[key]; });
+  next.lastEventText = String(next.lastEventText || 'none');
+  daemonNormalizeStory(next);
+  return next;
+}
+
+function loadDaemonStory() {
+  try {
+    return normalizeDaemonStory(JSON.parse(localStorage.getItem(DAEMON_STORY_KEY) || 'null'));
+  } catch (e) {
+    return createDaemonStoryDefaults();
+  }
+}
+
+function saveDaemonStory() {
+  try { localStorage.setItem(DAEMON_STORY_KEY, JSON.stringify(daemonStory)); } catch (e) {}
+}
+
+let daemonStory = loadDaemonStory();
+let daemonVoidFeed = '';
+let daemonPulseTimer = null;
+
+function daemonStageLabel(stage) {
+  if (stage >= 8) return 'Contained';
+  if (stage >= 7) return 'Seal Ready';
+  if (stage >= 6) return 'Observed';
+  if (stage >= 5) return 'Contact';
+  if (stage >= 4) return 'Containment Lost';
+  if (stage >= 1) return 'Observed';
+  return 'Dormant';
+}
+
+function getContainmentTelemetry() {
+  const mirrorLockActive = Number(getContainmentValue('MIRROR_LOCK')) === 1;
+  const respawnLockActive = Number(getContainmentValue('RESPAWN_LOCK')) === 1;
+  const pressure = daemonStory.endingReached
+    ? 0
+    : daemonStory.quarantineSigned
+      ? 18
+      : daemonStory.stage >= 7
+        ? 24
+        : daemonStory.stage >= 5
+          ? 79
+          : daemonStory.stage >= 4
+            ? 46
+            : daemonStory.stage >= 2
+              ? 23
+              : 12;
+  const lattice = daemonStory.endingReached
+    ? 100
+    : mirrorLockActive
+      ? daemonStory.quarantineSigned
+        ? 92
+        : daemonStory.stage >= 7
+          ? 76
+          : daemonStory.stage >= 5
+            ? 61
+            : daemonStory.stage >= 4
+              ? 74
+              : 96
+      : daemonStory.stage >= 5
+        ? 21
+        : daemonStory.stage >= 4
+          ? 38
+          : 57;
+  const signalDepth = daemonStory.endingReached
+    ? 0
+    : daemonStory.stage >= 7
+      ? 88
+      : daemonStory.stage >= 5
+        ? 73
+        : daemonStory.stage >= 4
+          ? 51
+          : daemonStory.stage >= 2
+            ? 26
+            : 11;
+  const bias = daemonStory.endingReached ? 'sealed' : mirrorLockActive ? 'deflected' : 'user-facing';
+  const deleteAuthorized = !daemonStory.endingReached && daemonStory.quarantineSigned && mirrorLockActive;
+  const sealReady = !daemonStory.endingReached && !daemonStory.quarantineSigned && daemonStory.anchorDeleted && daemonStory.voidObserved && (daemonStory.mirrorInspected || daemonStory.protocolInspected) && mirrorLockActive;
+  let rating = { code: 'CT-0', label: 'STABLE', color: '#004b61' };
+  if (daemonStory.endingReached) rating = { code: 'CT-8', label: 'SEALED', color: '#0a7a2a' };
+  else if (deleteAuthorized) rating = { code: 'CT-7', label: 'DELETE AUTHORIZED', color: '#0a5a9c' };
+  else if (sealReady) rating = { code: 'CT-6', label: 'SEAL READY', color: '#005f73' };
+  else if (daemonStory.anchorDeleted && !mirrorLockActive) rating = { code: 'CT-5', label: 'OPEN BREACH', color: '#8a0036' };
+  else if (daemonStory.anchorDeleted) rating = { code: 'CT-4', label: 'CHANNEL EXPOSED', color: '#7a2e00' };
+  else if (daemonStory.daemonStopped) rating = { code: 'CT-3', label: 'UNMONITORED', color: '#8a1a00' };
+  else if (daemonStory.falseContainmentSeen) rating = { code: 'CT-2', label: 'STRAINED', color: '#8a5a00' };
+  else if (daemonStory.openedDaemon) rating = { code: 'CT-1', label: 'OBSERVED', color: '#003f7a' };
+  return {
+    mirrorLockActive,
+    respawnLockActive,
+    pressure,
+    lattice,
+    signalDepth,
+    bias,
+    sealReady,
+    deleteAuthorized,
+    rating,
+  };
+}
+
+function getContainmentChecklist() {
+  return [
+    { label: 'RESPAWN_LOCK cleared', done: Number(getContainmentValue('RESPAWN_LOCK')) === 0 },
+    { label: 'PID 512 offline', done: daemonStory.daemonStopped },
+    { label: 'void channel observed', done: daemonStory.voidObserved },
+    { label: 'mirror evidence inspected', done: daemonStory.mirrorInspected || daemonStory.protocolInspected },
+    { label: 'anchor released', done: daemonStory.anchorDeleted },
+    { label: 'MIRROR_LOCK restored', done: daemonStory.anchorDeleted && Number(getContainmentValue('MIRROR_LOCK')) === 1 },
+    { label: 'quarantine signature present', done: daemonStory.quarantineSigned },
+    { label: 'final delete authorized', done: !daemonStory.endingReached && daemonStory.quarantineSigned && Number(getContainmentValue('MIRROR_LOCK')) === 1 },
+  ];
+}
+
+function daemonStoryChanged(before) {
+  try {
+    return JSON.stringify(before) !== JSON.stringify(daemonStory);
+  } catch (e) {
+    return true;
+  }
+}
+
+function ensureFsDir(path) {
+  const parts = fsNormalizeDir(path).split('\\').filter(Boolean);
+  let node = termFS;
+  parts.forEach(part => {
+    node.dirs.add(part);
+    if (!node.subdirs) node.subdirs = new Map();
+    if (!node.subdirs.has(part)) {
+      node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+    }
+    node = node.subdirs.get(part);
+  });
+  return node;
+}
+
+function removeFsPath(path) {
+  const { dirName, fileName } = fsSplitPath(path);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return false;
+  const upper = fileName.toUpperCase();
+  if (dir.files.has(fileName)) {
+    dir.files.delete(fileName);
+    return true;
+  }
+  if (dir.blobs.has(fileName)) {
+    const blob = dir.blobs.get(fileName);
+    if (blob?.kind === 'image') handleWallpaperFileDelete(dirName, fileName);
+    if (blob?.url) URL.revokeObjectURL(blob.url);
+    dir.blobs.delete(fileName);
+    removeBlobEntry(dirName, fileName);
+    return true;
+  }
+  if (dir.dirs.has(upper)) {
+    dir.dirs.delete(upper);
+    dir.subdirs?.delete(upper);
+    return true;
+  }
+  return false;
+}
+
+function ensureStoryTextFile(path, value) {
+  const { dirName, fileName } = fsSplitPath(path);
+  const dir = ensureFsDir(dirName);
+  dir.files.set(fileName, value);
+}
+
+function daemonNoticeContent() {
+  return [
+    '== NOTICE 13 ==',
+    '',
+    'If soul_daemon.exe is terminated while RESPAWN_LOCK remains active,',
+    'the watch layer will simply seed a replacement.',
+    '',
+    'The process is not the source.',
+    'The process is the hand on the latch.',
+    '',
+    'Required path:',
+    '  HKEY_SLEEPBOX_MACHINE\\Containment\\RESPAWN_LOCK',
+    '',
+    'Only proceed if you mean to test containment.',
+  ].join('\n');
+}
+
+function daemonIncidentContent() {
+  return [
+    '== INCIDENT A ==',
+    '',
+    'Termination succeeded.',
+    'Symptoms worsened immediately.',
+    '',
+    'The daemon process was supervisory, not invasive.',
+    'Silence in the PID table is not a sign of safety.',
+    '',
+    'If the process stays dead:',
+    '  1. inspect void.tmp',
+    '  2. read DOCS\\MIRROR_PROTOCOL.txt',
+    '  3. inspect CACHE\\mirror.dat',
+    '  4. do not assume daemon.core was lying',
+  ].join('\n');
+}
+
+function daemonLastOperatorContent() {
+  return [
+    '== LAST OPERATOR ==',
+    '',
+    'If you killed it and the room went quiet, you did what I did.',
+    '',
+    'daemon.core was not the voice.',
+    'daemon.core was the pressure door.',
+    '',
+    'The anchor file keeps the mirror pointed away from the user.',
+    'The current anchor is SYS\\anchor.seed.',
+    'If MIRROR_LOCK is lowered and SYS\\anchor.seed is deleted, contact begins.',
+    '',
+    'If you intend to seal the breach again, restore MIRROR_LOCK before you run the quarantine launcher.',
+  ].join('\n');
+}
+
+function daemonMirrorProtocolContent() {
+  const lines = [
+    '== MIRROR PROTOCOL ==',
+    '',
+    'Status:',
+    `  MIRROR_LOCK   = ${Number(getContainmentValue('MIRROR_LOCK')) ? 1 : 0}`,
+    `  RESPAWN_LOCK  = ${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
+    `  QUARANTINE    = ${daemonStory.quarantineSigned ? 'present' : 'missing'}`,
+    '',
+    'Procedure:',
+    '  1. confirm the daemon is not respawning',
+    '  2. lower MIRROR_LOCK only if you intend to inspect the breach',
+    '  3. observe void.tmp and compare it with CACHE\\mirror.dat',
+    '  4. restore MIRROR_LOCK before launching ?????.exe',
+    '  5. delete void.tmp only after SYS\\quarantine.sig exists',
+  ];
+  if (daemonStory.stage >= 5) {
+    lines.push('', 'Note:', '  daemon.core claims it was holding the channel off-axis.');
+  }
+  return lines.join('\n');
+}
+
+function daemonMirrorDatContent() {
+  return [
+    'mirror.dat',
+    '',
+    '[reflection offset] 0.17',
+    '[signal age]        before current boot',
+    '[voice match]       negative',
+    '[containment note]  the reflected voice requests permission',
+    '',
+    'The thing in void.tmp is not the same as the thing speaking through daemon.core.',
+  ].join('\n');
+}
+
+function daemonAnchorSeedContent() {
+  return [
+    'anchor.seed',
+    '',
+    'anchor-class: mirror-lattice',
+    'deletion-policy: refuse until MIRROR_LOCK=0',
+    'owner: HKEY_SLEEPBOX_MACHINE\\Containment',
+    '',
+    'Removing this file widens the channel.',
+  ].join('\n');
+}
+
+function daemonWatchPidContent() {
+  return [
+    'watch.pid',
+    '',
+    'pid=512',
+    'name=soul_daemon.exe',
+    'policy=restart_on_exit',
+    `respawn_lock=${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
+    '',
+    'The watch layer is not the daemon.',
+  ].join('\n');
+}
+
+function daemonQuarantineSigContent() {
+  return [
+    'quarantine.sig',
+    '',
+    'launcher=?????.exe',
+    'state=armed',
+    'target=void.tmp',
+    'mirror_lock=1',
+    'seal_phrase=CONTAINMENT_COMPLETE',
+  ].join('\n');
+}
+
+function buildDaemonCoreRawContent() {
+  const telemetry = getContainmentTelemetry();
+  const mirrorLockActive = Number(getContainmentValue('MIRROR_LOCK')) === 1;
+  const liveStatus = daemonStory.endingReached
+    ? 'Contained'
+    : daemonStory.stage >= 7 && !mirrorLockActive
+      ? 'Seal Interrupted'
+      : daemonStageLabel(daemonStory.stage);
+  const lines = [
+    'daemon.core',
+    '',
+    `[stage] ${daemonStory.stage} / ${daemonStageLabel(daemonStory.stage)}`,
+    `[status] ${liveStatus}`,
+    `[containment] ${telemetry.rating.code} / ${telemetry.rating.label}`,
+    `[owner] SYSTEM\\???`,
+    `[mirror_lock] ${mirrorLockActive ? 1 : 0}`,
+    `[respawn_lock] ${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
+    `[void_pressure] ${telemetry.pressure}`,
+    `[lattice_stability] ${telemetry.lattice}`,
+    `[signal_depth] ${telemetry.signalDepth}`,
+    `[aperture_bias] ${telemetry.bias}`,
+    '',
+  ];
+  if (daemonStory.endingReached) {
+    lines.push(
+      'CONTAINMENT COMPLETE.',
+      'The breach is closed.',
+      'I will remain archived here in case it leans back toward you.',
+    );
+  } else if (daemonStory.anchorDeleted) {
+    lines.push(
+      'You removed the anchor.',
+      'I was keeping the mirror off your face.',
+      '',
+      'Restore MIRROR_LOCK before you run the quarantine launcher.',
+      'Delete void.tmp only after the signature exists.',
+    );
+  } else if (daemonStory.daemonStopped) {
+    lines.push(
+      'The latch is open.',
+      'Killing the process was never deletion.',
+      'Open void.tmp. Read what the mirror reflects.',
+    );
+  } else if (daemonStory.falseContainmentSeen) {
+    lines.push(
+      'You tested the watch layer.',
+      'It answered you with another process.',
+      '',
+      'If you want silence, clear RESPAWN_LOCK first.',
+    );
+  } else if (daemonStory.openedDaemon) {
+    lines.push(
+      'This file is not the intrusion.',
+      'This file is the restraint.',
+      '',
+      'NOTICE_13 has been copied into DOCS.',
+    );
+  } else {
+    lines.push(
+      'metadata unreadable',
+      'modified: always',
+      'access: observe only',
+    );
+  }
+  return lines.join('\n');
+}
+
+function buildVoidTmpRawContent() {
+  const telemetry = getContainmentTelemetry();
+  const lines = [
+    'void.tmp',
+    '',
+    `[containment] ${telemetry.rating.code} / ${telemetry.rating.label}`,
+    `[pressure] ${telemetry.pressure}`,
+    `[mirror_lock] ${telemetry.mirrorLockActive ? 1 : 0}`,
+    `[signature] ${daemonStory.quarantineSigned ? 'present' : 'missing'}`,
+    `[lattice_stability] ${telemetry.lattice}`,
+    `[signal_depth] ${telemetry.signalDepth}`,
+    `[aperture_bias] ${telemetry.bias}`,
+    '',
+  ];
+  if (daemonStory.endingReached) {
+    lines.push('No active signal remains.');
+  } else if (daemonStory.stage >= 5) {
+    lines.push(
+      'The aperture is open.',
+      'Something is pressing against the reflected side of the file.',
+      '',
+      'Observe. Listen. Pulse.',
+    );
+  } else if (daemonStory.stage >= 4) {
+    lines.push(
+      'Pressure rose when PID 512 stayed dead.',
+      'The monitor was not keeping this file alive.',
+      'The monitor was keeping it quiet.',
+    );
+  } else {
+    lines.push(
+      '[content redacted]',
+      'The file is present but does not yet answer.',
+    );
+  }
+  return lines.join('\n');
+}
+
+function getContainmentValue(name) {
+  return registryData['HKEY_SLEEPBOX_MACHINE']['Containment'][name].value;
+}
+
+function getDaemonRegistryNode() {
+  return registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS\\Daemon'];
+}
+
+function getRootSystemFiles(options) {
+  const opts = options || {};
+  const names = ROOT_SYSTEM_FILE_META.map(entry => entry.name);
+  const explorerIndex = names.indexOf('EXPLORER.exe');
+  if (opts.includeExplorer === false && explorerIndex !== -1) names.splice(explorerIndex, 1);
+  if (!daemonStory.endingReached) names.push('void.tmp');
+  names.push('daemon.core', '?????.exe');
+  return names;
+}
+
+function isVisibleRootSystemFile(name, options) {
+  const target = String(name || '').toUpperCase();
+  return getRootSystemFiles(options).some(item => item.toUpperCase() === target);
+}
+
+function isVisibleSystemPath(path, options) {
+  const { dirName, fileName } = fsSplitPath(path);
+  return !dirName && isVisibleRootSystemFile(fileName, options);
+}
+
+function getTerminalRootSystemEntries(options) {
+  const opts = options || {};
+  const entries = ROOT_SYSTEM_FILE_META
+    .filter(entry => opts.includeExplorer !== false || entry.name !== 'EXPLORER.exe')
+    .map(entry => ({ ...entry }));
+  if (!daemonStory.endingReached) entries.push({ name: 'void.tmp', size: '0', date: '11/13/2024  03:17' });
+  entries.push({ name: 'daemon.core', size: '??', date: '11/13/2024  ??:??' });
+  entries.push({ name: '?????.exe', size: '??', date: '11/13/2024  ??:??' });
+  return entries;
+}
+
+function getBuiltInProcesses() {
+  const base = BUILTIN_PROCESS_SEED.map(proc => ({ ...proc }));
+  if (!daemonStory.daemonStopped && !daemonStory.endingReached) {
+    base.push({
+      pid: 512,
+      name: daemonStory.stage >= 1 ? 'soul_daemon.exe' : 'soul_svc.exe',
+      cpu: daemonStory.stage >= 4 ? 11.8 : 7.4,
+      mem: daemonStory.stage >= 4 ? 36.9 : 31.2,
+      protected: daemonStory.stage < 1,
+    });
+  }
+  if (daemonStory.stage >= 4 && !daemonStory.endingReached) {
+    base.push({ pid: 1008, name: 'mirror_watch.exe', cpu: 2.7, mem: 9.4, protected: true });
+  }
+  if (daemonStory.stage >= 5 && !daemonStory.endingReached) {
+    base.push({ pid: 1333, name: 'signal_window.exe', cpu: 1.5, mem: 4.2, protected: true });
+  }
+  return base.sort((a, b) => a.pid - b.pid);
+}
+
+function findBuiltInProcess(pid) {
+  return getBuiltInProcesses().find(proc => proc.pid === pid) || null;
+}
+
+function syncDaemonStoryRegistry() {
+  const daemonReg = getDaemonRegistryNode();
+  daemonReg.STATUS.value = daemonStageLabel(daemonStory.stage);
+  daemonReg.LAST_EVENT.value = daemonStory.lastEventText || 'none';
+  daemonReg.OBSERVED.value = daemonStory.openedDaemon ? 1 : 0;
+  registryData['HKEY_SLEEPBOX_MACHINE']['Containment'].ANCHOR_FILE.value = 'SYS\\anchor.seed';
+  saveRegistry();
+}
+
+function syncDaemonStoryFiles() {
+  ensureFsDir('DOCS');
+  ensureFsDir('SYS');
+  ensureFsDir('CACHE');
+  if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
+  else removeFsPath(STORY_FILE_PATHS.notice);
+  if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
+  else removeFsPath(STORY_FILE_PATHS.incident);
+  if (daemonStory.stage >= 4) {
+    ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
+    ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
+    if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
+  } else {
+    removeFsPath(STORY_FILE_PATHS.lastOperator);
+    removeFsPath(STORY_FILE_PATHS.mirrorProtocol);
+    removeFsPath(STORY_FILE_PATHS.mirrorDat);
+  }
+  if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
+  else removeFsPath(STORY_FILE_PATHS.anchorSeed);
+  if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
+  else removeFsPath(STORY_FILE_PATHS.watchPid);
+  if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
+  else removeFsPath(STORY_FILE_PATHS.quarantineSig);
+  if (daemonStory.endingReached) {
+    removeFsPath(STORY_FILE_PATHS.mirrorDat);
+    removeFsPath(STORY_FILE_PATHS.watchPid);
+  }
+}
+
+function refreshDaemonStoryViews() {
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  applyDaemonVisualState();
+  applyDaemonWindowState();
+  if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
+  if (typeof renderVoid === 'function' && document.getElementById('wb-void')) renderVoid();
+}
+
+function getDaemonVisualStage() {
+  if (daemonStory.endingReached) return 0;
+  if (daemonStory.stage >= 7) return 7;
+  if (daemonStory.stage >= 5) return 5;
+  if (daemonStory.stage >= 4) return 4;
+  return 0;
+}
+
+function scheduleDaemonPulse() {
+  clearTimeout(daemonPulseTimer);
+  daemonPulseTimer = null;
+  const visualStage = getDaemonVisualStage();
+  if (!visualStage) return;
+  const minDelay = visualStage >= 7 ? 3800 : visualStage >= 5 ? 6200 : 9800;
+  const maxDelay = visualStage >= 7 ? 7200 : visualStage >= 5 ? 10800 : 14800;
+  const nextDelay = minDelay + Math.random() * (maxDelay - minDelay);
+  daemonPulseTimer = setTimeout(() => {
+    triggerGlitch({ intensity: visualStage, subtle: true });
+    scheduleDaemonPulse();
+  }, nextDelay);
+}
+
+function applyDaemonVisualState() {
+  const body = document.body;
+  if (!body) return;
+  body.classList.remove('daemon-visual-4', 'daemon-visual-5', 'daemon-visual-7');
+  const visualStage = getDaemonVisualStage();
+  if (visualStage) body.classList.add(`daemon-visual-${visualStage}`);
+  scheduleDaemonPulse();
+}
+
+function applyDaemonWindowState() {
+  const daemonWin = wins['daemon']?.el;
+  const voidWin = wins['void']?.el;
+  if (daemonWin) daemonWin.classList.add('daemon-surface');
+  if (voidWin) voidWin.classList.add('void-surface');
+}
+
+function pulseDaemonWindows(intensity, options) {
+  const subtle = !!options?.subtle;
+  ['daemon', 'void'].forEach(id => {
+    const el = wins[id]?.el;
+    if (!el) return;
+    const x = subtle
+      ? (Math.random() < 0.5 ? -0.75 : 0.75)
+      : intensity >= 7
+        ? (Math.random() < 0.5 ? -2 : 2)
+        : (Math.random() < 0.5 ? -1 : 1);
+    const y = subtle
+      ? 0
+      : intensity >= 7
+        ? (Math.random() < 0.5 ? -1 : 1)
+        : 0;
+    el.style.setProperty('--pulse-x', x + 'px');
+    el.style.setProperty('--pulse-y', y + 'px');
+    el.classList.add('window-afterimage');
+    setTimeout(() => {
+      const current = wins[id]?.el;
+      if (!current || current !== el) return;
+      el.classList.remove('window-afterimage');
+      el.style.removeProperty('--pulse-x');
+      el.style.removeProperty('--pulse-y');
+    }, subtle ? 150 : intensity >= 7 ? 260 : 180);
+  });
+}
+
+function syncDaemonStory(options) {
+  const opts = options || {};
+  daemonNormalizeStory(daemonStory);
+  saveDaemonStory();
+  syncDaemonStoryRegistry();
+  syncDaemonStoryFiles();
+  schedSave();
+  if (!opts.silent) refreshDaemonStoryViews();
+}
+
+function updateDaemonStory(mutator, options) {
+  const before = normalizeDaemonStory(daemonStory);
+  mutator(daemonStory);
+  daemonNormalizeStory(daemonStory);
+  if (!daemonStoryChanged(before) && !options?.forceSync) return false;
+  syncDaemonStory(options);
+  if (options?.glitch) triggerGlitch();
+  if (options?.notice) {
+    const info = typeof options.notice === 'string'
+      ? { message: options.notice, title: 'Containment Notice', icon: '👁️' }
+      : options.notice;
+    osAlert(info.message, info.title || 'Containment Notice', info.icon || '👁️');
+  }
+  return true;
+}
+
+function daemonActivate(trigger) {
+  return updateDaemonStory(story => {
+    if (!story.openedDaemon) {
+      story.openedDaemon = true;
+      story.lastEventText = 'daemon.core observed';
+    } else if (trigger === 'raw' && story.lastEventText === 'none') {
+      story.lastEventText = 'daemon.core observed';
+    }
+  }, { forceSync: true });
+}
+
+function daemonRecordInvestigation(kind) {
+  return updateDaemonStory(story => {
+    if (kind === 'void') story.voidObserved = true;
+    if (kind === 'mirror') story.mirrorInspected = true;
+    if (kind === 'protocol') story.protocolInspected = true;
+    if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+      story.mirrorLockRestored = true;
+      story.lastEventText = 'mirror lattice restored';
+      return;
+    }
+    if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
+      story.lastEventText = 'void channel profiled';
+    }
+  });
+}
+
+function canDeleteAnchorSeed() {
+  return daemonStory.stage >= 4 && Number(getContainmentValue('MIRROR_LOCK')) === 0;
+}
+
+function canAttemptDeleteItem(path, fallbackDir, meta) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
+  if (upperPath === 'VOID.TMP') return true;
+  if (!dirName && ROOT_PROTECTED_DIRS.has(String(fileName || '').toUpperCase())) return false;
+  if (meta?.sysfile) return false;
+  return true;
+}
+
+function deleteVirtualPath(path, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
+  const fileLabel = fileName || path;
+  if (!fileName) return { ok: false, message: 'Usage: DEL <file>' };
+
+  if (upperPath === 'VOID.TMP') {
+    if (daemonStory.endingReached) return { ok: false, message: 'File not found: void.tmp' };
+    if (!daemonStory.quarantineSigned) {
+      return {
+        ok: false,
+        message: 'void.tmp refuses to go quietly.',
+        details: ['A quarantine signature is required before deletion will hold.'],
+      };
+    }
+    if (Number(getContainmentValue('MIRROR_LOCK')) !== 1) {
+      return {
+        ok: false,
+        message: 'void.tmp remains unstable.',
+        details: ['Restore HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 1 before the final delete.'],
+      };
+    }
+    updateDaemonStory(story => {
+      story.endingReached = true;
+      story.lastEventText = 'containment complete';
+    }, {
+      glitch: true,
+      notice: {
+        title: 'Containment Complete',
+        icon: '👁️',
+        message: 'void.tmp collapsed without residue.\n\ndaemon.core has entered an archived state.',
+      },
+    });
+    if (wins['void']) closeWin('void');
+    if (typeof setupIcons === 'function') setupIcons();
+    return {
+      ok: true,
+      deleted: true,
+      details: ['Deleted: void.tmp', 'SYS\\quarantine.sig holds.', 'Containment complete.'],
+    };
+  }
+
+  if (upperPath === 'DAEMON.CORE') {
+    return {
+      ok: false,
+      message: 'Access denied.',
+      details: ['daemon.core is not removable.', 'It remains in archive even when it is no longer active.'],
+    };
+  }
+
+  if (upperPath === '?????.EXE') {
+    return {
+      ok: false,
+      message: 'The launcher refuses deletion.',
+      details: ['If you need it quiet, leave it unopened.'],
+    };
+  }
+
+  if (!dirName && ROOT_PROTECTED_DIRS.has(String(fileName || '').toUpperCase())) {
+    return {
+      ok: false,
+      message: `Cannot delete ${fileLabel}: Access is denied.`,
+      details: ['Core directories are protected.'],
+    };
+  }
+
+  if (upperPath === STORY_FILE_PATHS.anchorSeed.toUpperCase()) {
+    if (!canDeleteAnchorSeed()) {
+      return {
+        ok: false,
+        message: 'anchor.seed will not release.',
+        details: ['Set HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 0 before deleting this file.'],
+      };
+    }
+    if (!removeFsPath(STORY_FILE_PATHS.anchorSeed)) {
+      return { ok: false, message: 'File not found: ' + fileLabel };
+    }
+    updateDaemonStory(story => {
+      story.anchorDeleted = true;
+      story.lastEventText = 'anchor released';
+      daemonVoidFeed = 'The aperture widens. Something on the reflected side notices the room.';
+    }, {
+      glitch: true,
+      notice: {
+        title: 'Anchor Lost',
+        icon: '⬛',
+        message: 'The mirror anchor is gone.\n\nKeep daemon.core and void.tmp isolated from your active work while you inspect the breach.',
+      },
+    });
+    return {
+      ok: true,
+      deleted: true,
+      details: ['Deleted: anchor.seed', 'Mirror anchor released.', 'daemon.core no longer speaks in warnings.'],
+    };
+  }
+
+  if (isVisibleSystemPath(path, { includeExplorer: true })) {
+    return {
+      ok: false,
+      message: `Cannot delete ${fileLabel}: Access is denied.`,
+      details: ['System files are protected.'],
+    };
+  }
+
+  const deleted = removeFsPath(path);
+  if (!deleted) return { ok: false, message: 'File not found: ' + fileLabel };
+  syncDaemonStory({ silent: false });
+  return { ok: true, deleted: true, details: [`Deleted: ${fileLabel}`] };
+}
+
+function killSoulDaemonProcess() {
+  if (daemonStory.stage < 1) {
+    return {
+      ok: false,
+      message: 'ERROR: Access is denied. (PID 512)',
+      details: ['soul_svc.exe is still registered as a protected service.'],
+    };
+  }
+  if (daemonStory.daemonStopped || daemonStory.endingReached) {
+    return { ok: false, message: 'ERROR: The process with PID 512 was not found.' };
+  }
+  if (Number(getContainmentValue('RESPAWN_LOCK')) !== 0) {
+    updateDaemonStory(story => {
+      story.killedSoulDaemon = true;
+      story.falseContainmentSeen = true;
+      story.lastEventText = 'respawn loop observed';
+    }, { glitch: true });
+    return {
+      ok: false,
+      respawned: true,
+      message: 'soul_daemon.exe terminated.',
+      details: [
+        'watch.pid restored the process before the table settled.',
+        'RESPAWN_LOCK is still active.',
+      ],
+    };
+  }
+  updateDaemonStory(story => {
+    story.killedSoulDaemon = true;
+    story.falseContainmentSeen = true;
+    story.respawnDisabledKill = true;
+    story.daemonStopped = true;
+    story.wrongVictory = true;
+    story.lastEventText = 'daemon relay offline';
+    daemonVoidFeed = 'The monitor goes missing. The pressure does not.';
+  }, {
+    glitch: true,
+    notice: {
+      title: 'Monitor Link Lost',
+      icon: '⚠️',
+      message: 'PID 512 stayed dead.\n\nvoid.tmp and CACHE\\mirror.dat should now be treated as active evidence.',
+    },
+  });
+  return {
+    ok: true,
+    stopped: true,
+    message: 'SUCCESS: soul_daemon.exe terminated.',
+    details: [
+      'The process does not respawn.',
+      'Void pressure begins to climb in its absence.',
+    ],
+  };
+}
+
+syncDaemonStory({ silent: true });
 
 // ── Blob persistence (base64 per-file, separate localStorage keys) ─
 const BLOB_PREFIX = 'sleepOS-blob:';
@@ -2332,6 +3413,7 @@ function scriptPathExists(path, dirName) {
   const target = String(path || '').trim();
   if (!target) return false;
   if (target === '.' || target === '..' || target === '\\' || /^C:\\sleepOS\\?$/i.test(target)) return true;
+  if (isVisibleSystemPath(target, { includeExplorer: true })) return true;
   if (fsGetEntry(target, dirName)) return true;
   return !!fsGetDir(fsNormalizeDir(target));
 }
@@ -2590,29 +3672,20 @@ async function execScriptInstruction(inst, labels, state) {
     case 'del':
     case 'rm': {
       if (!resolvedArg) throw makeScriptError('Usage: del <file>', inst.lineNo);
-      const { dirName, fileName } = fsSplitPath(resolvedArg, state.dirName);
-      const dir = fsGetDir(dirName);
-      const upper = String(fileName || '').toUpperCase();
-      if (!dir || !fileName) return null;
-      const _SYS = new Set(['WELCOME.README','TERMINAL.EXE','SYSMON.EXE','NOTEPAD.EXE','BROWSER.EXE','DEFRAG.EXE','CALC.EXE','REGEDIT.EXE','EXPLORER.EXE']);
-      if (_SYS.has(upper)) throw makeScriptError(`Cannot delete ${fileName}: Access is denied.`, inst.lineNo);
-      if (dir.files.has(fileName)) dir.files.delete(fileName);
-      else if (dir.blobs.has(fileName)) {
-        const blob = dir.blobs.get(fileName);
-        if (blob?.url) URL.revokeObjectURL(blob.url);
-        dir.blobs.delete(fileName);
-        removeBlobEntry(dirName, fileName);
-      } else if (dir.dirs.has(upper)) {
-        dir.dirs.delete(upper);
-        dir.subdirs?.delete(upper);
-      }
-      schedSave();
-      document.dispatchEvent(new CustomEvent('fs-changed'));
+      const deletion = deleteVirtualPath(resolvedArg, state.dirName);
+      if (!deletion.ok) throw makeScriptError(deletion.message || ('Cannot delete: ' + resolvedArg), inst.lineNo);
       state.status = 0;
       return null;
     }
     case 'open': {
       if (!resolvedArg) throw makeScriptError('Usage: open <file>', inst.lineNo);
+      if (isVisibleSystemPath(resolvedArg, { includeExplorer: true })) {
+        if (!openSystemFile(fsSplitPath(resolvedArg, state.dirName).fileName)) {
+          throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
+        }
+        state.status = 0;
+        return null;
+      }
       const entry = fsGetEntry(resolvedArg, state.dirName);
       if (!entry) throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
       if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
@@ -3487,6 +4560,28 @@ function clearDesktopSel() {
   desktopSel.clear();
 }
 
+function canDeleteDesktopSystemIcon(ic) {
+  return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
+}
+
+function deleteDesktopSystemIcons(icons) {
+  const targets = (icons || []).filter(canDeleteDesktopSystemIcon);
+  if (!targets.length) return;
+  const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected items?';
+  osConfirm(prompt, 'Delete', ok => {
+    if (!ok) return;
+    const blocked = [];
+    let changed = false;
+    targets.forEach(target => {
+      const result = deleteVirtualPath(target.name);
+      if (result.ok && result.deleted) changed = true;
+      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+    });
+    if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
+    if (changed) clearDesktopSel();
+  }, '🗑️');
+}
+
 function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
@@ -3583,6 +4678,7 @@ function makeDesktopIconEl(ic) {
     const selDivs = [...desktopSel];
     const selIcs  = selDivs.map(d => d._ic);
     const multi   = selDivs.length > 1;
+    const canDeleteSystemFiles = selIcs.some(canDeleteDesktopSystemIcon);
     const items   = [];
     if (multi) {
       items.push({ label: 'Open All (' + selDivs.length + ')', action: () => selIcs.forEach(i => {
@@ -3600,6 +4696,10 @@ function makeDesktopIconEl(ic) {
       if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
         items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
+    }
+    if (canDeleteSystemFiles) {
+      items.push('-');
+      items.push({ label: multi ? 'Delete Deletable Items' : 'Delete', action: () => deleteDesktopSystemIcons(selIcs) });
     }
     if (selIcs.some(i => i.custom)) {
       items.push('-');
@@ -3626,7 +4726,7 @@ function addDesktopShortcut(name, emoji, target, openFn) {
   customDesktopIcons.push(ic);
   saveDesktopShortcuts();
   // Find a free cell (prefer column-first after existing icons)
-  const allIcons = [...DESKTOP_ICONS, ...customDesktopIcons];
+  const allIcons = [...getVisibleDesktopIcons(), ...customDesktopIcons];
   const defaults = iconDefaultPositions(allIcons);
   const { col: dc, row: dr } = defaults[ic.name] || { col: 0, row: 0 };
   const { col, row } = iconFindFreeCell(dc, dr, ic.name);
@@ -3646,7 +4746,7 @@ function setupIcons() {
   const layer = document.getElementById('icons-layer');
   layer.innerHTML = '';
 
-  const allIcons = [...DESKTOP_ICONS, ...customDesktopIcons];
+  const allIcons = [...getVisibleDesktopIcons(), ...customDesktopIcons];
   const saved    = (() => { try { return JSON.parse(localStorage.getItem(ICON_POS_KEY) || '{}'); } catch { return {}; } })();
   const defaults = iconDefaultPositions(allIcons);
   iconPositions  = {};
@@ -4329,8 +5429,14 @@ function getVoidTmpContent() {
   ].join('\n');
 }
 
+function getVoidTmpContent() {
+  return buildVoidTmpRawContent();
+}
+
 function openNotepad(filename, dirName, options) {
   options = options || {};
+  const splitInfo = fsSplitPath(filename, dirName);
+  const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
   // Special handling for .exe files — decompiler view (read-only)
   const normalizedName = (filename || '').toLowerCase();
   const isExe = normalizedName.endsWith('.exe');
@@ -4341,14 +5447,18 @@ function openNotepad(filename, dirName, options) {
     return openDecompilerView(filename);
   }
   if (isDaemonCore) {
-    return openLoreNotepad(filename, DAEMON_CORE_CONTENT, 'daemon.core — [RAW READ]', '👁️');
+    daemonActivate('raw');
+    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core — [RAW READ]', '👁️');
   }
   if (isVoidTmp) {
-    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp — [GARBLED]', '⬛');
+    daemonRecordInvestigation('void');
+    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp — [OBSERVATION]', '⬛');
   }
 
   const entry = filename ? fsGetEntry(filename, dirName) : null;
-  const { dirName: initialDir, fileName } = fsSplitPath(filename, dirName);
+  if (entry && fullPathUpper === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
+  if (entry && fullPathUpper === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
+  const { dirName: initialDir, fileName } = splitInfo;
   const pathKey = filename ? ((initialDir ? initialDir + '\\' : '') + fileName) : String(++_notepadCount);
   const id = 'notepad-' + pathKey.replace(/\W/g,'_');
   const displayName = fileName || 'untitled.txt';
@@ -4683,7 +5793,7 @@ function openExplorer(startPath) {
   }
 
   function getDeletableSelectedItems() {
-    return getSelectedItems().filter(item => !item.sysfile && !item._proj);
+    return getSelectedItems().filter(item => !item._proj && canAttemptDeleteItem(makeFsPath(item.name), cwd, item));
   }
 
   function makeFsPath(name) {
@@ -4843,26 +5953,15 @@ function openExplorer(startPath) {
     const prompt = items.length === 1 ? 'Delete "' + items[0].name + '"?' : 'Delete ' + items.length + ' selected items?';
     osConfirm(prompt, 'Delete', ok => {
       if (!ok) return;
-      const dir = fsGetDir(cwd);
-      if (!dir) return;
+      const blocked = [];
+      let changed = false;
       items.forEach(item => {
-        if (item.kind === 'dir') {
-          dir.dirs.delete(item.name);
-          dir.subdirs?.delete(item.name);
-          return;
-        }
-        if (dir.blobs.has(item.name)) {
-          const blob = dir.blobs.get(item.name);
-          if (blob?.kind === 'image') handleWallpaperFileDelete(cwd, item.name);
-          URL.revokeObjectURL(blob.url);
-          dir.blobs.delete(item.name);
-          removeBlobEntry(cwd, item.name);
-          return;
-        }
-        dir.files.delete(item.name);
+        const result = deleteVirtualPath(makeFsPath(item.name), cwd);
+        if (result.ok && result.deleted) changed = true;
+        else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
       });
-      schedSave();
-      document.dispatchEvent(new CustomEvent('fs-changed'));
+      if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
+      if (changed || blocked.length) document.dispatchEvent(new CustomEvent('fs-changed'));
       render();
     }, '\u{1F5D1}\uFE0F');
   }
@@ -5014,7 +6113,7 @@ function openExplorer(startPath) {
       ['DOCS', ...termFS.dirs].filter((value, index, array) => array.indexOf(value) === index).forEach(dirName => {
         if (dirName !== 'PROJECTS') items.push({ name:dirName, kind:'dir', sysfile:false });
       });
-      const sysFileNames = new Set(['WELCOME.README','TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','void.tmp','daemon.core','?????.exe']);
+      const sysFileNames = new Set(getRootSystemFiles({ includeExplorer: false }));
       sysFileNames.forEach(name => items.push({ name, kind:'file', sysfile:true }));
       termFS.files.forEach((_, name) => { if (!sysFileNames.has(name)) items.push({ name, kind:'file', sysfile:false }); });
       termFS.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
@@ -5429,6 +6528,10 @@ function openTerminal(startDir, initialCommand) {
   function launchTerminalTarget(rawTarget) {
     const key = resolveShellText(rawTarget).trim().toLowerCase();
     if (!key) return false;
+    if (key === 'void.tmp' && daemonStory.endingReached) {
+      print('void.tmp is no longer present.');
+      return true;
+    }
 
     const openExplorerAtCwd = () => openExplorer(cwd || '');
     const launchers = {
@@ -5452,9 +6555,9 @@ function openTerminal(startDir, initialCommand) {
       'regedit.exe': { lines: ['Starting REGEDIT.exe...'], action: openRegedit },
       regedit: { lines: ['Starting REGEDIT.exe...'], action: openRegedit },
       'daemon.core': {
-        lines: ['Opening daemon.core...', 'It is already open.', 'It has always been open.'],
+        lines: ['Opening daemon.core...'],
         action: openDaemon,
-        delay: 400,
+        delay: 320,
       },
       'void.tmp': { lines: ['Opening void.tmp...'], action: openVoid },
       '?????.exe': { lines: ['Executing ?????.exe...'], action: openUnknown },
@@ -5556,19 +6659,10 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    ..`,
         `11/13/2024  10:31    <DIR>    DOCS`,
         `11/13/2024  10:31    <DIR>    PROJECTS`,
-        `11/13/2024  10:31      623    WELCOME.README`,
-        `11/13/2024  10:31    4,096    NOTEPAD.exe`,
-        `11/13/2024  10:31    4,096    TERMINAL.exe`,
-        `11/13/2024  10:31    8,192    SYSMON.exe`,
-        `11/13/2024  10:31    8,192    BROWSER.exe`,
-        `11/13/2024  10:31    8,192    DEFRAG.exe`,
-        `11/13/2024  10:31    4,096    CALC.exe`,
-        `11/13/2024  10:31    8,192    REGEDIT.exe`,
-        `11/13/2024  10:31    8,192    EXPLORER.exe`,
-        `11/13/2024  03:17        0    void.tmp`,
-        `11/13/2024  ??:??       ??    daemon.core`,
-        `11/13/2024  ??:??       ??    ?????.exe`,
       ].forEach(line => lines.push(line));
+      getTerminalRootSystemEntries({ includeExplorer: true }).forEach(entry => {
+        lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
+      });
       termFS.dirs.forEach(d => { if (d !== 'DOCS') lines.push(`${ds}  ${ts}    <DIR>    ${d}`); });
       termFS.files.forEach((c, n) => lines.push(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
       termFS.blobs.forEach((b, n) => lines.push(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
@@ -5587,18 +6681,11 @@ function openTerminal(startDir, initialCommand) {
       '  PID   CPU    MEM   PROCESS',
       '  ---   ---    ---   -------',
     ];
-    [
-      ['0001', '0.0%', ' 2.1%', 'System Idle'],
-      ['0004', '0.3%', ' 4.8%', 'kernel.exe'],
-      ['0088', '1.2%', '12.4%', 'sleep_gui.exe'],
-      ['0112', '0.8%', ' 8.3%', 'dream_fragment.exe'],
-      ['0247', '3.1%', '22.7%', 'noise_engine.exe'],
-      ['0333', '0.0%', ' 0.1%', 'UNKNOWN'],
-      ['0334', '0.0%', ' 0.1%', 'UNKNOWN'],
-      ['0335', '0.0%', ' 0.1%', 'UNKNOWN'],
-      ['0512', '7.4%', '31.2%', 'soul_daemon.exe'],
-      ['0999', '0.0%', '  ???', 'void.exe'],
-    ].forEach(([pid, cpu, mem, name]) => lines.push(`  ${pid}  ${cpu}  ${mem}  ${name}`));
+    getBuiltInProcesses().forEach(proc => {
+      lines.push(`  ${String(proc.pid).padStart(4, '0')}  ${String(proc.cpu.toFixed(1)).padStart(3)}%  ${String(proc.mem.toFixed(1)).padStart(4)}%  ${proc.name}`);
+    });
+    [['0333', '0.0%', ' 0.1%', 'UNKNOWN'], ['0334', '0.0%', ' 0.1%', 'UNKNOWN'], ['0335', '0.0%', ' 0.1%', 'UNKNOWN']]
+      .forEach(([pid, cpu, mem, name]) => lines.push(`  ${pid}  ${cpu}  ${mem}  ${name}`));
     return lines;
   }
 
@@ -5673,10 +6760,12 @@ function openTerminal(startDir, initialCommand) {
         [...sub.blobs.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
       }
     });
-    ['WELCOME.README', 'TERMINAL.exe', 'SYSMON.exe', 'NOTEPAD.exe', 'BROWSER.exe', 'DEFRAG.exe',
-     'CALC.exe', 'REGEDIT.exe', 'EXPLORER.exe', 'void.tmp',
-     'daemon.core              [UNREADABLE]', '?????.exe                [DO NOT EXECUTE]'
-    ].forEach(n => lines.push(`├── ${n}`));
+    getRootSystemFiles({ includeExplorer: true }).forEach(name => {
+      let label = name;
+      if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
+      if (name === '?????.exe') label = daemonStory.stage >= 7 ? '?????.exe                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
+      lines.push(`├── ${label}`);
+    });
     termFS.files.forEach((_, n) => lines.push(`├── ${n}`));
     termFS.blobs.forEach((b, n) => lines.push(`├── ${n}  [${b.kind}]`));
     lines.push('└── PROJECTS\\');
@@ -5688,8 +6777,20 @@ function openTerminal(startDir, initialCommand) {
   }
 
   function getPipeableText(path) {
+    const { dirName, fileName } = fsSplitPath(path, cwd);
+    const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
+    if (upperPath === 'DAEMON.CORE') {
+      daemonActivate('raw');
+      return buildDaemonCoreRawContent().split('\n');
+    }
+    if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
+      daemonRecordInvestigation('void');
+      return getVoidTmpContent().split('\n');
+    }
     const entry = fsGetEntry(path, cwd);
     if (!entry) throw new Error('File not found: ' + path);
+    if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
+    if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
     if (entry.kind === 'blob') {
       return [
         `Binary file: ${entry.fileName} (${entry.value.kind}, ${fmtSize(entry.value.size)})`,
@@ -6114,40 +7215,10 @@ function openTerminal(startDir, initialCommand) {
     },
     del: (args) => {
       const raw = (args || '').trim();
-      const f = raw.toLowerCase();
-      if (!f) { print('Usage: DEL [filename]'); return; }
-      if (f === 'void.tmp') {
-        print(`Deleting ${raw}...`);
-        setTimeout(() => {
-          print('Delete failed.', '#ff4444');
-          print('void.tmp cannot be deleted.');
-          print('void.tmp has always been here.');
-          print('void.tmp will always be here.');
-        }, 500);
-      } else if (f === 'daemon.core') {
-        print(`Deleting ${raw}...`);
-        setTimeout(() => { print('Access denied.', '#ff4444'); print('The file is currently in use by: SYSTEM, UNKNOWN, UNKNOWN, UNKNOWN'); }, 400);
-      } else if (f === '?????.exe') {
-        print('You cannot delete this file.');
-        print('It deleted itself before you asked.');
-        print('It is still here.');
-      } else {
-        const dir = fsGetDir(cwd);
-        const upper = raw.toUpperCase();
-        const SYS_FILES = new Set(['WELCOME.README','TERMINAL.EXE','SYSMON.EXE','NOTEPAD.EXE','BROWSER.EXE','DEFRAG.EXE','CALC.EXE','REGEDIT.EXE','EXPLORER.EXE']);
-        if (SYS_FILES.has(upper)) {
-          print(`Cannot delete ${raw}: Access is denied.`, '#ff4444');
-          print('System files are protected and cannot be deleted.');
-        } else if (dir.files.has(raw)) {
-          dir.files.delete(raw); schedSave(); print(`Deleted: ${raw}`);
-        } else if (dir.blobs.has(raw)) {
-          const b = dir.blobs.get(raw); URL.revokeObjectURL(b.url); dir.blobs.delete(raw); removeBlobEntry(cwd, raw); schedSave(); print(`Deleted: ${raw}`);
-        } else if (dir.dirs.has(upper)) {
-          dir.dirs.delete(upper); dir.subdirs?.delete(upper); schedSave(); print(`Removed directory: ${upper}`);
-        } else {
-          print(`File not found: ${raw}`);
-        }
-      }
+      if (!raw) { print('Usage: DEL [filename]'); return; }
+      const result = deleteVirtualPath(raw, cwd);
+      if (!result.ok) print(result.message || `Cannot delete ${raw}`, '#ff4444');
+      (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
     },
     rm: (args) => CMDS.del(args),
     copy: (args) => {
@@ -6201,23 +7272,17 @@ function openTerminal(startDir, initialCommand) {
       const pidStr = (args || '').replace(/\D/g,'');
       if (!pidStr) { print('Usage: TASKKILL <pid>'); return; }
       const pid = parseInt(pidStr, 10);
-      // System / lore PIDs that can't be killed
-      const SYS_PIDS = { 4:'System', 52:'csrss.exe', 116:'services.exe', 124:'lsass.exe', 280:'svchost.exe', 312:'svchost.exe', 440:'dream_kernel.exe', 666:'daemon.core', 1024:'soul_svc.exe' };
-      if (pid in SYS_PIDS) {
-        print(`Terminating ${SYS_PIDS[pid]} (PID ${pid})...`);
-        setTimeout(() => {
-          print(`ERROR: Access is denied. (PID ${pid})`, '#ff4444');
-          print('System processes cannot be terminated.');
-        }, 600);
+      if (pid === 512) {
+        const result = killSoulDaemonProcess();
+        print(result.message, result.ok ? undefined : '#ff4444');
+        (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
         return;
       }
-      if (pid === 512) {
-        print('Terminating void_monitor.exe (PID 512)...');
-        setTimeout(() => {
-          print('void_monitor.exe terminated.', '#ff4444');
-          print('Void Pressure: UNMONITORED');
-          print('Restarting void_monitor.exe... [automatic]');
-        }, 500);
+      const builtIn = findBuiltInProcess(pid);
+      if (builtIn) {
+        print(`Terminating ${builtIn.name} (PID ${pid})...`);
+        print(`ERROR: Access is denied. (PID ${pid})`, '#ff4444');
+        print('System processes cannot be terminated.');
         return;
       }
       // Look up real window by PID
@@ -6267,37 +7332,36 @@ function openTerminal(startDir, initialCommand) {
     },
     cat: (args) => {
       const raw = (args||'').trim();
-      const f = raw.toLowerCase();
-      if (f === 'void.tmp') {
-        print('');
-        setTimeout(() => { print(''); setTimeout(() => { print('[process terminated]', '#ff4444'); }, 600); }, 400);
-      } else if (f === 'daemon.core') {
-        print('Error: Cannot read daemon.core', '#ff4444');
-        print('  The file is currently being written.');
-        print('  It is always being written.');
-      } else {
-        // Support DIR/filename paths
-        let dirObj, fname;
-        const slash = raw.indexOf('/') !== -1 ? raw.indexOf('/') : raw.indexOf('\\');
-        if (slash !== -1) {
-          dirObj = fsGetDir(raw.slice(0, slash).toUpperCase());
-          fname  = raw.slice(slash + 1);
-        } else {
-          dirObj = fsGetDir(cwd);
-          fname  = raw;
-        }
-        if (dirObj && dirObj.files.has(fname)) {
-          const content = dirObj.files.get(fname);
-          if (content === '') print('(empty file)');
-          else content.split('\n').forEach(l => print(l));
-        } else if (dirObj && dirObj.blobs.has(fname)) {
-          const b = dirObj.blobs.get(fname);
-          print(`Binary file: ${fname} (${b.kind}, ${fmtSize(b.size)})`);
-          print(`Use OPEN ${fname} to view it.`);
-        } else {
-          print('File not found: ' + (raw || '(no argument given)'));
-        }
+      if (!raw) { print('Usage: CAT <file>'); return; }
+      const { dirName, fileName } = fsSplitPath(raw, cwd);
+      const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
+      if (upperPath === 'DAEMON.CORE') {
+        daemonActivate('raw');
+        buildDaemonCoreRawContent().split('\n').forEach(line => print(line));
+        return;
       }
+      if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
+        daemonRecordInvestigation('void');
+        getVoidTmpContent().split('\n').forEach(line => print(line));
+        return;
+      }
+      const entry = fsGetEntry(raw, cwd);
+      if (!entry) {
+        print('File not found: ' + raw);
+        return;
+      }
+      if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
+      if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
+      if (entry.kind === 'blob') {
+        print(`Binary file: ${entry.fileName} (${entry.value.kind}, ${fmtSize(entry.value.size)})`);
+        print(`Use OPEN ${entry.fileName} to view it.`);
+        return;
+      }
+      if (entry.value === '') {
+        print('(empty file)');
+        return;
+      }
+      entry.value.split('\n').forEach(line => print(line));
     },
     start: (args) => {
       if (!args) { print('Usage: START [program]'); return; }
@@ -6339,6 +7403,12 @@ function openTerminal(startDir, initialCommand) {
     open: (args) => {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: OPEN [filename]'); return; }
+      const split = fsSplitPath(raw, cwd);
+      if (isVisibleSystemPath(raw, { includeExplorer: true })) {
+        print(`Opening ${split.fileName}...`);
+        setTimeout(() => openSystemFile(split.fileName), 300);
+        return;
+      }
       const entry = fsGetEntry(raw, cwd);
       if (entry && entry.kind === 'blob') {
         print(`Opening ${raw}...`);
@@ -6784,19 +7854,6 @@ function openSysmon() {
   procPanel.appendChild(procList);
   content.appendChild(procPanel);
 
-  // System background processes
-  const SYS_PROCS = [
-    { pid:4,    name:'System',           cpu:0.1, mem:0.5  },
-    { pid:52,   name:'csrss.exe',        cpu:0.1, mem:1.2  },
-    { pid:116,  name:'services.exe',     cpu:0.2, mem:2.1  },
-    { pid:124,  name:'lsass.exe',        cpu:0.3, mem:3.4  },
-    { pid:280,  name:'svchost.exe',      cpu:0.5, mem:4.8  },
-    { pid:312,  name:'svchost.exe',      cpu:0.1, mem:2.3  },
-    { pid:440,  name:'dream_kernel.exe', cpu:1.2, mem:8.5  },
-    { pid:512,  name:'void_monitor.exe', cpu:0.4, mem:5.2  },
-    { pid:666,  name:'daemon.core',      cpu:2.1, mem:12.3 },
-    { pid:1024, name:'soul_svc.exe',     cpu:0.7, mem:6.1  },
-  ];
   function getProcessList() {
     const procs = [];
     Object.entries(wins).forEach(([id, w]) => {
@@ -6805,7 +7862,13 @@ function openSysmon() {
       procs.push({ pid: pidFromId(id), name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
     });
     if (showSysProcs) {
-      SYS_PROCS.forEach(p => procs.push({ ...p, cpu: parseFloat((p.cpu + (Math.random()-0.5)*0.2).toFixed(1)), mem: parseFloat((p.mem + (Math.random()-0.5)*0.3).toFixed(1)), winId: null, isSystem: true }));
+      getBuiltInProcesses().forEach(p => procs.push({
+        ...p,
+        cpu: parseFloat((p.cpu + (Math.random() - 0.5) * 0.2).toFixed(1)),
+        mem: parseFloat((p.mem + (Math.random() - 0.5) * 0.3).toFixed(1)),
+        winId: null,
+        isSystem: true,
+      }));
     }
     return procs.sort((a, b) => a.pid - b.pid);
   }
@@ -6829,6 +7892,13 @@ function openSysmon() {
   procToolbar.querySelector('#sm-kill-btn').addEventListener('click', () => {
     if (!selectedProc) return;
     if (selectedProc.isSystem) {
+      if (selectedProc.pid === 512) {
+        const result = killSoulDaemonProcess();
+        selectedProc = null;
+        renderProcesses();
+        osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), result.ok ? 'Process Update' : 'Access Denied', '⚠️');
+        return;
+      }
       const dlgId = 'sm-killerr-' + Date.now();
       if (mkWin({ id:dlgId, title:'Access Denied', icon:'\u26a0\ufe0f', w:290, h:110, popup:true, menubar:false, statusbar:false })) {
         const db = document.getElementById('wb-' + dlgId);
@@ -6914,7 +7984,7 @@ function openSysmon() {
     const up = document.getElementById('sm-uptime');
     if (up) up.textContent = `${String(Math.floor(sec/3600)).padStart(2,'0')}:${String(Math.floor((sec%3600)/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
     const ct = document.getElementById('sm-proc-count');
-    if (ct) ct.textContent = Object.keys(wins).length + (showSysProcs ? SYS_PROCS.length : 0);
+    if (ct) ct.textContent = Object.keys(wins).length + (showSysProcs ? getBuiltInProcesses().length : 0);
     if (activeTab === 'processes') renderProcesses();
   }
 
@@ -7354,6 +8424,327 @@ function runUnknown() {
 // ─────────────────────────────────────────────────────────────────
 // BROWSER
 // ─────────────────────────────────────────────────────────────────
+function renderDaemonPanel() {
+  const body = document.getElementById('wb-daemon');
+  if (!body) return;
+  applyDaemonWindowState();
+  const title = document.getElementById('wtitle-daemon');
+  if (title) title.textContent = daemonStory.endingReached ? 'daemon.core — Archive' : 'daemon.core — Containment';
+  const telemetry = getContainmentTelemetry();
+  const mirrorLockActive = telemetry.mirrorLockActive;
+  const checklist = getContainmentChecklist();
+  const status = daemonStory.endingReached
+    ? 'Contained'
+    : daemonStory.stage >= 7 && !mirrorLockActive
+      ? 'Seal Interrupted'
+      : daemonStageLabel(daemonStory.stage);
+  const statusColor = daemonStory.endingReached
+    ? '#006400'
+    : daemonStory.stage >= 7 && !mirrorLockActive
+      ? '#aa5500'
+      : daemonStory.stage >= 5
+        ? '#800080'
+        : daemonStory.stage >= 4
+          ? '#aa0000'
+          : '#000080';
+  const notes = [];
+  if (daemonStory.endingReached) {
+    notes.push('Containment complete. The archive is quiet.');
+  } else if (daemonStory.stage >= 7 && !mirrorLockActive) {
+    notes.push('The seal lattice was ready, then the mirror lock dropped again.');
+    notes.push('Restore MIRROR_LOCK to 1 before you run ?????.exe or delete void.tmp.');
+  } else if (daemonStory.stage >= 7) {
+    notes.push('The seal lattice is ready. Run ?????.exe to write SYS\\quarantine.sig, then delete void.tmp.');
+  } else if (daemonStory.stage >= 5) {
+    notes.push('You removed the anchor. The mirror is no longer deflected away from the user.');
+    notes.push('Inspect void.tmp and CACHE\\mirror.dat. Restore MIRROR_LOCK when you are done.');
+  } else if (daemonStory.stage >= 4) {
+    notes.push('PID 512 stayed dead. The quiet that followed was a failure state, not a victory.');
+    notes.push('Inspect void.tmp and CACHE\\mirror.dat.');
+  } else if (daemonStory.stage >= 2) {
+    notes.push('The watch layer answered your kill attempt. RESPAWN_LOCK must be cleared before PID 512 will stay down.');
+  } else {
+    notes.push('This file is the restraint, not the intrusion.');
+    notes.push('Open the raw read, then check DOCS for the first containment note.');
+  }
+  const gauge = value => `<div style="height:6px;border:1px solid #8f8f8f;background:#dadada;"><div style="height:100%;width:${Math.max(0, Math.min(100, value))}%;background:#000080;"></div></div>`;
+  body.innerHTML = `
+    <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:11px;line-height:1.5;">
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <div style="font-size:42px;line-height:1;">👁️</div>
+        <div style="flex:1;">
+          <div><b>File:</b> daemon.core</div>
+          <div><b>Status:</b> <span style="color:${statusColor};font-weight:bold">${status}</span></div>
+          <div><b>Containment:</b> <span style="color:${telemetry.rating.color};font-weight:bold">${telemetry.rating.code} / ${telemetry.rating.label}</span></div>
+          <div><b>Observed:</b> ${daemonStory.openedDaemon ? 'yes' : 'no'}</div>
+          <div><b>Last Event:</b> ${escHtml(daemonStory.lastEventText || 'none')}</div>
+          <div><b>Mirror Lock:</b> ${telemetry.mirrorLockActive ? '1' : '0'}</div>
+          <div><b>Respawn Lock:</b> ${telemetry.respawnLockActive ? '1' : '0'}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
+          <div><b>Void Pressure</b> ${telemetry.pressure}</div>
+          ${gauge(telemetry.pressure)}
+        </div>
+        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
+          <div><b>Lattice Stability</b> ${telemetry.lattice}</div>
+          ${gauge(telemetry.lattice)}
+        </div>
+        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
+          <div><b>Signal Depth</b> ${telemetry.signalDepth}</div>
+          ${gauge(telemetry.signalDepth)}
+        </div>
+        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
+          <div><b>Aperture Bias</b></div>
+          <div style="margin-top:4px;color:${telemetry.bias === 'user-facing' ? '#8a0036' : telemetry.bias === 'sealed' ? '#0a7a2a' : '#005f73'};font-weight:bold;text-transform:uppercase;">${telemetry.bias}</div>
+        </div>
+      </div>
+      <div style="border:1px solid #b0b0b0;background:#fff;padding:8px;min-height:78px;">
+        ${notes.map(line => `<div>${escHtml(line)}</div>`).join('')}
+      </div>
+      ${daemonStory.stage >= 4 ? `
+        <div style="border:1px solid #b0b0b0;background:#f7f7f7;padding:8px;">
+          <div style="font-weight:bold;margin-bottom:4px;">Containment Checklist</div>
+          ${checklist.map(item => `<div style="display:flex;align-items:center;gap:6px;color:${item.done ? '#0a662f' : '#555'};"><span style="font-weight:bold;width:12px;">${item.done ? '■' : '□'}</span><span>${escHtml(item.label)}</span></div>`).join('')}
+        </div>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <button class="dlg-btn" onclick="openNotepad('daemon.core')">Raw Read</button>
+        ${daemonStory.stage >= 4 && !daemonStory.endingReached ? `<button class="dlg-btn" onclick="openVoid()">Open void.tmp</button>` : ''}
+      </div>
+      <div style="text-align:right;">
+        <button class="dlg-btn primary" onclick="closeWin('daemon')">Close</button>
+      </div>
+    </div>`;
+  resizeDaemonWindow();
+}
+
+function resizeDaemonWindow() {
+  const daemonWin = wins.daemon?.el;
+  const body = document.getElementById('wb-daemon');
+  if (!daemonWin || !body) return;
+  if (wins.daemon.maximized) return;
+  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  if (isMobile) return;
+  const desktop = document.getElementById('desktop');
+  if (!desktop) return;
+  const stage = daemonStory.stage || 0;
+  const targetWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
+  const contentHeight = Math.ceil(body.scrollHeight);
+  const targetHeight = stage >= 7
+    ? Math.max(500, contentHeight + 76)
+    : stage >= 3
+      ? Math.max(470, contentHeight + 72)
+      : Math.max(430, contentHeight + 68);
+  const maxWidth = Math.max(360, desktop.clientWidth - 24);
+  const maxHeight = Math.max(320, desktop.clientHeight - 24);
+  const nextWidth = Math.min(maxWidth, Math.max(daemonWin.offsetWidth, targetWidth));
+  const nextHeight = Math.min(maxHeight, Math.max(daemonWin.offsetHeight, targetHeight));
+  daemonWin.style.width = nextWidth + 'px';
+  daemonWin.style.height = nextHeight + 'px';
+  const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
+  const maxTop = Math.max(0, desktop.clientHeight - nextHeight);
+  const currentLeft = parseFloat(daemonWin.style.left) || 0;
+  const currentTop = parseFloat(daemonWin.style.top) || 0;
+  daemonWin.style.left = Math.max(0, Math.min(maxLeft, currentLeft)) + 'px';
+  daemonWin.style.top = Math.max(0, Math.min(maxTop, currentTop)) + 'px';
+}
+
+function openDaemon() {
+  daemonActivate('panel');
+  const stage = daemonStory.stage || 0;
+  const initialWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
+  const initialHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
+  if (!mkWin({ id:'daemon', title:'daemon.core — Containment', icon:'👁️', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
+  renderDaemonPanel();
+}
+
+function daemonVoidAction(mode) {
+  const telemetry = getContainmentTelemetry();
+  if (mode === 'observe') {
+    daemonVoidFeed = daemonStory.stage >= 5
+      ? 'The file is no longer empty. It is only narrow.'
+      : daemonStory.stage >= 4
+        ? 'Pressure is measurable. Silence is not safety.'
+        : 'Nothing stable answers yet.';
+  } else if (mode === 'measure') {
+    daemonVoidFeed = [
+      `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
+      `void pressure: ${telemetry.pressure}`,
+      `lattice stability: ${telemetry.lattice}`,
+      `signal depth: ${telemetry.signalDepth}`,
+      `aperture bias: ${telemetry.bias}`,
+    ].join('\n');
+  } else if (mode === 'listen') {
+    daemonVoidFeed = daemonStory.stage >= 5
+      ? 'The reflected side does not speak in words. It leans.'
+      : daemonStory.stage >= 4
+        ? 'You hear the shape of a voice through the monitor gap.'
+        : 'Static. Then the suggestion of a room tone.';
+  } else if (mode === 'trace') {
+    daemonVoidFeed = daemonStory.stage >= 5
+      ? 'trace path:\n  daemon.core -> mirror offset -> void.tmp\n  return latency remains non-local'
+      : daemonStory.stage >= 4
+        ? 'trace path:\n  monitor gap -> pressure rise -> reflected surface'
+        : 'No stable trace path yet.';
+  } else if (mode === 'sample') {
+    daemonVoidFeed = daemonStory.stage >= 5
+      ? 'sample:\n  carrier mismatch: confirmed\n  human voice match: negative\n  reflected side remains coherent'
+      : daemonStory.stage >= 4
+        ? 'sample:\n  carrier unstable\n  monitor loss amplified the return path'
+        : 'Sampling window too narrow.';
+  } else if (mode === 'stabilize') {
+    daemonVoidFeed = telemetry.mirrorLockActive
+      ? daemonStory.quarantineSigned
+        ? 'stabilize:\n  seal lattice catches for 0.8s\n  pressure drops in stepped increments'
+        : 'stabilize:\n  mirror lock absorbs part of the return\n  pressure hesitates, then climbs again'
+      : 'stabilize refused:\n  MIRROR_LOCK=0\n  aperture remains user-facing';
+    triggerGlitch({ intensity: daemonStory.stage >= 7 ? 7 : daemonStory.stage >= 5 ? 5 : 4 });
+  } else if (mode === 'pulse') {
+    daemonVoidFeed = daemonStory.quarantineSigned
+      ? 'The quarantine signature holds. The aperture recoils.'
+      : daemonStory.stage >= 5
+        ? 'A pulse returns late, as if the file were farther away than the disk.'
+        : 'The pulse dissipates without a readable return.';
+    if (daemonStory.stage >= 5) triggerGlitch();
+  }
+  daemonRecordInvestigation('void');
+  const out = document.getElementById('void-readout');
+  if (out) out.textContent = daemonVoidFeed;
+}
+
+function renderVoid() {
+  const body = document.getElementById('wb-void');
+  if (!body) return;
+  applyDaemonWindowState();
+  const title = document.getElementById('wtitle-void');
+  if (title) title.textContent = daemonStory.endingReached ? 'void.tmp — Sealed' : 'void.tmp';
+  body.style.cssText = 'background:#000;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:10px;';
+  const telemetry = getContainmentTelemetry();
+  const pressure = telemetry.pressure;
+  const summary = daemonStory.endingReached
+    ? 'No active signal remains.'
+    : daemonStory.stage >= 5
+      ? 'Observation window open. Keep interaction bounded.'
+      : daemonStory.stage >= 4
+        ? 'Pressure rose after the daemon relay went quiet.'
+        : 'No stable observation channel yet.';
+  const readout = daemonVoidFeed || summary;
+  body.innerHTML = `
+    <div style="border:1px solid #123512;background:#030703;color:#7fd37f;padding:8px;font-size:11px;line-height:1.5;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div>
+        <div><b>CONTAINMENT:</b> ${telemetry.rating.code}</div>
+        <div style="color:${telemetry.rating.color};font-weight:bold;">${telemetry.rating.label}</div>
+      </div>
+      <div>
+        <div><b>BIAS:</b> ${telemetry.bias.toUpperCase()}</div>
+        <div><b>QUARANTINE:</b> ${daemonStory.quarantineSigned ? 'present' : 'missing'}</div>
+      </div>
+      <div>
+        <div><b>VOID PRESSURE:</b> ${pressure}</div>
+        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, pressure))}%;background:#6ab56a;"></div></div>
+      </div>
+      <div>
+        <div><b>LATTICE:</b> ${telemetry.lattice}</div>
+        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, telemetry.lattice))}%;background:#7fd37f;"></div></div>
+      </div>
+      <div>
+        <div><b>SIGNAL DEPTH:</b> ${telemetry.signalDepth}</div>
+        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, telemetry.signalDepth))}%;background:#9ee29e;"></div></div>
+      </div>
+      <div>
+        <div><b>MIRROR LOCK:</b> ${telemetry.mirrorLockActive ? '1' : '0'}</div>
+        <div><b>DELETE AUTH:</b> ${telemetry.deleteAuthorized ? 'yes' : 'no'}</div>
+      </div>
+    </div>
+    <div id="void-readout" style="flex:1;border:1px solid #123512;background:#020402;color:#6ab56a;padding:10px;font-size:11px;line-height:1.7;white-space:pre-wrap;">${escHtml(readout)}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;">
+      <button class="dlg-btn" onclick="daemonVoidAction('observe')">Observe</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('measure')">Measure</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('listen')">Listen</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('trace')">Trace</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('sample')">Sample</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('stabilize')">Stabilize</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('pulse')">Pulse</button>
+      <button class="dlg-btn primary" onclick="closeWin('void')">Close</button>
+    </div>`;
+  resizeVoidWindow();
+}
+
+function resizeVoidWindow() {
+  const voidWin = wins.void?.el;
+  if (!voidWin || wins.void.maximized) return;
+  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  if (isMobile) return;
+  const desktop = document.getElementById('desktop');
+  if (!desktop) return;
+  const nextHeight = Math.min(Math.max(360, desktop.clientHeight - 24), Math.max(voidWin.offsetHeight, 380));
+  voidWin.style.height = nextHeight + 'px';
+  const maxTop = Math.max(0, desktop.clientHeight - nextHeight);
+  const currentTop = parseFloat(voidWin.style.top) || 0;
+  voidWin.style.top = Math.max(0, Math.min(maxTop, currentTop)) + 'px';
+}
+
+function openVoid() {
+  if (daemonStory.endingReached) {
+    osAlert('void.tmp is no longer present.', 'void.tmp', '⬛');
+    return;
+  }
+  daemonRecordInvestigation('void');
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:400, h:380, x:220, y:150, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  renderVoid();
+}
+
+function openUnknown() {
+  const wid = 'unk-warn-' + Date.now();
+  if (!mkWin({ id:wid, title:'?????.exe', icon:'❓', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
+  const ready = daemonStory.stage >= 7 && !daemonStory.endingReached && Number(getContainmentValue('MIRROR_LOCK')) === 1;
+  const signed = daemonStory.quarantineSigned;
+  document.getElementById('wb-' + wid).innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon">❓</div>
+      <div class="dlg-text">
+        ${signed
+          ? 'SYS\\quarantine.sig is already present.<br><br>The launcher is waiting for the final delete.'
+          : ready
+          ? 'The quarantine launcher is armed.<br><br>Running <b>?????.exe</b> will write <b>SYS\\quarantine.sig</b>.'
+          : 'The launcher is inert right now.<br><br>Restore the mirror and finish the investigation before you try to use it.'}
+      </div>
+    </div>
+    <div class="dlg-btns">
+      <button class="dlg-btn primary" onclick="closeWin('${wid}');runUnknown()">${signed ? 'Check Status' : ready ? 'Generate Signature' : 'Run Anyway'}</button>
+      <button class="dlg-btn" onclick="closeWin('${wid}')">Cancel</button>
+    </div>`;
+}
+
+function runUnknown() {
+  let message = '';
+  if (daemonStory.endingReached) {
+    message = 'The quarantine launcher has been archived.\nThere is nothing left to sign.';
+  } else if (daemonStory.stage < 7 || Number(getContainmentValue('MIRROR_LOCK')) !== 1) {
+    message = '?????.exe does not execute.\n\nThe launcher is waiting for a restored mirror lattice.';
+  } else if (!daemonStory.quarantineSigned) {
+    updateDaemonStory(story => {
+      story.quarantineSigned = true;
+      story.lastEventText = 'quarantine signature written';
+      daemonVoidFeed = 'A signature passes through the aperture and the pressure drops.';
+    }, {
+      glitch: true,
+    });
+    message = 'quarantine.sig written.\n\nDelete void.tmp to complete containment.';
+  } else {
+    message = 'SYS\\quarantine.sig is already present.\n\nThe launcher has nothing else to do.';
+  }
+  const rid = 'unk-result-' + Date.now();
+  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:360, h:220, x:180, y:110, menubar:false, statusbar:false })) return;
+  document.getElementById('wb-' + rid).innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon">❓</div>
+      <div class="dlg-text" style="white-space:pre-line;">${escHtml(message)}</div>
+    </div>
+    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
+}
+
 function openBrowser() {
   if (!mkWin({ id:'browser', title:'sleepWEB — Web Browser', icon:'🌐', w:640, h:460, x:80, y:50 })) return;
 
@@ -7664,15 +9055,49 @@ function openBrowser() {
 // ─────────────────────────────────────────────────────────────────
 // GLITCH EFFECT
 // ─────────────────────────────────────────────────────────────────
-function triggerGlitch() {
+function triggerGlitch(options) {
   const desktop = document.getElementById('desktop');
-  desktop.classList.add('glitching');
-  setTimeout(() => desktop.classList.remove('glitching'), 650);
+  const windowsLayer = document.getElementById('windows-layer');
+  const taskbar = document.getElementById('taskbar');
+  const glitch = document.getElementById('glitch');
+  const intensity = Number(options?.intensity) || 0;
+  const subtle = !!options?.subtle;
+  pulseDaemonWindows(intensity, { subtle });
+  const targets = [desktop, windowsLayer, taskbar].filter(Boolean);
+  const glitchClass = subtle ? 'glitching-soft' : 'glitching';
+  targets.forEach(el => el.classList.add(glitchClass));
+  setTimeout(() => targets.forEach(el => {
+    el.classList.remove('glitching');
+    el.classList.remove('glitching-soft');
+  }), subtle ? 420 : intensity >= 7 ? 900 : intensity >= 5 ? 760 : 650);
+
+  if (glitch) {
+    glitch.style.display = 'block';
+    glitch.style.background = intensity >= 7
+      ? 'linear-gradient(90deg, rgba(255,0,120,0.14), transparent 22%, rgba(80,255,255,0.18) 58%, transparent 78%), repeating-linear-gradient(180deg, rgba(255,255,255,0.04) 0 2px, transparent 2px 6px)'
+      : intensity >= 5
+        ? 'linear-gradient(90deg, rgba(255,0,80,0.09), transparent 28%, rgba(90,255,240,0.12) 64%, transparent 82%), repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 8px)'
+        : 'linear-gradient(90deg, rgba(255,255,255,0.06), transparent 50%, rgba(120,255,255,0.06)), repeating-linear-gradient(180deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 10px)';
+    glitch.style.opacity = subtle
+      ? intensity >= 7 ? '0.54' : intensity >= 5 ? '0.38' : '0.24'
+      : intensity >= 7 ? '0.9' : intensity >= 5 ? '0.65' : '0.42';
+    glitch.style.transform = subtle
+      ? intensity >= 7 ? 'translateX(-2px)' : intensity >= 5 ? 'translateX(1px)' : 'translateX(0)'
+      : intensity >= 7 ? 'translateX(-6px)' : intensity >= 5 ? 'translateX(4px)' : 'translateX(0)';
+    setTimeout(() => {
+      glitch.style.display = 'none';
+      glitch.style.opacity = '';
+      glitch.style.transform = '';
+      glitch.style.background = '';
+    }, subtle ? 110 : intensity >= 7 ? 180 : 130);
+  }
 
   // Brief scanline intensify
   const crt = document.getElementById('crt');
-  crt.style.opacity = '2';
-  setTimeout(() => { crt.style.opacity = '1'; }, 180);
+  crt.style.opacity = subtle
+    ? intensity >= 7 ? '1.55' : intensity >= 5 ? '1.35' : '1.22'
+    : intensity >= 7 ? '2.45' : intensity >= 5 ? '2.2' : '2';
+  setTimeout(() => { crt.style.opacity = '1'; }, subtle ? 150 : intensity >= 7 ? 260 : 180);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -7863,6 +9288,25 @@ function openRegedit() {
         const v = Math.max(0, Math.min(99, parseInt(newValue) || 0));
         if (bar) bar.style.width = v + '%';
         if (val) val.textContent = v + '%';
+      } else if (keyPath === 'Containment') {
+        if (valName === 'RESPAWN_LOCK') {
+          updateDaemonStory(story => {
+            if (story.openedDaemon && !story.daemonStopped) {
+              story.lastEventText = Number(newValue) === 0 ? 'respawn lock cleared' : 'respawn lock raised';
+            }
+          }, { forceSync: true });
+        } else if (valName === 'MIRROR_LOCK') {
+          updateDaemonStory(story => {
+            if (Number(newValue) === 0) {
+              if (story.stage >= 4) story.lastEventText = story.anchorDeleted ? 'mirror lattice lowered' : 'mirror lock lowered';
+            } else if (story.anchorDeleted && story.stage >= 6) {
+              story.mirrorLockRestored = true;
+              story.lastEventText = 'mirror lattice restored';
+            } else if (story.anchorDeleted) {
+              story.lastEventText = 'mirror lock raised';
+            }
+          }, { forceSync: true, glitch: Number(newValue) === 0 && daemonStory.stage >= 5 });
+        }
       }
     } else if (hive === 'HKEY_CURRENT_USER') {
       if (keyPath === 'SOFTWARE\\sleepOS' && valName === 'SkipBoot') {
@@ -8328,6 +9772,16 @@ document.addEventListener('keydown', e => {
     return;
   }
 
+  // Delete - allow desktop-selected void.tmp to use the shared delete flow
+  if (e.key === 'Delete' && !inInput) {
+    const desktopTargets = [...desktopSel].map(el => el._ic).filter(canDeleteDesktopSystemIcon);
+    if (desktopTargets.length) {
+      e.preventDefault();
+      deleteDesktopSystemIcons(desktopTargets);
+      return;
+    }
+  }
+
   // F5 — refresh desktop icons
   if (e.key === 'F5' && !inInput) {
     e.preventDefault();
@@ -8360,6 +9814,7 @@ function startDesktop() {
   const savedWp = localStorage.getItem(WP_KEY);
   if (savedWp) applyWallpaper(savedWp, { deferMissing: isWallpaperFileId(savedWp) });
   applySettings();
+  applyDaemonVisualState();
   setupIcons();
 }
 </script>
