@@ -144,7 +144,7 @@ function generateWorld() {
   }
 
   // Surface-connected shafts — depthGuard=0 so they can open at the surface
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 8; i++) {
     const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
     const sy = surfaceYs[sx];
     const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.5; // mostly downward
@@ -152,7 +152,7 @@ function generateWorld() {
   }
 
   // Mid-depth horizontal cave networks
-  for (let i = 0; i < 35; i++) {
+  for (let i = 0; i < 18; i++) {
     const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
     const baseSY = surfaceYs[sx];
     const sy = baseSY + 12 + Math.floor(Math.random() * 50);
@@ -161,7 +161,7 @@ function generateWorld() {
   }
 
   // Deep large caverns
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 7; i++) {
     const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
     const baseSY = surfaceYs[sx];
     const sy = baseSY + 55 + Math.floor(Math.random() * 30);
