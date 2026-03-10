@@ -158,6 +158,9 @@ const JUMP_VEL   = -11;
 const WALK_SPEED = 2.5;
 const RUN_SPEED  = 5.0;
 
+let lastTime = 0;
+const TARGET_DT = 1000 / 60; // 16.67ms — reference frame duration
+
 const spritesheet = new Image();
 spritesheet.src = 'images/platformer_sprites_pixelized_0.png';
 
@@ -195,13 +198,13 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-function updatePlayer() {
-  // Fixed-step physics (tied to frame rate, not ts). Works correctly at 60fps.
+function updatePlayer(scale = 1) {
+  // Delta-time scaled physics. scale ~1.0 at 60fps, ~0.5 at 120fps.
   // Horizontal movement
   let speed = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
   let moveX = 0;
-  if (keys['KeyA'] || keys['ArrowLeft'])  { moveX = -speed; player.facing = -1; }
-  if (keys['KeyD'] || keys['ArrowRight']) { moveX =  speed; player.facing =  1; }
+  if (keys['KeyA'] || keys['ArrowLeft'])  { moveX = -speed * scale; player.facing = -1; }
+  if (keys['KeyD'] || keys['ArrowRight']) { moveX =  speed * scale; player.facing =  1; }
 
   // Apply horizontal, resolve collision
   player.x += moveX;
@@ -213,7 +216,7 @@ function updatePlayer() {
   }
 
   // Gravity
-  player.vy = Math.min(player.vy + GRAVITY, MAX_FALL);
+  player.vy = Math.min(player.vy + GRAVITY * scale, MAX_FALL);
 
   // Apply vertical, resolve collision
   player.y += player.vy;
@@ -221,12 +224,14 @@ function updatePlayer() {
     if (player.vy > 0) {
       // landing: snap to top of block
       player.y = Math.floor((player.y + player.h) / TILE) * TILE - player.h;
+      player.vy = 0;
       player.onGround = true;
     } else {
       // hit ceiling
       player.y = Math.ceil(player.y / TILE) * TILE;
+      player.vy = 0;
+      player.onGround = false;
     }
-    player.vy = 0;
   } else {
     player.onGround = false;
   }
@@ -242,13 +247,13 @@ function updatePlayer() {
   player.y = Math.max(0, Math.min(player.y, WORLD_H * TILE - player.h));
 }
 
-function updateCamera() {
+function updateCamera(scale = 1) {
   // Center player horizontally, 40% from top vertically
   const targetX = player.x + player.w / 2 - canvas.width / 2;
   const targetY = player.y + player.h / 2 - canvas.height * 0.4;
-  // Smooth follow (lerp)
-  cam.x += (targetX - cam.x) * 0.1;
-  cam.y += (targetY - cam.y) * 0.1;
+  // Smooth follow (lerp), scaled by dt so speed is frame-rate independent
+  cam.x += (targetX - cam.x) * 0.1 * scale;
+  cam.y += (targetY - cam.y) * 0.1 * scale;
   // Clamp to world
   cam.x = Math.max(0, Math.min(cam.x, WORLD_W * TILE - canvas.width));
   cam.y = Math.max(0, Math.min(cam.y, WORLD_H * TILE - canvas.height));
@@ -373,16 +378,20 @@ function drawPlayer() {
 
 let rafId;
 function loop(ts) {
-  updatePlayer();
+  const dt = ts ? Math.min(ts - lastTime, TARGET_DT * 3) : TARGET_DT;
+  lastTime = ts || 0;
+  const scale = dt / TARGET_DT; // ~1.0 at 60fps, ~0.5 at 120fps
+
+  updatePlayer(scale);
   updateAnimation();
-  updateCamera();
+  updateCamera(scale);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawSky();
   drawWorld();
   drawPlayer();
   rafId = requestAnimationFrame(loop);
 }
-loop();
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
