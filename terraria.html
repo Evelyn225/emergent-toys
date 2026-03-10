@@ -53,7 +53,71 @@ const TILE = 16;          // px per block
 const WORLD_W = 400;      // blocks wide
 const WORLD_H = 150;      // blocks tall
 
-// --- (world, player, camera, game loop go in later tasks) ---
+// Block types
+const AIR    = 0;
+const GRASS  = 1;
+const DIRT   = 2;
+const STONE  = 3;
+const DSTONE = 4; // deep stone
+
+// World is a flat Uint8Array [col + row * WORLD_W]
+const world = new Uint8Array(WORLD_W * WORLD_H);
+
+function getBlock(x, y) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return STONE;
+  return world[x + y * WORLD_W];
+}
+function setBlock(x, y, type) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return;
+  world[x + y * WORLD_W] = type;
+}
+
+// Simple value noise via hashed sine
+function hash(n) {
+  return (Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
+}
+function smoothNoise(x) {
+  const i = Math.floor(x);
+  const f = x - i;
+  const u = f * f * (3 - 2 * f); // smoothstep
+  return hash(i) * (1 - u) + hash(i + 1) * u;
+}
+function octaveNoise(x, octaves, persistence) {
+  let val = 0, amp = 1, freq = 1, max = 0;
+  for (let o = 0; o < octaves; o++) {
+    val += smoothNoise(x * freq) * amp;
+    max += amp;
+    amp *= persistence;
+    freq *= 2;
+  }
+  return val / max;
+}
+
+function generateWorld() {
+  const SEA_LEVEL = 60; // surface row index around here
+  for (let x = 0; x < WORLD_W; x++) {
+    // surface height: varies between rows 45 and 75
+    const n = octaveNoise(x / 60, 4, 0.5);
+    const surfaceY = Math.floor(SEA_LEVEL - 15 + n * 30);
+
+    for (let y = 0; y < WORLD_H; y++) {
+      if (y < surfaceY) {
+        setBlock(x, y, AIR);
+      } else if (y === surfaceY) {
+        setBlock(x, y, GRASS);
+      } else if (y < surfaceY + 5) {
+        setBlock(x, y, DIRT);
+      } else if (y < 100) {
+        setBlock(x, y, STONE);
+      } else {
+        setBlock(x, y, DSTONE);
+      }
+    }
+  }
+}
+generateWorld();
+
+// --- (player, camera, rendering go in later tasks) ---
 
 let rafId;
 function loop(ts) {
