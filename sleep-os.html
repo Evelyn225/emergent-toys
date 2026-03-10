@@ -672,6 +672,8 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 .exp-item .exp-icon { font-size: 28px; margin-bottom: 2px; pointer-events: none; }
 .exp-item span { pointer-events: none; }
 .exp-sysfile {  }
+.exp-drop-target { outline: 2px solid #000080; background: rgba(0,0,128,0.15) !important; }
+.exp-list-item.exp-drop-target, .exp-det-item.exp-drop-target { background: rgba(0,0,128,0.15) !important; outline: 2px solid #000080; }
 
 /* ── Drop zone overlay ───────────────────────────────────────── */
 #drop-overlay {
@@ -1680,6 +1682,7 @@ if (osSettings.skipBoot) { biosFinish(); } else { setTimeout(biosType, 250); }
 // ─────────────────────────────────────────────────────────────────
 let zTop = 100;
 const wins = {};
+let _expClipboard = null; // { items:[{name,kind,sysfile,srcCwd}], cut:bool }
 
 // Shared PID helpers (used by SYSMON and TASKKILL)
 function pidFromId(id) {
@@ -5968,6 +5971,42 @@ function openExplorer(startPath) {
   let selectionItems = new Map();
   let selectionNodes = new Map();
   let emptyStatusText = '';
+  let dragSrc = null; // { item, srcCwd }
+
+  function doMoveItem(srcItem, srcCwd, dstDirPath) {
+    if (srcItem.sysfile) return false;
+    const srcDirObj = srcCwd ? fsGetDir(srcCwd) : termFS;
+    const dstDirObj = fsGetDir(dstDirPath);
+    if (!srcDirObj || !dstDirObj) return false;
+    const name = srcItem.name;
+    if (srcItem.kind === 'dir') {
+      const upper = name.toUpperCase();
+      if (!srcDirObj.dirs.has(upper)) return false;
+      const sub = srcDirObj.subdirs?.get(upper);
+      srcDirObj.dirs.delete(upper); srcDirObj.subdirs?.delete(upper);
+      if (!dstDirObj.subdirs) dstDirObj.subdirs = new Map();
+      dstDirObj.dirs.add(upper);
+      if (sub) dstDirObj.subdirs.set(upper, sub);
+    } else if (srcDirObj.blobs?.has(name)) {
+      const blob = srcDirObj.blobs.get(name);
+      srcDirObj.blobs.delete(name);
+      if (!dstDirObj.blobs) dstDirObj.blobs = new Map();
+      dstDirObj.blobs.set(name, blob);
+      const oldKey = blobStorageKey(srcCwd, name);
+      const newKey = blobStorageKey(dstDirPath, name);
+      const data = localStorage.getItem(oldKey);
+      if (data) { try { localStorage.setItem(newKey, data); } catch(e) {} localStorage.removeItem(oldKey); }
+      void removeBlobEntryFromDb(srcCwd, name);
+    } else if (srcDirObj.files?.has(name)) {
+      const content = srcDirObj.files.get(name);
+      srcDirObj.files.delete(name);
+      if (!dstDirObj.files) dstDirObj.files = new Map();
+      dstDirObj.files.set(name, content);
+    } else { return false; }
+    schedSave();
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+    return true;
+  }
   const ITEM_SELECTOR = '.exp-item,.exp-list-item,.exp-det-item';
 
   function getIcon(name, kind) {
@@ -6210,6 +6249,43 @@ function openExplorer(startPath) {
       else replaceSelection(item);
     });
     el.addEventListener('dblclick', () => openItem(name, kind, sysfile));
+
+    // ── Drag source ──────────────────────────────────────────────
+    if (!sysfile) {
+      el.setAttribute('draggable', 'true');
+      el.addEventListener('dragstart', e => {
+        dragSrc = { item, srcCwd: cwd };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', name);
+        el.style.opacity = '0.5';
+      });
+      el.addEventListener('dragend', () => {
+        dragSrc = null;
+        el.style.opacity = '';
+        pane.querySelectorAll('.exp-drop-target').forEach(n => n.classList.remove('exp-drop-target'));
+      });
+    }
+    // ── Drag target (folders only) ───────────────────────────────
+    if (kind === 'dir' && !sysfile) {
+      el.addEventListener('dragover', e => {
+        if (!dragSrc || dragSrc.item === item) return;
+        e.preventDefault(); e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        el.classList.add('exp-drop-target');
+      });
+      el.addEventListener('dragleave', () => el.classList.remove('exp-drop-target'));
+      el.addEventListener('drop', e => {
+        e.preventDefault(); e.stopPropagation();
+        el.classList.remove('exp-drop-target');
+        if (!dragSrc || dragSrc.item === item) return;
+        const dstPath = cwd ? cwd + '\\' + name : name;
+        const ok = doMoveItem(dragSrc.item, dragSrc.srcCwd, dstPath);
+        dragSrc = null;
+        if (ok) render();
+        else if (ws) ws.querySelector ? ws.querySelector('.statusbar-panel')?.textContent : (ws.textContent = 'Move failed.');
+      });
+    }
+
     el.addEventListener('contextmenu', e => {
       e.preventDefault();
       e.stopPropagation();
@@ -6232,6 +6308,10 @@ function openExplorer(startPath) {
         ...(isScript ? [{ label: 'Run Script', action: () => {
           runScriptInTerminal(singleSelected.name, cwd);
         }}] : []),
+        '-',
+        { label: 'Cut',   disabled: multi ? false : !!singleSelected?.sysfile, action: () => { const its=allSelected.filter(i=>!i.sysfile); if(its.length){_expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut';} } },
+        { label: 'Copy',  disabled: multi ? false : !!singleSelected?.sysfile, action: () => { const its=allSelected.filter(i=>!i.sysfile); if(its.length){_expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:false}; if(ws) ws.textContent=its.length+' item(s) copied';} } },
+        { label: 'Paste', disabled: !_expClipboard, action: pasteClipboard },
         '-',
         { label: 'Rename', disabled: !singleSelected || !!singleSelected.sysfile, action: () => renameItem(singleSelected) },
         { label: 'Delete', disabled: !canDelete, action: deleteSelected },
@@ -6398,6 +6478,43 @@ function openExplorer(startPath) {
     ]);
   });
 
+  // ── External file drag-and-drop onto the pane ─────────────────
+  let dropOverlay = null;
+  pane.addEventListener('dragenter', e => {
+    if (cwd === 'PROJECTS') return;
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      if (!dropOverlay) {
+        dropOverlay = document.createElement('div');
+        dropOverlay.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,128,0.12);border:2px dashed #000080;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:#000080;font-weight:bold;z-index:10;';
+        dropOverlay.textContent = 'Drop files to upload';
+        pane.appendChild(dropOverlay);
+      }
+    }
+  });
+  pane.addEventListener('dragover', e => {
+    if (cwd === 'PROJECTS') return;
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
+  pane.addEventListener('dragleave', e => {
+    if (!pane.contains(e.relatedTarget)) {
+      dropOverlay?.remove(); dropOverlay = null;
+    }
+  });
+  pane.addEventListener('drop', e => {
+    dropOverlay?.remove(); dropOverlay = null;
+    if (cwd === 'PROJECTS') return;
+    if (e.dataTransfer.files?.length) {
+      e.preventDefault();
+      _uploadCwd = cwd;
+      handleFileUpload(e.dataTransfer.files);
+      render();
+    }
+  });
+
   mb.innerHTML = '';
   [
     { label: 'File', items: () => cwd === 'PROJECTS' ? [
@@ -6416,6 +6533,10 @@ function openExplorer(startPath) {
       { label: 'Close', action: () => closeWin('explorer') },
     ]},
     { label: 'Edit', items: () => [
+      { label: 'Cut',   disabled: !getSelectedItems().filter(i=>!i.sysfile).length || cwd==='PROJECTS', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut'; } },
+      { label: 'Copy',  disabled: !getSelectedItems().filter(i=>!i.sysfile).length, action: () => { const its=getSelectedItems().filter(i=>!i.sysfile); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:false}; if(ws) ws.textContent=its.length+' item(s) copied'; } },
+      { label: 'Paste', disabled: !_expClipboard || cwd==='PROJECTS', action: pasteClipboard },
+      '-',
       { label: 'Select All', action: () => selectAllVisibleItems() },
       { label: 'Invert Selection', action: () => invertSelection() },
       '-',
@@ -6448,6 +6569,91 @@ function openExplorer(startPath) {
     span.textContent = label;
     span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items()); });
     mb.appendChild(span);
+  });
+
+  // ── Paste helper ─────────────────────────────────────────────
+  function pasteClipboard() {
+    if (!_expClipboard || cwd === 'PROJECTS') return;
+    const dstDir = cwd ? fsGetDir(cwd) : termFS;
+    if (!dstDir) return;
+    let changed = false;
+    _expClipboard.items.forEach(({ name, kind, srcCwd }) => {
+      const srcDirObj = srcCwd ? fsGetDir(srcCwd) : termFS;
+      if (!srcDirObj) return;
+      // Unique name in destination
+      let dstName = name;
+      const hasDst = n => dstDir.files?.has(n) || dstDir.blobs?.has(n) || dstDir.dirs?.has(n.toUpperCase());
+      if (hasDst(dstName)) {
+        const dot = name.lastIndexOf('.');
+        const base = dot > 0 ? name.slice(0, dot) : name;
+        const ext  = dot > 0 ? name.slice(dot) : '';
+        let i = 2;
+        while (hasDst(base + '_copy' + (i > 2 ? i : '') + ext)) i++;
+        dstName = base + '_copy' + (i > 2 ? i : '') + ext;
+      }
+      if (kind === 'dir') {
+        const upper = name.toUpperCase(), dstUpper = dstName.toUpperCase();
+        if (!srcDirObj.dirs?.has(upper)) return;
+        const sub = srcDirObj.subdirs?.get(upper);
+        if (_expClipboard.cut) { srcDirObj.dirs.delete(upper); srcDirObj.subdirs?.delete(upper); }
+        if (!dstDir.subdirs) dstDir.subdirs = new Map();
+        dstDir.dirs.add(dstUpper);
+        if (sub) dstDir.subdirs.set(dstUpper, sub);
+      } else if (srcDirObj.blobs?.has(name)) {
+        const blob = srcDirObj.blobs.get(name);
+        if (_expClipboard.cut) srcDirObj.blobs.delete(name);
+        if (!dstDir.blobs) dstDir.blobs = new Map();
+        dstDir.blobs.set(dstName, { ...blob });
+      } else if (srcDirObj.files?.has(name)) {
+        const content = srcDirObj.files.get(name);
+        if (_expClipboard.cut) srcDirObj.files.delete(name);
+        if (!dstDir.files) dstDir.files = new Map();
+        dstDir.files.set(dstName, content);
+      } else { return; }
+      changed = true;
+    });
+    if (_expClipboard.cut) _expClipboard = null;
+    if (changed) { schedSave(); document.dispatchEvent(new CustomEvent('fs-changed')); render(); }
+  }
+
+  // ── Explorer keyboard shortcuts ───────────────────────────────
+  pane.setAttribute('tabindex', '-1');
+  pane.style.outline = 'none';
+  const winEl = document.getElementById('win-explorer');
+  winEl?.addEventListener('keydown', e => {
+    if (!wins['explorer']) return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    const items = getSelectedItems().filter(i => !i.sysfile && !i._proj);
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      if (!items.length) return;
+      _expClipboard = { items: items.map(i => ({ name: i.name, kind: i.kind, sysfile: i.sysfile, srcCwd: cwd })), cut: false };
+      if (ws) ws.textContent = items.length === 1 ? '"' + items[0].name + '" copied' : items.length + ' items copied';
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+      e.preventDefault();
+      if (!items.length) return;
+      _expClipboard = { items: items.map(i => ({ name: i.name, kind: i.kind, sysfile: i.sysfile, srcCwd: cwd })), cut: true };
+      if (ws) ws.textContent = items.length === 1 ? '"' + items[0].name + '" cut' : items.length + ' items cut';
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+      e.preventDefault();
+      pasteClipboard();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      selectAllVisibleItems();
+    } else if (e.key === 'Delete' || e.key === 'Backspace' && e.altKey) {
+      e.preventDefault();
+      if (getDeletableSelectedItems().length) deleteSelected();
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      const single = getSingleSelectedItem();
+      if (single && !single.sysfile) renameItem(single);
+    } else if (e.key === 'F5') {
+      e.preventDefault();
+      render();
+    } else if (e.key === 'Escape') {
+      clearSelection();
+    }
   });
 
   render();
