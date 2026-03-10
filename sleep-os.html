@@ -423,6 +423,15 @@ body {
   0%, 100% { box-shadow: 0 0 0 rgba(110,255,240,0), 1px 1px 0 #000; }
   50% { box-shadow: 0 0 16px rgba(110,255,240,0.16), 1px 1px 0 #000; }
 }
+@keyframes frag-app-hum {
+  0%, 100% { box-shadow: 1px 1px 0 #000, 0 0 0 rgba(110,255,240,0); }
+  50% { box-shadow: 1px 1px 0 #000, 0 0 12px rgba(110,255,240,0.09); }
+}
+@keyframes frag-app-sheen {
+  0% { transform: translateX(-118%); opacity: 0; }
+  18% { opacity: 0.22; }
+  100% { transform: translateX(125%); opacity: 0; }
+}
 
 #daemon-fx {
   position: fixed;
@@ -551,6 +560,62 @@ body.daemon-visual-7 .os-window.daemon-surface .win-titlebar::after,
 body.daemon-visual-7 .os-window.void-surface .win-titlebar::after {
   opacity: 0.58;
   animation: daemon-title-sheen 5.2s linear infinite;
+}
+body.frag-visual-1 .os-window:not(.daemon-surface):not(.void-surface),
+body.frag-visual-2 .os-window:not(.daemon-surface):not(.void-surface),
+body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) {
+  transition: filter 0.35s ease, box-shadow 0.35s ease;
+}
+body.frag-visual-1 .os-window:not(.daemon-surface):not(.void-surface) .win-body::after,
+body.frag-visual-2 .os-window:not(.daemon-surface):not(.void-surface) .win-body::after,
+body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 15px, rgba(255,255,255,0.022) 15px 16px, transparent 16px 31px),
+    linear-gradient(90deg, rgba(255,100,140,0.03), transparent 38%, rgba(120,255,240,0.03) 72%, transparent 100%);
+  transition: opacity 0.35s ease;
+}
+body.frag-visual-1 .os-window:not(.daemon-surface):not(.void-surface) .win-titlebar::before,
+body.frag-visual-2 .os-window:not(.daemon-surface):not(.void-surface) .win-titlebar::before,
+body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-titlebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(104deg, transparent 0 34%, rgba(255,255,255,0.12) 48%, transparent 63%);
+  transition: opacity 0.35s ease;
+}
+body.frag-visual-1 .os-window:not(.daemon-surface):not(.void-surface) {
+  filter: saturate(1.01) contrast(1.01);
+}
+body.frag-visual-1 .os-window:not(.daemon-surface):not(.void-surface) .win-body::after {
+  opacity: 0.04;
+}
+body.frag-visual-2 .os-window:not(.daemon-surface):not(.void-surface) {
+  filter: saturate(1.02) hue-rotate(-2deg) contrast(1.015);
+}
+body.frag-visual-2 .os-window:not(.daemon-surface):not(.void-surface) .win-body::after {
+  opacity: 0.08;
+}
+body.frag-visual-2 .os-window:not(.daemon-surface):not(.void-surface) .win-titlebar::before {
+  opacity: 0.16;
+  animation: frag-app-sheen 12s linear infinite;
+}
+body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) {
+  filter: saturate(1.04) hue-rotate(-3deg) contrast(1.02);
+  animation: frag-app-hum 9.5s ease-in-out infinite;
+}
+body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-body::after {
+  opacity: 0.12;
+}
+body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-titlebar::before {
+  opacity: 0.22;
+  animation: frag-app-sheen 9s linear infinite;
 }
 
 /* ── File Explorer ───────────────────────────────────────────── */
@@ -2073,17 +2138,75 @@ function fsGetEntry(path, fallbackDir) {
   return null;
 }
 
-function fsWriteTextFile(path, value, fallbackDir) {
+function calcTextFragmentationDelta(prevValue, nextValue, created) {
+  if (prevValue === nextValue) return 0;
+  const prevLen = String(prevValue ?? '').length;
+  const nextLen = String(nextValue ?? '').length;
+  const contentWeight = Math.max(nextLen, Math.abs(nextLen - prevLen));
+  return Math.min(0.035, (created ? 0.014 : 0.009) + Math.min(0.018, contentWeight / 18000));
+}
+
+function calcBlobFragmentationDelta(size, created) {
+  return Math.min(0.04, (created ? 0.016 : 0.01) + Math.min(0.02, Math.max(0, Number(size) || 0) / 180000));
+}
+
+function calcRemovalFragmentationDelta(kind, payload) {
+  if (kind === 'dir') return 0.007;
+  if (kind === 'blob') return Math.min(0.026, 0.009 + Math.min(0.014, Math.max(0, Number(payload) || 0) / 220000));
+  return Math.min(0.022, 0.008 + Math.min(0.012, String(payload ?? '').length / 22000));
+}
+
+function fsWriteTextFile(path, value, fallbackDir, options) {
+  options = options || {};
   const { dirName, fileName } = fsSplitPath(path, fallbackDir);
   const dir = fsGetDir(dirName);
   if (!dir || !fileName) return null;
-  dir.files.set(fileName, value);
+  const nextValue = String(value ?? '');
+  const hadFile = dir.files.has(fileName);
+  const prevValue = hadFile ? dir.files.get(fileName) : null;
+  if (hadFile && prevValue === nextValue) return { dir, dirName, fileName, created: false, unchanged: true };
+  dir.files.set(fileName, nextValue);
   schedSave();
-  return { dir, dirName, fileName };
+  if (options.trackFragmentation !== false) {
+    increaseDriveFragmentation(calcTextFragmentationDelta(prevValue, nextValue, !hadFile));
+  }
+  return { dir, dirName, fileName, created: !hadFile };
+}
+
+function fsWriteBlobFile(path, value, fallbackDir, options) {
+  options = options || {};
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  const existing = dir.blobs.get(fileName);
+  if (existing?.url && existing.url !== value?.url) URL.revokeObjectURL(existing.url);
+  dir.blobs.set(fileName, value);
+  schedSave();
+  if (options.trackFragmentation !== false) {
+    increaseDriveFragmentation(calcBlobFragmentationDelta(value?.size, !existing));
+  }
+  return { dir, dirName, fileName, created: !existing };
+}
+
+function fsCreateDir(path, fallbackDir, options) {
+  options = options || {};
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const parent = fsGetDir(dirName);
+  const name = String(fileName || '').toUpperCase();
+  if (!parent || !name) return null;
+  if (parent.dirs.has(name)) return { dir: parent, dirName, fileName: name, created: false };
+  parent.dirs.add(name);
+  if (!parent.subdirs) parent.subdirs = new Map();
+  if (!parent.subdirs.has(name)) parent.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+  schedSave();
+  if (options.trackFragmentation !== false) increaseDriveFragmentation(0.006);
+  return { dir: parent, dirName, fileName: name, created: true };
 }
 
 // ── Filesystem persistence ────────────────────────────────────────
 const FS_KEY = 'sleepOS-fs';
+const DRIVE_STATE_KEY = 'sleepOS-drive-state';
+const LEGACY_DEFRAG_KEY = 'sleepOS-defrag-time';
 let _fsSaveTimer = null;
 
 function _serDir(d) {
@@ -2135,6 +2258,76 @@ function saveFS() {
 function schedSave() {
   clearTimeout(_fsSaveTimer);
   _fsSaveTimer = setTimeout(saveFS, 400);
+}
+
+function computeLegacyFragLevel(ms) {
+  if (ms === null) return 0.68;
+  const hours = ms / 3600000;
+  if (hours < 0.01) return 0.02;
+  return Math.min(0.9, 0.02 + 0.88 * Math.pow(hours / 168, 0.38));
+}
+
+function createDriveStateDefaults(fromLegacy) {
+  const legacyTs = fromLegacy ? parseInt(localStorage.getItem(LEGACY_DEFRAG_KEY) || '0', 10) || 0 : 0;
+  const msSince = legacyTs ? Date.now() - legacyTs : null;
+  return {
+    level: computeLegacyFragLevel(msSince),
+    lastDefragTs: legacyTs,
+    changeCount: 0,
+    lastMutationTs: 0,
+  };
+}
+
+function normalizeDriveState(saved) {
+  const next = Object.assign(createDriveStateDefaults(false), saved || {});
+  next.level = Math.max(0.02, Math.min(0.92, Number(next.level) || 0.68));
+  next.lastDefragTs = Math.max(0, Math.trunc(Number(next.lastDefragTs) || 0));
+  next.changeCount = Math.max(0, Math.trunc(Number(next.changeCount) || 0));
+  next.lastMutationTs = Math.max(0, Math.trunc(Number(next.lastMutationTs) || 0));
+  return next;
+}
+
+function loadDriveState() {
+  try {
+    const raw = localStorage.getItem(DRIVE_STATE_KEY);
+    if (raw) return normalizeDriveState(JSON.parse(raw));
+  } catch (e) {}
+  return createDriveStateDefaults(true);
+}
+
+function saveDriveState() {
+  try { localStorage.setItem(DRIVE_STATE_KEY, JSON.stringify(defragState)); } catch (e) {}
+}
+
+let defragState = loadDriveState();
+
+function getDriveFragmentationLevel() {
+  return Math.max(0.02, Math.min(0.92, Number(defragState?.level) || 0.68));
+}
+
+function getDriveOptimizationPercent() {
+  return Math.round((1 - getDriveFragmentationLevel()) * 100);
+}
+
+function increaseDriveFragmentation(amount, options) {
+  const delta = Number(amount) || 0;
+  if (!(delta > 0)) return getDriveFragmentationLevel();
+  defragState.level = Math.min(0.92, getDriveFragmentationLevel() + delta);
+  defragState.changeCount = Math.max(0, Math.trunc(Number(defragState.changeCount) || 0)) + 1;
+  defragState.lastMutationTs = Date.now();
+  saveDriveState();
+  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
+  return defragState.level;
+}
+
+function optimizeDriveFragmentation(options) {
+  const targetLevel = Math.max(0.02, Math.min(0.12, Number(options?.targetLevel) || 0.06));
+  defragState.level = targetLevel;
+  defragState.lastDefragTs = Date.now();
+  saveDriveState();
+  try { localStorage.setItem(LEGACY_DEFRAG_KEY, String(defragState.lastDefragTs)); } catch (e) {}
+  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
+  return defragState.level;
 }
 
 function loadFS() {
@@ -2380,13 +2573,16 @@ function ensureFsDir(path) {
   return node;
 }
 
-function removeFsPath(path) {
+function removeFsPath(path, options) {
+  options = options || {};
   const { dirName, fileName } = fsSplitPath(path);
   const dir = fsGetDir(dirName);
   if (!dir || !fileName) return false;
   const upper = fileName.toUpperCase();
   if (dir.files.has(fileName)) {
+    const content = dir.files.get(fileName);
     dir.files.delete(fileName);
+    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('text', content));
     return true;
   }
   if (dir.blobs.has(fileName)) {
@@ -2395,11 +2591,13 @@ function removeFsPath(path) {
     if (blob?.url) URL.revokeObjectURL(blob.url);
     dir.blobs.delete(fileName);
     removeBlobEntry(dirName, fileName);
+    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('blob', blob?.size));
     return true;
   }
   if (dir.dirs.has(upper)) {
     dir.dirs.delete(upper);
     dir.subdirs?.delete(upper);
+    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
     return true;
   }
   return false;
@@ -2717,27 +2915,27 @@ function syncDaemonStoryFiles() {
   ensureFsDir('SYS');
   ensureFsDir('CACHE');
   if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
-  else removeFsPath(STORY_FILE_PATHS.notice);
+  else removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
-  else removeFsPath(STORY_FILE_PATHS.incident);
+  else removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
   if (daemonStory.stage >= 4) {
     ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
     ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
     if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
   } else {
-    removeFsPath(STORY_FILE_PATHS.lastOperator);
-    removeFsPath(STORY_FILE_PATHS.mirrorProtocol);
-    removeFsPath(STORY_FILE_PATHS.mirrorDat);
+    removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
+    removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
+    removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
   }
   if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
-  else removeFsPath(STORY_FILE_PATHS.anchorSeed);
+  else removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
   if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
-  else removeFsPath(STORY_FILE_PATHS.watchPid);
+  else removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
   if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
-  else removeFsPath(STORY_FILE_PATHS.quarantineSig);
+  else removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
   if (daemonStory.endingReached) {
-    removeFsPath(STORY_FILE_PATHS.mirrorDat);
-    removeFsPath(STORY_FILE_PATHS.watchPid);
+    removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
   }
 }
 
@@ -2757,16 +2955,33 @@ function getDaemonVisualStage() {
   return 0;
 }
 
+function getDriveFragmentationVisualLevel() {
+  if (daemonStory.endingReached) return 0;
+  const visualStage = getDaemonVisualStage();
+  if (visualStage < 4) return 0;
+  const fragLevel = getDriveFragmentationLevel();
+  if (fragLevel < 0.22) return 0;
+  if (visualStage >= 7 && fragLevel >= 0.62) return 3;
+  if (visualStage >= 5 && fragLevel >= 0.42) return 2;
+  return 1;
+}
+
 function scheduleDaemonPulse() {
   clearTimeout(daemonPulseTimer);
   daemonPulseTimer = null;
   const visualStage = getDaemonVisualStage();
   if (!visualStage) return;
-  const minDelay = visualStage >= 7 ? 3800 : visualStage >= 5 ? 6200 : 9800;
-  const maxDelay = visualStage >= 7 ? 7200 : visualStage >= 5 ? 10800 : 14800;
+  const fragLevel = getDriveFragmentationLevel();
+  const fragFactor = Math.max(0, Math.min(1, (fragLevel - 0.02) / 0.9));
+  const delayScale = 1.7 - fragFactor * 0.7;
+  const baseMinDelay = visualStage >= 7 ? 3800 : visualStage >= 5 ? 6200 : 9800;
+  const baseMaxDelay = visualStage >= 7 ? 7200 : visualStage >= 5 ? 10800 : 14800;
+  const minDelay = Math.round(baseMinDelay * delayScale);
+  const maxDelay = Math.round(baseMaxDelay * delayScale);
+  const pulseIntensity = Math.max(1, Math.round(visualStage * (0.55 + fragFactor * 0.45)));
   const nextDelay = minDelay + Math.random() * (maxDelay - minDelay);
   daemonPulseTimer = setTimeout(() => {
-    triggerGlitch({ intensity: visualStage, subtle: true });
+    triggerGlitch({ intensity: pulseIntensity, subtle: true });
     scheduleDaemonPulse();
   }, nextDelay);
 }
@@ -2774,9 +2989,11 @@ function scheduleDaemonPulse() {
 function applyDaemonVisualState() {
   const body = document.body;
   if (!body) return;
-  body.classList.remove('daemon-visual-4', 'daemon-visual-5', 'daemon-visual-7');
+  body.classList.remove('daemon-visual-4', 'daemon-visual-5', 'daemon-visual-7', 'frag-visual-1', 'frag-visual-2', 'frag-visual-3');
   const visualStage = getDaemonVisualStage();
+  const fragVisualLevel = getDriveFragmentationVisualLevel();
   if (visualStage) body.classList.add(`daemon-visual-${visualStage}`);
+  if (fragVisualLevel) body.classList.add(`frag-visual-${fragVisualLevel}`);
   scheduleDaemonPulse();
 }
 
@@ -3655,15 +3872,9 @@ async function execScriptInstruction(inst, labels, state) {
     }
     case 'mkdir': {
       if (!resolvedArg) throw makeScriptError('Usage: mkdir <dir>', inst.lineNo);
-      const { dirName, fileName } = fsSplitPath(resolvedArg, state.dirName);
-      const parent = fsGetDir(dirName);
-      const name = String(fileName || '').toUpperCase();
-      if (!parent || !name) throw makeScriptError('Cannot create directory: ' + resolvedArg, inst.lineNo);
-      if (!parent.dirs.has(name)) {
-        parent.dirs.add(name);
-        if (!parent.subdirs) parent.subdirs = new Map();
-        if (!parent.subdirs.has(name)) parent.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
-        schedSave();
+      const created = fsCreateDir(resolvedArg, state.dirName);
+      if (!created) throw makeScriptError('Cannot create directory: ' + resolvedArg, inst.lineNo);
+      if (created.created) {
         document.dispatchEvent(new CustomEvent('fs-changed'));
       }
       state.status = 0;
@@ -3877,10 +4088,13 @@ function handleFileUpload(fileList) {
                : 'binary';
     if (kind === 'text') {
       const reader = new FileReader();
-      reader.onload = e => { target.files.set(file.name, e.target.result); schedSave(); document.dispatchEvent(new CustomEvent('fs-changed')); };
+      reader.onload = e => {
+        fsWriteTextFile(file.name, e.target.result, dirPath);
+        document.dispatchEvent(new CustomEvent('fs-changed'));
+      };
       reader.readAsText(file);
     } else {
-      target.blobs.set(file.name, { url, kind, size: file.size, mime: file.type });
+      fsWriteBlobFile(file.name, { url, kind, size: file.size, mime: file.type }, dirPath);
       // Persist eagerly while we still have the raw File object
       const fr = new FileReader();
       fr.onload = e => saveBlobEntry(dirPath, file.name, kind, file.size, file.type, e.target.result);
@@ -5909,6 +6123,7 @@ function openExplorer(startPath) {
         dir.files.delete(item.name);
         dir.files.set(nextName, content ?? '');
       }
+      increaseDriveFragmentation(item.kind === 'dir' ? 0.006 : 0.008);
       schedSave();
       document.dispatchEvent(new CustomEvent('fs-changed'));
       render();
@@ -6174,8 +6389,8 @@ function openExplorer(startPath) {
     ] : [
       { label: 'Open Terminal Here', action: () => openTerminal(cwd) },
       '-',
-      { label: 'New Folder', action: () => osPrompt('Folder name:', '', 'New Folder', name => { if (name) { const dir = fsGetDir(cwd); if (dir) { dir.dirs.add(name.toUpperCase()); schedSave(); render(); } } }) },
-      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const dir = fsGetDir(cwd); if (dir) { dir.files.set(name, ''); schedSave(); openNotepad(name, cwd); render(); } } }) },
+      { label: 'New Folder', action: () => osPrompt('Folder name:', '', 'New Folder', name => { if (name) { const created = fsCreateDir(name, cwd); if (created?.created) { document.dispatchEvent(new CustomEvent('fs-changed')); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
       '-',
       { label: 'Upload File...', action: () => triggerUpload(cwd) },
       '-',
@@ -6190,8 +6405,8 @@ function openExplorer(startPath) {
       '-',
       { label: 'Close', action: () => closeWin('explorer') },
     ] : [
-      { label: 'New Folder', action: () => osPrompt('Folder name:', '', 'New Folder', name => { if (name) { const dir = fsGetDir(cwd); if (dir) { dir.dirs.add(name.toUpperCase()); schedSave(); render(); } } }) },
-      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const dir = fsGetDir(cwd); if (dir) { dir.files.set(name, ''); schedSave(); openNotepad(name, cwd); render(); } } }) },
+      { label: 'New Folder', action: () => osPrompt('Folder name:', '', 'New Folder', name => { if (name) { const created = fsCreateDir(name, cwd); if (created?.created) { document.dispatchEvent(new CustomEvent('fs-changed')); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
       '-',
       { label: 'Open', disabled: !selected, action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
       { label: 'Delete', disabled: !getDeletableSelectedItems().length, action: deleteSelected },
@@ -7198,10 +7413,7 @@ function openTerminal(startDir, initialCommand) {
       if (dir.dirs.has(name) || ['PROJECTS','DOCS','.','..'].includes(name)) {
         print(`A subdirectory or file ${name} already exists.`); return;
       }
-      dir.dirs.add(name);
-      if (!dir.subdirs) dir.subdirs = new Map();
-      dir.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
-      schedSave();
+      fsCreateDir(name, cwd);
       print(`Directory created: ${getPromptStr().replace('>','')}\\${name}`);
     },
     touch: (args) => {
@@ -7209,8 +7421,7 @@ function openTerminal(startDir, initialCommand) {
       const name = args.trim();
       const dir = fsGetDir(cwd);
       if (dir.files.has(name)) { print(`File already exists: ${name}`); return; }
-      dir.files.set(name, '');
-      schedSave();
+      fsWriteTextFile(name, '', cwd);
       print(`Created: ${name}`);
     },
     del: (args) => {
@@ -8009,19 +8220,9 @@ function openDefrag() {
   const COLS = 40, ROWS = 16, TOTAL = COLS * ROWS;
   // States: 0=free, 1=used(blue), 2=optimized(green), 3=active(red)
   const COLORS = { 0:'#ffffff', 1:'#0000aa', 2:'#00aa00', 3:'#cc2200' };
-  const DEFRAG_KEY = 'sleepOS-defrag-time';
-
-  const lastDefragTs = parseInt(localStorage.getItem(DEFRAG_KEY) || '0');
+  const lastDefragTs = Math.max(0, Math.trunc(Number(defragState.lastDefragTs) || 0));
   const msSince = lastDefragTs ? Date.now() - lastDefragTs : null;
-
-  // 0 = perfectly optimized, 1 = fully fragmented
-  function computeFragLevel(ms) {
-    if (ms === null) return 0.68;           // never defragged: default messy
-    const hours = ms / 3600000;
-    if (hours < 0.01) return 0.02;         // < ~36s: basically clean
-    return Math.min(0.90, 0.02 + 0.88 * Math.pow(hours / 168, 0.38)); // grows over ~1 week
-  }
-  const fragLevel = computeFragLevel(msSince);
+  const fragLevel = getDriveFragmentationLevel();
 
   // Build initial cell states: used blocks are green or blue based on frag level
   const cells = Array.from({ length: TOTAL }, () => {
@@ -8042,12 +8243,13 @@ function openDefrag() {
     return `${d} day${d !== 1 ? 's' : ''} ago`;
   }
 
-  const initOptPct = Math.round((1 - fragLevel) * 100);
+  const initOptPct = getDriveOptimizationPercent();
+  const initFragPct = Math.round(fragLevel * 100);
 
   // ── Drive info ─────────────────────────────────────────────────
   const infoRow = document.createElement('div');
   infoRow.style.cssText = 'display:flex;gap:16px;align-items:center;border:2px solid;border-color:#808080 #fff #fff #808080;padding:3px 8px;background:#fff;flex-shrink:0;';
-  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-last" style="color:#555;">Last defrag: ${timeAgo(msSince)}</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">${initOptPct}% optimized</span>`;
+  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-last" style="color:#555;">Last defrag: ${timeAgo(msSince)}</span><span id="df-frag" style="color:#555;">Fragmentation: ${initFragPct}%</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">${initOptPct}% optimized</span>`;
   body.appendChild(infoRow);
 
   // ── Canvas grid ────────────────────────────────────────────────
@@ -8089,8 +8291,8 @@ function openDefrag() {
   fileLabel.textContent = fragLevel < 0.05
     ? 'Disk is optimized. No defragmentation necessary.'
     : fragLevel < 0.3
-      ? `Disk is ${Math.round(fragLevel * 100)}% fragmented. Some defragmentation recommended.`
-      : `Disk is ${Math.round(fragLevel * 100)}% fragmented. Defragmentation recommended.`;
+      ? `Disk is ${initFragPct}% fragmented. Some defragmentation recommended.`
+      : `Disk is ${initFragPct}% fragmented. Defragmentation recommended.`;
   body.appendChild(fileLabel);
 
   // ── Buttons ────────────────────────────────────────────────────
@@ -8154,13 +8356,15 @@ function openDefrag() {
       // Finalize any remaining used-in-place blocks
       for (let i = 0; i < TOTAL; i++) if (cells[i] === 1) { cells[i] = 2; optimized++; }
       running = false; startBtn.disabled = false; stopBtn.disabled = true;
-      pbFill.style.width = '100%'; pbLabel.textContent = '100%';
-      document.getElementById('df-pct').textContent = '100% optimized';
+      pbFill.style.width = '98%'; pbLabel.textContent = '98%';
+      document.getElementById('df-pct').textContent = '98% optimized';
       fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
       if (ws) ws.textContent = 'Complete — 1 file could not be moved';
-      localStorage.setItem(DEFRAG_KEY, Date.now().toString());
+      optimizeDriveFragmentation({ targetLevel: 0.02 });
       const lastEl = document.getElementById('df-last');
       if (lastEl) lastEl.textContent = 'Last defrag: just now';
+      const fragEl = document.getElementById('df-frag');
+      if (fragEl) fragEl.textContent = 'Fragmentation: 2%';
       drawGrid();
       return;
     }
@@ -8232,9 +8436,9 @@ function openDefrag() {
       { label: 'Exit', action: () => closeWin('defrag') },
     ]},
     { label: 'Help', items: [
-      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe — Help\n\nClick Start to defragment drive C:\\.\n\nDisk defragmentation rearranges fragmented\ndata so your disk works more efficiently.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
+      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe — Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nLower fragmentation reduces late-stage application distortion.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
       '-',
-      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe — Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\n1 file cannot be moved.\nIt has always been there.', 'About DEFRAG.exe', '🧩') },
+      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe — Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\nA small amount of the drive always remains unmovable.', 'About DEFRAG.exe', '🧩') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -9335,9 +9539,7 @@ function openRegedit() {
           });
         });
         const fname = 'registry_export.reg';
-        const dir = fsGetDir('');
-        dir.files.set(fname, txt);
-        schedSave();
+        fsWriteTextFile(fname, txt, '');
         osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', '🗝️');
       }},
       '-',
