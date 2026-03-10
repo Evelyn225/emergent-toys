@@ -6188,7 +6188,10 @@ function openExplorer(startPath) {
     }
     if (cwd === 'PROJECTS') {
       const project = PROJECTS.find(p => p.name === name);
-      if (project) window.open(project.file, '_blank');
+      if (project) {
+        const url = /^https?:\/\//.test(project.file) ? project.file : 'https://' + project.file;
+        window.open(url, '_blank');
+      }
       return;
     }
     if (sysfile) {
@@ -6326,7 +6329,7 @@ function openExplorer(startPath) {
 
   function makeProjectItem(project) {
     const item = { name: project.name, kind: 'file', sysfile: true, _proj: project };
-    const openProject = () => window.open(project.file, '_blank');
+    const openProject = () => window.open(/^https?:\/\//.test(project.file) ? project.file : 'https://' + project.file, '_blank');
     let el;
     if (viewMode === 'details') {
       el = document.createElement('tr');
