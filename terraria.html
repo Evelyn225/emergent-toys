@@ -64,7 +64,7 @@ const DSTONE = 4; // deep stone
 const world = new Uint8Array(WORLD_W * WORLD_H);
 
 function getBlock(x, y) {
-  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return STONE;
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return STONE; // all borders are solid
   return world[x + y * WORLD_W];
 }
 function setBlock(x, y, type) {
@@ -74,7 +74,7 @@ function setBlock(x, y, type) {
 
 // Simple value noise via hashed sine
 function hash(n) {
-  return (Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
+  return Math.abs((Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1);
 }
 function smoothNoise(x) {
   const i = Math.floor(x);
@@ -107,7 +107,7 @@ function generateWorld() {
         setBlock(x, y, GRASS);
       } else if (y < surfaceY + 5) {
         setBlock(x, y, DIRT);
-      } else if (y < 100) {
+      } else if (y < surfaceY + 50) {
         setBlock(x, y, STONE);
       } else {
         setBlock(x, y, DSTONE);
