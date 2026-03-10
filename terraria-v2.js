@@ -213,6 +213,15 @@ function getDropType(type) {
   return blockDefs[type]?.drops || type;
 }
 
+function breakTreeFrom(x, y) {
+  let broken = 0;
+  for (let treeY = y; treeY >= 0 && getBlock(x, treeY) === TREE; treeY--) {
+    setBlock(x, treeY, AIR);
+    broken++;
+  }
+  return broken;
+}
+
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -658,6 +667,7 @@ const player = {
   fullySubmerged: false,
   drownTick: 0,
   jumpLatch: false,
+  jumpAnimRestart: false,
   waterExitFrames: 0,
   health: 5,
   maxHealth: 5,
@@ -1183,8 +1193,9 @@ function updateMining(scale = 1) {
   mining.progress += scale;
 
   if (mining.progress >= getMineFrames(blockType)) {
-    setBlock(wx, wy, AIR);
-    addToInventory(getDropType(blockType), 1);
+    const drops = blockType === TREE ? breakTreeFrom(wx, wy) : 1;
+    if (blockType !== TREE) setBlock(wx, wy, AIR);
+    addToInventory(getDropType(blockType), drops);
     mining.bx = -1;
     mining.by = -1;
     mining.progress = 0;
@@ -1231,6 +1242,7 @@ function updatePlacement(frame) {
 }
 
 function updatePlayer(scale = 1) {
+  player.jumpAnimRestart = false;
   const waterCoverageStart = sampleWaterCoverage(player.x, player.y, player.w, player.h);
   player.waterExitFrames = Math.max(0, player.waterExitFrames - scale);
   const rawInWaterStart = waterCoverageStart > PLAYER_WET_THRESHOLD;
@@ -1282,18 +1294,26 @@ function updatePlayer(scale = 1) {
     player.blockedX = false;
   }
 
-  if (inWaterStart) player.vy *= Math.pow(0.88, scale);
+  const supportedInWater = inWaterStart && !jumpHeld && player.vy >= 0 &&
+    checkOnGround(player.x, player.y, player.w, player.h);
 
-  const gravity = inWaterStart ? GRAVITY * WATER_GRAVITY_MULT : GRAVITY;
-  const maxFall = inWaterStart ? WATER_MAX_FALL : MAX_FALL;
-  player.vy = Math.min(player.vy + gravity * scale, maxFall);
+  if (supportedInWater) {
+    player.vy = 0;
+  } else {
+    if (inWaterStart) player.vy *= Math.pow(0.88, scale);
 
-  if (canWaterLaunch) {
-    player.vy = WATER_EXIT_JUMP_VEL;
-    player.inWater = false;
-    player.waterExitFrames = 12;
-  } else if (inWaterStart && jumpHeld) {
-    player.vy = Math.max(player.vy - WATER_SWIM_ACCEL * scale, -4.4);
+    const gravity = inWaterStart ? GRAVITY * WATER_GRAVITY_MULT : GRAVITY;
+    const maxFall = inWaterStart ? WATER_MAX_FALL : MAX_FALL;
+    player.vy = Math.min(player.vy + gravity * scale, maxFall);
+
+    if (canWaterLaunch) {
+      player.vy = WATER_EXIT_JUMP_VEL;
+      player.inWater = false;
+      player.waterExitFrames = 12;
+      player.jumpAnimRestart = true;
+    } else if (inWaterStart && jumpHeld) {
+      player.vy = Math.max(player.vy - WATER_SWIM_ACCEL * scale, -4.4);
+    }
   }
 
   player.y += player.vy;
@@ -1311,6 +1331,7 @@ function updatePlayer(scale = 1) {
   if (!rawInWaterStart && jumpHeld && player.onGround) {
     player.vy = JUMP_VEL;
     player.onGround = false;
+    player.jumpAnimRestart = true;
   }
 
   player.x = clamp(player.x, 0, WORLD_PX - player.w);
@@ -1358,7 +1379,7 @@ function updateAnimation(scale = 1) {
   else if (moving && running) newState = 'run';
   else if (moving) newState = 'walk';
 
-  if (newState !== player.animState) {
+  if (newState !== player.animState || (newState === 'jump' && player.jumpAnimRestart)) {
     player.animState = newState;
     player.animFrame = 0;
     player.animTick = 0;
@@ -1371,7 +1392,8 @@ function updateAnimation(scale = 1) {
   player.animTick += scale;
   if (player.animTick >= ticksPerFrame) {
     player.animTick = 0;
-    player.animFrame = (player.animFrame + 1) % frameCount;
+    if (newState === 'jump') player.animFrame = Math.min(player.animFrame + 1, frameCount - 1);
+    else player.animFrame = (player.animFrame + 1) % frameCount;
   }
 }
 
@@ -1606,7 +1628,7 @@ function drawTreeCanopies() {
   const camY = Math.round(cam.y);
 
   for (const tree of treeCanopies) {
-    if (getBlock(tree.x, tree.trunkBaseY - 1) !== TREE) continue;
+    if (getBlock(tree.x, tree.trunkTopY) !== TREE) continue;
     const palette = tree.biome === BIOME_MEADOW
       ? { base: '#77c64d', light: '#99ea6c', dark: '#467b2c' }
       : tree.biome === BIOME_ROCKY
@@ -1777,6 +1799,15 @@ function drawStatusHud() {
   }
 }
 
+function getInventoryIconLayout(slotW, slotH) {
+  const iconSize = slotW >= 40 ? TILE * 2 : TILE;
+  return {
+    size: iconSize,
+    x: Math.floor((slotW - iconSize) / 2),
+    y: Math.floor((slotH - iconSize) / 2),
+  };
+}
+
 function drawInventorySlot(stack, x, y, slotW, slotH, options = {}) {
   const selected = !!options.selected;
   const hotkey = options.hotkey || '';
@@ -1796,10 +1827,8 @@ function drawInventorySlot(stack, x, y, slotW, slotH, options = {}) {
   }
 
   if (!isEmptyStack(stack)) {
-    const iconSize = Math.floor(slotW * 0.52);
-    const iconOffsetX = Math.floor((slotW - iconSize) / 2);
-    const iconOffsetY = Math.floor((slotH - iconSize) / 2) - 2;
-    ctx.drawImage(tileTextures[stack.type], x + iconOffsetX, y + iconOffsetY, iconSize, iconSize);
+    const icon = getInventoryIconLayout(slotW, slotH);
+    ctx.drawImage(tileTextures[stack.type], x + icon.x, y + icon.y, icon.size, icon.size);
   }
 
   if (hotkey) {
