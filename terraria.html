@@ -169,15 +169,6 @@ function generateWorld() {
     digWorm(sx, sy, 80 + Math.floor(Math.random() * 80), 2.5 + Math.random() * 1.5, angle);
   }
 
-  // Pass 3: re-grass any newly exposed top surfaces
-  for (let x = 0; x < WORLD_W; x++) {
-    for (let y = 0; y < WORLD_H; y++) {
-      const b = getBlock(x, y);
-      if (b !== AIR && getBlock(x, y - 1) === AIR) {
-        if (b === DIRT || b === STONE || b === DSTONE) setBlock(x, y, GRASS);
-      }
-    }
-  }
 }
 generateWorld();
 
