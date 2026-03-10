@@ -147,6 +147,9 @@ const player = {
   onGround: false,
   blockedX: false,
   facing: 1,   // 1 = right, -1 = left
+  animState:  'stand',
+  animFrame:  0,
+  animTick:   0,
 };
 
 const GRAVITY    = 0.5;
@@ -154,6 +157,17 @@ const MAX_FALL   = TILE - 1; // prevents tunneling through 1-tile-thick floors
 const JUMP_VEL   = -11;
 const WALK_SPEED = 2.5;
 const RUN_SPEED  = 5.0;
+
+const spritesheet = new Image();
+spritesheet.src = 'images/platformer_sprites_pixelized_0.png';
+
+const ANIM = {
+  stand: { row: 8, colStart: 0, frames: 1,  fps: 4  },
+  walk:  { row: 4, colStart: 0, frames: 8,  fps: 10 },
+  // Run spans row 0 col 4-7 then row 1 col 0-3 — handled in drawPlayer
+  run:   null,
+  jump:  { row: 5, colStart: 2, frames: 6,  fps: 8  },
+};
 
 // Check if a world-pixel rect overlaps any solid block
 function collidesWithWorld(px, py, pw, ph) {
@@ -276,13 +290,85 @@ function drawWorld() {
   }
 }
 
+function updateAnimation() {
+  // Determine state
+  let newState = 'stand';
+  const moving = keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight'];
+  const running = keys['ShiftLeft'] || keys['ShiftRight'];
+
+  if (!player.onGround) {
+    newState = 'jump';
+  } else if (moving && running) {
+    newState = 'run';
+  } else if (moving) {
+    newState = 'walk';
+  }
+
+  if (newState !== player.animState) {
+    player.animState = newState;
+    player.animFrame = 0;
+    player.animTick  = 0;
+  }
+
+  // Advance frame
+  const fps = newState === 'run' ? 12 : newState === 'walk' ? 10 : newState === 'jump' ? 8 : 4;
+  const ticksPerFrame = Math.round(60 / fps);
+
+  player.animTick++;
+  if (player.animTick >= ticksPerFrame) {
+    player.animTick = 0;
+    const frameCount = newState === 'run' ? 8 : newState === 'walk' ? 8 : newState === 'jump' ? 6 : 1;
+    player.animFrame = (player.animFrame + 1) % frameCount;
+  }
+}
+
+function drawPlayer() {
+  if (!spritesheet.complete) return;
+
+  const FRAME_SIZE = 64;
+  let srcX, srcY;
+
+  if (player.animState === 'run') {
+    // Run: frames 4-11 in the sheet (row 0 col 4-7, row 1 col 0-3)
+    const globalFrame = player.animFrame + 4;
+    const col = globalFrame % 8;
+    const row = Math.floor(globalFrame / 8);
+    srcX = col * FRAME_SIZE;
+    srcY = row * FRAME_SIZE;
+  } else {
+    const anim = ANIM[player.animState];
+    srcX = (anim.colStart + player.animFrame) * FRAME_SIZE;
+    srcY = anim.row * FRAME_SIZE;
+  }
+
+  // Screen position: sprite is 64px wide, hitbox is 28px wide — center sprite on hitbox
+  const offsetX = (player.w - FRAME_SIZE) / 2; // will be negative (sprite wider than hitbox)
+  const screenX = player.x - cam.x + offsetX;
+  // Align bottom of sprite with bottom of hitbox
+  const screenY = player.y - cam.y + (player.h - FRAME_SIZE);
+
+  ctx.save();
+  if (player.facing === -1) {
+    ctx.translate(screenX + FRAME_SIZE / 2, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE,
+                  -FRAME_SIZE / 2, screenY, FRAME_SIZE, FRAME_SIZE);
+  } else {
+    ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE,
+                  screenX, screenY, FRAME_SIZE, FRAME_SIZE);
+  }
+  ctx.restore();
+}
+
 let rafId;
 function loop(ts) {
   updatePlayer();
+  updateAnimation();
   updateCamera();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawSky();
   drawWorld();
+  drawPlayer();
   rafId = requestAnimationFrame(loop);
 }
 loop();
