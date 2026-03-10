@@ -806,6 +806,11 @@ function sampleWaterCoverage(px, py, pw, ph) {
 
 const keys = {};
 window.addEventListener('keydown', event => {
+  if (event.code === 'Tab') {
+    event.preventDefault();
+    if (!event.repeat) toggleInventory();
+    return;
+  }
   keys[event.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
     event.preventDefault();
@@ -816,22 +821,186 @@ window.addEventListener('keyup', event => {
 });
 
 const mouse = { x: 0, y: 0, down: false, rightDown: false };
+function syncMouseFromEvent(event) {
+  mouse.x = event.clientX;
+  mouse.y = event.clientY;
+}
+
+const HOTBAR_SIZE = 8;
+const BACKPACK_COLS = 8;
+const BACKPACK_ROWS = 3;
+const BACKPACK_SIZE = BACKPACK_COLS * BACKPACK_ROWS;
+const STACK_LIMIT = 999;
+
+function createStack(type = AIR, count = 0) {
+  return { type, count };
+}
+
+function isEmptyStack(stack) {
+  return !stack || stack.type === AIR || stack.count <= 0;
+}
+
+function setStack(slot, stack) {
+  if (!slot) return;
+  slot.type = stack?.type ?? AIR;
+  slot.count = stack?.count ?? 0;
+  if (slot.type === AIR || slot.count <= 0) {
+    slot.type = AIR;
+    slot.count = 0;
+  }
+}
+
+function cloneStack(stack) {
+  return createStack(stack?.type ?? AIR, stack?.count ?? 0);
+}
+
+const inventory = {
+  hotbar: Array.from({ length: HOTBAR_SIZE }, () => createStack()),
+  backpack: Array.from({ length: BACKPACK_SIZE }, () => createStack()),
+  selected: 0,
+  open: false,
+};
+
+const dragState = {
+  active: false,
+  sourceArea: null,
+  sourceIndex: -1,
+  item: createStack(),
+};
+
+inventory.hotbar[0] = { type: DIRT, count: 48 };
+inventory.hotbar[1] = { type: STONE, count: 24 };
+inventory.hotbar[2] = { type: WOOD, count: 18 };
+inventory.hotbar[3] = { type: COPPER, count: 8 };
+
+function getInventoryArray(area) {
+  if (area === 'hotbar') return inventory.hotbar;
+  if (area === 'backpack') return inventory.backpack;
+  return null;
+}
+
+function getInventorySlot(area, index) {
+  const slots = getInventoryArray(area);
+  return slots && index >= 0 && index < slots.length ? slots[index] : null;
+}
+
+function getInventorySlotGroups() {
+  return [inventory.hotbar, inventory.backpack];
+}
+
+function clearDragState() {
+  dragState.active = false;
+  dragState.sourceArea = null;
+  dragState.sourceIndex = -1;
+  dragState.item = createStack();
+}
+
+function returnDraggedStack() {
+  if (!dragState.active || isEmptyStack(dragState.item)) {
+    clearDragState();
+    return;
+  }
+  const sourceSlot = getInventorySlot(dragState.sourceArea, dragState.sourceIndex);
+  if (sourceSlot) setStack(sourceSlot, dragState.item);
+  else addToInventory(dragState.item.type, dragState.item.count);
+  clearDragState();
+}
+
+function toggleInventory(forceOpen = !inventory.open) {
+  const nextOpen = !!forceOpen;
+  if (inventory.open === nextOpen) return;
+  if (!nextOpen && dragState.active) returnDraggedStack();
+  inventory.open = nextOpen;
+}
+
+function dropDraggedStack(area, index) {
+  if (!dragState.active) return;
+
+  const targetSlot = getInventorySlot(area, index);
+  if (!targetSlot) {
+    returnDraggedStack();
+    return;
+  }
+
+  if (area === 'hotbar') inventory.selected = index;
+
+  if (area === dragState.sourceArea && index === dragState.sourceIndex) {
+    setStack(targetSlot, dragState.item);
+    clearDragState();
+    return;
+  }
+
+  if (isEmptyStack(targetSlot)) {
+    setStack(targetSlot, dragState.item);
+    clearDragState();
+    return;
+  }
+
+  if (targetSlot.type === dragState.item.type && targetSlot.count < STACK_LIMIT) {
+    const transfer = Math.min(STACK_LIMIT - targetSlot.count, dragState.item.count);
+    targetSlot.count += transfer;
+    dragState.item.count -= transfer;
+    if (dragState.item.count <= 0) {
+      clearDragState();
+      return;
+    }
+    const sourceSlot = getInventorySlot(dragState.sourceArea, dragState.sourceIndex);
+    if (sourceSlot) setStack(sourceSlot, dragState.item);
+    clearDragState();
+    return;
+  }
+
+  const sourceSlot = getInventorySlot(dragState.sourceArea, dragState.sourceIndex);
+  const swapped = cloneStack(targetSlot);
+  setStack(targetSlot, dragState.item);
+  if (sourceSlot) setStack(sourceSlot, swapped);
+  clearDragState();
+}
+
+function handleInventoryPrimaryDown() {
+  const slotRef = getUiSlotAt(mouse.x, mouse.y);
+  if (!slotRef) return;
+  if (slotRef.area === 'hotbar') inventory.selected = slotRef.index;
+  if (!inventory.open || dragState.active) return;
+
+  const slot = getInventorySlot(slotRef.area, slotRef.index);
+  if (isEmptyStack(slot)) return;
+
+  dragState.active = true;
+  dragState.sourceArea = slotRef.area;
+  dragState.sourceIndex = slotRef.index;
+  dragState.item = cloneStack(slot);
+  setStack(slot, createStack());
+}
+
 window.addEventListener('blur', () => {
   for (const key of Object.keys(keys)) keys[key] = false;
   mouse.down = false;
   mouse.rightDown = false;
+  returnDraggedStack();
 });
 
 canvas.addEventListener('mousemove', event => {
-  mouse.x = event.clientX;
-  mouse.y = event.clientY;
+  syncMouseFromEvent(event);
 });
 canvas.addEventListener('mousedown', event => {
-  if (event.button === 0) mouse.down = true;
+  syncMouseFromEvent(event);
+  if (event.button === 0) {
+    mouse.down = true;
+    handleInventoryPrimaryDown();
+  }
   if (event.button === 2) mouse.rightDown = true;
 });
-canvas.addEventListener('mouseup', event => {
-  if (event.button === 0) mouse.down = false;
+window.addEventListener('mouseup', event => {
+  syncMouseFromEvent(event);
+  if (event.button === 0) {
+    if (dragState.active) {
+      const slotRef = getUiSlotAt(mouse.x, mouse.y);
+      if (slotRef) dropDraggedStack(slotRef.area, slotRef.index);
+      else returnDraggedStack();
+    }
+    mouse.down = false;
+  }
   if (event.button === 2) mouse.rightDown = false;
 });
 canvas.addEventListener('mouseleave', () => {
@@ -840,25 +1009,31 @@ canvas.addEventListener('mouseleave', () => {
 });
 canvas.addEventListener('contextmenu', event => event.preventDefault());
 
-const HOTBAR_SIZE = 8;
-const inventory = {
-  slots: Array.from({ length: HOTBAR_SIZE }, () => ({ type: AIR, count: 0 })),
-  selected: 0,
-};
-
-inventory.slots[0] = { type: DIRT, count: 48 };
-inventory.slots[1] = { type: STONE, count: 24 };
-inventory.slots[2] = { type: WOOD, count: 18 };
-inventory.slots[3] = { type: COPPER, count: 8 };
-
 function addToInventory(type, amount = 1) {
   if (type === AIR || amount <= 0) return false;
-  let slot = inventory.slots.find(candidate => candidate.type === type && candidate.count > 0 && candidate.count < 999);
-  if (!slot) slot = inventory.slots.find(candidate => candidate.type === AIR || candidate.count === 0);
-  if (!slot) return false;
-  if (slot.type === AIR || slot.count === 0) slot.type = type;
-  slot.count += amount;
-  return true;
+  let remaining = amount;
+
+  for (const slots of getInventorySlotGroups()) {
+    for (const slot of slots) {
+      if (slot.type !== type || slot.count <= 0 || slot.count >= STACK_LIMIT) continue;
+      const transfer = Math.min(STACK_LIMIT - slot.count, remaining);
+      slot.count += transfer;
+      remaining -= transfer;
+      if (remaining <= 0) return true;
+    }
+  }
+
+  for (const slots of getInventorySlotGroups()) {
+    for (const slot of slots) {
+      if (!isEmptyStack(slot)) continue;
+      const transfer = Math.min(STACK_LIMIT, remaining);
+      setStack(slot, createStack(type, transfer));
+      remaining -= transfer;
+      if (remaining <= 0) return true;
+    }
+  }
+
+  return remaining <= 0;
 }
 
 const MINE_RADIUS_PX = 6 * TILE;
@@ -866,16 +1041,112 @@ const mining = { bx: -1, by: -1, progress: 0, active: false };
 
 canvas.addEventListener('wheel', event => {
   event.preventDefault();
-  inventory.selected = mod(inventory.selected + (event.deltaY > 0 ? 1 : -1), inventory.slots.length);
+  inventory.selected = mod(inventory.selected + (event.deltaY > 0 ? 1 : -1), inventory.hotbar.length);
 }, { passive: false });
 
 window.addEventListener('keydown', event => {
   const value = parseInt(event.key, 10);
-  if (value >= 1 && value <= inventory.slots.length) inventory.selected = value - 1;
+  if (value >= 1 && value <= inventory.hotbar.length) inventory.selected = value - 1;
 });
 
 function getMineFrames(type) {
   return blockDefs[type]?.mine || 60;
+}
+
+function isPointInRect(px, py, x, y, w, h) {
+  return px >= x && px < x + w && py >= y && py < y + h;
+}
+
+function getInventoryMetrics() {
+  const compact = canvas.width < 520;
+  const slotW = compact ? 34 : canvas.width < 720 ? 40 : 48;
+  const slotH = slotW;
+  const gap = compact ? 5 : 7;
+  const hotbarW = HOTBAR_SIZE * slotW + (HOTBAR_SIZE - 1) * gap;
+  const hotbarX = Math.floor((canvas.width - hotbarW) / 2);
+  const hotbarY = Math.floor(canvas.height - slotH - 18);
+  const headerH = compact ? 26 : 28;
+  const panelPad = compact ? 12 : 14;
+  const gridW = BACKPACK_COLS * slotW + (BACKPACK_COLS - 1) * gap;
+  const gridH = BACKPACK_ROWS * slotH + (BACKPACK_ROWS - 1) * gap;
+  const backpackW = gridW + panelPad * 2;
+  const backpackH = gridH + headerH + panelPad;
+  const backpackX = Math.floor((canvas.width - backpackW) / 2);
+  const backpackY = hotbarY - backpackH - 14;
+  return {
+    slotW,
+    slotH,
+    gap,
+    iconSize: Math.floor(slotW * 0.52),
+    iconOffsetX: Math.floor((slotW - Math.floor(slotW * 0.52)) / 2),
+    iconOffsetY: Math.floor((slotH - Math.floor(slotW * 0.52)) / 2) - 2,
+    hotbar: { x: hotbarX, y: hotbarY, w: hotbarW, h: slotH },
+    backpack: {
+      x: backpackX,
+      y: backpackY,
+      w: backpackW,
+      h: backpackH,
+      headerH,
+      gridX: backpackX + panelPad,
+      gridY: backpackY + headerH,
+    },
+  };
+}
+
+function getSlotRect(area, index, metrics = getInventoryMetrics()) {
+  if (area === 'hotbar') {
+    if (index < 0 || index >= inventory.hotbar.length) return null;
+    return {
+      x: Math.floor(metrics.hotbar.x + index * (metrics.slotW + metrics.gap)),
+      y: metrics.hotbar.y,
+      w: metrics.slotW,
+      h: metrics.slotH,
+    };
+  }
+
+  if (area === 'backpack') {
+    if (index < 0 || index >= inventory.backpack.length) return null;
+    const col = index % BACKPACK_COLS;
+    const row = Math.floor(index / BACKPACK_COLS);
+    return {
+      x: Math.floor(metrics.backpack.gridX + col * (metrics.slotW + metrics.gap)),
+      y: Math.floor(metrics.backpack.gridY + row * (metrics.slotH + metrics.gap)),
+      w: metrics.slotW,
+      h: metrics.slotH,
+    };
+  }
+
+  return null;
+}
+
+function getUiSlotAt(x, y) {
+  const metrics = getInventoryMetrics();
+
+  if (inventory.open) {
+    for (let i = 0; i < inventory.backpack.length; i++) {
+      const rect = getSlotRect('backpack', i, metrics);
+      if (rect && isPointInRect(x, y, rect.x, rect.y, rect.w, rect.h)) {
+        return { area: 'backpack', index: i };
+      }
+    }
+  }
+
+  for (let i = 0; i < inventory.hotbar.length; i++) {
+    const rect = getSlotRect('hotbar', i, metrics);
+    if (rect && isPointInRect(x, y, rect.x, rect.y, rect.w, rect.h)) {
+      return { area: 'hotbar', index: i };
+    }
+  }
+
+  return null;
+}
+
+function isPointerOverInventoryUi(x = mouse.x, y = mouse.y) {
+  const metrics = getInventoryMetrics();
+  if (inventory.open && isPointInRect(x, y, metrics.backpack.x, metrics.backpack.y, metrics.backpack.w, metrics.backpack.h)) {
+    return true;
+  }
+  return isPointInRect(x, y, metrics.hotbar.x, metrics.hotbar.y, metrics.hotbar.w, metrics.hotbar.h);
 }
 
 function updateMining(scale = 1) {
@@ -888,7 +1159,8 @@ function updateMining(scale = 1) {
   const pcy = player.y + player.h / 2;
   const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
   const blockType = getBlock(wx, wy);
-  const canMine = mouse.down && dist <= MINE_RADIUS_PX && isMineable(blockType);
+  const canMine = mouse.down && !dragState.active && !isPointerOverInventoryUi() &&
+                  dist <= MINE_RADIUS_PX && isMineable(blockType);
 
   if (!canMine) {
     mining.active = false;
@@ -922,10 +1194,10 @@ function updateMining(scale = 1) {
 
 let lastPlaceFrame = -1;
 function updatePlacement(frame) {
-  if (!mouse.rightDown || frame === lastPlaceFrame) return;
+  if (!mouse.rightDown || frame === lastPlaceFrame || dragState.active || isPointerOverInventoryUi()) return;
   lastPlaceFrame = frame;
 
-  const slot = inventory.slots[inventory.selected];
+  const slot = inventory.hotbar[inventory.selected];
   if (!slot || slot.type === AIR || slot.count <= 0) return;
 
   const camX = Math.round(cam.x);
@@ -1505,49 +1777,93 @@ function drawStatusHud() {
   }
 }
 
-function drawHotbar() {
-  const slotW = canvas.width < 720 ? 40 : 48;
-  const slotH = slotW;
-  const gap = 7;
-  const totalW = inventory.slots.length * slotW + (inventory.slots.length - 1) * gap;
-  const startX = Math.floor((canvas.width - totalW) / 2);
-  const startY = Math.floor(canvas.height - slotH - 18);
-  const selected = inventory.slots[inventory.selected];
-  const iconSize = Math.floor(slotW * 0.52);
-  const iconOffsetX = Math.floor((slotW - iconSize) / 2);
-  const iconOffsetY = Math.floor((slotH - iconSize) / 2) - 2;
-
+function drawInventorySlot(stack, x, y, slotW, slotH, options = {}) {
+  const selected = !!options.selected;
+  const hotkey = options.hotkey || '';
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  for (let i = 0; i < inventory.slots.length; i++) {
-    const slot = inventory.slots[i];
-    const sx = Math.floor(startX + i * (slotW + gap));
-    const sy = startY;
+  ctx.fillStyle = selected ? 'rgba(46,57,82,0.92)' : 'rgba(10,12,18,0.72)';
+  ctx.fillRect(x, y, slotW, slotH);
+  if (selected) {
+    ctx.fillStyle = 'rgba(255,213,94,0.08)';
+    ctx.fillRect(x + 2, y + 2, slotW - 4, slotH - 4);
+  }
+  ctx.strokeStyle = selected ? '#ffef9c' : 'rgba(255,255,255,0.16)';
+  ctx.strokeRect(x + 0.5, y + 0.5, slotW - 1, slotH - 1);
+  if (selected) {
+    ctx.strokeStyle = 'rgba(255,213,94,0.5)';
+    ctx.strokeRect(x + 1.5, y + 1.5, slotW - 3, slotH - 3);
+  }
 
-    ctx.fillStyle = i === inventory.selected ? 'rgba(46,57,82,0.9)' : 'rgba(10,12,18,0.72)';
-    ctx.fillRect(sx, sy, slotW, slotH);
-    ctx.strokeStyle = i === inventory.selected ? '#ffef9c' : 'rgba(255,255,255,0.16)';
-    ctx.strokeRect(sx + 0.5, sy + 0.5, slotW - 1, slotH - 1);
-    if (i === inventory.selected) {
-      ctx.strokeStyle = 'rgba(255,213,94,0.5)';
-      ctx.strokeRect(sx + 1.5, sy + 1.5, slotW - 3, slotH - 3);
-    }
+  if (!isEmptyStack(stack)) {
+    const iconSize = Math.floor(slotW * 0.52);
+    const iconOffsetX = Math.floor((slotW - iconSize) / 2);
+    const iconOffsetY = Math.floor((slotH - iconSize) / 2) - 2;
+    ctx.drawImage(tileTextures[stack.type], x + iconOffsetX, y + iconOffsetY, iconSize, iconSize);
+  }
 
-    if (slot.type !== AIR) {
-      ctx.drawImage(tileTextures[slot.type], sx + iconOffsetX, sy + iconOffsetY, iconSize, iconSize);
-    }
+  if (hotkey) {
+    drawText(hotkey, x + 5, y + 13, 'rgba(255,255,255,0.7)', '10px Minecraft, monospace');
+  }
+  if (stack.count > 0) {
+    drawText(String(stack.count), x + slotW - 6, y + slotH - 7, '#ffffff', '12px Minecraft, monospace', 'right');
+  }
+  ctx.restore();
+}
 
-    drawText(String(i + 1), sx + 5, sy + 13, 'rgba(255,255,255,0.7)', '10px Minecraft, monospace');
-    if (slot.count > 0) {
-      drawText(String(slot.count), sx + slotW - 6, sy + slotH - 7, '#ffffff', '12px Minecraft, monospace', 'right');
-    }
+function drawBackpack() {
+  if (!inventory.open) return;
+
+  const metrics = getInventoryMetrics();
+  const panel = metrics.backpack;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(4,7,12,0.28)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  drawPanel(panel.x, panel.y, panel.w, panel.h);
+  ctx.fillStyle = 'rgba(93,132,176,0.16)';
+  ctx.fillRect(panel.x + 2, panel.y + 2, panel.w - 4, panel.headerH - 4);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.beginPath();
+  ctx.moveTo(panel.x + 12, panel.y + panel.headerH - 0.5);
+  ctx.lineTo(panel.x + panel.w - 12, panel.y + panel.headerH - 0.5);
+  ctx.stroke();
+  drawText('BACKPACK', panel.x + 14, panel.y + 18, '#f5f1d0', '13px Minecraft, monospace');
+  drawText('TAB', panel.x + panel.w - 14, panel.y + 18, '#8fb4d9', '11px Minecraft, monospace', 'right');
+
+  for (let i = 0; i < inventory.backpack.length; i++) {
+    const rect = getSlotRect('backpack', i, metrics);
+    const slot = inventory.backpack[i];
+    drawInventorySlot(slot, rect.x, rect.y, rect.w, rect.h);
+  }
+  ctx.restore();
+}
+
+function drawHotbar() {
+  const metrics = getInventoryMetrics();
+  const selected = inventory.hotbar[inventory.selected];
+
+  for (let i = 0; i < inventory.hotbar.length; i++) {
+    const rect = getSlotRect('hotbar', i, metrics);
+    const slot = inventory.hotbar[i];
+    drawInventorySlot(slot, rect.x, rect.y, rect.w, rect.h, {
+      selected: i === inventory.selected,
+      hotkey: String(i + 1),
+    });
   }
 
   if (selected && selected.type !== AIR) {
     const label = blockDefs[selected.type]?.name || 'Block';
-    drawText(label.toUpperCase(), Math.floor(canvas.width / 2), startY - 10, '#f5f1d0', '14px Minecraft, monospace', 'center');
+    drawText(label.toUpperCase(), Math.floor(canvas.width / 2), metrics.hotbar.y - 10, '#f5f1d0', '14px Minecraft, monospace', 'center');
   }
-  ctx.restore();
+}
+
+function drawDraggedStack() {
+  if (!dragState.active || isEmptyStack(dragState.item)) return;
+  const metrics = getInventoryMetrics();
+  const x = Math.floor(mouse.x - metrics.slotW * 0.35);
+  const y = Math.floor(mouse.y - metrics.slotH * 0.4);
+  drawInventorySlot(dragState.item, x, y, metrics.slotW, metrics.slotH, { selected: true });
 }
 
 function loop(ts) {
@@ -1573,8 +1889,10 @@ function loop(ts) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   drawMining();
+  drawBackpack();
   drawStatusHud();
   drawHotbar();
+  drawDraggedStack();
 
   requestAnimationFrame(loop);
 }
