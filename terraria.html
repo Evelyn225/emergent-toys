@@ -131,7 +131,7 @@ function generateWorld() {
             const bx = Math.round(wx + dx);
             const by = Math.round(wy + dy);
             const minY = surfaceYs[Math.max(0, Math.min(WORLD_W - 1, bx))];
-            if (by > minY + depthGuard && by < WORLD_H - 3) setBlock(bx, by, AIR);
+            if (by >= minY + depthGuard && by < WORLD_H - 3) setBlock(bx, by, AIR);
           }
         }
       }
