@@ -3,9 +3,15 @@
   "builds": [
     { "src": "api/*.js", "use": "@vercel/node" },
     { "src": "*.html", "use": "@vercel/static" },
+    { "src": "*.js", "use": "@vercel/static" },
+    { "src": "*.css", "use": "@vercel/static" },
     { "src": "*.json", "use": "@vercel/static" },
+    { "src": "*.ttf", "use": "@vercel/static" },
+    { "src": "*.woff", "use": "@vercel/static" },
+    { "src": "*.woff2", "use": "@vercel/static" },
     { "src": "casino-assets/**", "use": "@vercel/static" },
     { "src": "images/**", "use": "@vercel/static" },
+    { "src": "audio/**", "use": "@vercel/static" },
     { "src": "archive links/**", "use": "@vercel/static" },
     { "src": "site.webmanifest", "use": "@vercel/static" }
   ],
