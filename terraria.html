@@ -224,6 +224,7 @@ const ANIM = {
   run:     null,
   jump:    { row: 5, colStart: 2 },
   stairUp: { row: 6, colStart: 0 },
+  mine:    { row: 1, colStart: 4 },  // swing weapon frames (row 1, cols 4-7)
 };
 
 // Check if a world-pixel rect overlaps any solid block
@@ -259,6 +260,103 @@ window.addEventListener('keydown', e => {
   }
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Mouse state (screen coordinates)
+const mouse = { x: 0, y: 0, down: false };
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener('mousedown', e => { if (e.button === 0) mouse.down = true; });
+canvas.addEventListener('mouseup',   e => { if (e.button === 0) mouse.down = false; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// Mining time per block type (frames at 60fps)
+const MINE_FRAMES = { [GRASS]: 20, [DIRT]: 35, [STONE]: 70, [DSTONE]: 110 };
+const MINE_RADIUS_PX = 5.5 * TILE; // max reach from player center
+
+// Mining state — tracks which block is being mined and how far along
+const mining = { bx: -1, by: -1, progress: 0, active: false };
+
+function updateMining() {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  // Convert mouse screen → world block coords
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+
+  // Player center in world-pixels
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+
+  // Block center distance from player
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  const inRange = dist <= MINE_RADIUS_PX;
+  const blockType = getBlock(wx, wy);
+  const canMine = mouse.down && inRange && blockType !== AIR;
+
+  if (!canMine) {
+    mining.active = false;
+    // Reset progress only if target changed or mouse released
+    if (!mouse.down || wx !== mining.bx || wy !== mining.by) {
+      mining.bx = -1; mining.by = -1; mining.progress = 0;
+    }
+    return;
+  }
+
+  // Switch target → reset progress
+  if (wx !== mining.bx || wy !== mining.by) {
+    mining.bx = wx; mining.by = wy; mining.progress = 0;
+  }
+
+  mining.active = true;
+  // Face toward the block being mined
+  player.facing = (wx * TILE + TILE / 2 >= pcx) ? 1 : -1;
+  mining.progress++;
+
+  if (mining.progress >= (MINE_FRAMES[blockType] || 60)) {
+    setBlock(wx, wy, AIR);
+    mining.bx = -1; mining.by = -1; mining.progress = 0;
+    mining.active = false;
+  }
+}
+
+function drawMining() {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  const blockType = getBlock(wx, wy);
+  const inRange = dist <= MINE_RADIUS_PX && blockType !== AIR;
+
+  // Hover highlight on any reachable block
+  if (inRange) {
+    const sx = (wx * TILE - camX) | 0;
+    const sy = (wy * TILE - camY) | 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+  }
+
+  // Mining progress overlay on the active block
+  if (mining.bx >= 0) {
+    const sx = (mining.bx * TILE - camX) | 0;
+    const sy = (mining.by * TILE - camY) | 0;
+    const t = mining.progress / (MINE_FRAMES[getBlock(mining.bx, mining.by)] || 60);
+    // Darken block as it breaks
+    ctx.fillStyle = `rgba(0,0,0,${(t * 0.65).toFixed(2)})`;
+    ctx.fillRect(sx, sy, TILE, TILE);
+    // Bright border
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+    // Progress bar underneath block
+    ctx.fillStyle = '#000';
+    ctx.fillRect(sx, sy + TILE + 2, TILE, 4);
+    ctx.fillStyle = `hsl(${120 - t * 120},100%,50%)`;
+    ctx.fillRect(sx, sy + TILE + 2, Math.round(TILE * t), 4);
+  }
+}
 
 function updatePlayer(scale = 1) {
   // Delta-time scaled physics. scale ~1.0 at 60fps, ~0.5 at 120fps.
@@ -376,6 +474,8 @@ function updateAnimation() {
 
   if (!player.onGround) {
     newState = 'jump';
+  } else if (mining.active) {
+    newState = 'mine';
   } else if (moving && running) {
     newState = 'run';
   } else if (moving) {
@@ -389,8 +489,8 @@ function updateAnimation() {
   }
 
   // Advance frame
-  const FPS = { stand: 4, walk: 10, run: 12, jump: 8, stairUp: 12 };
-  const FRAME_COUNTS = { stand: 1, walk: 8, run: 8, jump: 6, stairUp: 8 };
+  const FPS = { stand: 4, walk: 10, run: 12, jump: 8, stairUp: 12, mine: 10 };
+  const FRAME_COUNTS = { stand: 1, walk: 8, run: 8, jump: 6, stairUp: 8, mine: 4 };
 
   const fps = FPS[newState] || 4;
   const ticksPerFrame = Math.round(60 / fps);
@@ -453,12 +553,14 @@ function loop(ts) {
   const scale = dt / TARGET_DT; // ~1.0 at 60fps, ~0.5 at 120fps
 
   updatePlayer(scale);
+  updateMining();
   updateAnimation();
   updateCamera(scale);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawSky();
   drawWorld();
   drawPlayer();
+  drawMining();
   rafId = requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
