@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>Turtle Drawing</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      color: #e8f0e8;
+      font-family: 'DM Mono', monospace;
+      font-weight: 300;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── Top bar ─── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    #topbar label {
+      font-size: 11px;
+      color: rgba(232,240,232,0.5);
+      margin-right: 2px;
+    }
+
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    input[type="color"] {
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      background: none;
+      cursor: pointer;
+      padding: 2px;
+    }
+
+    input[type="range"] {
+      width: 80px;
+      accent-color: #7ec8a0;
+    }
+
+    button {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      font-weight: 300;
+      background: rgba(255,255,255,0.06);
+      color: #e8f0e8;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    button:hover { background: rgba(255,255,255,0.12); }
+    button:active { transform: scale(0.95); }
+
+    #pen-toggle.pen-up {
+      color: #f0a0a0;
+      border-color: rgba(240,160,160,0.4);
+    }
+
+    /* ─── Command bar ─── */
+    #cmdbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+    }
+
+    #cmd-input {
+      flex: 1;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      font-weight: 300;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px;
+      color: #e8f0e8;
+      padding: 5px 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #cmd-input:focus { border-color: rgba(126,200,160,0.5); }
+    #cmd-input::placeholder { color: rgba(232,240,232,0.25); }
+
+    #cmd-hint {
+      font-size: 10px;
+      color: rgba(232,240,232,0.3);
+      white-space: nowrap;
+    }
+
+    /* ─── Canvas area ─── */
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ─── Home button ─── */
+    #home-btn {
+      position: fixed;
+      top: 8px;
+      right: 10px;
+      z-index: 1000;
+      padding: 6px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+    #home-btn:hover { transform: scale(1.2) rotate(5deg); background: rgba(255,150,200,0.8); border-color: #888; }
+    #home-btn:active { transform: scale(0.9) rotate(-5deg); }
+
+    /* ─── Key hint overlay ─── */
+    #key-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: rgba(232,240,232,0.2);
+      pointer-events: none;
+      white-space: nowrap;
+      letter-spacing: 0.04em;
+    }
+
+    /* ─── Trail color mode button ─── */
+    #rainbow-toggle.on {
+      color: #ffdd88;
+      border-color: rgba(255,220,136,0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <a id="home-btn" href="index.html" title="Home">
+    <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+         alt="home" style="width:18px;height:18px;object-fit:contain;">
+  </a>
+
+  <!-- Controls -->
+  <div id="topbar">
+    <div class="ctrl-group">
+      <label>color</label>
+      <input type="color" id="color-pick" value="#7ec8a0">
+    </div>
+    <div class="ctrl-group">
+      <label>size</label>
+      <input type="range" id="size-pick" min="1" max="20" value="2">
+      <span id="size-val" style="font-size:11px;color:rgba(232,240,232,0.5);min-width:20px">2</span>
+    </div>
+    <div class="ctrl-group">
+      <label>speed</label>
+      <input type="range" id="speed-pick" min="1" max="20" value="5">
+      <span id="speed-val" style="font-size:11px;color:rgba(232,240,232,0.5);min-width:20px">5</span>
+    </div>
+    <button id="pen-toggle">pen down</button>
+    <button id="rainbow-toggle">rainbow</button>
+    <button id="clear-btn">clear</button>
+    <button id="center-btn">reset turtle</button>
+    <button id="save-btn">save png</button>
+  </div>
+
+  <!-- Logo-style command bar -->
+  <div id="cmdbar">
+    <label style="font-size:11px;color:rgba(232,240,232,0.4);">&gt;</label>
+    <input id="cmd-input" type="text" placeholder="fd 100  rt 90  lt 45  bk 50  circle 80  repeat 4 [fd 60 rt 90]" spellcheck="false">
+    <span id="cmd-hint">enter to run</span>
+  </div>
+
+  <!-- Drawing canvas -->
+  <div id="canvas-wrap">
+    <canvas id="draw-canvas"></canvas>
+    <div id="key-hint">↑ ↓ forward / back &nbsp;·&nbsp; ← → turn &nbsp;·&nbsp; shift+↑↓ larger step</div>
+  </div>
+
+<script>
+// ── Canvas setup ─────────────────────────────────────────────────────────────
+const wrap   = document.getElementById('canvas-wrap');
+const canvas = document.getElementById('draw-canvas');
+const ctx    = canvas.getContext('2d');
+
+function resize() {
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  // Save existing drawing
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  canvas.width  = w;
+  canvas.height = h;
+  ctx.putImageData(img, 0, 0);
+  // Keep background dark
+  // (putImageData restored the pixels, background is transparent over body)
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Turtle state ─────────────────────────────────────────────────────────────
+const turtle = {
+  x: 0, y: 0,   // set in reset()
+  angle: -90,    // facing up
+  penDown: true,
+  color: '#7ec8a0',
+  size: 2,
+  rainbow: false,
+  rainbowHue: 0,
+};
+
+function reset() {
+  turtle.x     = canvas.width  / 2;
+  turtle.y     = canvas.height / 2;
+  turtle.angle = -90;
+}
+reset();
+
+// ── Draw trail canvas ─────────────────────────────────────────────────────────
+function currentColor() {
+  if (turtle.rainbow) {
+    turtle.rainbowHue = (turtle.rainbowHue + 1.5) % 360;
+    return `hsl(${turtle.rainbowHue}, 80%, 65%)`;
+  }
+  return turtle.color;
+}
+
+function moveTo(nx, ny) {
+  if (turtle.penDown) {
+    ctx.beginPath();
+    ctx.moveTo(turtle.x, turtle.y);
+    ctx.lineTo(nx, ny);
+    ctx.strokeStyle = currentColor();
+    ctx.lineWidth   = turtle.size;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+  }
+  turtle.x = nx;
+  turtle.y = ny;
+}
+
+function forward(dist) {
+  const rad = turtle.angle * Math.PI / 180;
+  moveTo(
+    turtle.x + Math.cos(rad) * dist,
+    turtle.y + Math.sin(rad) * dist,
+  );
+}
+
+function right(deg)  { turtle.angle += deg; }
+function left(deg)   { turtle.angle -= deg; }
+
+function drawCircle(radius) {
+  // Approximate circle by many small steps
+  const steps   = 72;
+  const stepDeg = 360 / steps;
+  const stepDist = (2 * Math.PI * Math.abs(radius)) / steps;
+  for (let i = 0; i < steps; i++) {
+    forward(stepDist);
+    if (radius >= 0) right(stepDeg); else left(stepDeg);
+  }
+}
+
+// ── Turtle sprite ────────────────────────────────────────────────────────────
+const spriteCanvas = document.createElement('canvas');
+spriteCanvas.width  = 26;
+spriteCanvas.height = 26;
+const sc = spriteCanvas.getContext('2d');
+
+function drawTurtleSprite() {
+  sc.clearRect(0, 0, 26, 26);
+  // Shell
+  sc.beginPath();
+  sc.arc(13, 13, 9, 0, Math.PI * 2);
+  sc.fillStyle   = '#4a9e6a';
+  sc.fill();
+  // Shine
+  sc.beginPath();
+  sc.arc(10, 10, 3, 0, Math.PI * 2);
+  sc.fillStyle = 'rgba(255,255,255,0.2)';
+  sc.fill();
+  // Head (pointing right in sprite, will be rotated)
+  sc.beginPath();
+  sc.arc(22, 13, 5, 0, Math.PI * 2);
+  sc.fillStyle = '#5ab87c';
+  sc.fill();
+  // Eyes
+  sc.beginPath();
+  sc.arc(24, 11, 1.5, 0, Math.PI * 2);
+  sc.fillStyle = '#fff';
+  sc.fill();
+  sc.beginPath();
+  sc.arc(24.5, 11, 0.7, 0, Math.PI * 2);
+  sc.fillStyle = '#222';
+  sc.fill();
+}
+drawTurtleSprite();
+
+// Overlay canvas for turtle sprite (drawn on top, cleared each frame)
+const overlayCanvas = document.createElement('canvas');
+const oc = overlayCanvas.getContext('2d');
+overlayCanvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;width:100%;height:100%';
+wrap.appendChild(overlayCanvas);
+
+function syncOverlay() {
+  overlayCanvas.width  = canvas.width;
+  overlayCanvas.height = canvas.height;
+}
+syncOverlay();
+window.addEventListener('resize', () => { syncOverlay(); });
+
+function renderTurtle() {
+  oc.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  oc.save();
+  oc.translate(turtle.x, turtle.y);
+  // sprite points right at 0°, turtle.angle 0° = right, so direct mapping
+  oc.rotate((turtle.angle) * Math.PI / 180);
+  oc.drawImage(spriteCanvas, -13, -13);
+  oc.restore();
+}
+
+// ── Animation loop ────────────────────────────────────────────────────────────
+function tick() {
+  renderTurtle();
+  requestAnimationFrame(tick);
+}
+tick();
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+const colorPick   = document.getElementById('color-pick');
+const sizePick    = document.getElementById('size-pick');
+const sizeVal     = document.getElementById('size-val');
+const speedPick   = document.getElementById('speed-pick');
+const speedVal    = document.getElementById('speed-val');
+const penToggle   = document.getElementById('pen-toggle');
+const rainbowBtn  = document.getElementById('rainbow-toggle');
+const clearBtn    = document.getElementById('clear-btn');
+const centerBtn   = document.getElementById('center-btn');
+const saveBtn     = document.getElementById('save-btn');
+
+colorPick.addEventListener('input', e => { turtle.color = e.target.value; });
+
+sizePick.addEventListener('input', e => {
+  turtle.size = +e.target.value;
+  sizeVal.textContent = e.target.value;
+});
+
+speedPick.addEventListener('input', e => {
+  speedVal.textContent = e.target.value;
+});
+
+penToggle.addEventListener('click', () => {
+  turtle.penDown = !turtle.penDown;
+  penToggle.textContent = turtle.penDown ? 'pen down' : 'pen up';
+  penToggle.classList.toggle('pen-up', !turtle.penDown);
+});
+
+rainbowBtn.addEventListener('click', () => {
+  turtle.rainbow = !turtle.rainbow;
+  rainbowBtn.classList.toggle('on', turtle.rainbow);
+  rainbowBtn.textContent = turtle.rainbow ? 'rainbow ✦' : 'rainbow';
+});
+
+clearBtn.addEventListener('click', () => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+centerBtn.addEventListener('click', () => {
+  reset();
+});
+
+saveBtn.addEventListener('click', () => {
+  // Merge overlay + drawing
+  const tmp    = document.createElement('canvas');
+  tmp.width    = canvas.width;
+  tmp.height   = canvas.height;
+  const tc     = tmp.getContext('2d');
+  tc.fillStyle = '#0a0a0a';
+  tc.fillRect(0, 0, tmp.width, tmp.height);
+  tc.drawImage(canvas, 0, 0);
+  tc.drawImage(overlayCanvas, 0, 0);
+  const a    = document.createElement('a');
+  a.href     = tmp.toDataURL('image/png');
+  a.download = 'turtle-drawing.png';
+  a.click();
+});
+
+// ── Keyboard controls ─────────────────────────────────────────────────────────
+const keysDown = new Set();
+
+document.addEventListener('keydown', e => {
+  // Don't capture when typing in command input
+  if (document.activeElement === document.getElementById('cmd-input')) return;
+
+  const step = e.shiftKey ? +speedPick.value * 5 : +speedPick.value * 5;
+  const turnStep = 15;
+
+  switch (e.key) {
+    case 'ArrowUp':    e.preventDefault(); forward(step);      break;
+    case 'ArrowDown':  e.preventDefault(); forward(-step);     break;
+    case 'ArrowRight': e.preventDefault(); right(turnStep);    break;
+    case 'ArrowLeft':  e.preventDefault(); left(turnStep);     break;
+    case ' ':          e.preventDefault();
+      turtle.penDown = !turtle.penDown;
+      penToggle.textContent = turtle.penDown ? 'pen down' : 'pen up';
+      penToggle.classList.toggle('pen-up', !turtle.penDown);
+      break;
+  }
+});
+
+// ── Logo-style command interpreter ───────────────────────────────────────────
+const cmdInput = document.getElementById('cmd-input');
+
+cmdInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    runScript(cmdInput.value.trim());
+    cmdInput.value = '';
+  }
+});
+
+// Simple tokenizer & interpreter
+function tokenize(src) {
+  const tokens = [];
+  let i = 0;
+  while (i < src.length) {
+    if (src[i] === ' ' || src[i] === '\t' || src[i] === '\n') { i++; continue; }
+    if (src[i] === '[') { tokens.push('['); i++; continue; }
+    if (src[i] === ']') { tokens.push(']'); i++; continue; }
+    // word or number
+    let j = i;
+    while (j < src.length && src[j] !== ' ' && src[j] !== '[' && src[j] !== ']') j++;
+    tokens.push(src.slice(i, j));
+    i = j;
+  }
+  return tokens;
+}
+
+function runScript(src) {
+  if (!src) return;
+  const tokens = tokenize(src.toLowerCase());
+  execTokens(tokens, 0, tokens.length);
+}
+
+function execTokens(tokens, start, end) {
+  let i = start;
+  while (i < end) {
+    const tok = tokens[i];
+    if (tok === 'fd' || tok === 'forward') {
+      i++; forward(parseFloat(tokens[i]) || 0); i++;
+    } else if (tok === 'bk' || tok === 'back' || tok === 'backward') {
+      i++; forward(-(parseFloat(tokens[i]) || 0)); i++;
+    } else if (tok === 'rt' || tok === 'right') {
+      i++; right(parseFloat(tokens[i]) || 0); i++;
+    } else if (tok === 'lt' || tok === 'left') {
+      i++; left(parseFloat(tokens[i]) || 0); i++;
+    } else if (tok === 'pu' || tok === 'penup') {
+      turtle.penDown = false;
+      penToggle.textContent = 'pen up';
+      penToggle.classList.add('pen-up');
+      i++;
+    } else if (tok === 'pd' || tok === 'pendown') {
+      turtle.penDown = true;
+      penToggle.textContent = 'pen down';
+      penToggle.classList.remove('pen-up');
+      i++;
+    } else if (tok === 'home') {
+      reset(); i++;
+    } else if (tok === 'cs' || tok === 'clearscreen' || tok === 'clear') {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      reset(); i++;
+    } else if (tok === 'circle') {
+      i++; drawCircle(parseFloat(tokens[i]) || 50); i++;
+    } else if (tok === 'setcolor' || tok === 'color') {
+      i++;
+      const col = tokens[i];
+      // Accept hex or css color names
+      turtle.color = col.startsWith('#') ? col : col;
+      colorPick.value = turtle.color;
+      turtle.rainbow = false;
+      rainbowBtn.classList.remove('on');
+      rainbowBtn.textContent = 'rainbow';
+      i++;
+    } else if (tok === 'setsize' || tok === 'size') {
+      i++;
+      turtle.size = parseFloat(tokens[i]) || 2;
+      sizePick.value = turtle.size;
+      sizeVal.textContent = turtle.size;
+      i++;
+    } else if (tok === 'repeat') {
+      i++;
+      const times = parseInt(tokens[i]) || 0; i++;
+      // Expect [ ... ]
+      if (tokens[i] === '[') {
+        i++;
+        const blockStart = i;
+        // find matching ]
+        let depth = 1, j = i;
+        while (j < end && depth > 0) {
+          if (tokens[j] === '[') depth++;
+          else if (tokens[j] === ']') depth--;
+          j++;
+        }
+        const blockEnd = j - 1; // points at ]
+        for (let r = 0; r < times; r++) {
+          execTokens(tokens, blockStart, blockEnd);
+        }
+        i = j; // past ]
+      }
+    } else {
+      i++; // skip unknown token
+    }
+  }
+}
+
+// ── Examples on first load ────────────────────────────────────────────────────
+// Draw a small greeting spiral
+(function initDraw() {
+  turtle.rainbow = true;
+  turtle.size    = 2;
+  const steps    = 80;
+  for (let s = 0; s < steps; s++) {
+    forward(s * 2.2);
+    right(91);
+  }
+  turtle.rainbow = false;
+  turtle.color   = '#7ec8a0';
+  reset();
+})();
+</script>
+</body>
+</html>
