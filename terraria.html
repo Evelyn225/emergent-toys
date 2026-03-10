@@ -40,10 +40,16 @@
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
+let skyGradient = null;
+
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
   // Note: setting canvas.width/height clears the canvas and resets all ctx state.
+  skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  skyGradient.addColorStop(0, '#1a6fa8');
+  skyGradient.addColorStop(1, '#5ba3d9');
+  // Note: cam repositioning on resize is handled by player-follow logic in the game loop (Task 4+)
 }
 resize();
 window.addEventListener('resize', resize);
@@ -119,7 +125,7 @@ generateWorld();
 
 // Camera position in world-pixels (top-left corner of viewport)
 const cam = { x: 0, y: 0 };
-// Temporary: position camera to view the terrain (will be replaced by player-follow in Task 4)
+// Temporary camera position — requires resize() to have run above (canvas must be sized)
 cam.x = WORLD_W * TILE / 2 - canvas.width / 2;
 cam.y = 50 * TILE - canvas.height / 2;
 
@@ -137,10 +143,7 @@ const BLOCK_DARK = {
 };
 
 function drawSky() {
-  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  grad.addColorStop(0, '#1a6fa8');
-  grad.addColorStop(1, '#5ba3d9');
-  ctx.fillStyle = grad;
+  ctx.fillStyle = skyGradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
@@ -157,12 +160,10 @@ function drawWorld() {
       if (type === AIR) continue;
       const sx = x * TILE - cam.x;
       const sy = y * TILE - cam.y;
-      ctx.fillStyle = BLOCK_COLORS[type];
+      ctx.fillStyle = BLOCK_DARK[type];
       ctx.fillRect(sx, sy, TILE, TILE);
-      // 1px dark border
-      ctx.strokeStyle = BLOCK_DARK[type];
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+      ctx.fillStyle = BLOCK_COLORS[type];
+      ctx.fillRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
     }
   }
 }
