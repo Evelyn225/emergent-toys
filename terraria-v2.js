@@ -658,6 +658,7 @@ const player = {
   fullySubmerged: false,
   drownTick: 0,
   jumpLatch: false,
+  waterExitFrames: 0,
   health: 5,
   maxHealth: 5,
 };
@@ -668,6 +669,7 @@ cam.y = 48 * TILE - canvas.height / 2;
 const GRAVITY = 0.52;
 const MAX_FALL = TILE - 1;
 const JUMP_VEL = -11.4;
+const WATER_EXIT_JUMP_VEL = JUMP_VEL * Math.SQRT1_2;
 const WALK_SPEED = 2.45;
 const RUN_SPEED = 4.85;
 
@@ -958,14 +960,17 @@ function updatePlacement(frame) {
 
 function updatePlayer(scale = 1) {
   const waterCoverageStart = sampleWaterCoverage(player.x, player.y, player.w, player.h);
-  const inWaterStart = waterCoverageStart > PLAYER_WET_THRESHOLD;
+  player.waterExitFrames = Math.max(0, player.waterExitFrames - scale);
+  const rawInWaterStart = waterCoverageStart > PLAYER_WET_THRESHOLD;
+  const inWaterStart = rawInWaterStart && player.waterExitFrames <= 0;
   const jumpHeld = !!(keys['Space'] || keys['KeyW'] || keys['ArrowUp']);
   const jumpPressed = jumpHeld && !player.jumpLatch;
   const centerX = player.x + player.w * 0.5;
   const headInWater = isPointInWater(centerX, player.y + 6);
   const justAboveHeadInWater = isPointInWater(centerX, player.y - 2);
   const nearSurface = headInWater && !justAboveHeadInWater;
-  const canWaterExitStep = (inWaterStart || player.inWater || nearSurface) && (jumpHeld || player.vy < -1);
+  const canWaterLaunch = rawInWaterStart && jumpPressed && (!headInWater || nearSurface || waterCoverageStart < 0.65);
+  const canWaterExitStep = (rawInWaterStart || player.inWater || nearSurface || player.waterExitFrames > 0) && (jumpHeld || player.vy < -1);
   const speedBase = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
   const speed = speedBase * (inWaterStart ? WATER_SPEED_MULT : 1);
   let moveX = 0;
@@ -1011,13 +1016,12 @@ function updatePlayer(scale = 1) {
   const maxFall = inWaterStart ? WATER_MAX_FALL : MAX_FALL;
   player.vy = Math.min(player.vy + gravity * scale, maxFall);
 
-  if (inWaterStart && jumpHeld) {
-    if (jumpPressed && nearSurface) {
-      player.vy = JUMP_VEL;
-      player.inWater = false;
-    } else {
-      player.vy = Math.max(player.vy - WATER_SWIM_ACCEL * scale, -4.4);
-    }
+  if (canWaterLaunch) {
+    player.vy = WATER_EXIT_JUMP_VEL;
+    player.inWater = false;
+    player.waterExitFrames = 12;
+  } else if (inWaterStart && jumpHeld) {
+    player.vy = Math.max(player.vy - WATER_SWIM_ACCEL * scale, -4.4);
   }
 
   player.y += player.vy;
@@ -1032,7 +1036,7 @@ function updatePlayer(scale = 1) {
   }
 
   player.onGround = checkOnGround(player.x, player.y, player.w, player.h);
-  if (!inWaterStart && jumpPressed && player.onGround) {
+  if (!rawInWaterStart && jumpHeld && player.onGround) {
     player.vy = JUMP_VEL;
     player.onGround = false;
   }
@@ -1041,8 +1045,9 @@ function updatePlayer(scale = 1) {
   player.y = clamp(player.y, 0, WORLD_H * TILE - player.h);
 
   const waterCoverageEnd = sampleWaterCoverage(player.x, player.y, player.w, player.h);
-  player.inWater = waterCoverageEnd > PLAYER_WET_THRESHOLD;
-  player.fullySubmerged = waterCoverageEnd >= PLAYER_SUBMERGED_THRESHOLD;
+  const rawInWaterEnd = waterCoverageEnd > PLAYER_WET_THRESHOLD;
+  player.inWater = rawInWaterEnd && player.waterExitFrames <= 0;
+  player.fullySubmerged = waterCoverageEnd >= PLAYER_SUBMERGED_THRESHOLD && player.waterExitFrames <= 0;
 
   if (player.fullySubmerged) {
     player.air = Math.max(0, player.air - scale);
