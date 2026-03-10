@@ -100,12 +100,13 @@ function octaveNoise(x, octaves, persistence) {
 }
 
 function generateWorld() {
-  const SEA_LEVEL = 60; // surface row index around here
+  const SEA_LEVEL = 60;
+  // First pass: fill terrain layers
+  const surfaceYs = new Int16Array(WORLD_W);
   for (let x = 0; x < WORLD_W; x++) {
-    // surface height: varies between rows 45 and 75
     const n = octaveNoise(x / 60, 4, 0.5);
     const surfaceY = Math.floor(SEA_LEVEL - 15 + n * 30);
-
+    surfaceYs[x] = surfaceY;
     for (let y = 0; y < WORLD_H; y++) {
       if (y < surfaceY) {
         setBlock(x, y, AIR);
@@ -117,6 +118,28 @@ function generateWorld() {
         setBlock(x, y, STONE);
       } else {
         setBlock(x, y, DSTONE);
+      }
+    }
+  }
+
+  // Second pass: carve caves using 2D noise product
+  // Multiplying two independent noise fields creates enclosed cave pockets
+  for (let x = 0; x < WORLD_W; x++) {
+    const minCaveY = surfaceYs[x] + 8; // caves start well below surface
+    for (let y = minCaveY; y < WORLD_H - 4; y++) {
+      const nx = octaveNoise(x / 18 + 1000, 3, 0.55);
+      const ny = octaveNoise(y / 12 + 2000, 3, 0.55);
+      if (nx * ny > 0.28) setBlock(x, y, AIR);
+    }
+  }
+
+  // Third pass: restore grass cap where caves broke through surface
+  for (let x = 0; x < WORLD_W; x++) {
+    const sy = surfaceYs[x];
+    if (getBlock(x, sy) === AIR) {
+      // Find new exposed top and re-grass it
+      for (let y = sy; y < sy + 10; y++) {
+        if (getBlock(x, y) !== AIR) { setBlock(x, y, GRASS); break; }
       }
     }
   }
@@ -189,6 +212,17 @@ function collidesWithWorld(px, py, pw, ph) {
   return false;
 }
 
+// Check if player is resting on solid ground (checks 1px below feet)
+function checkOnGround(px, py, pw, ph) {
+  const feetTile = Math.floor((py + ph) / TILE);
+  const left     = Math.floor(px / TILE);
+  const right    = Math.floor((px + pw - 1) / TILE);
+  for (let tx = left; tx <= right; tx++) {
+    if (getBlock(tx, feetTile) !== AIR) return true;
+  }
+  return false;
+}
+
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
@@ -225,16 +259,14 @@ function updatePlayer(scale = 1) {
       // landing: snap to top of block
       player.y = Math.floor((player.y + player.h) / TILE) * TILE - player.h;
       player.vy = 0;
-      player.onGround = true;
     } else {
       // hit ceiling
       player.y = Math.ceil(player.y / TILE) * TILE;
       player.vy = 0;
-      player.onGround = false;
     }
-  } else {
-    player.onGround = false;
   }
+  // Use dedicated ground check — reliable even when feet are exactly on tile boundary
+  player.onGround = checkOnGround(player.x, player.y, player.w, player.h);
 
   // Jump
   if ((keys['Space'] || keys['KeyW']) && player.onGround) {
@@ -288,8 +320,8 @@ function drawWorld() {
     for (let x = startX; x < endX; x++) {
       const type = getBlock(x, y);
       if (type === AIR) continue;
-      const sx = x * TILE - cam.x;
-      const sy = y * TILE - cam.y;
+      const sx = Math.round(x * TILE - cam.x);
+      const sy = Math.round(y * TILE - cam.y);
       ctx.fillStyle = BLOCK_DARK[type];
       ctx.fillRect(sx, sy, TILE, TILE);
       ctx.fillStyle = BLOCK_COLORS[type];
