@@ -1392,7 +1392,8 @@ function updateAnimation(scale = 1) {
   player.animTick += scale;
   if (player.animTick >= ticksPerFrame) {
     player.animTick = 0;
-    if (newState === 'jump') player.animFrame = Math.min(player.animFrame + 1, frameCount - 1);
+    if (newState === 'jump' && player.inWater) player.animFrame = (player.animFrame + 1) % 3;
+    else if (newState === 'jump') player.animFrame = Math.min(player.animFrame + 1, frameCount - 1);
     else player.animFrame = (player.animFrame + 1) % frameCount;
   }
 }
