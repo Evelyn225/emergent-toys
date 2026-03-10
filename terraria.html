@@ -68,6 +68,8 @@ const DSTONE = 4; // deep stone
 
 // World is a flat Uint8Array [col + row * WORLD_W]
 const world = new Uint8Array(WORLD_W * WORLD_H);
+// Surface Y per column (filled by generateWorld, used for cave background rendering)
+const surfaceYs = new Int16Array(WORLD_W);
 
 function getBlock(x, y) {
   if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return STONE; // all borders are solid
@@ -101,45 +103,78 @@ function octaveNoise(x, octaves, persistence) {
 
 function generateWorld() {
   const SEA_LEVEL = 60;
-  // First pass: fill terrain layers
-  const surfaceYs = new Int16Array(WORLD_W);
+
+  // Pass 1: fill terrain layers, record surface heights
   for (let x = 0; x < WORLD_W; x++) {
     const n = octaveNoise(x / 60, 4, 0.5);
-    const surfaceY = Math.floor(SEA_LEVEL - 15 + n * 30);
-    surfaceYs[x] = surfaceY;
+    const sy = Math.floor(SEA_LEVEL - 15 + n * 30);
+    surfaceYs[x] = sy;
     for (let y = 0; y < WORLD_H; y++) {
-      if (y < surfaceY) {
-        setBlock(x, y, AIR);
-      } else if (y === surfaceY) {
-        setBlock(x, y, GRASS);
-      } else if (y < surfaceY + 5) {
-        setBlock(x, y, DIRT);
-      } else if (y < surfaceY + 50) {
-        setBlock(x, y, STONE);
-      } else {
-        setBlock(x, y, DSTONE);
+      if      (y < sy)       setBlock(x, y, AIR);
+      else if (y === sy)     setBlock(x, y, GRASS);
+      else if (y < sy + 5)   setBlock(x, y, DIRT);
+      else if (y < sy + 50)  setBlock(x, y, STONE);
+      else                   setBlock(x, y, DSTONE);
+    }
+  }
+
+  // Pass 2: worm-carved caves (Terraria-style)
+  // Each worm starts at a position, then walks with random angle changes,
+  // carving a circular cross-section as it goes.
+  function digWorm(startX, startY, length, radius, angle) {
+    let wx = startX, wy = startY;
+    for (let i = 0; i < length; i++) {
+      const r = Math.ceil(radius);
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (dx * dx + dy * dy <= radius * radius) {
+            const bx = Math.round(wx + dx);
+            const by = Math.round(wy + dy);
+            const minY = surfaceYs[Math.max(0, Math.min(WORLD_W - 1, bx))];
+            if (by > minY + 2 && by < WORLD_H - 3) setBlock(bx, by, AIR);
+          }
+        }
       }
+      // Random walk with slight horizontal bias
+      angle += (Math.random() - 0.5) * 0.45;
+      wx += Math.cos(angle) * 1.5;
+      wy += Math.sin(angle) * 0.65;
+      if (wx < 2 || wx > WORLD_W - 3 || wy < 5 || wy > WORLD_H - 5) break;
     }
   }
 
-  // Second pass: carve caves using 2D noise product
-  // Multiplying two independent noise fields creates enclosed cave pockets
-  for (let x = 0; x < WORLD_W; x++) {
-    const minCaveY = surfaceYs[x] + 8; // caves start well below surface
-    for (let y = minCaveY; y < WORLD_H - 4; y++) {
-      const nx = octaveNoise(x / 18 + 1000, 3, 0.55);
-      const ny = octaveNoise(y / 12 + 2000, 3, 0.55);
-      if (nx * ny > 0.28) setBlock(x, y, AIR);
-    }
+  // Surface-connected shafts (dig mostly downward from surface openings)
+  for (let i = 0; i < 18; i++) {
+    const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
+    const sy = surfaceYs[sx] + 1;
+    const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.6; // mostly downward
+    digWorm(sx, sy, 60 + Math.floor(Math.random() * 60), 1.5 + Math.random() * 1.5, angle);
   }
 
-  // Third pass: restore grass cap where caves broke through surface
+  // Mid-depth horizontal cave networks
+  for (let i = 0; i < 35; i++) {
+    const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
+    const baseSY = surfaceYs[sx];
+    const sy = baseSY + 12 + Math.floor(Math.random() * 50);
+    const angle = Math.random() * Math.PI * 2;
+    digWorm(sx, sy, 100 + Math.floor(Math.random() * 120), 2 + Math.random() * 2.5, angle);
+  }
+
+  // Deep large caverns
+  for (let i = 0; i < 15; i++) {
+    const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
+    const baseSY = surfaceYs[sx];
+    const sy = baseSY + 55 + Math.floor(Math.random() * 30);
+    const angle = Math.random() * Math.PI * 2;
+    digWorm(sx, sy, 80 + Math.floor(Math.random() * 80), 3.5 + Math.random() * 2, angle);
+  }
+
+  // Pass 3: re-grass any newly exposed top surfaces
   for (let x = 0; x < WORLD_W; x++) {
-    const sy = surfaceYs[x];
-    if (getBlock(x, sy) === AIR) {
-      // Find new exposed top and re-grass it
-      for (let y = sy; y < sy + 10; y++) {
-        if (getBlock(x, y) !== AIR) { setBlock(x, y, GRASS); break; }
+    for (let y = 0; y < WORLD_H; y++) {
+      const b = getBlock(x, y);
+      if (b !== AIR && getBlock(x, y - 1) === AIR) {
+        if (b === DIRT || b === STONE || b === DSTONE) setBlock(x, y, GRASS);
       }
     }
   }
@@ -297,12 +332,7 @@ const BLOCK_COLORS = {
   [STONE]:  '#7a7a8a',
   [DSTONE]: '#5a5a6a',
 };
-const BLOCK_DARK = {
-  [GRASS]:  '#3d7228',
-  [DIRT]:   '#6b5010',
-  [STONE]:  '#5a5a68',
-  [DSTONE]: '#3e3e50',
-};
+const CAVE_BG = '#1a100a'; // dark earthy background shown behind underground air
 
 function drawSky() {
   ctx.fillStyle = skyGradient;
@@ -310,22 +340,30 @@ function drawSky() {
 }
 
 function drawWorld() {
-  // Visible tile range
-  const startX = Math.max(0, Math.floor(cam.x / TILE));
-  const endX   = Math.min(WORLD_W, Math.ceil((cam.x + canvas.width) / TILE) + 1);
-  const startY = Math.max(0, Math.floor(cam.y / TILE));
-  const endY   = Math.min(WORLD_H, Math.ceil((cam.y + canvas.height) / TILE) + 1);
+  // Snap camera to integers to prevent sub-pixel gaps between tiles
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const startX = Math.max(0, Math.floor(camX / TILE));
+  const endX   = Math.min(WORLD_W, Math.ceil((camX + canvas.width) / TILE) + 1);
+  const startY = Math.max(0, Math.floor(camY / TILE));
+  const endY   = Math.min(WORLD_H, Math.ceil((camY + canvas.height) / TILE) + 1);
 
   for (let y = startY; y < endY; y++) {
     for (let x = startX; x < endX; x++) {
       const type = getBlock(x, y);
-      if (type === AIR) continue;
-      const sx = Math.round(x * TILE - cam.x);
-      const sy = Math.round(y * TILE - cam.y);
-      ctx.fillStyle = BLOCK_DARK[type];
-      ctx.fillRect(sx, sy, TILE, TILE);
+      const sx = (x * TILE - camX) | 0;  // integer via bitwise OR — fast floor for positive nums
+      const sy = (y * TILE - camY) | 0;
+      if (type === AIR) {
+        // Show cave background for underground air pockets
+        if (y > surfaceYs[x]) {
+          ctx.fillStyle = CAVE_BG;
+          ctx.fillRect(sx, sy, TILE, TILE);
+        }
+        continue;
+      }
+      // Solid block — no border, just flush fill for seamless look
       ctx.fillStyle = BLOCK_COLORS[type];
-      ctx.fillRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
+      ctx.fillRect(sx, sy, TILE, TILE);
     }
   }
 }
