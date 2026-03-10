@@ -1,565 +1,1102 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
-  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
-  <title>Turtle Drawing</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32"  href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16"  href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+<title>Turtle Drawing</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0a;--panel:#111;--panel2:#161616;--border:rgba(255,255,255,.08);
+  --text:#d8e8d8;--dim:rgba(216,232,216,.4);--accent:#7ec8a0;--warn:#f09898;
+  --panel-w:220px;
+}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-weight:300;
+     height:100vh;overflow:hidden;display:flex;flex-direction:column}
 
-    body {
-      background: #0a0a0a;
-      color: #e8f0e8;
-      font-family: 'DM Mono', monospace;
-      font-weight: 300;
-      height: 100vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
+/* ── Top bar ── */
+#topbar{
+  display:flex;align-items:center;gap:6px;padding:5px 8px;
+  background:var(--panel);border-bottom:1px solid var(--border);
+  flex-shrink:0;z-index:10;
+}
+#topbar h1{font-size:13px;font-weight:400;color:var(--accent);letter-spacing:.05em;margin-right:4px}
+.sep{width:1px;height:18px;background:var(--border);margin:0 2px}
+#home-btn{
+  text-decoration:none;font-size:16px;padding:3px 6px;border-radius:4px;
+  border:1px solid var(--border);background:rgba(255,255,255,.04);
+  transition:all .2s cubic-bezier(.34,1.56,.64,1);line-height:1;display:flex;
+}
+#home-btn:hover{transform:scale(1.15) rotate(5deg)}
+.tb-btn{
+  font-family:'DM Mono',monospace;font-size:11px;font-weight:300;
+  background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border);
+  border-radius:4px;padding:4px 9px;cursor:pointer;transition:background .15s,transform .1s;
+  white-space:nowrap;
+}
+.tb-btn:hover{background:rgba(255,255,255,.1)}
+.tb-btn:active{transform:scale(.95)}
+.tb-btn.on{color:var(--accent);border-color:rgba(126,200,160,.35)}
+.tb-btn.warn{color:var(--warn);border-color:rgba(240,152,152,.35)}
+#undo-btn:disabled,#redo-btn:disabled{opacity:.3;pointer-events:none}
 
-    /* ─── Top bar ─── */
-    #topbar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 12px;
-      background: rgba(255,255,255,0.04);
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      flex-shrink: 0;
-      flex-wrap: wrap;
-    }
+/* ── Body layout ── */
+#body{display:flex;flex:1;overflow:hidden}
 
-    #topbar label {
-      font-size: 11px;
-      color: rgba(232,240,232,0.5);
-      margin-right: 2px;
-    }
+/* ── Sidebar ── */
+#sidebar{
+  width:var(--panel-w);flex-shrink:0;background:var(--panel);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+  overflow-y:auto;overflow-x:hidden;
+  transition:width .25s,opacity .25s;
+}
+#sidebar.collapsed{width:0;opacity:0;pointer-events:none}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
 
-    .ctrl-group {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+.section{border-bottom:1px solid var(--border);padding:8px 10px}
+.section-title{
+  font-size:10px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;
+  margin-bottom:7px;cursor:pointer;user-select:none;display:flex;justify-content:space-between
+}
+.section-title .arr{transition:transform .2s;display:inline-block}
+.section.closed .section-body{display:none}
+.section.closed .arr{transform:rotate(-90deg)}
 
-    input[type="color"] {
-      width: 28px;
-      height: 28px;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 4px;
-      background: none;
-      cursor: pointer;
-      padding: 2px;
-    }
+.row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.row label{font-size:11px;color:var(--dim);min-width:52px;flex-shrink:0}
+.row input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
+.row span.val{font-size:11px;color:var(--dim);min-width:22px;text-align:right}
+.row input[type=color]{width:26px;height:22px;border:1px solid var(--border);border-radius:3px;
+  background:none;cursor:pointer;padding:1px}
+.row select{flex:1;font-family:'DM Mono',monospace;font-size:11px;font-weight:300;
+  background:var(--panel2);color:var(--text);border:1px solid var(--border);
+  border-radius:4px;padding:3px 5px;cursor:pointer}
+.side-btn{
+  font-family:'DM Mono',monospace;font-size:11px;font-weight:300;
+  background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border);
+  border-radius:4px;padding:4px 0;cursor:pointer;transition:background .15s;
+  text-align:center;width:100%;margin-bottom:5px;
+}
+.side-btn:hover{background:rgba(255,255,255,.1)}
+.side-btn.on{color:var(--accent);border-color:rgba(126,200,160,.35)}
+.side-btn.warn{color:var(--warn);border-color:rgba(240,152,152,.35)}
 
-    input[type="range"] {
-      width: 80px;
-      accent-color: #7ec8a0;
-    }
+/* Color swatches */
+#swatches{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.swatch{width:20px;height:20px;border-radius:3px;cursor:pointer;border:1px solid rgba(0,0,0,.3);
+  transition:transform .15s;flex-shrink:0}
+.swatch:hover{transform:scale(1.2)}
+.swatch.active{outline:2px solid #fff;outline-offset:1px}
 
-    button {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      font-weight: 300;
-      background: rgba(255,255,255,0.06);
-      color: #e8f0e8;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 4px;
-      padding: 5px 10px;
-      cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-    }
-    button:hover { background: rgba(255,255,255,0.12); }
-    button:active { transform: scale(0.95); }
+/* Presets */
+.preset-btn{
+  font-family:'DM Mono',monospace;font-size:10px;font-weight:300;
+  background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--border);
+  border-radius:4px;padding:4px 6px;cursor:pointer;transition:background .15s;
+  text-align:left;width:100%;margin-bottom:4px;display:block;
+}
+.preset-btn:hover{background:rgba(255,255,255,.1)}
+.preset-btn span{color:var(--dim);font-size:9px;display:block}
 
-    #pen-toggle.pen-up {
-      color: #f0a0a0;
-      border-color: rgba(240,160,160,0.4);
-    }
+/* ── Canvas area ── */
+#canvas-wrap{
+  flex:1;position:relative;overflow:hidden;
+  cursor:crosshair;touch-action:none;
+}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+#draw-canvas{background:transparent}
+#overlay-canvas{pointer-events:none}
 
-    /* ─── Command bar ─── */
-    #cmdbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      background: rgba(255,255,255,0.02);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      flex-shrink: 0;
-    }
+/* ── Command bar ── */
+#cmdbar{
+  display:flex;align-items:center;gap:8px;
+  padding:5px 10px;background:var(--panel);
+  border-top:1px solid var(--border);flex-shrink:0;
+}
+#cmd-prompt{font-size:12px;color:var(--accent);flex-shrink:0}
+#cmd-input{
+  flex:1;font-family:'DM Mono',monospace;font-size:12px;font-weight:300;
+  background:transparent;border:none;color:var(--text);padding:0;outline:none;
+  caret-color:var(--accent);
+}
+#cmd-input::placeholder{color:rgba(216,232,216,.2)}
+#cmd-status{font-size:10px;color:var(--dim);flex-shrink:0;max-width:260px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-    #cmd-input {
-      flex: 1;
-      font-family: 'DM Mono', monospace;
-      font-size: 12px;
-      font-weight: 300;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 4px;
-      color: #e8f0e8;
-      padding: 5px 10px;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    #cmd-input:focus { border-color: rgba(126,200,160,0.5); }
-    #cmd-input::placeholder { color: rgba(232,240,232,0.25); }
+/* ── Position HUD ── */
+#hud{
+  position:absolute;top:8px;left:8px;pointer-events:none;
+  font-size:10px;color:rgba(216,232,216,.3);line-height:1.8;letter-spacing:.03em
+}
 
-    #cmd-hint {
-      font-size: 10px;
-      color: rgba(232,240,232,0.3);
-      white-space: nowrap;
-    }
-
-    /* ─── Canvas area ─── */
-    #canvas-wrap {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-    }
-
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    /* ─── Home button ─── */
-    #home-btn {
-      position: fixed;
-      top: 8px;
-      right: 10px;
-      z-index: 1000;
-      padding: 6px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 4px;
-      text-decoration: none;
-      font-size: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      line-height: 1;
-      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    }
-    #home-btn:hover { transform: scale(1.2) rotate(5deg); background: rgba(255,150,200,0.8); border-color: #888; }
-    #home-btn:active { transform: scale(0.9) rotate(-5deg); }
-
-    /* ─── Key hint overlay ─── */
-    #key-hint {
-      position: absolute;
-      bottom: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 10px;
-      color: rgba(232,240,232,0.2);
-      pointer-events: none;
-      white-space: nowrap;
-      letter-spacing: 0.04em;
-    }
-
-    /* ─── Trail color mode button ─── */
-    #rainbow-toggle.on {
-      color: #ffdd88;
-      border-color: rgba(255,220,136,0.4);
-    }
-  </style>
+/* ── Touch controls ── */
+#touch-btns{
+  position:absolute;bottom:12px;right:12px;display:none;
+  flex-direction:column;align-items:center;gap:4px;
+}
+@media (pointer:coarse){#touch-btns{display:flex}}
+.t-row{display:flex;gap:4px}
+.t-btn{
+  width:48px;height:48px;background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.2);border-radius:8px;
+  font-size:18px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;
+  active-opacity:.7;
+}
+.t-btn:active{background:rgba(255,255,255,.25)}
+</style>
 </head>
 <body>
 
-  <a id="home-btn" href="index.html" title="Home">
-    <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
-         alt="home" style="width:18px;height:18px;object-fit:contain;">
-  </a>
+<!-- Top bar -->
+<div id="topbar">
+  <a id="home-btn" href="index.html" title="Home">🏠</a>
+  <h1>🐢 turtle</h1>
+  <div class="sep"></div>
+  <button class="tb-btn" id="sidebar-toggle">⊞ panel</button>
+  <div class="sep"></div>
+  <button class="tb-btn" id="undo-btn" disabled>↩ undo</button>
+  <button class="tb-btn" id="redo-btn" disabled>↪ redo</button>
+  <div class="sep"></div>
+  <button class="tb-btn" id="pen-btn">pen ▼</button>
+  <button class="tb-btn" id="rainbow-btn">🌈 rainbow</button>
+  <button class="tb-btn" id="grid-btn">grid</button>
+  <button class="tb-btn" id="axes-btn">axes</button>
+  <div class="sep"></div>
+  <button class="tb-btn" id="clear-btn" style="margin-left:auto">clear</button>
+  <button class="tb-btn" id="save-btn">save png</button>
+</div>
 
-  <!-- Controls -->
-  <div id="topbar">
-    <div class="ctrl-group">
-      <label>color</label>
-      <input type="color" id="color-pick" value="#7ec8a0">
-    </div>
-    <div class="ctrl-group">
-      <label>size</label>
-      <input type="range" id="size-pick" min="1" max="20" value="2">
-      <span id="size-val" style="font-size:11px;color:rgba(232,240,232,0.5);min-width:20px">2</span>
-    </div>
-    <div class="ctrl-group">
-      <label>speed</label>
-      <input type="range" id="speed-pick" min="1" max="20" value="5">
-      <span id="speed-val" style="font-size:11px;color:rgba(232,240,232,0.5);min-width:20px">5</span>
-    </div>
-    <button id="pen-toggle">pen down</button>
-    <button id="rainbow-toggle">rainbow</button>
-    <button id="clear-btn">clear</button>
-    <button id="center-btn">reset turtle</button>
-    <button id="save-btn">save png</button>
-  </div>
+<!-- Body -->
+<div id="body">
 
-  <!-- Logo-style command bar -->
-  <div id="cmdbar">
-    <label style="font-size:11px;color:rgba(232,240,232,0.4);">&gt;</label>
-    <input id="cmd-input" type="text" placeholder="fd 100  rt 90  lt 45  bk 50  circle 80  repeat 4 [fd 60 rt 90]" spellcheck="false">
-    <span id="cmd-hint">enter to run</span>
-  </div>
+  <!-- Sidebar -->
+  <div id="sidebar">
 
-  <!-- Drawing canvas -->
+    <!-- PEN section -->
+    <div class="section" id="sec-pen">
+      <div class="section-title" data-sec="sec-pen">Pen <span class="arr">▾</span></div>
+      <div class="section-body">
+        <div id="swatches"></div>
+        <div class="row"><label>color</label><input type="color" id="color-pick" value="#7ec8a0"></div>
+        <div class="row"><label>bg</label><input type="color" id="bg-pick" value="#0a0a0a"></div>
+        <div class="row"><label>size</label><input type="range" id="size-pick" min="1" max="30" value="2"><span class="val" id="size-val">2</span></div>
+        <div class="row"><label>opacity</label><input type="range" id="alpha-pick" min="5" max="100" value="100"><span class="val" id="alpha-val">100</span></div>
+        <div class="row"><label>style</label>
+          <select id="line-style">
+            <option value="solid">solid</option>
+            <option value="dashed">dashed</option>
+            <option value="dotted">dotted</option>
+            <option value="long-dash">long dash</option>
+          </select>
+        </div>
+        <div class="row"><label>cap</label>
+          <select id="line-cap">
+            <option value="round">round</option>
+            <option value="butt">butt</option>
+            <option value="square">square</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- TURTLE section -->
+    <div class="section" id="sec-turtle">
+      <div class="section-title" data-sec="sec-turtle">Turtle <span class="arr">▾</span></div>
+      <div class="section-body">
+        <div class="row"><label>speed</label><input type="range" id="speed-pick" min="1" max="50" value="8"><span class="val" id="speed-val">8</span></div>
+        <div class="row"><label>turn°</label><input type="range" id="turn-pick" min="1" max="90" value="15"><span class="val" id="turn-val">15</span></div>
+        <button class="side-btn" id="show-turtle-btn" style="margin-bottom:5px">hide turtle</button>
+        <button class="side-btn" id="wrap-btn">wrap: off</button>
+        <button class="side-btn" id="center-btn">reset position</button>
+      </div>
+    </div>
+
+    <!-- SYMMETRY section -->
+    <div class="section" id="sec-sym">
+      <div class="section-title" data-sec="sec-sym">Symmetry <span class="arr">▾</span></div>
+      <div class="section-body">
+        <div class="row"><label>copies</label><input type="range" id="sym-pick" min="1" max="12" value="1"><span class="val" id="sym-val">1</span></div>
+        <div class="row"><label>mirror</label>
+          <select id="mirror-mode">
+            <option value="rotate">rotate</option>
+            <option value="reflect-x">reflect X</option>
+            <option value="reflect-y">reflect Y</option>
+            <option value="both">reflect both</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- CANVAS section -->
+    <div class="section" id="sec-canvas">
+      <div class="section-title" data-sec="sec-canvas">Canvas <span class="arr">▾</span></div>
+      <div class="section-body">
+        <button class="side-btn" id="zoom-reset-btn">zoom 100%</button>
+        <div class="row"><label>zoom</label><input type="range" id="zoom-pick" min="20" max="400" value="100"><span class="val" id="zoom-val">100</span></div>
+      </div>
+    </div>
+
+    <!-- PRESETS section -->
+    <div class="section" id="sec-presets">
+      <div class="section-title" data-sec="sec-presets">Presets <span class="arr">▾</span></div>
+      <div class="section-body">
+        <button class="preset-btn" data-prog="spiral">🌀 spiral<span>growing square spiral</span></button>
+        <button class="preset-btn" data-prog="star5">⭐ 5-point star<span>classic star polygon</span></button>
+        <button class="preset-btn" data-prog="rose">🌹 rose<span>petal curve</span></button>
+        <button class="preset-btn" data-prog="snowflake">❄ snowflake<span>Koch snowflake style</span></button>
+        <button class="preset-btn" data-prog="web">🕸 web<span>concentric polygons</span></button>
+        <button class="preset-btn" data-prog="tree">🌲 tree<span>fractal tree</span></button>
+        <button class="preset-btn" data-prog="circle36">○ 36 circles<span>overlapping circles</span></button>
+        <button class="preset-btn" data-prog="rainbow-star">🌈 rainbow star<span>colorful burst</span></button>
+        <button class="preset-btn" data-prog="hilbert">⬜ Hilbert curve<span>space-filling curve</span></button>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- Canvas area -->
   <div id="canvas-wrap">
     <canvas id="draw-canvas"></canvas>
-    <div id="key-hint">↑ ↓ forward / back &nbsp;·&nbsp; ← → turn &nbsp;·&nbsp; shift+↑↓ larger step</div>
+    <canvas id="overlay-canvas"></canvas>
+    <div id="hud"></div>
+
+    <!-- Touch D-pad -->
+    <div id="touch-btns">
+      <div class="t-row">
+        <div class="t-btn" id="tb-up">↑</div>
+      </div>
+      <div class="t-row">
+        <div class="t-btn" id="tb-lt">↺</div>
+        <div class="t-btn" id="tb-pu" title="pen up/down">✏</div>
+        <div class="t-btn" id="tb-rt">↻</div>
+      </div>
+      <div class="t-row">
+        <div class="t-btn" id="tb-dn">↓</div>
+      </div>
+    </div>
   </div>
 
+</div><!-- /body -->
+
+<!-- Command bar -->
+<div id="cmdbar">
+  <span id="cmd-prompt">&gt;</span>
+  <input id="cmd-input" type="text" autocomplete="off" spellcheck="false"
+    placeholder="fd 100  rt 90  repeat 4 [fd 80 rt 90]  circle 60  tree 80 5">
+  <span id="cmd-status">arrow keys to move · space = pen up/down</span>
+</div>
+
 <script>
-// ── Canvas setup ─────────────────────────────────────────────────────────────
-const wrap   = document.getElementById('canvas-wrap');
-const canvas = document.getElementById('draw-canvas');
-const ctx    = canvas.getContext('2d');
+'use strict';
 
-function resize() {
-  const w = wrap.clientWidth;
-  const h = wrap.clientHeight;
-  // Save existing drawing
-  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  canvas.width  = w;
-  canvas.height = h;
-  ctx.putImageData(img, 0, 0);
-  // Keep background dark
-  // (putImageData restored the pixels, background is transparent over body)
+// ── Canvas setup ──────────────────────────────────────────────────────────────
+const wrap    = document.getElementById('canvas-wrap');
+const dc      = document.getElementById('draw-canvas');
+const oc      = document.getElementById('overlay-canvas');
+const ctx     = dc.getContext('2d');
+const octx    = oc.getContext('2d');
+
+let VIEW = { x:0, y:0, zoom:1 };   // pan + zoom
+let bgColor = '#0a0a0a';
+
+function resizeCanvases() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  dc.width = oc.width = w;
+  dc.height = oc.height = h;
 }
-resize();
-window.addEventListener('resize', resize);
+resizeCanvases();
+window.addEventListener('resize', () => { resizeCanvases(); redrawAll(); });
 
-// ── Turtle state ─────────────────────────────────────────────────────────────
-const turtle = {
-  x: 0, y: 0,   // set in reset()
-  angle: -90,    // facing up
-  penDown: true,
-  color: '#7ec8a0',
-  size: 2,
-  rainbow: false,
-  rainbowHue: 0,
+// ── Undo / Redo history ───────────────────────────────────────────────────────
+const MAX_HISTORY = 60;
+let history = [];    // array of ImageData
+let histIdx = -1;
+
+function saveSnapshot() {
+  // trim forward history
+  history.splice(histIdx + 1);
+  if (history.length >= MAX_HISTORY) history.shift();
+  history.push(ctx.getImageData(0, 0, dc.width, dc.height));
+  histIdx = history.length - 1;
+  updateUndoRedo();
+}
+
+function undo() {
+  if (histIdx <= 0) return;
+  histIdx--;
+  ctx.putImageData(history[histIdx], 0, 0);
+  updateUndoRedo();
+}
+function redo() {
+  if (histIdx >= history.length - 1) return;
+  histIdx++;
+  ctx.putImageData(history[histIdx], 0, 0);
+  updateUndoRedo();
+}
+function updateUndoRedo() {
+  document.getElementById('undo-btn').disabled = histIdx <= 0;
+  document.getElementById('redo-btn').disabled = histIdx >= history.length - 1;
+}
+
+// ── Turtle state ──────────────────────────────────────────────────────────────
+const T = {
+  x:0, y:0, angle:-90,
+  penDown:true, visible:true, wrap:false,
+  color:'#7ec8a0', alpha:1, size:2,
+  rainbow:false, rainbowHue:0,
+  lineStyle:'solid', lineCap:'round',
 };
+let symmetry = 1, mirrorMode = 'rotate';
+let showGrid = false, showAxes = false;
 
-function reset() {
-  turtle.x     = canvas.width  / 2;
-  turtle.y     = canvas.height / 2;
-  turtle.angle = -90;
+function resetTurtle() {
+  T.x = dc.width/2;  T.y = dc.height/2;
+  T.angle = -90;
 }
-reset();
+resetTurtle();
+saveSnapshot();
 
-// ── Draw trail canvas ─────────────────────────────────────────────────────────
-function currentColor() {
-  if (turtle.rainbow) {
-    turtle.rainbowHue = (turtle.rainbowHue + 1.5) % 360;
-    return `hsl(${turtle.rainbowHue}, 80%, 65%)`;
+// ── Drawing helpers ───────────────────────────────────────────────────────────
+function penColor() {
+  if (T.rainbow) {
+    T.rainbowHue = (T.rainbowHue + 1.2) % 360;
+    return `hsla(${T.rainbowHue},80%,65%,${T.alpha})`;
   }
-  return turtle.color;
-}
-
-function moveTo(nx, ny) {
-  if (turtle.penDown) {
-    ctx.beginPath();
-    ctx.moveTo(turtle.x, turtle.y);
-    ctx.lineTo(nx, ny);
-    ctx.strokeStyle = currentColor();
-    ctx.lineWidth   = turtle.size;
-    ctx.lineCap     = 'round';
-    ctx.stroke();
+  const hex = T.color;
+  if (T.alpha < 1) {
+    const r = parseInt(hex.slice(1,3),16),
+          g = parseInt(hex.slice(3,5),16),
+          b = parseInt(hex.slice(5,7),16);
+    return `rgba(${r},${g},${b},${T.alpha})`;
   }
-  turtle.x = nx;
-  turtle.y = ny;
+  return hex;
 }
 
-function forward(dist) {
-  const rad = turtle.angle * Math.PI / 180;
-  moveTo(
-    turtle.x + Math.cos(rad) * dist,
-    turtle.y + Math.sin(rad) * dist,
-  );
-}
-
-function right(deg)  { turtle.angle += deg; }
-function left(deg)   { turtle.angle -= deg; }
-
-function drawCircle(radius) {
-  // Approximate circle by many small steps
-  const steps   = 72;
-  const stepDeg = 360 / steps;
-  const stepDist = (2 * Math.PI * Math.abs(radius)) / steps;
-  for (let i = 0; i < steps; i++) {
-    forward(stepDist);
-    if (radius >= 0) right(stepDeg); else left(stepDeg);
+function setDash() {
+  switch(T.lineStyle) {
+    case 'dashed':    ctx.setLineDash([T.size*4, T.size*3]); break;
+    case 'dotted':    ctx.setLineDash([1, T.size*3]); break;
+    case 'long-dash': ctx.setLineDash([T.size*10, T.size*4]); break;
+    default:          ctx.setLineDash([]); break;
   }
 }
 
-// ── Turtle sprite ────────────────────────────────────────────────────────────
-const spriteCanvas = document.createElement('canvas');
-spriteCanvas.width  = 26;
-spriteCanvas.height = 26;
-const sc = spriteCanvas.getContext('2d');
+// Draw a line in world space (accounting for view transform)
+function worldLine(x1,y1,x2,y2,col,sz,cap) {
+  const cx1 = worldToScreen(x1,y1), cx2 = worldToScreen(x2,y2);
+  ctx.beginPath();
+  ctx.moveTo(cx1.x, cx1.y);
+  ctx.lineTo(cx2.x, cx2.y);
+  ctx.strokeStyle = col;
+  ctx.lineWidth   = sz * VIEW.zoom;
+  ctx.lineCap     = cap || T.lineCap;
+  setDash();
+  ctx.stroke();
+}
 
+function worldToScreen(wx,wy) {
+  return {
+    x: (wx + VIEW.x) * VIEW.zoom + dc.width/2,
+    y: (wy + VIEW.y) * VIEW.zoom + dc.height/2,
+  };
+}
+function screenToWorld(sx,sy) {
+  return {
+    x: (sx - dc.width/2)  / VIEW.zoom - VIEW.x,
+    y: (sy - dc.height/2) / VIEW.zoom - VIEW.y,
+  };
+}
+
+// Move turtle forward with symmetry
+function moveTurtle(dist) {
+  const rad = T.angle * Math.PI / 180;
+  const nx  = T.x + Math.cos(rad) * dist;
+  const ny  = T.y + Math.sin(rad) * dist;
+
+  if (T.penDown) {
+    const col = penColor();
+    for (let s = 0; s < symmetry; s++) {
+      const a = (s / symmetry) * Math.PI * 2;
+      applySymmetry(T.x, T.y, nx, ny, a, col);
+    }
+  }
+
+  if (T.wrap) {
+    const w = dc.width / VIEW.zoom;
+    const h = dc.height / VIEW.zoom;
+    T.x = ((nx % w) + w) % w - w/2;
+    T.y = ((ny % h) + h) % h - h/2;
+  } else {
+    T.x = nx; T.y = ny;
+  }
+}
+
+function applySymmetry(x1,y1,x2,y2, rotAngle, col) {
+  const cos = Math.cos(rotAngle), sin = Math.sin(rotAngle);
+  function rot(px,py) {
+    return [px*cos - py*sin, px*sin + py*cos];
+  }
+  function refl(px,py,mode) {
+    if (mode==='reflect-x') return [px,-py];
+    if (mode==='reflect-y') return [-px,py];
+    if (mode==='both')      return [-px,-py];
+    return [px,py];
+  }
+
+  const [rx1,ry1] = rot(x1,y1);
+  const [rx2,ry2] = rot(x2,y2);
+  worldLine(rx1,ry1,rx2,ry2, col, T.size, T.lineCap);
+
+  if (mirrorMode !== 'rotate') {
+    const [mx1,my1] = refl(rx1,ry1,mirrorMode);
+    const [mx2,my2] = refl(rx2,ry2,mirrorMode);
+    worldLine(mx1,my1,mx2,my2, col, T.size, T.lineCap);
+  }
+}
+
+function turnRight(deg)  { T.angle += deg; }
+function turnLeft(deg)   { T.angle -= deg; }
+function penUp()   { T.penDown=false; updatePenBtn(); }
+function penDown() { T.penDown=true;  updatePenBtn(); }
+
+function updatePenBtn() {
+  const b = document.getElementById('pen-btn');
+  b.textContent = T.penDown ? 'pen ▼' : 'pen ▲';
+  b.classList.toggle('warn', !T.penDown);
+}
+
+// ── Grid / axes overlay ───────────────────────────────────────────────────────
+function redrawAll() {
+  // Re-render grid on top of drawing
+  renderOverlay();
+}
+
+function renderOverlay() {
+  octx.clearRect(0,0,oc.width,oc.height);
+
+  if (showGrid) {
+    const step = 40 * VIEW.zoom;
+    const ox = (VIEW.x * VIEW.zoom + oc.width/2) % step;
+    const oy = (VIEW.y * VIEW.zoom + oc.height/2) % step;
+    octx.beginPath();
+    octx.strokeStyle = 'rgba(255,255,255,0.05)';
+    octx.lineWidth = 1;
+    for (let x = ox; x < oc.width; x+=step) {
+      octx.moveTo(x,0); octx.lineTo(x,oc.height);
+    }
+    for (let y = oy; y < oc.height; y+=step) {
+      octx.moveTo(0,y); octx.lineTo(oc.width,y);
+    }
+    octx.stroke();
+  }
+
+  if (showAxes) {
+    const cx = worldToScreen(0,0);
+    octx.beginPath();
+    octx.strokeStyle = 'rgba(255,100,100,0.3)';
+    octx.lineWidth = 1;
+    octx.moveTo(cx.x, 0); octx.lineTo(cx.x, oc.height);
+    octx.moveTo(0, cx.y); octx.lineTo(oc.width, cx.y);
+    octx.stroke();
+  }
+
+  // Turtle sprite
+  if (T.visible) drawTurtleSprite();
+}
+
+// ── Turtle sprite ─────────────────────────────────────────────────────────────
 function drawTurtleSprite() {
-  sc.clearRect(0, 0, 26, 26);
+  const sc = worldToScreen(T.x, T.y);
+  const sz = Math.max(14, 14 * VIEW.zoom);
+  octx.save();
+  octx.translate(sc.x, sc.y);
+  octx.rotate((T.angle + 90) * Math.PI / 180);
+
   // Shell
-  sc.beginPath();
-  sc.arc(13, 13, 9, 0, Math.PI * 2);
-  sc.fillStyle   = '#4a9e6a';
-  sc.fill();
-  // Shine
-  sc.beginPath();
-  sc.arc(10, 10, 3, 0, Math.PI * 2);
-  sc.fillStyle = 'rgba(255,255,255,0.2)';
-  sc.fill();
-  // Head (pointing right in sprite, will be rotated)
-  sc.beginPath();
-  sc.arc(22, 13, 5, 0, Math.PI * 2);
-  sc.fillStyle = '#5ab87c';
-  sc.fill();
+  octx.beginPath();
+  octx.ellipse(0, 0, sz*.7, sz*.85, 0, 0, Math.PI*2);
+  octx.fillStyle = '#2e7d4f';
+  octx.fill();
+
+  // Shell pattern
+  octx.beginPath();
+  octx.ellipse(0, -sz*.15, sz*.35, sz*.42, 0, 0, Math.PI*2);
+  octx.fillStyle = '#3a9960';
+  octx.fill();
+  octx.beginPath();
+  octx.ellipse(0, -sz*.15, sz*.18, sz*.22, 0, 0, Math.PI*2);
+  octx.fillStyle = '#4ab872';
+  octx.fill();
+
+  // Head (top)
+  octx.beginPath();
+  octx.ellipse(0, -sz*.92, sz*.28, sz*.3, 0, 0, Math.PI*2);
+  octx.fillStyle = '#5ac880';
+  octx.fill();
+
   // Eyes
-  sc.beginPath();
-  sc.arc(24, 11, 1.5, 0, Math.PI * 2);
-  sc.fillStyle = '#fff';
-  sc.fill();
-  sc.beginPath();
-  sc.arc(24.5, 11, 0.7, 0, Math.PI * 2);
-  sc.fillStyle = '#222';
-  sc.fill();
-}
-drawTurtleSprite();
+  [-sz*.1, sz*.1].forEach(ex => {
+    octx.beginPath();
+    octx.arc(ex, -sz*1.0, sz*.08, 0, Math.PI*2);
+    octx.fillStyle = '#fff';
+    octx.fill();
+    octx.beginPath();
+    octx.arc(ex+sz*.02, -sz*1.0, sz*.04, 0, Math.PI*2);
+    octx.fillStyle = '#111';
+    octx.fill();
+  });
 
-// Overlay canvas for turtle sprite (drawn on top, cleared each frame)
-const overlayCanvas = document.createElement('canvas');
-const oc = overlayCanvas.getContext('2d');
-overlayCanvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;width:100%;height:100%';
-wrap.appendChild(overlayCanvas);
+  // Legs
+  [[sz*.7,  sz*.3, 30], [-sz*.7, sz*.3, -30],
+   [sz*.6, -sz*.3, -20], [-sz*.6, -sz*.3, 20]].forEach(([lx,ly,lr]) => {
+    octx.save();
+    octx.translate(lx,ly);
+    octx.rotate(lr*Math.PI/180);
+    octx.beginPath();
+    octx.ellipse(0,0,sz*.2,sz*.12,0,0,Math.PI*2);
+    octx.fillStyle = '#4ab872';
+    octx.fill();
+    octx.restore();
+  });
 
-function syncOverlay() {
-  overlayCanvas.width  = canvas.width;
-  overlayCanvas.height = canvas.height;
-}
-syncOverlay();
-window.addEventListener('resize', () => { syncOverlay(); });
+  // Pen indicator
+  if (!T.penDown) {
+    octx.beginPath();
+    octx.arc(0, 0, sz*.95, 0, Math.PI*2);
+    octx.strokeStyle = 'rgba(255,150,150,0.6)';
+    octx.lineWidth = 2;
+    octx.stroke();
+  }
 
-function renderTurtle() {
-  oc.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  oc.save();
-  oc.translate(turtle.x, turtle.y);
-  // sprite points right at 0°, turtle.angle 0° = right, so direct mapping
-  oc.rotate((turtle.angle) * Math.PI / 180);
-  oc.drawImage(spriteCanvas, -13, -13);
-  oc.restore();
+  octx.restore();
 }
 
 // ── Animation loop ────────────────────────────────────────────────────────────
-function tick() {
-  renderTurtle();
-  requestAnimationFrame(tick);
-}
-tick();
+function loop() { renderOverlay(); requestAnimationFrame(loop); }
+loop();
+
+// ── HUD ───────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('hud').textContent =
+    `x: ${T.x.toFixed(1)}  y: ${T.y.toFixed(1)}  ∠: ${((T.angle%360+360)%360).toFixed(0)}°`;
+}, 100);
 
 // ── Controls ──────────────────────────────────────────────────────────────────
-const colorPick   = document.getElementById('color-pick');
-const sizePick    = document.getElementById('size-pick');
-const sizeVal     = document.getElementById('size-val');
-const speedPick   = document.getElementById('speed-pick');
-const speedVal    = document.getElementById('speed-val');
-const penToggle   = document.getElementById('pen-toggle');
-const rainbowBtn  = document.getElementById('rainbow-toggle');
-const clearBtn    = document.getElementById('clear-btn');
-const centerBtn   = document.getElementById('center-btn');
-const saveBtn     = document.getElementById('save-btn');
+// Swatches
+const SWATCHES = [
+  '#ffffff','#f0a0a0','#f0c890','#f0f080','#a0f0a0',
+  '#7ec8a0','#80d0f0','#a090f0','#f090d0','#aaaaaa',
+  '#333333','#1a3a2a','#602020','#203060','#604010',
+];
+const swatchEl = document.getElementById('swatches');
+SWATCHES.forEach(col => {
+  const d = document.createElement('div');
+  d.className = 'swatch';
+  d.style.background = col;
+  d.addEventListener('click', () => {
+    T.color = col;
+    document.getElementById('color-pick').value = col;
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    d.classList.add('active');
+    T.rainbow = false;
+    document.getElementById('rainbow-btn').classList.remove('on');
+  });
+  swatchEl.appendChild(d);
+});
+swatchEl.children[4].classList.add('active'); // default
 
-colorPick.addEventListener('input', e => { turtle.color = e.target.value; });
+const colorPick = document.getElementById('color-pick');
+colorPick.addEventListener('input', e => {
+  T.color = e.target.value;
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+});
 
+const bgPick = document.getElementById('bg-pick');
+bgPick.addEventListener('input', e => {
+  bgColor = e.target.value;
+  document.body.style.background = bgColor;
+  wrap.style.background = bgColor;
+});
+
+const sizePick = document.getElementById('size-pick');
 sizePick.addEventListener('input', e => {
-  turtle.size = +e.target.value;
-  sizeVal.textContent = e.target.value;
+  T.size = +e.target.value;
+  document.getElementById('size-val').textContent = e.target.value;
 });
 
+const alphaPick = document.getElementById('alpha-pick');
+alphaPick.addEventListener('input', e => {
+  T.alpha = +e.target.value / 100;
+  document.getElementById('alpha-val').textContent = e.target.value;
+});
+
+const speedPick = document.getElementById('speed-pick');
 speedPick.addEventListener('input', e => {
-  speedVal.textContent = e.target.value;
+  document.getElementById('speed-val').textContent = e.target.value;
 });
 
-penToggle.addEventListener('click', () => {
-  turtle.penDown = !turtle.penDown;
-  penToggle.textContent = turtle.penDown ? 'pen down' : 'pen up';
-  penToggle.classList.toggle('pen-up', !turtle.penDown);
+const turnPick = document.getElementById('turn-pick');
+turnPick.addEventListener('input', e => {
+  document.getElementById('turn-val').textContent = e.target.value;
 });
 
-rainbowBtn.addEventListener('click', () => {
-  turtle.rainbow = !turtle.rainbow;
-  rainbowBtn.classList.toggle('on', turtle.rainbow);
-  rainbowBtn.textContent = turtle.rainbow ? 'rainbow ✦' : 'rainbow';
+document.getElementById('line-style').addEventListener('change', e => {
+  T.lineStyle = e.target.value;
+});
+document.getElementById('line-cap').addEventListener('change', e => {
+  T.lineCap = e.target.value;
 });
 
-clearBtn.addEventListener('click', () => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+const symPick = document.getElementById('sym-pick');
+symPick.addEventListener('input', e => {
+  symmetry = +e.target.value;
+  document.getElementById('sym-val').textContent = e.target.value;
+});
+document.getElementById('mirror-mode').addEventListener('change', e => {
+  mirrorMode = e.target.value;
 });
 
-centerBtn.addEventListener('click', () => {
-  reset();
+const zoomPick = document.getElementById('zoom-pick');
+zoomPick.addEventListener('input', e => {
+  VIEW.zoom = +e.target.value / 100;
+  document.getElementById('zoom-val').textContent = e.target.value;
 });
 
-saveBtn.addEventListener('click', () => {
-  // Merge overlay + drawing
-  const tmp    = document.createElement('canvas');
-  tmp.width    = canvas.width;
-  tmp.height   = canvas.height;
-  const tc     = tmp.getContext('2d');
-  tc.fillStyle = '#0a0a0a';
+// Top-bar buttons
+document.getElementById('sidebar-toggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+});
+
+document.getElementById('undo-btn').addEventListener('click', undo);
+document.getElementById('redo-btn').addEventListener('click', redo);
+
+document.getElementById('pen-btn').addEventListener('click', () => {
+  T.penDown = !T.penDown; updatePenBtn();
+});
+
+document.getElementById('rainbow-btn').addEventListener('click', () => {
+  T.rainbow = !T.rainbow;
+  document.getElementById('rainbow-btn').classList.toggle('on', T.rainbow);
+});
+
+document.getElementById('grid-btn').addEventListener('click', () => {
+  showGrid = !showGrid;
+  document.getElementById('grid-btn').classList.toggle('on', showGrid);
+});
+
+document.getElementById('axes-btn').addEventListener('click', () => {
+  showAxes = !showAxes;
+  document.getElementById('axes-btn').classList.toggle('on', showAxes);
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  saveSnapshot();
+  ctx.clearRect(0, 0, dc.width, dc.height);
+  saveSnapshot();
+});
+
+document.getElementById('save-btn').addEventListener('click', () => {
+  const tmp = document.createElement('canvas');
+  tmp.width = dc.width; tmp.height = dc.height;
+  const tc = tmp.getContext('2d');
+  tc.fillStyle = bgColor;
   tc.fillRect(0, 0, tmp.width, tmp.height);
-  tc.drawImage(canvas, 0, 0);
-  tc.drawImage(overlayCanvas, 0, 0);
-  const a    = document.createElement('a');
-  a.href     = tmp.toDataURL('image/png');
+  tc.drawImage(dc, 0, 0);
+  tc.drawImage(oc, 0, 0);
+  const a = document.createElement('a');
+  a.href = tmp.toDataURL('image/png');
   a.download = 'turtle-drawing.png';
   a.click();
 });
 
-// ── Keyboard controls ─────────────────────────────────────────────────────────
-const keysDown = new Set();
+document.getElementById('show-turtle-btn').addEventListener('click', function() {
+  T.visible = !T.visible;
+  this.textContent = T.visible ? 'hide turtle' : 'show turtle';
+});
+document.getElementById('wrap-btn').addEventListener('click', function() {
+  T.wrap = !T.wrap;
+  this.textContent = T.wrap ? 'wrap: on' : 'wrap: off';
+  this.classList.toggle('on', T.wrap);
+});
+document.getElementById('center-btn').addEventListener('click', () => {
+  resetTurtle();
+});
+document.getElementById('zoom-reset-btn').addEventListener('click', () => {
+  VIEW = {x:0,y:0,zoom:1};
+  zoomPick.value = 100;
+  document.getElementById('zoom-val').textContent = '100';
+});
+
+// Collapsible sections
+document.querySelectorAll('.section-title').forEach(title => {
+  title.addEventListener('click', () => {
+    title.closest('.section').classList.toggle('closed');
+  });
+});
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+const HELD = new Set();
+let kbInterval = null;
+
+function doKeyStep() {
+  const step = +speedPick.value;
+  const turn = +turnPick.value;
+  let moved = false;
+  if (HELD.has('ArrowUp'))    { moveTurtle(step);  moved=true; }
+  if (HELD.has('ArrowDown'))  { moveTurtle(-step); moved=true; }
+  if (HELD.has('ArrowRight')) { turnRight(turn);   moved=true; }
+  if (HELD.has('ArrowLeft'))  { turnLeft(turn);    moved=true; }
+  return moved;
+}
 
 document.addEventListener('keydown', e => {
-  // Don't capture when typing in command input
   if (document.activeElement === document.getElementById('cmd-input')) return;
 
-  const step = e.shiftKey ? +speedPick.value * 5 : +speedPick.value * 5;
-  const turnStep = 15;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+    HELD.add(e.key);
+    if (!kbInterval) {
+      doKeyStep();
+      kbInterval = setInterval(() => {
+        if (!doKeyStep()) { clearInterval(kbInterval); kbInterval=null; }
+      }, 30);
+    }
+  }
+  if (e.key === ' ')  { e.preventDefault(); T.penDown=!T.penDown; updatePenBtn(); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) { e.preventDefault(); redo(); }
+  if (e.key === 'c' && !e.ctrlKey && !e.metaKey) { resetTurtle(); }
+  if (e.key === 'h')  { saveSnapshot(); ctx.clearRect(0,0,dc.width,dc.height); saveSnapshot(); }
+});
 
-  switch (e.key) {
-    case 'ArrowUp':    e.preventDefault(); forward(step);      break;
-    case 'ArrowDown':  e.preventDefault(); forward(-step);     break;
-    case 'ArrowRight': e.preventDefault(); right(turnStep);    break;
-    case 'ArrowLeft':  e.preventDefault(); left(turnStep);     break;
-    case ' ':          e.preventDefault();
-      turtle.penDown = !turtle.penDown;
-      penToggle.textContent = turtle.penDown ? 'pen down' : 'pen up';
-      penToggle.classList.toggle('pen-up', !turtle.penDown);
-      break;
+document.addEventListener('keyup', e => {
+  HELD.delete(e.key);
+  if (HELD.size === 0) {
+    clearInterval(kbInterval); kbInterval=null;
+    saveSnapshot();
   }
 });
 
-// ── Logo-style command interpreter ───────────────────────────────────────────
+// ── Touch D-pad ───────────────────────────────────────────────────────────────
+function holdTouchBtn(action) {
+  action();
+  let iv = setInterval(action, 30);
+  const stop = () => { clearInterval(iv); saveSnapshot(); };
+  window.addEventListener('touchend',  stop, {once:true});
+  window.addEventListener('touchcancel', stop, {once:true});
+}
+document.getElementById('tb-up').addEventListener('touchstart', e => {
+  e.preventDefault();
+  holdTouchBtn(() => moveTurtle(+speedPick.value));
+});
+document.getElementById('tb-dn').addEventListener('touchstart', e => {
+  e.preventDefault();
+  holdTouchBtn(() => moveTurtle(-+speedPick.value));
+});
+document.getElementById('tb-lt').addEventListener('touchstart', e => {
+  e.preventDefault();
+  holdTouchBtn(() => turnLeft(+turnPick.value));
+});
+document.getElementById('tb-rt').addEventListener('touchstart', e => {
+  e.preventDefault();
+  holdTouchBtn(() => turnRight(+turnPick.value));
+});
+document.getElementById('tb-pu').addEventListener('click', () => {
+  T.penDown = !T.penDown; updatePenBtn();
+});
+
+// ── Mouse drag to draw ────────────────────────────────────────────────────────
+let dragging = false;
+wrap.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const pos = screenToWorld(e.offsetX, e.offsetY);
+  T.x = pos.x; T.y = pos.y;
+  dragging = true;
+  saveSnapshot();
+});
+wrap.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const pos = screenToWorld(e.offsetX, e.offsetY);
+  moveTurtle(0); // just update position visually
+  const prev = {x: T.x, y: T.y};
+  T.x = pos.x; T.y = pos.y;
+  if (T.penDown) {
+    const col = penColor();
+    for (let s = 0; s < symmetry; s++) {
+      const a = (s/symmetry)*Math.PI*2;
+      applySymmetry(prev.x, prev.y, T.x, T.y, a, col);
+    }
+  }
+});
+wrap.addEventListener('mouseup', () => { if(dragging){dragging=false;saveSnapshot();} });
+wrap.addEventListener('mouseleave', () => { if(dragging){dragging=false;saveSnapshot();} });
+
+// Scroll to zoom
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.08 : 0.93;
+  VIEW.zoom = Math.max(0.2, Math.min(4, VIEW.zoom * factor));
+  const pct = Math.round(VIEW.zoom * 100);
+  zoomPick.value = pct;
+  document.getElementById('zoom-val').textContent = pct;
+}, {passive:false});
+
+// ── Command interpreter ────────────────────────────────────────────────────────
 const cmdInput = document.getElementById('cmd-input');
+const cmdStatus = document.getElementById('cmd-status');
+let cmdHistory = [], cmdHistIdx = -1;
 
 cmdInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
-    runScript(cmdInput.value.trim());
+    const src = cmdInput.value.trim();
+    if (src) {
+      cmdHistory.unshift(src);
+      if (cmdHistory.length > 50) cmdHistory.pop();
+      cmdHistIdx = -1;
+      saveSnapshot();
+      try {
+        runScript(src);
+        cmdStatus.textContent = '✓ ' + src.slice(0,50);
+        cmdStatus.style.color = 'rgba(126,200,160,.6)';
+      } catch(err) {
+        cmdStatus.textContent = '✗ ' + err.message;
+        cmdStatus.style.color = 'rgba(240,152,152,.8)';
+      }
+      saveSnapshot();
+    }
     cmdInput.value = '';
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (cmdHistIdx < cmdHistory.length-1) cmdHistIdx++;
+    cmdInput.value = cmdHistory[cmdHistIdx] || '';
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    cmdHistIdx = Math.max(-1, cmdHistIdx-1);
+    cmdInput.value = cmdHistIdx >= 0 ? cmdHistory[cmdHistIdx] : '';
   }
 });
 
-// Simple tokenizer & interpreter
 function tokenize(src) {
-  const tokens = [];
+  const toks = [];
   let i = 0;
   while (i < src.length) {
-    if (src[i] === ' ' || src[i] === '\t' || src[i] === '\n') { i++; continue; }
-    if (src[i] === '[') { tokens.push('['); i++; continue; }
-    if (src[i] === ']') { tokens.push(']'); i++; continue; }
-    // word or number
+    if (/\s/.test(src[i])) { i++; continue; }
+    if (src[i]==='[') { toks.push('['); i++; continue; }
+    if (src[i]===']') { toks.push(']'); i++; continue; }
     let j = i;
-    while (j < src.length && src[j] !== ' ' && src[j] !== '[' && src[j] !== ']') j++;
-    tokens.push(src.slice(i, j));
+    while (j < src.length && !/\s/.test(src[j]) && src[j]!=='[' && src[j]!==']') j++;
+    toks.push(src.slice(i,j));
     i = j;
   }
-  return tokens;
+  return toks;
 }
 
 function runScript(src) {
   if (!src) return;
-  const tokens = tokenize(src.toLowerCase());
-  execTokens(tokens, 0, tokens.length);
+  execToks(tokenize(src.toLowerCase()), 0);
 }
 
-function execTokens(tokens, start, end) {
+function execToks(toks, start) {
   let i = start;
-  while (i < end) {
-    const tok = tokens[i];
-    if (tok === 'fd' || tok === 'forward') {
-      i++; forward(parseFloat(tokens[i]) || 0); i++;
-    } else if (tok === 'bk' || tok === 'back' || tok === 'backward') {
-      i++; forward(-(parseFloat(tokens[i]) || 0)); i++;
-    } else if (tok === 'rt' || tok === 'right') {
-      i++; right(parseFloat(tokens[i]) || 0); i++;
-    } else if (tok === 'lt' || tok === 'left') {
-      i++; left(parseFloat(tokens[i]) || 0); i++;
-    } else if (tok === 'pu' || tok === 'penup') {
-      turtle.penDown = false;
-      penToggle.textContent = 'pen up';
-      penToggle.classList.add('pen-up');
+  while (i < toks.length) {
+    const t = toks[i];
+    if (t==='fd'||t==='forward')        { i++; moveTurtle(num(toks[i++])); }
+    else if (t==='bk'||t==='back'||t==='backward') { i++; moveTurtle(-num(toks[i++])); }
+    else if (t==='rt'||t==='right')     { i++; turnRight(num(toks[i++])); }
+    else if (t==='lt'||t==='left')      { i++; turnLeft(num(toks[i++])); }
+    else if (t==='pu'||t==='penup')     { penUp(); i++; }
+    else if (t==='pd'||t==='pendown')   { penDown(); i++; }
+    else if (t==='home')                { resetTurtle(); i++; }
+    else if (t==='cs'||t==='clear')     { ctx.clearRect(0,0,dc.width,dc.height); resetTurtle(); i++; }
+    else if (t==='circle')              { i++; drawCircle(num(toks[i++])); }
+    else if (t==='arc')                 { i++; const r=num(toks[i++]),deg=num(toks[i++]); drawArc(r,deg); }
+    else if (t==='dot')                 { i++; drawDot(num(toks[i++])); }
+    else if (t==='setcolor'||t==='color')  { i++; setColor(toks[i++]); }
+    else if (t==='setsize'||t==='size')    { i++; T.size=num(toks[i++]); sizePick.value=T.size; document.getElementById('size-val').textContent=T.size; }
+    else if (t==='setheading'||t==='seth') { i++; T.angle=num(toks[i++])-90; }
+    else if (t==='setpos'||t==='goto')  { i++; T.x=num(toks[i++]); T.y=num(toks[i++]); }
+    else if (t==='speed')               { i++; speedPick.value=num(toks[i++]); }
+    else if (t==='rainbow')             { T.rainbow=true; i++; }
+    else if (t==='norainbow')           { T.rainbow=false; i++; }
+    else if (t==='sym'||t==='symmetry') { i++; symmetry=Math.max(1,Math.round(num(toks[i++]))); symPick.value=symmetry; document.getElementById('sym-val').textContent=symmetry; }
+    else if (t==='repeat') {
       i++;
-    } else if (tok === 'pd' || tok === 'pendown') {
-      turtle.penDown = true;
-      penToggle.textContent = 'pen down';
-      penToggle.classList.remove('pen-up');
-      i++;
-    } else if (tok === 'home') {
-      reset(); i++;
-    } else if (tok === 'cs' || tok === 'clearscreen' || tok === 'clear') {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      reset(); i++;
-    } else if (tok === 'circle') {
-      i++; drawCircle(parseFloat(tokens[i]) || 50); i++;
-    } else if (tok === 'setcolor' || tok === 'color') {
-      i++;
-      const col = tokens[i];
-      // Accept hex or css color names
-      turtle.color = col.startsWith('#') ? col : col;
-      colorPick.value = turtle.color;
-      turtle.rainbow = false;
-      rainbowBtn.classList.remove('on');
-      rainbowBtn.textContent = 'rainbow';
-      i++;
-    } else if (tok === 'setsize' || tok === 'size') {
-      i++;
-      turtle.size = parseFloat(tokens[i]) || 2;
-      sizePick.value = turtle.size;
-      sizeVal.textContent = turtle.size;
-      i++;
-    } else if (tok === 'repeat') {
-      i++;
-      const times = parseInt(tokens[i]) || 0; i++;
-      // Expect [ ... ]
-      if (tokens[i] === '[') {
+      const times = Math.round(num(toks[i++]));
+      if (toks[i]==='[') {
         i++;
-        const blockStart = i;
-        // find matching ]
-        let depth = 1, j = i;
-        while (j < end && depth > 0) {
-          if (tokens[j] === '[') depth++;
-          else if (tokens[j] === ']') depth--;
+        const blkStart = i;
+        let depth=1; let j=i;
+        while (j<toks.length&&depth>0) {
+          if(toks[j]==='[')depth++;
+          else if(toks[j]===']')depth--;
           j++;
         }
-        const blockEnd = j - 1; // points at ]
-        for (let r = 0; r < times; r++) {
-          execTokens(tokens, blockStart, blockEnd);
-        }
-        i = j; // past ]
+        const blkEnd = j-1;
+        for (let r=0;r<times;r++) execToks(toks, blkStart);
+        i = j;
       }
-    } else {
-      i++; // skip unknown token
     }
+    else if (t==='tree') {
+      i++;
+      const len=num(toks[i++]);
+      const dep=toks[i] && !isNaN(toks[i]) ? num(toks[i++]) : 5;
+      drawTree(len,dep);
+    }
+    else { i++; }
   }
 }
 
-// ── Examples on first load ────────────────────────────────────────────────────
-// Draw a small greeting spiral
-(function initDraw() {
-  turtle.rainbow = true;
-  turtle.size    = 2;
-  const steps    = 80;
-  for (let s = 0; s < steps; s++) {
-    forward(s * 2.2);
-    right(91);
+function num(s) { const v=parseFloat(s); if(isNaN(v)) throw new Error(`not a number: ${s}`); return v; }
+
+function setColor(col) {
+  const mapped = {'red':'#f06060','green':'#60d080','blue':'#6090f0','yellow':'#f0e060',
+    'white':'#ffffff','black':'#111111','purple':'#a060f0','pink':'#f080c0',
+    'orange':'#f09040','cyan':'#60d0f0','lime':'#80f060','teal':'#40c0b0'};
+  T.color = mapped[col] || col;
+  colorPick.value = T.color;
+  T.rainbow = false;
+}
+
+function drawCircle(radius) {
+  const steps=Math.max(24,Math.abs(Math.round(radius*0.8)));
+  const deg=360/steps;
+  const dist=(2*Math.PI*Math.abs(radius))/steps;
+  for(let i=0;i<steps;i++){
+    moveTurtle(dist);
+    if(radius>=0) turnRight(deg); else turnLeft(deg);
   }
-  turtle.rainbow = false;
-  turtle.color   = '#7ec8a0';
-  reset();
+}
+
+function drawArc(radius, degrees) {
+  const steps=Math.max(4,Math.abs(Math.round(degrees/5)));
+  const deg=degrees/steps;
+  const dist=(2*Math.PI*Math.abs(radius)*(Math.abs(degrees)/360))/steps;
+  for(let i=0;i<steps;i++){
+    moveTurtle(dist);
+    if(radius>=0) turnRight(deg); else turnLeft(deg);
+  }
+}
+
+function drawDot(size) {
+  const sc = worldToScreen(T.x, T.y);
+  ctx.beginPath();
+  ctx.arc(sc.x, sc.y, size*VIEW.zoom/2, 0, Math.PI*2);
+  ctx.fillStyle = penColor();
+  ctx.fill();
+}
+
+function drawTree(len, depth) {
+  if (depth === 0 || len < 2) return;
+  moveTurtle(len);
+  const prevAngle = T.angle;
+  turnLeft(25); drawTree(len*0.65, depth-1);
+  T.angle = prevAngle;
+  turnRight(25); drawTree(len*0.65, depth-1);
+  T.angle = prevAngle;
+  moveTurtle(-len);
+}
+
+// ── Preset programs ───────────────────────────────────────────────────────────
+const PRESETS = {
+  spiral: () => {
+    T.rainbow=true;
+    for(let i=0;i<120;i++){moveTurtle(i*2.2);turnRight(91);}
+    T.rainbow=false; T.color='#7ec8a0';
+  },
+  star5: () => {
+    runScript('repeat 5 [fd 150 rt 144]');
+  },
+  rose: () => {
+    T.rainbow=true; T.size=2;
+    for(let i=0;i<720;i++){
+      moveTurtle(Math.abs(Math.sin(i*5*Math.PI/180))*3);
+      turnRight(0.5);
+    }
+    T.rainbow=false;
+  },
+  snowflake: () => {
+    symmetry=6; symPick.value=6; document.getElementById('sym-val').textContent=6;
+    T.color='#80d8f8'; T.size=1.5;
+    for(let i=0;i<3;i++){
+      runScript('fd 80 bk 80 rt 60');
+      runScript('fd 50 rt 60 fd 25 bk 25 lt 60 bk 50 rt 60');
+    }
+    symmetry=1; symPick.value=1; document.getElementById('sym-val').textContent=1;
+  },
+  web: () => {
+    T.rainbow=true; T.size=1;
+    for(let sides=3;sides<=10;sides++){
+      const L=sides*14;
+      for(let i=0;i<sides;i++){moveTurtle(L);turnRight(360/sides);}
+    }
+    T.rainbow=false;
+  },
+  tree: () => {
+    T.color='#60c050'; T.size=2;
+    drawTree(90, 7);
+    resetTurtle();
+  },
+  circle36: () => {
+    T.rainbow=true; T.size=1.5;
+    for(let i=0;i<36;i++){
+      drawCircle(80);
+      turnRight(10);
+    }
+    T.rainbow=false;
+  },
+  'rainbow-star': () => {
+    T.rainbow=true; T.size=3; symmetry=8;
+    symPick.value=8; document.getElementById('sym-val').textContent=8;
+    for(let i=0;i<200;i++){moveTurtle(i*1.1);turnRight(59);}
+    symmetry=1; symPick.value=1; document.getElementById('sym-val').textContent=1;
+    T.rainbow=false; T.color='#7ec8a0';
+  },
+  hilbert: () => {
+    T.color='#b0a0f8'; T.size=1.5;
+    function hilbert(order,angle,size){
+      if(order===0)return;
+      turnRight(angle);
+      hilbert(order-1,-angle,size);
+      moveTurtle(size);
+      turnLeft(angle);
+      hilbert(order-1,angle,size);
+      moveTurtle(size);
+      hilbert(order-1,angle,size);
+      turnLeft(angle);
+      moveTurtle(size);
+      hilbert(order-1,-angle,size);
+      turnRight(angle);
+    }
+    // Position top-left
+    T.x = -dc.width/(2*VIEW.zoom)*0.45;
+    T.y = -dc.height/(2*VIEW.zoom)*0.45;
+    hilbert(4, 90, 14);
+  },
+};
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    saveSnapshot();
+    resetTurtle();
+    const fn = PRESETS[btn.dataset.prog];
+    if (fn) fn();
+    saveSnapshot();
+  });
+});
+
+// ── Startup drawing ───────────────────────────────────────────────────────────
+(function initDraw(){
+  T.rainbow=true; T.size=2;
+  for(let i=0;i<80;i++){moveTurtle(i*2.5);turnRight(91);}
+  T.rainbow=false; T.color='#7ec8a0';
+  resetTurtle();
+  saveSnapshot();
 })();
 </script>
 </body>
