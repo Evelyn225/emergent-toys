@@ -1046,9 +1046,10 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 #sleep-overlay {
   display:none; position:fixed; inset:0; z-index:99992;
   align-items:center; justify-content:center;
+  background-color:#000;
   background:
-    radial-gradient(circle at 50% 40%, rgba(20,48,26,0.22), transparent 34%),
-    linear-gradient(180deg, rgba(0,18,0,0.96), #000 60%);
+    radial-gradient(circle at 50% 40%, #14301a 0%, #071307 34%, #000 70%),
+    linear-gradient(180deg, #001200, #000 60%);
   color:#9ab393; text-align:center; padding:24px;
 }
 #sleep-overlay.active { display:flex; }
@@ -11248,8 +11249,7 @@ Stopping unknown (PID 0334)...           [TIMEOUT]
 Stopping unknown (PID 0335)...           [TIMEOUT]
 Flushing corpus cache...                 [OK]
 Unloading kernel modules...              [OK]
-
-It is now safe to turn off your computer.
+Saving system state...                   [OK]
   </div>`;
   document.getElementById('desktop').style.display = 'none';
   document.getElementById('taskbar').style.display = 'none';
