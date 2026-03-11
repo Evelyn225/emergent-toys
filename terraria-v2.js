@@ -38,7 +38,7 @@ const PICK_IRON   = 17;
 const WATER_MAX = 1;
 const WATER_RENDER_EPS = 0.04;
 const WATER_SIDE_FLOW = 0.35;
-const WATER_STEPS_PER_FRAME = 2;
+const WATER_STEPS_PER_FRAME = 1;
 const WATER_MOVE_THRESHOLD = 0.003;
 const WATER_SPEED_MULT = 0.72;
 const WATER_GRAVITY_MULT = 0.24;
@@ -772,6 +772,10 @@ const player = {
   waterExitFrames: 0,
   health: 5,
   maxHealth: 5,
+  iframes: 0,
+  dying: false,
+  deathFrame: 0,
+  deathTick: 0,
 };
 
 cam.x = WORLD_PX / 2 - canvas.width / 2;
@@ -790,6 +794,13 @@ spritesheet.src = 'images/platformer_sprites_pixelized_0.png';
 const FRAME_SIZE = 64;
 const SHEET_COLS = 8;
 
+// Offscreen canvas used to tint the player sprite without bleeding into the background
+const hitCanvas = document.createElement('canvas');
+hitCanvas.width = FRAME_SIZE;
+hitCanvas.height = FRAME_SIZE;
+const hitCtx = hitCanvas.getContext('2d');
+hitCtx.imageSmoothingEnabled = false;
+
 const ANIM = {
   stand: { row: 8, colStart: 0 },
   walk: { row: 4, colStart: 0 },
@@ -797,6 +808,13 @@ const ANIM = {
   jump: { row: 5, colStart: 2 },
   mine: { row: 1, colStart: 4 },
 };
+
+// Frames 19–23 (0-indexed); last frame (row 2, col 7) is the body-drop hold frame
+const DEATH_FRAMES = [
+  { row: 2, col: 3 }, { row: 2, col: 4 }, { row: 2, col: 5 },
+  { row: 2, col: 6 }, { row: 2, col: 7 },
+];
+const DEATH_TICKS_PER_FRAME = 7;
 
 function collidesWithWorld(px, py, pw, ph) {
   const left = Math.floor(px / TILE);
@@ -1636,7 +1654,6 @@ function updatePlacement(frame) {
   const wx = Math.floor((mouse.x + camX) / TILE);
   const wy = Math.floor((mouse.y + camY) / TILE);
   if (getBlock(wx, wy) !== AIR) return;
-  if (getWater(wx, wy) > WATER_RENDER_EPS) return;
 
   const pcx = player.x + player.w / 2;
   const pcy = player.y + player.h / 2;
@@ -1654,6 +1671,7 @@ function updatePlacement(frame) {
   if (overlaps) return;
 
   setBlock(wx, wy, slot.type);
+  setWater(wx, wy, 0);
   slot.count--;
   if (slot.count <= 0) {
     slot.count = 0;
@@ -1663,6 +1681,8 @@ function updatePlacement(frame) {
 
 function updatePlayer(scale = 1) {
   player.jumpAnimRestart = false;
+  if (player.dying) return; // death animation handled separately
+  if (player.iframes > 0) player.iframes = Math.max(0, player.iframes - scale);
   const waterCoverageStart = sampleWaterCoverage(player.x, player.y, player.w, player.h);
   player.waterExitFrames = Math.max(0, player.waterExitFrames - scale);
   const rawInWaterStart = waterCoverageStart > PLAYER_WET_THRESHOLD;
@@ -1736,11 +1756,19 @@ function updatePlayer(scale = 1) {
     }
   }
 
+  const prevVy = player.vy;
   player.y += player.vy;
   if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
     if (player.vy > 0) {
       player.y = Math.floor((player.y + player.h) / TILE) * TILE - player.h;
       player.vy = 0;
+      // Fall damage: only when landing hard and not in water
+      const FALL_THRESHOLD = 14.8;
+      if (prevVy > FALL_THRESHOLD && !inWaterStart && player.iframes <= 0) {
+        const dmg = Math.floor((prevVy - FALL_THRESHOLD) / 1.5) + 1;
+        player.health = Math.max(0, player.health - dmg);
+        player.iframes = 30;
+      }
     } else {
       player.y = Math.ceil(player.y / TILE) * TILE;
       player.vy = 0;
@@ -1815,6 +1843,26 @@ function updateAnimation(scale = 1) {
     if (newState === 'jump' && player.inWater) player.animFrame = (player.animFrame + 1) % 3;
     else if (newState === 'jump') player.animFrame = Math.min(player.animFrame + 1, frameCount - 1);
     else player.animFrame = (player.animFrame + 1) % frameCount;
+  }
+}
+
+const DEATH_FREEZE_TICKS = 120; // frames to hold last frame before respawn
+
+function updateDeathAnim(scale = 1) {
+  if (!player.dying) return;
+  // Still animating through frames
+  if (player.deathFrame < DEATH_FRAMES.length - 1) {
+    player.deathTick += scale;
+    if (player.deathTick >= DEATH_TICKS_PER_FRAME) {
+      player.deathTick = 0;
+      player.deathFrame = Math.min(player.deathFrame + 1, DEATH_FRAMES.length - 1);
+    }
+  } else {
+    // Frozen on last frame — count down then respawn
+    player.deathTick += scale;
+    if (player.deathTick >= DEATH_FREEZE_TICKS) {
+      respawnPlayer();
+    }
   }
 }
 
@@ -2081,7 +2129,11 @@ function drawPlayer() {
 
   let srcX;
   let srcY;
-  if (player.animState === 'run') {
+  if (player.dying) {
+    const f = DEATH_FRAMES[Math.min(player.deathFrame, DEATH_FRAMES.length - 1)];
+    srcX = f.col * FRAME_SIZE;
+    srcY = f.row * FRAME_SIZE;
+  } else if (player.animState === 'run') {
     const globalFrame = player.animFrame + 4;
     srcX = (globalFrame % SHEET_COLS) * FRAME_SIZE;
     srcY = Math.floor(globalFrame / SHEET_COLS) * FRAME_SIZE;
@@ -2096,16 +2148,53 @@ function drawPlayer() {
   const screenX = player.x - cam.x + (player.w - drawSize) / 2;
   const screenY = player.y - cam.y;
 
+  // Hit flash: blink red while invincibility frames are active
+  const hitFlash = !player.dying && player.iframes > 0 && Math.floor(player.iframes / 4) % 2 === 1;
+
+  // Build the source image: either raw sprite or red-tinted sprite
+  let spriteSrc = spritesheet;
+  if (hitFlash) {
+    hitCtx.clearRect(0, 0, FRAME_SIZE, FRAME_SIZE);
+    hitCtx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE, 0, 0, FRAME_SIZE, FRAME_SIZE);
+    // source-in: fill red only where pixels are already non-transparent
+    hitCtx.globalCompositeOperation = 'source-in';
+    hitCtx.fillStyle = 'rgba(255,60,60,0.85)';
+    hitCtx.fillRect(0, 0, FRAME_SIZE, FRAME_SIZE);
+    hitCtx.globalCompositeOperation = 'source-over';
+    spriteSrc = hitCanvas;
+    srcX = 0; srcY = 0;
+  }
+
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   if (player.facing === -1) {
     ctx.translate(screenX + drawSize / 2, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE, -drawSize / 2, screenY, drawSize, drawSize);
+    ctx.drawImage(spriteSrc, srcX, srcY, FRAME_SIZE, FRAME_SIZE, -drawSize / 2, screenY, drawSize, drawSize);
   } else {
-    ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE, screenX, screenY, drawSize, drawSize);
+    ctx.drawImage(spriteSrc, srcX, srcY, FRAME_SIZE, FRAME_SIZE, screenX, screenY, drawSize, drawSize);
   }
   ctx.restore();
+
+  // Air bar above player's head — only when in water or not fully recovered
+  if (player.inWater || player.air < player.maxAir) {
+    const barW = 28;
+    const barH = 3;
+    const barX = Math.round(player.x - cam.x + (player.w - barW) / 2);
+    const barY = Math.round(player.y - cam.y) - 7;
+    const airRatio = clamp(player.air / player.maxAir, 0, 1);
+
+    // Outline
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX - 0.5, barY - 0.5, barW + 1, barH + 1);
+
+    // Fill (transparent when empty)
+    if (airRatio > 0) {
+      ctx.fillStyle = `rgba(60,160,255,${0.5 + airRatio * 0.5})`;
+      ctx.fillRect(barX, barY, Math.round(barW * airRatio), barH);
+    }
+  }
 }
 
 function drawMining() {
@@ -2199,25 +2288,17 @@ function drawStatusHud() {
   const stage = getDepthLabel(depth);
   const showAir = player.inWater || player.air < player.maxAir;
 
-  for (let i = 0; i < player.maxHealth; i++) {
-    drawHeart(18 + i * 22, 18, 16, i < player.health);
+  const heartFlash = player.iframes > 0 && Math.floor(player.iframes / 5) % 2 === 0;
+  if (!heartFlash) {
+    for (let i = 0; i < player.maxHealth; i++) {
+      drawHeart(18 + i * 22, 18, 16, i < player.health);
+    }
   }
 
-  drawPanel(16, 48, 202, showAir ? 98 : 68);
+  drawPanel(16, 48, 202, 68);
   drawText(`Biome: ${biomeNames[biomes[tileX]]}`, 28, 70, '#ffffff', '14px Minecraft, monospace');
   drawText(`Depth: ${stage} +${depth}`, 28, 90, '#d9e6ff', '14px Minecraft, monospace');
   drawText('LMB mine   RMB place', 28, 110, '#8fb4d9', '12px Minecraft, monospace');
-
-  if (showAir) {
-    const airRatio = clamp(player.air / player.maxAir, 0, 1);
-    drawText(`Air ${Math.ceil(airRatio * 100)}%`, 28, 130, '#b8ebff', '12px Minecraft, monospace');
-    ctx.fillStyle = 'rgba(0,0,0,0.72)';
-    ctx.fillRect(28, 136, 160, 10);
-    ctx.fillStyle = mixColor('#ff7a69', '#74d5ff', airRatio);
-    ctx.fillRect(28, 136, Math.round(160 * airRatio), 10);
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-    ctx.strokeRect(28.5, 136.5, 159, 9);
-  }
 }
 
 function getInventoryIconLayout(slotW, slotH) {
@@ -2491,13 +2572,28 @@ function loadGame(slot) {
 function resetPlayer() {
   player.x = WORLD_PX / 2 - player.w / 2;
   player.y = findSpawnY();
-  player.vy = 0; player.health = 5; player.maxHealth = 5;
+  player.vy = 0; player.health = 5; player.maxHealth = 5; player.iframes = 0;
+  player.dying = false; player.deathFrame = 0; player.deathTick = 0;
   player.onGround = false; player.blockedX = false;
   player.inWater = false; player.fullySubmerged = false;
   player.air = PLAYER_MAX_AIR; player.drownTick = 0;
   player.jumpLatch = false; player.jumpAnimRestart = false;
   player.waterExitFrames = 0; player.facing = 1;
   player.animState = 'stand'; player.animFrame = 0; player.animTick = 0;
+  cam.x = clamp(player.x + player.w / 2 - canvas.width / 2, 0, Math.max(0, WORLD_PX - canvas.width));
+  cam.y = clamp(player.y + player.h / 2 - canvas.height * 0.4, 0, Math.max(0, WORLD_H * TILE - canvas.height));
+}
+
+function respawnPlayer() {
+  player.x = WORLD_PX / 2 - player.w / 2;
+  player.y = findSpawnY();
+  player.vy = 0; player.health = player.maxHealth;
+  player.dying = false; player.deathFrame = 0; player.deathTick = 0;
+  player.onGround = false; player.iframes = 60;
+  player.inWater = false; player.fullySubmerged = false;
+  player.air = PLAYER_MAX_AIR; player.drownTick = 0;
+  player.jumpLatch = false; player.jumpAnimRestart = false;
+  player.waterExitFrames = 0;
   cam.x = clamp(player.x + player.w / 2 - canvas.width / 2, 0, Math.max(0, WORLD_PX - canvas.width));
   cam.y = clamp(player.y + player.h / 2 - canvas.height * 0.4, 0, Math.max(0, WORLD_H * TILE - canvas.height));
 }
@@ -2719,9 +2815,11 @@ function loop(ts) {
   if (saveMessageTimer > 0) saveMessageTimer--;
   updateWorld(dt);
   updatePlayer(scale);
-  updateMining(scale);
-  updatePlacement(lastTime);
-  updateAnimation(scale);
+  if (player.health <= 0 && !player.dying) { player.dying = true; player.deathFrame = 0; player.deathTick = 0; }
+  updateDeathAnim(scale);
+  if (!player.dying) updateMining(scale);
+  if (!player.dying) updatePlacement(lastTime);
+  if (!player.dying) updateAnimation(scale);
   updateCamera(scale);
 
   drawSky();
