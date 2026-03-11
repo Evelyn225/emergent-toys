@@ -1296,12 +1296,20 @@ const REG_KEY = 'sleepOS-registry';
 const SYSTEM_WALLPAPER_DIR = 'SYS\\WALLPAPERS';
 const DEFAULT_WALLPAPER_PATH = SYSTEM_WALLPAPER_DIR + '\\DEFAULT.JPG';
 const LEGACY_BUILTIN_WALLPAPER_IDS = new Set(['default', 'magicant', 'hills', 'battle', 'summers', 'saturn', 'cave']);
-// Point these assetUrl values at images/wallpapers/* as that repo folder fills out.
 const SEEDED_WALLPAPERS = [
-  { path: DEFAULT_WALLPAPER_PATH, label: 'Default', assetUrl: 'images/tree_bg.jpg', mime: 'image/jpeg' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\CRYSTALLINE.PNG', label: 'Crystalline', assetUrl: 'images/crystalline.png', mime: 'image/png' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\PIXELPATHS.PNG', label: 'Pixel Paths', assetUrl: 'images/pxelpaths.PNG', mime: 'image/png' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\INDEXBG.PNG', label: 'Index Sky', assetUrl: 'images/indexbg.PNG', mime: 'image/png' },
+  { path: DEFAULT_WALLPAPER_PATH, label: 'Default', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/default.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CITY.JPG', label: 'City', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/city.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CRAFT.PNG', label: 'Craft', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/craft.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\DARK.JPG', label: 'Dark', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/dark.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\FOREST.PNG', label: 'Forest', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/forest.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\HILLS.JPG', label: 'Hills', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/hills.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\OCEAN.GIF', label: 'Ocean', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/ocean.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\POWERLINES.JPG', label: 'Powerlines', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/powerlines.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\REBIRTH.GIF', label: 'Rebirth', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/rebirth.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\SPACE.PNG', label: 'Space', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/space.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\STATIC.GIF', label: 'Static', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/static.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\WATCHING.GIF', label: 'Watching', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/watching.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\WAVES.GIF', label: 'Waves', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/waves.gif', mime: 'image/gif' },
 ];
 const SEEDED_WALLPAPER_MAP = new Map(SEEDED_WALLPAPERS.map(item => [item.path, item]));
 const registryData = {
@@ -1603,11 +1611,20 @@ function renderAppearanceWindow() {
   renderWallpaperSection('wp-grid-system', systemWallpapers, 'System wallpaper files will appear here.');
   renderWallpaperSection('wp-grid-uploaded', otherWallpapers, 'Upload an image anywhere in File Explorer, or add more files under SYS\\WALLPAPERS.');
   const note = document.getElementById('wp-upload-note');
-  note.textContent = 'Wallpaper uses HKEY_CURRENT_USER\\Desktop\\Wallpaper. Right-click any image or edit that registry path to switch backgrounds.';
+  note.textContent = 'Right-click any image to set it as your wallpaper.';
 }
 
 function refreshAppearanceWindow() {
   if (document.getElementById('wb-appearance')) renderAppearanceWindow();
+}
+
+function applyWallpaperColorFallback() {
+  const bg = document.getElementById('desktop-bg');
+  if (!bg) return false;
+  currentWallpaper = '';
+  bg.style.cssText = 'background:#008080;';
+  syncWallpaperSwatches();
+  return false;
 }
 
 function applyWallpaper(path, options = {}) {
@@ -1625,19 +1642,7 @@ function applyWallpaper(path, options = {}) {
     return true;
   }
 
-  if (deferMissing) return false;
-
-  const normalized = normalizeWallpaperPath(path);
-  if (normalized !== DEFAULT_WALLPAPER_PATH) {
-    return applyWallpaper(DEFAULT_WALLPAPER_PATH, { updateRegistry });
-  }
-
-  currentWallpaper = DEFAULT_WALLPAPER_PATH;
-  bg.style.cssText = 'background:#008080;';
-  try { localStorage.setItem(WP_KEY, DEFAULT_WALLPAPER_PATH); } catch (e) {}
-  if (updateRegistry) setWallpaperRegistryValue(DEFAULT_WALLPAPER_PATH);
-  syncWallpaperSwatches();
-  return false;
+  return applyWallpaperColorFallback();
 }
 
 function handleWallpaperFileRename(dirPath, oldName, newName) {
@@ -2183,6 +2188,10 @@ const termFS = {
     ]),
   }]]),
 };
+termFS.dirs.add('DESKTOP');
+if (!termFS.subdirs.has('DESKTOP')) {
+  termFS.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+}
 
 // Helper: get a directory object by name ('' = root)
 function fsGetDir(path) {
@@ -3848,7 +3857,7 @@ async function loadBlobsFromIndexedDb() {
   if (items.length) document.dispatchEvent(new CustomEvent('fs-changed'));
   const savedWp = getInitialWallpaperPath();
   if (savedWp) {
-    if (!applyWallpaper(savedWp)) applyWallpaper(DEFAULT_WALLPAPER_PATH);
+    applyWallpaper(savedWp);
   }
 }
 loadBlobsFromStorage();
@@ -4511,13 +4520,34 @@ function triggerUpload(dir) {
   document.getElementById('file-upload-input').click();
 }
 
-function handleFileUpload(fileList) {
-  const dirPath = _uploadCwd || '';
-  const target = fsGetDir(dirPath) || { files: termFS.files, blobs: termFS.blobs };
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(String(e.target?.result ?? ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsText(file);
+  });
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target?.result);
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function handleFileUpload(fileList) {
+  const dirPath = fsNormalizeDir(_uploadCwd || '');
+  if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
+  const dir = fsGetDir(dirPath);
+  if (dirPath && !dir) {
+    osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'X');
+    return;
+  }
   const dirLabel = dirPath ? `C:\\sleepOS\\${dirPath}\\` : 'C:\\sleepOS';
-  const added = [];
-  [...fileList].forEach(file => {
-    const url = URL.createObjectURL(file);
+  const results = await Promise.all([...fileList].map(async file => {
     const TEXT_EXTS = /\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/i;
     const mime = file.type || inferBlobMimeFromName(file.name);
     const inferredKind = inferBlobKindFromName(file.name);
@@ -4527,25 +4557,38 @@ function handleFileUpload(fileList) {
                : mime.startsWith('audio/') ? 'audio'
                : isText ? 'text'
                : inferredKind;
-    if (kind === 'text') {
-      const reader = new FileReader();
-      reader.onload = e => {
-        fsWriteTextFile(file.name, e.target.result, dirPath);
-        document.dispatchEvent(new CustomEvent('fs-changed'));
-      };
-      reader.readAsText(file);
-    } else {
-      fsWriteBlobFile(file.name, { url, kind, size: file.size, mime }, dirPath);
-      // Persist eagerly while we still have the raw File object
-      const fr = new FileReader();
-      fr.onload = e => saveBlobEntry(dirPath, file.name, kind, file.size, mime, e.target.result);
-      fr.readAsArrayBuffer(file);
+    try {
+      if (kind === 'text') {
+        const content = await readFileAsText(file);
+        const saved = fsWriteTextFile(file.name, content, dirPath);
+        return saved ? { ok: true, name: file.name } : { ok: false, name: file.name };
+      }
+      const url = URL.createObjectURL(file);
+      const saved = fsWriteBlobFile(file.name, { url, kind, size: file.size, mime }, dirPath);
+      if (!saved) {
+        URL.revokeObjectURL(url);
+        return { ok: false, name: file.name };
+      }
+      try {
+        const buffer = await readFileAsArrayBuffer(file);
+        saveBlobEntry(dirPath, file.name, kind, file.size, mime, buffer);
+      } catch (e) {}
+      return { ok: true, name: file.name };
+    } catch (e) {
+      return { ok: false, name: file.name };
     }
-    added.push(file.name);
-  });
+  }));
+  const added = results.filter(result => result.ok).map(result => result.name);
+  const failed = results.filter(result => !result.ok).map(result => result.name);
   if (added.length) {
-    showUploadConfirm(added, dirLabel);
     document.dispatchEvent(new CustomEvent('fs-changed'));
+    showUploadConfirm(added, dirLabel);
+  }
+  if (failed.length) {
+    const msg = failed.length === 1
+      ? `"${failed[0]}" could not be uploaded to ${dirLabel}`
+      : `${failed.length} files could not be uploaded to ${dirLabel}`;
+    osAlert(msg, 'Upload Failed', 'X');
   }
 }
 
@@ -5140,6 +5183,43 @@ function iconLabel(name) {
   return name.slice(0, dot).toUpperCase() + name.slice(dot);
 }
 
+function resolveFsIcon(name, kind) {
+  if (kind === 'image') return '\u{1F5BC}\uFE0F';
+  if (kind === 'video') return '\u{1F3AC}';
+  if (kind === 'audio') return '\u{1F3B5}';
+  if (kind === 'dir') return '\u{1F4C1}';
+  const systemIcon = SYSTEM_FILE_ICONS[String(name).toUpperCase()];
+  if (systemIcon) return systemIcon;
+  const ext = (String(name || '').split('.').pop() || '').toLowerCase();
+  return {
+    exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
+    json:'\u{1F4CB}', js:'\u{1F4DC}', ts:'\u{1F4DC}', jsx:'\u{1F4DC}', tsx:'\u{1F4DC}',
+    html:'\u{1F310}', htm:'\u{1F310}', css:'\u{1F3A8}', py:'\u{1F40D}',
+    tmp:'\u{1F5D1}\uFE0F', log:'\u{1F4CB}', csv:'\u{1F4CA}', core:'\u{1F4A5}'
+  }[ext] || '\u{1F4C4}';
+}
+
+function getDesktopFsIcons() {
+  const dir = fsGetDir('DESKTOP');
+  if (!dir) return [];
+  const icons = [];
+  dir.dirs.forEach(name => icons.push({ name, kind: 'dir' }));
+  dir.files.forEach((_, name) => icons.push({ name, kind: 'file' }));
+  dir.blobs.forEach((blob, name) => icons.push({ name, kind: blob?.kind || inferBlobKindFromName(name) }));
+  return icons.map(item => ({
+    name: item.name,
+    emoji: resolveFsIcon(item.name, item.kind),
+    kind: item.kind,
+    desktopEntry: true,
+    target: {
+      name: item.name,
+      path: 'DESKTOP\\' + item.name,
+      kind: item.kind === 'dir' ? 'dir' : 'file',
+      sysfile: false,
+    },
+  }));
+}
+
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICON GRID
 // ─────────────────────────────────────────────────────────────────
@@ -5235,6 +5315,31 @@ function deleteDesktopSystemIcons(icons) {
     if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
     if (changed) clearDesktopSel();
   }, '🗑️');
+}
+
+function canDeleteDesktopFsEntry(ic) {
+  return !!ic?.desktopEntry && !!ic?.target?.path;
+}
+
+function deleteDesktopFsEntries(icons) {
+  const targets = (icons || []).filter(canDeleteDesktopFsEntry);
+  if (!targets.length) return;
+  const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected files?';
+  osConfirm(prompt, 'Delete', ok => {
+    if (!ok) return;
+    const blocked = [];
+    let changed = false;
+    targets.forEach(target => {
+      const result = deleteVirtualPath(target.target.path);
+      if (result.ok && result.deleted) changed = true;
+      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+    });
+    if (blocked.length) osAlert(blocked[0], 'Delete', 'âš ï¸');
+    if (changed) {
+      clearDesktopSel();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+    }
+  }, 'ðŸ—‘ï¸');
 }
 
 function makeDesktopIconEl(ic) {
@@ -5335,6 +5440,8 @@ function makeDesktopIconEl(ic) {
     const selIcs  = selDivs.map(d => d._ic);
     const multi   = selDivs.length > 1;
     const canDeleteSystemFiles = selIcs.some(canDeleteDesktopSystemIcon);
+    const canDeleteDesktopFiles = selIcs.some(canDeleteDesktopFsEntry);
+    const singleDesktopImage = !multi && selIcs[0]?.desktopEntry && selIcs[0]?.kind === 'image' ? selIcs[0] : null;
     const items   = [];
     if (multi) {
       items.push({ label: 'Open All (' + selDivs.length + ')', action: () => selIcs.forEach(i => {
@@ -5352,10 +5459,17 @@ function makeDesktopIconEl(ic) {
       if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
         items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
+      if (singleDesktopImage) {
+        items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });
+      }
     }
     if (canDeleteSystemFiles) {
       items.push('-');
       items.push({ label: multi ? 'Delete Deletable Items' : 'Delete', action: () => deleteDesktopSystemIcons(selIcs) });
+    }
+    if (canDeleteDesktopFiles) {
+      items.push('-');
+      items.push({ label: multi ? 'Delete Files' : 'Delete', action: () => deleteDesktopFsEntries(selIcs) });
     }
     if (selIcs.some(i => i.custom)) {
       items.push('-');
@@ -5382,29 +5496,23 @@ function addDesktopShortcut(name, emoji, target, openFn) {
   const ic = { name, emoji, target: target || null, openFn, custom: true };
   customDesktopIcons.push(ic);
   saveDesktopShortcuts();
-  document.dispatchEvent(new CustomEvent('fs-changed'));
   // Find a free cell (prefer column-first after existing icons)
-  const allIcons = [...getVisibleDesktopIcons(), ...customDesktopIcons];
+  const allIcons = [...getVisibleDesktopIcons(), ...getDesktopFsIcons(), ...customDesktopIcons];
   const defaults = iconDefaultPositions(allIcons);
   const { col: dc, row: dr } = defaults[ic.name] || { col: 0, row: 0 };
   const { col, row } = iconFindFreeCell(dc, dr, ic.name);
   iconPositions[ic.name] = { col, row };
   saveIconPositions();
-  const el = makeDesktopIconEl(ic);
-  el.setAttribute('data-icon-key', ic.name);
-  el.style.position = 'absolute';
-  const { left, top } = iconCellToPixel(col, row);
-  el.style.left = left + 'px';
-  el.style.top  = top  + 'px';
-  document.getElementById('icons-layer').appendChild(el);
+  document.dispatchEvent(new CustomEvent('fs-changed'));
 }
 
+let _desktopInteractionsBound = false;
 function setupIcons() {
   clearDesktopSel();
   const layer = document.getElementById('icons-layer');
   layer.innerHTML = '';
 
-  const allIcons = [...getVisibleDesktopIcons(), ...customDesktopIcons];
+  const allIcons = [...getVisibleDesktopIcons(), ...getDesktopFsIcons(), ...customDesktopIcons];
   const saved    = (() => { try { return JSON.parse(localStorage.getItem(ICON_POS_KEY) || '{}'); } catch { return {}; } })();
   const defaults = iconDefaultPositions(allIcons);
   iconPositions  = {};
@@ -5419,6 +5527,9 @@ function setupIcons() {
     el.style.top  = top  + 'px';
     layer.appendChild(el);
   });
+
+  if (_desktopInteractionsBound) return;
+  _desktopInteractionsBound = true;
 
   // Rubber-band selection on empty desktop space
   layer.addEventListener('mousedown', e => {
@@ -5473,6 +5584,7 @@ function setupIcons() {
       { label: '📝 Open Notepad',     action: openNotepad },
       { label: '🌐 Open Browser',     action: openBrowser },
       '-',
+      { label: '📤 Upload File...',  action: () => triggerUpload('DESKTOP') },
       { label: '🖼️ Change Wallpaper', action: openAppearance },
       '-',
       { label: 'ℹ️ Properties', action: () => osAlert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686', 'Properties', 'ℹ️') },
@@ -5484,6 +5596,10 @@ function setupIcons() {
       clearDesktopSel();
   });
 }
+
+document.addEventListener('fs-changed', () => {
+  if (typeof setupIcons === 'function') setupIcons();
+});
 
 // Reflow icons when window is resized
 let _iconResizeTimer;
@@ -6450,19 +6566,7 @@ function openExplorer(startPath) {
   const ITEM_SELECTOR = '.exp-item,.exp-list-item,.exp-det-item';
 
   function getIcon(name, kind) {
-    if (kind === 'image') return '\u{1F5BC}\uFE0F';
-    if (kind === 'video') return '\u{1F3AC}';
-    if (kind === 'audio') return '\u{1F3B5}';
-    if (kind === 'dir') return '\u{1F4C1}';
-    const systemIcon = SYSTEM_FILE_ICONS[String(name).toUpperCase()];
-    if (systemIcon) return systemIcon;
-    const ext = (name.split('.').pop() || '').toLowerCase();
-    return {
-      exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
-      json:'\u{1F4CB}', js:'\u{1F4DC}', ts:'\u{1F4DC}', jsx:'\u{1F4DC}', tsx:'\u{1F4DC}',
-      html:'\u{1F310}', htm:'\u{1F310}', css:'\u{1F3A8}', py:'\u{1F40D}',
-      tmp:'\u{1F5D1}\uFE0F', log:'\u{1F4CB}', csv:'\u{1F4CA}', core:'\u{1F4A5}'
-    }[ext] || '\u{1F4C4}';
+    return resolveFsIcon(name, kind);
   }
 
   function selectionKey(item) {
@@ -6637,8 +6741,10 @@ function openExplorer(startPath) {
     if (cwd === 'DESKTOP') {
       const shortcut = customDesktopIcons.find(ic => ic.name === name);
       if (shortcut) { openDesktopShortcutTarget(shortcut.target); return; }
-      openSystemFile(name);
-      return;
+      if (sysfile) {
+        openSystemFile(name);
+        return;
+      }
     }
     if (sysfile) {
       openSystemFile(name);
@@ -6869,6 +6975,12 @@ function openExplorer(startPath) {
     if (cwd === 'DESKTOP') {
       const desktopItems = getVisibleDesktopIcons().map(ic => ({ name: ic.name, kind: 'file', sysfile: true }));
       customDesktopIcons.forEach(ic => desktopItems.push({ name: ic.name, kind: 'file', sysfile: false, _shortcut: ic }));
+      const desktopDir = fsGetDir('DESKTOP');
+      if (desktopDir) {
+        desktopDir.dirs.forEach(name => desktopItems.push({ name, kind: 'dir', sysfile: false }));
+        desktopDir.files.forEach((_, name) => desktopItems.push({ name, kind: 'file', sysfile: false }));
+        desktopDir.blobs.forEach((blob, name) => desktopItems.push({ name, kind: blob.kind || inferBlobKindFromName(name), sysfile: false }));
+      }
       const build = items => {
         if (viewMode === 'details') {
           const tbl = document.createElement('table');
@@ -10127,9 +10239,7 @@ function openRegedit() {
       }
     } else if (hive === 'HKEY_CURRENT_USER') {
       if (keyPath === 'Desktop' && valName === 'Wallpaper') {
-        if (!applyWallpaper(String(newValue), { updateRegistry: false, deferMissing: false })) {
-          applyWallpaper(DEFAULT_WALLPAPER_PATH, { updateRegistry: false });
-        }
+        applyWallpaper(String(newValue), { updateRegistry: false, deferMissing: false });
       } else if (keyPath === 'SOFTWARE\\sleepOS' && valName === 'SkipBoot') {
         osSettings.skipBoot = !!newValue;
         saveSettings();
