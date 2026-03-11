@@ -311,9 +311,11 @@ function handleWorldRightClick() {
     inventory.open = true;
     return;
   }
-  if (type === FURNACE && !inventory.open) {
+  if (type === FURNACE) {
     if (!furnaces.has(key)) furnaces.set(key, createFurnaceState());
-    openUI = { type: 'furnace', key, wx, wy };
+    openUI = { type: 'furnace', key, wx, wy, wasInventoryOpen: inventory.open };
+    inventory.open = true;
+    return;
   }
 }
 
@@ -398,18 +400,34 @@ function updateFurnaces(scale) {
 const slimes = [];
 const SLIME_W = 20, SLIME_H = 16;
 const SLIME_MAX = 5;
-const SLIME_SPAWN_DIST_MIN = canvas.width * 0.6;
-const SLIME_SPAWN_DIST_MAX = canvas.width * 1.2;
 const SLIME_JUMP_INTERVAL_MIN = 60, SLIME_JUMP_INTERVAL_MAX = 150;
 const SLIME_JUMP_VEL = -9.0;
 const SLIME_WALK_SPEED = 1.8;
 
+function getSlimeSpawnDistMin() {
+  return Math.max(canvas.width / 2 + TILE * 3, canvas.width * 0.6);
+}
+
+function getSlimeSpawnDistMax() {
+  return Math.max(getSlimeSpawnDistMin() + TILE * 8, canvas.width * 1.2);
+}
+
+function getSlimeDespawnDist(slime) {
+  const base = Math.max(getSlimeSpawnDistMax() * 2, canvas.width * 2.5);
+  return slime.seen ? base : base * 2;
+}
+
+function isSlimeOnScreen(slime) {
+  return slime.x + SLIME_W > cam.x && slime.x < cam.x + canvas.width &&
+         slime.y + SLIME_H > cam.y && slime.y < cam.y + canvas.height;
+}
+
 function spawnSlime() {
   if (slimes.length >= SLIME_MAX) return;
   const side = Math.random() < 0.5 ? -1 : 1;
-  // Ensure spawn is at least half a screen-width beyond the viewport edge
-  const offscreenMargin = canvas.width / 2 + TILE * 3;
-  const spawnDist = offscreenMargin + Math.random() * TILE * 20;
+  const spawnMin = getSlimeSpawnDistMin();
+  const spawnMax = getSlimeSpawnDistMax();
+  const spawnDist = spawnMin + Math.random() * Math.max(1, spawnMax - spawnMin);
   const wx = Math.floor((player.x + player.w / 2 + side * spawnDist) / TILE);
   const clampedWx = Math.max(2, Math.min(WORLD_W - 3, wx));
   // Find surface at that x
@@ -426,6 +444,7 @@ function spawnSlime() {
     jumpTick: Math.floor(Math.random() * SLIME_JUMP_INTERVAL_MAX),
     iframes: 0,
     hue,
+    seen: false,
     squish: 0, // 0=normal, >0 squishing down on land
   });
 }
@@ -476,18 +495,19 @@ function meleeAttackSlimes() {
 }
 
 function updateSlimes(scale) {
-  // Despawn off-screen slimes
+  const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2;
+
+  // Keep freshly spawned slimes alive until they have a chance to enter view.
   for (let i = slimes.length - 1; i >= 0; i--) {
     const s = slimes[i];
-    const dx = Math.abs(s.x - (player.x + player.w / 2));
-    if (dx > SLIME_SPAWN_DIST_MAX * 1.5) { slimes.splice(i, 1); continue; }
+    if (isSlimeOnScreen(s)) s.seen = true;
+    const dx = Math.abs((s.x + SLIME_W / 2) - pcx);
+    if (dx > getSlimeDespawnDist(s)) { slimes.splice(i, 1); continue; }
     if (s.health <= 0) { slimes.splice(i, 1); continue; }
   }
 
   // Spawn logic ~every 3s
   if (Math.random() < 0.004 * scale) spawnSlime();
-
-  const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2;
 
   for (const s of slimes) {
     if (s.iframes > 0) s.iframes = Math.max(0, s.iframes - scale);
@@ -1814,7 +1834,13 @@ window.addEventListener('keydown', event => {
   if (event.code === 'KeyE') {
     event.preventDefault();
     if (!event.repeat && gameState === 'playing') {
-      if (openUI) { openUI = null; } else { handleWorldRightClick(); }
+      if (openUI) {
+        const wasOpen = openUI.wasInventoryOpen ?? true;
+        openUI = null;
+        if (!wasOpen) toggleInventory(false);
+      } else {
+        handleWorldRightClick();
+      }
     }
     return;
   }
@@ -2013,6 +2039,82 @@ function getInventorySlotGroups() {
   return [inventory.hotbar, inventory.backpack];
 }
 
+function isSingleItemArea(area) {
+  return area === 'equip' || area === 'acc';
+}
+
+function canAcceptStackInArea(area, index, stack) {
+  if (!stack || isEmptyStack(stack)) return false;
+  if (area === 'craftout' || area === 'furnaceOut') return false;
+  if (area === 'equip') {
+    const def = itemDefs[stack.type];
+    return !!def && def.equipSlot === index;
+  }
+  if (area === 'acc') {
+    const def = itemDefs[stack.type];
+    return !!def?.accessory;
+  }
+  if (area === 'furnaceOre') return !!SMELT_RECIPES[stack.type];
+  if (area === 'furnaceFuel') return stack.type === COAL;
+  return !!getInventorySlot(area, index);
+}
+
+function moveTypeIntoSlots(type, amount, slots) {
+  if (!Array.isArray(slots) || type === AIR || amount <= 0) return amount;
+  let remaining = amount;
+
+  for (const slot of slots) {
+    if (slot.type !== type || slot.count <= 0 || slot.count >= STACK_LIMIT) continue;
+    const transfer = Math.min(STACK_LIMIT - slot.count, remaining);
+    slot.count += transfer;
+    remaining -= transfer;
+    if (remaining <= 0) return 0;
+  }
+
+  for (const slot of slots) {
+    if (!isEmptyStack(slot)) continue;
+    const transfer = Math.min(STACK_LIMIT, remaining);
+    setStack(slot, createStack(type, transfer));
+    remaining -= transfer;
+    if (remaining <= 0) return 0;
+  }
+
+  return remaining;
+}
+
+function moveTypeIntoCollections(type, amount, collections) {
+  let remaining = amount;
+  for (const collection of collections) {
+    const slots = Array.isArray(collection) ? collection : [collection];
+    remaining = moveTypeIntoSlots(type, remaining, slots);
+    if (remaining <= 0) break;
+  }
+  return remaining;
+}
+
+function finalizeShiftSource(area, srcSlot, remaining) {
+  if (remaining <= 0) setStack(srcSlot, createStack());
+  else srcSlot.count = remaining;
+  if (area === 'craft') updateCraftingOutput();
+}
+
+function moveOneItemIntoSlot(srcSlot, targetSlot) {
+  if (!targetSlot || !isEmptyStack(targetSlot) || isEmptyStack(srcSlot)) return false;
+  setStack(targetSlot, createStack(srcSlot.type, 1));
+  srcSlot.count--;
+  if (srcSlot.count <= 0) setStack(srcSlot, createStack());
+  return true;
+}
+
+function tryShiftEquipStack(srcSlot) {
+  const def = itemDefs[srcSlot.type];
+  if (!def) return false;
+  if (def.equipSlot != null) return moveOneItemIntoSlot(srcSlot, equipment[def.equipSlot]);
+  if (!def.accessory) return false;
+  const target = accessories.find(slot => isEmptyStack(slot));
+  return moveOneItemIntoSlot(srcSlot, target);
+}
+
 function clearDragState() {
   dragState.active = false;
   dragState.sourceArea = null;
@@ -2046,8 +2148,7 @@ function toggleInventory(forceOpen = !inventory.open) {
 function dropDraggedStack(area, index) {
   if (!dragState.active) return;
 
-  // Output slots are read-only (can only take from them)
-  if (area === 'craftout' || area === 'furnaceOut') {
+  if (!canAcceptStackInArea(area, index, dragState.item)) {
     returnDraggedStack();
     return;
   }
@@ -2056,17 +2157,6 @@ function dropDraggedStack(area, index) {
   if (!targetSlot) {
     returnDraggedStack();
     return;
-  }
-
-  // Equipment slots: only accept items with matching equipSlot
-  if (area === 'equip') {
-    const def = itemDefs[dragState.item.type];
-    if (!def || def.equipSlot !== index) { returnDraggedStack(); return; }
-  }
-  // Accessory slots: only accept accessory items
-  if (area === 'acc') {
-    const def = itemDefs[dragState.item.type];
-    if (!def?.accessory) { returnDraggedStack(); return; }
   }
 
   if (area === 'hotbar') inventory.selected = index;
@@ -2086,7 +2176,7 @@ function dropDraggedStack(area, index) {
     return;
   }
 
-  if (targetSlot.type === dragState.item.type && targetSlot.count < STACK_LIMIT) {
+  if (!isSingleItemArea(area) && targetSlot.type === dragState.item.type && targetSlot.count < STACK_LIMIT) {
     const transfer = Math.min(STACK_LIMIT - targetSlot.count, dragState.item.count);
     targetSlot.count += transfer;
     dragState.item.count -= transfer;
@@ -2115,44 +2205,35 @@ function shiftClickSlot(area, index) {
   const srcSlot = getInventorySlot(area, index);
   if (!srcSlot || isEmptyStack(srcSlot)) return;
 
-  let destArrays;
-  if (area === 'hotbar') destArrays = [inventory.backpack];
-  else if (area === 'backpack') destArrays = [inventory.hotbar];
-  else destArrays = [inventory.backpack, inventory.hotbar];
-
-  const type = srcSlot.type;
-  let remaining = srcSlot.count;
-
-  // First pass: merge with existing stacks of same type
-  for (const arr of destArrays) {
-    for (const slot of arr) {
-      if (slot.type !== type || slot.count <= 0 || slot.count >= STACK_LIMIT) continue;
-      const transfer = Math.min(STACK_LIMIT - slot.count, remaining);
-      slot.count += transfer;
-      remaining -= transfer;
-      if (remaining <= 0) break;
-    }
-    if (remaining <= 0) break;
+  if (tryShiftEquipStack(srcSlot)) {
+    if (area === 'craft') updateCraftingOutput();
+    return;
   }
 
-  // Second pass: fill empty slots
-  if (remaining > 0) {
-    for (const arr of destArrays) {
-      for (const slot of arr) {
-        if (!isEmptyStack(slot)) continue;
-        const transfer = Math.min(STACK_LIMIT, remaining);
-        setStack(slot, createStack(type, transfer));
-        remaining -= transfer;
-        if (remaining <= 0) break;
-      }
-      if (remaining <= 0) break;
+  let destinations = null;
+
+  if (openUI?.type === 'chest') {
+    const chestSlots = chests.get(openUI.key) ?? [];
+    if (area === 'chest') destinations = [inventory.backpack, inventory.hotbar];
+    else if (area === 'hotbar' || area === 'backpack') destinations = [chestSlots];
+  } else if (openUI?.type === 'furnace') {
+    const furnace = furnaces.get(openUI.key);
+    if (area === 'furnaceOre' || area === 'furnaceFuel' || area === 'furnaceOut') {
+      destinations = [inventory.backpack, inventory.hotbar];
+    } else if (furnace) {
+      if (SMELT_RECIPES[srcSlot.type]) destinations = [furnace.ore];
+      else if (srcSlot.type === COAL) destinations = [furnace.fuel];
     }
   }
 
-  if (remaining <= 0) setStack(srcSlot, createStack());
-  else srcSlot.count = remaining;
+  if (!destinations) {
+    if (area === 'hotbar') destinations = [inventory.backpack];
+    else if (area === 'backpack') destinations = [inventory.hotbar];
+    else destinations = [inventory.backpack, inventory.hotbar];
+  }
 
-  if (area === 'craft') updateCraftingOutput();
+  const remaining = moveTypeIntoCollections(srcSlot.type, srcSlot.count, destinations);
+  finalizeShiftSource(area, srcSlot, remaining);
 }
 
 // Ctrl+click: collect all stacks of same type from hotbar+backpack into cursor
@@ -2190,8 +2271,7 @@ function handleInventoryPrimaryDown() {
   const slotRef = getUiSlotAt(mouse.x, mouse.y);
   if (!slotRef) return;
   if (slotRef.area === 'hotbar') inventory.selected = slotRef.index;
-  const isOpenUISlot = slotRef.area === 'chest' || slotRef.area === 'furnaceOre' || slotRef.area === 'furnaceFuel' || slotRef.area === 'furnaceOut';
-  if (!inventory.open && !isOpenUISlot) return;
+  if (!inventory.open && !openUI) return;
 
   // Click craft output: take the result
   if (slotRef.area === 'craftout') {
@@ -2233,19 +2313,17 @@ function handleInventoryRightDown() {
   if (!inventory.open && !openUI) return;
   const slotRef = getUiSlotAt(mouse.x, mouse.y);
   if (!slotRef || slotRef.area === 'craftout') return;
+  if (slotRef.area === 'furnaceOut' && dragState.active) return;
 
   if (dragState.active) {
     // Place one item into target slot
     const targetSlot = getInventorySlot(slotRef.area, slotRef.index);
     if (!targetSlot) return;
-
-    if (slotRef.area === 'equip') {
-      const def = itemDefs[dragState.item.type];
-      if (!def || def.equipSlot !== slotRef.index) return;
-    }
+    if (!canAcceptStackInArea(slotRef.area, slotRef.index, dragState.item)) return;
+    if (isSingleItemArea(slotRef.area) && !isEmptyStack(targetSlot)) return;
 
     const canPlace = isEmptyStack(targetSlot) ||
-      (targetSlot.type === dragState.item.type && targetSlot.count < STACK_LIMIT);
+      (!isSingleItemArea(slotRef.area) && targetSlot.type === dragState.item.type && targetSlot.count < STACK_LIMIT);
 
     if (canPlace) {
       if (isEmptyStack(targetSlot)) {
@@ -2586,6 +2664,12 @@ function isPointerOverInventoryUi(x = mouse.x, y = mouse.y) {
     const panelH = 4 * sH + pad * 2 + 28;
     const px = Math.round(canvas.width / 2 - panelW / 2);
     const py = Math.max(4, metrics.panel.y - panelH - 8);
+    if (isPointInRect(x, y, px, py, panelW, panelH)) return true;
+  }
+  if (openUI?.type === 'furnace') {
+    const panelW = 260, panelH = 170;
+    const px = Math.round(canvas.width / 2 - panelW / 2);
+    const py = Math.round(canvas.height / 2 - panelH / 2);
     if (isPointInRect(x, y, px, py, panelW, panelH)) return true;
   }
   return isPointInRect(x, y, metrics.hotbar.x, metrics.hotbar.y, metrics.hotbar.w, metrics.hotbar.h);
@@ -3492,11 +3576,6 @@ function drawFurnaceUI() {
 
 function drawInventoryScreen() {
   if (!inventory.open && !openUI) return;
-  if (openUI && openUI.type === 'furnace') {
-    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawFurnaceUI();
-    return;
-  }
   if (!inventory.open) return;
 
   const m = getInventoryMetrics();
@@ -3587,6 +3666,7 @@ function drawInventoryScreen() {
 
   // Chest UI drawn on top of inventory when a chest is open
   if (openUI?.type === 'chest') drawChestUI();
+  if (openUI?.type === 'furnace') drawFurnaceUI();
 
   ctx.restore();
 }
