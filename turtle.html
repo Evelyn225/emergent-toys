@@ -871,16 +871,14 @@ function* execArcGen(radius, degrees) {
 
 function* treeGen(len, depth, angle) {
   if (depth <= 0 || len < 1) return;
-  const savedX = T.x, savedY = T.y, savedAngle = T.angle;
+  // Direct translation of Logo backtracking tree — each call is self-restoring.
   moveTurtle(len); yield;
-  T.angle = savedAngle + angle;
-  yield* treeGen(len * 0.65, depth - 1, angle);
-  T.x = savedX + Math.cos(savedAngle * Math.PI/180) * len;
-  T.y = savedY + Math.sin(savedAngle * Math.PI/180) * len;
-  T.angle = savedAngle - angle;
-  yield* treeGen(len * 0.65, depth - 1, angle);
-  T.x = savedX; T.y = savedY; T.angle = savedAngle;
-  moveTurtle(-len); yield;
+  T.angle += angle;                                        // rt angle
+  yield* treeGen(len * 0.65, depth - 1, angle);           // right subtree (returns to trunk tip)
+  T.angle -= 2 * angle;                                   // lt 2*angle
+  yield* treeGen(len * 0.65, depth - 1, angle);           // left subtree  (returns to trunk tip)
+  T.angle += angle;                                        // rt angle (restore direction)
+  moveTurtle(-len); yield;                                 // bk len (return to branch base)
 }
 
 // ══ ANIMATION RUNNER ═══════════════════════════════════════════════════════
@@ -1164,9 +1162,9 @@ for i 0 turns [
   rt angle
 ]`,
 
-'star': `# Star polygon — points and skip
+'star': `# Star polygon {n/k} — skip connects every k-th vertex
 var points = 5 [2 20]
-var skip   = 2 [2 10]
+var skip   = 2 [2 9]
 var size   = 150 [30 300]
 var hue    = 40 [0 360]
 
@@ -1174,9 +1172,7 @@ color hsl hue 85 65
 size 2
 repeat points [
   fd size
-  rt 180 - 180 * (points - skip * 2) / points
-  fd size
-  rt 180 + 180 / points
+  rt skip * 360 / points
 ]`,
 
 'flower': `# Petal flower — petals and radius
