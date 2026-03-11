@@ -24,6 +24,7 @@ const COPPER = 5;
 const IRON = 6;
 const WOOD = 7;
 const TREE = 8;
+const COAL_ORE    = 9;
 
 // Non-block item types
 const HELMET      = 10;
@@ -34,6 +35,21 @@ const SWORD_STONE = 14;
 const SWORD_IRON  = 15;
 const PICK_STONE  = 16;
 const PICK_IRON   = 17;
+// Placeable structure blocks
+const DOOR        = 18;
+const DOOR_OPEN   = 19;
+const CHEST       = 20;
+const FURNACE     = 21;
+// Crafted items / materials
+const COAL        = 22;
+const COPPER_INGOT = 23;
+const IRON_INGOT  = 24;
+const ARROW       = 25;
+const AXE_STONE   = 26;
+const AXE_IRON    = 27;
+const SHOVEL_STONE = 28;
+const SHOVEL_IRON = 29;
+const BOW         = 30;
 
 const WATER_MAX = 1;
 const WATER_RENDER_EPS = 0.04;
@@ -62,7 +78,12 @@ const blockDefs = {
   [COPPER]: { name: 'Copper Ore', solid: true, mine: 44 },
   [IRON]: { name: 'Iron Ore', solid: true, mine: 56 },
   [WOOD]: { name: 'Wood', solid: true, mine: 16 },
-  [TREE]: { name: 'Tree', solid: false, mine: 16, drops: WOOD },
+  [TREE]:     { name: 'Tree',      solid: false, mine: 16,  drops: WOOD  },
+  [COAL_ORE]: { name: 'Coal Ore',  solid: true,  mine: 28,  drops: COAL  },
+  [DOOR]:     { name: 'Door',      solid: true,  mine: 12,  drops: DOOR  },
+  [DOOR_OPEN]:{ name: 'Door',      solid: false, mine: 12,  drops: DOOR  },
+  [CHEST]:    { name: 'Chest',     solid: true,  mine: 24,  drops: CHEST },
+  [FURNACE]:  { name: 'Furnace',   solid: true,  mine: 40,  drops: FURNACE },
 };
 
 const itemDefs = {
@@ -70,14 +91,171 @@ const itemDefs = {
   [CHESTPLATE]:  { name: 'Chestplate',    equipSlot: 1 },
   [LEGGINGS]:    { name: 'Leggings',      equipSlot: 2 },
   [BOOTS]:       { name: 'Boots',         equipSlot: 3 },
-  [SWORD_STONE]: { name: 'Stone Sword'                 },
-  [SWORD_IRON]:  { name: 'Iron Sword'                  },
-  [PICK_STONE]:  { name: 'Stone Pickaxe'               },
-  [PICK_IRON]:   { name: 'Iron Pickaxe'                },
+  [SWORD_STONE]: { name: 'Stone Sword'   },
+  [SWORD_IRON]:  { name: 'Iron Sword'    },
+  [PICK_STONE]:  { name: 'Stone Pickaxe' },
+  [PICK_IRON]:   { name: 'Iron Pickaxe'  },
+  [AXE_STONE]:   { name: 'Stone Axe'     },
+  [AXE_IRON]:    { name: 'Iron Axe'      },
+  [SHOVEL_STONE]:{ name: 'Stone Shovel'  },
+  [SHOVEL_IRON]: { name: 'Iron Shovel'   },
+  [BOW]:         { name: 'Bow'           },
+  [COAL]:        { name: 'Coal'          },
+  [COPPER_INGOT]:{ name: 'Copper Ingot'  },
+  [IRON_INGOT]:  { name: 'Iron Ingot'    },
+  [ARROW]:       { name: 'Arrow'         },
+  [DOOR]:        { name: 'Door'          },
+  [CHEST]:       { name: 'Chest'         },
+  [FURNACE]:     { name: 'Furnace'       },
 };
 
 function getItemName(type) {
   return blockDefs[type]?.name ?? itemDefs[type]?.name ?? 'Item';
+}
+
+const armorDefs = {
+  [HELMET]:     { defense: 1 },
+  [CHESTPLATE]: { defense: 3 },
+  [LEGGINGS]:   { defense: 2 },
+  [BOOTS]:      { defense: 1 },
+};
+function getTotalDefense() {
+  return equipment.reduce((s, slot) => s + (armorDefs[slot.type]?.defense ?? 0), 0);
+}
+
+function getToolMultiplier(blockType) {
+  const held = inventory.hotbar[inventory.selected]?.type ?? AIR;
+  if ((held === PICK_STONE || held === PICK_IRON) &&
+      [STONE, DSTONE, COPPER, IRON, COAL_ORE, FURNACE].includes(blockType))
+    return held === PICK_IRON ? 3.5 : 2.5;
+  if ((held === AXE_STONE || held === AXE_IRON) && [WOOD, TREE].includes(blockType))
+    return held === AXE_IRON ? 3.5 : 2.5;
+  if ((held === SHOVEL_STONE || held === SHOVEL_IRON) && [DIRT, GRASS].includes(blockType))
+    return held === SHOVEL_IRON ? 3.5 : 2.5;
+  return 1;
+}
+
+// ─── CHEST / FURNACE / DOOR STATE ─────────────────────────────────────────────
+const CHEST_SLOTS = 20; // 4 rows of 5
+const chests = new Map();   // blockIndex → Array<Stack>
+const furnaces = new Map(); // blockIndex → FurnaceState
+let openUI = null; // null | { type:'chest'|'furnace', key, wx, wy }
+
+const SMELT_RECIPES = {
+  [COPPER]: { out: COPPER_INGOT, time: 150 },
+  [IRON]:   { out: IRON_INGOT,   time: 180 },
+};
+
+function createFurnaceState() {
+  return { ore: createStack(), fuel: createStack(), out: createStack(), timer: 0 };
+}
+
+function isInteractable(type) {
+  return type === DOOR || type === DOOR_OPEN || type === CHEST || type === FURNACE;
+}
+
+function blockKey(wx, wy) { return wy * WORLD_W + wx; }
+
+function handleWorldRightClick() {
+  if (openUI || inventory.open) return;
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  if (Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy) > MINE_RADIUS_PX) return;
+
+  const type = getBlock(wx, wy);
+  const key = blockKey(wx, wy);
+  if (type === DOOR)      { setBlock(wx, wy, DOOR_OPEN); return; }
+  if (type === DOOR_OPEN) { setBlock(wx, wy, DOOR); return; }
+  if (type === CHEST) {
+    if (!chests.has(key)) chests.set(key, Array.from({ length: CHEST_SLOTS }, () => createStack()));
+    openUI = { type: 'chest', key, wx, wy };
+    return;
+  }
+  if (type === FURNACE) {
+    if (!furnaces.has(key)) furnaces.set(key, createFurnaceState());
+    openUI = { type: 'furnace', key, wx, wy };
+  }
+}
+
+// ─── ARROW PROJECTILES ────────────────────────────────────────────────────────
+const arrowEntities = [];
+let bowCooldown = 0;
+
+function fireArrow() {
+  if (bowCooldown > 0) return;
+  const held = inventory.hotbar[inventory.selected];
+  if (!held || held.type !== BOW) return;
+  let arrowSlot = null;
+  for (const s of [...inventory.hotbar, ...inventory.backpack]) {
+    if (s.type === ARROW && s.count > 0) { arrowSlot = s; break; }
+  }
+  if (!arrowSlot) return;
+  arrowSlot.count--;
+  if (arrowSlot.count <= 0) setStack(arrowSlot, createStack());
+
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  const tx = mouse.x + Math.round(cam.x);
+  const ty = mouse.y + Math.round(cam.y);
+  const dx = tx - pcx, dy = ty - pcy;
+  const dist = Math.hypot(dx, dy) || 1;
+  const spd = 13;
+  arrowEntities.push({ x: pcx, y: pcy, vx: dx / dist * spd, vy: dy / dist * spd, life: 240 });
+  bowCooldown = 20;
+}
+
+function updateArrows(scale) {
+  if (bowCooldown > 0) bowCooldown = Math.max(0, bowCooldown - scale);
+  for (let i = arrowEntities.length - 1; i >= 0; i--) {
+    const a = arrowEntities[i];
+    a.x += a.vx * scale;
+    a.y += a.vy * scale;
+    a.vy += 0.28 * scale;
+    a.life -= scale;
+    if (isSolid(getBlock(Math.floor(a.x / TILE), Math.floor(a.y / TILE))) || a.life <= 0) {
+      arrowEntities.splice(i, 1);
+    }
+  }
+}
+
+function drawArrows() {
+  if (arrowEntities.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = '#c8a062';
+  ctx.lineWidth = 2;
+  for (const a of arrowEntities) {
+    const sx = a.x - cam.x, sy = a.y - cam.y;
+    const angle = Math.atan2(a.vy, a.vx);
+    ctx.beginPath();
+    ctx.moveTo(sx - Math.cos(angle) * 8, sy - Math.sin(angle) * 8);
+    ctx.lineTo(sx + Math.cos(angle) * 5, sy + Math.sin(angle) * 5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function updateFurnaces(scale) {
+  for (const [, f] of furnaces) {
+    const recipe = SMELT_RECIPES[f.ore.type];
+    const hasFuel = !isEmptyStack(f.fuel) && f.fuel.type === COAL;
+    const canOut = isEmptyStack(f.out) || (f.out.type === recipe?.out && f.out.count < STACK_LIMIT);
+    if (recipe && hasFuel && canOut) {
+      f.timer += scale;
+      if (f.timer >= recipe.time) {
+        f.timer = 0;
+        f.fuel.count--; if (f.fuel.count <= 0) setStack(f.fuel, createStack());
+        f.ore.count--;  if (f.ore.count <= 0)  setStack(f.ore,  createStack());
+        if (isEmptyStack(f.out)) setStack(f.out, createStack(recipe.out, 1));
+        else f.out.count++;
+      }
+    } else {
+      f.timer = 0;
+    }
+  }
 }
 
 const biomeNames = {
@@ -355,6 +533,12 @@ function spawnOres() {
     const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
     const y = surfaceYs[x] + 30 + Math.floor(Math.random() * 55);
     paintOreVein(IRON, x, y, 18 + Math.floor(Math.random() * 18), 1.2 + Math.random() * 0.9, Math.random() * TAU);
+  }
+  // Coal: abundant near surface
+  for (let i = 0; i < 70; i++) {
+    const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
+    const y = surfaceYs[x] + 5 + Math.floor(Math.random() * 60);
+    paintOreVein(COAL_ORE, x, y, 16 + Math.floor(Math.random() * 14), 1.3 + Math.random() * 0.7, Math.random() * TAU);
   }
 }
 
@@ -674,6 +858,98 @@ function createBootsTexture(color) {
   return texture;
 }
 
+function createCoalOreTexture() {
+  const tex = createStoneTexture('#777981', '#989da6', '#5e616a', 33);
+  const g = tex.getContext('2d');
+  for (let y = 1; y < TILE - 1; y++) for (let x = 1; x < TILE - 1; x++) {
+    if (hash2(x, y, 110) > 0.88) { pixel(g, x, y, '#1a1a1a'); if (hash2(x, y, 111) > 0.5) pixel(g, x+1, y, '#333'); }
+  }
+  return tex;
+}
+
+function createDoorTexture(open) {
+  const { texture, g } = makeCanvas();
+  if (!open) {
+    pixel(g, 1, 0, '#8B6030', 14, 16);
+    pixel(g, 0, 0, '#5a3518', 2, 16);  pixel(g, 14, 0, '#5a3518', 2, 16);
+    pixel(g, 2, 7, '#5a3518', 12, 1);
+    pixel(g, 2, 1, '#7a5025', 12, 5);  pixel(g, 2, 9, '#7a5025', 12, 6);
+    pixel(g, 11, 4, '#d4a840', 2, 2);  // handle
+  } else {
+    pixel(g, 0, 0, '#5a3518', 3, 16);  pixel(g, 13, 0, '#5a3518', 3, 16);
+    pixel(g, 0, 0, '#5a3518', 16, 2);  pixel(g, 0, 14, '#5a3518', 16, 2);
+  }
+  return texture;
+}
+
+function createChestTexture() {
+  const { texture, g } = makeCanvas();
+  pixel(g, 0, 0, '#5a3518', 16, 16);
+  pixel(g, 1, 1, '#8B6030', 14, 6);
+  pixel(g, 1, 8, '#8B6030', 14, 7);
+  pixel(g, 0, 7, '#c8a030', 16, 2);
+  pixel(g, 6, 6, '#d4a840', 4, 4);    pixel(g, 7, 7, '#1a1010', 2, 2);
+  return texture;
+}
+
+function createFurnaceTexture(lit) {
+  const { texture, g } = makeCanvas();
+  tileTextures[STONE].getContext ? g.drawImage(tileTextures[STONE], 0, 0) : null;
+  pixel(g, 0, 0, '#7d7f88', 16, 16);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const n = hash2(x, y, 44); if (n > 0.84) pixel(g, x, y, '#9ea3ad'); else if (n < 0.18) pixel(g, x, y, '#5e616a');
+  }
+  pixel(g, 3, 7, '#1a1a1a', 10, 8);
+  if (lit) { pixel(g, 4, 8, '#ff6600', 8, 6); pixel(g, 5, 9, '#ffaa00', 6, 3); pixel(g, 6, 10, '#ffee00', 4, 1); }
+  pixel(g, 5, 2, '#333', 6, 3);
+  return texture;
+}
+
+function createIngotTexture(color) {
+  const { texture, g } = makeCanvas();
+  pixel(g, 2, 5, color, 12, 6);  pixel(g, 1, 6, color, 14, 4);
+  pixel(g, 3, 4, shiftColor(color, 0.2), 10, 2);
+  pixel(g, 2, 11, shiftColor(color, -0.2), 12, 2);
+  return texture;
+}
+
+function createAxeTexture(headColor, handleColor) {
+  const { texture, g } = makeCanvas();
+  for (let i = 0; i < 8; i++) pixel(g, 6 + i, 6 + i, handleColor, 2, 2);
+  pixel(g, 0, 1, headColor, 8, 5);  pixel(g, 0, 0, headColor, 5, 2);  pixel(g, 0, 6, headColor, 5, 2);
+  pixel(g, 7, 5, headColor, 2, 2);
+  return texture;
+}
+
+function createShovelTexture(headColor, handleColor) {
+  const { texture, g } = makeCanvas();
+  pixel(g, 7, 4, handleColor, 2, 12);
+  pixel(g, 5, 0, headColor, 6, 4);  pixel(g, 4, 3, headColor, 8, 3);
+  return texture;
+}
+
+function createBowTexture() {
+  const { texture, g } = makeCanvas();
+  for (let i = 0; i < 8; i++) pixel(g, 3 + Math.round(Math.sin(i/7*Math.PI)*3), i*2, '#8B6030', 2, 2);
+  for (let y = 0; y < 16; y++) pixel(g, 11, y, '#d4c090', 1, 1);
+  return texture;
+}
+
+function createArrowTexture() {
+  const { texture, g } = makeCanvas();
+  pixel(g, 2, 7, '#8B6030', 9, 2);
+  pixel(g, 11, 7, '#999', 2, 2);  pixel(g, 13, 6, '#aaa', 1, 4);  pixel(g, 14, 7, '#ccc', 1, 2);
+  pixel(g, 1, 5, '#cc3333', 2, 2);  pixel(g, 1, 9, '#cc3333', 2, 2);
+  return texture;
+}
+
+function createCoalTexture() {
+  const { texture, g } = makeCanvas();
+  pixel(g, 3, 2, '#1a1a1a', 10, 12);  pixel(g, 2, 4, '#1a1a1a', 12, 8);  pixel(g, 4, 1, '#222', 8, 2);
+  pixel(g, 5, 4, '#333', 6, 6);
+  return texture;
+}
+
 function buildTextures() {
   tileTextures[GRASS] = createGrassTexture();
   tileTextures[DIRT] = createDirtTexture();
@@ -694,6 +970,20 @@ function buildTextures() {
   tileTextures[CHESTPLATE]  = createChestplateTexture('#d28b4b');
   tileTextures[LEGGINGS]    = createLeggingsTexture('#d28b4b');
   tileTextures[BOOTS]       = createBootsTexture('#d28b4b');
+  tileTextures[COAL_ORE]    = createCoalOreTexture();
+  tileTextures[DOOR]        = createDoorTexture(false);
+  tileTextures[DOOR_OPEN]   = createDoorTexture(true);
+  tileTextures[CHEST]       = createChestTexture();
+  tileTextures[FURNACE]     = createFurnaceTexture(false);
+  tileTextures[COPPER_INGOT]= createIngotTexture('#d28b4b');
+  tileTextures[IRON_INGOT]  = createIngotTexture('#c0c4cc');
+  tileTextures[COAL]        = createCoalTexture();
+  tileTextures[AXE_STONE]   = createAxeTexture('#7a7a8a', '#8B6914');
+  tileTextures[AXE_IRON]    = createAxeTexture('#c0c4cc', '#6a6d78');
+  tileTextures[SHOVEL_STONE]= createShovelTexture('#7a7a8a', '#8B6914');
+  tileTextures[SHOVEL_IRON] = createShovelTexture('#c0c4cc', '#6a6d78');
+  tileTextures[BOW]         = createBowTexture();
+  tileTextures[ARROW]       = createArrowTexture();
 }
 
 function generateWorld() {
@@ -942,7 +1232,14 @@ window.addEventListener('keydown', event => {
   }
   if (event.code === 'Tab') {
     event.preventDefault();
-    if (!event.repeat && gameState === 'playing') toggleInventory();
+    if (!event.repeat && gameState === 'playing') { openUI = null; toggleInventory(); }
+    return;
+  }
+  if (event.code === 'KeyE') {
+    event.preventDefault();
+    if (!event.repeat && gameState === 'playing') {
+      if (openUI) { openUI = null; } else { handleWorldRightClick(); }
+    }
     return;
   }
   if (gameState !== 'playing') return;
@@ -1078,10 +1375,14 @@ function getInventoryArray(area) {
   if (area === 'backpack') return inventory.backpack;
   if (area === 'craft') return craftingGrid;
   if (area === 'equip') return equipment;
+  if (area === 'chest' && openUI?.type === 'chest') return chests.get(openUI.key) ?? null;
   return null;
 }
 
 function getInventorySlot(area, index) {
+  if (area === 'furnaceOre'  && openUI?.type === 'furnace') return furnaces.get(openUI.key)?.ore  ?? null;
+  if (area === 'furnaceFuel' && openUI?.type === 'furnace') return furnaces.get(openUI.key)?.fuel ?? null;
+  if (area === 'furnaceOut'  && openUI?.type === 'furnace') return furnaces.get(openUI.key)?.out  ?? null;
   const slots = getInventoryArray(area);
   return slots && index >= 0 && index < slots.length ? slots[index] : null;
 }
@@ -1368,10 +1669,12 @@ canvas.addEventListener('mousedown', event => {
   if (event.button === 0) {
     mouse.down = true;
     handleInventoryPrimaryDown();
+    if (!inventory.open && !openUI && !isPointerOverInventoryUi()) fireArrow();
   }
   if (event.button === 2) {
     mouse.rightDown = true;
     handleInventoryRightDown();
+    if (!inventory.open && !isPointerOverInventoryUi()) handleWorldRightClick();
   }
 });
 window.addEventListener('mouseup', event => {
@@ -1425,7 +1728,8 @@ window.addEventListener('keydown', event => {
 });
 
 function getMineFrames(type) {
-  return blockDefs[type]?.mine || 60;
+  const base = blockDefs[type]?.mine || 60;
+  return Math.max(1, Math.round(base / getToolMultiplier(type)));
 }
 
 function isPointInRect(px, py, x, y, w, h) {
@@ -1631,6 +1935,24 @@ function updateMining(scale = 1) {
   mining.progress += scale;
 
   if (mining.progress >= getMineFrames(blockType)) {
+    const key = blockKey(wx, wy);
+    if (blockType === CHEST) {
+      // Return chest contents to inventory first
+      const contents = chests.get(key);
+      if (contents) { for (const s of contents) if (!isEmptyStack(s)) addToInventory(s.type, s.count); }
+      chests.delete(key);
+      if (openUI?.key === key) openUI = null;
+    }
+    if (blockType === FURNACE) {
+      const f = furnaces.get(key);
+      if (f) {
+        if (!isEmptyStack(f.ore))  addToInventory(f.ore.type,  f.ore.count);
+        if (!isEmptyStack(f.fuel)) addToInventory(f.fuel.type, f.fuel.count);
+        if (!isEmptyStack(f.out))  addToInventory(f.out.type,  f.out.count);
+      }
+      furnaces.delete(key);
+      if (openUI?.key === key) openUI = null;
+    }
     const drops = blockType === TREE ? breakTreeFrom(wx, wy) : 1;
     if (blockType !== TREE) setBlock(wx, wy, AIR);
     addToInventory(getDropType(blockType), drops);
@@ -1643,7 +1965,7 @@ function updateMining(scale = 1) {
 
 let lastPlaceFrame = -1;
 function updatePlacement(frame) {
-  if (!mouse.rightDown || frame === lastPlaceFrame || dragState.active || isPointerOverInventoryUi()) return;
+  if (!mouse.rightDown || frame === lastPlaceFrame || dragState.active || isPointerOverInventoryUi() || openUI) return;
   lastPlaceFrame = frame;
 
   const slot = inventory.hotbar[inventory.selected];
@@ -1870,6 +2192,8 @@ function updateWorld(dt) {
   dayClockMs = mod(dayClockMs + dt, DAY_LENGTH_MS);
   const steps = clamp(Math.round(dt / TARGET_DT) * WATER_STEPS_PER_FRAME, 1, 4);
   for (let i = 0; i < steps; i++) simulateWaterStep();
+  updateFurnaces(dt / TARGET_DT);
+  updateArrows(dt / TARGET_DT);
 }
 
 function daylightFactor() {
@@ -2191,7 +2515,7 @@ function drawPlayer() {
 
     // Fill (transparent when empty)
     if (airRatio > 0) {
-      ctx.fillStyle = `rgba(60,160,255,${0.5 + airRatio * 0.5})`;
+      ctx.fillStyle = `rgba(250,60,55,${0.5 + airRatio * 0.5})`;
       ctx.fillRect(barX, barY, Math.round(barW * airRatio), barH);
     }
   }
@@ -2295,7 +2619,23 @@ function drawStatusHud() {
     }
   }
 
-  drawPanel(16, 48, 202, 68);
+  // Armor bar: small shield icons below hearts
+  const defense = getTotalDefense();
+  const maxDefense = 7; // helmet1 + chest3 + legs2 + boots1
+  if (defense > 0 || !isEmptyStack(equipment[0]) || !isEmptyStack(equipment[1]) || !isEmptyStack(equipment[2]) || !isEmptyStack(equipment[3])) {
+    for (let i = 0; i < maxDefense; i++) {
+      const sx = 18 + i * 18, sy = 38;
+      ctx.fillStyle = i < defense ? '#6ad4ff' : 'rgba(255,255,255,0.15)';
+      ctx.beginPath();
+      ctx.moveTo(sx + 6, sy);     ctx.lineTo(sx + 12, sy + 4);
+      ctx.lineTo(sx + 12, sy + 9); ctx.lineTo(sx + 6, sy + 13);
+      ctx.lineTo(sx, sy + 9);     ctx.lineTo(sx, sy + 4);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.5; ctx.stroke();
+    }
+  }
+
+  drawPanel(16, 56, 202, 68);
   drawText(`Biome: ${biomeNames[biomes[tileX]]}`, 28, 70, '#ffffff', '14px Minecraft, monospace');
   drawText(`Depth: ${stage} +${depth}`, 28, 90, '#d9e6ff', '14px Minecraft, monospace');
   drawText('LMB mine   RMB place', 28, 110, '#8fb4d9', '12px Minecraft, monospace');
@@ -2347,7 +2687,81 @@ function drawInventorySlot(stack, x, y, slotW, slotH, options = {}) {
   ctx.restore();
 }
 
+function drawChestUI() {
+  if (!openUI || openUI.type !== 'chest') return;
+  const slots = chests.get(openUI.key);
+  if (!slots) return;
+  const cols = 5, rows = 4, sW = 44, sH = 44, pad = 14;
+  const panelW = cols * sW + pad * 2;
+  const panelH = rows * sH + pad * 2 + 28;
+  const px = Math.round(canvas.width / 2 - panelW / 2);
+  const py = Math.round(canvas.height / 2 - panelH / 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.82)';
+  ctx.fillRect(px, py, panelW, panelH);
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1;
+  ctx.strokeRect(px + 0.5, py + 0.5, panelW - 1, panelH - 1);
+  drawText('CHEST', px + pad, py + 20, '#d4a840', '13px Minecraft, monospace');
+  for (let i = 0; i < CHEST_SLOTS; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    const sx = px + pad + col * sW, sy = py + pad + 20 + row * sH;
+    const slotRef = getUiSlotAt(mouse.x, mouse.y);
+    const hovered = slotRef?.area === 'chest' && slotRef?.index === i;
+    drawInventorySlot(slots[i], sx, sy, sW, sH, { hovered });
+  }
+}
+
+function drawFurnaceUI() {
+  if (!openUI || openUI.type !== 'furnace') return;
+  const f = furnaces.get(openUI.key);
+  if (!f) return;
+  const sW = 48, sH = 48, pad = 16;
+  const panelW = 260, panelH = 170;
+  const px = Math.round(canvas.width / 2 - panelW / 2);
+  const py = Math.round(canvas.height / 2 - panelH / 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.82)';
+  ctx.fillRect(px, py, panelW, panelH);
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1;
+  ctx.strokeRect(px + 0.5, py + 0.5, panelW - 1, panelH - 1);
+  drawText('FURNACE', px + pad, py + 22, '#ff9944', '13px Minecraft, monospace');
+
+  // Ore slot (top-left area)
+  const oreX = px + pad, oreY = py + 36;
+  drawInventorySlot(f.ore, oreX, oreY, sW, sH);
+  drawText('Ore', oreX + 2, oreY + sH + 14, '#aaa', '11px monospace');
+
+  // Fuel slot (bottom-left)
+  const fuelX = px + pad, fuelY = py + 100;
+  drawInventorySlot(f.fuel, fuelX, fuelY, sW, sH);
+  drawText('Fuel', fuelX + 2, fuelY + sH + 14, '#aaa', '11px monospace');
+
+  // Progress bar
+  const recipe = SMELT_RECIPES[f.ore.type];
+  const hasFuel = !isEmptyStack(f.fuel) && f.fuel.type === COAL;
+  const progress = (recipe && hasFuel) ? f.timer / recipe.time : 0;
+  const barX = px + pad + sW + 12, barY = py + 60, barW = 80, barH = 14;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(barX, barY, barW, barH);
+  if (progress > 0) {
+    ctx.fillStyle = mixColor('#ff6600', '#ffcc00', progress);
+    ctx.fillRect(barX, barY, Math.round(barW * progress), barH);
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.strokeRect(barX + 0.5, barY + 0.5, barW - 1, barH - 1);
+  drawText('▶', barX + barW / 2 - 4, barY + 11, 'rgba(255,255,255,0.5)', '10px monospace');
+
+  // Output slot
+  const outX = px + pad + sW + 12 + barW + 12, outY = py + 50;
+  drawInventorySlot(f.out, outX, outY, sW, sH);
+  drawText('Output', outX + 2, outY + sH + 14, '#aaa', '11px monospace');
+}
+
 function drawInventoryScreen() {
+  if (!inventory.open && !openUI) return;
+  if (openUI) {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (openUI.type === 'chest') drawChestUI();
+    if (openUI.type === 'furnace') drawFurnaceUI();
+    drawDraggedStack();
+    return;
+  }
   if (!inventory.open) return;
 
   const m = getInventoryMetrics();
@@ -2630,6 +3044,7 @@ function enterGame(slot) {
 function handleEscape() {
   if (gameState === 'mainmenu') return;
   if (menuConfirm) { menuConfirm = null; return; }
+  if (openUI) { openUI = null; return; }
   if (inventory.open) { toggleInventory(false); return; }
   if (gameState === 'playing') { gameState = 'paused'; }
   else if (gameState === 'paused') { gameState = 'playing'; }
