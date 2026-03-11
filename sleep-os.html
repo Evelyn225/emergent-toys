@@ -236,8 +236,13 @@ body {
 }
 .sm-item:hover { background: #000080; color: #fff; }
 .sm-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; flex-shrink: 0; }
-.sm-icon-power svg { width: 12px; height: 12px; display: block; overflow: visible; }
-.sm-icon-power svg path { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sm-icon-power svg, .power-icon svg { display: block; overflow: visible; }
+.sm-icon-power svg { width: 12px; height: 12px; }
+.sm-icon-power svg path, .power-icon svg path {
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+.power-icon { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
+.win-icon .power-icon svg { width: 12px; height: 12px; }
 .sm-icon img { width: 16px; height: 16px; display: block; }
 .sm-sep { height: 1px; margin: 2px 4px; background: linear-gradient(to right, #808080, #fff); }
 
@@ -347,6 +352,8 @@ body {
 /* ── Dialog ───────────────────────────────────────────────────── */
 .dlg-body { padding: 12px; display: flex; gap: 12px; align-items: flex-start; }
 .dlg-icon { font-size: 32px; flex-shrink: 0; line-height: 1; }
+.dlg-icon.power-icon { width: 32px; height: 32px; }
+.dlg-icon.power-icon svg { width: 28px; height: 28px; }
 .dlg-text { font-size: 11px; line-height: 1.6; flex: 1; }
 .dlg-btns { padding: 8px; display: flex; justify-content: center; gap: 8px; border-top: 1px solid #d0d0d0; }
 .dlg-btn {
@@ -1681,6 +1688,7 @@ const registryData = {
     },
     'SOFTWARE\\sleepOS': {
       SkipBoot:           { type:'REG_DWORD', value: 0 },
+      IdleSleepMinutes:   { type:'REG_DWORD', value: 10 },
     },
     'SOFTWARE\\sleepOS\\Daemon': {
       STATUS:             { type:'REG_SZ',    value: 'Dormant' },
@@ -1703,6 +1711,20 @@ try {
     });
   }
 } catch(e) {}
+const DEFAULT_IDLE_SLEEP_MINUTES = 10;
+const MIN_IDLE_SLEEP_MINUTES = 1;
+function normalizeIdleSleepMinutes(value) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_IDLE_SLEEP_MINUTES;
+  return Math.max(MIN_IDLE_SLEEP_MINUTES, parsed);
+}
+function getIdleSleepMinutes() {
+  return normalizeIdleSleepMinutes(registryData['HKEY_CURRENT_USER']?.['SOFTWARE\\sleepOS']?.IdleSleepMinutes?.value);
+}
+function getIdleSleepMs() {
+  return getIdleSleepMinutes() * 60 * 1000;
+}
+registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'].IdleSleepMinutes.value = getIdleSleepMinutes();
 function saveRegistry() {
   const out = {};
   Object.keys(registryData).forEach(hive => {
@@ -1723,6 +1745,7 @@ function applyRegistrySettings() {
   osSettings.videoDither   = !!cc.VIDEO_DITHER.value;
   osSettings.clock12h      = cc.CLOCK_FORMAT.value === '12h';
   osSettings.skipBoot      = !!cu.SkipBoot.value;
+  cu.IdleSleepMinutes.value = getIdleSleepMinutes();
   saveSettings();
   applySettings();
 }
@@ -4582,7 +4605,10 @@ function applySettings() {
       cc.VIDEO_DITHER.value  = osSettings.videoDither  ? 1 : 0;
       cc.CLOCK_FORMAT.value  = osSettings.clock12h ? '12h' : '24h';
     }
-    if (cu) cu.SkipBoot.value = osSettings.skipBoot ? 1 : 0;
+    if (cu) {
+      cu.SkipBoot.value = osSettings.skipBoot ? 1 : 0;
+      cu.IdleSleepMinutes.value = getIdleSleepMinutes();
+    }
     saveRegistry();
   }
 }
@@ -5872,18 +5898,24 @@ function updateClock() {
 setInterval(updateClock, 1000); updateClock();
 
 // idle sleep
-const IDLE_SLEEP_MS = 10 * 60 * 1000;
 const IDLE_MOVE_THROTTLE_MS = 1000;
+const MANUAL_SLEEP_WAKE_DELAY_MS = 500;
 let idleSleepTimer = null;
 let idleSleepActive = false;
 let idleSleepArmed = false;
 let idleLastActivityTs = Date.now();
 let idleLastMoveTs = 0;
+let idleSleepWakeLockedUntil = 0;
 
 function scheduleIdleSleep() {
   if (idleSleepTimer) clearTimeout(idleSleepTimer);
   if (!idleSleepArmed || idleSleepActive || !bisDone) return;
-  idleSleepTimer = setTimeout(enterIdleSleep, IDLE_SLEEP_MS);
+  const remainingMs = getIdleSleepMs() - (Date.now() - idleLastActivityTs);
+  if (remainingMs <= 0) {
+    enterIdleSleep();
+    return;
+  }
+  idleSleepTimer = setTimeout(enterIdleSleep, remainingMs);
 }
 function noteIdleActivity(kind = 'generic', force = false) {
   if (!idleSleepArmed) return;
@@ -5896,9 +5928,10 @@ function noteIdleActivity(kind = 'generic', force = false) {
   idleLastActivityTs = now;
   scheduleIdleSleep();
 }
-function enterIdleSleep() {
+function enterIdleSleep(wakeLockMs = 0) {
   if (idleSleepActive || !bisDone) return;
   idleSleepActive = true;
+  idleSleepWakeLockedUntil = Date.now() + Math.max(0, wakeLockMs || 0);
   if (idleSleepTimer) clearTimeout(idleSleepTimer);
   closeStart();
   closeDropdown();
@@ -5915,6 +5948,7 @@ function enterIdleSleep() {
 function wakeIdleSleep() {
   if (!idleSleepActive) return;
   idleSleepActive = false;
+  idleSleepWakeLockedUntil = 0;
   const overlay = document.getElementById('sleep-overlay');
   if (overlay) {
     overlay.classList.remove('active');
@@ -5942,6 +5976,7 @@ function armIdleSleep() {
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
+    if (Date.now() < idleSleepWakeLockedUntil) return;
     wakeIdleSleep();
   };
   document.addEventListener('keydown', wakeAndSwallow, true);
@@ -5950,12 +5985,12 @@ function armIdleSleep() {
   document.addEventListener('touchstart', wakeAndSwallow, true);
 
   window.addEventListener('focus', () => {
-    if (!idleSleepActive && Date.now() - idleLastActivityTs >= IDLE_SLEEP_MS) enterIdleSleep();
+    if (!idleSleepActive && Date.now() - idleLastActivityTs >= getIdleSleepMs()) enterIdleSleep();
     else noteIdleActivity('generic', true);
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden || idleSleepActive) return;
-    if (Date.now() - idleLastActivityTs >= IDLE_SLEEP_MS) enterIdleSleep();
+    if (Date.now() - idleLastActivityTs >= getIdleSleepMs()) enterIdleSleep();
     else scheduleIdleSleep();
   });
 
@@ -11168,12 +11203,14 @@ function triggerGlitch(options) {
 // ─────────────────────────────────────────────────────────────────
 function doShutdown() {
   const id = 'shutdown';
-  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'⏻', w:300, h:165,
+  const powerIconSvg = '<svg viewBox="0 -3 16 16" aria-hidden="true" focusable="false"><path d="M8 1.5v5.2"></path><path d="M4.8 3.3a5 5 0 1 0 6.4 0"></path></svg>';
+  const powerIcon = `<span class="power-icon">${powerIconSvg}</span>`;
+  if (!mkWin({ id, title:'Shut Down sleepOS', icon:powerIcon, w:300, h:165,
                x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
                menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-shutdown').innerHTML = `
     <div class="dlg-body">
-      <div class="dlg-icon">⏻</div>
+      <div class="dlg-icon power-icon">${powerIconSvg}</div>
       <div class="dlg-text">
         What do you want the computer to do?<br><br>
         <select id="shutdown-sel" style="width:180px;font-size:11px;margin-top:2px;">
@@ -11195,7 +11232,7 @@ function confirmShutdown() {
   const val = sel ? sel.value : 'back';
   closeWin('shutdown');
   if (val === 'sleep') {
-    enterIdleSleep();
+    enterIdleSleep(MANUAL_SLEEP_WAKE_DELAY_MS);
     return;
   }
 
@@ -11424,9 +11461,16 @@ function openRegedit() {
     } else if (hive === 'HKEY_CURRENT_USER') {
       if (keyPath === 'Desktop' && valName === 'Wallpaper') {
         applyWallpaper(String(newValue), { updateRegistry: false, deferMissing: false });
-      } else if (keyPath === 'SOFTWARE\\sleepOS' && valName === 'SkipBoot') {
-        osSettings.skipBoot = !!newValue;
-        saveSettings();
+      } else if (keyPath === 'SOFTWARE\\sleepOS') {
+        if (valName === 'SkipBoot') {
+          osSettings.skipBoot = !!newValue;
+          saveSettings();
+        } else if (valName === 'IdleSleepMinutes') {
+          const normalized = normalizeIdleSleepMinutes(newValue);
+          registryData[hive][keyPath][valName].value = normalized;
+          saveRegistry();
+          scheduleIdleSleep();
+        }
       }
     }
   }
