@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>Terraria</title>
+  <style>
+    @font-face {
+      font-family: 'Minecraft';
+      src: url('Minecraft.ttf') format('truetype');
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: 'Minecraft', monospace; }
+    canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+  </style>
+</head>
+<body>
+
+<!-- Home button -->
+<a href="index.html"
+  style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         padding: 8px; background: rgba(0,0,0,0.8); color: white;
+         border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
+         text-decoration: none; font-family: sans-serif; font-size: 18px;
+         transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+         line-height: 1; display: flex; align-items: center; justify-content: center;"
+  onmouseover="this.style.transform='scale(1.2) rotate(5deg)';this.style.background='rgba(90,158,58,0.8)';this.style.borderColor='rgba(255,255,255,0.6)'"
+  onmouseout="this.style.transform='scale(1) rotate(0deg)';this.style.background='rgba(0,0,0,0.8)';this.style.borderColor='rgba(255,255,255,0.3)'"
+  onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
+  onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
+  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+       alt="home" style="width: 18px; height: 18px; object-fit: contain;">
+</a>
+
+<canvas id="c"></canvas>
+<script>
+window.__TERRARIA_ENGINE_REQUESTED__ = new URLSearchParams(window.location.search).get('engine') || 'v2';
+window.__TERRARIA_V2_LOAD_FAILED__ = false;
+</script>
+<script
+  src="terraria-v2.js"
+  onerror="window.__TERRARIA_V2_LOAD_FAILED__=true; console.error('[terraria] failed to load terraria-v2.js');"
+></script>
+<script>
+const terrariaUseLegacy = window.__TERRARIA_ENGINE_REQUESTED__ === 'v1';
+
+if (!terrariaUseLegacy && !window.__TERRARIA_V2__ && !window.__TERRARIA_V2_LOAD_FAILED__) {
+  const errorBanner = document.createElement('div');
+  errorBanner.textContent = 'Terraria v2 failed to initialize. Add ?engine=v1 to the URL to force the legacy version.';
+  errorBanner.style.position = 'fixed';
+  errorBanner.style.left = '50%';
+  errorBanner.style.top = '16px';
+  errorBanner.style.transform = 'translateX(-50%)';
+  errorBanner.style.zIndex = '2000';
+  errorBanner.style.padding = '10px 14px';
+  errorBanner.style.background = 'rgba(20, 8, 8, 0.92)';
+  errorBanner.style.color = '#ffd1d1';
+  errorBanner.style.border = '1px solid rgba(255, 132, 132, 0.5)';
+  errorBanner.style.font = '12px Minecraft, monospace';
+  document.body.appendChild(errorBanner);
+  console.error('[terraria] terraria-v2.js loaded but did not initialize.');
+}
+
+if (terrariaUseLegacy || (window.__TERRARIA_V2_LOAD_FAILED__ && !window.__TERRARIA_V2__)) {
+window.__TERRARIA_ACTIVE_VERSION__ = 'v1';
+document.documentElement.dataset.terrariaEngine = 'v1';
+console.warn('[terraria] loaded v1 fallback');
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let skyGradient = null;
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  // Note: setting canvas.width/height clears the canvas and resets all ctx state.
+  skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  skyGradient.addColorStop(0, '#1a6fa8');
+  skyGradient.addColorStop(1, '#5ba3d9');
+  // Note: cam repositioning on resize is handled by player-follow logic in the game loop (Task 4+)
+}
+resize();
+window.addEventListener('resize', resize);
+
+// constants
+const TILE = 16;          // px per block
+const WORLD_W = 400;      // blocks wide
+const WORLD_H = 150;      // blocks tall
+
+// Block types
+const AIR    = 0;
+const GRASS  = 1;
+const DIRT   = 2;
+const STONE  = 3;
+const DSTONE = 4; // deep stone
+
+// World is a flat Uint8Array [col + row * WORLD_W]
+const world = new Uint8Array(WORLD_W * WORLD_H);
+// Surface Y per column (filled by generateWorld, used for cave background rendering)
+const surfaceYs = new Int16Array(WORLD_W);
+
+function getBlock(x, y) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return STONE; // all borders are solid
+  return world[x + y * WORLD_W];
+}
+function setBlock(x, y, type) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return;
+  world[x + y * WORLD_W] = type;
+}
+
+// Simple value noise via hashed sine
+function hash(n) {
+  return Math.abs((Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1);
+}
+function smoothNoise(x) {
+  const i = Math.floor(x);
+  const f = x - i;
+  const u = f * f * (3 - 2 * f); // smoothstep
+  return hash(i) * (1 - u) + hash(i + 1) * u;
+}
+function octaveNoise(x, octaves, persistence) {
+  let val = 0, amp = 1, freq = 1, max = 0;
+  for (let o = 0; o < octaves; o++) {
+    val += smoothNoise(x * freq) * amp;
+    max += amp;
+    amp *= persistence;
+    freq *= 2;
+  }
+  return val / max;
+}
+
+function generateWorld() {
+  const SEA_LEVEL = 60;
+
+  // Pass 1: fill terrain layers, record surface heights
+  for (let x = 0; x < WORLD_W; x++) {
+    const n = octaveNoise(x / 60, 4, 0.5);
+    const sy = Math.floor(SEA_LEVEL - 15 + n * 30);
+    surfaceYs[x] = sy;
+    for (let y = 0; y < WORLD_H; y++) {
+      if      (y < sy)       setBlock(x, y, AIR);
+      else if (y === sy)     setBlock(x, y, GRASS);
+      else if (y < sy + 5)   setBlock(x, y, DIRT);
+      else if (y < sy + 50)  setBlock(x, y, STONE);
+      else                   setBlock(x, y, DSTONE);
+    }
+  }
+
+  // Pass 2: worm-carved caves (Terraria-style)
+  // Each worm starts at a position, then walks with random angle changes,
+  // carving a circular cross-section as it goes.
+  function digWorm(startX, startY, length, radius, angle, depthGuard = 4) {
+    let wx = startX, wy = startY;
+    for (let i = 0; i < length; i++) {
+      const r = Math.ceil(radius);
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (dx * dx + dy * dy <= radius * radius) {
+            const bx = Math.round(wx + dx);
+            const by = Math.round(wy + dy);
+            const minY = surfaceYs[Math.max(0, Math.min(WORLD_W - 1, bx))];
+            if (by >= minY + depthGuard && by < WORLD_H - 3) setBlock(bx, by, AIR);
+          }
+        }
+      }
+      // Random walk with slight horizontal bias
+      angle += (Math.random() - 0.5) * 0.45;
+      wx += Math.cos(angle) * 1.5;
+      wy += Math.sin(angle) * 0.65;
+      if (wx < 2 || wx > WORLD_W - 3 || wy < 5 || wy > WORLD_H - 5) break;
+    }
+  }
+
+  // Surface-connected shafts — depthGuard=0 so they can open at the surface
+  for (let i = 0; i < 8; i++) {
+    const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
+    const sy = surfaceYs[sx];
+    const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.5; // mostly downward
+    digWorm(sx, sy, 60 + Math.floor(Math.random() * 60), 1 + Math.random() * 1, angle, 0);
+  }
+
+  // Mid-depth horizontal cave networks
+  for (let i = 0; i < 18; i++) {
+    const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
+    const baseSY = surfaceYs[sx];
+    const sy = baseSY + 12 + Math.floor(Math.random() * 50);
+    const angle = Math.random() * Math.PI * 2;
+    digWorm(sx, sy, 100 + Math.floor(Math.random() * 120), 1.5 + Math.random() * 1.5, angle);
+  }
+
+  // Deep large caverns
+  for (let i = 0; i < 7; i++) {
+    const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
+    const baseSY = surfaceYs[sx];
+    const sy = baseSY + 55 + Math.floor(Math.random() * 30);
+    const angle = Math.random() * Math.PI * 2;
+    digWorm(sx, sy, 80 + Math.floor(Math.random() * 80), 2.5 + Math.random() * 1.5, angle);
+  }
+
+}
+generateWorld();
+
+// Camera position in world-pixels (top-left corner of viewport)
+const cam = { x: 0, y: 0 };
+// Temporary camera position — requires resize() to have run above (canvas must be sized)
+cam.x = WORLD_W * TILE / 2 - canvas.width / 2;
+cam.y = 50 * TILE - canvas.height / 2;
+
+// Find spawn point: center of world, surface level
+function findSpawnY() {
+  const cx = Math.floor(WORLD_W / 2);
+  for (let y = 0; y < WORLD_H; y++) {
+    if (getBlock(cx, y) !== AIR) return y * TILE - 44; // 44 = player hitbox height
+  }
+  return 10 * TILE;
+}
+
+const player = {
+  x: WORLD_W * TILE / 2 - 16,  // world-pixel x (left edge)
+  y: findSpawnY(),
+  w: 22,   // hitbox width  (~1.4 tiles)
+  h: 44,   // hitbox height (~2.75 tiles)
+  vy: 0,
+  onGround: false,
+  blockedX: false,
+  facing: 1,   // 1 = right, -1 = left
+  animState:  'stand',
+  animFrame:  0,
+  animTick:   0,
+  stairTimer: 0,  // frames remaining in stair-climb animation
+};
+
+const GRAVITY    = 0.5;
+const MAX_FALL   = TILE - 1; // prevents tunneling through 1-tile-thick floors
+const JUMP_VEL   = -11;
+const WALK_SPEED = 2.5;
+const RUN_SPEED  = 5.0;
+
+let lastTime = 0;
+const TARGET_DT = 1000 / 60; // 16.67ms — reference frame duration
+
+const spritesheet = new Image();
+spritesheet.src = 'images/platformer_sprites_pixelized_0.png';
+
+const FRAME_SIZE  = 64;  // px per sprite frame (sheet is SHEET_COLS × FRAME_SIZE wide)
+const SHEET_COLS  = 8;   // columns in the spritesheet
+
+const ANIM = {
+  stand:   { row: 8, colStart: 0 },
+  walk:    { row: 4, colStart: 0 },
+  // Run spans row 0 col 4-7 then row 1 col 0-3 — handled in drawPlayer
+  run:     null,
+  jump:    { row: 5, colStart: 2 },
+  stairUp: { row: 6, colStart: 0 },
+  mine:    { row: 1, colStart: 4 },  // swing weapon frames (row 1, cols 4-7)
+};
+
+// Check if a world-pixel rect overlaps any solid block
+function collidesWithWorld(px, py, pw, ph) {
+  const left   = Math.floor(px / TILE);
+  const right  = Math.floor((px + pw - 1) / TILE);
+  const top    = Math.floor(py / TILE);
+  const bottom = Math.floor((py + ph - 1) / TILE);
+  for (let ty = top; ty <= bottom; ty++) {
+    for (let tx = left; tx <= right; tx++) {
+      if (getBlock(tx, ty) !== AIR) return true;
+    }
+  }
+  return false;
+}
+
+// Check if player is resting on solid ground (checks 1px below feet)
+function checkOnGround(px, py, pw, ph) {
+  const feetTile = Math.floor((py + ph) / TILE);
+  const left     = Math.floor(px / TILE);
+  const right    = Math.floor((px + pw - 1) / TILE);
+  for (let tx = left; tx <= right; tx++) {
+    if (getBlock(tx, feetTile) !== AIR) return true;
+  }
+  return false;
+}
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) {
+    e.preventDefault();
+  }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Mouse state (screen coordinates)
+const mouse = { x: 0, y: 0, down: false };
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0) mouse.down = true;
+  if (e.button === 2) mouse.rightDown = true;
+});
+canvas.addEventListener('mouseup', e => {
+  if (e.button === 0) mouse.down = false;
+  if (e.button === 2) mouse.rightDown = false;
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+mouse.rightDown = false;
+
+// Mining time per block type (frames at 60fps)
+const MINE_FRAMES = { [GRASS]: 10, [DIRT]: 18, [STONE]: 35, [DSTONE]: 55 };
+const MINE_RADIUS_PX = 5.5 * TILE; // max reach from player center
+
+// Mining state — tracks which block is being mined and how far along
+const mining = { bx: -1, by: -1, progress: 0, active: false };
+
+// Inventory hotbar — 5 slots, player starts with some blocks
+const SLOT_TYPES = [DIRT, STONE, DSTONE, GRASS];
+const SLOT_NAMES = { [DIRT]: 'Dirt', [STONE]: 'Stone', [DSTONE]: 'D.Stone', [GRASS]: 'Grass' };
+const inventory = {
+  slots: [
+    { type: DIRT,   count: 30 },
+    { type: STONE,  count: 20 },
+    { type: DSTONE, count: 10 },
+    { type: GRASS,  count: 0  },
+  ],
+  selected: 0,
+};
+
+// Scroll wheel + number keys to select hotbar slot
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  inventory.selected = (inventory.selected + (e.deltaY > 0 ? 1 : -1) + inventory.slots.length) % inventory.slots.length;
+}, { passive: false });
+window.addEventListener('keydown', e => {
+  const n = parseInt(e.key);
+  if (n >= 1 && n <= inventory.slots.length) inventory.selected = n - 1;
+});
+
+function updateMining() {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  // Convert mouse screen → world block coords
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+
+  // Player center in world-pixels
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+
+  // Block center distance from player
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  const inRange = dist <= MINE_RADIUS_PX;
+  const blockType = getBlock(wx, wy);
+  const canMine = mouse.down && inRange && blockType !== AIR;
+
+  if (!canMine) {
+    mining.active = false;
+    // Reset progress only if target changed or mouse released
+    if (!mouse.down || wx !== mining.bx || wy !== mining.by) {
+      mining.bx = -1; mining.by = -1; mining.progress = 0;
+    }
+    return;
+  }
+
+  // Switch target → reset progress
+  if (wx !== mining.bx || wy !== mining.by) {
+    mining.bx = wx; mining.by = wy; mining.progress = 0;
+  }
+
+  mining.active = true;
+  // Face toward the block being mined
+  player.facing = (wx * TILE + TILE / 2 >= pcx) ? 1 : -1;
+  mining.progress++;
+
+  if (mining.progress >= (MINE_FRAMES[blockType] || 60)) {
+    setBlock(wx, wy, AIR);
+    // Add mined block to inventory
+    const slot = inventory.slots.find(s => s.type === blockType);
+    if (slot) slot.count++;
+    mining.bx = -1; mining.by = -1; mining.progress = 0;
+    mining.active = false;
+  }
+}
+
+// Right-click block placement
+let lastPlaceFrame = -1;
+function updatePlacement(frame) {
+  if (!mouse.rightDown || frame === lastPlaceFrame) return;
+  lastPlaceFrame = frame;
+
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+
+  const slot = inventory.slots[inventory.selected];
+  if (!slot || slot.count <= 0) return;
+
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  if (dist > MINE_RADIUS_PX) return;
+  if (getBlock(wx, wy) !== AIR) return;
+
+  // Must be adjacent to a solid block
+  const adjacent = getBlock(wx-1,wy) !== AIR || getBlock(wx+1,wy) !== AIR ||
+                   getBlock(wx,wy-1) !== AIR || getBlock(wx,wy+1) !== AIR;
+  if (!adjacent) return;
+
+  // Don't place inside the player's hitbox
+  const bLeft = wx * TILE, bRight = bLeft + TILE;
+  const bTop  = wy * TILE, bBottom = bTop + TILE;
+  const overlaps = bRight > player.x && bLeft < player.x + player.w &&
+                   bBottom > player.y && bTop  < player.y + player.h;
+  if (overlaps) return;
+
+  setBlock(wx, wy, slot.type);
+  slot.count--;
+}
+
+function drawHotbar() {
+  const SLOT_W = 44, SLOT_H = 44, GAP = 6;
+  const n = inventory.slots.length;
+  const totalW = n * SLOT_W + (n - 1) * GAP;
+  const startX = Math.floor((canvas.width - totalW) / 2);
+  const startY = canvas.height - SLOT_H - 14;
+
+  ctx.save();
+  for (let i = 0; i < n; i++) {
+    const slot = inventory.slots[i];
+    const sx = startX + i * (SLOT_W + GAP);
+    const sy = startY;
+
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(sx, sy, SLOT_W, SLOT_H);
+
+    // Block color swatch
+    if (slot.type !== AIR) {
+      ctx.fillStyle = BLOCK_COLORS[slot.type];
+      ctx.fillRect(sx + 5, sy + 5, SLOT_W - 10, SLOT_H - 10);
+    }
+
+    // Selected border
+    ctx.strokeStyle = i === inventory.selected ? '#fff' : 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = i === inventory.selected ? 2 : 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, SLOT_W - 1, SLOT_H - 1);
+
+    // Slot number
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '10px monospace';
+    ctx.fillText(i + 1, sx + 4, sy + 13);
+
+    // Count
+    ctx.fillStyle = slot.count > 0 ? '#fff' : 'rgba(255,255,255,0.3)';
+    ctx.font = 'bold 11px monospace';
+    const countStr = String(slot.count);
+    ctx.fillText(countStr, sx + SLOT_W - 6 - countStr.length * 7, sy + SLOT_H - 6);
+  }
+  ctx.restore();
+}
+
+function drawMining() {
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const wx = Math.floor((mouse.x + camX) / TILE);
+  const wy = Math.floor((mouse.y + camY) / TILE);
+  const pcx = player.x + player.w / 2;
+  const pcy = player.y + player.h / 2;
+  const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
+  const blockType = getBlock(wx, wy);
+  const inRange = dist <= MINE_RADIUS_PX && blockType !== AIR;
+
+  // Hover highlight on any reachable block
+  if (inRange) {
+    const sx = (wx * TILE - camX) | 0;
+    const sy = (wy * TILE - camY) | 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+  }
+
+  // Mining progress overlay on the active block
+  if (mining.bx >= 0) {
+    const sx = (mining.bx * TILE - camX) | 0;
+    const sy = (mining.by * TILE - camY) | 0;
+    const t = mining.progress / (MINE_FRAMES[getBlock(mining.bx, mining.by)] || 60);
+    // Darken block as it breaks
+    ctx.fillStyle = `rgba(0,0,0,${(t * 0.65).toFixed(2)})`;
+    ctx.fillRect(sx, sy, TILE, TILE);
+    // Bright border
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+    // Progress bar underneath block
+    ctx.fillStyle = '#000';
+    ctx.fillRect(sx, sy + TILE + 2, TILE, 4);
+    ctx.fillStyle = `hsl(${120 - t * 120},100%,50%)`;
+    ctx.fillRect(sx, sy + TILE + 2, Math.round(TILE * t), 4);
+  }
+}
+
+function updatePlayer(scale = 1) {
+  // Delta-time scaled physics. scale ~1.0 at 60fps, ~0.5 at 120fps.
+  // Horizontal movement
+  let speed = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
+  let moveX = 0;
+  if (keys['KeyA'] || keys['ArrowLeft'])  { moveX = -speed * scale; player.facing = -1; }
+  if (keys['KeyD'] || keys['ArrowRight']) { moveX =  speed * scale; player.facing =  1; }
+
+  // Apply horizontal, resolve collision
+  player.x += moveX;
+  if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
+    // Auto step-up: if grounded and 1-block gap above, climb it
+    if (moveX !== 0 && player.onGround &&
+        !collidesWithWorld(player.x, player.y - TILE, player.w, player.h)) {
+      player.y -= TILE;
+      player.blockedX = false;
+    } else {
+      player.x -= moveX;
+      player.blockedX = true;
+    }
+  } else {
+    player.blockedX = false;
+  }
+
+  // Gravity
+  player.vy = Math.min(player.vy + GRAVITY * scale, MAX_FALL);
+
+  // Apply vertical, resolve collision
+  player.y += player.vy;
+  if (collidesWithWorld(player.x, player.y, player.w, player.h)) {
+    if (player.vy > 0) {
+      // landing: snap to top of block
+      player.y = Math.floor((player.y + player.h) / TILE) * TILE - player.h;
+      player.vy = 0;
+    } else {
+      // hit ceiling
+      player.y = Math.ceil(player.y / TILE) * TILE;
+      player.vy = 0;
+    }
+  }
+  // Use dedicated ground check — reliable even when feet are exactly on tile boundary
+  player.onGround = checkOnGround(player.x, player.y, player.w, player.h);
+
+  // Jump
+  if ((keys['Space'] || keys['KeyW']) && player.onGround) {
+    player.vy = JUMP_VEL;
+    player.onGround = false;
+  }
+
+  // Clamp to world bounds
+  player.x = Math.max(0, Math.min(player.x, WORLD_W * TILE - player.w));
+  player.y = Math.max(0, Math.min(player.y, WORLD_H * TILE - player.h));
+}
+
+function updateCamera(scale = 1) {
+  // Center player horizontally, 40% from top vertically
+  const targetX = player.x + player.w / 2 - canvas.width / 2;
+  const targetY = player.y + player.h / 2 - canvas.height * 0.4;
+  // Smooth follow (lerp), scaled by dt so speed is frame-rate independent
+  cam.x += (targetX - cam.x) * 0.1 * scale;
+  cam.y += (targetY - cam.y) * 0.1 * scale;
+  // Clamp to world
+  cam.x = Math.max(0, Math.min(cam.x, WORLD_W * TILE - canvas.width));
+  cam.y = Math.max(0, Math.min(cam.y, WORLD_H * TILE - canvas.height));
+}
+
+const BLOCK_COLORS = {
+  [GRASS]:  '#5a9e3a',
+  [DIRT]:   '#8B6914',
+  [STONE]:  '#7a7a8a',
+  [DSTONE]: '#5a5a6a',
+};
+const CAVE_BG = '#1a100a'; // dark earthy background shown behind underground air
+
+function drawSky() {
+  ctx.fillStyle = skyGradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawWorld() {
+  // Snap camera to integers to prevent sub-pixel gaps between tiles
+  const camX = Math.round(cam.x);
+  const camY = Math.round(cam.y);
+  const startX = Math.max(0, Math.floor(camX / TILE));
+  const endX   = Math.min(WORLD_W, Math.ceil((camX + canvas.width) / TILE) + 1);
+  const startY = Math.max(0, Math.floor(camY / TILE));
+  const endY   = Math.min(WORLD_H, Math.ceil((camY + canvas.height) / TILE) + 1);
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const type = getBlock(x, y);
+      const sx = (x * TILE - camX) | 0;  // integer via bitwise OR — fast floor for positive nums
+      const sy = (y * TILE - camY) | 0;
+      if (type === AIR) {
+        // Show cave background for underground air pockets
+        if (y > surfaceYs[x]) {
+          ctx.fillStyle = CAVE_BG;
+          ctx.fillRect(sx, sy, TILE, TILE);
+        }
+        continue;
+      }
+      // Solid block — no border, just flush fill for seamless look
+      ctx.fillStyle = BLOCK_COLORS[type];
+      ctx.fillRect(sx, sy, TILE, TILE);
+    }
+  }
+}
+
+function updateAnimation() {
+  // Determine state
+  let newState = 'stand';
+  const moving = (keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight']) && !player.blockedX;
+  const running = keys['ShiftLeft'] || keys['ShiftRight'];
+
+  if (!player.onGround) {
+    newState = 'jump';
+  } else if (mining.active) {
+    newState = 'mine';
+  } else if (moving && running) {
+    newState = 'run';
+  } else if (moving) {
+    newState = 'walk';
+  }
+
+  if (newState !== player.animState) {
+    player.animState = newState;
+    player.animFrame = 0;
+    player.animTick  = 0;
+  }
+
+  // Advance frame
+  const FPS = { stand: 4, walk: 10, run: 12, jump: 8, stairUp: 12, mine: 10 };
+  const FRAME_COUNTS = { stand: 1, walk: 8, run: 8, jump: 6, stairUp: 8, mine: 4 };
+
+  const fps = FPS[newState] || 4;
+  const ticksPerFrame = Math.round(60 / fps);
+
+  player.animTick++;
+  if (player.animTick >= ticksPerFrame) {
+    player.animTick = 0;
+    const frameCount = FRAME_COUNTS[newState] || 1;
+    player.animFrame = (player.animFrame + 1) % frameCount;
+  }
+}
+
+function drawPlayer() {
+  if (!spritesheet.complete || spritesheet.naturalWidth === 0) {
+    // Fallback: draw a yellow placeholder rectangle while the sheet loads
+    ctx.fillStyle = 'rgba(255,200,0,0.9)';
+    ctx.fillRect(player.x - cam.x, player.y - cam.y, player.w, player.h);
+    return;
+  }
+
+  let srcX, srcY;
+
+  if (player.animState === 'run') {
+    // Run: frames 4-11 in the sheet (row 0 col 4-7, row 1 col 0-3)
+    const globalFrame = player.animFrame + 4;
+    const col = globalFrame % SHEET_COLS;
+    const row = Math.floor(globalFrame / SHEET_COLS);
+    srcX = col * FRAME_SIZE;
+    srcY = row * FRAME_SIZE;
+  } else {
+    const anim = ANIM[player.animState];
+    if (!anim) return;
+    srcX = (anim.colStart + player.animFrame) * FRAME_SIZE;
+    srcY = anim.row * FRAME_SIZE;
+  }
+
+  // Scale sprite to match hitbox — draw square at player.h × player.h, centered on hitbox
+  const drawSize = player.h;
+  const screenX = player.x - cam.x + (player.w - drawSize) / 2;
+  const screenY = player.y - cam.y; // top of hitbox = top of draw rect (bottom-aligned naturally)
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (player.facing === -1) {
+    ctx.translate(screenX + drawSize / 2, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE,
+                  -drawSize / 2, screenY, drawSize, drawSize);
+  } else {
+    ctx.drawImage(spritesheet, srcX, srcY, FRAME_SIZE, FRAME_SIZE,
+                  screenX, screenY, drawSize, drawSize);
+  }
+  ctx.restore();
+}
+
+let rafId;
+function loop(ts) {
+  const dt = ts ? Math.min(ts - lastTime, TARGET_DT * 3) : TARGET_DT;
+  lastTime = ts || 0;
+  const scale = dt / TARGET_DT; // ~1.0 at 60fps, ~0.5 at 120fps
+
+  updatePlayer(scale);
+  updateMining();
+  updatePlacement(lastTime);
+  updateAnimation();
+  updateCamera(scale);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawSky();
+  drawWorld();
+  drawPlayer();
+  drawMining();
+  drawHotbar();
+  rafId = requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>

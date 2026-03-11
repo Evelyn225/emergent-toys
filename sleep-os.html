@@ -236,6 +236,8 @@ body {
 }
 .sm-item:hover { background: #000080; color: #fff; }
 .sm-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; flex-shrink: 0; }
+.sm-icon-power svg { width: 12px; height: 12px; display: block; overflow: visible; }
+.sm-icon-power svg path { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .sm-icon img { width: 16px; height: 16px; display: block; }
 .sm-sep { height: 1px; margin: 2px 4px; background: linear-gradient(to right, #808080, #fff); }
 
@@ -520,6 +522,35 @@ body.daemon-visual-7 #daemon-fx { opacity: 0.32; animation: daemon-fx-drift 9s l
   pointer-events: none;
   opacity: 0;
   background: linear-gradient(105deg, transparent 0 30%, rgba(255,255,255,0.2) 44%, transparent 58%);
+}
+.os-window.void-surface #void-readout {
+  scrollbar-width: auto;
+  scrollbar-color: #bdbdbd #7e7e7e;
+}
+.os-window.void-surface #void-readout::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+  background: #c0c0c0;
+}
+.os-window.void-surface #void-readout::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, #7f7f7f 0%, #969696 100%);
+  box-shadow:
+    inset 1px 1px 0 #444,
+    inset -1px -1px 0 #d6d6d6;
+}
+.os-window.void-surface #void-readout::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #d8d8d8 0%, #b5b5b5 100%);
+  border: 1px solid #7b7b7b;
+  box-shadow:
+    inset 1px 1px 0 #fff,
+    inset -1px -1px 0 #5a5a5a;
+}
+.os-window.void-surface #void-readout::-webkit-scrollbar-corner,
+.os-window.void-surface #void-readout::-webkit-scrollbar-button {
+  background: linear-gradient(180deg, #cfcfcf 0%, #a9a9a9 100%);
+  box-shadow:
+    inset 1px 1px 0 #fff,
+    inset -1px -1px 0 #666;
 }
 .os-window.window-afterimage {
   transform: translate(var(--pulse-x, 0px), var(--pulse-y, 0px));
@@ -893,7 +924,7 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 .calc-btn.equals { background:#000080; color:#fff; }
 .calc-btn.clear { background:#c04040; color:#fff; }
 
-/* ── Alt+Tab overlay ──────────────────────────────────────────── */
+/* ── Window switcher overlay ─────────────────────────────────── */
 #alttab-overlay {
   display:none; position:fixed; inset:0; z-index:99990;
   background:rgba(0,0,0,0.6); align-items:center; justify-content:center;
@@ -901,9 +932,29 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 #alttab-overlay.active { display:flex; }
 #alttab-box {
   background:#c0c0c0; border:2px solid; border-color:#fff #808080 #808080 #fff;
-  padding:10px; display:flex; flex-wrap:wrap; gap:8px; max-width:80vw;
+  padding:10px; display:flex; flex-direction:column; gap:10px; max-width:min(80vw, 560px);
   box-shadow:2px 2px 0 #000;
 }
+#alttab-head {
+  display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  color:#202020; font-size:10px;
+}
+#alttab-copy { display:flex; flex-direction:column; gap:3px; min-width:0; }
+#alttab-title {
+  font-weight:bold; text-transform:uppercase; letter-spacing:0.7px;
+}
+#alttab-subtitle { color:#444; line-height:1.35; }
+#alttab-hint {
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:4px;
+  color:#444; max-width:280px;
+}
+.alttab-word { color:#444; }
+.alttab-key {
+  min-width:22px; padding:1px 6px; text-align:center; font-size:10px; color:#111;
+  background:#f7f7f7; border:1px solid; border-color:#fff #808080 #808080 #fff;
+}
+.alttab-plus { color:#555; }
+#alttab-strip { display:flex; flex-wrap:wrap; gap:8px; }
 .alttab-item {
   display:flex; flex-direction:column; align-items:center; gap:3px;
   padding:6px 8px; cursor:default; border:2px solid transparent;
@@ -913,7 +964,7 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 .alttab-item .at-icon { font-size:24px; }
 .alttab-item .at-label { font-size:10px; text-align:center; max-width:72px; word-break:break-word; }
 
-/* ── Ctrl+Alt+Del overlay ─────────────────────────────────────── */
+/* ── Ctrl+Shift+Q overlay ────────────────────────────────────── */
 #cad-overlay {
   display:none; position:fixed; inset:0; z-index:99991;
   background:rgba(0,0,0,0.7); align-items:center; justify-content:center;
@@ -921,14 +972,68 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 #cad-overlay.active { display:flex; }
 #cad-box {
   background:#c0c0c0; border:2px solid; border-color:#fff #808080 #808080 #fff;
-  width:320px; box-shadow:2px 2px 0 #000;
+  width:min(470px, calc(100vw - 28px)); box-shadow:3px 3px 0 #000;
 }
 #cad-title {
   background:linear-gradient(to right,#000080,#1084d0); color:#fff;
   padding:3px 6px; font-size:11px; font-weight:bold;
 }
-#cad-body { padding:14px 16px; font-size:11px; line-height:1.7; }
-#cad-btns { display:flex; gap:8px; justify-content:center; padding:8px; border-top:1px solid #d0d0d0; }
+#cad-body {
+  padding:14px; font-size:11px; line-height:1.6;
+  display:flex; flex-direction:column; gap:12px;
+}
+#cad-hero { display:flex; gap:12px; align-items:flex-start; }
+#cad-glyph {
+  width:48px; height:48px; flex:0 0 48px; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(180deg,#1f5ca8,#000080); color:#fff; font-size:22px;
+  border:2px solid; border-color:#fff #6f6f6f #6f6f6f #fff;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+#cad-copy { display:flex; flex-direction:column; gap:4px; min-width:0; }
+#cad-kicker {
+  font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:#333;
+}
+#cad-headline {
+  font-size:13px; font-weight:bold; color:#111; line-height:1.35;
+}
+#cad-subline { color:#333; line-height:1.45; }
+#cad-shortcut {
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+  padding:6px 8px; background:#d4d0c8; border:1px solid; border-color:#fff #808080 #808080 #fff;
+}
+.cad-shortcut-label { font-size:10px; color:#333; margin-right:2px; }
+.cad-key {
+  min-width:26px; padding:1px 6px; text-align:center; font-size:10px;
+  background:#f7f7f7; border:1px solid; border-color:#fff #808080 #808080 #fff;
+}
+.cad-plus { font-size:10px; color:#555; }
+#cad-actions {
+  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px;
+}
+.cad-action {
+  display:flex; align-items:flex-start; gap:9px; min-height:78px; padding:9px 10px;
+  background:#c0c0c0; border:2px solid; border-color:#fff #808080 #808080 #fff;
+  text-align:left; font-family:var(--sleep-font); font-size:11px; cursor:default;
+}
+.cad-action:active,
+.cad-action:focus-visible {
+  border-color:#808080 #fff #fff #808080;
+  outline:none;
+}
+.cad-action-icon {
+  width:22px; flex:0 0 22px; font-size:18px; line-height:1.1; text-align:center;
+}
+.cad-action-copy {
+  display:flex; flex-direction:column; gap:3px; min-width:0;
+}
+.cad-action-copy strong { font-size:11px; color:#111; }
+.cad-action-copy span { font-size:10px; color:#333; line-height:1.35; }
+.cad-action.power { background:#c8c1b6; }
+#cad-footer {
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  padding:9px 12px; border-top:1px solid #a8a8a8; background:#b9b9b9;
+}
+#cad-footnote { font-size:10px; color:#333; }
 
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
@@ -965,6 +1070,12 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
   .dlg-text { font-size: 14px; line-height: 1.7; }
   .dlg-btn { min-width: 90px; height: 34px; font-size: 14px; }
 
+  #cad-actions { grid-template-columns: 1fr; }
+  #cad-hero { flex-direction: column; }
+  #cad-glyph { width: 40px; height: 40px; flex-basis: 40px; font-size: 18px; }
+  #cad-footer { flex-direction: column; align-items: stretch; }
+  #cad-footnote { text-align: center; }
+
   .term-wrap { font-size: 16px; }
   .note-body, .note-textarea { font-size: 13px; }
 }
@@ -984,24 +1095,59 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 <!-- Drop overlay -->
 <div id="drop-overlay">📁 Drop files to upload to sleepOS</div>
 
-<!-- Alt+Tab overlay -->
+<!-- Window switcher overlay -->
 <div id="alttab-overlay">
   <div id="alttab-box"></div>
 </div>
 
-<!-- Ctrl+Alt+Del overlay -->
+<!-- Ctrl+Shift+Q overlay -->
 <div id="cad-overlay">
   <div id="cad-box">
     <div id="cad-title">sleepOS Security</div>
     <div id="cad-body">
-      <b>Secure Attention Sequence received.</b><br><br>
-      What would you like to do?
+      <div id="cad-hero">
+        <div id="cad-glyph">⚠</div>
+        <div id="cad-copy">
+          <div id="cad-kicker">Secure Attention Sequence</div>
+          <div id="cad-headline">Session controls are available for the current desktop.</div>
+          <div id="cad-subline">Choose a system action below, or press <b>Esc</b> to return immediately.</div>
+        </div>
+      </div>
+      <div id="cad-shortcut">
+        <span class="cad-shortcut-label">Shortcut</span>
+        <span class="cad-key">Ctrl</span>
+        <span class="cad-plus">+</span>
+        <span class="cad-key">Alt</span>
+        <span class="cad-plus">+</span>
+        <span class="cad-key">Q</span>
+      </div>
+      <div id="cad-actions">
+        <button class="cad-action" onclick="cadAction('lock')">
+          <span class="cad-action-icon">🔒</span>
+          <span class="cad-action-copy">
+            <strong>Lock Session</strong>
+            <span>Blank the desktop until the next keypress or click.</span>
+          </span>
+        </button>
+        <button class="cad-action" onclick="cadAction('taskmgr')">
+          <span class="cad-action-icon">📊</span>
+          <span class="cad-action-copy">
+            <strong>System Monitorr</strong>
+            <span>Inspect active windows and process IDs before forcing changes.</span>
+          </span>
+        </button>
+        <button class="cad-action power" onclick="cadAction('shutdown')">
+          <span class="cad-action-icon">⏻</span>
+          <span class="cad-action-copy">
+            <strong>Shut Down</strong>
+            <span>Open power options for shutdown or restart.</span>
+          </span>
+        </button>
+      </div>
     </div>
-    <div id="cad-btns">
-      <button class="dlg-btn" onclick="cadAction('lock')">🔒 Lock</button>
-      <button class="dlg-btn" onclick="cadAction('taskmgr')">📊 Task Manager</button>
-      <button class="dlg-btn" onclick="cadAction('shutdown')">⏻ Shut Down</button>
-      <button class="dlg-btn" onclick="closeCad()">Cancel</button>
+    <div id="cad-footer">
+      <div id="cad-footnote">Security panel active</div>
+      <button class="dlg-btn" onclick="closeCad()">Return to Desktop</button>
     </div>
   </div>
 </div>
@@ -1063,7 +1209,7 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="closeStart();doShutdown()">
-      <span class="sm-icon">⏻</span><span>Shut Down...</span>
+      <span class="sm-icon sm-icon-power"><svg viewBox="0 -3 16 16" aria-hidden="true" focusable="false"><path d="M8 1.5v5.2"></path><path d="M4.8 3.3a5 5 0 1 0 6.4 0"></path></svg></span><span>Shut Down...</span>
     </div>
   </div>
 </div>
@@ -1094,6 +1240,9 @@ const PROJECTS = [
   { name: 'corridor crawler',   emoji: '🚪', file: 'evenet.fun/corridor.html' },
   { name: 'patch synth',        emoji: '🎛️',  file: 'evenet.fun/synth.html' },
 ];
+const RECYCLE_BIN_NAME = 'RECYCLE BIN';
+const RECYCLE_STORAGE_DIR = 'CACHE\\RECYCLE_BIN';
+const RECYCLE_BIN_KEY = 'sleepOS-recycle-bin';
 
 const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
@@ -1107,10 +1256,139 @@ const DESKTOP_ICONS = [
   { name: 'REGEDIT.exe',    emoji: '🗝️', action: 'openRegedit' },
   { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
-  { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
+  { name: RECYCLE_BIN_NAME, emoji: '\u{1F5D1}\uFE0F', action: 'openRecycleBin', recycleBin: true },
 ];
+function getExeDisplayName() {
+  return daemonStory.quarantineSigned ? 'quarantine.exe' : '?????.exe';
+}
+
+const DESKTOP_ICON_DIRS_KEY = 'sleepOS-desktop-icon-dirs';
+function normalizeDesktopContainerDir(dirPath) {
+  const normalized = fsNormalizeDir(dirPath || 'DESKTOP');
+  if (!normalized || normalized === 'DESKTOP' || normalized.startsWith('DESKTOP\\')) return normalized || 'DESKTOP';
+  return 'DESKTOP';
+}
+function loadDesktopIconDirs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DESKTOP_ICON_DIRS_KEY) || '{}') || {};
+    const out = {};
+    Object.entries(raw).forEach(([name, dirPath]) => {
+      const icon = DESKTOP_ICONS.find(item => item.name === name && !item.recycleBin);
+      if (!icon) return;
+      const normalized = normalizeDesktopContainerDir(dirPath);
+      if (normalized !== 'DESKTOP') out[name] = normalized;
+    });
+    return out;
+  } catch (e) {
+    return {};
+  }
+}
+function saveDesktopIconDirs() {
+  try { localStorage.setItem(DESKTOP_ICON_DIRS_KEY, JSON.stringify(desktopIconDirs)); } catch (e) {}
+}
+let desktopIconDirs = loadDesktopIconDirs();
+function getDesktopSystemIconDir(name) {
+  if (isRecycleBinItemName(name)) return 'DESKTOP';
+  const normalized = normalizeDesktopContainerDir(desktopIconDirs[name] || 'DESKTOP');
+  return normalized !== 'DESKTOP' && !fsGetDir(normalized) ? 'DESKTOP' : normalized;
+}
+function setDesktopSystemIconDir(name, dirPath) {
+  if (isRecycleBinItemName(name)) return;
+  const normalized = normalizeDesktopContainerDir(dirPath);
+  if (normalized === 'DESKTOP') delete desktopIconDirs[name];
+  else desktopIconDirs[name] = normalized;
+  saveDesktopIconDirs();
+}
+function getDesktopSystemIconsForDir(dirPath) {
+  const normalized = normalizeDesktopContainerDir(dirPath);
+  return DESKTOP_ICONS.filter(icon => {
+    if (icon.name === 'void.tmp' && daemonStory.endingReached) return false;
+    if (icon.recycleBin) return normalized === 'DESKTOP';
+    return getDesktopSystemIconDir(icon.name) === normalized;
+  });
+}
 function getVisibleDesktopIcons() {
-  return DESKTOP_ICONS.filter(icon => icon.name !== 'void.tmp' || !daemonStory.endingReached);
+  return getDesktopSystemIconsForDir('DESKTOP');
+}
+function isDesktopContainerPath(dirPath) {
+  const normalized = fsNormalizeDir(dirPath);
+  return normalized === 'DESKTOP' || normalized.startsWith('DESKTOP\\');
+}
+function isDesktopVirtualItem(item, srcDirPath) {
+  if (!item || !isDesktopContainerPath(srcDirPath)) return false;
+  if (item._shortcut || item.custom) return true;
+  return !!item.sysfile && !item.recycleBin && !isRecycleBinItemName(item.name);
+}
+function clearDesktopRootIconPosition(name) {
+  if (!Object.prototype.hasOwnProperty.call(iconPositions, name)) return;
+  delete iconPositions[name];
+  saveIconPositions();
+}
+function canMoveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
+  const srcDir = fsNormalizeDir(srcDirPath);
+  const dstDir = fsNormalizeDir(dstDirPath);
+  if (!isDesktopVirtualItem(item, srcDir)) return false;
+  if (!isDesktopContainerPath(dstDir)) return false;
+  return dstDir === 'DESKTOP' || !!fsGetDir(dstDir);
+}
+function moveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
+  const srcDir = fsNormalizeDir(srcDirPath);
+  const dstDir = fsNormalizeDir(dstDirPath);
+  if (!canMoveDesktopVirtualItem(item, srcDirPath, dstDir)) return false;
+  if (srcDir === dstDir) return true;
+  if (item._shortcut || item.custom) {
+    const shortcut = item._shortcut || item;
+    shortcut.dirPath = normalizeDesktopContainerDir(dstDir);
+    saveDesktopShortcuts();
+  } else {
+    setDesktopSystemIconDir(item.name, dstDir);
+  }
+  clearDesktopRootIconPosition(item.name);
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return true;
+}
+function canMoveShellItemToDir(item, srcDirPath, dstDirPath) {
+  const dstDir = fsNormalizeDir(dstDirPath);
+  if (!item || item._proj || item._recycle) return false;
+  if (isDesktopVirtualItem(item, srcDirPath)) return canMoveDesktopVirtualItem(item, srcDirPath, dstDir);
+  if (item.sysfile || item._shortcut) return false;
+  return dstDir === '' || !!fsGetDir(dstDir);
+}
+function moveShellItemToDir(item, srcDirPath, dstDirPath) {
+  const srcDir = fsNormalizeDir(srcDirPath);
+  const dstDir = fsNormalizeDir(dstDirPath);
+  if (isDesktopVirtualItem(item, srcDirPath)) return moveDesktopVirtualItem(item, srcDirPath, dstDir);
+  if (!canMoveShellItemToDir(item, srcDirPath, dstDir)) return false;
+  if (srcDir === dstDir) return true;
+  const oldPath = srcDir ? srcDir + '\\' + item.name : item.name;
+  const moved = moveFsItemByPath(item.name, srcDirPath, dstDir);
+  if (!moved) return false;
+  const newPath = moved.dirName ? moved.dirName + '\\' + moved.name : moved.name;
+  retargetDesktopShortcutsForMove(oldPath, newPath, item.kind);
+  if (isDesktopContainerPath(srcDirPath) || isDesktopContainerPath(dstDir)) clearDesktopRootIconPosition(item.name);
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return true;
+}
+function canRecycleShellItem(item, srcDirPath) {
+  return !!item && !item._proj && !item._recycle && !item._shortcut && !item.sysfile && !isDesktopVirtualItem(item, srcDirPath);
+}
+function recycleShellItem(item, srcDirPath) {
+  if (!canRecycleShellItem(item, srcDirPath)) return { ok: false, message: 'Move failed.' };
+  const result = recycleVirtualPath(item.name, srcDirPath);
+  if (result.ok) {
+    if (isDesktopContainerPath(srcDirPath)) clearDesktopRootIconPosition(item.name);
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+  }
+  return result;
+}
+function setShellDragPayload(payload) {
+  _shellDragPayload = payload || null;
+}
+function getShellDragPayload() {
+  return _shellDragPayload;
+}
+function clearShellDragPayload() {
+  _shellDragPayload = null;
 }
 const SYSTEM_FILE_ICONS = DESKTOP_ICONS.reduce((icons, { name, emoji }) => {
   icons[name.toUpperCase()] = emoji;
@@ -1136,10 +1414,12 @@ function normalizeDesktopShortcut(entry) {
   const emoji = String(entry.emoji || '').trim();
   if (!name || !emoji) return null;
   if (!path && !target.sysfile) return null;
+  const dirPath = normalizeDesktopContainerDir(entry.dirPath || 'DESKTOP');
   return {
     name,
     emoji,
     custom: true,
+    dirPath,
     target: {
       name,
       path,
@@ -1150,9 +1430,10 @@ function normalizeDesktopShortcut(entry) {
 }
 function saveDesktopShortcuts() {
   try {
-    localStorage.setItem(DESKTOP_SHORTCUTS_KEY, JSON.stringify(customDesktopIcons.map(({ name, emoji, target }) => ({
+    localStorage.setItem(DESKTOP_SHORTCUTS_KEY, JSON.stringify(customDesktopIcons.map(({ name, emoji, dirPath, target }) => ({
       name,
       emoji,
+      dirPath: normalizeDesktopContainerDir(dirPath || 'DESKTOP'),
       target,
     }))));
   } catch (e) {}
@@ -1163,6 +1444,39 @@ function loadDesktopShortcuts() {
     const raw = JSON.parse(localStorage.getItem(DESKTOP_SHORTCUTS_KEY) || '[]');
     raw.map(normalizeDesktopShortcut).filter(Boolean).forEach(icon => customDesktopIcons.push(icon));
   } catch (e) {}
+}
+function getDesktopShortcutsForDir(dirPath) {
+  const normalized = normalizeDesktopContainerDir(dirPath);
+  return customDesktopIcons.filter(icon => {
+    const iconDir = normalizeDesktopContainerDir(icon.dirPath || 'DESKTOP');
+    const resolvedDir = iconDir !== 'DESKTOP' && !fsGetDir(iconDir) ? 'DESKTOP' : iconDir;
+    return resolvedDir === normalized;
+  });
+}
+function retargetDesktopShortcutsForMove(oldPath, newPath, kind) {
+  const from = normalizeShortcutPath(oldPath);
+  const to = normalizeShortcutPath(newPath);
+  if (!from || !to) return false;
+  let changed = false;
+  customDesktopIcons.forEach(icon => {
+    const target = icon?.target;
+    if (!target || target.sysfile) return;
+    const targetPath = normalizeShortcutPath(target.path);
+    if (!targetPath) return;
+    if (kind === 'dir') {
+      if (targetPath === from || targetPath.startsWith(from + '\\')) {
+        target.path = to + targetPath.slice(from.length);
+        changed = true;
+      }
+      return;
+    }
+    if (targetPath === from) {
+      target.path = to;
+      changed = true;
+    }
+  });
+  if (changed) saveDesktopShortcuts();
+  return changed;
 }
 loadDesktopShortcuts();
 function openSystemFile(name) {
@@ -1185,6 +1499,7 @@ function openSystemFile(name) {
     'void.tmp': openVoid,
     'daemon.core': openDaemon,
     '?????.exe': openUnknown,
+    [RECYCLE_BIN_NAME]: openRecycleBin,
   };
   const resolvedKey = Object.keys(SYS).find(entry => entry.toLowerCase() === key.toLowerCase());
   if (!resolvedKey) return false;
@@ -1213,6 +1528,11 @@ function openDesktopShortcutTarget(target) {
   if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
   else openNotepad(entry.fileName, entry.dirName);
 }
+
+function openRecycleBin() {
+  openExplorer('RECYCLE');
+}
+
 const DEFAULT_BROWSER_FAVORITES = [
   { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: '&#128214;' },
   { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: '&#128230;' },
@@ -1261,6 +1581,25 @@ try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) ||
 
 // ── Registry data ─────────────────────────────────────────────────
 const REG_KEY = 'sleepOS-registry';
+const SYSTEM_WALLPAPER_DIR = 'SYS\\WALLPAPERS';
+const DEFAULT_WALLPAPER_PATH = SYSTEM_WALLPAPER_DIR + '\\DEFAULT.JPG';
+const LEGACY_BUILTIN_WALLPAPER_IDS = new Set(['default', 'magicant', 'hills', 'battle', 'summers', 'saturn', 'cave']);
+const SEEDED_WALLPAPERS = [
+  { path: DEFAULT_WALLPAPER_PATH, label: 'Default', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/default.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CITY.JPG', label: 'City', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/city.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CRAFT.PNG', label: 'Craft', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/craft.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\DARK.JPG', label: 'Dark', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/dark.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\FOREST.PNG', label: 'Forest', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/forest.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\HILLS.JPG', label: 'Hills', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/hills.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\OCEAN.GIF', label: 'Ocean', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/ocean.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\POWERLINES.JPG', label: 'Powerlines', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/powerlines.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\REBIRTH.GIF', label: 'Rebirth', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/rebirth.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\SPACE.PNG', label: 'Space', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/space.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\STATIC.GIF', label: 'Static', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/static.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\WATCHING.GIF', label: 'Watching', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/watching.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\WAVES.GIF', label: 'Waves', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/waves.gif', mime: 'image/gif' },
+];
+const SEEDED_WALLPAPER_MAP = new Map(SEEDED_WALLPAPERS.map(item => [item.path, item]));
 const registryData = {
   'HKEY_SLEEPBOX_MACHINE': {
     'SYSTEM\\CurrentConfig': {
@@ -1285,7 +1624,7 @@ const registryData = {
   },
   'HKEY_CURRENT_USER': {
     'Desktop': {
-      Wallpaper:          { type:'REG_SZ',    value: 'default' },
+      Wallpaper:          { type:'REG_SZ',    value: DEFAULT_WALLPAPER_PATH },
     },
     'SOFTWARE\\sleepOS': {
       SkipBoot:           { type:'REG_DWORD', value: 0 },
@@ -1394,19 +1733,83 @@ const WALLPAPERS = [
 ];
 
 const WALLPAPER_FILE_PREFIX = 'FILE:';
-let currentWallpaper = 'default';
+let currentWallpaper = DEFAULT_WALLPAPER_PATH;
 
 function isWallpaperFileId(id) {
   return typeof id === 'string' && id.startsWith(WALLPAPER_FILE_PREFIX);
 }
 
+function normalizeWallpaperPath(path, fallbackDir) {
+  const raw = String(path ?? '').trim();
+  if (!raw) return '';
+  if (isWallpaperFileId(raw)) return normalizeWallpaperPath(raw.slice(WALLPAPER_FILE_PREFIX.length), fallbackDir);
+  if (LEGACY_BUILTIN_WALLPAPER_IDS.has(raw.toLowerCase())) return DEFAULT_WALLPAPER_PATH;
+  const { dirName, fileName } = fsSplitPath(raw, fallbackDir);
+  return fileName ? blobRelativePath(dirName, fileName) : '';
+}
+
+function isSystemWallpaperPath(path) {
+  const normalized = normalizeWallpaperPath(path);
+  return normalized === SYSTEM_WALLPAPER_DIR || normalized.startsWith(SYSTEM_WALLPAPER_DIR + '\\');
+}
+
+function findMapKeyInsensitive(map, key) {
+  if (!map || !key) return '';
+  if (map.has(key)) return key;
+  const target = String(key).toUpperCase();
+  for (const existing of map.keys()) {
+    if (String(existing).toUpperCase() === target) return existing;
+  }
+  return '';
+}
+
+function resolveWallpaperEntry(path, fallbackDir) {
+  const normalized = normalizeWallpaperPath(path, fallbackDir);
+  if (!normalized) return null;
+  const { dirName, fileName } = fsSplitPath(normalized);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  const blobName = findMapKeyInsensitive(dir.blobs, fileName);
+  if (!blobName) return null;
+  const blob = dir.blobs.get(blobName);
+  if (!blob || blob.kind !== 'image') return null;
+  return { dir, dirName, fileName: blobName, path: blobRelativePath(dirName, blobName), blob };
+}
+
+function getWallpaperRegistryValue() {
+  return registryData['HKEY_CURRENT_USER']?.Desktop?.Wallpaper?.value || '';
+}
+
+function setWallpaperRegistryValue(path) {
+  const entry = registryData['HKEY_CURRENT_USER']?.Desktop?.Wallpaper;
+  if (!entry) return;
+  entry.value = path;
+  saveRegistry();
+}
+
+function syncWallpaperSwatches() {
+  document.querySelectorAll('.wp-swatch').forEach(swatch => {
+    swatch.classList.toggle('wp-selected', swatch.dataset.id === currentWallpaper);
+  });
+}
+
+function getInitialWallpaperPath() {
+  const rawRegistry = String(getWallpaperRegistryValue() || '').trim();
+  const rawSaved = String(localStorage.getItem(WP_KEY) || '').trim();
+  const registryPath = normalizeWallpaperPath(rawRegistry);
+  const savedPath = normalizeWallpaperPath(rawSaved);
+  const registryWasLegacyDefault = rawRegistry && LEGACY_BUILTIN_WALLPAPER_IDS.has(rawRegistry.toLowerCase());
+  if (savedPath && (!registryPath || registryWasLegacyDefault)) return savedPath;
+  return registryPath || savedPath || DEFAULT_WALLPAPER_PATH;
+}
+
 function wallpaperFileId(path, fallbackDir) {
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  return fileName ? WALLPAPER_FILE_PREFIX + blobRelativePath(dirName, fileName) : '';
+  const normalized = normalizeWallpaperPath(path, fallbackDir);
+  return normalized ? WALLPAPER_FILE_PREFIX + normalized : '';
 }
 
 function wallpaperFilePath(id) {
-  return isWallpaperFileId(id) ? id.slice(WALLPAPER_FILE_PREFIX.length) : '';
+  return normalizeWallpaperPath(id);
 }
 
 function getUploadedWallpaperChoices() {
@@ -1417,10 +1820,11 @@ function getUploadedWallpaperChoices() {
       if (blob.kind !== 'image') return;
       const relPath = blobRelativePath(dirPath, fileName);
       items.push({
-        id: WALLPAPER_FILE_PREFIX + relPath,
-        name: fileName,
+        id: relPath,
+        name: (SEEDED_WALLPAPER_MAP.get(relPath) || {}).label || fileName.replace(/\.[^.]+$/, ''),
         path: relPath,
         url: blob.url,
+        system: isSystemWallpaperPath(relPath),
       });
     });
     if (!dir.subdirs) return;
@@ -1429,133 +1833,124 @@ function getUploadedWallpaperChoices() {
       .forEach(([subName, subdir]) => walk(subdir, dirPath ? dirPath + '\\' + subName : subName));
   }
   walk(termFS, '');
-  return items.sort((a, b) => a.path.localeCompare(b.path));
+  return items.sort((a, b) => {
+    if (a.system !== b.system) return a.system ? -1 : 1;
+    return a.path.localeCompare(b.path);
+  });
 }
 
 function renderWallpaperSwatch(grid, choice) {
   const item = document.createElement('div');
   item.dataset.id = choice.id;
   item.className = 'wp-swatch' + (choice.id === currentWallpaper ? ' wp-selected' : '');
-  item.title = choice.path ? `C:\\sleepOS\\${choice.path}` : choice.name;
+  item.title = `C:\\sleepOS\\${choice.path}`;
   item.style.cssText = 'cursor:default;display:flex;flex-direction:column;align-items:center;gap:3px;';
 
   const thumb = document.createElement('div');
   thumb.className = 'wp-thumb';
   thumb.style.cssText = 'width:72px;height:50px;box-sizing:border-box;overflow:hidden;flex-shrink:0;background:#c0c0c0;';
 
-  if (choice.url) {
-    const img = document.createElement('img');
-    img.src = choice.url;
-    img.alt = choice.name;
-    img.draggable = false;
-    thumb.appendChild(img);
-  } else {
-    const fill = document.createElement('div');
-    fill.style.cssText = `width:100%;height:100%;${choice.bg}`;
-    thumb.appendChild(fill);
-  }
+  const img = document.createElement('img');
+  img.src = choice.url;
+  img.alt = choice.name;
+  img.draggable = false;
+  thumb.appendChild(img);
 
   const label = document.createElement('div');
   label.style.cssText = 'font-size:10px;text-align:center;line-height:1.25;max-width:84px;word-break:break-word;';
-  label.textContent = choice.path ? choice.name.replace(/\.[^.]+$/, '') : choice.name;
+  label.textContent = choice.name;
   item.appendChild(thumb);
   item.appendChild(label);
 
-  if (choice.path && choice.path !== choice.name) {
-    const meta = document.createElement('div');
-    meta.textContent = choice.path.replace(/\\[^\\]+$/, '') || 'Root';
-    meta.style.cssText = 'font-size:9px;color:#555;text-align:center;line-height:1.1;max-width:84px;word-break:break-word;';
-    item.appendChild(meta);
-  }
+  const meta = document.createElement('div');
+  meta.textContent = choice.path.replace(/\\[^\\]+$/, '') || 'Root';
+  meta.style.cssText = 'font-size:9px;color:#555;text-align:center;line-height:1.1;max-width:84px;word-break:break-word;';
+  item.appendChild(meta);
 
-  item.addEventListener('click', () => applyWallpaper(choice.id));
+  item.addEventListener('click', () => applyWallpaper(choice.path));
   grid.appendChild(item);
+}
+
+function renderWallpaperSection(gridId, choices, emptyText) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  if (!choices.length) {
+    grid.innerHTML = `<div style="grid-column:1 / -1;padding:8px 10px;border:2px solid;border-color:#808080 #fff #fff #808080;background:#d4d0c8;font-size:10px;line-height:1.4;">${emptyText}</div>`;
+    return;
+  }
+  choices.forEach(choice => renderWallpaperSwatch(grid, choice));
 }
 
 function renderAppearanceWindow() {
   const body = document.getElementById('wb-appearance');
   if (!body) return;
-  const uploads = getUploadedWallpaperChoices();
+  const choices = getUploadedWallpaperChoices();
+  const systemWallpapers = choices.filter(choice => choice.system);
+  const otherWallpapers = choices.filter(choice => !choice.system);
   body.style.cssText = 'padding:10px;overflow:auto;';
   body.innerHTML = `
     <div style="font-size:11px;margin-bottom:8px;">Wallpaper</div>
-    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Built-in</div>
-    <div id="wp-grid-builtins" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;"></div>
-    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Uploaded Images</div>
+    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">SYS\\WALLPAPERS</div>
+    <div id="wp-grid-system" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;"></div>
+    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Other Image Files</div>
     <div id="wp-grid-uploaded" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>
     <div id="wp-upload-note" style="font-size:10px;line-height:1.4;margin-top:10px;color:#333;"></div>`;
 
-  const builtinsGrid = document.getElementById('wp-grid-builtins');
-  WALLPAPERS.forEach(wp => renderWallpaperSwatch(builtinsGrid, wp));
-
-  const uploadedGrid = document.getElementById('wp-grid-uploaded');
+  renderWallpaperSection('wp-grid-system', systemWallpapers, 'System wallpaper files will appear here.');
+  renderWallpaperSection('wp-grid-uploaded', otherWallpapers, 'Upload an image anywhere in File Explorer, or add more files under SYS\\WALLPAPERS.');
   const note = document.getElementById('wp-upload-note');
-  if (uploads.length) {
-    uploads.forEach(choice => renderWallpaperSwatch(uploadedGrid, choice));
-    note.textContent = 'Right-click any image in File Explorer and choose Set as Wallpaper.';
-  } else {
-    uploadedGrid.innerHTML = `<div style="grid-column:1 / -1;padding:8px 10px;border:2px solid;border-color:#808080 #fff #fff #808080;background:#d4d0c8;font-size:10px;line-height:1.4;">Uploaded image files will appear here and can be used as wallpaper.</div>`;
-    note.textContent = 'Use File Explorer to upload an image, then right-click it to set it as wallpaper.';
-  }
+  note.textContent = 'Right-click any image to set it as your wallpaper.';
 }
 
 function refreshAppearanceWindow() {
   if (document.getElementById('wb-appearance')) renderAppearanceWindow();
 }
 
-function applyWallpaper(id, options = {}) {
-  const { deferMissing = false } = options;
+function applyWallpaperColorFallback() {
   const bg = document.getElementById('desktop-bg');
   if (!bg) return false;
-
-  const wp = WALLPAPERS.find(w => w.id === id);
-  if (wp) {
-    currentWallpaper = id;
-    bg.style.cssText = wp.bg;
-    localStorage.setItem(WP_KEY, id);
-    document.querySelectorAll('.wp-swatch').forEach(s => {
-      s.classList.toggle('wp-selected', s.dataset.id === id);
-    });
-    return true;
-  }
-
-  if (isWallpaperFileId(id)) {
-    const entry = fsGetEntry(wallpaperFilePath(id));
-    const blob = entry && entry.kind === 'blob' ? entry.value : null;
-    if (blob?.kind === 'image') {
-      currentWallpaper = id;
-      bg.style.cssText = `background-color:#c0c0c0;background-image:url("${blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;`;
-      localStorage.setItem(WP_KEY, id);
-      document.querySelectorAll('.wp-swatch').forEach(s => {
-        s.classList.toggle('wp-selected', s.dataset.id === id);
-      });
-      return true;
-    }
-    if (deferMissing) return false;
-  }
-
-  if (id !== 'default') return applyWallpaper('default');
-  document.querySelectorAll('.wp-swatch').forEach(s => {
-    s.classList.toggle('wp-selected', s.dataset.id === id);
-  });
+  currentWallpaper = '';
+  bg.style.cssText = 'background:#008080;';
+  syncWallpaperSwatches();
   return false;
 }
 
+function applyWallpaper(path, options = {}) {
+  const { deferMissing = false, updateRegistry = true } = options;
+  const bg = document.getElementById('desktop-bg');
+  if (!bg) return false;
+
+  const resolved = resolveWallpaperEntry(path);
+  if (resolved) {
+    currentWallpaper = resolved.path;
+    bg.style.cssText = `background-color:#c0c0c0;background-image:url("${resolved.blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;`;
+    try { localStorage.setItem(WP_KEY, resolved.path); } catch (e) {}
+    if (updateRegistry) setWallpaperRegistryValue(resolved.path);
+    syncWallpaperSwatches();
+    return true;
+  }
+
+  return applyWallpaperColorFallback();
+}
+
 function handleWallpaperFileRename(dirPath, oldName, newName) {
-  const oldId = WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, oldName);
-  const savedId = localStorage.getItem(WP_KEY);
-  if (currentWallpaper === oldId || savedId === oldId) {
-    applyWallpaper(WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, newName));
+  const oldPath = normalizeWallpaperPath(blobRelativePath(dirPath, oldName));
+  const newPath = normalizeWallpaperPath(blobRelativePath(dirPath, newName));
+  const savedPath = normalizeWallpaperPath(localStorage.getItem(WP_KEY));
+  const registryPath = normalizeWallpaperPath(getWallpaperRegistryValue());
+  if (currentWallpaper === oldPath || savedPath === oldPath || registryPath === oldPath) {
+    applyWallpaper(newPath);
   } else {
     refreshAppearanceWindow();
   }
 }
 
 function handleWallpaperFileDelete(dirPath, name) {
-  const id = WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, name);
-  const savedId = localStorage.getItem(WP_KEY);
-  if (currentWallpaper === id || savedId === id) {
-    applyWallpaper('default');
+  const deletedPath = normalizeWallpaperPath(blobRelativePath(dirPath, name));
+  const savedPath = normalizeWallpaperPath(localStorage.getItem(WP_KEY));
+  const registryPath = normalizeWallpaperPath(getWallpaperRegistryValue());
+  if (currentWallpaper === deletedPath || savedPath === deletedPath || registryPath === deletedPath) {
+    applyWallpaper(DEFAULT_WALLPAPER_PATH);
   } else {
     refreshAppearanceWindow();
   }
@@ -1683,6 +2078,13 @@ if (osSettings.skipBoot) { biosFinish(); } else { setTimeout(biosType, 250); }
 let zTop = 100;
 const wins = {};
 let _expClipboard = null; // { items:[{name,kind,sysfile,srcCwd}], cut:bool }
+let _shellDragPayload = null; // { item, srcCwd, source:'explorer'|'desktop', sourceId?:string }
+let _explorerWinSeq = 0;
+
+function nextExplorerWinId() {
+  do { _explorerWinSeq += 1; } while (wins['explorer-' + _explorerWinSeq]);
+  return 'explorer-' + _explorerWinSeq;
+}
 
 // Shared PID helpers (used by SYSMON and TASKKILL)
 function pidFromId(id) {
@@ -1742,12 +2144,8 @@ const termFS = {
         '  CAT f | NOTEPAD   pipe output into Notepad',
         '',
         'KEYBOARD SHORTCUTS:',
-        '  Alt+F4            close focused window',
-        '  Alt+Tab           cycle open windows',
-        '  Ctrl+Alt+Del      secure attention sequence',
-        '  Win / Meta        toggle Start Menu',
-        '  Win+R             Run dialog',
-        '  F5                refresh desktop',
+        '  Ctrl+Alt+Q      secure attention sequence',
+        '  Space+Tab         switch windows',
         '  Escape            close menus / overlays',
         '',
         'Bonus: RUN DOCS\\REACTOR.script to play a terminal game.',
@@ -1930,13 +2328,9 @@ const termFS = {
         '  cmd | NOTEPAD file     save piped output and open it',
         '',
         '── KEYBOARD SHORTCUTS ───────────────────────',
-        '  Alt+F4        close focused window',
-        '  Alt+Tab       cycle open windows',
-        '  Ctrl+Alt+Del  secure attention sequence',
-        '  Win / Meta    toggle Start Menu',
-        '  Win+R         open Run dialog',
-        '  F5            refresh desktop',
-        '  Escape        close menus / overlays',
+        '  Ctrl+Alt+Q    secure attention sequence',
+        '  Space+Tab       switch windows',
+        '  Escape          close menus / overlays',
       ].join('\n')],
       ['REACTOR.script', [
         '# REACTOR.script',
@@ -2091,6 +2485,10 @@ const termFS = {
     ]),
   }]]),
 };
+termFS.dirs.add('DESKTOP');
+if (!termFS.subdirs.has('DESKTOP')) {
+  termFS.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+}
 
 // Helper: get a directory object by name ('' = root)
 function fsGetDir(path) {
@@ -2249,6 +2647,21 @@ function refreshSeededDocs() {
   });
 }
 
+function refreshSeededWallpaperLibrary() {
+  const dir = ensureFsDir(SYSTEM_WALLPAPER_DIR);
+  SEEDED_WALLPAPERS.forEach(item => {
+    const { fileName } = fsSplitPath(item.path);
+    if (!fileName) return;
+    dir.blobs.set(fileName, {
+      url: item.assetUrl,
+      kind: 'image',
+      size: 0,
+      mime: item.mime,
+      seeded: true,
+    });
+  });
+}
+
 function saveFS() {
   try {
     const data = { dirs: [...termFS.dirs], files: {}, subdirs: {} };
@@ -2337,6 +2750,7 @@ function loadFS() {
   const raw = localStorage.getItem(FS_KEY);
   if (!raw) {
     refreshSeededDocs();
+    refreshSeededWallpaperLibrary();
     return;
   }
   try {
@@ -2345,10 +2759,53 @@ function loadFS() {
     if (data.files) Object.entries(data.files).forEach(([k, v]) => termFS.files.set(k, v));
     if (data.subdirs) Object.entries(data.subdirs).forEach(([k, v]) => termFS.subdirs.set(k, _desDir(v)));
     refreshSeededDocs();
+    refreshSeededWallpaperLibrary();
   } catch(e) { /* corrupted save — ignore */ }
 }
 
 loadFS();
+function normalizeRecycleEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const id = String(entry.id || '').trim();
+  const name = String(entry.name || '').trim();
+  const storedDir = fsNormalizeDir(entry.storedDir || '');
+  if (!id || !name || !storedDir) return null;
+  return {
+    id,
+    name,
+    kind: String(entry.kind || 'file').toLowerCase(),
+    originalDir: fsNormalizeDir(entry.originalDir || ''),
+    storedDir,
+    deletedAt: Number(entry.deletedAt) || Date.now(),
+  };
+}
+
+function loadRecycleBin() {
+  try {
+    return (JSON.parse(localStorage.getItem(RECYCLE_BIN_KEY) || '[]') || [])
+      .map(normalizeRecycleEntry)
+      .filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveRecycleBin() {
+  try { localStorage.setItem(RECYCLE_BIN_KEY, JSON.stringify(recycleBinEntries)); } catch (e) {}
+}
+
+function recycleEntryOriginalPath(entry) {
+  if (!entry) return '';
+  return entry.originalDir ? entry.originalDir + '\\' + entry.name : entry.name;
+}
+
+function recycleEntryStoredPath(entry) {
+  if (!entry) return '';
+  return entry.storedDir ? entry.storedDir + '\\' + entry.name : entry.name;
+}
+
+let recycleBinEntries = loadRecycleBin();
+ensureFsDir(RECYCLE_STORAGE_DIR);
 window.addEventListener('beforeunload', saveFS);
 document.addEventListener('fs-changed', schedSave);
 // Daemon story state and sync
@@ -2364,10 +2821,11 @@ const ROOT_SYSTEM_FILE_META = [
   { name: 'REGEDIT.exe', size: '8,192', date: '11/13/2024  10:31' },
   { name: 'EXPLORER.exe', size: '8,192', date: '11/13/2024  10:31' },
 ];
-const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE']);
+const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE', 'DESKTOP']);
 const STORY_FILE_PATHS = {
   notice: 'DOCS\\NOTICE_13.txt',
   incident: 'DOCS\\INCIDENT_A.txt',
+  lostContact: 'DOCS\\LOST_CONTACT.txt',
   lastOperator: 'DOCS\\LAST_OPERATOR.txt',
   mirrorProtocol: 'DOCS\\MIRROR_PROTOCOL.txt',
   watchPid: 'SYS\\watch.pid',
@@ -2386,6 +2844,25 @@ const BUILTIN_PROCESS_SEED = [
   { pid: 666, name: 'daemon.core', cpu: 2.1, mem: 12.3, protected: true },
   { pid: 999, name: 'void_monitor.exe', cpu: 0.4, mem: 5.2, protected: true },
 ];
+const VOID_ACTION_ORDER = ['observe', 'measure', 'listen', 'trace', 'sample', 'stabilize', 'pulse'];
+const VOID_ACTION_LABELS = {
+  observe: 'Observe',
+  measure: 'Measure',
+  listen: 'Listen',
+  trace: 'Trace',
+  sample: 'Sample',
+  stabilize: 'Stabilize',
+  pulse: 'Pulse',
+};
+
+function normalizeVoidActions(actions) {
+  const seen = new Set(
+    (Array.isArray(actions) ? actions : [])
+      .map(action => String(action || '').toLowerCase())
+      .filter(action => Object.prototype.hasOwnProperty.call(VOID_ACTION_LABELS, action))
+  );
+  return VOID_ACTION_ORDER.filter(action => seen.has(action));
+}
 
 function createDaemonStoryDefaults() {
   return {
@@ -2399,6 +2876,7 @@ function createDaemonStoryDefaults() {
     wrongVictory: false,
     anchorDeleted: false,
     voidObserved: false,
+    voidActions: [],
     mirrorInspected: false,
     protocolInspected: false,
     mirrorLockRestored: false,
@@ -2415,10 +2893,10 @@ function daemonNormalizeStory(story) {
   if (story.respawnDisabledKill) story.stage = Math.max(story.stage, 3);
   if (story.daemonStopped || story.wrongVictory) story.stage = Math.max(story.stage, 4);
   if (story.anchorDeleted) story.stage = Math.max(story.stage, 5);
-  if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+  if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
     story.mirrorLockRestored = true;
   }
-  if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected)) story.stage = Math.max(story.stage, 6);
+  if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected)) story.stage = Math.max(story.stage, 6);
   if (story.mirrorLockRestored || story.quarantineSigned) story.stage = Math.max(story.stage, 7);
   if (story.endingReached) story.stage = Math.max(story.stage, 8);
 }
@@ -2441,8 +2919,10 @@ function normalizeDaemonStory(saved) {
     'quarantineSigned',
     'endingReached',
   ].forEach(key => { next[key] = !!next[key]; });
+  next.voidActions = normalizeVoidActions(next.voidActions);
   next.lastEventText = String(next.lastEventText || 'none');
   daemonNormalizeStory(next);
+  if (next.stage >= 6 && !next.voidActions.length) next.voidActions = ['trace'];
   return next;
 }
 
@@ -2460,6 +2940,7 @@ function saveDaemonStory() {
 
 let daemonStory = loadDaemonStory();
 let daemonVoidFeed = '';
+let daemonVoidFeedMode = '';
 let daemonPulseTimer = null;
 
 function daemonStageLabel(stage) {
@@ -2472,10 +2953,50 @@ function daemonStageLabel(stage) {
   return 'Dormant';
 }
 
+function getVoidActions(story) {
+  return normalizeVoidActions((story || daemonStory)?.voidActions);
+}
+
+function isVoidProfiled(story) {
+  const target = story || daemonStory;
+  if (!target) return false;
+  if (target.stage >= 6 || target.quarantineSigned || target.endingReached) return true;
+  return getVoidActions(target).some(action => action !== 'observe');
+}
+
+function getVoidProfileLabel(story) {
+  const target = story || daemonStory;
+  const analyticalCount = getVoidActions(target).filter(action => action !== 'observe').length;
+  if (target?.endingReached) return 'sealed';
+  if (target?.quarantineSigned) return 'bound';
+  if (analyticalCount >= 3) return 'deep';
+  if (analyticalCount >= 1) return 'active';
+  if (getVoidActions(target).length) return 'surface';
+  return 'none';
+}
+
+function getVoidObjectiveLine(story) {
+  const target = story || daemonStory;
+  if (!target) return 'No stable directive.';
+  if (target.endingReached) return 'Containment complete. Archive only.';
+  if (target.stage < 4) return 'The relay is still taking the load. Watch the file.';
+  if (!target.anchorDeleted) {
+    return target.daemonStopped
+      ? 'Lower MIRROR_LOCK and remove SYS\\anchor.seed when you are ready to expose the channel.'
+      : 'Silence the relay before you trust what the file looks like.';
+  }
+  if (!isVoidProfiled(target)) return 'Use Measure, Listen, Trace, Sample, or Pulse here to profile the breach.';
+  if (!(target.mirrorInspected || target.protocolInspected)) return 'Compare this file with CACHE\\mirror.dat or DOCS\\MIRROR_PROTOCOL.txt.';
+  if (Number(getContainmentValue('MIRROR_LOCK')) !== 1) return 'Restore MIRROR_LOCK before containment can hold.';
+  if (!target.quarantineSigned) return 'Run ?????.exe to write SYS\\quarantine.sig.';
+  return 'Delete void.tmp. The seal is ready.';
+}
+
 function getContainmentTelemetry() {
   const mirrorLockActive = Number(getContainmentValue('MIRROR_LOCK')) === 1;
   const respawnLockActive = Number(getContainmentValue('RESPAWN_LOCK')) === 1;
-  const pressure = daemonStory.endingReached
+  const voidPressureBase = Math.max(0, Math.min(99, parseInt(registryData['HKEY_SLEEPBOX_MACHINE']?.['VOID']?.VOID_PRESSURE_BASE?.value) || 12));
+  const pressureBase = daemonStory.endingReached
     ? 0
     : daemonStory.quarantineSigned
       ? 18
@@ -2488,6 +3009,7 @@ function getContainmentTelemetry() {
             : daemonStory.stage >= 2
               ? 23
               : 12;
+  const pressure = daemonStory.endingReached ? 0 : Math.min(99, pressureBase + Math.max(0, voidPressureBase - 12));
   const lattice = daemonStory.endingReached
     ? 100
     : mirrorLockActive
@@ -2515,10 +3037,10 @@ function getContainmentTelemetry() {
           ? 51
           : daemonStory.stage >= 2
             ? 26
-            : 11;
+          : 11;
   const bias = daemonStory.endingReached ? 'sealed' : mirrorLockActive ? 'deflected' : 'user-facing';
   const deleteAuthorized = !daemonStory.endingReached && daemonStory.quarantineSigned && mirrorLockActive;
-  const sealReady = !daemonStory.endingReached && !daemonStory.quarantineSigned && daemonStory.anchorDeleted && daemonStory.voidObserved && (daemonStory.mirrorInspected || daemonStory.protocolInspected) && mirrorLockActive;
+  const sealReady = !daemonStory.endingReached && !daemonStory.quarantineSigned && daemonStory.anchorDeleted && daemonStory.voidObserved && isVoidProfiled(daemonStory) && (daemonStory.mirrorInspected || daemonStory.protocolInspected) && mirrorLockActive;
   let rating = { code: 'CT-0', label: 'STABLE', color: '#004b61' };
   if (daemonStory.endingReached) rating = { code: 'CT-8', label: 'SEALED', color: '#0a7a2a' };
   else if (deleteAuthorized) rating = { code: 'CT-7', label: 'DELETE AUTHORIZED', color: '#0a5a9c' };
@@ -2546,6 +3068,7 @@ function getContainmentChecklist() {
     { label: 'RESPAWN_LOCK cleared', done: Number(getContainmentValue('RESPAWN_LOCK')) === 0 },
     { label: 'PID 512 offline', done: daemonStory.daemonStopped },
     { label: 'void channel observed', done: daemonStory.voidObserved },
+    { label: 'void channel profiled', done: isVoidProfiled(daemonStory) },
     { label: 'mirror evidence inspected', done: daemonStory.mirrorInspected || daemonStory.protocolInspected },
     { label: 'anchor released', done: daemonStory.anchorDeleted },
     { label: 'MIRROR_LOCK restored', done: daemonStory.anchorDeleted && Number(getContainmentValue('MIRROR_LOCK')) === 1 },
@@ -2606,6 +3129,229 @@ function removeFsPath(path, options) {
   return false;
 }
 
+function isRecycleBinItemName(name) {
+  return String(name || '').trim().toUpperCase() === RECYCLE_BIN_NAME;
+}
+
+function getFsItemState(path, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  if (dir.files.has(fileName)) return { dirName, dir, entryName: fileName, kind: 'file', storage: 'text' };
+  if (dir.blobs.has(fileName)) {
+    const blob = dir.blobs.get(fileName);
+    return { dirName, dir, entryName: fileName, kind: blob?.kind || 'binary', storage: 'blob', blob };
+  }
+  const upper = fileName.toUpperCase();
+  if (dir.dirs.has(upper)) return { dirName, dir, entryName: upper, kind: 'dir', storage: 'dir' };
+  return null;
+}
+
+function fsDirHasEntry(dir, name) {
+  if (!dir) return false;
+  return dir.files.has(name) || dir.blobs.has(name) || dir.dirs.has(String(name || '').toUpperCase());
+}
+
+function makeUniqueFsName(dir, desiredName, kind, suffixToken) {
+  const exists = name => fsDirHasEntry(dir, name);
+  if (!exists(desiredName)) return desiredName;
+  const token = String(suffixToken || 'copy');
+  if (kind === 'dir') {
+    const base = String(desiredName || 'NEW_FOLDER').toUpperCase();
+    let candidate = base + '_' + token.toUpperCase();
+    let i = 2;
+    while (exists(candidate)) candidate = base + '_' + token.toUpperCase() + i++;
+    return candidate;
+  }
+  const dot = String(desiredName).lastIndexOf('.');
+  const base = dot > 0 ? desiredName.slice(0, dot) : desiredName;
+  const ext = dot > 0 ? desiredName.slice(dot) : '';
+  let candidate = base + '_' + token + ext;
+  let i = 2;
+  while (exists(candidate)) candidate = base + '_' + token + i++ + ext;
+  return candidate;
+}
+
+function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
+  options = options || {};
+  const item = getFsItemState(path, fallbackDir);
+  const dstDirName = fsNormalizeDir(dstDirPath);
+  const dstDir = fsGetDir(dstDirName);
+  if (!item || !dstDir) return null;
+  if (item.storage === 'dir') {
+    const srcPath = blobRelativePath(item.dirName, item.entryName);
+    if (dstDirName === srcPath || dstDirName.startsWith(srcPath + '\\')) return null;
+  }
+  let nextName = String(options.newName || item.entryName || '').trim();
+  if (!nextName) return null;
+  if (item.storage === 'dir') nextName = nextName.toUpperCase();
+  const sameParent = dstDirName === fsNormalizeDir(item.dirName);
+  const sameName = nextName === item.entryName;
+  if (sameParent && sameName) return { kind: item.kind, name: nextName, dirName: dstDirName };
+  if (options.makeUnique) nextName = makeUniqueFsName(dstDir, nextName, item.storage === 'dir' ? 'dir' : 'file', options.suffixToken || 'copy');
+  else if (fsDirHasEntry(dstDir, nextName)) return null;
+
+  if (item.storage === 'dir') {
+    const sub = item.dir.subdirs?.get(item.entryName);
+    item.dir.dirs.delete(item.entryName);
+    item.dir.subdirs?.delete(item.entryName);
+    if (!dstDir.subdirs) dstDir.subdirs = new Map();
+    dstDir.dirs.add(nextName);
+    if (sub) dstDir.subdirs.set(nextName, sub);
+    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, nextName));
+  } else if (item.storage === 'blob') {
+    const blob = item.dir.blobs.get(item.entryName);
+    item.dir.blobs.delete(item.entryName);
+    if (!dstDir.blobs) dstDir.blobs = new Map();
+    dstDir.blobs.set(nextName, blob);
+    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, nextName);
+  } else {
+    const content = item.dir.files.get(item.entryName);
+    item.dir.files.delete(item.entryName);
+    if (!dstDir.files) dstDir.files = new Map();
+    dstDir.files.set(nextName, content);
+  }
+  schedSave();
+  return { kind: item.kind, name: nextName, dirName: dstDirName };
+}
+
+function handleWallpaperTreeDelete(path) {
+  const removedPath = normalizeWallpaperPath(path);
+  const savedPath = normalizeWallpaperPath(localStorage.getItem(WP_KEY));
+  const registryPath = normalizeWallpaperPath(getWallpaperRegistryValue());
+  if (
+    (currentWallpaper && currentWallpaper.startsWith(removedPath + '\\')) ||
+    (savedPath && savedPath.startsWith(removedPath + '\\')) ||
+    (registryPath && registryPath.startsWith(removedPath + '\\'))
+  ) {
+    applyWallpaper(DEFAULT_WALLPAPER_PATH);
+  }
+}
+
+function purgeFsDirNode(dirPath, dirNode) {
+  if (!dirNode) return;
+  dirNode.subdirs?.forEach((subdir, name) => purgeFsDirNode(blobRelativePath(dirPath, name), subdir));
+  dirNode.blobs?.forEach((blob, name) => {
+    if (blob?.kind === 'image') handleWallpaperFileDelete(dirPath, name);
+    if (blob?.url) URL.revokeObjectURL(blob.url);
+    removeBlobEntry(dirPath, name);
+  });
+  dirNode.files?.clear?.();
+  dirNode.blobs?.clear?.();
+  dirNode.dirs?.clear?.();
+  dirNode.subdirs?.clear?.();
+}
+
+function purgeFsPath(path, fallbackDir) {
+  const item = getFsItemState(path, fallbackDir);
+  if (!item) return false;
+  if (item.storage !== 'dir') return removeFsPath(path);
+  purgeFsDirNode(blobRelativePath(item.dirName, item.entryName), item.dir.subdirs?.get(item.entryName));
+  item.dir.dirs.delete(item.entryName);
+  item.dir.subdirs?.delete(item.entryName);
+  increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
+  schedSave();
+  return true;
+}
+
+function recycleVirtualPath(path, fallbackDir) {
+  const item = getFsItemState(path, fallbackDir);
+  const fileLabel = fsSplitPath(path, fallbackDir).fileName || path;
+  if (!item) return { ok: false, message: 'File not found: ' + fileLabel };
+  const sourcePath = blobRelativePath(item.dirName, item.entryName);
+  if (fsNormalizeDir(sourcePath).startsWith(fsNormalizeDir(RECYCLE_STORAGE_DIR))) {
+    return { ok: false, message: 'Item is already in the Recycle Bin.' };
+  }
+
+  const id = 'RB_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7).toUpperCase();
+  const storedDir = RECYCLE_STORAGE_DIR + '\\' + id;
+  ensureFsDir(storedDir);
+
+  if (item.storage === 'blob' && item.blob?.kind === 'image') handleWallpaperFileDelete(item.dirName, item.entryName);
+  if (item.storage === 'dir') handleWallpaperTreeDelete(sourcePath);
+
+  const moved = moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
+  if (!moved) {
+    removeFsPath(storedDir, { trackFragmentation: false });
+    return { ok: false, message: 'Could not move ' + fileLabel + ' to the Recycle Bin.' };
+  }
+
+  recycleBinEntries.unshift({
+    id,
+    name: moved.name,
+    kind: item.kind,
+    originalDir: item.dirName,
+    storedDir,
+    deletedAt: Date.now(),
+  });
+  saveRecycleBin();
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return { ok: true, deleted: true, recycled: true, details: ['Moved to Recycle Bin: ' + fileLabel] };
+}
+
+function restoreRecycleEntry(entry) {
+  entry = normalizeRecycleEntry(entry);
+  if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
+  ensureFsDir(entry.originalDir);
+  const moved = moveFsItemByPath(entry.name, entry.storedDir, entry.originalDir, {
+    newName: entry.name,
+    makeUnique: true,
+    suffixToken: 'restored',
+  });
+  if (!moved) return { ok: false, message: 'Could not restore ' + entry.name + '.' };
+  removeFsPath(entry.storedDir, { trackFragmentation: false });
+  recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
+  saveRecycleBin();
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return { ok: true, restored: true, name: moved.name, dirName: entry.originalDir };
+}
+
+function purgeRecycleEntry(entry) {
+  entry = normalizeRecycleEntry(entry);
+  if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
+  purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
+  removeFsPath(entry.storedDir, { trackFragmentation: false });
+  recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
+  saveRecycleBin();
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return { ok: true, deleted: true };
+}
+
+function emptyRecycleBin() {
+  recycleBinEntries.slice().forEach(entry => purgeRecycleEntry(entry));
+}
+
+function confirmEmptyRecycleBin(onDone) {
+  if (!recycleBinEntries.length) {
+    if (typeof onDone === 'function') onDone(false);
+    return;
+  }
+  osConfirm('Permanently delete all items in the Recycle Bin?', 'Empty Recycle Bin', ok => {
+    if (!ok) {
+      if (typeof onDone === 'function') onDone(false);
+      return;
+    }
+    emptyRecycleBin();
+    if (typeof onDone === 'function') onDone(true);
+  }, '\u{1F5D1}\uFE0F');
+}
+
+function promptCreateFolderAt(dirPath, onDone) {
+  osPrompt('Folder name:', '', 'New Folder', name => {
+    if (!name) {
+      if (typeof onDone === 'function') onDone(null);
+      return;
+    }
+    const created = fsCreateDir(name, dirPath);
+    if (created?.created) {
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+      if (typeof onDone === 'function') onDone(created);
+      return;
+    }
+    if (typeof onDone === 'function') onDone(null);
+  }, '\u{1F4C1}');
+}
+
 function ensureStoryTextFile(path, value) {
   const { dirName, fileName } = fsSplitPath(path);
   const dir = ensureFsDir(dirName);
@@ -2639,29 +3385,80 @@ function daemonIncidentContent() {
     'The daemon process was supervisory, not invasive.',
     'Silence in the PID table is not a sign of safety.',
     '',
-    'If the process stays dead:',
-    '  1. inspect void.tmp',
-    '  2. read DOCS\\MIRROR_PROTOCOL.txt',
-    '  3. inspect CACHE\\mirror.dat',
-    '  4. do not assume daemon.core was lying',
+    'Read DOCS\\LOST_CONTACT.txt.',
+  ].join('\n');
+}
+
+function daemonLostContactContent() {
+  return [
+    '== LOST CONTACT ==',
+    '',
+    'The operator who left this note killed the daemon.',
+    'They thought that would be the end of it.',
+    '',
+    'It was not.',
+    '',
+    'The anchor file — SYS\\anchor.seed — was keeping the mirror',
+    'pointed away from the user. When the daemon went quiet,',
+    'the anchor was still holding.',
+    '',
+    'If you are reading this after killing it:',
+    '  - The anchor may still be in place. Check SYS\\anchor.seed.',
+    '  - Do not delete it without understanding what it does.',
+    '  - Read SYS\\anchor.seed before you touch it.',
+    '',
+    'When the anchor is removed, contact begins.',
+    'Have a plan before you do that.',
   ].join('\n');
 }
 
 function daemonLastOperatorContent() {
-  return [
-    '== LAST OPERATOR ==',
-    '',
-    'If you killed it and the room went quiet, you did what I did.',
-    '',
-    'daemon.core was not the voice.',
-    'daemon.core was the pressure door.',
-    '',
-    'The anchor file keeps the mirror pointed away from the user.',
-    'The current anchor is SYS\\anchor.seed.',
-    'If MIRROR_LOCK is lowered and SYS\\anchor.seed is deleted, contact begins.',
-    '',
-    'If you intend to seal the breach again, restore MIRROR_LOCK before you run the quarantine launcher.',
-  ].join('\n');
+  const lines = ['== LAST OPERATOR ==', ''];
+
+  if (daemonStory.daemonStopped && !daemonStory.anchorDeleted) {
+    // Killed daemon first, anchor still present
+    lines.push(
+      'If you killed it and the room went quiet, you did what I did.',
+      '',
+      'daemon.core was not the voice.',
+      'daemon.core was the pressure door.',
+      '',
+      'The anchor file keeps the mirror pointed away from the user.',
+      'The current anchor is SYS\\anchor.seed.',
+      'Lower MIRROR_LOCK and delete it when you are ready to inspect the breach.',
+      '',
+      'If you intend to seal the breach again, restore MIRROR_LOCK before you run the quarantine launcher.',
+    );
+  } else if (daemonStory.anchorDeleted && !daemonStory.daemonStopped) {
+    // Deleted anchor first, daemon still running
+    lines.push(
+      'You removed the anchor before the daemon relay went offline.',
+      '',
+      'daemon.core was not the voice.',
+      'daemon.core was the pressure door.',
+      '',
+      'The anchor is gone. The channel is open.',
+      'The daemon is still running — it can no longer deflect what is coming through.',
+      '',
+      'Inspect void.tmp. Read MIRROR_PROTOCOL.txt.',
+      'If you intend to seal the breach, restore MIRROR_LOCK before running the quarantine launcher.',
+    );
+  } else {
+    // Both done, or generic fallback
+    lines.push(
+      'The daemon is offline. The anchor is gone.',
+      '',
+      'daemon.core was not the voice.',
+      'daemon.core was the pressure door.',
+      '',
+      'The channel is open. Inspect void.tmp.',
+      'Read DOCS\\MIRROR_PROTOCOL.txt.',
+      '',
+      'Restore MIRROR_LOCK before you run the quarantine launcher.',
+    );
+  }
+
+  return lines.join('\n');
 }
 
 function daemonMirrorProtocolContent() {
@@ -2671,17 +3468,33 @@ function daemonMirrorProtocolContent() {
     'Status:',
     `  MIRROR_LOCK   = ${Number(getContainmentValue('MIRROR_LOCK')) ? 1 : 0}`,
     `  RESPAWN_LOCK  = ${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
-    `  QUARANTINE    = ${daemonStory.quarantineSigned ? 'present' : 'missing'}`,
+    `  QUARANTINE    = ${daemonStory.quarantineSigned ? 'SIGNED' : 'UNSIGNED'}`,
     '',
     'Procedure:',
-    '  1. confirm the daemon is not respawning',
-    '  2. lower MIRROR_LOCK only if you intend to inspect the breach',
-    '  3. observe void.tmp and compare it with CACHE\\mirror.dat',
-    '  4. restore MIRROR_LOCK before launching ?????.exe',
-    '  5. delete void.tmp only after SYS\\quarantine.sig exists',
+    daemonStory.daemonStopped
+      ? '  1. daemon relay is offline - respawn risk is low if RESPAWN_LOCK=0'
+      : '  1. daemon is still running - it cannot deflect void.tmp anymore',
+    Number(getContainmentValue('MIRROR_LOCK')) === 0
+      ? '  2. MIRROR_LOCK is 0 - the breach is open, inspect freely'
+      : '  2. MIRROR_LOCK is restored - lattice is deflecting again',
+    '  3. profile void.tmp directly - Measure, Listen, Trace, Sample, or Pulse',
+    '  4. compare CACHE\\mirror.dat with void.tmp - see NOTE below',
+    '  5. restore MIRROR_LOCK before launching ?????.exe',
+    '  6. delete void.tmp only after SYS\\quarantine.sig is signed',
+    '',
+    'NOTE - mirror.dat vs void.tmp:',
+    '  CACHE\\mirror.dat  : written by daemon.core, clean, internal',
+    '  void.tmp          : external origin, should not exist here',
+    '',
+    '  void.tmp is not a mirror artifact. It does not belong.',
+    '  It arrived through the channel the anchor was suppressing.',
+    '  It should be treated as a foreign object.',
+    '',
+    '  DO NOT open void.tmp from an uncontrolled state.',
+    '  Quarantine and delete it — do not try to read it as data.',
   ];
   if (daemonStory.stage >= 5) {
-    lines.push('', 'Note:', '  daemon.core claims it was holding the channel off-axis.');
+    lines.push('', 'Note from daemon.core:', '  I was keeping the channel off-axis to protect you from it.');
   }
   return lines.join('\n');
 }
@@ -2693,9 +3506,13 @@ function daemonMirrorDatContent() {
     '[reflection offset] 0.17',
     '[signal age]        before current boot',
     '[voice match]       negative',
-    '[containment note]  the reflected voice requests permission',
+    '[source]            internal — daemon-managed lattice reflection',
+    '[anomaly]           none',
     '',
-    'The thing in void.tmp is not the same as the thing speaking through daemon.core.',
+    'This file is a stable read. The lattice reflection is clean.',
+    'daemon.core wrote this as part of normal mirror management.',
+    '',
+    'Compare with void.tmp. They are not the same kind of file.',
   ].join('\n');
 }
 
@@ -2704,7 +3521,7 @@ function daemonAnchorSeedContent() {
     'anchor.seed',
     '',
     'anchor-class: mirror-lattice',
-    'deletion-policy: refuse until MIRROR_LOCK=0',
+    'deletion-policy: requires MIRROR_LOCK=0',
     'owner: HKEY_SLEEPBOX_MACHINE\\Containment',
     '',
     'Removing this file widens the channel.',
@@ -2728,11 +3545,25 @@ function daemonQuarantineSigContent() {
   return [
     'quarantine.sig',
     '',
-    'launcher=?????.exe',
+    `launcher=${getExeDisplayName()}`,
     'state=armed',
     'target=void.tmp',
     'mirror_lock=1',
     'seal_phrase=CONTAINMENT_COMPLETE',
+  ].join('\n');
+}
+
+function daemonQuarantinePendingContent() {
+  return [
+    'quarantine.sig',
+    '',
+    'launcher=?????.exe',
+    'state=unsigned',
+    'target=void.tmp',
+    '',
+    'This signature file exists but has not been written.',
+    'Run ?????.exe after the mirror lattice is restored to sign it.',
+    'A valid signature is required before void.tmp can be deleted.',
   ].join('\n');
 }
 
@@ -2757,6 +3588,8 @@ function buildDaemonCoreRawContent() {
     `[lattice_stability] ${telemetry.lattice}`,
     `[signal_depth] ${telemetry.signalDepth}`,
     `[aperture_bias] ${telemetry.bias}`,
+    `[temporal_drift] ${registryData['HKEY_SLEEPBOX_MACHINE']?.['SOUL\\Metrics']?.TEMPORAL_DRIFT?.value ?? '+/-2.3yr'}`,
+    `[observer_count] ${registryData['HKEY_SLEEPBOX_MACHINE']?.['VOID']?.OBSERVER_COUNT?.value ?? '[classified]'}`,
     '',
   ];
   if (daemonStory.endingReached) {
@@ -2803,8 +3636,66 @@ function buildDaemonCoreRawContent() {
   return lines.join('\n');
 }
 
+function buildVoidProbeNotes() {
+  const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
+  const notes = [];
+  if (daemonStory.stage >= 4) {
+    notes.push(`offset 0x0008: reported size = 0 bytes / observed depth = ${telemetry.signalDepth}`);
+    notes.push(`offset 0x0012: origin classification = external / aperture bias = ${telemetry.bias}`);
+  }
+  if (daemonStory.daemonStopped) notes.push('offset 0x0021: PID 512 silence increased readability');
+  if (daemonStory.anchorDeleted) notes.push('offset 0x0034: anchor.seed removal exposed the user-facing side');
+  if (actions.includes('observe')) {
+    notes.push(
+      daemonStory.stage >= 5
+        ? 'offset 0x0100: this is not residue from daemon.core; this surface is the breach'
+        : 'offset 0x0100: active window edges repeat on the inside of the file'
+    );
+  }
+  if (actions.includes('measure')) {
+    notes.push(`offset 0x0118: locality check failed / disk distance behaves like ${telemetry.signalDepth} units of depth`);
+    notes.push('offset 0x0124: zero-byte report is false on contact');
+  }
+  if (actions.includes('listen')) {
+    notes.push('offset 0x0140: room-tone match positive / human voice match negative');
+    notes.push('offset 0x014e: the pressure answers with posture, not language');
+  }
+  if (actions.includes('trace')) {
+    notes.push(
+      daemonStory.stage >= 5
+        ? 'offset 0x0180: return path = user-facing aperture <- mirror offset <- unresolved source'
+        : 'offset 0x0180: return path = monitor gap <- reflected surface'
+    );
+    if (daemonStory.anchorDeleted) notes.push('offset 0x018f: no anchor remains to push the angle away from the user');
+  }
+  if (actions.includes('sample')) {
+    notes.push('offset 0x01c0: daemon-authored signature = false');
+    notes.push('offset 0x01d2: CACHE\\mirror.dat mismatch confirmed');
+  }
+  if (actions.includes('stabilize')) {
+    notes.push(
+      telemetry.mirrorLockActive
+        ? 'offset 0x0210: MIRROR_LOCK bends the read angle but does not internalize the object'
+        : 'offset 0x0210: stabilization failed / aperture remains user-facing'
+    );
+  }
+  if (actions.includes('pulse')) {
+    notes.push(
+      daemonStory.quarantineSigned
+        ? 'offset 0x0240: quarantine signature binds to target id = void.tmp'
+        : 'offset 0x0240: echo returns before current boot'
+    );
+  }
+  if ((daemonStory.mirrorInspected || daemonStory.protocolInspected) && daemonStory.stage >= 5) {
+    notes.push('cross-check: mirror.dat clean, internal, daemon-managed / void.tmp foreign, external, non-local');
+  }
+  return notes;
+}
+
 function buildVoidTmpRawContent() {
   const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
   const lines = [
     'void.tmp',
     '',
@@ -2815,16 +3706,20 @@ function buildVoidTmpRawContent() {
     `[lattice_stability] ${telemetry.lattice}`,
     `[signal_depth] ${telemetry.signalDepth}`,
     `[aperture_bias] ${telemetry.bias}`,
+    '[origin] external / unresolved',
+    `[probe_record] ${actions.length}/${VOID_ACTION_ORDER.length}`,
+    `[profile] ${getVoidProfileLabel()}`,
+    `[probes] ${actions.length ? actions.map(action => VOID_ACTION_LABELS[action]).join(', ') : 'none recorded'}`,
     '',
   ];
   if (daemonStory.endingReached) {
-    lines.push('No active signal remains.');
+    lines.push('No active signal remains.', '', 'Archive note:', '  The breach surface is gone. The record remains.');
   } else if (daemonStory.stage >= 5) {
     lines.push(
       'The aperture is open.',
       'Something is pressing against the reflected side of the file.',
       '',
-      'Observe. Listen. Pulse.',
+      'This is the breach surface, not a symptom file.',
     );
   } else if (daemonStory.stage >= 4) {
     lines.push(
@@ -2837,6 +3732,15 @@ function buildVoidTmpRawContent() {
       '[content redacted]',
       'The file is present but does not yet answer.',
     );
+  }
+  if (!daemonStory.endingReached && daemonStory.stage >= 4) {
+    const notes = buildVoidProbeNotes();
+    if (notes.length) {
+      lines.push('', 'Recovered fragments:');
+      notes.forEach(note => lines.push('  ' + note));
+    }
+    lines.push('', 'Containment path:', '  ' + getVoidObjectiveLine());
+    if (!isVoidProfiled()) lines.push('  Direct probes make the file more legible.');
   }
   return lines.join('\n');
 }
@@ -2897,6 +3801,11 @@ function getBuiltInProcesses() {
   if (daemonStory.stage >= 5 && !daemonStory.endingReached) {
     base.push({ pid: 1333, name: 'signal_window.exe', cpu: 1.5, mem: 4.2, protected: true });
   }
+  // DAEMON_COUNT registry key: extra phantom processes when count > 7
+  const daemonCount = parseInt(registryData['HKEY_SLEEPBOX_MACHINE']?.['SOUL\\Metrics']?.DAEMON_COUNT?.value) || 7;
+  for (let i = 8; i <= Math.min(daemonCount, 20); i++) {
+    base.push({ pid: 500 + i * 13, name: 'soul_svc_' + String(i).padStart(2, '0') + '.exe', cpu: 0.1 + (i % 3) * 0.4, mem: 2.1 + (i % 5) * 1.2, protected: true });
+  }
   return base.sort((a, b) => a.pid - b.pid);
 }
 
@@ -2921,20 +3830,23 @@ function syncDaemonStoryFiles() {
   else removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
   else removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
+  if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
+  else removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
   if (daemonStory.stage >= 4) {
     ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
-    ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
     if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
   } else {
     removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
-    removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
     removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
   }
+  if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
+  else removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
   if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
   else removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
   if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
   else removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
   if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
+  else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
   else removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
   if (daemonStory.endingReached) {
     removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
@@ -2948,6 +3860,9 @@ function refreshDaemonStoryViews() {
   applyDaemonWindowState();
   if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
   if (typeof renderVoid === 'function' && document.getElementById('wb-void')) renderVoid();
+  // Reveal quarantine.exe name on desktop icon when signed
+  const exeIconLabel = document.querySelector('[data-icon-key="?????.exe"] .di-name');
+  if (exeIconLabel) exeIconLabel.textContent = iconLabel(getExeDisplayName());
 }
 
 function getDaemonVisualStage() {
@@ -3077,19 +3992,69 @@ function daemonRecordInvestigation(kind) {
     if (kind === 'void') story.voidObserved = true;
     if (kind === 'mirror') story.mirrorInspected = true;
     if (kind === 'protocol') story.protocolInspected = true;
-    if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
       story.mirrorLockRestored = true;
       story.lastEventText = 'mirror lattice restored';
       return;
     }
-    if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
       story.lastEventText = 'void channel profiled';
     }
   });
 }
 
+function daemonRecordVoidAction(mode) {
+  return updateDaemonStory(story => {
+    story.voidObserved = true;
+    story.voidActions = normalizeVoidActions([...(Array.isArray(story.voidActions) ? story.voidActions : []), mode]);
+    if (mode === 'observe') {
+      if (story.lastEventText === 'none') story.lastEventText = 'void surface observed';
+    } else if (story.stage < 6 || story.lastEventText === 'none') {
+      story.lastEventText = `void probe recorded: ${mode}`;
+    }
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+      story.mirrorLockRestored = true;
+      story.lastEventText = 'mirror lattice restored';
+      return;
+    }
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
+      story.lastEventText = 'void channel profiled';
+    }
+  }, { forceSync: true });
+}
+
+function getVoidMeasureEntries(telemetry) {
+  return [
+    ['Containment', `${telemetry.rating.code} / ${telemetry.rating.label}`],
+    ['Void Pressure', String(telemetry.pressure)],
+    ['Lattice Stability', String(telemetry.lattice)],
+    ['Signal Depth', String(telemetry.signalDepth)],
+    ['Aperture Bias', telemetry.bias],
+    ['Disk Locality', 'negative'],
+  ];
+}
+
+function renderVoidReadout(out, content, telemetry) {
+  if (!out) return;
+  if (daemonVoidFeedMode === 'measure') {
+    const cards = getVoidMeasureEntries(telemetry).map(([label, value]) => `
+      <div style="border:1px solid #123512;background:#061006;padding:6px;min-width:0;">
+        <div style="color:#8db98d;text-transform:uppercase;font-size:9px;letter-spacing:0.03em;margin-bottom:3px;">${escHtml(label)}</div>
+        <div style="color:#b8efb8;font-size:11px;line-height:1.35;word-break:break-word;">${escHtml(value)}</div>
+      </div>
+    `).join('');
+    out.style.whiteSpace = 'normal';
+    out.style.padding = '8px';
+    out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-content:start;">${cards}</div>`;
+    return;
+  }
+  out.style.whiteSpace = 'pre-wrap';
+  out.style.padding = '10px';
+  out.textContent = content;
+}
+
 function canDeleteAnchorSeed() {
-  return daemonStory.stage >= 4 && Number(getContainmentValue('MIRROR_LOCK')) === 0;
+  return Number(getContainmentValue('MIRROR_LOCK')) === 0;
 }
 
 function canAttemptDeleteItem(path, fallbackDir, meta) {
@@ -3172,7 +4137,7 @@ function deleteVirtualPath(path, fallbackDir) {
       return {
         ok: false,
         message: 'anchor.seed will not release.',
-        details: ['Set HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 0 before deleting this file.'],
+        details: ['Lower HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 0 first.'],
       };
     }
     if (!removeFsPath(STORY_FILE_PATHS.anchorSeed)) {
@@ -3182,6 +4147,7 @@ function deleteVirtualPath(path, fallbackDir) {
       story.anchorDeleted = true;
       story.lastEventText = 'anchor released';
       daemonVoidFeed = 'The aperture widens. Something on the reflected side notices the room.';
+      daemonVoidFeedMode = '';
     }, {
       glitch: true,
       notice: {
@@ -3193,7 +4159,7 @@ function deleteVirtualPath(path, fallbackDir) {
     return {
       ok: true,
       deleted: true,
-      details: ['Deleted: anchor.seed', 'Mirror anchor released.', 'daemon.core no longer speaks in warnings.'],
+      details: ['Deleted: anchor.seed', 'Mirror anchor released.', 'The channel is no longer deflected.'],
     };
   }
 
@@ -3205,10 +4171,10 @@ function deleteVirtualPath(path, fallbackDir) {
     };
   }
 
-  const deleted = removeFsPath(path);
-  if (!deleted) return { ok: false, message: 'File not found: ' + fileLabel };
+  const deleted = recycleVirtualPath(path, fallbackDir);
+  if (!deleted.ok) return deleted;
   syncDaemonStory({ silent: false });
-  return { ok: true, deleted: true, details: [`Deleted: ${fileLabel}`] };
+  return deleted;
 }
 
 function killSoulDaemonProcess() {
@@ -3246,6 +4212,7 @@ function killSoulDaemonProcess() {
     story.wrongVictory = true;
     story.lastEventText = 'daemon relay offline';
     daemonVoidFeed = 'The monitor goes missing. The pressure does not.';
+    daemonVoidFeedMode = '';
   }, {
     glitch: true,
     notice: {
@@ -3418,6 +4385,84 @@ function renameBlobEntry(dirPath, oldName, newName) {
   void renameBlobEntryInDb(dirPath, oldName, newName);
 }
 
+async function moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  const oldPath = blobRelativePath(srcDirPath, srcName);
+  const newPath = blobRelativePath(dstDirPath, dstName);
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      const store = tx.objectStore(MEDIA_DB_STORE);
+      const getReq = store.get(oldPath);
+      getReq.onsuccess = () => {
+        const data = getReq.result;
+        if (!data) return;
+        data.path = newPath;
+        store.put(data);
+        store.delete(oldPath);
+      };
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+function moveBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
+  const oldKey = blobStorageKey(srcDirPath, srcName);
+  const newKey = blobStorageKey(dstDirPath, dstName);
+  const data = localStorage.getItem(oldKey);
+  if (data) {
+    try { localStorage.setItem(newKey, data); } catch (e) {}
+    localStorage.removeItem(oldKey);
+  }
+  void moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
+}
+
+async function moveBlobSubtreeInDb(oldDirPath, newDirPath) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  const prefix = oldDirPath ? oldDirPath + '\\' : '';
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      const store = tx.objectStore(MEDIA_DB_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        (req.result || []).forEach(item => {
+          if (!String(item.path || '').startsWith(prefix)) return;
+          const nextPath = newDirPath + '\\' + String(item.path).slice(prefix.length);
+          store.put(Object.assign({}, item, { path: nextPath }));
+          store.delete(item.path);
+        });
+      };
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+function moveBlobStorageSubtree(oldDirPath, newDirPath) {
+  const from = fsNormalizeDir(oldDirPath);
+  const to = fsNormalizeDir(newDirPath);
+  const prefix = BLOB_PREFIX + (from ? from + '\\' : '');
+  Object.keys(localStorage)
+    .filter(key => key.startsWith(prefix))
+    .forEach(key => {
+      const data = localStorage.getItem(key);
+      const suffix = key.slice(prefix.length);
+      if (data !== null) {
+        try { localStorage.setItem(BLOB_PREFIX + to + '\\' + suffix, data); } catch (e) {}
+      }
+      localStorage.removeItem(key);
+    });
+  void moveBlobSubtreeInDb(from, to);
+}
+
 function loadBlobsFromStorage() {
   Object.keys(localStorage).filter(k => k.startsWith(BLOB_PREFIX)).forEach(k => {
     try {
@@ -3450,9 +4495,9 @@ async function loadBlobsFromIndexedDb() {
     restoreBlobIntoFs(dirPath, fileName, item.kind, item.size, item.mime, item.blob);
   });
   if (items.length) document.dispatchEvent(new CustomEvent('fs-changed'));
-  const savedWp = localStorage.getItem(WP_KEY);
-  if (savedWp && isWallpaperFileId(savedWp)) {
-    if (!applyWallpaper(savedWp)) applyWallpaper('default');
+  const savedWp = getInitialWallpaperPath();
+  if (savedWp) {
+    applyWallpaper(savedWp);
   }
 }
 loadBlobsFromStorage();
@@ -4069,45 +5114,121 @@ function fmtSize(bytes) {
   return (bytes/(1024*1024)).toFixed(1) + ' MB';
 }
 
+function inferBlobKindFromName(name) {
+  const lower = String(name || '').toLowerCase();
+  if (/\.(gif|png|jpe?g|webp|bmp|svg|avif|ico)$/.test(lower)) return 'image';
+  if (/\.(mp4|webm|mov|m4v|ogv)$/.test(lower)) return 'video';
+  if (/\.(mp3|wav|ogg|m4a|flac|aac)$/.test(lower)) return 'audio';
+  if (/\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/.test(lower)) return 'text';
+  return 'binary';
+}
+
+function inferBlobMimeFromName(name) {
+  const lower = String(name || '').toLowerCase();
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (/\.(jpg|jpeg)$/.test(lower)) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.bmp')) return 'image/bmp';
+  if (lower.endsWith('.svg')) return 'image/svg+xml';
+  if (lower.endsWith('.avif')) return 'image/avif';
+  if (lower.endsWith('.ico')) return 'image/x-icon';
+  if (lower.endsWith('.mp4')) return 'video/mp4';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  if (lower.endsWith('.ogv')) return 'video/ogg';
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  if (lower.endsWith('.ogg')) return 'audio/ogg';
+  if (lower.endsWith('.m4a')) return 'audio/mp4';
+  if (lower.endsWith('.flac')) return 'audio/flac';
+  if (lower.endsWith('.aac')) return 'audio/aac';
+  if (/\.(txt|log|ini|cfg)$/.test(lower)) return 'text/plain';
+  if (lower.endsWith('.md')) return 'text/markdown';
+  if (lower.endsWith('.csv')) return 'text/csv';
+  if (lower.endsWith('.json')) return 'application/json';
+  if (lower.endsWith('.xml')) return 'application/xml';
+  if (lower.endsWith('.html')) return 'text/html';
+  if (lower.endsWith('.css')) return 'text/css';
+  if (lower.endsWith('.js')) return 'text/javascript';
+  return '';
+}
+
 let _uploadCwd = '';
 function triggerUpload(dir) {
   _uploadCwd = dir || '';
   document.getElementById('file-upload-input').click();
 }
 
-function handleFileUpload(fileList) {
-  const dirPath = _uploadCwd || '';
-  const target = fsGetDir(dirPath) || { files: termFS.files, blobs: termFS.blobs };
-  const dirLabel = dirPath ? `C:\\sleepOS\\${dirPath}\\` : 'C:\\sleepOS';
-  const added = [];
-  [...fileList].forEach(file => {
-    const url = URL.createObjectURL(file);
-    const TEXT_EXTS = /\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/i;
-    const isText = file.type.startsWith('text/') || TEXT_EXTS.test(file.name) || file.type === '';
-    const kind = file.type.startsWith('image/') ? 'image'
-               : file.type.startsWith('video/') ? 'video'
-               : file.type.startsWith('audio/') ? 'audio'
-               : isText ? 'text'
-               : 'binary';
-    if (kind === 'text') {
-      const reader = new FileReader();
-      reader.onload = e => {
-        fsWriteTextFile(file.name, e.target.result, dirPath);
-        document.dispatchEvent(new CustomEvent('fs-changed'));
-      };
-      reader.readAsText(file);
-    } else {
-      fsWriteBlobFile(file.name, { url, kind, size: file.size, mime: file.type }, dirPath);
-      // Persist eagerly while we still have the raw File object
-      const fr = new FileReader();
-      fr.onload = e => saveBlobEntry(dirPath, file.name, kind, file.size, file.type, e.target.result);
-      fr.readAsArrayBuffer(file);
-    }
-    added.push(file.name);
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(String(e.target?.result ?? ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsText(file);
   });
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target?.result);
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function handleFileUpload(fileList) {
+  const dirPath = fsNormalizeDir(_uploadCwd || '');
+  if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
+  const dir = fsGetDir(dirPath);
+  if (dirPath && !dir) {
+    osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'X');
+    return;
+  }
+  const dirLabel = dirPath ? `C:\\sleepOS\\${dirPath}\\` : 'C:\\sleepOS';
+  const results = await Promise.all([...fileList].map(async file => {
+    const TEXT_EXTS = /\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/i;
+    const mime = file.type || inferBlobMimeFromName(file.name);
+    const inferredKind = inferBlobKindFromName(file.name);
+    const isText = mime.startsWith('text/') || inferredKind === 'text' || (file.type === '' && TEXT_EXTS.test(file.name));
+    const kind = mime.startsWith('image/') ? 'image'
+               : mime.startsWith('video/') ? 'video'
+               : mime.startsWith('audio/') ? 'audio'
+               : isText ? 'text'
+               : inferredKind;
+    try {
+      if (kind === 'text') {
+        const content = await readFileAsText(file);
+        const saved = fsWriteTextFile(file.name, content, dirPath);
+        return saved ? { ok: true, name: file.name } : { ok: false, name: file.name };
+      }
+      const url = URL.createObjectURL(file);
+      const saved = fsWriteBlobFile(file.name, { url, kind, size: file.size, mime }, dirPath);
+      if (!saved) {
+        URL.revokeObjectURL(url);
+        return { ok: false, name: file.name };
+      }
+      try {
+        const buffer = await readFileAsArrayBuffer(file);
+        saveBlobEntry(dirPath, file.name, kind, file.size, mime, buffer);
+      } catch (e) {}
+      return { ok: true, name: file.name };
+    } catch (e) {
+      return { ok: false, name: file.name };
+    }
+  }));
+  const added = results.filter(result => result.ok).map(result => result.name);
+  const failed = results.filter(result => !result.ok).map(result => result.name);
   if (added.length) {
-    showUploadConfirm(added, dirLabel);
     document.dispatchEvent(new CustomEvent('fs-changed'));
+    showUploadConfirm(added, dirLabel);
+  }
+  if (failed.length) {
+    const msg = failed.length === 1
+      ? `"${failed[0]}" could not be uploaded to ${dirLabel}`
+      : `${failed.length} files could not be uploaded to ${dirLabel}`;
+    osAlert(msg, 'Upload Failed', 'X');
   }
 }
 
@@ -4321,7 +5442,8 @@ function openAudioPlayer(filename, dirName) {
 // Drag-and-drop onto the desktop
 let _dragCount = 0;
 document.addEventListener('dragenter', e => {
-  if ([...e.dataTransfer.types].includes('Files')) {
+  if (getShellDragPayload()) return;
+  if ([...e.dataTransfer.types].includes('Files') && !e.target.closest?.('.os-window')) {
     _dragCount++;
     document.getElementById('drop-overlay').classList.add('active');
   }
@@ -4330,12 +5452,22 @@ document.addEventListener('dragleave', () => {
   _dragCount = Math.max(0, _dragCount - 1);
   if (_dragCount === 0) document.getElementById('drop-overlay').classList.remove('active');
 });
-document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('dragover', e => {
+  if (getShellDragPayload()) return;
+  if (![...e.dataTransfer.types].includes('Files')) return;
+  if (e.target.closest?.('.os-window')) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+});
 document.addEventListener('drop', e => {
+  if (e.defaultPrevented || getShellDragPayload()) return;
+  if (!e.dataTransfer.files.length) return;
+  if (e.target.closest?.('.os-window')) return;
   e.preventDefault();
   _dragCount = 0;
   document.getElementById('drop-overlay').classList.remove('active');
-  if (e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files);
+  _uploadCwd = 'DESKTOP';
+  handleFileUpload(e.dataTransfer.files);
 });
 document.getElementById('file-upload-input').addEventListener('change', function() {
   if (this.files.length) handleFileUpload(this.files);
@@ -4702,6 +5834,44 @@ function iconLabel(name) {
   return name.slice(0, dot).toUpperCase() + name.slice(dot);
 }
 
+function resolveFsIcon(name, kind) {
+  if (isRecycleBinItemName(name)) return SYSTEM_FILE_ICONS[RECYCLE_BIN_NAME] || '\u{1F5D1}\uFE0F';
+  if (kind === 'image') return '\u{1F5BC}\uFE0F';
+  if (kind === 'video') return '\u{1F3AC}';
+  if (kind === 'audio') return '\u{1F3B5}';
+  if (kind === 'dir') return '\u{1F4C1}';
+  const systemIcon = SYSTEM_FILE_ICONS[String(name).toUpperCase()];
+  if (systemIcon) return systemIcon;
+  const ext = (String(name || '').split('.').pop() || '').toLowerCase();
+  return {
+    exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
+    json:'\u{1F4CB}', js:'\u{1F4DC}', ts:'\u{1F4DC}', jsx:'\u{1F4DC}', tsx:'\u{1F4DC}',
+    html:'\u{1F310}', htm:'\u{1F310}', css:'\u{1F3A8}', py:'\u{1F40D}',
+    tmp:'\u{1F5D1}\uFE0F', log:'\u{1F4CB}', csv:'\u{1F4CA}', core:'\u{1F4A5}'
+  }[ext] || '\u{1F4C4}';
+}
+
+function getDesktopFsIcons() {
+  const dir = fsGetDir('DESKTOP');
+  if (!dir) return [];
+  const icons = [];
+  dir.dirs.forEach(name => icons.push({ name, kind: 'dir' }));
+  dir.files.forEach((_, name) => icons.push({ name, kind: 'file' }));
+  dir.blobs.forEach((blob, name) => icons.push({ name, kind: blob?.kind || inferBlobKindFromName(name) }));
+  return icons.map(item => ({
+    name: item.name,
+    emoji: resolveFsIcon(item.name, item.kind),
+    kind: item.kind,
+    desktopEntry: true,
+    target: {
+      name: item.name,
+      path: 'DESKTOP\\' + item.name,
+      kind: item.kind === 'dir' ? 'dir' : 'file',
+      sysfile: false,
+    },
+  }));
+}
+
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICON GRID
 // ─────────────────────────────────────────────────────────────────
@@ -4710,7 +5880,7 @@ const ICON_CELL_H  = 78;   // px per grid cell (vertical)
 const ICON_PAD_X   = 6;    // layer left/right padding
 const ICON_PAD_Y   = 6;    // layer top/bottom padding
 const ICON_POS_KEY = 'sleepOS-icon-positions';
-let iconPositions  = {};   // { ic.name: { col, row } }
+let iconPositions  = {};   // { ic.name: { col, row, manual? } }
 
 function iconGetGridSize() {
   const layer = document.getElementById('icons-layer');
@@ -4723,6 +5893,11 @@ function iconGetGridSize() {
 
 function iconCellToPixel(col, row) {
   return { left: ICON_PAD_X + col * ICON_CELL_W, top: ICON_PAD_Y + row * ICON_CELL_H };
+}
+
+function iconRecycleBinCell() {
+  const { cols, rows } = iconGetGridSize();
+  return { col: Math.max(0, cols - 1), row: Math.max(0, rows - 1) };
 }
 
 function iconPixelToCell(px, py) {
@@ -4767,6 +5942,31 @@ function saveIconPositions() {
   localStorage.setItem(ICON_POS_KEY, JSON.stringify(iconPositions));
 }
 
+function isDesktopBuiltInIcon(ic) {
+  return !!ic && !ic.desktopEntry && !ic.custom && !ic.recycleBin;
+}
+
+function getDesktopFolderDropTarget(clientX, clientY, draggingIcon) {
+  const folderEls = Array.from(document.querySelectorAll('#icons-layer .desktop-icon')).filter(el => {
+    const targetIcon = el._ic;
+    if (!targetIcon || targetIcon === draggingIcon) return false;
+    return !!targetIcon.desktopEntry && targetIcon.kind === 'dir';
+  });
+  for (const el of folderEls) {
+    const rect = el.getBoundingClientRect();
+    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+      return el._ic;
+    }
+  }
+  return null;
+}
+
+function moveDesktopIconIntoFolder(icon, folderIcon) {
+  if (!icon || !folderIcon?.desktopEntry || folderIcon.kind !== 'dir') return false;
+  const dstDirPath = folderIcon.target.path;
+  return moveShellItemToDir(icon, 'DESKTOP', dstDirPath);
+}
+
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICONS
 // ─────────────────────────────────────────────────────────────────
@@ -4799,10 +5999,42 @@ function deleteDesktopSystemIcons(icons) {
   }, '🗑️');
 }
 
+function canDeleteDesktopFsEntry(ic) {
+  return !!ic?.desktopEntry && !!ic?.target?.path;
+}
+
+function deleteDesktopFsEntries(icons) {
+  const targets = (icons || []).filter(canDeleteDesktopFsEntry);
+  if (!targets.length) return;
+  const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected files?';
+  osConfirm(prompt, 'Delete', ok => {
+    if (!ok) return;
+    const blocked = [];
+    let changed = false;
+    targets.forEach(target => {
+      const result = deleteVirtualPath(target.target.path);
+      if (result.ok && result.deleted) changed = true;
+      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+    });
+    if (blocked.length) osAlert(blocked[0], 'Delete', 'âš ï¸');
+    if (changed) {
+      clearDesktopSel();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+    }
+  }, 'ðŸ—‘ï¸');
+}
+
+function recycleDesktopItemAtPath(path) {
+  const result = recycleVirtualPath(path);
+  if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+  return result;
+}
+
 function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
-  div.innerHTML = '<div class="di-img">' + ic.emoji + '</div><div class="di-name">' + iconLabel(ic.name) + '</div>';
+  const displayName = ic.name === '?????.exe' ? getExeDisplayName() : ic.name;
+  div.innerHTML = '<div class="di-img">' + ic.emoji + '</div><div class="di-name">' + iconLabel(displayName) + '</div>';
   div._ic = ic;
   function activate() {
     if (ic.action) window[ic.action]?.();
@@ -4810,6 +6042,16 @@ function makeDesktopIconEl(ic) {
     else if (ic.openFn) ic.openFn();
   }
   let clicks = 0, clickT;
+  function queueActivateClick() {
+    clicks++;
+    if (clicks === 1) {
+      clickT = setTimeout(() => { clicks = 0; }, 380);
+    } else {
+      clearTimeout(clickT);
+      clicks = 0;
+      activate();
+    }
+  }
   div.addEventListener('pointerdown', e => {
     e.stopPropagation();
     if (e.button === 2) return; // let contextmenu handle right-clicks
@@ -4830,6 +6072,10 @@ function makeDesktopIconEl(ic) {
     div.classList.add('selected');
     desktopSel.add(div);
     if (e.pointerType !== 'mouse') { activate(); return; }
+    if (ic.recycleBin) {
+      queueActivateClick();
+      return;
+    }
 
     // Drag-to-rearrange tracking
     const startClientX = e.clientX, startClientY = e.clientY;
@@ -4838,6 +6084,9 @@ function makeDesktopIconEl(ic) {
     const lr      = layer.getBoundingClientRect();
     const offX    = e.clientX - divRect.left;
     const offY    = e.clientY - divRect.top;
+    const startCell = iconPositions[ic.name]
+      ? { col: iconPositions[ic.name].col, row: iconPositions[ic.name].row }
+      : iconPixelToCell(div.offsetLeft, div.offsetTop);
     let dragging  = false;
 
     const onMove = mv => {
@@ -4861,24 +6110,54 @@ function makeDesktopIconEl(ic) {
       div.style.zIndex  = '';
       div.style.opacity = '';
       if (dragging) {
+        const recycleEl = document.querySelector('[data-icon-key="' + CSS.escape(RECYCLE_BIN_NAME) + '"]');
+        if (canDeleteDesktopFsEntry(ic) && recycleEl && recycleEl !== div) {
+          const rr = recycleEl.getBoundingClientRect();
+          const overRecycleBin = up.clientX >= rr.left && up.clientX <= rr.right && up.clientY >= rr.top && up.clientY <= rr.bottom;
+          if (overRecycleBin) {
+            const result = recycleDesktopItemAtPath(ic.target.path);
+            if (result.ok) {
+              clearDesktopSel();
+              return;
+            }
+          }
+        }
+        const folderTarget = getDesktopFolderDropTarget(up.clientX, up.clientY, ic);
+        if (folderTarget && moveDesktopIconIntoFolder(ic, folderTarget)) {
+          clearDesktopSel();
+          return;
+        }
+        div.style.pointerEvents = 'none';
+        const dropNode = document.elementFromPoint(up.clientX, up.clientY);
+        div.style.pointerEvents = '';
+        const explorerItemEl = dropNode?.closest?.('.exp-item,.exp-list-item,.exp-det-item');
+        const explorerPaneEl = dropNode?.closest?.('.exp-body');
+        const explorerDrop = explorerItemEl?._shellDropHandler || explorerPaneEl?._shellDropHandler;
+        if (explorerDrop) {
+          const ok = explorerDrop({ item: ic, srcCwd: 'DESKTOP', source: 'desktop' });
+          if (ok) {
+            clearDesktopSel();
+            return;
+          }
+        }
+        if (dropNode?.closest?.('.os-window')) {
+          const { left, top } = iconCellToPixel(startCell.col, startCell.row);
+          div.style.left = left + 'px';
+          div.style.top = top + 'px';
+          return;
+        }
         // snap based on icon top-left corner position (Windows-style)
         const iconLeft = up.clientX - lr.left - offX;
         const iconTop  = up.clientY - lr.top  - offY;
         const { col: wc, row: wr } = iconPixelToCell(iconLeft, iconTop);
         const { col, row } = iconFindFreeCell(wc, wr, ic.name);
-        iconPositions[ic.name] = { col, row };
+        iconPositions[ic.name] = { col, row, manual: true };
         saveIconPositions();
         const { left, top } = iconCellToPixel(col, row);
         div.style.left = left + 'px';
         div.style.top  = top  + 'px';
       } else {
-        clicks++;
-        if (clicks === 1) {
-          clickT = setTimeout(() => { clicks = 0; }, 380);
-        } else {
-          clearTimeout(clickT); clicks = 0;
-          activate();
-        }
+        queueActivateClick();
       }
     };
     window.addEventListener('pointermove', onMove);
@@ -4896,6 +6175,8 @@ function makeDesktopIconEl(ic) {
     const selIcs  = selDivs.map(d => d._ic);
     const multi   = selDivs.length > 1;
     const canDeleteSystemFiles = selIcs.some(canDeleteDesktopSystemIcon);
+    const canDeleteDesktopFiles = selIcs.some(canDeleteDesktopFsEntry);
+    const singleDesktopImage = !multi && selIcs[0]?.desktopEntry && selIcs[0]?.kind === 'image' ? selIcs[0] : null;
     const items   = [];
     if (multi) {
       items.push({ label: 'Open All (' + selDivs.length + ')', action: () => selIcs.forEach(i => {
@@ -4913,14 +6194,25 @@ function makeDesktopIconEl(ic) {
       if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
         items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
+      if (singleDesktopImage) {
+        items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });
+      }
     }
     if (canDeleteSystemFiles) {
       items.push('-');
       items.push({ label: multi ? 'Delete Deletable Items' : 'Delete', action: () => deleteDesktopSystemIcons(selIcs) });
     }
+    if (canDeleteDesktopFiles) {
+      items.push('-');
+      items.push({ label: multi ? 'Delete Files' : 'Delete', action: () => deleteDesktopFsEntries(selIcs) });
+    }
+    if (!multi && ic.recycleBin) {
+      items.push('-');
+      items.push({ label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin() });
+    }
     if (selIcs.some(i => i.custom)) {
       items.push('-');
-      items.push({ label: multi ? 'Remove Shortcuts' : 'Remove Shortcut', action: () => {
+      items.push({ label: multi ? 'Delete Selected' : 'Delete', action: () => {
         selDivs.forEach(d => {
           if (!d._ic.custom) return;
           const idx = customDesktopIcons.indexOf(d._ic);
@@ -4931,43 +6223,97 @@ function makeDesktopIconEl(ic) {
         desktopSel.clear();
         saveDesktopShortcuts();
         saveIconPositions();
+        document.dispatchEvent(new CustomEvent('fs-changed'));
       }});
     }
     showCtxMenu(e.clientX, e.clientY, items);
   });
+  if (ic.recycleBin || (ic.desktopEntry && ic.kind === 'dir')) {
+    const dropDirPath = ic.recycleBin ? null : ic.target.path;
+    const setDropOutline = on => { div.style.outline = on ? '1px dotted #fff' : ''; };
+    div.addEventListener('dragover', e => {
+      const payload = getShellDragPayload();
+      if (!payload || payload.item === ic) return;
+      const accepts = ic.recycleBin
+        ? canRecycleShellItem(payload.item, payload.srcCwd)
+        : canMoveShellItemToDir(payload.item, payload.srcCwd, dropDirPath);
+      if (!accepts) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDropOutline(true);
+    });
+    div.addEventListener('dragleave', () => setDropOutline(false));
+    div.addEventListener('drop', e => {
+      const payload = getShellDragPayload();
+      setDropOutline(false);
+      if (!payload || payload.item === ic) return;
+      let ok = false;
+      if (ic.recycleBin) {
+        const result = recycleShellItem(payload.item, payload.srcCwd);
+        ok = !!result.ok;
+      } else {
+        ok = moveShellItemToDir(payload.item, payload.srcCwd, dropDirPath);
+      }
+      if (!ok) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clearShellDragPayload();
+    });
+  }
   return div;
 }
 
-function addDesktopShortcut(name, emoji, target, openFn) {
-  const ic = { name, emoji, target: target || null, openFn, custom: true };
+function addDesktopShortcut(name, emoji, target, openFn, dirPath) {
+  const ic = {
+    name,
+    emoji,
+    target: target || null,
+    openFn,
+    custom: true,
+    dirPath: normalizeDesktopContainerDir(dirPath || 'DESKTOP'),
+  };
   customDesktopIcons.push(ic);
   saveDesktopShortcuts();
+  if (ic.dirPath !== 'DESKTOP') {
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+    return;
+  }
   // Find a free cell (prefer column-first after existing icons)
-  const allIcons = [...getVisibleDesktopIcons(), ...customDesktopIcons];
+  const allIcons = [...getVisibleDesktopIcons(), ...getDesktopFsIcons(), ...getDesktopShortcutsForDir('DESKTOP')];
   const defaults = iconDefaultPositions(allIcons);
   const { col: dc, row: dr } = defaults[ic.name] || { col: 0, row: 0 };
   const { col, row } = iconFindFreeCell(dc, dr, ic.name);
   iconPositions[ic.name] = { col, row };
   saveIconPositions();
-  const el = makeDesktopIconEl(ic);
-  el.setAttribute('data-icon-key', ic.name);
-  el.style.position = 'absolute';
-  const { left, top } = iconCellToPixel(col, row);
-  el.style.left = left + 'px';
-  el.style.top  = top  + 'px';
-  document.getElementById('icons-layer').appendChild(el);
+  document.dispatchEvent(new CustomEvent('fs-changed'));
 }
 
+let _desktopInteractionsBound = false;
 function setupIcons() {
   clearDesktopSel();
   const layer = document.getElementById('icons-layer');
   layer.innerHTML = '';
 
-  const allIcons = [...getVisibleDesktopIcons(), ...customDesktopIcons];
+  const allIcons = [...getVisibleDesktopIcons(), ...getDesktopFsIcons(), ...getDesktopShortcutsForDir('DESKTOP')];
+  const recycleIcon = allIcons.find(ic => ic.recycleBin);
+  const otherIcons = recycleIcon ? allIcons.filter(ic => ic !== recycleIcon) : allIcons;
   const saved    = (() => { try { return JSON.parse(localStorage.getItem(ICON_POS_KEY) || '{}'); } catch { return {}; } })();
-  const defaults = iconDefaultPositions(allIcons);
+  const defaults = iconDefaultPositions(otherIcons);
+  const hasSavedPosition = ic => {
+    const entry = saved[ic.name];
+    if (!entry || !Number.isFinite(entry.col) || !Number.isFinite(entry.row)) return false;
+    return !isDesktopBuiltInIcon(ic) || entry.manual === true;
+  };
+  const assignPosition = ic => {
+    const preferred = hasSavedPosition(ic) ? saved[ic.name] : (defaults[ic.name] || { col: 0, row: 0 });
+    const { col, row } = iconFindFreeCell(preferred.col, preferred.row, ic.name);
+    iconPositions[ic.name] = saved[ic.name]?.manual === true ? { col, row, manual: true } : { col, row };
+  };
   iconPositions  = {};
-  allIcons.forEach(ic => { iconPositions[ic.name] = saved[ic.name] || defaults[ic.name] || { col: 0, row: 0 }; });
+  if (recycleIcon) iconPositions[recycleIcon.name] = iconRecycleBinCell();
+  otherIcons.filter(hasSavedPosition).forEach(assignPosition);
+  otherIcons.filter(ic => !hasSavedPosition(ic)).forEach(assignPosition);
+  saveIconPositions();
 
   allIcons.forEach(ic => {
     const el = makeDesktopIconEl(ic);
@@ -4978,6 +6324,9 @@ function setupIcons() {
     el.style.top  = top  + 'px';
     layer.appendChild(el);
   });
+
+  if (_desktopInteractionsBound) return;
+  _desktopInteractionsBound = true;
 
   // Rubber-band selection on empty desktop space
   layer.addEventListener('mousedown', e => {
@@ -5021,6 +6370,22 @@ function setupIcons() {
     window.addEventListener('mouseup',   onUp);
   });
 
+  layer.addEventListener('dragover', e => {
+    if (e.target.closest('.desktop-icon')) return;
+    const payload = getShellDragPayload();
+    if (!payload || !canMoveShellItemToDir(payload.item, payload.srcCwd, 'DESKTOP')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+  layer.addEventListener('drop', e => {
+    if (e.target.closest('.desktop-icon')) return;
+    const payload = getShellDragPayload();
+    if (!payload || !canMoveShellItemToDir(payload.item, payload.srcCwd, 'DESKTOP')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (moveShellItemToDir(payload.item, payload.srcCwd, 'DESKTOP')) clearShellDragPayload();
+  });
+
   // Desktop background right-click
   document.getElementById('desktop').addEventListener('contextmenu', e => {
     if (e.target.closest('.desktop-icon') || e.target.closest('.os-window')) return;
@@ -5032,6 +6397,8 @@ function setupIcons() {
       { label: '📝 Open Notepad',     action: openNotepad },
       { label: '🌐 Open Browser',     action: openBrowser },
       '-',
+      { label: '📁 New Folder',      action: () => promptCreateFolderAt('DESKTOP') },
+      { label: '📤 Upload File...',  action: () => triggerUpload('DESKTOP') },
       { label: '🖼️ Change Wallpaper', action: openAppearance },
       '-',
       { label: 'ℹ️ Properties', action: () => osAlert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686', 'Properties', 'ℹ️') },
@@ -5044,6 +6411,10 @@ function setupIcons() {
   });
 }
 
+document.addEventListener('fs-changed', () => {
+  if (typeof setupIcons === 'function') setupIcons();
+});
+
 // Reflow icons when window is resized
 let _iconResizeTimer;
 window.addEventListener('resize', () => {
@@ -5054,8 +6425,19 @@ window.addEventListener('resize', () => {
     const { cols, rows } = iconGetGridSize();
     const layer = document.getElementById('icons-layer');
     const occupied = new Set();
+    const recyclePos = iconRecycleBinCell();
+    const recycleEl = layer.querySelector('[data-icon-key="' + CSS.escape(RECYCLE_BIN_NAME) + '"]');
+    if (recycleEl) {
+      iconPositions[RECYCLE_BIN_NAME] = recyclePos;
+      occupied.add(recyclePos.col + ',' + recyclePos.row);
+      const { left, top } = iconCellToPixel(recyclePos.col, recyclePos.row);
+      recycleEl.style.left = left + 'px';
+      recycleEl.style.top = top + 'px';
+    }
     // Process icons in their current column-row order to avoid cascading collisions
-    const entries = Object.entries(iconPositions).sort(([, a], [, b]) => a.col - b.col || a.row - b.row);
+    const entries = Object.entries(iconPositions)
+      .filter(([name]) => name !== RECYCLE_BIN_NAME)
+      .sort(([, a], [, b]) => a.col - b.col || a.row - b.row);
     entries.forEach(([name, pos]) => {
       let col = Math.min(pos.col, cols - 1);
       let row = Math.min(pos.row, rows - 1);
@@ -5066,7 +6448,7 @@ window.addEventListener('resize', () => {
         k = col + ',' + row;
       }
       occupied.add(k);
-      iconPositions[name] = { col, row };
+      iconPositions[name] = pos.manual ? { col, row, manual: true } : { col, row };
       const el = layer.querySelector('[data-icon-key="' + CSS.escape(name) + '"]');
       if (el) { const { left, top } = iconCellToPixel(col, row); el.style.left = left + 'px'; el.style.top = top + 'px'; }
     });
@@ -5100,7 +6482,6 @@ Files:
 
 Known issues:
   [!] void.tmp cannot be read, deleted, or ignored
-  [!] ?????.exe should not be executed
   [!] Something is watching this session
 
 \u2014 SYSTEM`;
@@ -5859,10 +7240,11 @@ function openNotepad(filename, dirName, options) {
 }
 
 function openExplorer(startPath) {
-  if (!mkWin({ id:'explorer', title:'FILE EXPLORER \u2014 C:\\sleepOS', icon:'\u{1F5C2}\uFE0F', w:560, h:400, x:110, y:65 })) return;
-  const body = document.getElementById('wb-explorer');
-  const ws   = document.getElementById('ws-explorer');
-  const mb   = document.getElementById('mb-explorer');
+  const id = nextExplorerWinId();
+  if (!mkWin({ id, title:'FILE EXPLORER \u2014 C:\\sleepOS', icon:'\u{1F5C2}\uFE0F', w:560, h:400, x:110, y:65 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
   body.style.cssText = 'padding:0;display:flex;flex-direction:column;overflow:hidden;';
 
   let cwd = (startPath || '').toUpperCase();
@@ -5971,62 +7353,27 @@ function openExplorer(startPath) {
   let selectionItems = new Map();
   let selectionNodes = new Map();
   let emptyStatusText = '';
-  let dragSrc = null; // { item, srcCwd }
 
   function doMoveItem(srcItem, srcCwd, dstDirPath) {
-    if (srcItem.sysfile) return false;
-    const srcDirObj = srcCwd ? fsGetDir(srcCwd) : termFS;
-    const dstDirObj = fsGetDir(dstDirPath);
-    if (!srcDirObj || !dstDirObj) return false;
-    const name = srcItem.name;
-    if (srcItem.kind === 'dir') {
-      const upper = name.toUpperCase();
-      if (!srcDirObj.dirs.has(upper)) return false;
-      const sub = srcDirObj.subdirs?.get(upper);
-      srcDirObj.dirs.delete(upper); srcDirObj.subdirs?.delete(upper);
-      if (!dstDirObj.subdirs) dstDirObj.subdirs = new Map();
-      dstDirObj.dirs.add(upper);
-      if (sub) dstDirObj.subdirs.set(upper, sub);
-    } else if (srcDirObj.blobs?.has(name)) {
-      const blob = srcDirObj.blobs.get(name);
-      srcDirObj.blobs.delete(name);
-      if (!dstDirObj.blobs) dstDirObj.blobs = new Map();
-      dstDirObj.blobs.set(name, blob);
-      const oldKey = blobStorageKey(srcCwd, name);
-      const newKey = blobStorageKey(dstDirPath, name);
-      const data = localStorage.getItem(oldKey);
-      if (data) { try { localStorage.setItem(newKey, data); } catch(e) {} localStorage.removeItem(oldKey); }
-      void removeBlobEntryFromDb(srcCwd, name);
-    } else if (srcDirObj.files?.has(name)) {
-      const content = srcDirObj.files.get(name);
-      srcDirObj.files.delete(name);
-      if (!dstDirObj.files) dstDirObj.files = new Map();
-      dstDirObj.files.set(name, content);
-    } else { return false; }
-    schedSave();
-    document.dispatchEvent(new CustomEvent('fs-changed'));
-    return true;
+    return moveShellItemToDir(srcItem, srcCwd, dstDirPath);
+  }
+  function doRecycleItem(srcItem, srcCwd) {
+    return recycleShellItem(srcItem, srcCwd);
+  }
+  function setExplorerStatus(text) {
+    if (ws) ws.textContent = text;
   }
   const ITEM_SELECTOR = '.exp-item,.exp-list-item,.exp-det-item';
 
   function getIcon(name, kind) {
-    if (kind === 'image') return '\u{1F5BC}\uFE0F';
-    if (kind === 'video') return '\u{1F3AC}';
-    if (kind === 'audio') return '\u{1F3B5}';
-    if (kind === 'dir') return '\u{1F4C1}';
-    const systemIcon = SYSTEM_FILE_ICONS[String(name).toUpperCase()];
-    if (systemIcon) return systemIcon;
-    const ext = (name.split('.').pop() || '').toLowerCase();
-    return {
-      exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
-      json:'\u{1F4CB}', js:'\u{1F4DC}', ts:'\u{1F4DC}', jsx:'\u{1F4DC}', tsx:'\u{1F4DC}',
-      html:'\u{1F310}', htm:'\u{1F310}', css:'\u{1F3A8}', py:'\u{1F40D}',
-      tmp:'\u{1F5D1}\uFE0F', log:'\u{1F4CB}', csv:'\u{1F4CA}', core:'\u{1F4A5}'
-    }[ext] || '\u{1F4C4}';
+    return resolveFsIcon(name, kind);
   }
 
   function selectionKey(item) {
-    return (item.sysfile ? '1' : '0') + '|' + item.kind + '|' + item.name;
+    const recyclePart = item._recycle?.id ? '|recycle|' + item._recycle.id : '';
+    const shortcutPart = item._shortcut?.target?.path ? '|shortcut|' + normalizeShortcutPath(item._shortcut.target.path) : '';
+    const projectPart = item._proj?.file ? '|project|' + item._proj.file : '';
+    return (item.sysfile ? '1' : '0') + '|' + item.kind + '|' + item.name + recyclePart + shortcutPart + projectPart;
   }
 
   function registerSelectionNode(el, item) {
@@ -6046,6 +7393,7 @@ function openExplorer(startPath) {
   }
 
   function getDeletableSelectedItems() {
+    if (cwd === 'RECYCLE') return getSelectedItems().filter(item => !!item._recycle);
     return getSelectedItems().filter(item => !item._proj && canAttemptDeleteItem(makeFsPath(item.name), cwd, item));
   }
 
@@ -6058,7 +7406,10 @@ function openExplorer(startPath) {
   }
 
   function getSelectedPathsText() {
-    return getSelectedItems().map(item => 'C:\\sleepOS\\' + (cwd ? cwd + '\\' : '') + item.name).join('\n');
+    return getSelectedItems().map(item => {
+      if (item._recycle) return 'C:\\sleepOS\\' + recycleEntryOriginalPath(item._recycle);
+      return 'C:\\sleepOS\\' + (cwd ? cwd + '\\' : '') + item.name;
+    }).join('\n');
   }
 
   function updateSelectionStatus() {
@@ -6169,18 +7520,45 @@ function openExplorer(startPath) {
     });
   }
 
-  function createDesktopShortcutForItem(item) {
-    if (!item || item._proj) return;
-    addDesktopShortcut(item.name, getIcon(item.name, item.kind), {
-      name: item.name,
-      path: makeFsPath(item.name),
-      kind: item.kind,
-      sysfile: !!item.sysfile,
+  function getSelectedRecycleEntries() {
+    return getSelectedItems().map(item => normalizeRecycleEntry(item._recycle)).filter(Boolean);
+  }
+
+  function restoreSelectedRecycleEntries() {
+    const entries = getSelectedRecycleEntries();
+    if (!entries.length) return;
+    const blocked = [];
+    let restoredCount = 0;
+    entries.forEach(entry => {
+      const result = restoreRecycleEntry(entry);
+      if (result.ok && result.restored) restoredCount++;
+      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
     });
-    if (ws) ws.textContent = 'Shortcut created: ' + item.name;
+    if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
+    if (restoredCount && ws) ws.textContent = restoredCount === 1 ? '1 item restored' : restoredCount + ' items restored';
+    if (restoredCount || blocked.length) render();
   }
 
   function openItem(name, kind, sysfile) {
+    const item = name && typeof name === 'object' ? name : { name, kind, sysfile };
+    name = item.name;
+    kind = item.kind;
+    sysfile = item.sysfile;
+    if (item._recycle) {
+      const result = restoreRecycleEntry(item._recycle);
+      if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+      else if (ws) ws.textContent = 'Restored: ' + result.name;
+      render();
+      return;
+    }
+    if (isRecycleBinItemName(name)) {
+      openRecycleBin();
+      return;
+    }
+    if (item._shortcut) {
+      openDesktopShortcutTarget(item._shortcut.target);
+      return;
+    }
     if (kind === 'dir') {
       cwd = makeFsPath(name);
       render();
@@ -6193,6 +7571,16 @@ function openExplorer(startPath) {
         window.open(url, '_blank');
       }
       return;
+    }
+    if (cwd === 'DESKTOP') {
+      if (item._shortcut) {
+        openDesktopShortcutTarget(item._shortcut.target);
+        return;
+      }
+      if (sysfile) {
+        openSystemFile(name);
+        return;
+      }
     }
     if (sysfile) {
       openSystemFile(name);
@@ -6207,12 +7595,37 @@ function openExplorer(startPath) {
   function deleteSelected() {
     const items = getDeletableSelectedItems();
     if (!items.length) return;
-    const prompt = items.length === 1 ? 'Delete "' + items[0].name + '"?' : 'Delete ' + items.length + ' selected items?';
-    osConfirm(prompt, 'Delete', ok => {
+    const recycleView = cwd === 'RECYCLE';
+    const prompt = recycleView
+      ? (items.length === 1 ? 'Permanently delete "' + items[0].name + '"?' : 'Permanently delete ' + items.length + ' selected items?')
+      : (items.length === 1 ? 'Delete "' + items[0].name + '"?' : 'Delete ' + items.length + ' selected items?');
+    osConfirm(prompt, recycleView ? 'Delete Permanently' : 'Delete', ok => {
       if (!ok) return;
       const blocked = [];
       let changed = false;
+      if (recycleView) {
+        items.forEach(item => {
+          const result = purgeRecycleEntry(item._recycle);
+          if (result.ok && result.deleted) changed = true;
+          else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+        });
+        if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
+        if (changed && ws) ws.textContent = items.length === 1 ? '1 item deleted permanently' : items.length + ' items deleted permanently';
+        if (changed || blocked.length) render();
+        return;
+      }
       items.forEach(item => {
+        if (item._shortcut) {
+          const scIdx = customDesktopIcons.indexOf(item._shortcut);
+          if (scIdx > -1) {
+            customDesktopIcons.splice(scIdx, 1);
+            saveDesktopShortcuts();
+            delete iconPositions[item.name];
+            saveIconPositions();
+            changed = true;
+            return;
+          }
+        }
         const result = deleteVirtualPath(makeFsPath(item.name), cwd);
         if (result.ok && result.deleted) changed = true;
         else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
@@ -6229,9 +7642,12 @@ function openExplorer(startPath) {
            kind === 'binary' ? 'Binary File' : 'Text File';
   }
 
-  function makeItem(name, kind, sysfile) {
-    const item = { name, kind, sysfile };
+  function makeItem(name, kind, sysfile, meta) {
+    const item = { name, kind, sysfile, ...(meta || {}) };
     const icon = getIcon(name, kind);
+    const isRecycleEntry = !!item._recycle;
+    const isRecycleBin = !!item.recycleBin || isRecycleBinItemName(name);
+    const isDesktopRootDir = !cwd && kind === 'dir' && sysfile && name === 'DESKTOP';
     let el;
     if (viewMode === 'list') {
       el = document.createElement('div');
@@ -6251,41 +7667,63 @@ function openExplorer(startPath) {
       if (e.ctrlKey || e.metaKey) toggleSelection(item);
       else replaceSelection(item);
     });
-    el.addEventListener('dblclick', () => openItem(name, kind, sysfile));
+    el.addEventListener('dblclick', () => openItem(item));
 
     // ── Drag source ──────────────────────────────────────────────
-    if (!sysfile) {
+    const canDragItem = !isRecycleEntry && !item._proj && (!sysfile || isDesktopVirtualItem(item, cwd) || !!item._shortcut);
+    if (canDragItem) {
       el.setAttribute('draggable', 'true');
       el.addEventListener('dragstart', e => {
-        dragSrc = { item, srcCwd: cwd };
+        setShellDragPayload({ item, srcCwd: cwd, source: 'explorer', sourceId: id });
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', name);
         el.style.opacity = '0.5';
       });
       el.addEventListener('dragend', () => {
-        dragSrc = null;
+        clearShellDragPayload();
         el.style.opacity = '';
         pane.querySelectorAll('.exp-drop-target').forEach(n => n.classList.remove('exp-drop-target'));
       });
     }
-    // ── Drag target (folders only) ───────────────────────────────
-    if (kind === 'dir' && !sysfile) {
+    // ── Drag target (folders + recycle bin) ─────────────────────
+    if ((kind === 'dir' && (!sysfile || isDesktopRootDir)) || isRecycleBin) {
+      el._shellDropHandler = payload => {
+        if (!payload || payload.item === item) return false;
+        if (isRecycleBin) {
+          const result = doRecycleItem(payload.item, payload.srcCwd);
+          if (!result.ok) setExplorerStatus(result.message || 'Move failed.');
+          if (result.ok) render();
+          return !!result.ok;
+        }
+        if (isDesktopRootDir && fsNormalizeDir(payload.srcCwd) === 'DESKTOP') return false;
+        const dstPath = isDesktopRootDir ? 'DESKTOP' : (cwd ? cwd + '\\' + name : name);
+        if (!canMoveShellItemToDir(payload.item, payload.srcCwd, dstPath)) return false;
+        const ok = doMoveItem(payload.item, payload.srcCwd, dstPath);
+        if (!ok) setExplorerStatus('Move failed.');
+        if (ok) render();
+        return ok;
+      };
       el.addEventListener('dragover', e => {
-        if (!dragSrc || dragSrc.item === item) return;
-        e.preventDefault(); e.stopPropagation();
+        const payload = getShellDragPayload();
+        if (!payload || payload.item === item) return;
+        const dstPath = isDesktopRootDir ? 'DESKTOP' : (cwd ? cwd + '\\' + name : name);
+        const canDrop = isRecycleBin
+          ? canRecycleShellItem(payload.item, payload.srcCwd)
+          : fsNormalizeDir(payload.srcCwd) === dstPath ? false : canMoveShellItemToDir(payload.item, payload.srcCwd, dstPath);
+        if (!canDrop) return;
+        e.preventDefault();
+        e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
         el.classList.add('exp-drop-target');
       });
       el.addEventListener('dragleave', () => el.classList.remove('exp-drop-target'));
       el.addEventListener('drop', e => {
-        e.preventDefault(); e.stopPropagation();
         el.classList.remove('exp-drop-target');
-        if (!dragSrc || dragSrc.item === item) return;
-        const dstPath = cwd ? cwd + '\\' + name : name;
-        const ok = doMoveItem(dragSrc.item, dragSrc.srcCwd, dstPath);
-        dragSrc = null;
-        if (ok) render();
-        else if (ws) ws.querySelector ? ws.querySelector('.statusbar-panel')?.textContent : (ws.textContent = 'Move failed.');
+        const payload = getShellDragPayload();
+        if (!payload || payload.item === item) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (el._shellDropHandler(payload)) clearShellDragPayload();
       });
     }
 
@@ -6295,31 +7733,52 @@ function openExplorer(startPath) {
       ensureContextSelection(item);
       const allSelected = getSelectedItems();
       const singleSelected = getSingleSelectedItem();
+      const recycleSelected = getSelectedRecycleEntries();
       const multi = allSelected.length > 1;
       const canDelete = getDeletableSelectedItems().length > 0;
-      const isScript = !!singleSelected && !singleSelected.sysfile && singleSelected.name.toLowerCase().endsWith('.script');
-      const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && singleSelected.kind === 'image';
-      const isLoreFile = !!singleSelected && ['daemon.core','void.tmp'].includes(singleSelected.name);
-      const isExeFile  = !!singleSelected && singleSelected.name.toLowerCase().endsWith('.exe');
+      const mutableSelected = allSelected.filter(i => !i.sysfile && !i._recycle && !i._shortcut);
+      const isScript = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.script');
+      const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.kind === 'image';
+      const isLoreFile = !!singleSelected && !singleSelected._recycle && ['daemon.core','void.tmp'].includes(singleSelected.name);
+      const isExeFile  = !!singleSelected && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.exe');
+      if (singleSelected && !multi && (singleSelected.recycleBin || isRecycleBinItemName(singleSelected.name)) && !singleSelected._recycle) {
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: 'Open', action: openRecycleBin },
+          '-',
+          { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
+          '-',
+          { label: 'Copy Name', action: () => navigator.clipboard?.writeText(singleSelected.name) },
+        ]);
+        return;
+      }
+      if (recycleSelected.length && allSelected.every(i => i._recycle)) {
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: multi ? 'Restore Selected' : 'Restore', action: restoreSelectedRecycleEntries },
+          { label: multi ? 'Delete Permanently' : 'Delete Permanently', action: deleteSelected },
+          '-',
+          { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
+          '-',
+          { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || name) },
+        ]);
+        return;
+      }
       showCtxMenu(e.clientX, e.clientY, [
         multi
-          ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(i => openItem(i.name, i.kind, i.sysfile)) }
-          : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(name, kind, sysfile) },
+          ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(openItem) }
+          : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
         ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
         ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
-        ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(wallpaperFileId(singleSelected.name, cwd)) }] : []),
+        ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {
           runScriptInTerminal(singleSelected.name, cwd);
         }}] : []),
         '-',
-        { label: 'Cut',   disabled: multi ? false : !!singleSelected?.sysfile, action: () => { const its=allSelected.filter(i=>!i.sysfile); if(its.length){_expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut';} } },
-        { label: 'Copy',  disabled: multi ? false : !!singleSelected?.sysfile, action: () => { const its=allSelected.filter(i=>!i.sysfile); if(its.length){_expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:false}; if(ws) ws.textContent=its.length+' item(s) copied';} } },
-        { label: 'Paste', disabled: !_expClipboard, action: pasteClipboard },
+        { label: 'Cut',   disabled: !mutableSelected.length || cwd === 'RECYCLE', action: () => { if (mutableSelected.length) { _expClipboard = { items: mutableSelected.map(i => ({ name:i.name, kind:i.kind, srcCwd:cwd })), cut:true }; if (ws) ws.textContent = mutableSelected.length + ' item(s) cut'; } } },
+        { label: 'Copy',  disabled: !mutableSelected.length || cwd === 'RECYCLE', action: () => { if (mutableSelected.length) { _expClipboard = { items: mutableSelected.map(i => ({ name:i.name, kind:i.kind, srcCwd:cwd })), cut:false }; if (ws) ws.textContent = mutableSelected.length + ' item(s) copied'; } } },
+        { label: 'Paste', disabled: !_expClipboard || cwd === 'RECYCLE', action: pasteClipboard },
         '-',
-        { label: 'Rename', disabled: !singleSelected || !!singleSelected.sysfile, action: () => renameItem(singleSelected) },
+        { label: 'Rename', disabled: !singleSelected || !!singleSelected.sysfile || !!singleSelected._recycle || !!singleSelected._shortcut || cwd === 'RECYCLE', action: () => renameItem(singleSelected) },
         { label: 'Delete', disabled: !canDelete, action: deleteSelected },
-        '-',
-        { label: 'Create Desktop Shortcut', disabled: !singleSelected, action: () => createDesktopShortcutForItem(singleSelected) },
         '-',
         { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || name) },
       ]);
@@ -6374,7 +7833,7 @@ function openExplorer(startPath) {
     selectionNodes = new Map();
     const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
     addrEl.value = fullPath;
-    const titleEl = document.getElementById('wtitle-explorer');
+    const titleEl = document.getElementById('wtitle-' + id);
     if (titleEl) titleEl.textContent = 'FILE EXPLORER ? ' + fullPath;
 
     if (cwd === 'PROJECTS') {
@@ -6405,15 +7864,100 @@ function openExplorer(startPath) {
       return;
     }
 
+    if (cwd === 'RECYCLE') {
+      const recycleItems = recycleBinEntries.map(entry => ({
+        name: entry.name,
+        kind: entry.kind,
+        sysfile: false,
+        _recycle: entry,
+      }));
+      const build = items => {
+        if (viewMode === 'details') {
+          const tbl = document.createElement('table');
+          tbl.className = 'exp-det-tbl';
+          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+          const tbody = document.createElement('tbody');
+          items.forEach(item => tbody.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          tbl.appendChild(tbody);
+          pane.appendChild(tbl);
+        } else if (viewMode === 'list') {
+          const list = document.createElement('div');
+          list.style.cssText = 'display:flex;flex-direction:column;';
+          items.forEach(item => list.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          pane.appendChild(list);
+        } else {
+          const grid = document.createElement('div');
+          grid.className = 'exp-grid';
+          items.forEach(item => grid.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          pane.appendChild(grid);
+        }
+        if (!items.length) {
+          const empty = document.createElement('div');
+          empty.style.cssText = 'padding:12px;font-size:11px;color:#444;';
+          empty.textContent = 'Recycle Bin is empty.';
+          pane.appendChild(empty);
+        }
+      };
+      build(recycleItems);
+      emptyStatusText = recycleItems.length ? recycleItems.length + ' objects' : 'Recycle Bin is empty';
+      updateSelectionStatus();
+      return;
+    }
+
+    if (cwd === 'DESKTOP') {
+      const desktopItems = getVisibleDesktopIcons().map(ic => ({
+        name: ic.name,
+        kind: ic.recycleBin ? 'dir' : 'file',
+        sysfile: true,
+        recycleBin: !!ic.recycleBin,
+      }));
+      getDesktopShortcutsForDir('DESKTOP').forEach(ic => desktopItems.push({
+        name: ic.name,
+        kind: ic.target.kind === 'dir' ? 'dir' : 'file',
+        sysfile: false,
+        _shortcut: ic,
+      }));
+      const desktopDir = fsGetDir('DESKTOP');
+      if (desktopDir) {
+        desktopDir.dirs.forEach(name => desktopItems.push({ name, kind: 'dir', sysfile: false }));
+        desktopDir.files.forEach((_, name) => desktopItems.push({ name, kind: 'file', sysfile: false }));
+        desktopDir.blobs.forEach((blob, name) => desktopItems.push({ name, kind: blob.kind || inferBlobKindFromName(name), sysfile: false }));
+      }
+      const build = items => {
+        if (viewMode === 'details') {
+          const tbl = document.createElement('table');
+          tbl.className = 'exp-det-tbl';
+          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+          const tbody = document.createElement('tbody');
+          items.forEach(item => tbody.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          tbl.appendChild(tbody);
+          pane.appendChild(tbl);
+        } else if (viewMode === 'list') {
+          const list = document.createElement('div');
+          list.style.cssText = 'display:flex;flex-direction:column;';
+          items.forEach(item => list.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          pane.appendChild(list);
+        } else {
+          const grid = document.createElement('div');
+          grid.className = 'exp-grid';
+          items.forEach(item => grid.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          pane.appendChild(grid);
+        }
+      };
+      build(desktopItems);
+      emptyStatusText = desktopItems.length + ' objects';
+      updateSelectionStatus();
+      return;
+    }
+
     const items = [];
     if (!cwd) {
+      items.push({ name:'DESKTOP', kind:'dir', sysfile:true });
       items.push({ name:'PROJECTS', kind:'dir', sysfile:true });
       ['DOCS', ...termFS.dirs].filter((value, index, array) => array.indexOf(value) === index).forEach(dirName => {
-        if (dirName !== 'PROJECTS') items.push({ name:dirName, kind:'dir', sysfile:false });
+        if (dirName !== 'PROJECTS' && dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
       });
-      const sysFileNames = new Set(getRootSystemFiles({ includeExplorer: false }));
-      sysFileNames.forEach(name => items.push({ name, kind:'file', sysfile:true }));
-      termFS.files.forEach((_, name) => { if (!sysFileNames.has(name)) items.push({ name, kind:'file', sysfile:false }); });
+      termFS.files.forEach((_, name) => items.push({ name, kind:'file', sysfile:false }));
       termFS.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
     } else {
       const dir = fsGetDir(cwd);
@@ -6422,7 +7966,24 @@ function openExplorer(startPath) {
         render();
         return;
       }
-      dir.dirs.forEach(name => items.push({ name, kind:'dir', sysfile:false }));
+      if (cwd.startsWith('DESKTOP\\')) {
+        getDesktopSystemIconsForDir(cwd).forEach(ic => items.push({
+          name: ic.name,
+          kind: ic.recycleBin ? 'dir' : 'file',
+          sysfile: true,
+          recycleBin: !!ic.recycleBin,
+        }));
+        getDesktopShortcutsForDir(cwd).forEach(ic => items.push({
+          name: ic.name,
+          kind: ic.target.kind === 'dir' ? 'dir' : 'file',
+          sysfile: false,
+          _shortcut: ic,
+        }));
+      }
+      dir.dirs.forEach(name => {
+        if (cwd === 'CACHE' && name === 'RECYCLE_BIN') return;
+        items.push({ name, kind:'dir', sysfile:false });
+      });
       dir.files.forEach((_, name) => items.push({ name, kind:'file', sysfile:false }));
       dir.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
     }
@@ -6432,18 +7993,18 @@ function openExplorer(startPath) {
       tbl.className = 'exp-det-tbl';
       tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
       const tbody = document.createElement('tbody');
-      items.forEach(item => tbody.appendChild(makeItem(item.name, item.kind, item.sysfile)));
+      items.forEach(item => tbody.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
       tbl.appendChild(tbody);
       pane.appendChild(tbl);
     } else if (viewMode === 'list') {
       const list = document.createElement('div');
       list.style.cssText = 'display:flex;flex-direction:column;';
-      items.forEach(item => list.appendChild(makeItem(item.name, item.kind, item.sysfile)));
+      items.forEach(item => list.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
       pane.appendChild(list);
     } else {
       const grid = document.createElement('div');
       grid.className = 'exp-grid';
-      items.forEach(item => grid.appendChild(makeItem(item.name, item.kind, item.sysfile)));
+      items.forEach(item => grid.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
       pane.appendChild(grid);
     }
     emptyStatusText = items.length + ' objects';
@@ -6461,18 +8022,31 @@ function openExplorer(startPath) {
     if (e.target.closest(ITEM_SELECTOR)) return;
     clearSelection();
   });
+  pane._shellDropHandler = payload => {
+    if (!payload || cwd === 'PROJECTS' || cwd === 'RECYCLE') return false;
+    if (!canMoveShellItemToDir(payload.item, payload.srcCwd, cwd)) return false;
+    const ok = doMoveItem(payload.item, payload.srcCwd, cwd);
+    if (!ok) setExplorerStatus('Move failed.');
+    if (ok) render();
+    return ok;
+  };
 
   pane.addEventListener('contextmenu', e => {
     if (e.target.closest(ITEM_SELECTOR)) return;
     e.preventDefault();
     clearSelection();
     const inProjects = cwd === 'PROJECTS';
+    const inRecycle = cwd === 'RECYCLE';
     showCtxMenu(e.clientX, e.clientY, inProjects ? [
+      { label: 'Refresh', action: render },
+    ] : inRecycle ? [
+      { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
+      '-',
       { label: 'Refresh', action: render },
     ] : [
       { label: 'Open Terminal Here', action: () => openTerminal(cwd) },
       '-',
-      { label: 'New Folder', action: () => osPrompt('Folder name:', '', 'New Folder', name => { if (name) { const created = fsCreateDir(name, cwd); if (created?.created) { document.dispatchEvent(new CustomEvent('fs-changed')); render(); } } }) },
+      { label: 'New Folder', action: () => promptCreateFolderAt(cwd, () => render()) },
       { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
       '-',
       { label: 'Upload File...', action: () => triggerUpload(cwd) },
@@ -6484,7 +8058,8 @@ function openExplorer(startPath) {
   // ── External file drag-and-drop onto the pane ─────────────────
   let dropOverlay = null;
   pane.addEventListener('dragenter', e => {
-    if (cwd === 'PROJECTS') return;
+    if (getShellDragPayload()) return;
+    if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
     if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
       if (!dropOverlay) {
@@ -6496,9 +8071,19 @@ function openExplorer(startPath) {
     }
   });
   pane.addEventListener('dragover', e => {
-    if (cwd === 'PROJECTS') return;
+    if (!e.target.closest(ITEM_SELECTOR)) {
+      const payload = getShellDragPayload();
+      if (payload && pane._shellDropHandler && canMoveShellItemToDir(payload.item, payload.srcCwd, cwd)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        return;
+      }
+    }
+    if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
     if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
+      e.stopPropagation();
       e.dataTransfer.dropEffect = 'copy';
     }
   });
@@ -6509,13 +8094,23 @@ function openExplorer(startPath) {
   });
   pane.addEventListener('drop', e => {
     dropOverlay?.remove(); dropOverlay = null;
-    if (cwd === 'PROJECTS') return;
-    if (e.dataTransfer.files?.length) {
+    const payload = getShellDragPayload();
+    if (payload && !e.target.closest(ITEM_SELECTOR)) {
       e.preventDefault();
+      e.stopPropagation();
+      if (pane._shellDropHandler(payload)) clearShellDragPayload();
+      return;
+    }
+    if (e.dataTransfer.files?.length) {
+      if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+      e.preventDefault();
+      e.stopPropagation();
       _uploadCwd = cwd;
       handleFileUpload(e.dataTransfer.files);
       render();
+      return;
     }
+    if (e.target.closest(ITEM_SELECTOR)) return;
   });
 
   mb.innerHTML = '';
@@ -6523,22 +8118,29 @@ function openExplorer(startPath) {
     { label: 'File', items: () => cwd === 'PROJECTS' ? [
       { label: 'Open', disabled: !selected, action: () => { if (selected?._proj) window.open(selected._proj.file, '_blank'); } },
       '-',
-      { label: 'Close', action: () => closeWin('explorer') },
+      { label: 'Close', action: () => closeWin(id) },
+    ] : cwd === 'RECYCLE' ? [
+      { label: 'Restore', disabled: !getSelectedRecycleEntries().length, action: restoreSelectedRecycleEntries },
+      { label: 'Delete Permanently', disabled: !getSelectedRecycleEntries().length, action: deleteSelected },
+      '-',
+      { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
+      '-',
+      { label: 'Close', action: () => closeWin(id) },
     ] : [
-      { label: 'New Folder', action: () => osPrompt('Folder name:', '', 'New Folder', name => { if (name) { const created = fsCreateDir(name, cwd); if (created?.created) { document.dispatchEvent(new CustomEvent('fs-changed')); render(); } } }) },
+      { label: 'New Folder', action: () => promptCreateFolderAt(cwd, () => render()) },
       { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
       '-',
-      { label: 'Open', disabled: !selected, action: () => { if (selected) openItem(selected.name, selected.kind, selected.sysfile); } },
+      { label: 'Open', disabled: !selected, action: () => { if (selected) openItem(selected); } },
       { label: 'Delete', disabled: !getDeletableSelectedItems().length, action: deleteSelected },
       '-',
       { label: 'Upload File...', action: () => triggerUpload(cwd) },
       '-',
-      { label: 'Close', action: () => closeWin('explorer') },
+      { label: 'Close', action: () => closeWin(id) },
     ]},
     { label: 'Edit', items: () => [
-      { label: 'Cut',   disabled: !getSelectedItems().filter(i=>!i.sysfile).length || cwd==='PROJECTS', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut'; } },
-      { label: 'Copy',  disabled: !getSelectedItems().filter(i=>!i.sysfile).length, action: () => { const its=getSelectedItems().filter(i=>!i.sysfile); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:false}; if(ws) ws.textContent=its.length+' item(s) copied'; } },
-      { label: 'Paste', disabled: !_expClipboard || cwd==='PROJECTS', action: pasteClipboard },
+      { label: 'Cut',   disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='PROJECTS' || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut'; } },
+      { label: 'Copy',  disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:false}; if(ws) ws.textContent=its.length+' item(s) copied'; } },
+      { label: 'Paste', disabled: !_expClipboard || cwd==='PROJECTS' || cwd==='RECYCLE', action: pasteClipboard },
       '-',
       { label: 'Select All', action: () => selectAllVisibleItems() },
       { label: 'Invert Selection', action: () => invertSelection() },
@@ -6556,7 +8158,7 @@ function openExplorer(startPath) {
         if (ws) ws.textContent = 'Copied';
       }},
       '-',
-      { label: 'Rename', disabled: !getSingleSelectedItem() || getSingleSelectedItem()?.sysfile || cwd === 'PROJECTS', action: () => renameItem(getSingleSelectedItem()) },
+      { label: 'Rename', disabled: !getSingleSelectedItem() || getSingleSelectedItem()?.sysfile || getSingleSelectedItem()?._recycle || getSingleSelectedItem()?._shortcut || cwd === 'PROJECTS' || cwd === 'RECYCLE', action: () => renameItem(getSingleSelectedItem()) },
       { label: 'Delete', disabled: !getDeletableSelectedItems().length || cwd === 'PROJECTS', action: deleteSelected },
     ]},
     { label: 'View', items: () => [
@@ -6622,19 +8224,21 @@ function openExplorer(startPath) {
   // ── Explorer keyboard shortcuts ───────────────────────────────
   pane.setAttribute('tabindex', '-1');
   pane.style.outline = 'none';
-  const winEl = document.getElementById('win-explorer');
+  const winEl = document.getElementById('win-' + id);
   winEl?.addEventListener('keydown', e => {
-    if (!wins['explorer']) return;
+    if (!wins[id]) return;
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    const items = getSelectedItems().filter(i => !i.sysfile && !i._proj);
+    const items = getSelectedItems().filter(i => !i.sysfile && !i._proj && !i._recycle && !i._shortcut);
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
       e.preventDefault();
+      if (cwd === 'RECYCLE') return;
       if (!items.length) return;
       _expClipboard = { items: items.map(i => ({ name: i.name, kind: i.kind, sysfile: i.sysfile, srcCwd: cwd })), cut: false };
       if (ws) ws.textContent = items.length === 1 ? '"' + items[0].name + '" copied' : items.length + ' items copied';
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
       e.preventDefault();
+      if (cwd === 'RECYCLE') return;
       if (!items.length) return;
       _expClipboard = { items: items.map(i => ({ name: i.name, kind: i.kind, sysfile: i.sysfile, srcCwd: cwd })), cut: true };
       if (ws) ws.textContent = items.length === 1 ? '"' + items[0].name + '" cut' : items.length + ' items cut';
@@ -6650,7 +8254,7 @@ function openExplorer(startPath) {
     } else if (e.key === 'F2') {
       e.preventDefault();
       const single = getSingleSelectedItem();
-      if (single && !single.sysfile) renameItem(single);
+      if (single && !single.sysfile && !single._recycle && !single._shortcut && cwd !== 'RECYCLE') renameItem(single);
     } else if (e.key === 'F5') {
       e.preventDefault();
       render();
@@ -6662,7 +8266,7 @@ function openExplorer(startPath) {
   render();
 
   function onFsChanged() {
-    if (wins['explorer']) render();
+    if (wins[id]) render();
     else document.removeEventListener('fs-changed', onFsChanged);
   }
   document.addEventListener('fs-changed', onFsChanged);
@@ -7187,7 +8791,7 @@ function openTerminal(startDir, initialCommand) {
     getRootSystemFiles({ includeExplorer: true }).forEach(name => {
       let label = name;
       if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
-      if (name === '?????.exe') label = daemonStory.stage >= 7 ? '?????.exe                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
+      if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
       lines.push(`├── ${label}`);
     });
     termFS.files.forEach((_, n) => lines.push(`├── ${n}`));
@@ -8303,6 +9907,16 @@ function openSysmon() {
       row.style.cssText = `display:flex;font-size:10px;border-bottom:1px solid #f0f0f0;cursor:default;background:${sel ? '#000080' : 'transparent'};color:${sel ? '#fff' : '#000'};`;
       row.innerHTML = `<div style="width:54px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.pid}</div><div style="flex:1;padding:1px 4px;border-right:1px solid #e8e8e8;overflow:hidden;white-space:nowrap;">${p.name}</div><div style="width:52px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.cpu.toFixed(1)}</div><div style="width:58px;padding:1px 4px;">${p.mem.toFixed(1)}</div>`;
       row.addEventListener('click', () => { selectedProc = p; renderProcesses(); });
+      row.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        selectedProc = p;
+        renderProcesses();
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: 'End Task', action: () => procToolbar.querySelector('#sm-kill-btn').click() },
+          '-',
+          { label: 'Copy PID', action: () => procToolbar.querySelector('#sm-copypid-btn').click() },
+        ]);
+      });
       procList.appendChild(row);
     });
     const ct = document.getElementById('sm-proc-count');
@@ -8608,6 +10222,11 @@ function openDefrag() {
     drawGrid();
   });
 
+  const dfResizeObserver = new ResizeObserver(() => drawGrid());
+  dfResizeObserver.observe(gridWrap);
+  const _origCloseDefrag = wins['defrag']?._onclose;
+  if (wins['defrag']) wins['defrag']._onclose = () => { dfResizeObserver.disconnect(); if (_origCloseDefrag) _origCloseDefrag(); };
+
   body.addEventListener('contextmenu', e => {
     e.preventDefault();
     showCtxMenu(e.clientX, e.clientY, [
@@ -8679,161 +10298,6 @@ function openDaemon() {
     <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('daemon')">OK</button></div>`;
 }
 
-function openVoid() {
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:260, h:180, x:220, y:160, menubar:false, statusbar:false })) return;
-  renderVoid();
-}
-
-function renderVoid() {
-  const body = document.getElementById('wb-void');
-  if (!body) return;
-  body.style.cssText = 'background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0;overflow:hidden;';
-
-  if (unknownCount >= 5) {
-    // Interactive: type into the void
-    body.innerHTML = `
-      <div id="void-feed" style="width:100%;flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:8px 10px 4px;box-sizing:border-box;gap:3px;"></div>
-      <div style="width:100%;padding:4px 10px 8px;box-sizing:border-box;display:flex;align-items:center;gap:4px;border-top:1px solid #0d0d0d;">
-        <span style="color:#1a3a1a;font-family: var(--sleep-font);font-size:11px;">_</span>
-        <input id="void-input" type="text" style="flex:1;background:#000;border:none;color:#1a3a1a;font-family: var(--sleep-font);font-size:11px;outline:none;caret-color:#1a3a1a;" autocomplete="off" spellcheck="false" />
-      </div>`;
-    const input = document.getElementById('void-input');
-    if (input) {
-      input.focus();
-      input.addEventListener('keydown', e => {
-        if (e.key !== 'Enter') return;
-        const val = input.value.trim();
-        input.value = '';
-        if (!val) return;
-        const feed = document.getElementById('void-feed');
-        if (!feed) return;
-        const sent = document.createElement('div');
-        sent.style.cssText = 'color:#1a3a1a;font-size:11px;font-family: var(--sleep-font);text-align:right;opacity:0.5;';
-        sent.textContent = val;
-        feed.appendChild(sent);
-        const responses = ['','.','.','still here','i hear you','...','yes','no','both','neither',"don't",'why','always','never','now','before you asked','i know'];
-        setTimeout(() => {
-          const r = responses[Math.floor(Math.random() * responses.length)];
-          if (r) {
-            const resp = document.createElement('div');
-            resp.style.cssText = 'color:#070f07;font-size:11px;font-family: var(--sleep-font);transition:color 2s;';
-            resp.textContent = r;
-            feed.appendChild(resp);
-            setTimeout(() => { resp.style.color = '#1a3a1a'; }, 80);
-          }
-          while (feed.children.length > 8) feed.removeChild(feed.firstChild);
-        }, 500 + Math.random() * 900);
-      });
-    }
-  } else if (unknownCount >= 4) {
-    // Awakened: text visible, blinking cursor
-    body.innerHTML = `
-      <div style="color:#0a0a0a;font-size:56px;line-height:1;">⬛</div>
-      <div style="color:#1a3a1a;font-size:11px;font-family: var(--sleep-font);text-align:center;margin-top:8px;">
-        empty<br><span style="color:#0d200d;">or not</span>
-      </div>
-      <div style="color:#1a3a1a;font-size:13px;font-family: var(--sleep-font);margin-top:6px;animation:void-blink 1.1s step-end infinite;">_</div>`;
-  } else {
-    // Base: nearly invisible
-    body.innerHTML = `
-      <div style="color:#0a0a0a;font-size:64px;">⬛</div>
-      <div id="void-text" style="color:#0d0d0d;font-size:11px;font-family: var(--sleep-font);text-align:center;transition:color 4s ease;">
-        empty<br><span style="color:#070707">or not</span>
-      </div>`;
-    setTimeout(() => {
-      const t = document.getElementById('void-text');
-      if (t) t.style.color = '#1a3a1a';
-    }, 200);
-  }
-}
-
-let unknownCount = 0;
-function openUnknown() {
-  const wid = 'unk-warn-' + Date.now();
-  if (!mkWin({ id:wid, title:'Warning', icon:'⚠️', w:300, h:195, x:200+Math.random()*100, y:120+Math.random()*80, menubar:false, statusbar:false, popup:true })) return;
-  document.getElementById('wb-' + wid).innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon">⚠️</div>
-      <div class="dlg-text">
-        sleepOS cannot determine the nature of this file.<br><br>
-        Attempting to run <b>?????.exe</b> may have unintended consequences.
-      </div>
-    </div>
-    <div class="dlg-btns">
-      <button class="dlg-btn primary" onclick="closeWin('${wid}');runUnknown()">Run Anyway</button>
-      <button class="dlg-btn" onclick="closeWin('${wid}')">Cancel</button>
-    </div>`;
-}
-
-function applyUnknownEffect(n) {
-  triggerGlitch();
-  if (n === 7) {
-    // Clock corrupts
-    window._clockCorrupted = true;
-  } else if (n === 8) {
-    // Desktop icon names become ?????
-    document.querySelectorAll('.di-name').forEach(el => { el.textContent = '?????'; });
-  } else if (n === 9) {
-    // All open window titles and taskbar buttons become ?????.exe
-    document.querySelectorAll('[id^="wtitle-"]').forEach(el => { el.textContent = '?????.exe'; });
-    document.querySelectorAll('.taskbar-btn span:last-child').forEach(el => { el.textContent = '?????.exe'; });
-  } else if (n >= 10) {
-    // Desktop darkens further each run
-    let ov = document.getElementById('unk-overlay');
-    if (!ov) {
-      ov = document.createElement('div');
-      ov.id = 'unk-overlay';
-      ov.style.cssText = 'position:fixed;inset:0;background:#000;pointer-events:none;z-index:99990;opacity:0;transition:opacity 2s;';
-      document.body.appendChild(ov);
-    }
-    ov.style.opacity = Math.min(0.88, (parseFloat(ov.style.opacity) || 0) + 0.09);
-  }
-}
-
-function runUnknown() {
-  unknownCount++;
-  const msgs = [
-    'File executed.\nNothing happened.\n\n(Are you sure?)',
-    'File executed again.\n\nSomething may have changed.',
-    `File executed ${unknownCount} times.\n\nPlease stop.`,
-    `File executed ${unknownCount} times.\n\nThis is not recommended.`,
-    'You cannot run this file.\nYou never could.\nYou are already inside it.',
-    'File executed.\nFile not found.\nFile was never here.',
-  ];
-  const idx = Math.min(unknownCount - 1, msgs.length - 1);
-
-  // Run 3: CRT scanline flash only
-  if (unknownCount === 3) {
-    const crt = document.getElementById('crt');
-    crt.style.opacity = '2';
-    setTimeout(() => { crt.style.opacity = '1'; }, 220);
-  }
-  // Run 4: void.tmp awakens — update it if open, will take effect next open too
-  if (unknownCount === 4) renderVoid();
-  // Run 5: void.tmp becomes interactive — update it if open
-  if (unknownCount === 5) renderVoid();
-  // Run 6: start button label becomes "?????" for 4s
-  if (unknownCount === 6) {
-    const sb = document.getElementById('start-btn');
-    if (sb) {
-      const orig = sb.textContent;
-      sb.textContent = '?????';
-      setTimeout(() => { sb.textContent = orig; }, 4000);
-    }
-  }
-
-  if (unknownCount >= 7) applyUnknownEffect(unknownCount);
-
-  const rid = 'unk-result-' + Date.now();
-  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:400, h:260, x:160+Math.random()*120, y:80+Math.random()*80, menubar:false, statusbar:false })) return;
-  document.getElementById('wb-' + rid).innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon">❓</div>
-      <div class="dlg-text" style="white-space:pre-line;">${msgs[idx]}</div>
-    </div>
-    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
-}
-
 // ─────────────────────────────────────────────────────────────────
 // BROWSER
 // ─────────────────────────────────────────────────────────────────
@@ -8870,10 +10334,10 @@ function renderDaemonPanel() {
     notes.push('The seal lattice is ready. Run ?????.exe to write SYS\\quarantine.sig, then delete void.tmp.');
   } else if (daemonStory.stage >= 5) {
     notes.push('You removed the anchor. The mirror is no longer deflected away from the user.');
-    notes.push('Inspect void.tmp and CACHE\\mirror.dat. Restore MIRROR_LOCK when you are done.');
+    notes.push('Inspect void.tmp and CACHE\\mirror.dat. Read DOCS\\MIRROR_PROTOCOL.txt for the procedure. Restore MIRROR_LOCK when done.');
   } else if (daemonStory.stage >= 4) {
     notes.push('PID 512 stayed dead. The quiet that followed was a failure state, not a victory.');
-    notes.push('Inspect void.tmp and CACHE\\mirror.dat.');
+    notes.push('Lower MIRROR_LOCK in the registry, then delete SYS\\anchor.seed to open the channel. Inspect CACHE\\mirror.dat first.');
   } else if (daemonStory.stage >= 2) {
     notes.push('The watch layer answered your kill attempt. RESPAWN_LOCK must be cleared before PID 512 will stay down.');
   } else {
@@ -8974,12 +10438,13 @@ function openDaemon() {
 
 function daemonVoidAction(mode) {
   const telemetry = getContainmentTelemetry();
+  daemonVoidFeedMode = mode;
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'The file is no longer empty. It is only narrow.'
+      ? 'This is not a damaged file. This is the aperture surface.'
       : daemonStory.stage >= 4
-        ? 'Pressure is measurable. Silence is not safety.'
-        : 'Nothing stable answers yet.';
+        ? 'The relay went quiet and this surface brightened. Silence is not safety.'
+        : 'Nothing stable answers yet, but the file is already taking a shape.';
   } else if (mode === 'measure') {
     daemonVoidFeed = [
       `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
@@ -8987,22 +10452,23 @@ function daemonVoidAction(mode) {
       `lattice stability: ${telemetry.lattice}`,
       `signal depth: ${telemetry.signalDepth}`,
       `aperture bias: ${telemetry.bias}`,
+      'disk locality: negative',
     ].join('\n');
   } else if (mode === 'listen') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'The reflected side does not speak in words. It leans.'
+      ? 'The reflected side does not speak in words. It leans against the room tone.'
       : daemonStory.stage >= 4
         ? 'You hear the shape of a voice through the monitor gap.'
         : 'Static. Then the suggestion of a room tone.';
   } else if (mode === 'trace') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'trace path:\n  daemon.core -> mirror offset -> void.tmp\n  return latency remains non-local'
+      ? 'trace path:\n  user-facing aperture <- mirror offset <- unresolved source\n  return latency remains non-local'
       : daemonStory.stage >= 4
         ? 'trace path:\n  monitor gap -> pressure rise -> reflected surface'
         : 'No stable trace path yet.';
   } else if (mode === 'sample') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'sample:\n  carrier mismatch: confirmed\n  human voice match: negative\n  reflected side remains coherent'
+      ? 'sample:\n  carrier mismatch: confirmed\n  human voice match: negative\n  daemon-authored signature: false'
       : daemonStory.stage >= 4
         ? 'sample:\n  carrier unstable\n  monitor loss amplified the return path'
         : 'Sampling window too narrow.';
@@ -9017,13 +10483,13 @@ function daemonVoidAction(mode) {
     daemonVoidFeed = daemonStory.quarantineSigned
       ? 'The quarantine signature holds. The aperture recoils.'
       : daemonStory.stage >= 5
-        ? 'A pulse returns late, as if the file were farther away than the disk.'
+        ? 'A pulse returns before the machine feels ready for it, as if the file were farther away than the disk.'
         : 'The pulse dissipates without a readable return.';
     if (daemonStory.stage >= 5) triggerGlitch();
   }
-  daemonRecordInvestigation('void');
+  daemonRecordVoidAction(mode);
   const out = document.getElementById('void-readout');
-  if (out) out.textContent = daemonVoidFeed;
+  if (out) renderVoidReadout(out, daemonVoidFeed, telemetry);
 }
 
 function renderVoid() {
@@ -9034,13 +10500,14 @@ function renderVoid() {
   if (title) title.textContent = daemonStory.endingReached ? 'void.tmp — Sealed' : 'void.tmp';
   body.style.cssText = 'background:#000;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:10px;';
   const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
   const pressure = telemetry.pressure;
   const summary = daemonStory.endingReached
     ? 'No active signal remains.'
     : daemonStory.stage >= 5
-      ? 'Observation window open. Keep interaction bounded.'
+      ? `This file is the breach surface.\nUse the probes here to profile it.\n${getVoidObjectiveLine()}`
       : daemonStory.stage >= 4
-        ? 'Pressure rose after the daemon relay went quiet.'
+        ? `Pressure rose after the daemon relay went quiet.\nUse Measure, Listen, or Trace to make the change legible.\n${getVoidObjectiveLine()}`
         : 'No stable observation channel yet.';
   const readout = daemonVoidFeed || summary;
   body.innerHTML = `
@@ -9069,8 +10536,12 @@ function renderVoid() {
         <div><b>MIRROR LOCK:</b> ${telemetry.mirrorLockActive ? '1' : '0'}</div>
         <div><b>DELETE AUTH:</b> ${telemetry.deleteAuthorized ? 'yes' : 'no'}</div>
       </div>
+      <div>
+        <div><b>PROBES:</b> ${actions.length}/${VOID_ACTION_ORDER.length}</div>
+        <div><b>PROFILE:</b> ${getVoidProfileLabel().toUpperCase()}</div>
+      </div>
     </div>
-    <div id="void-readout" style="flex:1;border:1px solid #123512;background:#020402;color:#6ab56a;padding:10px;font-size:11px;line-height:1.7;white-space:pre-wrap;">${escHtml(readout)}</div>
+    <div id="void-readout" style="flex:1;min-height:0;overflow:auto;border:1px solid #123512;background:#020402;color:#6ab56a;padding:10px;font-size:11px;line-height:1.7;white-space:pre-wrap;">${escHtml(readout)}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;">
       <button class="dlg-btn" onclick="daemonVoidAction('observe')">Observe</button>
       <button class="dlg-btn" onclick="daemonVoidAction('measure')">Measure</button>
@@ -9081,6 +10552,7 @@ function renderVoid() {
       <button class="dlg-btn" onclick="daemonVoidAction('pulse')">Pulse</button>
       <button class="dlg-btn primary" onclick="closeWin('void')">Close</button>
     </div>`;
+  renderVoidReadout(document.getElementById('void-readout'), readout, telemetry);
   resizeVoidWindow();
 }
 
@@ -9091,10 +10563,19 @@ function resizeVoidWindow() {
   if (isMobile) return;
   const desktop = document.getElementById('desktop');
   if (!desktop) return;
-  const nextHeight = Math.min(Math.max(360, desktop.clientHeight - 24), Math.max(voidWin.offsetHeight, 380));
+  const targetWidth = daemonStory.stage >= 5 ? 560 : 540;
+  const targetHeight = daemonStory.stage >= 5 ? 520 : 500;
+  const maxWidth = Math.max(380, desktop.clientWidth - 24);
+  const maxHeight = Math.max(360, desktop.clientHeight - 24);
+  const nextWidth = Math.min(maxWidth, Math.max(voidWin.offsetWidth, targetWidth));
+  const nextHeight = Math.min(maxHeight, Math.max(voidWin.offsetHeight, targetHeight));
+  voidWin.style.width = nextWidth + 'px';
   voidWin.style.height = nextHeight + 'px';
+  const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
   const maxTop = Math.max(0, desktop.clientHeight - nextHeight);
+  const currentLeft = parseFloat(voidWin.style.left) || 0;
   const currentTop = parseFloat(voidWin.style.top) || 0;
+  voidWin.style.left = Math.max(0, Math.min(maxLeft, currentLeft)) + 'px';
   voidWin.style.top = Math.max(0, Math.min(maxTop, currentTop)) + 'px';
 }
 
@@ -9104,15 +10585,22 @@ function openVoid() {
     return;
   }
   daemonRecordInvestigation('void');
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:400, h:380, x:220, y:150, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
+  const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
   renderVoid();
 }
 
 function openUnknown() {
   const wid = 'unk-warn-' + Date.now();
-  if (!mkWin({ id:wid, title:'?????.exe', icon:'❓', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'❓', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
   const ready = daemonStory.stage >= 7 && !daemonStory.endingReached && Number(getContainmentValue('MIRROR_LOCK')) === 1;
   const signed = daemonStory.quarantineSigned;
+  const inertMsg = daemonStory.stage < 4
+    ? 'The launcher does not respond.<br><br>There is nothing here for it to do yet.'
+    : daemonStory.stage < 6
+    ? 'The launcher is inert.<br><br>The investigation is incomplete. Find the channel.'
+    : 'The launcher is waiting.<br><br>MIRROR_LOCK must be restored before it will sign anything.';
   document.getElementById('wb-' + wid).innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">❓</div>
@@ -9121,7 +10609,7 @@ function openUnknown() {
           ? 'SYS\\quarantine.sig is already present.<br><br>The launcher is waiting for the final delete.'
           : ready
           ? 'The quarantine launcher is armed.<br><br>Running <b>?????.exe</b> will write <b>SYS\\quarantine.sig</b>.'
-          : 'The launcher is inert right now.<br><br>Restore the mirror and finish the investigation before you try to use it.'}
+          : inertMsg}
       </div>
     </div>
     <div class="dlg-btns">
@@ -9134,13 +10622,18 @@ function runUnknown() {
   let message = '';
   if (daemonStory.endingReached) {
     message = 'The quarantine launcher has been archived.\nThere is nothing left to sign.';
+  } else if (daemonStory.stage < 4) {
+    message = '?????.exe does not execute.\n\nThere is nothing for it to do yet.';
+  } else if (daemonStory.stage < 6) {
+    message = '?????.exe does not execute.\n\nThe investigation is incomplete. Find and inspect the channel before you use this.';
   } else if (daemonStory.stage < 7 || Number(getContainmentValue('MIRROR_LOCK')) !== 1) {
-    message = '?????.exe does not execute.\n\nThe launcher is waiting for a restored mirror lattice.';
+    message = '?????.exe does not execute.\n\nRestore MIRROR_LOCK to 1 first. The launcher will not sign an open lattice.';
   } else if (!daemonStory.quarantineSigned) {
     updateDaemonStory(story => {
       story.quarantineSigned = true;
       story.lastEventText = 'quarantine signature written';
       daemonVoidFeed = 'A signature passes through the aperture and the pressure drops.';
+      daemonVoidFeedMode = '';
     }, {
       glitch: true,
     });
@@ -9578,6 +11071,7 @@ function openRegedit() {
   const ws   = document.getElementById('ws-regedit');
   const mb   = document.getElementById('mb-regedit');
   body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+  const REGEDIT_LOCKED_VALUE_NAMES = new Set(['OBSERVER_COUNT', 'ANCHOR_FILE', 'TEMPORAL_DRIFT']);
 
   const layout = document.createElement('div');
   layout.className = 'reg-layout';
@@ -9594,6 +11088,14 @@ function openRegedit() {
   layout.appendChild(vals);
 
   let selectedPath = null; // { hive, key }
+
+  function isLockedRegValue(hive, keyPath, valName) {
+    return REGEDIT_LOCKED_VALUE_NAMES.has(String(valName || '').toUpperCase());
+  }
+
+  function showLockedRegValueNotice(valName) {
+    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', '🗝️');
+  }
 
   function buildTree() {
     tree.innerHTML = '';
@@ -9646,15 +11148,22 @@ function openRegedit() {
 
     Object.keys(data).forEach(valName => {
       const entry = data[valName];
+      const locked = isLockedRegValue(hive, keyPath, valName);
       const tr = document.createElement('tr');
       tr.className = 'reg-val-row';
       tr.innerHTML = '<td>📄 ' + valName + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
-      tr.addEventListener('dblclick', () => editRegValue(hive, keyPath, valName));
+      tr.addEventListener('dblclick', () => {
+        if (locked) {
+          showLockedRegValueNotice(valName);
+          return;
+        }
+        editRegValue(hive, keyPath, valName);
+      });
       tr.addEventListener('contextmenu', e => {
         e.preventDefault();
         tr.classList.add('selected');
         showCtxMenu(e.clientX, e.clientY, [
-          { label: 'Modify', action: () => editRegValue(hive, keyPath, valName) },
+          { label: 'Modify', disabled: locked, action: () => editRegValue(hive, keyPath, valName) },
         ]);
         setTimeout(() => tr.classList.remove('selected'), 800);
       });
@@ -9665,6 +11174,10 @@ function openRegedit() {
   }
 
   function editRegValue(hive, keyPath, valName) {
+    if (isLockedRegValue(hive, keyPath, valName)) {
+      showLockedRegValueNotice(valName);
+      return;
+    }
     const entry = registryData[hive][keyPath][valName];
     const currentVal = String(entry.value);
     osPrompt('Edit value for: ' + valName, currentVal, 'Edit Registry Value', newVal => {
@@ -9695,12 +11208,37 @@ function openRegedit() {
           updateClock();
         }
         saveSettings();
-      } else if (keyPath === 'SOUL\\Metrics' && valName === 'SOUL_INTEGRITY') {
-        const bar = document.getElementById('bar-soul');
-        const val = document.getElementById('val-soul');
-        const v = Math.max(0, Math.min(99, parseInt(newValue) || 0));
-        if (bar) bar.style.width = v + '%';
-        if (val) val.textContent = v + '%';
+      } else if (keyPath === 'SOUL\\Metrics') {
+        if (valName === 'SOUL_INTEGRITY') {
+          const bar = document.getElementById('bar-soul');
+          const val = document.getElementById('val-soul');
+          const v = Math.max(0, Math.min(99, parseInt(newValue) || 0));
+          if (bar) bar.style.width = v + '%';
+          if (val) val.textContent = v + '%';
+        } else if (valName === 'DAEMON_COUNT') {
+          const count = parseInt(newValue) || 0;
+          if (count !== 7) triggerGlitch({ intensity: Math.abs(count - 7) > 3 ? 6 : 3 });
+          updateDaemonStory(story => {
+            story.lastEventText = count > 7 ? 'daemon count elevated — ' + count : count < 7 ? 'daemon count reduced — ' + count : 'daemon count nominal';
+          }, { forceSync: true });
+          if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
+        } else if (valName === 'TEMPORAL_DRIFT') {
+          triggerGlitch({ intensity: 3 });
+          updateDaemonStory(story => { story.lastEventText = 'temporal drift set: ' + String(newValue); }, { forceSync: true });
+          if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
+        }
+      } else if (keyPath === 'VOID') {
+        if (valName === 'VOID_PRESSURE_BASE') {
+          const base = Math.max(0, Math.min(99, parseInt(newValue) || 0));
+          triggerGlitch({ intensity: base > 50 ? 7 : base > 25 ? 5 : 2 });
+          if (typeof renderVoid === 'function' && document.getElementById('wb-void')) renderVoid();
+        } else if (valName === 'OBSERVER_COUNT') {
+          const val = String(newValue).trim();
+          if (val !== '[classified]' && val !== '') {
+            triggerGlitch({ intensity: 8 });
+            updateDaemonStory(story => { story.lastEventText = 'observer count declassified: ' + val; }, { forceSync: true });
+          }
+        }
       } else if (keyPath === 'Containment') {
         if (valName === 'RESPAWN_LOCK') {
           updateDaemonStory(story => {
@@ -9722,7 +11260,9 @@ function openRegedit() {
         }
       }
     } else if (hive === 'HKEY_CURRENT_USER') {
-      if (keyPath === 'SOFTWARE\\sleepOS' && valName === 'SkipBoot') {
+      if (keyPath === 'Desktop' && valName === 'Wallpaper') {
+        applyWallpaper(String(newValue), { updateRegistry: false, deferMissing: false });
+      } else if (keyPath === 'SOFTWARE\\sleepOS' && valName === 'SkipBoot') {
         osSettings.skipBoot = !!newValue;
         saveSettings();
       }
@@ -9758,7 +11298,8 @@ function openRegedit() {
       { label: 'Modify', disabled: !selectedPath, action: () => {
         if (!selectedPath) return;
         const keys = Object.keys(registryData[selectedPath.hive][selectedPath.key]);
-        if (keys.length) editRegValue(selectedPath.hive, selectedPath.key, keys[0]);
+        const editableKey = keys.find(valName => !isLockedRegValue(selectedPath.hive, selectedPath.key, valName));
+        if (editableKey) editRegValue(selectedPath.hive, selectedPath.key, editableKey);
       }},
     ]},
     { label: 'Help', items: [
@@ -10070,21 +11611,37 @@ function openRunDialog() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// ALT+TAB / KEYBOARD SHORTCUTS
+// SPACE+TAB / KEYBOARD SHORTCUTS
 // ─────────────────────────────────────────────────────────────────
 let altTabActive = false;
 let altTabIdx = 0;
 let altTabWinIds = [];
+let spaceTabHeld = false;
 
-function openAltTab() {
-  const ids = Object.keys(wins).filter(id => !wins[id].minimized);
-  if (ids.length === 0) return;
-  altTabWinIds = ids;
-  altTabIdx = (altTabIdx + 1) % ids.length;
+function getAltTabWindowIds() {
+  return Object.entries(wins)
+    .filter(([, win]) => !win.minimized)
+    .sort(([, a], [, b]) => (parseInt(b.el.style.zIndex, 10) || 0) - (parseInt(a.el.style.zIndex, 10) || 0))
+    .map(([id]) => id);
+}
 
+function renderAltTab() {
   const box = document.getElementById('alttab-box');
+  if (!box) return;
+  if (!altTabWinIds.length) {
+    box.innerHTML = '';
+    return;
+  }
   box.innerHTML = '';
-  ids.forEach((id, i) => {
+  const head = document.createElement('div');
+  head.id = 'alttab-head';
+  head.innerHTML = `
+    <div id="alttab-title">Window Switcher</div>
+    <div id="alttab-hint">Hold Space, tap Tab, release Space to select</div>`;
+  box.appendChild(head);
+  const strip = document.createElement('div');
+  strip.id = 'alttab-strip';
+  altTabWinIds.forEach((id, i) => {
     const w = wins[id];
     const item = document.createElement('div');
     item.className = 'alttab-item' + (i === altTabIdx ? ' focused' : '');
@@ -10093,9 +11650,19 @@ function openAltTab() {
       altTabIdx = i;
       commitAltTab();
     });
-    box.appendChild(item);
+    strip.appendChild(item);
   });
+  box.appendChild(strip);
+}
 
+function openAltTab(direction) {
+  const ids = getAltTabWindowIds();
+  if (ids.length === 0) return;
+  const step = direction === -1 ? -1 : 1;
+  altTabWinIds = ids;
+  if (!altTabActive) altTabIdx = ids.length === 1 ? 0 : (step > 0 ? 1 : ids.length - 1);
+  else altTabIdx = (altTabIdx + step + ids.length) % ids.length;
+  renderAltTab();
   document.getElementById('alttab-overlay').classList.add('active');
   altTabActive = true;
 }
@@ -10109,6 +11676,14 @@ function commitAltTab() {
     else focusWin(id);
   }
   altTabWinIds = [];
+}
+
+function closeAltTab() {
+  document.getElementById('alttab-overlay').classList.remove('active');
+  altTabActive = false;
+  altTabIdx = 0;
+  altTabWinIds = [];
+  renderAltTab();
 }
 
 function closeCad() {
@@ -10140,64 +11715,27 @@ function cadAction(type) {
 document.addEventListener('keydown', e => {
   // Don't fire in inputs/textareas (except specific shortcuts)
   const inInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+  const key = String(e.key || '').toLowerCase();
+  const secureAttention = e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && key === 'q';
 
-  // Alt+F4 — close focused window
-  if (e.altKey && e.key === 'F4') {
-    e.preventDefault();
-    const focused = Object.entries(wins).find(([, w]) => !w.el.classList.contains('inactive'));
-    if (focused) closeWin(focused[0]);
+  if (e.code === 'Space' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (!inInput) {
+      spaceTabHeld = true;
+      e.preventDefault();
+    }
     return;
   }
-
-  // Alt+Tab — cycle windows
-  if (e.altKey && e.key === 'Tab') {
+  if (!inInput && e.key === 'Tab' && spaceTabHeld && !e.ctrlKey && !e.altKey && !e.metaKey) {
     e.preventDefault();
-    openAltTab();
+    openAltTab(e.shiftKey ? -1 : 1);
     return;
   }
+  if (inInput && !secureAttention) return;
 
-  // Release Alt to commit alt-tab selection
-  if (altTabActive && e.key === 'Alt') {
-    e.preventDefault();
-    commitAltTab();
-    return;
-  }
-
-  // Ctrl+Alt+Del — secure attention sequence
-  if (e.ctrlKey && e.altKey && e.key === 'Delete') {
+  // Ctrl+Shift+Q — secure attention sequence
+  if (secureAttention) {
     e.preventDefault();
     document.getElementById('cad-overlay').classList.add('active');
-    return;
-  }
-
-  // Meta/Win key — toggle start menu; Win+R opens Run dialog
-  if ((e.metaKey || e.key === 'Meta' || e.key === 'OS') && e.key === 'r') {
-    e.preventDefault();
-    closeStart();
-    openRunDialog();
-    return;
-  }
-  if ((e.key === 'Meta' || e.key === 'OS') && !e.ctrlKey && !e.altKey) {
-    e.preventDefault();
-    toggleStart();
-    return;
-  }
-
-  // Delete - allow desktop-selected void.tmp to use the shared delete flow
-  if (e.key === 'Delete' && !inInput) {
-    const desktopTargets = [...desktopSel].map(el => el._ic).filter(canDeleteDesktopSystemIcon);
-    if (desktopTargets.length) {
-      e.preventDefault();
-      deleteDesktopSystemIcons(desktopTargets);
-      return;
-    }
-  }
-
-  // F5 — refresh desktop icons
-  if (e.key === 'F5' && !inInput) {
-    e.preventDefault();
-    const desktop = document.getElementById('desktop');
-    if (desktop && desktop.style.display !== 'none') setupIcons();
     return;
   }
 
@@ -10205,15 +11743,24 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeDropdown();
     closeStart();
-    if (altTabActive) {
-      document.getElementById('alttab-overlay').classList.remove('active');
-      altTabActive = false;
-      altTabWinIds = [];
-    }
     const cad = document.getElementById('cad-overlay');
     if (cad.classList.contains('active')) cad.classList.remove('active');
+    if (altTabActive) closeAltTab();
     return;
   }
+
+});
+document.addEventListener('keyup', e => {
+  if (e.code !== 'Space') return;
+  const wasHeld = spaceTabHeld;
+  spaceTabHeld = false;
+  if (!wasHeld || !altTabActive) return;
+  e.preventDefault();
+  commitAltTab();
+});
+window.addEventListener('blur', () => {
+  spaceTabHeld = false;
+  if (altTabActive) closeAltTab();
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -10222,8 +11769,8 @@ document.addEventListener('keydown', e => {
 function startDesktop() {
   document.getElementById('desktop').style.display = 'block';
   document.getElementById('taskbar').style.display = 'flex';
-  const savedWp = localStorage.getItem(WP_KEY);
-  if (savedWp) applyWallpaper(savedWp, { deferMissing: isWallpaperFileId(savedWp) });
+  const savedWp = getInitialWallpaperPath();
+  if (savedWp) applyWallpaper(savedWp, { deferMissing: !isSystemWallpaperPath(savedWp) });
   applySettings();
   applyDaemonVisualState();
   setupIcons();
