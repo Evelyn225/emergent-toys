@@ -50,6 +50,51 @@ const AXE_IRON    = 27;
 const SHOVEL_STONE = 28;
 const SHOVEL_IRON = 29;
 const BOW         = 30;
+const SWORD_COPPER  = 31;
+const PICK_COPPER   = 32;
+const AXE_COPPER    = 33;
+const SHOVEL_COPPER = 34;
+// Accessories
+const ACC_HERMES_BOOTS  = 58;  // +40% move speed
+const ACC_CLOUD_BOTTLE  = 59;  // double jump
+const ACC_HORSESHOE     = 60;  // negate fall damage
+const ACC_BAND_REGEN    = 61;  // slow HP regen
+const ACC_FROG_LEG      = 62;  // +30% jump height
+const ACC_SHACKLE       = 63;  // +2 defense
+const ACC_ANKH          = 64;  // +25% knockback resist
+const ACC_NECKLACE      = 65;  // +1 max HP
+const ACC_AGLET         = 66;  // +20% move speed
+const ACC_SPECTRE_BOOTS = 67;  // +60% move speed (combine aglet + hermes)
+const ACC_SLOTS = 5;
+// New ores & ingots
+const GOLD_ORE      = 35;
+const GOLD_INGOT    = 36;
+const DIAMOND       = 37;  // mined raw, no smelting
+// Iron armor
+const HELMET_IRON      = 38;
+const CHESTPLATE_IRON  = 39;
+const LEGGINGS_IRON    = 40;
+const BOOTS_IRON       = 41;
+// Gold tools
+const SWORD_GOLD    = 42;
+const PICK_GOLD     = 43;
+const AXE_GOLD      = 44;
+const SHOVEL_GOLD   = 45;
+// Gold armor
+const HELMET_GOLD      = 46;
+const CHESTPLATE_GOLD  = 47;
+const LEGGINGS_GOLD    = 48;
+const BOOTS_GOLD       = 49;
+// Diamond tools
+const SWORD_DIAMOND = 50;
+const PICK_DIAMOND  = 51;
+const AXE_DIAMOND   = 52;
+const SHOVEL_DIAMOND = 53;
+// Diamond armor
+const HELMET_DIAMOND      = 54;
+const CHESTPLATE_DIAMOND  = 55;
+const LEGGINGS_DIAMOND    = 56;
+const BOOTS_DIAMOND       = 57;
 
 const WATER_MAX = 1;
 const WATER_RENDER_EPS = 0.04;
@@ -80,6 +125,8 @@ const blockDefs = {
   [WOOD]: { name: 'Wood', solid: true, mine: 16 },
   [TREE]:     { name: 'Tree',      solid: false, mine: 16,  drops: WOOD  },
   [COAL_ORE]: { name: 'Coal Ore',  solid: true,  mine: 28,  drops: COAL  },
+  [GOLD_ORE]: { name: 'Gold Ore',    solid: true, mine: 68,  drops: GOLD_ORE  },
+  [DIAMOND]:  { name: 'Diamond Ore', solid: true, mine: 90,  drops: DIAMOND   },
   [DOOR]:     { name: 'Door',      solid: true,  mine: 12,  drops: DOOR  },
   [DOOR_OPEN]:{ name: 'Door',      solid: false, mine: 12,  drops: DOOR  },
   [CHEST]:    { name: 'Chest',     solid: true,  mine: 24,  drops: CHEST },
@@ -100,6 +147,42 @@ const itemDefs = {
   [SHOVEL_STONE]:{ name: 'Stone Shovel'  },
   [SHOVEL_IRON]: { name: 'Iron Shovel'   },
   [BOW]:         { name: 'Bow'           },
+  [SWORD_COPPER]:  { name: 'Copper Sword'    },
+  [PICK_COPPER]:   { name: 'Copper Pickaxe'  },
+  [AXE_COPPER]:    { name: 'Copper Axe'      },
+  [SHOVEL_COPPER]: { name: 'Copper Shovel'   },
+  [ACC_HERMES_BOOTS]: { name: 'Hermes Boots',   accessory: true },
+  [ACC_CLOUD_BOTTLE]: { name: 'Cloud in a Bottle', accessory: true },
+  [ACC_HORSESHOE]:    { name: 'Lucky Horseshoe', accessory: true },
+  [ACC_BAND_REGEN]:   { name: 'Band of Regeneration', accessory: true },
+  [ACC_FROG_LEG]:     { name: 'Frog Leg',       accessory: true },
+  [ACC_SHACKLE]:      { name: 'Shackle',         accessory: true },
+  [ACC_ANKH]:         { name: 'Ankh Charm',       accessory: true },
+  [ACC_NECKLACE]:     { name: 'Necklace',         accessory: true },
+  [ACC_AGLET]:        { name: 'Aglet',            accessory: true },
+  [ACC_SPECTRE_BOOTS]:{ name: 'Spectre Boots',    accessory: true },
+  [GOLD_INGOT]:    { name: 'Gold Ingot'      },
+  [DIAMOND]:       { name: 'Diamond'         },
+  [HELMET_IRON]:      { name: 'Iron Helmet',     equipSlot: 0 },
+  [CHESTPLATE_IRON]:  { name: 'Iron Chestplate', equipSlot: 1 },
+  [LEGGINGS_IRON]:    { name: 'Iron Leggings',   equipSlot: 2 },
+  [BOOTS_IRON]:       { name: 'Iron Boots',      equipSlot: 3 },
+  [SWORD_GOLD]:    { name: 'Gold Sword'      },
+  [PICK_GOLD]:     { name: 'Gold Pickaxe'    },
+  [AXE_GOLD]:      { name: 'Gold Axe'        },
+  [SHOVEL_GOLD]:   { name: 'Gold Shovel'     },
+  [HELMET_GOLD]:      { name: 'Gold Helmet',     equipSlot: 0 },
+  [CHESTPLATE_GOLD]:  { name: 'Gold Chestplate', equipSlot: 1 },
+  [LEGGINGS_GOLD]:    { name: 'Gold Leggings',   equipSlot: 2 },
+  [BOOTS_GOLD]:       { name: 'Gold Boots',      equipSlot: 3 },
+  [SWORD_DIAMOND]: { name: 'Diamond Sword'   },
+  [PICK_DIAMOND]:  { name: 'Diamond Pickaxe' },
+  [AXE_DIAMOND]:   { name: 'Diamond Axe'     },
+  [SHOVEL_DIAMOND]:{ name: 'Diamond Shovel'  },
+  [HELMET_DIAMOND]:     { name: 'Diamond Helmet',     equipSlot: 0 },
+  [CHESTPLATE_DIAMOND]: { name: 'Diamond Chestplate', equipSlot: 1 },
+  [LEGGINGS_DIAMOND]:   { name: 'Diamond Leggings',   equipSlot: 2 },
+  [BOOTS_DIAMOND]:      { name: 'Diamond Boots',      equipSlot: 3 },
   [COAL]:        { name: 'Coal'          },
   [COPPER_INGOT]:{ name: 'Copper Ingot'  },
   [IRON_INGOT]:  { name: 'Iron Ingot'    },
@@ -114,24 +197,75 @@ function getItemName(type) {
 }
 
 const armorDefs = {
-  [HELMET]:     { defense: 1 },
-  [CHESTPLATE]: { defense: 3 },
-  [LEGGINGS]:   { defense: 2 },
-  [BOOTS]:      { defense: 1 },
+  // Copper
+  [HELMET]:     { defense: 1 }, [CHESTPLATE]:  { defense: 3 }, [LEGGINGS]:  { defense: 2 }, [BOOTS]:  { defense: 1 },
+  // Iron
+  [HELMET_IRON]:    { defense: 2 }, [CHESTPLATE_IRON]:  { defense: 5 }, [LEGGINGS_IRON]:  { defense: 3 }, [BOOTS_IRON]:  { defense: 2 },
+  // Gold
+  [HELMET_GOLD]:    { defense: 3 }, [CHESTPLATE_GOLD]:  { defense: 7 }, [LEGGINGS_GOLD]:  { defense: 5 }, [BOOTS_GOLD]:  { defense: 3 },
+  // Diamond
+  [HELMET_DIAMOND]: { defense: 4 }, [CHESTPLATE_DIAMOND]:{ defense: 9 }, [LEGGINGS_DIAMOND]:{ defense: 7 }, [BOOTS_DIAMOND]:{ defense: 4 },
 };
+const accessories = Array.from({ length: ACC_SLOTS }, () => createStack());
+
+function hasAccessory(type) {
+  return accessories.some(s => s.type === type);
+}
+
 function getTotalDefense() {
-  return equipment.reduce((s, slot) => s + (armorDefs[slot.type]?.defense ?? 0), 0);
+  const armor = equipment.reduce((s, slot) => s + (armorDefs[slot.type]?.defense ?? 0), 0);
+  const acc = hasAccessory(ACC_SHACKLE) ? 2 : 0;
+  return armor + acc;
+}
+
+function getSpeedMult() {
+  if (hasAccessory(ACC_SPECTRE_BOOTS)) return 1.6;
+  let m = 1.0;
+  if (hasAccessory(ACC_HERMES_BOOTS)) m += 0.4;
+  if (hasAccessory(ACC_AGLET))        m += 0.2;
+  return m;
+}
+
+function getJumpMult() {
+  return hasAccessory(ACC_FROG_LEG) ? 1.3 : 1.0;
+}
+
+function getMaxHealth() {
+  return player.maxHealth + (hasAccessory(ACC_NECKLACE) ? 1 : 0);
+}
+
+// Called wherever player takes damage — applies Terraria-style defense reduction
+function applyDamageToPlayer(rawDmg) {
+  if (player.iframes > 0 || player.dying) return;
+  const defense = getTotalDefense();
+  const reduced = Math.max(1, rawDmg - Math.floor(defense / 2));
+  player.health = Math.max(0, player.health - reduced);
+  player.iframes = 45;
 }
 
 function getToolMultiplier(blockType) {
   const held = inventory.hotbar[inventory.selected]?.type ?? AIR;
-  if ((held === PICK_STONE || held === PICK_IRON) &&
-      [STONE, DSTONE, COPPER, IRON, COAL_ORE, FURNACE].includes(blockType))
-    return held === PICK_IRON ? 3.5 : 2.5;
-  if ((held === AXE_STONE || held === AXE_IRON) && [WOOD, TREE].includes(blockType))
-    return held === AXE_IRON ? 3.5 : 2.5;
-  if ((held === SHOVEL_STONE || held === SHOVEL_IRON) && [DIRT, GRASS].includes(blockType))
-    return held === SHOVEL_IRON ? 3.5 : 2.5;
+  const stoneBlocks = [STONE, DSTONE, COPPER, IRON, COAL_ORE, GOLD_ORE, DIAMOND, FURNACE];
+  // Pickaxes
+  if (held === PICK_DIAMOND && stoneBlocks.includes(blockType)) return 7.0;
+  if (held === PICK_GOLD    && stoneBlocks.includes(blockType)) return 5.0;
+  if (held === PICK_IRON    && stoneBlocks.includes(blockType)) return 3.5;
+  if (held === PICK_STONE   && stoneBlocks.includes(blockType)) return 2.5;
+  if (held === PICK_COPPER  && stoneBlocks.includes(blockType)) return 1.5;
+  // Axes
+  const woodBlocks = [WOOD, TREE];
+  if (held === AXE_DIAMOND && woodBlocks.includes(blockType)) return 7.0;
+  if (held === AXE_GOLD    && woodBlocks.includes(blockType)) return 5.0;
+  if (held === AXE_IRON    && woodBlocks.includes(blockType)) return 3.5;
+  if (held === AXE_STONE   && woodBlocks.includes(blockType)) return 2.5;
+  if (held === AXE_COPPER  && woodBlocks.includes(blockType)) return 1.5;
+  // Shovels
+  const dirtBlocks = [DIRT, GRASS];
+  if (held === SHOVEL_DIAMOND && dirtBlocks.includes(blockType)) return 7.0;
+  if (held === SHOVEL_GOLD    && dirtBlocks.includes(blockType)) return 5.0;
+  if (held === SHOVEL_IRON    && dirtBlocks.includes(blockType)) return 3.5;
+  if (held === SHOVEL_STONE   && dirtBlocks.includes(blockType)) return 2.5;
+  if (held === SHOVEL_COPPER  && dirtBlocks.includes(blockType)) return 1.5;
   return 1;
 }
 
@@ -142,8 +276,9 @@ const furnaces = new Map(); // blockIndex → FurnaceState
 let openUI = null; // null | { type:'chest'|'furnace', key, wx, wy }
 
 const SMELT_RECIPES = {
-  [COPPER]: { out: COPPER_INGOT, time: 150 },
-  [IRON]:   { out: IRON_INGOT,   time: 180 },
+  [COPPER]:   { out: COPPER_INGOT, time: 150 },
+  [IRON]:     { out: IRON_INGOT,   time: 180 },
+  [GOLD_ORE]: { out: GOLD_INGOT,   time: 220 },
 };
 
 function createFurnaceState() {
@@ -157,7 +292,7 @@ function isInteractable(type) {
 function blockKey(wx, wy) { return wy * WORLD_W + wx; }
 
 function handleWorldRightClick() {
-  if (openUI || inventory.open) return;
+  if (openUI) return;
   const camX = Math.round(cam.x);
   const camY = Math.round(cam.y);
   const wx = Math.floor((mouse.x + camX) / TILE);
@@ -168,14 +303,15 @@ function handleWorldRightClick() {
 
   const type = getBlock(wx, wy);
   const key = blockKey(wx, wy);
-  if (type === DOOR)      { setBlock(wx, wy, DOOR_OPEN); return; }
-  if (type === DOOR_OPEN) { setBlock(wx, wy, DOOR); return; }
+  if (type === DOOR)      { if (!inventory.open) { setBlock(wx, wy, DOOR_OPEN); return; } }
+  if (type === DOOR_OPEN) { if (!inventory.open) { setBlock(wx, wy, DOOR); return; } }
   if (type === CHEST) {
     if (!chests.has(key)) chests.set(key, Array.from({ length: CHEST_SLOTS }, () => createStack()));
-    openUI = { type: 'chest', key, wx, wy };
+    openUI = { type: 'chest', key, wx, wy, wasInventoryOpen: inventory.open };
+    inventory.open = true;
     return;
   }
-  if (type === FURNACE) {
+  if (type === FURNACE && !inventory.open) {
     if (!furnaces.has(key)) furnaces.set(key, createFurnaceState());
     openUI = { type: 'furnace', key, wx, wy };
   }
@@ -256,6 +392,236 @@ function updateFurnaces(scale) {
       f.timer = 0;
     }
   }
+}
+
+// ─── SLIME ENEMIES ────────────────────────────────────────────────────────────
+const slimes = [];
+const SLIME_W = 20, SLIME_H = 16;
+const SLIME_MAX = 5;
+const SLIME_SPAWN_DIST_MIN = canvas.width * 0.6;
+const SLIME_SPAWN_DIST_MAX = canvas.width * 1.2;
+const SLIME_JUMP_INTERVAL_MIN = 60, SLIME_JUMP_INTERVAL_MAX = 150;
+const SLIME_JUMP_VEL = -9.0;
+const SLIME_WALK_SPEED = 1.8;
+
+function spawnSlime() {
+  if (slimes.length >= SLIME_MAX) return;
+  const side = Math.random() < 0.5 ? -1 : 1;
+  // Ensure spawn is at least half a screen-width beyond the viewport edge
+  const offscreenMargin = canvas.width / 2 + TILE * 3;
+  const spawnDist = offscreenMargin + Math.random() * TILE * 20;
+  const wx = Math.floor((player.x + player.w / 2 + side * spawnDist) / TILE);
+  const clampedWx = Math.max(2, Math.min(WORLD_W - 3, wx));
+  // Find surface at that x
+  let wy = surfaceYs[clampedWx] ?? 10;
+  if (wy < 2) wy = 2;
+  const hue = 100 + Math.floor(Math.random() * 80); // green-ish
+  slimes.push({
+    x: clampedWx * TILE + (TILE - SLIME_W) / 2,
+    y: (wy - 1) * TILE - SLIME_H,
+    vy: 0,
+    onGround: false,
+    health: 3,
+    maxHealth: 3,
+    jumpTick: Math.floor(Math.random() * SLIME_JUMP_INTERVAL_MAX),
+    iframes: 0,
+    hue,
+    squish: 0, // 0=normal, >0 squishing down on land
+  });
+}
+
+function getWeaponDamage() {
+  const held = inventory.hotbar[inventory.selected]?.type ?? AIR;
+  if (held === SWORD_DIAMOND) return 9;
+  if (held === SWORD_GOLD)    return 6;
+  if (held === SWORD_IRON)    return 4;
+  if (held === SWORD_STONE)   return 3;
+  if (held === SWORD_COPPER)  return 2;
+  if (held === AXE_DIAMOND)   return 4;
+  if (held === AXE_GOLD)      return 3;
+  if (held === AXE_IRON)      return 2;
+  if (held === AXE_STONE)     return 1;
+  if (held === AXE_COPPER)    return 1;
+  if (held === PICK_IRON || held === PICK_COPPER || held === PICK_STONE ||
+      held === PICK_GOLD || held === PICK_DIAMOND) return 1;
+  return 0;
+}
+
+function meleeAttackSlimes() {
+  const dmg = getWeaponDamage();
+  if (dmg === 0) return;
+  const held = inventory.hotbar[inventory.selected]?.type ?? AIR;
+  const isSword = held === SWORD_COPPER || held === SWORD_STONE || held === SWORD_IRON || held === SWORD_GOLD || held === SWORD_DIAMOND;
+  // Swords use a wide arc from the player; other weapons need to click near the slime
+  const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2;
+  const tx = mouse.x + Math.round(cam.x), ty = mouse.y + Math.round(cam.y);
+  const swingReach = isSword ? TILE * 4.5 : MINE_RADIUS_PX;
+  if (Math.hypot(tx - pcx, ty - pcy) > swingReach) return;
+  for (const s of slimes) {
+    const scx = s.x + SLIME_W / 2, scy = s.y + SLIME_H / 2;
+    if (s.iframes > 0) continue;
+    let hit = false;
+    if (isSword) {
+      // Sword hits everything within a generous radius of the player in the click direction
+      hit = Math.hypot(scx - pcx, scy - pcy) < TILE * 4;
+    } else {
+      hit = Math.abs(tx - scx) < SLIME_W + 8 && Math.abs(ty - scy) < SLIME_H + 8;
+    }
+    if (hit) {
+      s.health -= dmg;
+      s.iframes = 20;
+      s.vy = -5;
+    }
+  }
+}
+
+function updateSlimes(scale) {
+  // Despawn off-screen slimes
+  for (let i = slimes.length - 1; i >= 0; i--) {
+    const s = slimes[i];
+    const dx = Math.abs(s.x - (player.x + player.w / 2));
+    if (dx > SLIME_SPAWN_DIST_MAX * 1.5) { slimes.splice(i, 1); continue; }
+    if (s.health <= 0) { slimes.splice(i, 1); continue; }
+  }
+
+  // Spawn logic ~every 3s
+  if (Math.random() < 0.004 * scale) spawnSlime();
+
+  const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2;
+
+  for (const s of slimes) {
+    if (s.iframes > 0) s.iframes = Math.max(0, s.iframes - scale);
+    s.squish = Math.max(0, s.squish - 0.08 * scale);
+
+    // Gravity
+    s.vy = Math.min(s.vy + GRAVITY * scale, MAX_FALL);
+    s.y += s.vy * scale;
+
+    // Vertical collision
+    const left  = Math.floor(s.x / TILE);
+    const right = Math.floor((s.x + SLIME_W - 1) / TILE);
+    const bottom = Math.floor((s.y + SLIME_H - 1) / TILE);
+    const top    = Math.floor(s.y / TILE);
+
+    s.onGround = false;
+    if (s.vy >= 0) {
+      if (isSolid(getBlock(left, bottom)) || isSolid(getBlock(right, bottom))) {
+        s.y = bottom * TILE - SLIME_H;
+        s.vy = 0;
+        s.onGround = true;
+        s.squish = 1;
+      }
+    } else {
+      if (isSolid(getBlock(left, top)) || isSolid(getBlock(right, top))) {
+        s.y = (top + 1) * TILE;
+        s.vy = 0;
+      }
+    }
+
+    // Jump AI
+    if (s.onGround) {
+      s.jumpTick -= scale;
+      const scx = s.x + SLIME_W / 2;
+      const dir = pcx > scx ? 1 : -1;
+      // Horizontal drift toward player while on ground
+      s.x += dir * SLIME_WALK_SPEED * scale * 0.3;
+      if (s.jumpTick <= 0) {
+        s.vy = SLIME_JUMP_VEL;
+        s.x += dir * SLIME_WALK_SPEED * scale * 2;
+        s.jumpTick = SLIME_JUMP_INTERVAL_MIN + Math.random() * (SLIME_JUMP_INTERVAL_MAX - SLIME_JUMP_INTERVAL_MIN);
+      }
+    } else {
+      // Horizontal movement in air
+      const scx = s.x + SLIME_W / 2;
+      const dir = pcx > scx ? 1 : -1;
+      s.x += dir * SLIME_WALK_SPEED * scale;
+    }
+
+    // Horizontal wall collision
+    const midY  = Math.floor((s.y + SLIME_H / 2) / TILE);
+    const lx = Math.floor(s.x / TILE);
+    const rx = Math.floor((s.x + SLIME_W - 1) / TILE);
+    if (isSolid(getBlock(lx, midY))) s.x = (lx + 1) * TILE;
+    if (isSolid(getBlock(rx, midY))) s.x = rx * TILE - SLIME_W;
+
+    // Clamp to world
+    s.x = Math.max(0, Math.min(WORLD_PX - SLIME_W, s.x));
+
+    // Damage player on touch
+    if (!player.dying) {
+      if (s.x < player.x + player.w && s.x + SLIME_W > player.x &&
+          s.y < player.y + player.h && s.y + SLIME_H > player.y) {
+        applyDamageToPlayer(2);
+        if (player.iframes > 0) player.vy = -6; // knockback only if damage landed
+      }
+    }
+  }
+
+  // Arrow hits on slimes
+  for (let ai = arrowEntities.length - 1; ai >= 0; ai--) {
+    const a = arrowEntities[ai];
+    for (const s of slimes) {
+      if (a.x > s.x && a.x < s.x + SLIME_W && a.y > s.y && a.y < s.y + SLIME_H) {
+        s.health -= 3; // bow does 3 damage
+        s.iframes = 15;
+        s.vy = -4;
+        arrowEntities.splice(ai, 1);
+        break;
+      }
+    }
+  }
+}
+
+function drawSlimes() {
+  if (slimes.length === 0) return;
+  ctx.save();
+  for (const s of slimes) {
+    const sx = Math.round(s.x - cam.x);
+    const sy = Math.round(s.y - cam.y);
+    const flash = s.iframes > 0 && Math.floor(s.iframes / 3) % 2 === 1;
+    const squishX = 1 + s.squish * 0.3;
+    const squishY = 1 - s.squish * 0.3;
+    const dw = Math.round(SLIME_W * squishX);
+    const dh = Math.round(SLIME_H * squishY);
+    const dx = sx - Math.round((dw - SLIME_W) / 2);
+    const dy = sy + (SLIME_H - dh);
+
+    // Body
+    const alpha = flash ? 0.4 : 0.82;
+    ctx.fillStyle = flash ? `hsla(0,80%,65%,${alpha})` : `hsla(${s.hue},70%,50%,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(dx + dw / 2, dy + dh * 0.6, dw / 2, dh / 2, 0, 0, TAU);
+    ctx.fill();
+
+    // Shine
+    ctx.fillStyle = `hsla(${s.hue},90%,80%,0.45)`;
+    ctx.beginPath();
+    ctx.ellipse(dx + dw * 0.35, dy + dh * 0.3, dw * 0.18, dh * 0.18, -0.4, 0, TAU);
+    ctx.fill();
+
+    // Eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(dx + dw * 0.33, dy + dh * 0.5, 2.5, 0, TAU);
+    ctx.arc(dx + dw * 0.62, dy + dh * 0.5, 2.5, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.arc(dx + dw * 0.34, dy + dh * 0.5, 1.2, 0, TAU);
+    ctx.arc(dx + dw * 0.63, dy + dh * 0.5, 1.2, 0, TAU);
+    ctx.fill();
+
+    // Health bar (only if damaged)
+    if (s.health < s.maxHealth) {
+      const bw = SLIME_W + 4, bh = 3;
+      const bx = sx - 2, by = sy - 6;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#44dd44';
+      ctx.fillRect(bx, by, Math.round(bw * s.health / s.maxHealth), bh);
+    }
+  }
+  ctx.restore();
 }
 
 const biomeNames = {
@@ -493,7 +859,7 @@ function digAirWorm(startX, startY, length, radius, angle, depthGuard = 4) {
     angle += (Math.random() - 0.5) * 0.48;
     wx += Math.cos(angle) * 1.45;
     wy += Math.sin(angle) * 0.72;
-    radius = clamp(radius + (Math.random() - 0.5) * 0.18, 1.1, 4.25);
+    radius = clamp(radius + (Math.random() - 0.5) * 0.14, 1.0, 3.5);
     if (wx < 2 || wx > WORLD_W - 3 || wy < 5 || wy > WORLD_H - 5) break;
   }
 }
@@ -524,21 +890,35 @@ function paintOreVein(type, startX, startY, length, radius, angle) {
 }
 
 function spawnOres() {
-  for (let i = 0; i < 56; i++) {
+  // Coal: common, near surface
+  for (let i = 0; i < 55; i++) {
     const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
-    const y = surfaceYs[x] + 8 + Math.floor(Math.random() * 42);
-    paintOreVein(COPPER, x, y, 18 + Math.floor(Math.random() * 16), 1.25 + Math.random() * 0.8, Math.random() * TAU);
+    const y = surfaceYs[x] + 5 + Math.floor(Math.random() * 55);
+    paintOreVein(COAL_ORE, x, y, 12 + Math.floor(Math.random() * 10), 1.2 + Math.random() * 0.6, Math.random() * TAU);
   }
-  for (let i = 0; i < 34; i++) {
+  // Copper: moderate, shallow-mid
+  for (let i = 0; i < 38; i++) {
     const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
-    const y = surfaceYs[x] + 30 + Math.floor(Math.random() * 55);
-    paintOreVein(IRON, x, y, 18 + Math.floor(Math.random() * 18), 1.2 + Math.random() * 0.9, Math.random() * TAU);
+    const y = surfaceYs[x] + 8 + Math.floor(Math.random() * 40);
+    paintOreVein(COPPER, x, y, 10 + Math.floor(Math.random() * 10), 1.1 + Math.random() * 0.7, Math.random() * TAU);
   }
-  // Coal: abundant near surface
-  for (let i = 0; i < 70; i++) {
+  // Iron: less common, mid depth
+  for (let i = 0; i < 24; i++) {
     const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
-    const y = surfaceYs[x] + 5 + Math.floor(Math.random() * 60);
-    paintOreVein(COAL_ORE, x, y, 16 + Math.floor(Math.random() * 14), 1.3 + Math.random() * 0.7, Math.random() * TAU);
+    const y = surfaceYs[x] + 28 + Math.floor(Math.random() * 50);
+    paintOreVein(IRON, x, y, 8 + Math.floor(Math.random() * 10), 1.1 + Math.random() * 0.8, Math.random() * TAU);
+  }
+  // Gold: rare, deep
+  for (let i = 0; i < 14; i++) {
+    const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
+    const y = surfaceYs[x] + 55 + Math.floor(Math.random() * 55);
+    paintOreVein(GOLD_ORE, x, y, 6 + Math.floor(Math.random() * 8), 1.0 + Math.random() * 0.7, Math.random() * TAU);
+  }
+  // Diamond: very rare, deepest
+  for (let i = 0; i < 7; i++) {
+    const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
+    const y = surfaceYs[x] + 90 + Math.floor(Math.random() * 40);
+    paintOreVein(DIAMOND, x, y, 4 + Math.floor(Math.random() * 5), 0.9 + Math.random() * 0.5, Math.random() * TAU);
   }
 }
 
@@ -799,22 +1179,56 @@ function createWoodTexture() {
 }
 
 function createSwordTexture(bladeColor, handleColor) {
-  const { texture, g } = makeCanvas();
-  for (let i = 0; i < 9; i++) pixel(g, 13 - i * 1, i, bladeColor, 2, 2);
-  pixel(g, 13, 0, bladeColor, 2, 1);  // tip
-  pixel(g, 3, 9, handleColor, 9, 2);  // guard
-  pixel(g, 7, 11, handleColor, 1, 4); // grip
-  pixel(g, 6, 11, handleColor, 3, 1); // grip top
+  const { texture, g } = makeCanvas(32);
+  // Handle (grip) — bottom-left diagonal
+  g.strokeStyle = handleColor; g.lineWidth = 3; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(7, 25); g.lineTo(12, 20); g.stroke();
+  // Guard — crosspiece
+  g.strokeStyle = shiftColor(bladeColor, -0.15); g.lineWidth = 3; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(8, 21); g.lineTo(16, 17); g.stroke();
+  // Blade — thick diagonal line
+  g.strokeStyle = bladeColor; g.lineWidth = 4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(13, 19); g.lineTo(26, 6); g.stroke();
+  // Blade highlight
+  g.strokeStyle = shiftColor(bladeColor, 0.3); g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(14, 17); g.lineTo(26, 5); g.stroke();
+  // Tip
+  g.fillStyle = shiftColor(bladeColor, 0.2);
+  g.beginPath(); g.arc(26, 5, 2.5, 0, Math.PI * 2); g.fill();
+  // Pommel
+  g.fillStyle = shiftColor(handleColor, 0.1);
+  g.beginPath(); g.arc(6, 27, 3, 0, Math.PI * 2); g.fill();
   return texture;
 }
 
 function createPickaxeTexture(headColor, handleColor) {
-  const { texture, g } = makeCanvas();
-  for (let i = 0; i < 9; i++) pixel(g, 5 + i, 4 + i, handleColor, 2, 2); // handle
-  pixel(g, 0, 1, headColor, 7, 3);   // head body
-  pixel(g, 0, 0, headColor, 3, 2);   // upper spike
-  pixel(g, 0, 4, headColor, 3, 2);   // lower spike
-  pixel(g, 5, 4, headColor, 2, 2);   // head-to-handle join
+  const { texture, g } = makeCanvas(32);
+  // Handle — diagonal from bottom-right to upper center
+  g.strokeStyle = handleColor; g.lineWidth = 3; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(27, 27); g.lineTo(14, 14); g.stroke();
+  // Head body — clean horizontal bar
+  g.fillStyle = headColor;
+  g.beginPath();
+  g.moveTo(4, 6); g.lineTo(22, 6); g.lineTo(22, 12); g.lineTo(4, 12); g.closePath();
+  g.fill();
+  // Left pick tip (main sharp end)
+  g.beginPath();
+  g.moveTo(4, 6); g.lineTo(0, 9); g.lineTo(4, 12); g.closePath();
+  g.fill();
+  // Right back spike
+  g.beginPath();
+  g.moveTo(22, 6); g.lineTo(27, 7); g.lineTo(26, 11); g.lineTo(22, 12); g.closePath();
+  g.fill();
+  // Neck connecting head to handle
+  g.beginPath();
+  g.moveTo(12, 12); g.lineTo(16, 12); g.lineTo(14, 14); g.lineTo(11, 14); g.closePath();
+  g.fill();
+  // Highlight on top edge
+  g.fillStyle = shiftColor(headColor, 0.35);
+  g.fillRect(5, 7, 16, 1);
+  // Shadow on bottom edge
+  g.fillStyle = shiftColor(headColor, -0.2);
+  g.fillRect(5, 11, 16, 1);
   return texture;
 }
 
@@ -914,32 +1328,91 @@ function createIngotTexture(color) {
 }
 
 function createAxeTexture(headColor, handleColor) {
-  const { texture, g } = makeCanvas();
-  for (let i = 0; i < 8; i++) pixel(g, 6 + i, 6 + i, handleColor, 2, 2);
-  pixel(g, 0, 1, headColor, 8, 5);  pixel(g, 0, 0, headColor, 5, 2);  pixel(g, 0, 6, headColor, 5, 2);
-  pixel(g, 7, 5, headColor, 2, 2);
+  const { texture, g } = makeCanvas(32);
+  // Handle — diagonal from bottom-right to upper-left
+  g.strokeStyle = handleColor; g.lineWidth = 3; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(27, 27); g.lineTo(13, 13); g.stroke();
+  // Axe blade — large fan shape at upper-left
+  g.fillStyle = headColor;
+  g.beginPath();
+  g.moveTo(13, 13); // handle socket top
+  g.lineTo(5, 4);   // blade top
+  g.lineTo(1, 11);  // cutting edge tip
+  g.lineTo(5, 21);  // blade bottom
+  g.lineTo(14, 17); // handle socket bottom
+  g.closePath();
+  g.fill();
+  // Handle eye socket (where shaft meets head)
+  g.fillStyle = handleColor;
+  g.beginPath();
+  g.moveTo(11, 12); g.lineTo(14, 10); g.lineTo(16, 13); g.lineTo(13, 16); g.closePath();
+  g.fill();
+  // Cutting edge highlight (curved bright edge)
+  g.strokeStyle = shiftColor(headColor, 0.4); g.lineWidth = 2; g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(5, 4); g.quadraticCurveTo(-1, 12, 5, 21); g.stroke();
+  // Face highlight
+  g.fillStyle = shiftColor(headColor, 0.25);
+  g.beginPath();
+  g.moveTo(6, 5); g.lineTo(3, 12); g.lineTo(6, 20); g.lineTo(8, 19); g.lineTo(5, 12); g.lineTo(7, 6); g.closePath();
+  g.fill();
   return texture;
 }
 
 function createShovelTexture(headColor, handleColor) {
-  const { texture, g } = makeCanvas();
-  pixel(g, 7, 4, handleColor, 2, 12);
-  pixel(g, 5, 0, headColor, 6, 4);  pixel(g, 4, 3, headColor, 8, 3);
+  const { texture, g } = makeCanvas(32);
+  // Handle
+  g.strokeStyle = handleColor; g.lineWidth = 3; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(28, 4); g.lineTo(16, 16); g.stroke();
+  // Shovel head
+  g.fillStyle = headColor;
+  g.beginPath();
+  g.moveTo(10, 16); g.lineTo(6, 20); g.lineTo(8, 26); g.lineTo(20, 26); g.lineTo(22, 20); g.lineTo(18, 16); g.closePath();
+  g.fill();
+  // Shoulder bar
+  g.fillStyle = shiftColor(headColor, -0.1);
+  g.fillRect(8, 14, 12, 4);
+  // Highlight
+  g.fillStyle = shiftColor(headColor, 0.3);
+  g.fillRect(9, 15, 10, 1.5);
   return texture;
 }
 
 function createBowTexture() {
-  const { texture, g } = makeCanvas();
-  for (let i = 0; i < 8; i++) pixel(g, 3 + Math.round(Math.sin(i/7*Math.PI)*3), i*2, '#8B6030', 2, 2);
-  for (let y = 0; y < 16; y++) pixel(g, 11, y, '#d4c090', 1, 1);
+  const { texture, g } = makeCanvas(32);
+  // Bow stave (curved arc)
+  g.strokeStyle = '#8B5E2A'; g.lineWidth = 3; g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(6, 28); g.quadraticCurveTo(20, 16, 6, 4); g.stroke();
+  // Highlight on stave
+  g.strokeStyle = '#c0894a'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(7, 26); g.quadraticCurveTo(18, 16, 7, 6); g.stroke();
+  // Bowstring
+  g.strokeStyle = '#d4c090'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(6, 4); g.lineTo(6, 28); g.stroke();
+  // Nock points
+  g.fillStyle = '#c8a060';
+  g.beginPath(); g.arc(6, 4, 2.5, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(6, 28, 2.5, 0, Math.PI * 2); g.fill();
   return texture;
 }
 
 function createArrowTexture() {
-  const { texture, g } = makeCanvas();
-  pixel(g, 2, 7, '#8B6030', 9, 2);
-  pixel(g, 11, 7, '#999', 2, 2);  pixel(g, 13, 6, '#aaa', 1, 4);  pixel(g, 14, 7, '#ccc', 1, 2);
-  pixel(g, 1, 5, '#cc3333', 2, 2);  pixel(g, 1, 9, '#cc3333', 2, 2);
+  const { texture, g } = makeCanvas(32);
+  // Shaft
+  g.strokeStyle = '#8B5E2A'; g.lineWidth = 2.5; g.lineCap = 'butt';
+  g.beginPath(); g.moveTo(4, 16); g.lineTo(24, 16); g.stroke();
+  // Arrowhead
+  g.fillStyle = '#c0c4cc';
+  g.beginPath(); g.moveTo(24, 16); g.lineTo(30, 13); g.lineTo(30, 19); g.closePath(); g.fill();
+  g.strokeStyle = '#e0e4ec'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(24, 16); g.lineTo(30, 13); g.stroke();
+  // Fletching (feathers)
+  g.fillStyle = '#cc4444';
+  g.beginPath(); g.moveTo(4, 16); g.lineTo(2, 11); g.lineTo(8, 14); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(4, 16); g.lineTo(2, 21); g.lineTo(8, 18); g.closePath(); g.fill();
+  g.fillStyle = '#ff7766';
+  g.beginPath(); g.moveTo(4, 16); g.lineTo(2, 13); g.lineTo(6, 15); g.closePath(); g.fill();
   return texture;
 }
 
@@ -948,6 +1421,26 @@ function createCoalTexture() {
   pixel(g, 3, 2, '#1a1a1a', 10, 12);  pixel(g, 2, 4, '#1a1a1a', 12, 8);  pixel(g, 4, 1, '#222', 8, 2);
   pixel(g, 5, 4, '#333', 6, 6);
   return texture;
+}
+
+function createAccessoryTexture(bgColor, symbol, symbolColor = '#fff') {
+  const { texture, g } = makeCanvas();
+  g.fillStyle = bgColor;
+  g.fillRect(2, 2, 28, 28);
+  g.strokeStyle = 'rgba(255,255,255,0.4)'; g.lineWidth = 1;
+  g.strokeRect(2.5, 2.5, 27, 27);
+  g.fillStyle = symbolColor;
+  g.font = 'bold 16px sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(symbol, 16, 16);
+  return texture;
+}
+
+function createGoldOreTexture() {
+  return createOreTexture('#777981', '#989da6', '#5d6068', '#e8c43a', '#f5dc6e', 70);
+}
+function createDiamondOreTexture() {
+  return createOreTexture('#55525f', '#6d6b78', '#393744', '#7adcf5', '#b8f0ff', 80);
 }
 
 function buildTextures() {
@@ -982,13 +1475,93 @@ function buildTextures() {
   tileTextures[AXE_IRON]    = createAxeTexture('#c0c4cc', '#6a6d78');
   tileTextures[SHOVEL_STONE]= createShovelTexture('#7a7a8a', '#8B6914');
   tileTextures[SHOVEL_IRON] = createShovelTexture('#c0c4cc', '#6a6d78');
-  tileTextures[BOW]         = createBowTexture();
-  tileTextures[ARROW]       = createArrowTexture();
+  tileTextures[BOW]          = createBowTexture();
+  tileTextures[ARROW]        = createArrowTexture();
+  tileTextures[SWORD_COPPER] = createSwordTexture('#d28b4b', '#8B6914');
+  tileTextures[PICK_COPPER]  = createPickaxeTexture('#d28b4b', '#8B6914');
+  tileTextures[AXE_COPPER]   = createAxeTexture('#d28b4b', '#8B6914');
+  tileTextures[SHOVEL_COPPER]= createShovelTexture('#d28b4b', '#8B6914');
+  // New ore textures
+  tileTextures[GOLD_ORE]  = createGoldOreTexture();
+  tileTextures[DIAMOND]   = createDiamondOreTexture();
+  tileTextures[GOLD_INGOT]= createIngotTexture('#e8c43a');
+  // Iron armor
+  tileTextures[HELMET_IRON]      = createHelmetTexture('#c0c4cc');
+  tileTextures[CHESTPLATE_IRON]  = createChestplateTexture('#c0c4cc');
+  tileTextures[LEGGINGS_IRON]    = createLeggingsTexture('#c0c4cc');
+  tileTextures[BOOTS_IRON]       = createBootsTexture('#c0c4cc');
+  // Gold tools
+  tileTextures[SWORD_GOLD]   = createSwordTexture('#e8c43a', '#b8960a');
+  tileTextures[PICK_GOLD]    = createPickaxeTexture('#e8c43a', '#b8960a');
+  tileTextures[AXE_GOLD]     = createAxeTexture('#e8c43a', '#b8960a');
+  tileTextures[SHOVEL_GOLD]  = createShovelTexture('#e8c43a', '#b8960a');
+  // Gold armor
+  tileTextures[HELMET_GOLD]      = createHelmetTexture('#e8c43a');
+  tileTextures[CHESTPLATE_GOLD]  = createChestplateTexture('#e8c43a');
+  tileTextures[LEGGINGS_GOLD]    = createLeggingsTexture('#e8c43a');
+  tileTextures[BOOTS_GOLD]       = createBootsTexture('#e8c43a');
+  // Diamond tools
+  tileTextures[SWORD_DIAMOND]  = createSwordTexture('#7adcf5', '#3ab8d8');
+  tileTextures[PICK_DIAMOND]   = createPickaxeTexture('#7adcf5', '#3ab8d8');
+  tileTextures[AXE_DIAMOND]    = createAxeTexture('#7adcf5', '#3ab8d8');
+  tileTextures[SHOVEL_DIAMOND] = createShovelTexture('#7adcf5', '#3ab8d8');
+  // Accessories
+  tileTextures[ACC_HERMES_BOOTS]  = createAccessoryTexture('#3a8aff', '👟', '#fff');
+  tileTextures[ACC_CLOUD_BOTTLE]  = createAccessoryTexture('#88ccff', '☁', '#fff');
+  tileTextures[ACC_HORSESHOE]     = createAccessoryTexture('#e8c43a', '🍀', '#228b22');
+  tileTextures[ACC_BAND_REGEN]    = createAccessoryTexture('#cc3344', '❤', '#ff8888');
+  tileTextures[ACC_FROG_LEG]      = createAccessoryTexture('#44aa44', '🐸', '#88ff88');
+  tileTextures[ACC_SHACKLE]       = createAccessoryTexture('#666677', '⛓', '#aaa');
+  tileTextures[ACC_ANKH]          = createAccessoryTexture('#cc8833', '☥', '#ffe080');
+  tileTextures[ACC_NECKLACE]      = createAccessoryTexture('#cc44cc', '💎', '#ffaaff');
+  tileTextures[ACC_AGLET]         = createAccessoryTexture('#558844', '>', '#aaff88');
+  tileTextures[ACC_SPECTRE_BOOTS] = createAccessoryTexture('#8844ff', '⚡', '#ccaaff');
+  // Diamond armor
+  tileTextures[HELMET_DIAMOND]      = createHelmetTexture('#7adcf5');
+  tileTextures[CHESTPLATE_DIAMOND]  = createChestplateTexture('#7adcf5');
+  tileTextures[LEGGINGS_DIAMOND]    = createLeggingsTexture('#7adcf5');
+  tileTextures[BOOTS_DIAMOND]       = createBootsTexture('#7adcf5');
+}
+
+const ALL_ACCESSORIES = [
+  ACC_HERMES_BOOTS, ACC_CLOUD_BOTTLE, ACC_HORSESHOE, ACC_BAND_REGEN,
+  ACC_FROG_LEG, ACC_SHACKLE, ACC_ANKH, ACC_NECKLACE, ACC_AGLET, ACC_SPECTRE_BOOTS,
+];
+
+function spawnCaveChests() {
+  const count = 8 + Math.floor(Math.random() * 5);
+  let placed = 0;
+  for (let attempt = 0; attempt < 400 && placed < count; attempt++) {
+    const x = 4 + Math.floor(Math.random() * (WORLD_W - 8));
+    const minDepth = surfaceYs[x] + 12;
+    // Scan downward from minDepth to find an air cell above a solid floor
+    for (let y = minDepth; y < WORLD_H - 2; y++) {
+      if (getBlock(x, y) === AIR && isSolid(getBlock(x, y + 1))) {
+        setBlock(x, y, CHEST);
+        const key = blockKey(x, y);
+        const slots = Array.from({ length: CHEST_SLOTS }, () => createStack());
+        // 1–3 random accessories + some coins/materials
+        const numAcc = 1 + Math.floor(Math.random() * 2);
+        const shuffled = ALL_ACCESSORIES.slice().sort(() => Math.random() - 0.5);
+        for (let a = 0; a < numAcc; a++) slots[a] = createStack(shuffled[a], 1);
+        // Filler: coins or basic materials in later slots
+        const fillers = [COAL, COPPER_INGOT, ARROW, IRON_INGOT];
+        for (let f = numAcc; f < numAcc + 3; f++) {
+          const mat = fillers[Math.floor(Math.random() * fillers.length)];
+          slots[f] = createStack(mat, 5 + Math.floor(Math.random() * 20));
+        }
+        chests.set(key, slots);
+        placed++;
+        break;
+      }
+    }
+  }
 }
 
 function generateWorld() {
   world.fill(0);
   water.fill(0);
+  chests.clear();
   generateBiomeBands();
 
   for (let x = 0; x < WORLD_W; x++) {
@@ -1004,25 +1577,26 @@ function generateWorld() {
     }
   }
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 7; i++) {
     const x = 6 + Math.floor(Math.random() * (WORLD_W - 12));
-    digAirWorm(x, surfaceYs[x], 70 + Math.floor(Math.random() * 50), 1.1 + Math.random() * 0.9, Math.PI / 2 + (Math.random() - 0.5) * 0.55, 0);
+    digAirWorm(x, surfaceYs[x], 50 + Math.floor(Math.random() * 35), 0.9 + Math.random() * 0.7, Math.PI / 2 + (Math.random() - 0.5) * 0.55, 0);
   }
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 17; i++) {
     const x = 6 + Math.floor(Math.random() * (WORLD_W - 12));
     const y = surfaceYs[x] + 12 + Math.floor(Math.random() * 55);
-    digAirWorm(x, y, 105 + Math.floor(Math.random() * 85), 1.45 + Math.random() * 1.2, Math.random() * TAU, 5);
+    digAirWorm(x, y, 75 + Math.floor(Math.random() * 60), 1.1 + Math.random() * 0.9, Math.random() * TAU, 5);
   }
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 7; i++) {
     const x = 6 + Math.floor(Math.random() * (WORLD_W - 12));
     const y = surfaceYs[x] + 58 + Math.floor(Math.random() * 28);
-    digAirWorm(x, y, 90 + Math.floor(Math.random() * 65), 2.3 + Math.random() * 1.4, Math.random() * TAU, 8);
+    digAirWorm(x, y, 65 + Math.floor(Math.random() * 45), 1.8 + Math.random() * 1.1, Math.random() * TAU, 8);
   }
 
   spawnOres();
   spawnWaterPools();
   settleWater(120);
   plantTrees();
+  spawnCaveChests();
 }
 
 function findSpawnY() {
@@ -1092,11 +1666,13 @@ const hitCtx = hitCanvas.getContext('2d');
 hitCtx.imageSmoothingEnabled = false;
 
 const ANIM = {
-  stand: { row: 8, colStart: 0 },
-  walk: { row: 4, colStart: 0 },
-  run: null,
-  jump: { row: 5, colStart: 2 },
-  mine: { row: 1, colStart: 4 },
+  stand:  { row: 8, colStart: 0 },
+  walk:   { row: 4, colStart: 0 },
+  run:    null,
+  jump:   { row: 5, colStart: 2 },
+  mine:   { row: 1, colStart: 4 },
+  attack: { row: 1, colStart: 4 },  // same frames as mine (swing)
+  bow:    { row: 3, colStart: 5 },  // frames 29-32: row3 cols5-7, then row4 col0
 };
 
 // Frames 19–23 (0-indexed); last frame (row 2, col 7) is the body-drop hold frame
@@ -1302,10 +1878,9 @@ const dragState = {
   item: createStack(),
 };
 
-inventory.hotbar[0] = { type: DIRT, count: 48 };
-inventory.hotbar[1] = { type: STONE, count: 24 };
-inventory.hotbar[2] = { type: WOOD, count: 18 };
-inventory.hotbar[3] = { type: COPPER, count: 8 };
+inventory.hotbar[0] = createStack(SWORD_COPPER, 1);
+inventory.hotbar[1] = createStack(PICK_COPPER, 1);
+inventory.hotbar[2] = createStack(AXE_COPPER, 1);
 
 // ─── CRAFTING & EQUIPMENT ─────────────────────────────────────────────────────
 
@@ -1315,19 +1890,65 @@ let craftingOutput = createStack();
 
 const equipment = Array.from({ length: 4 }, () => createStack());
 const EQUIP_LABELS = ['Head', 'Chest', 'Legs', 'Feet'];
+// accessories is declared earlier in the file (after armorDefs)
 
 const RECIPES = [
   // Pickaxes: 3 material in top row, wood handle in middle+bottom center
+  { pattern: [COPPER_INGOT,COPPER_INGOT,COPPER_INGOT, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_COPPER, count: 1 },
   { pattern: [STONE,STONE,STONE, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_STONE,  count: 1 },
-  { pattern: [IRON,IRON,IRON,   AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_IRON,   count: 1 },
+  { pattern: [IRON_INGOT,IRON_INGOT,IRON_INGOT, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_IRON, count: 1 },
   // Swords: 2 material in center column, wood handle at bottom
+  { pattern: [AIR,COPPER_INGOT,AIR, AIR,COPPER_INGOT,AIR, AIR,WOOD,AIR], out: SWORD_COPPER, count: 1 },
   { pattern: [AIR,STONE,AIR, AIR,STONE,AIR, AIR,WOOD,AIR],   out: SWORD_STONE, count: 1 },
-  { pattern: [AIR,IRON,AIR,  AIR,IRON,AIR,  AIR,WOOD,AIR],   out: SWORD_IRON,  count: 1 },
-  // Copper armor
-  { pattern: [COPPER,COPPER,COPPER, COPPER,AIR,COPPER, AIR,AIR,AIR],             out: HELMET,     count: 1 },
-  { pattern: [COPPER,AIR,COPPER, COPPER,COPPER,COPPER, COPPER,COPPER,COPPER],     out: CHESTPLATE, count: 1 },
-  { pattern: [COPPER,COPPER,COPPER, COPPER,AIR,COPPER, COPPER,AIR,COPPER],        out: LEGGINGS,   count: 1 },
-  { pattern: [AIR,AIR,AIR, COPPER,AIR,COPPER, COPPER,AIR,COPPER],                 out: BOOTS,      count: 1 },
+  { pattern: [AIR,IRON_INGOT,AIR, AIR,IRON_INGOT,AIR, AIR,WOOD,AIR], out: SWORD_IRON, count: 1 },
+  // Axes: 2 material in L-shape top-left, wood handle
+  { pattern: [COPPER_INGOT,COPPER_INGOT,AIR, COPPER_INGOT,WOOD,AIR, AIR,WOOD,AIR], out: AXE_COPPER, count: 1 },
+  { pattern: [STONE,STONE,AIR, STONE,WOOD,AIR, AIR,WOOD,AIR], out: AXE_STONE,  count: 1 },
+  { pattern: [IRON_INGOT,IRON_INGOT,AIR, IRON_INGOT,WOOD,AIR, AIR,WOOD,AIR], out: AXE_IRON, count: 1 },
+  // Shovels: 1 material on top center, wood handle below
+  { pattern: [AIR,COPPER_INGOT,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_COPPER, count: 1 },
+  { pattern: [AIR,STONE,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_STONE, count: 1 },
+  { pattern: [AIR,IRON_INGOT,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_IRON, count: 1 },
+  // Bow: 3 wood in column with arrow shape
+  { pattern: [AIR,WOOD,AIR, WOOD,AIR,WOOD, AIR,WOOD,AIR], out: BOW, count: 1 },
+  // Arrows: stone + wood = 4 arrows
+  { pattern: [AIR,STONE,AIR, AIR,WOOD,AIR, AIR,AIR,AIR], out: ARROW, count: 4 },
+  // Copper armor (uses copper ingots now)
+  { pattern: [COPPER_INGOT,COPPER_INGOT,COPPER_INGOT, COPPER_INGOT,AIR,COPPER_INGOT, AIR,AIR,AIR], out: HELMET, count: 1 },
+  { pattern: [COPPER_INGOT,AIR,COPPER_INGOT, COPPER_INGOT,COPPER_INGOT,COPPER_INGOT, COPPER_INGOT,COPPER_INGOT,COPPER_INGOT], out: CHESTPLATE, count: 1 },
+  { pattern: [COPPER_INGOT,COPPER_INGOT,COPPER_INGOT, COPPER_INGOT,AIR,COPPER_INGOT, COPPER_INGOT,AIR,COPPER_INGOT], out: LEGGINGS, count: 1 },
+  { pattern: [AIR,AIR,AIR, COPPER_INGOT,AIR,COPPER_INGOT, COPPER_INGOT,AIR,COPPER_INGOT], out: BOOTS, count: 1 },
+  // Gold tools (use GOLD_INGOT)
+  { pattern: [GOLD_INGOT,GOLD_INGOT,GOLD_INGOT, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_GOLD, count: 1 },
+  { pattern: [AIR,GOLD_INGOT,AIR, AIR,GOLD_INGOT,AIR, AIR,WOOD,AIR], out: SWORD_GOLD, count: 1 },
+  { pattern: [GOLD_INGOT,GOLD_INGOT,AIR, GOLD_INGOT,WOOD,AIR, AIR,WOOD,AIR], out: AXE_GOLD, count: 1 },
+  { pattern: [AIR,GOLD_INGOT,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_GOLD, count: 1 },
+  // Diamond tools (use DIAMOND raw)
+  { pattern: [DIAMOND,DIAMOND,DIAMOND, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_DIAMOND, count: 1 },
+  { pattern: [AIR,DIAMOND,AIR, AIR,DIAMOND,AIR, AIR,WOOD,AIR], out: SWORD_DIAMOND, count: 1 },
+  { pattern: [DIAMOND,DIAMOND,AIR, DIAMOND,WOOD,AIR, AIR,WOOD,AIR], out: AXE_DIAMOND, count: 1 },
+  { pattern: [AIR,DIAMOND,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_DIAMOND, count: 1 },
+  // Iron armor
+  { pattern: [IRON_INGOT,IRON_INGOT,IRON_INGOT, IRON_INGOT,AIR,IRON_INGOT, AIR,AIR,AIR], out: HELMET_IRON, count: 1 },
+  { pattern: [IRON_INGOT,AIR,IRON_INGOT, IRON_INGOT,IRON_INGOT,IRON_INGOT, IRON_INGOT,IRON_INGOT,IRON_INGOT], out: CHESTPLATE_IRON, count: 1 },
+  { pattern: [IRON_INGOT,IRON_INGOT,IRON_INGOT, IRON_INGOT,AIR,IRON_INGOT, IRON_INGOT,AIR,IRON_INGOT], out: LEGGINGS_IRON, count: 1 },
+  { pattern: [AIR,AIR,AIR, IRON_INGOT,AIR,IRON_INGOT, IRON_INGOT,AIR,IRON_INGOT], out: BOOTS_IRON, count: 1 },
+  // Gold armor
+  { pattern: [GOLD_INGOT,GOLD_INGOT,GOLD_INGOT, GOLD_INGOT,AIR,GOLD_INGOT, AIR,AIR,AIR], out: HELMET_GOLD, count: 1 },
+  { pattern: [GOLD_INGOT,AIR,GOLD_INGOT, GOLD_INGOT,GOLD_INGOT,GOLD_INGOT, GOLD_INGOT,GOLD_INGOT,GOLD_INGOT], out: CHESTPLATE_GOLD, count: 1 },
+  { pattern: [GOLD_INGOT,GOLD_INGOT,GOLD_INGOT, GOLD_INGOT,AIR,GOLD_INGOT, GOLD_INGOT,AIR,GOLD_INGOT], out: LEGGINGS_GOLD, count: 1 },
+  { pattern: [AIR,AIR,AIR, GOLD_INGOT,AIR,GOLD_INGOT, GOLD_INGOT,AIR,GOLD_INGOT], out: BOOTS_GOLD, count: 1 },
+  // Diamond armor
+  { pattern: [DIAMOND,DIAMOND,DIAMOND, DIAMOND,AIR,DIAMOND, AIR,AIR,AIR], out: HELMET_DIAMOND, count: 1 },
+  { pattern: [DIAMOND,AIR,DIAMOND, DIAMOND,DIAMOND,DIAMOND, DIAMOND,DIAMOND,DIAMOND], out: CHESTPLATE_DIAMOND, count: 1 },
+  { pattern: [DIAMOND,DIAMOND,DIAMOND, DIAMOND,AIR,DIAMOND, DIAMOND,AIR,DIAMOND], out: LEGGINGS_DIAMOND, count: 1 },
+  { pattern: [AIR,AIR,AIR, DIAMOND,AIR,DIAMOND, DIAMOND,AIR,DIAMOND], out: BOOTS_DIAMOND, count: 1 },
+  // Furnace: 8 stone surrounding center
+  { pattern: [STONE,STONE,STONE, STONE,AIR,STONE, STONE,STONE,STONE], out: FURNACE, count: 1 },
+  // Chest: 8 wood surrounding center
+  { pattern: [WOOD,WOOD,WOOD, WOOD,AIR,WOOD, WOOD,WOOD,WOOD], out: CHEST, count: 1 },
+  // Door: 6 wood, 2 columns of 3
+  { pattern: [WOOD,WOOD,AIR, WOOD,WOOD,AIR, WOOD,WOOD,AIR], out: DOOR, count: 1 },
 ];
 
 function updateCraftingOutput() {
@@ -1375,6 +1996,7 @@ function getInventoryArray(area) {
   if (area === 'backpack') return inventory.backpack;
   if (area === 'craft') return craftingGrid;
   if (area === 'equip') return equipment;
+  if (area === 'acc')   return accessories;
   if (area === 'chest' && openUI?.type === 'chest') return chests.get(openUI.key) ?? null;
   return null;
 }
@@ -1424,8 +2046,8 @@ function toggleInventory(forceOpen = !inventory.open) {
 function dropDraggedStack(area, index) {
   if (!dragState.active) return;
 
-  // Output slot is read-only
-  if (area === 'craftout') {
+  // Output slots are read-only (can only take from them)
+  if (area === 'craftout' || area === 'furnaceOut') {
     returnDraggedStack();
     return;
   }
@@ -1439,10 +2061,12 @@ function dropDraggedStack(area, index) {
   // Equipment slots: only accept items with matching equipSlot
   if (area === 'equip') {
     const def = itemDefs[dragState.item.type];
-    if (!def || def.equipSlot !== index) {
-      returnDraggedStack();
-      return;
-    }
+    if (!def || def.equipSlot !== index) { returnDraggedStack(); return; }
+  }
+  // Accessory slots: only accept accessory items
+  if (area === 'acc') {
+    const def = itemDefs[dragState.item.type];
+    if (!def?.accessory) { returnDraggedStack(); return; }
   }
 
   if (area === 'hotbar') inventory.selected = index;
@@ -1566,7 +2190,8 @@ function handleInventoryPrimaryDown() {
   const slotRef = getUiSlotAt(mouse.x, mouse.y);
   if (!slotRef) return;
   if (slotRef.area === 'hotbar') inventory.selected = slotRef.index;
-  if (!inventory.open) return;
+  const isOpenUISlot = slotRef.area === 'chest' || slotRef.area === 'furnaceOre' || slotRef.area === 'furnaceFuel' || slotRef.area === 'furnaceOut';
+  if (!inventory.open && !isOpenUISlot) return;
 
   // Click craft output: take the result
   if (slotRef.area === 'craftout') {
@@ -1605,7 +2230,7 @@ function handleInventoryPrimaryDown() {
 
 // Right-click: pick up half-stack (no drag) or place one item (drag active)
 function handleInventoryRightDown() {
-  if (!inventory.open) return;
+  if (!inventory.open && !openUI) return;
   const slotRef = getUiSlotAt(mouse.x, mouse.y);
   if (!slotRef || slotRef.area === 'craftout') return;
 
@@ -1669,7 +2294,18 @@ canvas.addEventListener('mousedown', event => {
   if (event.button === 0) {
     mouse.down = true;
     handleInventoryPrimaryDown();
-    if (!inventory.open && !openUI && !isPointerOverInventoryUi()) fireArrow();
+    if (!inventory.open && !openUI && !isPointerOverInventoryUi()) {
+      const prevBowCooldown = bowCooldown;
+      fireArrow();
+      if (bowCooldown > prevBowCooldown) {
+        player.animState = 'bow'; player.animFrame = 0; player.animTick = 0; player.actionTick = 0;
+      }
+      const dmgBefore = getWeaponDamage();
+      meleeAttackSlimes();
+      if (dmgBefore > 0 && inventory.hotbar[inventory.selected]?.type !== BOW) {
+        player.animState = 'attack'; player.animFrame = 0; player.animTick = 0; player.actionTick = 0;
+      }
+    }
   }
   if (event.button === 2) {
     mouse.rightDown = true;
@@ -1754,10 +2390,11 @@ function getInventoryMetrics() {
   const arrowW = compact ? 26 : 34;
   const craftSectionW = craftGridSize + arrowW + slotW;
 
-  // Equipment section dimensions
+  // Equipment section dimensions (armor + accessories side by side)
   const equipLabelW = compact ? 32 : 42;
-  const equipSectionW = equipLabelW + gap + slotW;
-  const equipH = 4 * slotH + 3 * gap;
+  const accLabelW = compact ? 26 : 34;
+  const equipSectionW = equipLabelW + gap + slotW + gap + accLabelW + gap + slotW;
+  const equipH = Math.max(4, ACC_SLOTS) * slotH + (Math.max(4, ACC_SLOTS) - 1) * gap;
 
   // Backpack dimensions
   const backpackGridW = BACKPACK_COLS * slotW + (BACKPACK_COLS - 1) * gap;
@@ -1778,9 +2415,11 @@ function getInventoryMetrics() {
   const upperY = panelY + headerH;
   const upperContentY = upperY + labelH;
 
-  // Equipment positions
+  // Equipment positions (armor left, accessories right)
   const equipX = panelX + panelPad;
   const equipSlotX = equipX + equipLabelW + gap;
+  const accLabelX = equipSlotX + slotW + gap;
+  const accSlotX = accLabelX + (compact ? 26 : 34) + gap;
 
   // Crafting positions
   const craftAreaX = equipX + equipSectionW + panelPad;
@@ -1800,6 +2439,7 @@ function getInventoryMetrics() {
     panel: { x: panelX, y: panelY, w: panelW, h: panelH },
     upper: { y: upperY, contentY: upperContentY },
     equip: { x: equipX, y: upperContentY, slotX: equipSlotX, labelW: equipLabelW, h: equipH },
+    acc:   { x: accLabelX, y: upperContentY, slotX: accSlotX },
     craft: {
       x: craftAreaX, y: upperContentY,
       gridX: craftGridX, gridSize: craftGridSize,
@@ -1849,6 +2489,14 @@ function getSlotRect(area, index, metrics = getInventoryMetrics()) {
       w: slotW, h: slotH,
     };
   }
+  if (area === 'acc') {
+    if (index < 0 || index >= ACC_SLOTS) return null;
+    return {
+      x: metrics.acc.slotX,
+      y: Math.floor(metrics.acc.y + index * (slotH + gap)),
+      w: slotW, h: slotH,
+    };
+  }
   if (area === 'craftout') {
     if (index !== 0) return null;
     return { x: metrics.craft.outX, y: metrics.craft.outY, w: slotW, h: slotH };
@@ -1858,6 +2506,34 @@ function getSlotRect(area, index, metrics = getInventoryMetrics()) {
 
 function getUiSlotAt(x, y) {
   const metrics = getInventoryMetrics();
+
+  // Chest UI slots
+  if (openUI?.type === 'chest') {
+    const cols = 5, sW = 44, sH = 44, pad = 14;
+    const panelW = cols * sW + pad * 2;
+    const panelH = 4 * sH + pad * 2 + 28;
+    const px = Math.round(canvas.width / 2 - panelW / 2);
+    const py = Math.max(4, metrics.panel.y - panelH - 8);
+    for (let i = 0; i < CHEST_SLOTS; i++) {
+      const col = i % cols, row = Math.floor(i / cols);
+      const sx = px + pad + col * sW, sy = py + pad + 20 + row * sH;
+      if (isPointInRect(x, y, sx, sy, sW, sH)) return { area: 'chest', index: i };
+    }
+  }
+
+  // Furnace UI slots
+  if (openUI?.type === 'furnace') {
+    const sW = 48, sH = 48, pad = 16;
+    const panelW = 260, panelH = 170;
+    const px = Math.round(canvas.width / 2 - panelW / 2);
+    const py = Math.round(canvas.height / 2 - panelH / 2);
+    const oreX = px + pad, oreY = py + 36;
+    if (isPointInRect(x, y, oreX, oreY, sW, sH)) return { area: 'furnaceOre', index: 0 };
+    const fuelX = px + pad, fuelY = py + 100;
+    if (isPointInRect(x, y, fuelX, fuelY, sW, sH)) return { area: 'furnaceFuel', index: 0 };
+    const outX = px + pad + sW + 12 + 80 + 12, outY = py + 50;
+    if (isPointInRect(x, y, outX, outY, sW, sH)) return { area: 'furnaceOut', index: 0 };
+  }
 
   if (inventory.open) {
     const outRect = getSlotRect('craftout', 0, metrics);
@@ -1874,6 +2550,12 @@ function getUiSlotAt(x, y) {
       const rect = getSlotRect('equip', i, metrics);
       if (rect && isPointInRect(x, y, rect.x, rect.y, rect.w, rect.h)) {
         return { area: 'equip', index: i };
+      }
+    }
+    for (let i = 0; i < ACC_SLOTS; i++) {
+      const rect = getSlotRect('acc', i, metrics);
+      if (rect && isPointInRect(x, y, rect.x, rect.y, rect.w, rect.h)) {
+        return { area: 'acc', index: i };
       }
     }
     for (let i = 0; i < BACKPACK_SIZE; i++) {
@@ -1898,6 +2580,14 @@ function isPointerOverInventoryUi(x = mouse.x, y = mouse.y) {
   if (inventory.open && isPointInRect(x, y, metrics.panel.x, metrics.panel.y, metrics.panel.w, metrics.panel.h)) {
     return true;
   }
+  if (openUI?.type === 'chest') {
+    const cols = 5, sW = 44, sH = 44, pad = 14;
+    const panelW = cols * sW + pad * 2;
+    const panelH = 4 * sH + pad * 2 + 28;
+    const px = Math.round(canvas.width / 2 - panelW / 2);
+    const py = Math.max(4, metrics.panel.y - panelH - 8);
+    if (isPointInRect(x, y, px, py, panelW, panelH)) return true;
+  }
   return isPointInRect(x, y, metrics.hotbar.x, metrics.hotbar.y, metrics.hotbar.w, metrics.hotbar.h);
 }
 
@@ -1911,7 +2601,10 @@ function updateMining(scale = 1) {
   const pcy = player.y + player.h / 2;
   const dist = Math.hypot(wx * TILE + TILE / 2 - pcx, wy * TILE + TILE / 2 - pcy);
   const blockType = getBlock(wx, wy);
-  const canMine = mouse.down && !dragState.active && !isPointerOverInventoryUi() &&
+  const heldItem = inventory.hotbar[inventory.selected]?.type ?? AIR;
+  const canMine = mouse.down && !dragState.active && !isPointerOverInventoryUi() && !openUI &&
+                  heldItem !== BOW && heldItem !== SWORD_COPPER && heldItem !== SWORD_STONE &&
+                  heldItem !== SWORD_IRON && heldItem !== SWORD_GOLD && heldItem !== SWORD_DIAMOND &&
                   dist <= MINE_RADIUS_PX && isMineable(blockType);
 
   if (!canMine) {
@@ -1970,6 +2663,8 @@ function updatePlacement(frame) {
 
   const slot = inventory.hotbar[inventory.selected];
   if (!slot || slot.type === AIR || slot.count <= 0) return;
+  // Only placeable if it's a block type (has a blockDef)
+  if (!blockDefs[slot.type]) return;
 
   const camX = Math.round(cam.x);
   const camY = Math.round(cam.y);
@@ -2017,7 +2712,7 @@ function updatePlayer(scale = 1) {
   const nearSurface = headInWater && !justAboveHeadInWater;
   const canWaterLaunch = rawInWaterStart && jumpPressed && (!headInWater || nearSurface || waterCoverageStart < 0.65);
   const canWaterExitStep = (rawInWaterStart || player.inWater || nearSurface || player.waterExitFrames > 0) && (jumpHeld || player.vy < -1);
-  const speedBase = keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED;
+  const speedBase = (keys['ShiftLeft'] || keys['ShiftRight'] ? RUN_SPEED : WALK_SPEED) * getSpeedMult();
   const speed = speedBase * (inWaterStart ? WATER_SPEED_MULT : 1);
   let moveX = 0;
   if (keys['KeyA'] || keys['ArrowLeft']) {
@@ -2086,10 +2781,9 @@ function updatePlayer(scale = 1) {
       player.vy = 0;
       // Fall damage: only when landing hard and not in water
       const FALL_THRESHOLD = 14.8;
-      if (prevVy > FALL_THRESHOLD && !inWaterStart && player.iframes <= 0) {
+      if (prevVy > FALL_THRESHOLD && !inWaterStart && !hasAccessory(ACC_HORSESHOE)) {
         const dmg = Math.floor((prevVy - FALL_THRESHOLD) / 1.5) + 1;
-        player.health = Math.max(0, player.health - dmg);
-        player.iframes = 30;
+        applyDamageToPlayer(dmg);
       }
     } else {
       player.y = Math.ceil(player.y / TILE) * TILE;
@@ -2098,10 +2792,15 @@ function updatePlayer(scale = 1) {
   }
 
   player.onGround = checkOnGround(player.x, player.y, player.w, player.h);
+  if (player.onGround) player.doubleJumpUsed = false;
+  const jumpVelMod = JUMP_VEL * getJumpMult();
   if (!rawInWaterStart && jumpHeld && player.onGround) {
-    player.vy = JUMP_VEL;
+    player.vy = jumpVelMod;
     player.onGround = false;
     player.jumpAnimRestart = true;
+  } else if (!rawInWaterStart && jumpPressed && !player.onGround && !player.doubleJumpUsed && hasAccessory(ACC_CLOUD_BOTTLE)) {
+    player.vy = jumpVelMod * 0.85;
+    player.doubleJumpUsed = true;
   }
 
   player.x = clamp(player.x, 0, WORLD_PX - player.w);
@@ -2118,7 +2817,7 @@ function updatePlayer(scale = 1) {
       player.drownTick += scale;
       if (player.drownTick >= DROWN_DAMAGE_FRAMES) {
         player.drownTick = 0;
-        player.health = Math.max(0, player.health - 1);
+        applyDamageToPlayer(2);
       }
     }
   } else {
@@ -2143,6 +2842,30 @@ function updateAnimation(scale = 1) {
   let newState = 'stand';
   const moving = (keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight']) && !player.blockedX;
   const running = keys['ShiftLeft'] || keys['ShiftRight'];
+
+  // Decay action animations
+  if (player.animState === 'attack' || player.animState === 'bow') {
+    player.actionTick = (player.actionTick || 0) + scale;
+    const frameCount = player.animState === 'bow' ? 4 : 4;
+    const tpf = 5;
+    player.animTick += scale;
+    if (player.animTick >= tpf) {
+      player.animTick = 0;
+      if (player.animState === 'bow') {
+        // bow frames span two rows; handle wrap manually
+        player.animFrame = Math.min(player.animFrame + 1, frameCount - 1);
+      } else {
+        player.animFrame = (player.animFrame + 1) % frameCount;
+      }
+    }
+    if (player.actionTick >= frameCount * tpf) {
+      player.animState = 'stand';
+      player.animFrame = 0;
+      player.animTick = 0;
+      player.actionTick = 0;
+    }
+    return;
+  }
 
   if (!player.onGround) newState = 'jump';
   else if (mining.active) newState = 'mine';
@@ -2194,6 +2917,7 @@ function updateWorld(dt) {
   for (let i = 0; i < steps; i++) simulateWaterStep();
   updateFurnaces(dt / TARGET_DT);
   updateArrows(dt / TARGET_DT);
+  updateSlimes(dt / TARGET_DT);
 }
 
 function daylightFactor() {
@@ -2461,6 +3185,11 @@ function drawPlayer() {
     const globalFrame = player.animFrame + 4;
     srcX = (globalFrame % SHEET_COLS) * FRAME_SIZE;
     srcY = Math.floor(globalFrame / SHEET_COLS) * FRAME_SIZE;
+  } else if (player.animState === 'bow') {
+    // Frames 29-32 (0-indexed): global frame = 29 + animFrame
+    const globalFrame = 29 + player.animFrame;
+    srcX = (globalFrame % SHEET_COLS) * FRAME_SIZE;
+    srcY = Math.floor(globalFrame / SHEET_COLS) * FRAME_SIZE;
   } else {
     const anim = ANIM[player.animState];
     if (!anim) return;
@@ -2621,15 +3350,21 @@ function drawStatusHud() {
 
   // Armor bar: small shield icons below hearts
   const defense = getTotalDefense();
-  const maxDefense = 7; // helmet1 + chest3 + legs2 + boots1
-  if (defense > 0 || !isEmptyStack(equipment[0]) || !isEmptyStack(equipment[1]) || !isEmptyStack(equipment[2]) || !isEmptyStack(equipment[3])) {
-    for (let i = 0; i < maxDefense; i++) {
-      const sx = 18 + i * 18, sy = 38;
-      ctx.fillStyle = i < defense ? '#6ad4ff' : 'rgba(255,255,255,0.15)';
+  const hasArmor = equipment.some(s => !isEmptyStack(s));
+  if (defense > 0 || hasArmor) {
+    // Show up to 10 icons; each icon = ceil(maxDefense/10) defense
+    const maxDefense = 24;
+    const ICON_COUNT = 10;
+    const perIcon = maxDefense / ICON_COUNT;
+    for (let i = 0; i < ICON_COUNT; i++) {
+      const sx = 18 + i * 16, sy = 38;
+      const filled = defense >= (i + 1) * perIcon;
+      const partial = !filled && defense > i * perIcon;
+      ctx.fillStyle = filled ? '#6ad4ff' : partial ? 'rgba(106,212,255,0.45)' : 'rgba(255,255,255,0.12)';
       ctx.beginPath();
-      ctx.moveTo(sx + 6, sy);     ctx.lineTo(sx + 12, sy + 4);
-      ctx.lineTo(sx + 12, sy + 9); ctx.lineTo(sx + 6, sy + 13);
-      ctx.lineTo(sx, sy + 9);     ctx.lineTo(sx, sy + 4);
+      ctx.moveTo(sx + 5, sy);     ctx.lineTo(sx + 10, sy + 3);
+      ctx.lineTo(sx + 10, sy + 8); ctx.lineTo(sx + 5, sy + 11);
+      ctx.lineTo(sx, sy + 8);     ctx.lineTo(sx, sy + 3);
       ctx.closePath(); ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.5; ctx.stroke();
     }
@@ -2695,7 +3430,9 @@ function drawChestUI() {
   const panelW = cols * sW + pad * 2;
   const panelH = rows * sH + pad * 2 + 28;
   const px = Math.round(canvas.width / 2 - panelW / 2);
-  const py = Math.round(canvas.height / 2 - panelH / 2);
+  // Position chest panel above the inventory panel with a small gap
+  const invMetrics = getInventoryMetrics();
+  const py = Math.max(4, invMetrics.panel.y - panelH - 8);
   ctx.fillStyle = 'rgba(0,0,0,0.82)';
   ctx.fillRect(px, py, panelW, panelH);
   ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1;
@@ -2755,11 +3492,9 @@ function drawFurnaceUI() {
 
 function drawInventoryScreen() {
   if (!inventory.open && !openUI) return;
-  if (openUI) {
+  if (openUI && openUI.type === 'furnace') {
     ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (openUI.type === 'chest') drawChestUI();
-    if (openUI.type === 'furnace') drawFurnaceUI();
-    drawDraggedStack();
+    drawFurnaceUI();
     return;
   }
   if (!inventory.open) return;
@@ -2789,12 +3524,21 @@ function drawInventoryScreen() {
 
   // ── EQUIPMENT SECTION ──────────────────────────────────────
   const eq = m.equip;
-  drawText('EQUIPMENT', eq.x, m.upper.y + 14, '#c9aa71', '11px Minecraft, monospace');
+  drawText('ARMOR', eq.x, m.upper.y + 14, '#c9aa71', '11px Minecraft, monospace');
   for (let i = 0; i < 4; i++) {
     const rect = getSlotRect('equip', i, m);
     const labelY = rect.y + Math.floor(m.slotH * 0.58);
     drawText(EQUIP_LABELS[i], eq.x, labelY, '#6a8fba', '10px Minecraft, monospace');
     drawInventorySlot(equipment[i], rect.x, rect.y, m.slotW, m.slotH);
+  }
+  // ── ACCESSORIES SECTION ────────────────────────────────────
+  const ac = m.acc;
+  drawText('ACCESS.', ac.x, m.upper.y + 14, '#c9aa71', '11px Minecraft, monospace');
+  for (let i = 0; i < ACC_SLOTS; i++) {
+    const rect = getSlotRect('acc', i, m);
+    const labelY = rect.y + Math.floor(m.slotH * 0.58);
+    drawText(`Acc ${i + 1}`, ac.x, labelY, '#6a8fba', '10px Minecraft, monospace');
+    drawInventorySlot(accessories[i], rect.x, rect.y, m.slotW, m.slotH);
   }
 
   // ── CRAFTING SECTION ───────────────────────────────────────
@@ -2841,7 +3585,35 @@ function drawInventoryScreen() {
     drawInventorySlot(inventory.backpack[i], rect.x, rect.y, m.slotW, m.slotH);
   }
 
+  // Chest UI drawn on top of inventory when a chest is open
+  if (openUI?.type === 'chest') drawChestUI();
+
   ctx.restore();
+}
+
+function drawInventoryTooltip() {
+  if (dragState.active) return;
+  const slotRef = getUiSlotAt(mouse.x, mouse.y);
+  if (!slotRef) return;
+  const slot = getInventorySlot(slotRef.area, slotRef.index);
+  if (!slot || slot.type === AIR || slot.type === 0) return;
+  const name = getItemName(slot.type);
+  if (!name || name === 'Item') return;
+  const text = name.toUpperCase();
+  ctx.font = '11px Minecraft, monospace';
+  const tw = ctx.measureText(text).width;
+  const pad = 6;
+  const tx = Math.min(mouse.x + 14, canvas.width - tw - pad * 2 - 4);
+  const ty = Math.max(mouse.y - 28, 4);
+  ctx.fillStyle = 'rgba(8,12,22,0.92)';
+  ctx.strokeStyle = 'rgba(180,140,255,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(tx, ty, tw + pad * 2, 22, 3);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f5f1d0';
+  ctx.textAlign = 'left';
+  ctx.fillText(text, tx + pad, ty + 15);
 }
 
 function drawHotbar() {
@@ -2909,13 +3681,17 @@ function getSaveMetadata(slot) {
     const raw = localStorage.getItem(SAVE_KEY_PREFIX + slot);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    return d?.v === 1 ? { savedAt: d.savedAt } : null;
+    return (d?.v === 1 || d?.v === 2) ? { savedAt: d.savedAt } : null;
   } catch { return null; }
 }
 
 function serializeGame() {
+  const chestsArr = [];
+  for (const [key, slots] of chests) chestsArr.push({ key, slots: slots.map(stackToObj) });
+  const furnacesArr = [];
+  for (const [key, f] of furnaces) furnacesArr.push({ key, ore: stackToObj(f.ore), fuel: stackToObj(f.fuel), out: stackToObj(f.out), timer: f.timer });
   return JSON.stringify({
-    v: 1,
+    v: 2,
     savedAt: Date.now(),
     world: encodeUint8Array(world),
     surfaceYs: Array.from(surfaceYs),
@@ -2925,14 +3701,17 @@ function serializeGame() {
     player: { x: player.x, y: player.y, vy: player.vy, health: player.health, maxHealth: player.maxHealth, facing: player.facing },
     inv: { hotbar: inventory.hotbar.map(stackToObj), backpack: inventory.backpack.map(stackToObj), selected: inventory.selected },
     equip: equipment.map(stackToObj),
+    acc: accessories.map(stackToObj),
     cam: { x: cam.x, y: cam.y },
     dayClockMs,
+    chests: chestsArr,
+    furnaces: furnacesArr,
   });
 }
 
 function deserializeGame(json) {
   const d = JSON.parse(json);
-  if (!d || d.v !== 1) return false;
+  if (!d || (d.v !== 1 && d.v !== 2)) return false;
 
   decodeUint8Array(d.world, world);
   surfaceYs.set(d.surfaceYs);
@@ -2956,10 +3735,25 @@ function deserializeGame(json) {
   inventory.selected = d.inv.selected;
   inventory.open = false;
   for (let i = 0; i < 4; i++) equipment[i] = objToStack(d.equip[i]);
+  if (d.acc) for (let i = 0; i < ACC_SLOTS; i++) accessories[i] = objToStack(d.acc[i] ?? {});
 
   cam.x = d.cam.x;
   cam.y = d.cam.y;
   dayClockMs = d.dayClockMs;
+
+  chests.clear();
+  if (d.chests) {
+    for (const entry of d.chests) {
+      chests.set(entry.key, entry.slots.map(objToStack));
+    }
+  }
+  furnaces.clear();
+  if (d.furnaces) {
+    for (const entry of d.furnaces) {
+      furnaces.set(entry.key, { ore: objToStack(entry.ore), fuel: objToStack(entry.fuel), out: objToStack(entry.out), timer: entry.timer });
+    }
+  }
+  openUI = null;
   return true;
 }
 
@@ -3019,6 +3813,9 @@ function resetInventory() {
   for (let i = 0; i < 4; i++) setStack(equipment[i], createStack());
   for (let i = 0; i < CRAFT_SIZE; i++) setStack(craftingGrid[i], createStack());
   craftingOutput = createStack();
+  furnaces.clear(); openUI = null;
+  slimes.length = 0;
+  for (let i = 0; i < ACC_SLOTS; i++) setStack(accessories[i], createStack());
 }
 
 function startNewGame(slot) {
@@ -3028,10 +3825,9 @@ function startNewGame(slot) {
   resetPlayer();
   resetInventory();
   // Starter items
-  inventory.hotbar[0] = createStack(DIRT, 48);
-  inventory.hotbar[1] = createStack(STONE, 24);
-  inventory.hotbar[2] = createStack(WOOD, 18);
-  inventory.hotbar[3] = createStack(COPPER, 8);
+  inventory.hotbar[0] = createStack(SWORD_COPPER, 1);
+  inventory.hotbar[1] = createStack(PICK_COPPER,  1);
+  inventory.hotbar[2] = createStack(AXE_COPPER,   1);
   gameState = 'playing';
   menuConfirm = null;
 }
@@ -3044,7 +3840,12 @@ function enterGame(slot) {
 function handleEscape() {
   if (gameState === 'mainmenu') return;
   if (menuConfirm) { menuConfirm = null; return; }
-  if (openUI) { openUI = null; return; }
+  if (openUI) {
+    const wasOpen = openUI.wasInventoryOpen ?? true;
+    openUI = null;
+    if (!wasOpen) toggleInventory(false);
+    return;
+  }
   if (inventory.open) { toggleInventory(false); return; }
   if (gameState === 'playing') { gameState = 'paused'; }
   else if (gameState === 'paused') { gameState = 'playing'; }
@@ -3106,7 +3907,7 @@ function drawMainMenu() {
       drawText('CONTINUE', L.slotX + L.slotW - 16, by + 20, '#ffd55e', '12px Minecraft, monospace', 'right');
       drawText(ds, L.slotX + 16, by + 40, 'rgba(150,195,245,0.8)', '10px Minecraft, monospace');
     } else {
-      drawText('NEW WORLD', L.slotX + L.slotW - 16, by + 20, 'rgba(255,255,255,0.4)', '12px Minecraft, monospace', 'right');
+      drawText('RESET WORLD', L.slotX + L.slotW - 16, by + 20, 'rgba(255,255,255,0.4)', '12px Minecraft, monospace', 'right');
       drawText('─── empty ───', L.slotX + 16, by + 40, 'rgba(255,255,255,0.2)', '11px Minecraft, monospace');
     }
   }
@@ -3221,6 +4022,8 @@ function loop(ts) {
     drawWater();
     drawTreeCanopies();
     drawPlayer();
+    drawArrows();
+    drawSlimes();
     drawPauseMenu();
     requestAnimationFrame(loop);
     return;
@@ -3232,6 +4035,15 @@ function loop(ts) {
   updatePlayer(scale);
   if (player.health <= 0 && !player.dying) { player.dying = true; player.deathFrame = 0; player.deathTick = 0; }
   updateDeathAnim(scale);
+  // Accessory: Band of Regeneration — 1 HP every 600 ticks (~10s)
+  if (hasAccessory(ACC_BAND_REGEN) && !player.dying) {
+    player.regenTick = (player.regenTick || 0) + scale;
+    if (player.regenTick >= 600) {
+      player.regenTick = 0;
+      const cap = getMaxHealth();
+      if (player.health < cap) player.health = Math.min(cap, player.health + 1);
+    }
+  } else { player.regenTick = 0; }
   if (!player.dying) updateMining(scale);
   if (!player.dying) updatePlacement(lastTime);
   if (!player.dying) updateAnimation(scale);
@@ -3242,6 +4054,8 @@ function loop(ts) {
   drawWater();
   drawTreeCanopies();
   drawPlayer();
+  drawArrows();
+  drawSlimes();
   if (player.fullySubmerged) {
     ctx.fillStyle = 'rgba(24,72,138,0.18)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -3251,6 +4065,7 @@ function loop(ts) {
   drawStatusHud();
   drawHotbar();
   drawDraggedStack();
+  drawInventoryTooltip();
 
   requestAnimationFrame(loop);
 }
