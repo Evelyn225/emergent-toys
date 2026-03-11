@@ -521,6 +521,35 @@ body.daemon-visual-7 #daemon-fx { opacity: 0.32; animation: daemon-fx-drift 9s l
   opacity: 0;
   background: linear-gradient(105deg, transparent 0 30%, rgba(255,255,255,0.2) 44%, transparent 58%);
 }
+.os-window.void-surface #void-readout {
+  scrollbar-width: auto;
+  scrollbar-color: #bdbdbd #7e7e7e;
+}
+.os-window.void-surface #void-readout::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+  background: #c0c0c0;
+}
+.os-window.void-surface #void-readout::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, #7f7f7f 0%, #969696 100%);
+  box-shadow:
+    inset 1px 1px 0 #444,
+    inset -1px -1px 0 #d6d6d6;
+}
+.os-window.void-surface #void-readout::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #d8d8d8 0%, #b5b5b5 100%);
+  border: 1px solid #7b7b7b;
+  box-shadow:
+    inset 1px 1px 0 #fff,
+    inset -1px -1px 0 #5a5a5a;
+}
+.os-window.void-surface #void-readout::-webkit-scrollbar-corner,
+.os-window.void-surface #void-readout::-webkit-scrollbar-button {
+  background: linear-gradient(180deg, #cfcfcf 0%, #a9a9a9 100%);
+  box-shadow:
+    inset 1px 1px 0 #fff,
+    inset -1px -1px 0 #666;
+}
 .os-window.window-afterimage {
   transform: translate(var(--pulse-x, 0px), var(--pulse-y, 0px));
 }
@@ -1107,7 +1136,6 @@ const DESKTOP_ICONS = [
   { name: 'REGEDIT.exe',    emoji: '🗝️', action: 'openRegedit' },
   { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
   { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
-  { name: '?????.exe',      emoji: '❓', action: 'openUnknown' },
 ];
 function getExeDisplayName() {
   return daemonStory.quarantineSigned ? 'quarantine.exe' : '?????.exe';
@@ -1265,6 +1293,17 @@ try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) ||
 
 // ── Registry data ─────────────────────────────────────────────────
 const REG_KEY = 'sleepOS-registry';
+const SYSTEM_WALLPAPER_DIR = 'SYS\\WALLPAPERS';
+const DEFAULT_WALLPAPER_PATH = SYSTEM_WALLPAPER_DIR + '\\DEFAULT.JPG';
+const LEGACY_BUILTIN_WALLPAPER_IDS = new Set(['default', 'magicant', 'hills', 'battle', 'summers', 'saturn', 'cave']);
+// Point these assetUrl values at images/wallpapers/* as that repo folder fills out.
+const SEEDED_WALLPAPERS = [
+  { path: DEFAULT_WALLPAPER_PATH, label: 'Default', assetUrl: 'images/tree_bg.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CRYSTALLINE.PNG', label: 'Crystalline', assetUrl: 'images/crystalline.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\PIXELPATHS.PNG', label: 'Pixel Paths', assetUrl: 'images/pxelpaths.PNG', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\INDEXBG.PNG', label: 'Index Sky', assetUrl: 'images/indexbg.PNG', mime: 'image/png' },
+];
+const SEEDED_WALLPAPER_MAP = new Map(SEEDED_WALLPAPERS.map(item => [item.path, item]));
 const registryData = {
   'HKEY_SLEEPBOX_MACHINE': {
     'SYSTEM\\CurrentConfig': {
@@ -1289,7 +1328,7 @@ const registryData = {
   },
   'HKEY_CURRENT_USER': {
     'Desktop': {
-      Wallpaper:          { type:'REG_SZ',    value: 'default' },
+      Wallpaper:          { type:'REG_SZ',    value: DEFAULT_WALLPAPER_PATH },
     },
     'SOFTWARE\\sleepOS': {
       SkipBoot:           { type:'REG_DWORD', value: 0 },
@@ -1398,19 +1437,83 @@ const WALLPAPERS = [
 ];
 
 const WALLPAPER_FILE_PREFIX = 'FILE:';
-let currentWallpaper = 'default';
+let currentWallpaper = DEFAULT_WALLPAPER_PATH;
 
 function isWallpaperFileId(id) {
   return typeof id === 'string' && id.startsWith(WALLPAPER_FILE_PREFIX);
 }
 
+function normalizeWallpaperPath(path, fallbackDir) {
+  const raw = String(path ?? '').trim();
+  if (!raw) return '';
+  if (isWallpaperFileId(raw)) return normalizeWallpaperPath(raw.slice(WALLPAPER_FILE_PREFIX.length), fallbackDir);
+  if (LEGACY_BUILTIN_WALLPAPER_IDS.has(raw.toLowerCase())) return DEFAULT_WALLPAPER_PATH;
+  const { dirName, fileName } = fsSplitPath(raw, fallbackDir);
+  return fileName ? blobRelativePath(dirName, fileName) : '';
+}
+
+function isSystemWallpaperPath(path) {
+  const normalized = normalizeWallpaperPath(path);
+  return normalized === SYSTEM_WALLPAPER_DIR || normalized.startsWith(SYSTEM_WALLPAPER_DIR + '\\');
+}
+
+function findMapKeyInsensitive(map, key) {
+  if (!map || !key) return '';
+  if (map.has(key)) return key;
+  const target = String(key).toUpperCase();
+  for (const existing of map.keys()) {
+    if (String(existing).toUpperCase() === target) return existing;
+  }
+  return '';
+}
+
+function resolveWallpaperEntry(path, fallbackDir) {
+  const normalized = normalizeWallpaperPath(path, fallbackDir);
+  if (!normalized) return null;
+  const { dirName, fileName } = fsSplitPath(normalized);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  const blobName = findMapKeyInsensitive(dir.blobs, fileName);
+  if (!blobName) return null;
+  const blob = dir.blobs.get(blobName);
+  if (!blob || blob.kind !== 'image') return null;
+  return { dir, dirName, fileName: blobName, path: blobRelativePath(dirName, blobName), blob };
+}
+
+function getWallpaperRegistryValue() {
+  return registryData['HKEY_CURRENT_USER']?.Desktop?.Wallpaper?.value || '';
+}
+
+function setWallpaperRegistryValue(path) {
+  const entry = registryData['HKEY_CURRENT_USER']?.Desktop?.Wallpaper;
+  if (!entry) return;
+  entry.value = path;
+  saveRegistry();
+}
+
+function syncWallpaperSwatches() {
+  document.querySelectorAll('.wp-swatch').forEach(swatch => {
+    swatch.classList.toggle('wp-selected', swatch.dataset.id === currentWallpaper);
+  });
+}
+
+function getInitialWallpaperPath() {
+  const rawRegistry = String(getWallpaperRegistryValue() || '').trim();
+  const rawSaved = String(localStorage.getItem(WP_KEY) || '').trim();
+  const registryPath = normalizeWallpaperPath(rawRegistry);
+  const savedPath = normalizeWallpaperPath(rawSaved);
+  const registryWasLegacyDefault = rawRegistry && LEGACY_BUILTIN_WALLPAPER_IDS.has(rawRegistry.toLowerCase());
+  if (savedPath && (!registryPath || registryWasLegacyDefault)) return savedPath;
+  return registryPath || savedPath || DEFAULT_WALLPAPER_PATH;
+}
+
 function wallpaperFileId(path, fallbackDir) {
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  return fileName ? WALLPAPER_FILE_PREFIX + blobRelativePath(dirName, fileName) : '';
+  const normalized = normalizeWallpaperPath(path, fallbackDir);
+  return normalized ? WALLPAPER_FILE_PREFIX + normalized : '';
 }
 
 function wallpaperFilePath(id) {
-  return isWallpaperFileId(id) ? id.slice(WALLPAPER_FILE_PREFIX.length) : '';
+  return normalizeWallpaperPath(id);
 }
 
 function getUploadedWallpaperChoices() {
@@ -1421,10 +1524,11 @@ function getUploadedWallpaperChoices() {
       if (blob.kind !== 'image') return;
       const relPath = blobRelativePath(dirPath, fileName);
       items.push({
-        id: WALLPAPER_FILE_PREFIX + relPath,
-        name: fileName,
+        id: relPath,
+        name: (SEEDED_WALLPAPER_MAP.get(relPath) || {}).label || fileName.replace(/\.[^.]+$/, ''),
         path: relPath,
         url: blob.url,
+        system: isSystemWallpaperPath(relPath),
       });
     });
     if (!dir.subdirs) return;
@@ -1433,133 +1537,127 @@ function getUploadedWallpaperChoices() {
       .forEach(([subName, subdir]) => walk(subdir, dirPath ? dirPath + '\\' + subName : subName));
   }
   walk(termFS, '');
-  return items.sort((a, b) => a.path.localeCompare(b.path));
+  return items.sort((a, b) => {
+    if (a.system !== b.system) return a.system ? -1 : 1;
+    return a.path.localeCompare(b.path);
+  });
 }
 
 function renderWallpaperSwatch(grid, choice) {
   const item = document.createElement('div');
   item.dataset.id = choice.id;
   item.className = 'wp-swatch' + (choice.id === currentWallpaper ? ' wp-selected' : '');
-  item.title = choice.path ? `C:\\sleepOS\\${choice.path}` : choice.name;
+  item.title = `C:\\sleepOS\\${choice.path}`;
   item.style.cssText = 'cursor:default;display:flex;flex-direction:column;align-items:center;gap:3px;';
 
   const thumb = document.createElement('div');
   thumb.className = 'wp-thumb';
   thumb.style.cssText = 'width:72px;height:50px;box-sizing:border-box;overflow:hidden;flex-shrink:0;background:#c0c0c0;';
 
-  if (choice.url) {
-    const img = document.createElement('img');
-    img.src = choice.url;
-    img.alt = choice.name;
-    img.draggable = false;
-    thumb.appendChild(img);
-  } else {
-    const fill = document.createElement('div');
-    fill.style.cssText = `width:100%;height:100%;${choice.bg}`;
-    thumb.appendChild(fill);
-  }
+  const img = document.createElement('img');
+  img.src = choice.url;
+  img.alt = choice.name;
+  img.draggable = false;
+  thumb.appendChild(img);
 
   const label = document.createElement('div');
   label.style.cssText = 'font-size:10px;text-align:center;line-height:1.25;max-width:84px;word-break:break-word;';
-  label.textContent = choice.path ? choice.name.replace(/\.[^.]+$/, '') : choice.name;
+  label.textContent = choice.name;
   item.appendChild(thumb);
   item.appendChild(label);
 
-  if (choice.path && choice.path !== choice.name) {
-    const meta = document.createElement('div');
-    meta.textContent = choice.path.replace(/\\[^\\]+$/, '') || 'Root';
-    meta.style.cssText = 'font-size:9px;color:#555;text-align:center;line-height:1.1;max-width:84px;word-break:break-word;';
-    item.appendChild(meta);
-  }
+  const meta = document.createElement('div');
+  meta.textContent = choice.path.replace(/\\[^\\]+$/, '') || 'Root';
+  meta.style.cssText = 'font-size:9px;color:#555;text-align:center;line-height:1.1;max-width:84px;word-break:break-word;';
+  item.appendChild(meta);
 
-  item.addEventListener('click', () => applyWallpaper(choice.id));
+  item.addEventListener('click', () => applyWallpaper(choice.path));
   grid.appendChild(item);
+}
+
+function renderWallpaperSection(gridId, choices, emptyText) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  if (!choices.length) {
+    grid.innerHTML = `<div style="grid-column:1 / -1;padding:8px 10px;border:2px solid;border-color:#808080 #fff #fff #808080;background:#d4d0c8;font-size:10px;line-height:1.4;">${emptyText}</div>`;
+    return;
+  }
+  choices.forEach(choice => renderWallpaperSwatch(grid, choice));
 }
 
 function renderAppearanceWindow() {
   const body = document.getElementById('wb-appearance');
   if (!body) return;
-  const uploads = getUploadedWallpaperChoices();
+  const choices = getUploadedWallpaperChoices();
+  const systemWallpapers = choices.filter(choice => choice.system);
+  const otherWallpapers = choices.filter(choice => !choice.system);
   body.style.cssText = 'padding:10px;overflow:auto;';
   body.innerHTML = `
     <div style="font-size:11px;margin-bottom:8px;">Wallpaper</div>
-    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Built-in</div>
-    <div id="wp-grid-builtins" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;"></div>
-    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Uploaded Images</div>
+    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">SYS\\WALLPAPERS</div>
+    <div id="wp-grid-system" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;"></div>
+    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Other Image Files</div>
     <div id="wp-grid-uploaded" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>
     <div id="wp-upload-note" style="font-size:10px;line-height:1.4;margin-top:10px;color:#333;"></div>`;
 
-  const builtinsGrid = document.getElementById('wp-grid-builtins');
-  WALLPAPERS.forEach(wp => renderWallpaperSwatch(builtinsGrid, wp));
-
-  const uploadedGrid = document.getElementById('wp-grid-uploaded');
+  renderWallpaperSection('wp-grid-system', systemWallpapers, 'System wallpaper files will appear here.');
+  renderWallpaperSection('wp-grid-uploaded', otherWallpapers, 'Upload an image anywhere in File Explorer, or add more files under SYS\\WALLPAPERS.');
   const note = document.getElementById('wp-upload-note');
-  if (uploads.length) {
-    uploads.forEach(choice => renderWallpaperSwatch(uploadedGrid, choice));
-    note.textContent = 'Right-click any image in File Explorer and choose Set as Wallpaper.';
-  } else {
-    uploadedGrid.innerHTML = `<div style="grid-column:1 / -1;padding:8px 10px;border:2px solid;border-color:#808080 #fff #fff #808080;background:#d4d0c8;font-size:10px;line-height:1.4;">Uploaded image files will appear here and can be used as wallpaper.</div>`;
-    note.textContent = 'Use File Explorer to upload an image, then right-click it to set it as wallpaper.';
-  }
+  note.textContent = 'Wallpaper uses HKEY_CURRENT_USER\\Desktop\\Wallpaper. Right-click any image or edit that registry path to switch backgrounds.';
 }
 
 function refreshAppearanceWindow() {
   if (document.getElementById('wb-appearance')) renderAppearanceWindow();
 }
 
-function applyWallpaper(id, options = {}) {
-  const { deferMissing = false } = options;
+function applyWallpaper(path, options = {}) {
+  const { deferMissing = false, updateRegistry = true } = options;
   const bg = document.getElementById('desktop-bg');
   if (!bg) return false;
 
-  const wp = WALLPAPERS.find(w => w.id === id);
-  if (wp) {
-    currentWallpaper = id;
-    bg.style.cssText = wp.bg;
-    localStorage.setItem(WP_KEY, id);
-    document.querySelectorAll('.wp-swatch').forEach(s => {
-      s.classList.toggle('wp-selected', s.dataset.id === id);
-    });
+  const resolved = resolveWallpaperEntry(path);
+  if (resolved) {
+    currentWallpaper = resolved.path;
+    bg.style.cssText = `background-color:#c0c0c0;background-image:url("${resolved.blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;`;
+    try { localStorage.setItem(WP_KEY, resolved.path); } catch (e) {}
+    if (updateRegistry) setWallpaperRegistryValue(resolved.path);
+    syncWallpaperSwatches();
     return true;
   }
 
-  if (isWallpaperFileId(id)) {
-    const entry = fsGetEntry(wallpaperFilePath(id));
-    const blob = entry && entry.kind === 'blob' ? entry.value : null;
-    if (blob?.kind === 'image') {
-      currentWallpaper = id;
-      bg.style.cssText = `background-color:#c0c0c0;background-image:url("${blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;`;
-      localStorage.setItem(WP_KEY, id);
-      document.querySelectorAll('.wp-swatch').forEach(s => {
-        s.classList.toggle('wp-selected', s.dataset.id === id);
-      });
-      return true;
-    }
-    if (deferMissing) return false;
+  if (deferMissing) return false;
+
+  const normalized = normalizeWallpaperPath(path);
+  if (normalized !== DEFAULT_WALLPAPER_PATH) {
+    return applyWallpaper(DEFAULT_WALLPAPER_PATH, { updateRegistry });
   }
 
-  if (id !== 'default') return applyWallpaper('default');
-  document.querySelectorAll('.wp-swatch').forEach(s => {
-    s.classList.toggle('wp-selected', s.dataset.id === id);
-  });
+  currentWallpaper = DEFAULT_WALLPAPER_PATH;
+  bg.style.cssText = 'background:#008080;';
+  try { localStorage.setItem(WP_KEY, DEFAULT_WALLPAPER_PATH); } catch (e) {}
+  if (updateRegistry) setWallpaperRegistryValue(DEFAULT_WALLPAPER_PATH);
+  syncWallpaperSwatches();
   return false;
 }
 
 function handleWallpaperFileRename(dirPath, oldName, newName) {
-  const oldId = WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, oldName);
-  const savedId = localStorage.getItem(WP_KEY);
-  if (currentWallpaper === oldId || savedId === oldId) {
-    applyWallpaper(WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, newName));
+  const oldPath = normalizeWallpaperPath(blobRelativePath(dirPath, oldName));
+  const newPath = normalizeWallpaperPath(blobRelativePath(dirPath, newName));
+  const savedPath = normalizeWallpaperPath(localStorage.getItem(WP_KEY));
+  const registryPath = normalizeWallpaperPath(getWallpaperRegistryValue());
+  if (currentWallpaper === oldPath || savedPath === oldPath || registryPath === oldPath) {
+    applyWallpaper(newPath);
   } else {
     refreshAppearanceWindow();
   }
 }
 
 function handleWallpaperFileDelete(dirPath, name) {
-  const id = WALLPAPER_FILE_PREFIX + blobRelativePath(dirPath, name);
-  const savedId = localStorage.getItem(WP_KEY);
-  if (currentWallpaper === id || savedId === id) {
-    applyWallpaper('default');
+  const deletedPath = normalizeWallpaperPath(blobRelativePath(dirPath, name));
+  const savedPath = normalizeWallpaperPath(localStorage.getItem(WP_KEY));
+  const registryPath = normalizeWallpaperPath(getWallpaperRegistryValue());
+  if (currentWallpaper === deletedPath || savedPath === deletedPath || registryPath === deletedPath) {
+    applyWallpaper(DEFAULT_WALLPAPER_PATH);
   } else {
     refreshAppearanceWindow();
   }
@@ -2243,6 +2341,21 @@ function refreshSeededDocs() {
   });
 }
 
+function refreshSeededWallpaperLibrary() {
+  const dir = ensureFsDir(SYSTEM_WALLPAPER_DIR);
+  SEEDED_WALLPAPERS.forEach(item => {
+    const { fileName } = fsSplitPath(item.path);
+    if (!fileName) return;
+    dir.blobs.set(fileName, {
+      url: item.assetUrl,
+      kind: 'image',
+      size: 0,
+      mime: item.mime,
+      seeded: true,
+    });
+  });
+}
+
 function saveFS() {
   try {
     const data = { dirs: [...termFS.dirs], files: {}, subdirs: {} };
@@ -2331,6 +2444,7 @@ function loadFS() {
   const raw = localStorage.getItem(FS_KEY);
   if (!raw) {
     refreshSeededDocs();
+    refreshSeededWallpaperLibrary();
     return;
   }
   try {
@@ -2339,6 +2453,7 @@ function loadFS() {
     if (data.files) Object.entries(data.files).forEach(([k, v]) => termFS.files.set(k, v));
     if (data.subdirs) Object.entries(data.subdirs).forEach(([k, v]) => termFS.subdirs.set(k, _desDir(v)));
     refreshSeededDocs();
+    refreshSeededWallpaperLibrary();
   } catch(e) { /* corrupted save — ignore */ }
 }
 
@@ -2381,6 +2496,25 @@ const BUILTIN_PROCESS_SEED = [
   { pid: 666, name: 'daemon.core', cpu: 2.1, mem: 12.3, protected: true },
   { pid: 999, name: 'void_monitor.exe', cpu: 0.4, mem: 5.2, protected: true },
 ];
+const VOID_ACTION_ORDER = ['observe', 'measure', 'listen', 'trace', 'sample', 'stabilize', 'pulse'];
+const VOID_ACTION_LABELS = {
+  observe: 'Observe',
+  measure: 'Measure',
+  listen: 'Listen',
+  trace: 'Trace',
+  sample: 'Sample',
+  stabilize: 'Stabilize',
+  pulse: 'Pulse',
+};
+
+function normalizeVoidActions(actions) {
+  const seen = new Set(
+    (Array.isArray(actions) ? actions : [])
+      .map(action => String(action || '').toLowerCase())
+      .filter(action => Object.prototype.hasOwnProperty.call(VOID_ACTION_LABELS, action))
+  );
+  return VOID_ACTION_ORDER.filter(action => seen.has(action));
+}
 
 function createDaemonStoryDefaults() {
   return {
@@ -2394,6 +2528,7 @@ function createDaemonStoryDefaults() {
     wrongVictory: false,
     anchorDeleted: false,
     voidObserved: false,
+    voidActions: [],
     mirrorInspected: false,
     protocolInspected: false,
     mirrorLockRestored: false,
@@ -2410,10 +2545,10 @@ function daemonNormalizeStory(story) {
   if (story.respawnDisabledKill) story.stage = Math.max(story.stage, 3);
   if (story.daemonStopped || story.wrongVictory) story.stage = Math.max(story.stage, 4);
   if (story.anchorDeleted) story.stage = Math.max(story.stage, 5);
-  if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+  if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
     story.mirrorLockRestored = true;
   }
-  if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected)) story.stage = Math.max(story.stage, 6);
+  if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected)) story.stage = Math.max(story.stage, 6);
   if (story.mirrorLockRestored || story.quarantineSigned) story.stage = Math.max(story.stage, 7);
   if (story.endingReached) story.stage = Math.max(story.stage, 8);
 }
@@ -2436,8 +2571,10 @@ function normalizeDaemonStory(saved) {
     'quarantineSigned',
     'endingReached',
   ].forEach(key => { next[key] = !!next[key]; });
+  next.voidActions = normalizeVoidActions(next.voidActions);
   next.lastEventText = String(next.lastEventText || 'none');
   daemonNormalizeStory(next);
+  if (next.stage >= 6 && !next.voidActions.length) next.voidActions = ['trace'];
   return next;
 }
 
@@ -2455,6 +2592,7 @@ function saveDaemonStory() {
 
 let daemonStory = loadDaemonStory();
 let daemonVoidFeed = '';
+let daemonVoidFeedMode = '';
 let daemonPulseTimer = null;
 
 function daemonStageLabel(stage) {
@@ -2465,6 +2603,45 @@ function daemonStageLabel(stage) {
   if (stage >= 4) return 'Containment Lost';
   if (stage >= 1) return 'Observed';
   return 'Dormant';
+}
+
+function getVoidActions(story) {
+  return normalizeVoidActions((story || daemonStory)?.voidActions);
+}
+
+function isVoidProfiled(story) {
+  const target = story || daemonStory;
+  if (!target) return false;
+  if (target.stage >= 6 || target.quarantineSigned || target.endingReached) return true;
+  return getVoidActions(target).some(action => action !== 'observe');
+}
+
+function getVoidProfileLabel(story) {
+  const target = story || daemonStory;
+  const analyticalCount = getVoidActions(target).filter(action => action !== 'observe').length;
+  if (target?.endingReached) return 'sealed';
+  if (target?.quarantineSigned) return 'bound';
+  if (analyticalCount >= 3) return 'deep';
+  if (analyticalCount >= 1) return 'active';
+  if (getVoidActions(target).length) return 'surface';
+  return 'none';
+}
+
+function getVoidObjectiveLine(story) {
+  const target = story || daemonStory;
+  if (!target) return 'No stable directive.';
+  if (target.endingReached) return 'Containment complete. Archive only.';
+  if (target.stage < 4) return 'The relay is still taking the load. Watch the file.';
+  if (!target.anchorDeleted) {
+    return target.daemonStopped
+      ? 'Lower MIRROR_LOCK and remove SYS\\anchor.seed when you are ready to expose the channel.'
+      : 'Silence the relay before you trust what the file looks like.';
+  }
+  if (!isVoidProfiled(target)) return 'Use Measure, Listen, Trace, Sample, or Pulse here to profile the breach.';
+  if (!(target.mirrorInspected || target.protocolInspected)) return 'Compare this file with CACHE\\mirror.dat or DOCS\\MIRROR_PROTOCOL.txt.';
+  if (Number(getContainmentValue('MIRROR_LOCK')) !== 1) return 'Restore MIRROR_LOCK before containment can hold.';
+  if (!target.quarantineSigned) return 'Run ?????.exe to write SYS\\quarantine.sig.';
+  return 'Delete void.tmp. The seal is ready.';
 }
 
 function getContainmentTelemetry() {
@@ -2512,10 +2689,10 @@ function getContainmentTelemetry() {
           ? 51
           : daemonStory.stage >= 2
             ? 26
-            : 11;
+          : 11;
   const bias = daemonStory.endingReached ? 'sealed' : mirrorLockActive ? 'deflected' : 'user-facing';
   const deleteAuthorized = !daemonStory.endingReached && daemonStory.quarantineSigned && mirrorLockActive;
-  const sealReady = !daemonStory.endingReached && !daemonStory.quarantineSigned && daemonStory.anchorDeleted && daemonStory.voidObserved && (daemonStory.mirrorInspected || daemonStory.protocolInspected) && mirrorLockActive;
+  const sealReady = !daemonStory.endingReached && !daemonStory.quarantineSigned && daemonStory.anchorDeleted && daemonStory.voidObserved && isVoidProfiled(daemonStory) && (daemonStory.mirrorInspected || daemonStory.protocolInspected) && mirrorLockActive;
   let rating = { code: 'CT-0', label: 'STABLE', color: '#004b61' };
   if (daemonStory.endingReached) rating = { code: 'CT-8', label: 'SEALED', color: '#0a7a2a' };
   else if (deleteAuthorized) rating = { code: 'CT-7', label: 'DELETE AUTHORIZED', color: '#0a5a9c' };
@@ -2543,6 +2720,7 @@ function getContainmentChecklist() {
     { label: 'RESPAWN_LOCK cleared', done: Number(getContainmentValue('RESPAWN_LOCK')) === 0 },
     { label: 'PID 512 offline', done: daemonStory.daemonStopped },
     { label: 'void channel observed', done: daemonStory.voidObserved },
+    { label: 'void channel profiled', done: isVoidProfiled(daemonStory) },
     { label: 'mirror evidence inspected', done: daemonStory.mirrorInspected || daemonStory.protocolInspected },
     { label: 'anchor released', done: daemonStory.anchorDeleted },
     { label: 'MIRROR_LOCK restored', done: daemonStory.anchorDeleted && Number(getContainmentValue('MIRROR_LOCK')) === 1 },
@@ -2723,16 +2901,17 @@ function daemonMirrorProtocolContent() {
     '',
     'Procedure:',
     daemonStory.daemonStopped
-      ? '  1. daemon relay is offline — respawn risk is low if RESPAWN_LOCK=0'
-      : '  1. daemon is still running — it cannot deflect void.tmp anymore',
+      ? '  1. daemon relay is offline - respawn risk is low if RESPAWN_LOCK=0'
+      : '  1. daemon is still running - it cannot deflect void.tmp anymore',
     Number(getContainmentValue('MIRROR_LOCK')) === 0
-      ? '  2. MIRROR_LOCK is 0 — the breach is open, inspect freely'
-      : '  2. MIRROR_LOCK is restored — lattice is deflecting again',
-    '  3. compare CACHE\\mirror.dat with void.tmp — see NOTE below',
-    '  4. restore MIRROR_LOCK before launching ?????.exe',
-    '  5. delete void.tmp only after SYS\\quarantine.sig is signed',
+      ? '  2. MIRROR_LOCK is 0 - the breach is open, inspect freely'
+      : '  2. MIRROR_LOCK is restored - lattice is deflecting again',
+    '  3. profile void.tmp directly - Measure, Listen, Trace, Sample, or Pulse',
+    '  4. compare CACHE\\mirror.dat with void.tmp - see NOTE below',
+    '  5. restore MIRROR_LOCK before launching ?????.exe',
+    '  6. delete void.tmp only after SYS\\quarantine.sig is signed',
     '',
-    'NOTE — mirror.dat vs void.tmp:',
+    'NOTE - mirror.dat vs void.tmp:',
     '  CACHE\\mirror.dat  : written by daemon.core, clean, internal',
     '  void.tmp          : external origin, should not exist here',
     '',
@@ -2886,8 +3065,66 @@ function buildDaemonCoreRawContent() {
   return lines.join('\n');
 }
 
+function buildVoidProbeNotes() {
+  const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
+  const notes = [];
+  if (daemonStory.stage >= 4) {
+    notes.push(`offset 0x0008: reported size = 0 bytes / observed depth = ${telemetry.signalDepth}`);
+    notes.push(`offset 0x0012: origin classification = external / aperture bias = ${telemetry.bias}`);
+  }
+  if (daemonStory.daemonStopped) notes.push('offset 0x0021: PID 512 silence increased readability');
+  if (daemonStory.anchorDeleted) notes.push('offset 0x0034: anchor.seed removal exposed the user-facing side');
+  if (actions.includes('observe')) {
+    notes.push(
+      daemonStory.stage >= 5
+        ? 'offset 0x0100: this is not residue from daemon.core; this surface is the breach'
+        : 'offset 0x0100: active window edges repeat on the inside of the file'
+    );
+  }
+  if (actions.includes('measure')) {
+    notes.push(`offset 0x0118: locality check failed / disk distance behaves like ${telemetry.signalDepth} units of depth`);
+    notes.push('offset 0x0124: zero-byte report is false on contact');
+  }
+  if (actions.includes('listen')) {
+    notes.push('offset 0x0140: room-tone match positive / human voice match negative');
+    notes.push('offset 0x014e: the pressure answers with posture, not language');
+  }
+  if (actions.includes('trace')) {
+    notes.push(
+      daemonStory.stage >= 5
+        ? 'offset 0x0180: return path = user-facing aperture <- mirror offset <- unresolved source'
+        : 'offset 0x0180: return path = monitor gap <- reflected surface'
+    );
+    if (daemonStory.anchorDeleted) notes.push('offset 0x018f: no anchor remains to push the angle away from the user');
+  }
+  if (actions.includes('sample')) {
+    notes.push('offset 0x01c0: daemon-authored signature = false');
+    notes.push('offset 0x01d2: CACHE\\mirror.dat mismatch confirmed');
+  }
+  if (actions.includes('stabilize')) {
+    notes.push(
+      telemetry.mirrorLockActive
+        ? 'offset 0x0210: MIRROR_LOCK bends the read angle but does not internalize the object'
+        : 'offset 0x0210: stabilization failed / aperture remains user-facing'
+    );
+  }
+  if (actions.includes('pulse')) {
+    notes.push(
+      daemonStory.quarantineSigned
+        ? 'offset 0x0240: quarantine signature binds to target id = void.tmp'
+        : 'offset 0x0240: echo returns before current boot'
+    );
+  }
+  if ((daemonStory.mirrorInspected || daemonStory.protocolInspected) && daemonStory.stage >= 5) {
+    notes.push('cross-check: mirror.dat clean, internal, daemon-managed / void.tmp foreign, external, non-local');
+  }
+  return notes;
+}
+
 function buildVoidTmpRawContent() {
   const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
   const lines = [
     'void.tmp',
     '',
@@ -2898,16 +3135,20 @@ function buildVoidTmpRawContent() {
     `[lattice_stability] ${telemetry.lattice}`,
     `[signal_depth] ${telemetry.signalDepth}`,
     `[aperture_bias] ${telemetry.bias}`,
+    '[origin] external / unresolved',
+    `[probe_record] ${actions.length}/${VOID_ACTION_ORDER.length}`,
+    `[profile] ${getVoidProfileLabel()}`,
+    `[probes] ${actions.length ? actions.map(action => VOID_ACTION_LABELS[action]).join(', ') : 'none recorded'}`,
     '',
   ];
   if (daemonStory.endingReached) {
-    lines.push('No active signal remains.');
+    lines.push('No active signal remains.', '', 'Archive note:', '  The breach surface is gone. The record remains.');
   } else if (daemonStory.stage >= 5) {
     lines.push(
       'The aperture is open.',
       'Something is pressing against the reflected side of the file.',
       '',
-      'Observe. Listen. Pulse.',
+      'This is the breach surface, not a symptom file.',
     );
   } else if (daemonStory.stage >= 4) {
     lines.push(
@@ -2920,6 +3161,15 @@ function buildVoidTmpRawContent() {
       '[content redacted]',
       'The file is present but does not yet answer.',
     );
+  }
+  if (!daemonStory.endingReached && daemonStory.stage >= 4) {
+    const notes = buildVoidProbeNotes();
+    if (notes.length) {
+      lines.push('', 'Recovered fragments:');
+      notes.forEach(note => lines.push('  ' + note));
+    }
+    lines.push('', 'Containment path:', '  ' + getVoidObjectiveLine());
+    if (!isVoidProfiled()) lines.push('  Direct probes make the file more legible.');
   }
   return lines.join('\n');
 }
@@ -3171,15 +3421,65 @@ function daemonRecordInvestigation(kind) {
     if (kind === 'void') story.voidObserved = true;
     if (kind === 'mirror') story.mirrorInspected = true;
     if (kind === 'protocol') story.protocolInspected = true;
-    if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
       story.mirrorLockRestored = true;
       story.lastEventText = 'mirror lattice restored';
       return;
     }
-    if (story.anchorDeleted && story.voidObserved && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
       story.lastEventText = 'void channel profiled';
     }
   });
+}
+
+function daemonRecordVoidAction(mode) {
+  return updateDaemonStory(story => {
+    story.voidObserved = true;
+    story.voidActions = normalizeVoidActions([...(Array.isArray(story.voidActions) ? story.voidActions : []), mode]);
+    if (mode === 'observe') {
+      if (story.lastEventText === 'none') story.lastEventText = 'void surface observed';
+    } else if (story.stage < 6 || story.lastEventText === 'none') {
+      story.lastEventText = `void probe recorded: ${mode}`;
+    }
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+      story.mirrorLockRestored = true;
+      story.lastEventText = 'mirror lattice restored';
+      return;
+    }
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
+      story.lastEventText = 'void channel profiled';
+    }
+  }, { forceSync: true });
+}
+
+function getVoidMeasureEntries(telemetry) {
+  return [
+    ['Containment', `${telemetry.rating.code} / ${telemetry.rating.label}`],
+    ['Void Pressure', String(telemetry.pressure)],
+    ['Lattice Stability', String(telemetry.lattice)],
+    ['Signal Depth', String(telemetry.signalDepth)],
+    ['Aperture Bias', telemetry.bias],
+    ['Disk Locality', 'negative'],
+  ];
+}
+
+function renderVoidReadout(out, content, telemetry) {
+  if (!out) return;
+  if (daemonVoidFeedMode === 'measure') {
+    const cards = getVoidMeasureEntries(telemetry).map(([label, value]) => `
+      <div style="border:1px solid #123512;background:#061006;padding:6px;min-width:0;">
+        <div style="color:#8db98d;text-transform:uppercase;font-size:9px;letter-spacing:0.03em;margin-bottom:3px;">${escHtml(label)}</div>
+        <div style="color:#b8efb8;font-size:11px;line-height:1.35;word-break:break-word;">${escHtml(value)}</div>
+      </div>
+    `).join('');
+    out.style.whiteSpace = 'normal';
+    out.style.padding = '8px';
+    out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-content:start;">${cards}</div>`;
+    return;
+  }
+  out.style.whiteSpace = 'pre-wrap';
+  out.style.padding = '10px';
+  out.textContent = content;
 }
 
 function canDeleteAnchorSeed() {
@@ -3276,6 +3576,7 @@ function deleteVirtualPath(path, fallbackDir) {
       story.anchorDeleted = true;
       story.lastEventText = 'anchor released';
       daemonVoidFeed = 'The aperture widens. Something on the reflected side notices the room.';
+      daemonVoidFeedMode = '';
     }, {
       glitch: true,
       notice: {
@@ -3340,6 +3641,7 @@ function killSoulDaemonProcess() {
     story.wrongVictory = true;
     story.lastEventText = 'daemon relay offline';
     daemonVoidFeed = 'The monitor goes missing. The pressure does not.';
+    daemonVoidFeedMode = '';
   }, {
     glitch: true,
     notice: {
@@ -3544,9 +3846,9 @@ async function loadBlobsFromIndexedDb() {
     restoreBlobIntoFs(dirPath, fileName, item.kind, item.size, item.mime, item.blob);
   });
   if (items.length) document.dispatchEvent(new CustomEvent('fs-changed'));
-  const savedWp = localStorage.getItem(WP_KEY);
-  if (savedWp && isWallpaperFileId(savedWp)) {
-    if (!applyWallpaper(savedWp)) applyWallpaper('default');
+  const savedWp = getInitialWallpaperPath();
+  if (savedWp) {
+    if (!applyWallpaper(savedWp)) applyWallpaper(DEFAULT_WALLPAPER_PATH);
   }
 }
 loadBlobsFromStorage();
@@ -4163,6 +4465,46 @@ function fmtSize(bytes) {
   return (bytes/(1024*1024)).toFixed(1) + ' MB';
 }
 
+function inferBlobKindFromName(name) {
+  const lower = String(name || '').toLowerCase();
+  if (/\.(gif|png|jpe?g|webp|bmp|svg|avif|ico)$/.test(lower)) return 'image';
+  if (/\.(mp4|webm|mov|m4v|ogv)$/.test(lower)) return 'video';
+  if (/\.(mp3|wav|ogg|m4a|flac|aac)$/.test(lower)) return 'audio';
+  if (/\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/.test(lower)) return 'text';
+  return 'binary';
+}
+
+function inferBlobMimeFromName(name) {
+  const lower = String(name || '').toLowerCase();
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (/\.(jpg|jpeg)$/.test(lower)) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.bmp')) return 'image/bmp';
+  if (lower.endsWith('.svg')) return 'image/svg+xml';
+  if (lower.endsWith('.avif')) return 'image/avif';
+  if (lower.endsWith('.ico')) return 'image/x-icon';
+  if (lower.endsWith('.mp4')) return 'video/mp4';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  if (lower.endsWith('.ogv')) return 'video/ogg';
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  if (lower.endsWith('.ogg')) return 'audio/ogg';
+  if (lower.endsWith('.m4a')) return 'audio/mp4';
+  if (lower.endsWith('.flac')) return 'audio/flac';
+  if (lower.endsWith('.aac')) return 'audio/aac';
+  if (/\.(txt|log|ini|cfg)$/.test(lower)) return 'text/plain';
+  if (lower.endsWith('.md')) return 'text/markdown';
+  if (lower.endsWith('.csv')) return 'text/csv';
+  if (lower.endsWith('.json')) return 'application/json';
+  if (lower.endsWith('.xml')) return 'application/xml';
+  if (lower.endsWith('.html')) return 'text/html';
+  if (lower.endsWith('.css')) return 'text/css';
+  if (lower.endsWith('.js')) return 'text/javascript';
+  return '';
+}
+
 let _uploadCwd = '';
 function triggerUpload(dir) {
   _uploadCwd = dir || '';
@@ -4177,12 +4519,14 @@ function handleFileUpload(fileList) {
   [...fileList].forEach(file => {
     const url = URL.createObjectURL(file);
     const TEXT_EXTS = /\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/i;
-    const isText = file.type.startsWith('text/') || TEXT_EXTS.test(file.name) || file.type === '';
-    const kind = file.type.startsWith('image/') ? 'image'
-               : file.type.startsWith('video/') ? 'video'
-               : file.type.startsWith('audio/') ? 'audio'
+    const mime = file.type || inferBlobMimeFromName(file.name);
+    const inferredKind = inferBlobKindFromName(file.name);
+    const isText = mime.startsWith('text/') || inferredKind === 'text' || (file.type === '' && TEXT_EXTS.test(file.name));
+    const kind = mime.startsWith('image/') ? 'image'
+               : mime.startsWith('video/') ? 'video'
+               : mime.startsWith('audio/') ? 'audio'
                : isText ? 'text'
-               : 'binary';
+               : inferredKind;
     if (kind === 'text') {
       const reader = new FileReader();
       reader.onload = e => {
@@ -4191,10 +4535,10 @@ function handleFileUpload(fileList) {
       };
       reader.readAsText(file);
     } else {
-      fsWriteBlobFile(file.name, { url, kind, size: file.size, mime: file.type }, dirPath);
+      fsWriteBlobFile(file.name, { url, kind, size: file.size, mime }, dirPath);
       // Persist eagerly while we still have the raw File object
       const fr = new FileReader();
-      fr.onload = e => saveBlobEntry(dirPath, file.name, kind, file.size, file.type, e.target.result);
+      fr.onload = e => saveBlobEntry(dirPath, file.name, kind, file.size, mime, e.target.result);
       fr.readAsArrayBuffer(file);
     }
     added.push(file.name);
@@ -5197,7 +5541,6 @@ Files:
 
 Known issues:
   [!] void.tmp cannot be read, deleted, or ignored
-  [!] ?????.exe should not be executed
   [!] Something is watching this session
 
 \u2014 SYSTEM`;
@@ -6425,7 +6768,7 @@ function openExplorer(startPath) {
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(name, kind, sysfile) },
         ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
         ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
-        ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(wallpaperFileId(singleSelected.name, cwd)) }] : []),
+        ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {
           runScriptInTerminal(singleSelected.name, cwd);
         }}] : []),
@@ -6560,9 +6903,7 @@ function openExplorer(startPath) {
       ['DOCS', ...termFS.dirs].filter((value, index, array) => array.indexOf(value) === index).forEach(dirName => {
         if (dirName !== 'PROJECTS' && dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
       });
-      const sysFileNames = new Set(getRootSystemFiles({ includeExplorer: false }));
-      sysFileNames.forEach(name => items.push({ name, kind:'file', sysfile:true }));
-      termFS.files.forEach((_, name) => { if (!sysFileNames.has(name)) items.push({ name, kind:'file', sysfile:false }); });
+      termFS.files.forEach((_, name) => items.push({ name, kind:'file', sysfile:false }));
       termFS.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
     } else {
       const dir = fsGetDir(cwd);
@@ -8879,7 +9220,7 @@ function renderDaemonPanel() {
     notes.push('The seal lattice is ready. Run ?????.exe to write SYS\\quarantine.sig, then delete void.tmp.');
   } else if (daemonStory.stage >= 5) {
     notes.push('You removed the anchor. The mirror is no longer deflected away from the user.');
-    notes.push('Inspect void.tmp and CACHE\\mirror.dat. Restore MIRROR_LOCK when you are done.');
+    notes.push('Inspect void.tmp and CACHE\\mirror.dat. Read DOCS\\MIRROR_PROTOCOL.txt for the procedure. Restore MIRROR_LOCK when done.');
   } else if (daemonStory.stage >= 4) {
     notes.push('PID 512 stayed dead. The quiet that followed was a failure state, not a victory.');
     notes.push('Lower MIRROR_LOCK in the registry, then delete SYS\\anchor.seed to open the channel. Inspect CACHE\\mirror.dat first.');
@@ -8983,12 +9324,13 @@ function openDaemon() {
 
 function daemonVoidAction(mode) {
   const telemetry = getContainmentTelemetry();
+  daemonVoidFeedMode = mode;
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'The file is no longer empty. It is only narrow.'
+      ? 'This is not a damaged file. This is the aperture surface.'
       : daemonStory.stage >= 4
-        ? 'Pressure is measurable. Silence is not safety.'
-        : 'Nothing stable answers yet.';
+        ? 'The relay went quiet and this surface brightened. Silence is not safety.'
+        : 'Nothing stable answers yet, but the file is already taking a shape.';
   } else if (mode === 'measure') {
     daemonVoidFeed = [
       `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
@@ -8996,22 +9338,23 @@ function daemonVoidAction(mode) {
       `lattice stability: ${telemetry.lattice}`,
       `signal depth: ${telemetry.signalDepth}`,
       `aperture bias: ${telemetry.bias}`,
+      'disk locality: negative',
     ].join('\n');
   } else if (mode === 'listen') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'The reflected side does not speak in words. It leans.'
+      ? 'The reflected side does not speak in words. It leans against the room tone.'
       : daemonStory.stage >= 4
         ? 'You hear the shape of a voice through the monitor gap.'
         : 'Static. Then the suggestion of a room tone.';
   } else if (mode === 'trace') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'trace path:\n  daemon.core -> mirror offset -> void.tmp\n  return latency remains non-local'
+      ? 'trace path:\n  user-facing aperture <- mirror offset <- unresolved source\n  return latency remains non-local'
       : daemonStory.stage >= 4
         ? 'trace path:\n  monitor gap -> pressure rise -> reflected surface'
         : 'No stable trace path yet.';
   } else if (mode === 'sample') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'sample:\n  carrier mismatch: confirmed\n  human voice match: negative\n  reflected side remains coherent'
+      ? 'sample:\n  carrier mismatch: confirmed\n  human voice match: negative\n  daemon-authored signature: false'
       : daemonStory.stage >= 4
         ? 'sample:\n  carrier unstable\n  monitor loss amplified the return path'
         : 'Sampling window too narrow.';
@@ -9026,13 +9369,13 @@ function daemonVoidAction(mode) {
     daemonVoidFeed = daemonStory.quarantineSigned
       ? 'The quarantine signature holds. The aperture recoils.'
       : daemonStory.stage >= 5
-        ? 'A pulse returns late, as if the file were farther away than the disk.'
+        ? 'A pulse returns before the machine feels ready for it, as if the file were farther away than the disk.'
         : 'The pulse dissipates without a readable return.';
     if (daemonStory.stage >= 5) triggerGlitch();
   }
-  daemonRecordInvestigation('void');
+  daemonRecordVoidAction(mode);
   const out = document.getElementById('void-readout');
-  if (out) out.textContent = daemonVoidFeed;
+  if (out) renderVoidReadout(out, daemonVoidFeed, telemetry);
 }
 
 function renderVoid() {
@@ -9043,13 +9386,14 @@ function renderVoid() {
   if (title) title.textContent = daemonStory.endingReached ? 'void.tmp — Sealed' : 'void.tmp';
   body.style.cssText = 'background:#000;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:10px;';
   const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
   const pressure = telemetry.pressure;
   const summary = daemonStory.endingReached
     ? 'No active signal remains.'
     : daemonStory.stage >= 5
-      ? 'This file is not from this system. It came through the channel.\nDo not treat it as data. Quarantine and delete it.'
+      ? `This file is the breach surface.\nUse the probes here to profile it.\n${getVoidObjectiveLine()}`
       : daemonStory.stage >= 4
-        ? 'Pressure rose after the daemon relay went quiet.\nThis file should not be here.'
+        ? `Pressure rose after the daemon relay went quiet.\nUse Measure, Listen, or Trace to make the change legible.\n${getVoidObjectiveLine()}`
         : 'No stable observation channel yet.';
   const readout = daemonVoidFeed || summary;
   body.innerHTML = `
@@ -9078,8 +9422,12 @@ function renderVoid() {
         <div><b>MIRROR LOCK:</b> ${telemetry.mirrorLockActive ? '1' : '0'}</div>
         <div><b>DELETE AUTH:</b> ${telemetry.deleteAuthorized ? 'yes' : 'no'}</div>
       </div>
+      <div>
+        <div><b>PROBES:</b> ${actions.length}/${VOID_ACTION_ORDER.length}</div>
+        <div><b>PROFILE:</b> ${getVoidProfileLabel().toUpperCase()}</div>
+      </div>
     </div>
-    <div id="void-readout" style="flex:1;border:1px solid #123512;background:#020402;color:#6ab56a;padding:10px;font-size:11px;line-height:1.7;white-space:pre-wrap;">${escHtml(readout)}</div>
+    <div id="void-readout" style="flex:1;min-height:0;overflow:auto;border:1px solid #123512;background:#020402;color:#6ab56a;padding:10px;font-size:11px;line-height:1.7;white-space:pre-wrap;">${escHtml(readout)}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;">
       <button class="dlg-btn" onclick="daemonVoidAction('observe')">Observe</button>
       <button class="dlg-btn" onclick="daemonVoidAction('measure')">Measure</button>
@@ -9090,6 +9438,7 @@ function renderVoid() {
       <button class="dlg-btn" onclick="daemonVoidAction('pulse')">Pulse</button>
       <button class="dlg-btn primary" onclick="closeWin('void')">Close</button>
     </div>`;
+  renderVoidReadout(document.getElementById('void-readout'), readout, telemetry);
   resizeVoidWindow();
 }
 
@@ -9100,10 +9449,19 @@ function resizeVoidWindow() {
   if (isMobile) return;
   const desktop = document.getElementById('desktop');
   if (!desktop) return;
-  const nextHeight = Math.min(Math.max(360, desktop.clientHeight - 24), Math.max(voidWin.offsetHeight, 380));
+  const targetWidth = daemonStory.stage >= 5 ? 560 : 540;
+  const targetHeight = daemonStory.stage >= 5 ? 520 : 500;
+  const maxWidth = Math.max(380, desktop.clientWidth - 24);
+  const maxHeight = Math.max(360, desktop.clientHeight - 24);
+  const nextWidth = Math.min(maxWidth, Math.max(voidWin.offsetWidth, targetWidth));
+  const nextHeight = Math.min(maxHeight, Math.max(voidWin.offsetHeight, targetHeight));
+  voidWin.style.width = nextWidth + 'px';
   voidWin.style.height = nextHeight + 'px';
+  const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
   const maxTop = Math.max(0, desktop.clientHeight - nextHeight);
+  const currentLeft = parseFloat(voidWin.style.left) || 0;
   const currentTop = parseFloat(voidWin.style.top) || 0;
+  voidWin.style.left = Math.max(0, Math.min(maxLeft, currentLeft)) + 'px';
   voidWin.style.top = Math.max(0, Math.min(maxTop, currentTop)) + 'px';
 }
 
@@ -9113,7 +9471,9 @@ function openVoid() {
     return;
   }
   daemonRecordInvestigation('void');
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:400, h:380, x:220, y:150, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
+  const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
   renderVoid();
 }
 
@@ -9159,6 +9519,7 @@ function runUnknown() {
       story.quarantineSigned = true;
       story.lastEventText = 'quarantine signature written';
       daemonVoidFeed = 'A signature passes through the aperture and the pressure drops.';
+      daemonVoidFeedMode = '';
     }, {
       glitch: true,
     });
@@ -9765,7 +10126,11 @@ function openRegedit() {
         }
       }
     } else if (hive === 'HKEY_CURRENT_USER') {
-      if (keyPath === 'SOFTWARE\\sleepOS' && valName === 'SkipBoot') {
+      if (keyPath === 'Desktop' && valName === 'Wallpaper') {
+        if (!applyWallpaper(String(newValue), { updateRegistry: false, deferMissing: false })) {
+          applyWallpaper(DEFAULT_WALLPAPER_PATH, { updateRegistry: false });
+        }
+      } else if (keyPath === 'SOFTWARE\\sleepOS' && valName === 'SkipBoot') {
         osSettings.skipBoot = !!newValue;
         saveSettings();
       }
@@ -10207,8 +10572,8 @@ document.addEventListener('keydown', e => {
 function startDesktop() {
   document.getElementById('desktop').style.display = 'block';
   document.getElementById('taskbar').style.display = 'flex';
-  const savedWp = localStorage.getItem(WP_KEY);
-  if (savedWp) applyWallpaper(savedWp, { deferMissing: isWallpaperFileId(savedWp) });
+  const savedWp = getInitialWallpaperPath();
+  if (savedWp) applyWallpaper(savedWp, { deferMissing: !isSystemWallpaperPath(savedWp) });
   applySettings();
   applyDaemonVisualState();
   setupIcons();
