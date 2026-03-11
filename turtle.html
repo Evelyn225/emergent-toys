@@ -553,7 +553,6 @@ function drawArc(radius, degrees) {
 
 // ══ TOKENIZER ══════════════════════════════════════════════════════════════
 function tokenize(src) {
-  src = src.replace(/#[^\n]*/g, ' ');  // strip # comments
   const toks = [];
   let i = 0;
   while (i < src.length) {
@@ -566,16 +565,30 @@ function tokenize(src) {
     if (c===',') { toks.push({t:','}); i++; continue; }
     if (c==='=') { toks.push({t:'='}); i++; continue; }
     if ('+-*/%'.includes(c)) { toks.push({t:c}); i++; continue; }
-    // hex color literal: 0x... or just raw hex after color cmd is handled by parser
+    // # — hex color literal (#rgb or #rrggbb) OR line comment
+    if (c === '#') {
+      let j = i + 1;
+      while (j < src.length && /[0-9a-fA-F]/.test(src[j])) j++;
+      const hexLen = j - i - 1;
+      const nextOk = !src[j] || /[\s\[\](),+\-*/%]/.test(src[j]);
+      if ((hexLen === 3 || hexLen === 6) && nextOk) {
+        toks.push({t:'W', v: src.slice(i, j).toLowerCase()});
+        i = j;
+      } else {
+        // comment — skip to end of line
+        while (i < src.length && src[i] !== '\n') i++;
+      }
+      continue;
+    }
     if (/[0-9]/.test(c) || (c==='.' && /[0-9]/.test(src[i+1]||''))) {
       let j = i;
       while (j < src.length && /[0-9.]/.test(src[j])) j++;
       toks.push({t:'N', v: parseFloat(src.slice(i,j))});
       i = j; continue;
     }
-    if (/[a-zA-Z_#]/.test(c)) {
+    if (/[a-zA-Z_]/.test(c)) {
       let j = i;
-      while (j < src.length && /[a-zA-Z0-9_#.]/.test(src[j])) j++;
+      while (j < src.length && /[a-zA-Z0-9_]/.test(src[j])) j++;
       toks.push({t:'W', v: src.slice(i,j).toLowerCase()});
       i = j; continue;
     }
@@ -1270,7 +1283,17 @@ $('stop-btn').addEventListener('click', () => {
 $('new-btn').addEventListener('click', () => {
   activeScript = null;
   nameInput.value = 'untitled';
-  editor.value = '# new script\nvar size = 100 [10 300]\n\ncolor #7ec8a0\nfd size\n';
+  editor.value = `# my script
+var size  = 120 [10 400]
+var sides = 4   [3 20]
+var hue   = 160 [0 360]
+
+color hsl hue 70 60
+size 2
+repeat sides [
+  fd size
+  rt 360 / sides
+]`;
   parseEditor();
   renderScriptList();
   nameInput.focus();
