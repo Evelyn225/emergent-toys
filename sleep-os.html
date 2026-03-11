@@ -236,6 +236,8 @@ body {
 }
 .sm-item:hover { background: #000080; color: #fff; }
 .sm-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; flex-shrink: 0; }
+.sm-icon-power svg { width: 12px; height: 12px; display: block; overflow: visible; }
+.sm-icon-power svg path { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .sm-icon img { width: 16px; height: 16px; display: block; }
 .sm-sep { height: 1px; margin: 2px 4px; background: linear-gradient(to right, #808080, #fff); }
 
@@ -1207,7 +1209,7 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="closeStart();doShutdown()">
-      <span class="sm-icon">⏻</span><span>Shut Down...</span>
+      <span class="sm-icon sm-icon-power"><svg viewBox="0 -3 16 16" aria-hidden="true" focusable="false"><path d="M8 1.5v5.2"></path><path d="M4.8 3.3a5 5 0 1 0 6.4 0"></path></svg></span><span>Shut Down...</span>
     </div>
   </div>
 </div>
