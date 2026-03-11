@@ -11069,6 +11069,7 @@ function openRegedit() {
   const ws   = document.getElementById('ws-regedit');
   const mb   = document.getElementById('mb-regedit');
   body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+  const REGEDIT_LOCKED_VALUE_NAMES = new Set(['OBSERVER_COUNT', 'ANCHOR_FILE', 'TEMPORAL_DRIFT']);
 
   const layout = document.createElement('div');
   layout.className = 'reg-layout';
@@ -11085,6 +11086,14 @@ function openRegedit() {
   layout.appendChild(vals);
 
   let selectedPath = null; // { hive, key }
+
+  function isLockedRegValue(hive, keyPath, valName) {
+    return REGEDIT_LOCKED_VALUE_NAMES.has(String(valName || '').toUpperCase());
+  }
+
+  function showLockedRegValueNotice(valName) {
+    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', '🗝️');
+  }
 
   function buildTree() {
     tree.innerHTML = '';
@@ -11137,15 +11146,22 @@ function openRegedit() {
 
     Object.keys(data).forEach(valName => {
       const entry = data[valName];
+      const locked = isLockedRegValue(hive, keyPath, valName);
       const tr = document.createElement('tr');
       tr.className = 'reg-val-row';
       tr.innerHTML = '<td>📄 ' + valName + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
-      tr.addEventListener('dblclick', () => editRegValue(hive, keyPath, valName));
+      tr.addEventListener('dblclick', () => {
+        if (locked) {
+          showLockedRegValueNotice(valName);
+          return;
+        }
+        editRegValue(hive, keyPath, valName);
+      });
       tr.addEventListener('contextmenu', e => {
         e.preventDefault();
         tr.classList.add('selected');
         showCtxMenu(e.clientX, e.clientY, [
-          { label: 'Modify', action: () => editRegValue(hive, keyPath, valName) },
+          { label: 'Modify', disabled: locked, action: () => editRegValue(hive, keyPath, valName) },
         ]);
         setTimeout(() => tr.classList.remove('selected'), 800);
       });
@@ -11156,6 +11172,10 @@ function openRegedit() {
   }
 
   function editRegValue(hive, keyPath, valName) {
+    if (isLockedRegValue(hive, keyPath, valName)) {
+      showLockedRegValueNotice(valName);
+      return;
+    }
     const entry = registryData[hive][keyPath][valName];
     const currentVal = String(entry.value);
     osPrompt('Edit value for: ' + valName, currentVal, 'Edit Registry Value', newVal => {
@@ -11276,7 +11296,8 @@ function openRegedit() {
       { label: 'Modify', disabled: !selectedPath, action: () => {
         if (!selectedPath) return;
         const keys = Object.keys(registryData[selectedPath.hive][selectedPath.key]);
-        if (keys.length) editRegValue(selectedPath.hive, selectedPath.key, keys[0]);
+        const editableKey = keys.find(valName => !isLockedRegValue(selectedPath.hive, selectedPath.key, valName));
+        if (editableKey) editRegValue(selectedPath.hive, selectedPath.key, editableKey);
       }},
     ]},
     { label: 'Help', items: [
