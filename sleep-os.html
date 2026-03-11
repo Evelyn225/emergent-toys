@@ -1198,7 +1198,7 @@ body.idle-sleeping { cursor:none; }
     <div id="sleep-sigil">☾</div>
     <div id="sleep-clock">--:--</div>
     <div id="sleep-title">Idle Sleep State</div>
-    <div id="sleep-copy">No input was detected for 10 minutes. Move the mouse, click, or press any key to wake sleepOS.</div>
+    <div id="sleep-copy">Move the mouse, click, or press any key to wake sleepOS.</div>
   </div>
 </div>
 <input id="file-upload-input" type="file" accept="image/*,video/*,audio/*,text/*,.script,.txt,.md,.csv,.json,.xml,.html,.css,.js" multiple style="display:none">
@@ -11179,6 +11179,7 @@ function doShutdown() {
         <select id="shutdown-sel" style="width:180px;font-size:11px;margin-top:2px;">
           <option value="off">Shut down</option>
           <option value="restart">Restart</option>
+          <option value="sleep">Sleep</option>
           <option value="back">Return to Eve Net</option>
         </select>
       </div>
@@ -11193,6 +11194,10 @@ function confirmShutdown() {
   const sel = document.getElementById('shutdown-sel');
   const val = sel ? sel.value : 'back';
   closeWin('shutdown');
+  if (val === 'sleep') {
+    enterIdleSleep();
+    return;
+  }
 
   const bios = document.getElementById('bios');
   bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';
