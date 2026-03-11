@@ -1035,6 +1035,48 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 }
 #cad-footnote { font-size:10px; color:#333; }
 
+/* idle sleep overlay */
+#sleep-overlay {
+  display:none; position:fixed; inset:0; z-index:99992;
+  align-items:center; justify-content:center;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(20,48,26,0.22), transparent 34%),
+    linear-gradient(180deg, rgba(0,18,0,0.96), #000 60%);
+  color:#9ab393; text-align:center; padding:24px;
+}
+#sleep-overlay.active { display:flex; }
+#sleep-overlay::before {
+  content:'';
+  position:absolute; inset:0;
+  background:repeating-linear-gradient(
+    0deg,
+    transparent, transparent 2px,
+    rgba(120,150,120,0.05) 2px, rgba(120,150,120,0.05) 4px
+  );
+  pointer-events:none;
+}
+#sleep-shell {
+  position:relative; z-index:1;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  min-width:min(420px, calc(100vw - 48px));
+}
+#sleep-sigil {
+  font-size:38px; line-height:1;
+  color:#b6d2b0; text-shadow:0 0 14px rgba(120,170,120,0.28);
+}
+#sleep-clock {
+  font-size:30px; letter-spacing:0.16em; color:#d9e7d1;
+  text-shadow:0 0 18px rgba(133,186,133,0.3);
+}
+#sleep-title {
+  font-size:12px; letter-spacing:0.22em; text-transform:uppercase;
+  color:#8da58a;
+}
+#sleep-copy {
+  max-width:420px; font-size:11px; line-height:1.7; color:#7d917a;
+}
+body.idle-sleeping { cursor:none; }
+
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 14px; }
@@ -1151,6 +1193,14 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
     </div>
   </div>
 </div>
+<div id="sleep-overlay" tabindex="-1" aria-hidden="true">
+  <div id="sleep-shell">
+    <div id="sleep-sigil">☾</div>
+    <div id="sleep-clock">--:--</div>
+    <div id="sleep-title">Idle Sleep State</div>
+    <div id="sleep-copy">No input was detected for 10 minutes. Move the mouse, click, or press any key to wake sleepOS.</div>
+  </div>
+</div>
 <input id="file-upload-input" type="file" accept="image/*,video/*,audio/*,text/*,.script,.txt,.md,.csv,.json,.xml,.html,.css,.js" multiple style="display:none">
 
 <!-- Desktop -->
@@ -1201,7 +1251,7 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="closeStart();openRunDialog()">
-      <span class="sm-icon">▶</span><span>Run... <span style="opacity:0.55;font-size:9px;">Win+R</span></span>
+      <span class="sm-icon">▶</span><span>Run...</span>
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="window.location='index.html'">
@@ -1239,6 +1289,9 @@ const PROJECTS = [
   { name: 'tablecloth',         emoji: '🧶', file: 'evenet.fun/tablecloth.html' },
   { name: 'corridor crawler',   emoji: '🚪', file: 'evenet.fun/corridor.html' },
   { name: 'patch synth',        emoji: '🎛️',  file: 'evenet.fun/synth.html' },
+  { name: 'turtle',             emoji: '🐢', file: 'evenet.fun/turtle.html' },
+  { name: 'ball like',          emoji: '⚪', file: 'evenet.fun/ball-like.html' },
+  { name: 'mineria',            emoji: '⛏️', file: 'evenet.fun/terraria.html' },
 ];
 const RECYCLE_BIN_NAME = 'RECYCLE BIN';
 const RECYCLE_STORAGE_DIR = 'CACHE\\RECYCLE_BIN';
@@ -2125,6 +2178,11 @@ const termFS = {
         '  Create with TOUCH, NOTEPAD, or ECHO >.',
         '  Upload via right-click > Upload File.',
         '  New items go into your current folder.',
+        '',
+        'SHORTCUTS:',
+        '  Space + Tab     switch windows',
+        '  Ctrl + Alt + Q  session controls',
+        '  Esc             close menus and overlays',
         '',
         'TERMINAL (quick ref):',
         '  DIR / LS          list files',
@@ -5794,21 +5852,115 @@ function addTbBtn(id, title, icon) {
 // ─────────────────────────────────────────────────────────────────
 // CLOCK
 // ─────────────────────────────────────────────────────────────────
-function updateClock() {
-  const now = new Date();
-  if (window._clockCorrupted && Math.random() < 0.75) {
-    document.getElementById('clock').textContent = '??:??'; return;
-  }
-  let h = Math.random() < 0.004 ? Math.floor(Math.random() * 24) : now.getHours();
-  const m = Math.random() < 0.004 ? Math.floor(Math.random() * 60) : now.getMinutes();
+function formatClockDisplay(now, allowCorruption = true) {
+  if (allowCorruption && window._clockCorrupted && Math.random() < 0.75) return '??:??';
+  let h = allowCorruption && Math.random() < 0.004 ? Math.floor(Math.random() * 24) : now.getHours();
+  const m = allowCorruption && Math.random() < 0.004 ? Math.floor(Math.random() * 60) : now.getMinutes();
   let suffix = '';
   if (osSettings.clock12h) {
     suffix = h >= 12 ? ' PM' : ' AM';
     h = h % 12 || 12;
   }
-  document.getElementById('clock').textContent = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + suffix;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + suffix;
+}
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = formatClockDisplay(now, true);
+  const sleepClock = document.getElementById('sleep-clock');
+  if (sleepClock) sleepClock.textContent = formatClockDisplay(now, false);
 }
 setInterval(updateClock, 1000); updateClock();
+
+// idle sleep
+const IDLE_SLEEP_MS = 10 * 60 * 1000;
+const IDLE_MOVE_THROTTLE_MS = 1000;
+let idleSleepTimer = null;
+let idleSleepActive = false;
+let idleSleepArmed = false;
+let idleLastActivityTs = Date.now();
+let idleLastMoveTs = 0;
+
+function scheduleIdleSleep() {
+  if (idleSleepTimer) clearTimeout(idleSleepTimer);
+  if (!idleSleepArmed || idleSleepActive || !bisDone) return;
+  idleSleepTimer = setTimeout(enterIdleSleep, IDLE_SLEEP_MS);
+}
+function noteIdleActivity(kind = 'generic', force = false) {
+  if (!idleSleepArmed) return;
+  const now = Date.now();
+  if (!force && idleSleepActive) return;
+  if (kind === 'move') {
+    if (!force && now - idleLastMoveTs < IDLE_MOVE_THROTTLE_MS) return;
+    idleLastMoveTs = now;
+  }
+  idleLastActivityTs = now;
+  scheduleIdleSleep();
+}
+function enterIdleSleep() {
+  if (idleSleepActive || !bisDone) return;
+  idleSleepActive = true;
+  if (idleSleepTimer) clearTimeout(idleSleepTimer);
+  closeStart();
+  closeDropdown();
+  closeCad();
+  if (altTabActive) closeAltTab();
+  const overlay = document.getElementById('sleep-overlay');
+  if (!overlay) return;
+  document.body.classList.add('idle-sleeping');
+  overlay.classList.add('active');
+  overlay.setAttribute('aria-hidden', 'false');
+  updateClock();
+  overlay.focus();
+}
+function wakeIdleSleep() {
+  if (!idleSleepActive) return;
+  idleSleepActive = false;
+  const overlay = document.getElementById('sleep-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+  document.body.classList.remove('idle-sleeping');
+  idleLastActivityTs = Date.now();
+  scheduleIdleSleep();
+}
+function armIdleSleep() {
+  if (idleSleepArmed) {
+    noteIdleActivity('generic', true);
+    return;
+  }
+  idleSleepArmed = true;
+
+  document.addEventListener('pointerdown', () => noteIdleActivity('generic'), { passive: true });
+  document.addEventListener('pointermove', () => noteIdleActivity('move'), { passive: true });
+  document.addEventListener('wheel', () => noteIdleActivity('generic'), { passive: true });
+  document.addEventListener('touchstart', () => noteIdleActivity('generic'), { passive: true });
+  document.addEventListener('keydown', () => noteIdleActivity('generic'));
+
+  const wakeAndSwallow = e => {
+    if (!idleSleepActive) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    wakeIdleSleep();
+  };
+  document.addEventListener('keydown', wakeAndSwallow, true);
+  document.addEventListener('pointerdown', wakeAndSwallow, true);
+  document.addEventListener('pointermove', wakeAndSwallow, true);
+  document.addEventListener('touchstart', wakeAndSwallow, true);
+
+  window.addEventListener('focus', () => {
+    if (!idleSleepActive && Date.now() - idleLastActivityTs >= IDLE_SLEEP_MS) enterIdleSleep();
+    else noteIdleActivity('generic', true);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || idleSleepActive) return;
+    if (Date.now() - idleLastActivityTs >= IDLE_SLEEP_MS) enterIdleSleep();
+    else scheduleIdleSleep();
+  });
+
+  scheduleIdleSleep();
+}
 
 // ─────────────────────────────────────────────────────────────────
 // START MENU
@@ -6480,13 +6632,18 @@ Files:
   files and folders, or upload from your machine.
   Everything persists within your session.
 
+Shortcuts:
+  Space + Tab     switch windows
+  Ctrl + Alt + Q  session controls
+  Esc             close menus and overlays
+
 Known issues:
   [!] void.tmp cannot be read, deleted, or ignored
   [!] Something is watching this session
 
 \u2014 SYSTEM`;
 
-if (!termFS.files.has('WELCOME.README')) termFS.files.set('WELCOME.README', WELCOME_DEFAULT);
+termFS.files.set('WELCOME.README', WELCOME_DEFAULT);
 
 function openWelcome() { openNotepad('WELCOME.README'); }
 function escHtml(s) {
@@ -10664,7 +10821,7 @@ function openBrowser() {
   // ── home page ──────────────────────────────────────────────────
   function buildHome() {
     const projectLinks = PROJECTS.map(p =>
-      `<a class="lnk" href="#" onclick="window.parent.postMessage({type:'browser-nav',url:'${p.file}'},'*');return false;">${p.emoji} ${escHtml(p.name)}</a>`
+      `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${JSON.stringify(p.file).replace(/</g, '\\u003c')}},"*");return false;'>${p.emoji} ${escHtml(p.name)}</a>`
     ).join('');
     const favoriteLinks = browserFavorites
       .filter(fav => !DEFAULT_BROWSER_FAVORITE_URLS.has(fav.url.toLowerCase()))
@@ -11774,6 +11931,7 @@ function startDesktop() {
   applySettings();
   applyDaemonVisualState();
   setupIcons();
+  armIdleSleep();
 }
 </script>
 </body>
