@@ -2515,7 +2515,7 @@ function drawPlayer() {
 
     // Fill (transparent when empty)
     if (airRatio > 0) {
-      ctx.fillStyle = `rgba(250,60,55,${0.5 + airRatio * 0.5})`;
+      ctx.fillStyle = `rgba(50,60,95,${0.5 + airRatio * 0.5})`;
       ctx.fillRect(barX, barY, Math.round(barW * airRatio), barH);
     }
   }
