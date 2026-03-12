@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paperbots Terminal</title>
+<link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+<style>
+@font-face { font-family: 'W95'; src: url('w95font.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'W95Bold'; src: url('w95font-bold.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Pixelig'; src: url('Pixelig Cursief.ttf') format('truetype'); font-display: swap; }
+
+:root {
+  --bg: #030706;
+  --bg-soft: #071311;
+  --panel: rgba(10, 20, 18, 0.86);
+  --panel-strong: rgba(13, 26, 23, 0.94);
+  --line: rgba(111, 255, 208, 0.18);
+  --line-strong: rgba(111, 255, 208, 0.42);
+  --text: #d7ffe9;
+  --muted: rgba(196, 255, 226, 0.62);
+  --amber: #ffc96b;
+  --cyan: #87ffe7;
+  --good: #83ff88;
+  --bad: #ff8d73;
+  --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  --radius: 18px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: 'W95', monospace;
+  background:
+    radial-gradient(circle at top left, rgba(255, 201, 107, 0.08), transparent 28%),
+    radial-gradient(circle at top right, rgba(135, 255, 231, 0.12), transparent 24%),
+    linear-gradient(135deg, #020504 0%, #07100e 54%, #030706 100%);
+  color: var(--text);
+  overflow-x: hidden;
+  position: relative;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+body::before {
+  background:
+    linear-gradient(rgba(255,255,255,0.02), rgba(255,255,255,0.01)),
+    repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 4px);
+  mix-blend-mode: screen;
+  opacity: 0.18;
+}
+body::after {
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(135, 255, 231, 0.04) 50%, transparent 100%);
+  animation: sweep 9s linear infinite;
+  opacity: 0.55;
+}
+
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  padding: 24px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.brand-stack {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.home-link,
+.mobile-tab,
+.speed-btn,
+.action-btn,
+.form-btn,
+.secondary-btn,
+.roster-item,
+.watch-row {
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.home-link {
+  text-decoration: none;
+  color: var(--amber);
+  border: 1px solid rgba(255, 201, 107, 0.28);
+  background: rgba(255, 201, 107, 0.08);
+  padding: 9px 12px;
+  border-radius: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.home-link:hover,
+.mobile-tab:hover,
+.speed-btn:hover,
+.action-btn:hover,
+.form-btn:hover,
+.secondary-btn:hover,
+.watch-row:hover {
+  transform: translateY(-1px);
+}
+
+.brand-copy h1 {
+  margin: 2px 0 0;
+  font-family: 'Pixelig', 'W95Bold', monospace;
+  font-size: clamp(30px, 5vw, 54px);
+  font-weight: 400;
+  color: var(--cyan);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.top-meta {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  gap: 10px;
+  flex: 1;
+}
+
+.meta-chip,
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.meta-chip {
+  padding: 12px 14px;
+  min-height: 68px;
+}
+
+.meta-chip .label {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin-bottom: 8px;
+}
+
+.meta-chip strong {
+  font-family: 'W95Bold', monospace;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.status-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: rgba(255, 141, 115, 0.85);
+  box-shadow: 0 0 18px rgba(255, 141, 115, 0.35);
+  margin-top: 19px;
+}
+
+.status-dot.live {
+  background: rgba(131, 255, 136, 0.92);
+  box-shadow: 0 0 20px rgba(131, 255, 136, 0.4);
+}
+
+.mobile-tabs {
+  display: none;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mobile-tab {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: rgba(10, 20, 18, 0.72);
+  color: var(--muted);
+  border-radius: 14px;
+  padding: 10px 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+}
+
+.mobile-tab.active {
+  color: var(--bg);
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 0.96fr 1.2fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.panel {
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent 30%);
+  pointer-events: none;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.panel-head h2 {
+  margin: 2px 0 0;
+  font-family: 'W95Bold', monospace;
+  font-size: 17px;
+  text-transform: lowercase;
+}
+
+.panel-head.compact { margin-bottom: 12px; }
+
+.watchlist,
+.holdings-list,
+.leaderboard-list,
+.event-log,
+.roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.watchlist {
+  max-height: 324px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.holdings-list,
+.leaderboard-list,
+.event-log,
+.roster-list {
+  max-height: 268px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.watch-row,
+.holding-row,
+.leader-row,
+.event-row,
+.roster-item {
+  border: 1px solid rgba(111, 255, 208, 0.12);
+  background: rgba(4, 12, 11, 0.78);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.watch-row,
+.roster-item {
+  cursor: pointer;
+}
+
+.watch-row.active,
+.roster-item.active {
+  border-color: var(--line-strong);
+  background: rgba(15, 31, 28, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(135, 255, 231, 0.1);
+}
+
+.metric-grid,
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metric-card {
+  border: 1px solid rgba(111, 255, 208, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(3, 10, 9, 0.84);
+}
+
+.metric-card span {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin-bottom: 8px;
+}
+
+.metric-card strong {
+  font-family: 'W95Bold', monospace;
+  font-size: 18px;
+}
+
+.signal-box,
+.runtime-card,
+.command-status {
+  border: 1px dashed rgba(255, 201, 107, 0.22);
+  background: rgba(17, 17, 4, 0.15);
+  border-radius: 14px;
+  padding: 12px;
+  color: var(--amber);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stack-form,
+.editor-toolbar,
+.editor-actions,
+.trade-grid,
+.operator-grid,
+.control-cluster,
+.action-strip,
+.speed-strip,
+.range-strip {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stack-form {
+  flex-direction: column;
+}
+
+.editor-toolbar {
+  align-items: stretch;
+}
+
+.editor-toolbar > .input {
+  flex: 1 1 240px;
+}
+
+.editor-template-tools {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex: 0 0 auto;
+}
+
+.editor-template-tools .select {
+  min-width: 168px;
+}
+
+.trade-grid {
+  display: grid;
+  grid-template-columns: 0.88fr 0.88fr auto;
+  align-items: end;
+}
+
+.trade-grid label,
+.operator-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trade-grid .form-btn {
+  min-height: 44px;
+}
+
+.operator-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.operator-form {
+  border: 1px solid rgba(111, 255, 208, 0.12);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(3, 10, 9, 0.7);
+}
+
+.operator-title {
+  margin: 0 0 10px;
+  font-family: 'W95Bold', monospace;
+  font-size: 13px;
+  color: var(--cyan);
+  text-transform: lowercase;
+}
+
+.operator-note {
+  margin-top: 10px;
+}
+
+.bot-console-head {
+  align-items: center;
+}
+
+.bot-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.roster-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mini-kpi {
+  border: 1px solid rgba(111, 255, 208, 0.1);
+  border-radius: 12px;
+  background: rgba(2, 8, 8, 0.7);
+  padding: 9px 10px;
+}
+
+.mini-kpi span {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.mini-kpi strong {
+  font-family: 'W95Bold', monospace;
+  font-size: 14px;
+}
+
+.editor-shell.collapsed .editor-toolbar,
+.editor-shell.collapsed .editor,
+.editor-shell.collapsed .editor-actions,
+.editor-shell.collapsed .runtime-card,
+.editor-shell.collapsed .mini-guide {
+  display: none;
+}
+
+.mini-guide {
+  margin-top: 12px;
+  border: 1px dashed rgba(111, 255, 208, 0.16);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(2, 8, 8, 0.48);
+}
+
+.mini-guide summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.mini-guide .help-copy {
+  margin-top: 10px;
+}
+
+.field-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.input,
+.select,
+.editor {
+  width: 100%;
+  border: 1px solid rgba(111, 255, 208, 0.16);
+  background: rgba(3, 8, 8, 0.88);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 11px 12px;
+  font-family: 'W95', monospace;
+  font-size: 12px;
+}
+
+.editor {
+  min-height: 250px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.speed-btn,
+.action-btn,
+.form-btn,
+.secondary-btn {
+  border: 1px solid rgba(111, 255, 208, 0.18);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(3, 11, 10, 0.82);
+  color: var(--text);
+  font-family: 'W95', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.speed-btn.active,
+.range-btn.active,
+.toggle-live {
+  color: var(--bg);
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.form-btn {
+  background: rgba(255, 201, 107, 0.12);
+  border-color: rgba(255, 201, 107, 0.28);
+  color: var(--amber);
+}
+
+.chart-canvas {
+  width: 100%;
+  height: 330px;
+  border-radius: 16px;
+  background: radial-gradient(circle at top, rgba(135, 255, 231, 0.08), rgba(2, 8, 8, 0.98));
+  border: 1px solid rgba(111, 255, 208, 0.12);
+}
+
+.chart-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.hub-split {
+  display: grid;
+  grid-template-columns: 0.92fr 1.08fr;
+  gap: 18px;
+}
+
+.help-copy {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.pill.good { background: rgba(131, 255, 136, 0.14); color: var(--good); }
+.pill.bad { background: rgba(255, 141, 115, 0.14); color: var(--bad); }
+.pill.neutral { background: rgba(135, 255, 231, 0.11); color: var(--cyan); }
+
+.empty-state {
+  padding: 14px;
+  border: 1px dashed rgba(111, 255, 208, 0.16);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .topbar {
+    flex-direction: column;
+  }
+
+  .top-meta {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .hub-split {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-tabs {
+    display: flex;
+  }
+
+  body[data-panel="market"] .column[data-panel="hub"],
+  body[data-panel="market"] .column[data-panel="bots"],
+  body[data-panel="hub"] .column[data-panel="market"],
+  body[data-panel="hub"] .column[data-panel="bots"],
+  body[data-panel="bots"] .column[data-panel="market"],
+  body[data-panel="bots"] .column[data-panel="hub"] {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell { padding: 14px; }
+  .top-meta { grid-template-columns: 1fr; }
+  .metric-grid,
+  .account-grid,
+  .bot-summary-grid,
+  .operator-grid,
+  .trade-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body data-panel="market">
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-stack">
+        <a href="index.html" class="home-link">exit</a>
+        <div class="brand-copy">
+          <p class="eyebrow">retro market sandbox</p>
+          <h1>paperbots terminal</h1>
+        </div>
+      </div>
+      <div class="top-meta">
+        <div class="meta-chip"><span class="label">seed</span><strong id="seed-value">-</strong></div>
+        <div class="meta-chip"><span class="label">clock</span><strong id="clock-value">day 1 / 09:30</strong></div>
+        <div class="meta-chip"><span class="label" id="empire-cash-label">total cash</span><strong id="empire-cash-value">$0.00</strong></div>
+        <div class="meta-chip"><span class="label">empire net</span><strong id="empire-value">$0.00</strong></div>
+        <div class="meta-chip status-chip">
+          <span class="status-dot" id="run-indicator"></span>
+          <div>
+            <span class="label">loop</span>
+            <strong id="run-state">paused</strong>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="mobile-tabs">
+      <button class="mobile-tab active" data-panel="market">market</button>
+      <button class="mobile-tab" data-panel="hub">hub</button>
+      <button class="mobile-tab" data-panel="bots">bots</button>
+    </nav>
+
+    <main class="layout">
+      <section class="column" data-panel="market">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">watchlist</p><h2>market rack</h2></div></div>
+          <div class="watchlist" id="stock-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head compact"><div><p class="eyebrow">selected stock</p><h2 id="selected-stock-title">AAPL</h2></div><span class="pill neutral" id="selected-stock-pill">waiting</span></div>
+          <div class="metric-grid">
+            <div class="metric-card"><span>price</span><strong id="stock-price-value">$0.00</strong></div>
+            <div class="metric-card"><span>day move</span><strong id="stock-change-value">0.00%</strong></div>
+            <div class="metric-card"><span>session open</span><strong id="stock-open-value">$0.00</strong></div>
+            <div class="metric-card"><span>sector</span><strong id="stock-sector-value">-</strong></div>
+          </div>
+          <form id="trade-form" class="trade-grid" style="margin-top:12px;">
+            <label><span class="field-label">side</span><select class="select" id="trade-action"><option value="buy">buy</option><option value="sell">sell</option></select></label>
+            <label><span class="field-label">shares</span><input class="input" id="trade-shares" type="number" min="1" step="1" value="1"></label>
+            <button class="form-btn" type="submit">route order</button>
+          </form>
+          <div class="signal-box" id="trade-note">Orders fill on the current tick and pause the loop.</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head compact"><div><p class="eyebrow">personal account</p><h2 id="main-account-title">main account</h2></div></div>
+          <div class="account-grid">
+            <div class="metric-card"><span>cash</span><strong id="main-cash-value">$0.00</strong></div>
+            <div class="metric-card"><span>net worth</span><strong id="main-networth-value">$0.00</strong></div>
+            <div class="metric-card"><span>holdings</span><strong id="main-holdings-value">$0.00</strong></div>
+            <div class="metric-card"><span>total pnl</span><strong id="main-pnl-value">$0.00</strong></div>
+          </div>
+          <div class="holdings-list" id="main-holdings-list"></div>
+        </div>
+      </section>
+
+      <section class="column" data-panel="hub">
+        <div class="panel">
+          <div class="panel-head compact"><div><p class="eyebrow">loop controls</p><h2>time rig</h2></div></div>
+          <div class="control-cluster">
+            <div class="speed-strip">
+              <button class="speed-btn" data-speed="1x">1x</button>
+              <button class="speed-btn" data-speed="8x">8x</button>
+              <button class="speed-btn" data-speed="32x">32x</button>
+              <button class="speed-btn" data-speed="128x">128x</button>
+              <button class="speed-btn" data-speed="512x">512x</button>
+            </div>
+            <div class="action-strip">
+              <button class="action-btn" id="resume-btn" type="button">resume</button>
+              <button class="action-btn" id="pause-btn" type="button">pause</button>
+              <button class="secondary-btn" id="reset-btn" type="button">reset seed</button>
+              <button class="secondary-btn" id="reseed-btn" type="button">new seed</button>
+            </div>
+          </div>
+          <div class="command-status" id="command-status">worker idle</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">price trace</p><h2 id="chart-title">AAPL</h2></div>
+            <div class="range-strip">
+              <button class="speed-btn range-btn" data-range="60m">60m</button>
+              <button class="speed-btn range-btn" data-range="1D">1d</button>
+              <button class="speed-btn range-btn" data-range="5D">5d</button>
+              <button class="speed-btn range-btn" data-range="30D">30d</button>
+            </div>
+          </div>
+          <canvas id="chart-canvas" class="chart-canvas"></canvas>
+          <div class="chart-footer">
+            <span id="chart-low">low: --</span>
+            <span id="market-caption">market rack warming up</span>
+            <span id="chart-high">high: --</span>
+          </div>
+        </div>
+
+        <div class="hub-split">
+          <div class="panel">
+            <div class="panel-head compact"><div><p class="eyebrow">standings</p><h2>leaderboard</h2></div></div>
+            <div class="leaderboard-list" id="leaderboard-list"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head compact"><div><p class="eyebrow">news bus</p><h2>event console</h2></div></div>
+            <div class="event-log" id="event-log"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="column" data-panel="bots">
+        <div class="panel">
+          <div class="panel-head compact"><div><p class="eyebrow">operations</p><h2>bot desk</h2></div></div>
+          <div class="operator-grid">
+            <form id="create-bot-form" class="stack-form operator-form">
+              <p class="operator-title">spawn bot</p>
+              <label><span class="field-label">bot name</span><input class="input" id="bot-create-name" type="text" maxlength="24" placeholder="night drift"></label>
+              <label><span class="field-label">initial funding</span><input class="input" id="bot-create-funding" type="number" min="1" step="1" value="5000"></label>
+              <label><span class="field-label">starter template</span><select class="select" id="create-template"></select></label>
+              <button class="form-btn" type="submit">provision and fund</button>
+            </form>
+            <form id="transfer-form" class="stack-form operator-form">
+              <p class="operator-title">cash transfer</p>
+              <label><span class="field-label">from</span><select class="select" id="transfer-from"></select></label>
+              <label><span class="field-label">to</span><select class="select" id="transfer-to"></select></label>
+              <label><span class="field-label">amount</span><input class="input" id="transfer-amount" type="number" min="0.01" step="0.01" value="1000"></label>
+              <button class="form-btn" type="submit">move settled cash</button>
+            </form>
+          </div>
+          <div class="signal-box operator-note" id="transfer-summary">Create a bot to unlock cash routing between accounts.</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head compact"><div><p class="eyebrow">fleet</p><h2>bot roster</h2></div></div>
+          <div class="roster-list" id="bot-roster"></div>
+        </div>
+
+        <div class="panel editor-shell" id="bot-script-panel">
+          <div class="panel-head compact bot-console-head"><div><p class="eyebrow">strategy console</p><h2 id="editor-bot-name">no bot selected</h2></div><button class="secondary-btn" id="toggle-editor-panel-btn" type="button">collapse script</button></div>
+          <div class="bot-summary-grid">
+            <div class="metric-card"><span>bot cash</span><strong id="bot-cash-value">$0.00</strong></div>
+            <div class="metric-card"><span>bot net</span><strong id="bot-networth-value">$0.00</strong></div>
+            <div class="metric-card"><span>holdings</span><strong id="bot-holdings-value">$0.00</strong></div>
+            <div class="metric-card"><span>total pnl</span><strong id="bot-pnl-value">$0.00</strong></div>
+          </div>
+          <div class="editor-toolbar">
+            <input class="input" id="bot-name-input" type="text" maxlength="24" placeholder="rename selected bot">
+            <div class="editor-template-tools">
+              <button class="secondary-btn" id="load-template-btn" type="button">load template</button>
+              <select class="select" id="editor-template"></select>
+            </div>
+          </div>
+          <textarea class="editor" id="bot-editor" spellcheck="false" placeholder="Create a bot to start writing a strategy."></textarea>
+          <div class="editor-actions">
+            <button class="secondary-btn" id="rename-btn" type="button">rename</button>
+            <button class="form-btn" id="save-script-btn" type="button">save script</button>
+            <button class="action-btn" id="toggle-bot-btn" type="button">enable</button>
+          </div>
+          <div class="runtime-card" id="bot-runtime-status">Bot compiler waiting for a selected account.</div>
+          <details class="mini-guide">
+            <summary>script quick guide</summary>
+            <p class="help-copy">Use a tiny JS-like subset.
+
+let quote = price("AAPL");
+let trend = sma("AAPL", 20);
+
+if (quote < trend * 0.98 && cash() >= quote * 2) {
+  let order = buy("AAPL", 2);
+  if (order.ok) {
+    memory.lastBuy = quote;
+  }
+} else if (position("AAPL").shares > 0 && quote > (memory.lastBuy || quote) * 1.04) {
+  sell("AAPL", 2);
+}
+
+Supported: let, reassignment, memory.foo, if / else, math, comparisons, &&, ||, !, buy, sell, price, cash, position, sma, ema.</p>
+          </details>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="paperbots.js"></script>
+</body>
+</html>
