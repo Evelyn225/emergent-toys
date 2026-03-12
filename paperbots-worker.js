@@ -40,12 +40,12 @@ const EVENT_TEMPLATES = {
     good: [
       'Macro chatter turns risk-on across the tape',
       'Liquidity pulse lights up the whole board',
-      'Index futures leak optimism into the bell',
+      'Index futures pump optimism into the bell',
     ],
     bad: [
       'Rate nerves put the whole tape on edge',
       'Risk desk goes cold and the board buckles',
-      'A broad sell program hits the market spine',
+      'A broad sell program hits the market',
     ],
   },
   sector: {
@@ -56,7 +56,7 @@ const EVENT_TEMPLATES = {
     ],
     bad: [
       '{sector} gets clipped by a rotation sweep',
-      'Supply-chain static rattles {sector}',
+      'Supply-chain disruption rattles {sector}',
       'Funds peel away from {sector} in size',
     ],
   },
@@ -849,10 +849,10 @@ function createRuntime(state, bot) {
   const accountSnapshot = freezePlainObject(buildAccountSnapshot(state, bot));
   const recentEvent = state.eventLog[0]
     ? freezePlainObject({
-        label: state.eventLog[0].label,
-        detail: state.eventLog[0].detail,
-        tone: state.eventLog[0].tone,
-      })
+      label: state.eventLog[0].label,
+      detail: state.eventLog[0].detail,
+      tone: state.eventLog[0].tone,
+    })
     : null;
 
   const ctx = freezePlainObject({

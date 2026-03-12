@@ -262,7 +262,13 @@ const DEFAULT_UI = {
   chartRange: '1D',
   mobilePanel: 'market',
   editorCollapsed: false,
+  sortWatchlist: 'none',
 };
+
+const WATCHLIST_SORT_MODES = [
+  { id: 'none', label: 'sort: none' },
+  { id: 'move', label: 'sort: move' },
+];
 
 const refs = {
   body: document.body,
@@ -276,6 +282,7 @@ const refs = {
   stockList: document.getElementById('stock-list'),
   selectedStockTitle: document.getElementById('selected-stock-title'),
   selectedStockPill: document.getElementById('selected-stock-pill'),
+  sortWatchlistBtn: document.getElementById('sort-watchlist-btn'),
   stockPriceValue: document.getElementById('stock-price-value'),
   stockChangeValue: document.getElementById('stock-change-value'),
   stockOpenValue: document.getElementById('stock-open-value'),
@@ -350,7 +357,7 @@ function init() {
   renderBootState();
   startCashChipRotation();
   const bundle = loadBundle();
-  uiPrefs = { ...DEFAULT_UI, ...bundle.ui };
+  uiPrefs = normalizeUiPrefs(bundle.ui);
   applyMobilePanel(uiPrefs.mobilePanel, false);
   renderEditorPanelState();
   startWorker(bundle.sim);
@@ -418,6 +425,13 @@ function reconcileUiState() {
 function bindEvents() {
   refs.mobileTabs.forEach((button) => {
     button.addEventListener('click', () => applyMobilePanel(button.dataset.panel, true));
+  });
+
+  refs.sortWatchlistBtn.addEventListener('click', () => {
+    uiPrefs.sortWatchlist = getNextWatchlistSortMode(uiPrefs.sortWatchlist);
+    saveBundle();
+    updateWatchlistSortButton();
+    renderWatchlist();
   });
 
   refs.speedButtons.forEach((button) => {
@@ -546,15 +560,15 @@ function loadBundle() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { sim: null, ui: { ...DEFAULT_UI } };
+      return { sim: null, ui: normalizeUiPrefs() };
     }
     const parsed = JSON.parse(raw);
     return {
       sim: parsed.sim || null,
-      ui: { ...DEFAULT_UI, ...(parsed.ui || {}) },
+      ui: normalizeUiPrefs(parsed.ui),
     };
   } catch (error) {
-    return { sim: null, ui: { ...DEFAULT_UI } };
+    return { sim: null, ui: normalizeUiPrefs() };
   }
 }
 
@@ -582,6 +596,7 @@ function renderAll() {
   }
   refs.botScriptPanel.hidden = latestView.bots.length === 0;
   renderHeader();
+  updateWatchlistSortButton();
   renderWatchlist();
   renderSelectedStock();
   renderMainAccount();
@@ -609,16 +624,18 @@ function renderHeader() {
 }
 
 function renderWatchlist() {
-  const rows = latestView.stocks
-    .slice()
-    .sort((left, right) => right.changePct - left.changePct)
+  let list = latestView.stocks.slice();
+  if (uiPrefs.sortWatchlist === 'move') {
+    list.sort((left, right) => right.changePct - left.changePct);
+  }
+  const rows = list
     .map((stock) => {
       const tone = stock.changePct > 0 ? 'good' : stock.changePct < 0 ? 'bad' : 'neutral';
       return `
         <button class="watch-row ${stock.ticker === uiPrefs.selectedStock ? 'active' : ''}" data-stock="${stock.ticker}">
           <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
             <div>
-              <div style="font-family:'W95Bold',monospace;font-size:14px;">${stock.ticker}</div>
+              <div style="font-family:'W95Bold',monospace;font-size:14px;color:#d7ffe9;">${stock.ticker}</div>
               <div style="font-size:11px;color:var(--muted);">${escapeHtml(stock.name)}</div>
             </div>
             <div style="text-align:right;">
@@ -640,6 +657,28 @@ function renderWatchlist() {
       renderChart();
     });
   });
+}
+
+function normalizeUiPrefs(nextUi = {}) {
+  const normalized = { ...DEFAULT_UI, ...(nextUi || {}) };
+  if (typeof normalized.sortWatchlist === 'boolean') {
+    normalized.sortWatchlist = normalized.sortWatchlist ? 'move' : 'none';
+  }
+  if (!WATCHLIST_SORT_MODES.some((mode) => mode.id === normalized.sortWatchlist)) {
+    normalized.sortWatchlist = 'none';
+  }
+  return normalized;
+}
+
+function getNextWatchlistSortMode(currentMode) {
+  const currentIndex = WATCHLIST_SORT_MODES.findIndex((mode) => mode.id === currentMode);
+  const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % WATCHLIST_SORT_MODES.length : 0;
+  return WATCHLIST_SORT_MODES[nextIndex].id;
+}
+
+function updateWatchlistSortButton() {
+  const currentMode = WATCHLIST_SORT_MODES.find((mode) => mode.id === uiPrefs.sortWatchlist) || WATCHLIST_SORT_MODES[0];
+  refs.sortWatchlistBtn.textContent = currentMode.label;
 }
 
 function renderSelectedStock() {
@@ -765,7 +804,7 @@ function renderBotRoster() {
         <button class="roster-item ${bot.id === uiPrefs.selectedBotId ? 'active' : ''}" data-bot="${bot.id}">
           <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
             <div>
-              <div style="font-family:'W95Bold',monospace;font-size:14px;">${escapeHtml(bot.name)}</div>
+              <div style="font-family:'W95Bold',monospace;font-size:14px;color:#d7ffe9;">${escapeHtml(bot.name)}</div>
               <div style="font-size:11px;color:var(--muted);">${status} / ${bot.tradeCount} trades</div>
             </div>
             <div class="pill ${tone}">${status}</div>
