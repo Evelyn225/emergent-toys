@@ -1,0 +1,51 @@
+<html style="background:#555">
+
+<head>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            margin: 0;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            position: relative;
+            margin-top: 20px;
+            background: #222;
+        }
+
+        .grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(to right, rgba(0, 255, 0, 0.8) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 255, 0, 0.8) 1px, transparent 1px);
+            background-size: 16px 16px;
+            /* 16x16 grid on the original scale */
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Toolsall.png with 16x16 Grid</h2>
+    <div class="container" style="width: 160px; height: 128px; position:relative;">
+        <img id="img" src="images/mineria/tools-and-weapons/Toolsall.png"
+            style="image-rendering: auto; width: 160px; height: 128px;">
+        <div id="grid" class="grid" style="background-size: 16px 16px;"></div> <!-- 16x16 grid overlaid -->
+    </div>
+    <div class="container" style="width: 320px; height: 256px; position:relative;">
+        <img id="img2" src="images/mineria/tools-and-weapons/Toolsall.png"
+            style="image-rendering: pixelated; width: 320px; height: 256px;">
+        <div id="grid2" class="grid" style="background-size: 32px 32px;"></div> <!-- 16x16 grid overlaid scaled 2x-->
+    </div>
+</body>
+
+</html>

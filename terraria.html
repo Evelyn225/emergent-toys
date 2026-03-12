@@ -45,6 +45,7 @@
 window.__TERRARIA_ENGINE_REQUESTED__ = new URLSearchParams(window.location.search).get('engine') || 'v2';
 window.__TERRARIA_V2_LOAD_FAILED__ = false;
 </script>
+<script src="terraria-audio.js"></script>
 <script
   src="terraria-v2.js"
   onerror="window.__TERRARIA_V2_LOAD_FAILED__=true; console.error('[terraria] failed to load terraria-v2.js');"

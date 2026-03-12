@@ -24,77 +24,77 @@ const COPPER = 5;
 const IRON = 6;
 const WOOD = 7;
 const TREE = 8;
-const COAL_ORE    = 9;
+const COAL_ORE = 9;
 
 // Non-block item types
-const HELMET      = 10;
-const CHESTPLATE  = 11;
-const LEGGINGS    = 12;
-const BOOTS       = 13;
+const HELMET = 10;
+const CHESTPLATE = 11;
+const LEGGINGS = 12;
+const BOOTS = 13;
 const SWORD_STONE = 14;
-const SWORD_IRON  = 15;
-const PICK_STONE  = 16;
-const PICK_IRON   = 17;
+const SWORD_IRON = 15;
+const PICK_STONE = 16;
+const PICK_IRON = 17;
 // Placeable structure blocks
-const DOOR        = 18;
-const DOOR_OPEN   = 19;
-const CHEST       = 20;
-const FURNACE     = 21;
+const DOOR = 18;
+const DOOR_OPEN = 19;
+const CHEST = 20;
+const FURNACE = 21;
 // Crafted items / materials
-const COAL        = 22;
+const COAL = 22;
 const COPPER_INGOT = 23;
-const IRON_INGOT  = 24;
-const ARROW       = 25;
-const AXE_STONE   = 26;
-const AXE_IRON    = 27;
+const IRON_INGOT = 24;
+const ARROW = 25;
+const AXE_STONE = 26;
+const AXE_IRON = 27;
 const SHOVEL_STONE = 28;
 const SHOVEL_IRON = 29;
-const BOW         = 30;
-const SWORD_COPPER  = 31;
-const PICK_COPPER   = 32;
-const AXE_COPPER    = 33;
+const BOW = 30;
+const SWORD_COPPER = 31;
+const PICK_COPPER = 32;
+const AXE_COPPER = 33;
 const SHOVEL_COPPER = 34;
 // Accessories
-const ACC_HERMES_BOOTS  = 58;  // +40% move speed
-const ACC_CLOUD_BOTTLE  = 59;  // double jump
-const ACC_HORSESHOE     = 60;  // negate fall damage
-const ACC_BAND_REGEN    = 61;  // slow HP regen
-const ACC_FROG_LEG      = 62;  // +30% jump height
-const ACC_SHACKLE       = 63;  // +2 defense
-const ACC_ANKH          = 64;  // +25% knockback resist
-const ACC_NECKLACE      = 65;  // +1 max HP
-const ACC_AGLET         = 66;  // +20% move speed
+const ACC_HERMES_BOOTS = 58;  // +40% move speed
+const ACC_CLOUD_BOTTLE = 59;  // double jump
+const ACC_HORSESHOE = 60;  // negate fall damage
+const ACC_BAND_REGEN = 61;  // slow HP regen
+const ACC_FROG_LEG = 62;  // +30% jump height
+const ACC_SHACKLE = 63;  // +2 defense
+const ACC_ANKH = 64;  // +25% knockback resist
+const ACC_NECKLACE = 65;  // +1 max HP
+const ACC_AGLET = 66;  // +20% move speed
 const ACC_SPECTRE_BOOTS = 67;  // +60% move speed (combine aglet + hermes)
 const ACC_SLOTS = 5;
 // New ores & ingots
-const GOLD_ORE      = 35;
-const GOLD_INGOT    = 36;
-const DIAMOND       = 37;  // mined raw, no smelting
+const GOLD_ORE = 35;
+const GOLD_INGOT = 36;
+const DIAMOND = 37;  // mined raw, no smelting
 // Iron armor
-const HELMET_IRON      = 38;
-const CHESTPLATE_IRON  = 39;
-const LEGGINGS_IRON    = 40;
-const BOOTS_IRON       = 41;
+const HELMET_IRON = 38;
+const CHESTPLATE_IRON = 39;
+const LEGGINGS_IRON = 40;
+const BOOTS_IRON = 41;
 // Gold tools
-const SWORD_GOLD    = 42;
-const PICK_GOLD     = 43;
-const AXE_GOLD      = 44;
-const SHOVEL_GOLD   = 45;
+const SWORD_GOLD = 42;
+const PICK_GOLD = 43;
+const AXE_GOLD = 44;
+const SHOVEL_GOLD = 45;
 // Gold armor
-const HELMET_GOLD      = 46;
-const CHESTPLATE_GOLD  = 47;
-const LEGGINGS_GOLD    = 48;
-const BOOTS_GOLD       = 49;
+const HELMET_GOLD = 46;
+const CHESTPLATE_GOLD = 47;
+const LEGGINGS_GOLD = 48;
+const BOOTS_GOLD = 49;
 // Diamond tools
 const SWORD_DIAMOND = 50;
-const PICK_DIAMOND  = 51;
-const AXE_DIAMOND   = 52;
+const PICK_DIAMOND = 51;
+const AXE_DIAMOND = 52;
 const SHOVEL_DIAMOND = 53;
 // Diamond armor
-const HELMET_DIAMOND      = 54;
-const CHESTPLATE_DIAMOND  = 55;
-const LEGGINGS_DIAMOND    = 56;
-const BOOTS_DIAMOND       = 57;
+const HELMET_DIAMOND = 54;
+const CHESTPLATE_DIAMOND = 55;
+const LEGGINGS_DIAMOND = 56;
+const BOOTS_DIAMOND = 57;
 
 const WATER_MAX = 1;
 const WATER_RENDER_EPS = 0.04;
@@ -123,73 +123,73 @@ const blockDefs = {
   [COPPER]: { name: 'Copper Ore', solid: true, mine: 44 },
   [IRON]: { name: 'Iron Ore', solid: true, mine: 56 },
   [WOOD]: { name: 'Wood', solid: true, mine: 16 },
-  [TREE]:     { name: 'Tree',      solid: false, mine: 16,  drops: WOOD  },
-  [COAL_ORE]: { name: 'Coal Ore',  solid: true,  mine: 28,  drops: COAL  },
-  [GOLD_ORE]: { name: 'Gold Ore',    solid: true, mine: 68,  drops: GOLD_ORE  },
-  [DIAMOND]:  { name: 'Diamond Ore', solid: true, mine: 90,  drops: DIAMOND   },
-  [DOOR]:     { name: 'Door',      solid: true,  mine: 12,  drops: DOOR  },
-  [DOOR_OPEN]:{ name: 'Door',      solid: false, mine: 12,  drops: DOOR  },
-  [CHEST]:    { name: 'Chest',     solid: true,  mine: 24,  drops: CHEST },
-  [FURNACE]:  { name: 'Furnace',   solid: true,  mine: 40,  drops: FURNACE },
+  [TREE]: { name: 'Tree', solid: false, mine: 16, drops: WOOD },
+  [COAL_ORE]: { name: 'Coal Ore', solid: true, mine: 28, drops: COAL },
+  [GOLD_ORE]: { name: 'Gold Ore', solid: true, mine: 68, drops: GOLD_ORE },
+  [DIAMOND]: { name: 'Diamond Ore', solid: true, mine: 90, drops: DIAMOND },
+  [DOOR]: { name: 'Door', solid: true, mine: 12, drops: DOOR },
+  [DOOR_OPEN]: { name: 'Door', solid: false, mine: 12, drops: DOOR },
+  [CHEST]: { name: 'Chest', solid: true, mine: 24, drops: CHEST },
+  [FURNACE]: { name: 'Furnace', solid: true, mine: 40, drops: FURNACE },
 };
 
 const itemDefs = {
-  [HELMET]:      { name: 'Helmet',        equipSlot: 0 },
-  [CHESTPLATE]:  { name: 'Chestplate',    equipSlot: 1 },
-  [LEGGINGS]:    { name: 'Leggings',      equipSlot: 2 },
-  [BOOTS]:       { name: 'Boots',         equipSlot: 3 },
-  [SWORD_STONE]: { name: 'Stone Sword'   },
-  [SWORD_IRON]:  { name: 'Iron Sword'    },
-  [PICK_STONE]:  { name: 'Stone Pickaxe' },
-  [PICK_IRON]:   { name: 'Iron Pickaxe'  },
-  [AXE_STONE]:   { name: 'Stone Axe'     },
-  [AXE_IRON]:    { name: 'Iron Axe'      },
-  [SHOVEL_STONE]:{ name: 'Stone Shovel'  },
-  [SHOVEL_IRON]: { name: 'Iron Shovel'   },
-  [BOW]:         { name: 'Bow'           },
-  [SWORD_COPPER]:  { name: 'Copper Sword'    },
-  [PICK_COPPER]:   { name: 'Copper Pickaxe'  },
-  [AXE_COPPER]:    { name: 'Copper Axe'      },
-  [SHOVEL_COPPER]: { name: 'Copper Shovel'   },
-  [ACC_HERMES_BOOTS]: { name: 'Hermes Boots',   accessory: true },
+  [HELMET]: { name: 'Helmet', equipSlot: 0 },
+  [CHESTPLATE]: { name: 'Chestplate', equipSlot: 1 },
+  [LEGGINGS]: { name: 'Leggings', equipSlot: 2 },
+  [BOOTS]: { name: 'Boots', equipSlot: 3 },
+  [SWORD_STONE]: { name: 'Stone Sword' },
+  [SWORD_IRON]: { name: 'Iron Sword' },
+  [PICK_STONE]: { name: 'Stone Pickaxe' },
+  [PICK_IRON]: { name: 'Iron Pickaxe' },
+  [AXE_STONE]: { name: 'Stone Axe' },
+  [AXE_IRON]: { name: 'Iron Axe' },
+  [SHOVEL_STONE]: { name: 'Stone Shovel' },
+  [SHOVEL_IRON]: { name: 'Iron Shovel' },
+  [BOW]: { name: 'Bow' },
+  [SWORD_COPPER]: { name: 'Copper Sword' },
+  [PICK_COPPER]: { name: 'Copper Pickaxe' },
+  [AXE_COPPER]: { name: 'Copper Axe' },
+  [SHOVEL_COPPER]: { name: 'Copper Shovel' },
+  [ACC_HERMES_BOOTS]: { name: 'Hermes Boots', accessory: true },
   [ACC_CLOUD_BOTTLE]: { name: 'Cloud in a Bottle', accessory: true },
-  [ACC_HORSESHOE]:    { name: 'Lucky Horseshoe', accessory: true },
-  [ACC_BAND_REGEN]:   { name: 'Band of Regeneration', accessory: true },
-  [ACC_FROG_LEG]:     { name: 'Frog Leg',       accessory: true },
-  [ACC_SHACKLE]:      { name: 'Shackle',         accessory: true },
-  [ACC_ANKH]:         { name: 'Ankh Charm',       accessory: true },
-  [ACC_NECKLACE]:     { name: 'Necklace',         accessory: true },
-  [ACC_AGLET]:        { name: 'Aglet',            accessory: true },
-  [ACC_SPECTRE_BOOTS]:{ name: 'Spectre Boots',    accessory: true },
-  [GOLD_INGOT]:    { name: 'Gold Ingot'      },
-  [DIAMOND]:       { name: 'Diamond'         },
-  [HELMET_IRON]:      { name: 'Iron Helmet',     equipSlot: 0 },
-  [CHESTPLATE_IRON]:  { name: 'Iron Chestplate', equipSlot: 1 },
-  [LEGGINGS_IRON]:    { name: 'Iron Leggings',   equipSlot: 2 },
-  [BOOTS_IRON]:       { name: 'Iron Boots',      equipSlot: 3 },
-  [SWORD_GOLD]:    { name: 'Gold Sword'      },
-  [PICK_GOLD]:     { name: 'Gold Pickaxe'    },
-  [AXE_GOLD]:      { name: 'Gold Axe'        },
-  [SHOVEL_GOLD]:   { name: 'Gold Shovel'     },
-  [HELMET_GOLD]:      { name: 'Gold Helmet',     equipSlot: 0 },
-  [CHESTPLATE_GOLD]:  { name: 'Gold Chestplate', equipSlot: 1 },
-  [LEGGINGS_GOLD]:    { name: 'Gold Leggings',   equipSlot: 2 },
-  [BOOTS_GOLD]:       { name: 'Gold Boots',      equipSlot: 3 },
-  [SWORD_DIAMOND]: { name: 'Diamond Sword'   },
-  [PICK_DIAMOND]:  { name: 'Diamond Pickaxe' },
-  [AXE_DIAMOND]:   { name: 'Diamond Axe'     },
-  [SHOVEL_DIAMOND]:{ name: 'Diamond Shovel'  },
-  [HELMET_DIAMOND]:     { name: 'Diamond Helmet',     equipSlot: 0 },
+  [ACC_HORSESHOE]: { name: 'Lucky Horseshoe', accessory: true },
+  [ACC_BAND_REGEN]: { name: 'Band of Regeneration', accessory: true },
+  [ACC_FROG_LEG]: { name: 'Frog Leg', accessory: true },
+  [ACC_SHACKLE]: { name: 'Shackle', accessory: true },
+  [ACC_ANKH]: { name: 'Ankh Charm', accessory: true },
+  [ACC_NECKLACE]: { name: 'Necklace', accessory: true },
+  [ACC_AGLET]: { name: 'Aglet', accessory: true },
+  [ACC_SPECTRE_BOOTS]: { name: 'Spectre Boots', accessory: true },
+  [GOLD_INGOT]: { name: 'Gold Ingot' },
+  [DIAMOND]: { name: 'Diamond' },
+  [HELMET_IRON]: { name: 'Iron Helmet', equipSlot: 0 },
+  [CHESTPLATE_IRON]: { name: 'Iron Chestplate', equipSlot: 1 },
+  [LEGGINGS_IRON]: { name: 'Iron Leggings', equipSlot: 2 },
+  [BOOTS_IRON]: { name: 'Iron Boots', equipSlot: 3 },
+  [SWORD_GOLD]: { name: 'Gold Sword' },
+  [PICK_GOLD]: { name: 'Gold Pickaxe' },
+  [AXE_GOLD]: { name: 'Gold Axe' },
+  [SHOVEL_GOLD]: { name: 'Gold Shovel' },
+  [HELMET_GOLD]: { name: 'Gold Helmet', equipSlot: 0 },
+  [CHESTPLATE_GOLD]: { name: 'Gold Chestplate', equipSlot: 1 },
+  [LEGGINGS_GOLD]: { name: 'Gold Leggings', equipSlot: 2 },
+  [BOOTS_GOLD]: { name: 'Gold Boots', equipSlot: 3 },
+  [SWORD_DIAMOND]: { name: 'Diamond Sword' },
+  [PICK_DIAMOND]: { name: 'Diamond Pickaxe' },
+  [AXE_DIAMOND]: { name: 'Diamond Axe' },
+  [SHOVEL_DIAMOND]: { name: 'Diamond Shovel' },
+  [HELMET_DIAMOND]: { name: 'Diamond Helmet', equipSlot: 0 },
   [CHESTPLATE_DIAMOND]: { name: 'Diamond Chestplate', equipSlot: 1 },
-  [LEGGINGS_DIAMOND]:   { name: 'Diamond Leggings',   equipSlot: 2 },
-  [BOOTS_DIAMOND]:      { name: 'Diamond Boots',      equipSlot: 3 },
-  [COAL]:        { name: 'Coal'          },
-  [COPPER_INGOT]:{ name: 'Copper Ingot'  },
-  [IRON_INGOT]:  { name: 'Iron Ingot'    },
-  [ARROW]:       { name: 'Arrow'         },
-  [DOOR]:        { name: 'Door'          },
-  [CHEST]:       { name: 'Chest'         },
-  [FURNACE]:     { name: 'Furnace'       },
+  [LEGGINGS_DIAMOND]: { name: 'Diamond Leggings', equipSlot: 2 },
+  [BOOTS_DIAMOND]: { name: 'Diamond Boots', equipSlot: 3 },
+  [COAL]: { name: 'Coal' },
+  [COPPER_INGOT]: { name: 'Copper Ingot' },
+  [IRON_INGOT]: { name: 'Iron Ingot' },
+  [ARROW]: { name: 'Arrow' },
+  [DOOR]: { name: 'Door' },
+  [CHEST]: { name: 'Chest' },
+  [FURNACE]: { name: 'Furnace' },
 };
 
 function getItemName(type) {
@@ -198,13 +198,13 @@ function getItemName(type) {
 
 const armorDefs = {
   // Copper
-  [HELMET]:     { defense: 1 }, [CHESTPLATE]:  { defense: 3 }, [LEGGINGS]:  { defense: 2 }, [BOOTS]:  { defense: 1 },
+  [HELMET]: { defense: 1 }, [CHESTPLATE]: { defense: 3 }, [LEGGINGS]: { defense: 2 }, [BOOTS]: { defense: 1 },
   // Iron
-  [HELMET_IRON]:    { defense: 2 }, [CHESTPLATE_IRON]:  { defense: 5 }, [LEGGINGS_IRON]:  { defense: 3 }, [BOOTS_IRON]:  { defense: 2 },
+  [HELMET_IRON]: { defense: 2 }, [CHESTPLATE_IRON]: { defense: 5 }, [LEGGINGS_IRON]: { defense: 3 }, [BOOTS_IRON]: { defense: 2 },
   // Gold
-  [HELMET_GOLD]:    { defense: 3 }, [CHESTPLATE_GOLD]:  { defense: 7 }, [LEGGINGS_GOLD]:  { defense: 5 }, [BOOTS_GOLD]:  { defense: 3 },
+  [HELMET_GOLD]: { defense: 3 }, [CHESTPLATE_GOLD]: { defense: 7 }, [LEGGINGS_GOLD]: { defense: 5 }, [BOOTS_GOLD]: { defense: 3 },
   // Diamond
-  [HELMET_DIAMOND]: { defense: 4 }, [CHESTPLATE_DIAMOND]:{ defense: 9 }, [LEGGINGS_DIAMOND]:{ defense: 7 }, [BOOTS_DIAMOND]:{ defense: 4 },
+  [HELMET_DIAMOND]: { defense: 4 }, [CHESTPLATE_DIAMOND]: { defense: 9 }, [LEGGINGS_DIAMOND]: { defense: 7 }, [BOOTS_DIAMOND]: { defense: 4 },
 };
 const accessories = Array.from({ length: ACC_SLOTS }, () => createStack());
 
@@ -222,7 +222,7 @@ function getSpeedMult() {
   if (hasAccessory(ACC_SPECTRE_BOOTS)) return 1.6;
   let m = 1.0;
   if (hasAccessory(ACC_HERMES_BOOTS)) m += 0.4;
-  if (hasAccessory(ACC_AGLET))        m += 0.2;
+  if (hasAccessory(ACC_AGLET)) m += 0.2;
   return m;
 }
 
@@ -248,24 +248,24 @@ function getToolMultiplier(blockType) {
   const stoneBlocks = [STONE, DSTONE, COPPER, IRON, COAL_ORE, GOLD_ORE, DIAMOND, FURNACE];
   // Pickaxes
   if (held === PICK_DIAMOND && stoneBlocks.includes(blockType)) return 7.0;
-  if (held === PICK_GOLD    && stoneBlocks.includes(blockType)) return 5.0;
-  if (held === PICK_IRON    && stoneBlocks.includes(blockType)) return 3.5;
-  if (held === PICK_STONE   && stoneBlocks.includes(blockType)) return 2.5;
-  if (held === PICK_COPPER  && stoneBlocks.includes(blockType)) return 1.5;
+  if (held === PICK_GOLD && stoneBlocks.includes(blockType)) return 5.0;
+  if (held === PICK_IRON && stoneBlocks.includes(blockType)) return 3.5;
+  if (held === PICK_STONE && stoneBlocks.includes(blockType)) return 2.5;
+  if (held === PICK_COPPER && stoneBlocks.includes(blockType)) return 1.5;
   // Axes
   const woodBlocks = [WOOD, TREE];
   if (held === AXE_DIAMOND && woodBlocks.includes(blockType)) return 7.0;
-  if (held === AXE_GOLD    && woodBlocks.includes(blockType)) return 5.0;
-  if (held === AXE_IRON    && woodBlocks.includes(blockType)) return 3.5;
-  if (held === AXE_STONE   && woodBlocks.includes(blockType)) return 2.5;
-  if (held === AXE_COPPER  && woodBlocks.includes(blockType)) return 1.5;
+  if (held === AXE_GOLD && woodBlocks.includes(blockType)) return 5.0;
+  if (held === AXE_IRON && woodBlocks.includes(blockType)) return 3.5;
+  if (held === AXE_STONE && woodBlocks.includes(blockType)) return 2.5;
+  if (held === AXE_COPPER && woodBlocks.includes(blockType)) return 1.5;
   // Shovels
   const dirtBlocks = [DIRT, GRASS];
   if (held === SHOVEL_DIAMOND && dirtBlocks.includes(blockType)) return 7.0;
-  if (held === SHOVEL_GOLD    && dirtBlocks.includes(blockType)) return 5.0;
-  if (held === SHOVEL_IRON    && dirtBlocks.includes(blockType)) return 3.5;
-  if (held === SHOVEL_STONE   && dirtBlocks.includes(blockType)) return 2.5;
-  if (held === SHOVEL_COPPER  && dirtBlocks.includes(blockType)) return 1.5;
+  if (held === SHOVEL_GOLD && dirtBlocks.includes(blockType)) return 5.0;
+  if (held === SHOVEL_IRON && dirtBlocks.includes(blockType)) return 3.5;
+  if (held === SHOVEL_STONE && dirtBlocks.includes(blockType)) return 2.5;
+  if (held === SHOVEL_COPPER && dirtBlocks.includes(blockType)) return 1.5;
   return 1;
 }
 
@@ -276,9 +276,9 @@ const furnaces = new Map(); // blockIndex → FurnaceState
 let openUI = null; // null | { type:'chest'|'furnace', key, wx, wy }
 
 const SMELT_RECIPES = {
-  [COPPER]:   { out: COPPER_INGOT, time: 150 },
-  [IRON]:     { out: IRON_INGOT,   time: 180 },
-  [GOLD_ORE]: { out: GOLD_INGOT,   time: 220 },
+  [COPPER]: { out: COPPER_INGOT, time: 150 },
+  [IRON]: { out: IRON_INGOT, time: 180 },
+  [GOLD_ORE]: { out: GOLD_INGOT, time: 220 },
 };
 
 function createFurnaceState() {
@@ -303,7 +303,7 @@ function handleWorldRightClick() {
 
   const type = getBlock(wx, wy);
   const key = blockKey(wx, wy);
-  if (type === DOOR)      { if (!inventory.open) { setBlock(wx, wy, DOOR_OPEN); return; } }
+  if (type === DOOR) { if (!inventory.open) { setBlock(wx, wy, DOOR_OPEN); return; } }
   if (type === DOOR_OPEN) { if (!inventory.open) { setBlock(wx, wy, DOOR); return; } }
   if (type === CHEST) {
     if (!chests.has(key)) chests.set(key, Array.from({ length: CHEST_SLOTS }, () => createStack()));
@@ -317,6 +317,7 @@ function handleWorldRightClick() {
     inventory.open = true;
     return;
   }
+
 }
 
 // ─── ARROW PROJECTILES ────────────────────────────────────────────────────────
@@ -324,6 +325,7 @@ const arrowEntities = [];
 let bowCooldown = 0;
 
 function fireArrow() {
+  if (player.dying || player.health <= 0) return;
   if (bowCooldown > 0) return;
   const held = inventory.hotbar[inventory.selected];
   if (!held || held.type !== BOW) return;
@@ -386,7 +388,7 @@ function updateFurnaces(scale) {
       if (f.timer >= recipe.time) {
         f.timer = 0;
         f.fuel.count--; if (f.fuel.count <= 0) setStack(f.fuel, createStack());
-        f.ore.count--;  if (f.ore.count <= 0)  setStack(f.ore,  createStack());
+        f.ore.count--; if (f.ore.count <= 0) setStack(f.ore, createStack());
         if (isEmptyStack(f.out)) setStack(f.out, createStack(recipe.out, 1));
         else f.out.count++;
       }
@@ -397,12 +399,17 @@ function updateFurnaces(scale) {
 }
 
 // ─── SLIME ENEMIES ────────────────────────────────────────────────────────────
+const slimeSprites = Array.from({ length: 16 }, (_, i) => {
+  const img = new Image();
+  img.src = `images/mineria/slime Sprites/slime${i + 1}.png`;
+  return img;
+});
 const slimes = [];
 const SLIME_W = 20, SLIME_H = 16;
 const SLIME_MAX = 5;
-const SLIME_JUMP_INTERVAL_MIN = 60, SLIME_JUMP_INTERVAL_MAX = 150;
+const SLIME_JUMP_INTERVAL_MIN = 80, SLIME_JUMP_INTERVAL_MAX = 180;
 const SLIME_JUMP_VEL = -9.0;
-const SLIME_WALK_SPEED = 1.8;
+const SLIME_WALK_SPEED = 1.2;
 
 function getSlimeSpawnDistMin() {
   return Math.max(canvas.width / 2 + TILE * 3, canvas.width * 0.6);
@@ -419,7 +426,7 @@ function getSlimeDespawnDist(slime) {
 
 function isSlimeOnScreen(slime) {
   return slime.x + SLIME_W > cam.x && slime.x < cam.x + canvas.width &&
-         slime.y + SLIME_H > cam.y && slime.y < cam.y + canvas.height;
+    slime.y + SLIME_H > cam.y && slime.y < cam.y + canvas.height;
 }
 
 function spawnSlime() {
@@ -446,27 +453,32 @@ function spawnSlime() {
     hue,
     seen: false,
     squish: 0, // 0=normal, >0 squishing down on land
+    animTick: 0,
+    animFrame: 0,
+    facing: 1,
+    isAttacking: 0
   });
 }
 
 function getWeaponDamage() {
   const held = inventory.hotbar[inventory.selected]?.type ?? AIR;
   if (held === SWORD_DIAMOND) return 9;
-  if (held === SWORD_GOLD)    return 6;
-  if (held === SWORD_IRON)    return 4;
-  if (held === SWORD_STONE)   return 3;
-  if (held === SWORD_COPPER)  return 2;
-  if (held === AXE_DIAMOND)   return 4;
-  if (held === AXE_GOLD)      return 3;
-  if (held === AXE_IRON)      return 2;
-  if (held === AXE_STONE)     return 1;
-  if (held === AXE_COPPER)    return 1;
+  if (held === SWORD_GOLD) return 6;
+  if (held === SWORD_IRON) return 4;
+  if (held === SWORD_STONE) return 3;
+  if (held === SWORD_COPPER) return 2;
+  if (held === AXE_DIAMOND) return 4;
+  if (held === AXE_GOLD) return 3;
+  if (held === AXE_IRON) return 2;
+  if (held === AXE_STONE) return 1;
+  if (held === AXE_COPPER) return 1;
   if (held === PICK_IRON || held === PICK_COPPER || held === PICK_STONE ||
-      held === PICK_GOLD || held === PICK_DIAMOND) return 1;
+    held === PICK_GOLD || held === PICK_DIAMOND) return 1;
   return 0;
 }
 
 function meleeAttackSlimes() {
+  if (player.dying || player.health <= 0) return;
   const dmg = getWeaponDamage();
   if (dmg === 0) return;
   const held = inventory.hotbar[inventory.selected]?.type ?? AIR;
@@ -497,6 +509,15 @@ function meleeAttackSlimes() {
 function updateSlimes(scale) {
   const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2;
 
+  // Animation update
+  for (const s of slimes) {
+    s.animTick += scale;
+    if (s.animTick > 10) {
+      s.animFrame = (s.animFrame + 1) % 4;
+      s.animTick = 0;
+    }
+  }
+
   // Keep freshly spawned slimes alive until they have a chance to enter view.
   for (let i = slimes.length - 1; i >= 0; i--) {
     const s = slimes[i];
@@ -518,10 +539,10 @@ function updateSlimes(scale) {
     s.y += s.vy * scale;
 
     // Vertical collision
-    const left  = Math.floor(s.x / TILE);
+    const left = Math.floor(s.x / TILE);
     const right = Math.floor((s.x + SLIME_W - 1) / TILE);
     const bottom = Math.floor((s.y + SLIME_H - 1) / TILE);
-    const top    = Math.floor(s.y / TILE);
+    const top = Math.floor(s.y / TILE);
 
     s.onGround = false;
     if (s.vy >= 0) {
@@ -543,6 +564,7 @@ function updateSlimes(scale) {
       s.jumpTick -= scale;
       const scx = s.x + SLIME_W / 2;
       const dir = pcx > scx ? 1 : -1;
+      s.facing = -dir; // Sprites face left by default
       // Horizontal drift toward player while on ground
       s.x += dir * SLIME_WALK_SPEED * scale * 0.3;
       if (s.jumpTick <= 0) {
@@ -554,11 +576,12 @@ function updateSlimes(scale) {
       // Horizontal movement in air
       const scx = s.x + SLIME_W / 2;
       const dir = pcx > scx ? 1 : -1;
+      s.facing = -dir;
       s.x += dir * SLIME_WALK_SPEED * scale;
     }
 
     // Horizontal wall collision
-    const midY  = Math.floor((s.y + SLIME_H / 2) / TILE);
+    const midY = Math.floor((s.y + SLIME_H / 2) / TILE);
     const lx = Math.floor(s.x / TILE);
     const rx = Math.floor((s.x + SLIME_W - 1) / TILE);
     if (isSolid(getBlock(lx, midY))) s.x = (lx + 1) * TILE;
@@ -568,11 +591,16 @@ function updateSlimes(scale) {
     s.x = Math.max(0, Math.min(WORLD_PX - SLIME_W, s.x));
 
     // Damage player on touch
+    if (s.isAttacking > 0) s.isAttacking -= scale;
+
     if (!player.dying) {
       if (s.x < player.x + player.w && s.x + SLIME_W > player.x &&
-          s.y < player.y + player.h && s.y + SLIME_H > player.y) {
+        s.y < player.y + player.h && s.y + SLIME_H > player.y) {
         applyDamageToPlayer(2);
-        if (player.iframes > 0) player.vy = -6; // knockback only if damage landed
+        if (player.iframes >= 45) { // Just took damage this frame
+          player.vy = -6; // knockback only if damage landed
+        }
+        s.isAttacking = 15; // Stay in attack animation for a few frames
       }
     }
   }
@@ -599,37 +627,39 @@ function drawSlimes() {
     const sx = Math.round(s.x - cam.x);
     const sy = Math.round(s.y - cam.y);
     const flash = s.iframes > 0 && Math.floor(s.iframes / 3) % 2 === 1;
-    const squishX = 1 + s.squish * 0.3;
-    const squishY = 1 - s.squish * 0.3;
-    const dw = Math.round(SLIME_W * squishX);
-    const dh = Math.round(SLIME_H * squishY);
-    const dx = sx - Math.round((dw - SLIME_W) / 2);
-    const dy = sy + (SLIME_H - dh);
 
-    // Body
-    const alpha = flash ? 0.4 : 0.82;
-    ctx.fillStyle = flash ? `hsla(0,80%,65%,${alpha})` : `hsla(${s.hue},70%,50%,${alpha})`;
-    ctx.beginPath();
-    ctx.ellipse(dx + dw / 2, dy + dh * 0.6, dw / 2, dh / 2, 0, 0, TAU);
-    ctx.fill();
+    let animGroup = 0; // 0: idle, 1: move, 2: attack, 3: hurt
+    if (s.iframes > 0) animGroup = 3;
+    else if (s.isAttacking > 0) animGroup = 2; // attack
+    else if (!s.onGround || Math.abs(s.x - s.lastX) > 0.1 || s.jumpTick < SLIME_JUMP_INTERVAL_MIN + 10) animGroup = 1; // move
+    else animGroup = 0; // idle
 
-    // Shine
-    ctx.fillStyle = `hsla(${s.hue},90%,80%,0.45)`;
-    ctx.beginPath();
-    ctx.ellipse(dx + dw * 0.35, dy + dh * 0.3, dw * 0.18, dh * 0.18, -0.4, 0, TAU);
-    ctx.fill();
+    s.lastX = s.x; // Track movement for next frame
 
-    // Eyes
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(dx + dw * 0.33, dy + dh * 0.5, 2.5, 0, TAU);
-    ctx.arc(dx + dw * 0.62, dy + dh * 0.5, 2.5, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#111';
-    ctx.beginPath();
-    ctx.arc(dx + dw * 0.34, dy + dh * 0.5, 1.2, 0, TAU);
-    ctx.arc(dx + dw * 0.63, dy + dh * 0.5, 1.2, 0, TAU);
-    ctx.fill();
+    const frameIdx = animGroup * 4 + s.animFrame;
+    const img = slimeSprites[frameIdx];
+
+    if (!img.complete || img.naturalWidth === 0) {
+      // Fallback
+      const alpha = flash ? 0.4 : 0.82;
+      ctx.fillStyle = flash ? `hsla(0,80%,65%,${alpha})` : `hsla(${s.hue},70%,50%,${alpha})`;
+      ctx.fillRect(sx, sy, SLIME_W, SLIME_H);
+    } else {
+      const drawW = img.naturalWidth || 32;
+      const drawH = img.naturalHeight || 32;
+      const dx = sx + SLIME_W / 2;
+      const dy = sy + SLIME_H; // Align bottom edge
+
+      ctx.save();
+      ctx.translate(dx, dy);
+      if (s.facing === -1) ctx.scale(-1, 1); // Flip based on facing
+      if (flash) ctx.globalAlpha = 0.5;
+
+      // Draw centered horizontally, aligned to bottom vertically
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, -drawW / 2, -drawH, drawW, drawH);
+      ctx.restore();
+    }
 
     // Health bar (only if damaged)
     if (s.health < s.maxHealth) {
@@ -678,10 +708,48 @@ let currentSaveSlot = -1;
 let saveMessageTimer = 0;
 let menuConfirm = null; // 'newworld' when showing confirm dialog
 const SAVE_KEY_PREFIX = 'terraria_v2_slot_';
+const audioManager = typeof window.TerrariaAudioManager === 'function'
+  ? new window.TerrariaAudioManager({
+    menuTrack: {
+      src: 'audio/mineria/intro.mp3',
+      baseVolume: 0.46,
+      gameplayBaseVolume: 0.72,
+      filterFrequency: 920,
+      filterQ: 0.9,
+    },
+    gameplayTracks: [
+      { id: 'a-chill-fever', src: 'audio/mineria/a_chill_fever.mp3' },
+      { id: 'binary-village', src: 'audio/mineria/binary_village.mp3' },
+      { id: 'cave-3', src: 'audio/mineria/cave_3.mp3' },
+      { id: 'look-trippy', src: 'audio/mineria/look_trippy.mp3' },
+    ],
+    initialGameplayDelayMs: 12000,
+    gameplayPauseMinMs: 65000,
+    gameplayPauseMaxMs: 98000,
+    fadeInMs: 3200,
+    fadeOutMs: 3600,
+    defaultMasterVolume: 0.78,
+    defaultMusicVolume: 0.88,
+  })
+  : null;
+const audioUi = { draggingKey: null };
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
+
+function syncAudioState() {
+  if (audioManager) audioManager.syncState(gameState);
+}
+
+function setGameState(nextState) {
+  if (gameState === nextState) return;
+  clearMenuAudioDrag();
+  gameState = nextState;
+  syncAudioState();
+}
+
+syncAudioState();
 
 function mod(value, divisor) {
   return ((value % divisor) + divisor) % divisor;
@@ -1296,7 +1364,7 @@ function createCoalOreTexture() {
   const tex = createStoneTexture('#777981', '#989da6', '#5e616a', 33);
   const g = tex.getContext('2d');
   for (let y = 1; y < TILE - 1; y++) for (let x = 1; x < TILE - 1; x++) {
-    if (hash2(x, y, 110) > 0.88) { pixel(g, x, y, '#1a1a1a'); if (hash2(x, y, 111) > 0.5) pixel(g, x+1, y, '#333'); }
+    if (hash2(x, y, 110) > 0.88) { pixel(g, x, y, '#1a1a1a'); if (hash2(x, y, 111) > 0.5) pixel(g, x + 1, y, '#333'); }
   }
   return tex;
 }
@@ -1305,13 +1373,13 @@ function createDoorTexture(open) {
   const { texture, g } = makeCanvas();
   if (!open) {
     pixel(g, 1, 0, '#8B6030', 14, 16);
-    pixel(g, 0, 0, '#5a3518', 2, 16);  pixel(g, 14, 0, '#5a3518', 2, 16);
+    pixel(g, 0, 0, '#5a3518', 2, 16); pixel(g, 14, 0, '#5a3518', 2, 16);
     pixel(g, 2, 7, '#5a3518', 12, 1);
-    pixel(g, 2, 1, '#7a5025', 12, 5);  pixel(g, 2, 9, '#7a5025', 12, 6);
+    pixel(g, 2, 1, '#7a5025', 12, 5); pixel(g, 2, 9, '#7a5025', 12, 6);
     pixel(g, 11, 4, '#d4a840', 2, 2);  // handle
   } else {
-    pixel(g, 0, 0, '#5a3518', 3, 16);  pixel(g, 13, 0, '#5a3518', 3, 16);
-    pixel(g, 0, 0, '#5a3518', 16, 2);  pixel(g, 0, 14, '#5a3518', 16, 2);
+    pixel(g, 0, 0, '#5a3518', 3, 16); pixel(g, 13, 0, '#5a3518', 3, 16);
+    pixel(g, 0, 0, '#5a3518', 16, 2); pixel(g, 0, 14, '#5a3518', 16, 2);
   }
   return texture;
 }
@@ -1322,7 +1390,7 @@ function createChestTexture() {
   pixel(g, 1, 1, '#8B6030', 14, 6);
   pixel(g, 1, 8, '#8B6030', 14, 7);
   pixel(g, 0, 7, '#c8a030', 16, 2);
-  pixel(g, 6, 6, '#d4a840', 4, 4);    pixel(g, 7, 7, '#1a1010', 2, 2);
+  pixel(g, 6, 6, '#d4a840', 4, 4); pixel(g, 7, 7, '#1a1010', 2, 2);
   return texture;
 }
 
@@ -1341,7 +1409,7 @@ function createFurnaceTexture(lit) {
 
 function createIngotTexture(color) {
   const { texture, g } = makeCanvas();
-  pixel(g, 2, 5, color, 12, 6);  pixel(g, 1, 6, color, 14, 4);
+  pixel(g, 2, 5, color, 12, 6); pixel(g, 1, 6, color, 14, 4);
   pixel(g, 3, 4, shiftColor(color, 0.2), 10, 2);
   pixel(g, 2, 11, shiftColor(color, -0.2), 12, 2);
   return texture;
@@ -1438,7 +1506,7 @@ function createArrowTexture() {
 
 function createCoalTexture() {
   const { texture, g } = makeCanvas();
-  pixel(g, 3, 2, '#1a1a1a', 10, 12);  pixel(g, 2, 4, '#1a1a1a', 12, 8);  pixel(g, 4, 1, '#222', 8, 2);
+  pixel(g, 3, 2, '#1a1a1a', 10, 12); pixel(g, 2, 4, '#1a1a1a', 12, 8); pixel(g, 4, 1, '#222', 8, 2);
   pixel(g, 5, 4, '#333', 6, 6);
   return texture;
 }
@@ -1463,6 +1531,78 @@ function createDiamondOreTexture() {
   return createOreTexture('#55525f', '#6d6b78', '#393744', '#7adcf5', '#b8f0ff', 80);
 }
 
+const toolsSheet = new Image();
+const TOOL_SPRITES = {
+  // Swords (Row 1)
+  [SWORD_COPPER]: [1, 1], [SWORD_STONE]: [2, 1], [SWORD_IRON]: [3, 1], [SWORD_GOLD]: [4, 1], [SWORD_DIAMOND]: [5, 1],
+  // Axes (were previously mapped to pickaxes)
+  [AXE_COPPER]: [7, 1], [AXE_STONE]: [8, 1], [AXE_IRON]: [9, 1], [AXE_GOLD]: [7, 4], [AXE_DIAMOND]: [8, 4],
+  // Pickaxes (were previously mapped to axes)
+  [PICK_COPPER]: [7, 2], [PICK_STONE]: [8, 2], [PICK_IRON]: [9, 2], [PICK_GOLD]: [7, 5], [PICK_DIAMOND]: [8, 5],
+  // Shovels
+  [SHOVEL_COPPER]: [7, 3], [SHOVEL_STONE]: [8, 3], [SHOVEL_IRON]: [9, 3], [SHOVEL_GOLD]: [7, 6], [SHOVEL_DIAMOND]: [8, 6],
+  // Bow and Arrow
+  [BOW]: [0, 5], [ARROW]: [0, 6],
+};
+
+function applyToolTextures() {
+  if (!toolsSheet.complete || toolsSheet.naturalWidth === 0) return;
+  // Get the exact background color from the top left corner of the spritesheet (which is empty margin)
+  const tempC = document.createElement('canvas');
+  tempC.width = 1; tempC.height = 1;
+  const tempG = tempC.getContext('2d');
+  tempG.drawImage(toolsSheet, 0, 0, 1, 1, 0, 0, 1, 1);
+  const bgPixel = tempG.getImageData(0, 0, 1, 1).data;
+  const bgR = bgPixel[0], bgG = bgPixel[1], bgB = bgPixel[2];
+
+  const applyTool = (type, isTool = false) => {
+    const pos = TOOL_SPRITES[type];
+    if (pos) tileTextures[type] = extractToolSprite(pos[0], pos[1], bgR, bgG, bgB, isTool);
+  };
+
+  // Weapons are in top-right of the 16x16 grid cell
+  applyTool(SWORD_STONE); applyTool(SWORD_IRON); applyTool(SWORD_COPPER); applyTool(SWORD_GOLD); applyTool(SWORD_DIAMOND);
+  applyTool(BOW); applyTool(ARROW);
+
+  // Pickaxes, Axes, Shovels are in the top-left of the 16x16 grid cell
+  applyTool(PICK_STONE, true); applyTool(PICK_IRON, true); applyTool(PICK_COPPER, true); applyTool(PICK_GOLD, true); applyTool(PICK_DIAMOND, true);
+  applyTool(AXE_STONE, true); applyTool(AXE_IRON, true); applyTool(AXE_COPPER, true); applyTool(AXE_GOLD, true); applyTool(AXE_DIAMOND, true);
+  applyTool(SHOVEL_STONE, true); applyTool(SHOVEL_IRON, true); applyTool(SHOVEL_COPPER, true); applyTool(SHOVEL_GOLD, true); applyTool(SHOVEL_DIAMOND, true);
+}
+
+toolsSheet.onload = () => {
+  applyToolTextures();
+};
+toolsSheet.src = 'images/mineria/tools-and-weapons/Toolsall.png';
+
+function extractToolSprite(col, row, bgR, bgG, bgB, isTool) {
+  const c = document.createElement('canvas');
+  c.width = 16;
+  c.height = 16;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+
+  if (toolsSheet.complete && toolsSheet.naturalWidth > 0) {
+    // Weapons: top-right corner (+8 x offset). Tools: top-left corner (+0 x offset)
+    const offsetX = isTool ? 0 : 8;
+    g.drawImage(toolsSheet, col * 16 + offsetX, row * 16, 8, 8, 0, 0, 16, 16);
+
+    // Clear out the dark background from the sprite
+    const imgData = g.getImageData(0, 0, 16, 16);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], gVal = data[i + 1], b = data[i + 2], a = data[i + 3];
+      // Only clear if color is very close to the assumed background
+      if (a > 0 && Math.abs(r - bgR) < 10 && Math.abs(gVal - bgG) < 10 && Math.abs(b - bgB) < 10) {
+        data[i + 3] = 0; // Set to fully transparent
+      }
+    }
+    g.putImageData(imgData, 0, 0);
+  }
+  return c;
+}
+
+// Rebuild textures when the spritesheet actually loads (already set up above)
 function buildTextures() {
   tileTextures[GRASS] = createGrassTexture();
   tileTextures[DIRT] = createDirtTexture();
@@ -1475,72 +1615,51 @@ function buildTextures() {
   wallTextures.shallow = createWallTexture('#59402e', '#402c1f', '#6a4e3a', 81);
   wallTextures.deep = createWallTexture('#342822', '#211813', '#473732', 82);
 
-  tileTextures[SWORD_STONE] = createSwordTexture('#7a7a8a', '#8B6914');
-  tileTextures[SWORD_IRON]  = createSwordTexture('#c0c4cc', '#6a6d78');
-  tileTextures[PICK_STONE]  = createPickaxeTexture('#7a7a8a', '#8B6914');
-  tileTextures[PICK_IRON]   = createPickaxeTexture('#c0c4cc', '#6a6d78');
-  tileTextures[HELMET]      = createHelmetTexture('#d28b4b');
-  tileTextures[CHESTPLATE]  = createChestplateTexture('#d28b4b');
-  tileTextures[LEGGINGS]    = createLeggingsTexture('#d28b4b');
-  tileTextures[BOOTS]       = createBootsTexture('#d28b4b');
-  tileTextures[COAL_ORE]    = createCoalOreTexture();
-  tileTextures[DOOR]        = createDoorTexture(false);
-  tileTextures[DOOR_OPEN]   = createDoorTexture(true);
-  tileTextures[CHEST]       = createChestTexture();
-  tileTextures[FURNACE]     = createFurnaceTexture(false);
-  tileTextures[COPPER_INGOT]= createIngotTexture('#d28b4b');
-  tileTextures[IRON_INGOT]  = createIngotTexture('#c0c4cc');
-  tileTextures[COAL]        = createCoalTexture();
-  tileTextures[AXE_STONE]   = createAxeTexture('#7a7a8a', '#8B6914');
-  tileTextures[AXE_IRON]    = createAxeTexture('#c0c4cc', '#6a6d78');
-  tileTextures[SHOVEL_STONE]= createShovelTexture('#7a7a8a', '#8B6914');
-  tileTextures[SHOVEL_IRON] = createShovelTexture('#c0c4cc', '#6a6d78');
-  tileTextures[BOW]          = createBowTexture();
-  tileTextures[ARROW]        = createArrowTexture();
-  tileTextures[SWORD_COPPER] = createSwordTexture('#d28b4b', '#8B6914');
-  tileTextures[PICK_COPPER]  = createPickaxeTexture('#d28b4b', '#8B6914');
-  tileTextures[AXE_COPPER]   = createAxeTexture('#d28b4b', '#8B6914');
-  tileTextures[SHOVEL_COPPER]= createShovelTexture('#d28b4b', '#8B6914');
+  // Apply placeholders or immediate loaded textures
+  applyToolTextures();
+
+  tileTextures[HELMET] = createHelmetTexture('#d28b4b');
+  tileTextures[CHESTPLATE] = createChestplateTexture('#d28b4b');
+  tileTextures[LEGGINGS] = createLeggingsTexture('#d28b4b');
+  tileTextures[BOOTS] = createBootsTexture('#d28b4b');
+  tileTextures[COAL_ORE] = createCoalOreTexture();
+  tileTextures[DOOR] = createDoorTexture(false);
+  tileTextures[DOOR_OPEN] = createDoorTexture(true);
+  tileTextures[CHEST] = createChestTexture();
+  tileTextures[FURNACE] = createFurnaceTexture(false);
+  tileTextures[COPPER_INGOT] = createIngotTexture('#d28b4b');
+  tileTextures[IRON_INGOT] = createIngotTexture('#c0c4cc');
+  tileTextures[COAL] = createCoalTexture();
   // New ore textures
-  tileTextures[GOLD_ORE]  = createGoldOreTexture();
-  tileTextures[DIAMOND]   = createDiamondOreTexture();
-  tileTextures[GOLD_INGOT]= createIngotTexture('#e8c43a');
+  tileTextures[GOLD_ORE] = createGoldOreTexture();
+  tileTextures[DIAMOND] = createDiamondOreTexture();
+  tileTextures[GOLD_INGOT] = createIngotTexture('#e8c43a');
   // Iron armor
-  tileTextures[HELMET_IRON]      = createHelmetTexture('#c0c4cc');
-  tileTextures[CHESTPLATE_IRON]  = createChestplateTexture('#c0c4cc');
-  tileTextures[LEGGINGS_IRON]    = createLeggingsTexture('#c0c4cc');
-  tileTextures[BOOTS_IRON]       = createBootsTexture('#c0c4cc');
-  // Gold tools
-  tileTextures[SWORD_GOLD]   = createSwordTexture('#e8c43a', '#b8960a');
-  tileTextures[PICK_GOLD]    = createPickaxeTexture('#e8c43a', '#b8960a');
-  tileTextures[AXE_GOLD]     = createAxeTexture('#e8c43a', '#b8960a');
-  tileTextures[SHOVEL_GOLD]  = createShovelTexture('#e8c43a', '#b8960a');
+  tileTextures[HELMET_IRON] = createHelmetTexture('#c0c4cc');
+  tileTextures[CHESTPLATE_IRON] = createChestplateTexture('#c0c4cc');
+  tileTextures[LEGGINGS_IRON] = createLeggingsTexture('#c0c4cc');
+  tileTextures[BOOTS_IRON] = createBootsTexture('#c0c4cc');
   // Gold armor
-  tileTextures[HELMET_GOLD]      = createHelmetTexture('#e8c43a');
-  tileTextures[CHESTPLATE_GOLD]  = createChestplateTexture('#e8c43a');
-  tileTextures[LEGGINGS_GOLD]    = createLeggingsTexture('#e8c43a');
-  tileTextures[BOOTS_GOLD]       = createBootsTexture('#e8c43a');
-  // Diamond tools
-  tileTextures[SWORD_DIAMOND]  = createSwordTexture('#7adcf5', '#3ab8d8');
-  tileTextures[PICK_DIAMOND]   = createPickaxeTexture('#7adcf5', '#3ab8d8');
-  tileTextures[AXE_DIAMOND]    = createAxeTexture('#7adcf5', '#3ab8d8');
-  tileTextures[SHOVEL_DIAMOND] = createShovelTexture('#7adcf5', '#3ab8d8');
+  tileTextures[HELMET_GOLD] = createHelmetTexture('#e8c43a');
+  tileTextures[CHESTPLATE_GOLD] = createChestplateTexture('#e8c43a');
+  tileTextures[LEGGINGS_GOLD] = createLeggingsTexture('#e8c43a');
+  tileTextures[BOOTS_GOLD] = createBootsTexture('#e8c43a');
   // Accessories
-  tileTextures[ACC_HERMES_BOOTS]  = createAccessoryTexture('#3a8aff', '👟', '#fff');
-  tileTextures[ACC_CLOUD_BOTTLE]  = createAccessoryTexture('#88ccff', '☁', '#fff');
-  tileTextures[ACC_HORSESHOE]     = createAccessoryTexture('#e8c43a', '🍀', '#228b22');
-  tileTextures[ACC_BAND_REGEN]    = createAccessoryTexture('#cc3344', '❤', '#ff8888');
-  tileTextures[ACC_FROG_LEG]      = createAccessoryTexture('#44aa44', '🐸', '#88ff88');
-  tileTextures[ACC_SHACKLE]       = createAccessoryTexture('#666677', '⛓', '#aaa');
-  tileTextures[ACC_ANKH]          = createAccessoryTexture('#cc8833', '☥', '#ffe080');
-  tileTextures[ACC_NECKLACE]      = createAccessoryTexture('#cc44cc', '💎', '#ffaaff');
-  tileTextures[ACC_AGLET]         = createAccessoryTexture('#558844', '>', '#aaff88');
+  tileTextures[ACC_HERMES_BOOTS] = createAccessoryTexture('#3a8aff', '👟', '#fff');
+  tileTextures[ACC_CLOUD_BOTTLE] = createAccessoryTexture('#88ccff', '☁', '#fff');
+  tileTextures[ACC_HORSESHOE] = createAccessoryTexture('#e8c43a', '🍀', '#228b22');
+  tileTextures[ACC_BAND_REGEN] = createAccessoryTexture('#cc3344', '❤', '#ff8888');
+  tileTextures[ACC_FROG_LEG] = createAccessoryTexture('#44aa44', '🐸', '#88ff88');
+  tileTextures[ACC_SHACKLE] = createAccessoryTexture('#666677', '⛓', '#aaa');
+  tileTextures[ACC_ANKH] = createAccessoryTexture('#cc8833', '☥', '#ffe080');
+  tileTextures[ACC_NECKLACE] = createAccessoryTexture('#cc44cc', '💎', '#ffaaff');
+  tileTextures[ACC_AGLET] = createAccessoryTexture('#558844', '>', '#aaff88');
   tileTextures[ACC_SPECTRE_BOOTS] = createAccessoryTexture('#8844ff', '⚡', '#ccaaff');
   // Diamond armor
-  tileTextures[HELMET_DIAMOND]      = createHelmetTexture('#7adcf5');
-  tileTextures[CHESTPLATE_DIAMOND]  = createChestplateTexture('#7adcf5');
-  tileTextures[LEGGINGS_DIAMOND]    = createLeggingsTexture('#7adcf5');
-  tileTextures[BOOTS_DIAMOND]       = createBootsTexture('#7adcf5');
+  tileTextures[HELMET_DIAMOND] = createHelmetTexture('#7adcf5');
+  tileTextures[CHESTPLATE_DIAMOND] = createChestplateTexture('#7adcf5');
+  tileTextures[LEGGINGS_DIAMOND] = createLeggingsTexture('#7adcf5');
+  tileTextures[BOOTS_DIAMOND] = createBootsTexture('#7adcf5');
 }
 
 const ALL_ACCESSORIES = [
@@ -1673,7 +1792,7 @@ const WALK_SPEED = 2.45;
 const RUN_SPEED = 4.85;
 
 const spritesheet = new Image();
-spritesheet.src = 'images/platformer_sprites_pixelized_0.png';
+spritesheet.src = 'images/mineria/platformer_sprites_pixelized_0.png';
 
 const FRAME_SIZE = 64;
 const SHEET_COLS = 8;
@@ -1686,13 +1805,13 @@ const hitCtx = hitCanvas.getContext('2d');
 hitCtx.imageSmoothingEnabled = false;
 
 const ANIM = {
-  stand:  { row: 8, colStart: 0 },
-  walk:   { row: 4, colStart: 0 },
-  run:    null,
-  jump:   { row: 5, colStart: 2 },
-  mine:   { row: 1, colStart: 4 },
+  stand: { row: 8, colStart: 0 },
+  walk: { row: 4, colStart: 0 },
+  run: null,
+  jump: { row: 5, colStart: 2 },
+  mine: { row: 1, colStart: 4 },
   attack: { row: 1, colStart: 4 },  // same frames as mine (swing)
-  bow:    { row: 3, colStart: 5 },  // frames 29-32: row3 cols5-7, then row4 col0
+  bow: { row: 3, colStart: 5 },  // frames 29-32: row3 cols5-7, then row4 col0
 };
 
 // Frames 19–23 (0-indexed); last frame (row 2, col 7) is the body-drop hold frame
@@ -1821,6 +1940,7 @@ function sampleWaterCoverage(px, py, pw, ph) {
 
 const keys = {};
 window.addEventListener('keydown', event => {
+  if (!event.repeat && audioManager) audioManager.unlock();
   if (event.code === 'Escape') {
     event.preventDefault();
     if (!event.repeat) handleEscape();
@@ -1904,8 +2024,8 @@ const dragState = {
   item: createStack(),
 };
 
-inventory.hotbar[0] = createStack(SWORD_COPPER, 1);
-inventory.hotbar[1] = createStack(PICK_COPPER, 1);
+inventory.hotbar[0] = createStack(PICK_COPPER, 1);
+inventory.hotbar[1] = createStack(SWORD_COPPER, 1);
 inventory.hotbar[2] = createStack(AXE_COPPER, 1);
 
 // ─── CRAFTING & EQUIPMENT ─────────────────────────────────────────────────────
@@ -1920,61 +2040,61 @@ const EQUIP_LABELS = ['Head', 'Chest', 'Legs', 'Feet'];
 
 const RECIPES = [
   // Pickaxes: 3 material in top row, wood handle in middle+bottom center
-  { pattern: [COPPER_INGOT,COPPER_INGOT,COPPER_INGOT, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_COPPER, count: 1 },
-  { pattern: [STONE,STONE,STONE, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_STONE,  count: 1 },
-  { pattern: [IRON_INGOT,IRON_INGOT,IRON_INGOT, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_IRON, count: 1 },
+  { pattern: [COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, AIR, WOOD, AIR, AIR, WOOD, AIR], out: PICK_COPPER, count: 1 },
+  { pattern: [STONE, STONE, STONE, AIR, WOOD, AIR, AIR, WOOD, AIR], out: PICK_STONE, count: 1 },
+  { pattern: [IRON_INGOT, IRON_INGOT, IRON_INGOT, AIR, WOOD, AIR, AIR, WOOD, AIR], out: PICK_IRON, count: 1 },
   // Swords: 2 material in center column, wood handle at bottom
-  { pattern: [AIR,COPPER_INGOT,AIR, AIR,COPPER_INGOT,AIR, AIR,WOOD,AIR], out: SWORD_COPPER, count: 1 },
-  { pattern: [AIR,STONE,AIR, AIR,STONE,AIR, AIR,WOOD,AIR],   out: SWORD_STONE, count: 1 },
-  { pattern: [AIR,IRON_INGOT,AIR, AIR,IRON_INGOT,AIR, AIR,WOOD,AIR], out: SWORD_IRON, count: 1 },
+  { pattern: [AIR, COPPER_INGOT, AIR, AIR, COPPER_INGOT, AIR, AIR, WOOD, AIR], out: SWORD_COPPER, count: 1 },
+  { pattern: [AIR, STONE, AIR, AIR, STONE, AIR, AIR, WOOD, AIR], out: SWORD_STONE, count: 1 },
+  { pattern: [AIR, IRON_INGOT, AIR, AIR, IRON_INGOT, AIR, AIR, WOOD, AIR], out: SWORD_IRON, count: 1 },
   // Axes: 2 material in L-shape top-left, wood handle
-  { pattern: [COPPER_INGOT,COPPER_INGOT,AIR, COPPER_INGOT,WOOD,AIR, AIR,WOOD,AIR], out: AXE_COPPER, count: 1 },
-  { pattern: [STONE,STONE,AIR, STONE,WOOD,AIR, AIR,WOOD,AIR], out: AXE_STONE,  count: 1 },
-  { pattern: [IRON_INGOT,IRON_INGOT,AIR, IRON_INGOT,WOOD,AIR, AIR,WOOD,AIR], out: AXE_IRON, count: 1 },
+  { pattern: [COPPER_INGOT, COPPER_INGOT, AIR, COPPER_INGOT, WOOD, AIR, AIR, WOOD, AIR], out: AXE_COPPER, count: 1 },
+  { pattern: [STONE, STONE, AIR, STONE, WOOD, AIR, AIR, WOOD, AIR], out: AXE_STONE, count: 1 },
+  { pattern: [IRON_INGOT, IRON_INGOT, AIR, IRON_INGOT, WOOD, AIR, AIR, WOOD, AIR], out: AXE_IRON, count: 1 },
   // Shovels: 1 material on top center, wood handle below
-  { pattern: [AIR,COPPER_INGOT,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_COPPER, count: 1 },
-  { pattern: [AIR,STONE,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_STONE, count: 1 },
-  { pattern: [AIR,IRON_INGOT,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_IRON, count: 1 },
+  { pattern: [AIR, COPPER_INGOT, AIR, AIR, WOOD, AIR, AIR, WOOD, AIR], out: SHOVEL_COPPER, count: 1 },
+  { pattern: [AIR, STONE, AIR, AIR, WOOD, AIR, AIR, WOOD, AIR], out: SHOVEL_STONE, count: 1 },
+  { pattern: [AIR, IRON_INGOT, AIR, AIR, WOOD, AIR, AIR, WOOD, AIR], out: SHOVEL_IRON, count: 1 },
   // Bow: 3 wood in column with arrow shape
-  { pattern: [AIR,WOOD,AIR, WOOD,AIR,WOOD, AIR,WOOD,AIR], out: BOW, count: 1 },
+  { pattern: [AIR, WOOD, AIR, AIR, AIR, WOOD, AIR, WOOD, AIR], out: BOW, count: 1 },
   // Arrows: stone + wood = 4 arrows
-  { pattern: [AIR,STONE,AIR, AIR,WOOD,AIR, AIR,AIR,AIR], out: ARROW, count: 4 },
+  { pattern: [AIR, STONE, AIR, AIR, WOOD, AIR, AIR, AIR, AIR], out: ARROW, count: 4 },
   // Copper armor (uses copper ingots now)
-  { pattern: [COPPER_INGOT,COPPER_INGOT,COPPER_INGOT, COPPER_INGOT,AIR,COPPER_INGOT, AIR,AIR,AIR], out: HELMET, count: 1 },
-  { pattern: [COPPER_INGOT,AIR,COPPER_INGOT, COPPER_INGOT,COPPER_INGOT,COPPER_INGOT, COPPER_INGOT,COPPER_INGOT,COPPER_INGOT], out: CHESTPLATE, count: 1 },
-  { pattern: [COPPER_INGOT,COPPER_INGOT,COPPER_INGOT, COPPER_INGOT,AIR,COPPER_INGOT, COPPER_INGOT,AIR,COPPER_INGOT], out: LEGGINGS, count: 1 },
-  { pattern: [AIR,AIR,AIR, COPPER_INGOT,AIR,COPPER_INGOT, COPPER_INGOT,AIR,COPPER_INGOT], out: BOOTS, count: 1 },
+  { pattern: [COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, AIR, COPPER_INGOT, AIR, AIR, AIR], out: HELMET, count: 1 },
+  { pattern: [COPPER_INGOT, AIR, COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, COPPER_INGOT], out: CHESTPLATE, count: 1 },
+  { pattern: [COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, COPPER_INGOT, AIR, COPPER_INGOT, COPPER_INGOT, AIR, COPPER_INGOT], out: LEGGINGS, count: 1 },
+  { pattern: [AIR, AIR, AIR, COPPER_INGOT, AIR, COPPER_INGOT, COPPER_INGOT, AIR, COPPER_INGOT], out: BOOTS, count: 1 },
   // Gold tools (use GOLD_INGOT)
-  { pattern: [GOLD_INGOT,GOLD_INGOT,GOLD_INGOT, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_GOLD, count: 1 },
-  { pattern: [AIR,GOLD_INGOT,AIR, AIR,GOLD_INGOT,AIR, AIR,WOOD,AIR], out: SWORD_GOLD, count: 1 },
-  { pattern: [GOLD_INGOT,GOLD_INGOT,AIR, GOLD_INGOT,WOOD,AIR, AIR,WOOD,AIR], out: AXE_GOLD, count: 1 },
-  { pattern: [AIR,GOLD_INGOT,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_GOLD, count: 1 },
+  { pattern: [GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, AIR, WOOD, AIR, AIR, WOOD, AIR], out: PICK_GOLD, count: 1 },
+  { pattern: [AIR, GOLD_INGOT, AIR, AIR, GOLD_INGOT, AIR, AIR, WOOD, AIR], out: SWORD_GOLD, count: 1 },
+  { pattern: [GOLD_INGOT, GOLD_INGOT, AIR, GOLD_INGOT, WOOD, AIR, AIR, WOOD, AIR], out: AXE_GOLD, count: 1 },
+  { pattern: [AIR, GOLD_INGOT, AIR, AIR, WOOD, AIR, AIR, WOOD, AIR], out: SHOVEL_GOLD, count: 1 },
   // Diamond tools (use DIAMOND raw)
-  { pattern: [DIAMOND,DIAMOND,DIAMOND, AIR,WOOD,AIR, AIR,WOOD,AIR], out: PICK_DIAMOND, count: 1 },
-  { pattern: [AIR,DIAMOND,AIR, AIR,DIAMOND,AIR, AIR,WOOD,AIR], out: SWORD_DIAMOND, count: 1 },
-  { pattern: [DIAMOND,DIAMOND,AIR, DIAMOND,WOOD,AIR, AIR,WOOD,AIR], out: AXE_DIAMOND, count: 1 },
-  { pattern: [AIR,DIAMOND,AIR, AIR,WOOD,AIR, AIR,WOOD,AIR], out: SHOVEL_DIAMOND, count: 1 },
+  { pattern: [DIAMOND, DIAMOND, DIAMOND, AIR, WOOD, AIR, AIR, WOOD, AIR], out: PICK_DIAMOND, count: 1 },
+  { pattern: [AIR, DIAMOND, AIR, AIR, DIAMOND, AIR, AIR, WOOD, AIR], out: SWORD_DIAMOND, count: 1 },
+  { pattern: [DIAMOND, DIAMOND, AIR, DIAMOND, WOOD, AIR, AIR, WOOD, AIR], out: AXE_DIAMOND, count: 1 },
+  { pattern: [AIR, DIAMOND, AIR, AIR, WOOD, AIR, AIR, WOOD, AIR], out: SHOVEL_DIAMOND, count: 1 },
   // Iron armor
-  { pattern: [IRON_INGOT,IRON_INGOT,IRON_INGOT, IRON_INGOT,AIR,IRON_INGOT, AIR,AIR,AIR], out: HELMET_IRON, count: 1 },
-  { pattern: [IRON_INGOT,AIR,IRON_INGOT, IRON_INGOT,IRON_INGOT,IRON_INGOT, IRON_INGOT,IRON_INGOT,IRON_INGOT], out: CHESTPLATE_IRON, count: 1 },
-  { pattern: [IRON_INGOT,IRON_INGOT,IRON_INGOT, IRON_INGOT,AIR,IRON_INGOT, IRON_INGOT,AIR,IRON_INGOT], out: LEGGINGS_IRON, count: 1 },
-  { pattern: [AIR,AIR,AIR, IRON_INGOT,AIR,IRON_INGOT, IRON_INGOT,AIR,IRON_INGOT], out: BOOTS_IRON, count: 1 },
+  { pattern: [IRON_INGOT, IRON_INGOT, IRON_INGOT, IRON_INGOT, AIR, IRON_INGOT, AIR, AIR, AIR], out: HELMET_IRON, count: 1 },
+  { pattern: [IRON_INGOT, AIR, IRON_INGOT, IRON_INGOT, IRON_INGOT, IRON_INGOT, IRON_INGOT, IRON_INGOT, IRON_INGOT], out: CHESTPLATE_IRON, count: 1 },
+  { pattern: [IRON_INGOT, IRON_INGOT, IRON_INGOT, IRON_INGOT, AIR, IRON_INGOT, IRON_INGOT, AIR, IRON_INGOT], out: LEGGINGS_IRON, count: 1 },
+  { pattern: [AIR, AIR, AIR, IRON_INGOT, AIR, IRON_INGOT, IRON_INGOT, AIR, IRON_INGOT], out: BOOTS_IRON, count: 1 },
   // Gold armor
-  { pattern: [GOLD_INGOT,GOLD_INGOT,GOLD_INGOT, GOLD_INGOT,AIR,GOLD_INGOT, AIR,AIR,AIR], out: HELMET_GOLD, count: 1 },
-  { pattern: [GOLD_INGOT,AIR,GOLD_INGOT, GOLD_INGOT,GOLD_INGOT,GOLD_INGOT, GOLD_INGOT,GOLD_INGOT,GOLD_INGOT], out: CHESTPLATE_GOLD, count: 1 },
-  { pattern: [GOLD_INGOT,GOLD_INGOT,GOLD_INGOT, GOLD_INGOT,AIR,GOLD_INGOT, GOLD_INGOT,AIR,GOLD_INGOT], out: LEGGINGS_GOLD, count: 1 },
-  { pattern: [AIR,AIR,AIR, GOLD_INGOT,AIR,GOLD_INGOT, GOLD_INGOT,AIR,GOLD_INGOT], out: BOOTS_GOLD, count: 1 },
+  { pattern: [GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, AIR, GOLD_INGOT, AIR, AIR, AIR], out: HELMET_GOLD, count: 1 },
+  { pattern: [GOLD_INGOT, AIR, GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, GOLD_INGOT], out: CHESTPLATE_GOLD, count: 1 },
+  { pattern: [GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, GOLD_INGOT, AIR, GOLD_INGOT, GOLD_INGOT, AIR, GOLD_INGOT], out: LEGGINGS_GOLD, count: 1 },
+  { pattern: [AIR, AIR, AIR, GOLD_INGOT, AIR, GOLD_INGOT, GOLD_INGOT, AIR, GOLD_INGOT], out: BOOTS_GOLD, count: 1 },
   // Diamond armor
-  { pattern: [DIAMOND,DIAMOND,DIAMOND, DIAMOND,AIR,DIAMOND, AIR,AIR,AIR], out: HELMET_DIAMOND, count: 1 },
-  { pattern: [DIAMOND,AIR,DIAMOND, DIAMOND,DIAMOND,DIAMOND, DIAMOND,DIAMOND,DIAMOND], out: CHESTPLATE_DIAMOND, count: 1 },
-  { pattern: [DIAMOND,DIAMOND,DIAMOND, DIAMOND,AIR,DIAMOND, DIAMOND,AIR,DIAMOND], out: LEGGINGS_DIAMOND, count: 1 },
-  { pattern: [AIR,AIR,AIR, DIAMOND,AIR,DIAMOND, DIAMOND,AIR,DIAMOND], out: BOOTS_DIAMOND, count: 1 },
+  { pattern: [DIAMOND, DIAMOND, DIAMOND, DIAMOND, AIR, DIAMOND, AIR, AIR, AIR], out: HELMET_DIAMOND, count: 1 },
+  { pattern: [DIAMOND, AIR, DIAMOND, DIAMOND, DIAMOND, DIAMOND, DIAMOND, DIAMOND, DIAMOND], out: CHESTPLATE_DIAMOND, count: 1 },
+  { pattern: [DIAMOND, DIAMOND, DIAMOND, DIAMOND, AIR, DIAMOND, DIAMOND, AIR, DIAMOND], out: LEGGINGS_DIAMOND, count: 1 },
+  { pattern: [AIR, AIR, AIR, DIAMOND, AIR, DIAMOND, DIAMOND, AIR, DIAMOND], out: BOOTS_DIAMOND, count: 1 },
   // Furnace: 8 stone surrounding center
-  { pattern: [STONE,STONE,STONE, STONE,AIR,STONE, STONE,STONE,STONE], out: FURNACE, count: 1 },
+  { pattern: [STONE, STONE, STONE, STONE, AIR, STONE, STONE, STONE, STONE], out: FURNACE, count: 1 },
   // Chest: 8 wood surrounding center
-  { pattern: [WOOD,WOOD,WOOD, WOOD,AIR,WOOD, WOOD,WOOD,WOOD], out: CHEST, count: 1 },
+  { pattern: [WOOD, WOOD, WOOD, WOOD, AIR, WOOD, WOOD, WOOD, WOOD], out: CHEST, count: 1 },
   // Door: 6 wood, 2 columns of 3
-  { pattern: [WOOD,WOOD,AIR, WOOD,WOOD,AIR, WOOD,WOOD,AIR], out: DOOR, count: 1 },
+  { pattern: [WOOD, WOOD, AIR, WOOD, WOOD, AIR, WOOD, WOOD, AIR], out: DOOR, count: 1 },
 ];
 
 function updateCraftingOutput() {
@@ -2022,15 +2142,15 @@ function getInventoryArray(area) {
   if (area === 'backpack') return inventory.backpack;
   if (area === 'craft') return craftingGrid;
   if (area === 'equip') return equipment;
-  if (area === 'acc')   return accessories;
+  if (area === 'acc') return accessories;
   if (area === 'chest' && openUI?.type === 'chest') return chests.get(openUI.key) ?? null;
   return null;
 }
 
 function getInventorySlot(area, index) {
-  if (area === 'furnaceOre'  && openUI?.type === 'furnace') return furnaces.get(openUI.key)?.ore  ?? null;
+  if (area === 'furnaceOre' && openUI?.type === 'furnace') return furnaces.get(openUI.key)?.ore ?? null;
   if (area === 'furnaceFuel' && openUI?.type === 'furnace') return furnaces.get(openUI.key)?.fuel ?? null;
-  if (area === 'furnaceOut'  && openUI?.type === 'furnace') return furnaces.get(openUI.key)?.out  ?? null;
+  if (area === 'furnaceOut' && openUI?.type === 'furnace') return furnaces.get(openUI.key)?.out ?? null;
   const slots = getInventoryArray(area);
   return slots && index >= 0 && index < slots.length ? slots[index] : null;
 }
@@ -2357,18 +2477,25 @@ window.addEventListener('blur', () => {
   for (const key of Object.keys(keys)) keys[key] = false;
   mouse.down = false;
   mouse.rightDown = false;
+  clearMenuAudioDrag();
   returnDraggedStack();
 });
 
 canvas.addEventListener('mousemove', event => {
   syncMouseFromEvent(event);
+  if (gameState !== 'playing') updateMenuAudioDrag(event.clientX);
 });
 canvas.addEventListener('mousedown', event => {
   syncMouseFromEvent(event);
   if (gameState !== 'playing') {
-    if (event.button === 0) handleMenuClick(event.clientX, event.clientY);
+    if (event.button === 0) {
+      if (audioManager) audioManager.unlock();
+      if (handleMenuAudioPointerDown(event.clientX, event.clientY)) return;
+      handleMenuClick(event.clientX, event.clientY);
+    }
     return;
   }
+  if (player.dying || player.health <= 0) return;
   if (event.button === 0) {
     mouse.down = true;
     handleInventoryPrimaryDown();
@@ -2394,10 +2521,12 @@ canvas.addEventListener('mousedown', event => {
 window.addEventListener('mouseup', event => {
   if (event.button === 0) mouse.down = false;
   if (event.button === 2) mouse.rightDown = false;
+  if (event.button === 0) clearMenuAudioDrag();
 });
 canvas.addEventListener('mouseleave', () => {
   mouse.down = false;
   mouse.rightDown = false;
+  clearMenuAudioDrag();
 });
 canvas.addEventListener('contextmenu', event => event.preventDefault());
 
@@ -2517,7 +2646,7 @@ function getInventoryMetrics() {
     panel: { x: panelX, y: panelY, w: panelW, h: panelH },
     upper: { y: upperY, contentY: upperContentY },
     equip: { x: equipX, y: upperContentY, slotX: equipSlotX, labelW: equipLabelW, h: equipH },
-    acc:   { x: accLabelX, y: upperContentY, slotX: accSlotX },
+    acc: { x: accLabelX, y: upperContentY, slotX: accSlotX },
     craft: {
       x: craftAreaX, y: upperContentY,
       gridX: craftGridX, gridSize: craftGridSize,
@@ -2687,9 +2816,9 @@ function updateMining(scale = 1) {
   const blockType = getBlock(wx, wy);
   const heldItem = inventory.hotbar[inventory.selected]?.type ?? AIR;
   const canMine = mouse.down && !dragState.active && !isPointerOverInventoryUi() && !openUI &&
-                  heldItem !== BOW && heldItem !== SWORD_COPPER && heldItem !== SWORD_STONE &&
-                  heldItem !== SWORD_IRON && heldItem !== SWORD_GOLD && heldItem !== SWORD_DIAMOND &&
-                  dist <= MINE_RADIUS_PX && isMineable(blockType);
+    heldItem !== BOW && heldItem !== SWORD_COPPER && heldItem !== SWORD_STONE &&
+    heldItem !== SWORD_IRON && heldItem !== SWORD_GOLD && heldItem !== SWORD_DIAMOND &&
+    dist <= MINE_RADIUS_PX && isMineable(blockType);
 
   if (!canMine) {
     mining.active = false;
@@ -2723,9 +2852,9 @@ function updateMining(scale = 1) {
     if (blockType === FURNACE) {
       const f = furnaces.get(key);
       if (f) {
-        if (!isEmptyStack(f.ore))  addToInventory(f.ore.type,  f.ore.count);
+        if (!isEmptyStack(f.ore)) addToInventory(f.ore.type, f.ore.count);
         if (!isEmptyStack(f.fuel)) addToInventory(f.fuel.type, f.fuel.count);
-        if (!isEmptyStack(f.out))  addToInventory(f.out.type,  f.out.count);
+        if (!isEmptyStack(f.out)) addToInventory(f.out.type, f.out.count);
       }
       furnaces.delete(key);
       if (openUI?.key === key) openUI = null;
@@ -2762,13 +2891,13 @@ function updatePlacement(frame) {
   if (dist > MINE_RADIUS_PX) return;
 
   const adjacent = isSolid(getBlock(wx - 1, wy)) || isSolid(getBlock(wx + 1, wy)) ||
-                   isSolid(getBlock(wx, wy - 1)) || isSolid(getBlock(wx, wy + 1));
+    isSolid(getBlock(wx, wy - 1)) || isSolid(getBlock(wx, wy + 1));
   if (!adjacent) return;
 
   const blockLeft = wx * TILE;
   const blockTop = wy * TILE;
   const overlaps = blockLeft + TILE > player.x && blockLeft < player.x + player.w &&
-                   blockTop + TILE > player.y && blockTop < player.y + player.h;
+    blockTop + TILE > player.y && blockTop < player.y + player.h;
   if (overlaps) return;
 
   setBlock(wx, wy, slot.type);
@@ -3446,9 +3575,9 @@ function drawStatusHud() {
       const partial = !filled && defense > i * perIcon;
       ctx.fillStyle = filled ? '#6ad4ff' : partial ? 'rgba(106,212,255,0.45)' : 'rgba(255,255,255,0.12)';
       ctx.beginPath();
-      ctx.moveTo(sx + 5, sy);     ctx.lineTo(sx + 10, sy + 3);
+      ctx.moveTo(sx + 5, sy); ctx.lineTo(sx + 10, sy + 3);
       ctx.lineTo(sx + 10, sy + 8); ctx.lineTo(sx + 5, sy + 11);
-      ctx.lineTo(sx, sy + 8);     ctx.lineTo(sx, sy + 3);
+      ctx.lineTo(sx, sy + 8); ctx.lineTo(sx, sy + 3);
       ctx.closePath(); ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.5; ctx.stroke();
     }
@@ -3906,14 +4035,14 @@ function startNewGame(slot) {
   resetInventory();
   // Starter items
   inventory.hotbar[0] = createStack(SWORD_COPPER, 1);
-  inventory.hotbar[1] = createStack(PICK_COPPER,  1);
-  inventory.hotbar[2] = createStack(AXE_COPPER,   1);
-  gameState = 'playing';
+  inventory.hotbar[1] = createStack(PICK_COPPER, 1);
+  inventory.hotbar[2] = createStack(AXE_COPPER, 1);
+  setGameState('playing');
   menuConfirm = null;
 }
 
 function enterGame(slot) {
-  if (loadGame(slot)) { gameState = 'playing'; menuConfirm = null; }
+  if (loadGame(slot)) { setGameState('playing'); menuConfirm = null; }
   else startNewGame(slot);
 }
 
@@ -3927,8 +4056,8 @@ function handleEscape() {
     return;
   }
   if (inventory.open) { toggleInventory(false); return; }
-  if (gameState === 'playing') { gameState = 'paused'; }
-  else if (gameState === 'paused') { gameState = 'playing'; }
+  if (gameState === 'playing') { setGameState('paused'); }
+  else if (gameState === 'paused') { setGameState('playing'); }
 }
 
 // ─── MENUS ────────────────────────────────────────────────────────────────────
@@ -3937,21 +4066,148 @@ function menuSlotLayout() {
   const panelW = Math.min(460, canvas.width - 40);
   const slotH = 58;
   const slotGap = 10;
-  const panelH = 88 + 3 * slotH + 2 * slotGap + 24;
+  const audioSectionH = audioManager ? 90 : 0;
+  const creditH = 22;
+  const footerPad = 22;
+  const panelH = 88 + 3 * slotH + 2 * slotGap + 18 + audioSectionH + creditH + footerPad;
   const panelX = Math.floor((canvas.width - panelW) / 2);
   const panelY = Math.floor((canvas.height - panelH) / 2);
-  return { panelX, panelY, panelW, panelH, slotH, slotGap, slotW: panelW - 48, slotX: panelX + 24, firstSlotY: panelY + 88 };
+  const firstSlotY = panelY + 88;
+  const audioY = firstSlotY + 3 * (slotH + slotGap) + 16;
+  const creditY = audioY + audioSectionH + 18;
+  return {
+    panelX, panelY, panelW, panelH,
+    slotH, slotGap,
+    slotW: panelW - 48,
+    slotX: panelX + 24,
+    firstSlotY,
+    audioSectionH,
+    audioY,
+    creditY,
+  };
 }
 
 function pauseMenuLayout() {
   const btns = menuConfirm === 'newworld' ? 2 : 4;
-  const panelW = Math.min(340, canvas.width - 40);
+  const panelW = Math.min(380, canvas.width - 40);
   const btnH = 46; const btnGap = 10;
   const innerH = btns * btnH + (btns - 1) * btnGap;
-  const panelH = 62 + innerH + 18;
+  const audioSectionH = !menuConfirm && audioManager ? 90 : 0;
+  const panelH = 62 + innerH + 18 + audioSectionH + (audioSectionH ? 18 : 0);
   const panelX = Math.floor((canvas.width - panelW) / 2);
   const panelY = Math.floor((canvas.height - panelH) / 2);
-  return { panelX, panelY, panelW, panelH, btnH, btnGap, btnW: panelW - 40, btnX: panelX + 20, firstBtnY: panelY + 58 };
+  const firstBtnY = panelY + 58;
+  const audioY = firstBtnY + innerH + 18;
+  return {
+    panelX, panelY, panelW, panelH,
+    btnH, btnGap,
+    btnW: panelW - 40,
+    btnX: panelX + 20,
+    firstBtnY,
+    audioSectionH,
+    audioY,
+  };
+}
+
+function getAudioSliderValue(key) {
+  if (!audioManager) return 0;
+  if (key === 'master') return audioManager.getMasterVolume();
+  if (key === 'music') return audioManager.getMusicVolume();
+  return 0;
+}
+
+function setAudioSliderValue(key, value) {
+  if (!audioManager) return;
+  const next = clamp(value, 0, 1);
+  if (key === 'master') audioManager.setMasterVolume(next);
+  else if (key === 'music') audioManager.setMusicVolume(next);
+}
+
+function buildAudioSliders(panelX, panelW, sectionY) {
+  if (!audioManager) return [];
+  const sliderX = panelX + 24;
+  const sliderW = panelW - 48;
+  return [
+    { key: 'master', label: 'MASTER VOLUME', x: sliderX, y: sectionY + 18, w: sliderW, h: 12 },
+    { key: 'music', label: 'MUSIC VOLUME', x: sliderX, y: sectionY + 50, w: sliderW, h: 12 },
+  ];
+}
+
+function getVisibleAudioSliders() {
+  if (!audioManager) return [];
+  if (gameState === 'mainmenu') {
+    const L = menuSlotLayout();
+    return buildAudioSliders(L.panelX, L.panelW, L.audioY);
+  }
+  if (gameState === 'paused' && !menuConfirm) {
+    const L = pauseMenuLayout();
+    return buildAudioSliders(L.panelX, L.panelW, L.audioY);
+  }
+  return [];
+}
+
+function updateAudioSliderFromPointer(slider, pointerX) {
+  if (!slider) return;
+  const ratio = (pointerX - slider.x) / slider.w;
+  setAudioSliderValue(slider.key, ratio);
+}
+
+function handleMenuAudioPointerDown(x, y) {
+  const sliders = getVisibleAudioSliders();
+  for (const slider of sliders) {
+    if (!isPointInRect(x, y, slider.x, slider.y - 8, slider.w, slider.h + 18)) continue;
+    audioUi.draggingKey = slider.key;
+    updateAudioSliderFromPointer(slider, x);
+    return true;
+  }
+  return false;
+}
+
+function updateMenuAudioDrag(x) {
+  if (!audioUi.draggingKey) return;
+  const slider = getVisibleAudioSliders().find(entry => entry.key === audioUi.draggingKey);
+  if (!slider) {
+    audioUi.draggingKey = null;
+    return;
+  }
+  updateAudioSliderFromPointer(slider, x);
+}
+
+function clearMenuAudioDrag() {
+  audioUi.draggingKey = null;
+}
+
+function drawMenuAudioSection(panelX, panelW, sectionY, title = 'AUDIO') {
+  const sliders = buildAudioSliders(panelX, panelW, sectionY);
+  if (!sliders.length) return;
+
+  drawText(title, panelX + panelW / 2, sectionY, 'rgba(255,255,255,0.38)', '10px Minecraft, monospace', 'center');
+
+  for (const slider of sliders) {
+    const value = getAudioSliderValue(slider.key);
+    const hovering = audioUi.draggingKey === slider.key
+      || isPointInRect(mouse.x, mouse.y, slider.x, slider.y - 8, slider.w, slider.h + 18);
+    drawText(slider.label, slider.x, slider.y - 6, '#d9e7f8', '10px Minecraft, monospace');
+    drawText(`${Math.round(value * 100)}%`, slider.x + slider.w, slider.y - 6,
+      hovering ? '#ffd55e' : 'rgba(255,255,255,0.62)', '10px Minecraft, monospace', 'right');
+
+    ctx.fillStyle = 'rgba(4,8,14,0.92)';
+    ctx.fillRect(slider.x, slider.y, slider.w, slider.h);
+    ctx.strokeStyle = hovering ? 'rgba(120,185,240,0.95)' : 'rgba(255,255,255,0.18)';
+    ctx.strokeRect(slider.x + 0.5, slider.y + 0.5, slider.w - 1, slider.h - 1);
+
+    const fillW = Math.round((slider.w - 2) * value);
+    if (fillW > 0) {
+      ctx.fillStyle = hovering ? 'rgba(104,184,255,0.82)' : 'rgba(86,140,208,0.66)';
+      ctx.fillRect(slider.x + 1, slider.y + 1, fillW, slider.h - 2);
+    }
+
+    const knobX = Math.round(slider.x + slider.w * value);
+    ctx.fillStyle = hovering ? '#ffd55e' : '#f5f1d0';
+    ctx.fillRect(knobX - 3, slider.y - 2, 6, slider.h + 4);
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.strokeRect(knobX - 3.5, slider.y - 1.5, 6, slider.h + 4);
+  }
 }
 
 function drawMainMenu() {
@@ -3987,10 +4243,12 @@ function drawMainMenu() {
       drawText('CONTINUE', L.slotX + L.slotW - 16, by + 20, '#ffd55e', '12px Minecraft, monospace', 'right');
       drawText(ds, L.slotX + 16, by + 40, 'rgba(150,195,245,0.8)', '10px Minecraft, monospace');
     } else {
-      drawText('RESET WORLD', L.slotX + L.slotW - 16, by + 20, 'rgba(255,255,255,0.4)', '12px Minecraft, monospace', 'right');
+      drawText('NEW WORLD', L.slotX + L.slotW - 16, by + 20, 'rgba(255,255,255,0.4)', '12px Minecraft, monospace', 'right');
       drawText('─── empty ───', L.slotX + 16, by + 40, 'rgba(255,255,255,0.2)', '11px Minecraft, monospace');
     }
   }
+  drawMenuAudioSection(L.panelX, L.panelW, L.audioY);
+  drawText('Music by Alex McCulloch', L.panelX + L.panelW / 2, L.creditY, '#9bc9ef', '12px Minecraft, monospace', 'center');
 }
 
 function drawPauseMenu() {
@@ -4012,7 +4270,7 @@ function drawPauseMenu() {
 
   const labels = menuConfirm === 'newworld'
     ? ['CANCEL', 'CONFIRM']
-    : ['RESUME', 'SAVE GAME', 'NEW WORLD', 'MAIN MENU'];
+    : ['RESUME', 'SAVE GAME', 'RESET WORLD', 'MAIN MENU'];
   const colors = menuConfirm === 'newworld'
     ? ['#f5f1d0', '#ff7a7a']
     : ['#f5f1d0', '#f5f1d0', '#ff9966', '#ff7a7a'];
@@ -4037,6 +4295,7 @@ function drawPauseMenu() {
       drawText('✓ SAVED!', L.btnX + L.btnW - 12, by + L.btnH / 2 + 5, '#7dff7a', '11px Minecraft, monospace', 'right');
     }
   }
+  if (!menuConfirm) drawMenuAudioSection(L.panelX, L.panelW, L.audioY);
 }
 
 function handleMenuClick(x, y) {
@@ -4063,10 +4322,10 @@ function handleMenuClick(x, y) {
       }
     } else {
       const actions = [
-        () => { gameState = 'playing'; },
+        () => { setGameState('playing'); },
         () => { saveGame(); },
         () => { menuConfirm = 'newworld'; },
-        () => { if (dragState.active) returnDraggedStack(); inventory.open = false; gameState = 'mainmenu'; },
+        () => { if (dragState.active) returnDraggedStack(); inventory.open = false; setGameState('mainmenu'); },
       ];
       for (let i = 0; i < 4; i++) {
         const by = L.firstBtnY + i * (L.btnH + L.btnGap);
@@ -4113,7 +4372,13 @@ function loop(ts) {
   if (saveMessageTimer > 0) saveMessageTimer--;
   updateWorld(dt);
   updatePlayer(scale);
-  if (player.health <= 0 && !player.dying) { player.dying = true; player.deathFrame = 0; player.deathTick = 0; }
+  if (player.health <= 0 && !player.dying) {
+    player.dying = true;
+    player.deathFrame = 0;
+    player.deathTick = 0;
+    mouse.down = false;
+    mouse.rightDown = false;
+  }
   updateDeathAnim(scale);
   // Accessory: Band of Regeneration — 1 HP every 600 ticks (~10s)
   if (hasAccessory(ACC_BAND_REGEN) && !player.dying) {
