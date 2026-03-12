@@ -37,3 +37,5 @@ docs/
 *.stackdump
 .mcp.json
 .claude-flow/
+.playwright/
+grid_test.html
