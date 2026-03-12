@@ -16,8 +16,8 @@
   class TerrariaAudioManager {
     constructor(options = {}) {
       this.storageKey = options.storageKey || 'terraria_v2_audio_settings';
-      this.fadeInMs = options.fadeInMs ?? 2000;
-      this.fadeOutMs = options.fadeOutMs ?? 2000;
+      this.fadeInMs = options.fadeInMs ?? 4000;
+      this.fadeOutMs = options.fadeOutMs ?? 4000;
       this.initialGameplayDelayMs = options.initialGameplayDelayMs ?? 14000;
       this.gameplayPauseMinMs = Math.max(options.gameplayPauseMinMs ?? 65000, 60001);
       this.gameplayPauseMaxMs = Math.max(options.gameplayPauseMaxMs ?? 98000, this.gameplayPauseMinMs);

@@ -708,28 +708,35 @@ let currentSaveSlot = -1;
 let saveMessageTimer = 0;
 let menuConfirm = null; // 'newworld' when showing confirm dialog
 const SAVE_KEY_PREFIX = 'terraria_v2_slot_';
+const MINERIA_TRACKS = [
+  { id: 'intro', src: 'audio/mineria/intro.mp3' },
+  { id: 'a-chill-fever', src: 'audio/mineria/a_chill_fever.mp3' },
+  { id: 'binary-village', src: 'audio/mineria/binary_village.mp3' },
+  { id: 'cave-3', src: 'audio/mineria/cave_3.mp3' },
+  { id: 'look-trippy', src: 'audio/mineria/look_trippy.mp3' },
+];
+var menuTrackSrc = MINERIA_TRACKS[0].src;
+if (Math.random() < 0.5) {
+  menuTrackSrc = MINERIA_TRACKS[1].src;
+}
+
 const audioManager = typeof window.TerrariaAudioManager === 'function'
   ? new window.TerrariaAudioManager({
     menuTrack: {
-      src: 'audio/mineria/intro.mp3',
+      src: menuTrackSrc,
       baseVolume: 0.46,
       gameplayBaseVolume: 0.72,
       filterFrequency: 920,
       filterQ: 0.9,
     },
-    gameplayTracks: [
-      { id: 'a-chill-fever', src: 'audio/mineria/a_chill_fever.mp3' },
-      { id: 'binary-village', src: 'audio/mineria/binary_village.mp3' },
-      { id: 'cave-3', src: 'audio/mineria/cave_3.mp3' },
-      { id: 'look-trippy', src: 'audio/mineria/look_trippy.mp3' },
-    ],
+    gameplayTracks: MINERIA_TRACKS,
     initialGameplayDelayMs: 12000,
     gameplayPauseMinMs: 65000,
     gameplayPauseMaxMs: 98000,
     fadeInMs: 3200,
     fadeOutMs: 3600,
-    defaultMasterVolume: 0.78,
-    defaultMusicVolume: 0.88,
+    defaultMasterVolume: 0.4,
+    defaultMusicVolume: 0.65,
   })
   : null;
 const audioUi = { draggingKey: null };
