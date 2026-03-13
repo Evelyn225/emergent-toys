@@ -1,7 +1,7 @@
 window.__TERRARIA_V2__ = true;
 window.__TERRARIA_ACTIVE_VERSION__ = 'v2';
 document.documentElement.dataset.terrariaEngine = 'v2';
-console.info('[terraria] loaded v2');
+console.info('[mineria] loaded v2');
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -3988,7 +3988,7 @@ function loadGame(slot) {
     currentSaveSlot = slot;
     return true;
   } catch (e) {
-    console.error('[terraria] load failed:', e);
+    console.error('[mineria] load failed:', e);
     return false;
   }
 }
@@ -4229,7 +4229,7 @@ function drawMainMenu() {
   ctx.fillStyle = 'rgba(40,60,90,0.4)';
   ctx.fillRect(L.panelX + 2, L.panelY + 2, L.panelW - 4, 80);
 
-  drawText('TERRARIA', L.panelX + L.panelW / 2, L.panelY + 36, '#ffd55e', '28px Minecraft, monospace', 'center');
+  drawText('MINERIA', L.panelX + L.panelW / 2, L.panelY + 36, '#ffd55e', '28px Minecraft, monospace', 'center');
   drawText('Eve Net Edition', L.panelX + L.panelW / 2, L.panelY + 58, '#7aacde', '11px Minecraft, monospace', 'center');
   drawText('Select World', L.panelX + L.panelW / 2, L.panelY + 74, 'rgba(255,255,255,0.35)', '10px Minecraft, monospace', 'center');
 
