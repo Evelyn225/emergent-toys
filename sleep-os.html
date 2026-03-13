@@ -1644,6 +1644,10 @@ function getShellDragPayload() {
 function clearShellDragPayload() {
   _shellDragPayload = null;
 }
+function isDesktopSurfaceTransferBlocked(payload, dstDirPath) {
+  if (!payload) return false;
+  return fsNormalizeDir(payload.srcCwd) === 'DESKTOP' && fsNormalizeDir(dstDirPath) === 'DESKTOP';
+}
 function buildShellDragPayload(item, srcCwd, source, extra) {
   const raw = Array.isArray(extra?.items) && extra.items.length ? extra.items : [item];
   const items = [];
@@ -2017,63 +2021,7 @@ function applyRegistrySettings() {
   applySettings();
 }
 
-// ─────────────────────────────────────────────────────────────────
 // WALLPAPERS
-// ─────────────────────────────────────────────────────────────────
-const WALLPAPERS = [
-  {
-    id: 'default', name: 'Default', emoji: '🟦',
-    bg: 'background:#008080;'
-  },
-  {
-    id: 'magicant', name: 'Magicant', emoji: '🌸',
-    bg: `background:
-      linear-gradient(180deg,#c84890 0%,#e070b0 22%,#f0a0d0 48%,#f8d0ee 75%,#fce4ff 100%);
-    animation:eb-magicant 7s ease-in-out infinite alternate;`
-  },
-  {
-    id: 'hills', name: 'Hills', emoji: '🌤️',
-    bg: `background:
-      linear-gradient(180deg,#3a80cc 0%,#5aaae0 32%,#88c8f0 40%,#52b050 42%,#3a9038 54%,#2a7028 100%);`
-  },
-  {
-    id: 'battle', name: 'Battle!', emoji: '⚡',
-    bg: `background: repeating-linear-gradient(
-      -45deg,
-      #cc0000 0px,  #cc0000 18px,
-      #e04000 18px, #e04000 36px,
-      #e89000 36px, #e89000 54px,
-      #18a838 54px, #18a838 72px,
-      #1858cc 72px, #1858cc 90px,
-      #7800c0 90px, #7800c0 108px
-    );
-    background-size: 153px 153px;
-    animation:eb-battle 0.65s linear infinite;`
-  },
-  {
-    id: 'summers', name: 'Summers', emoji: '🏖️',
-    bg: `background:
-      radial-gradient(ellipse 300% 35% at 50% 43%, rgba(255,150,30,0.28) 0%, transparent 100%),
-      linear-gradient(180deg,
-        #a83000 0%,#d86020 12%,#f09040 24%,#f8c858 34%,
-        #5090d8 35%,#3070b8 54%,
-        #c0a050 55%,#d0b468 100%);`
-  },
-  {
-    id: 'saturn', name: 'Saturn Valley', emoji: '🪨',
-    bg: `background:
-      radial-gradient(circle at 28% 72%, rgba(130,65,10,0.7) 0%, transparent 42%),
-      radial-gradient(circle at 72% 82%, rgba(90,35,5,0.55) 0%, transparent 38%),
-      radial-gradient(circle at 58% 18%, rgba(150,85,20,0.45) 0%, transparent 52%),
-      linear-gradient(180deg,#180600 0%,#3a1504 22%,#582808 48%,#7a3c12 68%,#481c04 100%);`
-  },
-  {
-    id: 'cave', name: 'Cave of the Past', emoji: '🕳️',
-    bg: `background:
-      radial-gradient(circle at 50% 50%, #1a0038 0%, #0c0022 45%, #000006 100%);
-    animation:eb-cave 5s ease-in-out infinite alternate;`
-  },
-];
 
 const WALLPAPER_FILE_PREFIX = 'FILE:';
 let currentWallpaper = DEFAULT_WALLPAPER_PATH;
@@ -3339,7 +3287,6 @@ document.addEventListener('fs-changed', schedSave);
 // Daemon story state and sync
 const DAEMON_STORY_KEY = 'sleepOS-daemon-story';
 const ROOT_SYSTEM_FILE_META = [
-  { name: 'WELCOME.README', size: '623', date: '11/13/2024  10:31' },
   { name: 'TERMINAL.exe', size: '4,096', date: '11/13/2024  10:31' },
   { name: 'SYSMON.exe', size: '8,192', date: '11/13/2024  10:31' },
   { name: 'NOTEPAD.exe', size: '4,096', date: '11/13/2024  10:31' },
@@ -7276,14 +7223,14 @@ function setupIcons() {
   layer.addEventListener('dragover', e => {
     if (e.target.closest('.desktop-icon')) return;
     const payload = getShellDragPayload();
-    if (!payload || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
+    if (!payload || isDesktopSurfaceTransferBlocked(payload, 'DESKTOP') || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   });
   layer.addEventListener('drop', e => {
     if (e.target.closest('.desktop-icon')) return;
     const payload = getShellDragPayload();
-    if (!payload || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
+    if (!payload || isDesktopSurfaceTransferBlocked(payload, 'DESKTOP') || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
     e.preventDefault();
     e.stopPropagation();
     if (moveShellPayloadToDir(payload, 'DESKTOP')) clearShellDragPayload();
@@ -7380,13 +7327,9 @@ Shortcuts:
 
 Known issues:
   [!] void.tmp cannot be read, deleted, or ignored
-  [!] Something is watching this session
+  [!] Something is watching this session`;
 
-\u2014 SYSTEM`;
-
-termFS.files.set('WELCOME.README', WELCOME_DEFAULT);
-
-function openWelcome() { openNotepad('WELCOME.README'); }
+function openWelcome() { openNotepad('WELCOME.README', '', { initialContent: WELCOME_DEFAULT }); }
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -8931,6 +8874,7 @@ function openExplorer(startPath) {
   });
   pane._shellDropHandler = payload => {
     if (!payload || cwd === 'PROJECTS' || cwd === 'RECYCLE') return false;
+    if (isDesktopSurfaceTransferBlocked(payload, cwd)) return false;
     if (!canMoveShellPayloadToDir(payload, cwd)) return false;
     const ok = doMovePayload(payload, cwd);
     if (!ok) setExplorerStatus('Move failed.');
@@ -8980,7 +8924,7 @@ function openExplorer(startPath) {
   pane.addEventListener('dragover', e => {
     if (!e.target.closest(ITEM_SELECTOR)) {
       const payload = getShellDragPayload();
-      if (payload && pane._shellDropHandler && canMoveShellPayloadToDir(payload, cwd)) {
+      if (payload && pane._shellDropHandler && !isDesktopSurfaceTransferBlocked(payload, cwd) && canMoveShellPayloadToDir(payload, cwd)) {
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
@@ -10026,7 +9970,6 @@ function openTerminal(startDir, initialCommand) {
           `11/13/2024  10:31    <DIR>    ..`,
           `11/13/2024  10:31    <DIR>    DOCS`,
           `11/13/2024  10:31    <DIR>    PROJECTS`,
-          `11/13/2024  10:31      623    WELCOME.README`,
           `11/13/2024  10:31    4,096    TERMINAL.exe`,
           `11/13/2024  10:31    8,192    SYSMON.exe`,
           `11/13/2024  03:17        0    void.tmp`,
@@ -10186,7 +10129,7 @@ function openTerminal(startDir, initialCommand) {
         }
       });
       // System files
-      ['WELCOME.README','TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe',
+      ['TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe',
        'void.tmp','daemon.core              [UNREADABLE]','?????.exe                [DO NOT EXECUTE]'
       ].forEach(n => print(`├── ${n}`));
       // User files
@@ -10525,107 +10468,6 @@ function openTerminal(startDir, initialCommand) {
     }
     await runTerminalCommand(raw, { recordHistory: true });
   };
-
-  /*
-      const pipeIdx = raw.indexOf('|');
-      if (pipeIdx !== -1 && !raw.startsWith('echo')) {
-        const left  = raw.slice(0, pipeIdx).trim();
-        const right = raw.slice(pipeIdx + 1).trim();
-        // Capture left command output
-        const captured = [];
-        const capturePrint = (text) => captured.push(String(text || ''));
-        const lParts = left.split(/\s+/);
-        const lCmd = lParts[0].toLowerCase();
-        const lArgs = lParts.slice(1).join(' ');
-        if (CMDS[lCmd]) CMDS[lCmd](lArgs, capturePrint);
-        else capturePrint('Unknown command: ' + lCmd);
-
-        // Feed captured output to right command
-        const rParts = right.split(/\s+/);
-        const rCmd = rParts[0].toLowerCase();
-        const rArgs = rParts.slice(1).join(' ');
-
-        if (rCmd === 'grep') {
-          // grep pattern — filter captured lines
-          const pattern = rArgs.trim().replace(/^"|"$/g,'');
-          let re2;
-          try { re2 = new RegExp(pattern, 'i'); } catch(e2) { print('Invalid regex: ' + pattern, '#ff4444'); print(''); return; }
-          let matches = 0;
-          captured.forEach(line => { if (re2.test(line)) { print(line); matches++; } });
-          if (matches === 0) print('(no matches)');
-          else print('\n' + matches + ' match' + (matches !== 1 ? 'es' : '') + ' found');
-        } else if (rCmd === 'wc') {
-          const joined = captured.join('\n');
-          const lines = captured.length;
-          const words = joined.trim() ? joined.trim().split(/\s+/).length : 0;
-          const bytes = new TextEncoder().encode(joined).length;
-          print('  ' + String(lines).padStart(6) + '  ' + String(words).padStart(6) + '  ' + String(bytes).padStart(6));
-        } else {
-          print('Pipe target not supported: ' + rCmd, '#ff4444');
-        }
-        print('');
-        return;
-      }
-
-      const parts = raw.split(/\s+/);
-      const cmd = parts[0].toLowerCase();
-      let args = parts.slice(1).join(' ');
-
-      // Wildcard expansion for ls/dir and del/rm
-      if ((cmd === 'ls' || cmd === 'dir') && args.includes('*')) {
-        const expanded = expandGlob(args.trim());
-        expanded.forEach(f => print('  ' + f));
-        print('');
-        return;
-      }
-      if ((cmd === 'del' || cmd === 'rm') && args.includes('*')) {
-        const expanded = expandGlob(args.trim());
-        expanded.forEach(f => CMDS.del(f));
-        print('');
-        return;
-      }
-
-      // Executable lookup table
-      const EXES = {
-        'welcome.readme': () => { print('Opening WELCOME.README...'); setTimeout(openWelcome, 300); },
-        'welcome':        () => { print('Opening WELCOME.README...'); setTimeout(openWelcome, 300); },
-        'sysmon.exe':     () => { print('Starting SYSMON.exe...'); setTimeout(openSysmon, 300); },
-        'sysmon':         () => { print('Starting SYSMON.exe...'); setTimeout(openSysmon, 300); },
-        'browser.exe':    () => { print('Starting BROWSER.exe...'); setTimeout(openBrowser, 300); },
-        'browser':        () => { print('Starting BROWSER.exe...'); setTimeout(openBrowser, 300); },
-        'defrag.exe':     () => { print('Starting DEFRAG.exe...'); setTimeout(openDefrag, 300); },
-        'defrag':         () => { print('Starting DEFRAG.exe...'); setTimeout(openDefrag, 300); },
-        'terminal.exe':   () => { print('TERMINAL.exe is already running.'); print('You are inside it.'); },
-        'notepad.exe':    () => { print('Opening Notepad...'); setTimeout(openNotepad, 300); },
-        'notepad':        () => { print('Opening Notepad...'); setTimeout(openNotepad, 300); },
-        'explorer.exe':   () => { print('Opening File Explorer...'); setTimeout(openExplorer, 300); },
-        'explorer':       () => { print('Opening File Explorer...'); setTimeout(openExplorer, 300); },
-        'daemon.core':    () => { print('Opening daemon.core...'); print('It is already open.'); print('It has always been open.'); setTimeout(openDaemon, 400); },
-        'void.tmp':       () => { print('Opening void.tmp...'); setTimeout(openVoid, 300); },
-        '?????.exe':      () => { print('Executing ?????.exe...'); setTimeout(openUnknown, 300); },
-        '?????':          () => { print('Executing ?????.exe...'); setTimeout(openUnknown, 300); },
-      };
-      // Also allow running project files by name
-      const project = PROJECTS.find(p =>
-        p.file.toLowerCase() === cmd ||
-        p.file.toLowerCase().replace('.html','') === cmd ||
-        p.name.toLowerCase() === cmd ||
-        p.name.toLowerCase().replace(/ /g,'-') === cmd
-      );
-
-      if (!cmd) { }
-      else if (CMDS[cmd]) { await CMDS[cmd](args); }
-      else if (EXES[cmd]) { EXES[cmd](); }
-      else if (project) {
-        print(`Launching ${project.name}...`);
-        print('Opening in new tab.');
-        setTimeout(() => window.open(project.file, '_blank'), 400);
-      }
-      else { print(`'${parts[0]}' is not recognized as an internal or external command.`); print(`Type HELP for a list of commands, or DIR to list executables.`); }
-      print('');
-    }
-  });
-  */
 
   inp.addEventListener('keydown', async (e) => {
     if (pendingRead) {
