@@ -5,27 +5,62 @@
     <meta charset="UTF-8">
     <title>Play catch with your dad!</title>
     <style>
+        @font-face {
+            font-family: "F25 Bank Printer";
+            src: url("F25_Bank_Printer.ttf") format("truetype");
+            font-display: swap;
+        }
+
         body {
             margin: 0;
             overflow: hidden;
             background: #0d0d14;
+            font-family: "F25 Bank Printer", monospace;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+        }
+
+        body,
+        a,
+        div,
+        button,
+        input {
+            font-family: "F25 Bank Printer", monospace;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+        }
+
+        #music-credit {
+            position: fixed;
+            left: 50%;
+            bottom: 14px;
+            transform: translateX(-50%);
+            z-index: 150;
+            font-family: "F25 Bank Printer", monospace;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.48);
+            text-align: center;
+            pointer-events: none;
+            text-transform: uppercase;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
         }
     </style>
 </head>
 
 <body>
     <a href="index.html"
-        style="position: fixed; top: 10px; right: 10px; z-index: 1000; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: sans-serif; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;"
+        style="position: fixed; top: 10px; right: 10px; z-index: 1000; padding: 8px 8px; background: rgba(0, 0, 0, 0.8); color: white; border: 1px solid #444; border-radius: 4px; text-decoration: none; font-family: 'F25 Bank Printer', monospace; font-size: 18px; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); line-height: 1; display: flex; align-items: center; justify-content: center;"
         onmouseover="this.style.transform='scale(1.2) rotate(5deg)'; this.style.background='rgba(100, 200, 255, 0.8)'; this.style.borderColor='#888'"
         onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.background='rgba(0, 0, 0, 0.8)'; this.style.borderColor='#444'"
         onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
         onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
         <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home"
             style="width: 18px; height: 18px; object-fit: contain;"></a>
-    <div id="vol-slider" style="position:fixed;bottom:16px;left:16px;z-index:200;cursor:pointer;user-select:none;font-family:'Courier New',monospace;color:rgba(255,255,255,0.5);letter-spacing:2px;line-height:1.6;">
+    <div id="vol-slider" style="position:fixed;bottom:16px;left:16px;z-index:200;cursor:pointer;user-select:none;font-family:'F25 Bank Printer',monospace;color:rgba(255,255,255,0.5);letter-spacing:2px;line-height:1.6;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.15em;margin-bottom:2px;">volume</div>
         <div id="vol-bar" style="font-size:13px;"></div>
     </div>
+    <div id="music-credit">Music by Alex McCulloch</div>
+    <audio id="bg-music" src="audio/Improvisation_Alex.mp3" loop preload="auto" playsinline></audio>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
     <script>
@@ -142,6 +177,7 @@
         let ballActivated = false;
         let throwMeFade = 1.0;
         let hintX, hintY;
+        let displayFont;
 
         let audioCtx = null;
         let audioBuffers = [];
@@ -149,6 +185,47 @@
         const HIT_COOLDOWN = 2;
         const HIT_THRESHOLD = 1.7;
         let masterVolume = 0.8;
+        const BG_MUSIC_MAX_LEVEL = 0.15;
+        const BG_MUSIC_FADE = 0.75;
+        let bgMusicStarted = false;
+        let bgMusicSource = null;
+        let bgMusicGain = null;
+        const bgMusicEl = document.getElementById('bg-music');
+
+        function preload() {
+            displayFont = loadFont('F25_Bank_Printer.ttf');
+        }
+
+        function ensureAudioGraph() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (!bgMusicSource) {
+                bgMusicSource = audioCtx.createMediaElementSource(bgMusicEl);
+                bgMusicGain = audioCtx.createGain();
+                bgMusicGain.gain.value = 0;
+                bgMusicSource.connect(bgMusicGain);
+                bgMusicGain.connect(audioCtx.destination);
+            }
+        }
+
+        function getBackgroundMusicLevel() {
+            return BG_MUSIC_MAX_LEVEL * masterVolume;
+        }
+
+        function updateBackgroundMusicVolume(immediate = false) {
+            if (!audioCtx || !bgMusicGain) return;
+            let t = audioCtx.currentTime;
+            let target = getBackgroundMusicLevel();
+            bgMusicGain.gain.cancelScheduledValues(t);
+            if (immediate) {
+                bgMusicGain.gain.setValueAtTime(target, t);
+                return;
+            }
+            let current = bgMusicGain.gain.value;
+            bgMusicGain.gain.setValueAtTime(current, t);
+            bgMusicGain.gain.linearRampToValueAtTime(target, t + 0.12);
+        }
 
         (function initVolSlider() {
             const STEPS = 10;
@@ -167,6 +244,7 @@
                 const rect = bar.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 masterVolume = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                updateBackgroundMusicVolume();
                 render();
             }
             let draggingVol = false;
@@ -180,12 +258,15 @@
         })();
 
         function unlockAudio() {
-            if (audioCtx) { audioCtx.resume(); return; }
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            ensureAudioGraph();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            startBackgroundMusic();
         }
 
         async function loadBallSounds() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            ensureAudioGraph();
             for (let i = 1; i <= 5; i++) {
                 try {
                     let resp = await fetch(`https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/audio/ballhit${i}.wav`);
@@ -195,6 +276,44 @@
                 } catch(e) {}
             }
         }
+
+        async function startBackgroundMusic() {
+            ensureAudioGraph();
+            if (bgMusicStarted) return;
+            bgMusicStarted = true;
+            let t = audioCtx.currentTime;
+            bgMusicGain.gain.cancelScheduledValues(t);
+            bgMusicGain.gain.setValueAtTime(0, t);
+            bgMusicGain.gain.linearRampToValueAtTime(getBackgroundMusicLevel(), t + BG_MUSIC_FADE);
+            try {
+                bgMusicEl.volume = 1;
+                await bgMusicEl.play();
+            } catch (e) {
+                bgMusicStarted = false;
+            }
+        }
+
+        function fadeOutBackgroundMusic() {
+            if (!audioCtx || !bgMusicGain) return;
+            let t = audioCtx.currentTime;
+            let current = bgMusicGain.gain.value;
+            bgMusicGain.gain.cancelScheduledValues(t);
+            bgMusicGain.gain.setValueAtTime(current, t);
+            bgMusicGain.gain.linearRampToValueAtTime(0, t + 0.45);
+        }
+
+        function primeAudio() {
+            unlockAudio();
+            window.removeEventListener('pointerdown', primeAudio);
+            window.removeEventListener('touchstart', primeAudio);
+            window.removeEventListener('keydown', primeAudio);
+        }
+
+        window.addEventListener('pointerdown', primeAudio, { once: true });
+        window.addEventListener('touchstart', primeAudio, { once: true });
+        window.addEventListener('keydown', primeAudio, { once: true });
+        window.addEventListener('beforeunload', fadeOutBackgroundMusic);
+        window.addEventListener('pagehide', fadeOutBackgroundMusic);
 
         function playBallHit(speed) {
             if (frameCount - lastHitFrame < HIT_COOLDOWN) return;
@@ -373,7 +492,7 @@
                 }
                 // Draw bubble
                 push();
-                textFont('Georgia');
+                if (displayFont) textFont(displayFont);
                 textSize(17);
                 textAlign(CENTER, CENTER);
                 let paddingX = 42;
@@ -572,7 +691,7 @@
                 // label
                 noStroke();
                 fill(255, 255, 255, a);
-                textFont('DM Mono, monospace');
+                if (displayFont) textFont(displayFont);
                 textSize(13);
                 textAlign(CENTER, TOP);
                 text('throw me', tipX, labelY);
