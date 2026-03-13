@@ -167,7 +167,7 @@
     .cash-badge,
     .round-badge,
     .card-name {
-      font-size: 0.8rem;
+      font-size: 1rem;
     }
 
     h1,
@@ -193,7 +193,7 @@
 
     .marquee h1 {
       position: relative;
-      font-size: clamp(2.8rem, 8vw, 5.6rem);
+      font-size: clamp(2.8rem, 8vw, 4.2rem);
       line-height: 0.9;
       color: #fff3cf;
       text-shadow: none;
@@ -405,14 +405,30 @@
       min-height: 640px;
     }
 
+    .table-stage[data-result="win"] {
+      animation: table-win 620ms ease;
+    }
+
+    .table-stage[data-result="loss"] {
+      animation: table-loss 420ms ease;
+    }
+
+    .table-stage[data-result="push"] {
+      animation: table-push 520ms ease;
+    }
+
     .table-stage::before {
       content: "";
       position: absolute;
       inset: 0;
       background:
-        repeating-linear-gradient(90deg, transparent 0 35px, var(--felt-line) 35px 37px),
-        repeating-linear-gradient(0deg, transparent 0 35px, rgba(0, 0, 0, 0.08) 35px 37px);
-      opacity: 0.36;
+        radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.08), transparent 24%),
+        radial-gradient(circle at 78% 18%, rgba(255, 227, 153, 0.05), transparent 22%),
+        radial-gradient(circle at 50% 78%, rgba(0, 0, 0, 0.12), transparent 34%),
+        linear-gradient(90deg, transparent 0%, rgba(255, 241, 195, 0.06) 26%, transparent 54%, rgba(0, 0, 0, 0.08) 78%, transparent 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.12));
+      background-repeat: no-repeat;
+      opacity: 0.46;
       pointer-events: none;
     }
 
@@ -422,6 +438,88 @@
       inset: 12px;
       border: 3px dashed rgba(255, 241, 195, 0.18);
       pointer-events: none;
+    }
+
+    .result-fx {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .result-fx::before,
+    .result-fx::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .result-fx::before {
+      content: attr(data-label);
+      inset: auto 0 50%;
+      transform: translateY(50%) scale(0.88);
+      text-align: center;
+      font-family: "PixelCowboy", serif;
+      font-size: clamp(2.2rem, 7vw, 4.8rem);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .result-fx::after {
+      background:
+        repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 255, 255, 0.08) 18px 22px),
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.16), transparent 56%);
+      mix-blend-mode: screen;
+    }
+
+    .result-fx.win {
+      background:
+        radial-gradient(circle at center, rgba(255, 235, 123, 0.42), transparent 44%),
+        repeating-radial-gradient(circle at center, rgba(255, 208, 80, 0.22) 0 10px, transparent 10px 24px);
+      animation: result-win 760ms ease;
+    }
+
+    .result-fx.win::before {
+      color: #fff7bf;
+      text-shadow: 0 0 0 #784006, 4px 4px 0 #784006, 8px 8px 0 rgba(59, 21, 4, 0.6);
+      animation: result-text 900ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    }
+
+    .result-fx.win::after {
+      animation: result-scan 720ms ease;
+    }
+
+    .result-fx.loss {
+      background: radial-gradient(circle at center, rgba(255, 77, 68, 0.26), transparent 55%);
+      animation: result-loss 520ms ease;
+    }
+
+    .result-fx.loss::before {
+      color: #ffd3cd;
+      text-shadow: 0 0 0 #67110f, 4px 4px 0 #67110f, 8px 8px 0 rgba(42, 8, 7, 0.62);
+      animation: result-text 620ms ease;
+    }
+
+    .result-fx.loss::after {
+      animation: result-scan 520ms ease;
+    }
+
+    .result-fx.push {
+      background: radial-gradient(circle at center, rgba(114, 198, 255, 0.22), transparent 50%);
+      animation: result-push 620ms ease;
+    }
+
+    .result-fx.push::before {
+      color: #ecfaff;
+      text-shadow: 0 0 0 #17425d, 4px 4px 0 #17425d, 8px 8px 0 rgba(8, 28, 41, 0.56);
+      animation: result-text 760ms ease;
+    }
+
+    .result-fx.push::after {
+      animation: result-scan 620ms ease;
     }
 
     .dealer-strip {
@@ -493,7 +591,7 @@
       box-shadow: 0 8px 0 rgba(0, 0, 0, 0.2);
       text-align: left;
       transform-origin: center bottom;
-      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease, border-color 120ms ease;
     }
 
     .card.selectable:hover {
@@ -517,6 +615,37 @@
       box-shadow: 0 14px 0 rgba(0, 0, 0, 0.2), 0 0 0 4px rgba(255, 212, 99, 0.3);
     }
 
+    .card.flipping {
+      animation: card-flip-in 420ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      animation-delay: var(--flip-delay, 0ms);
+      animation-fill-mode: both;
+      backface-visibility: hidden;
+      transform-style: preserve-3d;
+    }
+
+    .card.winner {
+      transform: translateY(-14px);
+      border-color: #a91818;
+      background: linear-gradient(180deg, #fff2ef, #edd3cc);
+      box-shadow: 0 16px 0 rgba(0, 0, 0, 0.18), 0 0 0 4px rgba(216, 35, 35, 0.22), 0 0 22px rgba(255, 70, 70, 0.28);
+      filter: saturate(1.08);
+      animation: winner-pop 420ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      animation-fill-mode: both;
+    }
+
+    .card.flipping.winner {
+      animation:
+        card-flip-in 420ms cubic-bezier(0.18, 0.89, 0.32, 1.28),
+        winner-pop 420ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      animation-delay: var(--flip-delay, 0ms), calc(var(--flip-delay, 0ms) + 180ms);
+      animation-fill-mode: both, both;
+    }
+
+    .card.pending-draw.back {
+      box-shadow: 0 8px 0 rgba(0, 0, 0, 0.2), inset 0 0 0 3px rgba(255, 235, 164, 0.3);
+      filter: brightness(0.95) saturate(0.88);
+    }
+
     .card.back {
       justify-content: center;
       align-items: center;
@@ -530,16 +659,19 @@
     }
 
     .card.back::after {
-      font-size: 0.74rem;
+      font-size: 0.92rem;
       content: "PALACE";
-      text-shadow: 1px, 1px 0 #57100d;
+      letter-spacing: 0.14em;
+      color: #fff6d5;
+      text-shadow: 0 0 0 #5a130f, 2px 2px 0 #5a130f, 0 0 10px rgba(255, 219, 127, 0.22);
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 82%;
-      height: 82%;
+      width: 90%;
+      height: 90%;
       border: 3px solid rgba(255, 241, 188, 0.55);
-      background: rgba(20, 4, 4, 0.32);
+      background: linear-gradient(180deg, rgba(26, 8, 8, 0.56), rgba(14, 5, 5, 0.72));
+      box-shadow: inset 0 0 0 2px rgba(255, 233, 170, 0.12);
     }
 
     .card-corner {
@@ -586,6 +718,11 @@
       white-space: nowrap;
     }
 
+    .bet-adjust[hidden],
+    .bet-presets[hidden] {
+      display: none;
+    }
+
     .showdown-bar {
       position: relative;
       z-index: 1;
@@ -608,6 +745,27 @@
       border: 3px solid rgba(255, 223, 140, 0.2);
     }
 
+    .round-badge.win {
+      background: rgba(255, 219, 90, 0.22);
+      border-color: rgba(255, 232, 136, 0.4);
+      color: #fff8dd;
+      animation: badge-win 640ms ease;
+    }
+
+    .round-badge.loss {
+      background: rgba(188, 33, 24, 0.28);
+      border-color: rgba(255, 149, 149, 0.24);
+      color: #ffe0da;
+      animation: badge-loss 420ms ease;
+    }
+
+    .round-badge.push {
+      background: rgba(90, 177, 255, 0.18);
+      border-color: rgba(170, 221, 255, 0.24);
+      color: #e7f6ff;
+      animation: badge-push 520ms ease;
+    }
+
     .phase-copy {
       color: #fff6df;
       line-height: 1.45;
@@ -627,6 +785,93 @@
       margin-top: 6px;
       font-size: 1.12rem;
       color: #fff6db;
+    }
+
+    @keyframes card-flip-in {
+      0% {
+        opacity: 0;
+        transform: perspective(900px) rotateY(-90deg) translateY(18px) scale(0.92);
+        filter: brightness(1.22);
+      }
+      100% {
+        opacity: 1;
+        transform: perspective(900px) rotateY(0deg) translateY(0) scale(1);
+        filter: brightness(1);
+      }
+    }
+
+    @keyframes table-win {
+      0% { box-shadow: inset 0 0 0 rgba(255, 232, 129, 0); }
+      40% { box-shadow: inset 0 0 80px rgba(255, 219, 96, 0.22); }
+      100% { box-shadow: inset 0 0 0 rgba(255, 232, 129, 0); }
+    }
+
+    @keyframes table-loss {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-5px); }
+      40% { transform: translateX(5px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+
+    @keyframes table-push {
+      0% { box-shadow: inset 0 0 0 rgba(122, 204, 255, 0); }
+      50% { box-shadow: inset 0 0 56px rgba(122, 204, 255, 0.18); }
+      100% { box-shadow: inset 0 0 0 rgba(122, 204, 255, 0); }
+    }
+
+    @keyframes result-win {
+      0% { opacity: 0; transform: scale(0.92); }
+      25% { opacity: 1; }
+      100% { opacity: 0; transform: scale(1.1); }
+    }
+
+    @keyframes result-loss {
+      0% { opacity: 0; }
+      35% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes result-push {
+      0% { opacity: 0; transform: scale(0.96); }
+      45% { opacity: 1; }
+      100% { opacity: 0; transform: scale(1.05); }
+    }
+
+    @keyframes result-text {
+      0% { opacity: 0; transform: translateY(50%) scale(0.7); }
+      28% { opacity: 1; transform: translateY(50%) scale(1.04); }
+      100% { opacity: 0; transform: translateY(50%) scale(1.12); }
+    }
+
+    @keyframes result-scan {
+      0% { opacity: 0; transform: scale(0.94); }
+      30% { opacity: 0.72; }
+      100% { opacity: 0; transform: scale(1.05); }
+    }
+
+    @keyframes winner-pop {
+      0% { transform: translateY(-4px) scale(0.96); }
+      60% { transform: translateY(-18px) scale(1.04); }
+      100% { transform: translateY(-14px) scale(1); }
+    }
+
+    @keyframes badge-win {
+      0% { transform: scale(0.96); }
+      50% { transform: scale(1.06); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes badge-loss {
+      0%, 100% { transform: translateX(0); }
+      30% { transform: translateX(-3px); }
+      60% { transform: translateX(3px); }
+    }
+
+    @keyframes badge-push {
+      0% { transform: scale(0.97); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
     }
 
     .history-list,
@@ -709,7 +954,17 @@
       border: 3px solid rgba(255, 240, 194, 0.18);
       background: #27120b;
       background-position: center;
+      background-repeat: no-repeat;
       border-radius: 2px;
+      box-shadow: inset 0 0 0 2px rgba(255, 240, 194, 0.08);
+    }
+
+    .item-preview.table-preview {
+      background-size: 100% 100%;
+    }
+
+    .item-preview.back-preview {
+      background-size: 24px 24px, 24px 24px, 100% 100%;
     }
 
     .item-meta {
@@ -895,25 +1150,27 @@
             <strong id="cashBadge" class="cash-value">$200</strong>
           </div>
 
-          <div class="bank-grid">
-            <div class="stat-card">
-              <div class="stat-label">Current Bet</div>
-              <div id="betValue" class="stat-value">$10</div>
+            <div class="bank-grid">
+              <div class="stat-card">
+                <div class="stat-label">Raise Bet</div>
+                <div id="betValue" class="stat-value">$0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Deck Left</div>
+                <div id="deckLeft" class="stat-value">52 cards</div>
+              </div>
             </div>
-            <div class="stat-card">
-              <div class="stat-label">Deck Left</div>
-              <div id="deckLeft" class="stat-value">52 cards</div>
-            </div>
-          </div>
 
           <div class="bet-controls">
-            <div class="bet-adjust">
-              <button id="betDown" class="mini-button" type="button" aria-label="Decrease bet">-5</button>
-              <div id="betDisplay" class="bet-display">$10 ante</div>
-              <button id="betUp" class="mini-button" type="button" aria-label="Increase bet">+5</button>
+            <div id="betDisplay" class="bet-display">$10 table ante</div>
+
+            <div id="betAdjust" class="bet-adjust" hidden>
+              <button id="betDown" class="mini-button" type="button" aria-label="Decrease raise">-5</button>
+              <div class="bet-display">Tap chips or +/-</div>
+              <button id="betUp" class="mini-button" type="button" aria-label="Increase raise">+5</button>
             </div>
 
-            <div id="betPresets" class="bet-presets">
+            <div id="betPresets" class="bet-presets" hidden>
               <button class="bet-chip" type="button" data-bet="5">$5</button>
               <button class="bet-chip" type="button" data-bet="10">$10</button>
               <button class="bet-chip" type="button" data-bet="25">$25</button>
@@ -924,7 +1181,6 @@
 
             <div class="action-stack">
               <button id="primaryAction" class="action-button" type="button">Deal Hand</button>
-              <button id="secondaryAction" class="action-button secondary" type="button" hidden>Fold Hand</button>
             </div>
           </div>
 
@@ -952,7 +1208,8 @@
       </section>
 
       <section class="panel table-shell">
-        <div class="table-stage">
+        <div id="tableStage" class="table-stage">
+          <div id="resultFx" class="result-fx" aria-hidden="true"></div>
           <div class="dealer-strip">
             <div class="dealer-badge" id="dealerBadge">Cactus Cal</div>
             <p class="dealer-note" id="dealerNote">"Hold the good ones. Toss the junk. Try not to blink when I do the draw."</p>
@@ -969,7 +1226,7 @@
           <div class="showdown-bar">
             <div>
               <div id="roundBadge" class="round-badge">Ready for a new hand</div>
-              <p id="phaseCopy" class="phase-copy">Set an ante, deal, tap cards to hold, then draw for the showdown.</p>
+              <p id="phaseCopy" class="phase-copy">Pay the ante, deal, hold what you like, then raise after the cards hit the table.</p>
             </div>
             <div class="pot-box">
               Pot
@@ -1018,6 +1275,10 @@
   <script>
     const SAVE_KEY = "poker-palace-save-v1";
     const MAX_HISTORY = 7;
+    const TABLE_ANTE = 10;
+    const DEALER_DRAW_DELAY = 950;
+    const WINNER_HIGHLIGHT_DELAY = 220;
+    const SHOWDOWN_FX_DELAY = 1050;
 
     const FULL_DECK = [
       { id: "AS", rank: "A", value: 14, suit: "spades", suitName: "Spades", suitGlyph: "&spades;", color: "black" },
@@ -1099,7 +1360,8 @@
 
     const runtime = {
       phase: "idle",
-      bet: 10,
+      bet: TABLE_ANTE,
+      raise: 0,
       pot: 0,
       playerHand: [],
       dealerHand: [],
@@ -1107,19 +1369,29 @@
       dealerHolds: [false, false, false, false, false],
       playerEval: null,
       dealerEval: null,
+      winningPlayerIndices: [],
+      winningDealerIndices: [],
+      flipPlayerIndices: [],
+      flipDealerIndices: [],
+      resultTone: "",
+      fxTone: "",
       deck: [],
       roundBadge: "Ready for a new hand",
-      phaseCopy: "Set an ante, deal, tap cards to hold, then draw for the showdown.",
+      phaseCopy: "Set an ante, deal, hold what you like, then raise after the cards hit the table.",
       dealerNote: "\"Hold the good ones. Toss the junk. Try not to blink when I do the draw.\""
     };
 
     let saveData = loadSave();
+    let dealerDrawTimer = null;
+    let winnerHighlightTimer = null;
+    let resultFxTimer = null;
 
     const els = {
       cashBadge: document.getElementById("cashBadge"),
       betValue: document.getElementById("betValue"),
       deckLeft: document.getElementById("deckLeft"),
       betDisplay: document.getElementById("betDisplay"),
+      betAdjust: document.getElementById("betAdjust"),
       winsValue: document.getElementById("winsValue"),
       lossesValue: document.getElementById("lossesValue"),
       tiesValue: document.getElementById("tiesValue"),
@@ -1128,7 +1400,6 @@
       betUp: document.getElementById("betUp"),
       betPresets: document.getElementById("betPresets"),
       primaryAction: document.getElementById("primaryAction"),
-      secondaryAction: document.getElementById("secondaryAction"),
       bailoutButton: document.getElementById("bailoutButton"),
       dealerCards: document.getElementById("dealerCards"),
       playerCards: document.getElementById("playerCards"),
@@ -1140,7 +1411,9 @@
       storeSections: document.getElementById("storeSections"),
       historyList: document.getElementById("historyList"),
       dealerBadge: document.getElementById("dealerBadge"),
-      dealerNote: document.getElementById("dealerNote")
+      dealerNote: document.getElementById("dealerNote"),
+      tableStage: document.getElementById("tableStage"),
+      resultFx: document.getElementById("resultFx")
     };
 
     function loadSave() {
@@ -1194,6 +1467,54 @@
       return "$" + Math.max(0, Math.floor(value));
     }
 
+    function cancelDealerDrawTimer() {
+      if (dealerDrawTimer !== null) {
+        window.clearTimeout(dealerDrawTimer);
+        dealerDrawTimer = null;
+      }
+    }
+
+    function cancelResultFxTimer() {
+      if (resultFxTimer !== null) {
+        window.clearTimeout(resultFxTimer);
+        resultFxTimer = null;
+      }
+    }
+
+    function cancelWinnerHighlightTimer() {
+      if (winnerHighlightTimer !== null) {
+        window.clearTimeout(winnerHighlightTimer);
+        winnerHighlightTimer = null;
+      }
+    }
+
+    function scheduleWinnerHighlight(playerIndices, dealerIndices) {
+      cancelWinnerHighlightTimer();
+      winnerHighlightTimer = window.setTimeout(() => {
+        winnerHighlightTimer = null;
+        runtime.winningPlayerIndices = playerIndices.slice();
+        runtime.winningDealerIndices = dealerIndices.slice();
+        renderTable();
+      }, WINNER_HIGHLIGHT_DELAY);
+    }
+
+    function scheduleResultFx(tone) {
+      cancelResultFxTimer();
+      resultFxTimer = window.setTimeout(() => {
+        resultFxTimer = null;
+        runtime.fxTone = tone;
+        renderTable();
+      }, SHOWDOWN_FX_DELAY);
+    }
+
+    function scheduleDealerDraw() {
+      cancelDealerDrawTimer();
+      dealerDrawTimer = window.setTimeout(() => {
+        dealerDrawTimer = null;
+        resolveDealerDraw();
+      }, DEALER_DRAW_DELAY);
+    }
+
     function clampBet(nextBet) {
       if (saveData.cash <= 0) {
         return 0;
@@ -1204,6 +1525,24 @@
     function setBet(nextBet) {
       runtime.bet = clampBet(nextBet);
       renderSidebar();
+    }
+
+    function clampRaise(nextRaise) {
+      return Math.max(0, Math.min(Math.floor(nextRaise), saveData.cash));
+    }
+
+    function setRaise(nextRaise) {
+      runtime.raise = clampRaise(nextRaise);
+      renderSidebar();
+      renderTable();
+    }
+
+    function totalStake() {
+      return TABLE_ANTE + runtime.raise;
+    }
+
+    function displayPot() {
+      return runtime.phase === "player" ? runtime.pot + runtime.raise * 2 : runtime.pot;
     }
 
     function createDeck() {
@@ -1335,6 +1674,38 @@
       return cards.map((card, index) => index === highestIndex);
     }
 
+    function winningIndices(cards, evaluation) {
+      const indexesByValue = new Map();
+      cards.forEach((card, index) => {
+        const bucket = indexesByValue.get(card.value) || [];
+        bucket.push(index);
+        indexesByValue.set(card.value, bucket);
+      });
+
+      if (evaluation.rank >= 4 || evaluation.rank === 6) {
+        return cards.map((card, index) => index);
+      }
+
+      if (evaluation.rank === 7) {
+        return indexesByValue.get(evaluation.tiebreak[0]) || [];
+      }
+
+      if (evaluation.rank === 3) {
+        return indexesByValue.get(evaluation.tiebreak[0]) || [];
+      }
+
+      if (evaluation.rank === 2) {
+        return [...(indexesByValue.get(evaluation.tiebreak[0]) || []), ...(indexesByValue.get(evaluation.tiebreak[1]) || [])];
+      }
+
+      if (evaluation.rank === 1) {
+        return indexesByValue.get(evaluation.tiebreak[0]) || [];
+      }
+
+      const highValue = evaluation.tiebreak[0];
+      return indexesByValue.get(highValue) || [0];
+    }
+
     function applyCosmetics() {
       const tableItem = STORE_BY_ID[saveData.active.table];
       const backItem = STORE_BY_ID[saveData.active.back];
@@ -1356,20 +1727,18 @@
     }
 
     function startRound() {
-      if (saveData.cash <= 0) {
-        runtime.roundBadge = "No bankroll";
-        runtime.phaseCopy = "You are broke. Take the bailout or buy fewer hats.";
+      cancelDealerDrawTimer();
+      cancelWinnerHighlightTimer();
+      cancelResultFxTimer();
+
+      if (saveData.cash < TABLE_ANTE) {
+        runtime.roundBadge = "Short stack";
+        runtime.phaseCopy = "You need " + formatMoney(TABLE_ANTE) + " for the table ante. Take the bailout or spend less in the store.";
         renderAll();
         return;
       }
 
-      runtime.bet = clampBet(runtime.bet || 10);
-      if (runtime.bet <= 0) {
-        runtime.roundBadge = "Bad ante";
-        runtime.phaseCopy = "You need at least $1 to deal a hand.";
-        renderAll();
-        return;
-      }
+      runtime.bet = TABLE_ANTE;
 
       runtime.deck = shuffleDeck(createDeck());
       runtime.playerHand = [];
@@ -1384,78 +1753,141 @@
       runtime.dealerHolds = chooseDealerHolds(runtime.dealerHand);
       runtime.playerEval = evaluateHand(runtime.playerHand);
       runtime.dealerEval = null;
-      runtime.phase = "draw";
-      runtime.pot = runtime.bet * 2;
-      saveData.cash -= runtime.bet;
+      runtime.phase = "player";
+      runtime.raise = 0;
+      runtime.pot = TABLE_ANTE * 2;
+      runtime.winningPlayerIndices = [];
+      runtime.winningDealerIndices = [];
+      runtime.flipPlayerIndices = [0, 1, 2, 3, 4];
+      runtime.flipDealerIndices = [0, 1, 2, 3, 4];
+      runtime.resultTone = "";
+      runtime.fxTone = "";
+      saveData.cash -= TABLE_ANTE;
       saveProgress();
 
       const dealerKeepCount = runtime.dealerHolds.filter(Boolean).length;
       runtime.roundBadge = "Pick your holds";
-      runtime.phaseCopy = "Tap any player card to hold it, then draw once. Dealer plans to keep " + dealerKeepCount + " card" + (dealerKeepCount === 1 ? "" : "s") + ".";
-      updateDealerTalk("\"I already know what I am keeping. You should too.\"");
+      runtime.phaseCopy = "Tap your holds, then choose a raise if you want. Dealer plans to hold " + dealerKeepCount + " card" + (dealerKeepCount === 1 ? "" : "s") + " before the draw.";
+      updateDealerTalk("\"I am keeping a few. You can buy a little courage before you draw.\"");
       renderAll();
     }
 
     function toggleHold(index) {
-      if (runtime.phase !== "draw") {
+      if (runtime.phase !== "player") {
         return;
       }
       runtime.playerHolds[index] = !runtime.playerHolds[index];
       renderTable();
     }
 
-    function revealHand(playerFolded) {
-      if (runtime.phase !== "draw") {
+    function commitPlayerDraw() {
+      if (runtime.phase !== "player") {
         return;
       }
 
-      if (!playerFolded) {
-        runtime.playerHand = runtime.playerHand.map((card, index) => (runtime.playerHolds[index] ? card : drawFromDeck(runtime.deck)));
-        runtime.dealerHand = runtime.dealerHand.map((card, index) => (runtime.dealerHolds[index] ? card : drawFromDeck(runtime.deck)));
+      cancelDealerDrawTimer();
+      cancelWinnerHighlightTimer();
+      cancelResultFxTimer();
+
+      if (runtime.raise > 0) {
+        saveData.cash -= runtime.raise;
+        runtime.pot += runtime.raise * 2;
       }
 
+      const playerFlips = [];
+      runtime.playerHand = runtime.playerHand.map((card, index) => {
+        if (runtime.playerHolds[index]) {
+          return card;
+        }
+        playerFlips.push(index);
+        return drawFromDeck(runtime.deck);
+      });
+      runtime.flipPlayerIndices = playerFlips;
+      runtime.flipDealerIndices = runtime.dealerHolds
+        .map((held, index) => held ? index : null)
+        .filter((index) => index !== null);
       runtime.playerEval = evaluateHand(runtime.playerHand);
+      runtime.phase = "dealer";
+      saveProgress();
+
+      const dealerHoldCount = runtime.dealerHolds.filter(Boolean).length;
+      const dealerDrawCount = runtime.dealerHolds.length - dealerHoldCount;
+      runtime.roundBadge = "Dealer phase";
+      runtime.phaseCopy = "Dealer locks " + dealerHoldCount + " card" + (dealerHoldCount === 1 ? "" : "s") + " and draws " + dealerDrawCount + " in a beat.";
+      updateDealerTalk("\"Your move is in. Watch the house do its little trick.\"");
+      renderAll();
+      scheduleDealerDraw();
+    }
+
+    function resolveDealerDraw() {
+      if (runtime.phase !== "dealer") {
+        return;
+      }
+
+      cancelDealerDrawTimer();
+      cancelWinnerHighlightTimer();
+      cancelResultFxTimer();
+
+      const dealerFlips = [];
+      runtime.dealerHand = runtime.dealerHand.map((card, index) => {
+        if (runtime.dealerHolds[index]) {
+          return card;
+        }
+        dealerFlips.push(index);
+        return drawFromDeck(runtime.deck);
+      });
+      runtime.flipDealerIndices = dealerFlips;
       runtime.dealerEval = evaluateHand(runtime.dealerHand);
       runtime.phase = "showdown";
       saveData.stats.games += 1;
+      const result = compareHands(runtime.playerEval, runtime.dealerEval);
+      const stake = totalStake();
+      let playerWinningIndices = [];
+      let dealerWinningIndices = [];
 
-      if (playerFolded) {
+      runtime.winningPlayerIndices = [];
+      runtime.winningDealerIndices = [];
+
+      if (result > 0) {
+        saveData.cash += runtime.pot;
+        saveData.stats.wins += 1;
+        runtime.resultTone = "win";
+        runtime.roundBadge = "You win";
+        runtime.phaseCopy = runtime.playerEval.label + " beats " + runtime.dealerEval.label + ". You scoop " + formatMoney(runtime.pot) + ".";
+        updateDealerTalk("\"That one hurt. Nice pull.\"");
+        playerWinningIndices = winningIndices(runtime.playerHand, runtime.playerEval);
+        pushHistory(runtime.playerEval.label + " over " + runtime.dealerEval.label, stake, "win");
+      } else if (result < 0) {
         saveData.stats.losses += 1;
-        runtime.roundBadge = "Folded";
-        runtime.phaseCopy = "You dumped the hand and lost your ante. Dealer shows " + runtime.dealerEval.label + ".";
-        updateDealerTalk("\"Sometimes the best card is the one you never paid to see.\"");
-        pushHistory("Folded into " + runtime.dealerEval.label, -runtime.bet, "loss");
+        runtime.resultTone = "loss";
+        runtime.roundBadge = "Dealer wins";
+        runtime.phaseCopy = runtime.dealerEval.label + " beats your " + runtime.playerEval.label + ". The house keeps " + formatMoney(stake) + ".";
+        updateDealerTalk("\"House loves a patient draw.\"");
+        dealerWinningIndices = winningIndices(runtime.dealerHand, runtime.dealerEval);
+        pushHistory(runtime.dealerEval.label + " over " + runtime.playerEval.label, -stake, "loss");
       } else {
-        const result = compareHands(runtime.playerEval, runtime.dealerEval);
-        if (result > 0) {
-          saveData.cash += runtime.pot;
-          saveData.stats.wins += 1;
-          runtime.roundBadge = "You win";
-          runtime.phaseCopy = runtime.playerEval.label + " beats " + runtime.dealerEval.label + ". You scoop " + formatMoney(runtime.pot) + ".";
-          updateDealerTalk("\"That one hurt. Nice pull.\"");
-          pushHistory(runtime.playerEval.label + " over " + runtime.dealerEval.label, runtime.pot - runtime.bet, "win");
-        } else if (result < 0) {
-          saveData.stats.losses += 1;
-          runtime.roundBadge = "Dealer wins";
-          runtime.phaseCopy = runtime.dealerEval.label + " beats your " + runtime.playerEval.label + ". Your ante stays on the table.";
-          updateDealerTalk("\"House loves a patient draw.\"");
-          pushHistory(runtime.dealerEval.label + " over " + runtime.playerEval.label, -runtime.bet, "loss");
-        } else {
-          saveData.cash += runtime.bet;
-          saveData.stats.ties += 1;
-          runtime.roundBadge = "Push";
-          runtime.phaseCopy = "Both hands land on " + runtime.playerEval.label + ". Your ante comes back.";
-          updateDealerTalk("\"Same bones, same smoke, same split pot.\"");
-          pushHistory("Push with " + runtime.playerEval.label, 0, "push");
-        }
+        saveData.cash += stake;
+        saveData.stats.ties += 1;
+        runtime.resultTone = "push";
+        runtime.roundBadge = "Push";
+        runtime.phaseCopy = "Both hands land on " + runtime.playerEval.label + ". Your full stake comes back.";
+        updateDealerTalk("\"Same bones, same smoke, same split pot.\"");
+        playerWinningIndices = winningIndices(runtime.playerHand, runtime.playerEval);
+        dealerWinningIndices = winningIndices(runtime.dealerHand, runtime.dealerEval);
+        pushHistory("Push with " + runtime.playerEval.label, 0, "push");
       }
 
       saveProgress();
-      runtime.bet = clampBet(runtime.bet);
+      runtime.bet = TABLE_ANTE;
       renderAll();
+      scheduleWinnerHighlight(playerWinningIndices, dealerWinningIndices);
+      scheduleResultFx(runtime.resultTone);
     }
 
     function resetToIdle() {
+      cancelDealerDrawTimer();
+      cancelWinnerHighlightTimer();
+      cancelResultFxTimer();
       runtime.phase = "idle";
       runtime.pot = 0;
       runtime.deck = [];
@@ -1465,10 +1897,17 @@
       runtime.dealerHolds = [false, false, false, false, false];
       runtime.playerEval = null;
       runtime.dealerEval = null;
+      runtime.raise = 0;
+      runtime.winningPlayerIndices = [];
+      runtime.winningDealerIndices = [];
+      runtime.flipPlayerIndices = [];
+      runtime.flipDealerIndices = [];
+      runtime.resultTone = "";
+      runtime.fxTone = "";
       runtime.roundBadge = "Ready for a new hand";
-      runtime.phaseCopy = "Set an ante, deal, tap cards to hold, then draw for the showdown.";
+      runtime.phaseCopy = "Every hand starts with a fixed " + formatMoney(TABLE_ANTE) + " ante. Deal, hold what you like, then pick a raise.";
       updateDealerTalk("\"Fresh shuffle. Same bad intentions.\"");
-      runtime.bet = clampBet(runtime.bet || 10);
+      runtime.bet = TABLE_ANTE;
       renderAll();
     }
 
@@ -1488,7 +1927,7 @@
       equipItem(itemId, false);
       pushHistory("Bought " + item.name, -item.price, "loss");
       saveProgress();
-      runtime.bet = clampBet(runtime.bet || 10);
+      runtime.bet = TABLE_ANTE;
       runtime.roundBadge = "Purchase complete";
       runtime.phaseCopy = item.name + " is now yours. Cosmetics pull from the same bankroll as the table.";
       updateDealerTalk("\"That paint job cost chips you could have gambled. Respect.\"");
@@ -1513,7 +1952,7 @@
     function takeBailout() {
       saveData.cash += 100;
       saveProgress();
-      runtime.bet = clampBet(Math.max(runtime.bet, 10));
+      runtime.bet = TABLE_ANTE;
       runtime.roundBadge = "Pit boss bailout";
       runtime.phaseCopy = "A rough hundred bucks appeared under the felt. Try not to spend it all on card backs.";
       updateDealerTalk("\"Do not make me explain that loan to accounting.\"");
@@ -1525,8 +1964,11 @@
         startRound();
         return;
       }
-      if (runtime.phase === "draw") {
-        revealHand(false);
+      if (runtime.phase === "player") {
+        commitPlayerDraw();
+        return;
+      }
+      if (runtime.phase === "dealer") {
         return;
       }
       resetToIdle();
@@ -1534,22 +1976,29 @@
 
     function cardMarkup(card, index, options) {
       const classes = ["card"];
+      const styleBits = [];
       if (card.color === "red") classes.push("red");
       if (options.hidden) classes.push("back");
       if (options.selectable) classes.push("selectable");
       if (options.held) classes.push("held");
+      if (options.pendingDraw) classes.push("pending-draw");
+      if (options.flip) classes.push("flipping");
+      if (options.winner) classes.push("winner");
+      if (options.flip) styleBits.push("--flip-delay:" + (index * 45) + "ms");
+
+      const styleAttr = styleBits.length ? " style=\"" + styleBits.join(";") + "\"" : "";
 
       if (options.hidden) {
-        return "<button type=\"button\" class=\"" + classes.join(" ") + "\" disabled aria-label=\"Hidden dealer card\"></button>";
+        return "<button type=\"button\" class=\"" + classes.join(" ") + "\"" + styleAttr + " disabled aria-label=\"Hidden dealer card\">" + (options.tagText ? "<span class=\"hold-tag\">" + options.tagText + "</span>" : "") + "</button>";
       }
 
       return [
-        "<button type=\"button\" class=\"" + classes.join(" ") + "\" data-index=\"" + index + "\" " + (options.selectable ? "" : "disabled ") + "aria-label=\"" + card.rank + " of " + card.suitName + "\">",
+        "<button type=\"button\" class=\"" + classes.join(" ") + "\" data-index=\"" + index + "\"" + styleAttr + " " + (options.selectable ? "" : "disabled ") + "aria-label=\"" + card.rank + " of " + card.suitName + "\">",
         "<span class=\"card-corner top\"><strong>" + card.rank + "</strong><span>" + card.suitGlyph + "</span></span>",
         "<span class=\"card-center\">" + card.suitGlyph + "</span>",
         "<span class=\"card-name\">" + card.rank + " of " + card.suitName + "</span>",
         "<span class=\"card-corner bottom\"><strong>" + card.rank + "</strong><span>" + card.suitGlyph + "</span></span>",
-        options.selectable ? "<span class=\"hold-tag\">" + (options.held ? "Held" : "Tap to hold") + "</span>" : "",
+        options.tagText ? "<span class=\"hold-tag\">" + options.tagText + "</span>" : "",
         "</button>"
       ].join("");
     }
@@ -1563,48 +2012,98 @@
     }
 
     function renderTable() {
-      const dealerHidden = runtime.phase === "draw";
-      renderCards(els.dealerCards, runtime.dealerHand, () => ({ hidden: dealerHidden, selectable: false, held: false }));
-      renderCards(els.playerCards, runtime.playerHand, (index) => ({ hidden: false, selectable: runtime.phase === "draw", held: runtime.playerHolds[index] }));
-      els.dealerRank.textContent = dealerHidden ? "Hidden hand" : (runtime.dealerEval ? runtime.dealerEval.label : "Waiting");
+      const dealerWinnerSet = new Set(runtime.winningDealerIndices);
+      const playerWinnerSet = new Set(runtime.winningPlayerIndices);
+      const dealerFlipSet = new Set(runtime.flipDealerIndices);
+      const playerFlipSet = new Set(runtime.flipPlayerIndices);
+
+      renderCards(els.dealerCards, runtime.dealerHand, (index) => {
+        if (runtime.phase === "player") {
+          return { hidden: true, selectable: false, held: false, flip: dealerFlipSet.has(index), tagText: "" };
+        }
+        if (runtime.phase === "dealer") {
+          return runtime.dealerHolds[index]
+            ? { hidden: false, selectable: false, held: true, tagText: "Hold", flip: dealerFlipSet.has(index), winner: false }
+            : { hidden: true, selectable: false, held: false, pendingDraw: true, tagText: "Draw", flip: false };
+        }
+        return { hidden: false, selectable: false, held: false, flip: dealerFlipSet.has(index), winner: dealerWinnerSet.has(index), tagText: dealerWinnerSet.has(index) ? "Win" : "" };
+      });
+
+      renderCards(els.playerCards, runtime.playerHand, (index) => ({
+        hidden: false,
+        selectable: runtime.phase === "player",
+        held: runtime.playerHolds[index],
+        flip: playerFlipSet.has(index),
+        winner: playerWinnerSet.has(index),
+        tagText: runtime.phase === "player" ? (runtime.playerHolds[index] ? "Held" : "Tap to hold") : (playerWinnerSet.has(index) ? "Win" : "")
+      }));
+
+      els.dealerRank.textContent = runtime.phase === "player"
+        ? "Hidden hand"
+        : runtime.phase === "dealer"
+          ? "Holding " + runtime.dealerHolds.filter(Boolean).length + " / Drawing " + (5 - runtime.dealerHolds.filter(Boolean).length)
+          : (runtime.dealerEval ? runtime.dealerEval.label : "Waiting");
       els.playerRank.textContent = runtime.playerEval ? runtime.playerEval.label : "No hand yet";
       els.roundBadge.textContent = runtime.roundBadge;
+      els.roundBadge.className = "round-badge" + (runtime.resultTone ? " " + runtime.resultTone : "");
       els.phaseCopy.textContent = runtime.phaseCopy;
-      els.potAmount.textContent = formatMoney(runtime.pot);
+      els.potAmount.textContent = formatMoney(displayPot());
       els.dealerNote.textContent = runtime.dealerNote;
       els.deckLeft.textContent = runtime.phase === "idle" ? "52 cards" : runtime.deck.length + " cards";
+      els.tableStage.dataset.result = runtime.fxTone || "";
+      els.resultFx.className = "result-fx" + (runtime.fxTone ? " " + runtime.fxTone : "");
+      els.resultFx.dataset.label = runtime.fxTone === "win"
+        ? "Big Win"
+        : runtime.fxTone === "loss"
+          ? "House Win"
+          : runtime.fxTone === "push"
+            ? "Push"
+            : "";
     }
 
     function renderSidebar() {
+      const canAdjustRaise = runtime.phase === "player";
+      const displayedRaise = runtime.phase === "player" || runtime.phase === "dealer" || runtime.phase === "showdown" ? runtime.raise : 0;
+
       els.cashBadge.textContent = formatMoney(saveData.cash);
-      els.betValue.textContent = formatMoney(runtime.bet || 0);
-      els.betDisplay.textContent = formatMoney(runtime.bet || 0) + " ante";
+      els.betValue.textContent = formatMoney(displayedRaise);
+      els.betDisplay.textContent = runtime.phase === "player"
+        ? "Place a bet"
+        : runtime.phase === "dealer"
+          ? (runtime.raise > 0 ? "Dealer drawing on a locked " + formatMoney(runtime.raise) + " raise." : "Dealer drawing on the fixed " + formatMoney(TABLE_ANTE) + " ante.")
+          : runtime.phase === "showdown"
+            ? (runtime.raise > 0 ? "Last raise: " + formatMoney(runtime.raise) : "No raise on the last hand.")
+            : formatMoney(TABLE_ANTE) + " table ante";
       els.winsValue.textContent = String(saveData.stats.wins);
       els.lossesValue.textContent = String(saveData.stats.losses);
       els.tiesValue.textContent = String(saveData.stats.ties);
       els.gamesValue.textContent = String(saveData.stats.games);
 
-      const canAdjustBet = runtime.phase === "idle" || runtime.phase === "showdown";
-      els.betDown.disabled = !canAdjustBet || saveData.cash <= 0;
-      els.betUp.disabled = !canAdjustBet || saveData.cash <= 0;
+      els.betAdjust.hidden = !canAdjustRaise;
+      els.betPresets.hidden = !canAdjustRaise;
+      els.betDown.disabled = !canAdjustRaise || runtime.raise <= 0;
+      els.betUp.disabled = !canAdjustRaise || saveData.cash <= 0;
       Array.from(els.betPresets.querySelectorAll("[data-bet]")).forEach((button) => {
         const rawBet = button.getAttribute("data-bet");
-        const numericBet = rawBet === "max" ? clampBet(saveData.cash) : clampBet(Number(rawBet));
-        button.disabled = !canAdjustBet || saveData.cash <= 0;
-        button.classList.toggle("active", numericBet === runtime.bet && saveData.cash > 0);
+        const exactAmount = rawBet === "max" ? saveData.cash : Number(rawBet);
+        const numericBet = rawBet === "max" ? clampRaise(saveData.cash) : clampRaise(exactAmount);
+        button.disabled = !canAdjustRaise || exactAmount > saveData.cash || numericBet <= 0;
+        button.classList.toggle("active", numericBet === runtime.raise && (rawBet === "max" || runtime.raise === exactAmount));
       });
 
       if (runtime.phase === "idle") {
-        els.primaryAction.textContent = "Deal Hand";
-      } else if (runtime.phase === "draw") {
-        els.primaryAction.textContent = "Draw Cards";
+        els.primaryAction.textContent = "Deal " + formatMoney(TABLE_ANTE) + " Hand";
+      } else if (runtime.phase === "player") {
+        els.primaryAction.textContent = "Draw My Cards";
+      } else if (runtime.phase === "dealer") {
+        els.primaryAction.textContent = "Dealer Drawing...";
       } else {
         els.primaryAction.textContent = "Next Hand";
       }
 
-      els.primaryAction.disabled = runtime.phase === "idle" && saveData.cash <= 0;
-      els.secondaryAction.hidden = runtime.phase !== "draw";
-      els.bailoutButton.hidden = saveData.cash > 0;
+      els.primaryAction.disabled = (runtime.phase === "idle" && saveData.cash < TABLE_ANTE) || runtime.phase === "dealer";
+      els.primaryAction.hidden = runtime.phase === "dealer";
+      els.bailoutButton.hidden = saveData.cash >= TABLE_ANTE;
     }
 
     function renderStore() {
@@ -1620,9 +2119,10 @@
           const actionLabel = active ? "Equipped" : owned ? "Equip" : "Buy";
           const actionDisabled = active ? "disabled" : "";
           const headerLabel = active ? "Live now" : owned ? "Owned" : formatMoney(item.price);
+          const previewClass = item.type === "table" ? "table-preview" : "back-preview";
           return [
             "<div class=\"store-item" + (active ? " active" : "") + "\">",
-            "<div class=\"item-preview\" style=\"background:" + item.preview + "; background-size: 24px 24px, 24px 24px, 100% 100%;\"></div>",
+            "<div class=\"item-preview " + previewClass + "\" style=\"background:" + item.preview + ";\"></div>",
             "<div class=\"item-meta\">",
             "<div class=\"item-name-row\"><strong class=\"item-name\">" + item.name + "</strong><span class=\"price-tag\">" + headerLabel + "</span></div>",
             "<div class=\"item-copy\">" + item.description + "</div>",
@@ -1656,31 +2156,33 @@
       renderTable();
       renderStore();
       renderHistory();
+      runtime.flipPlayerIndices = [];
+      runtime.flipDealerIndices = [];
     }
 
     els.betDown.addEventListener("click", () => {
-      if (runtime.phase !== "draw") {
-        setBet((runtime.bet || 1) - 5);
+      if (runtime.phase === "player") {
+        setRaise(runtime.raise - 5);
       }
     });
 
     els.betUp.addEventListener("click", () => {
-      if (runtime.phase !== "draw") {
-        setBet((runtime.bet || 0) + 5);
+      if (runtime.phase === "player") {
+        setRaise(runtime.raise + 5);
       }
     });
 
     els.betPresets.addEventListener("click", (event) => {
       const button = event.target.closest("[data-bet]");
-      if (!button || runtime.phase === "draw") {
+      if (!button || runtime.phase !== "player") {
         return;
       }
       const raw = button.getAttribute("data-bet");
-      setBet(raw === "max" ? saveData.cash : Number(raw));
+      const amount = raw === "max" ? saveData.cash : Number(raw);
+      setRaise(amount);
     });
 
     els.primaryAction.addEventListener("click", handlePrimaryAction);
-    els.secondaryAction.addEventListener("click", () => revealHand(true));
     els.bailoutButton.addEventListener("click", takeBailout);
 
     els.playerCards.addEventListener("click", (event) => {
@@ -1704,7 +2206,7 @@
       }
     });
 
-    runtime.bet = clampBet(runtime.bet);
+    runtime.bet = TABLE_ANTE;
     renderAll();
     resetToIdle();
   </script>
