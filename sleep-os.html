@@ -91,19 +91,19 @@ body {
   z-index: 500;
 }
 .desktop-icon {
-  width: 72px; height: 72px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  padding: 3px; cursor: default;
+  width: 80px; height: 80px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 4px; cursor: default;
   border: 1px solid transparent;
   user-select: none; overflow: hidden;
 }
 .desktop-icon:hover { border: 1px dotted rgba(255,255,255,0.55); background: rgba(0,0,128,0.28); }
 .desktop-icon.selected { border: 1px dotted #fff; background: rgba(0,0,128,0.5); }
-.di-img { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.di-img { font-size: 26px; line-height: 1; flex-shrink: 0; }
 .di-name {
   font-size: 10px; color: #fff;
   text-align: center; text-shadow: 1px 1px 1px #000;
-  word-break: break-word; line-height: 1.2;
+  word-break: normal; overflow-wrap: anywhere; line-height: 1.2;
   max-height: 2.4em; overflow: hidden;
 }
 .desktop-icon.selected .di-name { background: #000080; }
@@ -1200,8 +1200,8 @@ body.idle-sleeping { cursor:none; }
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 14px; }
 
-  .desktop-icon { width: 72px; height: 72px; padding: 4px; gap: 3px; }
-  .di-img { font-size: 26px; }
+  .desktop-icon { width: 80px; height: 80px; padding: 5px; gap: 4px; }
+  .di-img { font-size: 28px; }
   .di-name { font-size: 10px; }
 
   #taskbar { height: 44px; padding: 3px; }
@@ -1759,6 +1759,28 @@ try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) ||
 const REG_KEY = 'sleepOS-registry';
 const SYSTEM_WALLPAPER_DIR = 'SYS\\WALLPAPERS';
 const DEFAULT_WALLPAPER_PATH = SYSTEM_WALLPAPER_DIR + '\\DEFAULT.JPG';
+const USER_VIDEO_DIR = 'VIDEOS';
+const STARTUP_EXPLORER_PATH = USER_VIDEO_DIR;
+const PRELOADED_VIDEO_BASE_URL = 'https://pub-1e78b32b6c14474da39103ed015fc3c9.r2.dev';
+function encodeAssetPath(path) {
+  return String(path || '')
+    .split('/')
+    .map(part => encodeURIComponent(part))
+    .join('/');
+}
+function getPreloadedVideoAssetUrl(objectName, fallbackLocalName) {
+  if (PRELOADED_VIDEO_BASE_URL) {
+    return PRELOADED_VIDEO_BASE_URL.replace(/\/+$/, '') + '/' + encodeAssetPath(objectName);
+  }
+  return encodeAssetPath('videos/' + (fallbackLocalName || objectName));
+}
+const SEEDED_HOME_MEDIA = [
+  { path: USER_VIDEO_DIR + '\\bunnies and furry friends.mp4', assetUrl: getPreloadedVideoAssetUrl('bunnies and furry friends.mp4'), mime: 'video/mp4', size: 421218044 },
+  { path: USER_VIDEO_DIR + '\\Dragonball_HG_EP01.mp4', assetUrl: getPreloadedVideoAssetUrl('Dragonball_HG_EP01.mp4'), mime: 'video/mp4', size: 306739027 },
+  { path: USER_VIDEO_DIR + '\\lain.mp4', assetUrl: getPreloadedVideoAssetUrl('lain-web.mp4'), mime: 'video/mp4', size: 269121971 },
+  { path: USER_VIDEO_DIR + '\\Tcz62PMls-I.webm', assetUrl: getPreloadedVideoAssetUrl('Tcz62PMls-I.webm'), mime: 'video/webm', size: 2295519 },
+  { path: USER_VIDEO_DIR + '\\Theory Of Angel.mkv', assetUrl: getPreloadedVideoAssetUrl('Theory Of Angel.mkv'), mime: 'video/x-matroska', size: 31040788 },
+];
 const LEGACY_BUILTIN_WALLPAPER_IDS = new Set(['default', 'magicant', 'hills', 'battle', 'summers', 'saturn', 'cave']);
 const SEEDED_WALLPAPERS = [
   { path: DEFAULT_WALLPAPER_PATH, label: 'Default', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/default.jpg', mime: 'image/jpeg' },
@@ -3021,6 +3043,21 @@ function refreshSeededWallpaperLibrary() {
   });
 }
 
+function refreshSeededHomeMedia() {
+  SEEDED_HOME_MEDIA.forEach(item => {
+    const { dirName, fileName } = fsSplitPath(item.path);
+    if (!fileName) return;
+    const dir = ensureFsDir(dirName);
+    dir.blobs.set(fileName, {
+      url: item.assetUrl,
+      kind: 'video',
+      size: item.size || 0,
+      mime: item.mime,
+      seeded: true,
+    });
+  });
+}
+
 function saveFS() {
   try {
     const data = { dirs: [...termFS.dirs], files: {}, subdirs: {} };
@@ -3110,6 +3147,7 @@ function loadFS() {
   if (!raw) {
     refreshSeededDocs();
     refreshSeededWallpaperLibrary();
+    refreshSeededHomeMedia();
     return;
   }
   try {
@@ -3119,6 +3157,7 @@ function loadFS() {
     if (data.subdirs) Object.entries(data.subdirs).forEach(([k, v]) => termFS.subdirs.set(k, _desDir(v)));
     refreshSeededDocs();
     refreshSeededWallpaperLibrary();
+    refreshSeededHomeMedia();
   } catch(e) { /* corrupted save — ignore */ }
 }
 
@@ -6359,8 +6398,8 @@ function getDesktopFsIcons() {
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICON GRID
 // ─────────────────────────────────────────────────────────────────
-const ICON_CELL_W  = 78;   // px per grid cell (horizontal)
-const ICON_CELL_H  = 78;   // px per grid cell (vertical)
+const ICON_CELL_W  = 86;   // px per grid cell (horizontal)
+const ICON_CELL_H  = 86;   // px per grid cell (vertical)
 const ICON_PAD_X   = 6;    // layer left/right padding
 const ICON_PAD_Y   = 6;    // layer top/bottom padding
 const ICON_POS_KEY = 'sleepOS-icon-positions';
@@ -6556,10 +6595,6 @@ function makeDesktopIconEl(ic) {
     div.classList.add('selected');
     desktopSel.add(div);
     if (e.pointerType !== 'mouse') { activate(); return; }
-    if (ic.recycleBin) {
-      queueActivateClick();
-      return;
-    }
 
     // Drag-to-rearrange tracking
     const startClientX = e.clientX, startClientY = e.clientY;
@@ -6780,13 +6815,13 @@ function setupIcons() {
 
   const allIcons = [...getVisibleDesktopIcons(), ...getDesktopFsIcons(), ...getDesktopShortcutsForDir('DESKTOP')];
   const recycleIcon = allIcons.find(ic => ic.recycleBin);
-  const otherIcons = recycleIcon ? allIcons.filter(ic => ic !== recycleIcon) : allIcons;
   const saved    = (() => { try { return JSON.parse(localStorage.getItem(ICON_POS_KEY) || '{}'); } catch { return {}; } })();
-  const defaults = iconDefaultPositions(otherIcons);
+  const defaults = iconDefaultPositions(allIcons.filter(ic => !ic.recycleBin));
+  if (recycleIcon) defaults[recycleIcon.name] = iconRecycleBinCell();
   const hasSavedPosition = ic => {
     const entry = saved[ic.name];
     if (!entry || !Number.isFinite(entry.col) || !Number.isFinite(entry.row)) return false;
-    return !isDesktopBuiltInIcon(ic) || entry.manual === true;
+    return ic.recycleBin || !isDesktopBuiltInIcon(ic) || entry.manual === true;
   };
   const assignPosition = ic => {
     const preferred = hasSavedPosition(ic) ? saved[ic.name] : (defaults[ic.name] || { col: 0, row: 0 });
@@ -6794,9 +6829,8 @@ function setupIcons() {
     iconPositions[ic.name] = saved[ic.name]?.manual === true ? { col, row, manual: true } : { col, row };
   };
   iconPositions  = {};
-  if (recycleIcon) iconPositions[recycleIcon.name] = iconRecycleBinCell();
-  otherIcons.filter(hasSavedPosition).forEach(assignPosition);
-  otherIcons.filter(ic => !hasSavedPosition(ic)).forEach(assignPosition);
+  allIcons.filter(hasSavedPosition).forEach(assignPosition);
+  allIcons.filter(ic => !hasSavedPosition(ic)).forEach(assignPosition);
   saveIconPositions();
 
   allIcons.forEach(ic => {
@@ -6909,22 +6943,12 @@ window.addEventListener('resize', () => {
     const { cols, rows } = iconGetGridSize();
     const layer = document.getElementById('icons-layer');
     const occupied = new Set();
-    const recyclePos = iconRecycleBinCell();
-    const recycleEl = layer.querySelector('[data-icon-key="' + CSS.escape(RECYCLE_BIN_NAME) + '"]');
-    if (recycleEl) {
-      iconPositions[RECYCLE_BIN_NAME] = recyclePos;
-      occupied.add(recyclePos.col + ',' + recyclePos.row);
-      const { left, top } = iconCellToPixel(recyclePos.col, recyclePos.row);
-      recycleEl.style.left = left + 'px';
-      recycleEl.style.top = top + 'px';
-    }
-    // Process icons in their current column-row order to avoid cascading collisions
     const entries = Object.entries(iconPositions)
-      .filter(([name]) => name !== RECYCLE_BIN_NAME)
       .sort(([, a], [, b]) => a.col - b.col || a.row - b.row);
     entries.forEach(([name, pos]) => {
-      let col = Math.min(pos.col, cols - 1);
-      let row = Math.min(pos.row, rows - 1);
+      const preferred = name === RECYCLE_BIN_NAME && !pos.manual ? iconRecycleBinCell() : pos;
+      let col = Math.min(preferred.col, cols - 1);
+      let row = Math.min(preferred.row, rows - 1);
       let k   = col + ',' + row;
       while (occupied.has(k)) {
         row++; if (row >= rows) { row = 0; col++; }
@@ -12327,6 +12351,7 @@ function startDesktop() {
   applyDaemonVisualState();
   setupIcons();
   armIdleSleep();
+  openExplorer(STARTUP_EXPLORER_PATH);
 }
 </script>
 </body>

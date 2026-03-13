@@ -31,6 +31,9 @@ temp/
 audio/server-hum-generator.js
 audio/interference.mp3
 
+# Local video files
+videos/
+
 # Documentation and workspace
 docs/
 .claude/
