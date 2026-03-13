@@ -897,10 +897,18 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
   cursor: default; line-height: 1;
   border: 2px solid; border-color: #fff #808080 #808080 #fff;
   display: flex; align-items: center; justify-content: center;
+  font-family: "Segoe UI Symbol", "Arial Unicode MS", var(--sleep-font);
+  transform: translateY(-1px);
 }
 .vp-btn:hover  { background: #d4d0c8; color: #111; }
-.vp-btn:active { border-color: #808080 #fff #fff #808080; padding-top: 1px; }
-.vp-btn-play   { min-width: 32px; font-size: 18px; }
+.vp-btn:active { border-color: #808080 #fff #fff #808080; transform: translateY(0); }
+.vp-btn.active {
+  border-color: #808080 #fff #fff #808080;
+  background: #d4d0c8;
+  color: #000080;
+  transform: translateY(0);
+}
+.vp-btn-play   { min-width: 32px; font-size: 16px; padding-bottom: 1px; }
 .vp-divider    { width: 1px; height: 18px; background: #808080; box-shadow: 1px 0 0 #fff; margin: 0 4px; flex-shrink: 0; }
 .vp-spacer     { flex: 1; }
 .vp-vol {
@@ -918,13 +926,84 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
   cursor: default; white-space: nowrap; letter-spacing: 0;
   color: #222; background: #fff;
   border: 2px solid; border-color: #808080 #fff #fff #808080;
+  flex-shrink: 0;
 }
 .vp-meta {
+  flex: 0 1 120px;
+  min-width: 0;
   font-size: 10px; color: #4a4a4a;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-left: 4px;
 }
 .vp-spacer { flex: 1; }
-
+.ap-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  background: linear-gradient(180deg, #d9d7ca 0%, #b9b5a7 100%);
+}
+.ap-screen-head {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ap-screen-icon {
+  font-size: 28px;
+  line-height: 1;
+  color: #000080;
+  text-shadow: 1px 1px 0 #fff;
+}
+.ap-screen-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 1px;
+}
+.ap-screen-label {
+  font-size: 9px;
+  color: #3c3c3c;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ap-screen-title {
+  font-size: 12px;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ap-screen-path {
+  font-size: 10px;
+  color: #3f3f3f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ap-loop-indicator {
+  min-width: 34px;
+  padding: 4px 8px;
+  font-size: 14px;
+  line-height: 1;
+  text-align: center;
+  color: #3c3c3c;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  font-family: "Segoe UI Symbol", "Arial Unicode MS", var(--sleep-font);
+}
+.ap-loop-indicator.active {
+  color: #000080;
+  background: #e8e5d9;
+}
 /* Video player */
 .st-panel { padding: 10px 12px; display: flex; flex-direction: column; gap: 0; }
 .st-section { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #808080; margin: 10px 0 4px; border-bottom: 1px solid #d0d0d0; padding-bottom: 2px; }
@@ -1565,6 +1644,53 @@ function getShellDragPayload() {
 function clearShellDragPayload() {
   _shellDragPayload = null;
 }
+function buildShellDragPayload(item, srcCwd, source, extra) {
+  const raw = Array.isArray(extra?.items) && extra.items.length ? extra.items : [item];
+  const items = [];
+  raw.forEach(candidate => {
+    if (candidate && !items.includes(candidate)) items.push(candidate);
+  });
+  return {
+    ...(extra || {}),
+    item: item || items[0] || null,
+    items,
+    srcCwd,
+    source,
+  };
+}
+function getShellDragItems(payload) {
+  if (!payload) return [];
+  const raw = Array.isArray(payload.items) && payload.items.length ? payload.items : [payload.item];
+  return raw.filter((item, index) => item && raw.indexOf(item) === index);
+}
+function shellDragIncludesItem(payload, item) {
+  return !!item && getShellDragItems(payload).includes(item);
+}
+function canMoveShellPayloadToDir(payload, dstDirPath) {
+  const items = getShellDragItems(payload);
+  return !!items.length && items.every(item => canMoveShellItemToDir(item, payload.srcCwd, dstDirPath));
+}
+function moveShellPayloadToDir(payload, dstDirPath) {
+  const items = getShellDragItems(payload);
+  if (!items.length || !canMoveShellPayloadToDir(payload, dstDirPath)) return false;
+  let moved = 0;
+  items.forEach(item => { if (moveShellItemToDir(item, payload.srcCwd, dstDirPath)) moved++; });
+  return moved === items.length;
+}
+function canRecycleShellPayload(payload) {
+  const items = getShellDragItems(payload);
+  return !!items.length && items.every(item => canRecycleShellItem(item, payload.srcCwd));
+}
+function recycleShellPayload(payload) {
+  const items = getShellDragItems(payload);
+  if (!items.length || !canRecycleShellPayload(payload)) return false;
+  let recycled = 0;
+  items.forEach(item => {
+    const result = recycleShellItem(item, payload.srcCwd);
+    if (result.ok) recycled++;
+  });
+  return recycled === items.length;
+}
 const SYSTEM_FILE_ICONS = DESKTOP_ICONS.reduce((icons, { name, emoji }) => {
   icons[name.toUpperCase()] = emoji;
   return icons;
@@ -1760,26 +1886,29 @@ const REG_KEY = 'sleepOS-registry';
 const SYSTEM_WALLPAPER_DIR = 'SYS\\WALLPAPERS';
 const DEFAULT_WALLPAPER_PATH = SYSTEM_WALLPAPER_DIR + '\\DEFAULT.JPG';
 const USER_VIDEO_DIR = 'VIDEOS';
-const STARTUP_EXPLORER_PATH = USER_VIDEO_DIR;
-const PRELOADED_VIDEO_BASE_URL = 'https://pub-1e78b32b6c14474da39103ed015fc3c9.r2.dev';
+const USER_MUSIC_DIR = 'MUSIC';
+const PRELOADED_MEDIA_BASE_URL = 'https://pub-1e78b32b6c14474da39103ed015fc3c9.r2.dev';
 function encodeAssetPath(path) {
   return String(path || '')
     .split('/')
     .map(part => encodeURIComponent(part))
     .join('/');
 }
-function getPreloadedVideoAssetUrl(objectName, fallbackLocalName) {
-  if (PRELOADED_VIDEO_BASE_URL) {
-    return PRELOADED_VIDEO_BASE_URL.replace(/\/+$/, '') + '/' + encodeAssetPath(objectName);
+function getPreloadedAssetUrl(objectName, fallbackLocalPath) {
+  if (PRELOADED_MEDIA_BASE_URL) {
+    return PRELOADED_MEDIA_BASE_URL.replace(/\/+$/, '') + '/' + encodeAssetPath(objectName);
   }
-  return encodeAssetPath('videos/' + (fallbackLocalName || objectName));
+  return encodeAssetPath(fallbackLocalPath || objectName);
 }
 const SEEDED_HOME_MEDIA = [
-  { path: USER_VIDEO_DIR + '\\bunnies and furry friends.mp4', assetUrl: getPreloadedVideoAssetUrl('bunnies and furry friends.mp4'), mime: 'video/mp4', size: 421218044 },
-  { path: USER_VIDEO_DIR + '\\Dragonball_HG_EP01.mp4', assetUrl: getPreloadedVideoAssetUrl('Dragonball_HG_EP01.mp4'), mime: 'video/mp4', size: 306739027 },
-  { path: USER_VIDEO_DIR + '\\lain.mp4', assetUrl: getPreloadedVideoAssetUrl('lain-web.mp4'), mime: 'video/mp4', size: 269121971 },
-  { path: USER_VIDEO_DIR + '\\Tcz62PMls-I.webm', assetUrl: getPreloadedVideoAssetUrl('Tcz62PMls-I.webm'), mime: 'video/webm', size: 2295519 },
-  { path: USER_VIDEO_DIR + '\\Theory Of Angel.mkv', assetUrl: getPreloadedVideoAssetUrl('Theory Of Angel.mkv'), mime: 'video/x-matroska', size: 31040788 },
+  { path: USER_VIDEO_DIR + '\\bunnies and furry friends.mp4', assetUrl: getPreloadedAssetUrl('bunnies and furry friends.mp4', 'videos/bunnies and furry friends.mp4'), kind: 'video', mime: 'video/mp4', size: 421218044 },
+  { path: USER_VIDEO_DIR + '\\Dragonball_HG_EP01.mp4', assetUrl: getPreloadedAssetUrl('Dragonball_HG_EP01.mp4', 'videos/Dragonball_HG_EP01.mp4'), kind: 'video', mime: 'video/mp4', size: 306739027 },
+  { path: USER_VIDEO_DIR + '\\lain.mp4', assetUrl: getPreloadedAssetUrl('lain-web.mp4', 'videos/lain-web.mp4'), kind: 'video', mime: 'video/mp4', size: 269121971 },
+  { path: USER_VIDEO_DIR + '\\Tcz62PMls-I.webm', assetUrl: getPreloadedAssetUrl('Tcz62PMls-I.webm', 'videos/Tcz62PMls-I.webm'), kind: 'video', mime: 'video/webm', size: 2295519 },
+  { path: USER_VIDEO_DIR + '\\Theory Of Angel.mkv', assetUrl: getPreloadedAssetUrl('Theory Of Angel.mkv', 'videos/Theory Of Angel.mkv'), kind: 'video', mime: 'video/x-matroska', size: 31040788 },
+  { path: USER_MUSIC_DIR + '\\hum.wav', assetUrl: getPreloadedAssetUrl('hum.wav', 'audio/hum.wav'), kind: 'audio', mime: 'audio/wav', size: 12815618, author: 'Alex McCulloch' },
+  { path: USER_MUSIC_DIR + '\\Hello There.mp3', assetUrl: getPreloadedAssetUrl('Hello There.mp3', 'audio/Hello there.mp3'), kind: 'audio', mime: 'audio/mpeg', size: 735225, author: 'Alex McCulloch' },
+  { path: USER_MUSIC_DIR + '\\Space++.mp3', assetUrl: getPreloadedAssetUrl('Space++.mp3', 'audio/Space++.mp3'), kind: 'audio', mime: 'audio/mpeg', size: 5753711, author: 'Alex McCulloch' },
 ];
 const LEGACY_BUILTIN_WALLPAPER_IDS = new Set(['default', 'magicant', 'hills', 'battle', 'summers', 'saturn', 'cave']);
 const SEEDED_WALLPAPERS = [
@@ -3050,9 +3179,10 @@ function refreshSeededHomeMedia() {
     const dir = ensureFsDir(dirName);
     dir.blobs.set(fileName, {
       url: item.assetUrl,
-      kind: 'video',
+      kind: item.kind || inferBlobKindFromName(fileName),
       size: item.size || 0,
       mime: item.mime,
+      author: item.author || '',
       seeded: true,
     });
   });
@@ -5815,7 +5945,7 @@ function openVideoPlayer(filename, dirName) {
     timeEl.textContent = fmtT(video.currentTime);
     if (!seek._dragging && video.duration) { seek.value = (video.currentTime / video.duration) * 1000; updateSeekGradient(); }
   });
-  video.addEventListener('play',         () => { btnPlay.textContent = '\u23F8'; overlay.style.opacity = '0'; });
+  video.addEventListener('play',         () => { btnPlay.textContent = '❚❚'; overlay.style.opacity = '0'; });
   video.addEventListener('pause',        () => { btnPlay.textContent = '\u25B6'; overlay.style.opacity = '0.35'; });
   video.addEventListener('ended',        () => { btnPlay.textContent = '\u25B6'; overlay.style.opacity = '1'; });
   video.addEventListener('volumechange', renderVol);
@@ -5857,6 +5987,197 @@ function openAudioPlayer(filename, dirName) {
   const audio = document.createElement('audio');
   audio.src = blob.url; audio.controls = true; audio.style.width = '100%';
   body.appendChild(audio);
+}
+
+function openAudioPlayer(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
+  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const id = 'aud-' + pathKey.replace(/\W/g,'_');
+  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' — Media Player', icon: '🎵', w: 420, h: 240 })) return;
+
+  const body = document.getElementById('wb-' + id);
+  const ws = document.getElementById('ws-' + id);
+  const mb = document.getElementById('mb-' + id);
+  const author = String(blob.author || '').trim();
+
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const shell = document.createElement('div'); shell.className = 'vp-shell';
+  const screen = document.createElement('div'); screen.className = 'vp-screen ap-screen';
+  const screenHead = document.createElement('div'); screenHead.className = 'ap-screen-head';
+  const iconEl = document.createElement('div'); iconEl.className = 'ap-screen-icon'; iconEl.textContent = '♫';
+  const metaWrap = document.createElement('div'); metaWrap.className = 'ap-screen-meta';
+  const labelEl = document.createElement('div'); labelEl.className = 'ap-screen-label'; labelEl.textContent = 'SleepOS Audio Deck';
+  const titleEl = document.createElement('div'); titleEl.className = 'ap-screen-title'; titleEl.textContent = iconLabel(entry.fileName);
+  const pathEl = document.createElement('div'); pathEl.className = 'ap-screen-path'; pathEl.textContent = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  metaWrap.appendChild(labelEl);
+  metaWrap.appendChild(titleEl);
+  if (author) {
+    const authorEl = document.createElement('div');
+    authorEl.className = 'ap-screen-path';
+    authorEl.textContent = 'Author: ' + author;
+    metaWrap.appendChild(authorEl);
+  }
+  metaWrap.appendChild(pathEl);
+  const loopIndicator = document.createElement('div'); loopIndicator.className = 'ap-loop-indicator'; loopIndicator.textContent = '↻';
+  screenHead.appendChild(iconEl);
+  screenHead.appendChild(metaWrap);
+  screenHead.appendChild(loopIndicator);
+  screen.appendChild(screenHead);
+
+  const bar = document.createElement('div'); bar.className = 'vp-bar';
+  const seekRow = document.createElement('div'); seekRow.className = 'vp-seek-row';
+  const timeEl = document.createElement('div'); timeEl.className = 'vp-time'; timeEl.textContent = '0:00';
+  const durEl = document.createElement('div'); durEl.className = 'vp-time vp-dur'; durEl.textContent = '0:00';
+  const seek = document.createElement('input'); seek.type = 'range'; seek.className = 'vp-seek';
+  seek.min = 0; seek.max = 1000; seek.value = 0;
+  seekRow.appendChild(timeEl);
+  seekRow.appendChild(seek);
+  seekRow.appendChild(durEl);
+
+  const btnRow = document.createElement('div'); btnRow.className = 'vp-btn-row';
+  const mkBtn = (txt, title, cls, fn) => {
+    const b = document.createElement('div');
+    b.className = 'vp-btn' + (cls ? ' ' + cls : '');
+    b.textContent = txt;
+    b.title = title;
+    b.addEventListener('click', fn);
+    return b;
+  };
+  const div = (cls) => { const d = document.createElement('div'); d.className = cls; return d; };
+
+  const audio = document.createElement('audio');
+  audio.src = blob.url;
+  audio.preload = 'metadata';
+  audio.style.display = 'none';
+
+  const btnRew = mkBtn('⏮', 'Back 10s', '', () => { audio.currentTime = Math.max(0, audio.currentTime - 10); });
+  const btnPlay = mkBtn('▶', 'Play/Pause', 'vp-btn-play', () => audio.paused ? audio.play() : audio.pause());
+  const btnStop = mkBtn('⏹', 'Stop', '', () => { audio.pause(); audio.currentTime = 0; });
+  const btnFwd = mkBtn('⏭', 'Forward 10s', '', () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); });
+  const btnLoop = mkBtn('↻', 'Toggle Loop', '', () => {
+    audio.loop = !audio.loop;
+    renderLoop();
+  });
+  const muteBtn = mkBtn('🔊', 'Mute', '', () => {
+    audio.muted = !audio.muted;
+    muteBtn.textContent = audio.muted ? '🔇' : '🔊';
+    renderVol();
+  });
+  const volEl = document.createElement('div'); volEl.className = 'vp-vol-blocks'; volEl.title = 'Volume';
+  const metaEl = document.createElement('div'); metaEl.className = 'vp-meta';
+  metaEl.textContent = iconLabel(entry.fileName) + '  ·  ' + fmtSize(blob.size) + (author ? '  ·  ' + author : '');
+
+  btnRow.appendChild(btnRew);
+  btnRow.appendChild(btnPlay);
+  btnRow.appendChild(btnStop);
+  btnRow.appendChild(btnFwd);
+  btnRow.appendChild(div('vp-divider'));
+  btnRow.appendChild(btnLoop);
+  btnRow.appendChild(div('vp-divider'));
+  btnRow.appendChild(muteBtn);
+  btnRow.appendChild(volEl);
+  btnRow.appendChild(div('vp-spacer'));
+  btnRow.appendChild(metaEl);
+
+  bar.appendChild(seekRow);
+  bar.appendChild(btnRow);
+  shell.appendChild(screen);
+  shell.appendChild(bar);
+  shell.appendChild(audio);
+  body.appendChild(shell);
+
+  function fmtT(s) {
+    if (!isFinite(s)) return '0:00';
+    return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  }
+  function updateSeekGradient() {
+    const pct = seek.max > 0 ? (seek.value / seek.max * 100).toFixed(1) + '%' : '0%';
+    seek.style.setProperty('--pct', pct);
+  }
+  function renderVol() {
+    const v = audio.muted ? 0 : audio.volume;
+    const filled = Math.round(v * 10);
+    const on = Array(filled + 1).join('&#9632;');
+    const off = Array(10 - filled + 1).join('&#9643;');
+    volEl.innerHTML = `<span style="color:#000080">${on}</span><span style="color:#6a6a6a">${off}</span>`;
+  }
+  function renderLoop() {
+    btnLoop.classList.toggle('active', audio.loop);
+    loopIndicator.classList.toggle('active', audio.loop);
+  }
+  function setVolFromX(clientX) {
+    const r = volEl.getBoundingClientRect();
+    audio.volume = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    audio.muted = false;
+    muteBtn.textContent = '🔊';
+    renderVol();
+  }
+
+  let volDrag = false;
+  function syncPlayingState() {
+    btnPlay.textContent = audio.paused ? '▶' : '❚❚';
+  }
+
+  renderVol();
+  renderLoop();
+  updateSeekGradient();
+
+  audio.addEventListener('loadedmetadata', () => { durEl.textContent = fmtT(audio.duration); });
+  audio.addEventListener('timeupdate', () => {
+    timeEl.textContent = fmtT(audio.currentTime);
+    if (!seek._dragging && audio.duration) {
+      seek.value = (audio.currentTime / audio.duration) * 1000;
+      updateSeekGradient();
+    }
+  });
+  audio.addEventListener('play', syncPlayingState);
+  audio.addEventListener('pause', syncPlayingState);
+  audio.addEventListener('ended', syncPlayingState);
+  audio.addEventListener('volumechange', renderVol);
+
+  seek.addEventListener('mousedown', () => { seek._dragging = true; });
+  seek.addEventListener('input', () => {
+    if (audio.duration) {
+      audio.currentTime = (seek.value / 1000) * audio.duration;
+      updateSeekGradient();
+    }
+  });
+  seek.addEventListener('mouseup', () => { seek._dragging = false; });
+
+  volEl.addEventListener('mousedown', e => { volDrag = true; setVolFromX(e.clientX); });
+  document.addEventListener('mousemove', e => { if (volDrag) setVolFromX(e.clientX); });
+  document.addEventListener('mouseup', () => { volDrag = false; });
+
+  if (ws) ws.textContent = iconLabel(entry.fileName) + '  —  ' + fmtSize(blob.size) + (author ? '  —  ' + author : '');
+  if (mb) {
+    [
+      { label: 'File', items: [{ label: 'Close', action: () => { audio.pause(); closeWin(id); } }] },
+      { label: 'Playback', items: [
+        { label: 'Play / Pause', action: () => audio.paused ? audio.play() : audio.pause() },
+        { label: 'Stop', action: () => { audio.pause(); audio.currentTime = 0; } },
+        '-',
+        { label: '⇦ Back 10s', action: () => { audio.currentTime = Math.max(0, audio.currentTime - 10); } },
+        { label: '⇨ Forward 10s', action: () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); } },
+        '-',
+        { label: () => (audio.loop ? 'Disable Loop' : 'Enable Loop'), action: () => { audio.loop = !audio.loop; renderLoop(); } },
+      ]},
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item';
+      span.textContent = label;
+      span.addEventListener('click', e => {
+        e.stopPropagation();
+        showDropdown(span, items.map(item => {
+          if (typeof item === 'string') return item;
+          if (typeof item.label === 'function') return { ...item, label: item.label() };
+          return item;
+        }));
+      });
+      mb.appendChild(span);
+    });
+  }
 }
 
 // Drag-and-drop onto the desktop
@@ -6398,24 +6719,52 @@ function getDesktopFsIcons() {
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICON GRID
 // ─────────────────────────────────────────────────────────────────
-const ICON_CELL_W  = 86;   // px per grid cell (horizontal)
-const ICON_CELL_H  = 86;   // px per grid cell (vertical)
+const ICON_CELL_W  = 86;   // minimum horizontal spacing between icon anchors
+const ICON_CELL_H  = 86;   // minimum vertical spacing between icon anchors
+const ICON_BOX_W   = 80;   // rendered desktop icon width
+const ICON_BOX_H   = 80;   // rendered desktop icon height
 const ICON_PAD_X   = 6;    // layer left/right padding
 const ICON_PAD_Y   = 6;    // layer top/bottom padding
 const ICON_POS_KEY = 'sleepOS-icon-positions';
 let iconPositions  = {};   // { ic.name: { col, row, manual? } }
 
-function iconGetGridSize() {
+function iconGetGridMetrics() {
   const layer = document.getElementById('icons-layer');
-  if (!layer) return { cols: 1, rows: 1 };
+  if (!layer) {
+    return {
+      cols: 1,
+      rows: 1,
+      stepX: 0,
+      stepY: 0,
+      padX: ICON_PAD_X,
+      padY: ICON_PAD_Y,
+    };
+  }
+  const availW = Math.max(ICON_BOX_W, layer.offsetWidth - ICON_PAD_X * 2);
+  const availH = Math.max(ICON_BOX_H, layer.offsetHeight - ICON_PAD_Y * 2);
+  const cols = Math.max(1, Math.floor((availW - ICON_BOX_W) / ICON_CELL_W) + 1);
+  const rows = Math.max(1, Math.floor((availH - ICON_BOX_H) / ICON_CELL_H) + 1);
   return {
-    cols: Math.max(1, Math.floor((layer.offsetWidth  - ICON_PAD_X * 2) / ICON_CELL_W)),
-    rows: Math.max(1, Math.floor((layer.offsetHeight - ICON_PAD_Y * 2) / ICON_CELL_H)),
+    cols,
+    rows,
+    stepX: cols > 1 ? (availW - ICON_BOX_W) / (cols - 1) : 0,
+    stepY: rows > 1 ? (availH - ICON_BOX_H) / (rows - 1) : 0,
+    padX: ICON_PAD_X,
+    padY: ICON_PAD_Y,
   };
 }
 
+function iconGetGridSize() {
+  const { cols, rows } = iconGetGridMetrics();
+  return { cols, rows };
+}
+
 function iconCellToPixel(col, row) {
-  return { left: ICON_PAD_X + col * ICON_CELL_W, top: ICON_PAD_Y + row * ICON_CELL_H };
+  const { stepX, stepY, padX, padY } = iconGetGridMetrics();
+  return {
+    left: Math.round(padX + col * stepX),
+    top: Math.round(padY + row * stepY),
+  };
 }
 
 function iconRecycleBinCell() {
@@ -6424,9 +6773,10 @@ function iconRecycleBinCell() {
 }
 
 function iconPixelToCell(px, py) {
+  const { cols, rows, stepX, stepY, padX, padY } = iconGetGridMetrics();
   return {
-    col: Math.floor((px - ICON_PAD_X + ICON_CELL_W / 2) / ICON_CELL_W),
-    row: Math.floor((py - ICON_PAD_Y + ICON_CELL_H / 2) / ICON_CELL_H),
+    col: Math.max(0, Math.min(cols - 1, stepX > 0 ? Math.round((px - padX) / stepX) : 0)),
+    row: Math.max(0, Math.min(rows - 1, stepY > 0 ? Math.round((py - padY) / stepY) : 0)),
   };
 }
 
@@ -6469,10 +6819,11 @@ function isDesktopBuiltInIcon(ic) {
   return !!ic && !ic.desktopEntry && !ic.custom && !ic.recycleBin;
 }
 
-function getDesktopFolderDropTarget(clientX, clientY, draggingIcon) {
+function getDesktopFolderDropTarget(clientX, clientY, draggingIcons) {
+  const draggingSet = new Set(Array.isArray(draggingIcons) ? draggingIcons : [draggingIcons].filter(Boolean));
   const folderEls = Array.from(document.querySelectorAll('#icons-layer .desktop-icon')).filter(el => {
     const targetIcon = el._ic;
-    if (!targetIcon || targetIcon === draggingIcon) return false;
+    if (!targetIcon || draggingSet.has(targetIcon)) return false;
     return !!targetIcon.desktopEntry && targetIcon.kind === 'dir';
   });
   for (const el of folderEls) {
@@ -6591,21 +6942,37 @@ function makeDesktopIconEl(ic) {
       clearTimeout(clickT);
       return;
     }
-    clearDesktopSel();
-    div.classList.add('selected');
-    desktopSel.add(div);
+    if (!desktopSel.has(div) || desktopSel.size <= 1) {
+      clearDesktopSel();
+      div.classList.add('selected');
+      desktopSel.add(div);
+    }
     if (e.pointerType !== 'mouse') { activate(); return; }
 
     // Drag-to-rearrange tracking
     const startClientX = e.clientX, startClientY = e.clientY;
-    const divRect = div.getBoundingClientRect();
     const layer   = document.getElementById('icons-layer');
     const lr      = layer.getBoundingClientRect();
-    const offX    = e.clientX - divRect.left;
-    const offY    = e.clientY - divRect.top;
-    const startCell = iconPositions[ic.name]
-      ? { col: iconPositions[ic.name].col, row: iconPositions[ic.name].row }
-      : iconPixelToCell(div.offsetLeft, div.offsetTop);
+    const draggedDivs = desktopSel.has(div) ? [...desktopSel] : [div];
+    const dragStates = draggedDivs.map(el => {
+      const rect = el.getBoundingClientRect();
+      const iconState = el._ic;
+      const currentPos = iconPositions[iconState.name];
+      return {
+        el,
+        ic: iconState,
+        startLeft: el.offsetLeft,
+        startTop: el.offsetTop,
+        offX: e.clientX - rect.left,
+        offY: e.clientY - rect.top,
+        startCell: currentPos
+          ? { col: currentPos.col, row: currentPos.row }
+          : iconPixelToCell(el.offsetLeft, el.offsetTop),
+      };
+    });
+    const primaryState = dragStates.find(state => state.el === div) || dragStates[0];
+    const draggedIcons = dragStates.map(state => state.ic);
+    const draggedPayload = buildShellDragPayload(ic, 'DESKTOP', 'desktop', { items: draggedIcons });
     let dragging  = false;
 
     const onMove = mv => {
@@ -6613,68 +6980,87 @@ function makeDesktopIconEl(ic) {
         if (Math.abs(mv.clientX - startClientX) > 5 || Math.abs(mv.clientY - startClientY) > 5) {
           dragging = true;
           clicks = 0; clearTimeout(clickT);
-          div.style.zIndex  = '999';
-          div.style.opacity = '0.75';
+          dragStates.forEach(state => {
+            state.el.style.zIndex = '999';
+            state.el.style.opacity = '0.75';
+          });
         }
       }
       if (dragging) {
         mv.preventDefault();
-        div.style.left = (mv.clientX - lr.left - offX) + 'px';
-        div.style.top  = (mv.clientY - lr.top  - offY) + 'px';
+        const dx = mv.clientX - startClientX;
+        const dy = mv.clientY - startClientY;
+        dragStates.forEach(state => {
+          state.el.style.left = (state.startLeft + dx) + 'px';
+          state.el.style.top  = (state.startTop + dy) + 'px';
+        });
       }
     };
     const onUp = up => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup',   onUp);
-      div.style.zIndex  = '';
-      div.style.opacity = '';
+      dragStates.forEach(state => {
+        state.el.style.zIndex = '';
+        state.el.style.opacity = '';
+      });
       if (dragging) {
         const recycleEl = document.querySelector('[data-icon-key="' + CSS.escape(RECYCLE_BIN_NAME) + '"]');
-        if (canDeleteDesktopFsEntry(ic) && recycleEl && recycleEl !== div) {
+        const canRecycleDragged = draggedIcons.length && draggedIcons.every(canDeleteDesktopFsEntry);
+        if (canRecycleDragged && recycleEl && !draggedDivs.includes(recycleEl)) {
           const rr = recycleEl.getBoundingClientRect();
           const overRecycleBin = up.clientX >= rr.left && up.clientX <= rr.right && up.clientY >= rr.top && up.clientY <= rr.bottom;
           if (overRecycleBin) {
-            const result = recycleDesktopItemAtPath(ic.target.path);
-            if (result.ok) {
+            const ok = draggedIcons.every(targetIcon => recycleDesktopItemAtPath(targetIcon.target.path).ok);
+            if (ok) {
               clearDesktopSel();
               return;
             }
           }
         }
-        const folderTarget = getDesktopFolderDropTarget(up.clientX, up.clientY, ic);
-        if (folderTarget && moveDesktopIconIntoFolder(ic, folderTarget)) {
+        const folderTarget = getDesktopFolderDropTarget(up.clientX, up.clientY, draggedIcons);
+        if (folderTarget && moveShellPayloadToDir(draggedPayload, folderTarget.target.path)) {
           clearDesktopSel();
           return;
         }
-        div.style.pointerEvents = 'none';
+        draggedDivs.forEach(stateEl => { stateEl.style.pointerEvents = 'none'; });
         const dropNode = document.elementFromPoint(up.clientX, up.clientY);
-        div.style.pointerEvents = '';
+        draggedDivs.forEach(stateEl => { stateEl.style.pointerEvents = ''; });
         const explorerItemEl = dropNode?.closest?.('.exp-item,.exp-list-item,.exp-det-item');
         const explorerPaneEl = dropNode?.closest?.('.exp-body');
         const explorerDrop = explorerItemEl?._shellDropHandler || explorerPaneEl?._shellDropHandler;
         if (explorerDrop) {
-          const ok = explorerDrop({ item: ic, srcCwd: 'DESKTOP', source: 'desktop' });
+          const ok = explorerDrop(draggedPayload);
           if (ok) {
             clearDesktopSel();
             return;
           }
         }
         if (dropNode?.closest?.('.os-window')) {
-          const { left, top } = iconCellToPixel(startCell.col, startCell.row);
-          div.style.left = left + 'px';
-          div.style.top = top + 'px';
+          dragStates.forEach(state => {
+            const { left, top } = iconCellToPixel(state.startCell.col, state.startCell.row);
+            state.el.style.left = left + 'px';
+            state.el.style.top = top + 'px';
+          });
           return;
         }
         // snap based on icon top-left corner position (Windows-style)
-        const iconLeft = up.clientX - lr.left - offX;
-        const iconTop  = up.clientY - lr.top  - offY;
+        const iconLeft = up.clientX - lr.left - primaryState.offX;
+        const iconTop  = up.clientY - lr.top  - primaryState.offY;
         const { col: wc, row: wr } = iconPixelToCell(iconLeft, iconTop);
-        const { col, row } = iconFindFreeCell(wc, wr, ic.name);
-        iconPositions[ic.name] = { col, row, manual: true };
+        dragStates.forEach(state => { delete iconPositions[state.ic.name]; });
+        dragStates
+          .slice()
+          .sort((a, b) => a.startCell.col - b.startCell.col || a.startCell.row - b.startCell.row)
+          .forEach(state => {
+            const wantCol = wc + (state.startCell.col - primaryState.startCell.col);
+            const wantRow = wr + (state.startCell.row - primaryState.startCell.row);
+            const { col, row } = iconFindFreeCell(wantCol, wantRow, state.ic.name);
+            iconPositions[state.ic.name] = { col, row, manual: true };
+            const { left, top } = iconCellToPixel(col, row);
+            state.el.style.left = left + 'px';
+            state.el.style.top  = top  + 'px';
+          });
         saveIconPositions();
-        const { left, top } = iconCellToPixel(col, row);
-        div.style.left = left + 'px';
-        div.style.top  = top  + 'px';
       } else {
         queueActivateClick();
       }
@@ -6752,10 +7138,10 @@ function makeDesktopIconEl(ic) {
     const setDropOutline = on => { div.style.outline = on ? '1px dotted #fff' : ''; };
     div.addEventListener('dragover', e => {
       const payload = getShellDragPayload();
-      if (!payload || payload.item === ic) return;
+      if (!payload || shellDragIncludesItem(payload, ic)) return;
       const accepts = ic.recycleBin
-        ? canRecycleShellItem(payload.item, payload.srcCwd)
-        : canMoveShellItemToDir(payload.item, payload.srcCwd, dropDirPath);
+        ? canRecycleShellPayload(payload)
+        : canMoveShellPayloadToDir(payload, dropDirPath);
       if (!accepts) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
@@ -6765,13 +7151,12 @@ function makeDesktopIconEl(ic) {
     div.addEventListener('drop', e => {
       const payload = getShellDragPayload();
       setDropOutline(false);
-      if (!payload || payload.item === ic) return;
+      if (!payload || shellDragIncludesItem(payload, ic)) return;
       let ok = false;
       if (ic.recycleBin) {
-        const result = recycleShellItem(payload.item, payload.srcCwd);
-        ok = !!result.ok;
+        ok = recycleShellPayload(payload);
       } else {
-        ok = moveShellItemToDir(payload.item, payload.srcCwd, dropDirPath);
+        ok = moveShellPayloadToDir(payload, dropDirPath);
       }
       if (!ok) return;
       e.preventDefault();
@@ -6891,17 +7276,17 @@ function setupIcons() {
   layer.addEventListener('dragover', e => {
     if (e.target.closest('.desktop-icon')) return;
     const payload = getShellDragPayload();
-    if (!payload || !canMoveShellItemToDir(payload.item, payload.srcCwd, 'DESKTOP')) return;
+    if (!payload || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   });
   layer.addEventListener('drop', e => {
     if (e.target.closest('.desktop-icon')) return;
     const payload = getShellDragPayload();
-    if (!payload || !canMoveShellItemToDir(payload.item, payload.srcCwd, 'DESKTOP')) return;
+    if (!payload || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
     e.preventDefault();
     e.stopPropagation();
-    if (moveShellItemToDir(payload.item, payload.srcCwd, 'DESKTOP')) clearShellDragPayload();
+    if (moveShellPayloadToDir(payload, 'DESKTOP')) clearShellDragPayload();
   });
 
   // Desktop background right-click
@@ -7873,6 +8258,12 @@ function openExplorer(startPath) {
   function doRecycleItem(srcItem, srcCwd) {
     return recycleShellItem(srcItem, srcCwd);
   }
+  function doMovePayload(payload, dstDirPath) {
+    return moveShellPayloadToDir(payload, dstDirPath);
+  }
+  function doRecyclePayload(payload) {
+    return recycleShellPayload(payload);
+  }
   function setExplorerStatus(text) {
     if (ws) ws.textContent = text;
   }
@@ -8187,7 +8578,10 @@ function openExplorer(startPath) {
     if (canDragItem) {
       el.setAttribute('draggable', 'true');
       el.addEventListener('dragstart', e => {
-        setShellDragPayload({ item, srcCwd: cwd, source: 'explorer', sourceId: id });
+        const key = selectionKey(item);
+        const dragItems = selectedKeys.has(key) ? getSelectedItems() : [item];
+        if (!selectedKeys.has(key) || dragItems.length <= 1) replaceSelection(item);
+        setShellDragPayload(buildShellDragPayload(item, cwd, 'explorer', { sourceId: id, items: dragItems }));
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', name);
         el.style.opacity = '0.5';
@@ -8201,28 +8595,28 @@ function openExplorer(startPath) {
     // ── Drag target (folders + recycle bin) ─────────────────────
     if ((kind === 'dir' && (!sysfile || isDesktopRootDir)) || isRecycleBin) {
       el._shellDropHandler = payload => {
-        if (!payload || payload.item === item) return false;
+        if (!payload || shellDragIncludesItem(payload, item)) return false;
         if (isRecycleBin) {
-          const result = doRecycleItem(payload.item, payload.srcCwd);
-          if (!result.ok) setExplorerStatus(result.message || 'Move failed.');
-          if (result.ok) render();
-          return !!result.ok;
+          const ok = doRecyclePayload(payload);
+          if (!ok) setExplorerStatus('Move failed.');
+          if (ok) render();
+          return ok;
         }
         if (isDesktopRootDir && fsNormalizeDir(payload.srcCwd) === 'DESKTOP') return false;
         const dstPath = isDesktopRootDir ? 'DESKTOP' : (cwd ? cwd + '\\' + name : name);
-        if (!canMoveShellItemToDir(payload.item, payload.srcCwd, dstPath)) return false;
-        const ok = doMoveItem(payload.item, payload.srcCwd, dstPath);
+        if (!canMoveShellPayloadToDir(payload, dstPath)) return false;
+        const ok = doMovePayload(payload, dstPath);
         if (!ok) setExplorerStatus('Move failed.');
         if (ok) render();
         return ok;
       };
       el.addEventListener('dragover', e => {
         const payload = getShellDragPayload();
-        if (!payload || payload.item === item) return;
+        if (!payload || shellDragIncludesItem(payload, item)) return;
         const dstPath = isDesktopRootDir ? 'DESKTOP' : (cwd ? cwd + '\\' + name : name);
         const canDrop = isRecycleBin
-          ? canRecycleShellItem(payload.item, payload.srcCwd)
-          : fsNormalizeDir(payload.srcCwd) === dstPath ? false : canMoveShellItemToDir(payload.item, payload.srcCwd, dstPath);
+          ? canRecycleShellPayload(payload)
+          : fsNormalizeDir(payload.srcCwd) === dstPath ? false : canMoveShellPayloadToDir(payload, dstPath);
         if (!canDrop) return;
         e.preventDefault();
         e.stopPropagation();
@@ -8233,7 +8627,7 @@ function openExplorer(startPath) {
       el.addEventListener('drop', e => {
         el.classList.remove('exp-drop-target');
         const payload = getShellDragPayload();
-        if (!payload || payload.item === item) return;
+        if (!payload || shellDragIncludesItem(payload, item)) return;
         e.preventDefault();
         e.stopPropagation();
         if (el._shellDropHandler(payload)) clearShellDragPayload();
@@ -8537,8 +8931,8 @@ function openExplorer(startPath) {
   });
   pane._shellDropHandler = payload => {
     if (!payload || cwd === 'PROJECTS' || cwd === 'RECYCLE') return false;
-    if (!canMoveShellItemToDir(payload.item, payload.srcCwd, cwd)) return false;
-    const ok = doMoveItem(payload.item, payload.srcCwd, cwd);
+    if (!canMoveShellPayloadToDir(payload, cwd)) return false;
+    const ok = doMovePayload(payload, cwd);
     if (!ok) setExplorerStatus('Move failed.');
     if (ok) render();
     return ok;
@@ -8586,7 +8980,7 @@ function openExplorer(startPath) {
   pane.addEventListener('dragover', e => {
     if (!e.target.closest(ITEM_SELECTOR)) {
       const payload = getShellDragPayload();
-      if (payload && pane._shellDropHandler && canMoveShellItemToDir(payload.item, payload.srcCwd, cwd)) {
+      if (payload && pane._shellDropHandler && canMoveShellPayloadToDir(payload, cwd)) {
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
@@ -12351,7 +12745,6 @@ function startDesktop() {
   applyDaemonVisualState();
   setupIcons();
   armIdleSleep();
-  openExplorer(STARTUP_EXPLORER_PATH);
 }
 </script>
 </body>
