@@ -5830,7 +5830,7 @@ function openVideoPlayer(filename, dirName) {
 
   const btnRew  = mkBtn('\u23EE', 'Back 10s',    '', () => { video.currentTime = Math.max(0, video.currentTime - 10); });
   const btnPlay = mkBtn('\u25B6', 'Play/Pause', 'vp-btn-play', () => video.paused ? video.play() : video.pause());
-  const btnStop = mkBtn('\u23F9', 'Stop',        '', () => { video.pause(); video.currentTime = 0; });
+  const btnStop = mkBtn('\u25A0', 'Stop',        '', () => { video.pause(); video.currentTime = 0; });
   const btnFwd  = mkBtn('\u23ED', 'Forward 10s', '', () => { video.currentTime = Math.min(video.duration||0, video.currentTime + 10); });
 
   const muteBtn = mkBtn('\u{1F50A}', 'Mute', '', () => {
@@ -6001,7 +6001,7 @@ function openAudioPlayer(filename, dirName) {
 
   const btnRew = mkBtn('⏮', 'Back 10s', '', () => { audio.currentTime = Math.max(0, audio.currentTime - 10); });
   const btnPlay = mkBtn('▶', 'Play/Pause', 'vp-btn-play', () => audio.paused ? audio.play() : audio.pause());
-  const btnStop = mkBtn('⏹', 'Stop', '', () => { audio.pause(); audio.currentTime = 0; });
+  const btnStop = mkBtn('\u25A0', 'Stop', '', () => { audio.pause(); audio.currentTime = 0; });
   const btnFwd = mkBtn('⏭', 'Forward 10s', '', () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); });
   const btnLoop = mkBtn('↻', 'Toggle Loop', '', () => {
     audio.loop = !audio.loop;
