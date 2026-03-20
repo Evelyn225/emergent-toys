@@ -10,6 +10,7 @@
     { "src": "*.ttf", "use": "@vercel/static" },
     { "src": "*.woff", "use": "@vercel/static" },
     { "src": "*.woff2", "use": "@vercel/static" },
+    { "src": "*.webp", "use": "@vercel/static" },
     { "src": "casino-assets/**", "use": "@vercel/static" },
     { "src": "images/**", "use": "@vercel/static" },
     { "src": "audio/**", "use": "@vercel/static" },
