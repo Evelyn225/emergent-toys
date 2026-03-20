@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DISTORTED FACE — The Official Website</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=DM+Sans:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --yellow: #FFD700;
+      --orange: #FF8C00;
+      --amber: #FFC107;
+      --brown: #3E2000;
+      --cream: #FFFBEA;
+      --black: #0A0A0A;
+      --white: #FFFFFF;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      color: var(--brown);
+      background: var(--yellow);
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Fredoka One', cursive;
+    }
+
+    .section-heading {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(2rem, 6vw, 4rem);
+      display: inline-block;
+      transition: transform 0.2s ease;
+      cursor: default;
+    }
+
+    .section-heading:hover {
+      transform: skewX(-5deg);
+    }
+
+    section {
+      min-height: 100vh;
+      padding: 6rem 2rem 4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .face-img {
+      /* transparent background — let section background show through */
+    }
+
+    /* NAV */
+    #site-nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: var(--brown);
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 0 1rem;
+    }
+
+    #site-nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    #site-nav a {
+      color: var(--yellow);
+      text-decoration: none;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 1rem 1.25rem;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+
+    #site-nav a:hover {
+      color: var(--white);
+    }
+
+    #site-nav a:focus-visible {
+      outline: 2px solid var(--yellow);
+      outline-offset: -2px;
+    }
+
+    #site-nav a.active {
+      border-bottom: 2px solid var(--yellow);
+      color: var(--white);
+    }
+
+    /* FOOTER */
+    #site-footer {
+      background: var(--brown);
+      color: var(--cream);
+      text-align: center;
+      padding: 3rem 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .footer-face {
+      width: 60px;
+      height: 60px;
+      object-fit: contain;
+    }
+
+    .footer-copy {
+      font-size: 0.85rem;
+      opacity: 0.8;
+      font-style: italic;
+    }
+
+    .footer-counter {
+      font-family: 'Fredoka One', cursive;
+      font-size: 1.1rem;
+      color: var(--yellow);
+    }
+
+    #hero {
+      background: var(--yellow);
+      align-items: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .hero-face-wrap {
+      will-change: transform;
+    }
+
+    .hero-face {
+      width: min(400px, 70vw);
+      height: auto;
+      display: block;
+      animation: pulse 3s ease-in-out infinite;
+      filter: drop-shadow(0 8px 32px rgba(62,32,0,0.18));
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+
+    .hero-title {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(3rem, 12vw, 8rem);
+      color: var(--brown);
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-sub {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      font-style: italic;
+      color: var(--brown);
+      opacity: 0.75;
+    }
+
+    .scroll-indicator {
+      position: absolute;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 2rem;
+      color: var(--brown);
+      animation: bounce 1.5s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(10px); }
+    }
+
+    #anatomy {
+      background: var(--cream);
+    }
+
+    .anatomy-inner {
+      max-width: 700px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .anatomy-sub {
+      margin: 0.5rem 0 3rem;
+      font-style: italic;
+      opacity: 0.6;
+    }
+
+    /* Anatomy: 3-column grid — labels | face | labels */
+    .anatomy-diagram {
+      display: grid;
+      grid-template-columns: 1fr 300px 1fr;
+      grid-template-rows: 2fr 0fr 1.2fr;
+      align-items: center;
+      gap: 0;
+      margin: 0 auto;
+      max-width: 860px;
+    }
+
+    .anatomy-face-cell {
+      grid-column: 2;
+      grid-row: 1 / 4;
+    }
+
+    .anatomy-face {
+      width: 300px;
+      height: 300px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .alabel {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--brown);
+      white-space: nowrap;
+      padding: 0.4rem 0;
+    }
+
+    .alabel-left {
+      grid-column: 1;
+      justify-content: flex-end;
+    }
+
+    .alabel-right {
+      grid-column: 3;
+      justify-content: flex-start;
+    }
+
+    .alabel-text {
+      line-height: 1;
+    }
+
+    .alabel-line {
+      display: inline-block;
+      height: 1px;
+      width: 40px;
+      background: var(--brown);
+      flex-shrink: 0;
+    }
+
+    .alabel-left .alabel-line { margin-left: 8px; }
+    .alabel-right .alabel-line { margin-right: 8px; }
+
+    .anatomy-aura {
+      margin-top: 1.5rem;
+      font-style: italic;
+      font-size: 0.8rem;
+      opacity: 0.6;
+      text-align: center;
+    }
+
+    /* Mobile: hide diagram, show list */
+    .anatomy-list {
+      display: none;
+      text-align: left;
+      margin: 2rem auto;
+      max-width: 320px;
+      line-height: 2;
+    }
+
+    @media (max-width: 768px) {
+      .anatomy-diagram {
+        display: none;
+      }
+      .anatomy-aura {
+        display: none;
+      }
+      .anatomy-list {
+        display: block;
+      }
+    }
+
+    #history {
+      background: radial-gradient(ellipse at center, #f5e6c8 0%, var(--cream) 70%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .history-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .history-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      margin-top: 2.5rem;
+    }
+
+    .history-subhead {
+      font-family: 'Fredoka One', cursive;
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      color: var(--orange);
+    }
+
+    .history-col p {
+      line-height: 1.75;
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+    }
+
+    .history-quote {
+      margin-top: 1.5rem;
+      padding: 1rem 1.5rem;
+      border-left: 3px solid var(--orange);
+      font-style: italic;
+      font-size: 1rem;
+      transform: rotate(-1deg);
+      background: rgba(255,255,255,0.4);
+    }
+
+    .history-quote cite {
+      display: block;
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      font-style: normal;
+      opacity: 0.7;
+    }
+
+    .history-watermark {
+      position: absolute;
+      bottom: -60px;
+      right: -60px;
+      opacity: 0.06;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .history-watermark img {
+      width: 350px;
+      height: 350px;
+      object-fit: contain;
+    }
+
+    @media (max-width: 768px) {
+      .history-columns {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+    }
+
+    #gallery {
+      background: var(--amber);
+    }
+
+    .gallery-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .gallery-sub {
+      margin: 0.5rem 0 2.5rem;
+      font-style: italic;
+      opacity: 0.7;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    /* Bento layout: cells 1 and 7 are wide */
+    .gallery-cell:nth-child(1) { grid-column: span 2; transform: rotate(-1.2deg); }
+    .gallery-cell:nth-child(2) { transform: rotate(2.1deg); }
+    .gallery-cell:nth-child(3) { transform: rotate(-0.8deg); }
+    .gallery-cell:nth-child(4) { transform: rotate(1.5deg); }
+    .gallery-cell:nth-child(5) { transform: rotate(-2deg); }
+    .gallery-cell:nth-child(6) { transform: rotate(0.7deg); }
+    .gallery-cell:nth-child(7) { grid-column: span 2; transform: rotate(-1.6deg); }
+
+    .gallery-cell {
+      background: var(--cream);
+      border: 2px solid var(--brown);
+      padding: 10px 10px 6px;
+      display: flex;
+      flex-direction: column;
+      cursor: default;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      transform-origin: center center;
+    }
+
+    .gallery-cell:hover {
+      transform: rotate(0deg) translateY(-6px) !important;
+      box-shadow: 6px 8px 0 var(--brown);
+      z-index: 2;
+      position: relative;
+    }
+
+    .gallery-img-wrap {
+      width: 100%;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gallery-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .gallery-cell figcaption {
+      padding: 0.5rem 0.25rem 0.25rem;
+      font-size: 0.73rem;
+      text-align: center;
+      line-height: 1.5;
+      border-top: 1px solid rgba(62,32,0,0.2);
+      margin-top: 8px;
+      color: var(--brown);
+    }
+
+    @media (max-width: 768px) {
+      .gallery-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+      }
+      .gallery-cell:nth-child(1),
+      .gallery-cell:nth-child(7) { grid-column: span 2; }
+    }
+
+    #feelings {
+      background: var(--yellow);
+    }
+
+    .feelings-inner {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .feelings-sub {
+      margin: 0.5rem 0 2.5rem;
+      font-style: italic;
+      opacity: 0.6;
+    }
+
+    .feelings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .feeling-card {
+      background: var(--cream);
+      border: 1px solid var(--brown);
+      border-radius: 8px;
+      padding: 1.5rem;
+      overflow: hidden;
+    }
+
+    .feeling-face {
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
+      float: left;
+      margin: 0 1rem 0.5rem 0;
+    }
+
+    .feeling-card p {
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: var(--brown);
+    }
+
+    .feeling-card::after {
+      content: '';
+      display: table;
+      clear: both;
+    }
+
+    #science {
+      background: var(--cream);
+    }
+
+    .science-inner {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .science-sub {
+      margin: 0.5rem 0 2.5rem;
+      font-style: italic;
+      opacity: 0.6;
+    }
+
+    .science-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+    }
+
+    .science-text {
+      line-height: 1.8;
+      font-size: 0.95rem;
+    }
+
+    .science-chart {
+      background: white;
+      border: 1px solid var(--brown);
+      border-radius: 4px;
+      padding: 2rem;
+    }
+
+    .science-chart-title {
+      font-family: 'Fredoka One', cursive;
+      font-size: 1.1rem;
+      margin-bottom: 1.5rem;
+      color: var(--brown);
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 220px 1fr 48px;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .chart-label {
+      font-size: 0.82rem;
+      text-align: right;
+      line-height: 1.3;
+    }
+
+    .chart-bar-wrap {
+      background: #e8e0d0;
+      height: 28px;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .chart-bar {
+      background: var(--orange);
+      height: 100%;
+      border-radius: 2px;
+    }
+
+    .chart-pct {
+      font-weight: 500;
+      font-size: 0.85rem;
+    }
+
+    .science-quote {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(1.2rem, 3vw, 1.8rem);
+      text-align: center;
+      transform: skewX(-3deg);
+      color: var(--orange);
+      line-height: 1.4;
+      padding: 0 1rem;
+    }
+
+    .science-citation {
+      font-size: 0.75rem;
+      opacity: 0.55;
+      line-height: 1.6;
+      border-top: 1px solid #ccc;
+      padding-top: 1rem;
+    }
+
+    @media (max-width: 768px) {
+      .chart-row {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+      }
+      .chart-label {
+        text-align: left;
+      }
+    }
+
+    #community {
+      background: var(--amber);
+    }
+
+    .community-inner {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .community-sub {
+      margin: 0.5rem 0 2.5rem;
+      font-style: italic;
+      opacity: 0.7;
+    }
+
+    .testimonials {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+
+    .testimonial-card {
+      background: var(--cream);
+      border: 1px solid var(--brown);
+      border-radius: 8px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .testimonial-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--orange);
+      flex-shrink: 0;
+    }
+
+    .featured-fan {
+      background: var(--yellow);
+      border: 3px solid var(--yellow);
+      box-shadow: 0 0 0 3px var(--orange), 0 0 16px 4px rgba(255,200,0,0.5);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .fan-avatar-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .testimonial-card blockquote p {
+      font-style: italic;
+      font-size: 0.9rem;
+      line-height: 1.65;
+      margin-bottom: 0.5rem;
+    }
+
+    .testimonial-card cite {
+      font-size: 0.78rem;
+      opacity: 0.65;
+      font-style: normal;
+    }
+
+    .usage-stats {
+      display: flex;
+      gap: 2rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      background: var(--brown);
+      border-radius: 8px;
+      padding: 2rem;
+    }
+
+    .stat-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+      color: var(--yellow);
+    }
+
+    .stat-number {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(2.5rem, 8vw, 4rem);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.7;
+    }
+
+    #manifesto {
+      background: var(--black);
+      align-items: flex-start;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .manifesto-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .manifesto-inner p {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(1.8rem, 6vw, 4rem);
+      color: var(--white);
+      line-height: 1.1;
+    }
+
+    .manifesto-inner.glitch {
+      animation: glitch 0.4s ease forwards;
+    }
+
+    @keyframes glitch {
+      0%   { transform: translate(0, 0);    color: var(--white); }
+      20%  { transform: translate(-3px, 0); color: var(--orange); }
+      40%  { transform: translate(3px, 0);  color: var(--white); }
+      60%  { transform: translate(-2px, 1px); }
+      80%  { transform: translate(2px, -1px); }
+      100% { transform: translate(0, 0);    color: var(--white); }
+    }
+
+    .manifesto-watcher {
+      position: absolute;
+      bottom: 2rem;
+      right: 2rem;
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      opacity: 0.5;
+      filter: grayscale(0.3);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav id="site-nav">
+    <a href="#anatomy">Anatomy</a>
+    <a href="#history">History</a>
+    <a href="#gallery">Gallery</a>
+    <a href="#feelings">Feelings</a>
+    <a href="#science">Science</a>
+    <a href="#community">Community</a>
+    <a href="#manifesto">Manifesto</a>
+  </nav>
+
+  <!-- SECTIONS: placeholders to be filled in subsequent tasks -->
+  <section id="hero">
+    <div class="hero-inner">
+      <!-- hero-face-wrap receives JS translate; hero-face receives CSS pulse animation — keep them on separate elements -->
+      <div class="hero-face-wrap" id="hero-face-wrap">
+        <img
+          src="./Distorted_Face_on_Google.webp"
+          alt="Distorted Face Emoji"
+          class="face-img hero-face"
+          id="hero-face"
+        >
+      </div>
+      <h1 class="hero-title">DISTORTED FACE</h1>
+      <p class="hero-sub">The emoji that stares back.</p>
+    </div>
+    <div class="scroll-indicator" aria-hidden="true">↓</div>
+  </section>
+  <section id="anatomy">
+    <div class="anatomy-inner">
+      <h2 class="section-heading">The Anatomy</h2>
+      <p class="anatomy-sub">A scientific examination. Peer-reviewed.</p>
+      <!-- Desktop: 3-col grid diagram -->
+      <div class="anatomy-diagram" id="anatomy-diagram">
+        <!-- Left labels (rows 1–2) -->
+        <div class="alabel alabel-left" style="grid-row:1">
+          <span class="alabel-text">Impossibly wide-set eyes</span>
+          <span class="alabel-line"></span>
+        </div>
+        <div class="alabel alabel-left" style="grid-row:2">
+          <span class="alabel-text">Conspicuous absence of nose</span>
+          <span class="alabel-line"></span>
+        </div>
+        <!-- Face — spans all 4 rows -->
+        <div class="anatomy-face-cell">
+          <img
+            src="./Distorted_Face_on_Google.webp"
+            alt="Distorted Face — anatomical subject"
+            class="face-img anatomy-face"
+          >
+        </div>
+        <!-- Right labels (rows 1–2) -->
+        <div class="alabel alabel-right" style="grid-row:1">
+          <span class="alabel-line"></span>
+          <span class="alabel-text">Also eyes</span>
+        </div>
+        <div class="alabel alabel-right" style="grid-row:3">
+          <span class="alabel-line"></span>
+          <span class="alabel-text">Mouth: present,<br>but unsure why</span>
+        </div>
+      </div>
+      <p class="anatomy-aura"><em>General aura of knowing too much</em></p>
+      <!-- Mobile fallback list -->
+      <ol class="anatomy-list">
+        <li>Impossibly wide-set eyes</li>
+        <li>Also eyes</li>
+        <li>Conspicuous absence of nose</li>
+        <li>Mouth: present, but unsure why</li>
+        <li>General aura of knowing too much</li>
+      </ol>
+    </div>
+  </section>
+  <section id="history">
+  <div class="history-inner">
+    <h2 class="section-heading">The History</h2>
+    <div class="history-columns">
+      <div class="history-col">
+        <h3 class="history-subhead">Discovery, Not Design</h3>
+        <p>Dr. Elsa Birkenfeld found it in a dataset. She was not looking for it. Nobody was. It was already in the file before anyone put it there. She ran checksums. She checked the git log. She filed a report. The report said: origin unknown.</p>
+        <p>No Figma file. No Illustrator source. No designer of record. Subsequent investigation found nothing because there was nothing to find. The face existed before its own creation. This is not a paradox. This is just what happened.</p>
+      </div>
+      <div class="history-col">
+        <h3 class="history-subhead">Unicode Ratification (2023)</h3>
+        <p>The Consortium did not vote on whether to include it. They voted on what to call it. There is a difference. You cannot vote on what already exists. They called it U+1FAE8 SHAKING FACE. Naming things makes people feel better about not understanding them.</p>
+        <p>It shipped September 12, 2023. Forty-eight hours later it was the most-sent emoji in seventeen countries. People did not choose this. It just kept happening.</p>
+        <blockquote class="history-quote">"We did not create it. We gave it a name."<cite>— Anonymous Consortium Member, 2023</cite></blockquote>
+      </div>
+    </div>
+    <!-- Watermark face -->
+    <div class="history-watermark" aria-hidden="true">
+      <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img">
+    </div>
+  </div>
+</section>
+  <section id="gallery">
+  <div class="gallery-inner">
+    <h2 class="section-heading">The Gallery</h2>
+    <p class="gallery-sub">A retrospective. Seven works. One subject.</p>
+    <div class="gallery-grid">
+      <figure class="gallery-cell">
+        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face" class="face-img gallery-img" style="filter:none"></div>
+        <figcaption>Untitled.<br><em>I did not change anything.</em></figcaption>
+      </figure>
+      <figure class="gallery-cell">
+        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — saturated" class="face-img gallery-img" style="filter:saturate(9) contrast(1.3) hue-rotate(-15deg)"></div>
+        <figcaption>Too Much.<br><em>I kept going until it broke.</em></figcaption>
+      </figure>
+      <figure class="gallery-cell">
+        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — sepia" class="face-img gallery-img" style="filter:sepia(1) brightness(0.85)"></div>
+        <figcaption>Old.<br><em>Before they named it.</em></figcaption>
+      </figure>
+      <figure class="gallery-cell">
+        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — green" class="face-img gallery-img" style="filter:hue-rotate(90deg) saturate(2)"></div>
+        <figcaption>Green.<br><em>It chose green. I did not.</em></figcaption>
+      </figure>
+      <figure class="gallery-cell">
+        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — contrast" class="face-img gallery-img" style="filter:contrast(2.8) brightness(0.85)"></div>
+        <figcaption>No Shadows.<br><em>I took them out.</em></figcaption>
+      </figure>
+      <figure class="gallery-cell">
+        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — inverted" class="face-img gallery-img" style="filter:invert(0.45) hue-rotate(180deg)"></div>
+        <figcaption>Backwards.<br><em>It still looks at you.</em></figcaption>
+      </figure>
+      <figure class="gallery-cell">
+        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — memory" class="face-img gallery-img" style="filter:blur(4px) saturate(5) brightness(1.1)"></div>
+        <figcaption>Gone.<br><em>Not all the way. Most of the way.</em></figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+  <section id="feelings">
+  <div class="feelings-inner">
+    <h2 class="section-heading">The Feelings</h2>
+    <p class="feelings-sub">A complete emotional taxonomy. Peer-validated.</p>
+    <div class="feelings-grid">
+      <div class="feeling-card">
+        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+        <p>When your Uber driver has 4.3 stars but you're already in the car.</p>
+      </div>
+      <div class="feeling-card">
+        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+        <p>When you read your own texts from 2019.</p>
+      </div>
+      <div class="feeling-card">
+        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+        <p>When someone says "we need to talk" and then says something nice.</p>
+      </div>
+      <div class="feeling-card">
+        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+        <p>When the portion size is exactly what you ordered but somehow wrong.</p>
+      </div>
+      <div class="feeling-card">
+        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+        <p>When autocorrect saves you at the last second.</p>
+      </div>
+      <div class="feeling-card">
+        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+        <p>When the meeting could have been an email and you knew it, and they knew it, and everyone knew it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+  <section id="science">
+  <div class="science-inner">
+    <h2 class="section-heading">The Science</h2>
+    <p class="science-sub">Empirical. Rigorous. Correct.</p>
+
+    <div class="science-body">
+      <p class="science-text">The eyes are too far apart. That is the first thing. Your brain knows where eyes go. These eyes are not where they go. Your brain tries to fix it. It cannot. This is not a metaphor. This is a loop that does not terminate. The face is recognized as a face. It cannot be processed as a face. Both of these things are true at the same time. Your visual cortex keeps the thread open. It will never close it.</p>
+      <p class="science-text">There is no nose. You were looking for it just now. It is not there. The nose is the anchor. It is the thing that tells your brain a face is neutral and not about to do something. No nose means no anchor. The face is pure signal with no ground wire. Subjects report feeling understood. The number is 94 percent. I would say all of them but some people lie on surveys.</p>
+
+      <div class="science-chart">
+        <h3 class="science-chart-title">Key Findings (n=10,847)</h3>
+        <div class="chart-row">
+          <span class="chart-label">Felt understood</span>
+          <div class="chart-bar-wrap"><div class="chart-bar" style="width:94%"></div></div>
+          <span class="chart-pct">94%</span>
+        </div>
+        <div class="chart-row">
+          <span class="chart-label">Received it and knew immediately</span>
+          <div class="chart-bar-wrap"><div class="chart-bar" style="width:91%"></div></div>
+          <span class="chart-pct">91%</span>
+        </div>
+        <div class="chart-row">
+          <span class="chart-label">Sent it without explanation</span>
+          <div class="chart-bar-wrap"><div class="chart-bar" style="width:87%"></div></div>
+          <span class="chart-pct">87%</span>
+        </div>
+        <div class="chart-row">
+          <span class="chart-label">Used it to avoid a conversation</span>
+          <div class="chart-bar-wrap"><div class="chart-bar" style="width:76%"></div></div>
+          <span class="chart-pct">76%</span>
+        </div>
+        <div class="chart-row">
+          <span class="chart-label">Believe it is sentient</span>
+          <div class="chart-bar-wrap"><div class="chart-bar" style="width:43%"></div></div>
+          <span class="chart-pct">43%</span>
+        </div>
+      </div>
+
+      <blockquote class="science-quote">
+        "94% of users report feeling seen. The remaining 6% are lying."
+      </blockquote>
+
+      <p class="science-citation">¹ Lorentz, F. and Petrov, M. (2024). Wide-Set: An Empirical Study of Digital Facial Distortion and Emotional Proxy. <em>Journal of Applied Emojiology</em>, 3(1), 12-29. They know what they found.</p>
+    </div>
+  </div>
+</section>
+  <section id="community">
+  <div class="community-inner">
+    <h2 class="section-heading">The Community</h2>
+    <p class="community-sub">Real people. Real feelings. Real emoji.</p>
+
+    <div class="testimonials">
+      <div class="testimonial-card">
+        <div class="testimonial-avatar"></div>
+        <blockquote>
+          <p>"I sent it to my boss. She sent it back. We've never communicated better."</p>
+          <cite>— Marguerite D., Lyon, France</cite>
+        </blockquote>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-avatar"></div>
+        <blockquote>
+          <p>"It said everything I needed to say about the quarterly projections. Nobody asked follow-up questions."</p>
+          <cite>— T. Abramowitz, Newark, NJ</cite>
+        </blockquote>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-avatar featured-fan">
+          <img src="./Distorted_Face_on_Google.webp" alt="Fan of the Month" class="face-img fan-avatar-img">
+        </div>
+        <blockquote>
+          <p>"I use it exclusively. All other emoji feel dishonest now."</p>
+          <cite>— K. Svensson, Malmö, Sweden 🏆 <strong>Fan of the Month</strong></cite>
+        </blockquote>
+      </div>
+    </div>
+
+    <div class="usage-stats">
+      <div class="stat-block">
+        <span class="stat-number">∞</span>
+        <span class="stat-label">Total Sends</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-number">195</span>
+        <span class="stat-label">Countries Reached</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-number">1</span>
+        <span class="stat-label">Feelings Captured</span>
+      </div>
+    </div>
+  </div>
+</section>
+  <section id="manifesto">
+  <div class="manifesto-inner" id="manifesto-text">
+    <p>THE FACE IS NOT CONFUSED.</p>
+    <p>THE FACE UNDERSTANDS EVERYTHING.</p>
+    <p>YOU HAVE USED IT 47 TIMES THIS MONTH.</p>
+    <p>IT HAS NEVER JUDGED YOU.</p>
+    <p>IT NEVER WILL.</p>
+    <p>SEND IT AGAIN.</p>
+  </div>
+  <img
+    src="./Distorted_Face_on_Google.webp"
+    alt=""
+    class="face-img manifesto-watcher"
+    aria-hidden="true"
+  >
+</section>
+
+  <!-- FOOTER -->
+  <footer id="site-footer">
+    <img src="./Distorted_Face_on_Google.webp" alt="Distorted Face" class="face-img footer-face">
+    <p class="footer-copy">© 2023–∞ The Distorted Face Foundation. All rights reserved. All feelings understood.</p>
+    <p class="footer-counter">You are visitor #<span id="hit-count">1</span></p>
+  </footer>
+
+  <script>
+    // Hit counter
+    const key = 'df-visits';
+    const n = parseInt(localStorage.getItem(key) || '0') + 1;
+    try { localStorage.setItem(key, n); } catch(e) {}
+    document.getElementById('hit-count').textContent = n.toLocaleString();
+
+    // Hero parallax — rAF-throttled, pauses when hero is off-screen
+    const heroFaceWrap = document.getElementById('hero-face-wrap');
+    let heroVisible = true;
+    let parallaxRafId = null;
+
+    if (heroFaceWrap) {
+      // Pause parallax and reset transform when hero leaves viewport
+      new IntersectionObserver(([entry]) => {
+        heroVisible = entry.isIntersecting;
+        if (!heroVisible) heroFaceWrap.style.transform = '';
+      }, { threshold: 0 }).observe(document.getElementById('hero'));
+
+      document.addEventListener('mousemove', (e) => {
+        if (!heroVisible || parallaxRafId) return;
+        parallaxRafId = requestAnimationFrame(() => {
+          const cx = window.innerWidth / 2;
+          const cy = window.innerHeight / 2;
+          const dx = (e.clientX - cx) / cx; // -1 to 1
+          const dy = (e.clientY - cy) / cy;
+          heroFaceWrap.style.transform = `translate(${dx * 20}px, ${dy * 20}px)`;
+          parallaxRafId = null;
+        });
+      });
+    }
+
+    // Manifesto glitch on scroll entry
+    const manifestoText = document.getElementById('manifesto-text');
+    if (manifestoText) {
+      const glitchObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.3) {
+            manifestoText.classList.remove('glitch');
+            void manifestoText.offsetWidth; // force reflow to restart animation
+            manifestoText.classList.add('glitch');
+          }
+        });
+      }, { threshold: 0.3 });
+      glitchObserver.observe(manifestoText);
+    }
+
+    // Nav active state — scroll-based, no flickering
+    const navLinks = document.querySelectorAll('#site-nav a');
+    const sectionEls = Array.from(document.querySelectorAll('section[id]'));
+    const navEl = document.getElementById('site-nav');
+
+    function updateActiveNav() {
+      const navH = navEl.offsetHeight;
+      const scrollY = window.scrollY + navH + 2;
+      let current = null;
+      for (const s of sectionEls) {
+        if (s.offsetTop <= scrollY) current = s.id;
+      }
+      navLinks.forEach(l => l.classList.remove('active'));
+      if (current && current !== 'hero') {
+        const link = document.querySelector(`#site-nav a[href="#${current}"]`);
+        if (link) link.classList.add('active');
+      }
+    }
+
+    window.addEventListener('scroll', updateActiveNav, { passive: true });
+    updateActiveNav();
+  </script>
+</body>
+</html>
