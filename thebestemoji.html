@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DISTORTED FACE — The Official Website</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=DM+Sans:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=DM+Sans:ital,wght@0,400;0,500;1,400&display=swap"
+    rel="stylesheet">
   <style>
     :root {
       --yellow: #FFD700;
@@ -18,7 +21,9 @@
       --white: #FFFFFF;
     }
 
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
@@ -34,7 +39,10 @@
       background: var(--yellow);
     }
 
-    h1, h2, h3, h4 {
+    h1,
+    h2,
+    h3,
+    h4 {
       font-family: 'Fredoka One', cursive;
     }
 
@@ -163,12 +171,19 @@
       height: auto;
       display: block;
       animation: pulse 3s ease-in-out infinite;
-      filter: drop-shadow(0 8px 32px rgba(62,32,0,0.18));
+      filter: drop-shadow(0 8px 32px rgba(62, 32, 0, 0.18));
     }
 
     @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.04); }
+
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.04);
+      }
     }
 
     .hero-title {
@@ -197,8 +212,15 @@
     }
 
     @keyframes bounce {
-      0%, 100% { transform: translateX(-50%) translateY(0); }
-      50% { transform: translateX(-50%) translateY(10px); }
+
+      0%,
+      100% {
+        transform: translateX(-50%) translateY(0);
+      }
+
+      50% {
+        transform: translateX(-50%) translateY(10px);
+      }
     }
 
     #anatomy {
@@ -273,8 +295,13 @@
       flex-shrink: 0;
     }
 
-    .alabel-left .alabel-line { margin-left: 8px; }
-    .alabel-right .alabel-line { margin-right: 8px; }
+    .alabel-left .alabel-line {
+      margin-left: 8px;
+    }
+
+    .alabel-right .alabel-line {
+      margin-right: 8px;
+    }
 
     .anatomy-aura {
       margin-top: 1.5rem;
@@ -297,9 +324,11 @@
       .anatomy-diagram {
         display: none;
       }
+
       .anatomy-aura {
         display: none;
       }
+
       .anatomy-list {
         display: block;
       }
@@ -345,7 +374,7 @@
       font-style: italic;
       font-size: 1rem;
       transform: rotate(-1deg);
-      background: rgba(255,255,255,0.4);
+      background: rgba(255, 255, 255, 0.4);
     }
 
     .history-quote cite {
@@ -401,13 +430,35 @@
     }
 
     /* Bento layout: cells 1 and 7 are wide */
-    .gallery-cell:nth-child(1) { grid-column: span 2; transform: rotate(-1.2deg); }
-    .gallery-cell:nth-child(2) { transform: rotate(2.1deg); }
-    .gallery-cell:nth-child(3) { transform: rotate(-0.8deg); }
-    .gallery-cell:nth-child(4) { transform: rotate(1.5deg); }
-    .gallery-cell:nth-child(5) { transform: rotate(-2deg); }
-    .gallery-cell:nth-child(6) { transform: rotate(0.7deg); }
-    .gallery-cell:nth-child(7) { grid-column: span 2; transform: rotate(-1.6deg); }
+    .gallery-cell:nth-child(1) {
+      grid-column: span 2;
+      transform: rotate(-1.2deg);
+    }
+
+    .gallery-cell:nth-child(2) {
+      transform: rotate(2.1deg);
+    }
+
+    .gallery-cell:nth-child(3) {
+      transform: rotate(-0.8deg);
+    }
+
+    .gallery-cell:nth-child(4) {
+      transform: rotate(1.5deg);
+    }
+
+    .gallery-cell:nth-child(5) {
+      transform: rotate(-2deg);
+    }
+
+    .gallery-cell:nth-child(6) {
+      transform: rotate(0.7deg);
+    }
+
+    .gallery-cell:nth-child(7) {
+      grid-column: span 2;
+      transform: rotate(-1.6deg);
+    }
 
     .gallery-cell {
       background: var(--cream);
@@ -447,7 +498,7 @@
       font-size: 0.73rem;
       text-align: center;
       line-height: 1.5;
-      border-top: 1px solid rgba(62,32,0,0.2);
+      border-top: 1px solid rgba(62, 32, 0, 0.2);
       margin-top: 8px;
       color: var(--brown);
     }
@@ -457,8 +508,11 @@
         grid-template-columns: repeat(2, 1fr);
         gap: 1rem;
       }
+
       .gallery-cell:nth-child(1),
-      .gallery-cell:nth-child(7) { grid-column: span 2; }
+      .gallery-cell:nth-child(7) {
+        grid-column: span 2;
+      }
     }
 
     #feelings {
@@ -605,6 +659,7 @@
         grid-template-columns: 1fr;
         gap: 0.25rem;
       }
+
       .chart-label {
         text-align: left;
       }
@@ -653,7 +708,7 @@
     .featured-fan {
       background: var(--yellow);
       border: 3px solid var(--yellow);
-      box-shadow: 0 0 0 3px var(--orange), 0 0 16px 4px rgba(255,200,0,0.5);
+      box-shadow: 0 0 0 3px var(--orange), 0 0 16px 4px rgba(255, 200, 0, 0.5);
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -738,12 +793,33 @@
     }
 
     @keyframes glitch {
-      0%   { transform: translate(0, 0);    color: var(--white); }
-      20%  { transform: translate(-3px, 0); color: var(--orange); }
-      40%  { transform: translate(3px, 0);  color: var(--white); }
-      60%  { transform: translate(-2px, 1px); }
-      80%  { transform: translate(2px, -1px); }
-      100% { transform: translate(0, 0);    color: var(--white); }
+      0% {
+        transform: translate(0, 0);
+        color: var(--white);
+      }
+
+      20% {
+        transform: translate(-3px, 0);
+        color: var(--orange);
+      }
+
+      40% {
+        transform: translate(3px, 0);
+        color: var(--white);
+      }
+
+      60% {
+        transform: translate(-2px, 1px);
+      }
+
+      80% {
+        transform: translate(2px, -1px);
+      }
+
+      100% {
+        transform: translate(0, 0);
+        color: var(--white);
+      }
     }
 
     .manifesto-watcher {
@@ -758,7 +834,8 @@
     }
   </style>
 </head>
-<body>
+
+<body onload="showRandomNumber()">
 
   <!-- NAV -->
   <nav id="site-nav">
@@ -776,12 +853,7 @@
     <div class="hero-inner">
       <!-- hero-face-wrap receives JS translate; hero-face receives CSS pulse animation — keep them on separate elements -->
       <div class="hero-face-wrap" id="hero-face-wrap">
-        <img
-          src="./Distorted_Face_on_Google.webp"
-          alt="Distorted Face Emoji"
-          class="face-img hero-face"
-          id="hero-face"
-        >
+        <img src="./Distorted_Face_on_Google.webp" alt="Distorted Face Emoji" class="face-img hero-face" id="hero-face">
       </div>
       <h1 class="hero-title">DISTORTED FACE</h1>
       <p class="hero-sub">The emoji that stares back.</p>
@@ -805,11 +877,8 @@
         </div>
         <!-- Face — spans all 4 rows -->
         <div class="anatomy-face-cell">
-          <img
-            src="./Distorted_Face_on_Google.webp"
-            alt="Distorted Face — anatomical subject"
-            class="face-img anatomy-face"
-          >
+          <img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — anatomical subject"
+            class="face-img anatomy-face">
         </div>
         <!-- Right labels (rows 1–2) -->
         <div class="alabel alabel-right" style="grid-row:1">
@@ -833,204 +902,222 @@
     </div>
   </section>
   <section id="history">
-  <div class="history-inner">
-    <h2 class="section-heading">The History</h2>
-    <div class="history-columns">
-      <div class="history-col">
-        <h3 class="history-subhead">Discovery, Not Design</h3>
-        <p>Dr. Elsa Birkenfeld found it in a dataset. She was not looking for it. Nobody was. It was already in the file before anyone put it there. She ran checksums. She checked the git log. She filed a report. The report said: origin unknown.</p>
-        <p>No Figma file. No Illustrator source. No designer of record. Subsequent investigation found nothing because there was nothing to find. The face existed before its own creation. This is not a paradox. This is just what happened.</p>
+    <div class="history-inner">
+      <h2 class="section-heading">The History</h2>
+      <div class="history-columns">
+        <div class="history-col">
+          <h3 class="history-subhead">Conveying Fact Through Distortion</h3>
+          <p>Before becoming Distorted Face (U+1FAEA) in Unicode 17.0, it started in the Emoji Kitchen. But the tension of stretching facial features to convey impossible feelings spans centuries.</p>
+          <p>From Da Vinci's grotesques to Francis Bacon ("If you want to convey fact... this can only ever be done through a form of distortion") to 1930s "squash and stretch" animation, showing true expression often means breaking the material of the face itself. Even hyper-pop producer SOPHIE's "Faceshopping" revolutionized the visual of such plasticity.</p>
+        </div>
+        <div class="history-col">
+          <h3 class="history-subhead">Chronically Online</h3>
+          <p>Today, this distortion isn't a mistake; it's an emotional shorthand. Whether it's "fisheye PFPs" in Discord, 0.5x selfies, or inflating a single facial feature, this "ugly-cute" warp is a deliberate rebellion against the airbrushed Facetune era.</p>
+          <p>It acts as a successor to Melting Face 🫠 and Dotted Line Face 🫥. Distorted Face is the face of a silent internal scream, a reminder that sometimes to show how we feel, we must stretch the truth until it's unrecognizable.</p>
+          <blockquote class="history-quote">"If you want to convey fact, it can only ever be done through a form of distortion."<cite>— Francis Bacon</cite></blockquote>
+        </div>
       </div>
-      <div class="history-col">
-        <h3 class="history-subhead">Unicode Ratification (2023)</h3>
-        <p>The Consortium did not vote on whether to include it. They voted on what to call it. There is a difference. You cannot vote on what already exists. They called it U+1FAE8 SHAKING FACE. Naming things makes people feel better about not understanding them.</p>
-        <p>It shipped September 12, 2023. Forty-eight hours later it was the most-sent emoji in seventeen countries. People did not choose this. It just kept happening.</p>
-        <blockquote class="history-quote">"We did not create it. We gave it a name."<cite>— Anonymous Consortium Member, 2023</cite></blockquote>
+      <!-- Watermark face -->
+      <div class="history-watermark" aria-hidden="true">
+        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img">
       </div>
     </div>
-    <!-- Watermark face -->
-    <div class="history-watermark" aria-hidden="true">
-      <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img">
-    </div>
-  </div>
-</section>
+  </section>
   <section id="gallery">
-  <div class="gallery-inner">
-    <h2 class="section-heading">The Gallery</h2>
-    <p class="gallery-sub">A retrospective. Seven works. One subject.</p>
-    <div class="gallery-grid">
-      <figure class="gallery-cell">
-        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face" class="face-img gallery-img" style="filter:none"></div>
-        <figcaption>Untitled.<br><em>I did not change anything.</em></figcaption>
-      </figure>
-      <figure class="gallery-cell">
-        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — saturated" class="face-img gallery-img" style="filter:saturate(9) contrast(1.3) hue-rotate(-15deg)"></div>
-        <figcaption>Too Much.<br><em>I kept going until it broke.</em></figcaption>
-      </figure>
-      <figure class="gallery-cell">
-        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — sepia" class="face-img gallery-img" style="filter:sepia(1) brightness(0.85)"></div>
-        <figcaption>Old.<br><em>Before they named it.</em></figcaption>
-      </figure>
-      <figure class="gallery-cell">
-        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — green" class="face-img gallery-img" style="filter:hue-rotate(90deg) saturate(2)"></div>
-        <figcaption>Green.<br><em>It chose green. I did not.</em></figcaption>
-      </figure>
-      <figure class="gallery-cell">
-        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — contrast" class="face-img gallery-img" style="filter:contrast(2.8) brightness(0.85)"></div>
-        <figcaption>No Shadows.<br><em>I took them out.</em></figcaption>
-      </figure>
-      <figure class="gallery-cell">
-        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — inverted" class="face-img gallery-img" style="filter:invert(0.45) hue-rotate(180deg)"></div>
-        <figcaption>Backwards.<br><em>It still looks at you.</em></figcaption>
-      </figure>
-      <figure class="gallery-cell">
-        <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — memory" class="face-img gallery-img" style="filter:blur(4px) saturate(5) brightness(1.1)"></div>
-        <figcaption>Gone.<br><em>Not all the way. Most of the way.</em></figcaption>
-      </figure>
+    <div class="gallery-inner">
+      <h2 class="section-heading">The Gallery</h2>
+      <p class="gallery-sub">A retrospective. Seven works. One subject.</p>
+      <div class="gallery-grid">
+        <figure class="gallery-cell">
+          <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face"
+              class="face-img gallery-img" style="filter:none"></div>
+          <figcaption>Untitled.<br><em>I did not change anything.</em></figcaption>
+        </figure>
+        <figure class="gallery-cell">
+          <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — saturated"
+              class="face-img gallery-img" style="filter:saturate(9) contrast(1.3) hue-rotate(-15deg)"></div>
+          <figcaption>Too Much.<br><em>I kept going until it broke.</em></figcaption>
+        </figure>
+        <figure class="gallery-cell">
+          <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — sepia"
+              class="face-img gallery-img" style="filter:sepia(1) brightness(0.85)"></div>
+          <figcaption>Old.<br><em>Before they named it.</em></figcaption>
+        </figure>
+        <figure class="gallery-cell">
+          <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — green"
+              class="face-img gallery-img" style="filter:hue-rotate(90deg) saturate(2)"></div>
+          <figcaption>Green.<br><em>It chose green. I did not.</em></figcaption>
+        </figure>
+        <figure class="gallery-cell">
+          <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — contrast"
+              class="face-img gallery-img" style="filter:contrast(2.8) brightness(0.85)"></div>
+          <figcaption>No Shadows.<br><em>I took them out.</em></figcaption>
+        </figure>
+        <figure class="gallery-cell">
+          <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — inverted"
+              class="face-img gallery-img" style="filter:invert(0.45) hue-rotate(180deg)"></div>
+          <figcaption>Backwards.<br><em>It still looks at you.</em></figcaption>
+        </figure>
+        <figure class="gallery-cell">
+          <div class="gallery-img-wrap"><img src="./Distorted_Face_on_Google.webp" alt="Distorted Face — memory"
+              class="face-img gallery-img" style="filter:blur(4px) saturate(5) brightness(1.1)"></div>
+          <figcaption>Gone.<br><em>Not all the way. Most of the way.</em></figcaption>
+        </figure>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
   <section id="feelings">
-  <div class="feelings-inner">
-    <h2 class="section-heading">The Feelings</h2>
-    <p class="feelings-sub">A complete emotional taxonomy. Peer-validated.</p>
-    <div class="feelings-grid">
-      <div class="feeling-card">
-        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
-        <p>When your Uber driver has 4.3 stars but you're already in the car.</p>
-      </div>
-      <div class="feeling-card">
-        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
-        <p>When you read your own texts from 2019.</p>
-      </div>
-      <div class="feeling-card">
-        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
-        <p>When someone says "we need to talk" and then says something nice.</p>
-      </div>
-      <div class="feeling-card">
-        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
-        <p>When the portion size is exactly what you ordered but somehow wrong.</p>
-      </div>
-      <div class="feeling-card">
-        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
-        <p>When autocorrect saves you at the last second.</p>
-      </div>
-      <div class="feeling-card">
-        <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
-        <p>When the meeting could have been an email and you knew it, and they knew it, and everyone knew it.</p>
+    <div class="feelings-inner">
+      <h2 class="section-heading">The Feelings</h2>
+      <p class="feelings-sub">A complete emotional taxonomy. Peer-validated.</p>
+      <div class="feelings-grid">
+        <div class="feeling-card">
+          <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+          <p>When your Uber driver has 4.3 stars but you're already in the car.</p>
+        </div>
+        <div class="feeling-card">
+          <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+          <p>When you read your own texts from 2019.</p>
+        </div>
+        <div class="feeling-card">
+          <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+          <p>When someone says "we need to talk" and then says something nice.</p>
+        </div>
+        <div class="feeling-card">
+          <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+          <p>When the portion size is exactly what you ordered but somehow wrong.</p>
+        </div>
+        <div class="feeling-card">
+          <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+          <p>When autocorrect saves you at the last second.</p>
+        </div>
+        <div class="feeling-card">
+          <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img feeling-face">
+          <p>When the meeting could have been an email and you knew it, and they knew it, and everyone knew it.</p>
+        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
   <section id="science">
-  <div class="science-inner">
-    <h2 class="section-heading">The Science</h2>
-    <p class="science-sub">Empirical. Rigorous. Correct.</p>
+    <div class="science-inner">
+      <h2 class="section-heading">The Science</h2>
+      <p class="science-sub">Empirical. Rigorous. Correct.</p>
 
-    <div class="science-body">
-      <p class="science-text">The eyes are too far apart. That is the first thing. Your brain knows where eyes go. These eyes are not where they go. Your brain tries to fix it. It cannot. This is not a metaphor. This is a loop that does not terminate. The face is recognized as a face. It cannot be processed as a face. Both of these things are true at the same time. Your visual cortex keeps the thread open. It will never close it.</p>
-      <p class="science-text">There is no nose. You were looking for it just now. It is not there. The nose is the anchor. It is the thing that tells your brain a face is neutral and not about to do something. No nose means no anchor. The face is pure signal with no ground wire. Subjects report feeling understood. The number is 94 percent. I would say all of them but some people lie on surveys.</p>
+      <div class="science-body">
+        <p class="science-text">The eyes are too far apart. That is the first thing. Your brain knows where eyes go.
+          These eyes are not where they go. Your brain tries to fix it. It cannot. This is not a metaphor. The face is
+          recognized as a face but it cannot be processed as a face.</p>
+        <p class="science-text">There is no nose. You were looking for it just now. It is not there. Upon viewing this
+          emoji 94 percent of subjects reported feeling understood.</p>
 
-      <div class="science-chart">
-        <h3 class="science-chart-title">Key Findings (n=10,847)</h3>
-        <div class="chart-row">
-          <span class="chart-label">Felt understood</span>
-          <div class="chart-bar-wrap"><div class="chart-bar" style="width:94%"></div></div>
-          <span class="chart-pct">94%</span>
+        <div class="science-chart">
+          <h3 class="science-chart-title">Key Findings (n=10,847)</h3>
+          <div class="chart-row">
+            <span class="chart-label">Felt understood</span>
+            <div class="chart-bar-wrap">
+              <div class="chart-bar" style="width:94%"></div>
+            </div>
+            <span class="chart-pct">94%</span>
+          </div>
+          <div class="chart-row">
+            <span class="chart-label">Received it and knew immediately</span>
+            <div class="chart-bar-wrap">
+              <div class="chart-bar" style="width:91%"></div>
+            </div>
+            <span class="chart-pct">91%</span>
+          </div>
+          <div class="chart-row">
+            <span class="chart-label">Sent it without explanation</span>
+            <div class="chart-bar-wrap">
+              <div class="chart-bar" style="width:87%"></div>
+            </div>
+            <span class="chart-pct">87%</span>
+          </div>
+          <div class="chart-row">
+            <span class="chart-label">Used it to avoid a conversation</span>
+            <div class="chart-bar-wrap">
+              <div class="chart-bar" style="width:76%"></div>
+            </div>
+            <span class="chart-pct">76%</span>
+          </div>
+          <div class="chart-row">
+            <span class="chart-label">Believe it is sentient</span>
+            <div class="chart-bar-wrap">
+              <div class="chart-bar" style="width:43%"></div>
+            </div>
+            <span class="chart-pct">43%</span>
+          </div>
         </div>
-        <div class="chart-row">
-          <span class="chart-label">Received it and knew immediately</span>
-          <div class="chart-bar-wrap"><div class="chart-bar" style="width:91%"></div></div>
-          <span class="chart-pct">91%</span>
-        </div>
-        <div class="chart-row">
-          <span class="chart-label">Sent it without explanation</span>
-          <div class="chart-bar-wrap"><div class="chart-bar" style="width:87%"></div></div>
-          <span class="chart-pct">87%</span>
-        </div>
-        <div class="chart-row">
-          <span class="chart-label">Used it to avoid a conversation</span>
-          <div class="chart-bar-wrap"><div class="chart-bar" style="width:76%"></div></div>
-          <span class="chart-pct">76%</span>
-        </div>
-        <div class="chart-row">
-          <span class="chart-label">Believe it is sentient</span>
-          <div class="chart-bar-wrap"><div class="chart-bar" style="width:43%"></div></div>
-          <span class="chart-pct">43%</span>
-        </div>
+
+        <blockquote class="science-quote">
+          "94% of users report feeling seen. The remaining 6% are lying."
+        </blockquote>
+
+        <p class="science-citation">¹ Lorentz, F. and Petrov, M. (2024). Wide-Set: An Empirical Study of Digital Facial
+          Distortion and Emotional Proxy. <em>Journal of Applied Emojiology</em>, 3(1), 12-29. They know what they did.
+        </p>
       </div>
-
-      <blockquote class="science-quote">
-        "94% of users report feeling seen. The remaining 6% are lying."
-      </blockquote>
-
-      <p class="science-citation">¹ Lorentz, F. and Petrov, M. (2024). Wide-Set: An Empirical Study of Digital Facial Distortion and Emotional Proxy. <em>Journal of Applied Emojiology</em>, 3(1), 12-29. They know what they found.</p>
     </div>
-  </div>
-</section>
+  </section>
   <section id="community">
-  <div class="community-inner">
-    <h2 class="section-heading">The Community</h2>
-    <p class="community-sub">Real people. Real feelings. Real emoji.</p>
+    <div class="community-inner">
+      <h2 class="section-heading">The Community</h2>
+      <p class="community-sub">Real people. Real feelings. Real emoji.</p>
 
-    <div class="testimonials">
-      <div class="testimonial-card">
-        <div class="testimonial-avatar"></div>
-        <blockquote>
-          <p>"I sent it to my boss. She sent it back. We've never communicated better."</p>
-          <cite>— Marguerite D., Lyon, France</cite>
-        </blockquote>
-      </div>
-      <div class="testimonial-card">
-        <div class="testimonial-avatar"></div>
-        <blockquote>
-          <p>"It said everything I needed to say about the quarterly projections. Nobody asked follow-up questions."</p>
-          <cite>— T. Abramowitz, Newark, NJ</cite>
-        </blockquote>
-      </div>
-      <div class="testimonial-card">
-        <div class="testimonial-avatar featured-fan">
-          <img src="./Distorted_Face_on_Google.webp" alt="Fan of the Month" class="face-img fan-avatar-img">
+      <div class="testimonials">
+        <div class="testimonial-card">
+          <div class="testimonial-avatar"></div>
+          <blockquote>
+            <p>"I sent it to my boss. She sent it back. We've never communicated better."</p>
+            <cite>— Marguerite D., Lyon, France</cite>
+          </blockquote>
         </div>
-        <blockquote>
-          <p>"I use it exclusively. All other emoji feel dishonest now."</p>
-          <cite>— K. Svensson, Malmö, Sweden 🏆 <strong>Fan of the Month</strong></cite>
-        </blockquote>
+        <div class="testimonial-card">
+          <div class="testimonial-avatar"></div>
+          <blockquote>
+            <p>"It said everything I needed to say about the quarterly projections. Nobody asked follow-up questions."
+            </p>
+            <cite>— T. Abramowitz, Newark, NJ</cite>
+          </blockquote>
+        </div>
+        <div class="testimonial-card">
+          <div class="testimonial-avatar featured-fan">
+            <img src="./Distorted_Face_on_Google.webp" alt="Fan of the Month" class="face-img fan-avatar-img">
+          </div>
+          <blockquote>
+            <p>"I use it exclusively. All other emoji feel dishonest now."</p>
+            <cite>— K. Svensson, Malmö, Sweden 🏆 <strong>Fan of the Month</strong></cite>
+          </blockquote>
+        </div>
       </div>
-    </div>
 
-    <div class="usage-stats">
-      <div class="stat-block">
-        <span class="stat-number">∞</span>
-        <span class="stat-label">Total Sends</span>
-      </div>
-      <div class="stat-block">
-        <span class="stat-number">195</span>
-        <span class="stat-label">Countries Reached</span>
-      </div>
-      <div class="stat-block">
-        <span class="stat-number">1</span>
-        <span class="stat-label">Feelings Captured</span>
+      <div class="usage-stats">
+        <div class="stat-block">
+          <span class="stat-number">∞</span>
+          <span class="stat-label">Total Sends</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-number">195</span>
+          <span class="stat-label">Countries Reached</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-number">1</span>
+          <span class="stat-label">Feelings Captured</span>
+        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
   <section id="manifesto">
-  <div class="manifesto-inner" id="manifesto-text">
-    <p>THE FACE IS NOT CONFUSED.</p>
-    <p>THE FACE UNDERSTANDS EVERYTHING.</p>
-    <p>YOU HAVE USED IT 47 TIMES THIS MONTH.</p>
-    <p>IT HAS NEVER JUDGED YOU.</p>
-    <p>IT NEVER WILL.</p>
-    <p>SEND IT AGAIN.</p>
-  </div>
-  <img
-    src="./Distorted_Face_on_Google.webp"
-    alt=""
-    class="face-img manifesto-watcher"
-    aria-hidden="true"
-  >
-</section>
+    <div class="manifesto-inner" id="manifesto-text">
+      <p>THE FACE IS NOT CONFUSED.</p>
+      <p>THE FACE UNDERSTANDS EVERYTHING.</p>
+      <p>YOU HAVE USED IT <span id="myNumber"></span> TIMES THIS MONTH.</p>
+      <p>IT HAS NEVER JUDGED YOU.</p>
+      <p>IT NEVER WILL.</p>
+      <p>SEND IT AGAIN.</p>
+    </div>
+    <img src="./Distorted_Face_on_Google.webp" alt="" class="face-img manifesto-watcher" aria-hidden="true">
+  </section>
 
   <!-- FOOTER -->
   <footer id="site-footer">
@@ -1040,10 +1127,16 @@
   </footer>
 
   <script>
+
+    function showRandomNumber() {
+      document.getElementById("myNumber").innerHTML = Math.floor(Math.random() * (100 - 5 + 1)) + 5;
+    }
+
+
     // Hit counter
     const key = 'df-visits';
     const n = parseInt(localStorage.getItem(key) || '0') + 1;
-    try { localStorage.setItem(key, n); } catch(e) {}
+    try { localStorage.setItem(key, n); } catch (e) { }
     document.getElementById('hit-count').textContent = n.toLocaleString();
 
     // Hero parallax — rAF-throttled, pauses when hero is off-screen
@@ -1109,4 +1202,5 @@
     updateActiveNav();
   </script>
 </body>
+
 </html>
