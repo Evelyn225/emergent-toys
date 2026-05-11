@@ -8026,6 +8026,26 @@ function openNotepad(filename, dirName, options) {
 
   ta.addEventListener('input', () => { renderHighlight(); updateStatus(); });
   ta.addEventListener('scroll', syncScroll);
+  ta.addEventListener('dragover', e => e.preventDefault());
+  ta.addEventListener('drop', e => {
+    e.preventDefault();
+    // Collect names from internal shell drag or external OS files
+    const shellPayload = getShellDragPayload();
+    let names = [];
+    if (shellPayload?.items?.length) {
+      names = shellPayload.items.map(i => i.name);
+      clearShellDragPayload();
+    } else if (e.dataTransfer?.files?.length) {
+      names = [...e.dataTransfer.files].map(f => f.name);
+    }
+    if (!names.length) return;
+    const insert = names.join(' ');
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, start) + insert + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = start + insert.length;
+    renderHighlight();
+    updateStatus();
+  });
   updateStatus();
 
   // ── IDE keybindings ──────────────────────────────────────────
