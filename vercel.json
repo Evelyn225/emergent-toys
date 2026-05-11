@@ -15,10 +15,13 @@
     { "src": "images/**", "use": "@vercel/static" },
     { "src": "audio/**", "use": "@vercel/static" },
     { "src": "archive links/**", "use": "@vercel/static" },
-    { "src": "site.webmanifest", "use": "@vercel/static" }
+    { "src": "site.webmanifest", "use": "@vercel/static" },
+    { "src": "robots.txt", "use": "@vercel/static" },
+    { "src": "sitemap.xml", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/sleep-os", "dest": "/sleep-os.html" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
