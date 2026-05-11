@@ -320,10 +320,6 @@
     clearTimeout(splashAutoExit);
     document.removeEventListener('click', onClickSkip);
 
-    document.querySelectorAll('.link-item').forEach(el => {
-      el.style.animation = 'none';
-      el.style.opacity   = '0';
-    });
 
     splashEl.style.animation = 'splash-exit 0.45s ease-in-out forwards';
     splashEl.addEventListener('animationend', (e) => {
