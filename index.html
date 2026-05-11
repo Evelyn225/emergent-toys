@@ -116,8 +116,10 @@
     }
 
     .link-item:hover,
-    .link-item:focus {
+    .link-item:focus-visible {
       color: rgba(255,255,255,1);
+    }
+    .link-item:focus:not(:focus-visible) {
       outline: none;
     }
 
