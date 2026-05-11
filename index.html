@@ -24,7 +24,22 @@
       href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
   <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
   <title>H̷̡͈̙̳̼̳̲̅̋͂̋͝͝Ë̸̠̤̰́̄̚H̴͓͎̪͗͒̔̏͘E̶̗̙̱̖͎͊̋̈́̅̈́H̸͉̗͈̍̕E̶̤̼͌̎͊H̴̢̹̩̙̞͑̀̾͒̕E̵̟̋̋̎͘̚</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style id="fonts">
+@font-face {
+  font-family: 'W95';
+  src: url('w95font.woff2') format('woff2'),
+       url('w95font.woff')  format('woff');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'W95';
+  src: url('w95font-bold.woff2') format('woff2'),
+       url('w95font-bold.woff')  format('woff');
+  font-weight: bold;
+  font-style: normal;
+}
+</style>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATON.CUR'), auto !important; }
@@ -33,24 +48,9 @@
     body {
       margin: 0;
       overflow: hidden;
-      background: #fff;
-      font-family: 'DM Mono', monospace;
-      font-weight: 300;
-      color: #111;
-      background-image: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/indexbg.PNG');
-    }
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: inherit;
-      background-size: cover;
-      background-position: left 50% top 32%;
-      filter: blur(20px) brightness(1.85) contrast(0.95);
-      background-blend-mode: luminosity;
-      transform: scale(1.5);
-      background-repeat: no-repeat;
-      z-index: -1;
+      background: #000;
+      font-family: 'W95', monospace;
+      color: rgba(255,255,255,0.85);
     }
     /* ─── Centered hero ─── */
     .hero {
@@ -264,7 +264,7 @@
     }
 
     #splash-terminal {
-      font-family: 'DM Mono', monospace;
+      font-family: 'W95', monospace;
       font-size: 13px;
       font-weight: 300;
       color: rgba(0, 0, 0, 0.75);
@@ -283,7 +283,7 @@
     /* cursor particles */
     .cursor-particle {
       position: fixed;
-      font-family: 'DM Mono', monospace;
+      font-family: 'W95', monospace;
       pointer-events: none;
       z-index: 10000;
       user-select: none;
