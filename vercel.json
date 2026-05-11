@@ -21,7 +21,7 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/sleep-os", "dest": "/sleep-os.html" },
+    { "src": "^/([a-zA-Z0-9_\\-]+)$", "dest": "/$1.html" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
