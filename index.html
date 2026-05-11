@@ -361,17 +361,7 @@
     mainContent.style.visibility = 'visible';
     requestAnimationFrame(() => { mainContent.style.opacity = '1'; });
 
-    // Title typing
-    const titleText   = "Eve Net";
-    const titleTarget = document.getElementById("main-title-text");
-    let titleIndex    = 0;
-    function typeTitle() {
-      if (!titleTarget) return;
-      titleTarget.textContent = titleText.slice(0, titleIndex);
-      titleIndex++;
-      if (titleIndex <= titleText.length) setTimeout(typeTitle, 90);
-    }
-    typeTitle();
+    document.getElementById('main-title-text').textContent = 'Eve Net';
   }
 
   // ── Cursor particles ──────────────────────────────────────────
