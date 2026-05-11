@@ -1487,7 +1487,7 @@ body.idle-sleeping { cursor:none; }
       <span class="sm-icon">▶</span><span>Run...</span>
     </div>
     <div class="sm-sep"></div>
-    <div class="sm-item" onclick="window.location='index.html'">
+    <div class="sm-item" onclick="window.location='/'">
       <span class="sm-icon"><img src="https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/go-home.png" alt=""></span><span>Return to Eve Net</span>
     </div>
     <div class="sm-sep"></div>
@@ -11944,7 +11944,7 @@ Saving system state...                   [OK]
   document.getElementById('taskbar').style.display = 'none';
   setTimeout(() => { bios.style.opacity = '1'; }, 30);
   setTimeout(() => {
-    if (val === 'back') window.location.href = 'index.html';
+    if (val === 'back') window.location.href = '/';
     else if (val === 'restart') window.location.href = 'sleep-os.html';
     else window.close();
   }, 3200);
