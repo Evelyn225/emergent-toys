@@ -348,6 +348,25 @@ body {
 .sm-fill { height: 100%; background: #000080; position: absolute; left: 0; top: 0; transition: width 1.2s ease; }
 .sm-val { width: 38px; text-align: right; font-size: 10px; color: #444; }
 
+/* ── Browser ─────────────────────────────────────────────────── */
+.browser-toolbar {
+  display: flex; align-items: center; gap: 2px; padding: 2px 4px;
+  background: #c0c0c0; border-bottom: 1px solid #808080; flex-shrink: 0;
+}
+.br-btn {
+  min-width: 22px; height: 22px; padding: 0 4px; cursor: default;
+  background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  font-size: 11px; font-family: var(--sleep-font);
+}
+.br-btn:active { border-color: #808080 #fff #fff #808080; }
+.br-btn:disabled { color: #808080; }
+.br-vsep { width: 1px; background: #808080; height: 20px; margin: 0 2px; flex-shrink: 0; }
+.br-addr-label { font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+.br-addr {
+  flex: 1; height: 18px; font-size: 11px; padding: 0 2px;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+  background: #fff; font-family: var(--sleep-font);
+}
 
 /* ── Dialog ───────────────────────────────────────────────────── */
 .dlg-body { padding: 12px; display: flex; gap: 12px; align-items: flex-start; }
@@ -1505,6 +1524,7 @@ const PROJECTS = [
   { name: 'patch synth',        emoji: '🎛️',  file: 'evenet.fun/synth.html' },
   { name: 'turtle',             emoji: '🐢', file: 'evenet.fun/turtle.html' },
   { name: 'ball like',          emoji: '⚪', file: 'evenet.fun/ball-like.html' },
+  { name: 'mineria',            emoji: '⛏️', file: 'evenet.fun/terraria.html' },
 ];
 const RECYCLE_BIN_NAME = 'RECYCLE BIN';
 const RECYCLE_STORAGE_DIR = 'CACHE\\RECYCLE_BIN';
@@ -1516,6 +1536,7 @@ const DESKTOP_ICONS = [
   { name: 'EXPLORER.exe',   emoji: '🗂️', action: 'openExplorer' },
   { name: 'TERMINAL.exe',   emoji: '💻', action: 'openTerminal' },
   { name: 'SYSMON.exe',     emoji: '📊', action: 'openSysmon' },
+  { name: 'BROWSER.exe',    emoji: '🌐', action: 'openBrowser' },
   { name: 'DEFRAG.exe',     emoji: '🧩', action: 'openDefrag' },
   { name: 'CALC.exe',       emoji: '🔢', action: 'openCalculator' },
   { name: 'REGEDIT.exe',    emoji: '🗝️', action: 'openRegedit' },
@@ -1807,6 +1828,7 @@ function openSystemFile(name) {
     'TERMINAL.exe': openTerminal,
     'SYSMON.exe': openSysmon,
     'NOTEPAD.exe': openNotepad,
+    'BROWSER.exe': openBrowser,
     'DEFRAG.exe': openDefrag,
     'CALC.exe': openCalculator,
     'REGEDIT.exe': openRegedit,
@@ -1848,7 +1870,46 @@ function openRecycleBin() {
   openExplorer('RECYCLE');
 }
 
-
+const DEFAULT_BROWSER_FAVORITES = [
+  { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: '&#128214;' },
+  { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: '&#128230;' },
+  { title: 'Poolsuite FM',      url: 'https://poolsuite.net', homeIcon: '&#128251;' },
+];
+const DEFAULT_BROWSER_FAVORITE_URLS = new Set(DEFAULT_BROWSER_FAVORITES.map(fav => fav.url.toLowerCase()));
+function normalizeFavoriteEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const url = String(entry.url || '').trim();
+  if (!url) return null;
+  const title = String(entry.title || url).trim() || url;
+  return { title, url };
+}
+function dedupeFavorites(list) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : [])
+    .map(normalizeFavoriteEntry)
+    .filter(entry => {
+      if (!entry) return false;
+      const key = entry.url.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+let browserFavorites = [];
+try {
+  browserFavorites = dedupeFavorites(JSON.parse(localStorage.getItem('sleepOS-favorites') || '[]'));
+} catch {
+  browserFavorites = [];
+}
+function saveFavorites() {
+  browserFavorites = dedupeFavorites(browserFavorites);
+  localStorage.setItem('sleepOS-favorites', JSON.stringify(browserFavorites));
+}
+if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
+  browserFavorites = dedupeFavorites([...DEFAULT_BROWSER_FAVORITES, ...browserFavorites]);
+  saveFavorites();
+  localStorage.setItem('sleepOS-favorites-seeded', '1');
+}
 
 // ── Settings bootstrap (must be early so BIOS skip works) ────────
 const SETTINGS_KEY = 'sleepOS-settings';
@@ -2541,7 +2602,7 @@ const termFS = {
         '',
         'SYSTEM FILES (read-only):',
         '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
-        '  SYSMON.exe  DEFRAG.exe',
+        '  SYSMON.exe  BROWSER.exe  DEFRAG.exe',
         '  CALC.exe  REGEDIT.exe  EXPLORER.exe',
         '  void.tmp  daemon.core  ?????.exe',
         '',
@@ -2691,7 +2752,7 @@ const termFS = {
         '',
         '── PROGRAMS FOR start/open ──────────────────',
         '',
-        '  notepad, terminal, sysmon,',
+        '  notepad, terminal, sysmon, browser,',
         '  defrag, explorer, welcome,',
         '  calc, regedit',
       ].join('\n')],
@@ -3261,6 +3322,7 @@ const ROOT_SYSTEM_FILE_META = [
   { name: 'TERMINAL.exe', size: '4,096', date: '11/13/2024  10:31' },
   { name: 'SYSMON.exe', size: '8,192', date: '11/13/2024  10:31' },
   { name: 'NOTEPAD.exe', size: '4,096', date: '11/13/2024  10:31' },
+  { name: 'BROWSER.exe', size: '8,192', date: '11/13/2024  10:31' },
   { name: 'DEFRAG.exe', size: '8,192', date: '11/13/2024  10:31' },
   { name: 'CALC.exe', size: '4,096', date: '11/13/2024  10:31' },
   { name: 'REGEDIT.exe', size: '8,192', date: '11/13/2024  10:31' },
@@ -5432,6 +5494,8 @@ async function execScriptInstruction(inst, labels, state) {
         'terminal.exe': () => openTerminal(state.dirName),
         sysmon: openSysmon,
         'sysmon.exe': openSysmon,
+        browser: openBrowser,
+        'browser.exe': openBrowser,
         defrag: openDefrag,
         'defrag.exe': openDefrag,
         explorer: openExplorer,
@@ -7044,7 +7108,7 @@ function makeDesktopIconEl(ic) {
       if (['daemon.core','void.tmp'].includes(icName)) {
         items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
       }
-      if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
+      if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
         items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
       if (singleDesktopImage) {
@@ -7251,6 +7315,7 @@ function setupIcons() {
       { label: '💻 Open Terminal',    action: openTerminal },
       { label: '🗂️ Open Explorer',    action: openExplorer },
       { label: '📝 Open Notepad',     action: openNotepad },
+      { label: '🌐 Open Browser',     action: openBrowser },
       '-',
       { label: '📁 New Folder',      action: () => promptCreateFolderAt('DESKTOP') },
       { label: '📤 Upload File...',  action: () => triggerUpload('DESKTOP') },
@@ -7319,6 +7384,7 @@ Programs:
   PROJECTS.DIR  \u2014 interactive apps (double-click to browse)
   NOTEPAD.exe   \u2014 text editor with syntax highlighting
   TERMINAL.exe  \u2014 command line (type HELP for commands)
+  BROWSER.exe   \u2014 web browser
   SYSMON.exe    \u2014 system monitor
   DEFRAG.exe    \u2014 disk defragmenter
   CALC.exe      \u2014 calculator
@@ -7685,6 +7751,24 @@ function getExeDecompilerContent(fname) {
       'integrity_critical:',
       '  CALL emit_warning',
       '  PUSH 0xDEAD',
+      '  RET',
+    ],
+    'browser.exe': [
+      '; BROWSER.exe - Disassembly',
+      'section .rodata',
+      '  home_url  DB "sleep://home", 0',
+      '  err_msg   DB "site blocked by void", 0',
+      'section .text',
+      '  MOV  esi, home_url',
+      '  CALL resolve_sleep_addr',
+      '  TEST eax, eax',
+      '  JZ   frame_blocked',
+      '  CALL render_page',
+      '  JMP  event_loop',
+      'frame_blocked:',
+      '  PUSH err_msg',
+      '  CALL show_error',
+      '  ; observer may intercept traffic here',
       '  RET',
     ],
     'defrag.exe': [
@@ -9445,6 +9529,8 @@ function openTerminal(startDir, initialCommand) {
       files: { lines: ['Opening Files...'], action: openFiles },
       'sysmon.exe': { lines: ['Starting SYSMON.exe...'], action: openSysmon },
       sysmon: { lines: ['Starting SYSMON.exe...'], action: openSysmon },
+      'browser.exe': { lines: ['Starting BROWSER.exe...'], action: openBrowser },
+      browser: { lines: ['Starting BROWSER.exe...'], action: openBrowser },
       'defrag.exe': { lines: ['Starting DEFRAG.exe...'], action: openDefrag },
       defrag: { lines: ['Starting DEFRAG.exe...'], action: openDefrag },
       'calc.exe': { lines: ['Starting CALC.exe...'], action: openCalculator },
@@ -10147,7 +10233,7 @@ function openTerminal(startDir, initialCommand) {
         }
       });
       // System files
-      ['TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','DEFRAG.exe',
+      ['TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe',
        'void.tmp','daemon.core              [UNREADABLE]','?????.exe                [DO NOT EXECUTE]'
       ].forEach(n => print(`├── ${n}`));
       // User files
@@ -10268,6 +10354,8 @@ function openTerminal(startDir, initialCommand) {
         'explorer':       openExplorer,
         'sysmon.exe':     openSysmon,
         'sysmon':         openSysmon,
+        'browser.exe':    openBrowser,
+        'browser':        openBrowser,
         'defrag.exe':     openDefrag,
         'defrag':         openDefrag,
         'daemon.core':    openDaemon,
@@ -11416,6 +11504,313 @@ function runUnknown() {
     <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
 }
 
+function openBrowser() {
+  if (!mkWin({ id:'browser', title:'sleepWEB - Web Browser', icon:'🌐', w:640, h:460, x:80, y:50 })) return;
+
+  const mb   = document.getElementById('mb-browser');
+  const body = document.getElementById('wb-browser');
+  const ws   = document.getElementById('ws-browser');
+  body.style.cssText = 'display:flex;flex-direction:column;padding:0;overflow:hidden;';
+
+  let hist = [], histIdx = -1;
+
+  // ── home page ──────────────────────────────────────────────────
+  function buildHome() {
+    const projectLinks = PROJECTS.map(p =>
+      `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${JSON.stringify(p.file).replace(/</g, '\\u003c')}},"*");return false;'>${p.emoji} ${escHtml(p.name)}</a>`
+    ).join('');
+    const favoriteLinks = browserFavorites
+      .filter(fav => !DEFAULT_BROWSER_FAVORITE_URLS.has(fav.url.toLowerCase()))
+      .map(fav => {
+        const safeUrl = JSON.stringify(fav.url).replace(/</g, '\u003c');
+        const safeTitle = escHtml(fav.title || fav.url);
+        return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>&#9734; ${safeTitle}</a>`;
+      }).join('');
+    const webLinks = DEFAULT_BROWSER_FAVORITES.map(fav => {
+      const safeUrl = JSON.stringify(fav.url).replace(/</g, '\u003c');
+      const safeTitle = escHtml(fav.title);
+      return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${fav.homeIcon} ${safeTitle}</a>`;
+    }).join('');
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
+@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
+:root{--sleep-font:'W95font',sans-serif;}
+      body{margin:0;background:#c0c0c0;font-family: var(--sleep-font);font-size:12px;}
+      h1{background:#000080;color:#fff;margin:0;padding:6px 12px;font-size:13px;}
+      .sec{padding:6px 12px;}.sec h2{font-size:11px;margin:6px 0 4px;border-bottom:1px solid #808080;}
+      .grid{display:flex;flex-wrap:wrap;gap:3px;}
+      .lnk{background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;
+           padding:1px 7px;font-size:11px;text-decoration:none;color:#000;display:inline-block;}
+      .lnk:hover{background:#000080;color:#fff;}
+    </style></head><body>
+    <h1>&#127760; sleepWEB &#8212; Start Page</h1>
+    <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${projectLinks}</div></div>
+    <div class="sec"><h2>The Web (may not load in frame)</h2><div class="grid">${webLinks}${favoriteLinks}</div></div>
+    </body></html>`;
+  }
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'browser-toolbar';
+  toolbar.innerHTML = `
+    <button class="br-btn" id="br-back" title="Back" disabled>◀</button>
+    <button class="br-btn" id="br-fwd"  title="Forward" disabled>▶</button>
+    <button class="br-btn" id="br-stop" title="Stop">✕</button>
+    <button class="br-btn" id="br-ref"  title="Refresh">↻</button>
+    <button class="br-btn" id="br-home" title="Home">🏠</button>
+    <div class="br-vsep"></div>
+    <span class="br-addr-label">Address:</span>
+    <input class="br-addr" id="br-url" type="text" value="home:">
+    <button class="br-btn" id="br-go">Go</button>
+    <button class="br-btn" id="br-fav" title="Add to Favorites">⭐</button>`;
+  body.appendChild(toolbar);
+
+  // ── iframe + error overlay ─────────────────────────────────────
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'flex:1;position:relative;overflow:hidden;background:#fff;';
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+  iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation';
+  wrap.appendChild(iframe);
+
+  const errDiv = document.createElement('div');
+  errDiv.id = 'br-err';
+  errDiv.style.cssText = 'display:none;position:absolute;inset:0;background:#c0c0c0;padding:30px;';
+  const errBox = document.createElement('div');
+  errBox.style.cssText = 'background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:16px;max-width:380px;margin:auto;font-size:11px;';
+  errDiv.appendChild(errBox);
+  wrap.appendChild(errDiv);
+
+  function showError(url) {
+    errBox.innerHTML = `
+      <div style="font-size:24px;margin-bottom:8px;">🚫</div>
+      <b>This page cannot be displayed</b><br><br>
+      <span style="word-break:break-all;color:#444;">${url}</span><br><br>
+      This site sent <code style="background:#eee;padding:1px 3px;">X-Frame-Options</code> or
+      <code style="background:#eee;padding:1px 3px;">Content-Security-Policy</code> headers that
+      block embedding.<br><br>
+      To fix this on <b>your own sites</b>, add this header:<br>
+      <code style="background:#eee;padding:2px 4px;display:block;margin:4px 0;">X-Frame-Options: ALLOWALL</code>
+      <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;">
+        <button class="dlg-btn primary" id="br-err-tab">Open in New Tab</button>
+        <button class="dlg-btn" id="br-err-ok">OK</button>
+      </div>`;
+    errDiv.style.display = 'block';
+    document.getElementById('br-err-tab').onclick = () => window.open(url, '_blank');
+    document.getElementById('br-err-ok').onclick  = () => { errDiv.style.display = 'none'; };
+    if (ws) ws.textContent = 'Error: site blocked embedding';
+  }
+  body.appendChild(wrap);
+
+  // ── navigate ───────────────────────────────────────────────────
+  function updateNav() {
+    document.getElementById('br-back').disabled = histIdx <= 0;
+    document.getElementById('br-fwd').disabled  = histIdx >= hist.length - 1;
+  }
+
+  let lastAttemptedUrl = '';
+
+  function navigate(url, push = true) {
+    errDiv.style.display = 'none';
+    if (!url || url === 'home:') {
+      url = 'home:';
+      document.getElementById('br-url').value = 'home:';
+      iframe.removeAttribute('src');
+      iframe.srcdoc = buildHome();
+      if (ws) ws.textContent = 'sleepWEB Start Page';
+    } else {
+      if (!/^https?:\/\/|^data:|^about:/.test(url)) url = 'https://' + url;
+      lastAttemptedUrl = url;
+      document.getElementById('br-url').value = url;
+      iframe.removeAttribute('srcdoc');
+      iframe.src = url;
+      if (ws) ws.textContent = 'Connecting to ' + (url.split('/')[2] || url);
+    }
+    if (push) { hist = hist.slice(0, histIdx + 1); hist.push(url); histIdx = hist.length - 1; }
+    updateNav();
+  }
+
+  function syncUrl() {
+    try {
+      const loc = iframe.contentWindow.location.href;
+      if (loc && loc !== 'about:blank' && loc !== 'about:srcdoc') {
+        const bar = document.getElementById('br-url');
+        if (bar && bar.value !== loc) {
+          bar.value = loc;
+          if (hist[histIdx] !== loc) {
+            hist = hist.slice(0, histIdx + 1); hist.push(loc); histIdx = hist.length - 1;
+            updateNav();
+          }
+        }
+      }
+    } catch(e) { /* cross-origin - cannot read URL */ }
+  }
+
+  // Poll to catch SPA pushState/hash navigation and link clicks
+  const _urlPoll = setInterval(syncUrl, 600);
+
+  iframe.addEventListener('load', () => {
+    syncUrl();
+    if (ws) ws.textContent = 'Done';
+  });
+
+  // Clear poll when browser window closes
+  document.getElementById('win-browser')?.addEventListener('remove', () => clearInterval(_urlPoll), { once: true });
+  // Use MutationObserver to detect window removal
+  new MutationObserver((_, obs) => {
+    if (!document.getElementById('win-browser')) { clearInterval(_urlPoll); obs.disconnect(); }
+  }).observe(document.getElementById('desktop'), { childList: true });
+  iframe.addEventListener('error', () => showError(lastAttemptedUrl));
+
+  // ── handle nav messages from srcdoc home page ──────────────────
+  function onBrowserMsg(e) {
+    if (e.data && e.data.type === 'browser-nav') navigate(e.data.url);
+  }
+  window.addEventListener('message', onBrowserMsg);
+  // clean up when window closes
+  const winEl = document.getElementById('win-browser');
+  if (winEl) new MutationObserver((_, obs) => {
+    if (!document.getElementById('win-browser')) {
+      window.removeEventListener('message', onBrowserMsg); obs.disconnect();
+    }
+  }).observe(document.getElementById('desktop'), { childList: true });
+
+  // ── button wiring ──────────────────────────────────────────────
+  document.getElementById('br-back').addEventListener('click', () => {
+    if (histIdx > 0) { histIdx--; navigate(hist[histIdx], false); }
+  });
+  document.getElementById('br-fwd').addEventListener('click', () => {
+    if (histIdx < hist.length - 1) { histIdx++; navigate(hist[histIdx], false); }
+  });
+  document.getElementById('br-stop').addEventListener('click', () => {
+    iframe.src = 'about:blank'; if (ws) ws.textContent = 'Stopped.';
+  });
+  document.getElementById('br-ref').addEventListener('click', () => {
+    const u = hist[histIdx]; if (u === 'home:') { iframe.srcdoc = buildHome(); } else { iframe.src = iframe.src; }
+    if (ws) ws.textContent = 'Refreshing...';
+  });
+  document.getElementById('br-home').addEventListener('click', () => navigate('home:'));
+  document.getElementById('br-go').addEventListener('click', () => navigate(document.getElementById('br-url').value.trim()));
+  document.getElementById('br-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') navigate(document.getElementById('br-url').value.trim());
+  });
+
+  // ── favorites helpers ──────────────────────────────────────────
+  function currentUrl() { return hist[histIdx] || 'home:'; }
+  function refreshHome() {
+    if (currentUrl() === 'home:') iframe.srcdoc = buildHome();
+  }
+  function addToFavorites() {
+    const url = currentUrl();
+    if (url === 'home:') return;
+    if (browserFavorites.some(fav => fav.url.toLowerCase() === url.toLowerCase())) {
+      if (ws) ws.textContent = 'Site is already in Favorites.';
+      return;
+    }
+    osPrompt('Save to Favorites as:', document.getElementById('br-url').value, 'Add to Favorites', title => {
+      if (!title) return;
+      browserFavorites.push({ title, url });
+      saveFavorites();
+      refreshHome();
+      if (ws) ws.textContent = 'Added to Favorites.';
+    }, '*');
+  }
+
+  document.getElementById('br-fav').addEventListener('click', addToFavorites);
+
+  // ── browser body right-click ───────────────────────────────────
+  body.addEventListener('contextmenu', e => {
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '◀ Back',    disabled: histIdx <= 0,               action: () => document.getElementById('br-back').click() },
+      { label: '▶ Forward', disabled: histIdx >= hist.length - 1, action: () => document.getElementById('br-fwd').click() },
+      { label: '↻ Refresh', action: () => document.getElementById('br-ref').click() },
+      '-',
+      { label: '⭐ Add to Favorites', disabled: currentUrl() === 'home:', action: addToFavorites },
+      '-',
+      { label: '🏠 Home',      action: () => navigate('home:') },
+      { label: '🔗 Open in New Tab', disabled: currentUrl() === 'home:', action: () => window.open(currentUrl(), '_blank') },
+    ]);
+  });
+
+  // ── menu bar ───────────────────────────────────────────────────
+  function brDropdown(anchor, items) {
+    const old = document.getElementById('active-dropdown'); if (old) old.remove();
+    const rect = anchor.getBoundingClientRect();
+    const dd = document.createElement('div');
+    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+    dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+    items.forEach(item => {
+      if (item === '-') {
+        const s = document.createElement('div'); s.className = 'menu-dd-sep'; dd.appendChild(s);
+      } else {
+        const el = document.createElement('div'); el.className = 'menu-dd-item'; el.textContent = item.label;
+        el.addEventListener('mousedown', e => { e.stopPropagation(); dd.remove(); item.action(); });
+        dd.appendChild(el);
+      }
+    });
+    document.body.appendChild(dd);
+    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+  }
+
+  mb.innerHTML = '';
+  [
+    { label: 'File', items: [
+      { label: 'Open Location...', action: () => osPrompt('Enter URL:', 'https://', 'Open Location', u => { if (u) navigate(u); }, '🌐') },
+      '-',
+      { label: 'Close', action: () => closeWin('browser') },
+    ]},
+    { label: 'View', items: [
+      { label: 'Home',    action: () => navigate('home:') },
+      { label: 'Refresh', action: () => document.getElementById('br-ref').click() },
+      { label: 'Stop',    action: () => document.getElementById('br-stop').click() },
+      '-',
+      { label: 'View Source', action: () => {
+        try {
+          const src = iframe.contentDocument.documentElement.outerHTML;
+          const w = window.open(''); w.document.write('<pre style="white-space:pre-wrap;font-size:12px;">' + src.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>');
+        } catch(e) { osAlert('Cannot view source of cross-origin pages.', 'View Source', '🚫'); }
+      }},
+    ]},
+    { label: 'Help', items: [
+      { label: 'About sleepWEB', action: () => osAlert('sleepWEB - Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', '🌐') },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); brDropdown(span, items); });
+    mb.appendChild(span);
+  });
+
+  // Favorites menu (dynamic - built on open)
+  const favSpan = document.createElement('span');
+  favSpan.className = 'menu-item'; favSpan.textContent = 'Favorites';
+  favSpan.addEventListener('click', e => {
+    e.stopPropagation();
+    const items = [
+      { label: '⭐ Add to Favorites', action: addToFavorites },
+      { label: '🗑️ Clear All Favorites', action: () => {
+        if (!browserFavorites.length) return;
+        osConfirm('Clear all favorites?', 'Confirm', ok => {
+          if (!ok) return;
+          browserFavorites.length = 0; saveFavorites(); refreshHome(); if (ws) ws.textContent = 'Favorites cleared.';
+        }, '🗑️');
+      }},
+    ];
+    if (browserFavorites.length) {
+      items.push('-');
+      browserFavorites.forEach((fav, i) => items.push({
+        label: fav.title,
+        action: () => navigate(fav.url),
+      }));
+    }
+    brDropdown(favSpan, items);
+  });
+  mb.appendChild(favSpan);
+
+  navigate('home:');
+}
+
 // ─────────────────────────────────────────────────────────────────
 // GLITCH EFFECT
 // ─────────────────────────────────────────────────────────────────
@@ -12102,6 +12497,7 @@ function openRunDialog() {
     'sysmon': openSysmon, 'sysmon.exe': openSysmon,
     'explorer': openExplorer, 'explorer.exe': openExplorer,
     'defrag': openDefrag, 'defrag.exe': openDefrag,
+    'browser': openBrowser, 'browser.exe': openBrowser,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,
