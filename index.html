@@ -269,7 +269,7 @@
       min-height: 7em;
     }
 
-    /* full-viewport cursor surface — sits below all content */
+    /* full-viewport cursor surface - sits below all content */
     #cursor-layer {
       position: fixed;
       inset: 0;
@@ -621,10 +621,6 @@
         <div class="icon-emoji">🐢</div>
         <span class="icon-label">turtle drawing</span>
       </a>
-      <a href="terraria.html" class="dock-icon">
-        <div class="icon-emoji">⛏️</div>
-        <span class="icon-label">mineria</span>
-      </a>
       <a href="poker-palace.html" class="dock-icon">
         <div class="icon-emoji">&#127137;</div>
         <span class="icon-label">poker palace</span>
@@ -778,7 +774,7 @@
     if (splashDone) return;
     splashDone = true;
 
-    // Snap dock icons hidden before overlay clears — prevents flash
+    // Snap dock icons hidden before overlay clears - prevents flash
     document.querySelectorAll('.dock-icon').forEach(el => {
       el.style.animation = 'none';
       el.style.opacity   = '0';
