@@ -640,16 +640,19 @@
   initBg();
 
   // ── Splash intro ──────────────────────────────────────────────
-  const splashEl    = document.getElementById('splash');
-  const splashText  = document.getElementById('splash-text');
+  const splashEl     = document.getElementById('splash');
+  const splashText   = document.getElementById('splash-text');
   const splashCursor = document.getElementById('splash-cursor');
-  const splashHint  = document.getElementById('splash-hint');
+  const splashHint   = document.getElementById('splash-hint');
 
   let splashDone = false;
+  let splashAutoExit;
 
   function exitSplash() {
     if (splashDone) return;
     splashDone = true;
+    clearTimeout(splashAutoExit);
+    document.removeEventListener('click', onClickSkip);
 
     document.querySelectorAll('.link-item').forEach(el => {
       el.style.animation = 'none';
@@ -667,7 +670,6 @@
   function onClickSkip(e) {
     if (e.target.closest('#theme-toggle')) return;
     exitSplash();
-    document.removeEventListener('click', onClickSkip);
   }
   document.addEventListener('click', onClickSkip);
   document.addEventListener('keydown', () => exitSplash(), { once: true });
@@ -682,11 +684,10 @@
     if (splashIndex <= SPLASH_TITLE.length) {
       setTimeout(typeSplash, 90);
     } else {
-      // Typing done: show blinking cursor + hint
-      splashCursor.style.animation = 'cursor-blink 1s steps(1) infinite';
       splashCursor.style.opacity = '1';
+      splashCursor.style.animation = 'cursor-blink 1s steps(1) infinite';
       splashHint.style.opacity = '1';
-      setTimeout(exitSplash, 2200);
+      splashAutoExit = setTimeout(exitSplash, 2200);
     }
   }
   typeSplash();
