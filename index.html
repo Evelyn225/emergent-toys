@@ -640,17 +640,18 @@
   initBg();
 
   // ── Splash intro ──────────────────────────────────────────────
-  const splashEl = document.getElementById('splash');
+  const splashEl    = document.getElementById('splash');
+  const splashText  = document.getElementById('splash-text');
+  const splashCursor = document.getElementById('splash-cursor');
+  const splashHint  = document.getElementById('splash-hint');
 
   let splashDone = false;
 
-  // Slide the overlay up then load the page
   function exitSplash() {
     if (splashDone) return;
     splashDone = true;
 
-    // Snap dock icons hidden before overlay clears - prevents flash
-    document.querySelectorAll('.dock-icon').forEach(el => {
+    document.querySelectorAll('.link-item').forEach(el => {
       el.style.animation = 'none';
       el.style.opacity   = '0';
     });
@@ -663,7 +664,6 @@
     });
   }
 
-  // Skip on click or keydown (but not the theme toggle)
   function onClickSkip(e) {
     if (e.target.closest('#theme-toggle')) return;
     exitSplash();
@@ -672,8 +672,24 @@
   document.addEventListener('click', onClickSkip);
   document.addEventListener('keydown', () => exitSplash(), { once: true });
 
-  // Auto-exit
-  setTimeout(exitSplash, 2950);
+  // Typewriter on splash title
+  const SPLASH_TITLE = 'Eve Net';
+  let splashIndex = 0;
+
+  function typeSplash() {
+    splashText.textContent = SPLASH_TITLE.slice(0, splashIndex);
+    splashIndex++;
+    if (splashIndex <= SPLASH_TITLE.length) {
+      setTimeout(typeSplash, 90);
+    } else {
+      // Typing done: show blinking cursor + hint
+      splashCursor.style.animation = 'cursor-blink 1s steps(1) infinite';
+      splashCursor.style.opacity = '1';
+      splashHint.style.opacity = '1';
+      setTimeout(exitSplash, 2200);
+    }
+  }
+  typeSplash();
 
   // ── Main page init (runs after splash exits) ──────────────────
   function startPage() {
