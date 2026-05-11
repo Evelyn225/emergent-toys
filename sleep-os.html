@@ -114,6 +114,7 @@ body {
   padding: 4px; cursor: default;
   border: 1px solid transparent;
   user-select: none; overflow: hidden;
+  touch-action: none;
 }
 .desktop-icon:hover { border: 1px dotted rgba(255,255,255,0.55); background: rgba(0,0,128,0.28); }
 .desktop-icon.selected { border: 1px dotted #fff; background: rgba(0,0,128,0.5); }
@@ -1296,6 +1297,7 @@ body.idle-sleeping { cursor:none; }
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 14px; }
+  .win-rz { display: none; }
 
   .desktop-icon { width: 80px; height: 80px; padding: 5px; gap: 4px; }
   .di-img { font-size: 28px; }
@@ -1309,8 +1311,9 @@ body.idle-sleeping { cursor:none; }
   .tb-divider { height: 36px; }
   #system-tray { height: 36px; font-size: 14px; padding: 0 8px; }
 
-  .win-titlebar { height: 34px; padding: 2px 4px; }
-  .win-btn { width: 30px; height: 28px; font-size: 15px; }
+  .win-titlebar { height: 52px; padding: 4px 6px; }
+  .win-btn { width: 44px; height: 44px; font-size: 20px; }
+  .win-controls { gap: 4px; }
   .win-title-text { font-size: 13px; }
   .win-icon { font-size: 16px; }
   .win-menubar { padding: 2px 4px; }
@@ -1336,6 +1339,13 @@ body.idle-sleeping { cursor:none; }
 
   .term-wrap { font-size: 16px; }
   .note-body, .note-textarea { font-size: 13px; }
+
+  .exp-toolbar button { padding: 8px 14px; font-size: 13px; }
+  .exp-addr { padding: 6px 6px; font-size: 13px; }
+  .exp-item { width: 86px; padding: 8px 4px; font-size: 12px; }
+  .exp-item .exp-icon { font-size: 32px; }
+  .exp-list-item { padding: 10px 6px; font-size: 13px; }
+  .exp-det-item td { padding: 8px 6px; font-size: 13px; }
 }
 </style>
 </head>
@@ -6912,9 +6922,10 @@ function makeDesktopIconEl(ic) {
       div.classList.add('selected');
       desktopSel.add(div);
     }
-    if (e.pointerType !== 'mouse') { activate(); return; }
 
     // Drag-to-rearrange tracking
+    const isMouse = e.pointerType === 'mouse';
+    const dragThreshold = isMouse ? 5 : 12;
     const startClientX = e.clientX, startClientY = e.clientY;
     const layer   = document.getElementById('icons-layer');
     const lr      = layer.getBoundingClientRect();
@@ -6942,7 +6953,7 @@ function makeDesktopIconEl(ic) {
 
     const onMove = mv => {
       if (!dragging) {
-        if (Math.abs(mv.clientX - startClientX) > 5 || Math.abs(mv.clientY - startClientY) > 5) {
+        if (Math.abs(mv.clientX - startClientX) > dragThreshold || Math.abs(mv.clientY - startClientY) > dragThreshold) {
           dragging = true;
           clicks = 0; clearTimeout(clickT);
           dragStates.forEach(state => {
@@ -7027,7 +7038,11 @@ function makeDesktopIconEl(ic) {
           });
         saveIconPositions();
       } else {
-        queueActivateClick();
+        if (isMouse) {
+          queueActivateClick();
+        } else {
+          activate();
+        }
       }
     };
     window.addEventListener('pointermove', onMove);
@@ -7174,13 +7189,17 @@ function setupIcons() {
     return ic.recycleBin || !isDesktopBuiltInIcon(ic) || entry.manual === true;
   };
   const assignPosition = ic => {
-    const preferred = hasSavedPosition(ic) ? saved[ic.name] : (defaults[ic.name] || { col: 0, row: 0 });
+    const isAutoRecycleBin = ic.recycleBin && saved[ic.name]?.manual !== true;
+    const preferred = isAutoRecycleBin ? iconRecycleBinCell() : (hasSavedPosition(ic) ? saved[ic.name] : (defaults[ic.name] || { col: 0, row: 0 }));
     const { col, row } = iconFindFreeCell(preferred.col, preferred.row, ic.name);
     iconPositions[ic.name] = saved[ic.name]?.manual === true ? { col, row, manual: true } : { col, row };
   };
   iconPositions  = {};
-  allIcons.filter(hasSavedPosition).forEach(assignPosition);
-  allIcons.filter(ic => !hasSavedPosition(ic)).forEach(assignPosition);
+  // Place non-recycle-bin icons first so the recycle bin can always claim the bottom-right cell
+  const nonBinIcons = allIcons.filter(ic => !ic.recycleBin);
+  nonBinIcons.filter(hasSavedPosition).forEach(assignPosition);
+  nonBinIcons.filter(ic => !hasSavedPosition(ic)).forEach(assignPosition);
+  if (recycleIcon) assignPosition(recycleIcon);
   saveIconPositions();
 
   allIcons.forEach(ic => {
@@ -7281,6 +7300,11 @@ function setupIcons() {
 
 document.addEventListener('fs-changed', () => {
   if (typeof setupIcons === 'function') setupIcons();
+});
+
+// Reflow icons on orientation change (mobile)
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
 });
 
 // Reflow icons when window is resized
@@ -8533,6 +8557,12 @@ function openExplorer(startPath) {
       else replaceSelection(item);
     });
     el.addEventListener('dblclick', () => openItem(item));
+    // Touch: single tap opens the item
+    let _tapX, _tapY;
+    el.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { _tapX = e.clientX; _tapY = e.clientY; } });
+    el.addEventListener('pointerup', e => {
+      if (e.pointerType !== 'mouse' && Math.abs(e.clientX - _tapX) < 10 && Math.abs(e.clientY - _tapY) < 10) openItem(item);
+    });
 
     // ── Drag source ──────────────────────────────────────────────
     const canDragItem = !isRecycleEntry && !item._proj && (!sysfile || isDesktopVirtualItem(item, cwd) || !!item._shortcut);
