@@ -340,7 +340,7 @@ void main() {
 `;
 
 
-    // --- Light fixture shader — same dither logic, fixed near-white luminance ----
+    // --- Light fixture shader - same dither logic, fixed near-white luminance ----
     const litFragmentShader = /* glsl */`
 precision highp float;
 uniform float matrixSize;
@@ -425,7 +425,7 @@ void main() {
       });
     }
 
-    // Light fixture material — dithers at near-white luminance, no displacement
+    // Light fixture material - dithers at near-white luminance, no displacement
     const litMat = new THREE.ShaderMaterial({
       uniforms: { matrixSize: uMatrixSize, bias: uBias },
       vertexShader: `
@@ -559,7 +559,7 @@ void main() {
         }
       }
 
-      // Double-height shell with full-height ribs — taller, heavier version of ribbed
+      // Double-height shell with full-height ribs - taller, heavier version of ribbed
       _tallrib() {
         const CH = H * 2;
         
@@ -976,7 +976,7 @@ void main() {
           iw.position.set(side * CW / 2, H / 2, 0);
           this.group.add(iw);
 
-          // Step walls at ±TZ — face +Z so they're visible to the approaching player
+          // Step walls at ±TZ - face +Z so they're visible to the approaching player
           for (const zSign of [-1, 1]) {
             const sw = new THREE.Mesh(new THREE.PlaneGeometry(EW, H, 4, 6), surfaceMat);
             sw.rotation.y = 0;
@@ -985,7 +985,7 @@ void main() {
           }
         }
 
-        // Corner columns — inner corners (x=±W/2) AND outer corners (x=±CW/2)
+        // Corner columns - inner corners (x=±W/2) AND outer corners (x=±CW/2)
         // fill the T-junction gaps where step wall meets outer/inner wall
         for (const side of [-1, 1]) {
           for (const zSign of [-1, 1]) {
@@ -1063,7 +1063,7 @@ void main() {
         }
       }
 
-      // Open colonnade hall — wide with columns instead of solid inner walls
+      // Open colonnade hall - wide with columns instead of solid inner walls
       _hall() {
         const CW = 11;
         const EW = (CW - W) / 2; // 2.5
@@ -1106,7 +1106,7 @@ void main() {
             this.group.add(sw);
           }
 
-          // Colonnade columns at outer edge — no solid wall, just pillars
+          // Colonnade columns at outer edge - no solid wall, just pillars
           for (const z of [-3.0, -1.0, 1.0, 3.0]) {
             const col = new THREE.Mesh(new THREE.BoxGeometry(0.6, H, 0.6), structMat);
             col.position.set(side * (CW / 2 - 0.3), H / 2, z);
@@ -1132,7 +1132,7 @@ void main() {
         }
       }
 
-      // Narrow-and-tall silo shaft — walls close in, ceiling soars
+      // Narrow-and-tall silo shaft - walls close in, ceiling soars
       _silo() {
         const WN = 3.5; // narrow inner width
         const CH = 8.0; // silo ceiling height
@@ -1184,13 +1184,13 @@ void main() {
             this.group.add(ow);
           }
 
-          // Inner narrow wall — standard height (middle zone, y=0 to H)
+          // Inner narrow wall - standard height (middle zone, y=0 to H)
           const iw = new THREE.Mesh(new THREE.PlaneGeometry(TZ * 2, H, 8, 8), surfaceMat);
           iw.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
           iw.position.set(side * WN / 2, H / 2, 0);
           this.group.add(iw);
 
-          // Tall silo wall — upper section (y=H to CH)
+          // Tall silo wall - upper section (y=H to CH)
           const tw = new THREE.Mesh(new THREE.PlaneGeometry(TZ * 2, CH - H, 8, 8), surfaceMat);
           tw.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
           tw.position.set(side * WN / 2, H + (CH - H) / 2, 0);
@@ -1242,7 +1242,7 @@ void main() {
         this.group.add(litBar);
       }
 
-      // Ceiling light bars — dithered near-white to match rendering style
+      // Ceiling light bars - dithered near-white to match rendering style
       _lit() {
         const zSlots = [-3.0, 0.0, 3.0];
 
@@ -1268,7 +1268,7 @@ void main() {
         }
       }
 
-      // Market stalls — simple brutalist frame structures on alternating sides
+      // Market stalls - simple brutalist frame structures on alternating sides
       _market() {
         // Floor and ceiling
         const flr = new THREE.Mesh(new THREE.PlaneGeometry(W, SEG_LEN, 12, 10), surfaceMat);
@@ -1309,7 +1309,7 @@ void main() {
         }
       }
 
-      // Tori gate — simple sacred gate structure
+      // Tori gate - simple sacred gate structure
       _tori() {
         const gateW = W * 0.6;  // gate width
         const gateH = H * 1.3;  // gate height (taller)
@@ -1342,7 +1342,7 @@ void main() {
         this.group.add(midBeam);
       }
 
-      // Corner — minimal corner pillars in each quadrant
+      // Corner - minimal corner pillars in each quadrant
       _corner() {
         // Floor and ceiling
         const flr = new THREE.Mesh(new THREE.PlaneGeometry(W, SEG_LEN, 12, 10), surfaceMat);
@@ -1364,7 +1364,7 @@ void main() {
         }
       }
 
-      // Cylindrical ribs — vertical torus arches at multiple z-positions
+      // Cylindrical ribs - vertical torus arches at multiple z-positions
       _cylrib() {
         // Floor and ceiling
         const flr = new THREE.Mesh(new THREE.PlaneGeometry(W, SEG_LEN, 12, 10), surfaceMat);
@@ -1390,7 +1390,7 @@ void main() {
         }
       }
 
-      // Two wide shallow bays per side with a bench — same carved-out approach, D=0.7
+      // Two wide shallow bays per side with a bench - same carved-out approach, D=0.7
       _bay() {
         const D = 0.7;
         const CW = W + 2 * D;
@@ -1444,7 +1444,7 @@ void main() {
         }
       }
 
-      // Three cramped cells per side — dropped ceiling at 2.4, dungeon-like
+      // Three cramped cells per side - dropped ceiling at 2.4, dungeon-like
       _cell() {
         const D = 0.8;
         const CW = W + 2 * D;
@@ -1516,7 +1516,7 @@ void main() {
         floor.rotation.x = -Math.PI / 2;
         this.group.add(floor);
 
-        // Pool floor — surfaceMat keeps it dark and deep
+        // Pool floor - surfaceMat keeps it dark and deep
         const poolFloor = new THREE.Mesh(new THREE.PlaneGeometry(PW, SEG_LEN, 10, 12), surfaceMat);
         poolFloor.rotation.x = -Math.PI / 2;
         poolFloor.position.set(-(W / 2 + PW / 2), -PD, 0);
@@ -1534,7 +1534,7 @@ void main() {
         rw.position.set(W / 2, H / 2, 0);
         this.group.add(rw);
 
-        // Left outer wall — taller to reach the sunken pool floor
+        // Left outer wall - taller to reach the sunken pool floor
         const lw = new THREE.Mesh(new THREE.PlaneGeometry(SEG_LEN, H + PD, 12, 10), surfaceMat);
         lw.rotation.y = Math.PI / 2;
         lw.position.set(-(W / 2 + PW), (H - PD) / 2, 0);
@@ -1567,7 +1567,7 @@ void main() {
         }
       }
 
-      // Standard shell but walls close in + ceiling drops in the center — claustrophobic passage
+      // Standard shell but walls close in + ceiling drops in the center - claustrophobic passage
       _cramped() {
         const NW = 3.5;  // narrow width
         const CH = 2.6;  // dropped ceiling height

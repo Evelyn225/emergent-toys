@@ -122,7 +122,7 @@
             const t = time * 2;
             const freq = config.warpFrequency;
             const amp = config.warpAmplitude;
-            // Build warped mesh — compute every intersection point once,
+            // Build warped mesh - compute every intersection point once,
             // then share those exact points between cell fills and grid lines
             const gs = config.gridSize;
             const cols = Math.ceil((logicalWidth  + gs * 2) / gs) + 1;
@@ -228,7 +228,7 @@
                 ctx.globalAlpha = 1;
             }
 
-            // Radial vignette — overhead light simulation
+            // Radial vignette - overhead light simulation
             ctx.globalAlpha = 1;
             ctx.fillStyle = vignetteGradient;
             ctx.fillRect(0, 0, logicalWidth, logicalHeight);

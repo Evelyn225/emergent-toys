@@ -452,7 +452,7 @@
             const themeInput = document.getElementById('themeInput');
             const themeScreen = document.getElementById('themeScreen');
             const topBar = document.getElementById('topBar');
-            // Require a theme — no silent random fallback
+            // Require a theme - no silent random fallback
             if (!themeInput.value.trim()) {
                 themeInput.classList.remove('input-error');
                 void themeInput.offsetWidth; // force reflow to restart animation
@@ -521,13 +521,13 @@
                 const secondPassPrompt = `
 You previously generated this site for the theme: "${themeValue}". Please review and improve it:
 
-1. Expand and enrich this working implementation — preserve everything that already functions. Make it more substantial and fully realized, deepening how it expresses the theme: "${themeValue}".
+1. Expand and enrich this working implementation - preserve everything that already functions. Make it more substantial and fully realized, deepening how it expresses the theme: "${themeValue}".
 2. Carefully check for any referenced functions, variables, or classes that are not fully implemented, and implement them.
 3. Ensure all p5.js code is complete and functional.
 4. Output only the improved HTML/CSS/JS code, no explanations.
 
 OUTPUT FORMAT (strictly enforced):
-- Raw HTML/CSS/JS only — no markdown, no code fences, no backticks
+- Raw HTML/CSS/JS only - no markdown, no code fences, no backticks
 - Do NOT wrap output in \`\`\`html or any other block
 - Output must begin with the first < character, nothing before it
 - Do NOT include <html>, <head>, or <body> tags
@@ -719,14 +719,14 @@ ${firstPassCode}
                     document.getElementById('loadingOverlay').classList.remove('hidden');
                     themeScreen.style.display = 'none';
                 } else if (themeScreen.style.display === 'flex') {
-                    // Overlay is open — only dismiss if a site exists
+                    // Overlay is open - only dismiss if a site exists
                     if (hasContent) {
                         themeScreen.style.display = 'none';
                         resumeCurrentSite();
                     }
                     // else: first visit, cannot dismiss
                 } else {
-                    // Overlay is closed — open it (do NOT clear generatedContent)
+                    // Overlay is closed - open it (do NOT clear generatedContent)
                     themeScreen.style.display = 'flex';
                     pauseCurrentSite();
                 }

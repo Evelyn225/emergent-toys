@@ -1,4 +1,4 @@
-// balllike.js — Line Rider style physics toy
+// balllike.js - Line Rider style physics toy
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -190,7 +190,7 @@ function cutLineWithCircle(points, cx, cy, r) {
     const ts = segCircleTs(cx, cy, r, prev, p).sort((a, b) => a - b);
 
     if (!prevInside && !inside) {
-      // Both outside — but segment might pass through the circle
+      // Both outside - but segment might pass through the circle
       if (ts.length === 2) {
         // Entry then exit: split here
         current.push(lerp(prev, p, ts[0]));

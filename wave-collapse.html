@@ -228,7 +228,7 @@
       position: relative;
     }
 
-    /* primary action — collapse button */
+    /* primary action - collapse button */
     .t-btn.primary {
       color: var(--cyan);
       border-color: rgba(0, 200, 240, 0.45);
@@ -305,7 +305,7 @@
 
   <!-- header -->
   <header>
-    <span class="header-eyebrow">[ WFC ] — superposition tile synthesis</span>
+    <span class="header-eyebrow">[ WFC ] - superposition tile synthesis</span>
     <h1>Wave Function Collapse</h1>
   </header>
 
@@ -383,13 +383,13 @@
     let tileSize = 8;
     let tilesX, tilesY;
 
-    const MAX_TILES = 300;  // cap — keeps init O(small) and WFC interesting
+    const MAX_TILES = 300;  // cap - keeps init O(small) and WFC interesting
 
     let wfcTiles  = [];   // [{pixels:Uint8Array, edges, count}]
     let wfcCompat = [];   // [{top:Int16Array, right:Int16Array, bottom:Int16Array, left:Int16Array}]
     let wfcN      = 0;    // number of unique tiles after capping
-    let cellPoss  = null; // Uint8Array(tilesY*tilesX*wfcN) — flat possibility grid
-    let cellCnt   = null; // Uint16Array(tilesY*tilesX)     — option count per cell
+    let cellPoss  = null; // Uint8Array(tilesY*tilesX*wfcN) - flat possibility grid
+    let cellCnt   = null; // Uint16Array(tilesY*tilesX)     - option count per cell
     let wfcAnimId = null;
 
     const WFC_DIRS = [
@@ -407,7 +407,7 @@
 
       setTimeout(() => {
         // Re-composite on solid bg to normalise any remaining transparency,
-        // then read pixels — bypasses p5 pixelDensity complications.
+        // then read pixels - bypasses p5 pixelDensity complications.
         background(3, 12, 22);
         image(img, 0, 0, width, height);
         const ctx  = canvas.elt.getContext('2d');
@@ -424,7 +424,7 @@
         tilesY = Math.ceil(height / tileSize);
         const cells = tilesX * tilesY;
 
-        // Flat typed arrays — grid init is a single fill(), not N×cells Set insertions
+        // Flat typed arrays - grid init is a single fill(), not N×cells Set insertions
         cellPoss = new Uint8Array(cells * wfcN).fill(1);
         cellCnt  = new Uint16Array(cells).fill(wfcN);
 
@@ -488,7 +488,7 @@
 
     // ── Source-position adjacency ─────────────────────────────────────────────
     // Builds compat from which tile types were literally neighbours in the source.
-    // No quantisation, no false positives — eliminates vertical streak artifacts.
+    // No quantisation, no false positives - eliminates vertical streak artifacts.
     function fastBuildAdjacency(tiles, srcGrid, gW, gH) {
       const N      = tiles.length;
       const compat = Array.from({ length: N }, () => ({
@@ -559,7 +559,7 @@
 
     // ── Generator 1: Circuit board pipe traces ────────────────────────────────
     // Uses an 8×8 grid (matching tileSize) so WFC tiles align exactly with cells.
-    // Connections between adjacent cells are decided randomly — tiles with a trace
+    // Connections between adjacent cells are decided randomly - tiles with a trace
     // running to an edge will match tiles where that trace continues from that edge.
     function drawCircuitBoard(gfx) {
       const W = 512, H = 512, GRID = 8;
@@ -615,7 +615,7 @@
     }
 
     // ── Generator 2: Crystal Voronoi lattice ──────────────────────────────────
-    // Uses createImage() for pixel manipulation — gfx.loadPixels() on a Graphics
+    // Uses createImage() for pixel manipulation - gfx.loadPixels() on a Graphics
     // object doesn't reliably flush writes back, but createImage is designed for this.
     function drawCrystalLattice(gfx) {
       const W = 512, H = 512;
@@ -624,10 +624,10 @@
       // Give each seed a colour tier so cells are visually distinguishable.
       // Tiers cycle through four clearly different brightness zones.
       const PALETTE = [
-        [  3,  18,  45 ],  // tier 0 — dark blue
-        [  2,  50, 100 ],  // tier 1 — mid teal
-        [  0,  95, 150 ],  // tier 2 — ocean
-        [  0, 155, 200 ],  // tier 3 — light cyan-teal
+        [  3,  18,  45 ],  // tier 0 - dark blue
+        [  2,  50, 100 ],  // tier 1 - mid teal
+        [  0,  95, 150 ],  // tier 2 - ocean
+        [  0, 155, 200 ],  // tier 3 - light cyan-teal
       ];
 
       const sx   = Array.from({length: N}, () => random(W));
@@ -655,7 +655,7 @@
 
           let r, g, b;
           if (isEdge) {
-            // Hard boundary — bright cyan line
+            // Hard boundary - bright cyan line
             r = 0; g = 210; b = 248;
           } else if (glowEdge) {
             // Soft glow fading from cyan to cell colour
@@ -665,7 +665,7 @@
             g = Math.round(c[1] + t * (210 - c[1]));
             b = Math.round(c[2] + t * (248 - c[2]));
           } else {
-            // Cell interior — base tier colour + small per-seed nudge
+            // Cell interior - base tier colour + small per-seed nudge
             const c   = PALETTE[tier[nearest]];
             const nud = (nearest % 6) - 3;              // -3 … +2 brightness nudge
             r = Math.max(0, c[0] + nud);
@@ -759,12 +759,12 @@
       }
     }
 
-    // ── Animated WFC collapse — entropy-guided, flat typed-array grid ─────────
+    // ── Animated WFC collapse - entropy-guided, flat typed-array grid ─────────
     function runWFCStep() {
       const BATCH = 200;
       const N  = wfcN;
       const gW = tilesX, gH = tilesY;
-      const allowed = new Uint8Array(N); // reused every propagation — no per-step alloc
+      const allowed = new Uint8Array(N); // reused every propagation - no per-step alloc
 
       for (let step = 0; step < BATCH; step++) {
         // Linear scan for min-entropy uncollapsed cell
@@ -779,7 +779,7 @@
           return;
         }
 
-        // Uniform-random collapse — frequency weighting biases to dominant tiles,
+        // Uniform-random collapse - frequency weighting biases to dominant tiles,
         // producing all-one-color output for images with large uniform regions.
         const base = minIdx * N;
         const avail = [];
@@ -834,7 +834,7 @@
               changed = true;
             }
           }
-          // Contradiction — pick random tile but don't propagate it further;
+          // Contradiction - pick random tile but don't propagate it further;
           // spreading an arbitrary choice creates cascading streak artifacts.
           if (cellCnt[ni] === 0) {
             const fb = Math.floor(Math.random() * N);
@@ -848,7 +848,7 @@
       }
     }
 
-    // ── Single putImageData call per frame — no p5 overhead ──────────────────
+    // ── Single putImageData call per frame - no p5 overhead ──────────────────
     function renderWFCGrid() {
       const T  = tileSize, N = wfcN, gW = tilesX;
       const ctx = canvas.elt.getContext('2d');

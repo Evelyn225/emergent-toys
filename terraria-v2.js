@@ -234,7 +234,7 @@ function getMaxHealth() {
   return player.maxHealth + (hasAccessory(ACC_NECKLACE) ? 1 : 0);
 }
 
-// Called wherever player takes damage — applies Terraria-style defense reduction
+// Called wherever player takes damage - applies Terraria-style defense reduction
 function applyDamageToPlayer(rawDmg) {
   if (player.iframes > 0 || player.dying) return;
   const defense = getTotalDefense();
@@ -1275,13 +1275,13 @@ function createWoodTexture() {
 
 function createSwordTexture(bladeColor, handleColor) {
   const { texture, g } = makeCanvas(32);
-  // Handle (grip) — bottom-left diagonal
+  // Handle (grip) - bottom-left diagonal
   g.strokeStyle = handleColor; g.lineWidth = 3; g.lineCap = 'round';
   g.beginPath(); g.moveTo(7, 25); g.lineTo(12, 20); g.stroke();
-  // Guard — crosspiece
+  // Guard - crosspiece
   g.strokeStyle = shiftColor(bladeColor, -0.15); g.lineWidth = 3; g.lineCap = 'round';
   g.beginPath(); g.moveTo(8, 21); g.lineTo(16, 17); g.stroke();
-  // Blade — thick diagonal line
+  // Blade - thick diagonal line
   g.strokeStyle = bladeColor; g.lineWidth = 4; g.lineCap = 'round';
   g.beginPath(); g.moveTo(13, 19); g.lineTo(26, 6); g.stroke();
   // Blade highlight
@@ -1298,10 +1298,10 @@ function createSwordTexture(bladeColor, handleColor) {
 
 function createPickaxeTexture(headColor, handleColor) {
   const { texture, g } = makeCanvas(32);
-  // Handle — diagonal from bottom-right to upper center
+  // Handle - diagonal from bottom-right to upper center
   g.strokeStyle = handleColor; g.lineWidth = 3; g.lineCap = 'round';
   g.beginPath(); g.moveTo(27, 27); g.lineTo(14, 14); g.stroke();
-  // Head body — clean horizontal bar
+  // Head body - clean horizontal bar
   g.fillStyle = headColor;
   g.beginPath();
   g.moveTo(4, 6); g.lineTo(22, 6); g.lineTo(22, 12); g.lineTo(4, 12); g.closePath();
@@ -1424,10 +1424,10 @@ function createIngotTexture(color) {
 
 function createAxeTexture(headColor, handleColor) {
   const { texture, g } = makeCanvas(32);
-  // Handle — diagonal from bottom-right to upper-left
+  // Handle - diagonal from bottom-right to upper-left
   g.strokeStyle = handleColor; g.lineWidth = 3; g.lineCap = 'round';
   g.beginPath(); g.moveTo(27, 27); g.lineTo(13, 13); g.stroke();
-  // Axe blade — large fan shape at upper-left
+  // Axe blade - large fan shape at upper-left
   g.fillStyle = headColor;
   g.beginPath();
   g.moveTo(13, 13); // handle socket top
@@ -3123,7 +3123,7 @@ function updateDeathAnim(scale = 1) {
       player.deathFrame = Math.min(player.deathFrame + 1, DEATH_FRAMES.length - 1);
     }
   } else {
-    // Frozen on last frame — count down then respawn
+    // Frozen on last frame - count down then respawn
     player.deathTick += scale;
     if (player.deathTick >= DEATH_FREEZE_TICKS) {
       respawnPlayer();
@@ -3449,7 +3449,7 @@ function drawPlayer() {
   }
   ctx.restore();
 
-  // Air bar above player's head — only when in water or not fully recovered
+  // Air bar above player's head - only when in water or not fully recovered
   if (player.inWater || player.air < player.maxAir) {
     const barW = 28;
     const barH = 3;
@@ -4387,7 +4387,7 @@ function loop(ts) {
     mouse.rightDown = false;
   }
   updateDeathAnim(scale);
-  // Accessory: Band of Regeneration — 1 HP every 600 ticks (~10s)
+  // Accessory: Band of Regeneration - 1 HP every 600 ticks (~10s)
   if (hasAccessory(ACC_BAND_REGEN) && !player.dying) {
     player.regenTick = (player.regenTick || 0) + scale;
     if (player.regenTick >= 600) {

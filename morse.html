@@ -617,7 +617,7 @@
     pressEnd();
   });
 
-  // Touch handlers — passive:false so we can preventDefault (suppresses context menu + mouse synthesis)
+  // Touch handlers - passive:false so we can preventDefault (suppresses context menu + mouse synthesis)
   document.addEventListener('touchstart', (e) => {
     if (e.target.closest('a') || e.target.closest('#ref-toggle') || e.target.closest('#ref-panel')) return;
     e.preventDefault();

@@ -58,7 +58,7 @@ CRITICAL REQUIREMENTS:
 
 AESTHETIC REQUIREMENTS:
 - Dark backgrounds always: #000, #0a060a, #001220, or similar near-black
-- Prefer colorMode(HSB, 360, 100, 100) — animate hue over time with frameCount, not hardcoded colors
+- Prefer colorMode(HSB, 360, 100, 100) - animate hue over time with frameCount, not hardcoded colors
 - Include windowResized() that calls resizeCanvas(windowWidth, windowHeight)
 - canvas fills the full viewport: createCanvas(windowWidth, windowHeight)
 - body { margin: 0; overflow: hidden; background: #000; }

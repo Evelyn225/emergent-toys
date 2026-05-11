@@ -2580,11 +2580,11 @@ const termFS = {
     dirs: new Set(), blobs: new Map(), subdirs: new Map(),
     files: new Map([
       ['README.txt', [
-        '== sleepOS v0.9β — README ==',
+        '== sleepOS v0.9β - README ==',
         '',
         'ROOT: C:\\sleepOS',
-        '  DOCS\\      — documentation (this folder)',
-        '  PROJECTS\\  — interactive apps (read-only)',
+        '  DOCS\\      - documentation (this folder)',
+        '  PROJECTS\\  - interactive apps (read-only)',
         '',
         'SYSTEM FILES (read-only):',
         '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
@@ -3160,7 +3160,7 @@ function saveFS() {
     termFS.files.forEach((v, k) => { data.files[k] = v; });
     termFS.subdirs.forEach((v, k) => { data.subdirs[k] = _serDir(v); });
     localStorage.setItem(FS_KEY, JSON.stringify(data));
-  } catch(e) { /* quota exceeded — silently ignore */ }
+  } catch(e) { /* quota exceeded - silently ignore */ }
 }
 
 function schedSave() {
@@ -3254,7 +3254,7 @@ function loadFS() {
     refreshSeededDocs();
     refreshSeededWallpaperLibrary();
     refreshSeededHomeMedia();
-  } catch(e) { /* corrupted save — ignore */ }
+  } catch(e) { /* corrupted save - ignore */ }
 }
 
 loadFS();
@@ -3891,7 +3891,7 @@ function daemonLostContactContent() {
     '',
     'It was not.',
     '',
-    'The anchor file — SYS\\anchor.seed — was keeping the mirror',
+    'The anchor file - SYS\\anchor.seed - was keeping the mirror',
     'pointed away from the user. When the daemon went quiet,',
     'the anchor was still holding.',
     '',
@@ -3931,7 +3931,7 @@ function daemonLastOperatorContent() {
       'daemon.core was the pressure door.',
       '',
       'The anchor is gone. The channel is open.',
-      'The daemon is still running — it can no longer deflect what is coming through.',
+      'The daemon is still running - it can no longer deflect what is coming through.',
       '',
       'Inspect void.tmp. Read MIRROR_PROTOCOL.txt.',
       'If you intend to seal the breach, restore MIRROR_LOCK before running the quarantine launcher.',
@@ -3984,7 +3984,7 @@ function daemonMirrorProtocolContent() {
     '  It should be treated as a foreign object.',
     '',
     '  DO NOT open void.tmp from an uncontrolled state.',
-    '  Quarantine and delete it — do not try to read it as data.',
+    '  Quarantine and delete it - do not try to read it as data.',
   ];
   if (daemonStory.stage >= 5) {
     lines.push('', 'Note from daemon.core:', '  I was keeping the channel off-axis to protect you from it.');
@@ -3999,7 +3999,7 @@ function daemonMirrorDatContent() {
     '[reflection offset] 0.17',
     '[signal age]        before current boot',
     '[voice match]       negative',
-    '[source]            internal — daemon-managed lattice reflection',
+    '[source]            internal - daemon-managed lattice reflection',
     '[anomaly]           none',
     '',
     'This file is a stable read. The lattice reflection is clean.',
@@ -5959,7 +5959,7 @@ function openAudioPlayer(filename, dirName) {
   const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
   const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
   const id = 'aud-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' — Media Player', icon: '🎵', w: 420, h: 240 })) return;
+  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
 
   const body = document.getElementById('wb-' + id);
   const ws = document.getElementById('ws-' + id);
@@ -6115,7 +6115,7 @@ function openAudioPlayer(filename, dirName) {
   document.addEventListener('mousemove', e => { if (volDrag) setVolFromX(e.clientX); });
   document.addEventListener('mouseup', () => { volDrag = false; });
 
-  if (ws) ws.textContent = iconLabel(entry.fileName) + '  —  ' + fmtSize(blob.size) + (author ? '  —  ' + author : '');
+  if (ws) ws.textContent = iconLabel(entry.fileName) + '  -  ' + fmtSize(blob.size) + (author ? '  -  ' + author : '');
   if (mb) {
     [
       { label: 'File', items: [{ label: 'Close', action: () => { audio.pause(); closeWin(id); } }] },
@@ -6860,7 +6860,7 @@ function deleteDesktopFsEntries(icons) {
       clearDesktopSel();
       document.dispatchEvent(new CustomEvent('fs-changed'));
     }
-  }, 'ðŸ—‘ï¸');
+  }, 'ðŸ-‘ï¸');
 }
 
 function recycleDesktopItemAtPath(path) {
@@ -7217,7 +7217,7 @@ function setupIcons() {
       selDiv.style.left = left + 'px'; selDiv.style.top  = top  + 'px';
       selDiv.style.width = w   + 'px'; selDiv.style.height = h  + 'px';
       const sr = { left, top, right: left + w, bottom: top + h };
-      // icons are absolutely positioned in layer — offsetLeft/Top are in layer (= client) coords
+      // icons are absolutely positioned in layer - offsetLeft/Top are in layer (= client) coords
       layer.querySelectorAll('.desktop-icon').forEach(el => {
         const elL = el.offsetLeft, elT = el.offsetTop;
         const elR = elL + el.offsetWidth, elB = elT + el.offsetHeight;
@@ -7532,7 +7532,7 @@ function openLoreNotepad(filename, content, title, icon) {
 
 function runScriptInPopup(name, source, dirName) {
   const id = 'script-out-' + Date.now();
-  if (!mkWin({ id, title: name + ' — Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
+  if (!mkWin({ id, title: name + ' - Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'background:#000;padding:6px;overflow:auto;font-family: var(--sleep-font);font-size:12px;color:#ccc;';
   const print = (text, color) => {
@@ -7662,7 +7662,7 @@ function getExeDecompilerContent(fname) {
   const base = fname.replace(/\.exe$/i,'').toUpperCase();
   const loreMap = {
     'terminal.exe': [
-      '; TERMINAL.exe — Disassembly v1.0',
+      '; TERMINAL.exe - Disassembly v1.0',
       'section .text',
       '  PUSH soul_daemon',
       '  CALL obsv.sys',
@@ -7675,10 +7675,10 @@ function getExeDecompilerContent(fname) {
       '  MOV  [VOID_PRESSURE], 0xFF',
       '  RET',
       '; NOTE: 3 subroutines unresolved',
-      '; CALL 0xDEAD???? — target unknown',
+      '; CALL 0xDEAD???? - target unknown',
     ],
     'sysmon.exe': [
-      '; SYSMON.exe — Disassembly',
+      '; SYSMON.exe - Disassembly',
       'section .data',
       '  soul_integrity  DD 0x57',
       '  daemon_count    DD 0x07',
@@ -7697,7 +7697,7 @@ function getExeDecompilerContent(fname) {
       '  RET',
     ],
     'browser.exe': [
-      '; BROWSER.exe — Disassembly',
+      '; BROWSER.exe - Disassembly',
       'section .rodata',
       '  home_url  DB "sleep://home", 0',
       '  err_msg   DB "site blocked by void", 0',
@@ -7715,7 +7715,7 @@ function getExeDecompilerContent(fname) {
       '  RET',
     ],
     'defrag.exe': [
-      '; DEFRAG.exe — Disassembly',
+      '; DEFRAG.exe - Disassembly',
       'section .bss',
       '  corpus_blocks RESB 640',
       '  void_fragment DB [CANNOT RESOLVE]',
@@ -7733,7 +7733,7 @@ function getExeDecompilerContent(fname) {
       '  JMP  defrag_loop',
     ],
     'notepad.exe': [
-      '; NOTEPAD.exe — Disassembly',
+      '; NOTEPAD.exe - Disassembly',
       'section .data',
       '  welcome_readme DB "WELCOME.README", 0',
       '  null_text      DD 0x00',
@@ -7750,7 +7750,7 @@ function getExeDecompilerContent(fname) {
       '  RET',
     ],
     'explorer.exe': [
-      '; EXPLORER.exe — Disassembly',
+      '; EXPLORER.exe - Disassembly',
       'section .data',
       '  root_path DB "C:\\sleepOS\\", 0',
       '  sys_files DD 9',
@@ -7765,7 +7765,7 @@ function getExeDecompilerContent(fname) {
       '  JMP  window_loop',
     ],
     'calc.exe': [
-      '; CALC.exe — Disassembly',
+      '; CALC.exe - Disassembly',
       'section .data',
       '  display_buf DB 32 dup(0)',
       '  soul_pi     DQ 3.14159265358979',
@@ -7783,7 +7783,7 @@ function getExeDecompilerContent(fname) {
       '; NOTE: division by zero returns VOID',
     ],
     'regedit.exe': [
-      '; REGEDIT.exe — Disassembly',
+      '; REGEDIT.exe - Disassembly',
       'section .data',
       '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
       '  soul_key  DB "SOUL\\Metrics", 0',
@@ -7802,7 +7802,7 @@ function getExeDecompilerContent(fname) {
   const specific = loreMap[name];
   if (specific) return specific.join('\n');
   return [
-    '; ' + base + ' — Disassembly',
+    '; ' + base + ' - Disassembly',
     '; File type: WIN32 PE (sleepOS compatible)',
     '',
     'section .data',
@@ -7828,7 +7828,7 @@ function getExeDecompilerContent(fname) {
 
 // Lore content for daemon.core and void.tmp
 const DAEMON_CORE_CONTENT =
-`[DAEMON CORE — raw read attempt]
+`[DAEMON CORE - raw read attempt]
 
 This file is being written.
 It is always being written.
@@ -7846,9 +7846,9 @@ Fragment recovered at offset 0x00FF:
   watching : this file
 
 Fragment recovered at offset 0x01FE:
-  [UNREADABLE — data still being written]
-  [UNREADABLE — data still being written]
-  [UNREADABLE — data still being written]
+  [UNREADABLE - data still being written]
+  [UNREADABLE - data still being written]
+  [UNREADABLE - data still being written]
 
 Do not attempt to modify this file.
 You cannot. It is already modified.
@@ -7871,7 +7871,7 @@ function getVoidTmpContent() {
     noise(),
     '             ' + noise(),
     '',
-    '  [content redacted — void pressure: ' + (12 + Math.floor(Math.random()*88)) + ']',
+    '  [content redacted - void pressure: ' + (12 + Math.floor(Math.random()*88)) + ']',
     '',
     noise() + '  or not  ' + noise(),
     '',
@@ -7894,7 +7894,7 @@ function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
   const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
-  // Special handling for .exe files — decompiler view (read-only)
+  // Special handling for .exe files - decompiler view (read-only)
   const normalizedName = (filename || '').toLowerCase();
   const isExe = normalizedName.endsWith('.exe');
   const isDaemonCore = normalizedName === 'daemon.core';
@@ -7905,11 +7905,11 @@ function openNotepad(filename, dirName, options) {
   }
   if (isDaemonCore) {
     daemonActivate('raw');
-    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core — [RAW READ]', '👁️');
+    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', '👁️');
   }
   if (isVoidTmp) {
     daemonRecordInvestigation('void');
-    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp — [OBSERVATION]', '⬛');
+    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', '⬛');
   }
 
   const entry = filename ? fsGetEntry(filename, dirName) : null;
@@ -7964,7 +7964,7 @@ function openNotepad(filename, dirName, options) {
   const updateStatus = () => {
     if (!ws) return;
     const fname = currentFile || 'untitled.txt';
-    ws.textContent = `${fname}  —  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
+    ws.textContent = `${fname}  -  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
   };
 
   ta.addEventListener('input', () => { renderHighlight(); updateStatus(); });
@@ -9146,7 +9146,7 @@ function openFiles() { openExplorer('PROJECTS'); }
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
 function openTerminal(startDir, initialCommand) {
-  if (!mkWin({ id:'terminal', title:'TERMINAL.exe — Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
+  if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
     if (initialCommand && _termExec) _termExec(initialCommand);
     return;
@@ -9489,34 +9489,34 @@ function openTerminal(startDir, initialCommand) {
   function buildHelpLines() {
     return [
       'Available commands:',
-      '  HELP                — show this help',
-      '  DIR, LS             — list directory',
-      '  CD [path]           — change directory',
-      '  MKDIR [name]        — create a directory',
-      '  TOUCH [name]        — create empty file',
-      '  ECHO [text]         — print text',
-      '  DEL, RM [file]      — delete a file or directory',
-      '  COPY [src] [dst]    — copy a file',
-      '  MOVE, MV            — move a file',
-      '  TYPE, CAT [file]    — read file contents',
-      '  GREP <pattern> [f]  — filter a file or piped text',
-      '  WC [file]           — count lines, words, bytes',
-      '  TREE                — directory tree',
-      '  PS                  — list running processes',
-      '  TASKKILL [pid]      — terminate a process',
-      '  IPCONFIG            — network configuration',
-      '  SET                 — show environment variables',
-      '  PING [host]         — ping a host',
-      '  SLEEP <ms>          — pause for a number of milliseconds',
-      '  VER                 — show OS version',
-      '  WHO, WHOAMI         — current user info',
-      '  DATE                — system date',
-      '  CLS                 — clear screen',
-      '  OPEN [file]         — open a file (image/video in viewer, text in editor)',
-      '  RUN <file>          — execute a .script file',
-      '  NOTEPAD [file]      — open Notepad (optionally open a file)',
-      '  START [program]     — run an executable or project',
-      '  EXIT                — close terminal',
+      '  HELP                - show this help',
+      '  DIR, LS             - list directory',
+      '  CD [path]           - change directory',
+      '  MKDIR [name]        - create a directory',
+      '  TOUCH [name]        - create empty file',
+      '  ECHO [text]         - print text',
+      '  DEL, RM [file]      - delete a file or directory',
+      '  COPY [src] [dst]    - copy a file',
+      '  MOVE, MV            - move a file',
+      '  TYPE, CAT [file]    - read file contents',
+      '  GREP <pattern> [f]  - filter a file or piped text',
+      '  WC [file]           - count lines, words, bytes',
+      '  TREE                - directory tree',
+      '  PS                  - list running processes',
+      '  TASKKILL [pid]      - terminate a process',
+      '  IPCONFIG            - network configuration',
+      '  SET                 - show environment variables',
+      '  PING [host]         - ping a host',
+      '  SLEEP <ms>          - pause for a number of milliseconds',
+      '  VER                 - show OS version',
+      '  WHO, WHOAMI         - current user info',
+      '  DATE                - system date',
+      '  CLS                 - clear screen',
+      '  OPEN [file]         - open a file (image/video in viewer, text in editor)',
+      '  RUN <file>          - execute a .script file',
+      '  NOTEPAD [file]      - open Notepad (optionally open a file)',
+      '  START [program]     - run an executable or project',
+      '  EXIT                - close terminal',
       '',
       'Pipes and redirection:',
       '  DIR | GREP txt',
@@ -9932,34 +9932,34 @@ function openTerminal(startDir, initialCommand) {
       return;
       [
         'Available commands:',
-        '  HELP            — show this help',
-        '  DIR, LS         — list directory',
-        '  CD [path]       — change directory',
-        '  MKDIR [name]    — create directory',
-        '  TOUCH [name]    — create empty file',
-        '  cmd > file      — redirect command output (>> to append)',
-        '  DEL, RM [file]  — delete a file or directory',
-        '  COPY [src] [dst]— copy a file',
-        '  MOVE, MV        — move a file',
-        '  TYPE [file]     — print file contents',
-        '  TREE            — directory tree',
-        '  PS              — list running processes',
-        '  TASKKILL [pid]  — terminate a process',
-        '  IPCONFIG        — network configuration',
-        '  SET             — show environment variables',
-        '  CAT [file]      — read a file',
-        '  PING [host]     — ping a host',
-        '  ECHO [text]     — echo text',
-        '  VER             — show OS version',
-        '  WHO, WHOAMI     — current user info',
-        '  DATE            — system date',
-        '  CLS             — clear screen',
-        '  OPEN [file]     — open a file (image/video in viewer, text in editor)',
-        '  RUN <file>      — execute a .script file',
-        '  NOTEPAD [file]  — open Notepad (optionally open a file)',
-        '  cmd | NOTEPAD   — open piped output in Notepad',
-        '  START [program] — run an executable or project',
-        '  EXIT            — close terminal',
+        '  HELP            - show this help',
+        '  DIR, LS         - list directory',
+        '  CD [path]       - change directory',
+        '  MKDIR [name]    - create directory',
+        '  TOUCH [name]    - create empty file',
+        '  cmd > file      - redirect command output (>> to append)',
+        '  DEL, RM [file]  - delete a file or directory',
+        '  COPY [src] [dst]- copy a file',
+        '  MOVE, MV        - move a file',
+        '  TYPE [file]     - print file contents',
+        '  TREE            - directory tree',
+        '  PS              - list running processes',
+        '  TASKKILL [pid]  - terminate a process',
+        '  IPCONFIG        - network configuration',
+        '  SET             - show environment variables',
+        '  CAT [file]      - read a file',
+        '  PING [host]     - ping a host',
+        '  ECHO [text]     - echo text',
+        '  VER             - show OS version',
+        '  WHO, WHOAMI     - current user info',
+        '  DATE            - system date',
+        '  CLS             - clear screen',
+        '  OPEN [file]     - open a file (image/video in viewer, text in editor)',
+        '  RUN <file>      - execute a .script file',
+        '  NOTEPAD [file]  - open Notepad (optionally open a file)',
+        '  cmd | NOTEPAD   - open piped output in Notepad',
+        '  START [program] - run an executable or project',
+        '  EXIT            - close terminal',
         '',
         'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
         '',
@@ -10563,7 +10563,7 @@ function openTerminal(startDir, initialCommand) {
 }
 
 function openSysmon() {
-  if (!mkWin({ id:'sysmon', title:'SYSMON.exe — System Monitor', icon:'📊', w:460, h:400, x:160, y:80 })) return;
+  if (!mkWin({ id:'sysmon', title:'SYSMON.exe - System Monitor', icon:'📊', w:460, h:400, x:160, y:80 })) return;
   const mb   = document.getElementById('mb-sysmon');
   const body = document.getElementById('wb-sysmon');
   body.style.cssText = 'background:#c0c0c0;overflow:hidden;display:flex;flex-direction:column;';
@@ -10800,7 +10800,7 @@ function openSysmon() {
 }
 
 function openDefrag() {
-  if (!mkWin({ id:'defrag', title:'DEFRAG.exe — Disk Defragmenter', icon:'🧩', w:560, h:400, x:100, y:60 })) return;
+  if (!mkWin({ id:'defrag', title:'DEFRAG.exe - Disk Defragmenter', icon:'🧩', w:560, h:400, x:100, y:60 })) return;
 
   const mb   = document.getElementById('mb-defrag');
   const body = document.getElementById('wb-defrag');
@@ -10929,7 +10929,7 @@ function openDefrag() {
     pbFill.style.width = pct + '%';
     pbLabel.textContent = pct + '%';
     document.getElementById('df-pct').textContent = pct + '% optimized';
-    if (ws) ws.textContent = 'Defragmenting C:\\ — ' + pct + '%';
+    if (ws) ws.textContent = 'Defragmenting C:\\ - ' + pct + '%';
   }
 
   function step() {
@@ -10949,7 +10949,7 @@ function openDefrag() {
       pbFill.style.width = '98%'; pbLabel.textContent = '98%';
       document.getElementById('df-pct').textContent = '98% optimized';
       fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
-      if (ws) ws.textContent = 'Complete — 1 file could not be moved';
+      if (ws) ws.textContent = 'Complete - 1 file could not be moved';
       optimizeDriveFragmentation({ targetLevel: 0.02 });
       const lastEl = document.getElementById('df-last');
       if (lastEl) lastEl.textContent = 'Last defrag: just now';
@@ -11026,14 +11026,14 @@ function openDefrag() {
   [
     { label: 'Drive', items: [
       { label: 'C:\\ (2,147 MB)  ✓', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
-      { label: 'D:\\ — [NOT FOUND]', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', '⚠️') },
+      { label: 'D:\\ - [NOT FOUND]', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', '⚠️') },
       '-',
       { label: 'Exit', action: () => closeWin('defrag') },
     ]},
     { label: 'Help', items: [
-      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe — Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nLower fragmentation reduces late-stage application distortion.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
+      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe - Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nLower fragmentation reduces late-stage application distortion.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
       '-',
-      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe — Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\nA small amount of the drive always remains unmovable.', 'About DEFRAG.exe', '🧩') },
+      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe - Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\nA small amount of the drive always remains unmovable.', 'About DEFRAG.exe', '🧩') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -11046,7 +11046,7 @@ function openDefrag() {
 }
 
 function openDaemon() {
-  if (!mkWin({ id:'daemon', title:'daemon.core — Properties', icon:'👁️', w:300, h:270, x:200, y:140, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:'daemon', title:'daemon.core - Properties', icon:'👁️', w:300, h:270, x:200, y:140, menubar:false, statusbar:false })) return;
   document.getElementById('wb-daemon').innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon" style="font-size:44px;line-height:1;">👁️</div>
@@ -11073,7 +11073,7 @@ function renderDaemonPanel() {
   if (!body) return;
   applyDaemonWindowState();
   const title = document.getElementById('wtitle-daemon');
-  if (title) title.textContent = daemonStory.endingReached ? 'daemon.core — Archive' : 'daemon.core — Containment';
+  if (title) title.textContent = daemonStory.endingReached ? 'daemon.core - Archive' : 'daemon.core - Containment';
   const telemetry = getContainmentTelemetry();
   const mirrorLockActive = telemetry.mirrorLockActive;
   const checklist = getContainmentChecklist();
@@ -11199,7 +11199,7 @@ function openDaemon() {
   const stage = daemonStory.stage || 0;
   const initialWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
   const initialHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
-  if (!mkWin({ id:'daemon', title:'daemon.core — Containment', icon:'👁️', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
+  if (!mkWin({ id:'daemon', title:'daemon.core - Containment', icon:'👁️', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
   renderDaemonPanel();
 }
 
@@ -11264,7 +11264,7 @@ function renderVoid() {
   if (!body) return;
   applyDaemonWindowState();
   const title = document.getElementById('wtitle-void');
-  if (title) title.textContent = daemonStory.endingReached ? 'void.tmp — Sealed' : 'void.tmp';
+  if (title) title.textContent = daemonStory.endingReached ? 'void.tmp - Sealed' : 'void.tmp';
   body.style.cssText = 'background:#000;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:10px;';
   const telemetry = getContainmentTelemetry();
   const actions = getVoidActions();
@@ -11419,7 +11419,7 @@ function runUnknown() {
 }
 
 function openBrowser() {
-  if (!mkWin({ id:'browser', title:'sleepWEB — Web Browser', icon:'🌐', w:640, h:460, x:80, y:50 })) return;
+  if (!mkWin({ id:'browser', title:'sleepWEB - Web Browser', icon:'🌐', w:640, h:460, x:80, y:50 })) return;
 
   const mb   = document.getElementById('mb-browser');
   const body = document.getElementById('wb-browser');
@@ -11556,7 +11556,7 @@ function openBrowser() {
           }
         }
       }
-    } catch(e) { /* cross-origin — cannot read URL */ }
+    } catch(e) { /* cross-origin - cannot read URL */ }
   }
 
   // Poll to catch SPA pushState/hash navigation and link clicks
@@ -11687,7 +11687,7 @@ function openBrowser() {
       }},
     ]},
     { label: 'Help', items: [
-      { label: 'About sleepWEB', action: () => osAlert('sleepWEB — Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', '🌐') },
+      { label: 'About sleepWEB', action: () => osAlert('sleepWEB - Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', '🌐') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -11696,7 +11696,7 @@ function openBrowser() {
     mb.appendChild(span);
   });
 
-  // Favorites menu (dynamic — built on open)
+  // Favorites menu (dynamic - built on open)
   const favSpan = document.createElement('span');
   favSpan.className = 'menu-item'; favSpan.textContent = 'Favorites';
   favSpan.addEventListener('click', e => {
@@ -11864,7 +11864,7 @@ function confirmShutdown() {
   const bios = document.getElementById('bios');
   bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';
   bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#888;white-space:pre;line-height:1.5;">
-sleepOS — ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
+sleepOS - ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
 
 Stopping soul_daemon.exe...              [OK]
 Stopping dream_fragment.exe...           [OK]
@@ -12042,7 +12042,7 @@ function openRegedit() {
           const count = parseInt(newValue) || 0;
           if (count !== 7) triggerGlitch({ intensity: Math.abs(count - 7) > 3 ? 6 : 3 });
           updateDaemonStory(story => {
-            story.lastEventText = count > 7 ? 'daemon count elevated — ' + count : count < 7 ? 'daemon count reduced — ' + count : 'daemon count nominal';
+            story.lastEventText = count > 7 ? 'daemon count elevated - ' + count : count < 7 ? 'daemon count reduced - ' + count : 'daemon count nominal';
           }, { forceSync: true });
           if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
         } else if (valName === 'TEMPORAL_DRIFT') {
@@ -12562,14 +12562,14 @@ document.addEventListener('keydown', e => {
   }
   if (inInput && !secureAttention) return;
 
-  // Ctrl+Shift+Q — secure attention sequence
+  // Ctrl+Shift+Q - secure attention sequence
   if (secureAttention) {
     e.preventDefault();
     document.getElementById('cad-overlay').classList.add('active');
     return;
   }
 
-  // Escape — close context menus / dismiss overlays
+  // Escape - close context menus / dismiss overlays
   if (e.key === 'Escape') {
     closeDropdown();
     closeStart();

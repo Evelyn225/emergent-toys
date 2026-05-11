@@ -404,14 +404,14 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         let windGusts = [];
         let nextWindTime = 6000; // ms: first gust 6s after load
 
-        // Automata rules — object order = birth priority (first wins contested cells)
+        // Automata rules - object order = birth priority (first wins contested cells)
         // Each type has a UNIQUE birth condition so they occupy distinct density niches:
-        //   crystal — S1-8/B45:  near-immortal once placed; born only at dense 4-5 neighbors → static formations
-        //   flowers — S234/B36:  robust High Life; born at 3 or 6 neighbors → spirals + dynamic clusters
-        //   fern    — S123/B2:   born from sparse pairs; dies in crowds → thin lace tendrils (unlike grass)
-        //   coral   — S45678/B3: born standard; survives only dense → compact self-pruning islands
-        //   grass   — S2345/B3:  stable medium patches; birth after coral so grass fills remaining space
-        //   moss    — S345678/B3: dense velvet masses; last priority, holds initial territory but doesn't flood
+        //   crystal - S1-8/B45:  near-immortal once placed; born only at dense 4-5 neighbors → static formations
+        //   flowers - S234/B36:  robust High Life; born at 3 or 6 neighbors → spirals + dynamic clusters
+        //   fern    - S123/B2:   born from sparse pairs; dies in crowds → thin lace tendrils (unlike grass)
+        //   coral   - S45678/B3: born standard; survives only dense → compact self-pruning islands
+        //   grass   - S2345/B3:  stable medium patches; birth after coral so grass fills remaining space
+        //   moss    - S345678/B3: dense velvet masses; last priority, holds initial territory but doesn't flood
         const rules = {
             crystal: { survive: [1,2,3,4,5,6,7,8], birth: [4,5],   name: "Crystal" },
             flowers: { survive: [2,3,4],            birth: [3,6],   name: "Flowers" },
@@ -466,11 +466,11 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
                 let baseSize;
                 switch(type) {
                     case 'flowers': baseSize = 3; break;
-                    case 'grass':   baseSize = 5; break; // reduced from 8 — was pre-loading dominance
-                    case 'moss':    baseSize = 4; break; // increased from 2 — needs mass to hold territory
+                    case 'grass':   baseSize = 5; break; // reduced from 8 - was pre-loading dominance
+                    case 'moss':    baseSize = 4; break; // increased from 2 - needs mass to hold territory
                     case 'coral':   baseSize = 5; break;
-                    case 'fern':    baseSize = 3; break; // reduced from 7 — B2 rule spreads from small seeds
-                    case 'crystal': baseSize = 5; break; // increased from 1 — needs density to survive
+                    case 'fern':    baseSize = 3; break; // reduced from 7 - B2 rule spreads from small seeds
+                    case 'crystal': baseSize = 5; break; // increased from 1 - needs density to survive
                     default:        baseSize = 4;
                 }
                 
@@ -566,8 +566,8 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
             ctx.fillStyle = '#071005';
             ctx.fillRect(0, 0, width, height);
 
-            // — Glow pass: render cells to offscreen buffer at full size (no gap),
-            //   then composite with blur for soft color bleed between adjacent types —
+            // - Glow pass: render cells to offscreen buffer at full size (no gap),
+            //   then composite with blur for soft color bleed between adjacent types -
             glowCtx.clearRect(0, 0, width, height);
 
             for (let i = 0; i < grid.length; i++) {
@@ -585,14 +585,14 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
                 }
             }
 
-            // Blur the glow buffer and composite it at low opacity — GPU-accelerated
+            // Blur the glow buffer and composite it at low opacity - GPU-accelerated
             ctx.filter = 'blur(4px)';
             ctx.globalAlpha = 0.4;
             ctx.drawImage(glowBuffer, 0, 0);
             ctx.filter = 'none';
             ctx.globalAlpha = 1;
 
-            // — Normal pass: crisp cells on top with 1px soil gap —
+            // - Normal pass: crisp cells on top with 1px soil gap -
             for (let i = 0; i < grid.length; i++) {
                 for (let j = 0; j < grid[i].length; j++) {
                     const cell = grid[i][j];
@@ -716,7 +716,7 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
         document.getElementById('randomize').addEventListener('click', randomize);
         document.getElementById('clear').addEventListener('click', clear);
 
-        // Wind drift — a wave front sweeps across the grid in a random direction,
+        // Wind drift - a wave front sweeps across the grid in a random direction,
         // shifting cells one step as it passes rather than moving everything at once.
         function spawnGust() {
             if (!grid.length || !grid[0].length) return;
@@ -726,7 +726,7 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
             const cols = grid.length, rows = grid[0].length;
             windGusts.push({
                 dx, dy,
-                speed: 1 + Math.floor(Math.random() * 2),   // 1-2 cells/frame — slow, visible sweep
+                speed: 1 + Math.floor(Math.random() * 2),   // 1-2 cells/frame - slow, visible sweep
                 strength: 0.55 + Math.random() * 0.25,
                 wavePos: 0,
                 waveWidth: 35,
@@ -747,7 +747,7 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
                 for (let y = yStart; y !== yEnd; y += yStep) {
                     if (grid[x][y] === null) continue;
 
-                    // Distance from upstream edge — works for all 8 directions
+                    // Distance from upstream edge - works for all 8 directions
                     const posX = gust.dx > 0 ? x : gust.dx < 0 ? cols - 1 - x : 0;
                     const posY = gust.dy > 0 ? y : gust.dy < 0 ? rows - 1 - y : 0;
                     const dist = wp - (posX + posY);
@@ -759,7 +759,7 @@ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
                     const nx = x + gust.dx, ny = y + gust.dy;
                     if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
 
-                    // Swap cells — preserves population, no erasure
+                    // Swap cells - preserves population, no erasure
                     const tmpType = grid[nx][ny];
                     const tmpAge  = ageGrid[nx][ny];
                     grid[nx][ny]    = grid[x][y];

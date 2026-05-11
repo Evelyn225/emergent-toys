@@ -180,7 +180,7 @@ function generateWorld() {
     }
   }
 
-  // Surface-connected shafts — depthGuard=0 so they can open at the surface
+  // Surface-connected shafts - depthGuard=0 so they can open at the surface
   for (let i = 0; i < 8; i++) {
     const sx = 5 + Math.floor(Math.random() * (WORLD_W - 10));
     const sy = surfaceYs[sx];
@@ -211,7 +211,7 @@ generateWorld();
 
 // Camera position in world-pixels (top-left corner of viewport)
 const cam = { x: 0, y: 0 };
-// Temporary camera position — requires resize() to have run above (canvas must be sized)
+// Temporary camera position - requires resize() to have run above (canvas must be sized)
 cam.x = WORLD_W * TILE / 2 - canvas.width / 2;
 cam.y = 50 * TILE - canvas.height / 2;
 
@@ -246,7 +246,7 @@ const WALK_SPEED = 2.5;
 const RUN_SPEED  = 5.0;
 
 let lastTime = 0;
-const TARGET_DT = 1000 / 60; // 16.67ms — reference frame duration
+const TARGET_DT = 1000 / 60; // 16.67ms - reference frame duration
 
 const spritesheet = new Image();
 spritesheet.src = 'images/mineria/platformer_sprites_pixelized_0.png';
@@ -257,7 +257,7 @@ const SHEET_COLS  = 8;   // columns in the spritesheet
 const ANIM = {
   stand:   { row: 8, colStart: 0 },
   walk:    { row: 4, colStart: 0 },
-  // Run spans row 0 col 4-7 then row 1 col 0-3 — handled in drawPlayer
+  // Run spans row 0 col 4-7 then row 1 col 0-3 - handled in drawPlayer
   run:     null,
   jump:    { row: 5, colStart: 2 },
   stairUp: { row: 6, colStart: 0 },
@@ -316,10 +316,10 @@ mouse.rightDown = false;
 const MINE_FRAMES = { [GRASS]: 10, [DIRT]: 18, [STONE]: 35, [DSTONE]: 55 };
 const MINE_RADIUS_PX = 5.5 * TILE; // max reach from player center
 
-// Mining state — tracks which block is being mined and how far along
+// Mining state - tracks which block is being mined and how far along
 const mining = { bx: -1, by: -1, progress: 0, active: false };
 
-// Inventory hotbar — 5 slots, player starts with some blocks
+// Inventory hotbar - 5 slots, player starts with some blocks
 const SLOT_TYPES = [DIRT, STONE, DSTONE, GRASS];
 const SLOT_NAMES = { [DIRT]: 'Dirt', [STONE]: 'Stone', [DSTONE]: 'D.Stone', [GRASS]: 'Grass' };
 const inventory = {
@@ -546,7 +546,7 @@ function updatePlayer(scale = 1) {
       player.vy = 0;
     }
   }
-  // Use dedicated ground check — reliable even when feet are exactly on tile boundary
+  // Use dedicated ground check - reliable even when feet are exactly on tile boundary
   player.onGround = checkOnGround(player.x, player.y, player.w, player.h);
 
   // Jump
@@ -597,7 +597,7 @@ function drawWorld() {
   for (let y = startY; y < endY; y++) {
     for (let x = startX; x < endX; x++) {
       const type = getBlock(x, y);
-      const sx = (x * TILE - camX) | 0;  // integer via bitwise OR — fast floor for positive nums
+      const sx = (x * TILE - camX) | 0;  // integer via bitwise OR - fast floor for positive nums
       const sy = (y * TILE - camY) | 0;
       if (type === AIR) {
         // Show cave background for underground air pockets
@@ -607,7 +607,7 @@ function drawWorld() {
         }
         continue;
       }
-      // Solid block — no border, just flush fill for seamless look
+      // Solid block - no border, just flush fill for seamless look
       ctx.fillStyle = BLOCK_COLORS[type];
       ctx.fillRect(sx, sy, TILE, TILE);
     }
@@ -675,7 +675,7 @@ function drawPlayer() {
     srcY = anim.row * FRAME_SIZE;
   }
 
-  // Scale sprite to match hitbox — draw square at player.h × player.h, centered on hitbox
+  // Scale sprite to match hitbox - draw square at player.h × player.h, centered on hitbox
   const drawSize = player.h;
   const screenX = player.x - cam.x + (player.w - drawSize) / 2;
   const screenY = player.y - cam.y; // top of hitbox = top of draw rect (bottom-aligned naturally)

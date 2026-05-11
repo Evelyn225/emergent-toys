@@ -466,7 +466,7 @@
             <select id="subcategory-select" style="display:none"></select>
             <div class="hell-select" id="subcategory-dropdown">
                 <button class="hell-select-trigger" type="button" id="subcategory-trigger">
-                    <span id="subcategory-value">— select —</span>
+                    <span id="subcategory-value">- select -</span>
                     <span class="hell-select-arrow">▼</span>
                 </button>
                 <div class="hell-select-options" id="subcategory-options"></div>
@@ -574,7 +574,7 @@
             // Add a placeholder option (enabled, not disabled)
             const placeholder = document.createElement('option');
             placeholder.value = '';
-            placeholder.textContent = '— select —';
+            placeholder.textContent = '- select -';
             placeholder.selected = true;
             placeholder.style.color = '#000';
             placeholder.disabled = true;
@@ -1131,7 +1131,7 @@
                 }
                 // Reflect selected label
                 const sel = nativeSelect.options[nativeSelect.selectedIndex];
-                valueEl.textContent = (sel && !sel.disabled) ? sel.textContent : '— select —';
+                valueEl.textContent = (sel && !sel.disabled) ? sel.textContent : '- select -';
             }
 
             trigger.addEventListener('click', (e) => {
@@ -1147,7 +1147,7 @@
             // Keep label in sync when native value changes via JS
             nativeSelect.addEventListener('change', () => {
                 const sel = nativeSelect.options[nativeSelect.selectedIndex];
-                valueEl.textContent = (sel && !sel.disabled) ? sel.textContent : '— select —';
+                valueEl.textContent = (sel && !sel.disabled) ? sel.textContent : '- select -';
                 optionsList.querySelectorAll('.hell-option').forEach(d => {
                     d.classList.toggle('selected', d.dataset.value === nativeSelect.value);
                 });

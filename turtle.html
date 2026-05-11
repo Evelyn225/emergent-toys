@@ -923,7 +923,7 @@ repeat branches [
   <!-- Status bar -->
   <div id="statusbar">
     <span id="status-dot"></span>
-    <span id="status-script">—</span>
+    <span id="status-script">-</span>
     <span id="status-sep">·</span>
     <span id="status-msg">select a script and press run</span>
     <span id="status-step"></span>
@@ -1103,7 +1103,7 @@ repeat branches [
         if (c === ',') { toks.push({ t: ',' }); i++; continue; }
         if (c === '=') { toks.push({ t: '=' }); i++; continue; }
         if ('+-*/%'.includes(c)) { toks.push({ t: c }); i++; continue; }
-        // # — hex color literal (#rgb or #rrggbb) OR line comment
+        // # - hex color literal (#rgb or #rrggbb) OR line comment
         if (c === '#') {
           let j = i + 1;
           while (j < src.length && /[0-9a-fA-F]/.test(src[j])) j++;
@@ -1113,7 +1113,7 @@ repeat branches [
             toks.push({ t: 'W', v: src.slice(i, j).toLowerCase() });
             i = j;
           } else {
-            // comment — skip to end of line
+            // comment - skip to end of line
             while (i < src.length && src[i] !== '\n') i++;
           }
           continue;
@@ -1441,7 +1441,7 @@ repeat branches [
 
     function* treeGen(len, depth, angle) {
       if (depth <= 0 || len < 1) return;
-      // Direct translation of Logo backtracking tree — each call is self-restoring.
+      // Direct translation of Logo backtracking tree - each call is self-restoring.
       moveTurtle(len); yield;
       T.angle += angle;                                        // rt angle
       yield* treeGen(len * 0.65, depth - 1, angle);           // right subtree (returns to trunk tip)
@@ -1507,7 +1507,7 @@ repeat branches [
 
     function setStatus(state, name, msg) {
       statusDot.className = state;
-      statusScript.textContent = name || '—';
+      statusScript.textContent = name || '-';
       statusMsg.textContent = msg || '';
       if (state !== 'running') statusStep.textContent = '';
     }
@@ -1548,7 +1548,7 @@ repeat branches [
 
     function renderSliders() {
       if (varDefs.length === 0) {
-        varPanel.innerHTML = '<div class="no-vars">no vars — add <span style="color:var(--accent)">var x = 6 [1 20]</span></div>';
+        varPanel.innerHTML = '<div class="no-vars">no vars - add <span style="color:var(--accent)">var x = 6 [1 20]</span></div>';
         return;
       }
       varPanel.innerHTML = '';
@@ -1708,7 +1708,7 @@ repeat branches [
       if (!activeScript) {
         // auto-save with the current name so unsaved new scripts can run
         saveCurrentScript();
-        if (!activeScript) { setStatus('', '—', 'no script selected'); return; }
+        if (!activeScript) { setStatus('', '-', 'no script selected'); return; }
       }
       const code = editor.value;
       let parsed;
@@ -1788,7 +1788,7 @@ repeat branches [
     // ══ DEFAULT SCRIPTS ════════════════════════════════════════════════════════
     const DEFAULTS = {
 
-      'polygon': `# Regular polygon — adjust sides and size
+      'polygon': `# Regular polygon - adjust sides and size
 var sides = 6 [3 20]
 var size  = 120 [20 320]
 var hue   = 160 [0 360]
@@ -1800,7 +1800,7 @@ repeat sides [
   rt 360 / sides
 ]`,
 
-      'spiral': `# Square spiral — growth and turn angle
+      'spiral': `# Square spiral - growth and turn angle
 var turns  = 100 [20 400]
 var growth = 2.4 [0.2 8]
 var angle  = 91  [88 180]
@@ -1812,7 +1812,7 @@ for i 0 turns [
   rt angle
 ]`,
 
-      'star': `# Star polygon {n/k} — skip connects every k-th vertex
+      'star': `# Star polygon {n/k} - skip connects every k-th vertex
 var points = 5 [2 20]
 var skip   = 2 [2 9]
 var size   = 150 [30 300]
@@ -1825,7 +1825,7 @@ repeat points [
   rt skip * 360 / points
 ]`,
 
-      'flower': `# Petal flower — petals and radius
+      'flower': `# Petal flower - petals and radius
 var petals = 8 [2 32]
 var radius = 80 [15 250]
 var hue    = 300 [0 360]
@@ -1860,7 +1860,7 @@ color hsl 120 55 45
 size 2
 tree length depth spread`,
 
-      'lissajous': `# Lissajous curves — connect dots
+      'lissajous': `# Lissajous curves - connect dots
 var a     = 3   [1 12]
 var b     = 4   [1 12]
 var size  = 160 [40 300]
@@ -1965,7 +1965,7 @@ repeat sides [
       snap();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       snap();
-      setStatus('', statusScript.textContent || '—', 'canvas cleared');
+      setStatus('', statusScript.textContent || '-', 'canvas cleared');
     });
 
     $('save-btn').addEventListener('click', () => {
