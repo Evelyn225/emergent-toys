@@ -203,25 +203,25 @@
     }
 
     /* ─── Light theme overrides ─── */
-    /* applyTheme sets data-theme="" when light, "dark" when dark.
+    /* applyTheme sets data-theme="light" when light, "dark" when dark.
        Base CSS is dark — these rules only fire in light mode. */
-    [data-theme=""] body {
+    [data-theme="light"] body {
       background: #f5f5f0;
       color: rgba(0,0,0,0.85);
     }
-    [data-theme=""] #splash        { background: #f5f5f0; }
-    [data-theme=""] #splash-title  { color: rgba(0,0,0,0.85); }
-    [data-theme=""] #splash-cursor { background: rgba(0,0,0,0.75); }
-    [data-theme=""] #splash-hint   { color: rgba(0,0,0,0.2); }
-    [data-theme=""] .main-title    { color: rgba(0,0,0,0.85); }
-    [data-theme=""] .title-cursor  { background: rgba(0,0,0,0.75); }
-    [data-theme=""] .main-tagline  { color: rgba(0,0,0,0.2); }
-    [data-theme=""] .link-item     { color: rgba(0,0,0,0.5); }
-    [data-theme=""] .link-item:hover,
-    [data-theme=""] .link-item:focus-visible { color: rgba(0,0,0,1); }
-    [data-theme=""] .link-sep      { color: rgba(0,0,0,0.1); }
-    [data-theme=""] #theme-toggle  { color: rgba(0,0,0,0.2); }
-    [data-theme=""] #theme-toggle:hover { color: rgba(0,0,0,0.6); }
+    [data-theme="light"] #splash        { background: #f5f5f0; }
+    [data-theme="light"] #splash-title  { color: rgba(0,0,0,0.85); }
+    [data-theme="light"] #splash-cursor { background: rgba(0,0,0,0.75); }
+    [data-theme="light"] #splash-hint   { color: rgba(0,0,0,0.2); }
+    [data-theme="light"] .main-title    { color: rgba(0,0,0,0.85); }
+    [data-theme="light"] .title-cursor  { background: rgba(0,0,0,0.75); }
+    [data-theme="light"] .main-tagline  { color: rgba(0,0,0,0.2); }
+    [data-theme="light"] .link-item     { color: rgba(0,0,0,0.5); }
+    [data-theme="light"] .link-item:hover,
+    [data-theme="light"] .link-item:focus-visible { color: rgba(0,0,0,1); }
+    [data-theme="light"] .link-sep      { color: rgba(0,0,0,0.1); }
+    [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.2); }
+    [data-theme="light"] #theme-toggle:hover { color: rgba(0,0,0,0.6); }
     /* ─── Theme toggle button ─── */
     #theme-toggle {
       position: fixed;
@@ -291,7 +291,7 @@
   function isDark() { return document.documentElement.dataset.theme === 'dark'; }
 
   function applyTheme(dark) {
-    document.documentElement.dataset.theme = dark ? 'dark' : '';
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     document.getElementById('theme-toggle').textContent = dark ? '[ light ]' : '[ dark ]';
   }
 
