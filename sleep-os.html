@@ -1327,6 +1327,10 @@ body.idle-sleeping { cursor:none; }
   .sm-lbl { width: 100px; font-size: 12px; }
   .sm-val { font-size: 12px; }
 
+  #start-menu { width: 260px; }
+  .sm-item { padding: 12px 10px 12px 6px; font-size: 14px; }
+  .sm-icon { width: 24px; height: 24px; font-size: 22px; }
+
   .dlg-body { padding: 14px; }
   .dlg-text { font-size: 14px; line-height: 1.7; }
   .dlg-btn { min-width: 90px; height: 34px; font-size: 14px; }
@@ -6215,6 +6219,28 @@ function showDropdown(anchor, items) {
   document.body.appendChild(dd);
   setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
 }
+// Long-press to context menu on touch - dispatches synthetic contextmenu event
+let _longPressActive = false;
+function addLongPress(el) {
+  let timer, startX, startY;
+  el.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    startX = e.clientX; startY = e.clientY;
+    timer = setTimeout(() => {
+      timer = null;
+      _longPressActive = true;
+      el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: startX, clientY: startY }));
+    }, 500);
+  }, { passive: true });
+  el.addEventListener('pointermove', e => {
+    if (!timer) return;
+    if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) { clearTimeout(timer); timer = null; }
+  }, { passive: true });
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  el.addEventListener('pointerup', cancel, { passive: true });
+  el.addEventListener('pointercancel', cancel, { passive: true });
+}
+
 function showCtxMenu(x, y, items) {
   closeDropdown();
   const dd = document.createElement('div');
@@ -6228,7 +6254,7 @@ function showCtxMenu(x, y, items) {
       const el = document.createElement('div');
       el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
       el.textContent = item.label;
-      if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
+      if (!item.disabled) el.addEventListener('pointerdown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
       dd.appendChild(el);
     }
   });
@@ -6237,7 +6263,10 @@ function showCtxMenu(x, y, items) {
   const r = dd.getBoundingClientRect();
   if (r.right  > window.innerWidth)  dd.style.left = (x - r.width)  + 'px';
   if (r.bottom > window.innerHeight) dd.style.top  = (y - r.height) + 'px';
-  setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
+  setTimeout(() => {
+    document.addEventListener('mousedown', closeDropdown, { once: true });
+    document.addEventListener('touchstart', closeDropdown, { once: true, passive: true });
+  }, 0);
 }
 
 // ── OS-native dialog replacements (no browser prompt/alert/confirm) ──
@@ -7040,14 +7069,16 @@ function makeDesktopIconEl(ic) {
       } else {
         if (isMouse) {
           queueActivateClick();
-        } else {
+        } else if (!_longPressActive) {
           activate();
         }
+        _longPressActive = false;
       }
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup',   onUp);
   });
+  addLongPress(div);
   div.addEventListener('contextmenu', e => {
     e.preventDefault(); e.stopPropagation();
     // If right-clicking outside current selection, replace it
@@ -7273,7 +7304,8 @@ function setupIcons() {
     if (moveShellPayloadToDir(payload, 'DESKTOP')) clearShellDragPayload();
   });
 
-  // Desktop background right-click
+  // Desktop background right-click / long-press
+  addLongPress(document.getElementById('desktop'));
   document.getElementById('desktop').addEventListener('contextmenu', e => {
     if (e.target.closest('.desktop-icon') || e.target.closest('.os-window')) return;
     e.preventDefault();
@@ -8557,11 +8589,13 @@ function openExplorer(startPath) {
       else replaceSelection(item);
     });
     el.addEventListener('dblclick', () => openItem(item));
-    // Touch: single tap opens the item
-    let _tapX, _tapY;
-    el.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { _tapX = e.clientX; _tapY = e.clientY; } });
+    // Touch: single tap opens, long-press shows context menu
+    addLongPress(el);
+    let _tapX, _tapY, _tapT;
+    el.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { _tapX = e.clientX; _tapY = e.clientY; _tapT = Date.now(); } });
     el.addEventListener('pointerup', e => {
-      if (e.pointerType !== 'mouse' && Math.abs(e.clientX - _tapX) < 10 && Math.abs(e.clientY - _tapY) < 10) openItem(item);
+      if (e.pointerType !== 'mouse' && !_longPressActive && Date.now() - _tapT < 400 && Math.abs(e.clientX - _tapX) < 10 && Math.abs(e.clientY - _tapY) < 10) openItem(item);
+      _longPressActive = false;
     });
 
     // ── Drag source ──────────────────────────────────────────────
@@ -8930,6 +8964,7 @@ function openExplorer(startPath) {
     return ok;
   };
 
+  addLongPress(pane);
   pane.addEventListener('contextmenu', e => {
     if (e.target.closest(ITEM_SELECTOR)) return;
     e.preventDefault();
