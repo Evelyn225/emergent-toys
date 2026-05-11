@@ -1296,44 +1296,44 @@ body.idle-sleeping { cursor:none; }
 
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
-  body { font-size: 14px; }
+  body { font-size: 16px; }
   .win-rz { display: none; }
 
-  .desktop-icon { width: 80px; height: 80px; padding: 5px; gap: 4px; }
-  .di-img { font-size: 28px; }
-  .di-name { font-size: 10px; }
+  .desktop-icon { width: 96px; height: 96px; padding: 6px; gap: 5px; }
+  .di-img { font-size: 36px; }
+  .di-name { font-size: 12px; }
 
-  #taskbar { height: 44px; padding: 3px; }
-  #desktop { bottom: 44px; }
-  #start-menu { bottom: 44px; }
-  #start-btn { height: 36px; font-size: 14px; padding: 0 12px; }
-  .taskbar-btn { height: 36px; font-size: 13px; padding: 0 8px; max-width: 120px; }
-  .tb-divider { height: 36px; }
-  #system-tray { height: 36px; font-size: 14px; padding: 0 8px; }
+  #taskbar { height: 56px; padding: 4px; }
+  #desktop { bottom: 56px; }
+  #start-menu { bottom: 56px; }
+  #start-btn { height: 48px; font-size: 16px; padding: 0 14px; }
+  .taskbar-btn { height: 48px; font-size: 14px; padding: 0 10px; max-width: 140px; }
+  .tb-divider { height: 48px; }
+  #system-tray { height: 48px; font-size: 16px; padding: 0 10px; }
 
   .win-titlebar { height: 62px; padding: 6px 8px; }
   .win-btn { width: 50px; height: 50px; font-size: 22px; }
   .win-controls { gap: 6px; }
-  .win-title-text { font-size: 15px; }
+  .win-title-text { font-size: 16px; }
   .win-icon { font-size: 18px; }
-  .win-menubar { padding: 2px 4px; }
-  .menu-item { padding: 4px 10px; font-size: 13px; }
-  .win-statusbar { height: 24px; font-size: 13px; }
+  .win-menubar { padding: 4px 6px; }
+  .menu-item { padding: 6px 12px; font-size: 15px; }
+  .win-statusbar { height: 28px; font-size: 14px; }
 
   .file-item { width: 90px; padding: 8px 4px; }
   .fi-icon { font-size: 30px; }
-  .fi-name { font-size: 12px; }
+  .fi-name { font-size: 13px; }
 
-  .sm-lbl { width: 100px; font-size: 12px; }
-  .sm-val { font-size: 12px; }
+  .sm-lbl { width: 110px; font-size: 14px; }
+  .sm-val { font-size: 14px; }
 
   #start-menu { width: 290px; }
   .sm-item { padding: 15px 12px 15px 8px; font-size: 16px; }
   .sm-icon { width: 28px; height: 28px; font-size: 26px; }
 
-  .dlg-body { padding: 14px; }
-  .dlg-text { font-size: 14px; line-height: 1.7; }
-  .dlg-btn { min-width: 90px; height: 34px; font-size: 14px; }
+  .dlg-body { padding: 16px; }
+  .dlg-text { font-size: 16px; line-height: 1.7; }
+  .dlg-btn { min-width: 100px; height: 40px; font-size: 16px; }
 
   #cad-actions { grid-template-columns: 1fr; }
   #cad-hero { flex-direction: column; }
@@ -1341,14 +1341,14 @@ body.idle-sleeping { cursor:none; }
   #cad-footer { flex-direction: column; align-items: stretch; }
   #cad-footnote { text-align: center; }
 
-  .term-wrap { font-size: 16px; }
-  .note-body, .note-textarea { font-size: 13px; }
+  .term-wrap { font-size: 17px; }
+  .note-body, .note-textarea { font-size: 15px; }
 
-  .exp-toolbar button { padding: 8px 14px; font-size: 13px; }
-  .exp-addr { padding: 6px 6px; font-size: 13px; }
-  .exp-item { width: 86px; padding: 8px 4px; font-size: 12px; }
+  .exp-toolbar button { padding: 8px 14px; font-size: 14px; }
+  .exp-addr { padding: 6px 6px; font-size: 14px; }
+  .exp-item { width: 86px; padding: 8px 4px; font-size: 13px; }
   .exp-item .exp-icon { font-size: 32px; }
-  .exp-list-item { padding: 10px 6px; font-size: 13px; }
+  .exp-list-item { padding: 10px 6px; font-size: 14px; }
   .exp-det-item td { padding: 8px 6px; font-size: 13px; }
 }
 </style>
@@ -6723,12 +6723,13 @@ function getDesktopFsIcons() {
 // ─────────────────────────────────────────────────────────────────
 // DESKTOP ICON GRID
 // ─────────────────────────────────────────────────────────────────
-const ICON_CELL_W  = 86;   // minimum horizontal spacing between icon anchors
-const ICON_CELL_H  = 86;   // minimum vertical spacing between icon anchors
-const ICON_BOX_W   = 80;   // rendered desktop icon width
-const ICON_BOX_H   = 80;   // rendered desktop icon height
-const ICON_PAD_X   = 6;    // layer left/right padding
-const ICON_PAD_Y   = 6;    // layer top/bottom padding
+const _mobileGrid  = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 700;
+const ICON_CELL_W  = _mobileGrid ? 104 : 86;
+const ICON_CELL_H  = _mobileGrid ? 104 : 86;
+const ICON_BOX_W   = _mobileGrid ? 96  : 80;
+const ICON_BOX_H   = _mobileGrid ? 96  : 80;
+const ICON_PAD_X   = 6;
+const ICON_PAD_Y   = 6;
 const ICON_POS_KEY = 'sleepOS-icon-positions';
 let iconPositions  = {};   // { ic.name: { col, row, manual? } }
 
