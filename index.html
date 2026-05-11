@@ -497,7 +497,7 @@
 
   // ── Main page init (runs after splash exits) ──────────────────
   function startPage() {
-    dockReady = true;
+
     const mainContent = document.getElementById('main-content');
     mainContent.style.visibility = 'visible';
     requestAnimationFrame(() => { mainContent.style.opacity = '1'; });
@@ -573,10 +573,8 @@
   })();
 
   // ── Keyboard nav ──────────────────────────────────────────────
-  let dockReady = false;
   const linkNav = document.querySelector('.link-list');
   linkNav.addEventListener('keydown', (e) => {
-    if (!dockReady) return;
     const links  = Array.from(document.querySelectorAll('.link-item'));
     const focused = document.activeElement;
     const idx     = links.indexOf(focused);
