@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>Physarum</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
+  <style>
+    @font-face {
+      font-family: 'W95';
+      src: url('w95font.woff2') format('woff2'),
+           url('w95font.woff')  format('woff');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'W95';
+      src: url('w95font-bold.woff2') format('woff2'),
+           url('w95font-bold.woff')  format('woff');
+      font-weight: bold;
+      font-style: normal;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #000; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+    #stats {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      font-family: 'W95', monospace;
+      font-weight: bold;
+      font-size: 11px;
+      color: rgba(170, 100, 255, 0.65);
+      z-index: 100;
+      line-height: 2;
+      pointer-events: none;
+      user-select: none;
+    }
+    #ui {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      font-family: 'W95', monospace;
+      font-weight: bold;
+      font-size: 11px;
+      color: rgba(170, 100, 255, 0.45);
+      z-index: 100;
+      line-height: 2;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="stats">
+  <span id="stat-agents">AGENTS: 0</span><br>
+  <span id="stat-food">FOOD: 0</span>
+</div>
+
+<div id="ui">
+  [CLICK] PLACE FOOD<br>
+  [RIGHT CLICK] REMOVE FOOD<br>
+  [R] RESET
+</div>
+
+<a href="/"
+  style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         padding: 8px; background: rgba(0,0,0,0.8); color: white;
+         border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
+         text-decoration: none; font-family: sans-serif; font-size: 18px;
+         transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+         line-height: 1; display: flex; align-items: center; justify-content: center;"
+  onmouseover="this.style.transform='scale(1.2)';
+               this.style.background='rgba(170,100,255,0.8)';
+               this.style.borderColor='rgba(255,255,255,0.6)'"
+  onmouseout="this.style.transform='scale(1)';
+              this.style.background='rgba(0,0,0,0.8)';
+              this.style.borderColor='rgba(255,255,255,0.3)'"
+  onmousedown="this.style.transform='scale(0.9)'"
+  onmouseup="this.style.transform='scale(1.2)'">
+  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+       alt="home" style="width: 18px; height: 18px; object-fit: contain;">
+</a>
+
+<script>
+// ─── constants ───────────────────────────────────────────────────
+const SCALE        = 3;      // screen pixels per sim cell
+const NUM_AGENTS   = 15000;
+const SA           = Math.PI / 4;   // sensor angle offset (45°)
+const SD           = 9;             // sensor distance (sim units)
+const RA           = Math.PI / 4;   // rotation amount per step
+const DEPOSIT      = 5;
+const DECAY        = 0.935;
+const SPEED        = 1.2;
+const HUNGER_MAX   = 180;    // frames of no trail before respawn
+const HUNGER_THRESH = 2;     // trail value below which hunger ticks up
+
+// ─── state ───────────────────────────────────────────────────────
+let simW, simH;
+let trail, trailBuf;    // Float32Array ping-pong
+let agents = [];
+let foodNodes = [];
+let pg;
+let colorLut = new Uint8Array(101 * 3); // pre-built per frame
+
+function setup() {
+  let cnv = createCanvas(windowWidth, windowHeight);
+  pixelDensity(1);
+  noSmooth();
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  simW = Math.floor(width  / SCALE);
+  simH = Math.floor(height / SCALE);
+
+  trail    = new Float32Array(simW * simH);
+  trailBuf = new Float32Array(simW * simH);
+
+  pg = createGraphics(simW, simH);
+  pg.pixelDensity(1);
+
+  initSim();
+}
+
+// ─── build color lookup table ─────────────────────────────────────
+function buildLut(hue) {
+  for (let i = 0; i <= 100; i++) {
+    let v   = i / 100;
+    let bri = v * v;          // quadratic: more contrast at low values
+    let sat = 0.88 - v * 0.2; // slight desaturation at peak
+    let [r, g, b] = hsbRgb(hue, sat, bri);
+    colorLut[i * 3]     = r;
+    colorLut[i * 3 + 1] = g;
+    colorLut[i * 3 + 2] = b;
+  }
+}
+
+function hsbRgb(h, s, v) {
+  h = ((h % 360) + 360) % 360;
+  let c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  let r = 0, g = 0, b = 0;
+  if      (h < 60)  { r=c; g=x; }
+  else if (h < 120) { r=x; g=c; }
+  else if (h < 180) { g=c; b=x; }
+  else if (h < 240) { g=x; b=c; }
+  else if (h < 300) { r=x; b=c; }
+  else              { r=c; b=x; }
+  return [Math.floor((r+m)*255), Math.floor((g+m)*255), Math.floor((b+m)*255)];
+}
+
+// ─── simulation init ──────────────────────────────────────────────
+function initSim() {
+  trail.fill(0);
+  trailBuf.fill(0);
+  agents    = [];
+  foodNodes = [];
+
+  // scatter food randomly, keeping away from edges
+  let margin  = Math.min(simW, simH) * 0.08;
+  let minDist = Math.min(simW, simH) * 0.07;
+  let attempts = 0;
+  while (foodNodes.length < 30 && attempts < 2000) {
+    attempts++;
+    let fx = margin + Math.random() * (simW - margin * 2);
+    let fy = margin + Math.random() * (simH - margin * 2);
+    let tooClose = false;
+    for (let f of foodNodes) {
+      if (Math.hypot(fx - f.x, fy - f.y) < minDist) { tooClose = true; break; }
+    }
+    if (!tooClose) foodNodes.push({ x: fx, y: fy });
+  }
+
+  spawnAtFood(NUM_AGENTS);
+  updateStats();
+}
+
+function spawnAtFood(total) {
+  let perFood = Math.floor(total / foodNodes.length);
+  for (let f of foodNodes) {
+    for (let i = 0; i < perFood; i++) {
+      agents.push({
+        x: f.x + (Math.random() - 0.5) * 8,
+        y: f.y + (Math.random() - 0.5) * 8,
+        a: Math.random() * Math.PI * 2,
+        h: 0
+      });
+    }
+  }
+}
+
+// ─── sense helper ─────────────────────────────────────────────────
+function sense(ag, ao) {
+  let a  = ag.a + ao;
+  let sx = Math.floor(ag.x + Math.cos(a) * SD);
+  let sy = Math.floor(ag.y + Math.sin(a) * SD);
+  sx = ((sx % simW) + simW) % simW;
+  sy = ((sy % simH) + simH) % simH;
+  return trail[sy * simW + sx];
+}
+
+// ─── main loop ────────────────────────────────────────────────────
+function draw() {
+  buildLut(105); // fixed yellow-green
+
+  // update agents
+  let n = agents.length;
+  for (let i = 0; i < n; i++) {
+    let ag  = agents[i];
+    let fwd = sense(ag, 0);
+    let lft = sense(ag,  SA);
+    let rgt = sense(ag, -SA);
+
+    let maxSense = fwd > lft ? (fwd > rgt ? fwd : rgt) : (lft > rgt ? lft : rgt);
+    if (maxSense < 1) {
+      // sensing nothing - wander, don't march into void
+      ag.a += (Math.random() - 0.5) * Math.PI * 0.6;
+    } else if (fwd >= lft && fwd >= rgt) {
+      if (fwd > 20 && Math.random() < 0.04) ag.a += (Math.random() - 0.5) * RA;
+    } else if (lft > rgt) {
+      ag.a += RA;
+    } else if (rgt > lft) {
+      ag.a -= RA;
+    } else {
+      ag.a += (Math.random() < 0.5 ? RA : -RA);
+    }
+
+    let nx = ag.x + Math.cos(ag.a) * SPEED;
+    let ny = ag.y + Math.sin(ag.a) * SPEED;
+
+    nx = ((nx % simW) + simW) % simW;
+    ny = ((ny % simH) + simH) % simH;
+
+    ag.x = nx;
+    ag.y = ny;
+
+    let idx = Math.floor(ag.y) * simW + Math.floor(ag.x);
+    if (idx >= 0 && idx < trail.length) {
+      trail[idx] = Math.min(trail[idx] + DEPOSIT, 100);
+    }
+
+    // hunger: tick up when in empty space, respawn at food when maxed
+    let localTrail = idx >= 0 && idx < trail.length ? trail[idx] : 0;
+    if (localTrail < HUNGER_THRESH) {
+      ag.h++;
+      if (ag.h >= HUNGER_MAX && foodNodes.length > 0) {
+        let f = foodNodes[Math.floor(Math.random() * foodNodes.length)];
+        ag.x = f.x + (Math.random() - 0.5) * 8;
+        ag.y = f.y + (Math.random() - 0.5) * 8;
+        ag.a = Math.random() * Math.PI * 2;
+        ag.h = 0;
+      }
+    } else {
+      ag.h = Math.max(0, ag.h - 3); // recover faster than it starves
+    }
+  }
+
+  // count agents near each food node (using squared dist to avoid sqrt)
+  let crowdR2 = 12 * 12;
+  let crowding = new Array(foodNodes.length).fill(0);
+  for (let j = 0; j < agents.length; j++) {
+    for (let fi = 0; fi < foodNodes.length; fi++) {
+      let dx = agents[j].x - foodNodes[fi].x;
+      let dy = agents[j].y - foodNodes[fi].y;
+      if (dx * dx + dy * dy < crowdR2) crowding[fi]++;
+    }
+  }
+
+  // food emits gradient scent, weakened by local crowding
+  for (let fi = 0; fi < foodNodes.length; fi++) {
+    let f  = foodNodes[fi];
+    let fx = Math.floor(f.x), fy = Math.floor(f.y);
+    let crowdFactor = 1 / (1 + crowding[fi] * 0.001); // 50% at ~500 agents nearby
+    let R = 11;
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        let d = Math.sqrt(dx * dx + dy * dy);
+        if (d > R) continue;
+        let strength = (1 - d / R) * 100 * crowdFactor;
+        let bx = ((fx + dx) % simW + simW) % simW;
+        let by = ((fy + dy) % simH + simH) % simH;
+        if (trail[by * simW + bx] < strength) trail[by * simW + bx] = strength;
+      }
+    }
+  }
+
+  // diffuse + decay into trailBuf (fully wrapped)
+  let tw = simW, th = simH;
+  for (let y = 0; y < th; y++) {
+    let row  = y * tw;
+    let rowU = ((y - 1 + th) % th) * tw;
+    let rowD = ((y + 1)      % th) * tw;
+    for (let x = 0; x < tw; x++) {
+      let xL = (x - 1 + tw) % tw;
+      let xR = (x + 1)      % tw;
+      let sum = trail[rowU + xL] + trail[rowU + x] + trail[rowU + xR]
+              + trail[row  + xL] + trail[row  + x] + trail[row  + xR]
+              + trail[rowD + xL] + trail[rowD + x] + trail[rowD + xR];
+      trailBuf[row + x] = sum * 0.11111 * DECAY;
+    }
+  }
+
+  // swap
+  let tmp = trail;
+  trail    = trailBuf;
+  trailBuf = tmp;
+
+  // render to low-res buffer
+  pg.loadPixels();
+  let px  = pg.pixels;
+  let tr  = trail;
+  let lut = colorLut;
+  let sz  = simW * simH;
+
+  for (let i = 0; i < sz; i++) {
+    let vi = Math.floor(tr[i]);       // 0-100
+    let li = vi * 3;
+    let pi = i * 4;
+    px[pi]     = lut[li];
+    px[pi + 1] = lut[li + 1];
+    px[pi + 2] = lut[li + 2];
+    px[pi + 3] = 255;
+  }
+
+  // food markers: white 5x5 squares
+  for (let f of foodNodes) {
+    let fx = Math.floor(f.x), fy = Math.floor(f.y);
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        let bx = fx + dx, by = fy + dy;
+        if (bx >= 0 && bx < simW && by >= 0 && by < simH) {
+          let bi = (by * simW + bx) * 4;
+          px[bi]     = 255;
+          px[bi + 1] = 255;
+          px[bi + 2] = 255;
+          px[bi + 3] = 255;
+        }
+      }
+    }
+  }
+
+  pg.updatePixels();
+  image(pg, 0, 0, width, height);
+}
+
+// ─── interaction ──────────────────────────────────────────────────
+function mousePressed() {
+  let sx = mouseX / SCALE, sy = mouseY / SCALE;
+
+  if (mouseButton === LEFT) {
+    foodNodes.push({ x: sx, y: sy });
+    for (let i = 0; i < 900; i++) {
+      agents.push({
+        x: sx + (Math.random() - 0.5) * 8,
+        y: sy + (Math.random() - 0.5) * 8,
+        a: Math.random() * Math.PI * 2,
+        h: 0
+      });
+    }
+    updateStats();
+  } else if (mouseButton === RIGHT) {
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < foodNodes.length; i++) {
+      let d = Math.hypot(sx - foodNodes[i].x, sy - foodNodes[i].y);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best >= 0 && bestD < 30) {
+      foodNodes.splice(best, 1);
+      updateStats();
+    }
+  }
+}
+
+function keyPressed() {
+  if (key === 'r' || key === 'R') initSim();
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  simW = Math.floor(width  / SCALE);
+  simH = Math.floor(height / SCALE);
+  trail    = new Float32Array(simW * simH);
+  trailBuf = new Float32Array(simW * simH);
+  if (pg) pg.remove();
+  pg = createGraphics(simW, simH);
+  pg.pixelDensity(1);
+  initSim();
+}
+
+function updateStats() {
+  document.getElementById('stat-agents').textContent = 'AGENTS: ' + agents.length;
+  document.getElementById('stat-food').textContent   = 'FOOD:   ' + foodNodes.length;
+}
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
