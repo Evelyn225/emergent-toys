@@ -189,7 +189,8 @@ function spawnAtFood(total) {
         x: f.x + (Math.random() - 0.5) * 8,
         y: f.y + (Math.random() - 0.5) * 8,
         a: Math.random() * Math.PI * 2,
-        h: 0
+        h: 0,
+        feed: 0
       });
     }
   }
@@ -216,6 +217,19 @@ function draw() {
     let fwd = sense(ag, 0);
     let lft = sense(ag,  SA);
     let rgt = sense(ag, -SA);
+
+    // feeding pause: triggered when sitting in a food core (trail near 100)
+    let idxNow = Math.floor(ag.y) * simW + Math.floor(ag.x);
+    if (ag.feed === 0 && idxNow >= 0 && idxNow < trail.length
+        && trail[idxNow] > 88 && Math.random() < 0.25) {
+      ag.feed = 10 + Math.floor(Math.random() * 20); // pause 10-30 frames
+    }
+    if (ag.feed > 0) {
+      ag.feed--;
+      if (idxNow >= 0 && idxNow < trail.length)
+        trail[idxNow] = Math.min(trail[idxNow] + DEPOSIT, 100);
+      continue;
+    }
 
     let maxSense = fwd > lft ? (fwd > rgt ? fwd : rgt) : (lft > rgt ? lft : rgt);
     if (maxSense < 1) {
@@ -276,13 +290,16 @@ function draw() {
   for (let fi = 0; fi < foodNodes.length; fi++) {
     let f  = foodNodes[fi];
     let fx = Math.floor(f.x), fy = Math.floor(f.y);
-    let crowdFactor = 1 / (1 + crowding[fi] * 0.001); // 50% at ~500 agents nearby
+    let crowdFactor = 1 / (1 + crowding[fi] * 0.001);
     let R = 11;
     for (let dy = -R; dy <= R; dy++) {
       for (let dx = -R; dx <= R; dx++) {
         let d = Math.sqrt(dx * dx + dy * dy);
         if (d > R) continue;
-        let strength = (1 - d / R) * 100 * crowdFactor;
+        // strong core within 6 units, weak aura beyond
+        let strength = (d < 6
+          ? (1 - d / 6) * 100
+          : (1 - (d - 6) / (R - 6)) * 25) * crowdFactor;
         let bx = ((fx + dx) % simW + simW) % simW;
         let by = ((fy + dy) % simH + simH) % simH;
         if (trail[by * simW + bx] < strength) trail[by * simW + bx] = strength;
@@ -360,7 +377,8 @@ function mousePressed() {
         x: sx + (Math.random() - 0.5) * 8,
         y: sy + (Math.random() - 0.5) * 8,
         a: Math.random() * Math.PI * 2,
-        h: 0
+        h: 0,
+        feed: 0
       });
     }
     updateStats();
