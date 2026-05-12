@@ -119,6 +119,7 @@
       text-decoration: none;
       -webkit-tap-highlight-color: transparent;
       transition: color 0.1s;
+      white-space: nowrap;
     }
 
     .link-item:hover,
@@ -139,7 +140,7 @@
       .main-inner { width: 94%; }
       .main-title { font-size: 26px; letter-spacing: 4px; margin-bottom: 14px; }
       .title-cursor { width: 18px; height: 26px; }
-      .main-tagline { font-size: 12px; letter-spacing: 2px; margin-bottom: 0; padding-bottom: 56px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+      .main-tagline { font-size: 12px; letter-spacing: 2px; margin-bottom: 0; padding-bottom: 56px; }
       .link-list { font-size: 15px; line-height: 3; padding-top: 40px; }
       .link-sep { margin: 0 4px; }
     }
@@ -232,7 +233,6 @@
     [data-theme="light"] .link-item:hover,
     [data-theme="light"] .link-item:focus-visible { color: rgba(0,0,0,1); }
     [data-theme="light"] .link-sep      { color: rgba(0,0,0,0.1); }
-    [data-theme="light"] .main-tagline  { border-bottom-color: rgba(0,0,0,0.08); }
     [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.2); }
     [data-theme="light"] #theme-toggle:hover { color: rgba(0,0,0,0.6); }
     /* ─── Theme toggle button ─── */
