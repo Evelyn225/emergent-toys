@@ -500,14 +500,14 @@
             let progressTimeoutId = setTimeout(() => {
                 progressInterval = setInterval(() => {
                     if (progress < 85) {
-                        t += 0.005;
+                        t += 0.009;
                         let eased = 85 * (1 - Math.pow(1 - t, 3));
                         if (eased > 85) eased = 85;
                         progress = eased;
                         setProgressBar(progress);
                     }
-                }, 120);
-            }, 2000);
+                }, 100);
+            }, 800);
             document.getElementById('consoleOutput').innerHTML = '';
             let themeValue = themeInput.value.trim();
             const themeStatus = document.getElementById('themeStatus');
@@ -532,41 +532,9 @@
                 if (!response.ok) throw new Error('Failed to generate site');
                 addConsoleCommand('Connection established', 'status');
                 const data = await response.json();
-                let firstPassCode = data.html || data.code;
-                // Second pass: ask AI to flesh out and fully implement referenced functions
-                const secondPassPrompt = `
-You previously generated this site for the theme: "${themeValue}". Please review and improve it:
-
-1. Expand and enrich this working implementation - preserve everything that already functions. Make it more substantial and fully realized, deepening how it expresses the theme: "${themeValue}".
-2. Carefully check for any referenced functions, variables, or classes that are not fully implemented, and implement them.
-3. Ensure all p5.js code is complete and functional.
-4. Output only the improved HTML/CSS/JS code, no explanations.
-
-OUTPUT FORMAT (strictly enforced):
-- Raw HTML/CSS/JS only - no markdown, no code fences, no backticks
-- Do NOT wrap output in \`\`\`html or any other block
-- Output must begin with the first < character, nothing before it
-- Do NOT include <html>, <head>, or <body> tags
-
-Theme: ${themeValue}
-
-Here is the current code:
-${firstPassCode}
-`;
-                // Show theme again during second pass
-                themeStatus.textContent = themeValue;
-                themeStatus.style.display = 'block';
-                const secondResponse = await fetch(GENERATE_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ theme: themeValue, prompt: secondPassPrompt })
-                });
-                if (!secondResponse.ok) throw new Error('Failed to improve site');
-                const improvedData = await secondResponse.json();
-                const improvedCode = improvedData.html || improvedData.code;
                 currentGeneration = {
                     theme: themeValue,
-                    code: improvedCode
+                    code: data.html || data.code
                 };
                 // Complete progress and UI state immediately
                 progress = 100;

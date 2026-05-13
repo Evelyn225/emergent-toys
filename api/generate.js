@@ -65,6 +65,10 @@ AESTHETIC:
 - blendMode(ADD) for glowing/luminous effects on dark backgrounds
 - pixelDensity(1) on pixel-heavy sketches
 
+COMPLETENESS:
+- Every function, class, and variable you reference must be fully implemented — no stubs, no TODOs, no placeholders
+- The output must run correctly on first load with zero errors
+
 VARIETY — avoid repeating these overused patterns:
 - Do not default to floating circles or simple particle rain
 - Do not use the same structure every time — rotate between: generative art, simulation, game, data sculpture, interactive toy, audio-reactive mock, procedural world
