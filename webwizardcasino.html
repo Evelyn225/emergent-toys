@@ -12,7 +12,18 @@
     <link rel="icon" type="image/png" sizes="16x16"
         href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
     <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
-    <link href="https://fonts.googleapis.com/css2?family=Iosevka:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+@font-face {
+  font-family: 'W95';
+  src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff');
+  font-weight: normal;
+}
+@font-face {
+  font-family: 'W95';
+  src: url('w95font-bold.woff2') format('woff2'), url('w95font-bold.woff') format('woff');
+  font-weight: bold;
+}
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
     <link rel="stylesheet" href="/casino-assets/casino-style.css">
 </head>
@@ -39,13 +50,14 @@
     </div>
 
     <div id="themeScreen" class="theme-screen">
+        <div id="errorToast"></div>
         <button id="themeScreenClose" style="display:none; position:absolute; top:14px; right:14px;
-            background:transparent; color:rgba(255,255,255,0.4); border:1px solid rgba(255,255,255,0.12);
-            border-radius:3px; font-size:16px; width:30px; height:30px; cursor:pointer;
-            font-family:'Iosevka',monospace; align-items:center; justify-content:center;
-            transition:background 0.15s,border-color 0.15s,color 0.15s;"
-            onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='rgba(255,255,255,0.25)';this.style.color='rgba(255,255,255,0.9)'"
-            onmouseout="this.style.background='transparent';this.style.borderColor='rgba(255,255,255,0.12)';this.style.color='rgba(255,255,255,0.4)'">✕</button>
+            background:transparent; color:rgba(255,255,255,0.35); border:1px solid rgba(255,255,255,0.12);
+            font-size:14px; width:28px; height:28px; cursor:pointer;
+            font-family:'W95',monospace; align-items:center; justify-content:center;
+            transition:background 0.12s,border-color 0.12s,color 0.12s;"
+            onmouseover="this.style.background='rgba(255,255,255,0.06)';this.style.borderColor='rgba(255,255,255,0.28)';this.style.color='rgba(255,255,255,0.9)'"
+            onmouseout="this.style.background='transparent';this.style.borderColor='rgba(255,255,255,0.12)';this.style.color='rgba(255,255,255,0.35)'">✕</button>
         <div class="theme-modal">
             <div class="theme-eyebrow">▓ terminal</div>
             <div class="theme-title">The Web Wizard's Casino</div>
@@ -343,10 +355,7 @@
                 await typeConsoleCommand('System initialized', 'status', 30);
                 await new Promise(r => setTimeout(r, 500));
                 await typeConsoleCommand('Connecting to AI engine...', 'normal', 30);
-                await new Promise(r => setTimeout(r, 500));
-                await typeConsoleCommand('Connection established', 'status', 30);
-                await new Promise(r => setTimeout(r, 500));
-                // Continue with random commands
+                // Continue with random commands (no fake "Connection established" here)
                 consoleCommandInterval = setInterval(async () => {
                     if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
                     let randomCommand;
@@ -359,6 +368,15 @@
                     await typeConsoleCommand(randomCommand, 'normal', 25);
                 }, 4000);
             })();
+        }
+
+        function showErrorToast(message) {
+            const toast = document.getElementById('errorToast');
+            if (!toast) return;
+            clearTimeout(toast._hideTimer);
+            toast.textContent = message;
+            toast.classList.add('visible');
+            toast._hideTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
         }
 
         function stopConsoleCommands() {
@@ -479,20 +497,17 @@
             let progress = 0;
             let t = 0;
             let progressInterval = null;
-            setTimeout(() => {
+            let progressTimeoutId = setTimeout(() => {
                 progressInterval = setInterval(() => {
                     if (progress < 85) {
-                        // Ease in: slow at first, then faster
-                        t += 0.005; // Even slower
-                        // Use an ease-out cubic function for natural feel
+                        t += 0.005;
                         let eased = 85 * (1 - Math.pow(1 - t, 3));
-                        // Prevent overshooting
                         if (eased > 85) eased = 85;
                         progress = eased;
                         setProgressBar(progress);
                     }
-                }, 120); // Even slower update
-            }, 2000); // Delay progress bar start by 2000ms
+                }, 120);
+            }, 2000);
             document.getElementById('consoleOutput').innerHTML = '';
             let themeValue = themeInput.value.trim();
             const themeStatus = document.getElementById('themeStatus');
@@ -515,6 +530,7 @@
                     body: JSON.stringify({ theme: themeValue, prompt })
                 });
                 if (!response.ok) throw new Error('Failed to generate site');
+                addConsoleCommand('Connection established', 'status');
                 const data = await response.json();
                 let firstPassCode = data.html || data.code;
                 // Second pass: ask AI to flesh out and fully implement referenced functions
@@ -565,16 +581,23 @@ ${firstPassCode}
                 // Single canonical injection
                 setDisplayedGeneration(currentGeneration);
             } catch (error) {
-                stopConsoleCommands();
-                addConsoleCommand('Error: ' + error.message, 'error');
-                setProgressBar(100);
+                clearTimeout(progressTimeoutId);
                 clearInterval(progressInterval);
+                stopConsoleCommands();
+                setProgressBar(0);
+                addConsoleCommand('Error: ' + (error.message || 'connection failed'), 'error');
+                document.getElementById('themeStatus').style.display = 'none';
                 setRegenerateButtonText('generate');
                 regenerateButton.disabled = false;
                 isGenerating = false;
                 document.getElementById('favoritesButton').style.display = '';
-                // Show themeStatus even on error
-                document.getElementById('themeStatus').style.display = 'block';
+                // Return to theme screen after showing the error briefly
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                    themeScreen.style.display = 'flex';
+                    resumeCurrentSite();
+                    showErrorToast("couldn't connect");
+                }, 2500);
             }
         }
 
@@ -773,7 +796,7 @@ ${firstPassCode}
                     themeInput.value = 'nothing found';
                 }
                 randomThemeButton.disabled = false;
-                randomThemeButton.textContent = 'random_theme';
+                randomThemeButton.textContent = 'random';
                 topBar.style.display = 'flex'; // Always show topBar when themeScreen is visible
             });
             startGenerationButton.addEventListener('click', () => {
