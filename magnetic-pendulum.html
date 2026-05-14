@@ -42,6 +42,105 @@
 <script>
 let fractalgfx;
 
+// --- Physics constants ---
+const PIXEL_SIZE      = 6;
+const SIM_SCALE       = 3.0;
+const H_OFFSET        = 0.4;
+const STRENGTH        = 1.0;
+const K_RESTORE       = 0.5;
+const FRICTION        = 0.25;
+const DT              = 0.05;
+const MAX_STEPS       = 10000;
+const SETTLE_RADIUS   = 0.3;
+const SETTLE_SPEED    = 0.01;
+const CELLS_PER_FRAME = 80;
+const TRACE_STEPS_PER_FRAME = 30;
+const FADE_RATE       = 0.8;
+const MAGNET_HUES     = [0, 180, 50];  // red, cyan, gold
+
+// Equilateral triangle, one vertex pointing up
+// Angles: 90°, 210°, 330° at radius 1.0
+const MAGNETS = [
+  { x:  0.000,  y:  1.000 },  // top     - red
+  { x: -0.866,  y: -0.500 },  // bot-left  - cyan
+  { x:  0.866,  y: -0.500 }   // bot-right - gold
+];
+
+function pixelToSim(px, py) {
+  return {
+    sx:  (px - width  / 2) / (width  / 2) * SIM_SCALE,
+    sy: -((py - height / 2) / (height / 2)) * SIM_SCALE
+  };
+}
+
+function simToPixel(sx, sy) {
+  return {
+    px:  sx / SIM_SCALE * (width  / 2) + width  / 2,
+    py: -sy / SIM_SCALE * (height / 2) + height / 2
+  };
+}
+
+function acceleration(x, y, vx, vy) {
+  let ax = 0, ay = 0;
+  for (let m of MAGNETS) {
+    const dx = m.x - x, dy = m.y - y;
+    const dist = Math.sqrt(dx * dx + dy * dy + H_OFFSET * H_OFFSET);
+    const d3 = dist * dist * dist;
+    ax += STRENGTH * dx / d3;
+    ay += STRENGTH * dy / d3;
+  }
+  ax -= K_RESTORE * x;
+  ay -= K_RESTORE * y;
+  ax -= FRICTION * vx;
+  ay -= FRICTION * vy;
+  return { ax, ay };
+}
+
+function rk4Step(x, y, vx, vy) {
+  const a1 = acceleration(x, y, vx, vy);
+  const k1x = vx, k1y = vy, k1vx = a1.ax, k1vy = a1.ay;
+
+  const x2  = x  + 0.5 * DT * k1x,  y2  = y  + 0.5 * DT * k1y;
+  const vx2 = vx + 0.5 * DT * k1vx, vy2 = vy + 0.5 * DT * k1vy;
+  const a2  = acceleration(x2, y2, vx2, vy2);
+  const k2x = vx2, k2y = vy2, k2vx = a2.ax, k2vy = a2.ay;
+
+  const x3  = x  + 0.5 * DT * k2x,  y3  = y  + 0.5 * DT * k2y;
+  const vx3 = vx + 0.5 * DT * k2vx, vy3 = vy + 0.5 * DT * k2vy;
+  const a3  = acceleration(x3, y3, vx3, vy3);
+  const k3x = vx3, k3y = vy3, k3vx = a3.ax, k3vy = a3.ay;
+
+  const x4  = x  + DT * k3x,  y4  = y  + DT * k3y;
+  const vx4 = vx + DT * k3vx, vy4 = vy + DT * k3vy;
+  const a4  = acceleration(x4, y4, vx4, vy4);
+  const k4x = vx4, k4y = vy4, k4vx = a4.ax, k4vy = a4.ay;
+
+  return {
+    x:  x  + (DT / 6) * (k1x  + 2 * k2x  + 2 * k3x  + k4x),
+    y:  y  + (DT / 6) * (k1y  + 2 * k2y  + 2 * k3y  + k4y),
+    vx: vx + (DT / 6) * (k1vx + 2 * k2vx + 2 * k3vx + k4vx),
+    vy: vy + (DT / 6) * (k1vy + 2 * k2vy + 2 * k3vy + k4vy)
+  };
+}
+
+function simulateCell(sx, sy) {
+  let x = sx, y = sy, vx = 0, vy = 0;
+  for (let i = 0; i < MAX_STEPS; i++) {
+    const r = rk4Step(x, y, vx, vy);
+    x = r.x; y = r.y; vx = r.vx; vy = r.vy;
+    const speed = Math.sqrt(vx * vx + vy * vy);
+    if (speed < SETTLE_SPEED) {
+      for (let m = 0; m < 3; m++) {
+        const dx = x - MAGNETS[m].x, dy = y - MAGNETS[m].y;
+        if (Math.sqrt(dx * dx + dy * dy) < SETTLE_RADIUS) {
+          return { magnet: m, steps: i + 1 };
+        }
+      }
+    }
+  }
+  return { magnet: null, steps: MAX_STEPS };
+}
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 100);
