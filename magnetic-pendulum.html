@@ -71,7 +71,7 @@ const MAX_STEPS       = 10000;
 const SETTLE_RADIUS   = 0.3;
 const SETTLE_SPEED    = 0.01;
 const CELLS_PER_FRAME = 80;
-const TRACE_STEPS_PER_FRAME = 30;
+const TRACE_STEPS_PER_FRAME = 6;
 const FADE_RATE       = 0.8;
 const MAGNET_HUES     = [0, 180, 50];  // red, cyan, gold
 
@@ -242,14 +242,23 @@ function updateTrace() {
     }
   }
 
-  // Draw trail (white dots, opacity tapers toward head)
-  noStroke();
-  const n = trace.trail.length;
-  for (let i = 0; i < n; i++) {
-    const t  = trace.trail[i];
-    const ta = trace.state === 'FADING' ? trace.trailAlpha : 100;
-    fill(0, 0, 100, ta * (i / n));
-    circle(t.px, t.py, 3);
+  // Draw trail as a connected stroke
+  const n  = trace.trail.length;
+  const ta = trace.state === 'FADING' ? trace.trailAlpha : 90;
+  if (n > 1) {
+    noFill();
+    stroke(0, 0, 100, ta * 0.6);
+    strokeWeight(1.5);
+    beginShape();
+    for (let i = 0; i < n; i++) vertex(trace.trail[i].px, trace.trail[i].py);
+    endShape();
+  }
+  // Bright head dot showing current pendulum position
+  if (n > 0 && trace.state !== 'FADING') {
+    const head = trace.trail[n - 1];
+    noStroke();
+    fill(0, 0, 100, 100);
+    circle(head.px, head.py, 7);
   }
 
   // Draw label
@@ -303,8 +312,10 @@ function draw() {
       grid[i] = result;
 
       if (result.magnet !== null) {
-        const brightness = map(result.steps, 0, MAX_STEPS, 100, 20);
-        fractalgfx.fill(MAGNET_HUES[result.magnet], 90, brightness);
+        const logSteps = Math.log(result.steps + 1);
+        const logMax   = Math.log(MAX_STEPS + 1);
+        const brightness = map(logSteps, 0, logMax, 100, 15);
+        fractalgfx.fill(MAGNET_HUES[result.magnet], 85, brightness);
       } else {
         fractalgfx.fill(0, 0, 5);
       }
