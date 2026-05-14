@@ -16,6 +16,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { margin: 0; overflow: hidden; background: #000; }
     canvas { display: block; }
+    @font-face { font-family: 'w95'; src: url('w95font.woff') format('woff'); }
   </style>
 </head>
 <body>
@@ -39,48 +40,98 @@
        alt="home" style="width: 18px; height: 18px; object-fit: contain;">
 </a>
 
+<!-- Worker source: not executed by the browser, grabbed as text to create a Blob URL -->
+<script id="worker-src" type="javascript/worker">
+onmessage = function(e) {
+  const { cols, rows, canvasW, canvasH, pixelSize, simScale,
+          mx, hOffSq, kR, fri, dt, dtH, dt6, maxSteps, sspSq, srSq,
+          cellStart, cellEnd } = e.data;
+  const m0x=mx[0],m0y=mx[1], m1x=mx[2],m1y=mx[3], m2x=mx[4],m2y=mx[5];
+  const halfW=canvasW*0.5, halfH=canvasH*0.5;
+  const BATCH = 1000;
+  let buf = new Int32Array(BATCH * 2);
+  let bc=0, bStart=cellStart;
+
+  for (let i = cellStart; i < cellEnd; i++) {
+    const col = i % cols;
+    const row = (i - col) / cols;
+    const px  = col*pixelSize + pixelSize*0.5;
+    const py  = row*pixelSize + pixelSize*0.5;
+    const sx  =  (px - halfW) / halfW * simScale;
+    const sy  = -((py - halfH) / halfH) * simScale;
+
+    let x=sx, y=sy, vx=0, vy=0, dx, dy, r2, mag=-1, st=maxSteps;
+    sim: for (let s = 0; s < maxSteps; s++) {
+      // k1 - force at current state
+      dx=m0x-x; dy=m0y-y; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2);
+      let ax0=dx/r2-kR*x-fri*vx, ay0=dy/r2-kR*y-fri*vy;
+      dx=m1x-x; dy=m1y-y; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax0+=dx/r2; ay0+=dy/r2;
+      dx=m2x-x; dy=m2y-y; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax0+=dx/r2; ay0+=dy/r2;
+      // k2 - force at midpoint (RK2 midpoint method - half the sqrt calls of RK4)
+      const x2=x+dtH*vx, y2=y+dtH*vy, vx2=vx+dtH*ax0, vy2=vy+dtH*ay0;
+      dx=m0x-x2; dy=m0y-y2; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2);
+      let ax2=dx/r2-kR*x2-fri*vx2, ay2=dy/r2-kR*y2-fri*vy2;
+      dx=m1x-x2; dy=m1y-y2; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax2+=dx/r2; ay2+=dy/r2;
+      dx=m2x-x2; dy=m2y-y2; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax2+=dx/r2; ay2+=dy/r2;
+      // advance full step using midpoint slope
+      x+=dt*vx2; y+=dt*vy2; vx+=dt*ax2; vy+=dt*ay2;
+      // settle check (squared, no sqrt)
+      if (vx*vx+vy*vy < sspSq) {
+        dx=x-m0x; dy=y-m0y; if(dx*dx+dy*dy<srSq){mag=0;st=s+1;break sim;}
+        dx=x-m1x; dy=y-m1y; if(dx*dx+dy*dy<srSq){mag=1;st=s+1;break sim;}
+        dx=x-m2x; dy=y-m2y; if(dx*dx+dy*dy<srSq){mag=2;st=s+1;break sim;}
+      }
+    }
+
+    buf[bc*2]=mag; buf[bc*2+1]=st; bc++;
+    if (bc === BATCH) {
+      postMessage({ type:'batch', start:bStart, data:buf }, [buf.buffer]);
+      buf = new Int32Array(BATCH * 2);
+      bStart=i+1; bc=0;
+    }
+  }
+  if (bc > 0) {
+    const tail = buf.slice(0, bc*2);
+    postMessage({ type:'batch', start:bStart, data:tail }, [tail.buffer]);
+  }
+  postMessage({ type:'done' });
+};
+</script>
+
 <script>
 let fractalgfx;
-let grid = [];
-let cols, rows, totalCells, renderIdx;
+let dragIdx = -1;
+let workers = [];
+let workerBlobURL = null;
+let currentCols, currentRows, currentPixelSize;
+let pendingRestart = false;
+let workersDone = 0, workersTotal = 0, workersDoneCallback = null;
+let hintAlpha = 100;
+const NUM_WORKERS = navigator.hardwareConcurrency || 4;
 
-let trace = {
-  state:         'IDLE',  // 'IDLE' | 'TRACING' | 'SETTLED' | 'FADING'
-  x:             0,
-  y:             0,
-  vx:            0,
-  vy:            0,
-  trail:         [],      // array of { px, py }
-  settledMagnet: -1,
-  trailAlpha:    100,
-  flashAmt:      0,       // 0..1, drives magnet glow pulse
-  labelText:     '',
-  labelPx:       0,
-  labelPy:       0
-};
+const PIXEL_SIZE       = 6;
+const PIXEL_COARSE     = 16;
+const SIM_SCALE        = 3.0;
+const H_OFFSET         = 0.4;
+const K_RESTORE        = 0.5;
+const FRICTION         = 0.25;
+const DT               = 0.14;
+const MAX_STEPS        = 2000;
+const SETTLE_RADIUS    = 0.35;
+const SETTLE_SPEED     = 0.02;
+const GRAB_PX          = 56;   // large enough for fat fingers
+const MAGNET_HUES      = [0, 190, 50];
+const H_OFFSET_SQ      = H_OFFSET * H_OFFSET;
+const SETTLE_SPEED_SQ  = SETTLE_SPEED * SETTLE_SPEED;
+const SETTLE_RADIUS_SQ = SETTLE_RADIUS * SETTLE_RADIUS;
+const DT_HALF          = DT * 0.5;
+const DT_SIXTH         = DT / 6.0;
+const LOG_MAX          = Math.log(MAX_STEPS + 1);
 
-// --- Physics constants ---
-const PIXEL_SIZE      = 6;
-const SIM_SCALE       = 3.0;
-const H_OFFSET        = 0.4;
-const STRENGTH        = 1.0;
-const K_RESTORE       = 0.5;
-const FRICTION        = 0.25;
-const DT              = 0.05;
-const MAX_STEPS       = 10000;
-const SETTLE_RADIUS   = 0.3;
-const SETTLE_SPEED    = 0.01;
-const CELLS_PER_FRAME = 80;
-const TRACE_STEPS_PER_FRAME = 6;
-const FADE_RATE       = 0.8;
-const MAGNET_HUES     = [0, 180, 50];  // red, cyan, gold
-
-// Equilateral triangle, one vertex pointing up
-// Angles: 90°, 210°, 330° at radius 1.0
 const MAGNETS = [
-  { x:  0.000,  y:  1.000 },  // top     - red
-  { x: -0.866,  y: -0.500 },  // bot-left  - cyan
-  { x:  0.866,  y: -0.500 }   // bot-right - gold
+  { x:  0.000,  y:  1.000 },
+  { x: -0.866,  y: -0.500 },
+  { x:  0.866,  y: -0.500 }
 ];
 
 function pixelToSim(px, py) {
@@ -97,180 +148,129 @@ function simToPixel(sx, sy) {
   };
 }
 
-function acceleration(x, y, vx, vy) {
-  let ax = 0, ay = 0;
-  for (let m of MAGNETS) {
-    const dx = m.x - x, dy = m.y - y;
-    const dist = Math.sqrt(dx * dx + dy * dy + H_OFFSET * H_OFFSET);
-    const d3 = dist * dist * dist;
-    ax += STRENGTH * dx / d3;
-    ay += STRENGTH * dy / d3;
-  }
-  ax -= K_RESTORE * x;
-  ay -= K_RESTORE * y;
-  ax -= FRICTION * vx;
-  ay -= FRICTION * vy;
-  return { ax, ay };
+function initWorkerBlob() {
+  const src = document.getElementById('worker-src').textContent;
+  workerBlobURL = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
 }
 
-function rk4Step(x, y, vx, vy) {
-  const a1 = acceleration(x, y, vx, vy);
-  const k1x = vx, k1y = vy, k1vx = a1.ax, k1vy = a1.ay;
-
-  const x2  = x  + 0.5 * DT * k1x,  y2  = y  + 0.5 * DT * k1y;
-  const vx2 = vx + 0.5 * DT * k1vx, vy2 = vy + 0.5 * DT * k1vy;
-  const a2  = acceleration(x2, y2, vx2, vy2);
-  const k2x = vx2, k2y = vy2, k2vx = a2.ax, k2vy = a2.ay;
-
-  const x3  = x  + 0.5 * DT * k2x,  y3  = y  + 0.5 * DT * k2y;
-  const vx3 = vx + 0.5 * DT * k2vx, vy3 = vy + 0.5 * DT * k2vy;
-  const a3  = acceleration(x3, y3, vx3, vy3);
-  const k3x = vx3, k3y = vy3, k3vx = a3.ax, k3vy = a3.ay;
-
-  const x4  = x  + DT * k3x,  y4  = y  + DT * k3y;
-  const vx4 = vx + DT * k3vx, vy4 = vy + DT * k3vy;
-  const a4  = acceleration(x4, y4, vx4, vy4);
-  const k4x = vx4, k4y = vy4, k4vx = a4.ax, k4vy = a4.ay;
-
-  return {
-    x:  x  + (DT / 6) * (k1x  + 2 * k2x  + 2 * k3x  + k4x),
-    y:  y  + (DT / 6) * (k1y  + 2 * k2y  + 2 * k3y  + k4y),
-    vx: vx + (DT / 6) * (k1vx + 2 * k2vx + 2 * k3vx + k4vx),
-    vy: vy + (DT / 6) * (k1vy + 2 * k2vy + 2 * k3vy + k4vy)
+function startWorkersAt(ps, callback) {
+  for (const w of workers) w.terminate();
+  workers = [];
+  workersDone = 0;
+  workersTotal = 0;
+  workersDoneCallback = callback || null;
+  if (!fractalgfx) return;
+  currentPixelSize = ps;
+  currentCols = Math.ceil(width  / ps);
+  currentRows = Math.ceil(height / ps);
+  const totalCells = currentCols * currentRows;
+  const chunkSize  = Math.ceil(totalCells / NUM_WORKERS);
+  const baseJob = {
+    cols: currentCols, rows: currentRows,
+    canvasW: width,    canvasH: height,
+    pixelSize: ps, simScale: SIM_SCALE,
+    mx: [MAGNETS[0].x, MAGNETS[0].y, MAGNETS[1].x, MAGNETS[1].y, MAGNETS[2].x, MAGNETS[2].y],
+    hOffSq: H_OFFSET_SQ, kR: K_RESTORE, fri: FRICTION,
+    dt: DT, dtH: DT_HALF, dt6: DT_SIXTH, maxSteps: MAX_STEPS,
+    sspSq: SETTLE_SPEED_SQ, srSq: SETTLE_RADIUS_SQ
   };
-}
-
-function simulateCell(sx, sy) {
-  let x = sx, y = sy, vx = 0, vy = 0;
-  for (let i = 0; i < MAX_STEPS; i++) {
-    const r = rk4Step(x, y, vx, vy);
-    x = r.x; y = r.y; vx = r.vx; vy = r.vy;
-    const speed = Math.sqrt(vx * vx + vy * vy);
-    if (speed < SETTLE_SPEED) {
-      for (let m = 0; m < 3; m++) {
-        const dx = x - MAGNETS[m].x, dy = y - MAGNETS[m].y;
-        if (Math.sqrt(dx * dx + dy * dy) < SETTLE_RADIUS) {
-          return { magnet: m, steps: i + 1 };
-        }
-      }
-    }
+  for (let wi = 0; wi < NUM_WORKERS; wi++) {
+    const cellStart = wi * chunkSize;
+    if (cellStart >= totalCells) break;
+    const w = new Worker(workerBlobURL);
+    w.onmessage = handleWorkerMessage;
+    w.postMessage({ ...baseJob, cellStart, cellEnd: Math.min(cellStart + chunkSize, totalCells) });
+    workers.push(w);
+    workersTotal++;
   }
-  return { magnet: null, steps: MAX_STEPS };
 }
 
-function drawMagnets(flashMagnet = -1, flashAmt = 0) {
+function startWorkers() {
+  startWorkersAt(PIXEL_COARSE, () => startWorkersAt(PIXEL_SIZE));
+}
+
+function handleWorkerMessage(e) {
+  if (e.data.type === 'done') {
+    workersDone++;
+    if (workersDone === workersTotal && workersDoneCallback) {
+      const cb = workersDoneCallback;
+      workersDoneCallback = null;
+      cb();
+    }
+    return;
+  }
+  if (e.data.type !== 'batch') return;
+  const { start, data } = e.data;
+  const count = data.length >> 1;
+  const ps = currentPixelSize;
+  fractalgfx.noStroke();
+  for (let j = 0; j < count; j++) {
+    const i   = start + j;
+    const col = i % currentCols;
+    const row = (i - col) / currentCols;
+    const mag = data[j*2], st = data[j*2+1];
+    if (mag >= 0) {
+      fractalgfx.fill(MAGNET_HUES[mag], 85, map(Math.log(st+1), 0, LOG_MAX, 100, 15));
+    } else {
+      fractalgfx.fill(0, 0, 5);
+    }
+    fractalgfx.rect(col * ps, row * ps, ps, ps);
+  }
+}
+
+function scheduleWorker() {
+  if (!pendingRestart) {
+    pendingRestart = true;
+    requestAnimationFrame(() => { pendingRestart = false; startWorkers(); });
+  }
+}
+
+function drawMagnets() {
   noStroke();
+  const pulse = sin(frameCount * 0.06) * 3;
   for (let m = 0; m < 3; m++) {
     const { px, py } = simToPixel(MAGNETS[m].x, MAGNETS[m].y);
-    const hue        = MAGNET_HUES[m];
-    const isFlash    = m === flashMagnet;
-    const baseAlpha  = 70;
-    const alpha      = isFlash ? map(flashAmt, 0, 1, baseAlpha, 100) : baseAlpha;
-    const glowSize   = isFlash ? map(flashAmt, 0, 1, 36, 60) : 36;
-    const coreSize   = isFlash ? map(flashAmt, 0, 1, 14, 22) : 14;
-
-    // outer glow ring
-    fill(hue, 70, 100, alpha * 0.35);
-    circle(px, py, glowSize);
-
-    // inner core
-    fill(hue, 50, 100, alpha);
-    circle(px, py, coreSize);
+    const grabbed = m === dragIdx;
+    fill(MAGNET_HUES[m], 70, 100, grabbed ? 33 : 18);
+    circle(px, py, (grabbed ? 56 : 38) + (grabbed ? 0 : pulse));
+    fill(MAGNET_HUES[m], 50, 100, grabbed ? 95 : 72);
+    circle(px, py, grabbed ? 22 : 15);
   }
 }
 
-function mouseClicked() {
+function mousePressed() {
+  for (let m = 0; m < 3; m++) {
+    const { px, py } = simToPixel(MAGNETS[m].x, MAGNETS[m].y);
+    if (dist(mouseX, mouseY, px, py) < GRAB_PX) {
+      dragIdx = m;
+      hintAlpha = 0;
+      return false;
+    }
+  }
+}
+
+function mouseDragged() {
+  if (dragIdx < 0) return;
   const { sx, sy } = pixelToSim(mouseX, mouseY);
-  trace.state         = 'TRACING';
-  trace.x             = sx;
-  trace.y             = sy;
-  trace.vx            = 0;
-  trace.vy            = 0;
-  trace.trail         = [];
-  trace.trailAlpha    = 100;
-  trace.flashAmt      = 0;
-  trace.settledMagnet = -1;
-  trace.labelText     = '';
+  MAGNETS[dragIdx].x = sx;
+  MAGNETS[dragIdx].y = sy;
+  scheduleWorker();
+  return false;
 }
 
-function updateTrace() {
-  if (trace.state === 'IDLE') return;
+function mouseReleased() { dragIdx = -1; return false; }
 
-  if (trace.state === 'TRACING') {
-    for (let s = 0; s < TRACE_STEPS_PER_FRAME; s++) {
-      const r = rk4Step(trace.x, trace.y, trace.vx, trace.vy);
-      trace.x = r.x; trace.y = r.y; trace.vx = r.vx; trace.vy = r.vy;
+function touchStarted() { mousePressed(); return false; }
+function touchMoved()   { mouseDragged(); return false; }
+function touchEnded()   { mouseReleased(); return false; }
 
-      const { px, py } = simToPixel(trace.x, trace.y);
-      trace.trail.push({ px, py });
-
-      const speed = Math.sqrt(trace.vx * trace.vx + trace.vy * trace.vy);
-      if (speed < SETTLE_SPEED) {
-        for (let m = 0; m < 3; m++) {
-          const dx = trace.x - MAGNETS[m].x, dy = trace.y - MAGNETS[m].y;
-          if (Math.sqrt(dx * dx + dy * dy) < SETTLE_RADIUS) {
-            trace.state         = 'SETTLED';
-            trace.settledMagnet = m;
-            trace.flashAmt      = 1;
-            trace.labelText     = `magnet ${m + 1}`;
-            trace.labelPx       = px;
-            trace.labelPy       = py;
-            break;
-          }
-        }
-        if (trace.state === 'SETTLED') break;
-      }
-
-      if (trace.trail.length > 3000) { trace.state = 'FADING'; break; }
-    }
-  }
-
-  if (trace.state === 'SETTLED') {
-    trace.flashAmt -= 0.03;
-    if (trace.flashAmt <= 0) {
-      trace.flashAmt = 0;
-      trace.state    = 'FADING';
-    }
-  }
-
-  if (trace.state === 'FADING') {
-    trace.trailAlpha -= FADE_RATE;
-    if (trace.trailAlpha <= 0) {
-      trace.state = 'IDLE';
-      trace.trail = [];
-      return;
-    }
-  }
-
-  // Draw trail as a connected stroke
-  const n  = trace.trail.length;
-  const ta = trace.state === 'FADING' ? trace.trailAlpha : 90;
-  if (n > 1) {
-    noFill();
-    stroke(0, 0, 100, ta * 0.6);
-    strokeWeight(1.5);
-    beginShape();
-    for (let i = 0; i < n; i++) vertex(trace.trail[i].px, trace.trail[i].py);
-    endShape();
-  }
-  // Bright head dot showing current pendulum position
-  if (n > 0 && trace.state !== 'FADING') {
-    const head = trace.trail[n - 1];
-    noStroke();
-    fill(0, 0, 100, 100);
-    circle(head.px, head.py, 7);
-  }
-
-  // Draw label
-  if (trace.labelText && trace.state !== 'IDLE') {
-    const la = trace.state === 'FADING' ? trace.trailAlpha : 100;
-    fill(0, 0, 100, la);
-    noStroke();
-    textFont('monospace');
-    textSize(12);
-    textAlign(LEFT, CENTER);
-    text(trace.labelText, trace.labelPx + 14, trace.labelPy);
-  }
+function makeFractalGfx() {
+  if (fractalgfx) fractalgfx.remove();
+  fractalgfx = createGraphics(width, height);
+  fractalgfx.colorMode(HSB, 360, 100, 100, 100);
+  fractalgfx.pixelDensity(1);
+  fractalgfx.noStroke();
+  fractalgfx.background(0);
 }
 
 function setup() {
@@ -279,65 +279,30 @@ function setup() {
   pixelDensity(1);
   noStroke();
   frameRate(60);
-
-  initGrid();
-}
-
-function initGrid() {
-  if (fractalgfx) fractalgfx.remove();
-  fractalgfx = createGraphics(width, height);
-  fractalgfx.colorMode(HSB, 360, 100, 100, 100);
-  fractalgfx.pixelDensity(1);
-  fractalgfx.noStroke();
-  fractalgfx.background(0);
-
-  cols       = Math.ceil(width  / PIXEL_SIZE);
-  rows       = Math.ceil(height / PIXEL_SIZE);
-  totalCells = cols * rows;
-  grid       = new Array(totalCells).fill(null);
-  renderIdx  = 0;
+  initWorkerBlob();
+  makeFractalGfx();
+  startWorkers();
 }
 
 function draw() {
-  // Compute new cells into the fractal buffer
-  if (renderIdx < totalCells) {
-    const end = Math.min(renderIdx + CELLS_PER_FRAME, totalCells);
-    for (let i = renderIdx; i < end; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const px  = col * PIXEL_SIZE + PIXEL_SIZE / 2;
-      const py  = row * PIXEL_SIZE + PIXEL_SIZE / 2;
-      const { sx, sy } = pixelToSim(px, py);
-      const result = simulateCell(sx, sy);
-      grid[i] = result;
-
-      if (result.magnet !== null) {
-        const logSteps = Math.log(result.steps + 1);
-        const logMax   = Math.log(MAX_STEPS + 1);
-        const brightness = map(logSteps, 0, logMax, 100, 15);
-        fractalgfx.fill(MAGNET_HUES[result.magnet], 85, brightness);
-      } else {
-        fractalgfx.fill(0, 0, 5);
-      }
-      fractalgfx.rect(col * PIXEL_SIZE, row * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
-    }
-    renderIdx = end;
-  }
-
-  // Stamp fractal buffer, then draw dynamic elements on top
   background(0);
   image(fractalgfx, 0, 0);
-  drawMagnets(trace.settledMagnet, trace.flashAmt);
-  updateTrace();
+  drawMagnets();
+  if (hintAlpha > 0) {
+    noStroke();
+    textAlign(CENTER, BOTTOM);
+    textFont('w95');
+    textSize(13);
+    fill(0, 0, 100, hintAlpha);
+    text('drag a magnet', width / 2, height - 18);
+    hintAlpha = max(0, hintAlpha - 0.25);
+  }
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
-  initGrid();
-  trace.state         = 'IDLE';
-  trace.trail         = [];
-  trace.settledMagnet = -1;
-  trace.flashAmt      = 0;
+  makeFractalGfx();
+  startWorkers();
 }
 </script>
 </body>
