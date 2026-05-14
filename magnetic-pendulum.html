@@ -41,6 +41,8 @@
 
 <script>
 let fractalgfx;
+let grid = [];
+let cols, rows, totalCells, renderIdx;
 
 // --- Physics constants ---
 const PIXEL_SIZE      = 6;
@@ -147,15 +149,57 @@ function setup() {
   pixelDensity(1);
   noStroke();
   frameRate(60);
-  background(0);
+
+  initGrid();
+}
+
+function initGrid() {
+  if (fractalgfx) fractalgfx.remove();
+  fractalgfx = createGraphics(width, height);
+  fractalgfx.colorMode(HSB, 360, 100, 100);
+  fractalgfx.pixelDensity(1);
+  fractalgfx.noStroke();
+  fractalgfx.background(0);
+
+  cols       = Math.ceil(width  / PIXEL_SIZE);
+  rows       = Math.ceil(height / PIXEL_SIZE);
+  totalCells = cols * rows;
+  grid       = new Array(totalCells).fill(null);
+  renderIdx  = 0;
 }
 
 function draw() {
+  // Compute new cells into the fractal buffer
+  if (renderIdx < totalCells) {
+    const end = Math.min(renderIdx + CELLS_PER_FRAME, totalCells);
+    for (let i = renderIdx; i < end; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const px  = col * PIXEL_SIZE + PIXEL_SIZE / 2;
+      const py  = row * PIXEL_SIZE + PIXEL_SIZE / 2;
+      const { sx, sy } = pixelToSim(px, py);
+      const result = simulateCell(sx, sy);
+      grid[i] = result;
+
+      if (result.magnet !== null) {
+        const brightness = map(result.steps, 0, MAX_STEPS, 100, 20);
+        fractalgfx.fill(MAGNET_HUES[result.magnet], 90, brightness);
+      } else {
+        fractalgfx.fill(0, 0, 5);
+      }
+      fractalgfx.rect(col * PIXEL_SIZE, row * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+    }
+    renderIdx = end;
+  }
+
+  // Stamp fractal buffer, then draw dynamic elements on top
   background(0);
+  image(fractalgfx, 0, 0);
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+  initGrid();
 }
 </script>
 </body>
