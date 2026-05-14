@@ -323,8 +323,10 @@ function draw() {
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   initGrid();
-  trace.state = 'IDLE';
-  trace.trail = [];
+  trace.state         = 'IDLE';
+  trace.trail         = [];
+  trace.settledMagnet = -1;
+  trace.flashAmt      = 0;
 }
 </script>
 </body>
