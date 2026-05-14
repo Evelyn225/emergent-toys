@@ -41,5 +41,6 @@ docs/
 .mcp.json
 .claude-flow/
 .playwright/
+.playwright-mcp/
 grid_test.html
 .superpowers/
