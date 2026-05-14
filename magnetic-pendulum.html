@@ -143,6 +143,27 @@ function simulateCell(sx, sy) {
   return { magnet: null, steps: MAX_STEPS };
 }
 
+function drawMagnets(flashMagnet = -1, flashAmt = 0) {
+  noStroke();
+  for (let m = 0; m < 3; m++) {
+    const { px, py } = simToPixel(MAGNETS[m].x, MAGNETS[m].y);
+    const hue        = MAGNET_HUES[m];
+    const isFlash    = m === flashMagnet;
+    const baseAlpha  = 70;
+    const alpha      = isFlash ? map(flashAmt, 0, 1, baseAlpha, 100) : baseAlpha;
+    const glowSize   = isFlash ? map(flashAmt, 0, 1, 36, 60) : 36;
+    const coreSize   = isFlash ? map(flashAmt, 0, 1, 14, 22) : 14;
+
+    // outer glow ring
+    fill(hue, 70, 100, alpha * 0.35);
+    circle(px, py, glowSize);
+
+    // inner core
+    fill(hue, 50, 100, alpha);
+    circle(px, py, coreSize);
+  }
+}
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 100);
@@ -195,6 +216,7 @@ function draw() {
   // Stamp fractal buffer, then draw dynamic elements on top
   background(0);
   image(fractalgfx, 0, 0);
+  drawMagnets();
 }
 
 function windowResized() {
