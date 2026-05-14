@@ -221,7 +221,7 @@ function updateTrace() {
         if (trace.state === 'SETTLED') break;
       }
 
-      if (trace.trail.length > 3000) break;
+      if (trace.trail.length > 3000) { trace.state = 'FADING'; break; }
     }
   }
 
@@ -277,7 +277,7 @@ function setup() {
 function initGrid() {
   if (fractalgfx) fractalgfx.remove();
   fractalgfx = createGraphics(width, height);
-  fractalgfx.colorMode(HSB, 360, 100, 100);
+  fractalgfx.colorMode(HSB, 360, 100, 100, 100);
   fractalgfx.pixelDensity(1);
   fractalgfx.noStroke();
   fractalgfx.background(0);
