@@ -44,6 +44,21 @@ let fractalgfx;
 let grid = [];
 let cols, rows, totalCells, renderIdx;
 
+let trace = {
+  state:         'IDLE',  // 'IDLE' | 'TRACING' | 'SETTLED' | 'FADING'
+  x:             0,
+  y:             0,
+  vx:            0,
+  vy:            0,
+  trail:         [],      // array of { px, py }
+  settledMagnet: -1,
+  trailAlpha:    100,
+  flashAmt:      0,       // 0..1, drives magnet glow pulse
+  labelText:     '',
+  labelPx:       0,
+  labelPy:       0
+};
+
 // --- Physics constants ---
 const PIXEL_SIZE      = 6;
 const SIM_SCALE       = 3.0;
@@ -164,6 +179,91 @@ function drawMagnets(flashMagnet = -1, flashAmt = 0) {
   }
 }
 
+function mouseClicked() {
+  const { sx, sy } = pixelToSim(mouseX, mouseY);
+  trace.state         = 'TRACING';
+  trace.x             = sx;
+  trace.y             = sy;
+  trace.vx            = 0;
+  trace.vy            = 0;
+  trace.trail         = [];
+  trace.trailAlpha    = 100;
+  trace.flashAmt      = 0;
+  trace.settledMagnet = -1;
+  trace.labelText     = '';
+}
+
+function updateTrace() {
+  if (trace.state === 'IDLE') return;
+
+  if (trace.state === 'TRACING') {
+    for (let s = 0; s < TRACE_STEPS_PER_FRAME; s++) {
+      const r = rk4Step(trace.x, trace.y, trace.vx, trace.vy);
+      trace.x = r.x; trace.y = r.y; trace.vx = r.vx; trace.vy = r.vy;
+
+      const { px, py } = simToPixel(trace.x, trace.y);
+      trace.trail.push({ px, py });
+
+      const speed = Math.sqrt(trace.vx * trace.vx + trace.vy * trace.vy);
+      if (speed < SETTLE_SPEED) {
+        for (let m = 0; m < 3; m++) {
+          const dx = trace.x - MAGNETS[m].x, dy = trace.y - MAGNETS[m].y;
+          if (Math.sqrt(dx * dx + dy * dy) < SETTLE_RADIUS) {
+            trace.state         = 'SETTLED';
+            trace.settledMagnet = m;
+            trace.flashAmt      = 1;
+            trace.labelText     = `magnet ${m + 1}`;
+            trace.labelPx       = px;
+            trace.labelPy       = py;
+            break;
+          }
+        }
+        if (trace.state === 'SETTLED') break;
+      }
+
+      if (trace.trail.length > 3000) break;
+    }
+  }
+
+  if (trace.state === 'SETTLED') {
+    trace.flashAmt -= 0.03;
+    if (trace.flashAmt <= 0) {
+      trace.flashAmt = 0;
+      trace.state    = 'FADING';
+    }
+  }
+
+  if (trace.state === 'FADING') {
+    trace.trailAlpha -= FADE_RATE;
+    if (trace.trailAlpha <= 0) {
+      trace.state = 'IDLE';
+      trace.trail = [];
+      return;
+    }
+  }
+
+  // Draw trail (white dots, opacity tapers toward head)
+  noStroke();
+  const n = trace.trail.length;
+  for (let i = 0; i < n; i++) {
+    const t  = trace.trail[i];
+    const ta = trace.state === 'FADING' ? trace.trailAlpha : 100;
+    fill(0, 0, 100, ta * (i / n));
+    circle(t.px, t.py, 3);
+  }
+
+  // Draw label
+  if (trace.labelText && trace.state !== 'IDLE') {
+    const la = trace.state === 'FADING' ? trace.trailAlpha : 100;
+    fill(0, 0, 100, la);
+    noStroke();
+    textFont('monospace');
+    textSize(12);
+    textAlign(LEFT, CENTER);
+    text(trace.labelText, trace.labelPx + 14, trace.labelPy);
+  }
+}
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 100);
@@ -216,12 +316,15 @@ function draw() {
   // Stamp fractal buffer, then draw dynamic elements on top
   background(0);
   image(fractalgfx, 0, 0);
-  drawMagnets();
+  drawMagnets(trace.settledMagnet, trace.flashAmt);
+  updateTrace();
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   initGrid();
+  trace.state = 'IDLE';
+  trace.trail = [];
 }
 </script>
 </body>
