@@ -91,50 +91,31 @@
 </a>
 
 <script>
-// ─── constants ───────────────────────────────────────────────────
-const SCALE        = 3;      // screen pixels per sim cell
-const NUM_AGENTS   = 15000;
-const SA           = Math.PI / 4;   // sensor angle offset (45°)
-const SD           = 9;             // sensor distance (sim units)
-const RA           = Math.PI / 4;   // rotation amount per step
-const DEPOSIT      = 5;
-const DECAY        = 0.935;
-const SPEED        = 1.2;
-const HUNGER_MAX   = 180;    // frames of no trail before respawn
-const HUNGER_THRESH = 2;     // trail value below which hunger ticks up
+// ─── worker source ────────────────────────────────────────────────
+const WORKER_SRC = `
+const SCALE       = 3;
+const NUM_AGENTS  = 15000;
+const SA          = Math.PI / 4;
+const SD          = 9;
+const RA          = Math.PI / 4;
+const DEPOSIT     = 5;
+const DECAY       = 0.935;
+const SPEED       = 1.2;
+const HUNGER_MAX  = 180;
+const HUNGER_THRESH = 2;
 
-// ─── state ───────────────────────────────────────────────────────
 let simW, simH;
-let trail, trailBuf;    // Float32Array ping-pong
+let trail, trailBuf;
 let agents = [];
 let foodNodes = [];
-let pg;
-let colorLut = new Uint8Array(101 * 3); // pre-built per frame
+let colorLut = new Uint8Array(101 * 3);
+let pixels;
 
-function setup() {
-  let cnv = createCanvas(windowWidth, windowHeight);
-  pixelDensity(1);
-  noSmooth();
-  document.addEventListener('contextmenu', e => e.preventDefault());
-
-  simW = Math.floor(width  / SCALE);
-  simH = Math.floor(height / SCALE);
-
-  trail    = new Float32Array(simW * simH);
-  trailBuf = new Float32Array(simW * simH);
-
-  pg = createGraphics(simW, simH);
-  pg.pixelDensity(1);
-
-  initSim();
-}
-
-// ─── build color lookup table ─────────────────────────────────────
 function buildLut(hue) {
   for (let i = 0; i <= 100; i++) {
-    let v   = i / 100;
-    let bri = v * v;          // quadratic: more contrast at low values
-    let sat = 0.88 - v * 0.2; // slight desaturation at peak
+    let v = i / 100;
+    let bri = v * v;
+    let sat = 0.88 - v * 0.2;
     let [r, g, b] = hsbRgb(hue, sat, bri);
     colorLut[i * 3]     = r;
     colorLut[i * 3 + 1] = g;
@@ -155,14 +136,11 @@ function hsbRgb(h, s, v) {
   return [Math.floor((r+m)*255), Math.floor((g+m)*255), Math.floor((b+m)*255)];
 }
 
-// ─── simulation init ──────────────────────────────────────────────
 function initSim() {
-  trail.fill(0);
-  trailBuf.fill(0);
+  trail    = new Float32Array(simW * simH);
+  trailBuf = new Float32Array(simW * simH);
   agents    = [];
   foodNodes = [];
-
-  // scatter food randomly, keeping away from edges
   let margin  = Math.min(simW, simH) * 0.08;
   let minDist = Math.min(simW, simH) * 0.07;
   let attempts = 0;
@@ -176,12 +154,11 @@ function initSim() {
     }
     if (!tooClose) foodNodes.push({ x: fx, y: fy });
   }
-
   spawnAtFood(NUM_AGENTS);
-  updateStats();
 }
 
 function spawnAtFood(total) {
+  if (!foodNodes.length) return;
   let perFood = Math.floor(total / foodNodes.length);
   for (let f of foodNodes) {
     for (let i = 0; i < perFood; i++) {
@@ -189,40 +166,31 @@ function spawnAtFood(total) {
         x: f.x + (Math.random() - 0.5) * 8,
         y: f.y + (Math.random() - 0.5) * 8,
         a: Math.random() * Math.PI * 2,
-        h: 0,
-        feed: 0
+        h: 0, feed: 0
       });
     }
   }
 }
 
-// ─── sense helper ─────────────────────────────────────────────────
 function sense(ag, ao) {
   let a  = ag.a + ao;
-  let sx = Math.floor(ag.x + Math.cos(a) * SD);
-  let sy = Math.floor(ag.y + Math.sin(a) * SD);
-  sx = ((sx % simW) + simW) % simW;
-  sy = ((sy % simH) + simH) % simH;
+  let sx = ((Math.floor(ag.x + Math.cos(a) * SD) % simW) + simW) % simW;
+  let sy = ((Math.floor(ag.y + Math.sin(a) * SD) % simH) + simH) % simH;
   return trail[sy * simW + sx];
 }
 
-// ─── main loop ────────────────────────────────────────────────────
-function draw() {
-  buildLut(105); // fixed yellow-green
-
-  // update agents
+function simStep() {
+  // agents
   let n = agents.length;
   for (let i = 0; i < n; i++) {
     let ag  = agents[i];
     let fwd = sense(ag, 0);
     let lft = sense(ag,  SA);
     let rgt = sense(ag, -SA);
-
-    // feeding pause: triggered when sitting in a food core (trail near 100)
     let idxNow = Math.floor(ag.y) * simW + Math.floor(ag.x);
     if (ag.feed === 0 && idxNow >= 0 && idxNow < trail.length
         && trail[idxNow] > 88 && Math.random() < 0.25) {
-      ag.feed = 10 + Math.floor(Math.random() * 20); // pause 10-30 frames
+      ag.feed = 10 + Math.floor(Math.random() * 20);
     }
     if (ag.feed > 0) {
       ag.feed--;
@@ -230,10 +198,8 @@ function draw() {
         trail[idxNow] = Math.min(trail[idxNow] + DEPOSIT, 100);
       continue;
     }
-
     let maxSense = fwd > lft ? (fwd > rgt ? fwd : rgt) : (lft > rgt ? lft : rgt);
     if (maxSense < 1) {
-      // sensing nothing - wander, don't march into void
       ag.a += (Math.random() - 0.5) * Math.PI * 0.6;
     } else if (fwd >= lft && fwd >= rgt) {
       if (fwd > 20 && Math.random() < 0.04) ag.a += (Math.random() - 0.5) * RA;
@@ -244,22 +210,11 @@ function draw() {
     } else {
       ag.a += (Math.random() < 0.5 ? RA : -RA);
     }
-
-    let nx = ag.x + Math.cos(ag.a) * SPEED;
-    let ny = ag.y + Math.sin(ag.a) * SPEED;
-
-    nx = ((nx % simW) + simW) % simW;
-    ny = ((ny % simH) + simH) % simH;
-
-    ag.x = nx;
-    ag.y = ny;
-
+    ag.x = ((ag.x + Math.cos(ag.a) * SPEED) % simW + simW) % simW;
+    ag.y = ((ag.y + Math.sin(ag.a) * SPEED) % simH + simH) % simH;
     let idx = Math.floor(ag.y) * simW + Math.floor(ag.x);
-    if (idx >= 0 && idx < trail.length) {
+    if (idx >= 0 && idx < trail.length)
       trail[idx] = Math.min(trail[idx] + DEPOSIT, 100);
-    }
-
-    // hunger: tick up when in empty space, respawn at food when maxed
     let localTrail = idx >= 0 && idx < trail.length ? trail[idx] : 0;
     if (localTrail < HUNGER_THRESH) {
       ag.h++;
@@ -271,11 +226,11 @@ function draw() {
         ag.h = 0;
       }
     } else {
-      ag.h = Math.max(0, ag.h - 3); // recover faster than it starves
+      ag.h = Math.max(0, ag.h - 3);
     }
   }
 
-  // count agents near each food node (using squared dist to avoid sqrt)
+  // crowding + food scent
   let crowdR2 = 12 * 12;
   let crowding = new Array(foodNodes.length).fill(0);
   for (let j = 0; j < agents.length; j++) {
@@ -285,8 +240,6 @@ function draw() {
       if (dx * dx + dy * dy < crowdR2) crowding[fi]++;
     }
   }
-
-  // food emits gradient scent, weakened by local crowding
   for (let fi = 0; fi < foodNodes.length; fi++) {
     let f  = foodNodes[fi];
     let fx = Math.floor(f.x), fy = Math.floor(f.y);
@@ -296,7 +249,6 @@ function draw() {
       for (let dx = -R; dx <= R; dx++) {
         let d = Math.sqrt(dx * dx + dy * dy);
         if (d > R) continue;
-        // strong core within 6 units, weak aura beyond
         let strength = (d < 6
           ? (1 - d / 6) * 100
           : (1 - (d - 6) / (R - 6)) * 25) * crowdFactor;
@@ -307,7 +259,7 @@ function draw() {
     }
   }
 
-  // diffuse + decay into trailBuf (fully wrapped)
+  // diffuse + decay
   let tw = simW, th = simH;
   for (let y = 0; y < th; y++) {
     let row  = y * tw;
@@ -322,27 +274,17 @@ function draw() {
       trailBuf[row + x] = sum * 0.11111 * DECAY;
     }
   }
+  let tmp = trail; trail = trailBuf; trailBuf = tmp;
 
-  // swap
-  let tmp = trail;
-  trail    = trailBuf;
-  trailBuf = tmp;
-
-  // render to low-res buffer
-  pg.loadPixels();
-  let px  = pg.pixels;
-  let tr  = trail;
-  let lut = colorLut;
-  let sz  = simW * simH;
-
+  // write pixels
+  let lut = colorLut, sz = simW * simH;
   for (let i = 0; i < sz; i++) {
-    let vi = Math.floor(tr[i]);       // 0-100
-    let li = vi * 3;
+    let li = Math.floor(trail[i]) * 3;
     let pi = i * 4;
-    px[pi]     = lut[li];
-    px[pi + 1] = lut[li + 1];
-    px[pi + 2] = lut[li + 2];
-    px[pi + 3] = 255;
+    pixels[pi]     = lut[li];
+    pixels[pi + 1] = lut[li + 1];
+    pixels[pi + 2] = lut[li + 2];
+    pixels[pi + 3] = 255;
   }
 
   // food markers: white 5x5 squares
@@ -353,67 +295,141 @@ function draw() {
         let bx = fx + dx, by = fy + dy;
         if (bx >= 0 && bx < simW && by >= 0 && by < simH) {
           let bi = (by * simW + bx) * 4;
-          px[bi]     = 255;
-          px[bi + 1] = 255;
-          px[bi + 2] = 255;
-          px[bi + 3] = 255;
+          pixels[bi] = pixels[bi+1] = pixels[bi+2] = pixels[bi+3] = 255;
         }
       }
     }
   }
-
-  pg.updatePixels();
-  image(pg, 0, 0, width, height);
 }
 
-// ─── interaction ──────────────────────────────────────────────────
-function mousePressed() {
-  let sx = mouseX / SCALE, sy = mouseY / SCALE;
+self.onmessage = function(e) {
+  const msg = e.data;
 
-  if (mouseButton === LEFT) {
-    foodNodes.push({ x: sx, y: sy });
+  if (msg.type === 'init') {
+    simW = msg.simW;
+    simH = msg.simH;
+    pixels = new Uint8ClampedArray(simW * simH * 4);
+    buildLut(105);
+    initSim();
+    simStep();
+    self.postMessage(
+      { type: 'frame', pixels, agentCount: agents.length, foodCount: foodNodes.length },
+      [pixels.buffer]
+    );
+    pixels = null;
+    return;
+  }
+
+  if (msg.type === 'step') {
+    pixels = msg.pixels;
+    simStep();
+    self.postMessage(
+      { type: 'frame', pixels, agentCount: agents.length, foodCount: foodNodes.length },
+      [pixels.buffer]
+    );
+    pixels = null;
+    return;
+  }
+
+  if (msg.type === 'addFood') {
+    foodNodes.push({ x: msg.x, y: msg.y });
     for (let i = 0; i < 900; i++) {
       agents.push({
-        x: sx + (Math.random() - 0.5) * 8,
-        y: sy + (Math.random() - 0.5) * 8,
+        x: msg.x + (Math.random() - 0.5) * 8,
+        y: msg.y + (Math.random() - 0.5) * 8,
         a: Math.random() * Math.PI * 2,
-        h: 0,
-        feed: 0
+        h: 0, feed: 0
       });
     }
-    updateStats();
-  } else if (mouseButton === RIGHT) {
+    return;
+  }
+
+  if (msg.type === 'removeFood') {
     let best = -1, bestD = Infinity;
     for (let i = 0; i < foodNodes.length; i++) {
-      let d = Math.hypot(sx - foodNodes[i].x, sy - foodNodes[i].y);
+      let d = Math.hypot(msg.x - foodNodes[i].x, msg.y - foodNodes[i].y);
       if (d < bestD) { bestD = d; best = i; }
     }
-    if (best >= 0 && bestD < 30) {
-      foodNodes.splice(best, 1);
-      updateStats();
+    if (best >= 0 && bestD < 30) foodNodes.splice(best, 1);
+    return;
+  }
+
+  if (msg.type === 'reset') {
+    buildLut(105);
+    initSim();
+    return;
+  }
+};
+`;
+
+// ─── main thread ──────────────────────────────────────────────────
+const SCALE = 3;
+
+let simW, simH, pg, worker;
+let pendingPixels = null;
+
+function launchWorker() {
+  if (worker) worker.terminate();
+  const blob = new Blob([WORKER_SRC], { type: 'text/javascript' });
+  worker = new Worker(URL.createObjectURL(blob));
+  worker.onmessage = function(e) {
+    const msg = e.data;
+    if (msg.type === 'frame') {
+      pendingPixels = msg.pixels;
+      document.getElementById('stat-agents').textContent = 'AGENTS: ' + msg.agentCount;
+      document.getElementById('stat-food').textContent   = 'FOOD:   ' + msg.foodCount;
     }
+  };
+}
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  pixelDensity(1);
+  noSmooth();
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  simW = Math.floor(width  / SCALE);
+  simH = Math.floor(height / SCALE);
+  pg   = createGraphics(simW, simH);
+  pg.pixelDensity(1);
+
+  launchWorker();
+  worker.postMessage({ type: 'init', simW, simH });
+}
+
+function draw() {
+  if (!pendingPixels) return;
+  pg.loadPixels();
+  pg.pixels.set(pendingPixels);
+  pg.updatePixels();
+  image(pg, 0, 0, width, height);
+  worker.postMessage({ type: 'step', pixels: pendingPixels }, [pendingPixels.buffer]);
+  pendingPixels = null;
+}
+
+function mousePressed() {
+  let sx = mouseX / SCALE, sy = mouseY / SCALE;
+  if (mouseButton === LEFT) {
+    worker.postMessage({ type: 'addFood', x: sx, y: sy });
+  } else if (mouseButton === RIGHT) {
+    worker.postMessage({ type: 'removeFood', x: sx, y: sy });
   }
 }
 
 function keyPressed() {
-  if (key === 'r' || key === 'R') initSim();
+  if (key === 'r' || key === 'R') worker.postMessage({ type: 'reset' });
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   simW = Math.floor(width  / SCALE);
   simH = Math.floor(height / SCALE);
-  trail    = new Float32Array(simW * simH);
-  trailBuf = new Float32Array(simW * simH);
+  pendingPixels = null;
   if (pg) pg.remove();
   pg = createGraphics(simW, simH);
   pg.pixelDensity(1);
-  initSim();
-}
-
-function updateStats() {
-  document.getElementById('stat-agents').textContent = 'AGENTS: ' + agents.length;
-  document.getElementById('stat-food').textContent   = 'FOOD:   ' + foodNodes.length;
+  launchWorker();
+  worker.postMessage({ type: 'init', simW, simH });
 }
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
