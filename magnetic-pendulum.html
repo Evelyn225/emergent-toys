@@ -260,9 +260,9 @@ function mouseDragged() {
 
 function mouseReleased() { dragIdx = -1; return false; }
 
-function touchStarted() { mousePressed(); return false; }
-function touchMoved()   { mouseDragged(); return false; }
-function touchEnded()   { mouseReleased(); return false; }
+function touchStarted(e) { if (e && e.target && e.target.closest('a')) return true; mousePressed(); return false; }
+function touchMoved(e)   { if (e && e.target && e.target.closest('a')) return true; mouseDragged(); return false; }
+function touchEnded()    { mouseReleased(); return false; }
 
 function makeFractalGfx() {
   if (fractalgfx) fractalgfx.remove();
