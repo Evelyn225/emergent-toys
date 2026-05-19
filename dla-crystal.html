@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>DLA Crystal</title>
+  <style>
+    @font-face {
+      font-family: 'W95';
+      src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'W95';
+      src: url('w95font-bold.woff2') format('woff2'), url('w95font-bold.woff') format('woff');
+      font-weight: bold;
+      font-style: normal;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+             width: 100vw; height: 100vh; }
+    #glow {
+      position: fixed; inset: 0; width: 100vw; height: 100vh;
+      image-rendering: pixelated; image-rendering: crisp-edges;
+      filter: blur(5px); opacity: 0.75;
+      mix-blend-mode: screen; pointer-events: none; z-index: 2;
+    }
+    #stats {
+      position: fixed;
+      top: 12px; left: 12px;
+      font-family: 'W95', monospace;
+      font-weight: bold;
+      font-size: 11px;
+      color: rgba(140, 210, 255, 0.6);
+      z-index: 100;
+      line-height: 2;
+      pointer-events: none;
+      user-select: none;
+      white-space: pre;
+    }
+    #ui {
+      position: fixed;
+      bottom: 12px; left: 12px;
+      font-family: 'W95', monospace;
+      font-size: 11px;
+      color: rgba(140, 210, 255, 0.25);
+      z-index: 100;
+      line-height: 2;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+
+<a href="/"
+  style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         padding: 8px; background: rgba(0,0,0,0.8); color: white;
+         border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
+         text-decoration: none; font-family: sans-serif; font-size: 18px;
+         transition: all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+         line-height: 1; display: flex; align-items: center; justify-content: center;"
+  onmouseover="this.style.transform='scale(1.2) rotate(5deg)';this.style.background='rgba(20,250,170,0.8)';this.style.borderColor='rgba(255,255,255,0.6)'"
+  onmouseout="this.style.transform='scale(1) rotate(0deg)';this.style.background='rgba(0,0,0,0.8)';this.style.borderColor='rgba(255,255,255,0.3)'"
+  onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
+  onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
+  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+       alt="home" style="width: 18px; height: 18px; object-fit: contain;">
+</a>
+
+<div id="stats"></div>
+<canvas id="c"></canvas>
+<canvas id="glow"></canvas>
+
+<div id="ui">[R] reset  ·  [click] reset</div>
+
+<script>
+// ── DLA Crystal ──────────────────────────────────────────────────────
+// Diffusion-Limited Aggregation: particles random-walk until they touch
+// the growing crystal, then stick forever.
+//
+// Speed tricks:
+//   · 600 simultaneous walkers so the crystal never waits for one particle
+//   · 40 sim steps per animation frame
+//   · Uint8Array grid for O(1) 8-connected neighbour lookup
+//   · Uint32Array view of the pixel buffer: 1 write per pixel vs 4
+//   · Spawn radius tracks the crystal edge; kill radius is kept tight
+//     so walkers that wander off are quickly recycled
+//   · Free-flight jump: a walker at distance d outside the crystal bounding
+//     circle (radius maxR) can jump up to d-maxR-1 px in any direction
+//     without hitting any crystal pixel - collapses the long approach walk
+//     from O(d²) to O(1) and keeps throughput high as the crystal grows
+//   · Squared-distance fast-path avoids sqrt for walkers near the surface
+//   · xorshift32 PRNG replaces Math.random() in the hot loop
+
+const canvas    = document.getElementById('c');
+const ctx       = canvas.getContext('2d');
+const glowCv    = document.getElementById('glow');
+const glowCtx   = glowCv.getContext('2d');
+const statsEl   = document.getElementById('stats');
+
+const N_WALKERS     = 800;  // simultaneous random walkers
+const STEPS_PER_RAF = 40;   // sim steps per animation frame
+const SPAWN_GAP     = 4;    // px beyond maxR where new walkers spawn
+const KILL_MARGIN   = 30;   // px beyond spawnR where stray walkers die
+const SCALE         = 2;    // sim pixels per screen pixel (chunky low-res look)
+
+// xorshift32 PRNG - ~3x faster than Math.random() in tight loops
+let _r = 0xDEADBEEF ^ (Date.now() & 0xFFFFFF);
+function rnd()    { _r ^= _r << 13; _r ^= _r >>> 17; _r ^= _r << 5; return (_r >>> 0) / 4294967296; }
+function rnd4()   { _r ^= _r << 13; _r ^= _r >>> 17; _r ^= _r << 5; return _r & 3; }
+function rndDir() { _r ^= _r << 13; _r ^= _r >>> 17; _r ^= _r << 5; return _r & 255; }
+
+// Precomputed unit-vector table — replaces Math.cos/sin in the hot jump loop
+const DIRCOS = new Float32Array(256);
+const DIRSIN = new Float32Array(256);
+for (let i = 0; i < 256; i++) {
+  const a = i * 6.2831853 / 256;
+  DIRCOS[i] = Math.cos(a);
+  DIRSIN[i] = Math.sin(a);
+}
+
+let W, H, cx, cy;
+let grid;     // Uint8Array  — 1 if crystal, 0 if empty
+let imgData;
+let pixels;   // Uint8ClampedArray from ImageData (shared buffer)
+let u32;      // Uint32Array view of the same buffer (faster per-pixel writes)
+
+let wx, wy;   // Int32Arrays — walker x/y positions
+let maxR, maxR2, spawnR, killR2;
+let count;    // total particles stuck so far
+let lastCount, lastMs, stepBudget;
+let rafId;
+
+// ── Colour ───────────────────────────────────────────────────────────
+// Hue cycles slowly with count so the growth history is visible as
+// colour bands: the trunk is one colour, tips are always the newest hue.
+function hsl2u32(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+  let r, g, b;
+  if      (h < 60)  { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else              { r = c; g = 0; b = x; }
+  // Pack RGBA into little-endian Uint32: bytes [R,G,B,A] → 0xAABBGGRR
+  return (0xFF000000 |
+    (((b + m) * 255 | 0) << 16) |
+    (((g + m) * 255 | 0) << 8)  |
+     ((r + m) * 255 | 0));
+}
+
+// ── Crystal helpers ──────────────────────────────────────────────────
+function stick(x, y) {
+  grid[y * W + x] = 1;
+  const hue       = (195 + count * 0.006 + rnd() * 40 - 20) % 360;
+  const sat       = 80 + (rnd() * 20 | 0);
+  const lightness = 35 + (rnd() * 50 | 0);
+  u32[y * W + x]  = hsl2u32(hue, sat, lightness);
+  count++;
+  const dx = x - cx, dy = y - cy;
+  const d2 = dx * dx + dy * dy;
+  if (d2 > maxR2) {
+    maxR2  = d2;
+    maxR   = Math.sqrt(d2);
+    spawnR = maxR + SPAWN_GAP;
+    killR2 = (spawnR + KILL_MARGIN) * (spawnR + KILL_MARGIN);
+  }
+}
+
+function spawnWalker(i) {
+  const r  = Math.max(5, spawnR);
+  const di = rndDir();
+  wx[i] = Math.max(1, Math.min(W - 2, (cx + r * DIRCOS[di]) | 0));
+  wy[i] = Math.max(1, Math.min(H - 2, (cy + r * DIRSIN[di]) | 0));
+}
+
+// ── Simulation step ──────────────────────────────────────────────────
+const DX = new Int8Array([1, -1, 0, 0]);
+const DY = new Int8Array([0, 0, 1, -1]);
+
+function step() {
+  for (let i = 0; i < N_WALKERS; i++) {
+    const x   = wx[i], y = wy[i];
+    const ddx = x - cx, ddy = y - cy;
+    const d2  = ddx * ddx + ddy * ddy;
+
+    // Free-flight jump: walker is outside the crystal bounding circle,
+    // so it can safely leap up to clearance pixels in any direction.
+    if (d2 > maxR2) {
+      const clearance = (Math.sqrt(d2) - maxR - 1) | 0;
+      if (clearance > 2) {
+        const di = rndDir();
+        const nx = Math.max(1, Math.min(W - 2, (x + clearance * DIRCOS[di]) | 0));
+        const ny = Math.max(1, Math.min(H - 2, (y + clearance * DIRSIN[di]) | 0));
+        const ex = nx - cx, ey = ny - cy;
+        if (ex * ex + ey * ey > killR2) { spawnWalker(i); continue; }
+        wx[i] = nx; wy[i] = ny;
+        continue;
+      }
+    }
+
+    // Normal single step near the crystal surface
+    const d  = rnd4();
+    const nx = x + DX[d];
+    const ny = y + DY[d];
+
+    // Hit the canvas border → respawn
+    if (nx < 1 || nx >= W - 1 || ny < 1 || ny >= H - 1) {
+      spawnWalker(i); continue;
+    }
+
+    // Wandered past kill radius → respawn
+    const ex = nx - cx, ey = ny - cy;
+    if (ex * ex + ey * ey > killR2) {
+      spawnWalker(i); continue;
+    }
+
+    // Touching crystal (8-connected) → stick
+    const base = ny * W + nx;
+    if (grid[base - 1]     | grid[base + 1]     |
+        grid[base - W]     | grid[base + W]      |
+        grid[base - W - 1] | grid[base - W + 1]  |
+        grid[base + W - 1] | grid[base + W + 1]) {
+      stick(nx, ny);
+      spawnWalker(i);
+      continue;
+    }
+
+    wx[i] = nx;
+    wy[i] = ny;
+  }
+}
+
+// ── Init / reset ─────────────────────────────────────────────────────
+function init() {
+  cancelAnimationFrame(rafId);
+
+  W  = canvas.width  = glowCv.width  = Math.ceil(window.innerWidth  / SCALE);
+  H  = canvas.height = glowCv.height = Math.ceil(window.innerHeight / SCALE);
+  cx = W >> 1;
+  cy = H >> 1;
+
+  grid    = new Uint8Array(W * H);
+  imgData = ctx.createImageData(W, H);
+  pixels  = imgData.data;
+  u32     = new Uint32Array(pixels.buffer);
+  u32.fill(0xFF000000); // all pixels → black opaque
+
+  maxR = 0; maxR2 = 0;
+  spawnR = 5;
+  killR2 = (5 + KILL_MARGIN) * (5 + KILL_MARGIN);
+  count = 0; lastCount = 0; lastMs = performance.now(); stepBudget = 0;
+
+  wx = new Int32Array(N_WALKERS);
+  wy = new Int32Array(N_WALKERS);
+
+  stick(cx, cy); // single seed at centre
+  for (let i = 0; i < N_WALKERS; i++) spawnWalker(i);
+
+  rafId = requestAnimationFrame(frame);
+}
+
+// ── Render loop ──────────────────────────────────────────────────────
+function frame() {
+  const t = Math.min(1, maxR / 110);
+  stepBudget += Math.max(0.35, t * t * STEPS_PER_RAF);
+  const stepsThisFrame = stepBudget | 0;
+  stepBudget -= stepsThisFrame;
+  for (let s = 0; s < stepsThisFrame; s++) step();
+  ctx.putImageData(imgData, 0, 0);
+  glowCtx.drawImage(canvas, 0, 0);
+
+  // Update stats at ~4 Hz so DOM writes don't eat into frame budget
+  const now = performance.now();
+  if (now - lastMs >= 250) {
+    const pps = ((count - lastCount) / (now - lastMs) * 1000) | 0;
+    statsEl.textContent =
+      `PARTICLES  ${count.toLocaleString()}\n` +
+      `RADIUS     ${maxR.toFixed(0)}px\n` +
+      `RATE       ${pps.toLocaleString()} p/s`;
+    lastCount = count;
+    lastMs    = now;
+  }
+
+  rafId = requestAnimationFrame(frame);
+}
+
+// ── Input ─────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'r' || e.key === 'R') init();
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('a')) init();
+});
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  init();
+}, { passive: false });
+window.addEventListener('resize', init);
+
+init();
+</script>
+</body>
+</html>
