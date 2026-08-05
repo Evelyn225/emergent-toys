@@ -31,6 +31,27 @@
 
     html {
       scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: var(--brown) transparent;
+    }
+
+    /* thin brown scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--brown);
+      border-radius: 2px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #5A3208;
     }
 
     body {
