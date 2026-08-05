@@ -312,17 +312,16 @@
 <body>
   <!-- Home button -->
   <a href="/"
-    style="position:fixed;top:10px;right:10px;z-index:1000;padding:8px;background:rgba(0,0,0,0.8);
-           color:white;border:1px solid rgba(255,255,255,0.3);border-radius:4px;text-decoration:none;
-           font-family:sans-serif;font-size:18px;transition:all 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
-           line-height:1;display:flex;align-items:center;justify-content:center;"
-    onmouseover="this.style.transform='scale(1.2) rotate(5deg)';this.style.background='rgba(170,120,20,0.85)';this.style.borderColor='rgba(255,255,255,0.6)'"
-    onmouseout="this.style.transform='scale(1) rotate(0deg)';this.style.background='rgba(0,0,0,0.8)';this.style.borderColor='rgba(255,255,255,0.3)'"
-    onmousedown="this.style.transform='scale(0.9) rotate(-5deg)'"
-    onmouseup="this.style.transform='scale(1.2) rotate(5deg)'">
-    <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
-         alt="home" style="width:18px;height:18px;object-fit:contain;">
-  </a>
+  style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         line-height: 0; text-decoration: none;
+         transition: transform 0.2s cubic-bezier(0.68,-0.55,0.265,1.55);"
+  onmouseover="this.style.transform='scale(1.12)'"
+  onmouseout="this.style.transform='scale(1)'"
+  onmousedown="this.style.transform='scale(0.95)'"
+  onmouseup="this.style.transform='scale(1.12)'">
+  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+       alt="home" style="width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; display: block;">
+</a>
 
   <canvas id="canvas"></canvas>
 

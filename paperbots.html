@@ -133,7 +133,6 @@
       align-items: center;
     }
 
-    .home-link,
     .mobile-tab,
     .speed-btn,
     .action-btn,
@@ -144,47 +143,12 @@
       transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
     }
 
-    .home-link {
-      position: fixed;
-      top: 24px;
-      right: 24px;
-      z-index: 220;
-      width: 38px;
-      height: 38px;
-      display: grid;
-      place-items: center;
-      border-radius: 10px;
-      border: 1px solid rgba(215, 255, 233, 0.28);
-      background: rgba(2, 5, 4, 0.82);
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
-      backdrop-filter: blur(10px);
-      text-decoration: none;
-    }
-
-    .home-link:hover,
     .mobile-tab:hover,
     .speed-btn:hover,
     .action-btn:hover,
     .form-btn:hover,
     .secondary-btn:hover {
       transform: translateY(-1px);
-    }
-
-    .home-link:hover {
-      transform: translateY(-2px) scale(1.04);
-      border-color: rgba(135, 255, 231, 0.92);
-      background: rgba(111, 255, 208, 0.18);
-    }
-
-    .home-link:active {
-      transform: translateY(0) scale(0.97);
-    }
-
-    .home-link img {
-      width: 18px;
-      height: 18px;
-      object-fit: contain;
-      image-rendering: pixelated;
     }
 
     .watch-row:active {
@@ -746,11 +710,6 @@
     }
 
     @media (max-width: 720px) {
-      .home-link {
-        top: 14px;
-        right: 14px;
-      }
-
       .app-shell {
         padding: 14px;
       }
@@ -775,9 +734,17 @@
   <div class="app-shell">
     <header class="topbar">
       <div class="brand-stack">
-        <a href="/" class="home-link" aria-label="Return to home">
-          <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home">
-        </a>
+        <a href="/"
+  style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         line-height: 0; text-decoration: none;
+         transition: transform 0.2s cubic-bezier(0.68,-0.55,0.265,1.55);"
+  onmouseover="this.style.transform='scale(1.12)'"
+  onmouseout="this.style.transform='scale(1)'"
+  onmousedown="this.style.transform='scale(0.95)'"
+  onmouseup="this.style.transform='scale(1.12)'">
+  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+       alt="home" style="width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; display: block;">
+</a>
         <div class="brand-copy">
           <p class="eyebrow">retro market sandbox</p>
           <h1>paperbots terminal</h1>
