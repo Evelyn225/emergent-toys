@@ -51,6 +51,30 @@
       box-sizing: border-box;
     }
 
+    /* minimal site-style scrollbar */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(111, 255, 208, 0.25) transparent;
+    }
+
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(111, 255, 208, 0.25);
+      border-radius: 2px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(111, 255, 208, 0.4);
+    }
+
     html,
     body {
       margin: 0;
