@@ -279,19 +279,42 @@ function render() {
   ctx.fillStyle = '#0a060a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Trails
+  // Trails - drawn as a tapered ribbon of tiling quads so the
+  // translucent segments never overlap (which would compound alpha
+  // into brighter blobs at the joints).
   for (const b of balls) {
-    if (b.trail.length < 2) continue;
-    for (let i = 1; i < b.trail.length; i++) {
-      const alpha = (i / b.trail.length) * 0.55;
-      const w = BALL_RADIUS * 0.7 * (i / b.trail.length);
-      ctx.strokeStyle = `hsla(${b.hue}, 100%, 65%, ${alpha})`;
-      ctx.lineWidth = w;
-      ctx.lineCap = 'round';
+    const pts = b.trail;
+    const n = pts.length;
+    if (n < 2) continue;
+
+    // Per-vertex unit normals (averaged from adjacent segments) and
+    // tapering half-widths, so consecutive quads share the exact same
+    // cross-section edge at each vertex and tile without overlap.
+    const nx = new Array(n);
+    const ny = new Array(n);
+    const hw = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = pts[Math.max(0, i - 1)];
+      const c = pts[Math.min(n - 1, i + 1)];
+      let dx = c.x - a.x;
+      let dy = c.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len; dy /= len;
+      nx[i] = -dy;
+      ny[i] = dx;
+      hw[i] = BALL_RADIUS * 0.35 * (i / n);
+    }
+
+    for (let i = 1; i < n; i++) {
+      const alpha = (i / n) * 0.55;
+      ctx.fillStyle = `hsla(${b.hue}, 100%, 65%, ${alpha})`;
       ctx.beginPath();
-      ctx.moveTo(b.trail[i - 1].x, b.trail[i - 1].y);
-      ctx.lineTo(b.trail[i].x, b.trail[i].y);
-      ctx.stroke();
+      ctx.moveTo(pts[i - 1].x + nx[i - 1] * hw[i - 1], pts[i - 1].y + ny[i - 1] * hw[i - 1]);
+      ctx.lineTo(pts[i - 1].x - nx[i - 1] * hw[i - 1], pts[i - 1].y - ny[i - 1] * hw[i - 1]);
+      ctx.lineTo(pts[i].x - nx[i] * hw[i], pts[i].y - ny[i] * hw[i]);
+      ctx.lineTo(pts[i].x + nx[i] * hw[i], pts[i].y + ny[i] * hw[i]);
+      ctx.closePath();
+      ctx.fill();
     }
   }
 
