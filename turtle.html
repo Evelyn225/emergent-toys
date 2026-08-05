@@ -103,17 +103,28 @@
     }
 
     #home-btn {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      line-height: 0;
       text-decoration: none;
-      font-size: 15px;
-      padding: 2px 5px;
-      border-radius: 4px;
+      transition: transform .2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
 
-      line-height: 1;
-      transition: transform .2s cubic-bezier(.34, 1.56, .64, 1);
+    #home-btn img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      image-rendering: pixelated;
+      display: block;
     }
 
     #home-btn:hover {
-      transform: scale(1.18) rotate(6deg);
+      transform: scale(1.2);
+    }
+
+    #home-btn:active {
+      transform: scale(0.95);
     }
 
     .sep {
@@ -766,7 +777,9 @@
     <div class="sep"></div>
     <button id="clear-btn" class="tb-btn">clear</button>
     <button id="save-btn" class="tb-btn">save png</button>
-    <a id="home-btn" href="/" title="Home" style="margin-left:auto">🏠</a>
+    <a id="home-btn" href="/" aria-label="Home">
+      <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home">
+    </a>
   </div>
 
   <!-- Main -->
