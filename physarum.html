@@ -11,7 +11,6 @@
     href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
   <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
   <title>Physarum</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
   <style>
     @font-face {
       font-family: 'W95';
@@ -29,7 +28,15 @@
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { margin: 0; overflow: hidden; background: #000; }
-    canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+    canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      display: block;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
     #stats {
       position: fixed;
       top: 12px;
@@ -56,19 +63,38 @@
       pointer-events: none;
       user-select: none;
     }
+    #fatal {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'W95', monospace;
+      font-weight: bold;
+      font-size: 12px;
+      color: rgba(170, 100, 255, 0.8);
+      z-index: 200;
+      text-align: center;
+      line-height: 2;
+      display: none;
+    }
   </style>
 </head>
 <body>
 
 <div id="stats">
   <span id="stat-agents">AGENTS: 0</span><br>
-  <span id="stat-food">FOOD: 0</span>
+  <span id="stat-food">FOOD:   0</span><br>
+  <span id="stat-mode">MODE:   ...</span>
 </div>
 
 <div id="ui">
   [CLICK] PLACE FOOD<br>
   [RIGHT CLICK] REMOVE FOOD<br>
   [R] RESET
+</div>
+
+<div id="fatal">
+  NO GPU BACKEND AVAILABLE<br>
+  THIS TOY NEEDS WEBGPU OR WEBGL2
 </div>
 
 <a href="/"
@@ -83,347 +109,1675 @@
        alt="home" style="width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; display: block;">
 </a>
 
+<canvas id="c"></canvas>
+
 <script>
-// ─── worker source ────────────────────────────────────────────────
-const WORKER_SRC = `
-const SCALE       = 3;
-const NUM_AGENTS  = 15000;
-const SA          = Math.PI / 4;
-const SD          = 9;
-const RA          = Math.PI / 4;
-const DEPOSIT     = 5;
-const DECAY       = 0.935;
-const SPEED       = 1.2;
-const HUNGER_MAX  = 180;
-const HUNGER_THRESH = 2;
+'use strict';
 
-let simW, simH;
-let trail, trailBuf;
-let agents = [];
-let foodNodes = [];
-let colorLut = new Uint8Array(101 * 3);
-let pixels;
+// ═══ tuning ═══════════════════════════════════════════════════════
+// These interact; none is safely tuned alone. docs/projects/physarum.md has a
+// table of what each controls and how it fails.
+const CFG = {
+  SCALE:          2,        // screen px per sim cell
+  AGENTS_PER_CELL: 1.0,
+  MAX_AGENTS:     1500000,
+  MAX_FOOD:       256,
+  FOOD_PER_CELL:  45 / (640 * 400),  // scales with area, like the agent pool
+  MAX_START_FOOD: 200,      // leaves slots free for hand-placed food
 
-function buildLut(hue) {
-  for (let i = 0; i <= 100; i++) {
-    let v = i / 100;
-    let bri = v * v;
-    let sat = 0.88 - v * 0.2;
-    let [r, g, b] = hsbRgb(hue, sat, bri);
-    colorLut[i * 3]     = r;
-    colorLut[i * 3 + 1] = g;
-    colorLut[i * 3 + 2] = b;
-  }
-}
+  SA:             Math.PI / 4,   // sense angle
+  SD:             6,             // sense distance; short = many thin filaments
+  RA:             Math.PI / 4,   // rotate angle
+  SPEED:          1.0,
+  DEPOSIT:        2.5,
+  DECAY:          0.935,
+  TRAIL_MAX:      100,
+  DEPOSIT_MAX:    80,       // deposit ceiling, below FEED_TRAIL
 
-function hsbRgb(h, s, v) {
-  h = ((h % 360) + 360) % 360;
-  let c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
-  let r = 0, g = 0, b = 0;
-  if      (h < 60)  { r=c; g=x; }
-  else if (h < 120) { r=x; g=c; }
-  else if (h < 180) { g=c; b=x; }
-  else if (h < 240) { g=x; b=c; }
-  else if (h < 300) { r=x; b=c; }
-  else              { r=c; b=x; }
-  return [Math.floor((r+m)*255), Math.floor((g+m)*255), Math.floor((b+m)*255)];
-}
+  HUNGER_MAX:     1500,     // frames since last meal before relocating
+  FEED_TRAIL:     88,
+  FEED_CHANCE:    0.25,
+  FEED_MIN:       10,
+  FEED_SPAN:      20,
+  SATIATED:       40,       // refractory frames after a meal; > FOOD_R / SPEED
 
-function initSim() {
-  trail    = new Float32Array(simW * simH);
-  trailBuf = new Float32Array(simW * simH);
-  agents    = [];
-  foodNodes = [];
-  let margin  = Math.min(simW, simH) * 0.08;
-  let minDist = Math.min(simW, simH) * 0.07;
-  let attempts = 0;
-  while (foodNodes.length < 30 && attempts < 2000) {
-    attempts++;
-    let fx = margin + Math.random() * (simW - margin * 2);
-    let fy = margin + Math.random() * (simH - margin * 2);
-    let tooClose = false;
-    for (let f of foodNodes) {
-      if (Math.hypot(fx - f.x, fy - f.y) < minDist) { tooClose = true; break; }
+  FOOD_R:         16,       // outer scent radius
+  FOOD_R_INNER:   9,        // inner plateau radius
+  FOOD_EQUILIBRIUM: 0.014,  // share of the pool one node sustains
+  FOOD_REGEN:     3.0e-3,   // energy regained per frame; sets cycle speed
+  FOOD_FADE:      0.35,     // scent collapses below this energy
+  MARKER:         7,        // food marker size in sim px
+
+  DENSITY_SHIFT:  3,        // density grid is 1/8 sim resolution
+  CROWD_RADIUS:   2,        // density texels sampled either side of a node
+  CROWD_DIV:      10,       // CROWD_SCALE = agentCount / CROWD_DIV
+
+  SPAWN_FRAC:     0.005,    // pool share teleported to newly placed food
+  FIXED:          1024,     // deposit fixed-point scale
+
+  HUE:            105,
+  RESIZE_DEBOUNCE: 200,
+};
+
+// ═══ food bookkeeping (CPU, shared by both backends) ══════════════
+// Slots are fixed and never spliced: energy lives on the GPU indexed by slot,
+// so compacting the array would misalign every node with its energy. The .w
+// channel instead holds a directory of active slots (data[i*4+3] for i < count)
+// so shaders can pick one uniformly without scanning all 256.
+const food = {
+  data:  new Float32Array(CFG.MAX_FOOD * 4),   // x, y, active, directory
+  count: 0,
+
+  clear() {
+    this.data.fill(0);
+    this.count = 0;
+  },
+
+  reindex() {
+    let n = 0;
+    for (let i = 0; i < CFG.MAX_FOOD; i++) {
+      if (this.data[i * 4 + 2] > 0.5) this.data[n++ * 4 + 3] = i;
     }
-    if (!tooClose) foodNodes.push({ x: fx, y: fy });
-  }
-  spawnAtFood(NUM_AGENTS);
-}
+    this.count = n;
+  },
 
-function spawnAtFood(total) {
-  if (!foodNodes.length) return;
-  let perFood = Math.floor(total / foodNodes.length);
-  for (let f of foodNodes) {
-    for (let i = 0; i < perFood; i++) {
-      agents.push({
-        x: f.x + (Math.random() - 0.5) * 8,
-        y: f.y + (Math.random() - 0.5) * 8,
-        a: Math.random() * Math.PI * 2,
-        h: 0, feed: 0
-      });
-    }
-  }
-}
-
-function sense(ag, ao) {
-  let a  = ag.a + ao;
-  let sx = ((Math.floor(ag.x + Math.cos(a) * SD) % simW) + simW) % simW;
-  let sy = ((Math.floor(ag.y + Math.sin(a) * SD) % simH) + simH) % simH;
-  return trail[sy * simW + sx];
-}
-
-function simStep() {
-  // agents
-  let n = agents.length;
-  for (let i = 0; i < n; i++) {
-    let ag  = agents[i];
-    let fwd = sense(ag, 0);
-    let lft = sense(ag,  SA);
-    let rgt = sense(ag, -SA);
-    let idxNow = Math.floor(ag.y) * simW + Math.floor(ag.x);
-    if (ag.feed === 0 && idxNow >= 0 && idxNow < trail.length
-        && trail[idxNow] > 88 && Math.random() < 0.25) {
-      ag.feed = 10 + Math.floor(Math.random() * 20);
-    }
-    if (ag.feed > 0) {
-      ag.feed--;
-      if (idxNow >= 0 && idxNow < trail.length)
-        trail[idxNow] = Math.min(trail[idxNow] + DEPOSIT, 100);
-      continue;
-    }
-    let maxSense = fwd > lft ? (fwd > rgt ? fwd : rgt) : (lft > rgt ? lft : rgt);
-    if (maxSense < 1) {
-      ag.a += (Math.random() - 0.5) * Math.PI * 0.6;
-    } else if (fwd >= lft && fwd >= rgt) {
-      if (fwd > 20 && Math.random() < 0.04) ag.a += (Math.random() - 0.5) * RA;
-    } else if (lft > rgt) {
-      ag.a += RA;
-    } else if (rgt > lft) {
-      ag.a -= RA;
-    } else {
-      ag.a += (Math.random() < 0.5 ? RA : -RA);
-    }
-    ag.x = ((ag.x + Math.cos(ag.a) * SPEED) % simW + simW) % simW;
-    ag.y = ((ag.y + Math.sin(ag.a) * SPEED) % simH + simH) % simH;
-    let idx = Math.floor(ag.y) * simW + Math.floor(ag.x);
-    if (idx >= 0 && idx < trail.length)
-      trail[idx] = Math.min(trail[idx] + DEPOSIT, 100);
-    let localTrail = idx >= 0 && idx < trail.length ? trail[idx] : 0;
-    if (localTrail < HUNGER_THRESH) {
-      ag.h++;
-      if (ag.h >= HUNGER_MAX && foodNodes.length > 0) {
-        let f = foodNodes[Math.floor(Math.random() * foodNodes.length)];
-        ag.x = f.x + (Math.random() - 0.5) * 8;
-        ag.y = f.y + (Math.random() - 0.5) * 8;
-        ag.a = Math.random() * Math.PI * 2;
-        ag.h = 0;
-      }
-    } else {
-      ag.h = Math.max(0, ag.h - 3);
-    }
-  }
-
-  // crowding + food scent
-  let crowdR2 = 12 * 12;
-  let crowding = new Array(foodNodes.length).fill(0);
-  for (let j = 0; j < agents.length; j++) {
-    for (let fi = 0; fi < foodNodes.length; fi++) {
-      let dx = agents[j].x - foodNodes[fi].x;
-      let dy = agents[j].y - foodNodes[fi].y;
-      if (dx * dx + dy * dy < crowdR2) crowding[fi]++;
-    }
-  }
-  for (let fi = 0; fi < foodNodes.length; fi++) {
-    let f  = foodNodes[fi];
-    let fx = Math.floor(f.x), fy = Math.floor(f.y);
-    let crowdFactor = 1 / (1 + crowding[fi] * 0.001);
-    let R = 11;
-    for (let dy = -R; dy <= R; dy++) {
-      for (let dx = -R; dx <= R; dx++) {
-        let d = Math.sqrt(dx * dx + dy * dy);
-        if (d > R) continue;
-        let strength = (d < 6
-          ? (1 - d / 6) * 100
-          : (1 - (d - 6) / (R - 6)) * 25) * crowdFactor;
-        let bx = ((fx + dx) % simW + simW) % simW;
-        let by = ((fy + dy) % simH + simH) % simH;
-        if (trail[by * simW + bx] < strength) trail[by * simW + bx] = strength;
+  add(x, y) {
+    for (let i = 0; i < CFG.MAX_FOOD; i++) {
+      if (this.data[i * 4 + 2] < 0.5) {
+        this.data[i * 4]     = x;
+        this.data[i * 4 + 1] = y;
+        this.data[i * 4 + 2] = 1;
+        this.reindex();
+        return i;
       }
     }
-  }
+    return -1;
+  },
 
-  // diffuse + decay
-  let tw = simW, th = simH;
-  for (let y = 0; y < th; y++) {
-    let row  = y * tw;
-    let rowU = ((y - 1 + th) % th) * tw;
-    let rowD = ((y + 1)      % th) * tw;
-    for (let x = 0; x < tw; x++) {
-      let xL = (x - 1 + tw) % tw;
-      let xR = (x + 1)      % tw;
-      let sum = trail[rowU + xL] + trail[rowU + x] + trail[rowU + xR]
-              + trail[row  + xL] + trail[row  + x] + trail[row  + xR]
-              + trail[rowD + xL] + trail[rowD + x] + trail[rowD + xR];
-      trailBuf[row + x] = sum * 0.11111 * DECAY;
-    }
-  }
-  let tmp = trail; trail = trailBuf; trailBuf = tmp;
-
-  // write pixels
-  let lut = colorLut, sz = simW * simH;
-  for (let i = 0; i < sz; i++) {
-    let li = Math.floor(trail[i]) * 3;
-    let pi = i * 4;
-    pixels[pi]     = lut[li];
-    pixels[pi + 1] = lut[li + 1];
-    pixels[pi + 2] = lut[li + 2];
-    pixels[pi + 3] = 255;
-  }
-
-  // food markers: white 5x5 squares
-  for (let f of foodNodes) {
-    let fx = Math.floor(f.x), fy = Math.floor(f.y);
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let dx = -2; dx <= 2; dx++) {
-        let bx = fx + dx, by = fy + dy;
-        if (bx >= 0 && bx < simW && by >= 0 && by < simH) {
-          let bi = (by * simW + bx) * 4;
-          pixels[bi] = pixels[bi+1] = pixels[bi+2] = pixels[bi+3] = 255;
-        }
-      }
-    }
-  }
-}
-
-self.onmessage = function(e) {
-  const msg = e.data;
-
-  if (msg.type === 'init') {
-    simW = msg.simW;
-    simH = msg.simH;
-    pixels = new Uint8ClampedArray(simW * simH * 4);
-    buildLut(105);
-    initSim();
-    simStep();
-    self.postMessage(
-      { type: 'frame', pixels, agentCount: agents.length, foodCount: foodNodes.length },
-      [pixels.buffer]
-    );
-    pixels = null;
-    return;
-  }
-
-  if (msg.type === 'step') {
-    pixels = msg.pixels;
-    simStep();
-    self.postMessage(
-      { type: 'frame', pixels, agentCount: agents.length, foodCount: foodNodes.length },
-      [pixels.buffer]
-    );
-    pixels = null;
-    return;
-  }
-
-  if (msg.type === 'addFood') {
-    foodNodes.push({ x: msg.x, y: msg.y });
-    for (let i = 0; i < 900; i++) {
-      agents.push({
-        x: msg.x + (Math.random() - 0.5) * 8,
-        y: msg.y + (Math.random() - 0.5) * 8,
-        a: Math.random() * Math.PI * 2,
-        h: 0, feed: 0
-      });
-    }
-    return;
-  }
-
-  if (msg.type === 'removeFood') {
+  removeNear(x, y, maxDist) {
     let best = -1, bestD = Infinity;
-    for (let i = 0; i < foodNodes.length; i++) {
-      let d = Math.hypot(msg.x - foodNodes[i].x, msg.y - foodNodes[i].y);
+    for (let i = 0; i < CFG.MAX_FOOD; i++) {
+      if (this.data[i * 4 + 2] < 0.5) continue;
+      const d = Math.hypot(x - this.data[i * 4], y - this.data[i * 4 + 1]);
       if (d < bestD) { bestD = d; best = i; }
     }
-    if (best >= 0 && bestD < 30) foodNodes.splice(best, 1);
+    if (best >= 0 && bestD < maxDist) {
+      this.data[best * 4 + 2] = 0;
+      this.reindex();
+      return best;
+    }
+    return -1;
+  },
+
+  // Poisson-ish scatter by rejection.
+  scatter(simW, simH) {
+    this.clear();
+    const target = Math.min(CFG.MAX_START_FOOD,
+      Math.max(8, Math.round(CFG.FOOD_PER_CELL * simW * simH)));
+    const margin  = Math.min(simW, simH) * 0.08;
+    const minDist = Math.min(simW, simH) * 0.05;
+    let attempts = 0;
+    while (this.count < target && attempts < 8000) {
+      attempts++;
+      const fx = margin + Math.random() * (simW - margin * 2);
+      const fy = margin + Math.random() * (simH - margin * 2);
+      let tooClose = false;
+      for (let i = 0; i < CFG.MAX_FOOD; i++) {
+        if (this.data[i * 4 + 2] < 0.5) continue;
+        if (Math.hypot(fx - this.data[i * 4], fy - this.data[i * 4 + 1]) < minDist) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) this.add(fx, fy);
+    }
+  },
+};
+
+// Derived, not fixed, so a node sustains the same share of the pool at any
+// window size. An absolute rate would starve the whole field at high agent
+// counts.
+function foodDrainFor(agentCount) {
+  return CFG.FOOD_REGEN / Math.max(1, agentCount * CFG.FOOD_EQUILIBRIUM);
+}
+
+// ═══ WGSL ═════════════════════════════════════════════════════════
+// Split into two modules because the access modes differ by stage: compute
+// needs the trail read_write, but WebGPU forbids writable storage in
+// vertex/fragment, so the render module redeclares it read-only.
+function wgslShared(cfg) {
+  const SPAN = cfg.FOOD_R * 2 + 1;
+  return `
+struct Params {
+  simW:        u32,
+  simH:        u32,
+  denW:        u32,
+  denH:        u32,
+  agentCount:  u32,
+  frame:       u32,
+  newFoodSlot: i32,
+  spawnSlot:   i32,
+  resetAll:    u32,
+  foodCount:   u32,
+  foodDrain:   f32,
+  _p0: u32,
+};
+
+struct Agent {
+  x:      f32,
+  y:      f32,
+  angle:  f32,
+  packed: u32,   // hunger in low 16 bits, feed in high 16
+};
+
+const SA:            f32 = ${cfg.SA};
+const SD:            f32 = ${cfg.SD}.0;
+const RA:            f32 = ${cfg.RA};
+const SPEED:         f32 = ${cfg.SPEED};
+const DEPOSIT:       f32 = ${cfg.DEPOSIT};
+const DECAY:         f32 = ${cfg.DECAY};
+const TRAIL_MAX:     f32 = ${cfg.TRAIL_MAX}.0;
+const DEPOSIT_MAX:   f32 = ${cfg.DEPOSIT_MAX}.0;
+const HUNGER_MAX:    u32 = ${cfg.HUNGER_MAX}u;
+const FEED_TRAIL:    f32 = ${cfg.FEED_TRAIL}.0;
+const FEED_CHANCE:   f32 = ${cfg.FEED_CHANCE};
+const SATIATED:      u32 = ${cfg.SATIATED}u;
+const FOOD_R:        i32 = ${cfg.FOOD_R};
+const FOOD_R_F:      f32 = ${cfg.FOOD_R}.0;
+const FOOD_RI:       f32 = ${cfg.FOOD_R_INNER}.0;
+const FOOD_REGEN:    f32 = ${cfg.FOOD_REGEN};
+const FOOD_FADE:     f32 = ${cfg.FOOD_FADE};
+const SPAWN_FRAC:    f32 = ${cfg.SPAWN_FRAC};
+const FIXED:         f32 = ${cfg.FIXED}.0;
+const MAX_FOOD:      u32 = ${cfg.MAX_FOOD}u;
+const SPAN:          u32 = ${SPAN}u;
+const DSHIFT:        u32 = ${cfg.DENSITY_SHIFT}u;
+const CROWD_R:       i32 = ${cfg.CROWD_RADIUS};
+const HUE:           f32 = ${cfg.HUE}.0;
+const MARKER:        f32 = ${cfg.MARKER}.0;
+
+fn hash(v: u32) -> u32 {
+  var s = v;
+  s = s ^ 2747636419u; s = s * 2654435769u;
+  s = s ^ (s >> 16u);  s = s * 2654435769u;
+  s = s ^ (s >> 16u);  s = s * 2654435769u;
+  return s;
+}
+fn rnd(seed: ptr<function, u32>) -> f32 {
+  *seed = hash(*seed);
+  return f32(*seed) / 4294967296.0;
+}
+`;
+}
+
+function wgslCompute(cfg) {
+  const SPAN = cfg.FOOD_R * 2 + 1;
+  return wgslShared(cfg) + `
+@group(0) @binding(0) var<uniform>             P:         Params;
+@group(0) @binding(1) var<storage, read_write> agents:    array<Agent>;
+@group(0) @binding(2) var<storage, read_write> trailSrc:  array<f32>;
+@group(0) @binding(3) var<storage, read_write> trailDst:  array<f32>;
+@group(0) @binding(4) var<storage, read_write> deposit:   array<atomic<u32>>;
+@group(0) @binding(5) var<storage, read_write> density:   array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read>       foodPos:   array<vec4f>;
+@group(0) @binding(7) var<storage, read_write> foodState: array<vec2f>;
+
+fn wrapIdx(x: f32, y: f32) -> u32 {
+  let w = i32(P.simW);
+  let h = i32(P.simH);
+  let ix = ((i32(floor(x)) % w) + w) % w;
+  let iy = ((i32(floor(y)) % h) + h) % h;
+  return u32(iy) * P.simW + u32(ix);
+}
+
+fn senseAt(x: f32, y: f32, a: f32) -> f32 {
+  return trailSrc[wrapIdx(x + cos(a) * SD, y + sin(a) * SD)];
+}
+
+// Uniform over active slots, and must stay that way. Preferring live nodes
+// phase-locks the field: every hungry agent piles onto the same healthy subset
+// and kills it as a group. Landing on a dead node is self-correcting, since
+// hunger counts time since the last meal.
+fn pickFood(seed: ptr<function, u32>) -> i32 {
+  if (P.foodCount == 0u) { return -1; }
+  let k = u32(rnd(seed) * f32(P.foodCount)) % P.foodCount;
+  return i32(foodPos[k].w);
+}
+
+// ── pass: seed agents at food ──
+@compute @workgroup_size(64)
+fn initAgents(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= P.agentCount) { return; }
+  var seed = hash(i * 2654435761u + 12345u);
+  var a: Agent;
+  // Scattered rather than seeded on food, which would drop the whole pool into
+  // saturated scent basins it cannot steer out of.
+  a.x = rnd(&seed) * f32(P.simW);
+  a.y = rnd(&seed) * f32(P.simH);
+  a.angle  = rnd(&seed) * 6.2831853;
+  a.packed = 0u;
+  agents[i] = a;
+}
+
+// ── pass: clear density ──
+@compute @workgroup_size(64)
+fn zeroDensity(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= P.denW * P.denH) { return; }
+  atomicStore(&density[i], 0u);
+}
+
+// ── pass: agent sense / steer / move / deposit ──
+@compute @workgroup_size(64)
+fn agentUpdate(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= P.agentCount) { return; }
+  var a = agents[i];
+  var seed = hash(i * 747796405u + P.frame * 2891336453u);
+
+  var hunger = a.packed & 0xffffu;
+  var feed   = a.packed >> 16u;
+
+  // Newly placed food yanks a slice of the pool onto it. The pool is fixed, so
+  // this stands in for spawning new agents.
+  if (P.spawnSlot >= 0) {
+    var sseed = hash(i ^ 0x9e3779b9u);
+    if (rnd(&sseed) < SPAWN_FRAC) {
+      let f = foodPos[u32(P.spawnSlot)];
+      var s2 = hash(i * 40503u + P.frame);
+      a.x = f.x + (rnd(&s2) - 0.5) * 8.0;
+      a.y = f.y + (rnd(&s2) - 0.5) * 8.0;
+      a.angle = rnd(&s2) * 6.2831853;
+      hunger = 0u;
+      feed   = 0u;
+    }
+  }
+
+  let here = wrapIdx(a.x, a.y);
+
+  // One counter, two phases: above SATIATED the agent is eating; below, it is
+  // walking the meal off and cannot re-trigger.
+  if (feed == 0u && trailSrc[here] > FEED_TRAIL && rnd(&seed) < FEED_CHANCE) {
+    feed = SATIATED + ${cfg.FEED_MIN}u + u32(rnd(&seed) * ${cfg.FEED_SPAN}.0);
+  }
+
+  if (feed > SATIATED) {
+    // Eating: hold position, keep depositing, and reset the hunger clock.
+    feed = feed - 1u;
+    hunger = 0u;
+    atomicAdd(&deposit[here], u32(DEPOSIT * FIXED));
+    a.packed = (feed << 16u) | (hunger & 0xffffu);
+    agents[i] = a;
+    let dq = (u32(a.y) >> DSHIFT) * P.denW + (u32(a.x) >> DSHIFT);
+    if (dq < P.denW * P.denH) { atomicAdd(&density[dq], 1u); }
+    return;
+  }
+  if (feed > 0u) { feed = feed - 1u; }
+
+  let fwd = senseAt(a.x, a.y, a.angle);
+  let lft = senseAt(a.x, a.y, a.angle + SA);
+  let rgt = senseAt(a.x, a.y, a.angle - SA);
+  let maxSense = max(fwd, max(lft, rgt));
+
+  if (maxSense < 1.0) {
+    a.angle = a.angle + (rnd(&seed) - 0.5) * 3.14159265 * 0.6;
+  } else if (fwd >= lft && fwd >= rgt) {
+    if (fwd > 20.0 && rnd(&seed) < 0.04) {
+      a.angle = a.angle + (rnd(&seed) - 0.5) * RA;
+    }
+  } else if (lft > rgt) {
+    a.angle = a.angle + RA;
+  } else if (rgt > lft) {
+    a.angle = a.angle - RA;
+  } else {
+    if (rnd(&seed) < 0.5) { a.angle = a.angle + RA; } else { a.angle = a.angle - RA; }
+  }
+
+  let w = f32(P.simW);
+  let h = f32(P.simH);
+  a.x = (a.x + cos(a.angle) * SPEED) % w;
+  a.y = (a.y + sin(a.angle) * SPEED) % h;
+  if (a.x < 0.0) { a.x = a.x + w; }
+  if (a.y < 0.0) { a.y = a.y + h; }
+
+  let dst = wrapIdx(a.x, a.y);
+  atomicAdd(&deposit[dst], u32(DEPOSIT * FIXED));
+
+  let dq = (u32(a.y) >> DSHIFT) * P.denW + (u32(a.x) >> DSHIFT);
+  if (dq < P.denW * P.denH) { atomicAdd(&density[dq], 1u); }
+
+  hunger = hunger + 1u;
+  if (hunger >= HUNGER_MAX) {
+    let slot = pickFood(&seed);
+    if (slot >= 0) {
+      let f = foodPos[u32(slot)];
+      a.x = f.x + (rnd(&seed) - 0.5) * 8.0;
+      a.y = f.y + (rnd(&seed) - 0.5) * 8.0;
+      a.angle = rnd(&seed) * 6.2831853;
+    }
+    hunger = 0u;
+  }
+
+  a.packed = (feed << 16u) | (hunger & 0xffffu);
+  agents[i] = a;
+}
+
+// ── pass: fold deposits into the trail, then clear them ──
+@compute @workgroup_size(64)
+fn foldDeposit(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= P.simW * P.simH) { return; }
+  let d = f32(atomicLoad(&deposit[i])) / FIXED;
+  atomicStore(&deposit[i], 0u);
+  // max() so an existing food stamp above DEPOSIT_MAX is not pulled back down.
+  let t = trailSrc[i];
+  trailSrc[i] = max(t, min(t + d, DEPOSIT_MAX));
+}
+
+// ── pass: food energy + crowding ──
+@compute @workgroup_size(64)
+fn foodEnergy(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= MAX_FOOD) { return; }
+
+  if (P.resetAll == 1u || i32(i) == P.newFoodSlot) {
+    foodState[i] = vec2f(1.0, 1.0);
     return;
   }
 
-  if (msg.type === 'reset') {
-    buildLut(105);
-    initSim();
+  let f = foodPos[i];
+  if (f.z < 0.5) {
+    foodState[i] = vec2f(1.0, 1.0);   // idle slots sit at full, ready for reuse
     return;
   }
+
+  var crowd = 0.0;
+  let cx = i32(f.x) >> DSHIFT;
+  let cy = i32(f.y) >> DSHIFT;
+  let dw = i32(P.denW);
+  let dh = i32(P.denH);
+  for (var dy = -CROWD_R; dy <= CROWD_R; dy = dy + 1) {
+    for (var dx = -CROWD_R; dx <= CROWD_R; dx = dx + 1) {
+      let px = ((cx + dx) % dw + dw) % dw;
+      let py = ((cy + dy) % dh + dh) % dh;
+      crowd = crowd + f32(atomicLoad(&density[u32(py) * P.denW + u32(px)]));
+    }
+  }
+
+  let crowdScale = max(1.0, f32(P.agentCount) / ${cfg.CROWD_DIV}.0);
+  let crowdFactor = 1.0 / (1.0 + crowd / crowdScale);
+
+  var e = foodState[i].x - crowd * P.foodDrain + FOOD_REGEN;
+  foodState[i] = vec2f(clamp(e, 0.0, 1.0), crowdFactor);
+}
+
+// ── pass: stamp food scent ──
+// One thread per (food slot, footprint texel). Overlapping nodes race on the
+// same texel; the survivor is one of the two legitimate values, so it is benign.
+@compute @workgroup_size(64)
+fn foodScent(@builtin(global_invocation_id) gid: vec3u) {
+  let t = gid.x;
+  let per = SPAN * SPAN;
+  let fi = t / per;
+  if (fi >= MAX_FOOD) { return; }
+  let f = foodPos[fi];
+  if (f.z < 0.5) { return; }
+
+  let k  = t % per;
+  let dx = i32(k % SPAN) - FOOD_R;
+  let dy = i32(k / SPAN) - FOOD_R;
+  let d  = sqrt(f32(dx * dx + dy * dy));
+  if (d > FOOD_R_F) { return; }
+
+  let st = foodState[fi];
+  let alive = smoothstep(0.0, FOOD_FADE, st.x);
+  var strength: f32;
+  if (d < FOOD_RI) {
+    strength = (1.0 - d / FOOD_RI) * 100.0;
+  } else {
+    strength = (1.0 - (d - FOOD_RI) / (FOOD_R_F - FOOD_RI)) * 25.0;
+  }
+  strength = strength * st.y * alive;
+
+  let idx = wrapIdx(f.x + f32(dx), f.y + f32(dy));
+  if (trailSrc[idx] < strength) { trailSrc[idx] = strength; }
+}
+
+// ── pass: diffuse + decay ──
+@compute @workgroup_size(64)
+fn diffuse(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  let total = P.simW * P.simH;
+  if (i >= total) { return; }
+  let w = i32(P.simW);
+  let h = i32(P.simH);
+  let x = i32(i % P.simW);
+  let y = i32(i / P.simW);
+  let xl = (x - 1 + w) % w;
+  let xr = (x + 1) % w;
+  let yu = (y - 1 + h) % h;
+  let yd = (y + 1) % h;
+  var sum = 0.0;
+  sum = sum + trailSrc[u32(yu) * P.simW + u32(xl)];
+  sum = sum + trailSrc[u32(yu) * P.simW + u32(x)];
+  sum = sum + trailSrc[u32(yu) * P.simW + u32(xr)];
+  sum = sum + trailSrc[u32(y)  * P.simW + u32(xl)];
+  sum = sum + trailSrc[u32(y)  * P.simW + u32(x)];
+  sum = sum + trailSrc[u32(y)  * P.simW + u32(xr)];
+  sum = sum + trailSrc[u32(yd) * P.simW + u32(xl)];
+  sum = sum + trailSrc[u32(yd) * P.simW + u32(x)];
+  sum = sum + trailSrc[u32(yd) * P.simW + u32(xr)];
+  trailDst[i] = sum * 0.111111 * DECAY;
+}
+`;
+}
+
+function wgslRender(cfg) {
+  return wgslShared(cfg) + `
+@group(0) @binding(0) var<uniform>       P:         Params;
+@group(0) @binding(1) var<storage, read> trail:     array<f32>;
+@group(0) @binding(2) var<storage, read> foodPos:   array<vec4f>;
+@group(0) @binding(3) var<storage, read> foodState: array<vec2f>;
+
+fn hsb2rgb(hh: f32, s: f32, v: f32) -> vec3f {
+  let h = hh - floor(hh / 360.0) * 360.0;
+  let c = v * s;
+  let x = c * (1.0 - abs((h / 60.0) % 2.0 - 1.0));
+  let m = v - c;
+  var rgb: vec3f;
+  if      (h <  60.0) { rgb = vec3f(c, x, 0.0); }
+  else if (h < 120.0) { rgb = vec3f(x, c, 0.0); }
+  else if (h < 180.0) { rgb = vec3f(0.0, c, x); }
+  else if (h < 240.0) { rgb = vec3f(0.0, x, c); }
+  else if (h < 300.0) { rgb = vec3f(x, 0.0, c); }
+  else                { rgb = vec3f(c, 0.0, x); }
+  return rgb + vec3f(m);
+}
+
+@vertex
+fn trailVS(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
+  var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+  return vec4f(p[vi], 0.0, 1.0);
+}
+
+@fragment
+fn trailFS(@builtin(position) pos: vec4f) -> @location(0) vec4f {
+  let x = u32(pos.x);
+  let y = u32(pos.y);
+  let v = clamp(trail[y * P.simW + x] / TRAIL_MAX, 0.0, 1.0);
+  return vec4f(hsb2rgb(HUE, 0.88 - v * 0.2, v * v), 1.0);
+}
+
+struct MarkerOut {
+  @builtin(position) pos:    vec4f,
+  @location(0)       local:  vec2f,
+  @location(1)       energy: f32,
 };
+
+@vertex
+fn markerVS(@builtin(vertex_index) vi: u32,
+            @builtin(instance_index) ii: u32) -> MarkerOut {
+  var o: MarkerOut;
+  let f = foodPos[ii];
+  if (f.z < 0.5) {
+    o.pos = vec4f(2.0, 2.0, 0.0, 1.0);   // clipped away
+    o.local = vec2f(0.0);
+    o.energy = 0.0;
+    return o;
+  }
+  let corner = vec2f(f32(vi & 1u), f32((vi >> 1u) & 1u));
+  let half   = floor(MARKER * 0.5);
+  let p      = floor(vec2f(f.x, f.y)) - half + corner * MARKER;
+  o.pos = vec4f(p.x / f32(P.simW) * 2.0 - 1.0,
+                1.0 - p.y / f32(P.simH) * 2.0, 0.0, 1.0);
+  o.local  = corner * MARKER;
+  o.energy = foodState[ii].x;
+  return o;
+}
+
+@fragment
+fn markerFS(in: MarkerOut) -> @location(0) vec4f {
+  let l = floor(in.local);
+  let edge = l.x < 1.0 || l.x >= MARKER - 1.0 || l.y < 1.0 || l.y >= MARKER - 1.0;
+  // Border stays lit so a dead node is still visible and still removable.
+  let b = select(in.energy, 0.4, edge);
+  return vec4f(vec3f(b), 1.0);
+}
+`;
+}
+
+// ═══ WebGPU backend ═══════════════════════════════════════════════
+class WebGPUBackend {
+  static label = 'WEBGPU';
+
+  static async create(canvas) {
+    if (!navigator.gpu) return null;
+    let adapter = null;
+    try { adapter = await navigator.gpu.requestAdapter(); } catch (e) { return null; }
+    if (!adapter) return null;
+    let device = null;
+    try { device = await adapter.requestDevice(); } catch (e) { return null; }
+    if (!device) return null;
+    return new WebGPUBackend(canvas, device);
+  }
+
+  constructor(canvas, device) {
+    this.canvas = canvas;
+    this.device = device;
+    this.ctx = canvas.getContext('webgpu');
+    this.format = navigator.gpu.getPreferredCanvasFormat();
+    this.ctx.configure({ device, format: this.format, alphaMode: 'opaque' });
+    this.cModule = device.createShaderModule({ code: wgslCompute(CFG) });
+    this.rModule = device.createShaderModule({ code: wgslRender(CFG) });
+
+    const C = GPUShaderStage.COMPUTE;
+    const VF = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
+    const b = (binding, visibility, type) =>
+      ({ binding, visibility, buffer: { type } });
+
+    this.cLayout = device.createBindGroupLayout({
+      entries: [
+        b(0, C, 'uniform'),
+        b(1, C, 'storage'),
+        b(2, C, 'storage'),
+        b(3, C, 'storage'),
+        b(4, C, 'storage'),
+        b(5, C, 'storage'),
+        b(6, C, 'read-only-storage'),
+        b(7, C, 'storage'),
+      ],
+    });
+    this.rLayout = device.createBindGroupLayout({
+      entries: [
+        b(0, VF, 'uniform'),
+        b(1, VF, 'read-only-storage'),
+        b(2, VF, 'read-only-storage'),
+        b(3, VF, 'read-only-storage'),
+      ],
+    });
+    this.cPipeLayout = device.createPipelineLayout({ bindGroupLayouts: [this.cLayout] });
+    this.rPipeLayout = device.createPipelineLayout({ bindGroupLayouts: [this.rLayout] });
+
+    this.frame = 0;
+    this.res = null;
+  }
+
+  init(simW, simH, agentCount) {
+    this.destroyResources();
+    const d = this.device;
+    this.simW = simW;
+    this.simH = simH;
+    this.agentCount = agentCount;
+    this.denW = Math.ceil(simW / (1 << CFG.DENSITY_SHIFT));
+    this.denH = Math.ceil(simH / (1 << CFG.DENSITY_SHIFT));
+    const cells = simW * simH;
+
+    const buf = (size, usage) => d.createBuffer({ size, usage });
+    const ST = GPUBufferUsage.STORAGE;
+    const CD = GPUBufferUsage.COPY_DST;
+
+    this.res = {
+      params:    buf(48, GPUBufferUsage.UNIFORM | CD),
+      agents:    buf(agentCount * 16, ST),
+      trailA:    buf(cells * 4, ST | CD),
+      trailB:    buf(cells * 4, ST | CD),
+      deposit:   buf(cells * 4, ST | CD),
+      density:   buf(this.denW * this.denH * 4, ST),
+      foodPos:   buf(CFG.MAX_FOOD * 16, ST | CD),
+      foodState: buf(CFG.MAX_FOOD * 8, ST | CD),
+    };
+
+    // Trails and deposits start at zero; createBuffer does not guarantee it.
+    const zeroCells = new Float32Array(cells);
+    d.queue.writeBuffer(this.res.trailA, 0, zeroCells);
+    d.queue.writeBuffer(this.res.trailB, 0, zeroCells);
+    d.queue.writeBuffer(this.res.deposit, 0, new Uint32Array(cells));
+    d.queue.writeBuffer(this.res.foodState, 0,
+      new Float32Array(CFG.MAX_FOOD * 2).fill(1));
+
+    // Pipelines are built once; only the bind groups differ per frame.
+    if (!this.pipes) {
+      const compute = (entry) => d.createComputePipeline({
+        layout: this.cPipeLayout,
+        compute: { module: this.cModule, entryPoint: entry },
+      });
+      this.pipes = {
+        initAgents:  compute('initAgents'),
+        zeroDensity: compute('zeroDensity'),
+        agentUpdate: compute('agentUpdate'),
+        foldDeposit: compute('foldDeposit'),
+        foodEnergy:  compute('foodEnergy'),
+        foodScent:   compute('foodScent'),
+        diffuse:     compute('diffuse'),
+        trail: d.createRenderPipeline({
+          layout: this.rPipeLayout,
+          vertex:   { module: this.rModule, entryPoint: 'trailVS' },
+          fragment: { module: this.rModule, entryPoint: 'trailFS',
+                      targets: [{ format: this.format }] },
+          primitive: { topology: 'triangle-list' },
+        }),
+        marker: d.createRenderPipeline({
+          layout: this.rPipeLayout,
+          vertex:   { module: this.rModule, entryPoint: 'markerVS' },
+          fragment: { module: this.rModule, entryPoint: 'markerFS',
+                      targets: [{ format: this.format }] },
+          primitive: { topology: 'triangle-strip' },
+        }),
+      };
+    }
+
+    // One bind group per ping-pong phase, shared by every pass in that phase.
+    this.cGroups = [0, 1].map((flip) => this.makeComputeGroup(flip));
+    this.rGroups = [0, 1].map((flip) => this.makeRenderGroup(flip));
+
+    this.flip = 0;
+    this.frame = 0;
+    this.pendingNewSlot = -1;
+    this.pendingSpawn = -1;
+    this.pendingReset = 1;
+
+    this.uploadFood();
+    this.writeParams();
+    this.runInit();
+  }
+
+  makeComputeGroup(flip) {
+    const r = this.res;
+    return this.device.createBindGroup({
+      layout: this.cLayout,
+      entries: [
+        { binding: 0, resource: { buffer: r.params } },
+        { binding: 1, resource: { buffer: r.agents } },
+        { binding: 2, resource: { buffer: flip === 0 ? r.trailA : r.trailB } },
+        { binding: 3, resource: { buffer: flip === 0 ? r.trailB : r.trailA } },
+        { binding: 4, resource: { buffer: r.deposit } },
+        { binding: 5, resource: { buffer: r.density } },
+        { binding: 6, resource: { buffer: r.foodPos } },
+        { binding: 7, resource: { buffer: r.foodState } },
+      ],
+    });
+  }
+
+  makeRenderGroup(flip) {
+    const r = this.res;
+    return this.device.createBindGroup({
+      layout: this.rLayout,
+      entries: [
+        { binding: 0, resource: { buffer: r.params } },
+        { binding: 1, resource: { buffer: flip === 0 ? r.trailA : r.trailB } },
+        { binding: 2, resource: { buffer: r.foodPos } },
+        { binding: 3, resource: { buffer: r.foodState } },
+      ],
+    });
+  }
+
+  writeParams() {
+    const p = new ArrayBuffer(48);
+    const u = new Uint32Array(p);
+    const i = new Int32Array(p);
+    const f = new Float32Array(p);
+    u[0] = this.simW;
+    u[1] = this.simH;
+    u[2] = this.denW;
+    u[3] = this.denH;
+    u[4] = this.agentCount;
+    u[5] = this.frame;
+    i[6] = this.pendingNewSlot;
+    i[7] = this.pendingSpawn;
+    u[8] = this.pendingReset;
+    u[9] = food.count;
+    f[10] = foodDrainFor(this.agentCount);
+    this.device.queue.writeBuffer(this.res.params, 0, p);
+  }
+
+  uploadFood() {
+    this.device.queue.writeBuffer(this.res.foodPos, 0, food.data);
+  }
+
+  runInit() {
+    const d = this.device;
+    const enc = d.createCommandEncoder();
+    const pass = enc.beginComputePass();
+    pass.setPipeline(this.pipes.initAgents);
+    pass.setBindGroup(0, this.cGroups[this.flip]);
+    pass.dispatchWorkgroups(Math.ceil(this.agentCount / 64));
+    pass.end();
+    d.queue.submit([enc.finish()]);
+  }
+
+  step() {
+    if (!this.res) return;
+    const d = this.device;
+    this.frame++;
+    this.uploadFood();
+    this.writeParams();
+
+    const wg = (n) => Math.ceil(n / 64);
+    const span = CFG.FOOD_R * 2 + 1;
+
+    const enc = d.createCommandEncoder();
+    const cp = enc.beginComputePass();
+    cp.setBindGroup(0, this.cGroups[this.flip]);
+
+    const run = (name, count) => {
+      cp.setPipeline(this.pipes[name]);
+      cp.dispatchWorkgroups(wg(count));
+    };
+    run('zeroDensity', this.denW * this.denH);
+    run('agentUpdate', this.agentCount);
+    run('foldDeposit', this.simW * this.simH);
+    run('foodEnergy',  CFG.MAX_FOOD);
+    run('foodScent',   CFG.MAX_FOOD * span * span);
+    run('diffuse',     this.simW * this.simH);
+    cp.end();
+
+    // Diffuse wrote into the other buffer, so render reads with the flip
+    // already advanced.
+    this.flip = 1 - this.flip;
+    const rf = this.flip;
+
+    const view = this.ctx.getCurrentTexture().createView();
+    const rp = enc.beginRenderPass({
+      colorAttachments: [{
+        view,
+        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    rp.setBindGroup(0, this.rGroups[rf]);
+    rp.setPipeline(this.pipes.trail);
+    rp.draw(3);
+    rp.setPipeline(this.pipes.marker);
+    rp.draw(4, CFG.MAX_FOOD);
+    rp.end();
+
+    d.queue.submit([enc.finish()]);
+
+    // One-shot uniforms fire for exactly one frame.
+    this.pendingNewSlot = -1;
+    this.pendingSpawn = -1;
+    this.pendingReset = 0;
+  }
+
+  addFood(slot) {
+    this.pendingNewSlot = slot;
+    this.pendingSpawn = slot;
+  }
+
+  removeFood() { /* slot deactivation is enough; energy idles at full */ }
+
+  reset() {
+    this.pendingReset = 1;
+    this.frame = 0;
+    this.uploadFood();
+    this.writeParams();
+    this.device.queue.writeBuffer(this.res.trailA, 0, new Float32Array(this.simW * this.simH));
+    this.device.queue.writeBuffer(this.res.trailB, 0, new Float32Array(this.simW * this.simH));
+    this.device.queue.writeBuffer(this.res.foodState, 0,
+      new Float32Array(CFG.MAX_FOOD * 2).fill(1));
+    this.runInit();
+  }
+
+  destroyResources() {
+    if (!this.res) return;
+    for (const b of Object.values(this.res)) b.destroy();
+    this.res = null;
+  }
+
+  destroy() { this.destroyResources(); }
+}
+
+// ═══ GLSL ═════════════════════════════════════════════════════════
+const GLSL_COMMON = (cfg) => `#version 300 es
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+
+const float SA            = float(${cfg.SA});
+const float SD            = float(${cfg.SD});
+const float RA            = float(${cfg.RA});
+const float SPEED         = float(${cfg.SPEED});
+const float DEPOSIT       = float(${cfg.DEPOSIT});
+const float DECAY         = float(${cfg.DECAY});
+const float TRAIL_MAX     = float(${cfg.TRAIL_MAX});
+const float DEPOSIT_MAX   = float(${cfg.DEPOSIT_MAX});
+const float HUNGER_MAX    = float(${cfg.HUNGER_MAX});
+// Agent w channel packing: w = hunger + feed * PACK. Must exceed HUNGER_MAX.
+const float PACK          = 1024.0;
+const float FEED_TRAIL    = float(${cfg.FEED_TRAIL});
+const float FEED_CHANCE   = float(${cfg.FEED_CHANCE});
+const float SATIATED      = float(${cfg.SATIATED});
+const float FOOD_R        = float(${cfg.FOOD_R});
+const float FOOD_RI       = float(${cfg.FOOD_R_INNER});
+const float FOOD_REGEN    = float(${cfg.FOOD_REGEN});
+const float FOOD_FADE     = float(${cfg.FOOD_FADE});
+const float SPAWN_FRAC    = float(${cfg.SPAWN_FRAC});
+const float HUE           = float(${cfg.HUE});
+const float MARKER        = float(${cfg.MARKER});
+const int   MAX_FOOD      = ${cfg.MAX_FOOD};
+const int   DSHIFT        = ${cfg.DENSITY_SHIFT};
+const int   CROWD_R       = ${cfg.CROWD_RADIUS};
+
+uint hashu(uint v) {
+  uint s = v;
+  s ^= 2747636419u; s *= 2654435769u;
+  s ^= s >> 16;     s *= 2654435769u;
+  s ^= s >> 16;     s *= 2654435769u;
+  return s;
+}
+float rnd(inout uint seed) {
+  seed = hashu(seed);
+  return float(seed) / 4294967296.0;
+}
 `;
 
-// ─── main thread ──────────────────────────────────────────────────
-const SCALE = 3;
+const GLSL_QUAD_VS = `#version 300 es
+void main() {
+  vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}
+`;
 
-let simW, simH, pg, worker;
-let pendingPixels = null;
+function glslAgentFS(cfg) {
+  return GLSL_COMMON(cfg) + `
+uniform sampler2D uAgents;
+uniform sampler2D uTrail;
+uniform sampler2D uFoodPos;
+uniform sampler2D uFoodState;
+uniform ivec2 uSim;
+uniform ivec2 uAgentTex;
+uniform uint  uFrame;
+uniform int   uAgentCount;
+uniform int   uSpawnSlot;
+uniform int   uFoodCount;
+uniform int   uInit;
+out vec4 outAgent;
 
-function launchWorker() {
-  if (worker) worker.terminate();
-  const blob = new Blob([WORKER_SRC], { type: 'text/javascript' });
-  worker = new Worker(URL.createObjectURL(blob));
-  worker.onmessage = function(e) {
-    const msg = e.data;
-    if (msg.type === 'frame') {
-      pendingPixels = msg.pixels;
-      document.getElementById('stat-agents').textContent = 'AGENTS: ' + msg.agentCount;
-      document.getElementById('stat-food').textContent   = 'FOOD:   ' + msg.foodCount;
+float trailAt(vec2 p) {
+  ivec2 q = ivec2(floor(p));
+  q.x = ((q.x % uSim.x) + uSim.x) % uSim.x;
+  q.y = ((q.y % uSim.y) + uSim.y) % uSim.y;
+  return texelFetch(uTrail, q, 0).r;
+}
+float senseAt(vec2 p, float a) {
+  return trailAt(p + vec2(cos(a), sin(a)) * SD);
+}
+// Uniform, not biased toward live nodes -- see the WGSL pickFood comment.
+int pickFood(inout uint seed) {
+  if (uFoodCount == 0) return -1;
+  int k = int(rnd(seed) * float(uFoodCount)) % uFoodCount;
+  return int(texelFetch(uFoodPos, ivec2(k, 0), 0).w);
+}
+
+void main() {
+  ivec2 t = ivec2(gl_FragCoord.xy);
+  int id = t.y * uAgentTex.x + t.x;
+  uint seed = hashu(uint(id) * 747796405u + uFrame * 2891336453u);
+
+  vec4 a;
+  if (uInit == 1) {
+    // Scattered, not spawned on food -- see the WGSL initAgents comment.
+    uint s2 = hashu(uint(id) * 2654435761u + 12345u);
+    vec2 pos = vec2(rnd(s2) * float(uSim.x), rnd(s2) * float(uSim.y));
+    outAgent = vec4(pos, rnd(s2) * 6.2831853, 0.0);
+    return;
+  }
+
+  a = texelFetch(uAgents, t, 0);
+  if (id >= uAgentCount) { outAgent = a; return; }
+
+  float packed = a.w;
+  float feed   = floor(packed / PACK);
+  float hunger = packed - feed * PACK;
+
+  if (uSpawnSlot >= 0) {
+    uint ss = hashu(uint(id) ^ 0x9e3779b9u);
+    if (rnd(ss) < SPAWN_FRAC) {
+      vec4 f = texelFetch(uFoodPos, ivec2(uSpawnSlot, 0), 0);
+      uint s3 = hashu(uint(id) * 40503u + uFrame);
+      a.xy = f.xy + (vec2(rnd(s3), rnd(s3)) - 0.5) * 8.0;
+      a.z  = rnd(s3) * 6.2831853;
+      hunger = 0.0;
+      feed   = 0.0;
     }
+  }
+
+  // One counter, two phases: above SATIATED the agent is eating; below, it is
+  // walking the meal off and cannot re-trigger.
+  if (feed < 0.5 && trailAt(a.xy) > FEED_TRAIL && rnd(seed) < FEED_CHANCE) {
+    feed = SATIATED + float(${cfg.FEED_MIN}) + floor(rnd(seed) * float(${cfg.FEED_SPAN}));
+  }
+
+  if (feed > SATIATED + 0.5) {
+    // Eating: hold position and reset the hunger clock.
+    feed -= 1.0;
+    outAgent = vec4(a.xyz, 0.0 + feed * PACK);
+    return;
+  }
+  if (feed > 0.5) feed -= 1.0;
+
+  float fwd = senseAt(a.xy, a.z);
+  float lft = senseAt(a.xy, a.z + SA);
+  float rgt = senseAt(a.xy, a.z - SA);
+  float mx  = max(fwd, max(lft, rgt));
+
+  if (mx < 1.0) {
+    a.z += (rnd(seed) - 0.5) * 3.14159265 * 0.6;
+  } else if (fwd >= lft && fwd >= rgt) {
+    if (fwd > 20.0 && rnd(seed) < 0.04) a.z += (rnd(seed) - 0.5) * RA;
+  } else if (lft > rgt) {
+    a.z += RA;
+  } else if (rgt > lft) {
+    a.z -= RA;
+  } else {
+    a.z += rnd(seed) < 0.5 ? RA : -RA;
+  }
+
+  vec2 sim = vec2(uSim);
+  a.xy = mod(a.xy + vec2(cos(a.z), sin(a.z)) * SPEED, sim);
+
+  hunger += 1.0;
+  if (hunger >= HUNGER_MAX) {
+    int slot = pickFood(seed);
+    if (slot >= 0) {
+      vec4 f = texelFetch(uFoodPos, ivec2(slot, 0), 0);
+      a.xy = f.xy + (vec2(rnd(seed), rnd(seed)) - 0.5) * 8.0;
+      a.z  = rnd(seed) * 6.2831853;
+    }
+    hunger = 0.0;
+  }
+
+  outAgent = vec4(a.xyz, hunger + feed * PACK);
+}
+`;
+}
+
+function glslPointVS(cfg) {
+  return GLSL_COMMON(cfg) + `
+uniform sampler2D uAgents;
+uniform ivec2 uAgentTex;
+uniform ivec2 uTarget;
+uniform int   uShift;
+out float vAmount;
+
+void main() {
+  int id = gl_VertexID;
+  ivec2 t = ivec2(id % uAgentTex.x, id / uAgentTex.x);
+  vec4 a = texelFetch(uAgents, t, 0);
+  // Every agent is drawn, feeding or not, matching the compute path.
+  vec2 cell = floor(a.xy);
+  if (uShift > 0) cell = floor(cell / float(1 << uShift));
+  vec2 clip = (cell + 0.5) / vec2(uTarget) * 2.0 - 1.0;
+  gl_Position  = vec4(clip, 0.0, 1.0);
+  gl_PointSize = 1.0;
+  vAmount = uShift > 0 ? 1.0 : DEPOSIT;
+}
+`;
+}
+
+const GLSL_POINT_FS = `#version 300 es
+precision highp float;
+in float vAmount;
+out vec4 outC;
+void main() { outC = vec4(vAmount, 0.0, 0.0, 1.0); }
+`;
+
+function glslFoodStateFS(cfg) {
+  return GLSL_COMMON(cfg) + `
+uniform sampler2D uFoodPos;
+uniform sampler2D uFoodState;
+uniform sampler2D uDensity;
+uniform ivec2 uDen;
+uniform int   uNewSlot;
+uniform int   uResetAll;
+uniform float uCrowdScale;
+uniform float uFoodDrain;
+out vec4 outState;
+
+void main() {
+  int i = int(gl_FragCoord.x);
+  if (uResetAll == 1 || i == uNewSlot) { outState = vec4(1.0, 1.0, 0.0, 1.0); return; }
+  vec4 f = texelFetch(uFoodPos, ivec2(i, 0), 0);
+  if (f.z < 0.5) { outState = vec4(1.0, 1.0, 0.0, 1.0); return; }
+
+  float crowd = 0.0;
+  int cx = int(f.x) >> DSHIFT;
+  int cy = int(f.y) >> DSHIFT;
+  for (int dy = -CROWD_R; dy <= CROWD_R; dy++) {
+    for (int dx = -CROWD_R; dx <= CROWD_R; dx++) {
+      int px = ((cx + dx) % uDen.x + uDen.x) % uDen.x;
+      int py = ((cy + dy) % uDen.y + uDen.y) % uDen.y;
+      crowd += texelFetch(uDensity, ivec2(px, py), 0).r;
+    }
+  }
+
+  float crowdFactor = 1.0 / (1.0 + crowd / uCrowdScale);
+  float e = texelFetch(uFoodState, ivec2(i, 0), 0).r - crowd * uFoodDrain + FOOD_REGEN;
+  outState = vec4(clamp(e, 0.0, 1.0), crowdFactor, 0.0, 1.0);
+}
+`;
+}
+
+function glslScentVS(cfg) {
+  return GLSL_COMMON(cfg) + `
+uniform sampler2D uFoodPos;
+uniform sampler2D uFoodState;
+uniform ivec2 uSim;
+out vec2  vLocal;
+out float vCrowd;
+out float vAlive;
+
+void main() {
+  vec4 f = texelFetch(uFoodPos, ivec2(gl_InstanceID, 0), 0);
+  if (f.z < 0.5) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); vLocal = vec2(0.0);
+                   vCrowd = 0.0; vAlive = 0.0; return; }
+  vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+  float span = FOOD_R * 2.0 + 1.0;
+  vec2 p = floor(f.xy) - FOOD_R + corner * span;
+  gl_Position = vec4(p.x / float(uSim.x) * 2.0 - 1.0,
+                     p.y / float(uSim.y) * 2.0 - 1.0, 0.0, 1.0);
+  vLocal = corner * span - FOOD_R - 0.5;
+  vec2 st = texelFetch(uFoodState, ivec2(gl_InstanceID, 0), 0).rg;
+  vAlive = smoothstep(0.0, FOOD_FADE, st.r);
+  vCrowd = st.g;
+}
+`;
+}
+
+function glslScentFS(cfg) {
+  return GLSL_COMMON(cfg) + `
+in vec2  vLocal;
+in float vCrowd;
+in float vAlive;
+out vec4 outC;
+
+void main() {
+  float d = length(floor(vLocal + 0.5));
+  if (d > FOOD_R) discard;
+  float s = d < FOOD_RI
+    ? (1.0 - d / FOOD_RI) * 100.0
+    : (1.0 - (d - FOOD_RI) / (FOOD_R - FOOD_RI)) * 25.0;
+  outC = vec4(s * vCrowd * vAlive, 0.0, 0.0, 1.0);
+}
+`;
+}
+
+function glslDiffuseFS(cfg) {
+  return GLSL_COMMON(cfg) + `
+uniform sampler2D uTrail;
+uniform sampler2D uDeposit;
+uniform sampler2D uScent;
+uniform ivec2 uSim;
+out vec4 outC;
+
+// Deposits and scent live in separate targets so the ceilings can differ:
+// deposits stop at DEPOSIT_MAX, scent reaches TRAIL_MAX. Mirrors the WGSL
+// foldDeposit + foodScent pair.
+float at(int x, int y) {
+  int px = ((x % uSim.x) + uSim.x) % uSim.x;
+  int py = ((y % uSim.y) + uSim.y) % uSim.y;
+  ivec2 q = ivec2(px, py);
+  float t = texelFetch(uTrail,   q, 0).r;
+  float d = texelFetch(uDeposit, q, 0).r;
+  float s = texelFetch(uScent,   q, 0).r;
+  return min(max(s, min(t + d, DEPOSIT_MAX)), TRAIL_MAX);
+}
+
+void main() {
+  int x = int(gl_FragCoord.x);
+  int y = int(gl_FragCoord.y);
+  float s = at(x-1, y-1) + at(x, y-1) + at(x+1, y-1)
+          + at(x-1, y  ) + at(x, y  ) + at(x+1, y  )
+          + at(x-1, y+1) + at(x, y+1) + at(x+1, y+1);
+  outC = vec4(s * 0.111111 * DECAY, 0.0, 0.0, 1.0);
+}
+`;
+}
+
+function glslTrailFS(cfg) {
+  return GLSL_COMMON(cfg) + `
+uniform sampler2D uTrail;
+uniform ivec2 uSim;
+out vec4 outC;
+
+vec3 hsb2rgb(float hh, float s, float v) {
+  float h = mod(hh, 360.0);
+  float c = v * s;
+  float x = c * (1.0 - abs(mod(h / 60.0, 2.0) - 1.0));
+  float m = v - c;
+  vec3 rgb;
+  if      (h <  60.0) rgb = vec3(c, x, 0.0);
+  else if (h < 120.0) rgb = vec3(x, c, 0.0);
+  else if (h < 180.0) rgb = vec3(0.0, c, x);
+  else if (h < 240.0) rgb = vec3(0.0, x, c);
+  else if (h < 300.0) rgb = vec3(x, 0.0, c);
+  else                rgb = vec3(c, 0.0, x);
+  return rgb + m;
+}
+
+void main() {
+  ivec2 q = ivec2(int(gl_FragCoord.x), uSim.y - 1 - int(gl_FragCoord.y));
+  float v = clamp(texelFetch(uTrail, q, 0).r / TRAIL_MAX, 0.0, 1.0);
+  outC = vec4(hsb2rgb(HUE, 0.88 - v * 0.2, v * v), 1.0);
+}
+`;
+}
+
+function glslMarkerVS(cfg) {
+  return GLSL_COMMON(cfg) + `
+uniform sampler2D uFoodPos;
+uniform sampler2D uFoodState;
+uniform ivec2 uSim;
+out vec2  vLocal;
+out float vEnergy;
+
+void main() {
+  vec4 f = texelFetch(uFoodPos, ivec2(gl_InstanceID, 0), 0);
+  if (f.z < 0.5) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); vLocal = vec2(0.0);
+                   vEnergy = 0.0; return; }
+  vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+  float half_ = floor(MARKER * 0.5);
+  vec2 p = floor(f.xy) - half_ + corner * MARKER;
+  gl_Position = vec4(p.x / float(uSim.x) * 2.0 - 1.0,
+                     1.0 - p.y / float(uSim.y) * 2.0, 0.0, 1.0);
+  vLocal  = corner * MARKER;
+  vEnergy = texelFetch(uFoodState, ivec2(gl_InstanceID, 0), 0).r;
+}
+`;
+}
+
+function glslMarkerFS(cfg) {
+  return GLSL_COMMON(cfg) + `
+in vec2  vLocal;
+in float vEnergy;
+out vec4 outC;
+void main() {
+  vec2 l = floor(vLocal);
+  bool edge = l.x < 1.0 || l.x >= MARKER - 1.0 || l.y < 1.0 || l.y >= MARKER - 1.0;
+  float b = edge ? 0.4 : vEnergy;
+  outC = vec4(vec3(b), 1.0);
+}
+`;
+}
+
+// ═══ WebGL2 backend ═══════════════════════════════════════════════
+class WebGL2Backend {
+  static label = 'WEBGL2';
+
+  static async create(canvas) {
+    const gl = canvas.getContext('webgl2', {
+      antialias: false, depth: false, stencil: false, preserveDrawingBuffer: false,
+    });
+    if (!gl) return null;
+    if (!gl.getExtension('EXT_color_buffer_float')) return null;
+    return new WebGL2Backend(canvas, gl);
+  }
+
+  constructor(canvas, gl) {
+    this.canvas = canvas;
+    this.gl = gl;
+    // Patchy on mobile. Half float's step near trail 100 is ~0.06, well under
+    // DEPOSIT, so the fallback loses precision rather than breaking.
+    this.floatBlend = !!gl.getExtension('EXT_float_blend');
+    this.trailFmt = this.floatBlend
+      ? { internal: gl.R32F, type: gl.FLOAT }
+      : { internal: gl.R16F, type: gl.HALF_FLOAT };
+    WebGL2Backend.label = this.floatBlend ? 'WEBGL2' : 'WEBGL2/F16';
+    this.progs = {};
+    this.res = null;
+    this.buildPrograms();
+  }
+
+  // ── GL helpers ──
+  compile(type, src) {
+    const gl = this.gl;
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      throw new Error(gl.getShaderInfoLog(s) + '\n' + src);
+    }
+    return s;
+  }
+
+  program(vs, fs) {
+    const gl = this.gl;
+    const p = gl.createProgram();
+    gl.attachShader(p, this.compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, this.compile(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(p));
+    }
+    const u = {};
+    const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const name = gl.getActiveUniform(p, i).name;
+      u[name] = gl.getUniformLocation(p, name);
+    }
+    return { p, u };
+  }
+
+  buildPrograms() {
+    this.progs.agent     = this.program(GLSL_QUAD_VS,     glslAgentFS(CFG));
+    this.progs.point     = this.program(glslPointVS(CFG), GLSL_POINT_FS);
+    this.progs.foodState = this.program(GLSL_QUAD_VS,     glslFoodStateFS(CFG));
+    this.progs.scent     = this.program(glslScentVS(CFG), glslScentFS(CFG));
+    this.progs.diffuse   = this.program(GLSL_QUAD_VS,     glslDiffuseFS(CFG));
+    this.progs.trail     = this.program(GLSL_QUAD_VS,     glslTrailFS(CFG));
+    this.progs.marker    = this.program(glslMarkerVS(CFG), glslMarkerFS(CFG));
+  }
+
+  tex(w, h, internal, format, type, data = null) {
+    const gl = this.gl;
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, format, type, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  }
+
+  fbo(tex) {
+    const gl = this.gl;
+    const f = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    return f;
+  }
+
+  bindTex(prog, name, unit, tex) {
+    const gl = this.gl;
+    if (prog.u[name] === undefined) return;
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(prog.u[name], unit);
+  }
+
+  // ── lifecycle ──
+  init(simW, simH, agentCount) {
+    const gl = this.gl;
+    this.destroyResources();
+    this.simW = simW;
+    this.simH = simH;
+    this.agentCount = agentCount;
+    this.denW = Math.ceil(simW / (1 << CFG.DENSITY_SHIFT));
+    this.denH = Math.ceil(simH / (1 << CFG.DENSITY_SHIFT));
+    this.aw = 1024;
+    this.ah = Math.ceil(agentCount / this.aw);
+    this.frame = 0;
+    this.pendingNewSlot = -1;
+    this.pendingSpawn = -1;
+    this.pendingReset = 1;
+
+    const tf = this.trailFmt;
+    const r = {};
+    r.agentA = this.tex(this.aw, this.ah, gl.RGBA32F, gl.RGBA, gl.FLOAT);
+    r.agentB = this.tex(this.aw, this.ah, gl.RGBA32F, gl.RGBA, gl.FLOAT);
+    r.trailA = this.tex(simW, simH, tf.internal, gl.RED, tf.type);
+    r.trailB = this.tex(simW, simH, tf.internal, gl.RED, tf.type);
+    r.deposit = this.tex(simW, simH, tf.internal, gl.RED, tf.type);
+    r.scent = this.tex(simW, simH, tf.internal, gl.RED, tf.type);
+    r.density = this.tex(this.denW, this.denH, gl.R32F, gl.RED, gl.FLOAT);
+    r.foodPos = this.tex(CFG.MAX_FOOD, 1, gl.RGBA32F, gl.RGBA, gl.FLOAT);
+    r.stateA = this.tex(CFG.MAX_FOOD, 1, gl.RGBA32F, gl.RGBA, gl.FLOAT);
+    r.stateB = this.tex(CFG.MAX_FOOD, 1, gl.RGBA32F, gl.RGBA, gl.FLOAT);
+    r.fboAgentA = this.fbo(r.agentA);
+    r.fboAgentB = this.fbo(r.agentB);
+    r.fboTrailA = this.fbo(r.trailA);
+    r.fboTrailB = this.fbo(r.trailB);
+    r.fboDeposit = this.fbo(r.deposit);
+    r.fboScent = this.fbo(r.scent);
+    r.fboDensity = this.fbo(r.density);
+    r.fboStateA = this.fbo(r.stateA);
+    r.fboStateB = this.fbo(r.stateB);
+    r.vao = gl.createVertexArray();
+    this.res = r;
+
+    this.aFlip = 0;
+    this.tFlip = 0;
+    this.sFlip = 0;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.disable(gl.DEPTH_TEST);
+
+    this.uploadFood();
+    this.clearTarget(r.fboTrailA, simW, simH);
+    this.clearTarget(r.fboTrailB, simW, simH);
+    this.fillState(1);
+    this.runInit();
+  }
+
+  clearTarget(f, w, h) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  fillState(v) {
+    const gl = this.gl;
+    const d = new Float32Array(CFG.MAX_FOOD * 4);
+    for (let i = 0; i < CFG.MAX_FOOD; i++) { d[i * 4] = v; d[i * 4 + 1] = 1; }
+    for (const t of [this.res.stateA, this.res.stateB]) {
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, CFG.MAX_FOOD, 1, gl.RGBA, gl.FLOAT, d);
+    }
+  }
+
+  uploadFood() {
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.res.foodPos);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, CFG.MAX_FOOD, 1, gl.RGBA, gl.FLOAT, food.data);
+  }
+
+  runInit() {
+    const gl = this.gl;
+    const r = this.res;
+    const pr = this.progs.agent;
+    gl.bindVertexArray(r.vao);
+    gl.useProgram(pr.p);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.aFlip === 0 ? r.fboAgentA : r.fboAgentB);
+    gl.viewport(0, 0, this.aw, this.ah);
+    gl.disable(gl.BLEND);
+    this.bindTex(pr, 'uAgents',    0, this.aFlip === 0 ? r.agentB : r.agentA);
+    this.bindTex(pr, 'uTrail',     1, r.trailA);
+    this.bindTex(pr, 'uFoodPos',   2, r.foodPos);
+    this.bindTex(pr, 'uFoodState', 3, this.sFlip === 0 ? r.stateA : r.stateB);
+    gl.uniform2i(pr.u.uSim, this.simW, this.simH);
+    gl.uniform2i(pr.u.uAgentTex, this.aw, this.ah);
+    gl.uniform1ui(pr.u.uFrame, 0);
+    gl.uniform1i(pr.u.uAgentCount, this.agentCount);
+    gl.uniform1i(pr.u.uSpawnSlot, -1);
+    gl.uniform1i(pr.u.uFoodCount, food.count);
+    gl.uniform1i(pr.u.uInit, 1);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  step() {
+    if (!this.res) return;
+    const gl = this.gl;
+    const r = this.res;
+    this.frame++;
+    this.uploadFood();
+    gl.bindVertexArray(r.vao);
+
+    const agentSrc = this.aFlip === 0 ? r.agentA : r.agentB;
+    const agentDst = this.aFlip === 0 ? r.agentB : r.agentA;
+    const agentDstFbo = this.aFlip === 0 ? r.fboAgentB : r.fboAgentA;
+    const trailSrc = this.tFlip === 0 ? r.trailA : r.trailB;
+    const trailDstFbo = this.tFlip === 0 ? r.fboTrailB : r.fboTrailA;
+    const stateSrc = this.sFlip === 0 ? r.stateA : r.stateB;
+    const stateDstFbo = this.sFlip === 0 ? r.fboStateB : r.fboStateA;
+
+    // 1. agent update
+    {
+      const pr = this.progs.agent;
+      gl.useProgram(pr.p);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, agentDstFbo);
+      gl.viewport(0, 0, this.aw, this.ah);
+      gl.disable(gl.BLEND);
+      this.bindTex(pr, 'uAgents',    0, agentSrc);
+      this.bindTex(pr, 'uTrail',     1, trailSrc);
+      this.bindTex(pr, 'uFoodPos',   2, r.foodPos);
+      this.bindTex(pr, 'uFoodState', 3, stateSrc);
+      gl.uniform2i(pr.u.uSim, this.simW, this.simH);
+      gl.uniform2i(pr.u.uAgentTex, this.aw, this.ah);
+      gl.uniform1ui(pr.u.uFrame, this.frame >>> 0);
+      gl.uniform1i(pr.u.uAgentCount, this.agentCount);
+      gl.uniform1i(pr.u.uSpawnSlot, this.pendingSpawn);
+      gl.uniform1i(pr.u.uFoodCount, food.count);
+      gl.uniform1i(pr.u.uInit, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    this.aFlip = 1 - this.aFlip;
+
+    // 2. density (cleared, then additive points at 1/8 res)
+    {
+      const pr = this.progs.point;
+      this.clearTarget(r.fboDensity, this.denW, this.denH);
+      gl.useProgram(pr.p);
+      gl.enable(gl.BLEND);
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      this.bindTex(pr, 'uAgents', 0, agentDst);
+      gl.uniform2i(pr.u.uAgentTex, this.aw, this.ah);
+      gl.uniform2i(pr.u.uTarget, this.denW, this.denH);
+      gl.uniform1i(pr.u.uShift, CFG.DENSITY_SHIFT);
+      gl.drawArrays(gl.POINTS, 0, this.agentCount);
+    }
+
+    // 3. deposit (additive points into their own cleared target)
+    {
+      const pr = this.progs.point;
+      this.clearTarget(r.fboDeposit, this.simW, this.simH);
+      gl.useProgram(pr.p);
+      gl.enable(gl.BLEND);
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      this.bindTex(pr, 'uAgents', 0, agentDst);
+      gl.uniform2i(pr.u.uAgentTex, this.aw, this.ah);
+      gl.uniform2i(pr.u.uTarget, this.simW, this.simH);
+      gl.uniform1i(pr.u.uShift, 0);
+      gl.drawArrays(gl.POINTS, 0, this.agentCount);
+    }
+
+    // 4. food energy + crowding
+    {
+      const pr = this.progs.foodState;
+      gl.useProgram(pr.p);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, stateDstFbo);
+      gl.viewport(0, 0, CFG.MAX_FOOD, 1);
+      gl.disable(gl.BLEND);
+      this.bindTex(pr, 'uFoodPos',   0, r.foodPos);
+      this.bindTex(pr, 'uFoodState', 1, stateSrc);
+      this.bindTex(pr, 'uDensity',   2, r.density);
+      gl.uniform2i(pr.u.uDen, this.denW, this.denH);
+      gl.uniform1i(pr.u.uNewSlot, this.pendingNewSlot);
+      gl.uniform1i(pr.u.uResetAll, this.pendingReset);
+      gl.uniform1f(pr.u.uCrowdScale, Math.max(1, this.agentCount / CFG.CROWD_DIV));
+      gl.uniform1f(pr.u.uFoodDrain, foodDrainFor(this.agentCount));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    this.sFlip = 1 - this.sFlip;
+    const stateNow = this.sFlip === 0 ? r.stateA : r.stateB;
+
+    // 5. food scent, MAX-blended so overlapping nodes resolve exactly
+    {
+      const pr = this.progs.scent;
+      this.clearTarget(r.fboScent, this.simW, this.simH);
+      gl.useProgram(pr.p);
+      gl.enable(gl.BLEND);
+      gl.blendEquation(gl.MAX);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      this.bindTex(pr, 'uFoodPos',   0, r.foodPos);
+      this.bindTex(pr, 'uFoodState', 1, stateNow);
+      gl.uniform2i(pr.u.uSim, this.simW, this.simH);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, CFG.MAX_FOOD);
+      gl.blendEquation(gl.FUNC_ADD);
+    }
+
+    // 6. diffuse + decay
+    {
+      const pr = this.progs.diffuse;
+      gl.useProgram(pr.p);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, trailDstFbo);
+      gl.viewport(0, 0, this.simW, this.simH);
+      gl.disable(gl.BLEND);
+      this.bindTex(pr, 'uTrail',   0, trailSrc);
+      this.bindTex(pr, 'uDeposit', 1, r.deposit);
+      this.bindTex(pr, 'uScent',   2, r.scent);
+      gl.uniform2i(pr.u.uSim, this.simW, this.simH);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    this.tFlip = 1 - this.tFlip;
+    const trailNow = this.tFlip === 0 ? r.trailA : r.trailB;
+
+    // 7. present
+    {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, this.simW, this.simH);
+      gl.disable(gl.BLEND);
+      const pr = this.progs.trail;
+      gl.useProgram(pr.p);
+      this.bindTex(pr, 'uTrail', 0, trailNow);
+      gl.uniform2i(pr.u.uSim, this.simW, this.simH);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      const pm = this.progs.marker;
+      gl.useProgram(pm.p);
+      this.bindTex(pm, 'uFoodPos',   0, r.foodPos);
+      this.bindTex(pm, 'uFoodState', 1, stateNow);
+      gl.uniform2i(pm.u.uSim, this.simW, this.simH);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, CFG.MAX_FOOD);
+    }
+
+    this.pendingNewSlot = -1;
+    this.pendingSpawn = -1;
+    this.pendingReset = 0;
+  }
+
+  addFood(slot) {
+    this.pendingNewSlot = slot;
+    this.pendingSpawn = slot;
+  }
+
+  removeFood() { /* slot deactivation is enough */ }
+
+  reset() {
+    this.frame = 0;
+    this.pendingReset = 1;
+    this.uploadFood();
+    this.clearTarget(this.res.fboTrailA, this.simW, this.simH);
+    this.clearTarget(this.res.fboTrailB, this.simW, this.simH);
+    this.fillState(1);
+    this.runInit();
+  }
+
+  destroyResources() {
+    if (!this.res) return;
+    const gl = this.gl;
+    for (const [k, v] of Object.entries(this.res)) {
+      if (k.startsWith('fbo')) gl.deleteFramebuffer(v);
+      else if (k === 'vao') gl.deleteVertexArray(v);
+      else gl.deleteTexture(v);
+    }
+    this.res = null;
+  }
+
+  destroy() { this.destroyResources(); }
+}
+
+// ═══ orchestration ════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const elAgents = document.getElementById('stat-agents');
+const elFood   = document.getElementById('stat-food');
+const elMode   = document.getElementById('stat-mode');
+
+let backend = null;
+let simW = 0, simH = 0, agentCount = 0;
+let resizeTimer = null;
+let running = false;
+
+function computeDims() {
+  simW = Math.max(64, Math.floor(window.innerWidth  / CFG.SCALE));
+  simH = Math.max(64, Math.floor(window.innerHeight / CFG.SCALE));
+  agentCount = Math.min(CFG.MAX_AGENTS,
+    Math.round(CFG.AGENTS_PER_CELL * simW * simH));
+  canvas.width  = simW;
+  canvas.height = simH;
+}
+
+function setupSim() {
+  computeDims();
+  food.scatter(simW, simH);
+  backend.init(simW, simH, agentCount);
+  updateStats();
+}
+
+function updateStats() {
+  elAgents.textContent = 'AGENTS: ' + agentCount.toLocaleString('en-US');
+  elFood.textContent   = 'FOOD:   ' + food.count;
+}
+
+function loop() {
+  if (!running) return;
+  backend.step();
+  requestAnimationFrame(loop);
+}
+
+function toSim(e) {
+  return {
+    x: (e.clientX / window.innerWidth)  * simW,
+    y: (e.clientY / window.innerHeight) * simH,
   };
 }
 
-function setup() {
-  createCanvas(windowWidth, windowHeight);
-  pixelDensity(1);
-  noSmooth();
-  document.addEventListener('contextmenu', e => e.preventDefault());
+async function boot() {
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  simW = Math.floor(width  / SCALE);
-  simH = Math.floor(height / SCALE);
-  pg   = createGraphics(simW, simH);
-  pg.pixelDensity(1);
-
-  launchWorker();
-  worker.postMessage({ type: 'init', simW, simH });
-}
-
-function draw() {
-  if (!pendingPixels) return;
-  pg.loadPixels();
-  pg.pixels.set(pendingPixels);
-  pg.updatePixels();
-  image(pg, 0, 0, width, height);
-  worker.postMessage({ type: 'step', pixels: pendingPixels }, [pendingPixels.buffer]);
-  pendingPixels = null;
-}
-
-function mousePressed() {
-  let sx = mouseX / SCALE, sy = mouseY / SCALE;
-  if (mouseButton === LEFT) {
-    worker.postMessage({ type: 'addFood', x: sx, y: sy });
-  } else if (mouseButton === RIGHT) {
-    worker.postMessage({ type: 'removeFood', x: sx, y: sy });
+  backend = await WebGPUBackend.create(canvas);
+  if (!backend) {
+    try {
+      backend = await WebGL2Backend.create(canvas);
+    } catch (e) {
+      console.error(e);
+      backend = null;
+    }
   }
+  if (!backend) {
+    document.getElementById('fatal').style.display = 'block';
+    elMode.textContent = 'MODE:   NONE';
+    canvas.style.display = 'none';
+    return;
+  }
+
+  elMode.textContent = 'MODE:   ' + backend.constructor.label;
+  setupSim();
+  running = true;
+  requestAnimationFrame(loop);
 }
 
-function keyPressed() {
-  if (key === 'r' || key === 'R') worker.postMessage({ type: 'reset' });
-}
+canvas.addEventListener('mousedown', (e) => {
+  if (!backend || !running) return;
+  const p = toSim(e);
+  if (e.button === 0) {
+    const slot = food.add(p.x, p.y);
+    if (slot >= 0) backend.addFood(slot);
+  } else if (e.button === 2) {
+    const slot = food.removeNear(p.x, p.y, 30);
+    if (slot >= 0) backend.removeFood(slot);
+  }
+  updateStats();
+});
 
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-  simW = Math.floor(width  / SCALE);
-  simH = Math.floor(height / SCALE);
-  pendingPixels = null;
-  if (pg) pg.remove();
-  pg = createGraphics(simW, simH);
-  pg.pixelDensity(1);
-  launchWorker();
-  worker.postMessage({ type: 'init', simW, simH });
-}
+window.addEventListener('keydown', (e) => {
+  if (!backend || !running) return;
+  if (e.key === 'r' || e.key === 'R') {
+    food.scatter(simW, simH);
+    backend.reset();
+    updateStats();
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (!backend) return;
+  clearTimeout(resizeTimer);
+  running = false;
+  // Debounced so a window drag does not reallocate the agent buffer per event.
+  resizeTimer = setTimeout(() => {
+    setupSim();
+    running = true;
+    requestAnimationFrame(loop);
+  }, CFG.RESIZE_DEBOUNCE);
+});
+
+boot();
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
 </body>
