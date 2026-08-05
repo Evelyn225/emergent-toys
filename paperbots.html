@@ -51,28 +51,15 @@
       box-sizing: border-box;
     }
 
-    /* minimal site-style scrollbar */
+    /* hidden scrollbar, scrolling still works */
     * {
-      scrollbar-width: thin;
-      scrollbar-color: rgba(4, 14, 12, 0.9) transparent;
+      scrollbar-width: none;
     }
 
     ::-webkit-scrollbar {
-      width: 4px;
-      height: 4px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(4, 14, 12, 0.9);
-      border-radius: 2px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(20, 40, 34, 0.95);
+      width: 0;
+      height: 0;
+      display: none;
     }
 
     html,
