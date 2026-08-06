@@ -2,5 +2,7 @@
   "os/desktop-model.js",
   "os/registry.js",
   "os/bios.js",
+  "os/fs-core.js",
+  "os/fs-persist.js",
   "os/_remainder.js"
 ]
