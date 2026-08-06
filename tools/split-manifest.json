@@ -15,5 +15,9 @@
   "apps/notepad.js",
   "apps/explorer.js",
   "apps/terminal.js",
+  "apps/sysmon.js",
+  "apps/defrag.js",
+  "apps/daemon-ui.js",
+  "apps/browser.js",
   "os/_remainder.js"
 ]
