@@ -51,6 +51,30 @@ const SEEDED_WALLPAPERS = [
 ];
 const SEEDED_WALLPAPER_MAP = new Map(SEEDED_WALLPAPERS.map(item => [item.path, item]));
 const registryData = {
+  'HKEY_CLASSES_ROOT': {
+    'Associations\\Text': {
+      '.txt':    { type:'REG_SZ', value:'NOTEPAD.exe' },
+      '.md':     { type:'REG_SZ', value:'NOTEPAD.exe' },
+      '.json':   { type:'REG_SZ', value:'NOTEPAD.exe' },
+      '.js':     { type:'REG_SZ', value:'NOTEPAD.exe' },
+      '.css':    { type:'REG_SZ', value:'NOTEPAD.exe' },
+      '.html':   { type:'REG_SZ', value:'NOTEPAD.exe' },
+      '.log':    { type:'REG_SZ', value:'NOTEPAD.exe' },
+      '.script': { type:'REG_SZ', value:'NOTEPAD.exe' },
+    },
+    'Associations\\Media': {
+      '.png':  { type:'REG_SZ', value:'IMAGEVIEW.exe' },
+      '.jpg':  { type:'REG_SZ', value:'IMAGEVIEW.exe' },
+      '.jpeg': { type:'REG_SZ', value:'IMAGEVIEW.exe' },
+      '.gif':  { type:'REG_SZ', value:'IMAGEVIEW.exe' },
+      '.webp': { type:'REG_SZ', value:'IMAGEVIEW.exe' },
+      '.mp3':  { type:'REG_SZ', value:'MEDIAPLAY.exe' },
+      '.wav':  { type:'REG_SZ', value:'MEDIAPLAY.exe' },
+      '.mp4':  { type:'REG_SZ', value:'MEDIAPLAY.exe' },
+      '.webm': { type:'REG_SZ', value:'MEDIAPLAY.exe' },
+      '.mkv':  { type:'REG_SZ', value:'MEDIAPLAY.exe' },
+    },
+  },
   'HKEY_SLEEPBOX_MACHINE': {
     'SYSTEM\\CurrentConfig': {
       CRT_SCANLINES:      { type:'REG_DWORD', value: 1 },
@@ -87,6 +111,50 @@ const registryData = {
     },
   },
 };
+
+// ── File associations ─────────────────────────────────────────────
+// Which app opens a file type is read from HKEY_CLASSES_ROOT at open time,
+// so editing the value in REGEDIT.exe actually changes the behaviour. The
+// defaults below reproduce what was previously hardcoded, so nothing changes
+// until someone edits the registry.
+const FILE_HANDLERS = {
+  'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
+  'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),
+  'MEDIAPLAY.exe': (name, dir) => {
+    const entry = fsGetEntry(name, dir);
+    const kind = entry?.value?.kind || inferBlobKindFromName(name);
+    if (kind === 'video') openVideoPlayer(name, dir);
+    else openAudioPlayer(name, dir);
+  },
+  'TERMINAL.exe':  (name, dir) => runScriptInTerminal(name, dir),
+  'BROWSER.exe':   () => openBrowser(),
+};
+
+// Returns the configured app for a filename's extension, or '' if unassociated.
+function getFileAssociation(fileName) {
+  const dot = String(fileName || '').lastIndexOf('.');
+  if (dot < 0) return '';
+  const ext = String(fileName).slice(dot).toLowerCase();
+  const hive = registryData['HKEY_CLASSES_ROOT'];
+  if (!hive) return '';
+  for (const keyPath of Object.keys(hive)) {
+    const entry = hive[keyPath][ext];
+    if (entry && entry.value) return String(entry.value);
+  }
+  return '';
+}
+
+// Open a file through its registry association. Returns false when there is no
+// association or the named app is unknown, so callers keep their own fallback.
+function openWithAssociation(fileName, dirName) {
+  const app = getFileAssociation(fileName);
+  if (!app) return false;
+  const key = Object.keys(FILE_HANDLERS).find(k => k.toLowerCase() === app.toLowerCase());
+  if (!key) return false;
+  FILE_HANDLERS[key](fileName, dirName);
+  return true;
+}
+
 try {
   const saved = JSON.parse(localStorage.getItem(REG_KEY) || 'null');
   if (saved) {

@@ -364,6 +364,7 @@ function openDesktopShortcutTarget(target) {
     osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
     return;
   }
+  if (openWithAssociation(entry.fileName, entry.dirName)) return;
   if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
   else openNotepad(entry.fileName, entry.dirName);
 }

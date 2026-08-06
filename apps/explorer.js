@@ -353,8 +353,12 @@ function openExplorer(startPath) {
     }
     const dir = fsGetDir(cwd);
     if (!dir) return;
+    if (!dir.blobs.has(name) && !dir.files.has(name)) return;
+    // Registry association first; falls through to the built-in defaults when
+    // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
+    if (openWithAssociation(name, cwd)) return;
     if (dir.blobs.has(name)) openMediaFile(name, cwd);
-    else if (dir.files.has(name)) openNotepad(name, cwd);
+    else openNotepad(name, cwd);
   }
 
   function deleteSelected() {
