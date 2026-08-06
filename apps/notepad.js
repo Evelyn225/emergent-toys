@@ -609,9 +609,14 @@ function openNotepad(filename, dirName, options) {
 
   const lineCount = () => ta.value.split('\n').length;
 
+  // Set when a binary file's bytes could not be read, so the status bar can say
+  // why instead of leaving an unexplained empty document.
+  let binaryReadError = '';
+
   const updateStatus = () => {
     if (!ws) return;
     const fname = currentFile || 'untitled.txt';
+    if (binaryReadError) { ws.textContent = `${fname}  -  ${binaryReadError}`; return; }
     ws.textContent = `${fname}  -  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
   };
 
@@ -620,9 +625,10 @@ function openNotepad(filename, dirName, options) {
   // window opens first and fills in. Saving over it is refused by
   // fsWriteTextFile, so the file cannot be damaged from here.
   if (entry && entry.kind === 'blob' && !hasInitialContent) {
-    readBlobAsAnsiText(entry.value).then(text => {
-      if (text === null || !wins[id]) return;
-      ta.value = text;
+    readBlobAsAnsiText(entry.value).then(result => {
+      if (!wins[id]) return;
+      if (result.error) { binaryReadError = result.error; updateStatus(); return; }
+      ta.value = result.text;
       renderHighlight();
       updateStatus();
     });

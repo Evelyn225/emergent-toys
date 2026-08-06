@@ -4414,16 +4414,21 @@ function showUploadConfirm(names, dirLabel) {
 // textarea that large janks badly. Most sleepOS blobs land under the cap whole.
 const BINARY_VIEW_BYTE_LIMIT = 512 * 1024;
 
+// Returns { text } on success or { error } with a reason short enough for a
+// status bar. The reason is distinguished rather than generic: the preloaded
+// media are served from an r2.dev URL, which cannot send CORS headers, so those
+// bytes are genuinely unreadable and saying so beats a silent blank document.
 async function readBlobAsAnsiText(blobValue) {
-  if (!blobValue?.url) return null;
+  if (!blobValue?.url) return { error: 'no data' };
+  const sameOrigin = blobValue.url.startsWith('blob:') || blobValue.url.startsWith(location.origin);
   try {
     const res = await fetch(blobValue.url);
-    if (!res.ok) return null;
+    if (!res.ok) return { error: 'unreadable (HTTP ' + res.status + ')' };
     const buf = await res.arrayBuffer();
     const bytes = new Uint8Array(buf, 0, Math.min(buf.byteLength, BINARY_VIEW_BYTE_LIMIT));
-    return new TextDecoder('windows-1252').decode(bytes);
+    return { text: new TextDecoder('windows-1252').decode(bytes) };
   } catch (e) {
-    return null; // cross-origin asset or revoked URL; caller keeps its fallback
+    return { error: sameOrigin ? 'unreadable (data unavailable)' : 'unreadable (cross-origin asset)' };
   }
 }
 
@@ -6617,9 +6622,14 @@ function openNotepad(filename, dirName, options) {
 
   const lineCount = () => ta.value.split('\n').length;
 
+  // Set when a binary file's bytes could not be read, so the status bar can say
+  // why instead of leaving an unexplained empty document.
+  let binaryReadError = '';
+
   const updateStatus = () => {
     if (!ws) return;
     const fname = currentFile || 'untitled.txt';
+    if (binaryReadError) { ws.textContent = `${fname}  -  ${binaryReadError}`; return; }
     ws.textContent = `${fname}  -  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
   };
 
@@ -6628,9 +6638,10 @@ function openNotepad(filename, dirName, options) {
   // window opens first and fills in. Saving over it is refused by
   // fsWriteTextFile, so the file cannot be damaged from here.
   if (entry && entry.kind === 'blob' && !hasInitialContent) {
-    readBlobAsAnsiText(entry.value).then(text => {
-      if (text === null || !wins[id]) return;
-      ta.value = text;
+    readBlobAsAnsiText(entry.value).then(result => {
+      if (!wins[id]) return;
+      if (result.error) { binaryReadError = result.error; updateStatus(); return; }
+      ta.value = result.text;
       renderHighlight();
       updateStatus();
     });
