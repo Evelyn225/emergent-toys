@@ -1,1 +1,5 @@
-[]
+[
+  "os/desktop-model.js",
+  "os/registry.js",
+  "os/bios.js"
+]
