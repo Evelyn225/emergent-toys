@@ -2,15 +2,14 @@
 // Usage: node tools/extract-slice.cjs <outPath> <startLine> <endLine>
 // Line numbers are baseline-relative (original line minus 1500), 1-indexed, inclusive.
 //
-// Cuts the next slice off the TOP of the remaining inline <script> block,
-// writes it to outPath, inserts a <script src> tag in load order, and
-// appends outPath to the manifest.
+// Cuts the next slice off the TOP of os/_remainder.js, writes it to outPath,
+// and inserts outPath into the manifest immediately before os/_remainder.js,
+// which must stay last since it holds the suffix.
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const HTML = path.join(ROOT, 'sleep-os.html');
 const MANIFEST = path.join(__dirname, 'split-manifest.json');
 const BASELINE = path.join(__dirname, '.baseline', 'script-body.txt');
 
@@ -39,29 +38,12 @@ const EOL = detectEol(baselineText);
 const baseline = baselineText.split('\n');
 const slice = baseline.slice(start - 1, end).join('\n') + '\n';
 
-let html = fs.readFileSync(HTML, 'utf8');
+const REMAINDER = path.join(ROOT, 'os/_remainder.js');
+let remainder = fs.readFileSync(REMAINDER, 'utf8');
 
-const OPEN = EOL + '<script>' + EOL;
-const CLOSE = EOL + '</script>' + EOL;
-const openIdx = html.indexOf(OPEN);
-if (openIdx === -1) {
-  console.error('FAIL: no inline <script> block left to cut from');
-  process.exit(1);
-}
-const bodyStart = openIdx + OPEN.length;
-const closeIdx = html.indexOf(CLOSE, bodyStart);
-if (closeIdx === -1) {
-  console.error('FAIL: <script> has no matching </script>');
-  process.exit(1);
-}
-const bodyEnd = closeIdx + EOL.length;
-const remainder = html.slice(bodyStart, bodyEnd);
-
-// Safety: the slice must be exactly the top of what is still inline.
-// This is what enforces strict top-down extraction.
 if (!remainder.startsWith(slice)) {
   console.error(
-    'FAIL: requested slice is not the current top of the inline script.\n' +
+    'FAIL: requested slice is not the current top of os/_remainder.js.\n' +
     '  Either a previous cut was skipped, or the line range is wrong.\n' +
     '  slice starts:     ' + JSON.stringify(slice.slice(0, 80)) + '\n' +
     '  remainder starts: ' + JSON.stringify(remainder.slice(0, 80))
@@ -69,34 +51,14 @@ if (!remainder.startsWith(slice)) {
   process.exit(1);
 }
 
-// Write the extracted file.
 const absOut = path.join(ROOT, outPath);
 fs.mkdirSync(path.dirname(absOut), { recursive: true });
 fs.writeFileSync(absOut, slice);
+fs.writeFileSync(REMAINDER, remainder.slice(slice.length));
 
-// Remove the slice from the inline block.
-html = html.slice(0, bodyStart) + remainder.slice(slice.length) + html.slice(bodyEnd);
-
-// Insert the tag after the last existing extracted tag, or immediately before <script>.
-// These lines are built from scratch, so they must use EOL explicitly.
+// Insert before the remainder, which must stay last in the manifest.
 const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
-const tag = `<script src="${outPath}"></script>` + EOL;
-if (manifest.length === 0) {
-  const at = html.indexOf(OPEN);
-  html = html.slice(0, at + EOL.length) + tag + html.slice(at + EOL.length);
-} else {
-  const prevTag = `<script src="${manifest[manifest.length - 1]}"></script>` + EOL;
-  const at = html.indexOf(prevTag);
-  if (at === -1) {
-    console.error('FAIL: could not find previous tag ' + prevTag.trim());
-    process.exit(1);
-  }
-  html = html.slice(0, at + prevTag.length) + tag + html.slice(at + prevTag.length);
-}
-
-fs.writeFileSync(HTML, html);
-
-manifest.push(outPath);
+manifest.splice(manifest.indexOf('os/_remainder.js'), 0, outPath);
 fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + '\n');
 
 console.log(`extracted ${outPath}  baseline lines ${start}-${end}  ${end - start + 1} lines  ${Buffer.byteLength(slice)} bytes`);
