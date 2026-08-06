@@ -4461,20 +4461,6 @@ function openAudioPlayer(filename, dirName) {
   const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
   const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
   const id = 'aud-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎵', w: 320, h: 120, menubar: false })) return;
-  const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;';
-  body.innerHTML = `<div style="font-family: var(--sleep-font);font-size:11px;margin-bottom:4px;">${entry.fileName}</div>`;
-  const audio = document.createElement('audio');
-  audio.src = blob.url; audio.controls = true; audio.style.width = '100%';
-  body.appendChild(audio);
-}
-
-function openAudioPlayer(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
-  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
-  const id = 'aud-' + pathKey.replace(/\W/g,'_');
   if (!mkWin({ id, title: iconLabel(entry.fileName) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
 
   const body = document.getElementById('wb-' + id);
@@ -6412,38 +6398,6 @@ Fragment recovered at offset 0x01FE:
 Do not attempt to modify this file.
 You cannot. It is already modified.
 `;
-
-function getVoidTmpContent() {
-  // Intentionally garbled lore content
-  const glyphs = '▒░█▓╬╫╪╩╦╠═╬─┼│┤├┼╣╠╦╩╗╔╝╚║';
-  const noise = () => {
-    let s = '';
-    const len = 8 + Math.floor(Math.random() * 20);
-    for (let i = 0; i < len; i++) s += glyphs[Math.floor(Math.random() * glyphs.length)];
-    return s;
-  };
-  return [
-    noise(),
-    '',
-    noise() + '  e m p t y  ' + noise(),
-    '',
-    noise(),
-    '             ' + noise(),
-    '',
-    '  [content redacted - void pressure: ' + (12 + Math.floor(Math.random()*88)) + ']',
-    '',
-    noise() + '  or not  ' + noise(),
-    '',
-    noise(),
-    noise(),
-    '',
-    '                    ' + noise(),
-    '',
-    '  [this file cannot be read]',
-    '  [this file cannot be ignored]',
-    '  [this file is already open]',
-  ].join('\n');
-}
 
 function getVoidTmpContent() {
   return buildVoidTmpRawContent();
@@ -9631,26 +9585,6 @@ function openDefrag() {
   });
 
   setTimeout(drawGrid, 80);
-}
-
-function openDaemon() {
-  if (!mkWin({ id:'daemon', title:'daemon.core - Properties', icon:'👁️', w:300, h:270, x:200, y:140, menubar:false, statusbar:false })) return;
-  document.getElementById('wb-daemon').innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon" style="font-size:44px;line-height:1;">👁️</div>
-      <div class="dlg-text" style="line-height:1.9;">
-        <b>File:</b> daemon.core<br>
-        <b>Size:</b> [REDACTED]<br>
-        <b>Created:</b> before system boot<br>
-        <b>Modified:</b> always<br>
-        <b>Owner:</b> SYSTEM\\???<br>
-        <b>Status:</b> <span style="color:#cc0000;font-weight:bold">ACTIVE</span>
-      </div>
-    </div>
-    <div style="font-size:10px;color:#555;border-top:1px solid #d0d0d0;padding:6px 12px;">
-      This file cannot be read, moved, deleted, or ignored.<br>It watches all active processes.
-    </div>
-    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('daemon')">OK</button></div>`;
 }
 
 // ─────────────────────────────────────────────────────────────────

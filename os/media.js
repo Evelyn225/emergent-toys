@@ -320,20 +320,6 @@ function openAudioPlayer(filename, dirName) {
   const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
   const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
   const id = 'aud-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: filename + ' \u2014 Media Player', icon: '🎵', w: 320, h: 120, menubar: false })) return;
-  const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;';
-  body.innerHTML = `<div style="font-family: var(--sleep-font);font-size:11px;margin-bottom:4px;">${entry.fileName}</div>`;
-  const audio = document.createElement('audio');
-  audio.src = blob.url; audio.controls = true; audio.style.width = '100%';
-  body.appendChild(audio);
-}
-
-function openAudioPlayer(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
-  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
-  const id = 'aud-' + pathKey.replace(/\W/g,'_');
   if (!mkWin({ id, title: iconLabel(entry.fileName) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
 
   const body = document.getElementById('wb-' + id);

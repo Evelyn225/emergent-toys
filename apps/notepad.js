@@ -535,38 +535,6 @@ You cannot. It is already modified.
 `;
 
 function getVoidTmpContent() {
-  // Intentionally garbled lore content
-  const glyphs = '▒░█▓╬╫╪╩╦╠═╬─┼│┤├┼╣╠╦╩╗╔╝╚║';
-  const noise = () => {
-    let s = '';
-    const len = 8 + Math.floor(Math.random() * 20);
-    for (let i = 0; i < len; i++) s += glyphs[Math.floor(Math.random() * glyphs.length)];
-    return s;
-  };
-  return [
-    noise(),
-    '',
-    noise() + '  e m p t y  ' + noise(),
-    '',
-    noise(),
-    '             ' + noise(),
-    '',
-    '  [content redacted - void pressure: ' + (12 + Math.floor(Math.random()*88)) + ']',
-    '',
-    noise() + '  or not  ' + noise(),
-    '',
-    noise(),
-    noise(),
-    '',
-    '                    ' + noise(),
-    '',
-    '  [this file cannot be read]',
-    '  [this file cannot be ignored]',
-    '  [this file is already open]',
-  ].join('\n');
-}
-
-function getVoidTmpContent() {
   return buildVoidTmpRawContent();
 }
 

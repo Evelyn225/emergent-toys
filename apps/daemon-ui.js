@@ -1,23 +1,3 @@
-function openDaemon() {
-  if (!mkWin({ id:'daemon', title:'daemon.core - Properties', icon:'👁️', w:300, h:270, x:200, y:140, menubar:false, statusbar:false })) return;
-  document.getElementById('wb-daemon').innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon" style="font-size:44px;line-height:1;">👁️</div>
-      <div class="dlg-text" style="line-height:1.9;">
-        <b>File:</b> daemon.core<br>
-        <b>Size:</b> [REDACTED]<br>
-        <b>Created:</b> before system boot<br>
-        <b>Modified:</b> always<br>
-        <b>Owner:</b> SYSTEM\\???<br>
-        <b>Status:</b> <span style="color:#cc0000;font-weight:bold">ACTIVE</span>
-      </div>
-    </div>
-    <div style="font-size:10px;color:#555;border-top:1px solid #d0d0d0;padding:6px 12px;">
-      This file cannot be read, moved, deleted, or ignored.<br>It watches all active processes.
-    </div>
-    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('daemon')">OK</button></div>`;
-}
-
 // ─────────────────────────────────────────────────────────────────
 // BROWSER
 // ─────────────────────────────────────────────────────────────────
