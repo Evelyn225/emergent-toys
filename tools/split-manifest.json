@@ -14,5 +14,6 @@
   "os/desktop-icons.js",
   "apps/notepad.js",
   "apps/explorer.js",
+  "apps/terminal.js",
   "os/_remainder.js"
 ]
