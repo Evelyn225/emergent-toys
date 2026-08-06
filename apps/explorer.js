@@ -551,7 +551,6 @@ function openExplorer(startPath) {
         '-',
         { label: 'Cut',   disabled: !mutableSelected.length || cwd === 'RECYCLE', action: () => { if (mutableSelected.length) { _expClipboard = { items: mutableSelected.map(i => ({ name:i.name, kind:i.kind, srcCwd:cwd })), cut:true }; if (ws) ws.textContent = mutableSelected.length + ' item(s) cut'; } } },
         { label: 'Copy',  disabled: !mutableSelected.length || cwd === 'RECYCLE', action: () => { if (mutableSelected.length) { _expClipboard = { items: mutableSelected.map(i => ({ name:i.name, kind:i.kind, srcCwd:cwd })), cut:false }; if (ws) ws.textContent = mutableSelected.length + ' item(s) copied'; } } },
-        { label: 'Paste', disabled: !_expClipboard || cwd === 'RECYCLE', action: pasteClipboard },
         '-',
         { label: 'Rename', disabled: !singleSelected || !!singleSelected.sysfile || !!singleSelected._recycle || !!singleSelected._shortcut || cwd === 'RECYCLE', action: () => renameItem(singleSelected) },
         { label: 'Delete', disabled: !canDelete, action: deleteSelected },
@@ -824,6 +823,8 @@ function openExplorer(startPath) {
     ] : [
       { label: 'Open Terminal Here', action: () => openTerminal(cwd) },
       '-',
+      { label: 'Paste', disabled: !_expClipboard, action: pasteClipboard },
+      '-',
       { label: 'New Folder', action: () => promptCreateFolderAt(cwd, () => render()) },
       { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
       '-',
@@ -955,48 +956,9 @@ function openExplorer(startPath) {
   });
 
   // ── Paste helper ─────────────────────────────────────────────
+  // Shared with the desktop; see pasteClipboardInto in os/fs-core.js.
   function pasteClipboard() {
-    if (!_expClipboard || cwd === 'PROJECTS') return;
-    const dstDir = cwd ? fsGetDir(cwd) : termFS;
-    if (!dstDir) return;
-    let changed = false;
-    _expClipboard.items.forEach(({ name, kind, srcCwd }) => {
-      const srcDirObj = srcCwd ? fsGetDir(srcCwd) : termFS;
-      if (!srcDirObj) return;
-      // Unique name in destination
-      let dstName = name;
-      const hasDst = n => dstDir.files?.has(n) || dstDir.blobs?.has(n) || dstDir.dirs?.has(n.toUpperCase());
-      if (hasDst(dstName)) {
-        const dot = name.lastIndexOf('.');
-        const base = dot > 0 ? name.slice(0, dot) : name;
-        const ext  = dot > 0 ? name.slice(dot) : '';
-        let i = 2;
-        while (hasDst(base + '_copy' + (i > 2 ? i : '') + ext)) i++;
-        dstName = base + '_copy' + (i > 2 ? i : '') + ext;
-      }
-      if (kind === 'dir') {
-        const upper = name.toUpperCase(), dstUpper = dstName.toUpperCase();
-        if (!srcDirObj.dirs?.has(upper)) return;
-        const sub = srcDirObj.subdirs?.get(upper);
-        if (_expClipboard.cut) { srcDirObj.dirs.delete(upper); srcDirObj.subdirs?.delete(upper); }
-        if (!dstDir.subdirs) dstDir.subdirs = new Map();
-        dstDir.dirs.add(dstUpper);
-        if (sub) dstDir.subdirs.set(dstUpper, sub);
-      } else if (srcDirObj.blobs?.has(name)) {
-        const blob = srcDirObj.blobs.get(name);
-        if (_expClipboard.cut) srcDirObj.blobs.delete(name);
-        if (!dstDir.blobs) dstDir.blobs = new Map();
-        dstDir.blobs.set(dstName, { ...blob });
-      } else if (srcDirObj.files?.has(name)) {
-        const content = srcDirObj.files.get(name);
-        if (_expClipboard.cut) srcDirObj.files.delete(name);
-        if (!dstDir.files) dstDir.files = new Map();
-        dstDir.files.set(dstName, content);
-      } else { return; }
-      changed = true;
-    });
-    if (_expClipboard.cut) _expClipboard = null;
-    if (changed) { schedSave(); document.dispatchEvent(new CustomEvent('fs-changed')); render(); }
+    if (pasteClipboardInto(cwd)) render();
   }
 
   // ── Explorer keyboard shortcuts ───────────────────────────────

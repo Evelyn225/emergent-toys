@@ -4,6 +4,55 @@ let _expClipboard = null; // { items:[{name,kind,sysfile,srcCwd}], cut:bool }
 let _shellDragPayload = null; // { item, srcCwd, source:'explorer'|'desktop', sourceId?:string }
 let _explorerWinSeq = 0;
 
+// Paste the shell clipboard into a directory. Lives here beside _expClipboard
+// rather than inside openExplorer so the desktop and every Explorer window
+// share one implementation. Returns true if anything changed; callers that
+// render their own view (Explorer) should refresh on true. The desktop needs
+// no explicit refresh because setupIcons listens for 'fs-changed'.
+function pasteClipboardInto(dstCwd) {
+  if (!_expClipboard || dstCwd === 'PROJECTS' || dstCwd === 'RECYCLE') return false;
+  const dstDir = dstCwd ? fsGetDir(dstCwd) : termFS;
+  if (!dstDir) return false;
+  let changed = false;
+  _expClipboard.items.forEach(({ name, kind, srcCwd }) => {
+    const srcDirObj = srcCwd ? fsGetDir(srcCwd) : termFS;
+    if (!srcDirObj) return;
+    let dstName = name;
+    const hasDst = n => dstDir.files?.has(n) || dstDir.blobs?.has(n) || dstDir.dirs?.has(n.toUpperCase());
+    if (hasDst(dstName)) {
+      const dot = name.lastIndexOf('.');
+      const base = dot > 0 ? name.slice(0, dot) : name;
+      const ext  = dot > 0 ? name.slice(dot) : '';
+      let i = 2;
+      while (hasDst(base + '_copy' + (i > 2 ? i : '') + ext)) i++;
+      dstName = base + '_copy' + (i > 2 ? i : '') + ext;
+    }
+    if (kind === 'dir') {
+      const upper = name.toUpperCase(), dstUpper = dstName.toUpperCase();
+      if (!srcDirObj.dirs?.has(upper)) return;
+      const sub = srcDirObj.subdirs?.get(upper);
+      if (_expClipboard.cut) { srcDirObj.dirs.delete(upper); srcDirObj.subdirs?.delete(upper); }
+      if (!dstDir.subdirs) dstDir.subdirs = new Map();
+      dstDir.dirs.add(dstUpper);
+      if (sub) dstDir.subdirs.set(dstUpper, sub);
+    } else if (srcDirObj.blobs?.has(name)) {
+      const blob = srcDirObj.blobs.get(name);
+      if (_expClipboard.cut) srcDirObj.blobs.delete(name);
+      if (!dstDir.blobs) dstDir.blobs = new Map();
+      dstDir.blobs.set(dstName, { ...blob });
+    } else if (srcDirObj.files?.has(name)) {
+      const content = srcDirObj.files.get(name);
+      if (_expClipboard.cut) srcDirObj.files.delete(name);
+      if (!dstDir.files) dstDir.files = new Map();
+      dstDir.files.set(dstName, content);
+    } else { return; }
+    changed = true;
+  });
+  if (_expClipboard.cut) _expClipboard = null;
+  if (changed) { schedSave(); document.dispatchEvent(new CustomEvent('fs-changed')); }
+  return changed;
+}
+
 function nextExplorerWinId() {
   do { _explorerWinSeq += 1; } while (wins['explorer-' + _explorerWinSeq]);
   return 'explorer-' + _explorerWinSeq;

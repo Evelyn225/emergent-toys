@@ -592,6 +592,8 @@ function setupIcons() {
       { label: '📝 Open Notepad',     action: openNotepad },
       { label: '🌐 Open Browser',     action: openBrowser },
       '-',
+      { label: '📋 Paste', disabled: !_expClipboard, action: () => pasteClipboardInto('DESKTOP') },
+      '-',
       { label: '📁 New Folder',      action: () => promptCreateFolderAt('DESKTOP') },
       { label: '📤 Upload File...',  action: () => triggerUpload('DESKTOP') },
       { label: '🖼️ Change Wallpaper', action: openAppearance },
@@ -619,30 +621,21 @@ window.addEventListener('orientationchange', () => {
 let _iconResizeTimer;
 window.addEventListener('resize', () => {
   const desktop = document.getElementById('desktop');
-  if (!desktop || desktop.style.display === 'none') return;
+  // The desktop is hidden by CSS during boot, not by an inline style, so
+  // `desktop.style.display` is '' at that point. Checking the inline style
+  // let this handler run over the BIOS screen. Use the computed value.
+  if (!desktop || getComputedStyle(desktop).display === 'none') return;
   clearTimeout(_iconResizeTimer);
   _iconResizeTimer = setTimeout(() => {
-    const { cols, rows } = iconGetGridSize();
-    const layer = document.getElementById('icons-layer');
-    const occupied = new Set();
-    const entries = Object.entries(iconPositions)
-      .sort(([, a], [, b]) => a.col - b.col || a.row - b.row);
-    entries.forEach(([name, pos]) => {
-      const preferred = name === RECYCLE_BIN_NAME && !pos.manual ? iconRecycleBinCell() : pos;
-      let col = Math.min(preferred.col, cols - 1);
-      let row = Math.min(preferred.row, rows - 1);
-      let k   = col + ',' + row;
-      while (occupied.has(k)) {
-        row++; if (row >= rows) { row = 0; col++; }
-        if (col >= cols) col = cols - 1;
-        k = col + ',' + row;
-      }
-      occupied.add(k);
-      iconPositions[name] = pos.manual ? { col, row, manual: true } : { col, row };
-      const el = layer.querySelector('[data-icon-key="' + CSS.escape(name) + '"]');
-      if (el) { const { left, top } = iconCellToPixel(col, row); el.style.left = left + 'px'; el.style.top = top + 'px'; }
-    });
-    saveIconPositions();
+    // Re-lay out through setupIcons rather than reflowing here. It honours
+    // manually placed icons, recomputes defaults for the new grid size, and
+    // places via iconFindFreeCell, which is bounded.
+    //
+    // This replaced a hand-rolled placement loop that could not terminate:
+    // it clamped with `if (col >= cols) col = cols - 1` instead of advancing,
+    // so once the last column filled it cycled the same occupied cells
+    // forever. Shrinking the window below the icon count hung the page.
+    if (typeof setupIcons === 'function') setupIcons();
   }, 150);
 });
 
