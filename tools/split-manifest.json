@@ -4,5 +4,6 @@
   "os/bios.js",
   "os/fs-core.js",
   "os/fs-persist.js",
+  "os/daemon.js",
   "os/_remainder.js"
 ]
