@@ -136,6 +136,28 @@ function showUploadConfirm(names, dirLabel) {
     <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
 }
 
+// Decode a binary file's bytes the way Windows Notepad does: straight through
+// the ANSI codepage (CP-1252), one byte to one character. That is what produces
+// the classic mojibake -- readable ASCII fragments like "ftypisom" floating in
+// a sea of symbols -- rather than a blank page or a polite error.
+//
+// Capped because a multi-megabyte file decodes to as many characters, and a
+// textarea that large janks badly. Most sleepOS blobs land under the cap whole.
+const BINARY_VIEW_BYTE_LIMIT = 512 * 1024;
+
+async function readBlobAsAnsiText(blobValue) {
+  if (!blobValue?.url) return null;
+  try {
+    const res = await fetch(blobValue.url);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const bytes = new Uint8Array(buf, 0, Math.min(buf.byteLength, BINARY_VIEW_BYTE_LIMIT));
+    return new TextDecoder('windows-1252').decode(bytes);
+  } catch (e) {
+    return null; // cross-origin asset or revoked URL; caller keeps its fallback
+  }
+}
+
 function openMediaFile(filename, dirName) {
   const entry = fsGetEntry(filename, dirName);
   const blob = entry && entry.kind === 'blob' ? entry.value : null;

@@ -615,6 +615,19 @@ function openNotepad(filename, dirName, options) {
     ws.textContent = `${fname}  -  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
   };
 
+  // Opening a binary file in Notepad shows its bytes as ANSI mojibake, the way
+  // Windows does, instead of a blank document. Reading a blob is async, so the
+  // window opens first and fills in. Saving over it is refused by
+  // fsWriteTextFile, so the file cannot be damaged from here.
+  if (entry && entry.kind === 'blob' && !hasInitialContent) {
+    readBlobAsAnsiText(entry.value).then(text => {
+      if (text === null || !wins[id]) return;
+      ta.value = text;
+      renderHighlight();
+      updateStatus();
+    });
+  }
+
   ta.addEventListener('input', () => { renderHighlight(); updateStatus(); });
   ta.addEventListener('scroll', syncScroll);
   ta.addEventListener('dragover', e => e.preventDefault());
