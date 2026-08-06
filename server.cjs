@@ -98,9 +98,11 @@ app.all('/api/unsplash.js', async (req, res) => {
   }
 });
 
-const openai = new OpenAI({
-    apiKey: process.env.CRITTERS_OPENAI_API_KEY
-});
+let openai = null;
+function getOpenAI() {
+    if (!openai) openai = new OpenAI({ apiKey: process.env.CRITTERS_OPENAI_API_KEY });
+    return openai;
+}
 
 app.post('/api/bug-chat', async (req, res) => {
     try {
@@ -127,7 +129,7 @@ app.post('/api/bug-chat', async (req, res) => {
             content: message
         });
 
-        const completion = await openai.chat.completions.create({
+        const completion = await getOpenAI().chat.completions.create({
             model: "gpt-4o-mini",
             messages: messages
         });
@@ -164,7 +166,7 @@ app.post('/api/bug-chat.js', async (req, res) => {
             content: message
         });
 
-        const completion = await openai.chat.completions.create({
+        const completion = await getOpenAI().chat.completions.create({
             model: "gpt-4o-mini",
             messages: messages
         });

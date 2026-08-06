@@ -2,9 +2,9 @@
   "name": "bug-hotline",
   "version": "1.0.0",
   "description": "Bug communication service",
-  "main": "server.js",
+  "main": "server.cjs",
   "scripts": {
-    "start": "node server.js",
+    "start": "node server.cjs",
     "build": "node tools/build.cjs",
     "test": "node --test test/*.cjs"
   },
