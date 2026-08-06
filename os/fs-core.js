@@ -539,6 +539,12 @@ function fsWriteTextFile(path, value, fallbackDir, options) {
   const { dirName, fileName } = fsSplitPath(path, fallbackDir);
   const dir = fsGetDir(dirName);
   if (!dir || !fileName) return null;
+  // Refuse to write text over a binary file. Without this the name ends up in
+  // both dir.files and dir.blobs, and since fsGetEntry checks files first the
+  // text entry permanently shadows the blob -- the media is still in memory
+  // but nothing can reach it. The terminal's pipeline writer already refuses
+  // this; the guard belongs here so every caller is covered.
+  if (dir.blobs?.has(fileName)) return null;
   const nextValue = String(value ?? '');
   const hadFile = dir.files.has(fileName);
   const prevValue = hadFile ? dir.files.get(fileName) : null;

@@ -117,6 +117,10 @@ const registryData = {
 // so editing the value in REGEDIT.exe actually changes the behaviour. The
 // defaults below reproduce what was previously hardcoded, so nothing changes
 // until someone edits the registry.
+// Deliberately unchecked: any handler may be pointed at any file type. Opening
+// a video in NOTEPAD.exe is allowed, the same way a real OS lets you. The only
+// thing guarded is the destructive part -- see the blob check in
+// fsWriteTextFile, which stops a save from shadowing the binary.
 const FILE_HANDLERS = {
   'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
   'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),

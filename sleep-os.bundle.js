@@ -533,6 +533,10 @@ const registryData = {
 // so editing the value in REGEDIT.exe actually changes the behaviour. The
 // defaults below reproduce what was previously hardcoded, so nothing changes
 // until someone edits the registry.
+// Deliberately unchecked: any handler may be pointed at any file type. Opening
+// a video in NOTEPAD.exe is allowed, the same way a real OS lets you. The only
+// thing guarded is the destructive part -- see the blob check in
+// fsWriteTextFile, which stops a save from shadowing the binary.
 const FILE_HANDLERS = {
   'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
   'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),
@@ -1672,6 +1676,12 @@ function fsWriteTextFile(path, value, fallbackDir, options) {
   const { dirName, fileName } = fsSplitPath(path, fallbackDir);
   const dir = fsGetDir(dirName);
   if (!dir || !fileName) return null;
+  // Refuse to write text over a binary file. Without this the name ends up in
+  // both dir.files and dir.blobs, and since fsGetEntry checks files first the
+  // text entry permanently shadows the blob -- the media is still in memory
+  // but nothing can reach it. The terminal's pipeline writer already refuses
+  // this; the guard belongs here so every caller is covered.
+  if (dir.blobs?.has(fileName)) return null;
   const nextValue = String(value ?? '');
   const hadFile = dir.files.has(fileName);
   const prevValue = hadFile ? dir.files.get(fileName) : null;
