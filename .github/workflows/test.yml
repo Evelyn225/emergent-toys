@@ -1,0 +1,25 @@
+# sleep-os.bundle.js is generated (via `npm run build`) but committed, so Vercel
+# can serve static files with no build configuration. test/bundle-current.test.cjs
+# fails if the committed bundle drifts from its sources in os/, but nothing ran it:
+# no CI, no git hooks, and Vercel's legacy `builds` array skips build steps entirely.
+# This workflow closes that gap by running the test suite on every push and PR.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  bundle-and-tests:
+    name: Bundle freshness and test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - run: npm test
