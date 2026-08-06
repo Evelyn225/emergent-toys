@@ -12,5 +12,7 @@
   "os/ui-chrome.js",
   "os/wm.js",
   "os/desktop-icons.js",
+  "apps/notepad.js",
+  "apps/explorer.js",
   "os/_remainder.js"
 ]
