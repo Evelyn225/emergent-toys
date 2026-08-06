@@ -10,8 +10,13 @@ const ROOT = path.join(__dirname, '..');
 
 // Byte-exact concatenation does NOT imply each file is individually valid:
 // a cut landing mid-function yields two files that concatenate perfectly and
-// neither of which parses. Every <script src> must parse standalone, so each
-// extracted file is compiled on its own here.
+// neither of which parses. Compilation catches that; concatenation cannot.
+//
+// This does NOT mean the files are loaded separately. They must not be -
+// sleep-os.html loads only sleep-os.bundle.js, because function declarations
+// do not hoist across <script> tag boundaries and sleepOS calls functions at
+// load time that are declared much later. See test/verify-split.test.cjs,
+// which enforces that.
 test('every extracted file parses standalone as a classic script', () => {
   const failures = [];
   for (const rel of readManifest()) {

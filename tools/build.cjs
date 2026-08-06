@@ -3,6 +3,12 @@
 // The bundle is what the browser executes, and it is byte-identical to the
 // original inline script. One script means hoisting, scope, and execution
 // order are preserved by construction rather than by testing.
+//
+// Do NOT replace the bundle with per-file <script src> tags. That was tried
+// and reverted: function declarations don't hoist across <script> tag
+// boundaries, and sleepOS calls functions at load time that are declared
+// much later. test/verify-split.test.cjs enforces that sources are never
+// loaded directly.
 const fs = require('fs');
 const path = require('path');
 const { readManifest } = require('./verify-split.cjs');
