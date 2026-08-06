@@ -100,4 +100,13 @@ function loadOsSources(ctx, relPaths) {
   return ctx;
 }
 
-module.exports = { makeOsContext, loadOsSources, makeLocalStorageStub, ROOT };
+// Objects and arrays created inside a vm context carry that realm's
+// prototypes, and assert.deepStrictEqual compares prototypes. Round-tripping
+// through JSON rebuilds the value with host prototypes so a structural
+// comparison against a plain literal works. Use it on anything a vm-loaded
+// source returned.
+function plain(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+module.exports = { makeOsContext, loadOsSources, makeLocalStorageStub, ROOT, plain };
