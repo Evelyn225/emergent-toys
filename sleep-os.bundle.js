@@ -1,0 +1,11130 @@
+// ─────────────────────────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────────────────────────
+const PROJECTS = [
+  { name: 'sand playground',    emoji: '⏳', file: 'evenet.fun/Sands.html' },
+  { name: 'bug hotline',        emoji: '🐛', file: 'evenet.fun/critters.html' },
+  { name: 'fireworks',          emoji: '🎆', file: 'evenet.fun/fireworks.html' },
+  { name: 'pixel splatter',     emoji: '🔮', file: 'pixel-splatter.html' },
+  { name: 'anime hell',         emoji: '🔥', file: 'evenet.fun/hell.html' },
+  { name: 'fluid',              emoji: '💧', file: 'evenet.fun/fluido.html' },
+  { name: 'web wizard casino',  emoji: '🎰', file: 'evenet.fun/webwizardcasino.html' },
+  { name: 'automata garden',    emoji: '🌱', file: 'evenet.fun/automata-garden.html' },
+  { name: 'erosion toy',        emoji: '🏔️',  file: 'evenet.fun/erosion.html' },
+  { name: 'wave collapse',      emoji: '🌊', file: 'evenet.fun/wave-collapse.html' },
+  { name: 'tentacle catch',     emoji: '🦑', file: 'evenet.fun/catch.html' },
+  { name: 'reaction diffusion', emoji: '⚗️',  file: 'evenet.fun/philosophers-stone.html' },
+  { name: 'voronoi',            emoji: '🔬', file: 'evenet.fun/vornoi.html' },
+  { name: 'morse code',         emoji: '📡', file: 'evenet.fun/morse.html' },
+  { name: 'lissajous',          emoji: '〰️', file: 'evenet.fun/lissajous.html' },
+  { name: 'net sanctuary',      emoji: '🌐', file: 'evenet.fun/net-sanctuary-project.html' },
+  { name: 'ascii render',       emoji: '💻', file: 'evenet.fun/ascii-render.html' },
+  { name: 'tablecloth',         emoji: '🧶', file: 'evenet.fun/tablecloth.html' },
+  { name: 'corridor crawler',   emoji: '🚪', file: 'evenet.fun/corridor.html' },
+  { name: 'patch synth',        emoji: '🎛️',  file: 'evenet.fun/synth.html' },
+  { name: 'turtle',             emoji: '🐢', file: 'evenet.fun/turtle.html' },
+  { name: 'ball like',          emoji: '⚪', file: 'evenet.fun/ball-like.html' },
+  { name: 'magnetic pendulum',  emoji: '🧲', file: 'evenet.fun/magnetic-pendulum.html' },
+  { name: 'physarum',           emoji: '🍄', file: 'evenet.fun/physarum.html' },
+  { name: 'dla crystal',        emoji: '❄️', file: 'evenet.fun/dla-crystal.html' },
+];
+const RECYCLE_BIN_NAME = 'RECYCLE BIN';
+const RECYCLE_STORAGE_DIR = 'CACHE\\RECYCLE_BIN';
+const RECYCLE_BIN_KEY = 'sleepOS-recycle-bin';
+
+const DESKTOP_ICONS = [
+  { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
+  { name: 'NOTEPAD.exe',    emoji: '📝', action: 'openNotepad' },
+  { name: 'EXPLORER.exe',   emoji: '🗂️', action: 'openExplorer' },
+  { name: 'TERMINAL.exe',   emoji: '💻', action: 'openTerminal' },
+  { name: 'SYSMON.exe',     emoji: '📊', action: 'openSysmon' },
+  { name: 'BROWSER.exe',    emoji: '🌐', action: 'openBrowser' },
+  { name: 'DEFRAG.exe',     emoji: '🧩', action: 'openDefrag' },
+  { name: 'CALC.exe',       emoji: '🔢', action: 'openCalculator' },
+  { name: 'REGEDIT.exe',    emoji: '🗝️', action: 'openRegedit' },
+  { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
+  { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
+  { name: RECYCLE_BIN_NAME, emoji: '\u{1F5D1}\uFE0F', action: 'openRecycleBin', recycleBin: true },
+];
+function getExeDisplayName() {
+  return daemonStory.quarantineSigned ? 'quarantine.exe' : '?????.exe';
+}
+
+const DESKTOP_ICON_DIRS_KEY = 'sleepOS-desktop-icon-dirs';
+function normalizeDesktopContainerDir(dirPath) {
+  const normalized = fsNormalizeDir(dirPath || 'DESKTOP');
+  if (!normalized || normalized === 'DESKTOP' || normalized.startsWith('DESKTOP\\')) return normalized || 'DESKTOP';
+  return 'DESKTOP';
+}
+function loadDesktopIconDirs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DESKTOP_ICON_DIRS_KEY) || '{}') || {};
+    const out = {};
+    Object.entries(raw).forEach(([name, dirPath]) => {
+      const icon = DESKTOP_ICONS.find(item => item.name === name && !item.recycleBin);
+      if (!icon) return;
+      const normalized = normalizeDesktopContainerDir(dirPath);
+      if (normalized !== 'DESKTOP') out[name] = normalized;
+    });
+    return out;
+  } catch (e) {
+    return {};
+  }
+}
+function saveDesktopIconDirs() {
+  try { localStorage.setItem(DESKTOP_ICON_DIRS_KEY, JSON.stringify(desktopIconDirs)); } catch (e) {}
+}
+let desktopIconDirs = loadDesktopIconDirs();
+function getDesktopSystemIconDir(name) {
+  if (isRecycleBinItemName(name)) return 'DESKTOP';
+  const normalized = normalizeDesktopContainerDir(desktopIconDirs[name] || 'DESKTOP');
+  return normalized !== 'DESKTOP' && !fsGetDir(normalized) ? 'DESKTOP' : normalized;
+}
+function setDesktopSystemIconDir(name, dirPath) {
+  if (isRecycleBinItemName(name)) return;
+  const normalized = normalizeDesktopContainerDir(dirPath);
+  if (normalized === 'DESKTOP') delete desktopIconDirs[name];
+  else desktopIconDirs[name] = normalized;
+  saveDesktopIconDirs();
+}
+function getDesktopSystemIconsForDir(dirPath) {
+  const normalized = normalizeDesktopContainerDir(dirPath);
+  return DESKTOP_ICONS.filter(icon => {
+    if (icon.name === 'void.tmp' && daemonStory.endingReached) return false;
+    if (icon.recycleBin) return normalized === 'DESKTOP';
+    return getDesktopSystemIconDir(icon.name) === normalized;
+  });
+}
+function getVisibleDesktopIcons() {
+  return getDesktopSystemIconsForDir('DESKTOP');
+}
+function isDesktopContainerPath(dirPath) {
+  const normalized = fsNormalizeDir(dirPath);
+  return normalized === 'DESKTOP' || normalized.startsWith('DESKTOP\\');
+}
+function isDesktopVirtualItem(item, srcDirPath) {
+  if (!item || !isDesktopContainerPath(srcDirPath)) return false;
+  if (item._shortcut || item.custom) return true;
+  return !!item.sysfile && !item.recycleBin && !isRecycleBinItemName(item.name);
+}
+function clearDesktopRootIconPosition(name) {
+  if (!Object.prototype.hasOwnProperty.call(iconPositions, name)) return;
+  delete iconPositions[name];
+  saveIconPositions();
+}
+function canMoveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
+  const srcDir = fsNormalizeDir(srcDirPath);
+  const dstDir = fsNormalizeDir(dstDirPath);
+  if (!isDesktopVirtualItem(item, srcDir)) return false;
+  if (!isDesktopContainerPath(dstDir)) return false;
+  return dstDir === 'DESKTOP' || !!fsGetDir(dstDir);
+}
+function moveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
+  const srcDir = fsNormalizeDir(srcDirPath);
+  const dstDir = fsNormalizeDir(dstDirPath);
+  if (!canMoveDesktopVirtualItem(item, srcDirPath, dstDir)) return false;
+  if (srcDir === dstDir) return true;
+  if (item._shortcut || item.custom) {
+    const shortcut = item._shortcut || item;
+    shortcut.dirPath = normalizeDesktopContainerDir(dstDir);
+    saveDesktopShortcuts();
+  } else {
+    setDesktopSystemIconDir(item.name, dstDir);
+  }
+  clearDesktopRootIconPosition(item.name);
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return true;
+}
+function canMoveShellItemToDir(item, srcDirPath, dstDirPath) {
+  const dstDir = fsNormalizeDir(dstDirPath);
+  if (!item || item._proj || item._recycle) return false;
+  if (isDesktopVirtualItem(item, srcDirPath)) return canMoveDesktopVirtualItem(item, srcDirPath, dstDir);
+  if (item.sysfile || item._shortcut) return false;
+  return dstDir === '' || !!fsGetDir(dstDir);
+}
+function moveShellItemToDir(item, srcDirPath, dstDirPath) {
+  const srcDir = fsNormalizeDir(srcDirPath);
+  const dstDir = fsNormalizeDir(dstDirPath);
+  if (isDesktopVirtualItem(item, srcDirPath)) return moveDesktopVirtualItem(item, srcDirPath, dstDir);
+  if (!canMoveShellItemToDir(item, srcDirPath, dstDir)) return false;
+  if (srcDir === dstDir) return true;
+  const oldPath = srcDir ? srcDir + '\\' + item.name : item.name;
+  const moved = moveFsItemByPath(item.name, srcDirPath, dstDir);
+  if (!moved) return false;
+  const newPath = moved.dirName ? moved.dirName + '\\' + moved.name : moved.name;
+  retargetDesktopShortcutsForMove(oldPath, newPath, item.kind);
+  if (isDesktopContainerPath(srcDirPath) || isDesktopContainerPath(dstDir)) clearDesktopRootIconPosition(item.name);
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return true;
+}
+function canRecycleShellItem(item, srcDirPath) {
+  return !!item && !item._proj && !item._recycle && !item._shortcut && !item.sysfile && !isDesktopVirtualItem(item, srcDirPath);
+}
+function recycleShellItem(item, srcDirPath) {
+  if (!canRecycleShellItem(item, srcDirPath)) return { ok: false, message: 'Move failed.' };
+  const result = recycleVirtualPath(item.name, srcDirPath);
+  if (result.ok) {
+    if (isDesktopContainerPath(srcDirPath)) clearDesktopRootIconPosition(item.name);
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+  }
+  return result;
+}
+function setShellDragPayload(payload) {
+  _shellDragPayload = payload || null;
+}
+function getShellDragPayload() {
+  return _shellDragPayload;
+}
+function clearShellDragPayload() {
+  _shellDragPayload = null;
+}
+function isDesktopSurfaceTransferBlocked(payload, dstDirPath) {
+  if (!payload) return false;
+  return fsNormalizeDir(payload.srcCwd) === 'DESKTOP' && fsNormalizeDir(dstDirPath) === 'DESKTOP';
+}
+function buildShellDragPayload(item, srcCwd, source, extra) {
+  const raw = Array.isArray(extra?.items) && extra.items.length ? extra.items : [item];
+  const items = [];
+  raw.forEach(candidate => {
+    if (candidate && !items.includes(candidate)) items.push(candidate);
+  });
+  return {
+    ...(extra || {}),
+    item: item || items[0] || null,
+    items,
+    srcCwd,
+    source,
+  };
+}
+function getShellDragItems(payload) {
+  if (!payload) return [];
+  const raw = Array.isArray(payload.items) && payload.items.length ? payload.items : [payload.item];
+  return raw.filter((item, index) => item && raw.indexOf(item) === index);
+}
+function shellDragIncludesItem(payload, item) {
+  return !!item && getShellDragItems(payload).includes(item);
+}
+function canMoveShellPayloadToDir(payload, dstDirPath) {
+  const items = getShellDragItems(payload);
+  return !!items.length && items.every(item => canMoveShellItemToDir(item, payload.srcCwd, dstDirPath));
+}
+function moveShellPayloadToDir(payload, dstDirPath) {
+  const items = getShellDragItems(payload);
+  if (!items.length || !canMoveShellPayloadToDir(payload, dstDirPath)) return false;
+  let moved = 0;
+  items.forEach(item => { if (moveShellItemToDir(item, payload.srcCwd, dstDirPath)) moved++; });
+  return moved === items.length;
+}
+function canRecycleShellPayload(payload) {
+  const items = getShellDragItems(payload);
+  return !!items.length && items.every(item => canRecycleShellItem(item, payload.srcCwd));
+}
+function recycleShellPayload(payload) {
+  const items = getShellDragItems(payload);
+  if (!items.length || !canRecycleShellPayload(payload)) return false;
+  let recycled = 0;
+  items.forEach(item => {
+    const result = recycleShellItem(item, payload.srcCwd);
+    if (result.ok) recycled++;
+  });
+  return recycled === items.length;
+}
+const SYSTEM_FILE_ICONS = DESKTOP_ICONS.reduce((icons, { name, emoji }) => {
+  icons[name.toUpperCase()] = emoji;
+  return icons;
+}, Object.create(null));
+
+const DESKTOP_SHORTCUTS_KEY = 'sleepOS-desktop-shortcuts';
+const customDesktopIcons = [];
+function normalizeShortcutPath(path) {
+  return String(path || '')
+    .trim()
+    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '');
+}
+function normalizeDesktopShortcut(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const target = entry.target && typeof entry.target === 'object' ? entry.target : null;
+  if (!target) return null;
+  const kind = target.kind === 'dir' ? 'dir' : 'file';
+  const path = normalizeShortcutPath(target.path);
+  const name = String(entry.name || target.name || path.split('\\').pop() || '').trim();
+  const emoji = String(entry.emoji || '').trim();
+  if (!name || !emoji) return null;
+  if (!path && !target.sysfile) return null;
+  const dirPath = normalizeDesktopContainerDir(entry.dirPath || 'DESKTOP');
+  return {
+    name,
+    emoji,
+    custom: true,
+    dirPath,
+    target: {
+      name,
+      path,
+      kind,
+      sysfile: !!target.sysfile,
+    },
+  };
+}
+function saveDesktopShortcuts() {
+  try {
+    localStorage.setItem(DESKTOP_SHORTCUTS_KEY, JSON.stringify(customDesktopIcons.map(({ name, emoji, dirPath, target }) => ({
+      name,
+      emoji,
+      dirPath: normalizeDesktopContainerDir(dirPath || 'DESKTOP'),
+      target,
+    }))));
+  } catch (e) {}
+}
+function loadDesktopShortcuts() {
+  customDesktopIcons.length = 0;
+  try {
+    const raw = JSON.parse(localStorage.getItem(DESKTOP_SHORTCUTS_KEY) || '[]');
+    raw.map(normalizeDesktopShortcut).filter(Boolean).forEach(icon => customDesktopIcons.push(icon));
+  } catch (e) {}
+}
+function getDesktopShortcutsForDir(dirPath) {
+  const normalized = normalizeDesktopContainerDir(dirPath);
+  return customDesktopIcons.filter(icon => {
+    const iconDir = normalizeDesktopContainerDir(icon.dirPath || 'DESKTOP');
+    const resolvedDir = iconDir !== 'DESKTOP' && !fsGetDir(iconDir) ? 'DESKTOP' : iconDir;
+    return resolvedDir === normalized;
+  });
+}
+function retargetDesktopShortcutsForMove(oldPath, newPath, kind) {
+  const from = normalizeShortcutPath(oldPath);
+  const to = normalizeShortcutPath(newPath);
+  if (!from || !to) return false;
+  let changed = false;
+  customDesktopIcons.forEach(icon => {
+    const target = icon?.target;
+    if (!target || target.sysfile) return;
+    const targetPath = normalizeShortcutPath(target.path);
+    if (!targetPath) return;
+    if (kind === 'dir') {
+      if (targetPath === from || targetPath.startsWith(from + '\\')) {
+        target.path = to + targetPath.slice(from.length);
+        changed = true;
+      }
+      return;
+    }
+    if (targetPath === from) {
+      target.path = to;
+      changed = true;
+    }
+  });
+  if (changed) saveDesktopShortcuts();
+  return changed;
+}
+loadDesktopShortcuts();
+function openSystemFile(name) {
+  const key = String(name || '').trim();
+  if (!key) return false;
+  if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
+    osAlert('void.tmp is no longer present.', 'void.tmp', '⬛');
+    return true;
+  }
+  const SYS = {
+    'WELCOME.README': openWelcome,
+    'TERMINAL.exe': openTerminal,
+    'SYSMON.exe': openSysmon,
+    'NOTEPAD.exe': openNotepad,
+    'BROWSER.exe': openBrowser,
+    'DEFRAG.exe': openDefrag,
+    'CALC.exe': openCalculator,
+    'REGEDIT.exe': openRegedit,
+    'EXPLORER.exe': openExplorer,
+    'void.tmp': openVoid,
+    'daemon.core': openDaemon,
+    '?????.exe': openUnknown,
+    [RECYCLE_BIN_NAME]: openRecycleBin,
+  };
+  const resolvedKey = Object.keys(SYS).find(entry => entry.toLowerCase() === key.toLowerCase());
+  if (!resolvedKey) return false;
+  SYS[resolvedKey]();
+  return true;
+}
+function openDesktopShortcutTarget(target) {
+  if (!target || typeof target !== 'object') return;
+  const path = normalizeShortcutPath(target.path);
+  const name = String(target.name || path.split('\\').pop() || '').trim();
+  if (target.sysfile) {
+    if (!openSystemFile(name || path)) {
+      osAlert('Shortcut target not found:\n' + (name || path || 'Unknown target'), 'Missing Shortcut', 'X');
+    }
+    return;
+  }
+  if (target.kind === 'dir') {
+    openExplorer(path);
+    return;
+  }
+  const entry = fsGetEntry(path);
+  if (!entry) {
+    osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
+    return;
+  }
+  if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
+  else openNotepad(entry.fileName, entry.dirName);
+}
+
+function openRecycleBin() {
+  openExplorer('RECYCLE');
+}
+
+const DEFAULT_BROWSER_FAVORITES = [
+  { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: '&#128214;' },
+  { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: '&#128230;' },
+  { title: 'Poolsuite FM',      url: 'https://poolsuite.net', homeIcon: '&#128251;' },
+];
+const DEFAULT_BROWSER_FAVORITE_URLS = new Set(DEFAULT_BROWSER_FAVORITES.map(fav => fav.url.toLowerCase()));
+function normalizeFavoriteEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const url = String(entry.url || '').trim();
+  if (!url) return null;
+  const title = String(entry.title || url).trim() || url;
+  return { title, url };
+}
+function dedupeFavorites(list) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : [])
+    .map(normalizeFavoriteEntry)
+    .filter(entry => {
+      if (!entry) return false;
+      const key = entry.url.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+let browserFavorites = [];
+try {
+  browserFavorites = dedupeFavorites(JSON.parse(localStorage.getItem('sleepOS-favorites') || '[]'));
+} catch {
+  browserFavorites = [];
+}
+function saveFavorites() {
+  browserFavorites = dedupeFavorites(browserFavorites);
+  localStorage.setItem('sleepOS-favorites', JSON.stringify(browserFavorites));
+}
+if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
+  browserFavorites = dedupeFavorites([...DEFAULT_BROWSER_FAVORITES, ...browserFavorites]);
+  saveFavorites();
+  localStorage.setItem('sleepOS-favorites-seeded', '1');
+}
+
+// ── Settings bootstrap (must be early so BIOS skip works) ────────
+const SETTINGS_KEY = 'sleepOS-settings';
+const FORCE_BOOT_SESSION_KEY = 'sleepOS-force-boot';
+const osSettings = { crtScanlines: true, videoDither: true, clock12h: false, skipBoot: false };
+try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
+
+// ── Registry data ─────────────────────────────────────────────────
+const REG_KEY = 'sleepOS-registry';
+const SYSTEM_WALLPAPER_DIR = 'SYS\\WALLPAPERS';
+const DEFAULT_WALLPAPER_PATH = SYSTEM_WALLPAPER_DIR + '\\DEFAULT.JPG';
+const USER_VIDEO_DIR = 'VIDEOS';
+const USER_MUSIC_DIR = 'MUSIC';
+const PRELOADED_MEDIA_BASE_URL = 'https://pub-1e78b32b6c14474da39103ed015fc3c9.r2.dev';
+function encodeAssetPath(path) {
+  return String(path || '')
+    .split('/')
+    .map(part => encodeURIComponent(part))
+    .join('/');
+}
+function getPreloadedAssetUrl(objectName, fallbackLocalPath) {
+  if (PRELOADED_MEDIA_BASE_URL) {
+    return PRELOADED_MEDIA_BASE_URL.replace(/\/+$/, '') + '/' + encodeAssetPath(objectName);
+  }
+  return encodeAssetPath(fallbackLocalPath || objectName);
+}
+const SEEDED_HOME_MEDIA = [
+  { path: USER_VIDEO_DIR + '\\bunnies and furry friends.mp4', assetUrl: getPreloadedAssetUrl('bunnies and furry friends.mp4', 'videos/bunnies and furry friends.mp4'), kind: 'video', mime: 'video/mp4', size: 421218044 },
+  { path: USER_VIDEO_DIR + '\\Dragonball_HG_EP01.mp4', assetUrl: getPreloadedAssetUrl('Dragonball_HG_EP01.mp4', 'videos/Dragonball_HG_EP01.mp4'), kind: 'video', mime: 'video/mp4', size: 306739027 },
+  { path: USER_VIDEO_DIR + '\\lain.mp4', assetUrl: getPreloadedAssetUrl('lain-web.mp4', 'videos/lain-web.mp4'), kind: 'video', mime: 'video/mp4', size: 269121971 },
+  { path: USER_VIDEO_DIR + '\\Tcz62PMls-I.webm', assetUrl: getPreloadedAssetUrl('Tcz62PMls-I.webm', 'videos/Tcz62PMls-I.webm'), kind: 'video', mime: 'video/webm', size: 2295519 },
+  { path: USER_VIDEO_DIR + '\\Theory Of Angel.mkv', assetUrl: getPreloadedAssetUrl('Theory Of Angel.mkv', 'videos/Theory Of Angel.mkv'), kind: 'video', mime: 'video/x-matroska', size: 31040788 },
+  { path: USER_MUSIC_DIR + '\\hum.wav', assetUrl: getPreloadedAssetUrl('hum.wav', 'audio/hum.wav'), kind: 'audio', mime: 'audio/wav', size: 12815618, author: 'Alex McCulloch' },
+  { path: USER_MUSIC_DIR + '\\Hello There.mp3', assetUrl: getPreloadedAssetUrl('Hello There.mp3', 'audio/Hello there.mp3'), kind: 'audio', mime: 'audio/mpeg', size: 735225, author: 'Alex McCulloch' },
+  { path: USER_MUSIC_DIR + '\\Space++.mp3', assetUrl: getPreloadedAssetUrl('Space++.mp3', 'audio/Space++.mp3'), kind: 'audio', mime: 'audio/mpeg', size: 5753711, author: 'Alex McCulloch' },
+];
+const LEGACY_BUILTIN_WALLPAPER_IDS = new Set(['default', 'magicant', 'hills', 'battle', 'summers', 'saturn', 'cave']);
+const SEEDED_WALLPAPERS = [
+  { path: DEFAULT_WALLPAPER_PATH, label: 'Default', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/default.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CITY.JPG', label: 'City', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/city.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CRAFT.PNG', label: 'Craft', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/craft.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\DARK.JPG', label: 'Dark', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/dark.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\FOREST.PNG', label: 'Forest', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/forest.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\HILLS.JPG', label: 'Hills', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/hills.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\OCEAN.GIF', label: 'Ocean', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/ocean.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\POWERLINES.JPG', label: 'Powerlines', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/powerlines.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\REBIRTH.GIF', label: 'Rebirth', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/rebirth.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\SPACE.PNG', label: 'Space', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/space.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\STATIC.GIF', label: 'Static', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/static.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\WATCHING.GIF', label: 'Watching', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/watching.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\WAVES.GIF', label: 'Waves', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/waves.gif', mime: 'image/gif' },
+];
+const SEEDED_WALLPAPER_MAP = new Map(SEEDED_WALLPAPERS.map(item => [item.path, item]));
+const registryData = {
+  'HKEY_SLEEPBOX_MACHINE': {
+    'SYSTEM\\CurrentConfig': {
+      CRT_SCANLINES:      { type:'REG_DWORD', value: 1 },
+      VIDEO_DITHER:       { type:'REG_DWORD', value: 1 },
+      CLOCK_FORMAT:       { type:'REG_SZ',    value: '24h' },
+    },
+    'SOUL\\Metrics': {
+      SOUL_INTEGRITY:     { type:'REG_DWORD', value: 87 },
+      DAEMON_COUNT:       { type:'REG_DWORD', value: 7  },
+      TEMPORAL_DRIFT:     { type:'REG_SZ',    value: '+/-2.3yr' },
+    },
+    'VOID': {
+      VOID_PRESSURE_BASE: { type:'REG_DWORD', value: 12 },
+      OBSERVER_COUNT:     { type:'REG_SZ',    value: '[classified]' },
+    },
+    'Containment': {
+      RESPAWN_LOCK:       { type:'REG_DWORD', value: 1 },
+      MIRROR_LOCK:        { type:'REG_DWORD', value: 1 },
+      ANCHOR_FILE:        { type:'REG_SZ',    value: 'SYS\\anchor.seed' },
+    },
+  },
+  'HKEY_CURRENT_USER': {
+    'Desktop': {
+      Wallpaper:          { type:'REG_SZ',    value: DEFAULT_WALLPAPER_PATH },
+    },
+    'SOFTWARE\\sleepOS': {
+      SkipBoot:           { type:'REG_DWORD', value: 0 },
+      IdleSleepMinutes:   { type:'REG_DWORD', value: 10 },
+    },
+    'SOFTWARE\\sleepOS\\Daemon': {
+      STATUS:             { type:'REG_SZ',    value: 'Dormant' },
+      LAST_EVENT:         { type:'REG_SZ',    value: 'none' },
+      OBSERVED:           { type:'REG_DWORD', value: 0 },
+    },
+  },
+};
+try {
+  const saved = JSON.parse(localStorage.getItem(REG_KEY) || 'null');
+  if (saved) {
+    Object.keys(saved).forEach(hive => {
+      if (!registryData[hive]) return;
+      Object.keys(saved[hive]).forEach(path => {
+        if (!registryData[hive][path]) return;
+        Object.keys(saved[hive][path]).forEach(key => {
+          if (registryData[hive][path][key]) registryData[hive][path][key].value = saved[hive][path][key].value;
+        });
+      });
+    });
+  }
+} catch(e) {}
+const DEFAULT_IDLE_SLEEP_MINUTES = 10;
+const MIN_IDLE_SLEEP_MINUTES = 1;
+function normalizeIdleSleepMinutes(value) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_IDLE_SLEEP_MINUTES;
+  return Math.max(MIN_IDLE_SLEEP_MINUTES, parsed);
+}
+function getIdleSleepMinutes() {
+  return normalizeIdleSleepMinutes(registryData['HKEY_CURRENT_USER']?.['SOFTWARE\\sleepOS']?.IdleSleepMinutes?.value);
+}
+function getIdleSleepMs() {
+  return getIdleSleepMinutes() * 60 * 1000;
+}
+registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'].IdleSleepMinutes.value = getIdleSleepMinutes();
+function saveRegistry() {
+  const out = {};
+  Object.keys(registryData).forEach(hive => {
+    out[hive] = {};
+    Object.keys(registryData[hive]).forEach(path => {
+      out[hive][path] = {};
+      Object.keys(registryData[hive][path]).forEach(key => {
+        out[hive][path][key] = { value: registryData[hive][path][key].value };
+      });
+    });
+  });
+  try { localStorage.setItem(REG_KEY, JSON.stringify(out)); } catch(e) {}
+}
+function applyRegistrySettings() {
+  const cc = registryData['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
+  const cu = registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'];
+  osSettings.crtScanlines = !!cc.CRT_SCANLINES.value;
+  osSettings.videoDither   = !!cc.VIDEO_DITHER.value;
+  osSettings.clock12h      = cc.CLOCK_FORMAT.value === '12h';
+  osSettings.skipBoot      = !!cu.SkipBoot.value;
+  cu.IdleSleepMinutes.value = getIdleSleepMinutes();
+  saveSettings();
+  applySettings();
+}
+
+// WALLPAPERS
+
+const WALLPAPER_FILE_PREFIX = 'FILE:';
+let currentWallpaper = DEFAULT_WALLPAPER_PATH;
+
+function isWallpaperFileId(id) {
+  return typeof id === 'string' && id.startsWith(WALLPAPER_FILE_PREFIX);
+}
+
+function normalizeWallpaperPath(path, fallbackDir) {
+  const raw = String(path ?? '').trim();
+  if (!raw) return '';
+  if (isWallpaperFileId(raw)) return normalizeWallpaperPath(raw.slice(WALLPAPER_FILE_PREFIX.length), fallbackDir);
+  if (LEGACY_BUILTIN_WALLPAPER_IDS.has(raw.toLowerCase())) return DEFAULT_WALLPAPER_PATH;
+  const { dirName, fileName } = fsSplitPath(raw, fallbackDir);
+  return fileName ? blobRelativePath(dirName, fileName) : '';
+}
+
+function isSystemWallpaperPath(path) {
+  const normalized = normalizeWallpaperPath(path);
+  return normalized === SYSTEM_WALLPAPER_DIR || normalized.startsWith(SYSTEM_WALLPAPER_DIR + '\\');
+}
+
+function findMapKeyInsensitive(map, key) {
+  if (!map || !key) return '';
+  if (map.has(key)) return key;
+  const target = String(key).toUpperCase();
+  for (const existing of map.keys()) {
+    if (String(existing).toUpperCase() === target) return existing;
+  }
+  return '';
+}
+
+function resolveWallpaperEntry(path, fallbackDir) {
+  const normalized = normalizeWallpaperPath(path, fallbackDir);
+  if (!normalized) return null;
+  const { dirName, fileName } = fsSplitPath(normalized);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  const blobName = findMapKeyInsensitive(dir.blobs, fileName);
+  if (!blobName) return null;
+  const blob = dir.blobs.get(blobName);
+  if (!blob || blob.kind !== 'image') return null;
+  return { dir, dirName, fileName: blobName, path: blobRelativePath(dirName, blobName), blob };
+}
+
+function getWallpaperRegistryValue() {
+  return registryData['HKEY_CURRENT_USER']?.Desktop?.Wallpaper?.value || '';
+}
+
+function setWallpaperRegistryValue(path) {
+  const entry = registryData['HKEY_CURRENT_USER']?.Desktop?.Wallpaper;
+  if (!entry) return;
+  entry.value = path;
+  saveRegistry();
+}
+
+function syncWallpaperSwatches() {
+  document.querySelectorAll('.wp-swatch').forEach(swatch => {
+    swatch.classList.toggle('wp-selected', swatch.dataset.id === currentWallpaper);
+  });
+}
+
+function getInitialWallpaperPath() {
+  const rawRegistry = String(getWallpaperRegistryValue() || '').trim();
+  const rawSaved = String(localStorage.getItem(WP_KEY) || '').trim();
+  const registryPath = normalizeWallpaperPath(rawRegistry);
+  const savedPath = normalizeWallpaperPath(rawSaved);
+  const registryWasLegacyDefault = rawRegistry && LEGACY_BUILTIN_WALLPAPER_IDS.has(rawRegistry.toLowerCase());
+  if (savedPath && (!registryPath || registryWasLegacyDefault)) return savedPath;
+  return registryPath || savedPath || DEFAULT_WALLPAPER_PATH;
+}
+
+function wallpaperFileId(path, fallbackDir) {
+  const normalized = normalizeWallpaperPath(path, fallbackDir);
+  return normalized ? WALLPAPER_FILE_PREFIX + normalized : '';
+}
+
+function wallpaperFilePath(id) {
+  return normalizeWallpaperPath(id);
+}
+
+function getUploadedWallpaperChoices() {
+  const items = [];
+  function walk(dir, dirPath) {
+    if (!dir) return;
+    dir.blobs?.forEach((blob, fileName) => {
+      if (blob.kind !== 'image') return;
+      const relPath = blobRelativePath(dirPath, fileName);
+      items.push({
+        id: relPath,
+        name: (SEEDED_WALLPAPER_MAP.get(relPath) || {}).label || fileName.replace(/\.[^.]+$/, ''),
+        path: relPath,
+        url: blob.url,
+        system: isSystemWallpaperPath(relPath),
+      });
+    });
+    if (!dir.subdirs) return;
+    [...dir.subdirs.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([subName, subdir]) => walk(subdir, dirPath ? dirPath + '\\' + subName : subName));
+  }
+  walk(termFS, '');
+  return items.sort((a, b) => {
+    if (a.system !== b.system) return a.system ? -1 : 1;
+    return a.path.localeCompare(b.path);
+  });
+}
+
+function renderWallpaperSwatch(grid, choice) {
+  const item = document.createElement('div');
+  item.dataset.id = choice.id;
+  item.className = 'wp-swatch' + (choice.id === currentWallpaper ? ' wp-selected' : '');
+  item.title = `C:\\sleepOS\\${choice.path}`;
+  item.style.cssText = 'cursor:default;display:flex;flex-direction:column;align-items:center;gap:3px;';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'wp-thumb';
+  thumb.style.cssText = 'width:72px;height:50px;box-sizing:border-box;overflow:hidden;flex-shrink:0;background:#c0c0c0;';
+
+  const img = document.createElement('img');
+  img.src = choice.url;
+  img.alt = choice.name;
+  img.draggable = false;
+  thumb.appendChild(img);
+
+  const label = document.createElement('div');
+  label.style.cssText = 'font-size:10px;text-align:center;line-height:1.25;max-width:84px;word-break:break-word;';
+  label.textContent = choice.name;
+  item.appendChild(thumb);
+  item.appendChild(label);
+
+  const meta = document.createElement('div');
+  meta.textContent = choice.path.replace(/\\[^\\]+$/, '') || 'Root';
+  meta.style.cssText = 'font-size:9px;color:#555;text-align:center;line-height:1.1;max-width:84px;word-break:break-word;';
+  item.appendChild(meta);
+
+  item.addEventListener('click', () => applyWallpaper(choice.path));
+  grid.appendChild(item);
+}
+
+function renderWallpaperSection(gridId, choices, emptyText) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  if (!choices.length) {
+    grid.innerHTML = `<div style="grid-column:1 / -1;padding:8px 10px;border:2px solid;border-color:#808080 #fff #fff #808080;background:#d4d0c8;font-size:10px;line-height:1.4;">${emptyText}</div>`;
+    return;
+  }
+  choices.forEach(choice => renderWallpaperSwatch(grid, choice));
+}
+
+function renderAppearanceWindow() {
+  const body = document.getElementById('wb-appearance');
+  if (!body) return;
+  const choices = getUploadedWallpaperChoices();
+  const systemWallpapers = choices.filter(choice => choice.system);
+  const otherWallpapers = choices.filter(choice => !choice.system);
+  body.style.cssText = 'padding:10px;overflow:auto;';
+  body.innerHTML = `
+    <div style="font-size:11px;margin-bottom:8px;">Wallpaper</div>
+    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">SYS\\WALLPAPERS</div>
+    <div id="wp-grid-system" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;"></div>
+    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Other Image Files</div>
+    <div id="wp-grid-uploaded" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>
+    <div id="wp-upload-note" style="font-size:10px;line-height:1.4;margin-top:10px;color:#333;"></div>`;
+
+  renderWallpaperSection('wp-grid-system', systemWallpapers, 'System wallpaper files will appear here.');
+  renderWallpaperSection('wp-grid-uploaded', otherWallpapers, 'Upload an image anywhere in File Explorer, or add more files under SYS\\WALLPAPERS.');
+  const note = document.getElementById('wp-upload-note');
+  note.textContent = 'Right-click any image to set it as your wallpaper.';
+}
+
+function refreshAppearanceWindow() {
+  if (document.getElementById('wb-appearance')) renderAppearanceWindow();
+}
+
+function applyWallpaperColorFallback() {
+  const bg = document.getElementById('desktop-bg');
+  if (!bg) return false;
+  currentWallpaper = '';
+  bg.style.cssText = 'background:#008080;';
+  syncWallpaperSwatches();
+  return false;
+}
+
+function applyWallpaper(path, options = {}) {
+  const { deferMissing = false, updateRegistry = true } = options;
+  const bg = document.getElementById('desktop-bg');
+  if (!bg) return false;
+
+  const resolved = resolveWallpaperEntry(path);
+  if (resolved) {
+    currentWallpaper = resolved.path;
+    bg.style.cssText = `background-color:#c0c0c0;background-image:url("${resolved.blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;`;
+    try { localStorage.setItem(WP_KEY, resolved.path); } catch (e) {}
+    if (updateRegistry) setWallpaperRegistryValue(resolved.path);
+    syncWallpaperSwatches();
+    return true;
+  }
+
+  return applyWallpaperColorFallback();
+}
+
+function handleWallpaperFileRename(dirPath, oldName, newName) {
+  const oldPath = normalizeWallpaperPath(blobRelativePath(dirPath, oldName));
+  const newPath = normalizeWallpaperPath(blobRelativePath(dirPath, newName));
+  const savedPath = normalizeWallpaperPath(localStorage.getItem(WP_KEY));
+  const registryPath = normalizeWallpaperPath(getWallpaperRegistryValue());
+  if (currentWallpaper === oldPath || savedPath === oldPath || registryPath === oldPath) {
+    applyWallpaper(newPath);
+  } else {
+    refreshAppearanceWindow();
+  }
+}
+
+function handleWallpaperFileDelete(dirPath, name) {
+  const deletedPath = normalizeWallpaperPath(blobRelativePath(dirPath, name));
+  const savedPath = normalizeWallpaperPath(localStorage.getItem(WP_KEY));
+  const registryPath = normalizeWallpaperPath(getWallpaperRegistryValue());
+  if (currentWallpaper === deletedPath || savedPath === deletedPath || registryPath === deletedPath) {
+    applyWallpaper(DEFAULT_WALLPAPER_PATH);
+  } else {
+    refreshAppearanceWindow();
+  }
+}
+
+function openAppearance() {
+  if (!mkWin({ id:'appearance', title:'Appearance', icon:'\u{1F5BC}\uFE0F', w:410, h:360, x:130, y:90, menubar:false, statusbar:false }) && !document.getElementById('wb-appearance')) return;
+  renderAppearanceWindow();
+}
+
+function openSettings() {
+  if (!mkWin({ id:'settings', title:'Settings', icon:'\u2699\uFE0F', w:390, h:294, x:145, y:95, menubar:false, statusbar:false })) return;
+  const body = document.getElementById('wb-settings');
+  body.className = 'win-body st-panel';
+
+  body.innerHTML =     `<div class="st-section">Display</div>
+     <div class="st-row"><div class="st-label">CRT scan lines</div><button class="st-toggle" data-setting="crtScanlines"></button></div>
+     <div class="st-row"><div class="st-label">Video dithering</div><button class="st-toggle" data-setting="videoDither"></button></div>
+     <div class="st-section">System</div>
+     <div class="st-row"><div class="st-label">12-hour clock</div><button class="st-toggle" data-setting="clock12h"></button></div>
+
+     <div class="st-row"><div class="st-label">Skip boot screen</div><button class="st-toggle" data-setting="skipBoot"></button></div>
+     <div class="st-footer">
+       <button class="dlg-btn primary" id="settings-open-appearance">Open Appearance</button>
+       <button class="dlg-btn" id="settings-close">Close</button>
+     </div>`;
+
+  function refresh() {
+    body.querySelectorAll('[data-setting]').forEach(btn => {
+      const key = btn.dataset.setting;
+      const enabled = !!osSettings[key];
+      btn.classList.toggle('on', enabled);
+      btn.textContent = enabled ? 'ON' : 'OFF';
+      btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    });
+  }
+
+  body.querySelectorAll('[data-setting]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.setting;
+      osSettings[key] = !osSettings[key];
+      saveSettings();
+      applySettings();
+      refresh();
+    });
+  });
+
+  document.getElementById('settings-open-appearance').addEventListener('click', openAppearance);
+  document.getElementById('settings-close').addEventListener('click', () => closeWin('settings'));
+  refresh();
+}
+function getBootRegistryNumber(keyPath, valueName, fallback, min = 0, max = 999) {
+  const parsed = Number(registryData['HKEY_SLEEPBOX_MACHINE']?.[keyPath]?.[valueName]?.value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+function getBootRegistryText(keyPath, valueName, fallback) {
+  const raw = registryData['HKEY_SLEEPBOX_MACHINE']?.[keyPath]?.[valueName]?.value;
+  const text = String(raw == null ? '' : raw).trim();
+  return text || fallback;
+}
+function getBiosSoulIntegrityStatus(value) {
+  if (value >= 92) return 'STABLE';
+  if (value >= 70) return 'DEGRADED';
+  if (value >= 45) return 'UNSTABLE';
+  return 'CRITICAL';
+}
+function formatBiosMetric(label, value, suffix = '') {
+  return `  ${String(label).padEnd(18, ' ')}: ${value}${suffix ? '  ' + suffix : ''}`;
+}
+function getBiosStorySnapshot() {
+  const fallback = {
+    stage: 0,
+    phaseLabel: 'Dormant',
+    coProcessorLine: 'Co-processor: present (unresponsive)',
+    segmentLine: '  Segment C: WARN - residual data found',
+    usbLine: '  USB: 1 device attached (unrecognized)',
+    relayState: 'Nominal',
+    containmentState: 'Baseline',
+    profileState: 'none',
+    bootLine: 'Loading sleepOS v0.903b2...',
+  };
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem('sleepOS-daemon-story') || 'null');
+  } catch (e) {}
+  const story = saved && typeof saved === 'object' ? saved : {};
+  const bool = key => !!story[key];
+  const voidActions = Array.isArray(story.voidActions)
+    ? story.voidActions
+        .map(action => String(action || '').toLowerCase().trim())
+        .filter(Boolean)
+    : [];
+  const analyticalCount = voidActions.filter(action => action !== 'observe').length;
+  let stage = Math.max(0, Math.min(8, Math.trunc(Number(story.stage) || 0)));
+
+  if (bool('openedDaemon')) stage = Math.max(stage, 1);
+  if (bool('falseContainmentSeen')) stage = Math.max(stage, 2);
+  if (bool('respawnDisabledKill')) stage = Math.max(stage, 3);
+  if (bool('daemonStopped') || bool('wrongVictory')) stage = Math.max(stage, 4);
+  if (bool('anchorDeleted')) stage = Math.max(stage, 5);
+  if (bool('anchorDeleted') && bool('voidObserved') && (analyticalCount > 0 || bool('mirrorInspected') || bool('protocolInspected'))) {
+    stage = Math.max(stage, 6);
+  }
+  if (bool('mirrorLockRestored') || bool('quarantineSigned')) stage = Math.max(stage, 7);
+  if (bool('endingReached')) stage = Math.max(stage, 8);
+
+  if (stage >= 8) {
+    return {
+      stage,
+      phaseLabel: 'Contained',
+      coProcessorLine: 'Co-processor: present (archived)',
+      segmentLine: '  Segment C: OK - archive checksum sealed',
+      usbLine: '  USB: 0 external devices required',
+      relayState: 'Archived',
+      containmentState: 'Sealed',
+      profileState: 'sealed',
+      bootLine: 'Loading archival shell...',
+    };
+  }
+  if (stage >= 7) {
+    return {
+      stage,
+      phaseLabel: 'Seal Ready',
+      coProcessorLine: 'Co-processor: present (quarantine primed)',
+      segmentLine: '  Segment C: OK - quarantine lattice primed',
+      usbLine: '  USB: 1 device attached (quarantine signer)',
+      relayState: 'Bypassed',
+      containmentState: 'Armed',
+      profileState: bool('quarantineSigned') ? 'bound' : 'ready',
+      bootLine: 'Loading seal-ready shell...',
+    };
+  }
+  if (stage >= 6) {
+    return {
+      stage,
+      phaseLabel: 'Profiled',
+      coProcessorLine: 'Co-processor: present (replying in-band)',
+      segmentLine: '  Segment C: WARN - seal lattice charging',
+      usbLine: '  USB: 1 device attached (void instrument)',
+      relayState: 'Bypassed',
+      containmentState: 'Profiling',
+      profileState: analyticalCount >= 3 ? 'deep' : 'active',
+      bootLine: 'Loading analysis shell...',
+    };
+  }
+  if (stage >= 5) {
+    return {
+      stage,
+      phaseLabel: 'Contact',
+      coProcessorLine: 'Co-processor: present (replying in-band)',
+      segmentLine: '  Segment C: FAIL - anchor bleedthrough',
+      usbLine: '  USB: 1 device attached (mirror echo)',
+      relayState: 'Compromised',
+      containmentState: 'Open',
+      profileState: 'contact',
+      bootLine: 'Loading degraded shell...',
+    };
+  }
+  if (stage >= 4) {
+    return {
+      stage,
+      phaseLabel: 'Containment Lost',
+      coProcessorLine: 'Co-processor: present (unstable handshake)',
+      segmentLine: '  Segment C: FAIL - daemon relay bleedthrough',
+      usbLine: '  USB: 1 device attached (relay ghost)',
+      relayState: 'Degraded',
+      containmentState: 'Fractured',
+      profileState: 'surface',
+      bootLine: 'Loading recovery shell...',
+    };
+  }
+  if (stage >= 1) {
+    return {
+      stage,
+      phaseLabel: 'Observed',
+      coProcessorLine: 'Co-processor: present (listening)',
+      segmentLine: '  Segment C: WARN - foreign pattern repeating',
+      usbLine: '  USB: 1 device attached (observer channel)',
+      relayState: 'Listening',
+      containmentState: 'Passive',
+      profileState: voidActions.length ? 'surface' : 'noise',
+      bootLine: 'Loading sleepOS v0.903b2...',
+    };
+  }
+  return fallback;
+}
+function buildBiosLines() {
+  const soulIntegrity = Math.trunc(getBootRegistryNumber('SOUL\\Metrics', 'SOUL_INTEGRITY', 87, 0, 100));
+  const daemonCount = Math.trunc(getBootRegistryNumber('SOUL\\Metrics', 'DAEMON_COUNT', 7, 0, 99));
+  const temporalDrift = getBootRegistryText('SOUL\\Metrics', 'TEMPORAL_DRIFT', '+/-2.3yr');
+  const observerCount = getBootRegistryText('VOID', 'OBSERVER_COUNT', '[classified]');
+  const voidPressureBase = Math.trunc(getBootRegistryNumber('VOID', 'VOID_PRESSURE_BASE', 12, 0, 99));
+  const unknownDaemons = Math.max(0, daemonCount - 4);
+  const memoryCoherence = Math.max(0, Math.min(99.9, soulIntegrity + 0.3 - Math.max(0, voidPressureBase - 12) * 0.18));
+  const story = getBiosStorySnapshot();
+
+  return [
+    'sleepOS BIOS v2.33b  (C) MMXXI Eve Networks Corp.',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '',
+    'CPU: SOMA-686 @ 666 MHz                [DETECTED]',
+    story.coProcessorLine,
+    '',
+    'Testing RAM...',
+    '  Segment A: OK',
+    '  Segment B: OK',
+    story.segmentLine,
+    '  262144 KB total',
+    '',
+    'Scanning devices...',
+    '  IDE 0 Master : WD Corpus-40GB  (ATA-6)',
+    '  IDE 0 Slave  : CD-ROM VOID-52x  (no disc)',
+    story.usbLine,
+    '',
+    'Running POST diagnostics...',
+    formatBiosMetric('Memory coherence', memoryCoherence.toFixed(1) + '%'),
+    formatBiosMetric('Clock drift', temporalDrift, '[WARNING]'),
+    formatBiosMetric('Daemon count', `${daemonCount} (${unknownDaemons} unrecognized)`),
+    formatBiosMetric('Observer count', observerCount),
+    formatBiosMetric('Story phase', story.phaseLabel),
+    formatBiosMetric('Relay state', story.relayState),
+    formatBiosMetric('Containment', story.containmentState),
+    formatBiosMetric('Void profile', story.profileState),
+    formatBiosMetric('Void pressure', `${voidPressureBase} baseline`),
+    formatBiosMetric('Soul integrity', `${soulIntegrity}%`, '[' + getBiosSoulIntegrityStatus(soulIntegrity) + ']'),
+    '',
+    story.bootLine,
+  ];
+}
+let biosLines = buildBiosLines();
+
+// BIOS BOOT// BIOS BOOT
+// ─────────────────────────────────────────────────────────────────
+const biosTextEl = document.getElementById('bios-text');
+let biosIdx = 0, biosChar = 0, biosTimer, bisDone = false;
+let forceBootSequence = false;
+try {
+  forceBootSequence = sessionStorage.getItem(FORCE_BOOT_SESSION_KEY) === '1';
+  if (forceBootSequence) sessionStorage.removeItem(FORCE_BOOT_SESSION_KEY);
+} catch (e) {}
+
+function biosFinish() {
+  if (bisDone) return; bisDone = true;
+  clearTimeout(biosTimer);
+  const biosEl = document.getElementById('bios');
+  biosEl.style.transition = 'opacity 0.6s';
+  biosEl.style.opacity = '0';
+  setTimeout(() => { biosEl.style.display = 'none'; startDesktop(); }, 600);
+}
+
+function biosType() {
+  if (bisDone) return;
+  if (biosIdx >= biosLines.length) { biosTimer = setTimeout(biosFinish, 700); return; }
+  const line = biosLines[biosIdx];
+  if (biosChar <= line.length) {
+    if (biosChar > 0) {
+      // Replace last line
+      const lines = biosTextEl.textContent.split('\n');
+      lines[lines.length - 1] = line.slice(0, biosChar);
+      biosTextEl.textContent = lines.join('\n');
+    }
+    biosChar++;
+    biosTimer = setTimeout(biosType, line === '' ? 0 : 11);
+  } else {
+    biosTextEl.textContent += '\n';
+    biosIdx++; biosChar = 0;
+    biosTimer = setTimeout(biosType, line === '' ? 25 : 55);
+  }
+}
+
+document.addEventListener('keydown',   biosFinish, { once: true });
+document.addEventListener('click',     biosFinish, { once: true });
+document.addEventListener('touchend',  biosFinish, { once: true });
+// Load settings early so skipBoot is available
+try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
+if (osSettings.skipBoot && !forceBootSequence) {
+  biosFinish();
+} else {
+  biosLines = buildBiosLines();
+  setTimeout(biosType, 250);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// WINDOW MANAGEMENT
+// ─────────────────────────────────────────────────────────────────
+let zTop = 100;
+const wins = {};
+let _expClipboard = null; // { items:[{name,kind,sysfile,srcCwd}], cut:bool }
+let _shellDragPayload = null; // { item, srcCwd, source:'explorer'|'desktop', sourceId?:string }
+let _explorerWinSeq = 0;
+
+function nextExplorerWinId() {
+  do { _explorerWinSeq += 1; } while (wins['explorer-' + _explorerWinSeq]);
+  return 'explorer-' + _explorerWinSeq;
+}
+
+// Shared PID helpers (used by SYSMON and TASKKILL)
+function pidFromId(id) {
+  let h = 2000;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fff;
+  return 2000 + (h % 6000);
+}
+function winIdByPid(pid) {
+  for (const id of Object.keys(wins)) {
+    if (pidFromId(id) === pid) return id;
+  }
+  return null;
+}
+
+// Shared virtual filesystem (terminal + notepad + media + explorer)
+// subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
+const termFS = {
+  dirs:    new Set(['DOCS']),
+  files:   new Map(),
+  blobs:   new Map(),
+  subdirs: new Map([['DOCS', {
+    dirs: new Set(), blobs: new Map(), subdirs: new Map(),
+    files: new Map([
+      ['README.txt', [
+        '== sleepOS v0.9β - README ==',
+        '',
+        'ROOT: C:\\sleepOS',
+        '  DOCS\\      - documentation (this folder)',
+        '  PROJECTS\\  - interactive apps (read-only)',
+        '',
+        'SYSTEM FILES (read-only):',
+        '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
+        '  SYSMON.exe  BROWSER.exe  DEFRAG.exe',
+        '  CALC.exe  REGEDIT.exe  EXPLORER.exe',
+        '  void.tmp  daemon.core  ?????.exe',
+        '',
+        'USER FILES:',
+        '  Create with TOUCH, NOTEPAD, or ECHO >.',
+        '  Upload via right-click > Upload File.',
+        '  New items go into your current folder.',
+        '',
+        'SHORTCUTS:',
+        '  Space + Tab     switch windows',
+        '  Ctrl + Alt + Q  session controls',
+        '  Esc             close menus and overlays',
+        '',
+        'TERMINAL (quick ref):',
+        '  DIR / LS          list files',
+        '  CD <dir>          enter folder  |  CD ..  go up',
+        '  CAT <file>        read file',
+        '  TOUCH <file>      create file',
+        '  MKDIR <dir>       create folder',
+        '  DEL <file>        delete',
+        '  GREP <pat> <file> search lines matching pattern',
+        '  WC <file>         word/line/byte count',
+        '  SET name=value    assign a shell variable',
+        '  INPUT <var>       read a line into a shell variable',
+        '  SLEEP <ms>        pause in milliseconds',
+        '  LS *.txt          wildcard file listing',
+        '  CAT f | GREP pat  pipe output between commands',
+        '  DIR > out.txt     redirect output to a file',
+        '  CAT f | NOTEPAD   pipe output into Notepad',
+        '',
+        'KEYBOARD SHORTCUTS:',
+        '  Ctrl+Alt+Q      secure attention sequence',
+        '  Space+Tab         switch windows',
+        '  Escape            close menus / overlays',
+        '',
+        'Bonus: RUN DOCS\\REACTOR.script to play a terminal game.',
+        '',
+        'See COMMANDS.txt for full terminal reference.',
+        'See SCRIPTING.txt for the .script language.',
+      ].join('\n')],
+      ['SCRIPTING.txt', [
+        '== sleepOS Script Language (.script files) ==',
+        '',
+        'Scripts are plain text files with .script extension.',
+        'Create one with: NOTEPAD myscript.script',
+        'Run one with:    RUN myscript.script',
+        '',
+        '── COMMANDS ─────────────────────────────────',
+        '',
+        '  print <text>       print text to terminal',
+        '  echo <text>        same as print',
+        '  wait <ms>          pause N milliseconds',
+        '  set <var> <value>  assign a variable',
+        '  input <var> [text] read a line from the terminal',
+        '  inc <var> [n]      increase a numeric variable',
+        '  dec <var> [n]      decrease a numeric variable',
+        '  add <var> <n>      add n to a numeric variable',
+        '  sub <var> <n>      subtract n from a numeric variable',
+        '  mul <var> <n>      multiply a numeric variable',
+        '  div <var> <n>      divide a numeric variable',
+        '  mod <var> <n>      modulo a numeric variable',
+        '  clear              clear the terminal output',
+        '  touch <file>       create an empty file',
+        '  mkdir <dir>        create a directory',
+        '  del <file>         delete a file',
+        '  open <file>        open file in viewer',
+        '  start <program>    launch a program',
+        '  notepad [file]     open Notepad',
+        '  run <script> [..]  run another script in the same context',
+        '  call <label> [..]  call a subroutine label',
+        '  return [code]      return from a subroutine',
+        '  exit [code]        stop the script with a status code',
+        '  grep <pattern> <file> print matching lines',
+        '',
+        '-- CONTROL FLOW --------------------------------------------',
+        '',
+        '  :label             declare a jump target',
+        '  goto <label>       jump to a label',
+        '  if a == b goto x   branch on a comparison',
+        '  if not a == b goto x',
+        '  if exists file goto x',
+        '  if defined name goto x',
+        '  if not exists file goto x',
+        '  if not defined name goto x',
+        '',
+        '  Supported operators: ==  !=  >  >=  <  <=',
+        '  == and != compare strings after $var expansion.',
+        '  >, >=, <, <= require both sides to be numbers.',
+        '',
+        '── VARIABLES ────────────────────────────────',
+        '',
+        '  set name Visitor',
+        '  print Hello, $name!',
+        '  -> Hello, Visitor!',
+        '  print Arg 1: $1  / argc=$argc',
+        '  if $status != 0 goto failed',
+        '',
+        '  Child scripts launched with RUN share the same variables.',
+        '  RUN and CALL provide positional args as $0, $1, $2, ...',
+        '  $argc is the arg count. $status / $errorlevel is the last exit code.',
+        '  INPUT only works when the script is launched from TERMINAL.',
+        '',
+        '── COLORS ───────────────────────────────────',
+        '',
+        '  print [red]    error text',
+        '  print [green]  success text',
+        '  print [yellow] warning text',
+        '  print [cyan]   info text',
+        '  print [blue]   note text',
+        '',
+        '── COMMENTS ─────────────────────────────────',
+        '',
+        '  # hash comment',
+        '  // double-slash comment',
+        '',
+        '── EXAMPLE SCRIPT ───────────────────────────',
+        '',
+        '  # loop.script',
+        '  input name "Operator name:"',
+        '  set mode debug',
+        '  set count 1',
+        '  if not exists DOCS goto no_docs',
+        '  if $mode == debug goto debug',
+        '  print Normal mode for $name',
+        '  goto start',
+        '  :debug',
+        '  print [cyan] Debug mode enabled for $name',
+        '  call tick_loop $name',
+        '  if $status != 0 goto failed',
+        '  exit 0',
+        '  :tick_loop',
+        '  :start',
+        '  print [yellow] Doubling counter...',
+        '  :loop',
+        '  print Tick $count',
+        '  mul count 2',
+        '  wait 250',
+        '  if $count <= 4 goto loop',
+        '  print [green] Done.',
+        '  return 0',
+        '  :no_docs',
+        '  print [red] DOCS missing',
+        '  exit 2',
+        '  :failed',
+        '  print [red] Subroutine failed',
+        '  exit $status',
+        '',
+        '── PROGRAMS FOR start/open ──────────────────',
+        '',
+        '  notepad, terminal, sysmon, browser,',
+        '  defrag, explorer, welcome,',
+        '  calc, regedit',
+      ].join('\n')],
+      ['COMMANDS.txt', [
+        '== Terminal Commands Reference ==',
+        '',
+        '── FILESYSTEM ───────────────────────────────',
+        '  DIR, LS              list current directory',
+        '  CD <path>            change directory',
+        '  CD ..                go up one level',
+        '  MKDIR <name>         create directory',
+        '  TOUCH <name>         create empty file',
+        '  DEL, RM <file>       delete file/directory',
+        '  CAT, TYPE <file>     read file contents',
+        '  COPY <src> <dst>     copy a file',
+        '  TREE                 show directory tree',
+        '  OPEN <file>          open in viewer/editor',
+        '',
+        '── SCRIPTING ────────────────────────────────',
+        '  RUN <file.script> [args] execute a script file',
+        '  .script files support labels, subroutines, args,',
+        '  shared variables, existence tests, and exit codes',
+        '  ECHO text > file     write text to file',
+        '  ECHO text >> file    append to file',
+        '',
+        '── PROGRAMS ─────────────────────────────────',
+        '  NOTEPAD [file]       text editor',
+        '  START <name>         start any program',
+        '  EXIT                 close terminal',
+        '  CALC                 open calculator',
+        '  REGEDIT              open registry editor',
+        '  EXPLORER             open file explorer',
+        '',
+        '── SYSTEM ───────────────────────────────────',
+        '  VER                  OS version',
+        '  WHO, WHOAMI          current user',
+        '  DATE                 system date',
+        '  PS                   running processes',
+        '  TASKKILL <pid>       terminate process',
+        '  IPCONFIG             network config',
+        '  SET [name[=value]]   show or assign shell variables',
+        '  INPUT <var> [prompt] read a line into a shell variable',
+        '  INC, DEC <var> [n]   adjust numeric shell variables',
+        '  ADD, SUB, MUL, DIV, MOD  arithmetic on shell variables',
+        '  PING [host]          ping a host',
+        '  SLEEP <ms>           pause for milliseconds',
+        '  ECHO <text>          print text',
+        '  PRINT <text>         alias for ECHO',
+        '  WAIT <ms>            alias for SLEEP',
+        '  CLS                  clear screen',
+        '  CLEAR                alias for CLS',
+        '  HELP                 this help',
+        '',
+        '── SEARCH & PIPES ───────────────────────────',
+        '  GREP <pattern> <file>  find matching lines',
+        '  WC <file>              word/line/byte count',
+        '  LS *.ext               wildcard glob listing',
+        '  DEL *.tmp              wildcard delete',
+        '  CAT f | GREP pattern   pipe output to command',
+        '  cmd > file             write command output to a file',
+        '  cmd >> file            append command output to a file',
+        '  cmd | NOTEPAD          open piped output in Notepad',
+        '  cmd | NOTEPAD file     save piped output and open it',
+        '',
+        '── KEYBOARD SHORTCUTS ───────────────────────',
+        '  Ctrl+Alt+Q    secure attention sequence',
+        '  Space+Tab       switch windows',
+        '  Escape          close menus / overlays',
+      ].join('\n')],
+      ['REACTOR.script', [
+        '# REACTOR.script',
+        'clear',
+        'print [cyan] REACTOR WATCH',
+        'print You are alone in the control loop.',
+        'print Survive 5 turns without melting down.',
+        'print',
+        'print 1) VENT  - lower heat, costs power',
+        'print 2) BOOST - gain power, raises heat',
+        'print 3) PATCH - repair integrity, costs power',
+        'print',
+        'input pilot "Operator name:"',
+        'set heat 4',
+        'set power 5',
+        'set integrity 6',
+        'set turn 1',
+        'print [green] Good luck, $pilot.',
+        'wait 300',
+        ':loop',
+        'call check_fail',
+        'if $status != 0 goto game_over',
+        'if $turn > 5 goto win',
+        'call hud',
+        'call event_brief',
+        'call choose_action',
+        'if $status != 0 goto loop',
+        'call apply_event',
+        'call check_fail',
+        'if $status != 0 goto game_over',
+        'inc turn 1',
+        'wait 250',
+        'goto loop',
+        ':hud',
+        'print',
+        'print [blue] ------------------------------',
+        'print [blue] TURN $turn / 5',
+        'print Heat: $heat',
+        'print Power: $power',
+        'print Integrity: $integrity',
+        'print [blue] ------------------------------',
+        'return 0',
+        ':event_brief',
+        'if $turn == 1 goto brief_1',
+        'if $turn == 2 goto brief_2',
+        'if $turn == 3 goto brief_3',
+        'if $turn == 4 goto brief_4',
+        'goto brief_5',
+        ':brief_1',
+        'print [yellow] Alert: a solar flare is incoming.',
+        'print [yellow] End of turn effect: heat +2',
+        'return 0',
+        ':brief_2',
+        'print [yellow] Alert: coolant leak in the outer ring.',
+        'print [yellow] End of turn effect: integrity -2',
+        'return 0',
+        ':brief_3',
+        'print [yellow] Alert: ghost load in the battery banks.',
+        'print [yellow] End of turn effect: power -2',
+        'return 0',
+        ':brief_4',
+        'print [yellow] Alert: chamber tremor in progress.',
+        'print [yellow] End of turn effect: heat +1, integrity -1',
+        'return 0',
+        ':brief_5',
+        'print [yellow] Alert: cascade surge across all systems.',
+        'print [yellow] End of turn effect: heat +2, power -1, integrity -1',
+        'return 0',
+        ':choose_action',
+        'print 1) VENT',
+        'print 2) BOOST',
+        'print 3) PATCH',
+        'input choice "Action:"',
+        'if $choice == 1 goto act_vent',
+        'if $choice == 2 goto act_boost',
+        'if $choice == 3 goto act_patch',
+        'print [red] Invalid action. Choose 1, 2, or 3.',
+        'return 1',
+        ':act_vent',
+        'print [cyan] You vent plasma into the dark.',
+        'dec heat 3',
+        'dec power 1',
+        'call clamp_heat',
+        'return 0',
+        ':act_boost',
+        'print [cyan] You push fresh charge into the grid.',
+        'add power 2',
+        'add heat 2',
+        'return 0',
+        ':act_patch',
+        'print [cyan] You patch fractures in the shell.',
+        'add integrity 2',
+        'dec power 2',
+        'return 0',
+        ':clamp_heat',
+        'if $heat >= 0 goto clamp_done',
+        'set heat 0',
+        ':clamp_done',
+        'return 0',
+        ':apply_event',
+        'if $turn == 1 goto event_1',
+        'if $turn == 2 goto event_2',
+        'if $turn == 3 goto event_3',
+        'if $turn == 4 goto event_4',
+        'goto event_5',
+        ':event_1',
+        'add heat 2',
+        'print [yellow] The flare hits. Heat climbs.',
+        'return 0',
+        ':event_2',
+        'sub integrity 2',
+        'print [yellow] Coolant loss scars the outer casing.',
+        'return 0',
+        ':event_3',
+        'sub power 2',
+        'print [yellow] The ghost load drains your reserves.',
+        'return 0',
+        ':event_4',
+        'add heat 1',
+        'sub integrity 1',
+        'print [yellow] The chamber shudders under strain.',
+        'return 0',
+        ':event_5',
+        'add heat 2',
+        'sub power 1',
+        'sub integrity 1',
+        'print [yellow] The final cascade tears through the stack.',
+        'return 0',
+        ':check_fail',
+        'if $heat < 10 goto check_power',
+        'print [red] MELTDOWN. Heat reached $heat.',
+        'return 10',
+        ':check_power',
+        'if $power > 0 goto check_integrity',
+        'print [red] BLACKOUT. Power collapsed.',
+        'return 11',
+        ':check_integrity',
+        'if $integrity > 0 goto safe',
+        'print [red] BREACH. Integrity failed.',
+        'return 12',
+        ':safe',
+        'return 0',
+        ':win',
+        'print',
+        'print [green] Reactor stable after 5 turns.',
+        'print [green] Nice work, $pilot.',
+        'exit 0',
+        ':game_over',
+        'print [red] The control loop goes silent.',
+        'exit $status',
+      ].join('\n')],
+    ]),
+  }]]),
+};
+termFS.dirs.add('DESKTOP');
+if (!termFS.subdirs.has('DESKTOP')) {
+  termFS.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+}
+
+// Helper: get a directory object by name ('' = root)
+function fsGetDir(path) {
+  if (!path) return termFS;
+  const parts = String(path).toUpperCase().replace(/\//g,'\\').split('\\').filter(Boolean);
+  let node = termFS;
+  for (const part of parts) {
+    if (!node.subdirs) node.subdirs = new Map();
+    if (!node.subdirs.has(part)) {
+      if (node.dirs.has(part)) node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+      else return null;
+    }
+    node = node.subdirs.get(part);
+  }
+  return node;
+}
+
+function fsNormalizeDir(name) {
+  return String(name || '')
+    .trim()
+    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '')
+    .toUpperCase();
+}
+
+function fsSplitPath(path, fallbackDir) {
+  const cleaned = String(path || '')
+    .trim()
+    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '');
+  if (!cleaned) return { dirName: fsNormalizeDir(fallbackDir), fileName: '' };
+  const parts = cleaned.split('\\').filter(Boolean);
+  if (parts.length === 1) return { dirName: fsNormalizeDir(fallbackDir), fileName: parts[0] };
+  return {
+    dirName: fsNormalizeDir(parts.slice(0, -1).join('\\')),
+    fileName: parts[parts.length - 1],
+  };
+}
+
+function fsGetEntry(path, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  if (dir.files.has(fileName)) return { dir, dirName, fileName, kind: 'text', value: dir.files.get(fileName) };
+  if (dir.blobs.has(fileName)) return { dir, dirName, fileName, kind: 'blob', value: dir.blobs.get(fileName) };
+  return null;
+}
+
+function calcTextFragmentationDelta(prevValue, nextValue, created) {
+  if (prevValue === nextValue) return 0;
+  const prevLen = String(prevValue ?? '').length;
+  const nextLen = String(nextValue ?? '').length;
+  const contentWeight = Math.max(nextLen, Math.abs(nextLen - prevLen));
+  return Math.min(0.035, (created ? 0.014 : 0.009) + Math.min(0.018, contentWeight / 18000));
+}
+
+function calcBlobFragmentationDelta(size, created) {
+  return Math.min(0.04, (created ? 0.016 : 0.01) + Math.min(0.02, Math.max(0, Number(size) || 0) / 180000));
+}
+
+function calcRemovalFragmentationDelta(kind, payload) {
+  if (kind === 'dir') return 0.007;
+  if (kind === 'blob') return Math.min(0.026, 0.009 + Math.min(0.014, Math.max(0, Number(payload) || 0) / 220000));
+  return Math.min(0.022, 0.008 + Math.min(0.012, String(payload ?? '').length / 22000));
+}
+
+function fsWriteTextFile(path, value, fallbackDir, options) {
+  options = options || {};
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  const nextValue = String(value ?? '');
+  const hadFile = dir.files.has(fileName);
+  const prevValue = hadFile ? dir.files.get(fileName) : null;
+  if (hadFile && prevValue === nextValue) return { dir, dirName, fileName, created: false, unchanged: true };
+  dir.files.set(fileName, nextValue);
+  schedSave();
+  if (options.trackFragmentation !== false) {
+    increaseDriveFragmentation(calcTextFragmentationDelta(prevValue, nextValue, !hadFile));
+  }
+  return { dir, dirName, fileName, created: !hadFile };
+}
+
+function fsWriteBlobFile(path, value, fallbackDir, options) {
+  options = options || {};
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  const existing = dir.blobs.get(fileName);
+  if (existing?.url && existing.url !== value?.url) URL.revokeObjectURL(existing.url);
+  dir.blobs.set(fileName, value);
+  schedSave();
+  if (options.trackFragmentation !== false) {
+    increaseDriveFragmentation(calcBlobFragmentationDelta(value?.size, !existing));
+  }
+  return { dir, dirName, fileName, created: !existing };
+}
+
+function fsCreateDir(path, fallbackDir, options) {
+  options = options || {};
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const parent = fsGetDir(dirName);
+  const name = String(fileName || '').toUpperCase();
+  if (!parent || !name) return null;
+  if (parent.dirs.has(name)) return { dir: parent, dirName, fileName: name, created: false };
+  parent.dirs.add(name);
+  if (!parent.subdirs) parent.subdirs = new Map();
+  if (!parent.subdirs.has(name)) parent.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+  schedSave();
+  if (options.trackFragmentation !== false) increaseDriveFragmentation(0.006);
+  return { dir: parent, dirName, fileName: name, created: true };
+}
+
+// ── Filesystem persistence ────────────────────────────────────────
+const FS_KEY = 'sleepOS-fs';
+const DRIVE_STATE_KEY = 'sleepOS-drive-state';
+const LEGACY_DEFRAG_KEY = 'sleepOS-defrag-time';
+let _fsSaveTimer = null;
+
+function _serDir(d) {
+  const out = { dirs: [...d.dirs], files: {}, subdirs: {} };
+  d.files.forEach((v, k) => { out.files[k] = v; });
+  if (d.subdirs) d.subdirs.forEach((v, k) => { out.subdirs[k] = _serDir(v); });
+  return out;
+}
+
+function _desDir(o) {
+  const d = { dirs: new Set(o.dirs || []), files: new Map(), blobs: new Map(), subdirs: new Map() };
+  Object.entries(o.files || {}).forEach(([k, v]) => d.files.set(k, v));
+  Object.entries(o.subdirs || {}).forEach(([k, v]) => d.subdirs.set(k, _desDir(v)));
+  return d;
+}
+
+const SEEDED_DOCS_DATA = _serDir(termFS.subdirs.get('DOCS'));
+
+function refreshSeededDocs() {
+  termFS.dirs.add('DOCS');
+  let docs = termFS.subdirs.get('DOCS');
+  if (!docs) {
+    docs = _desDir(SEEDED_DOCS_DATA);
+    termFS.subdirs.set('DOCS', docs);
+    return;
+  }
+  docs.dirs = docs.dirs || new Set();
+  docs.files = docs.files || new Map();
+  docs.blobs = docs.blobs || new Map();
+  docs.subdirs = docs.subdirs || new Map();
+  Object.entries(SEEDED_DOCS_DATA.files || {}).forEach(([name, value]) => {
+    docs.files.set(name, value);
+  });
+  Object.entries(SEEDED_DOCS_DATA.subdirs || {}).forEach(([name, value]) => {
+    docs.dirs.add(name);
+    docs.subdirs.set(name, _desDir(value));
+  });
+}
+
+function refreshSeededWallpaperLibrary() {
+  const dir = ensureFsDir(SYSTEM_WALLPAPER_DIR);
+  SEEDED_WALLPAPERS.forEach(item => {
+    const { fileName } = fsSplitPath(item.path);
+    if (!fileName) return;
+    dir.blobs.set(fileName, {
+      url: item.assetUrl,
+      kind: 'image',
+      size: 0,
+      mime: item.mime,
+      seeded: true,
+    });
+  });
+}
+
+function refreshSeededHomeMedia() {
+  SEEDED_HOME_MEDIA.forEach(item => {
+    const { dirName, fileName } = fsSplitPath(item.path);
+    if (!fileName) return;
+    const dir = ensureFsDir(dirName);
+    dir.blobs.set(fileName, {
+      url: item.assetUrl,
+      kind: item.kind || inferBlobKindFromName(fileName),
+      size: item.size || 0,
+      mime: item.mime,
+      author: item.author || '',
+      seeded: true,
+    });
+  });
+}
+
+function saveFS() {
+  try {
+    const data = { dirs: [...termFS.dirs], files: {}, subdirs: {} };
+    termFS.files.forEach((v, k) => { data.files[k] = v; });
+    termFS.subdirs.forEach((v, k) => { data.subdirs[k] = _serDir(v); });
+    localStorage.setItem(FS_KEY, JSON.stringify(data));
+  } catch(e) { /* quota exceeded - silently ignore */ }
+}
+
+function schedSave() {
+  clearTimeout(_fsSaveTimer);
+  _fsSaveTimer = setTimeout(saveFS, 400);
+}
+
+function computeLegacyFragLevel(ms) {
+  if (ms === null) return 0.68;
+  const hours = ms / 3600000;
+  if (hours < 0.01) return 0.02;
+  return Math.min(0.9, 0.02 + 0.88 * Math.pow(hours / 168, 0.38));
+}
+
+function createDriveStateDefaults(fromLegacy) {
+  const legacyTs = fromLegacy ? parseInt(localStorage.getItem(LEGACY_DEFRAG_KEY) || '0', 10) || 0 : 0;
+  const msSince = legacyTs ? Date.now() - legacyTs : null;
+  return {
+    level: computeLegacyFragLevel(msSince),
+    lastDefragTs: legacyTs,
+    changeCount: 0,
+    lastMutationTs: 0,
+  };
+}
+
+function normalizeDriveState(saved) {
+  const next = Object.assign(createDriveStateDefaults(false), saved || {});
+  next.level = Math.max(0.02, Math.min(0.92, Number(next.level) || 0.68));
+  next.lastDefragTs = Math.max(0, Math.trunc(Number(next.lastDefragTs) || 0));
+  next.changeCount = Math.max(0, Math.trunc(Number(next.changeCount) || 0));
+  next.lastMutationTs = Math.max(0, Math.trunc(Number(next.lastMutationTs) || 0));
+  return next;
+}
+
+function loadDriveState() {
+  try {
+    const raw = localStorage.getItem(DRIVE_STATE_KEY);
+    if (raw) return normalizeDriveState(JSON.parse(raw));
+  } catch (e) {}
+  return createDriveStateDefaults(true);
+}
+
+function saveDriveState() {
+  try { localStorage.setItem(DRIVE_STATE_KEY, JSON.stringify(defragState)); } catch (e) {}
+}
+
+let defragState = loadDriveState();
+
+function getDriveFragmentationLevel() {
+  return Math.max(0.02, Math.min(0.92, Number(defragState?.level) || 0.68));
+}
+
+function getDriveOptimizationPercent() {
+  return Math.round((1 - getDriveFragmentationLevel()) * 100);
+}
+
+function increaseDriveFragmentation(amount, options) {
+  const delta = Number(amount) || 0;
+  if (!(delta > 0)) return getDriveFragmentationLevel();
+  defragState.level = Math.min(0.92, getDriveFragmentationLevel() + delta);
+  defragState.changeCount = Math.max(0, Math.trunc(Number(defragState.changeCount) || 0)) + 1;
+  defragState.lastMutationTs = Date.now();
+  saveDriveState();
+  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
+  return defragState.level;
+}
+
+function optimizeDriveFragmentation(options) {
+  const targetLevel = Math.max(0.02, Math.min(0.12, Number(options?.targetLevel) || 0.06));
+  defragState.level = targetLevel;
+  defragState.lastDefragTs = Date.now();
+  saveDriveState();
+  try { localStorage.setItem(LEGACY_DEFRAG_KEY, String(defragState.lastDefragTs)); } catch (e) {}
+  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
+  return defragState.level;
+}
+
+function loadFS() {
+  const raw = localStorage.getItem(FS_KEY);
+  if (!raw) {
+    refreshSeededDocs();
+    refreshSeededWallpaperLibrary();
+    refreshSeededHomeMedia();
+    return;
+  }
+  try {
+    const data = JSON.parse(raw);
+    if (data.dirs) data.dirs.forEach(d => termFS.dirs.add(d));
+    if (data.files) Object.entries(data.files).forEach(([k, v]) => termFS.files.set(k, v));
+    if (data.subdirs) Object.entries(data.subdirs).forEach(([k, v]) => termFS.subdirs.set(k, _desDir(v)));
+    refreshSeededDocs();
+    refreshSeededWallpaperLibrary();
+    refreshSeededHomeMedia();
+  } catch(e) { /* corrupted save - ignore */ }
+}
+
+loadFS();
+function normalizeRecycleEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const id = String(entry.id || '').trim();
+  const name = String(entry.name || '').trim();
+  const storedDir = fsNormalizeDir(entry.storedDir || '');
+  if (!id || !name || !storedDir) return null;
+  return {
+    id,
+    name,
+    kind: String(entry.kind || 'file').toLowerCase(),
+    originalDir: fsNormalizeDir(entry.originalDir || ''),
+    storedDir,
+    deletedAt: Number(entry.deletedAt) || Date.now(),
+  };
+}
+
+function loadRecycleBin() {
+  try {
+    return (JSON.parse(localStorage.getItem(RECYCLE_BIN_KEY) || '[]') || [])
+      .map(normalizeRecycleEntry)
+      .filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveRecycleBin() {
+  try { localStorage.setItem(RECYCLE_BIN_KEY, JSON.stringify(recycleBinEntries)); } catch (e) {}
+}
+
+function recycleEntryOriginalPath(entry) {
+  if (!entry) return '';
+  return entry.originalDir ? entry.originalDir + '\\' + entry.name : entry.name;
+}
+
+function recycleEntryStoredPath(entry) {
+  if (!entry) return '';
+  return entry.storedDir ? entry.storedDir + '\\' + entry.name : entry.name;
+}
+
+let recycleBinEntries = loadRecycleBin();
+ensureFsDir(RECYCLE_STORAGE_DIR);
+window.addEventListener('beforeunload', saveFS);
+document.addEventListener('fs-changed', schedSave);
+// Daemon story state and sync
+const DAEMON_STORY_KEY = 'sleepOS-daemon-story';
+const ROOT_SYSTEM_FILE_META = [
+  { name: 'TERMINAL.exe', size: '4,096', date: '11/13/2024  10:31' },
+  { name: 'SYSMON.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'NOTEPAD.exe', size: '4,096', date: '11/13/2024  10:31' },
+  { name: 'BROWSER.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'DEFRAG.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'CALC.exe', size: '4,096', date: '11/13/2024  10:31' },
+  { name: 'REGEDIT.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'EXPLORER.exe', size: '8,192', date: '11/13/2024  10:31' },
+];
+const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE', 'DESKTOP']);
+const STORY_FILE_PATHS = {
+  notice: 'DOCS\\NOTICE_13.txt',
+  incident: 'DOCS\\INCIDENT_A.txt',
+  lostContact: 'DOCS\\LOST_CONTACT.txt',
+  lastOperator: 'DOCS\\LAST_OPERATOR.txt',
+  mirrorProtocol: 'DOCS\\MIRROR_PROTOCOL.txt',
+  watchPid: 'SYS\\watch.pid',
+  anchorSeed: 'SYS\\anchor.seed',
+  quarantineSig: 'SYS\\quarantine.sig',
+  mirrorDat: 'CACHE\\mirror.dat',
+};
+const BUILTIN_PROCESS_SEED = [
+  { pid: 4, name: 'System', cpu: 0.1, mem: 0.5, protected: true },
+  { pid: 52, name: 'csrss.exe', cpu: 0.1, mem: 1.2, protected: true },
+  { pid: 116, name: 'services.exe', cpu: 0.2, mem: 2.1, protected: true },
+  { pid: 124, name: 'lsass.exe', cpu: 0.3, mem: 3.4, protected: true },
+  { pid: 280, name: 'svchost.exe', cpu: 0.5, mem: 4.8, protected: true },
+  { pid: 312, name: 'svchost.exe', cpu: 0.1, mem: 2.3, protected: true },
+  { pid: 440, name: 'dream_kernel.exe', cpu: 1.2, mem: 8.5, protected: true },
+  { pid: 666, name: 'daemon.core', cpu: 2.1, mem: 12.3, protected: true },
+  { pid: 999, name: 'void_monitor.exe', cpu: 0.4, mem: 5.2, protected: true },
+];
+const VOID_ACTION_ORDER = ['observe', 'measure', 'listen', 'trace', 'sample', 'stabilize', 'pulse'];
+const VOID_ACTION_LABELS = {
+  observe: 'Observe',
+  measure: 'Measure',
+  listen: 'Listen',
+  trace: 'Trace',
+  sample: 'Sample',
+  stabilize: 'Stabilize',
+  pulse: 'Pulse',
+};
+
+function normalizeVoidActions(actions) {
+  const seen = new Set(
+    (Array.isArray(actions) ? actions : [])
+      .map(action => String(action || '').toLowerCase())
+      .filter(action => Object.prototype.hasOwnProperty.call(VOID_ACTION_LABELS, action))
+  );
+  return VOID_ACTION_ORDER.filter(action => seen.has(action));
+}
+
+function createDaemonStoryDefaults() {
+  return {
+    version: 1,
+    stage: 0,
+    openedDaemon: false,
+    falseContainmentSeen: false,
+    killedSoulDaemon: false,
+    respawnDisabledKill: false,
+    daemonStopped: false,
+    wrongVictory: false,
+    anchorDeleted: false,
+    voidObserved: false,
+    voidActions: [],
+    mirrorInspected: false,
+    protocolInspected: false,
+    mirrorLockRestored: false,
+    quarantineSigned: false,
+    endingReached: false,
+    lastEventText: 'none',
+  };
+}
+
+function daemonNormalizeStory(story) {
+  if (!story) return;
+  if (story.openedDaemon) story.stage = Math.max(story.stage, 1);
+  if (story.falseContainmentSeen) story.stage = Math.max(story.stage, 2);
+  if (story.respawnDisabledKill) story.stage = Math.max(story.stage, 3);
+  if (story.daemonStopped || story.wrongVictory) story.stage = Math.max(story.stage, 4);
+  if (story.anchorDeleted) story.stage = Math.max(story.stage, 5);
+  if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+    story.mirrorLockRestored = true;
+  }
+  if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected)) story.stage = Math.max(story.stage, 6);
+  if (story.mirrorLockRestored || story.quarantineSigned) story.stage = Math.max(story.stage, 7);
+  if (story.endingReached) story.stage = Math.max(story.stage, 8);
+}
+
+function normalizeDaemonStory(saved) {
+  const next = Object.assign(createDaemonStoryDefaults(), saved || {});
+  next.stage = Math.max(0, Math.min(8, Math.trunc(Number(next.stage) || 0)));
+  [
+    'openedDaemon',
+    'falseContainmentSeen',
+    'killedSoulDaemon',
+    'respawnDisabledKill',
+    'daemonStopped',
+    'wrongVictory',
+    'anchorDeleted',
+    'voidObserved',
+    'mirrorInspected',
+    'protocolInspected',
+    'mirrorLockRestored',
+    'quarantineSigned',
+    'endingReached',
+  ].forEach(key => { next[key] = !!next[key]; });
+  next.voidActions = normalizeVoidActions(next.voidActions);
+  next.lastEventText = String(next.lastEventText || 'none');
+  daemonNormalizeStory(next);
+  if (next.stage >= 6 && !next.voidActions.length) next.voidActions = ['trace'];
+  return next;
+}
+
+function loadDaemonStory() {
+  try {
+    return normalizeDaemonStory(JSON.parse(localStorage.getItem(DAEMON_STORY_KEY) || 'null'));
+  } catch (e) {
+    return createDaemonStoryDefaults();
+  }
+}
+
+function saveDaemonStory() {
+  try { localStorage.setItem(DAEMON_STORY_KEY, JSON.stringify(daemonStory)); } catch (e) {}
+}
+
+let daemonStory = loadDaemonStory();
+let daemonVoidFeed = '';
+let daemonVoidFeedMode = '';
+let daemonPulseTimer = null;
+
+function daemonStageLabel(stage) {
+  if (stage >= 8) return 'Contained';
+  if (stage >= 7) return 'Seal Ready';
+  if (stage >= 6) return 'Observed';
+  if (stage >= 5) return 'Contact';
+  if (stage >= 4) return 'Containment Lost';
+  if (stage >= 1) return 'Observed';
+  return 'Dormant';
+}
+
+function getVoidActions(story) {
+  return normalizeVoidActions((story || daemonStory)?.voidActions);
+}
+
+function isVoidProfiled(story) {
+  const target = story || daemonStory;
+  if (!target) return false;
+  if (target.stage >= 6 || target.quarantineSigned || target.endingReached) return true;
+  return getVoidActions(target).some(action => action !== 'observe');
+}
+
+function getVoidProfileLabel(story) {
+  const target = story || daemonStory;
+  const analyticalCount = getVoidActions(target).filter(action => action !== 'observe').length;
+  if (target?.endingReached) return 'sealed';
+  if (target?.quarantineSigned) return 'bound';
+  if (analyticalCount >= 3) return 'deep';
+  if (analyticalCount >= 1) return 'active';
+  if (getVoidActions(target).length) return 'surface';
+  return 'none';
+}
+
+function getVoidObjectiveLine(story) {
+  const target = story || daemonStory;
+  if (!target) return 'No stable directive.';
+  if (target.endingReached) return 'Containment complete. Archive only.';
+  if (target.stage < 4) return 'The relay is still taking the load. Watch the file.';
+  if (!target.anchorDeleted) {
+    return target.daemonStopped
+      ? 'Lower MIRROR_LOCK and remove SYS\\anchor.seed when you are ready to expose the channel.'
+      : 'Silence the relay before you trust what the file looks like.';
+  }
+  if (!isVoidProfiled(target)) return 'Use Measure, Listen, Trace, Sample, or Pulse here to profile the breach.';
+  if (!(target.mirrorInspected || target.protocolInspected)) return 'Compare this file with CACHE\\mirror.dat or DOCS\\MIRROR_PROTOCOL.txt.';
+  if (Number(getContainmentValue('MIRROR_LOCK')) !== 1) return 'Restore MIRROR_LOCK before containment can hold.';
+  if (!target.quarantineSigned) return 'Run ?????.exe to write SYS\\quarantine.sig.';
+  return 'Delete void.tmp. The seal is ready.';
+}
+
+function getContainmentTelemetry() {
+  const mirrorLockActive = Number(getContainmentValue('MIRROR_LOCK')) === 1;
+  const respawnLockActive = Number(getContainmentValue('RESPAWN_LOCK')) === 1;
+  const voidPressureBase = Math.max(0, Math.min(99, parseInt(registryData['HKEY_SLEEPBOX_MACHINE']?.['VOID']?.VOID_PRESSURE_BASE?.value) || 12));
+  const pressureBase = daemonStory.endingReached
+    ? 0
+    : daemonStory.quarantineSigned
+      ? 18
+      : daemonStory.stage >= 7
+        ? 24
+        : daemonStory.stage >= 5
+          ? 79
+          : daemonStory.stage >= 4
+            ? 46
+            : daemonStory.stage >= 2
+              ? 23
+              : 12;
+  const pressure = daemonStory.endingReached ? 0 : Math.min(99, pressureBase + Math.max(0, voidPressureBase - 12));
+  const lattice = daemonStory.endingReached
+    ? 100
+    : mirrorLockActive
+      ? daemonStory.quarantineSigned
+        ? 92
+        : daemonStory.stage >= 7
+          ? 76
+          : daemonStory.stage >= 5
+            ? 61
+            : daemonStory.stage >= 4
+              ? 74
+              : 96
+      : daemonStory.stage >= 5
+        ? 21
+        : daemonStory.stage >= 4
+          ? 38
+          : 57;
+  const signalDepth = daemonStory.endingReached
+    ? 0
+    : daemonStory.stage >= 7
+      ? 88
+      : daemonStory.stage >= 5
+        ? 73
+        : daemonStory.stage >= 4
+          ? 51
+          : daemonStory.stage >= 2
+            ? 26
+          : 11;
+  const bias = daemonStory.endingReached ? 'sealed' : mirrorLockActive ? 'deflected' : 'user-facing';
+  const deleteAuthorized = !daemonStory.endingReached && daemonStory.quarantineSigned && mirrorLockActive;
+  const sealReady = !daemonStory.endingReached && !daemonStory.quarantineSigned && daemonStory.anchorDeleted && daemonStory.voidObserved && isVoidProfiled(daemonStory) && (daemonStory.mirrorInspected || daemonStory.protocolInspected) && mirrorLockActive;
+  let rating = { code: 'CT-0', label: 'STABLE', color: '#004b61' };
+  if (daemonStory.endingReached) rating = { code: 'CT-8', label: 'SEALED', color: '#0a7a2a' };
+  else if (deleteAuthorized) rating = { code: 'CT-7', label: 'DELETE AUTHORIZED', color: '#0a5a9c' };
+  else if (sealReady) rating = { code: 'CT-6', label: 'SEAL READY', color: '#005f73' };
+  else if (daemonStory.anchorDeleted && !mirrorLockActive) rating = { code: 'CT-5', label: 'OPEN BREACH', color: '#8a0036' };
+  else if (daemonStory.anchorDeleted) rating = { code: 'CT-4', label: 'CHANNEL EXPOSED', color: '#7a2e00' };
+  else if (daemonStory.daemonStopped) rating = { code: 'CT-3', label: 'UNMONITORED', color: '#8a1a00' };
+  else if (daemonStory.falseContainmentSeen) rating = { code: 'CT-2', label: 'STRAINED', color: '#8a5a00' };
+  else if (daemonStory.openedDaemon) rating = { code: 'CT-1', label: 'OBSERVED', color: '#003f7a' };
+  return {
+    mirrorLockActive,
+    respawnLockActive,
+    pressure,
+    lattice,
+    signalDepth,
+    bias,
+    sealReady,
+    deleteAuthorized,
+    rating,
+  };
+}
+
+function getContainmentChecklist() {
+  return [
+    { label: 'RESPAWN_LOCK cleared', done: Number(getContainmentValue('RESPAWN_LOCK')) === 0 },
+    { label: 'PID 512 offline', done: daemonStory.daemonStopped },
+    { label: 'void channel observed', done: daemonStory.voidObserved },
+    { label: 'void channel profiled', done: isVoidProfiled(daemonStory) },
+    { label: 'mirror evidence inspected', done: daemonStory.mirrorInspected || daemonStory.protocolInspected },
+    { label: 'anchor released', done: daemonStory.anchorDeleted },
+    { label: 'MIRROR_LOCK restored', done: daemonStory.anchorDeleted && Number(getContainmentValue('MIRROR_LOCK')) === 1 },
+    { label: 'quarantine signature present', done: daemonStory.quarantineSigned },
+    { label: 'final delete authorized', done: !daemonStory.endingReached && daemonStory.quarantineSigned && Number(getContainmentValue('MIRROR_LOCK')) === 1 },
+  ];
+}
+
+function daemonStoryChanged(before) {
+  try {
+    return JSON.stringify(before) !== JSON.stringify(daemonStory);
+  } catch (e) {
+    return true;
+  }
+}
+
+function ensureFsDir(path) {
+  const parts = fsNormalizeDir(path).split('\\').filter(Boolean);
+  let node = termFS;
+  parts.forEach(part => {
+    node.dirs.add(part);
+    if (!node.subdirs) node.subdirs = new Map();
+    if (!node.subdirs.has(part)) {
+      node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+    }
+    node = node.subdirs.get(part);
+  });
+  return node;
+}
+
+function removeFsPath(path, options) {
+  options = options || {};
+  const { dirName, fileName } = fsSplitPath(path);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return false;
+  const upper = fileName.toUpperCase();
+  if (dir.files.has(fileName)) {
+    const content = dir.files.get(fileName);
+    dir.files.delete(fileName);
+    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('text', content));
+    return true;
+  }
+  if (dir.blobs.has(fileName)) {
+    const blob = dir.blobs.get(fileName);
+    if (blob?.kind === 'image') handleWallpaperFileDelete(dirName, fileName);
+    if (blob?.url) URL.revokeObjectURL(blob.url);
+    dir.blobs.delete(fileName);
+    removeBlobEntry(dirName, fileName);
+    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('blob', blob?.size));
+    return true;
+  }
+  if (dir.dirs.has(upper)) {
+    dir.dirs.delete(upper);
+    dir.subdirs?.delete(upper);
+    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
+    return true;
+  }
+  return false;
+}
+
+function isRecycleBinItemName(name) {
+  return String(name || '').trim().toUpperCase() === RECYCLE_BIN_NAME;
+}
+
+function getFsItemState(path, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const dir = fsGetDir(dirName);
+  if (!dir || !fileName) return null;
+  if (dir.files.has(fileName)) return { dirName, dir, entryName: fileName, kind: 'file', storage: 'text' };
+  if (dir.blobs.has(fileName)) {
+    const blob = dir.blobs.get(fileName);
+    return { dirName, dir, entryName: fileName, kind: blob?.kind || 'binary', storage: 'blob', blob };
+  }
+  const upper = fileName.toUpperCase();
+  if (dir.dirs.has(upper)) return { dirName, dir, entryName: upper, kind: 'dir', storage: 'dir' };
+  return null;
+}
+
+function fsDirHasEntry(dir, name) {
+  if (!dir) return false;
+  return dir.files.has(name) || dir.blobs.has(name) || dir.dirs.has(String(name || '').toUpperCase());
+}
+
+function makeUniqueFsName(dir, desiredName, kind, suffixToken) {
+  const exists = name => fsDirHasEntry(dir, name);
+  if (!exists(desiredName)) return desiredName;
+  const token = String(suffixToken || 'copy');
+  if (kind === 'dir') {
+    const base = String(desiredName || 'NEW_FOLDER').toUpperCase();
+    let candidate = base + '_' + token.toUpperCase();
+    let i = 2;
+    while (exists(candidate)) candidate = base + '_' + token.toUpperCase() + i++;
+    return candidate;
+  }
+  const dot = String(desiredName).lastIndexOf('.');
+  const base = dot > 0 ? desiredName.slice(0, dot) : desiredName;
+  const ext = dot > 0 ? desiredName.slice(dot) : '';
+  let candidate = base + '_' + token + ext;
+  let i = 2;
+  while (exists(candidate)) candidate = base + '_' + token + i++ + ext;
+  return candidate;
+}
+
+function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
+  options = options || {};
+  const item = getFsItemState(path, fallbackDir);
+  const dstDirName = fsNormalizeDir(dstDirPath);
+  const dstDir = fsGetDir(dstDirName);
+  if (!item || !dstDir) return null;
+  if (item.storage === 'dir') {
+    const srcPath = blobRelativePath(item.dirName, item.entryName);
+    if (dstDirName === srcPath || dstDirName.startsWith(srcPath + '\\')) return null;
+  }
+  let nextName = String(options.newName || item.entryName || '').trim();
+  if (!nextName) return null;
+  if (item.storage === 'dir') nextName = nextName.toUpperCase();
+  const sameParent = dstDirName === fsNormalizeDir(item.dirName);
+  const sameName = nextName === item.entryName;
+  if (sameParent && sameName) return { kind: item.kind, name: nextName, dirName: dstDirName };
+  if (options.makeUnique) nextName = makeUniqueFsName(dstDir, nextName, item.storage === 'dir' ? 'dir' : 'file', options.suffixToken || 'copy');
+  else if (fsDirHasEntry(dstDir, nextName)) return null;
+
+  if (item.storage === 'dir') {
+    const sub = item.dir.subdirs?.get(item.entryName);
+    item.dir.dirs.delete(item.entryName);
+    item.dir.subdirs?.delete(item.entryName);
+    if (!dstDir.subdirs) dstDir.subdirs = new Map();
+    dstDir.dirs.add(nextName);
+    if (sub) dstDir.subdirs.set(nextName, sub);
+    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, nextName));
+  } else if (item.storage === 'blob') {
+    const blob = item.dir.blobs.get(item.entryName);
+    item.dir.blobs.delete(item.entryName);
+    if (!dstDir.blobs) dstDir.blobs = new Map();
+    dstDir.blobs.set(nextName, blob);
+    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, nextName);
+  } else {
+    const content = item.dir.files.get(item.entryName);
+    item.dir.files.delete(item.entryName);
+    if (!dstDir.files) dstDir.files = new Map();
+    dstDir.files.set(nextName, content);
+  }
+  schedSave();
+  return { kind: item.kind, name: nextName, dirName: dstDirName };
+}
+
+function handleWallpaperTreeDelete(path) {
+  const removedPath = normalizeWallpaperPath(path);
+  const savedPath = normalizeWallpaperPath(localStorage.getItem(WP_KEY));
+  const registryPath = normalizeWallpaperPath(getWallpaperRegistryValue());
+  if (
+    (currentWallpaper && currentWallpaper.startsWith(removedPath + '\\')) ||
+    (savedPath && savedPath.startsWith(removedPath + '\\')) ||
+    (registryPath && registryPath.startsWith(removedPath + '\\'))
+  ) {
+    applyWallpaper(DEFAULT_WALLPAPER_PATH);
+  }
+}
+
+function purgeFsDirNode(dirPath, dirNode) {
+  if (!dirNode) return;
+  dirNode.subdirs?.forEach((subdir, name) => purgeFsDirNode(blobRelativePath(dirPath, name), subdir));
+  dirNode.blobs?.forEach((blob, name) => {
+    if (blob?.kind === 'image') handleWallpaperFileDelete(dirPath, name);
+    if (blob?.url) URL.revokeObjectURL(blob.url);
+    removeBlobEntry(dirPath, name);
+  });
+  dirNode.files?.clear?.();
+  dirNode.blobs?.clear?.();
+  dirNode.dirs?.clear?.();
+  dirNode.subdirs?.clear?.();
+}
+
+function purgeFsPath(path, fallbackDir) {
+  const item = getFsItemState(path, fallbackDir);
+  if (!item) return false;
+  if (item.storage !== 'dir') return removeFsPath(path);
+  purgeFsDirNode(blobRelativePath(item.dirName, item.entryName), item.dir.subdirs?.get(item.entryName));
+  item.dir.dirs.delete(item.entryName);
+  item.dir.subdirs?.delete(item.entryName);
+  increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
+  schedSave();
+  return true;
+}
+
+function recycleVirtualPath(path, fallbackDir) {
+  const item = getFsItemState(path, fallbackDir);
+  const fileLabel = fsSplitPath(path, fallbackDir).fileName || path;
+  if (!item) return { ok: false, message: 'File not found: ' + fileLabel };
+  const sourcePath = blobRelativePath(item.dirName, item.entryName);
+  if (fsNormalizeDir(sourcePath).startsWith(fsNormalizeDir(RECYCLE_STORAGE_DIR))) {
+    return { ok: false, message: 'Item is already in the Recycle Bin.' };
+  }
+
+  const id = 'RB_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7).toUpperCase();
+  const storedDir = RECYCLE_STORAGE_DIR + '\\' + id;
+  ensureFsDir(storedDir);
+
+  if (item.storage === 'blob' && item.blob?.kind === 'image') handleWallpaperFileDelete(item.dirName, item.entryName);
+  if (item.storage === 'dir') handleWallpaperTreeDelete(sourcePath);
+
+  const moved = moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
+  if (!moved) {
+    removeFsPath(storedDir, { trackFragmentation: false });
+    return { ok: false, message: 'Could not move ' + fileLabel + ' to the Recycle Bin.' };
+  }
+
+  recycleBinEntries.unshift({
+    id,
+    name: moved.name,
+    kind: item.kind,
+    originalDir: item.dirName,
+    storedDir,
+    deletedAt: Date.now(),
+  });
+  saveRecycleBin();
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return { ok: true, deleted: true, recycled: true, details: ['Moved to Recycle Bin: ' + fileLabel] };
+}
+
+function restoreRecycleEntry(entry) {
+  entry = normalizeRecycleEntry(entry);
+  if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
+  ensureFsDir(entry.originalDir);
+  const moved = moveFsItemByPath(entry.name, entry.storedDir, entry.originalDir, {
+    newName: entry.name,
+    makeUnique: true,
+    suffixToken: 'restored',
+  });
+  if (!moved) return { ok: false, message: 'Could not restore ' + entry.name + '.' };
+  removeFsPath(entry.storedDir, { trackFragmentation: false });
+  recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
+  saveRecycleBin();
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return { ok: true, restored: true, name: moved.name, dirName: entry.originalDir };
+}
+
+function purgeRecycleEntry(entry) {
+  entry = normalizeRecycleEntry(entry);
+  if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
+  purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
+  removeFsPath(entry.storedDir, { trackFragmentation: false });
+  recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
+  saveRecycleBin();
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  return { ok: true, deleted: true };
+}
+
+function emptyRecycleBin() {
+  recycleBinEntries.slice().forEach(entry => purgeRecycleEntry(entry));
+}
+
+function confirmEmptyRecycleBin(onDone) {
+  if (!recycleBinEntries.length) {
+    if (typeof onDone === 'function') onDone(false);
+    return;
+  }
+  osConfirm('Permanently delete all items in the Recycle Bin?', 'Empty Recycle Bin', ok => {
+    if (!ok) {
+      if (typeof onDone === 'function') onDone(false);
+      return;
+    }
+    emptyRecycleBin();
+    if (typeof onDone === 'function') onDone(true);
+  }, '\u{1F5D1}\uFE0F');
+}
+
+function promptCreateFolderAt(dirPath, onDone) {
+  osPrompt('Folder name:', '', 'New Folder', name => {
+    if (!name) {
+      if (typeof onDone === 'function') onDone(null);
+      return;
+    }
+    const created = fsCreateDir(name, dirPath);
+    if (created?.created) {
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+      if (typeof onDone === 'function') onDone(created);
+      return;
+    }
+    if (typeof onDone === 'function') onDone(null);
+  }, '\u{1F4C1}');
+}
+
+function ensureStoryTextFile(path, value) {
+  const { dirName, fileName } = fsSplitPath(path);
+  const dir = ensureFsDir(dirName);
+  dir.files.set(fileName, value);
+}
+
+function daemonNoticeContent() {
+  return [
+    '== NOTICE 13 ==',
+    '',
+    'If soul_daemon.exe is terminated while RESPAWN_LOCK remains active,',
+    'the watch layer will simply seed a replacement.',
+    '',
+    'The process is not the source.',
+    'The process is the hand on the latch.',
+    '',
+    'Required path:',
+    '  HKEY_SLEEPBOX_MACHINE\\Containment\\RESPAWN_LOCK',
+    '',
+    'Only proceed if you mean to test containment.',
+  ].join('\n');
+}
+
+function daemonIncidentContent() {
+  return [
+    '== INCIDENT A ==',
+    '',
+    'Termination succeeded.',
+    'Symptoms worsened immediately.',
+    '',
+    'The daemon process was supervisory, not invasive.',
+    'Silence in the PID table is not a sign of safety.',
+    '',
+    'Read DOCS\\LOST_CONTACT.txt.',
+  ].join('\n');
+}
+
+function daemonLostContactContent() {
+  return [
+    '== LOST CONTACT ==',
+    '',
+    'The operator who left this note killed the daemon.',
+    'They thought that would be the end of it.',
+    '',
+    'It was not.',
+    '',
+    'The anchor file - SYS\\anchor.seed - was keeping the mirror',
+    'pointed away from the user. When the daemon went quiet,',
+    'the anchor was still holding.',
+    '',
+    'If you are reading this after killing it:',
+    '  - The anchor may still be in place. Check SYS\\anchor.seed.',
+    '  - Do not delete it without understanding what it does.',
+    '  - Read SYS\\anchor.seed before you touch it.',
+    '',
+    'When the anchor is removed, contact begins.',
+    'Have a plan before you do that.',
+  ].join('\n');
+}
+
+function daemonLastOperatorContent() {
+  const lines = ['== LAST OPERATOR ==', ''];
+
+  if (daemonStory.daemonStopped && !daemonStory.anchorDeleted) {
+    // Killed daemon first, anchor still present
+    lines.push(
+      'If you killed it and the room went quiet, you did what I did.',
+      '',
+      'daemon.core was not the voice.',
+      'daemon.core was the pressure door.',
+      '',
+      'The anchor file keeps the mirror pointed away from the user.',
+      'The current anchor is SYS\\anchor.seed.',
+      'Lower MIRROR_LOCK and delete it when you are ready to inspect the breach.',
+      '',
+      'If you intend to seal the breach again, restore MIRROR_LOCK before you run the quarantine launcher.',
+    );
+  } else if (daemonStory.anchorDeleted && !daemonStory.daemonStopped) {
+    // Deleted anchor first, daemon still running
+    lines.push(
+      'You removed the anchor before the daemon relay went offline.',
+      '',
+      'daemon.core was not the voice.',
+      'daemon.core was the pressure door.',
+      '',
+      'The anchor is gone. The channel is open.',
+      'The daemon is still running - it can no longer deflect what is coming through.',
+      '',
+      'Inspect void.tmp. Read MIRROR_PROTOCOL.txt.',
+      'If you intend to seal the breach, restore MIRROR_LOCK before running the quarantine launcher.',
+    );
+  } else {
+    // Both done, or generic fallback
+    lines.push(
+      'The daemon is offline. The anchor is gone.',
+      '',
+      'daemon.core was not the voice.',
+      'daemon.core was the pressure door.',
+      '',
+      'The channel is open. Inspect void.tmp.',
+      'Read DOCS\\MIRROR_PROTOCOL.txt.',
+      '',
+      'Restore MIRROR_LOCK before you run the quarantine launcher.',
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function daemonMirrorProtocolContent() {
+  const lines = [
+    '== MIRROR PROTOCOL ==',
+    '',
+    'Status:',
+    `  MIRROR_LOCK   = ${Number(getContainmentValue('MIRROR_LOCK')) ? 1 : 0}`,
+    `  RESPAWN_LOCK  = ${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
+    `  QUARANTINE    = ${daemonStory.quarantineSigned ? 'SIGNED' : 'UNSIGNED'}`,
+    '',
+    'Procedure:',
+    daemonStory.daemonStopped
+      ? '  1. daemon relay is offline - respawn risk is low if RESPAWN_LOCK=0'
+      : '  1. daemon is still running - it cannot deflect void.tmp anymore',
+    Number(getContainmentValue('MIRROR_LOCK')) === 0
+      ? '  2. MIRROR_LOCK is 0 - the breach is open, inspect freely'
+      : '  2. MIRROR_LOCK is restored - lattice is deflecting again',
+    '  3. profile void.tmp directly - Measure, Listen, Trace, Sample, or Pulse',
+    '  4. compare CACHE\\mirror.dat with void.tmp - see NOTE below',
+    '  5. restore MIRROR_LOCK before launching ?????.exe',
+    '  6. delete void.tmp only after SYS\\quarantine.sig is signed',
+    '',
+    'NOTE - mirror.dat vs void.tmp:',
+    '  CACHE\\mirror.dat  : written by daemon.core, clean, internal',
+    '  void.tmp          : external origin, should not exist here',
+    '',
+    '  void.tmp is not a mirror artifact. It does not belong.',
+    '  It arrived through the channel the anchor was suppressing.',
+    '  It should be treated as a foreign object.',
+    '',
+    '  DO NOT open void.tmp from an uncontrolled state.',
+    '  Quarantine and delete it - do not try to read it as data.',
+  ];
+  if (daemonStory.stage >= 5) {
+    lines.push('', 'Note from daemon.core:', '  I was keeping the channel off-axis to protect you from it.');
+  }
+  return lines.join('\n');
+}
+
+function daemonMirrorDatContent() {
+  return [
+    'mirror.dat',
+    '',
+    '[reflection offset] 0.17',
+    '[signal age]        before current boot',
+    '[voice match]       negative',
+    '[source]            internal - daemon-managed lattice reflection',
+    '[anomaly]           none',
+    '',
+    'This file is a stable read. The lattice reflection is clean.',
+    'daemon.core wrote this as part of normal mirror management.',
+    '',
+    'Compare with void.tmp. They are not the same kind of file.',
+  ].join('\n');
+}
+
+function daemonAnchorSeedContent() {
+  return [
+    'anchor.seed',
+    '',
+    'anchor-class: mirror-lattice',
+    'deletion-policy: requires MIRROR_LOCK=0',
+    'owner: HKEY_SLEEPBOX_MACHINE\\Containment',
+    '',
+    'Removing this file widens the channel.',
+  ].join('\n');
+}
+
+function daemonWatchPidContent() {
+  return [
+    'watch.pid',
+    '',
+    'pid=512',
+    'name=soul_daemon.exe',
+    'policy=restart_on_exit',
+    `respawn_lock=${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
+    '',
+    'The watch layer is not the daemon.',
+  ].join('\n');
+}
+
+function daemonQuarantineSigContent() {
+  return [
+    'quarantine.sig',
+    '',
+    `launcher=${getExeDisplayName()}`,
+    'state=armed',
+    'target=void.tmp',
+    'mirror_lock=1',
+    'seal_phrase=CONTAINMENT_COMPLETE',
+  ].join('\n');
+}
+
+function daemonQuarantinePendingContent() {
+  return [
+    'quarantine.sig',
+    '',
+    'launcher=?????.exe',
+    'state=unsigned',
+    'target=void.tmp',
+    '',
+    'This signature file exists but has not been written.',
+    'Run ?????.exe after the mirror lattice is restored to sign it.',
+    'A valid signature is required before void.tmp can be deleted.',
+  ].join('\n');
+}
+
+function buildDaemonCoreRawContent() {
+  const telemetry = getContainmentTelemetry();
+  const mirrorLockActive = Number(getContainmentValue('MIRROR_LOCK')) === 1;
+  const liveStatus = daemonStory.endingReached
+    ? 'Contained'
+    : daemonStory.stage >= 7 && !mirrorLockActive
+      ? 'Seal Interrupted'
+      : daemonStageLabel(daemonStory.stage);
+  const lines = [
+    'daemon.core',
+    '',
+    `[stage] ${daemonStory.stage} / ${daemonStageLabel(daemonStory.stage)}`,
+    `[status] ${liveStatus}`,
+    `[containment] ${telemetry.rating.code} / ${telemetry.rating.label}`,
+    `[owner] SYSTEM\\???`,
+    `[mirror_lock] ${mirrorLockActive ? 1 : 0}`,
+    `[respawn_lock] ${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
+    `[void_pressure] ${telemetry.pressure}`,
+    `[lattice_stability] ${telemetry.lattice}`,
+    `[signal_depth] ${telemetry.signalDepth}`,
+    `[aperture_bias] ${telemetry.bias}`,
+    `[temporal_drift] ${registryData['HKEY_SLEEPBOX_MACHINE']?.['SOUL\\Metrics']?.TEMPORAL_DRIFT?.value ?? '+/-2.3yr'}`,
+    `[observer_count] ${registryData['HKEY_SLEEPBOX_MACHINE']?.['VOID']?.OBSERVER_COUNT?.value ?? '[classified]'}`,
+    '',
+  ];
+  if (daemonStory.endingReached) {
+    lines.push(
+      'CONTAINMENT COMPLETE.',
+      'The breach is closed.',
+      'I will remain archived here in case it leans back toward you.',
+    );
+  } else if (daemonStory.anchorDeleted) {
+    lines.push(
+      'You removed the anchor.',
+      'I was keeping the mirror off your face.',
+      '',
+      'Restore MIRROR_LOCK before you run the quarantine launcher.',
+      'Delete void.tmp only after the signature exists.',
+    );
+  } else if (daemonStory.daemonStopped) {
+    lines.push(
+      'The latch is open.',
+      'Killing the process was never deletion.',
+      'Open void.tmp. Read what the mirror reflects.',
+    );
+  } else if (daemonStory.falseContainmentSeen) {
+    lines.push(
+      'You tested the watch layer.',
+      'It answered you with another process.',
+      '',
+      'If you want silence, clear RESPAWN_LOCK first.',
+    );
+  } else if (daemonStory.openedDaemon) {
+    lines.push(
+      'This file is not the intrusion.',
+      'This file is the restraint.',
+      '',
+      'NOTICE_13 has been copied into DOCS.',
+    );
+  } else {
+    lines.push(
+      'metadata unreadable',
+      'modified: always',
+      'access: observe only',
+    );
+  }
+  return lines.join('\n');
+}
+
+function buildVoidProbeNotes() {
+  const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
+  const notes = [];
+  if (daemonStory.stage >= 4) {
+    notes.push(`offset 0x0008: reported size = 0 bytes / observed depth = ${telemetry.signalDepth}`);
+    notes.push(`offset 0x0012: origin classification = external / aperture bias = ${telemetry.bias}`);
+  }
+  if (daemonStory.daemonStopped) notes.push('offset 0x0021: PID 512 silence increased readability');
+  if (daemonStory.anchorDeleted) notes.push('offset 0x0034: anchor.seed removal exposed the user-facing side');
+  if (actions.includes('observe')) {
+    notes.push(
+      daemonStory.stage >= 5
+        ? 'offset 0x0100: this is not residue from daemon.core; this surface is the breach'
+        : 'offset 0x0100: active window edges repeat on the inside of the file'
+    );
+  }
+  if (actions.includes('measure')) {
+    notes.push(`offset 0x0118: locality check failed / disk distance behaves like ${telemetry.signalDepth} units of depth`);
+    notes.push('offset 0x0124: zero-byte report is false on contact');
+  }
+  if (actions.includes('listen')) {
+    notes.push('offset 0x0140: room-tone match positive / human voice match negative');
+    notes.push('offset 0x014e: the pressure answers with posture, not language');
+  }
+  if (actions.includes('trace')) {
+    notes.push(
+      daemonStory.stage >= 5
+        ? 'offset 0x0180: return path = user-facing aperture <- mirror offset <- unresolved source'
+        : 'offset 0x0180: return path = monitor gap <- reflected surface'
+    );
+    if (daemonStory.anchorDeleted) notes.push('offset 0x018f: no anchor remains to push the angle away from the user');
+  }
+  if (actions.includes('sample')) {
+    notes.push('offset 0x01c0: daemon-authored signature = false');
+    notes.push('offset 0x01d2: CACHE\\mirror.dat mismatch confirmed');
+  }
+  if (actions.includes('stabilize')) {
+    notes.push(
+      telemetry.mirrorLockActive
+        ? 'offset 0x0210: MIRROR_LOCK bends the read angle but does not internalize the object'
+        : 'offset 0x0210: stabilization failed / aperture remains user-facing'
+    );
+  }
+  if (actions.includes('pulse')) {
+    notes.push(
+      daemonStory.quarantineSigned
+        ? 'offset 0x0240: quarantine signature binds to target id = void.tmp'
+        : 'offset 0x0240: echo returns before current boot'
+    );
+  }
+  if ((daemonStory.mirrorInspected || daemonStory.protocolInspected) && daemonStory.stage >= 5) {
+    notes.push('cross-check: mirror.dat clean, internal, daemon-managed / void.tmp foreign, external, non-local');
+  }
+  return notes;
+}
+
+function buildVoidTmpRawContent() {
+  const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
+  const lines = [
+    'void.tmp',
+    '',
+    `[containment] ${telemetry.rating.code} / ${telemetry.rating.label}`,
+    `[pressure] ${telemetry.pressure}`,
+    `[mirror_lock] ${telemetry.mirrorLockActive ? 1 : 0}`,
+    `[signature] ${daemonStory.quarantineSigned ? 'present' : 'missing'}`,
+    `[lattice_stability] ${telemetry.lattice}`,
+    `[signal_depth] ${telemetry.signalDepth}`,
+    `[aperture_bias] ${telemetry.bias}`,
+    '[origin] external / unresolved',
+    `[probe_record] ${actions.length}/${VOID_ACTION_ORDER.length}`,
+    `[profile] ${getVoidProfileLabel()}`,
+    `[probes] ${actions.length ? actions.map(action => VOID_ACTION_LABELS[action]).join(', ') : 'none recorded'}`,
+    '',
+  ];
+  if (daemonStory.endingReached) {
+    lines.push('No active signal remains.', '', 'Archive note:', '  The breach surface is gone. The record remains.');
+  } else if (daemonStory.stage >= 5) {
+    lines.push(
+      'The aperture is open.',
+      'Something is pressing against the reflected side of the file.',
+      '',
+      'This is the breach surface, not a symptom file.',
+    );
+  } else if (daemonStory.stage >= 4) {
+    lines.push(
+      'Pressure rose when PID 512 stayed dead.',
+      'The monitor was not keeping this file alive.',
+      'The monitor was keeping it quiet.',
+    );
+  } else {
+    lines.push(
+      '[content redacted]',
+      'The file is present but does not yet answer.',
+    );
+  }
+  if (!daemonStory.endingReached && daemonStory.stage >= 4) {
+    const notes = buildVoidProbeNotes();
+    if (notes.length) {
+      lines.push('', 'Recovered fragments:');
+      notes.forEach(note => lines.push('  ' + note));
+    }
+    lines.push('', 'Containment path:', '  ' + getVoidObjectiveLine());
+    if (!isVoidProfiled()) lines.push('  Direct probes make the file more legible.');
+  }
+  return lines.join('\n');
+}
+
+function getContainmentValue(name) {
+  return registryData['HKEY_SLEEPBOX_MACHINE']['Containment'][name].value;
+}
+
+function getDaemonRegistryNode() {
+  return registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS\\Daemon'];
+}
+
+function getRootSystemFiles(options) {
+  const opts = options || {};
+  const names = ROOT_SYSTEM_FILE_META.map(entry => entry.name);
+  const explorerIndex = names.indexOf('EXPLORER.exe');
+  if (opts.includeExplorer === false && explorerIndex !== -1) names.splice(explorerIndex, 1);
+  if (!daemonStory.endingReached) names.push('void.tmp');
+  names.push('daemon.core', '?????.exe');
+  return names;
+}
+
+function isVisibleRootSystemFile(name, options) {
+  const target = String(name || '').toUpperCase();
+  return getRootSystemFiles(options).some(item => item.toUpperCase() === target);
+}
+
+function isVisibleSystemPath(path, options) {
+  const { dirName, fileName } = fsSplitPath(path);
+  return !dirName && isVisibleRootSystemFile(fileName, options);
+}
+
+function getTerminalRootSystemEntries(options) {
+  const opts = options || {};
+  const entries = ROOT_SYSTEM_FILE_META
+    .filter(entry => opts.includeExplorer !== false || entry.name !== 'EXPLORER.exe')
+    .map(entry => ({ ...entry }));
+  if (!daemonStory.endingReached) entries.push({ name: 'void.tmp', size: '0', date: '11/13/2024  03:17' });
+  entries.push({ name: 'daemon.core', size: '??', date: '11/13/2024  ??:??' });
+  entries.push({ name: '?????.exe', size: '??', date: '11/13/2024  ??:??' });
+  return entries;
+}
+
+function getBuiltInProcesses() {
+  const base = BUILTIN_PROCESS_SEED.map(proc => ({ ...proc }));
+  if (!daemonStory.daemonStopped && !daemonStory.endingReached) {
+    base.push({
+      pid: 512,
+      name: daemonStory.stage >= 1 ? 'soul_daemon.exe' : 'soul_svc.exe',
+      cpu: daemonStory.stage >= 4 ? 11.8 : 7.4,
+      mem: daemonStory.stage >= 4 ? 36.9 : 31.2,
+      protected: daemonStory.stage < 1,
+    });
+  }
+  if (daemonStory.stage >= 4 && !daemonStory.endingReached) {
+    base.push({ pid: 1008, name: 'mirror_watch.exe', cpu: 2.7, mem: 9.4, protected: true });
+  }
+  if (daemonStory.stage >= 5 && !daemonStory.endingReached) {
+    base.push({ pid: 1333, name: 'signal_window.exe', cpu: 1.5, mem: 4.2, protected: true });
+  }
+  // DAEMON_COUNT registry key: extra phantom processes when count > 7
+  const daemonCount = parseInt(registryData['HKEY_SLEEPBOX_MACHINE']?.['SOUL\\Metrics']?.DAEMON_COUNT?.value) || 7;
+  for (let i = 8; i <= Math.min(daemonCount, 20); i++) {
+    base.push({ pid: 500 + i * 13, name: 'soul_svc_' + String(i).padStart(2, '0') + '.exe', cpu: 0.1 + (i % 3) * 0.4, mem: 2.1 + (i % 5) * 1.2, protected: true });
+  }
+  return base.sort((a, b) => a.pid - b.pid);
+}
+
+function findBuiltInProcess(pid) {
+  return getBuiltInProcesses().find(proc => proc.pid === pid) || null;
+}
+
+function syncDaemonStoryRegistry() {
+  const daemonReg = getDaemonRegistryNode();
+  daemonReg.STATUS.value = daemonStageLabel(daemonStory.stage);
+  daemonReg.LAST_EVENT.value = daemonStory.lastEventText || 'none';
+  daemonReg.OBSERVED.value = daemonStory.openedDaemon ? 1 : 0;
+  registryData['HKEY_SLEEPBOX_MACHINE']['Containment'].ANCHOR_FILE.value = 'SYS\\anchor.seed';
+  saveRegistry();
+}
+
+function syncDaemonStoryFiles() {
+  ensureFsDir('DOCS');
+  ensureFsDir('SYS');
+  ensureFsDir('CACHE');
+  if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
+  else removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
+  if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
+  else removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
+  if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
+  else removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
+  if (daemonStory.stage >= 4) {
+    ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
+    if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
+  } else {
+    removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
+    removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+  }
+  if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
+  else removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
+  if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
+  else removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
+  if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
+  else removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+  if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
+  else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
+  else removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
+  if (daemonStory.endingReached) {
+    removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+  }
+}
+
+function refreshDaemonStoryViews() {
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+  applyDaemonVisualState();
+  applyDaemonWindowState();
+  if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
+  if (typeof renderVoid === 'function' && document.getElementById('wb-void')) renderVoid();
+  // Reveal quarantine.exe name on desktop icon when signed
+  const exeIconLabel = document.querySelector('[data-icon-key="?????.exe"] .di-name');
+  if (exeIconLabel) exeIconLabel.textContent = iconLabel(getExeDisplayName());
+}
+
+function getDaemonVisualStage() {
+  if (daemonStory.endingReached) return 0;
+  if (daemonStory.stage >= 7) return 7;
+  if (daemonStory.stage >= 5) return 5;
+  if (daemonStory.stage >= 4) return 4;
+  return 0;
+}
+
+function getDriveFragmentationVisualLevel() {
+  if (daemonStory.endingReached) return 0;
+  const visualStage = getDaemonVisualStage();
+  if (visualStage < 4) return 0;
+  const fragLevel = getDriveFragmentationLevel();
+  if (fragLevel < 0.22) return 0;
+  if (visualStage >= 7 && fragLevel >= 0.62) return 3;
+  if (visualStage >= 5 && fragLevel >= 0.42) return 2;
+  return 1;
+}
+
+function scheduleDaemonPulse() {
+  clearTimeout(daemonPulseTimer);
+  daemonPulseTimer = null;
+  const visualStage = getDaemonVisualStage();
+  if (!visualStage) return;
+  const fragLevel = getDriveFragmentationLevel();
+  const fragFactor = Math.max(0, Math.min(1, (fragLevel - 0.02) / 0.9));
+  const delayScale = 1.7 - fragFactor * 0.7;
+  const baseMinDelay = visualStage >= 7 ? 3800 : visualStage >= 5 ? 6200 : 9800;
+  const baseMaxDelay = visualStage >= 7 ? 7200 : visualStage >= 5 ? 10800 : 14800;
+  const minDelay = Math.round(baseMinDelay * delayScale);
+  const maxDelay = Math.round(baseMaxDelay * delayScale);
+  const pulseIntensity = Math.max(1, Math.round(visualStage * (0.55 + fragFactor * 0.45)));
+  const nextDelay = minDelay + Math.random() * (maxDelay - minDelay);
+  daemonPulseTimer = setTimeout(() => {
+    triggerGlitch({ intensity: pulseIntensity, subtle: true });
+    scheduleDaemonPulse();
+  }, nextDelay);
+}
+
+function applyDaemonVisualState() {
+  const body = document.body;
+  if (!body) return;
+  body.classList.remove('daemon-visual-4', 'daemon-visual-5', 'daemon-visual-7', 'frag-visual-1', 'frag-visual-2', 'frag-visual-3');
+  const visualStage = getDaemonVisualStage();
+  const fragVisualLevel = getDriveFragmentationVisualLevel();
+  if (visualStage) body.classList.add(`daemon-visual-${visualStage}`);
+  if (fragVisualLevel) body.classList.add(`frag-visual-${fragVisualLevel}`);
+  scheduleDaemonPulse();
+}
+
+function applyDaemonWindowState() {
+  const daemonWin = wins['daemon']?.el;
+  const voidWin = wins['void']?.el;
+  if (daemonWin) daemonWin.classList.add('daemon-surface');
+  if (voidWin) voidWin.classList.add('void-surface');
+}
+
+function pulseDaemonWindows(intensity, options) {
+  const subtle = !!options?.subtle;
+  ['daemon', 'void'].forEach(id => {
+    const el = wins[id]?.el;
+    if (!el) return;
+    const x = subtle
+      ? (Math.random() < 0.5 ? -0.75 : 0.75)
+      : intensity >= 7
+        ? (Math.random() < 0.5 ? -2 : 2)
+        : (Math.random() < 0.5 ? -1 : 1);
+    const y = subtle
+      ? 0
+      : intensity >= 7
+        ? (Math.random() < 0.5 ? -1 : 1)
+        : 0;
+    el.style.setProperty('--pulse-x', x + 'px');
+    el.style.setProperty('--pulse-y', y + 'px');
+    el.classList.add('window-afterimage');
+    setTimeout(() => {
+      const current = wins[id]?.el;
+      if (!current || current !== el) return;
+      el.classList.remove('window-afterimage');
+      el.style.removeProperty('--pulse-x');
+      el.style.removeProperty('--pulse-y');
+    }, subtle ? 150 : intensity >= 7 ? 260 : 180);
+  });
+}
+
+function syncDaemonStory(options) {
+  const opts = options || {};
+  daemonNormalizeStory(daemonStory);
+  saveDaemonStory();
+  syncDaemonStoryRegistry();
+  syncDaemonStoryFiles();
+  schedSave();
+  if (!opts.silent) refreshDaemonStoryViews();
+}
+
+function updateDaemonStory(mutator, options) {
+  const before = normalizeDaemonStory(daemonStory);
+  mutator(daemonStory);
+  daemonNormalizeStory(daemonStory);
+  if (!daemonStoryChanged(before) && !options?.forceSync) return false;
+  syncDaemonStory(options);
+  if (options?.glitch) triggerGlitch();
+  if (options?.notice) {
+    const info = typeof options.notice === 'string'
+      ? { message: options.notice, title: 'Containment Notice', icon: '👁️' }
+      : options.notice;
+    osAlert(info.message, info.title || 'Containment Notice', info.icon || '👁️');
+  }
+  return true;
+}
+
+function daemonActivate(trigger) {
+  return updateDaemonStory(story => {
+    if (!story.openedDaemon) {
+      story.openedDaemon = true;
+      story.lastEventText = 'daemon.core observed';
+    } else if (trigger === 'raw' && story.lastEventText === 'none') {
+      story.lastEventText = 'daemon.core observed';
+    }
+  }, { forceSync: true });
+}
+
+function daemonRecordInvestigation(kind) {
+  return updateDaemonStory(story => {
+    if (kind === 'void') story.voidObserved = true;
+    if (kind === 'mirror') story.mirrorInspected = true;
+    if (kind === 'protocol') story.protocolInspected = true;
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+      story.mirrorLockRestored = true;
+      story.lastEventText = 'mirror lattice restored';
+      return;
+    }
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
+      story.lastEventText = 'void channel profiled';
+    }
+  });
+}
+
+function daemonRecordVoidAction(mode) {
+  return updateDaemonStory(story => {
+    story.voidObserved = true;
+    story.voidActions = normalizeVoidActions([...(Array.isArray(story.voidActions) ? story.voidActions : []), mode]);
+    if (mode === 'observe') {
+      if (story.lastEventText === 'none') story.lastEventText = 'void surface observed';
+    } else if (story.stage < 6 || story.lastEventText === 'none') {
+      story.lastEventText = `void probe recorded: ${mode}`;
+    }
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
+      story.mirrorLockRestored = true;
+      story.lastEventText = 'mirror lattice restored';
+      return;
+    }
+    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
+      story.lastEventText = 'void channel profiled';
+    }
+  }, { forceSync: true });
+}
+
+function getVoidMeasureEntries(telemetry) {
+  return [
+    ['Containment', `${telemetry.rating.code} / ${telemetry.rating.label}`],
+    ['Void Pressure', String(telemetry.pressure)],
+    ['Lattice Stability', String(telemetry.lattice)],
+    ['Signal Depth', String(telemetry.signalDepth)],
+    ['Aperture Bias', telemetry.bias],
+    ['Disk Locality', 'negative'],
+  ];
+}
+
+function renderVoidReadout(out, content, telemetry) {
+  if (!out) return;
+  if (daemonVoidFeedMode === 'measure') {
+    const cards = getVoidMeasureEntries(telemetry).map(([label, value]) => `
+      <div style="border:1px solid #123512;background:#061006;padding:6px;min-width:0;">
+        <div style="color:#8db98d;text-transform:uppercase;font-size:9px;letter-spacing:0.03em;margin-bottom:3px;">${escHtml(label)}</div>
+        <div style="color:#b8efb8;font-size:11px;line-height:1.35;word-break:break-word;">${escHtml(value)}</div>
+      </div>
+    `).join('');
+    out.style.whiteSpace = 'normal';
+    out.style.padding = '8px';
+    out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-content:start;">${cards}</div>`;
+    return;
+  }
+  out.style.whiteSpace = 'pre-wrap';
+  out.style.padding = '10px';
+  out.textContent = content;
+}
+
+function canDeleteAnchorSeed() {
+  return Number(getContainmentValue('MIRROR_LOCK')) === 0;
+}
+
+function canAttemptDeleteItem(path, fallbackDir, meta) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
+  if (upperPath === 'VOID.TMP') return true;
+  if (!dirName && ROOT_PROTECTED_DIRS.has(String(fileName || '').toUpperCase())) return false;
+  if (meta?.sysfile) return false;
+  return true;
+}
+
+function deleteVirtualPath(path, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
+  const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
+  const fileLabel = fileName || path;
+  if (!fileName) return { ok: false, message: 'Usage: DEL <file>' };
+
+  if (upperPath === 'VOID.TMP') {
+    if (daemonStory.endingReached) return { ok: false, message: 'File not found: void.tmp' };
+    if (!daemonStory.quarantineSigned) {
+      return {
+        ok: false,
+        message: 'void.tmp refuses to go quietly.',
+        details: ['A quarantine signature is required before deletion will hold.'],
+      };
+    }
+    if (Number(getContainmentValue('MIRROR_LOCK')) !== 1) {
+      return {
+        ok: false,
+        message: 'void.tmp remains unstable.',
+        details: ['Restore HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 1 before the final delete.'],
+      };
+    }
+    updateDaemonStory(story => {
+      story.endingReached = true;
+      story.lastEventText = 'containment complete';
+    });
+    if (wins['void']) closeWin('void');
+    if (typeof setupIcons === 'function') setupIcons();
+    setTimeout(playContainmentEndingReboot, 140);
+    return {
+      ok: true,
+      deleted: true,
+      details: ['Deleted: void.tmp', 'SYS\\quarantine.sig holds.', 'Containment complete.'],
+    };
+  }
+
+  if (upperPath === 'DAEMON.CORE') {
+    return {
+      ok: false,
+      message: 'Access denied.',
+      details: ['daemon.core is not removable.', 'It remains in archive even when it is no longer active.'],
+    };
+  }
+
+  if (upperPath === '?????.EXE') {
+    return {
+      ok: false,
+      message: 'The launcher refuses deletion.',
+      details: ['If you need it quiet, leave it unopened.'],
+    };
+  }
+
+  if (!dirName && ROOT_PROTECTED_DIRS.has(String(fileName || '').toUpperCase())) {
+    return {
+      ok: false,
+      message: `Cannot delete ${fileLabel}: Access is denied.`,
+      details: ['Core directories are protected.'],
+    };
+  }
+
+  if (upperPath === STORY_FILE_PATHS.anchorSeed.toUpperCase()) {
+    if (!canDeleteAnchorSeed()) {
+      return {
+        ok: false,
+        message: 'anchor.seed will not release.',
+        details: ['Lower HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 0 first.'],
+      };
+    }
+    if (!removeFsPath(STORY_FILE_PATHS.anchorSeed)) {
+      return { ok: false, message: 'File not found: ' + fileLabel };
+    }
+    updateDaemonStory(story => {
+      story.anchorDeleted = true;
+      story.lastEventText = 'anchor released';
+      daemonVoidFeed = 'The aperture widens. Something on the reflected side notices the room.';
+      daemonVoidFeedMode = '';
+    }, {
+      glitch: true,
+      notice: {
+        title: 'Anchor Lost',
+        icon: '⬛',
+        message: 'The mirror anchor is gone.\n\nKeep daemon.core and void.tmp isolated from your active work while you inspect the breach.',
+      },
+    });
+    return {
+      ok: true,
+      deleted: true,
+      details: ['Deleted: anchor.seed', 'Mirror anchor released.', 'The channel is no longer deflected.'],
+    };
+  }
+
+  if (isVisibleSystemPath(path, { includeExplorer: true })) {
+    return {
+      ok: false,
+      message: `Cannot delete ${fileLabel}: Access is denied.`,
+      details: ['System files are protected.'],
+    };
+  }
+
+  const deleted = recycleVirtualPath(path, fallbackDir);
+  if (!deleted.ok) return deleted;
+  syncDaemonStory({ silent: false });
+  return deleted;
+}
+
+// Testing helper: prime the endgame state, then run the real final delete.
+function forceDeleteVoidTmp() {
+  if (daemonStory.endingReached) {
+    return { ok: false, message: 'void.tmp is no longer present.' };
+  }
+  const containment = registryData['HKEY_SLEEPBOX_MACHINE']?.['Containment'];
+  if (containment?.MIRROR_LOCK) containment.MIRROR_LOCK.value = 1;
+  saveRegistry();
+  updateDaemonStory(story => {
+    story.openedDaemon = true;
+    story.falseContainmentSeen = true;
+    story.daemonStopped = true;
+    story.anchorDeleted = true;
+    story.voidObserved = true;
+    story.voidActions = VOID_ACTION_ORDER.slice();
+    story.mirrorInspected = true;
+    story.protocolInspected = true;
+    story.mirrorLockRestored = true;
+    story.quarantineSigned = true;
+    story.lastEventText = 'debug skip armed';
+  }, { forceSync: true });
+  return deleteVirtualPath('void.tmp');
+}
+window.forceDeleteVoidTmp = forceDeleteVoidTmp;
+
+function killSoulDaemonProcess() {
+  if (daemonStory.stage < 1) {
+    return {
+      ok: false,
+      message: 'ERROR: Access is denied. (PID 512)',
+      details: ['soul_svc.exe is still registered as a protected service.'],
+    };
+  }
+  if (daemonStory.daemonStopped || daemonStory.endingReached) {
+    return { ok: false, message: 'ERROR: The process with PID 512 was not found.' };
+  }
+  if (Number(getContainmentValue('RESPAWN_LOCK')) !== 0) {
+    updateDaemonStory(story => {
+      story.killedSoulDaemon = true;
+      story.falseContainmentSeen = true;
+      story.lastEventText = 'respawn loop observed';
+    }, { glitch: true });
+    return {
+      ok: false,
+      respawned: true,
+      message: 'soul_daemon.exe terminated.',
+      details: [
+        'watch.pid restored the process before the table settled.',
+        'RESPAWN_LOCK is still active.',
+      ],
+    };
+  }
+  updateDaemonStory(story => {
+    story.killedSoulDaemon = true;
+    story.falseContainmentSeen = true;
+    story.respawnDisabledKill = true;
+    story.daemonStopped = true;
+    story.wrongVictory = true;
+    story.lastEventText = 'daemon relay offline';
+    daemonVoidFeed = 'The monitor goes missing. The pressure does not.';
+    daemonVoidFeedMode = '';
+  }, {
+    glitch: true,
+    notice: {
+      title: 'Monitor Link Lost',
+      icon: '⚠️',
+      message: 'PID 512 stayed dead.\n\nvoid.tmp and CACHE\\mirror.dat should now be treated as active evidence.',
+    },
+  });
+  return {
+    ok: true,
+    stopped: true,
+    message: 'SUCCESS: soul_daemon.exe terminated.',
+    details: [
+      'The process does not respawn.',
+      'Void pressure begins to climb in its absence.',
+    ],
+  };
+}
+
+syncDaemonStory({ silent: true });
+
+// ── Blob persistence (base64 per-file, separate localStorage keys) ─
+const BLOB_PREFIX = 'sleepOS-blob:';
+const BLOB_SIZE_LIMIT = 3 * 1024 * 1024; // skip files > 3 MB uncompressed
+const MEDIA_DB_NAME = 'sleepOS-media';
+const MEDIA_DB_VERSION = 1;
+const MEDIA_DB_STORE = 'blobs';
+let _mediaDbPromise = null;
+
+function blobRelativePath(dirPath, name) {
+  return (dirPath ? dirPath + '\\' : '') + name;
+}
+
+function blobStorageKey(dirPath, name) {
+  return BLOB_PREFIX + blobRelativePath(dirPath, name);
+}
+
+function splitBlobRelativePath(path) {
+  const clean = String(path || '').replace(/\//g, '\\').replace(/^\\+|\\+$/g, '');
+  const lastSlash = clean.lastIndexOf('\\');
+  return {
+    dirPath: lastSlash === -1 ? '' : clean.slice(0, lastSlash),
+    fileName: lastSlash === -1 ? clean : clean.slice(lastSlash + 1),
+  };
+}
+
+function _ab2b64(ab) {
+  const bytes = new Uint8Array(ab);
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 8192)
+    out += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length)));
+  return btoa(out);
+}
+
+function openMediaDb() {
+  if (!window.indexedDB) return Promise.resolve(null);
+  if (_mediaDbPromise) return _mediaDbPromise;
+  _mediaDbPromise = new Promise(resolve => {
+    try {
+      const req = indexedDB.open(MEDIA_DB_NAME, MEDIA_DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(MEDIA_DB_STORE)) {
+          db.createObjectStore(MEDIA_DB_STORE, { keyPath: 'path' });
+        }
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => db.close();
+        resolve(db);
+      };
+      req.onerror = req.onblocked = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+  return _mediaDbPromise;
+}
+
+async function storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      tx.objectStore(MEDIA_DB_STORE).put({
+        path: blobRelativePath(dirPath, name),
+        kind,
+        size,
+        mime,
+        blob: new Blob([arrayBuffer], { type: mime || 'application/octet-stream' }),
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+async function removeBlobEntryFromDb(dirPath, name) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      tx.objectStore(MEDIA_DB_STORE).delete(blobRelativePath(dirPath, name));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+async function renameBlobEntryInDb(dirPath, oldName, newName) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  const oldPath = blobRelativePath(dirPath, oldName);
+  const newPath = blobRelativePath(dirPath, newName);
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      const store = tx.objectStore(MEDIA_DB_STORE);
+      const getReq = store.get(oldPath);
+      getReq.onsuccess = () => {
+        const data = getReq.result;
+        if (!data) return;
+        data.path = newPath;
+        store.put(data);
+        store.delete(oldPath);
+      };
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
+  if (!fileName) return;
+  const dir = fsGetDir(dirPath);
+  if (!dir) return;
+  const prev = dir.blobs.get(fileName);
+  if (prev?.url) URL.revokeObjectURL(prev.url);
+  const blob = rawBlob instanceof Blob ? rawBlob : new Blob([rawBlob], { type: mime || 'application/octet-stream' });
+  dir.blobs.set(fileName, { url: URL.createObjectURL(blob), kind, size, mime });
+}
+
+// Save a single blob entry immediately (called at upload time when we have the raw File)
+function saveBlobEntry(dirPath, name, kind, size, mime, arrayBuffer) {
+  void storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer);
+  if (size > BLOB_SIZE_LIMIT) return;
+  try { localStorage.setItem(blobStorageKey(dirPath, name),
+    JSON.stringify({ kind, size, mime, b64: _ab2b64(arrayBuffer) })); }
+  catch(ex) { /* quota */ }
+}
+
+function removeBlobEntry(dirPath, name) {
+  localStorage.removeItem(blobStorageKey(dirPath, name));
+  void removeBlobEntryFromDb(dirPath, name);
+}
+
+function renameBlobEntry(dirPath, oldName, newName) {
+  const oldKey = blobStorageKey(dirPath, oldName);
+  const newKey = blobStorageKey(dirPath, newName);
+  const data = localStorage.getItem(oldKey);
+  if (data) { try { localStorage.setItem(newKey, data); } catch(ex) {} localStorage.removeItem(oldKey); }
+  void renameBlobEntryInDb(dirPath, oldName, newName);
+}
+
+async function moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  const oldPath = blobRelativePath(srcDirPath, srcName);
+  const newPath = blobRelativePath(dstDirPath, dstName);
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      const store = tx.objectStore(MEDIA_DB_STORE);
+      const getReq = store.get(oldPath);
+      getReq.onsuccess = () => {
+        const data = getReq.result;
+        if (!data) return;
+        data.path = newPath;
+        store.put(data);
+        store.delete(oldPath);
+      };
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+function moveBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
+  const oldKey = blobStorageKey(srcDirPath, srcName);
+  const newKey = blobStorageKey(dstDirPath, dstName);
+  const data = localStorage.getItem(oldKey);
+  if (data) {
+    try { localStorage.setItem(newKey, data); } catch (e) {}
+    localStorage.removeItem(oldKey);
+  }
+  void moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
+}
+
+async function moveBlobSubtreeInDb(oldDirPath, newDirPath) {
+  const db = await openMediaDb();
+  if (!db) return false;
+  const prefix = oldDirPath ? oldDirPath + '\\' : '';
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      const store = tx.objectStore(MEDIA_DB_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        (req.result || []).forEach(item => {
+          if (!String(item.path || '').startsWith(prefix)) return;
+          const nextPath = newDirPath + '\\' + String(item.path).slice(prefix.length);
+          store.put(Object.assign({}, item, { path: nextPath }));
+          store.delete(item.path);
+        });
+      };
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+function moveBlobStorageSubtree(oldDirPath, newDirPath) {
+  const from = fsNormalizeDir(oldDirPath);
+  const to = fsNormalizeDir(newDirPath);
+  const prefix = BLOB_PREFIX + (from ? from + '\\' : '');
+  Object.keys(localStorage)
+    .filter(key => key.startsWith(prefix))
+    .forEach(key => {
+      const data = localStorage.getItem(key);
+      const suffix = key.slice(prefix.length);
+      if (data !== null) {
+        try { localStorage.setItem(BLOB_PREFIX + to + '\\' + suffix, data); } catch (e) {}
+      }
+      localStorage.removeItem(key);
+    });
+  void moveBlobSubtreeInDb(from, to);
+}
+
+function loadBlobsFromStorage() {
+  Object.keys(localStorage).filter(k => k.startsWith(BLOB_PREFIX)).forEach(k => {
+    try {
+      const { kind, size, mime, b64 } = JSON.parse(localStorage.getItem(k));
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const { dirPath, fileName } = splitBlobRelativePath(k.slice(BLOB_PREFIX.length));
+      restoreBlobIntoFs(dirPath, fileName, kind, size, mime, new Blob([bytes], { type: mime }));
+    } catch(e) { /* corrupted ? skip */ }
+  });
+  void loadBlobsFromIndexedDb();
+}
+
+async function loadBlobsFromIndexedDb() {
+  const db = await openMediaDb();
+  if (!db) return;
+  const items = await new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readonly');
+      const req = tx.objectStore(MEDIA_DB_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    } catch (e) {
+      resolve([]);
+    }
+  });
+  items.forEach(item => {
+    const { dirPath, fileName } = splitBlobRelativePath(item.path);
+    restoreBlobIntoFs(dirPath, fileName, item.kind, item.size, item.mime, item.blob);
+  });
+  if (items.length) document.dispatchEvent(new CustomEvent('fs-changed'));
+  const savedWp = getInitialWallpaperPath();
+  if (savedWp) {
+    applyWallpaper(savedWp);
+  }
+}
+loadBlobsFromStorage();
+
+// ── Wallpaper persistence ─────────────────────────────────────────
+const WP_KEY = 'sleepOS-wallpaper';
+
+// ── Settings helpers ──────────────────────────────────────────────
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(osSettings)); } catch(e) {}
+}
+
+function applySettings() {
+  const crt = document.getElementById('crt');
+  if (crt) crt.style.display = osSettings.crtScanlines ? '' : 'none';
+  document.querySelectorAll('.vp-dither').forEach(d => d.style.display = osSettings.videoDither ? '' : 'none');
+  updateClock();
+  // Keep registry in sync with settings
+  if (typeof registryData !== 'undefined') {
+    const cc = registryData['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
+    const cu = registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'];
+    if (cc) {
+      cc.CRT_SCANLINES.value = osSettings.crtScanlines ? 1 : 0;
+      cc.VIDEO_DITHER.value  = osSettings.videoDither  ? 1 : 0;
+      cc.CLOCK_FORMAT.value  = osSettings.clock12h ? '12h' : '24h';
+    }
+    if (cu) {
+      cu.SkipBoot.value = osSettings.skipBoot ? 1 : 0;
+      cu.IdleSleepMinutes.value = getIdleSleepMinutes();
+    }
+    saveRegistry();
+  }
+}
+
+document.addEventListener('fs-changed', refreshAppearanceWindow);
+
+// ── Script executor ──────────────────────────────────────────────
+const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
+const SCRIPT_MAX_STEPS = 10000;
+const SCRIPT_MAX_DEPTH = 16;
+const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
+
+function makeScriptError(message, lineNo, sourceName) {
+  const err = new Error(message);
+  err.lineNo = lineNo || 0;
+  err.sourceName = sourceName || '';
+  return err;
+}
+
+function makeAbortError(message) {
+  const err = new Error(message || 'Command interrupted.');
+  err.name = 'AbortError';
+  err.isCommandAbort = true;
+  return err;
+}
+
+function isAbortError(err) {
+  return !!(err && (err.isCommandAbort || err.name === 'AbortError'));
+}
+
+function throwIfAborted(signal) {
+  if (signal && signal.aborted) {
+    throw signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError();
+  }
+}
+
+function scriptResolveText(text, vars) {
+  return String(text ?? '').replace(/\$(\w+)/g, (_, key) => vars[key] ?? '');
+}
+
+function scriptBuildArgFrame(targetName, args) {
+  const values = Object.create(null);
+  const items = Array.isArray(args) ? args.map(arg => String(arg ?? '')) : [];
+  values['0'] = String(targetName || '');
+  values.argc = String(items.length);
+  items.forEach((value, index) => { values[String(index + 1)] = value; });
+  return { targetName: String(targetName || ''), values };
+}
+
+function scriptLookupVar(state, key) {
+  const name = String(key || '');
+  if (name === 'status' || name === 'errorlevel') return String(state.status ?? 0);
+  const frame = state.frames?.[state.frames.length - 1];
+  if (frame && Object.prototype.hasOwnProperty.call(frame.values, name)) return frame.values[name];
+  return state.vars[name] ?? '';
+}
+
+function scriptHasVar(state, key) {
+  const name = String(key || '');
+  if (name === 'status' || name === 'errorlevel') return true;
+  const frame = state.frames?.[state.frames.length - 1];
+  if (frame && Object.prototype.hasOwnProperty.call(frame.values, name)) return true;
+  return Object.prototype.hasOwnProperty.call(state.vars, name);
+}
+
+function scriptResolveStateText(text, state) {
+  return String(text ?? '').replace(/\$(\w+)/g, (_, key) => scriptLookupVar(state, key));
+}
+
+function scriptUnescape(text) {
+  return String(text ?? '')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'");
+}
+
+function scriptStripOuterQuotes(text) {
+  const trimmed = String(text ?? '').trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return scriptUnescape(trimmed.slice(1, -1));
+  }
+  return trimmed;
+}
+
+function scriptNormalizeLabel(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function scriptParseNumber(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : null;
+}
+
+function scriptParseStatusCode(value, lineNo, fallback) {
+  const text = String(value ?? '').trim();
+  if (!text) return Math.trunc(scriptParseNumber(fallback ?? 0) ?? 0);
+  const num = scriptParseNumber(text);
+  if (num === null) throw makeScriptError('Status code must be numeric.', lineNo);
+  return Math.trunc(num);
+}
+
+function scriptTokenize(text, lineNo) {
+  const source = String(text ?? '');
+  const tokens = [];
+  let token = '';
+  let quote = null;
+  let started = false;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (quote) {
+      started = true;
+      if (ch === '\\' && i + 1 < source.length) {
+        token += source[i + 1];
+        i++;
+        continue;
+      }
+      if (ch === quote) {
+        quote = null;
+        continue;
+      }
+      token += ch;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      if (started) {
+        tokens.push(token);
+        token = '';
+        started = false;
+      }
+      continue;
+    }
+    started = true;
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    token += ch;
+  }
+  if (quote) throw makeScriptError('Unterminated quoted string.', lineNo);
+  if (started) tokens.push(token);
+  return tokens;
+}
+
+function scriptIsReservedVarName(name) {
+  return /^(?:status|errorlevel|argc|\d+)$/i.test(String(name || ''));
+}
+
+function scriptPathExists(path, dirName) {
+  const target = String(path || '').trim();
+  if (!target) return false;
+  if (target === '.' || target === '..' || target === '\\' || /^C:\\sleepOS\\?$/i.test(target)) return true;
+  if (isVisibleSystemPath(target, { includeExplorer: true })) return true;
+  if (fsGetEntry(target, dirName)) return true;
+  return !!fsGetDir(fsNormalizeDir(target));
+}
+
+function scriptEvaluateCondition(text, state, lineNo) {
+  const tokens = scriptTokenize(text, lineNo);
+  let negate = false;
+  if (tokens[0] && tokens[0].toLowerCase() === 'not') {
+    negate = true;
+    tokens.shift();
+  }
+  if (tokens[0] && tokens[0].toLowerCase() === 'exists') {
+    if (tokens.length !== 4 || tokens[2].toLowerCase() !== 'goto') {
+      throw makeScriptError('Usage: if [not] exists <path> goto <label>', lineNo);
+    }
+    const rawPassed = scriptPathExists(tokens[1], state.dirName);
+    return { passed: negate ? !rawPassed : rawPassed, label: tokens[3] };
+  }
+  if (tokens[0] && tokens[0].toLowerCase() === 'defined') {
+    if (tokens.length !== 4 || tokens[2].toLowerCase() !== 'goto') {
+      throw makeScriptError('Usage: if [not] defined <var> goto <label>', lineNo);
+    }
+    const rawPassed = scriptHasVar(state, tokens[1]);
+    return { passed: negate ? !rawPassed : rawPassed, label: tokens[3] };
+  }
+  if (tokens.length !== 5 || tokens[3].toLowerCase() !== 'goto') {
+    throw makeScriptError('Usage: if <left> <op> <right> goto <label>', lineNo);
+  }
+  const rawPassed = scriptCompare(tokens[0], tokens[1], tokens[2], lineNo);
+  return { passed: negate ? !rawPassed : rawPassed, label: tokens[4] };
+}
+
+function scriptMutateNumericVar(vars, key, op, amountRaw, lineNo) {
+  const current = Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : '0';
+  const currentNum = scriptParseNumber(current);
+  if (currentNum === null) throw makeScriptError('Variable is not numeric: ' + key, lineNo);
+  const needsAmount = op === 'mul' || op === 'div' || op === 'mod';
+  if (needsAmount && (amountRaw === undefined || amountRaw === null || String(amountRaw).trim() === '')) {
+    throw makeScriptError('Usage: ' + op + ' <var> <amount>', lineNo);
+  }
+  const amount = amountRaw === undefined || amountRaw === null || String(amountRaw).trim() === '' ? 1 : scriptParseNumber(amountRaw);
+  if (amount === null) throw makeScriptError('Arithmetic operand must be numeric.', lineNo);
+  if ((op === 'div' || op === 'mod') && amount === 0) throw makeScriptError('Division by zero.', lineNo);
+  let nextValue = currentNum;
+  if (op === 'inc' || op === 'add') nextValue = currentNum + amount;
+  else if (op === 'dec' || op === 'sub') nextValue = currentNum - amount;
+  else if (op === 'mul') nextValue = currentNum * amount;
+  else if (op === 'div') nextValue = currentNum / amount;
+  else if (op === 'mod') nextValue = currentNum % amount;
+  else throw makeScriptError('Unsupported arithmetic operation: ' + op, lineNo);
+  vars[key] = String(nextValue);
+  return vars[key];
+}
+
+function scriptEmitError(printFn, sourceName, lineNo, message) {
+  const prefix = sourceName ? sourceName + ': ' : 'Script error: ';
+  const where = lineNo ? 'line ' + lineNo + ': ' : '';
+  printFn(prefix + where + message, '#ff4444');
+}
+
+function scriptFail(err, printFn, sourceName, bubbleErrors) {
+  const scriptErr = err instanceof Error ? err : makeScriptError(String(err), 0, sourceName);
+  if (!scriptErr.sourceName) scriptErr.sourceName = sourceName || '';
+  if (bubbleErrors) throw scriptErr;
+  scriptEmitError(printFn, scriptErr.sourceName || sourceName, scriptErr.lineNo || 0, scriptErr.message || String(scriptErr));
+  return Math.trunc(scriptErr.statusCode ?? 1);
+}
+
+function parseScript(source) {
+  const instructions = [];
+  const labels = Object.create(null);
+  String(source ?? '').replace(/\r/g, '').split('\n').forEach((rawLine, index) => {
+    const lineNo = index + 1;
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || line.startsWith('//')) return;
+    if (line.startsWith(':')) {
+      const match = line.match(SCRIPT_LABEL_RE);
+      if (!match) throw makeScriptError('Invalid label syntax.', lineNo);
+      const label = scriptNormalizeLabel(match[1]);
+      if (Object.prototype.hasOwnProperty.call(labels, label)) {
+        throw makeScriptError('Duplicate label: ' + match[1], lineNo);
+      }
+      labels[label] = instructions.length;
+      return;
+    }
+    const spaceIdx = line.search(/\s/);
+    instructions.push({
+      lineNo,
+      raw: line,
+      cmd: (spaceIdx === -1 ? line : line.slice(0, spaceIdx)).toLowerCase(),
+      arg: spaceIdx === -1 ? '' : line.slice(spaceIdx + 1).trim(),
+    });
+  });
+  return { instructions, labels };
+}
+
+async function scriptSleep(ms, signal) {
+  throwIfAborted(signal);
+  await new Promise((resolve, reject) => {
+    const tid = setTimeout(done, ms);
+    function cleanup() {
+      clearTimeout(tid);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }
+    function done() {
+      cleanup();
+      resolve();
+    }
+    function onAbort() {
+      cleanup();
+      reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
+    }
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function scriptJumpIndex(labels, labelName, lineNo) {
+  const key = scriptNormalizeLabel(labelName);
+  if (!Object.prototype.hasOwnProperty.call(labels, key)) {
+    throw makeScriptError('Unknown label: ' + labelName, lineNo);
+  }
+  return labels[key];
+}
+
+function scriptCompare(left, op, right, lineNo) {
+  if (op === '==') return left === right;
+  if (op === '!=') return left !== right;
+  const leftNum = scriptParseNumber(left);
+  const rightNum = scriptParseNumber(right);
+  if (leftNum === null || rightNum === null) {
+    throw makeScriptError('Numeric comparison requires numeric operands.', lineNo);
+  }
+  if (op === '>') return leftNum > rightNum;
+  if (op === '>=') return leftNum >= rightNum;
+  if (op === '<') return leftNum < rightNum;
+  if (op === '<=') return leftNum <= rightNum;
+  throw makeScriptError('Unsupported comparison operator: ' + op, lineNo);
+}
+
+async function execScriptInstruction(inst, labels, state) {
+  throwIfAborted(state.signal);
+  const resolvedArg = scriptResolveStateText(inst.arg, state).trim();
+  switch (inst.cmd) {
+    case 'print':
+    case 'echo': {
+      const colorMatch = resolvedArg.match(/^\[(\w+)\]\s*/);
+      if (colorMatch && SCRIPT_COLORS[colorMatch[1]]) {
+        state.printFn(resolvedArg.slice(colorMatch[0].length), SCRIPT_COLORS[colorMatch[1]]);
+      } else {
+        state.printFn(resolvedArg);
+      }
+      state.status = 0;
+      return null;
+    }
+    case 'set': {
+      const match = resolvedArg.match(/^(\w+)(?:\s+(.*))?$/);
+      if (!match) throw makeScriptError('Usage: set <var> <value>', inst.lineNo);
+      if (scriptIsReservedVarName(match[1])) throw makeScriptError('Cannot assign reserved variable: ' + match[1], inst.lineNo);
+      state.vars[match[1]] = match[2] ?? '';
+      state.status = 0;
+      return null;
+    }
+    case 'inc':
+    case 'dec':
+    case 'add':
+    case 'sub':
+    case 'mul':
+    case 'div':
+    case 'mod': {
+      const match = resolvedArg.match(/^(\w+)(?:\s+(.+))?$/);
+      if (!match) {
+        const usage = inst.cmd === 'mul' || inst.cmd === 'div' || inst.cmd === 'mod'
+          ? 'Usage: ' + inst.cmd + ' <var> <amount>'
+          : 'Usage: ' + inst.cmd + ' <var> [amount]';
+        throw makeScriptError(usage, inst.lineNo);
+      }
+      if (scriptIsReservedVarName(match[1])) throw makeScriptError('Cannot assign reserved variable: ' + match[1], inst.lineNo);
+      scriptMutateNumericVar(state.vars, match[1], inst.cmd, match[2], inst.lineNo);
+      state.status = 0;
+      return null;
+    }
+    case 'wait': {
+      const ms = scriptParseNumber(resolvedArg);
+      if (ms === null) throw makeScriptError('Usage: wait <ms>', inst.lineNo);
+      await scriptSleep(Math.min(Math.max(Math.floor(ms), 0), 30000), state.signal);
+      state.status = 0;
+      return null;
+    }
+    case 'input': {
+      throwIfAborted(state.signal);
+      if (!state.readLine) throw makeScriptError('INPUT requires an interactive terminal.', inst.lineNo);
+      const match = resolvedArg.match(/^(\w+)(?:\s+(.+))?$/);
+      if (!match) throw makeScriptError('Usage: input <var> [prompt]', inst.lineNo);
+      if (scriptIsReservedVarName(match[1])) throw makeScriptError('Cannot assign reserved variable: ' + match[1], inst.lineNo);
+      const key = match[1];
+      const prompt = match[2] ? scriptStripOuterQuotes(match[2]) : key + ':';
+      state.vars[key] = await state.readLine(prompt);
+      state.status = 0;
+      return null;
+    }
+    case 'goto':
+      if (!resolvedArg) throw makeScriptError('Usage: goto <label>', inst.lineNo);
+      state.status = 0;
+      return { type: 'jump', pc: scriptJumpIndex(labels, resolvedArg, inst.lineNo) };
+    case 'call': {
+      const tokens = scriptTokenize(resolvedArg, inst.lineNo);
+      if (!tokens.length) throw makeScriptError('Usage: call <label> [args...]', inst.lineNo);
+      state.status = 0;
+      return {
+        type: 'call',
+        pc: scriptJumpIndex(labels, tokens[0], inst.lineNo),
+        frame: scriptBuildArgFrame(tokens[0], tokens.slice(1)),
+      };
+    }
+    case 'return':
+      return { type: 'return', code: scriptParseStatusCode(resolvedArg, inst.lineNo, state.status) };
+    case 'exit':
+      return { type: 'exit', code: scriptParseStatusCode(resolvedArg, inst.lineNo, state.status) };
+    case 'if': {
+      const result = scriptEvaluateCondition(resolvedArg, state, inst.lineNo);
+      state.status = result.passed ? 0 : 1;
+      if (result.passed) return { type: 'jump', pc: scriptJumpIndex(labels, result.label, inst.lineNo) };
+      return null;
+    }
+    case 'clear':
+      (state.clearFn || (() => { const out = document.getElementById('to'); if (out) out.innerHTML = ''; }))();
+      state.status = 0;
+      return null;
+    case 'touch': {
+      if (!resolvedArg) throw makeScriptError('Usage: touch <file>', inst.lineNo);
+      const existing = fsGetEntry(resolvedArg, state.dirName);
+      if (!existing) {
+        const saved = fsWriteTextFile(resolvedArg, '', state.dirName);
+        if (!saved) throw makeScriptError('Cannot create file: ' + resolvedArg, inst.lineNo);
+        document.dispatchEvent(new CustomEvent('fs-changed'));
+      }
+      state.status = 0;
+      return null;
+    }
+    case 'mkdir': {
+      if (!resolvedArg) throw makeScriptError('Usage: mkdir <dir>', inst.lineNo);
+      const created = fsCreateDir(resolvedArg, state.dirName);
+      if (!created) throw makeScriptError('Cannot create directory: ' + resolvedArg, inst.lineNo);
+      if (created.created) {
+        document.dispatchEvent(new CustomEvent('fs-changed'));
+      }
+      state.status = 0;
+      return null;
+    }
+    case 'del':
+    case 'rm': {
+      if (!resolvedArg) throw makeScriptError('Usage: del <file>', inst.lineNo);
+      const deletion = deleteVirtualPath(resolvedArg, state.dirName);
+      if (!deletion.ok) throw makeScriptError(deletion.message || ('Cannot delete: ' + resolvedArg), inst.lineNo);
+      state.status = 0;
+      return null;
+    }
+    case 'open': {
+      if (!resolvedArg) throw makeScriptError('Usage: open <file>', inst.lineNo);
+      if (isVisibleSystemPath(resolvedArg, { includeExplorer: true })) {
+        if (!openSystemFile(fsSplitPath(resolvedArg, state.dirName).fileName)) {
+          throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
+        }
+        state.status = 0;
+        return null;
+      }
+      const entry = fsGetEntry(resolvedArg, state.dirName);
+      if (!entry) throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
+      if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
+      else openNotepad(entry.fileName, entry.dirName);
+      state.status = 0;
+      return null;
+    }
+    case 'notepad':
+      openNotepad(resolvedArg || undefined, state.dirName);
+      state.status = 0;
+      return null;
+    case 'start': {
+      const key = resolvedArg.toLowerCase();
+      const map = {
+        notepad: () => openNotepad(undefined, state.dirName),
+        'notepad.exe': () => openNotepad(undefined, state.dirName),
+        terminal: () => openTerminal(state.dirName),
+        'terminal.exe': () => openTerminal(state.dirName),
+        sysmon: openSysmon,
+        'sysmon.exe': openSysmon,
+        browser: openBrowser,
+        'browser.exe': openBrowser,
+        defrag: openDefrag,
+        'defrag.exe': openDefrag,
+        explorer: openExplorer,
+        'explorer.exe': openExplorer,
+        welcome: openWelcome,
+        'welcome.readme': openWelcome,
+        files: openFiles,
+        calc: openCalculator,
+        'calc.exe': openCalculator,
+        regedit: openRegedit,
+        'regedit.exe': openRegedit,
+      };
+      if (!map[key]) throw makeScriptError('Program not found: ' + resolvedArg, inst.lineNo);
+      map[key]();
+      state.status = 0;
+      return null;
+    }
+    case 'run': {
+      const tokens = scriptTokenize(resolvedArg, inst.lineNo);
+      if (!tokens.length) throw makeScriptError('Usage: run <script> [args...]', inst.lineNo);
+      const entry = fsGetEntry(tokens[0], state.dirName);
+      if (!entry || entry.kind !== 'text') throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
+      state.status = await execScript(entry.value, state.printFn, {
+        vars: state.vars,
+        depth: state.depth + 1,
+        dirName: entry.dirName,
+        sourceName: entry.fileName,
+        clearFn: state.clearFn,
+        readLine: state.readLine,
+        signal: state.signal,
+        args: tokens.slice(1),
+      });
+      return null;
+    }
+    case 'grep': {
+      const match = resolvedArg.match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)\s+(.+)$/);
+      if (!match) throw makeScriptError('Usage: grep <pattern> <file>', inst.lineNo);
+      const patternToken = match[1];
+      const pattern = scriptUnescape(patternToken.replace(/^['"]|['"]$/g, ''));
+      const fileName = match[2].replace(/^['"]|['"]$/g, '');
+      const entry = fsGetEntry(fileName, state.dirName);
+      if (!entry || entry.kind !== 'text') throw makeScriptError('File not found: ' + fileName, inst.lineNo);
+      let re;
+      try { re = new RegExp(pattern, 'i'); }
+      catch (e) { throw makeScriptError('Invalid regex: ' + pattern, inst.lineNo); }
+      const lines = entry.value.split('\n');
+      let matches = 0;
+      lines.forEach((line, index) => {
+        if (re.test(line)) {
+          state.printFn((index + 1) + ':' + line);
+          matches++;
+        }
+      });
+      if (matches === 0) state.printFn('(no matches)');
+      else state.printFn(matches + ' match' + (matches === 1 ? '' : 'es') + ' found');
+      state.status = matches === 0 ? 1 : 0;
+      return null;
+    }
+    default:
+      throw makeScriptError('Unknown command: ' + inst.cmd, inst.lineNo);
+  }
+}
+
+async function execScript(source, printFn, options) {
+  options = options || {};
+  const sourceName = options.sourceName || 'script';
+  const depth = options.depth || 0;
+  if (depth >= SCRIPT_MAX_DEPTH) {
+    return scriptFail(makeScriptError('Maximum script recursion depth exceeded.', 0, sourceName), printFn, sourceName, options.bubbleErrors);
+  }
+  let parsed;
+  try {
+    parsed = parseScript(source);
+  } catch (err) {
+    return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+  }
+  const state = {
+    vars: options.vars || Object.create(null),
+    depth,
+    dirName: fsNormalizeDir(options.dirName),
+    printFn,
+    clearFn: options.clearFn || null,
+    readLine: options.readLine || null,
+    signal: options.signal || null,
+    status: Math.trunc(options.initialStatus ?? 0),
+    frames: [scriptBuildArgFrame(options.targetName || sourceName, options.args || [])],
+    callStack: [],
+  };
+  let pc = 0;
+  let steps = 0;
+  while (pc < parsed.instructions.length) {
+    const inst = parsed.instructions[pc];
+    steps++;
+    try {
+      throwIfAborted(state.signal);
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+    }
+    if (steps > SCRIPT_MAX_STEPS) {
+      return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
+    }
+    try {
+      const action = await execScriptInstruction(inst, parsed.labels, state);
+      if (action && action.type === 'jump') {
+        pc = action.pc;
+        continue;
+      }
+      if (action && action.type === 'call') {
+        state.callStack.push({ returnPc: pc + 1 });
+        state.frames.push(action.frame);
+        pc = action.pc;
+        continue;
+      }
+      if (action && action.type === 'return') {
+        if (!state.callStack.length || state.frames.length <= 1) {
+          throw makeScriptError('RETURN without CALL.', inst.lineNo);
+        }
+        const frame = state.callStack.pop();
+        state.frames.pop();
+        state.status = action.code;
+        pc = frame.returnPc;
+        continue;
+      }
+      if (action && action.type === 'exit') {
+        state.status = action.code;
+        return state.status;
+      }
+      if (typeof action === 'number') {
+        pc = action;
+        continue;
+      }
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+    }
+    pc++;
+  }
+  return Math.trunc(state.status ?? 0);
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function inferBlobKindFromName(name) {
+  const lower = String(name || '').toLowerCase();
+  if (/\.(gif|png|jpe?g|webp|bmp|svg|avif|ico)$/.test(lower)) return 'image';
+  if (/\.(mp4|webm|mov|m4v|ogv)$/.test(lower)) return 'video';
+  if (/\.(mp3|wav|ogg|m4a|flac|aac)$/.test(lower)) return 'audio';
+  if (/\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/.test(lower)) return 'text';
+  return 'binary';
+}
+
+function inferBlobMimeFromName(name) {
+  const lower = String(name || '').toLowerCase();
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (/\.(jpg|jpeg)$/.test(lower)) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.bmp')) return 'image/bmp';
+  if (lower.endsWith('.svg')) return 'image/svg+xml';
+  if (lower.endsWith('.avif')) return 'image/avif';
+  if (lower.endsWith('.ico')) return 'image/x-icon';
+  if (lower.endsWith('.mp4')) return 'video/mp4';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  if (lower.endsWith('.ogv')) return 'video/ogg';
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  if (lower.endsWith('.ogg')) return 'audio/ogg';
+  if (lower.endsWith('.m4a')) return 'audio/mp4';
+  if (lower.endsWith('.flac')) return 'audio/flac';
+  if (lower.endsWith('.aac')) return 'audio/aac';
+  if (/\.(txt|log|ini|cfg)$/.test(lower)) return 'text/plain';
+  if (lower.endsWith('.md')) return 'text/markdown';
+  if (lower.endsWith('.csv')) return 'text/csv';
+  if (lower.endsWith('.json')) return 'application/json';
+  if (lower.endsWith('.xml')) return 'application/xml';
+  if (lower.endsWith('.html')) return 'text/html';
+  if (lower.endsWith('.css')) return 'text/css';
+  if (lower.endsWith('.js')) return 'text/javascript';
+  return '';
+}
+
+let _uploadCwd = '';
+function triggerUpload(dir) {
+  _uploadCwd = dir || '';
+  document.getElementById('file-upload-input').click();
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(String(e.target?.result ?? ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsText(file);
+  });
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target?.result);
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function handleFileUpload(fileList) {
+  const dirPath = fsNormalizeDir(_uploadCwd || '');
+  if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
+  const dir = fsGetDir(dirPath);
+  if (dirPath && !dir) {
+    osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'X');
+    return;
+  }
+  const dirLabel = dirPath ? `C:\\sleepOS\\${dirPath}\\` : 'C:\\sleepOS';
+  const results = await Promise.all([...fileList].map(async file => {
+    const TEXT_EXTS = /\.(script|txt|md|csv|json|xml|html|css|js|log|ini|cfg|sh|bat)$/i;
+    const mime = file.type || inferBlobMimeFromName(file.name);
+    const inferredKind = inferBlobKindFromName(file.name);
+    const isText = mime.startsWith('text/') || inferredKind === 'text' || (file.type === '' && TEXT_EXTS.test(file.name));
+    const kind = mime.startsWith('image/') ? 'image'
+               : mime.startsWith('video/') ? 'video'
+               : mime.startsWith('audio/') ? 'audio'
+               : isText ? 'text'
+               : inferredKind;
+    try {
+      if (kind === 'text') {
+        const content = await readFileAsText(file);
+        const saved = fsWriteTextFile(file.name, content, dirPath);
+        return saved ? { ok: true, name: file.name } : { ok: false, name: file.name };
+      }
+      const url = URL.createObjectURL(file);
+      const saved = fsWriteBlobFile(file.name, { url, kind, size: file.size, mime }, dirPath);
+      if (!saved) {
+        URL.revokeObjectURL(url);
+        return { ok: false, name: file.name };
+      }
+      try {
+        const buffer = await readFileAsArrayBuffer(file);
+        saveBlobEntry(dirPath, file.name, kind, file.size, mime, buffer);
+      } catch (e) {}
+      return { ok: true, name: file.name };
+    } catch (e) {
+      return { ok: false, name: file.name };
+    }
+  }));
+  const added = results.filter(result => result.ok).map(result => result.name);
+  const failed = results.filter(result => !result.ok).map(result => result.name);
+  if (added.length) {
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+    showUploadConfirm(added, dirLabel);
+  }
+  if (failed.length) {
+    const msg = failed.length === 1
+      ? `"${failed[0]}" could not be uploaded to ${dirLabel}`
+      : `${failed.length} files could not be uploaded to ${dirLabel}`;
+    osAlert(msg, 'Upload Failed', 'X');
+  }
+}
+
+function showUploadConfirm(names, dirLabel) {
+  dirLabel = dirLabel || 'C:\\sleepOS';
+  const msg = names.length === 1
+    ? `"${names[0]}" uploaded to ${dirLabel}`
+    : `${names.length} files uploaded to ${dirLabel}`;
+  const id = 'upload-confirm-' + Date.now();
+  if (!mkWin({ id, title: 'Upload Complete', icon: '📤', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:14px;font-family: var(--sleep-font);font-size:12px;';
+  body.innerHTML = `<div style="margin-bottom:12px;">📁 ${msg}</div>
+    <div style="margin-bottom:8px;color:#555;">Use OPEN &lt;filename&gt; in terminal, or type the filename to view.</div>
+    <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
+}
+
+function openMediaFile(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null;
+  if (!blob) { return; }
+  if (blob.kind === 'image') openImageViewer(entry.fileName, entry.dirName);
+  else if (blob.kind === 'video') openVideoPlayer(entry.fileName, entry.dirName);
+  else if (blob.kind === 'audio') openAudioPlayer(entry.fileName, entry.dirName);
+  else osAlert('Cannot open binary file:\n' + entry.fileName, 'Cannot Open', 'X');
+}
+
+function openImageViewer(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
+  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const id = 'img-' + pathKey.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: '🖼️', w: 520, h: 400 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;';
+  const wrap = document.createElement('div'); wrap.className = 'media-body';
+  const img  = document.createElement('img'); img.src = blob.url;
+  wrap.appendChild(img); body.appendChild(wrap);
+  if (ws) ws.textContent = entry.fileName + '  \u2014  ' + fmtSize(blob.size);
+  if (mb) {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = 'File';
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, [
+      { label: 'Close', action: () => closeWin(id) },
+    ]); });
+    mb.appendChild(span);
+    const viewSpan = document.createElement('span');
+    viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+    viewSpan.addEventListener('click', e => { e.stopPropagation(); showDropdown(viewSpan, [
+      { label: 'Actual Size',  action: () => { img.style.maxWidth='none'; img.style.maxHeight='none'; } },
+      { label: 'Fit to Window', action: () => { img.style.maxWidth='100%'; img.style.maxHeight='100%'; } },
+    ]); });
+    mb.appendChild(viewSpan);
+  }
+}
+
+function openVideoPlayer(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
+  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const id = 'vid-' + pathKey.replace(/\W/g,'_');
+  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' \u2014 Media Player', icon: '🎬', w: 500, h: 390 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const shell  = document.createElement('div'); shell.className = 'vp-shell';
+
+  // ── Screen ────────────────────────────────────────────────────
+  const screen  = document.createElement('div'); screen.className = 'vp-screen';
+  const video   = document.createElement('video'); video.src = blob.url;
+  const dither  = document.createElement('div'); dither.className = 'vp-dither';
+  dither.style.display = osSettings.videoDither ? '' : 'none';
+  const overlay = document.createElement('div'); overlay.className = 'vp-screen-overlay';
+  overlay.textContent = '▶'; overlay.style.opacity = '1';
+  screen.appendChild(video); screen.appendChild(dither); screen.appendChild(overlay);
+  screen.addEventListener('click', () => video.paused ? video.play() : video.pause());
+
+  // ── Bottom bar ────────────────────────────────────────────────
+  const bar = document.createElement('div'); bar.className = 'vp-bar';
+
+  // Seek row
+  const seekRow = document.createElement('div'); seekRow.className = 'vp-seek-row';
+  const timeEl  = document.createElement('div'); timeEl.className = 'vp-time'; timeEl.textContent = '0:00';
+  const durEl   = document.createElement('div'); durEl.className = 'vp-time vp-dur'; durEl.textContent = '0:00';
+  const seek    = document.createElement('input'); seek.type = 'range'; seek.className = 'vp-seek';
+  seek.min = 0; seek.max = 1000; seek.value = 0;
+  seekRow.appendChild(timeEl); seekRow.appendChild(seek); seekRow.appendChild(durEl);
+
+  // Button row
+  const btnRow = document.createElement('div'); btnRow.className = 'vp-btn-row';
+  const mkBtn = (txt, title, cls, fn) => {
+    const b = document.createElement('div');
+    b.className = 'vp-btn' + (cls ? ' ' + cls : '');
+    b.textContent = txt; b.title = title;
+    b.addEventListener('click', fn); return b;
+  };
+  const div = (cls) => { const d = document.createElement('div'); d.className = cls; return d; };
+
+  const btnRew  = mkBtn('\u23EE', 'Back 10s',    '', () => { video.currentTime = Math.max(0, video.currentTime - 10); });
+  const btnPlay = mkBtn('\u25B6', 'Play/Pause', 'vp-btn-play', () => video.paused ? video.play() : video.pause());
+  const btnStop = mkBtn('\u25A0', 'Stop',        '', () => { video.pause(); video.currentTime = 0; });
+  const btnFwd  = mkBtn('\u23ED', 'Forward 10s', '', () => { video.currentTime = Math.min(video.duration||0, video.currentTime + 10); });
+
+  const muteBtn = mkBtn('\u{1F50A}', 'Mute', '', () => {
+    video.muted = !video.muted;
+    muteBtn.textContent = video.muted ? '\u{1F507}' : '\u{1F50A}';
+    renderVol();
+  });
+
+  // Unicode block volume slider (10 blocks)
+  const volEl = document.createElement('div'); volEl.className = 'vp-vol-blocks'; volEl.title = 'Volume';
+  const VOL_BLOCKS = 10;
+  function renderVol() {
+    const v = video.muted ? 0 : video.volume;
+    const filled = Math.round(v * VOL_BLOCKS);
+    const on = Array(filled + 1).join('&#9632;');
+    const off = Array(VOL_BLOCKS - filled + 1).join('&#9643;');
+    volEl.innerHTML =
+      `<span style="color:#000080">${on}</span>` +
+      `<span style="color:#6a6a6a">${off}</span>`;
+  }
+  function setVolFromX(clientX) {
+    const r = volEl.getBoundingClientRect();
+    video.volume = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    video.muted = false;
+    muteBtn.textContent = '\u{1F50A}';
+    renderVol();
+  }
+  let _volDrag = false;
+  volEl.addEventListener('mousedown', e => { _volDrag = true; setVolFromX(e.clientX); });
+  document.addEventListener('mousemove', e => { if (_volDrag) setVolFromX(e.clientX); });
+  document.addEventListener('mouseup', () => { _volDrag = false; });
+  renderVol();
+
+  const metaEl = document.createElement('div'); metaEl.className = 'vp-meta';
+  metaEl.textContent = iconLabel(entry.fileName) + '  \u00b7  ' + fmtSize(blob.size);
+
+  btnRow.appendChild(btnRew); btnRow.appendChild(btnPlay); btnRow.appendChild(btnStop);
+  btnRow.appendChild(btnFwd); btnRow.appendChild(div('vp-divider'));
+  btnRow.appendChild(muteBtn); btnRow.appendChild(volEl);
+  btnRow.appendChild(div('vp-spacer')); btnRow.appendChild(metaEl);
+
+  bar.appendChild(seekRow); bar.appendChild(btnRow);
+  shell.appendChild(screen); shell.appendChild(bar);
+  body.appendChild(shell);
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function fmtT(s) {
+    if (!isFinite(s)) return '0:00';
+    return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2,'0');
+  }
+  function updateSeekGradient() {
+    const pct = seek.max > 0 ? (seek.value / seek.max * 100).toFixed(1) + '%' : '0%';
+    seek.style.setProperty('--pct', pct);
+  }
+
+  // ── Events ────────────────────────────────────────────────────
+  video.addEventListener('loadedmetadata', () => { durEl.textContent = fmtT(video.duration); });
+  video.addEventListener('timeupdate', () => {
+    timeEl.textContent = fmtT(video.currentTime);
+    if (!seek._dragging && video.duration) { seek.value = (video.currentTime / video.duration) * 1000; updateSeekGradient(); }
+  });
+  video.addEventListener('play',         () => { btnPlay.textContent = '❚❚'; overlay.style.opacity = '0'; });
+  video.addEventListener('pause',        () => { btnPlay.textContent = '\u25B6'; overlay.style.opacity = '0.35'; });
+  video.addEventListener('ended',        () => { btnPlay.textContent = '\u25B6'; overlay.style.opacity = '1'; });
+  video.addEventListener('volumechange', renderVol);
+
+  seek.addEventListener('mousedown', () => { seek._dragging = true; });
+  seek.addEventListener('input', () => { if (video.duration) { video.currentTime = (seek.value/1000)*video.duration; updateSeekGradient(); } });
+  seek.addEventListener('mouseup', () => { seek._dragging = false; });
+
+  // ── Menu bar ──────────────────────────────────────────────────
+  if (ws) ws.textContent = iconLabel(entry.fileName) + '  \u2014  ' + fmtSize(blob.size);
+  if (mb) {
+    [
+      { label: 'File', items: [{ label: 'Close', action: () => { video.pause(); closeWin(id); } }] },
+      { label: 'Playback', items: [
+        { label: 'Play / Pause', action: () => video.paused ? video.play() : video.pause() },
+        { label: 'Stop',         action: () => { video.pause(); video.currentTime = 0; } },
+        '-',
+        { label: '\u21E6 Back 10s',    action: () => { video.currentTime = Math.max(0, video.currentTime - 10); } },
+        { label: '\u21E8 Forward 10s', action: () => { video.currentTime = Math.min(video.duration||0, video.currentTime + 10); } },
+      ]},
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item'; span.textContent = label;
+      span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+      mb.appendChild(span);
+    });
+  }
+}
+
+function openAudioPlayer(filename, dirName) {
+  const entry = fsGetEntry(filename, dirName);
+  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
+  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const id = 'aud-' + pathKey.replace(/\W/g,'_');
+  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
+
+  const body = document.getElementById('wb-' + id);
+  const ws = document.getElementById('ws-' + id);
+  const mb = document.getElementById('mb-' + id);
+  const author = String(blob.author || '').trim();
+
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const shell = document.createElement('div'); shell.className = 'vp-shell';
+  const screen = document.createElement('div'); screen.className = 'vp-screen ap-screen';
+  const screenHead = document.createElement('div'); screenHead.className = 'ap-screen-head';
+  const iconEl = document.createElement('div'); iconEl.className = 'ap-screen-icon'; iconEl.textContent = '♫';
+  const metaWrap = document.createElement('div'); metaWrap.className = 'ap-screen-meta';
+  const labelEl = document.createElement('div'); labelEl.className = 'ap-screen-label'; labelEl.textContent = 'SleepOS Audio Deck';
+  const titleEl = document.createElement('div'); titleEl.className = 'ap-screen-title'; titleEl.textContent = iconLabel(entry.fileName);
+  const pathEl = document.createElement('div'); pathEl.className = 'ap-screen-path'; pathEl.textContent = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  metaWrap.appendChild(labelEl);
+  metaWrap.appendChild(titleEl);
+  if (author) {
+    const authorEl = document.createElement('div');
+    authorEl.className = 'ap-screen-path';
+    authorEl.textContent = 'Author: ' + author;
+    metaWrap.appendChild(authorEl);
+  }
+  metaWrap.appendChild(pathEl);
+  const loopIndicator = document.createElement('div'); loopIndicator.className = 'ap-loop-indicator'; loopIndicator.textContent = '↻';
+  screenHead.appendChild(iconEl);
+  screenHead.appendChild(metaWrap);
+  screenHead.appendChild(loopIndicator);
+  screen.appendChild(screenHead);
+
+  const bar = document.createElement('div'); bar.className = 'vp-bar';
+  const seekRow = document.createElement('div'); seekRow.className = 'vp-seek-row';
+  const timeEl = document.createElement('div'); timeEl.className = 'vp-time'; timeEl.textContent = '0:00';
+  const durEl = document.createElement('div'); durEl.className = 'vp-time vp-dur'; durEl.textContent = '0:00';
+  const seek = document.createElement('input'); seek.type = 'range'; seek.className = 'vp-seek';
+  seek.min = 0; seek.max = 1000; seek.value = 0;
+  seekRow.appendChild(timeEl);
+  seekRow.appendChild(seek);
+  seekRow.appendChild(durEl);
+
+  const btnRow = document.createElement('div'); btnRow.className = 'vp-btn-row';
+  const mkBtn = (txt, title, cls, fn) => {
+    const b = document.createElement('div');
+    b.className = 'vp-btn' + (cls ? ' ' + cls : '');
+    b.textContent = txt;
+    b.title = title;
+    b.addEventListener('click', fn);
+    return b;
+  };
+  const div = (cls) => { const d = document.createElement('div'); d.className = cls; return d; };
+
+  const audio = document.createElement('audio');
+  audio.src = blob.url;
+  audio.preload = 'metadata';
+  audio.style.display = 'none';
+
+  const btnRew = mkBtn('⏮', 'Back 10s', '', () => { audio.currentTime = Math.max(0, audio.currentTime - 10); });
+  const btnPlay = mkBtn('▶', 'Play/Pause', 'vp-btn-play', () => audio.paused ? audio.play() : audio.pause());
+  const btnStop = mkBtn('\u25A0', 'Stop', '', () => { audio.pause(); audio.currentTime = 0; });
+  const btnFwd = mkBtn('⏭', 'Forward 10s', '', () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); });
+  const btnLoop = mkBtn('↻', 'Toggle Loop', '', () => {
+    audio.loop = !audio.loop;
+    renderLoop();
+  });
+  const muteBtn = mkBtn('🔊', 'Mute', '', () => {
+    audio.muted = !audio.muted;
+    muteBtn.textContent = audio.muted ? '🔇' : '🔊';
+    renderVol();
+  });
+  const volEl = document.createElement('div'); volEl.className = 'vp-vol-blocks'; volEl.title = 'Volume';
+  const metaEl = document.createElement('div'); metaEl.className = 'vp-meta';
+  metaEl.textContent = iconLabel(entry.fileName) + '  ·  ' + fmtSize(blob.size) + (author ? '  ·  ' + author : '');
+
+  btnRow.appendChild(btnRew);
+  btnRow.appendChild(btnPlay);
+  btnRow.appendChild(btnStop);
+  btnRow.appendChild(btnFwd);
+  btnRow.appendChild(div('vp-divider'));
+  btnRow.appendChild(btnLoop);
+  btnRow.appendChild(div('vp-divider'));
+  btnRow.appendChild(muteBtn);
+  btnRow.appendChild(volEl);
+  btnRow.appendChild(div('vp-spacer'));
+  btnRow.appendChild(metaEl);
+
+  bar.appendChild(seekRow);
+  bar.appendChild(btnRow);
+  shell.appendChild(screen);
+  shell.appendChild(bar);
+  shell.appendChild(audio);
+  body.appendChild(shell);
+
+  function fmtT(s) {
+    if (!isFinite(s)) return '0:00';
+    return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  }
+  function updateSeekGradient() {
+    const pct = seek.max > 0 ? (seek.value / seek.max * 100).toFixed(1) + '%' : '0%';
+    seek.style.setProperty('--pct', pct);
+  }
+  function renderVol() {
+    const v = audio.muted ? 0 : audio.volume;
+    const filled = Math.round(v * 10);
+    const on = Array(filled + 1).join('&#9632;');
+    const off = Array(10 - filled + 1).join('&#9643;');
+    volEl.innerHTML = `<span style="color:#000080">${on}</span><span style="color:#6a6a6a">${off}</span>`;
+  }
+  function renderLoop() {
+    btnLoop.classList.toggle('active', audio.loop);
+    loopIndicator.classList.toggle('active', audio.loop);
+  }
+  function setVolFromX(clientX) {
+    const r = volEl.getBoundingClientRect();
+    audio.volume = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    audio.muted = false;
+    muteBtn.textContent = '🔊';
+    renderVol();
+  }
+
+  let volDrag = false;
+  function syncPlayingState() {
+    btnPlay.textContent = audio.paused ? '▶' : '❚❚';
+  }
+
+  renderVol();
+  renderLoop();
+  updateSeekGradient();
+
+  audio.addEventListener('loadedmetadata', () => { durEl.textContent = fmtT(audio.duration); });
+  audio.addEventListener('timeupdate', () => {
+    timeEl.textContent = fmtT(audio.currentTime);
+    if (!seek._dragging && audio.duration) {
+      seek.value = (audio.currentTime / audio.duration) * 1000;
+      updateSeekGradient();
+    }
+  });
+  audio.addEventListener('play', syncPlayingState);
+  audio.addEventListener('pause', syncPlayingState);
+  audio.addEventListener('ended', syncPlayingState);
+  audio.addEventListener('volumechange', renderVol);
+
+  seek.addEventListener('mousedown', () => { seek._dragging = true; });
+  seek.addEventListener('input', () => {
+    if (audio.duration) {
+      audio.currentTime = (seek.value / 1000) * audio.duration;
+      updateSeekGradient();
+    }
+  });
+  seek.addEventListener('mouseup', () => { seek._dragging = false; });
+
+  volEl.addEventListener('mousedown', e => { volDrag = true; setVolFromX(e.clientX); });
+  document.addEventListener('mousemove', e => { if (volDrag) setVolFromX(e.clientX); });
+  document.addEventListener('mouseup', () => { volDrag = false; });
+
+  if (ws) ws.textContent = iconLabel(entry.fileName) + '  -  ' + fmtSize(blob.size) + (author ? '  -  ' + author : '');
+  if (mb) {
+    [
+      { label: 'File', items: [{ label: 'Close', action: () => { audio.pause(); closeWin(id); } }] },
+      { label: 'Playback', items: [
+        { label: 'Play / Pause', action: () => audio.paused ? audio.play() : audio.pause() },
+        { label: 'Stop', action: () => { audio.pause(); audio.currentTime = 0; } },
+        '-',
+        { label: '⇦ Back 10s', action: () => { audio.currentTime = Math.max(0, audio.currentTime - 10); } },
+        { label: '⇨ Forward 10s', action: () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); } },
+        '-',
+        { label: () => (audio.loop ? 'Disable Loop' : 'Enable Loop'), action: () => { audio.loop = !audio.loop; renderLoop(); } },
+      ]},
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item';
+      span.textContent = label;
+      span.addEventListener('click', e => {
+        e.stopPropagation();
+        showDropdown(span, items.map(item => {
+          if (typeof item === 'string') return item;
+          if (typeof item.label === 'function') return { ...item, label: item.label() };
+          return item;
+        }));
+      });
+      mb.appendChild(span);
+    });
+  }
+}
+
+// Drag-and-drop onto the desktop
+let _dragCount = 0;
+document.addEventListener('dragenter', e => {
+  if (getShellDragPayload()) return;
+  if ([...e.dataTransfer.types].includes('Files') && !e.target.closest?.('.os-window')) {
+    _dragCount++;
+    document.getElementById('drop-overlay').classList.add('active');
+  }
+});
+document.addEventListener('dragleave', () => {
+  _dragCount = Math.max(0, _dragCount - 1);
+  if (_dragCount === 0) document.getElementById('drop-overlay').classList.remove('active');
+});
+document.addEventListener('dragover', e => {
+  if (getShellDragPayload()) return;
+  if (![...e.dataTransfer.types].includes('Files')) return;
+  if (e.target.closest?.('.os-window')) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+});
+document.addEventListener('drop', e => {
+  if (e.defaultPrevented || getShellDragPayload()) return;
+  if (!e.dataTransfer.files.length) return;
+  if (e.target.closest?.('.os-window')) return;
+  e.preventDefault();
+  _dragCount = 0;
+  document.getElementById('drop-overlay').classList.remove('active');
+  _uploadCwd = 'DESKTOP';
+  handleFileUpload(e.dataTransfer.files);
+});
+document.getElementById('file-upload-input').addEventListener('change', function() {
+  if (this.files.length) handleFileUpload(this.files);
+  this.value = '';
+});
+
+// Shared dropdown menu helpers
+function closeDropdown() {
+  const old = document.getElementById('active-dropdown');
+  if (old) old.remove();
+}
+function showDropdown(anchor, items) {
+  closeDropdown();
+  const rect = anchor.getBoundingClientRect();
+  const dd = document.createElement('div');
+  dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+  dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+  items.forEach(item => {
+    if (item === '-') {
+      const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
+    } else {
+      const el = document.createElement('div');
+      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
+      el.textContent = item.label;
+      if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
+      dd.appendChild(el);
+    }
+  });
+  document.body.appendChild(dd);
+  setTimeout(() => document.addEventListener('mousedown', closeDropdown, { once: true }), 0);
+}
+// Long-press to context menu on touch - dispatches synthetic contextmenu event
+let _longPressActive = false;
+function addLongPress(el) {
+  let timer, startX, startY;
+  el.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    startX = e.clientX; startY = e.clientY;
+    timer = setTimeout(() => {
+      timer = null;
+      _longPressActive = true;
+      el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: startX, clientY: startY }));
+    }, 500);
+  }, { passive: true });
+  el.addEventListener('pointermove', e => {
+    if (!timer) return;
+    if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) { clearTimeout(timer); timer = null; }
+  }, { passive: true });
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  el.addEventListener('pointerup', cancel, { passive: true });
+  el.addEventListener('pointercancel', cancel, { passive: true });
+}
+
+function showCtxMenu(x, y, items) {
+  closeDropdown();
+  const dd = document.createElement('div');
+  dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+  // Keep menu on screen
+  dd.style.left = x + 'px'; dd.style.top = y + 'px';
+  items.forEach(item => {
+    if (item === '-') {
+      const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
+    } else {
+      const el = document.createElement('div');
+      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
+      el.textContent = item.label;
+      if (!item.disabled) el.addEventListener('pointerdown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
+      dd.appendChild(el);
+    }
+  });
+  document.body.appendChild(dd);
+  // Clamp to viewport
+  const r = dd.getBoundingClientRect();
+  if (r.right  > window.innerWidth)  dd.style.left = (x - r.width)  + 'px';
+  if (r.bottom > window.innerHeight) dd.style.top  = (y - r.height) + 'px';
+  setTimeout(() => {
+    document.addEventListener('mousedown', closeDropdown, { once: true });
+    document.addEventListener('touchstart', closeDropdown, { once: true, passive: true });
+  }, 0);
+}
+
+// ── OS-native dialog replacements (no browser prompt/alert/confirm) ──
+function _osDlgPos(w, h) {
+  return { x: Math.max(20, Math.floor(window.innerWidth/2)  - Math.floor(w/2)),
+           y: Math.max(20, Math.floor(window.innerHeight/2) - Math.floor(h/2)) };
+}
+function osAlert(msg, title, icon) {
+  title = title || 'sleepOS'; icon = icon || '🔔';
+  const id = 'os-alert-' + Date.now();
+  const p = _osDlgPos(320, 175);
+  if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  const b = document.getElementById('wb-' + id);
+  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
+  const ok = document.getElementById(id + '-ok');
+  ok.onclick = () => closeWin(id);
+  ok.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') closeWin(id); });
+  setTimeout(() => ok.focus(), 40);
+}
+function osConfirm(msg, title, cb, icon) {
+  title = title || 'Confirm'; icon = icon || '❓';
+  const id = 'os-confirm-' + Date.now();
+  const p = _osDlgPos(320, 175);
+  if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  const b = document.getElementById('wb-' + id);
+  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
+  const row = document.getElementById(id + '-btns');
+  const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
+  const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = 'Cancel';
+  ok.onclick  = () => { closeWin(id); cb(true);  };
+  can.onclick = () => { closeWin(id); cb(false); };
+  [ok, can].forEach(btn => btn.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btn.click();
+    if (e.key === 'Escape') can.click();
+  }));
+  row.appendChild(ok); row.appendChild(can);
+  setTimeout(() => ok.focus(), 40);
+}
+function osPrompt(msg, def, title, cb, icon) {
+  title = title || 'Input'; icon = icon || '✏️'; def = def ?? '';
+  const id = 'os-prompt-' + Date.now();
+  const p = _osDlgPos(340, 185);
+  if (!mkWin({ id, title, icon, w:340, h:185, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  const b = document.getElementById('wb-' + id);
+  b.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:8px;font-size:11px;';
+  const msgDiv = document.createElement('div');
+  msgDiv.style.whiteSpace = 'pre-wrap'; msgDiv.textContent = msg;
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = def;
+  inp.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;padding:2px 4px;font-family: var(--sleep-font);font-size:11px;background:#fff;width:100%;box-sizing:border-box;';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;';
+  const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
+  const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = 'Cancel';
+  ok.onclick  = () => { const v = inp.value; closeWin(id); cb(v.trim() || null); };
+  can.onclick = () => { closeWin(id); cb(null); };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') ok.click(); if (e.key === 'Escape') can.click(); });
+  row.appendChild(ok); row.appendChild(can);
+  b.appendChild(msgDiv); b.appendChild(inp); b.appendChild(row);
+  setTimeout(() => { inp.focus(); inp.select(); }, 40);
+}
+
+function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
+                 menubar = true, statusbar = true, popup = false }) {
+  if (wins[id]) { focusWin(id); unminWin(id); return null; }
+
+  // Default position: slightly random cascade; on mobile fill viewport (except small popups)
+  const count = Object.keys(wins).length;
+  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  const taskbarH = isMobile ? 44 : 28;
+  if (isMobile && !popup) {
+    x = 0; y = 0;
+    w = window.innerWidth;
+    h = window.innerHeight - taskbarH;
+  } else {
+    if (x === undefined) x = 80 + count * 22;
+    if (y === undefined) y = 44 + count * 22;
+    // Center popups on mobile
+    if (isMobile && popup) {
+      x = Math.max(4, Math.floor((window.innerWidth - w) / 2));
+      y = Math.max(4, Math.floor((window.innerHeight - taskbarH - h) / 3));
+    }
+  }
+
+  const el = document.createElement('div');
+  el.className = 'os-window inactive';
+  el.id = 'win-' + id;
+  el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`;
+
+  el.innerHTML = `
+    <div class="win-rz win-rz-n"></div><div class="win-rz win-rz-s"></div>
+    <div class="win-rz win-rz-e"></div><div class="win-rz win-rz-w"></div>
+    <div class="win-rz win-rz-nw"></div><div class="win-rz win-rz-ne"></div>
+    <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>
+    <div class="win-titlebar" id="tb-${id}">
+      <div class="win-title-text">
+        <span class="win-icon">${icon}</span>
+        <span id="wtitle-${id}">${title}</span>
+      </div>
+      <div class="win-controls">
+        <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
+        <button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>
+        <button class="win-btn" title="Close"    onclick="closeWin('${id}')">✕</button>
+      </div>
+    </div>
+    ${menubar ? `<div class="win-menubar" id="mb-${id}"></div>` : ''}
+    <div class="win-body" id="wb-${id}"></div>
+    ${statusbar ? `<div class="win-statusbar"><div class="statusbar-panel" id="ws-${id}">Ready</div></div>` : ''}
+  `;
+
+  document.getElementById('windows-layer').appendChild(el);
+  wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
+
+  makeDraggable(el, document.getElementById('tb-' + id));
+  makeResizable(el, id);
+  addTbBtn(id, title, icon);
+  el.addEventListener('mousedown', () => focusWin(id));
+  el.addEventListener('touchstart', () => focusWin(id), { passive: true });
+
+  focusWin(id);
+  return el;
+}
+
+function focusWin(id) {
+  const w = wins[id]; if (!w) return;
+  w.el.style.zIndex = ++zTop;
+  Object.values(wins).forEach(v => v.el.classList.add('inactive'));
+  w.el.classList.remove('inactive');
+  document.querySelectorAll('.taskbar-btn').forEach(b => b.classList.remove('focused'));
+  const btn = document.getElementById('tbtn-' + id);
+  if (btn) btn.classList.add('focused');
+}
+
+function minWin(id) {
+  const w = wins[id]; if (!w) return;
+  w.minimized = true; w.el.style.display = 'none';
+  const btn = document.getElementById('tbtn-' + id);
+  if (btn) btn.classList.remove('focused');
+}
+
+function unminWin(id) {
+  const w = wins[id]; if (!w) return;
+  w.minimized = false; w.el.style.display = 'flex'; focusWin(id);
+}
+
+function maxWin(id) {
+  const w = wins[id]; if (!w) return;
+  if (w.maximized) {
+    w.el.style.cssText = w.origStyle;
+    w.maximized = false;
+  } else {
+    w.origStyle = w.el.style.cssText;
+    const d = document.getElementById('desktop');
+    w.el.style.left   = '0';
+    w.el.style.top    = '0';
+    w.el.style.width  = d.offsetWidth + 'px';
+    w.el.style.height = d.offsetHeight + 'px';
+    w.el.style.zIndex = ++zTop;
+    w.maximized = true;
+  }
+}
+
+function restoreMaximizedForDrag(id, clientX, clientY) {
+  const w = wins[id];
+  if (!w || !w.maximized || !w.origStyle) return;
+  const fullRect = w.el.getBoundingClientRect();
+  const pointerRatio = fullRect.width ? Math.min(0.9, Math.max(0.1, (clientX - fullRect.left) / fullRect.width)) : 0.5;
+  w.el.style.cssText = w.origStyle;
+  w.maximized = false;
+  w.el.style.zIndex = ++zTop;
+  const desktop = document.getElementById('desktop');
+  const maxLeft = Math.max(0, desktop.offsetWidth - w.el.offsetWidth);
+  const maxTop = Math.max(0, desktop.offsetHeight - w.el.offsetHeight);
+  w.el.style.left = Math.max(0, Math.min(maxLeft, clientX - w.el.offsetWidth * pointerRatio)) + 'px';
+  w.el.style.top = Math.max(0, Math.min(maxTop, clientY - 14)) + 'px';
+}
+
+function closeWin(id) {
+  const w = wins[id]; if (!w) return;
+  if (w._interval) clearInterval(w._interval);
+  w.el.remove(); delete wins[id];
+  const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
+}
+
+function makeDraggable(win, handle) {
+  let sx, sy, sl, st;
+  const id = win.id.replace('win-', '');
+
+  function startDrag(cx, cy) {
+    sx = cx; sy = cy;
+    sl = win.offsetLeft; st = win.offsetTop;
+  }
+  function moveDrag(cx, cy) {
+    const desktop = document.getElementById('desktop');
+    const maxLeft = Math.max(0, desktop.offsetWidth - win.offsetWidth);
+    const maxTop = Math.max(0, desktop.offsetHeight - win.offsetHeight);
+    win.style.left = Math.max(0, Math.min(maxLeft, sl + cx - sx)) + 'px';
+    win.style.top  = Math.max(0, Math.min(maxTop, st + cy - sy)) + 'px';
+  }
+
+  handle.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    focusWin(id);
+    restoreMaximizedForDrag(id, e.clientX, e.clientY);
+    startDrag(e.clientX, e.clientY);
+    const onMove = (e) => moveDrag(e.clientX, e.clientY);
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  handle.addEventListener('touchstart', (e) => {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    focusWin(id);
+    const t = e.touches[0];
+    restoreMaximizedForDrag(id, t.clientX, t.clientY);
+    startDrag(t.clientX, t.clientY);
+    const onMove = (e) => { e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); };
+    const onEnd = () => { handle.removeEventListener('touchmove', onMove); handle.removeEventListener('touchend', onEnd); };
+    handle.addEventListener('touchmove', onMove, { passive: false });
+    handle.addEventListener('touchend', onEnd);
+  }, { passive: false });
+}
+
+function makeResizable(win, id) {
+  const MIN_W = 180, MIN_H = 80;
+  win.querySelectorAll('.win-rz').forEach(handle => {
+    const a = [...handle.classList].find(c => c.startsWith('win-rz-') && c !== 'win-rz').replace('win-rz-','');
+    handle.addEventListener('mousedown', e => {
+      const w = wins[id]; if (w && w.maximized) return; // don't resize while maximized
+      e.preventDefault(); e.stopPropagation();
+      focusWin(id);
+      const x0 = e.clientX, y0 = e.clientY;
+      const W0 = win.offsetWidth, H0 = win.offsetHeight;
+      const L0 = win.offsetLeft,  T0 = win.offsetTop;
+      const onMove = e => {
+        const dx = e.clientX - x0, dy = e.clientY - y0;
+        let W = W0, H = H0, L = L0, T = T0;
+        if (a.includes('e')) W = Math.max(MIN_W, W0 + dx);
+        if (a.includes('s')) H = Math.max(MIN_H, H0 + dy);
+        if (a.includes('w')) { W = Math.max(MIN_W, W0 - dx); L = L0 + W0 - W; }
+        if (a.includes('n')) { H = Math.max(MIN_H, H0 - dy); T = T0 + H0 - H; }
+        win.style.width = W+'px'; win.style.height = H+'px';
+        win.style.left  = L+'px'; win.style.top    = T+'px';
+      };
+      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
+function addTbBtn(id, title, icon) {
+  const btn = document.createElement('button');
+  btn.className = 'taskbar-btn focused';
+  btn.id = 'tbtn-' + id;
+  btn.innerHTML = `<span>${icon}</span><span>${title}</span>`;
+  btn.addEventListener('click', () => {
+    const w = wins[id]; if (!w) return;
+    if (w.minimized) { unminWin(id); }
+    else if (w.maximized) { maxWin(id); }   // restore to pre-maximize size
+    else if (w.el.classList.contains('inactive')) { focusWin(id); }
+    else { minWin(id); }
+  });
+  document.getElementById('taskbar-programs').appendChild(btn);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CLOCK
+// ─────────────────────────────────────────────────────────────────
+function formatClockDisplay(now, allowCorruption = true) {
+  if (allowCorruption && window._clockCorrupted && Math.random() < 0.75) return '??:??';
+  let h = allowCorruption && Math.random() < 0.004 ? Math.floor(Math.random() * 24) : now.getHours();
+  const m = allowCorruption && Math.random() < 0.004 ? Math.floor(Math.random() * 60) : now.getMinutes();
+  let suffix = '';
+  if (osSettings.clock12h) {
+    suffix = h >= 12 ? ' PM' : ' AM';
+    h = h % 12 || 12;
+  }
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + suffix;
+}
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = formatClockDisplay(now, true);
+  const sleepClock = document.getElementById('sleep-clock');
+  if (sleepClock) sleepClock.textContent = formatClockDisplay(now, false);
+}
+setInterval(updateClock, 1000); updateClock();
+
+// idle sleep
+const IDLE_MOVE_THROTTLE_MS = 1000;
+const MANUAL_SLEEP_WAKE_DELAY_MS = 500;
+let idleSleepTimer = null;
+let idleSleepActive = false;
+let idleSleepArmed = false;
+let idleLastActivityTs = Date.now();
+let idleLastMoveTs = 0;
+let idleSleepWakeLockedUntil = 0;
+
+function scheduleIdleSleep() {
+  if (idleSleepTimer) clearTimeout(idleSleepTimer);
+  if (!idleSleepArmed || idleSleepActive || !bisDone) return;
+  const remainingMs = getIdleSleepMs() - (Date.now() - idleLastActivityTs);
+  if (remainingMs <= 0) {
+    enterIdleSleep();
+    return;
+  }
+  idleSleepTimer = setTimeout(enterIdleSleep, remainingMs);
+}
+function noteIdleActivity(kind = 'generic', force = false) {
+  if (!idleSleepArmed) return;
+  const now = Date.now();
+  if (!force && idleSleepActive) return;
+  if (kind === 'move') {
+    if (!force && now - idleLastMoveTs < IDLE_MOVE_THROTTLE_MS) return;
+    idleLastMoveTs = now;
+  }
+  idleLastActivityTs = now;
+  scheduleIdleSleep();
+}
+function enterIdleSleep(wakeLockMs = 0) {
+  if (idleSleepActive || !bisDone) return;
+  idleSleepActive = true;
+  idleSleepWakeLockedUntil = Date.now() + Math.max(0, wakeLockMs || 0);
+  if (idleSleepTimer) clearTimeout(idleSleepTimer);
+  closeStart();
+  closeDropdown();
+  closeCad();
+  if (altTabActive) closeAltTab();
+  const overlay = document.getElementById('sleep-overlay');
+  if (!overlay) return;
+  document.body.classList.add('idle-sleeping');
+  overlay.classList.add('active');
+  overlay.setAttribute('aria-hidden', 'false');
+  updateClock();
+  overlay.focus();
+}
+function wakeIdleSleep() {
+  if (!idleSleepActive) return;
+  idleSleepActive = false;
+  idleSleepWakeLockedUntil = 0;
+  const overlay = document.getElementById('sleep-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+  document.body.classList.remove('idle-sleeping');
+  idleLastActivityTs = Date.now();
+  scheduleIdleSleep();
+}
+function armIdleSleep() {
+  if (idleSleepArmed) {
+    noteIdleActivity('generic', true);
+    return;
+  }
+  idleSleepArmed = true;
+
+  document.addEventListener('pointerdown', () => noteIdleActivity('generic'), { passive: true });
+  document.addEventListener('pointermove', () => noteIdleActivity('move'), { passive: true });
+  document.addEventListener('wheel', () => noteIdleActivity('generic'), { passive: true });
+  document.addEventListener('touchstart', () => noteIdleActivity('generic'), { passive: true });
+  document.addEventListener('keydown', () => noteIdleActivity('generic'));
+
+  const wakeAndSwallow = e => {
+    if (!idleSleepActive) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    if (Date.now() < idleSleepWakeLockedUntil) return;
+    wakeIdleSleep();
+  };
+  document.addEventListener('keydown', wakeAndSwallow, true);
+  document.addEventListener('pointerdown', wakeAndSwallow, true);
+  document.addEventListener('pointermove', wakeAndSwallow, true);
+  document.addEventListener('touchstart', wakeAndSwallow, true);
+
+  window.addEventListener('focus', () => {
+    if (!idleSleepActive && Date.now() - idleLastActivityTs >= getIdleSleepMs()) enterIdleSleep();
+    else noteIdleActivity('generic', true);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || idleSleepActive) return;
+    if (Date.now() - idleLastActivityTs >= getIdleSleepMs()) enterIdleSleep();
+    else scheduleIdleSleep();
+  });
+
+  scheduleIdleSleep();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// START MENU
+// ─────────────────────────────────────────────────────────────────
+let startOpen = false;
+function toggleStart() {
+  startOpen = !startOpen;
+  document.getElementById('start-menu').style.display = startOpen ? 'flex' : 'none';
+  document.getElementById('start-btn').classList.toggle('pressed', startOpen);
+}
+function closeStart() { if (startOpen) toggleStart(); }
+function handleOutsideStart(e) {
+  if (startOpen && !e.target.closest('#start-menu') && e.target.id !== 'start-btn')
+    closeStart();
+}
+document.addEventListener('mousedown', handleOutsideStart);
+document.addEventListener('touchstart', handleOutsideStart, { passive: true });
+
+// Uppercase stem, preserve extension case: "untitled.txt" → "UNTITLED.txt"
+function iconLabel(name) {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return name.toUpperCase();
+  return name.slice(0, dot).toUpperCase() + name.slice(dot);
+}
+
+function resolveFsIcon(name, kind) {
+  if (isRecycleBinItemName(name)) return SYSTEM_FILE_ICONS[RECYCLE_BIN_NAME] || '\u{1F5D1}\uFE0F';
+  if (kind === 'image') return '\u{1F5BC}\uFE0F';
+  if (kind === 'video') return '\u{1F3AC}';
+  if (kind === 'audio') return '\u{1F3B5}';
+  if (kind === 'dir') return '\u{1F4C1}';
+  const systemIcon = SYSTEM_FILE_ICONS[String(name).toUpperCase()];
+  if (systemIcon) return systemIcon;
+  const ext = (String(name || '').split('.').pop() || '').toLowerCase();
+  return {
+    exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
+    json:'\u{1F4CB}', js:'\u{1F4DC}', ts:'\u{1F4DC}', jsx:'\u{1F4DC}', tsx:'\u{1F4DC}',
+    html:'\u{1F310}', htm:'\u{1F310}', css:'\u{1F3A8}', py:'\u{1F40D}',
+    tmp:'\u{1F5D1}\uFE0F', log:'\u{1F4CB}', csv:'\u{1F4CA}', core:'\u{1F4A5}'
+  }[ext] || '\u{1F4C4}';
+}
+
+function getDesktopFsIcons() {
+  const dir = fsGetDir('DESKTOP');
+  if (!dir) return [];
+  const icons = [];
+  dir.dirs.forEach(name => icons.push({ name, kind: 'dir' }));
+  dir.files.forEach((_, name) => icons.push({ name, kind: 'file' }));
+  dir.blobs.forEach((blob, name) => icons.push({ name, kind: blob?.kind || inferBlobKindFromName(name) }));
+  return icons.map(item => ({
+    name: item.name,
+    emoji: resolveFsIcon(item.name, item.kind),
+    kind: item.kind,
+    desktopEntry: true,
+    target: {
+      name: item.name,
+      path: 'DESKTOP\\' + item.name,
+      kind: item.kind === 'dir' ? 'dir' : 'file',
+      sysfile: false,
+    },
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────
+// DESKTOP ICON GRID
+// ─────────────────────────────────────────────────────────────────
+const _mobileGrid  = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 700;
+const ICON_CELL_W  = _mobileGrid ? 104 : 86;
+const ICON_CELL_H  = _mobileGrid ? 104 : 86;
+const ICON_BOX_W   = _mobileGrid ? 96  : 80;
+const ICON_BOX_H   = _mobileGrid ? 96  : 80;
+const ICON_PAD_X   = 6;
+const ICON_PAD_Y   = 6;
+const ICON_POS_KEY = 'sleepOS-icon-positions';
+let iconPositions  = {};   // { ic.name: { col, row, manual? } }
+
+function iconGetGridMetrics() {
+  const layer = document.getElementById('icons-layer');
+  if (!layer) {
+    return {
+      cols: 1,
+      rows: 1,
+      stepX: 0,
+      stepY: 0,
+      padX: ICON_PAD_X,
+      padY: ICON_PAD_Y,
+    };
+  }
+  const availW = Math.max(ICON_BOX_W, layer.offsetWidth - ICON_PAD_X * 2);
+  const availH = Math.max(ICON_BOX_H, layer.offsetHeight - ICON_PAD_Y * 2);
+  const cols = Math.max(1, Math.floor((availW - ICON_BOX_W) / ICON_CELL_W) + 1);
+  const rows = Math.max(1, Math.floor((availH - ICON_BOX_H) / ICON_CELL_H) + 1);
+  return {
+    cols,
+    rows,
+    stepX: cols > 1 ? (availW - ICON_BOX_W) / (cols - 1) : 0,
+    stepY: rows > 1 ? (availH - ICON_BOX_H) / (rows - 1) : 0,
+    padX: ICON_PAD_X,
+    padY: ICON_PAD_Y,
+  };
+}
+
+function iconGetGridSize() {
+  const { cols, rows } = iconGetGridMetrics();
+  return { cols, rows };
+}
+
+function iconCellToPixel(col, row) {
+  const { stepX, stepY, padX, padY } = iconGetGridMetrics();
+  return {
+    left: Math.round(padX + col * stepX),
+    top: Math.round(padY + row * stepY),
+  };
+}
+
+function iconRecycleBinCell() {
+  const { cols, rows } = iconGetGridSize();
+  return { col: Math.max(0, cols - 1), row: Math.max(0, rows - 1) };
+}
+
+function iconPixelToCell(px, py) {
+  const { cols, rows, stepX, stepY, padX, padY } = iconGetGridMetrics();
+  return {
+    col: Math.max(0, Math.min(cols - 1, stepX > 0 ? Math.round((px - padX) / stepX) : 0)),
+    row: Math.max(0, Math.min(rows - 1, stepY > 0 ? Math.round((py - padY) / stepY) : 0)),
+  };
+}
+
+function iconDefaultPositions(icons) {
+  const { rows } = iconGetGridSize();
+  const out = {};
+  icons.forEach((ic, i) => { out[ic.name] = { col: Math.floor(i / rows), row: i % rows }; });
+  return out;
+}
+
+function iconFindFreeCell(wantCol, wantRow, excludeName) {
+  const { cols, rows } = iconGetGridSize();
+  const clamp = (c, r) => ({ col: Math.max(0, Math.min(c, cols - 1)), row: Math.max(0, Math.min(r, rows - 1)) });
+  const occ = new Set(
+    Object.entries(iconPositions).filter(([k]) => k !== excludeName).map(([, p]) => p.col + ',' + p.row)
+  );
+  const start = clamp(wantCol, wantRow);
+  const visited = new Set();
+  const q = [start];
+  let iter = 0;
+  while (q.length && iter++ < cols * rows * 2) {
+    const { col, row } = q.shift();
+    const k = col + ',' + row;
+    if (visited.has(k)) continue;
+    visited.add(k);
+    if (!occ.has(k)) return { col, row };
+    for (const [dc, dr] of [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+      const nc = col + dc, nr = row + dr;
+      if (nc >= 0 && nc < cols && nr >= 0 && nr < rows) q.push({ col: nc, row: nr });
+    }
+  }
+  return start;
+}
+
+function saveIconPositions() {
+  localStorage.setItem(ICON_POS_KEY, JSON.stringify(iconPositions));
+}
+
+function isDesktopBuiltInIcon(ic) {
+  return !!ic && !ic.desktopEntry && !ic.custom && !ic.recycleBin;
+}
+
+function getDesktopFolderDropTarget(clientX, clientY, draggingIcons) {
+  const draggingSet = new Set(Array.isArray(draggingIcons) ? draggingIcons : [draggingIcons].filter(Boolean));
+  const folderEls = Array.from(document.querySelectorAll('#icons-layer .desktop-icon')).filter(el => {
+    const targetIcon = el._ic;
+    if (!targetIcon || draggingSet.has(targetIcon)) return false;
+    return !!targetIcon.desktopEntry && targetIcon.kind === 'dir';
+  });
+  for (const el of folderEls) {
+    const rect = el.getBoundingClientRect();
+    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+      return el._ic;
+    }
+  }
+  return null;
+}
+
+function moveDesktopIconIntoFolder(icon, folderIcon) {
+  if (!icon || !folderIcon?.desktopEntry || folderIcon.kind !== 'dir') return false;
+  const dstDirPath = folderIcon.target.path;
+  return moveShellItemToDir(icon, 'DESKTOP', dstDirPath);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// DESKTOP ICONS
+// ─────────────────────────────────────────────────────────────────
+const desktopSel = new Set(); // Set of icon div elements currently selected
+
+function clearDesktopSel() {
+  desktopSel.forEach(d => d.classList.remove('selected'));
+  desktopSel.clear();
+}
+
+function canDeleteDesktopSystemIcon(ic) {
+  return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
+}
+
+function deleteDesktopSystemIcons(icons) {
+  const targets = (icons || []).filter(canDeleteDesktopSystemIcon);
+  if (!targets.length) return;
+  const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected items?';
+  osConfirm(prompt, 'Delete', ok => {
+    if (!ok) return;
+    const blocked = [];
+    let changed = false;
+    targets.forEach(target => {
+      const result = deleteVirtualPath(target.name);
+      if (result.ok && result.deleted) changed = true;
+      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+    });
+    if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
+    if (changed) clearDesktopSel();
+  }, '🗑️');
+}
+
+function canDeleteDesktopFsEntry(ic) {
+  return !!ic?.desktopEntry && !!ic?.target?.path;
+}
+
+function deleteDesktopFsEntries(icons) {
+  const targets = (icons || []).filter(canDeleteDesktopFsEntry);
+  if (!targets.length) return;
+  const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected files?';
+  osConfirm(prompt, 'Delete', ok => {
+    if (!ok) return;
+    const blocked = [];
+    let changed = false;
+    targets.forEach(target => {
+      const result = deleteVirtualPath(target.target.path);
+      if (result.ok && result.deleted) changed = true;
+      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+    });
+    if (blocked.length) osAlert(blocked[0], 'Delete', 'âš ï¸');
+    if (changed) {
+      clearDesktopSel();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+    }
+  }, 'ðŸ-‘ï¸');
+}
+
+function recycleDesktopItemAtPath(path) {
+  const result = recycleVirtualPath(path);
+  if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+  return result;
+}
+
+function makeDesktopIconEl(ic) {
+  const div = document.createElement('div');
+  div.className = 'desktop-icon';
+  const displayName = ic.name === '?????.exe' ? getExeDisplayName() : ic.name;
+  div.innerHTML = '<div class="di-img">' + ic.emoji + '</div><div class="di-name">' + iconLabel(displayName) + '</div>';
+  div._ic = ic;
+  function activate() {
+    if (ic.action) window[ic.action]?.();
+    else if (ic.target) openDesktopShortcutTarget(ic.target);
+    else if (ic.openFn) ic.openFn();
+  }
+  let clicks = 0, clickT;
+  function queueActivateClick() {
+    clicks++;
+    if (clicks === 1) {
+      clickT = setTimeout(() => { clicks = 0; }, 380);
+    } else {
+      clearTimeout(clickT);
+      clicks = 0;
+      activate();
+    }
+  }
+  div.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    if (e.button === 2) return; // let contextmenu handle right-clicks
+    if (e.ctrlKey) {
+      // Toggle this icon in the multi-selection
+      if (desktopSel.has(div)) {
+        div.classList.remove('selected');
+        desktopSel.delete(div);
+      } else {
+        div.classList.add('selected');
+        desktopSel.add(div);
+      }
+      clicks = 0;
+      clearTimeout(clickT);
+      return;
+    }
+    if (!desktopSel.has(div) || desktopSel.size <= 1) {
+      clearDesktopSel();
+      div.classList.add('selected');
+      desktopSel.add(div);
+    }
+
+    // Drag-to-rearrange tracking
+    const isMouse = e.pointerType === 'mouse';
+    const dragThreshold = isMouse ? 5 : 12;
+    const startClientX = e.clientX, startClientY = e.clientY;
+    const layer   = document.getElementById('icons-layer');
+    const lr      = layer.getBoundingClientRect();
+    const draggedDivs = desktopSel.has(div) ? [...desktopSel] : [div];
+    const dragStates = draggedDivs.map(el => {
+      const rect = el.getBoundingClientRect();
+      const iconState = el._ic;
+      const currentPos = iconPositions[iconState.name];
+      return {
+        el,
+        ic: iconState,
+        startLeft: el.offsetLeft,
+        startTop: el.offsetTop,
+        offX: e.clientX - rect.left,
+        offY: e.clientY - rect.top,
+        startCell: currentPos
+          ? { col: currentPos.col, row: currentPos.row }
+          : iconPixelToCell(el.offsetLeft, el.offsetTop),
+      };
+    });
+    const primaryState = dragStates.find(state => state.el === div) || dragStates[0];
+    const draggedIcons = dragStates.map(state => state.ic);
+    const draggedPayload = buildShellDragPayload(ic, 'DESKTOP', 'desktop', { items: draggedIcons });
+    let dragging  = false;
+
+    const onMove = mv => {
+      if (!dragging) {
+        if (Math.abs(mv.clientX - startClientX) > dragThreshold || Math.abs(mv.clientY - startClientY) > dragThreshold) {
+          dragging = true;
+          clicks = 0; clearTimeout(clickT);
+          dragStates.forEach(state => {
+            state.el.style.zIndex = '999';
+            state.el.style.opacity = '0.75';
+          });
+        }
+      }
+      if (dragging) {
+        mv.preventDefault();
+        const dx = mv.clientX - startClientX;
+        const dy = mv.clientY - startClientY;
+        dragStates.forEach(state => {
+          state.el.style.left = (state.startLeft + dx) + 'px';
+          state.el.style.top  = (state.startTop + dy) + 'px';
+        });
+      }
+    };
+    const onUp = up => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup',   onUp);
+      dragStates.forEach(state => {
+        state.el.style.zIndex = '';
+        state.el.style.opacity = '';
+      });
+      if (dragging) {
+        const recycleEl = document.querySelector('[data-icon-key="' + CSS.escape(RECYCLE_BIN_NAME) + '"]');
+        const canRecycleDragged = draggedIcons.length && draggedIcons.every(canDeleteDesktopFsEntry);
+        if (canRecycleDragged && recycleEl && !draggedDivs.includes(recycleEl)) {
+          const rr = recycleEl.getBoundingClientRect();
+          const overRecycleBin = up.clientX >= rr.left && up.clientX <= rr.right && up.clientY >= rr.top && up.clientY <= rr.bottom;
+          if (overRecycleBin) {
+            const ok = draggedIcons.every(targetIcon => recycleDesktopItemAtPath(targetIcon.target.path).ok);
+            if (ok) {
+              clearDesktopSel();
+              return;
+            }
+          }
+        }
+        const folderTarget = getDesktopFolderDropTarget(up.clientX, up.clientY, draggedIcons);
+        if (folderTarget && moveShellPayloadToDir(draggedPayload, folderTarget.target.path)) {
+          clearDesktopSel();
+          return;
+        }
+        draggedDivs.forEach(stateEl => { stateEl.style.pointerEvents = 'none'; });
+        const dropNode = document.elementFromPoint(up.clientX, up.clientY);
+        draggedDivs.forEach(stateEl => { stateEl.style.pointerEvents = ''; });
+        const explorerItemEl = dropNode?.closest?.('.exp-item,.exp-list-item,.exp-det-item');
+        const explorerPaneEl = dropNode?.closest?.('.exp-body');
+        const explorerDrop = explorerItemEl?._shellDropHandler || explorerPaneEl?._shellDropHandler;
+        if (explorerDrop) {
+          const ok = explorerDrop(draggedPayload);
+          if (ok) {
+            clearDesktopSel();
+            return;
+          }
+        }
+        if (dropNode?.closest?.('.os-window')) {
+          dragStates.forEach(state => {
+            const { left, top } = iconCellToPixel(state.startCell.col, state.startCell.row);
+            state.el.style.left = left + 'px';
+            state.el.style.top = top + 'px';
+          });
+          return;
+        }
+        // snap based on icon top-left corner position (Windows-style)
+        const iconLeft = up.clientX - lr.left - primaryState.offX;
+        const iconTop  = up.clientY - lr.top  - primaryState.offY;
+        const { col: wc, row: wr } = iconPixelToCell(iconLeft, iconTop);
+        dragStates.forEach(state => { delete iconPositions[state.ic.name]; });
+        dragStates
+          .slice()
+          .sort((a, b) => a.startCell.col - b.startCell.col || a.startCell.row - b.startCell.row)
+          .forEach(state => {
+            const wantCol = wc + (state.startCell.col - primaryState.startCell.col);
+            const wantRow = wr + (state.startCell.row - primaryState.startCell.row);
+            const { col, row } = iconFindFreeCell(wantCol, wantRow, state.ic.name);
+            iconPositions[state.ic.name] = { col, row, manual: true };
+            const { left, top } = iconCellToPixel(col, row);
+            state.el.style.left = left + 'px';
+            state.el.style.top  = top  + 'px';
+          });
+        saveIconPositions();
+      } else {
+        if (isMouse) {
+          queueActivateClick();
+        } else if (!_longPressActive) {
+          activate();
+        }
+        _longPressActive = false;
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup',   onUp);
+  });
+  addLongPress(div);
+  div.addEventListener('contextmenu', e => {
+    e.preventDefault(); e.stopPropagation();
+    // If right-clicking outside current selection, replace it
+    if (!desktopSel.has(div)) {
+      clearDesktopSel();
+      div.classList.add('selected');
+      desktopSel.add(div);
+    }
+    const selDivs = [...desktopSel];
+    const selIcs  = selDivs.map(d => d._ic);
+    const multi   = selDivs.length > 1;
+    const canDeleteSystemFiles = selIcs.some(canDeleteDesktopSystemIcon);
+    const canDeleteDesktopFiles = selIcs.some(canDeleteDesktopFsEntry);
+    const singleDesktopImage = !multi && selIcs[0]?.desktopEntry && selIcs[0]?.kind === 'image' ? selIcs[0] : null;
+    const items   = [];
+    if (multi) {
+      items.push({ label: 'Open All (' + selDivs.length + ')', action: () => selIcs.forEach(i => {
+        if (i.action) window[i.action]?.();
+        else if (i.target) openDesktopShortcutTarget(i.target);
+        else if (i.openFn) i.openFn();
+      })});
+    } else {
+      items.push({ label: 'Open', action: activate });
+      // Lore / decompiler shortcuts for single icons
+      const icName = ic.name || '';
+      if (['daemon.core','void.tmp'].includes(icName)) {
+        items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
+      }
+      if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
+        items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
+      }
+      if (singleDesktopImage) {
+        items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });
+      }
+    }
+    if (canDeleteSystemFiles) {
+      items.push('-');
+      items.push({ label: multi ? 'Delete Deletable Items' : 'Delete', action: () => deleteDesktopSystemIcons(selIcs) });
+    }
+    if (canDeleteDesktopFiles) {
+      items.push('-');
+      items.push({ label: multi ? 'Delete Files' : 'Delete', action: () => deleteDesktopFsEntries(selIcs) });
+    }
+    if (!multi && ic.recycleBin) {
+      items.push('-');
+      items.push({ label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin() });
+    }
+    if (selIcs.some(i => i.custom)) {
+      items.push('-');
+      items.push({ label: multi ? 'Delete Selected' : 'Delete', action: () => {
+        selDivs.forEach(d => {
+          if (!d._ic.custom) return;
+          const idx = customDesktopIcons.indexOf(d._ic);
+          if (idx > -1) customDesktopIcons.splice(idx, 1);
+          delete iconPositions[d._ic.name];
+          d.remove();
+        });
+        desktopSel.clear();
+        saveDesktopShortcuts();
+        saveIconPositions();
+        document.dispatchEvent(new CustomEvent('fs-changed'));
+      }});
+    }
+    showCtxMenu(e.clientX, e.clientY, items);
+  });
+  if (ic.recycleBin || (ic.desktopEntry && ic.kind === 'dir')) {
+    const dropDirPath = ic.recycleBin ? null : ic.target.path;
+    const setDropOutline = on => { div.style.outline = on ? '1px dotted #fff' : ''; };
+    div.addEventListener('dragover', e => {
+      const payload = getShellDragPayload();
+      if (!payload || shellDragIncludesItem(payload, ic)) return;
+      const accepts = ic.recycleBin
+        ? canRecycleShellPayload(payload)
+        : canMoveShellPayloadToDir(payload, dropDirPath);
+      if (!accepts) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDropOutline(true);
+    });
+    div.addEventListener('dragleave', () => setDropOutline(false));
+    div.addEventListener('drop', e => {
+      const payload = getShellDragPayload();
+      setDropOutline(false);
+      if (!payload || shellDragIncludesItem(payload, ic)) return;
+      let ok = false;
+      if (ic.recycleBin) {
+        ok = recycleShellPayload(payload);
+      } else {
+        ok = moveShellPayloadToDir(payload, dropDirPath);
+      }
+      if (!ok) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clearShellDragPayload();
+    });
+  }
+  return div;
+}
+
+function addDesktopShortcut(name, emoji, target, openFn, dirPath) {
+  const ic = {
+    name,
+    emoji,
+    target: target || null,
+    openFn,
+    custom: true,
+    dirPath: normalizeDesktopContainerDir(dirPath || 'DESKTOP'),
+  };
+  customDesktopIcons.push(ic);
+  saveDesktopShortcuts();
+  if (ic.dirPath !== 'DESKTOP') {
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+    return;
+  }
+  // Find a free cell (prefer column-first after existing icons)
+  const allIcons = [...getVisibleDesktopIcons(), ...getDesktopFsIcons(), ...getDesktopShortcutsForDir('DESKTOP')];
+  const defaults = iconDefaultPositions(allIcons);
+  const { col: dc, row: dr } = defaults[ic.name] || { col: 0, row: 0 };
+  const { col, row } = iconFindFreeCell(dc, dr, ic.name);
+  iconPositions[ic.name] = { col, row };
+  saveIconPositions();
+  document.dispatchEvent(new CustomEvent('fs-changed'));
+}
+
+let _desktopInteractionsBound = false;
+function setupIcons() {
+  clearDesktopSel();
+  const layer = document.getElementById('icons-layer');
+  layer.innerHTML = '';
+
+  const allIcons = [...getVisibleDesktopIcons(), ...getDesktopFsIcons(), ...getDesktopShortcutsForDir('DESKTOP')];
+  const recycleIcon = allIcons.find(ic => ic.recycleBin);
+  const saved    = (() => { try { return JSON.parse(localStorage.getItem(ICON_POS_KEY) || '{}'); } catch { return {}; } })();
+  const defaults = iconDefaultPositions(allIcons.filter(ic => !ic.recycleBin));
+  if (recycleIcon) defaults[recycleIcon.name] = iconRecycleBinCell();
+  const hasSavedPosition = ic => {
+    const entry = saved[ic.name];
+    if (!entry || !Number.isFinite(entry.col) || !Number.isFinite(entry.row)) return false;
+    return ic.recycleBin || !isDesktopBuiltInIcon(ic) || entry.manual === true;
+  };
+  const assignPosition = ic => {
+    const isAutoRecycleBin = ic.recycleBin && saved[ic.name]?.manual !== true;
+    const preferred = isAutoRecycleBin ? iconRecycleBinCell() : (hasSavedPosition(ic) ? saved[ic.name] : (defaults[ic.name] || { col: 0, row: 0 }));
+    const { col, row } = iconFindFreeCell(preferred.col, preferred.row, ic.name);
+    iconPositions[ic.name] = saved[ic.name]?.manual === true ? { col, row, manual: true } : { col, row };
+  };
+  iconPositions  = {};
+  // Place non-recycle-bin icons first so the recycle bin can always claim the bottom-right cell
+  const nonBinIcons = allIcons.filter(ic => !ic.recycleBin);
+  nonBinIcons.filter(hasSavedPosition).forEach(assignPosition);
+  nonBinIcons.filter(ic => !hasSavedPosition(ic)).forEach(assignPosition);
+  if (recycleIcon) assignPosition(recycleIcon);
+  saveIconPositions();
+
+  allIcons.forEach(ic => {
+    const el = makeDesktopIconEl(ic);
+    el.setAttribute('data-icon-key', ic.name);
+    el.style.position = 'absolute';
+    const { left, top } = iconCellToPixel(iconPositions[ic.name].col, iconPositions[ic.name].row);
+    el.style.left = left + 'px';
+    el.style.top  = top  + 'px';
+    layer.appendChild(el);
+  });
+
+  if (_desktopInteractionsBound) return;
+  _desktopInteractionsBound = true;
+
+  // Rubber-band selection on empty desktop space
+  layer.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.desktop-icon') || e.target.closest('.os-window')) return;
+    if (!e.ctrlKey) clearDesktopSel();
+    document.body.style.userSelect = 'none';
+    // layer is position:fixed inset:0 so offsetLeft/Top of icons === clientX/Y coords
+    const sx = e.clientX, sy = e.clientY;
+    let didDrag = false;
+    const selDiv = document.createElement('div');
+    selDiv.className = 'sel-rect';
+    selDiv.style.cssText = 'left:' + sx + 'px;top:' + sy + 'px;width:0;height:0;';
+    layer.appendChild(selDiv);
+    const onMove = mv => {
+      didDrag = true;
+      const cx = mv.clientX, cy = mv.clientY;
+      const left = Math.min(sx, cx), top = Math.min(sy, cy);
+      const w = Math.abs(cx - sx),   h   = Math.abs(cy - sy);
+      selDiv.style.left = left + 'px'; selDiv.style.top  = top  + 'px';
+      selDiv.style.width = w   + 'px'; selDiv.style.height = h  + 'px';
+      const sr = { left, top, right: left + w, bottom: top + h };
+      // icons are absolutely positioned in layer - offsetLeft/Top are in layer (= client) coords
+      layer.querySelectorAll('.desktop-icon').forEach(el => {
+        const elL = el.offsetLeft, elT = el.offsetTop;
+        const elR = elL + el.offsetWidth, elB = elT + el.offsetHeight;
+        const hit = sr.left < elR && sr.right > elL && sr.top < elB && sr.bottom > elT;
+        if (hit) { desktopSel.add(el); el.classList.add('selected'); }
+        else if (!e.ctrlKey) { desktopSel.delete(el); el.classList.remove('selected'); }
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      document.body.style.userSelect = '';
+      selDiv.remove();
+      // suppress the click that fires after mouseup so it doesn't clear selection
+      if (didDrag) window.addEventListener('click', e2 => e2.stopPropagation(), { once: true, capture: true });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+  });
+
+  layer.addEventListener('dragover', e => {
+    if (e.target.closest('.desktop-icon')) return;
+    const payload = getShellDragPayload();
+    if (!payload || isDesktopSurfaceTransferBlocked(payload, 'DESKTOP') || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+  layer.addEventListener('drop', e => {
+    if (e.target.closest('.desktop-icon')) return;
+    const payload = getShellDragPayload();
+    if (!payload || isDesktopSurfaceTransferBlocked(payload, 'DESKTOP') || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (moveShellPayloadToDir(payload, 'DESKTOP')) clearShellDragPayload();
+  });
+
+  // Desktop background right-click / long-press
+  addLongPress(document.getElementById('desktop'));
+  document.getElementById('desktop').addEventListener('contextmenu', e => {
+    if (e.target.closest('.desktop-icon') || e.target.closest('.os-window')) return;
+    e.preventDefault();
+    clearDesktopSel();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '💻 Open Terminal',    action: openTerminal },
+      { label: '🗂️ Open Explorer',    action: openExplorer },
+      { label: '📝 Open Notepad',     action: openNotepad },
+      { label: '🌐 Open Browser',     action: openBrowser },
+      '-',
+      { label: '📁 New Folder',      action: () => promptCreateFolderAt('DESKTOP') },
+      { label: '📤 Upload File...',  action: () => triggerUpload('DESKTOP') },
+      { label: '🖼️ Change Wallpaper', action: openAppearance },
+      '-',
+      { label: 'ℹ️ Properties', action: () => osAlert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686', 'Properties', 'ℹ️') },
+    ]);
+  });
+
+  document.getElementById('desktop').addEventListener('click', e => {
+    if (!e.target.closest('.desktop-icon') && !e.target.closest('.os-window'))
+      clearDesktopSel();
+  });
+}
+
+document.addEventListener('fs-changed', () => {
+  if (typeof setupIcons === 'function') setupIcons();
+});
+
+// Reflow icons on orientation change (mobile)
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+});
+
+// Reflow icons when window is resized
+let _iconResizeTimer;
+window.addEventListener('resize', () => {
+  const desktop = document.getElementById('desktop');
+  if (!desktop || desktop.style.display === 'none') return;
+  clearTimeout(_iconResizeTimer);
+  _iconResizeTimer = setTimeout(() => {
+    const { cols, rows } = iconGetGridSize();
+    const layer = document.getElementById('icons-layer');
+    const occupied = new Set();
+    const entries = Object.entries(iconPositions)
+      .sort(([, a], [, b]) => a.col - b.col || a.row - b.row);
+    entries.forEach(([name, pos]) => {
+      const preferred = name === RECYCLE_BIN_NAME && !pos.manual ? iconRecycleBinCell() : pos;
+      let col = Math.min(preferred.col, cols - 1);
+      let row = Math.min(preferred.row, rows - 1);
+      let k   = col + ',' + row;
+      while (occupied.has(k)) {
+        row++; if (row >= rows) { row = 0; col++; }
+        if (col >= cols) col = cols - 1;
+        k = col + ',' + row;
+      }
+      occupied.add(k);
+      iconPositions[name] = pos.manual ? { col, row, manual: true } : { col, row };
+      const el = layer.querySelector('[data-icon-key="' + CSS.escape(name) + '"]');
+      if (el) { const { left, top } = iconCellToPixel(col, row); el.style.left = left + 'px'; el.style.top = top + 'px'; }
+    });
+    saveIconPositions();
+  }, 150);
+});
+
+// ─────────────────────────────────────────────────────────────────
+// WINDOW CONTENT
+// ─────────────────────────────────────────────────────────────────
+
+const WELCOME_DEFAULT =
+`== sleepOS v0.9\u03b2 \u2014 WELCOME ==
+
+You are running sleepOS, an experimental interactive desktop.
+
+Programs:
+  PROJECTS.DIR  \u2014 interactive apps (double-click to browse)
+  NOTEPAD.exe   \u2014 text editor with syntax highlighting
+  TERMINAL.exe  \u2014 command line (type HELP for commands)
+  BROWSER.exe   \u2014 web browser
+  SYSMON.exe    \u2014 system monitor
+  DEFRAG.exe    \u2014 disk defragmenter
+  CALC.exe      \u2014 calculator
+  REGEDIT.exe   \u2014 registry editor
+
+Files:
+  Right-click the desktop or any folder to create
+  files and folders, or upload from your machine.
+  Everything persists within your session.
+
+Shortcuts:
+  Space + Tab     switch windows
+  Ctrl + Alt + Q  session controls
+  Esc             close menus and overlays
+
+Known issues:
+  [!] void.tmp cannot be read, deleted, or ignored
+  [!] Something is watching this session`;
+
+function openWelcome() { openNotepad('WELCOME.README', '', { initialContent: WELCOME_DEFAULT }); }
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function detectLang(fname) {
+  if (!fname) return 'txt';
+  const ext = (fname.split('.').pop() || '').toLowerCase();
+  return { js:'js', mjs:'js', ts:'js', jsx:'js', tsx:'js',
+           html:'html', htm:'html',
+           css:'css', scss:'css',
+           json:'json',
+           md:'md', markdown:'md',
+           py:'py',
+           script:'script' }[ext] || 'txt';
+}
+
+const LANG_LABELS = { js:'JavaScript', html:'HTML', css:'CSS', json:'JSON', md:'Markdown', py:'Python', script:'.script', txt:'Plain Text' };
+
+// Each rule: { re (global regex), cls (CSS class) }
+const LANG_RULES = {
+  js: [
+    { re: /\/\*[\s\S]*?\*\//g,          cls: 'tok-cmt' },
+    { re: /\/\/[^\n]*/g,                 cls: 'tok-cmt' },
+    { re: /`(?:[^`\\]|\\.)*`/g,          cls: 'tok-str' },
+    { re: /"(?:[^"\\]|\\.)*"/g,          cls: 'tok-str' },
+    { re: /'(?:[^'\\]|\\.)*'/g,          cls: 'tok-str' },
+    { re: /\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|delete|typeof|instanceof|in|of|this|class|extends|import|export|default|try|catch|finally|throw|async|await|true|false|null|undefined|void|static|get|set|from)\b/g, cls: 'tok-kw' },
+    { re: /\b([A-Za-z_$][\w$]*)\s*(?=\()/g, cls: 'tok-fn' },
+    { re: /\b0x[\da-fA-F]+|\b\d+(\.\d+)?([eE][+-]?\d+)?\b/g, cls: 'tok-num' },
+  ],
+  html: [
+    { re: /<!--[\s\S]*?-->/g,            cls: 'tok-cmt' },
+    { re: new RegExp("\"(?:[^\"\\\\]|\\\\.)*\"", "g"), cls: 'tok-str' },
+    { re: new RegExp("'(?:[^'\\\\]|\\\\.)*'", "g"), cls: 'tok-str' },
+    { re: /\b[a-zA-Z-]+=(?=["'])/g,     cls: 'tok-att' },
+    { re: /<\/?[A-Za-z][A-Za-z0-9]*|>/g, cls: 'tok-tag' },
+  ],
+  css: [
+    { re: /\/\*[\s\S]*?\*\//g,           cls: 'tok-cmt' },
+    { re: /"[^"]*"|'[^']*'/g,            cls: 'tok-str' },
+    { re: /#[0-9a-fA-F]{3,8}\b/g,        cls: 'tok-num' },
+    { re: /\b\d+(\.\d+)?(px|em|rem|%|vh|vw|vmin|vmax|pt|cm|mm|s|ms|deg|fr)?\b/g, cls: 'tok-num' },
+    { re: /[.#:[\]A-Za-z*][^{;]*(?=\{)/g, cls: 'tok-fn' },
+    { re: /[\w-]+(?=\s*:)/g,             cls: 'tok-kw' },
+  ],
+  json: [
+    { re: /"(?:[^"\\]|\\.)*"\s*(?=:)/g,  cls: 'tok-att' },
+    { re: /"(?:[^"\\]|\\.)*"/g,           cls: 'tok-str' },
+    { re: /\b(true|false|null)\b/g,       cls: 'tok-kw' },
+    { re: /-?\b\d+(\.\d+)?([eE][+-]?\d+)?\b/g, cls: 'tok-num' },
+  ],
+  md: [
+    { re: /^#{1,6} .+/gm,               cls: 'tok-hdr' },
+    { re: /`[^`]+`/g,                    cls: 'tok-cmt' },
+    { re: /\*\*[^*\n]+\*\*|__[^_\n]+__/g, cls: 'tok-kw' },
+    { re: /\*[^*\n]+\*|_[^_\n]+_/g,     cls: 'tok-str' },
+    { re: /^\s*[-*+] /gm,               cls: 'tok-fn' },
+    { re: /\[[^\]]+\]\([^)]+\)/g,        cls: 'tok-fn' },
+  ],
+  py: [
+    { re: /"""[\s\S]*?"""|'''[\s\S]*?'''/g, cls: 'tok-str' },
+    { re: /#[^\n]*/g,                    cls: 'tok-cmt' },
+    { re: /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, cls: 'tok-str' },
+    { re: /\b(def|class|return|if|elif|else|for|while|in|not|and|or|is|import|from|as|try|except|finally|raise|with|lambda|pass|break|continue|yield|True|False|None|global|nonlocal|del|assert|async|await)\b/g, cls: 'tok-kw' },
+    { re: /\b([A-Za-z_]\w*)\s*(?=\()/g, cls: 'tok-fn' },
+    { re: /\b\d+(\.\d+)?\b/g,           cls: 'tok-num' },
+  ],
+  script: [
+    { re: /#[^\n]*/g,                    cls: 'tok-cmt' },
+    { re: /\/\/[^\n]*/g,                 cls: 'tok-cmt' },
+    { re: /^\s*:[A-Za-z_][\w.-]*/gm,     cls: 'tok-fn' },
+    { re: /\b(print|echo|set|input|wait|inc|dec|add|sub|mul|div|mod|clear|touch|mkdir|del|rm|open|notepad|start|run|goto|if|not|exists|defined|call|return|exit|grep)\b/gi, cls: 'tok-kw' },
+    { re: /==|!=|>=|<=|>|</g,            cls: 'tok-att' },
+    { re: /\[(red|green|yellow|cyan|blue|white)\]/gi, cls: 'tok-fn' },
+    { re: /\$\w+/g,                      cls: 'tok-var' },
+    { re: /\b\d+\b/g,                    cls: 'tok-num' },
+  ],
+  txt: [],
+};
+
+function highlight(text, lang) {
+  const rules = LANG_RULES[lang] || [];
+  if (!rules.length) return escHtml(text);
+
+  // Collect all non-overlapping token intervals
+  const intervals = [];
+  for (let ri = 0; ri < rules.length; ri++) {
+    const { re, cls } = rules[ri];
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      intervals.push({ start: m.index, end: m.index + m[0].length, cls, ri });
+    }
+  }
+  // Sort by start; ties broken by rule order (lower ri = higher priority)
+  intervals.sort((a, b) => a.start !== b.start ? a.start - b.start : a.ri - b.ri);
+
+  // Sweep: drop intervals that overlap an already-chosen one
+  const chosen = [];
+  let coveredTo = 0;
+  for (const iv of intervals) {
+    if (iv.start >= coveredTo) { chosen.push(iv); coveredTo = iv.end; }
+  }
+
+  let result = '';
+  let cur = 0;
+  for (const iv of chosen) {
+    if (iv.start > cur) result += escHtml(text.slice(cur, iv.start));
+    result += `<span class="${iv.cls}">${escHtml(text.slice(iv.start, iv.end))}</span>`;
+    cur = iv.end;
+  }
+  if (cur < text.length) result += escHtml(text.slice(cur));
+  return result;
+}
+
+// Notepad counter for unique window IDs
+let _notepadCount = 0;
+
+function openDecompilerView(filename) {
+  const id = 'decompile-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: '\u2699\uFE0F', w:500, h:360 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const content = getExeDecompilerContent(filename);
+
+  // Read-only display with syntax highlighting (asm-like)
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'flex:1;overflow:auto;background:#fff;padding:8px;font-family:var(--sleep-font);font-size:11px;line-height:1.7;white-space:pre;';
+
+  // Basic asm-style syntax coloring
+  function highlightAsm(text) {
+    return text.split('\n').map(line => {
+      const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (esc.trimStart().startsWith(';')) return '<span style="color:#6a9955;font-style:italic;">' + esc + '</span>';
+      const opcodes = /\b(PUSH|CALL|MOV|CMP|JE|JZ|JNE|JNZ|JLE|JL|JG|JGE|JMP|TEST|SUB|ADD|AND|OR|XOR|LEA|RET|NOP|HLT)\b/g;
+      const colored = esc.replace(opcodes, m => '<span style="color:#0000cc;font-weight:bold;">' + m + '</span>');
+      return colored.replace(/\b(0x[0-9A-Fa-f]+)\b/g, '<span style="color:#098658;">$1</span>')
+                    .replace(/\b(DD|DB|DQ|DW|RESB|RESW|RESD|dup)\b/g, '<span style="color:#dd4400;">$1</span>');
+    }).join('\n');
+  }
+
+  wrap.innerHTML = highlightAsm(content);
+  body.appendChild(wrap);
+
+  if (ws) ws.textContent = filename + '  \u2014  Read-only  |  Decompiler View';
+
+  if (mb) {
+    const fileSpan = document.createElement('span');
+    fileSpan.className = 'menu-item'; fileSpan.textContent = 'File';
+    fileSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      showDropdown(fileSpan, [
+        { label: 'Close', action: () => closeWin(id) },
+      ]);
+    });
+    mb.appendChild(fileSpan);
+    const viewSpan = document.createElement('span');
+    viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+    viewSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      showDropdown(viewSpan, [
+        { label: 'Copy All', action: () => navigator.clipboard?.writeText(content) },
+      ]);
+    });
+    mb.appendChild(viewSpan);
+  }
+}
+
+function openLoreNotepad(filename, content, title, icon) {
+  const id = 'lore-' + (filename || '').replace(/\W/g,'_');
+  if (!mkWin({ id, title: title + ' \u2014 Notepad', icon: icon || '📝', w:440, h:320, menubar:false, statusbar:false })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;';
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'background:#fff;padding:8px;margin:0;height:100%;overflow:auto;font-family:var(--sleep-font);font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-word;';
+  pre.textContent = content;
+  body.appendChild(pre);
+}
+
+function runScriptInPopup(name, source, dirName) {
+  const id = 'script-out-' + Date.now();
+  if (!mkWin({ id, title: name + ' - Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'background:#000;padding:6px;overflow:auto;font-family: var(--sleep-font);font-size:12px;color:#ccc;';
+  const print = (text, color) => {
+    const div = document.createElement('div');
+    div.textContent = text || '\u00a0';
+    if (color) div.style.color = color;
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+  };
+  print('Running ' + name + '...', '#888');
+  print('');
+  execScript(source, print, { sourceName: name, dirName, clearFn: () => { body.innerHTML = ''; } })
+    .then(code => { if (code !== 0) print('Exit code: ' + code, '#dddd00'); });
+}
+
+function quoteTerminalArg(text) {
+  const value = String(text ?? '');
+  if (!value) return '""';
+  if (!/[\s"]/.test(value)) return value;
+  return '"' + value.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
+function runScriptInTerminal(name, dirName, args) {
+  const items = [quoteTerminalArg(name), ...(Array.isArray(args) ? args.map(quoteTerminalArg) : [])];
+  openTerminal(dirName || '', 'RUN ' + items.join(' '));
+}
+
+function openSaveDialog(defaultName, callback) {
+  const id = 'saveas-' + Date.now();
+  if (!mkWin({ id, title: 'Save As', icon: '💾', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
+
+  let saveCwd = '';
+
+  // ── "Save in:" bar ────────────────────────────────────────────
+  const locRow = document.createElement('div');
+  locRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+  const locLabel = document.createElement('span');
+  locLabel.textContent = 'Save in:'; locLabel.style.whiteSpace = 'nowrap';
+  const locDisp = document.createElement('div');
+  locDisp.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff;padding:1px 4px;font-family: var(--sleep-font);font-size:11px;';
+  locRow.appendChild(locLabel); locRow.appendChild(locDisp);
+  body.appendChild(locRow);
+
+  // ── File list ────────────────────────────────────────────────
+  const fileList = document.createElement('div');
+  fileList.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff;overflow:auto;padding:4px;display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;min-height:0;';
+  body.appendChild(fileList);
+
+  // ── File name row ────────────────────────────────────────────
+  const nameRow = document.createElement('div');
+  nameRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+  const nameLabel = document.createElement('span');
+  nameLabel.textContent = 'File name:'; nameLabel.style.whiteSpace = 'nowrap';
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text'; nameInput.value = defaultName;
+  nameInput.style.cssText = 'flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;padding:1px 4px;font-family: var(--sleep-font);font-size:11px;background:#fff;';
+  nameRow.appendChild(nameLabel); nameRow.appendChild(nameInput);
+  body.appendChild(nameRow);
+
+  // ── Buttons ──────────────────────────────────────────────────
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;flex-shrink:0;';
+  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary'; saveBtn.textContent = 'Save';
+  const cancelBtn = document.createElement('button'); cancelBtn.className = 'dlg-btn';        cancelBtn.textContent = 'Cancel';
+  btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
+  body.appendChild(btnRow);
+
+  function makeFLItem(emoji, label) {
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:68px;padding:3px;cursor:default;border:1px solid transparent;font-size:10px;text-align:center;word-break:break-word;';
+    el.innerHTML = `<div style="font-size:22px;">${emoji}</div><span>${label}</span>`;
+    el.addEventListener('mouseover', () => { el.style.background='#000080'; el.style.color='#fff'; });
+    el.addEventListener('mouseout',  () => { el.style.background='';        el.style.color=''; });
+    return el;
+  }
+
+  function renderSaveList() {
+    fileList.innerHTML = '';
+    locDisp.textContent = saveCwd ? `C:\\sleepOS\\${saveCwd}` : 'C:\\sleepOS';
+
+    if (saveCwd) {
+      const up = makeFLItem('📁', '..');
+      up.addEventListener('dblclick', () => { saveCwd = ''; renderSaveList(); });
+      fileList.appendChild(up);
+    }
+
+    const dir = fsGetDir(saveCwd);
+    const dirs = saveCwd ? [...(dir?.dirs ?? [])]
+                         : ['DOCS', ...termFS.dirs].filter((v, i, a) => a.indexOf(v) === i);
+    dirs.forEach(d => {
+      const el = makeFLItem('📁', d);
+      el.addEventListener('dblclick', () => { saveCwd = d; renderSaveList(); });
+      fileList.appendChild(el);
+    });
+
+    (dir?.files ?? termFS.files).forEach((_, name) => {
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      const emoji = { script:'📜', txt:'📄', md:'📋', js:'📜', py:'🐍' }[ext] || '📄';
+      const el = makeFLItem(emoji, name);
+      el.addEventListener('click', () => { nameInput.value = name; });
+      el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
+      fileList.appendChild(el);
+    });
+  }
+
+  saveBtn.addEventListener('click', () => {
+    const fname = nameInput.value.trim();
+    if (!fname) return;
+    closeWin(id);
+    callback(fname, saveCwd);
+  });
+  cancelBtn.addEventListener('click', () => closeWin(id));
+  nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  saveBtn.click();
+    if (e.key === 'Escape') cancelBtn.click();
+  });
+
+  renderSaveList();
+  setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+}
+
+// Lore-ified pseudo-bytecode for .exe decompiler view
+function getExeDecompilerContent(fname) {
+  const name = (fname || '').toLowerCase();
+  const base = fname.replace(/\.exe$/i,'').toUpperCase();
+  const loreMap = {
+    'terminal.exe': [
+      '; TERMINAL.exe - Disassembly v1.0',
+      'section .text',
+      '  PUSH soul_daemon',
+      '  CALL obsv.sys',
+      '  MOV  eax, [STDIN_HANDLE]',
+      '  CMP  eax, 0x00000000',
+      '  JE   void_fallback',
+      '  CALL parse_command',
+      '  JMP  main_loop',
+      'void_fallback:',
+      '  MOV  [VOID_PRESSURE], 0xFF',
+      '  RET',
+      '; NOTE: 3 subroutines unresolved',
+      '; CALL 0xDEAD???? - target unknown',
+    ],
+    'sysmon.exe': [
+      '; SYSMON.exe - Disassembly',
+      'section .data',
+      '  soul_integrity  DD 0x57',
+      '  daemon_count    DD 0x07',
+      '  observer_ref    DD [CLASSIFIED]',
+      'section .text',
+      '  PUSH soul_integrity',
+      '  CALL read_corpus_metrics',
+      '  MOV  eax, [soul_integrity]',
+      '  SUB  eax, 0x01',
+      '  JLE  integrity_critical',
+      '  CALL update_display',
+      '  JMP  tick_loop',
+      'integrity_critical:',
+      '  CALL emit_warning',
+      '  PUSH 0xDEAD',
+      '  RET',
+    ],
+    'browser.exe': [
+      '; BROWSER.exe - Disassembly',
+      'section .rodata',
+      '  home_url  DB "sleep://home", 0',
+      '  err_msg   DB "site blocked by void", 0',
+      'section .text',
+      '  MOV  esi, home_url',
+      '  CALL resolve_sleep_addr',
+      '  TEST eax, eax',
+      '  JZ   frame_blocked',
+      '  CALL render_page',
+      '  JMP  event_loop',
+      'frame_blocked:',
+      '  PUSH err_msg',
+      '  CALL show_error',
+      '  ; observer may intercept traffic here',
+      '  RET',
+    ],
+    'defrag.exe': [
+      '; DEFRAG.exe - Disassembly',
+      'section .bss',
+      '  corpus_blocks RESB 640',
+      '  void_fragment DB [CANNOT RESOLVE]',
+      'section .text',
+      '  MOV  ecx, 0x280',
+      '  LEA  edi, [corpus_blocks]',
+      '  CALL scan_fragments',
+      '  MOV  eax, [void_fragment]',
+      '  CMP  eax, 0x00',
+      '  JNE  skip_void',
+      '  ; void_fragment cannot be moved',
+      '  ; it has always been here',
+      'skip_void:',
+      '  CALL compact_corpus',
+      '  JMP  defrag_loop',
+    ],
+    'notepad.exe': [
+      '; NOTEPAD.exe - Disassembly',
+      'section .data',
+      '  welcome_readme DB "WELCOME.README", 0',
+      '  null_text      DD 0x00',
+      'section .text',
+      '  MOV  esi, welcome_readme',
+      '  CALL fs_open_read',
+      '  TEST eax, eax',
+      '  JZ   open_blank',
+      '  CALL load_text_buffer',
+      '  JMP  editor_loop',
+      'open_blank:',
+      '  MOV  [text_buffer], null_text',
+      '  CALL init_editor',
+      '  RET',
+    ],
+    'explorer.exe': [
+      '; EXPLORER.exe - Disassembly',
+      'section .data',
+      '  root_path DB "C:\\sleepOS\\", 0',
+      '  sys_files DD 9',
+      'section .text',
+      '  PUSH root_path',
+      '  CALL enumerate_fs',
+      '  MOV  ecx, sys_files',
+      '  CALL add_system_entries',
+      '  ; 1 entry cannot be enumerated',
+      '  ; see: ?????.exe',
+      '  CALL render_icon_grid',
+      '  JMP  window_loop',
+    ],
+    'calc.exe': [
+      '; CALC.exe - Disassembly',
+      'section .data',
+      '  display_buf DB 32 dup(0)',
+      '  soul_pi     DQ 3.14159265358979',
+      'section .text',
+      '  MOV  eax, 0x00',
+      '  MOV  [accumulator], eax',
+      '  CALL init_display',
+      '  JMP  calc_loop',
+      'calc_loop:',
+      '  CALL wait_keypress',
+      '  CALL eval_operation',
+      '  PUSH [accumulator]',
+      '  CALL update_display',
+      '  JMP  calc_loop',
+      '; NOTE: division by zero returns VOID',
+    ],
+    'regedit.exe': [
+      '; REGEDIT.exe - Disassembly',
+      'section .data',
+      '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
+      '  soul_key  DB "SOUL\\Metrics", 0',
+      'section .text',
+      '  PUSH hive_root',
+      '  CALL open_registry_hive',
+      '  MOV  esi, soul_key',
+      '  CALL reg_open_key',
+      '  CALL enumerate_values',
+      '  ; WARNING: OBSERVER_COUNT is classified',
+      '  ; ACCESS DENIED for key VOID\\',
+      '  CALL render_tree',
+      '  JMP  edit_loop',
+    ],
+  };
+  const specific = loreMap[name];
+  if (specific) return specific.join('\n');
+  return [
+    '; ' + base + ' - Disassembly',
+    '; File type: WIN32 PE (sleepOS compatible)',
+    '',
+    'section .data',
+    '  entry_point DD 0x' + Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4,'0'),
+    '  build_stamp DD 0x' + Math.floor(Math.random()*0xFFFFFFFF).toString(16).toUpperCase().padStart(8,'0'),
+    '',
+    'section .text',
+    '  PUSH soul_daemon',
+    '  CALL obsv.sys',
+    '  MOV  eax, [entry_point]',
+    '  CALL eax',
+    '  CMP  eax, 0',
+    '  JNZ  execution_error',
+    '  RET',
+    'execution_error:',
+    '  PUSH 0xDEADC0DE',
+    '  CALL void_handler',
+    '  JMP  0x0000',
+    '',
+    '; [decompiler: 1 function unresolved]',
+  ].join('\n');
+}
+
+// Lore content for daemon.core and void.tmp
+const DAEMON_CORE_CONTENT =
+`[DAEMON CORE - raw read attempt]
+
+This file is being written.
+It is always being written.
+
+Fragment recovered at offset 0x0000:
+  owner    : SYSTEM\\???
+  type     : persistent observer
+  priority : ABOVE_KERNEL
+  started  : before system boot
+  status   : ACTIVE
+
+Fragment recovered at offset 0x00FF:
+  watching : all active processes
+  watching : all inactive processes
+  watching : this file
+
+Fragment recovered at offset 0x01FE:
+  [UNREADABLE - data still being written]
+  [UNREADABLE - data still being written]
+  [UNREADABLE - data still being written]
+
+Do not attempt to modify this file.
+You cannot. It is already modified.
+`;
+
+function getVoidTmpContent() {
+  return buildVoidTmpRawContent();
+}
+
+function openNotepad(filename, dirName, options) {
+  options = options || {};
+  const splitInfo = fsSplitPath(filename, dirName);
+  const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
+  // Special handling for .exe files - decompiler view (read-only)
+  const normalizedName = (filename || '').toLowerCase();
+  const isExe = normalizedName.endsWith('.exe');
+  const isDaemonCore = normalizedName === 'daemon.core';
+  const isVoidTmp = normalizedName === 'void.tmp';
+
+  if (isExe && filename) {
+    return openDecompilerView(filename);
+  }
+  if (isDaemonCore) {
+    daemonActivate('raw');
+    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', '👁️');
+  }
+  if (isVoidTmp) {
+    daemonRecordInvestigation('void');
+    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', '⬛');
+  }
+
+  const entry = filename ? fsGetEntry(filename, dirName) : null;
+  if (entry && fullPathUpper === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
+  if (entry && fullPathUpper === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
+  const { dirName: initialDir, fileName } = splitInfo;
+  const pathKey = filename ? ((initialDir ? initialDir + '\\' : '') + fileName) : String(++_notepadCount);
+  const id = 'notepad-' + pathKey.replace(/\W/g,'_');
+  const displayName = fileName || 'untitled.txt';
+  const hasInitialContent = Object.prototype.hasOwnProperty.call(options, 'initialContent');
+  const initial = hasInitialContent ? String(options.initialContent ?? '') : entry && entry.kind === 'text' ? entry.value : '';
+  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
+
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  // ── editor container (highlight div + textarea overlay) ──────
+  const wrap = document.createElement('div');
+  wrap.className = 'editor-wrap';
+
+  const hl = document.createElement('div');
+  hl.className = 'editor-highlight';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'note-textarea';
+  ta.value = initial;
+  ta.spellcheck = false;
+
+  wrap.appendChild(hl);
+  wrap.appendChild(ta);
+  body.appendChild(wrap);
+
+  let currentFile = fileName || null;
+  let currentDir = currentFile ? initialDir : fsNormalizeDir(dirName);
+  let lang = detectLang(fileName || filename);
+
+  function renderHighlight() {
+    hl.innerHTML = highlight(ta.value, lang) + '\n'; // trailing \n keeps last-line height correct
+    syncScroll();
+  }
+  function syncScroll() {
+    hl.scrollTop  = ta.scrollTop;
+    hl.scrollLeft = ta.scrollLeft;
+  }
+
+  renderHighlight();
+
+  const lineCount = () => ta.value.split('\n').length;
+
+  const updateStatus = () => {
+    if (!ws) return;
+    const fname = currentFile || 'untitled.txt';
+    ws.textContent = `${fname}  -  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
+  };
+
+  ta.addEventListener('input', () => { renderHighlight(); updateStatus(); });
+  ta.addEventListener('scroll', syncScroll);
+  ta.addEventListener('dragover', e => e.preventDefault());
+  ta.addEventListener('drop', e => {
+    e.preventDefault();
+    // Collect names from internal shell drag or external OS files
+    const shellPayload = getShellDragPayload();
+    let names = [];
+    if (shellPayload?.items?.length) {
+      names = shellPayload.items.map(i => i.name);
+      clearShellDragPayload();
+    } else if (e.dataTransfer?.files?.length) {
+      names = [...e.dataTransfer.files].map(f => f.name);
+    }
+    if (!names.length) return;
+    const insert = names.join(' ');
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, start) + insert + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = start + insert.length;
+    renderHighlight();
+    updateStatus();
+  });
+  updateStatus();
+
+  // ── IDE keybindings ──────────────────────────────────────────
+  ta.addEventListener('keydown', e => {
+    // Tab → insert 2 spaces
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = ta.selectionStart, en = ta.selectionEnd;
+      ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(en);
+      ta.selectionStart = ta.selectionEnd = s + 2;
+      renderHighlight(); updateStatus();
+    }
+    // Enter → auto-indent (match leading whitespace of current line)
+    if (e.key === 'Enter') {
+      const s = ta.selectionStart;
+      const lineStart = ta.value.lastIndexOf('\n', s - 1) + 1;
+      const indent = ta.value.slice(lineStart).match(/^[ \t]*/)[0];
+      if (indent.length) {
+        e.preventDefault();
+        ta.value = ta.value.slice(0, s) + '\n' + indent + ta.value.slice(ta.selectionEnd);
+        ta.selectionStart = ta.selectionEnd = s + 1 + indent.length;
+        renderHighlight(); updateStatus();
+      }
+    }
+    // Ctrl+S / Cmd+S → save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      currentFile ? save(currentFile) : promptSaveAs();
+    }
+    // Ctrl+/ → toggle line comment
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault();
+      const cmt = { js:'//', html:'<!--', css:'/*', py:'#', script:'#', md:'', txt:'', json:'' }[lang] || '//';
+      if (!cmt) return;
+      const s = ta.selectionStart;
+      const lineStart = ta.value.lastIndexOf('\n', s - 1) + 1;
+      const lineEnd = ta.value.indexOf('\n', s);
+      const line = ta.value.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+      const trimmed = line.trimStart();
+      const prefix = line.slice(0, line.length - trimmed.length);
+      let newLine;
+      if (trimmed.startsWith(cmt)) newLine = prefix + trimmed.slice(cmt.length);
+      else newLine = prefix + cmt + trimmed;
+      ta.value = ta.value.slice(0, lineStart) + newLine + (lineEnd === -1 ? '' : ta.value.slice(lineEnd));
+      ta.selectionStart = ta.selectionEnd = s + (newLine.length - line.length);
+      renderHighlight(); updateStatus();
+    }
+  });
+
+  function save(fname) {
+    const saved = fsWriteTextFile(fname, ta.value, currentDir);
+    if (!saved) return;
+    currentFile = saved.fileName;
+    currentDir = saved.dirName;
+    // re-detect lang if filename changed
+    const newLang = detectLang(currentFile);
+    if (newLang !== lang) { lang = newLang; renderHighlight(); }
+    const titleEl = document.getElementById('wtitle-' + id);
+    if (titleEl) titleEl.textContent = currentFile + ' \u2014 Notepad';
+    updateStatus();
+  }
+
+  function promptSaveAs() {
+    openSaveDialog(currentFile || 'untitled.txt', (fname, dir) => {
+      const saved = fsWriteTextFile(fname, ta.value, dir || currentDir);
+      if (!saved) return;
+      currentFile = saved.fileName;
+      currentDir = saved.dirName;
+      const newLang = detectLang(currentFile);
+      if (newLang !== lang) { lang = newLang; renderHighlight(); }
+      const titleEl = document.getElementById('wtitle-' + id);
+      if (titleEl) titleEl.textContent = currentFile + ' \u2014 Notepad';
+      updateStatus();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+    });
+  }
+
+  function setLang(l) { lang = l; renderHighlight(); updateStatus(); }
+
+  function buildMenu() {
+    mb.innerHTML = '';
+    [
+      { label: 'File', items: [
+        { label: 'New',           action: () => openNotepad() },
+        '-',
+        { label: 'Save  Ctrl+S', action: () => currentFile ? save(currentFile) : promptSaveAs() },
+        { label: 'Save As\u2026', action: promptSaveAs },
+        '-',
+        { label: 'Close',         action: () => closeWin(id) },
+      ]},
+      { label: 'Edit', items: [
+        { label: 'Select All',    action: () => { ta.focus(); ta.select(); } },
+        '-',
+        { label: 'Toggle Comment  Ctrl+/', action: () => ta.dispatchEvent(Object.assign(new KeyboardEvent('keydown',{key:'/',ctrlKey:true,bubbles:true}))) },
+      ]},
+      { label: 'Language', items: Object.entries(LANG_LABELS).map(([k,v]) => ({
+          label: (lang === k ? '\u2713 ' : '\u00a0\u00a0') + v,
+          action: () => setLang(k),
+        }))
+      },
+    ].forEach(({ label, items }) => {
+      const span = document.createElement('span');
+      span.className = 'menu-item'; span.textContent = label;
+      span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+      mb.appendChild(span);
+    });
+  }
+  buildMenu();
+  // Rebuild language menu when lang changes so checkmark updates
+  const origSetLang = setLang;
+  setLang = (l) => { origSetLang(l); buildMenu(); };
+
+  ta.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const hasSel = ta.selectionStart !== ta.selectionEnd;
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '✂️ Cut',              disabled: !hasSel, action: () => document.execCommand('cut') },
+      { label: '📋 Copy',             disabled: !hasSel, action: () => document.execCommand('copy') },
+      { label: '📄 Paste',            action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
+      '-',
+      { label: 'Select All',          action: () => { ta.focus(); ta.select(); } },
+      { label: 'Toggle Comment',      action: () => ta.dispatchEvent(Object.assign(new KeyboardEvent('keydown', { key: '/', ctrlKey: true, bubbles: true }))) },
+      '-',
+      { label: 'Save  Ctrl+S',        action: () => currentFile ? save(currentFile) : promptSaveAs() },
+      { label: 'Save As\u2026',       action: promptSaveAs },
+    ]);
+  });
+}
+
+function openExplorer(startPath) {
+  const id = nextExplorerWinId();
+  if (!mkWin({ id, title:'FILE EXPLORER \u2014 C:\\sleepOS', icon:'\u{1F5C2}\uFE0F', w:560, h:400, x:110, y:65 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;display:flex;flex-direction:column;overflow:hidden;';
+
+  let cwd = (startPath || '').toUpperCase();
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'exp-toolbar';
+  const upBtn      = document.createElement('button'); upBtn.textContent = '\u2B06 Up';
+  const refreshBtn = document.createElement('button'); refreshBtn.textContent = '\u21BB Refresh';
+  const addrEl     = document.createElement('input'); addrEl.className = 'exp-addr';
+  addrEl.title = 'Type a path and press Enter to navigate';
+  addrEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const raw = addrEl.value.trim();
+      const normalized = fsNormalizeDir(raw);
+      if (normalized === '') {
+        cwd = '';
+        render();
+        addrEl.blur();
+      } else if (normalized === 'PROJECTS' || fsGetDir(normalized)) {
+        cwd = normalized;
+        render();
+        addrEl.blur();
+      } else {
+        addrEl.style.background = 'rgba(180,0,0,0.25)';
+        setTimeout(() => { addrEl.style.background = ''; }, 600);
+        const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
+        addrEl.value = fullPath;
+        addrEl.blur();
+      }
+    } else if (e.key === 'Escape') {
+      const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
+      addrEl.value = fullPath;
+      addrEl.blur();
+    }
+  });
+  addrEl.addEventListener('blur', () => {
+    const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
+    addrEl.value = fullPath;
+  });
+  addrEl.addEventListener('focus', () => addrEl.select());
+  toolbar.appendChild(upBtn); toolbar.appendChild(refreshBtn); toolbar.appendChild(addrEl);
+  body.appendChild(toolbar);
+
+  const pane = document.createElement('div');
+  pane.className = 'exp-body';
+  pane.style.position = 'relative';
+  body.appendChild(pane);
+
+  // Rubber-band selection on empty pane space
+  pane.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    const ITEM_SEL = '.exp-item,.exp-list-item,.exp-det-item';
+    if (e.target.closest(ITEM_SEL)) return;
+    if (!e.ctrlKey) clearSelection();
+    document.body.style.userSelect = 'none';
+    const pr0  = pane.getBoundingClientRect();
+    const st0  = pane.scrollTop;
+    const sx   = e.clientX - pr0.left + st0;
+    const sy   = e.clientY - pr0.top  + st0;
+    let didDrag = false;
+    const selDiv = document.createElement('div');
+    selDiv.className = 'sel-rect';
+    selDiv.style.cssText = 'left:' + sx + 'px;top:' + sy + 'px;width:0;height:0;';
+    pane.appendChild(selDiv);
+    const onMove = mv => {
+      didDrag = true;
+      const pr  = pane.getBoundingClientRect();
+      const st  = pane.scrollTop;
+      const cx  = mv.clientX - pr.left + st;
+      const cy  = mv.clientY - pr.top  + st;
+      const left = Math.min(sx, cx), top = Math.min(sy, cy);
+      const w    = Math.abs(cx - sx),  h  = Math.abs(cy - sy);
+      selDiv.style.left = left + 'px'; selDiv.style.top  = top  + 'px';
+      selDiv.style.width = w   + 'px'; selDiv.style.height = h  + 'px';
+      const sr = { left, top, right: left + w, bottom: top + h };
+      let changed = false;
+      pane.querySelectorAll(ITEM_SEL).forEach(el => {
+        const key = el._selKey;
+        if (!key) return;
+        const er = el.getBoundingClientRect();
+        const el_l = er.left   - pr.left + st;
+        const el_t = er.top    - pr.top  + st;
+        const el_r = er.right  - pr.left + st;
+        const el_b = er.bottom - pr.top  + st;
+        const hit = sr.left < el_r && sr.right > el_l && sr.top < el_b && sr.bottom > el_t;
+        if (hit && !selectedKeys.has(key)) { selectedKeys.add(key); changed = true; }
+        else if (!hit && !e.ctrlKey && selectedKeys.has(key)) { selectedKeys.delete(key); changed = true; }
+      });
+      if (changed) syncSelectionUi();
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      document.body.style.userSelect = '';
+      selDiv.remove();
+      if (didDrag) window.addEventListener('click', e2 => e2.stopPropagation(), { once: true, capture: true });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+  });
+
+  let selected = null;
+  let viewMode = 'icons';
+  let selectedKeys = new Set();
+  let selectionItems = new Map();
+  let selectionNodes = new Map();
+  let emptyStatusText = '';
+
+  function doMoveItem(srcItem, srcCwd, dstDirPath) {
+    return moveShellItemToDir(srcItem, srcCwd, dstDirPath);
+  }
+  function doRecycleItem(srcItem, srcCwd) {
+    return recycleShellItem(srcItem, srcCwd);
+  }
+  function doMovePayload(payload, dstDirPath) {
+    return moveShellPayloadToDir(payload, dstDirPath);
+  }
+  function doRecyclePayload(payload) {
+    return recycleShellPayload(payload);
+  }
+  function setExplorerStatus(text) {
+    if (ws) ws.textContent = text;
+  }
+  const ITEM_SELECTOR = '.exp-item,.exp-list-item,.exp-det-item';
+
+  function getIcon(name, kind) {
+    return resolveFsIcon(name, kind);
+  }
+
+  function selectionKey(item) {
+    const recyclePart = item._recycle?.id ? '|recycle|' + item._recycle.id : '';
+    const shortcutPart = item._shortcut?.target?.path ? '|shortcut|' + normalizeShortcutPath(item._shortcut.target.path) : '';
+    const projectPart = item._proj?.file ? '|project|' + item._proj.file : '';
+    return (item.sysfile ? '1' : '0') + '|' + item.kind + '|' + item.name + recyclePart + shortcutPart + projectPart;
+  }
+
+  function registerSelectionNode(el, item) {
+    const key = selectionKey(item);
+    selectionItems.set(key, item);
+    selectionNodes.set(key, el);
+    el._selKey = key;
+  }
+
+  function getSelectedItems() {
+    return Array.from(selectedKeys).map(key => selectionItems.get(key)).filter(Boolean);
+  }
+
+  function getSingleSelectedItem() {
+    const items = getSelectedItems();
+    return items.length === 1 ? items[0] : null;
+  }
+
+  function getDeletableSelectedItems() {
+    if (cwd === 'RECYCLE') return getSelectedItems().filter(item => !!item._recycle);
+    return getSelectedItems().filter(item => !item._proj && canAttemptDeleteItem(makeFsPath(item.name), cwd, item));
+  }
+
+  function makeFsPath(name) {
+    return cwd ? cwd + '\\' + name : name;
+  }
+
+  function getSelectedNamesText() {
+    return getSelectedItems().map(item => item.name).join('\n');
+  }
+
+  function getSelectedPathsText() {
+    return getSelectedItems().map(item => {
+      if (item._recycle) return 'C:\\sleepOS\\' + recycleEntryOriginalPath(item._recycle);
+      return 'C:\\sleepOS\\' + (cwd ? cwd + '\\' : '') + item.name;
+    }).join('\n');
+  }
+
+  function updateSelectionStatus() {
+    if (!ws) return;
+    const items = getSelectedItems();
+    if (!items.length) {
+      ws.textContent = emptyStatusText;
+      return;
+    }
+    if (items.length === 1) {
+      ws.textContent = items[0]._proj ? items[0].name + '  \u2014  double-click to open' : items[0].name;
+      return;
+    }
+    ws.textContent = items.length + ' objects selected';
+  }
+
+  function syncSelectionUi() {
+    selectionNodes.forEach((node, key) => node.classList.toggle('selected', selectedKeys.has(key)));
+    const items = getSelectedItems();
+    if (selected && !selectedKeys.has(selectionKey(selected))) selected = null;
+    if (!selected && items.length) selected = items[items.length - 1];
+    updateSelectionStatus();
+  }
+
+  function clearSelection() {
+    selectedKeys = new Set();
+    selected = null;
+    syncSelectionUi();
+  }
+
+  function replaceSelection(item) {
+    selectedKeys = new Set([selectionKey(item)]);
+    selected = item;
+    syncSelectionUi();
+  }
+
+  function toggleSelection(item) {
+    const key = selectionKey(item);
+    const next = new Set(selectedKeys);
+    if (next.has(key)) {
+      next.delete(key);
+      if (selected && selectionKey(selected) === key) selected = null;
+    } else {
+      next.add(key);
+      selected = item;
+    }
+    selectedKeys = next;
+    if (!selected && selectedKeys.size) {
+      const items = getSelectedItems();
+      selected = items[items.length - 1] || null;
+    }
+    syncSelectionUi();
+  }
+
+  function selectAllVisibleItems() {
+    selectedKeys = new Set(selectionItems.keys());
+    selected = getSelectedItems()[0] || null;
+    syncSelectionUi();
+  }
+
+  function invertSelection() {
+    const next = new Set();
+    selectionItems.forEach((_, key) => {
+      if (!selectedKeys.has(key)) next.add(key);
+    });
+    selectedKeys = next;
+    selected = getSelectedItems()[0] || null;
+    syncSelectionUi();
+  }
+
+  function ensureContextSelection(item) {
+    const key = selectionKey(item);
+    if (!selectedKeys.has(key) || selectedKeys.size <= 1) replaceSelection(item);
+    else {
+      selected = item;
+      syncSelectionUi();
+    }
+  }
+
+  function renameItem(item) {
+    if (!item || item.sysfile || item._proj) return;
+    osPrompt('Rename to:', item.name, 'Rename', nextName => {
+      if (!nextName || nextName === item.name) return;
+      const dir = fsGetDir(cwd);
+      if (!dir) return;
+      if (item.kind === 'dir') {
+        dir.dirs.delete(item.name);
+        const sub = dir.subdirs?.get(item.name);
+        dir.dirs.add(nextName.toUpperCase());
+        if (!dir.subdirs) dir.subdirs = new Map();
+        if (sub) dir.subdirs.set(nextName.toUpperCase(), sub);
+        dir.subdirs.delete(item.name);
+      } else if (dir.blobs.has(item.name)) {
+        const blob = dir.blobs.get(item.name);
+        dir.blobs.delete(item.name);
+        dir.blobs.set(nextName, blob);
+        renameBlobEntry(cwd, item.name, nextName);
+        if (blob?.kind === 'image') handleWallpaperFileRename(cwd, item.name, nextName);
+      } else {
+        const content = dir.files.get(item.name);
+        dir.files.delete(item.name);
+        dir.files.set(nextName, content ?? '');
+      }
+      increaseDriveFragmentation(item.kind === 'dir' ? 0.006 : 0.008);
+      schedSave();
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+      render();
+    });
+  }
+
+  function getSelectedRecycleEntries() {
+    return getSelectedItems().map(item => normalizeRecycleEntry(item._recycle)).filter(Boolean);
+  }
+
+  function restoreSelectedRecycleEntries() {
+    const entries = getSelectedRecycleEntries();
+    if (!entries.length) return;
+    const blocked = [];
+    let restoredCount = 0;
+    entries.forEach(entry => {
+      const result = restoreRecycleEntry(entry);
+      if (result.ok && result.restored) restoredCount++;
+      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+    });
+    if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
+    if (restoredCount && ws) ws.textContent = restoredCount === 1 ? '1 item restored' : restoredCount + ' items restored';
+    if (restoredCount || blocked.length) render();
+  }
+
+  function openItem(name, kind, sysfile) {
+    const item = name && typeof name === 'object' ? name : { name, kind, sysfile };
+    name = item.name;
+    kind = item.kind;
+    sysfile = item.sysfile;
+    if (item._recycle) {
+      const result = restoreRecycleEntry(item._recycle);
+      if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+      else if (ws) ws.textContent = 'Restored: ' + result.name;
+      render();
+      return;
+    }
+    if (isRecycleBinItemName(name)) {
+      openRecycleBin();
+      return;
+    }
+    if (item._shortcut) {
+      openDesktopShortcutTarget(item._shortcut.target);
+      return;
+    }
+    if (kind === 'dir') {
+      cwd = makeFsPath(name);
+      render();
+      return;
+    }
+    if (cwd === 'PROJECTS') {
+      const project = PROJECTS.find(p => p.name === name);
+      if (project) {
+        const url = /^https?:\/\//.test(project.file) ? project.file : 'https://' + project.file;
+        window.open(url, '_blank');
+      }
+      return;
+    }
+    if (cwd === 'DESKTOP') {
+      if (item._shortcut) {
+        openDesktopShortcutTarget(item._shortcut.target);
+        return;
+      }
+      if (sysfile) {
+        openSystemFile(name);
+        return;
+      }
+    }
+    if (sysfile) {
+      openSystemFile(name);
+      return;
+    }
+    const dir = fsGetDir(cwd);
+    if (!dir) return;
+    if (dir.blobs.has(name)) openMediaFile(name, cwd);
+    else if (dir.files.has(name)) openNotepad(name, cwd);
+  }
+
+  function deleteSelected() {
+    const items = getDeletableSelectedItems();
+    if (!items.length) return;
+    const recycleView = cwd === 'RECYCLE';
+    const prompt = recycleView
+      ? (items.length === 1 ? 'Permanently delete "' + items[0].name + '"?' : 'Permanently delete ' + items.length + ' selected items?')
+      : (items.length === 1 ? 'Delete "' + items[0].name + '"?' : 'Delete ' + items.length + ' selected items?');
+    osConfirm(prompt, recycleView ? 'Delete Permanently' : 'Delete', ok => {
+      if (!ok) return;
+      const blocked = [];
+      let changed = false;
+      if (recycleView) {
+        items.forEach(item => {
+          const result = purgeRecycleEntry(item._recycle);
+          if (result.ok && result.deleted) changed = true;
+          else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+        });
+        if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
+        if (changed && ws) ws.textContent = items.length === 1 ? '1 item deleted permanently' : items.length + ' items deleted permanently';
+        if (changed || blocked.length) render();
+        return;
+      }
+      items.forEach(item => {
+        if (item._shortcut) {
+          const scIdx = customDesktopIcons.indexOf(item._shortcut);
+          if (scIdx > -1) {
+            customDesktopIcons.splice(scIdx, 1);
+            saveDesktopShortcuts();
+            delete iconPositions[item.name];
+            saveIconPositions();
+            changed = true;
+            return;
+          }
+        }
+        const result = deleteVirtualPath(makeFsPath(item.name), cwd);
+        if (result.ok && result.deleted) changed = true;
+        else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
+      });
+      if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
+      if (changed || blocked.length) document.dispatchEvent(new CustomEvent('fs-changed'));
+      render();
+    }, '\u{1F5D1}\uFE0F');
+  }
+
+  function typeLabel(kind) {
+    return kind === 'dir' ? 'File Folder' : kind === 'image' ? 'Image File' :
+           kind === 'video' ? 'Video File' : kind === 'audio' ? 'Audio File' :
+           kind === 'binary' ? 'Binary File' : 'Text File';
+  }
+
+  function makeItem(name, kind, sysfile, meta) {
+    const item = { name, kind, sysfile, ...(meta || {}) };
+    const icon = getIcon(name, kind);
+    const isRecycleEntry = !!item._recycle;
+    const isRecycleBin = !!item.recycleBin || isRecycleBinItemName(name);
+    const isDesktopRootDir = !cwd && kind === 'dir' && sysfile && name === 'DESKTOP';
+    let el;
+    if (viewMode === 'list') {
+      el = document.createElement('div');
+      el.className = 'exp-list-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = '<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">' + icon + '</span><span>' + iconLabel(name) + '</span>';
+    } else if (viewMode === 'details') {
+      el = document.createElement('tr');
+      el.className = 'exp-det-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = '<td style="font-size:12px;width:22px;">' + icon + '</td><td>' + iconLabel(name) + '</td><td>' + typeLabel(kind) + '</td>';
+    } else {
+      el = document.createElement('div');
+      el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
+      el.innerHTML = '<div class="exp-icon">' + icon + '</div><span>' + iconLabel(name) + '</span>';
+    }
+    registerSelectionNode(el, item);
+    el.addEventListener('click', e => {
+      if (e.ctrlKey || e.metaKey) toggleSelection(item);
+      else replaceSelection(item);
+    });
+    el.addEventListener('dblclick', () => openItem(item));
+    // Touch: single tap opens, long-press shows context menu
+    addLongPress(el);
+    let _tapX, _tapY, _tapT;
+    el.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { _tapX = e.clientX; _tapY = e.clientY; _tapT = Date.now(); } });
+    el.addEventListener('pointerup', e => {
+      if (e.pointerType !== 'mouse' && !_longPressActive && Date.now() - _tapT < 400 && Math.abs(e.clientX - _tapX) < 10 && Math.abs(e.clientY - _tapY) < 10) openItem(item);
+      _longPressActive = false;
+    });
+
+    // ── Drag source ──────────────────────────────────────────────
+    const canDragItem = !isRecycleEntry && !item._proj && (!sysfile || isDesktopVirtualItem(item, cwd) || !!item._shortcut);
+    if (canDragItem) {
+      el.setAttribute('draggable', 'true');
+      el.addEventListener('dragstart', e => {
+        const key = selectionKey(item);
+        const dragItems = selectedKeys.has(key) ? getSelectedItems() : [item];
+        if (!selectedKeys.has(key) || dragItems.length <= 1) replaceSelection(item);
+        setShellDragPayload(buildShellDragPayload(item, cwd, 'explorer', { sourceId: id, items: dragItems }));
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', name);
+        el.style.opacity = '0.5';
+      });
+      el.addEventListener('dragend', () => {
+        clearShellDragPayload();
+        el.style.opacity = '';
+        pane.querySelectorAll('.exp-drop-target').forEach(n => n.classList.remove('exp-drop-target'));
+      });
+    }
+    // ── Drag target (folders + recycle bin) ─────────────────────
+    if ((kind === 'dir' && (!sysfile || isDesktopRootDir)) || isRecycleBin) {
+      el._shellDropHandler = payload => {
+        if (!payload || shellDragIncludesItem(payload, item)) return false;
+        if (isRecycleBin) {
+          const ok = doRecyclePayload(payload);
+          if (!ok) setExplorerStatus('Move failed.');
+          if (ok) render();
+          return ok;
+        }
+        if (isDesktopRootDir && fsNormalizeDir(payload.srcCwd) === 'DESKTOP') return false;
+        const dstPath = isDesktopRootDir ? 'DESKTOP' : (cwd ? cwd + '\\' + name : name);
+        if (!canMoveShellPayloadToDir(payload, dstPath)) return false;
+        const ok = doMovePayload(payload, dstPath);
+        if (!ok) setExplorerStatus('Move failed.');
+        if (ok) render();
+        return ok;
+      };
+      el.addEventListener('dragover', e => {
+        const payload = getShellDragPayload();
+        if (!payload || shellDragIncludesItem(payload, item)) return;
+        const dstPath = isDesktopRootDir ? 'DESKTOP' : (cwd ? cwd + '\\' + name : name);
+        const canDrop = isRecycleBin
+          ? canRecycleShellPayload(payload)
+          : fsNormalizeDir(payload.srcCwd) === dstPath ? false : canMoveShellPayloadToDir(payload, dstPath);
+        if (!canDrop) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        el.classList.add('exp-drop-target');
+      });
+      el.addEventListener('dragleave', () => el.classList.remove('exp-drop-target'));
+      el.addEventListener('drop', e => {
+        el.classList.remove('exp-drop-target');
+        const payload = getShellDragPayload();
+        if (!payload || shellDragIncludesItem(payload, item)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (el._shellDropHandler(payload)) clearShellDragPayload();
+      });
+    }
+
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ensureContextSelection(item);
+      const allSelected = getSelectedItems();
+      const singleSelected = getSingleSelectedItem();
+      const recycleSelected = getSelectedRecycleEntries();
+      const multi = allSelected.length > 1;
+      const canDelete = getDeletableSelectedItems().length > 0;
+      const mutableSelected = allSelected.filter(i => !i.sysfile && !i._recycle && !i._shortcut);
+      const isScript = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.script');
+      const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.kind === 'image';
+      const isLoreFile = !!singleSelected && !singleSelected._recycle && ['daemon.core','void.tmp'].includes(singleSelected.name);
+      const isExeFile  = !!singleSelected && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.exe');
+      if (singleSelected && !multi && (singleSelected.recycleBin || isRecycleBinItemName(singleSelected.name)) && !singleSelected._recycle) {
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: 'Open', action: openRecycleBin },
+          '-',
+          { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
+          '-',
+          { label: 'Copy Name', action: () => navigator.clipboard?.writeText(singleSelected.name) },
+        ]);
+        return;
+      }
+      if (recycleSelected.length && allSelected.every(i => i._recycle)) {
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: multi ? 'Restore Selected' : 'Restore', action: restoreSelectedRecycleEntries },
+          { label: multi ? 'Delete Permanently' : 'Delete Permanently', action: deleteSelected },
+          '-',
+          { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
+          '-',
+          { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || name) },
+        ]);
+        return;
+      }
+      showCtxMenu(e.clientX, e.clientY, [
+        multi
+          ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(openItem) }
+          : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
+        ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
+        ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
+        ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
+        ...(isScript ? [{ label: 'Run Script', action: () => {
+          runScriptInTerminal(singleSelected.name, cwd);
+        }}] : []),
+        '-',
+        { label: 'Cut',   disabled: !mutableSelected.length || cwd === 'RECYCLE', action: () => { if (mutableSelected.length) { _expClipboard = { items: mutableSelected.map(i => ({ name:i.name, kind:i.kind, srcCwd:cwd })), cut:true }; if (ws) ws.textContent = mutableSelected.length + ' item(s) cut'; } } },
+        { label: 'Copy',  disabled: !mutableSelected.length || cwd === 'RECYCLE', action: () => { if (mutableSelected.length) { _expClipboard = { items: mutableSelected.map(i => ({ name:i.name, kind:i.kind, srcCwd:cwd })), cut:false }; if (ws) ws.textContent = mutableSelected.length + ' item(s) copied'; } } },
+        { label: 'Paste', disabled: !_expClipboard || cwd === 'RECYCLE', action: pasteClipboard },
+        '-',
+        { label: 'Rename', disabled: !singleSelected || !!singleSelected.sysfile || !!singleSelected._recycle || !!singleSelected._shortcut || cwd === 'RECYCLE', action: () => renameItem(singleSelected) },
+        { label: 'Delete', disabled: !canDelete, action: deleteSelected },
+        '-',
+        { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || name) },
+      ]);
+    });
+    return el;
+  }
+
+  function makeProjectItem(project) {
+    const item = { name: project.name, kind: 'file', sysfile: true, _proj: project };
+    const openProject = () => window.open(/^https?:\/\//.test(project.file) ? project.file : 'https://' + project.file, '_blank');
+    let el;
+    if (viewMode === 'details') {
+      el = document.createElement('tr');
+      el.className = 'exp-det-item';
+      el.innerHTML = '<td style="font-size:12px;width:22px;">' + project.emoji + '</td><td>' + project.name + '</td><td>HTML Application</td>';
+    } else if (viewMode === 'list') {
+      el = document.createElement('div');
+      el.className = 'exp-list-item';
+      el.innerHTML = '<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">' + project.emoji + '</span><span>' + project.name + '</span>';
+    } else {
+      el = document.createElement('div');
+      el.className = 'exp-item';
+      el.innerHTML = '<div class="exp-icon">' + project.emoji + '</div><span>' + project.name + '</span>';
+    }
+    registerSelectionNode(el, item);
+    el.addEventListener('click', e => {
+      if (e.ctrlKey || e.metaKey) toggleSelection(item);
+      else replaceSelection(item);
+    });
+    el.addEventListener('dblclick', openProject);
+    el.addEventListener('touchend', e => { e.preventDefault(); openProject(); }, { passive: false });
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ensureContextSelection(item);
+      showCtxMenu(e.clientX, e.clientY, [
+        { label: 'Open', action: openProject },
+        '-',
+        { label: 'Properties', action: () => osAlert('Name:\t' + project.name + '\nFile:\t' + project.file + '\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\', 'Properties', '??') },
+        '-',
+        { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || project.name) },
+      ]);
+    });
+    return el;
+  }
+
+  function render() {
+    pane.innerHTML = '';
+    selected = null;
+    selectedKeys = new Set();
+    selectionItems = new Map();
+    selectionNodes = new Map();
+    const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
+    addrEl.value = fullPath;
+    const titleEl = document.getElementById('wtitle-' + id);
+    if (titleEl) titleEl.textContent = 'FILE EXPLORER ? ' + fullPath;
+
+    if (cwd === 'PROJECTS') {
+      const build = fn => {
+        if (viewMode === 'details') {
+          const tbl = document.createElement('table');
+          tbl.className = 'exp-det-tbl';
+          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+          const tbody = document.createElement('tbody');
+          PROJECTS.forEach(project => tbody.appendChild(fn(project)));
+          tbl.appendChild(tbody);
+          pane.appendChild(tbl);
+        } else if (viewMode === 'list') {
+          const list = document.createElement('div');
+          list.style.cssText = 'display:flex;flex-direction:column;';
+          PROJECTS.forEach(project => list.appendChild(fn(project)));
+          pane.appendChild(list);
+        } else {
+          const grid = document.createElement('div');
+          grid.className = 'exp-grid';
+          PROJECTS.forEach(project => grid.appendChild(fn(project)));
+          pane.appendChild(grid);
+        }
+      };
+      build(makeProjectItem);
+      emptyStatusText = PROJECTS.length + ' objects';
+      updateSelectionStatus();
+      return;
+    }
+
+    if (cwd === 'RECYCLE') {
+      const recycleItems = recycleBinEntries.map(entry => ({
+        name: entry.name,
+        kind: entry.kind,
+        sysfile: false,
+        _recycle: entry,
+      }));
+      const build = items => {
+        if (viewMode === 'details') {
+          const tbl = document.createElement('table');
+          tbl.className = 'exp-det-tbl';
+          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+          const tbody = document.createElement('tbody');
+          items.forEach(item => tbody.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          tbl.appendChild(tbody);
+          pane.appendChild(tbl);
+        } else if (viewMode === 'list') {
+          const list = document.createElement('div');
+          list.style.cssText = 'display:flex;flex-direction:column;';
+          items.forEach(item => list.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          pane.appendChild(list);
+        } else {
+          const grid = document.createElement('div');
+          grid.className = 'exp-grid';
+          items.forEach(item => grid.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          pane.appendChild(grid);
+        }
+        if (!items.length) {
+          const empty = document.createElement('div');
+          empty.style.cssText = 'padding:12px;font-size:11px;color:#444;';
+          empty.textContent = 'Recycle Bin is empty.';
+          pane.appendChild(empty);
+        }
+      };
+      build(recycleItems);
+      emptyStatusText = recycleItems.length ? recycleItems.length + ' objects' : 'Recycle Bin is empty';
+      updateSelectionStatus();
+      return;
+    }
+
+    if (cwd === 'DESKTOP') {
+      const desktopItems = getVisibleDesktopIcons().map(ic => ({
+        name: ic.name,
+        kind: ic.recycleBin ? 'dir' : 'file',
+        sysfile: true,
+        recycleBin: !!ic.recycleBin,
+      }));
+      getDesktopShortcutsForDir('DESKTOP').forEach(ic => desktopItems.push({
+        name: ic.name,
+        kind: ic.target.kind === 'dir' ? 'dir' : 'file',
+        sysfile: false,
+        _shortcut: ic,
+      }));
+      const desktopDir = fsGetDir('DESKTOP');
+      if (desktopDir) {
+        desktopDir.dirs.forEach(name => desktopItems.push({ name, kind: 'dir', sysfile: false }));
+        desktopDir.files.forEach((_, name) => desktopItems.push({ name, kind: 'file', sysfile: false }));
+        desktopDir.blobs.forEach((blob, name) => desktopItems.push({ name, kind: blob.kind || inferBlobKindFromName(name), sysfile: false }));
+      }
+      const build = items => {
+        if (viewMode === 'details') {
+          const tbl = document.createElement('table');
+          tbl.className = 'exp-det-tbl';
+          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+          const tbody = document.createElement('tbody');
+          items.forEach(item => tbody.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          tbl.appendChild(tbody);
+          pane.appendChild(tbl);
+        } else if (viewMode === 'list') {
+          const list = document.createElement('div');
+          list.style.cssText = 'display:flex;flex-direction:column;';
+          items.forEach(item => list.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          pane.appendChild(list);
+        } else {
+          const grid = document.createElement('div');
+          grid.className = 'exp-grid';
+          items.forEach(item => grid.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+          pane.appendChild(grid);
+        }
+      };
+      build(desktopItems);
+      emptyStatusText = desktopItems.length + ' objects';
+      updateSelectionStatus();
+      return;
+    }
+
+    const items = [];
+    if (!cwd) {
+      items.push({ name:'DESKTOP', kind:'dir', sysfile:true });
+      items.push({ name:'PROJECTS', kind:'dir', sysfile:true });
+      ['DOCS', ...termFS.dirs].filter((value, index, array) => array.indexOf(value) === index).forEach(dirName => {
+        if (dirName !== 'PROJECTS' && dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
+      });
+      termFS.files.forEach((_, name) => items.push({ name, kind:'file', sysfile:false }));
+      termFS.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
+    } else {
+      const dir = fsGetDir(cwd);
+      if (!dir) {
+        cwd = '';
+        render();
+        return;
+      }
+      if (cwd.startsWith('DESKTOP\\')) {
+        getDesktopSystemIconsForDir(cwd).forEach(ic => items.push({
+          name: ic.name,
+          kind: ic.recycleBin ? 'dir' : 'file',
+          sysfile: true,
+          recycleBin: !!ic.recycleBin,
+        }));
+        getDesktopShortcutsForDir(cwd).forEach(ic => items.push({
+          name: ic.name,
+          kind: ic.target.kind === 'dir' ? 'dir' : 'file',
+          sysfile: false,
+          _shortcut: ic,
+        }));
+      }
+      dir.dirs.forEach(name => {
+        if (cwd === 'CACHE' && name === 'RECYCLE_BIN') return;
+        items.push({ name, kind:'dir', sysfile:false });
+      });
+      dir.files.forEach((_, name) => items.push({ name, kind:'file', sysfile:false }));
+      dir.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
+    }
+
+    if (viewMode === 'details') {
+      const tbl = document.createElement('table');
+      tbl.className = 'exp-det-tbl';
+      tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      items.forEach(item => tbody.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+      tbl.appendChild(tbody);
+      pane.appendChild(tbl);
+    } else if (viewMode === 'list') {
+      const list = document.createElement('div');
+      list.style.cssText = 'display:flex;flex-direction:column;';
+      items.forEach(item => list.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+      pane.appendChild(list);
+    } else {
+      const grid = document.createElement('div');
+      grid.className = 'exp-grid';
+      items.forEach(item => grid.appendChild(makeItem(item.name, item.kind, item.sysfile, item)));
+      pane.appendChild(grid);
+    }
+    emptyStatusText = items.length + ' objects';
+    updateSelectionStatus();
+  }
+
+  upBtn.addEventListener('click', () => {
+    const i = cwd.lastIndexOf('\\');
+    cwd = i >= 0 ? cwd.slice(0, i) : '';
+    render();
+  });
+  refreshBtn.addEventListener('click', () => render());
+
+  pane.addEventListener('click', e => {
+    if (e.target.closest(ITEM_SELECTOR)) return;
+    clearSelection();
+  });
+  pane._shellDropHandler = payload => {
+    if (!payload || cwd === 'PROJECTS' || cwd === 'RECYCLE') return false;
+    if (isDesktopSurfaceTransferBlocked(payload, cwd)) return false;
+    if (!canMoveShellPayloadToDir(payload, cwd)) return false;
+    const ok = doMovePayload(payload, cwd);
+    if (!ok) setExplorerStatus('Move failed.');
+    if (ok) render();
+    return ok;
+  };
+
+  addLongPress(pane);
+  pane.addEventListener('contextmenu', e => {
+    if (e.target.closest(ITEM_SELECTOR)) return;
+    e.preventDefault();
+    clearSelection();
+    const inProjects = cwd === 'PROJECTS';
+    const inRecycle = cwd === 'RECYCLE';
+    showCtxMenu(e.clientX, e.clientY, inProjects ? [
+      { label: 'Refresh', action: render },
+    ] : inRecycle ? [
+      { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
+      '-',
+      { label: 'Refresh', action: render },
+    ] : [
+      { label: 'Open Terminal Here', action: () => openTerminal(cwd) },
+      '-',
+      { label: 'New Folder', action: () => promptCreateFolderAt(cwd, () => render()) },
+      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
+      '-',
+      { label: 'Upload File...', action: () => triggerUpload(cwd) },
+      '-',
+      { label: 'Refresh', action: render },
+    ]);
+  });
+
+  // ── External file drag-and-drop onto the pane ─────────────────
+  let dropOverlay = null;
+  pane.addEventListener('dragenter', e => {
+    if (getShellDragPayload()) return;
+    if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      if (!dropOverlay) {
+        dropOverlay = document.createElement('div');
+        dropOverlay.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,128,0.12);border:2px dashed #000080;pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:#000080;font-weight:bold;z-index:10;';
+        dropOverlay.textContent = 'Drop files to upload';
+        pane.appendChild(dropOverlay);
+      }
+    }
+  });
+  pane.addEventListener('dragover', e => {
+    if (!e.target.closest(ITEM_SELECTOR)) {
+      const payload = getShellDragPayload();
+      if (payload && pane._shellDropHandler && !isDesktopSurfaceTransferBlocked(payload, cwd) && canMoveShellPayloadToDir(payload, cwd)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        return;
+      }
+    }
+    if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
+  pane.addEventListener('dragleave', e => {
+    if (!pane.contains(e.relatedTarget)) {
+      dropOverlay?.remove(); dropOverlay = null;
+    }
+  });
+  pane.addEventListener('drop', e => {
+    dropOverlay?.remove(); dropOverlay = null;
+    const payload = getShellDragPayload();
+    if (payload && !e.target.closest(ITEM_SELECTOR)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (pane._shellDropHandler(payload)) clearShellDragPayload();
+      return;
+    }
+    if (e.dataTransfer.files?.length) {
+      if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+      e.preventDefault();
+      e.stopPropagation();
+      _uploadCwd = cwd;
+      handleFileUpload(e.dataTransfer.files);
+      render();
+      return;
+    }
+    if (e.target.closest(ITEM_SELECTOR)) return;
+  });
+
+  mb.innerHTML = '';
+  [
+    { label: 'File', items: () => cwd === 'PROJECTS' ? [
+      { label: 'Open', disabled: !selected, action: () => { if (selected?._proj) window.open(selected._proj.file, '_blank'); } },
+      '-',
+      { label: 'Close', action: () => closeWin(id) },
+    ] : cwd === 'RECYCLE' ? [
+      { label: 'Restore', disabled: !getSelectedRecycleEntries().length, action: restoreSelectedRecycleEntries },
+      { label: 'Delete Permanently', disabled: !getSelectedRecycleEntries().length, action: deleteSelected },
+      '-',
+      { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
+      '-',
+      { label: 'Close', action: () => closeWin(id) },
+    ] : [
+      { label: 'New Folder', action: () => promptCreateFolderAt(cwd, () => render()) },
+      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
+      '-',
+      { label: 'Open', disabled: !selected, action: () => { if (selected) openItem(selected); } },
+      { label: 'Delete', disabled: !getDeletableSelectedItems().length, action: deleteSelected },
+      '-',
+      { label: 'Upload File...', action: () => triggerUpload(cwd) },
+      '-',
+      { label: 'Close', action: () => closeWin(id) },
+    ]},
+    { label: 'Edit', items: () => [
+      { label: 'Cut',   disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='PROJECTS' || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut'; } },
+      { label: 'Copy',  disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:false}; if(ws) ws.textContent=its.length+' item(s) copied'; } },
+      { label: 'Paste', disabled: !_expClipboard || cwd==='PROJECTS' || cwd==='RECYCLE', action: pasteClipboard },
+      '-',
+      { label: 'Select All', action: () => selectAllVisibleItems() },
+      { label: 'Invert Selection', action: () => invertSelection() },
+      '-',
+      { label: 'Copy Name', disabled: !getSelectedItems().length, action: () => {
+        const text = getSelectedNamesText();
+        if (!text) return;
+        navigator.clipboard?.writeText(text);
+        if (ws) ws.textContent = 'Copied';
+      }},
+      { label: 'Copy Path', disabled: !getSelectedItems().length, action: () => {
+        const text = getSelectedPathsText();
+        if (!text) return;
+        navigator.clipboard?.writeText(text);
+        if (ws) ws.textContent = 'Copied';
+      }},
+      '-',
+      { label: 'Rename', disabled: !getSingleSelectedItem() || getSingleSelectedItem()?.sysfile || getSingleSelectedItem()?._recycle || getSingleSelectedItem()?._shortcut || cwd === 'PROJECTS' || cwd === 'RECYCLE', action: () => renameItem(getSingleSelectedItem()) },
+      { label: 'Delete', disabled: !getDeletableSelectedItems().length || cwd === 'PROJECTS', action: deleteSelected },
+    ]},
+    { label: 'View', items: () => [
+      { label: (viewMode === 'icons' ? '* ' : '  ') + 'Large Icons', action: () => { viewMode = 'icons'; render(); } },
+      { label: (viewMode === 'list' ? '* ' : '  ') + 'List', action: () => { viewMode = 'list'; render(); } },
+      { label: (viewMode === 'details' ? '* ' : '  ') + 'Details', action: () => { viewMode = 'details'; render(); } },
+      '-',
+      { label: 'Refresh', action: render },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item';
+    span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items()); });
+    mb.appendChild(span);
+  });
+
+  // ── Paste helper ─────────────────────────────────────────────
+  function pasteClipboard() {
+    if (!_expClipboard || cwd === 'PROJECTS') return;
+    const dstDir = cwd ? fsGetDir(cwd) : termFS;
+    if (!dstDir) return;
+    let changed = false;
+    _expClipboard.items.forEach(({ name, kind, srcCwd }) => {
+      const srcDirObj = srcCwd ? fsGetDir(srcCwd) : termFS;
+      if (!srcDirObj) return;
+      // Unique name in destination
+      let dstName = name;
+      const hasDst = n => dstDir.files?.has(n) || dstDir.blobs?.has(n) || dstDir.dirs?.has(n.toUpperCase());
+      if (hasDst(dstName)) {
+        const dot = name.lastIndexOf('.');
+        const base = dot > 0 ? name.slice(0, dot) : name;
+        const ext  = dot > 0 ? name.slice(dot) : '';
+        let i = 2;
+        while (hasDst(base + '_copy' + (i > 2 ? i : '') + ext)) i++;
+        dstName = base + '_copy' + (i > 2 ? i : '') + ext;
+      }
+      if (kind === 'dir') {
+        const upper = name.toUpperCase(), dstUpper = dstName.toUpperCase();
+        if (!srcDirObj.dirs?.has(upper)) return;
+        const sub = srcDirObj.subdirs?.get(upper);
+        if (_expClipboard.cut) { srcDirObj.dirs.delete(upper); srcDirObj.subdirs?.delete(upper); }
+        if (!dstDir.subdirs) dstDir.subdirs = new Map();
+        dstDir.dirs.add(dstUpper);
+        if (sub) dstDir.subdirs.set(dstUpper, sub);
+      } else if (srcDirObj.blobs?.has(name)) {
+        const blob = srcDirObj.blobs.get(name);
+        if (_expClipboard.cut) srcDirObj.blobs.delete(name);
+        if (!dstDir.blobs) dstDir.blobs = new Map();
+        dstDir.blobs.set(dstName, { ...blob });
+      } else if (srcDirObj.files?.has(name)) {
+        const content = srcDirObj.files.get(name);
+        if (_expClipboard.cut) srcDirObj.files.delete(name);
+        if (!dstDir.files) dstDir.files = new Map();
+        dstDir.files.set(dstName, content);
+      } else { return; }
+      changed = true;
+    });
+    if (_expClipboard.cut) _expClipboard = null;
+    if (changed) { schedSave(); document.dispatchEvent(new CustomEvent('fs-changed')); render(); }
+  }
+
+  // ── Explorer keyboard shortcuts ───────────────────────────────
+  pane.setAttribute('tabindex', '-1');
+  pane.style.outline = 'none';
+  const winEl = document.getElementById('win-' + id);
+  winEl?.addEventListener('keydown', e => {
+    if (!wins[id]) return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    const items = getSelectedItems().filter(i => !i.sysfile && !i._proj && !i._recycle && !i._shortcut);
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      if (cwd === 'RECYCLE') return;
+      if (!items.length) return;
+      _expClipboard = { items: items.map(i => ({ name: i.name, kind: i.kind, sysfile: i.sysfile, srcCwd: cwd })), cut: false };
+      if (ws) ws.textContent = items.length === 1 ? '"' + items[0].name + '" copied' : items.length + ' items copied';
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+      e.preventDefault();
+      if (cwd === 'RECYCLE') return;
+      if (!items.length) return;
+      _expClipboard = { items: items.map(i => ({ name: i.name, kind: i.kind, sysfile: i.sysfile, srcCwd: cwd })), cut: true };
+      if (ws) ws.textContent = items.length === 1 ? '"' + items[0].name + '" cut' : items.length + ' items cut';
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+      e.preventDefault();
+      pasteClipboard();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      selectAllVisibleItems();
+    } else if (e.key === 'Delete' || e.key === 'Backspace' && e.altKey) {
+      e.preventDefault();
+      if (getDeletableSelectedItems().length) deleteSelected();
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      const single = getSingleSelectedItem();
+      if (single && !single.sysfile && !single._recycle && !single._shortcut && cwd !== 'RECYCLE') renameItem(single);
+    } else if (e.key === 'F5') {
+      e.preventDefault();
+      render();
+    } else if (e.key === 'Escape') {
+      clearSelection();
+    }
+  });
+
+  render();
+
+  function onFsChanged() {
+    if (wins[id]) render();
+    else document.removeEventListener('fs-changed', onFsChanged);
+  }
+  document.addEventListener('fs-changed', onFsChanged);
+}
+
+function openFiles() { openExplorer('PROJECTS'); }
+
+let _termNav = null; // exposes cwd navigation to callers when terminal is already open
+let _termExec = null;
+function openTerminal(startDir, initialCommand) {
+  if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
+    if (startDir && _termNav) _termNav(startDir);
+    if (initialCommand && _termExec) _termExec(initialCommand);
+    return;
+  }
+  const body = document.getElementById('wb-terminal');
+  body.style.padding = '0'; body.style.overflow = 'hidden';
+  body.innerHTML = `
+    <div class="term-wrap" id="tw">
+      <div class="term-out" id="to"></div>
+      <div class="term-in-line">
+        <span class="term-prompt" id="term-prompt">C:\sleepOS&gt;&nbsp;</span>
+        <input class="term-input" id="ti" type="text" autocomplete="off" spellcheck="false">
+      </div>
+    </div>`;
+
+  const out = document.getElementById('to');
+  const inp = document.getElementById('ti');
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const sel = window.getSelection()?.toString();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '📋 Copy',         disabled: !sel, action: () => sel && navigator.clipboard?.writeText(sel) },
+      { label: '📄 Paste',        action: () => navigator.clipboard?.readText().then(t => { inp.value += t; inp.focus(); }) },
+      '-',
+      { label: '🧹 Clear Screen', action: () => { out.innerHTML = ''; } },
+      '-',
+      { label: 'Close',           action: () => closeWin('terminal') },
+    ]);
+  });
+
+  const print = (text, color) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    if (color) div.style.color = color;
+    out.appendChild(div);
+    out.scrollTop = out.scrollHeight;
+  };
+
+  print('sleepOS Command Processor v2.33');
+  print('Copyright (C) MMXXI Eve Networks Corp.');
+  print('');
+  print('Type HELP for available commands.');
+  print('');
+
+  let cmdHistory = [], histIdx = -1;
+  let cwd = startDir ? startDir.toUpperCase() : ''; // '' = root, 'DOCS' = DOCS dir, etc.
+  const DEFAULT_SHELL_VARS = {
+    COMPUTERNAME: 'SOMA-686',
+    USERNAME: 'VISITOR',
+    OS: 'sleepOS 0.9b2',
+    SOUL_INTEGRITY: '87',
+    DAEMON_COUNT: '7',
+    DAEMON_KNOWN: '4',
+    TEMPORAL_DRIFT: '+/-2.3yr',
+    VOID_PRESSURE: '12',
+    OBSERVER_COUNT: '[classified]',
+    PATH: 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+  };
+  let shellVars = Object.assign(Object.create(null), DEFAULT_SHELL_VARS);
+  let promptOverride = '';
+  let activeCommandController = null;
+  let pendingRead = null;
+
+  function getPromptStr() {
+    return cwd ? `C:\\sleepOS\\${cwd}>` : 'C:\\sleepOS>';
+  }
+  function getActivePromptStr() {
+    return promptOverride || getPromptStr();
+  }
+  function updatePrompt() {
+    const el = document.getElementById('term-prompt');
+    if (el) el.textContent = getActivePromptStr() + '\u00a0';
+  }
+  function setPromptOverride(text) {
+    promptOverride = String(text || '').trim();
+    updatePrompt();
+  }
+
+  function getCurrentCommandSignal() {
+    return activeCommandController ? activeCommandController.signal : null;
+  }
+
+  function refreshTerminalInputMode() {
+    inp.readOnly = !!activeCommandController && !pendingRead;
+  }
+
+  function interruptActiveCommand() {
+    if (!activeCommandController && !pendingRead) return false;
+    const err = makeAbortError();
+    if (pendingRead) {
+      const { reject } = pendingRead;
+      pendingRead = null;
+      setPromptOverride('');
+      if (reject) reject(err);
+    }
+    if (activeCommandController && !activeCommandController.signal.aborted) {
+      activeCommandController.abort(err);
+    }
+    inp.value = '';
+    refreshTerminalInputMode();
+    print('^C', '#ff4444');
+    inp.focus();
+    return true;
+  }
+
+  // Allow openTerminal(dir) to navigate us when already open
+  _termNav = (dir) => { cwd = dir.toUpperCase(); updatePrompt(); print(`\nChanged directory to C:\\sleepOS\\${cwd}`); };
+
+  updatePrompt(); // set prompt correctly if startDir was given
+
+  function unquoteShellValue(value) {
+    const trimmed = String(value ?? '').trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+      return trimmed.slice(1, -1).replace(/\\(["'])/g, '$1');
+    }
+    return trimmed;
+  }
+
+  function parseTerminalDelayMs(value) {
+    const ms = scriptParseNumber(unquoteShellValue(value));
+    if (ms === null || ms < 0) throw new Error('Usage: SLEEP <ms>');
+    return Math.floor(ms);
+  }
+
+  function resolveShellText(text) {
+    return scriptResolveText(String(text ?? ''), shellVars);
+  }
+
+  function normalizeTerminalReadPrompt(text) {
+    const trimmed = String(text || '').trim();
+    return trimmed || 'INPUT:';
+  }
+
+  function readTerminalLine(promptText) {
+    if (pendingRead) throw new Error('Another INPUT request is already pending.');
+    throwIfAborted(getCurrentCommandSignal());
+    const normalizedPrompt = normalizeTerminalReadPrompt(promptText);
+    return new Promise((resolve, reject) => {
+      pendingRead = { promptText: normalizedPrompt, resolve, reject };
+      setPromptOverride(normalizedPrompt);
+      refreshTerminalInputMode();
+      inp.focus();
+    });
+  }
+
+  function getCommandParts(segment) {
+    const trimmed = String(segment || '').trim();
+    if (!trimmed) return { cmd: '', args: '' };
+    const sp = trimmed.search(/\s/);
+    return sp === -1
+      ? { cmd: trimmed.toLowerCase(), args: '' }
+      : { cmd: trimmed.slice(0, sp).toLowerCase(), args: trimmed.slice(sp + 1).trim() };
+  }
+
+  function splitUnquoted(text, delimiter) {
+    const parts = [];
+    let quote = null;
+    let start = 0;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quote) {
+        if (ch === quote && text[i - 1] !== '\\') quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+      if (ch === delimiter) {
+        parts.push(text.slice(start, i));
+        start = i + 1;
+      }
+    }
+    parts.push(text.slice(start));
+    return parts;
+  }
+
+  function findLastUnquotedRedirect(text) {
+    let quote = null;
+    let found = null;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quote) {
+        if (ch === quote && text[i - 1] !== '\\') quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+      if (ch === '>') {
+        const op = text[i + 1] === '>' ? '>>' : '>';
+        found = { index: i, op };
+        if (op === '>>') i++;
+      }
+    }
+    return found;
+  }
+
+  function parseShellLine(text) {
+    const trimmed = String(text || '').trim();
+    if (!trimmed) return null;
+    const redirect = findLastUnquotedRedirect(trimmed);
+    let commandText = trimmed;
+    let redirectOp = null;
+    let redirectTarget = '';
+    if (redirect) {
+      commandText = trimmed.slice(0, redirect.index).trim();
+      redirectOp = redirect.op;
+      redirectTarget = trimmed.slice(redirect.index + redirect.op.length).trim();
+    }
+    return {
+      stages: splitUnquoted(commandText, '|').map(part => part.trim()).filter(Boolean),
+      redirectOp,
+      redirectTarget,
+    };
+  }
+
+  function applyShellSet(rawArgs) {
+    const text = String(rawArgs ?? '').trim();
+    if (!text) return buildSetLines();
+
+    let match = text.match(/^(\w+)=(.*)$/);
+    if (match) {
+      const key = match[1];
+      if (match[2] === '') {
+        delete shellVars[key];
+      } else {
+        shellVars[key] = scriptStripOuterQuotes(resolveShellText(match[2]));
+      }
+      return [];
+    }
+
+    match = resolveShellText(text).match(/^(\w+)(?:\s+(.*))?$/);
+    if (!match) throw new Error('Usage: SET [name[=value] | name value]');
+    if (match[2] === undefined) return buildSetLines(match[1]);
+
+    shellVars[match[1]] = scriptStripOuterQuotes(match[2]);
+    return [];
+  }
+
+  function runShellNumericCommand(op, rawArgs) {
+    const resolved = resolveShellText(rawArgs).trim();
+    const match = resolved.match(/^(\w+)(?:\s+(.+))?$/);
+    if (!match) {
+      const usage = op === 'mul' || op === 'div' || op === 'mod'
+        ? `Usage: ${op.toUpperCase()} <var> <amount>`
+        : `Usage: ${op.toUpperCase()} <var> [amount]`;
+      throw new Error(usage);
+    }
+    const nextValue = scriptMutateNumericVar(shellVars, match[1], op, match[2] === undefined ? undefined : scriptStripOuterQuotes(match[2]), 0);
+    return [`${match[1]}=${nextValue}`];
+  }
+
+  async function runShellInputCommand(rawArgs) {
+    const resolved = resolveShellText(rawArgs).trim();
+    const match = resolved.match(/^(\w+)(?:\s+(.+))?$/);
+    if (!match) throw new Error('Usage: INPUT <var> [prompt]');
+    const key = match[1];
+    const prompt = match[2] ? scriptStripOuterQuotes(match[2]) : key + ':';
+    const value = await readTerminalLine(prompt);
+    shellVars[key] = value;
+    return [value];
+  }
+
+  function findTerminalProject(key) {
+    return PROJECTS.find(p =>
+      p.file.toLowerCase() === key ||
+      p.file.toLowerCase().replace('.html', '') === key ||
+      p.name.toLowerCase() === key ||
+      p.name.toLowerCase().replace(/ /g, '-') === key
+    );
+  }
+
+  function launchTerminalTarget(rawTarget) {
+    const key = resolveShellText(rawTarget).trim().toLowerCase();
+    if (!key) return false;
+    if (key === 'void.tmp' && daemonStory.endingReached) {
+      print('void.tmp is no longer present.');
+      return true;
+    }
+
+    const openExplorerAtCwd = () => openExplorer(cwd || '');
+    const launchers = {
+      'welcome.readme': { lines: ['Opening WELCOME.README...'], action: openWelcome },
+      welcome: { lines: ['Opening WELCOME.README...'], action: openWelcome },
+      'notepad.exe': { lines: ['Opening Notepad...'], action: () => openNotepad(undefined, cwd) },
+      notepad: { lines: ['Opening Notepad...'], action: () => openNotepad(undefined, cwd) },
+      'terminal.exe': { lines: ['TERMINAL.exe is already running.', 'You are inside it.'] },
+      terminal: { lines: ['TERMINAL.exe is already running.', 'You are inside it.'] },
+      'explorer.exe': { lines: ['Opening File Explorer...'], action: openExplorerAtCwd },
+      explorer: { lines: ['Opening File Explorer...'], action: openExplorerAtCwd },
+      files: { lines: ['Opening Files...'], action: openFiles },
+      'sysmon.exe': { lines: ['Starting SYSMON.exe...'], action: openSysmon },
+      sysmon: { lines: ['Starting SYSMON.exe...'], action: openSysmon },
+      'browser.exe': { lines: ['Starting BROWSER.exe...'], action: openBrowser },
+      browser: { lines: ['Starting BROWSER.exe...'], action: openBrowser },
+      'defrag.exe': { lines: ['Starting DEFRAG.exe...'], action: openDefrag },
+      defrag: { lines: ['Starting DEFRAG.exe...'], action: openDefrag },
+      'calc.exe': { lines: ['Starting CALC.exe...'], action: openCalculator },
+      calc: { lines: ['Starting CALC.exe...'], action: openCalculator },
+      'regedit.exe': { lines: ['Starting REGEDIT.exe...'], action: openRegedit },
+      regedit: { lines: ['Starting REGEDIT.exe...'], action: openRegedit },
+      'daemon.core': {
+        lines: ['Opening daemon.core...'],
+        action: openDaemon,
+        delay: 320,
+      },
+      'void.tmp': { lines: ['Opening void.tmp...'], action: openVoid },
+      '?????.exe': { lines: ['Executing ?????.exe...'], action: openUnknown },
+      '?????': { lines: ['Executing ?????.exe...'], action: openUnknown },
+    };
+
+    const entry = launchers[key];
+    if (entry) {
+      (entry.lines || []).forEach(line => print(line));
+      if (entry.action) setTimeout(entry.action, entry.delay ?? 300);
+      return true;
+    }
+
+    const project = findTerminalProject(key);
+    if (!project) return false;
+    print(`Launching ${project.name}...`);
+    print('Opening in new tab.');
+    setTimeout(() => window.open(project.file, '_blank'), 400);
+    return true;
+  }
+
+  function expandGlob(pattern) {
+    const dir = fsGetDir(cwd);
+    if (!dir) return [pattern];
+    const allNames = [...dir.files.keys(), ...dir.blobs.keys()];
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+    const re = new RegExp('^' + escaped + '$', 'i');
+    const matches = allNames.filter(n => re.test(n));
+    return matches.length ? matches : [pattern];
+  }
+
+  function buildHelpLines() {
+    return [
+      'Available commands:',
+      '  HELP                - show this help',
+      '  DIR, LS             - list directory',
+      '  CD [path]           - change directory',
+      '  MKDIR [name]        - create a directory',
+      '  TOUCH [name]        - create empty file',
+      '  ECHO [text]         - print text',
+      '  DEL, RM [file]      - delete a file or directory',
+      '  COPY [src] [dst]    - copy a file',
+      '  MOVE, MV            - move a file',
+      '  TYPE, CAT [file]    - read file contents',
+      '  GREP <pattern> [f]  - filter a file or piped text',
+      '  WC [file]           - count lines, words, bytes',
+      '  TREE                - directory tree',
+      '  PS                  - list running processes',
+      '  TASKKILL [pid]      - terminate a process',
+      '  IPCONFIG            - network configuration',
+      '  SET                 - show environment variables',
+      '  PING [host]         - ping a host',
+      '  SLEEP <ms>          - pause for a number of milliseconds',
+      '  VER                 - show OS version',
+      '  WHO, WHOAMI         - current user info',
+      '  DATE                - system date',
+      '  CLS                 - clear screen',
+      '  OPEN [file]         - open a file (image/video in viewer, text in editor)',
+      '  RUN <file>          - execute a .script file',
+      '  NOTEPAD [file]      - open Notepad (optionally open a file)',
+      '  START [program]     - run an executable or project',
+      '  EXIT                - close terminal',
+      '',
+      'Pipes and redirection:',
+      '  DIR | GREP txt',
+      '  CAT README.txt | NOTEPAD',
+      '  DIR > listing.txt',
+      '  CAT README.txt | GREP TODO >> notes.txt',
+      '',
+      'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
+      '  Scripts now support labels, goto, if, inc, and dec.',
+      '',
+      'You can also type executables directly:',
+      '  notepad.exe, sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
+      '  or any project name (try: fireworks, fluid, ...)',
+    ];
+  }
+
+  function buildDirLines(args) {
+    const targetArg = (args || '').trim();
+    if (targetArg && /[*?]/.test(targetArg)) return expandGlob(targetArg);
+    const targetCwd = targetArg ? targetArg.toUpperCase() : cwd;
+    const dir = fsGetDir(targetCwd);
+    if (!dir) throw new Error(`Directory not found: ${args}`);
+    const path = targetCwd ? `C:\\sleepOS\\${targetCwd}` : 'C:\\sleepOS';
+    const now = new Date();
+    const ds = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()}`;
+    const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const lines = [
+      'Volume in drive C is CORPUS',
+      'Volume Serial Number is DEAD-C0DE',
+      '',
+      `Directory of ${path}`,
+      '',
+    ];
+    if (!targetCwd) {
+      [
+        `11/13/2024  10:31    <DIR>    .`,
+        `11/13/2024  10:31    <DIR>    ..`,
+        `11/13/2024  10:31    <DIR>    DOCS`,
+        `11/13/2024  10:31    <DIR>    PROJECTS`,
+      ].forEach(line => lines.push(line));
+      getTerminalRootSystemEntries({ includeExplorer: true }).forEach(entry => {
+        lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
+      });
+      termFS.dirs.forEach(d => { if (d !== 'DOCS') lines.push(`${ds}  ${ts}    <DIR>    ${d}`); });
+      termFS.files.forEach((c, n) => lines.push(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
+      termFS.blobs.forEach((b, n) => lines.push(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+    } else {
+      dir.dirs.forEach(d => lines.push(`${ds}  ${ts}    <DIR>    ${d}`));
+      dir.files.forEach((c, n) => lines.push(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
+      dir.blobs.forEach((b, n) => lines.push(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+      if (dir.files.size + dir.blobs.size + dir.dirs.size === 0) lines.push('  (empty directory)');
+    }
+    lines.push('');
+    return lines;
+  }
+
+  function buildPsLines() {
+    const lines = [
+      '  PID   CPU    MEM   PROCESS',
+      '  ---   ---    ---   -------',
+    ];
+    getBuiltInProcesses().forEach(proc => {
+      lines.push(`  ${String(proc.pid).padStart(4, '0')}  ${String(proc.cpu.toFixed(1)).padStart(3)}%  ${String(proc.mem.toFixed(1)).padStart(4)}%  ${proc.name}`);
+    });
+    [['0333', '0.0%', ' 0.1%', 'UNKNOWN'], ['0334', '0.0%', ' 0.1%', 'UNKNOWN'], ['0335', '0.0%', ' 0.1%', 'UNKNOWN']]
+      .forEach(([pid, cpu, mem, name]) => lines.push(`  ${pid}  ${cpu}  ${mem}  ${name}`));
+    return lines;
+  }
+
+  function buildVerLines() {
+    return [
+      'sleepOS Version 0.9β (Build 2024.11.13-EXPERIMENTAL)',
+      'Soul Architecture: SOMA-686  /  Corpus Mode: ACTIVE',
+    ];
+  }
+
+  function buildWhoLines() {
+    return [
+      'Current user : VISITOR\\UNKNOWN',
+      'Domain       : sleepOS.CORPUS',
+      'Session ID   : 0x' + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6, '0'),
+      'Observers    : unknown (cannot enumerate)',
+    ];
+  }
+
+  function buildDateLines() {
+    const now = new Date();
+    return [
+      'System date: ' + now.toDateString(),
+      'NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.',
+    ];
+  }
+
+  function buildSetLines() {
+    return [
+      'COMPUTERNAME=SOMA-686',
+      'USERNAME=VISITOR',
+      'OS=sleepOS 0.9b2',
+      'SOUL_INTEGRITY=87',
+      'DAEMON_COUNT=7',
+      'DAEMON_KNOWN=4',
+      'TEMPORAL_DRIFT=+/-2.3yr',
+      'VOID_PRESSURE=12',
+      'OBSERVER_COUNT=[classified]',
+      'PATH=C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+    ];
+  }
+
+  function buildIpconfigLines() {
+    return [
+      'sleepOS IP Configuration',
+      '',
+      'Adapter: SOMA-686 NIC',
+      '  Connection-specific DNS  : corpus.internal',
+      '  IPv4 Address             : 0.0.0.0',
+      '  Subnet Mask              : 255.255.255.???',
+      '  Default Gateway          : [unreachable]',
+      '  DNS Servers              : unknown (responding)',
+      '',
+      'Adapter: VOID Interface',
+      '  Status                   : Connected',
+      '  Address                  : [cannot be expressed]',
+      '  Packets in               : ∞',
+      '  Packets out              : 0',
+    ];
+  }
+
+  function buildTreeLines() {
+    const lines = ['C:\\sleepOS', '├── DOCS\\'];
+    const docs = fsGetDir('DOCS');
+    [...docs.files.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
+    termFS.dirs.forEach(d => {
+      if (d === 'DOCS') return;
+      lines.push(`├── ${d}\\`);
+      const sub = termFS.subdirs?.get(d);
+      if (sub) {
+        [...sub.files.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
+        [...sub.blobs.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
+      }
+    });
+    getRootSystemFiles({ includeExplorer: true }).forEach(name => {
+      let label = name;
+      if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
+      if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
+      lines.push(`├── ${label}`);
+    });
+    termFS.files.forEach((_, n) => lines.push(`├── ${n}`));
+    termFS.blobs.forEach((b, n) => lines.push(`├── ${n}  [${b.kind}]`));
+    lines.push('└── PROJECTS\\');
+    lines.push('    ├── sand playground');
+    lines.push('    ├── fireworks');
+    lines.push('    ├── ... (more objects)');
+    lines.push('    └── [1 object cannot be listed]');
+    return lines;
+  }
+
+  function getPipeableText(path) {
+    const { dirName, fileName } = fsSplitPath(path, cwd);
+    const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
+    if (upperPath === 'DAEMON.CORE') {
+      daemonActivate('raw');
+      return buildDaemonCoreRawContent().split('\n');
+    }
+    if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
+      daemonRecordInvestigation('void');
+      return getVoidTmpContent().split('\n');
+    }
+    const entry = fsGetEntry(path, cwd);
+    if (!entry) throw new Error('File not found: ' + path);
+    if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
+    if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
+    if (entry.kind === 'blob') {
+      return [
+        `Binary file: ${entry.fileName} (${entry.value.kind}, ${fmtSize(entry.value.size)})`,
+        `Use OPEN ${entry.fileName} to view it.`,
+      ];
+    }
+    return entry.value ? entry.value.split('\n') : [];
+  }
+
+  async function buildPingLines(args, signal) {
+    const host = (args || 'evenet.fun').trim().replace(/^https?:\/\//i, '').replace(/[/?#].*$/, '');
+    const lines = [`Pinging ${host} with 32 bytes of data:`];
+    const times = [];
+    let received = 0;
+    for (let i = 0; i < 4; i++) {
+      throwIfAborted(signal);
+      if (i > 0) await scriptSleep(1000, signal);
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const abortFetch = () => ctrl.abort();
+      if (signal) signal.addEventListener('abort', abortFetch, { once: true });
+      const t0 = performance.now();
+      try {
+        await fetch(`https://${host}/`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+        clearTimeout(tid);
+        const ms = Math.round(performance.now() - t0);
+        times.push(ms);
+        received++;
+        lines.push(`Reply from ${host}: bytes=32 time=${ms}ms TTL=57`);
+      } catch (e) {
+        clearTimeout(tid);
+        if (signal) signal.removeEventListener('abort', abortFetch);
+        if (signal?.aborted) throw signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError();
+        lines.push(`Request timeout for ${host}.`);
+        continue;
+      }
+      if (signal) signal.removeEventListener('abort', abortFetch);
+    }
+    lines.push('');
+    lines.push(`Ping statistics for ${host}:`);
+    const lost = 4 - received;
+    lines.push(`  Packets: Sent = 4, Received = ${received}, Lost = ${lost} (${Math.round(lost / 4 * 100)}% loss)`);
+    if (times.length) {
+      lines.push(`Approximate round trip times: Min=${Math.min(...times)}ms  Max=${Math.max(...times)}ms  Avg=${Math.round(times.reduce((a, b) => a + b) / times.length)}ms`);
+    }
+    return lines;
+  }
+
+  function buildHelpLines() {
+    return [
+      'Available commands:',
+      '  HELP                - show this help',
+      '  DIR, LS             - list directory',
+      '  CD [path]           - change directory',
+      '  MKDIR [name]        - create a directory',
+      '  TOUCH [name]        - create empty file',
+      '  ECHO [text]         - print text',
+      '  PRINT [text]        - alias for ECHO',
+      '  DEL, RM [file]      - delete a file or directory',
+      '  COPY [src] [dst]    - copy a file',
+      '  MOVE, MV            - move a file',
+      '  TYPE, CAT [file]    - read file contents',
+      '  GREP <pattern> [f]  - filter a file or piped text',
+      '  WC [file]           - count lines, words, bytes',
+      '  TREE                - directory tree',
+      '  PS                  - list running processes',
+      '  TASKKILL [pid]      - terminate a process',
+      '  IPCONFIG            - network configuration',
+      '  SET [name=value]    - show or assign shell variables',
+      '  INPUT <var> [text]  - read a line into a shell variable',
+      '  INC, DEC <var> [n]  - adjust numeric shell variables',
+      '  ADD, SUB, MUL, DIV, MOD - arithmetic on shell variables',
+      '  PING [host]         - ping a host',
+      '  SLEEP <ms>          - pause for a number of milliseconds',
+      '  WAIT <ms>           - alias for SLEEP',
+      '  VER                 - show OS version',
+      '  WHO, WHOAMI         - current user info',
+      '  DATE                - system date',
+      '  CLS                 - clear screen',
+      '  CLEAR               - alias for CLS',
+      '  OPEN [file]         - open a file (image/video in viewer, text in editor)',
+      '  RUN <file> [args]   - execute a .script file',
+      '  NOTEPAD [file]      - open Notepad (optionally open a file)',
+      '  START [program]     - run an executable or project',
+      '  EXIT                - close terminal',
+      '',
+      'Pipes and redirection:',
+      '  DIR | GREP txt',
+      '  CAT README.txt | NOTEPAD',
+      '  DIR > listing.txt',
+      '  CAT README.txt | GREP TODO >> notes.txt',
+      '',
+      'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
+      '  Scripts support labels, subroutines, args, existence tests, and status codes.',
+      '',
+      'You can also type executables directly:',
+      '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
+      '  welcome.readme, void.tmp, daemon.core, ?????.exe',
+      '  or any project name (try: fireworks, fluid, ...)',
+    ];
+  }
+
+  function buildSetLines(nameFilter) {
+    const keys = Object.keys(shellVars).sort((a, b) => a.localeCompare(b));
+    if (!nameFilter) return keys.map(key => `${key}=${shellVars[key]}`);
+    return Object.prototype.hasOwnProperty.call(shellVars, nameFilter)
+      ? [`${nameFilter}=${shellVars[nameFilter]}`]
+      : [`Variable not defined: ${nameFilter}`];
+  }
+
+  async function runPipeStage(cmd, args, stdinLines) {
+    cmd = ({ print: 'echo', wait: 'sleep', clear: 'cls' }[cmd] || cmd);
+    if (cmd === 'echo') return [unquoteShellValue(resolveShellText(args))];
+    if (cmd === 'help') return buildHelpLines();
+    if (cmd === 'dir' || cmd === 'ls') return buildDirLines(resolveShellText(args));
+    if (cmd === 'ps') return buildPsLines();
+    if (cmd === 'ver') return buildVerLines();
+    if (cmd === 'who' || cmd === 'whoami') return buildWhoLines();
+    if (cmd === 'date') return buildDateLines();
+    if (cmd === 'set') return applyShellSet(args);
+    if (cmd === 'input') return runShellInputCommand(args);
+    if (cmd === 'inc' || cmd === 'dec' || cmd === 'add' || cmd === 'sub' || cmd === 'mul' || cmd === 'div' || cmd === 'mod') {
+      return runShellNumericCommand(cmd, args);
+    }
+    if (cmd === 'ipconfig') return buildIpconfigLines();
+    if (cmd === 'tree') return buildTreeLines();
+    if (cmd === 'ping') return buildPingLines(resolveShellText(args), getCurrentCommandSignal());
+    if (cmd === 'sleep') {
+      await scriptSleep(parseTerminalDelayMs(resolveShellText(args)), getCurrentCommandSignal());
+      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+    }
+    if (cmd === 'cls') {
+      out.innerHTML = '';
+      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+    }
+    if (cmd === 'cat' || cmd === 'type') {
+      const target = resolveShellText(args).trim();
+      if (target) return getPipeableText(target);
+      if (Array.isArray(stdinLines)) return stdinLines.slice();
+      throw new Error('Usage: CAT [file]');
+    }
+    if (cmd === 'grep') {
+      const match = resolveShellText(args).trim().match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)(?:\s+(.+))?$/);
+      if (!match) throw new Error('Usage: GREP <pattern> [file]');
+      const pattern = unquoteShellValue(match[1]);
+      const target = match[2] ? unquoteShellValue(match[2]) : '';
+      let re;
+      try { re = new RegExp(pattern, 'i'); } catch (e) { throw new Error('Invalid regex: ' + pattern); }
+      const sourceLines = target ? getPipeableText(target) : Array.isArray(stdinLines) ? stdinLines.slice() : null;
+      if (!sourceLines) throw new Error('Usage: GREP <pattern> [file]');
+      return sourceLines.filter(line => re.test(line));
+    }
+    if (cmd === 'wc') {
+      let sourceText = '';
+      let label = '';
+      const targetArg = resolveShellText(args).trim();
+      if (targetArg) {
+        const target = unquoteShellValue(targetArg);
+        const entry = fsGetEntry(target, cwd);
+        if (!entry || entry.kind !== 'text') throw new Error('File not found: ' + target);
+        sourceText = entry.value;
+        label = '  ' + entry.fileName;
+      } else if (Array.isArray(stdinLines)) {
+        sourceText = stdinLines.join('\n');
+      } else {
+        throw new Error('Usage: WC [file]');
+      }
+      const lines = sourceText ? sourceText.split('\n').length : 0;
+      const words = sourceText.trim() ? sourceText.trim().split(/\s+/).length : 0;
+      const bytes = new TextEncoder().encode(sourceText).length;
+      return [`  ${String(lines).padStart(6)}  ${String(words).padStart(6)}  ${String(bytes).padStart(6)}${label}`];
+    }
+    return null;
+  }
+
+  function writePipelineOutput(targetPath, lines, append) {
+    const normalizedTarget = unquoteShellValue(resolveShellText(targetPath));
+    if (!normalizedTarget) throw new Error('Missing redirect target.');
+    const existing = fsGetEntry(normalizedTarget, cwd);
+    if (existing && existing.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
+    const output = lines.join('\n');
+    const existingText = existing && existing.kind === 'text' ? existing.value : '';
+    const nextValue = append
+      ? (existingText && output ? existingText + '\n' + output : existingText + output)
+      : output;
+    const saved = fsWriteTextFile(normalizedTarget, nextValue, cwd);
+    if (!saved) throw new Error('Cannot write file: ' + normalizedTarget);
+    document.dispatchEvent(new CustomEvent('fs-changed'));
+    return saved;
+  }
+
+  async function tryExecutePipeline(raw) {
+    const parsed = parseShellLine(raw);
+    if (!parsed || (!parsed.redirectOp && parsed.stages.length < 2)) return false;
+    if (!parsed.stages.length) {
+      print('Invalid command pipeline.', '#ff4444');
+      print('');
+      return true;
+    }
+    try {
+      let stream = null;
+      let consumedBySink = false;
+      for (let i = 0; i < parsed.stages.length; i++) {
+        const { cmd, args } = getCommandParts(parsed.stages[i]);
+        if (!cmd) throw new Error('Invalid command pipeline.');
+        const isLastStage = i === parsed.stages.length - 1;
+        if (isLastStage && (cmd === 'notepad' || cmd === 'notepad.exe')) {
+          const content = Array.isArray(stream) ? stream.join('\n') : '';
+          const target = args.trim();
+          if (target) {
+            const saved = writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
+            print(`Opening ${saved.fileName} in Notepad...`);
+            setTimeout(() => openNotepad(saved.fileName, saved.dirName), 300);
+          } else {
+            print('Opening piped output in Notepad...');
+            setTimeout(() => openNotepad(undefined, cwd, { initialContent: content }), 300);
+          }
+          consumedBySink = true;
+          break;
+        }
+        const result = await runPipeStage(cmd, args, stream);
+        if (!result) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
+        stream = result;
+      }
+      if (parsed.redirectOp) {
+        if (consumedBySink) throw new Error('Cannot redirect output after piping into Notepad.');
+        const saved = writePipelineOutput(parsed.redirectTarget, Array.isArray(stream) ? stream : [], parsed.redirectOp === '>>');
+        print(`${parsed.redirectOp === '>>' ? 'Appended' : 'Wrote'}: ${saved.fileName}`);
+      } else if (!consumedBySink) {
+        (stream || []).forEach(line => print(line));
+      }
+    } catch (err) {
+      print(err.message || String(err), '#ff4444');
+    }
+    print('');
+    return true;
+  }
+
+  const CMDS = {
+    help: () => {
+      buildHelpLines().forEach(l => print(l));
+      return;
+      [
+        'Available commands:',
+        '  HELP            - show this help',
+        '  DIR, LS         - list directory',
+        '  CD [path]       - change directory',
+        '  MKDIR [name]    - create directory',
+        '  TOUCH [name]    - create empty file',
+        '  cmd > file      - redirect command output (>> to append)',
+        '  DEL, RM [file]  - delete a file or directory',
+        '  COPY [src] [dst]- copy a file',
+        '  MOVE, MV        - move a file',
+        '  TYPE [file]     - print file contents',
+        '  TREE            - directory tree',
+        '  PS              - list running processes',
+        '  TASKKILL [pid]  - terminate a process',
+        '  IPCONFIG        - network configuration',
+        '  SET             - show environment variables',
+        '  CAT [file]      - read a file',
+        '  PING [host]     - ping a host',
+        '  ECHO [text]     - echo text',
+        '  VER             - show OS version',
+        '  WHO, WHOAMI     - current user info',
+        '  DATE            - system date',
+        '  CLS             - clear screen',
+        '  OPEN [file]     - open a file (image/video in viewer, text in editor)',
+        '  RUN <file>      - execute a .script file',
+        '  NOTEPAD [file]  - open Notepad (optionally open a file)',
+        '  cmd | NOTEPAD   - open piped output in Notepad',
+        '  START [program] - run an executable or project',
+        '  EXIT            - close terminal',
+        '',
+        'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
+        '',
+        'You can also type executables directly:',
+        '  notepad.exe, sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
+        '  or any project name (try: fireworks, fluid, ...)',
+      ].forEach(l => print(l));
+    },
+    dir: (args) => {
+      const targetCwd = args ? args.trim().toUpperCase() : cwd;
+      const dir = fsGetDir(targetCwd);
+      if (!dir) { print(`Directory not found: ${args}`); return; }
+      const path = targetCwd ? `C:\\sleepOS\\${targetCwd}` : 'C:\\sleepOS';
+      print('Volume in drive C is CORPUS');
+      print('Volume Serial Number is DEAD-C0DE');
+      print('');
+      print(`Directory of ${path}`);
+      print('');
+      const now = new Date();
+      const ds = `${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')}/${now.getFullYear()}`;
+      const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      if (!targetCwd) {
+        // Root: show system entries
+        [
+          `11/13/2024  10:31    <DIR>    .`,
+          `11/13/2024  10:31    <DIR>    ..`,
+          `11/13/2024  10:31    <DIR>    DOCS`,
+          `11/13/2024  10:31    <DIR>    PROJECTS`,
+          `11/13/2024  10:31    4,096    TERMINAL.exe`,
+          `11/13/2024  10:31    8,192    SYSMON.exe`,
+          `11/13/2024  03:17        0    void.tmp`,
+          `11/13/2024  ??:??       ??    daemon.core`,
+          `11/13/2024  ??:??       ??    ?????.exe`,
+        ].forEach(l => print(l));
+        termFS.dirs.forEach(d => { if (d !== 'DOCS') print(`${ds}  ${ts}    <DIR>    ${d}`); });
+        termFS.files.forEach((c, n) => print(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
+        termFS.blobs.forEach((b, n) => print(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+      } else {
+        dir.dirs.forEach(d => print(`${ds}  ${ts}    <DIR>    ${d}`));
+        dir.files.forEach((c, n) => print(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
+        dir.blobs.forEach((b, n) => print(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+        if (dir.files.size + dir.blobs.size + dir.dirs.size === 0) print('  (empty directory)');
+      }
+      print('');
+    },
+    ls: (args) => CMDS.dir(args),
+    ps: () => {
+      print('  PID   CPU    MEM   PROCESS');
+      print('  ---   ---    ---   -------');
+      [
+        ['0001', '0.0%', ' 2.1%', 'System Idle'],
+        ['0004', '0.3%', ' 4.8%', 'kernel.exe'],
+        ['0088', '1.2%', '12.4%', 'sleep_gui.exe'],
+        ['0112', '0.8%', ' 8.3%', 'dream_fragment.exe'],
+        ['0247', '3.1%', '22.7%', 'noise_engine.exe'],
+        ['0333', '0.0%', ' 0.1%', 'UNKNOWN'],
+        ['0334', '0.0%', ' 0.1%', 'UNKNOWN'],
+        ['0335', '0.0%', ' 0.1%', 'UNKNOWN'],
+        ['0512', '7.4%', '31.2%', 'soul_daemon.exe'],
+        ['0999', '0.0%', '  ???', 'void.exe'],
+      ].forEach(([pid, cpu, mem, name]) => {
+        const isUnk = name === 'UNKNOWN';
+        print(`  ${pid}  ${cpu}  ${mem}  ${name}`, isUnk ? '#ff4444' : undefined);
+      });
+    },
+    ver: () => {
+      print('sleepOS Version 0.9\u03b2 (Build 2024.11.13-EXPERIMENTAL)');
+      print('Soul Architecture: SOMA-686  /  Corpus Mode: ACTIVE');
+    },
+    who: () => {
+      print('Current user : VISITOR\\UNKNOWN');
+      print('Domain       : sleepOS.CORPUS');
+      print('Session ID   : 0x' + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6,'0'));
+      print('Observers    : unknown (cannot enumerate)');
+    },
+    date: () => {
+      const now = new Date();
+      print('System date: ' + now.toDateString());
+      print('NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.');
+    },
+    ping: async (args) => {
+      const host = (args || 'evenet.fun').trim().replace(/^https?:\/\//i,'').replace(/[/?#].*$/,'');
+      print(`Pinging ${host} with 32 bytes of data:`);
+      const times = []; let received = 0;
+      for (let i = 0; i < 4; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 1000));
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4000);
+        const t0 = performance.now();
+        try {
+          await fetch(`https://${host}/`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+          clearTimeout(tid);
+          const ms = Math.round(performance.now() - t0);
+          times.push(ms); received++;
+          print(`Reply from ${host}: bytes=32 time=${ms}ms TTL=57`);
+        } catch(e) {
+          clearTimeout(tid);
+          print(`Request timeout for ${host}.`);
+        }
+      }
+      print('');
+      print(`Ping statistics for ${host}:`);
+      const lost = 4 - received;
+      print(`  Packets: Sent = 4, Received = ${received}, Lost = ${lost} (${Math.round(lost/4*100)}% loss)`);
+      if (times.length) print(`Approximate round trip times: Min=${Math.min(...times)}ms  Max=${Math.max(...times)}ms  Avg=${Math.round(times.reduce((a,b)=>a+b)/times.length)}ms`);
+    },
+    sleep: async (args) => {
+      await scriptSleep(parseTerminalDelayMs(args));
+    },
+    echo: (args) => { if (args) print(args); },
+    cls: () => { out.innerHTML = ''; },
+    whoami: (args) => CMDS.who(args),
+    type: (args) => CMDS.cat(args),
+    cd: (args) => {
+      const dest = (args || '').trim();
+      if (!dest || dest === '.' || dest === 'C:\\sleepOS' || dest === '\\') {
+        cwd = ''; updatePrompt(); return;
+      } else if (dest === '..') {
+        if (!cwd) { print('Already at root.'); return; }
+        const i = cwd.lastIndexOf('\\'); cwd = i >= 0 ? cwd.slice(0, i) : ''; updatePrompt(); return;
+      } else {
+        const newCwd = cwd ? cwd + '\\' + dest.toUpperCase() : dest.toUpperCase();
+        const dir = fsGetDir(newCwd);
+        if (dir) { cwd = newCwd; updatePrompt(); }
+        else { print(`The system cannot find the path specified: ${dest}`); }
+      }
+    },
+    mkdir: (args) => {
+      if (!args) { print('Usage: MKDIR [name]'); return; }
+      const name = args.trim().toUpperCase();
+      const dir = fsGetDir(cwd);
+      if (dir.dirs.has(name) || ['PROJECTS','DOCS','.','..'].includes(name)) {
+        print(`A subdirectory or file ${name} already exists.`); return;
+      }
+      fsCreateDir(name, cwd);
+      print(`Directory created: ${getPromptStr().replace('>','')}\\${name}`);
+    },
+    touch: (args) => {
+      if (!args) { print('Usage: TOUCH [filename]'); return; }
+      const name = args.trim();
+      const dir = fsGetDir(cwd);
+      if (dir.files.has(name)) { print(`File already exists: ${name}`); return; }
+      fsWriteTextFile(name, '', cwd);
+      print(`Created: ${name}`);
+    },
+    del: (args) => {
+      const raw = (args || '').trim();
+      if (!raw) { print('Usage: DEL [filename]'); return; }
+      const result = deleteVirtualPath(raw, cwd);
+      if (!result.ok) print(result.message || `Cannot delete ${raw}`, '#ff4444');
+      (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
+    },
+    rm: (args) => CMDS.del(args),
+    copy: (args) => {
+      const parts = (args || '').trim().split(/\s+/);
+      if (parts.length < 2) { print('Usage: COPY [source] [destination]'); return; }
+      print(`Copying '${parts[0]}' to '${parts[1]}'...`);
+      setTimeout(() => {
+        print('1 file(s) copied.');
+        print(`WARNING: The copy is not identical to the original.`);
+        print('This is considered normal.');
+      }, 700);
+    },
+    move: (args) => {
+      if (!args) { print('Usage: MOVE [source] [destination]'); return; }
+      print('Move failed.', '#ff4444');
+      print('Files in sleepOS cannot be moved.');
+      print('They are already where they need to be.');
+    },
+    mv: (args) => CMDS.move(args),
+    tree: () => {
+      print('C:\\sleepOS');
+      // DOCS (always)
+      print('├── DOCS\\');
+      const docs = fsGetDir('DOCS');
+      [...docs.files.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
+      // User dirs
+      termFS.dirs.forEach(d => {
+        if (d === 'DOCS') return;
+        print(`├── ${d}\\`);
+        const sub = termFS.subdirs?.get(d);
+        if (sub) {
+          [...sub.files.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
+          [...sub.blobs.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
+        }
+      });
+      // System files
+      ['TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe',
+       'void.tmp','daemon.core              [UNREADABLE]','?????.exe                [DO NOT EXECUTE]'
+      ].forEach(n => print(`├── ${n}`));
+      // User files
+      termFS.files.forEach((_, n) => print(`├── ${n}`));
+      termFS.blobs.forEach((b, n) => print(`├── ${n}  [${b.kind}]`));
+      // PROJECTS
+      print('└── PROJECTS\\');
+      print('    ├── sand playground');
+      print('    ├── fireworks');
+      print('    ├── ... (more objects)');
+      print('    └── [1 object cannot be listed]');
+    },
+    taskkill: (args) => {
+      const pidStr = (args || '').replace(/\D/g,'');
+      if (!pidStr) { print('Usage: TASKKILL <pid>'); return; }
+      const pid = parseInt(pidStr, 10);
+      if (pid === 512) {
+        const result = killSoulDaemonProcess();
+        print(result.message, result.ok ? undefined : '#ff4444');
+        (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
+        return;
+      }
+      const builtIn = findBuiltInProcess(pid);
+      if (builtIn) {
+        print(`Terminating ${builtIn.name} (PID ${pid})...`);
+        print(`ERROR: Access is denied. (PID ${pid})`, '#ff4444');
+        print('System processes cannot be terminated.');
+        return;
+      }
+      // Look up real window by PID
+      const winId = winIdByPid(pid);
+      if (winId && wins[winId]) {
+        const name = wins[winId].title.split(' \u2014')[0].trim();
+        print(`Terminating ${name} (PID ${pid})...`);
+        setTimeout(() => {
+          closeWin(winId);
+          print(`SUCCESS: Process "${name}" (PID ${pid}) terminated.`);
+        }, 400);
+      } else {
+        print(`ERROR: The process with PID ${pid} was not found.`, '#ff4444');
+      }
+    },
+    ipconfig: () => {
+      [
+        'sleepOS IP Configuration',
+        '',
+        'Adapter: SOMA-686 NIC',
+        '  Connection-specific DNS  : corpus.internal',
+        '  IPv4 Address             : 0.0.0.0',
+        '  Subnet Mask              : 255.255.255.???',
+        '  Default Gateway          : [unreachable]',
+        '  DNS Servers              : unknown (responding)',
+        '',
+        'Adapter: VOID Interface',
+        '  Status                   : Connected',
+        '  Address                  : [cannot be expressed]',
+        '  Packets in               : ∞',
+        '  Packets out              : 0',
+      ].forEach(l => print(l));
+    },
+    set: () => {
+      [
+        'COMPUTERNAME=SOMA-686',
+        'USERNAME=VISITOR',
+        'OS=sleepOS 0.9b2',
+        'SOUL_INTEGRITY=87',
+        'DAEMON_COUNT=7',
+        'DAEMON_KNOWN=4',
+        'TEMPORAL_DRIFT=+/-2.3yr',
+        'VOID_PRESSURE=12',
+        'OBSERVER_COUNT=[classified]',
+        'PATH=C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+      ].forEach(l => print(l));
+    },
+    cat: (args) => {
+      const raw = (args||'').trim();
+      if (!raw) { print('Usage: CAT <file>'); return; }
+      const { dirName, fileName } = fsSplitPath(raw, cwd);
+      const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
+      if (upperPath === 'DAEMON.CORE') {
+        daemonActivate('raw');
+        buildDaemonCoreRawContent().split('\n').forEach(line => print(line));
+        return;
+      }
+      if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
+        daemonRecordInvestigation('void');
+        getVoidTmpContent().split('\n').forEach(line => print(line));
+        return;
+      }
+      const entry = fsGetEntry(raw, cwd);
+      if (!entry) {
+        print('File not found: ' + raw);
+        return;
+      }
+      if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
+      if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
+      if (entry.kind === 'blob') {
+        print(`Binary file: ${entry.fileName} (${entry.value.kind}, ${fmtSize(entry.value.size)})`);
+        print(`Use OPEN ${entry.fileName} to view it.`);
+        return;
+      }
+      if (entry.value === '') {
+        print('(empty file)');
+        return;
+      }
+      entry.value.split('\n').forEach(line => print(line));
+    },
+    start: (args) => {
+      if (!args) { print('Usage: START [program]'); return; }
+      // re-use the exe dispatch by simulating a command run
+      const key = args.toLowerCase().trim();
+      const EXES_start = {
+        'welcome.readme': openWelcome,
+        'welcome':        openWelcome,
+        'notepad.exe':    openNotepad,
+        'notepad':        openNotepad,
+        'explorer.exe':   openExplorer,
+        'explorer':       openExplorer,
+        'sysmon.exe':     openSysmon,
+        'sysmon':         openSysmon,
+        'browser.exe':    openBrowser,
+        'browser':        openBrowser,
+        'defrag.exe':     openDefrag,
+        'defrag':         openDefrag,
+        'daemon.core':    openDaemon,
+        'void.tmp':       openVoid,
+        '?????.exe':      openUnknown,
+      };
+      const proj = PROJECTS.find(p =>
+        p.file.toLowerCase() === key ||
+        p.file.toLowerCase().replace('.html','') === key ||
+        p.name.toLowerCase() === key ||
+        p.name.toLowerCase().replace(/ /g,'-') === key
+      );
+      if (EXES_start[key]) {
+        print(`Starting ${args}...`);
+        setTimeout(EXES_start[key], 300);
+      } else if (proj) {
+        print(`Launching ${proj.name}...`);
+        setTimeout(() => window.open(proj.file, '_blank'), 400);
+      } else {
+        print(`Cannot find program: ${args}`);
+      }
+    },
+    open: (args) => {
+      const raw = (args || '').trim();
+      if (!raw) { print('Usage: OPEN [filename]'); return; }
+      const split = fsSplitPath(raw, cwd);
+      if (isVisibleSystemPath(raw, { includeExplorer: true })) {
+        print(`Opening ${split.fileName}...`);
+        setTimeout(() => openSystemFile(split.fileName), 300);
+        return;
+      }
+      const entry = fsGetEntry(raw, cwd);
+      if (entry && entry.kind === 'blob') {
+        print(`Opening ${raw}...`);
+        setTimeout(() => openMediaFile(raw, cwd), 300);
+      } else if (entry && entry.kind === 'text') {
+        print(`Opening ${raw}...`);
+        setTimeout(() => openNotepad(raw, cwd), 300);
+      } else {
+        print(`File not found: ${raw}`);
+        print('Use DIR to list available files.');
+      }
+    },
+    run: async (args) => {
+      const fname = (args || '').trim();
+      if (!fname) { print('Usage: RUN <script.script>'); return; }
+      const entry = fsGetEntry(fname, cwd);
+      if (!entry || entry.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
+      print(`Running ${fname}...`);
+      await execScript(entry.value, print, {
+        sourceName: entry.fileName,
+        dirName: entry.dirName,
+        clearFn: () => { out.innerHTML = ''; },
+      });
+    },
+    notepad: (args) => {
+      const fname = args ? args.trim() : null;
+      if (fname) {
+        const entry = fsGetEntry(fname, cwd);
+        if (!entry || entry.kind !== 'text') { print(`File not found: ${fname}`); return; }
+      }
+      print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
+      setTimeout(() => openNotepad(fname || undefined, cwd), 300);
+    },
+    grep: (args) => {
+      if (!args) { print('Usage: GREP <pattern> <file>'); return; }
+      const parts = args.match(/^("(?:[^"\\]|\\.)*"|[^\s]+)\s+(.+)$/);
+      if (!parts) { print('Usage: GREP <pattern> <file>'); return; }
+      const pattern = parts[1].replace(/^"|"$/g,'');
+      const fname = parts[2].trim();
+      let re;
+      try { re = new RegExp(pattern, 'i'); } catch(e) { print('Invalid regex: ' + pattern, '#ff4444'); return; }
+      const dir = fsGetDir(cwd);
+      if (!dir || !dir.files.has(fname)) { print('File not found: ' + fname); return; }
+      const lines = dir.files.get(fname).split('\n');
+      let matches = 0;
+      lines.forEach((line, i) => {
+        if (re.test(line)) { print((i+1) + ':' + line); matches++; }
+      });
+      if (matches === 0) print('(no matches)');
+      else print('\n' + matches + ' match' + (matches !== 1 ? 'es' : '') + ' found');
+    },
+    wc: (args) => {
+      const fname = (args || '').trim();
+      if (!fname) { print('Usage: WC <file>'); return; }
+      const dir = fsGetDir(cwd);
+      if (!dir || !dir.files.has(fname)) { print('File not found: ' + fname); return; }
+      const content = dir.files.get(fname);
+      const lines = content.split('\n').length;
+      const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+      const bytes = new TextEncoder().encode(content).length;
+      print(`  ${String(lines).padStart(6)}  ${String(words).padStart(6)}  ${String(bytes).padStart(6)}  ${fname}`);
+    },
+    exit: () => closeWin('terminal'),
+  };
+
+  CMDS.help = () => buildHelpLines().forEach(line => print(line));
+  CMDS.dir = (args) => buildDirLines(args).forEach(line => print(line));
+  CMDS.ls = (args) => CMDS.dir(args);
+  CMDS.ps = () => buildPsLines().forEach(line => print(line));
+  CMDS.ver = () => buildVerLines().forEach(line => print(line));
+  CMDS.who = () => buildWhoLines().forEach(line => print(line));
+  CMDS.whoami = () => CMDS.who();
+  CMDS.date = () => buildDateLines().forEach(line => print(line));
+  CMDS.ping = async (args) => {
+    (await buildPingLines(resolveShellText(args), getCurrentCommandSignal())).forEach(line => print(line));
+  };
+  CMDS.ipconfig = () => buildIpconfigLines().forEach(line => print(line));
+  CMDS.tree = () => buildTreeLines().forEach(line => print(line));
+  CMDS.sleep = async (args) => {
+    await scriptSleep(parseTerminalDelayMs(args), getCurrentCommandSignal());
+  };
+  CMDS.wait = (args) => CMDS.sleep(args);
+  CMDS.echo = (args) => { print(unquoteShellValue(args || '')); };
+  CMDS.print = (args) => CMDS.echo(args);
+  CMDS.cls = () => { out.innerHTML = ''; };
+  CMDS.clear = () => CMDS.cls();
+  CMDS.set = (args) => applyShellSet(args).forEach(line => print(line));
+  CMDS.input = async (args) => {
+    await runShellInputCommand(args);
+  };
+  CMDS.inc = (args) => runShellNumericCommand('inc', args).forEach(line => print(line));
+  CMDS.dec = (args) => runShellNumericCommand('dec', args).forEach(line => print(line));
+  CMDS.add = (args) => runShellNumericCommand('add', args).forEach(line => print(line));
+  CMDS.sub = (args) => runShellNumericCommand('sub', args).forEach(line => print(line));
+  CMDS.mul = (args) => runShellNumericCommand('mul', args).forEach(line => print(line));
+  CMDS.div = (args) => runShellNumericCommand('div', args).forEach(line => print(line));
+  CMDS.mod = (args) => runShellNumericCommand('mod', args).forEach(line => print(line));
+  CMDS.start = (args) => {
+    if (!args || !String(args).trim()) { print('Usage: START [program]'); return; }
+    if (!launchTerminalTarget(args)) print(`Cannot find program: ${args}`);
+  };
+  CMDS.run = async (args) => {
+    const tokens = scriptTokenize(args || '');
+    if (!tokens.length) { print('Usage: RUN <script.script> [args...]'); return; }
+    const fname = tokens[0];
+    const entry = fsGetEntry(fname, cwd);
+    if (!entry || entry.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
+    print(`Running ${fname}...`);
+    const exitCode = await execScript(entry.value, print, {
+      sourceName: entry.fileName,
+      dirName: entry.dirName,
+      vars: shellVars,
+      readLine: readTerminalLine,
+      signal: getCurrentCommandSignal(),
+      args: tokens.slice(1),
+      clearFn: () => { out.innerHTML = ''; },
+    });
+    if (exitCode !== 0) print(`Exit code: ${exitCode}`, '#dddd00');
+  };
+
+  async function runTerminalCommand(raw, options) {
+    if (activeCommandController) {
+      print('A command is already running. Press Ctrl+C to interrupt.', '#dddd00');
+      print('');
+      return;
+    }
+    const text = String(raw || '').trim();
+    options = options || {};
+    activeCommandController = new AbortController();
+    refreshTerminalInputMode();
+    histIdx = -1;
+    print(getPromptStr() + ' ' + text);
+    if (text && options.recordHistory !== false) {
+      cmdHistory.push(text);
+      if (cmdHistory.length > 50) cmdHistory.shift();
+    }
+    try {
+      if (await tryExecutePipeline(text)) return;
+
+      const parts = text.split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const args = resolveShellText(parts.slice(1).join(' '));
+      const exeAlias = cmd.endsWith('.exe') ? cmd.slice(0, -4) : '';
+
+      if ((cmd === 'del' || cmd === 'rm') && args.includes('*')) {
+        const expanded = expandGlob(args.trim());
+        expanded.forEach(name => CMDS.del(name));
+        print('');
+        return;
+      }
+
+      if (!cmd) {
+        // no-op
+      } else if (CMDS[cmd]) {
+        await CMDS[cmd](args);
+      } else if (exeAlias && CMDS[exeAlias]) {
+        await CMDS[exeAlias](args);
+      } else if (!args && launchTerminalTarget(parts[0])) {
+        // launched directly
+      } else {
+        print(`'${parts[0]}' is not recognized as an internal or external command.`);
+        print('Type HELP for a list of commands, or DIR to list executables.');
+      }
+    } catch (err) {
+      if (!isAbortError(err)) print(err.message || String(err), '#ff4444');
+    } finally {
+      activeCommandController = null;
+      refreshTerminalInputMode();
+    }
+    print('');
+  }
+
+  _termExec = async (raw) => {
+    if (pendingRead) {
+      print('Finish the current INPUT prompt before starting another command.', '#ff4444');
+      print('');
+      return;
+    }
+    if (activeCommandController) {
+      print('A command is already running. Press Ctrl+C to interrupt.', '#dddd00');
+      print('');
+      return;
+    }
+    await runTerminalCommand(raw, { recordHistory: true });
+  };
+
+  inp.addEventListener('keydown', async (e) => {
+    if (pendingRead) {
+      if (e.ctrlKey && !e.altKey && !e.metaKey && String(e.key).toLowerCase() === 'c') {
+        if (interruptActiveCommand()) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const response = inp.value;
+        const { promptText, resolve } = pendingRead;
+        inp.value = '';
+        pendingRead = null;
+        setPromptOverride('');
+        refreshTerminalInputMode();
+        print(promptText + ' ' + response);
+        resolve(response);
+      }
+      return;
+    }
+
+    if (e.ctrlKey && !e.altKey && !e.metaKey && String(e.key).toLowerCase() === 'c') {
+      if (interruptActiveCommand()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (histIdx < cmdHistory.length - 1) histIdx++;
+      inp.value = cmdHistory[cmdHistory.length - 1 - histIdx] || '';
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      histIdx = Math.max(-1, histIdx - 1);
+      inp.value = histIdx < 0 ? '' : cmdHistory[cmdHistory.length - 1 - histIdx];
+      return;
+    }
+
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    if (activeCommandController) {
+      print('A command is already running. Press Ctrl+C to interrupt.', '#dddd00');
+      print('');
+      return;
+    }
+
+    const raw = inp.value.trim();
+    inp.value = '';
+    await runTerminalCommand(raw, { recordHistory: true });
+  }, true);
+
+  refreshTerminalInputMode();
+  document.getElementById('tw').addEventListener('click', () => inp.focus());
+  setTimeout(() => inp.focus(), 80);
+  if (initialCommand) setTimeout(() => { if (_termExec) _termExec(initialCommand); }, 30);
+}
+
+function openSysmon() {
+  if (!mkWin({ id:'sysmon', title:'SYSMON.exe - System Monitor', icon:'📊', w:460, h:400, x:160, y:80 })) return;
+  const mb   = document.getElementById('mb-sysmon');
+  const body = document.getElementById('wb-sysmon');
+  body.style.cssText = 'background:#c0c0c0;overflow:hidden;display:flex;flex-direction:column;';
+
+  const METRICS = [
+    { key:'cpu',       label:'CPU Usage',      val:34, color:'#000080' },
+    { key:'ram',       label:'RAM Usage',       val:61, color:'#000080' },
+    { key:'soul',      label:'Soul Integrity',  val:87, color:'#006400' },
+    { key:'dream',     label:'Dream Cache',     val:23, color:'#800080' },
+    { key:'entropy',   label:'Entropy Level',   val:74, color:'#8b4513' },
+    { key:'void',      label:'Void Pressure',   val:12, color:'#000080' },
+    { key:'daemon',    label:'Daemon Activity', val:45, color:'#800000' },
+    { key:'coherence', label:'Coherence',       val:91, color:'#006060' },
+  ];
+  const state = {};
+  METRICS.forEach(m => { state[m.key] = m.val; });
+
+  let updateInterval = 1500;
+  let showSysProcs   = true;
+  let activeTab      = 'resources';
+  let selectedProc   = null;
+  let smTimer        = null;
+
+  // Tab bar
+  const tabBar = document.createElement('div');
+  tabBar.style.cssText = 'display:flex;border-bottom:2px solid #808080;background:#c0c0c0;flex-shrink:0;padding:3px 4px 0;gap:2px;';
+  function makeTabBtn(label, key) {
+    const t = document.createElement('button');
+    t.textContent = label; t.dataset.tab = key;
+    t.style.cssText = 'background:#c0c0c0;border:1px solid;border-color:#fff #808080 #808080 #fff;border-bottom:none;padding:2px 12px;font-size:11px;cursor:default;font-family:var(--sleep-font);position:relative;bottom:-1px;';
+    t.addEventListener('click', () => switchTab(key));
+    tabBar.appendChild(t); return t;
+  }
+  const tabRes  = makeTabBtn('Resources', 'resources');
+  const tabProc = makeTabBtn('Processes', 'processes');
+  body.appendChild(tabBar);
+
+  const content = document.createElement('div');
+  content.style.cssText = 'flex:1;overflow:hidden;position:relative;';
+  body.appendChild(content);
+
+  // Resources panel
+  const resPanel = document.createElement('div');
+  resPanel.style.cssText = 'position:absolute;inset:0;overflow:auto;padding:6px 6px 4px;';
+  resPanel.innerHTML = METRICS.map(m => `
+    <div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
+      <div style="width:112px;font-size:10px;white-space:nowrap;">${m.label}</div>
+      <div style="flex:1;height:14px;border:1px solid;border-color:#808080 #fff #fff #808080;background:#fff;position:relative;min-width:60px;">
+        <div id="smbar-${m.key}" style="position:absolute;inset:0;right:auto;width:${m.val}%;background:${m.color || '#000080'};"></div>
+      </div>
+      <div id="smval-${m.key}" style="width:30px;font-size:10px;text-align:right;">${m.val}%</div>
+    </div>`).join('') + `
+    <div style="margin-top:6px;padding:3px 0 0;font-size:10px;color:#444;border-top:1px solid #b0b0b0;">
+      <b>Processes:</b> <span id="sm-proc-count">--</span> running &nbsp;|&nbsp; <b>Uptime:</b> <span id="sm-uptime">--:--:--</span>
+    </div>`;
+  content.appendChild(resPanel);
+
+  // Processes panel
+  const procPanel = document.createElement('div');
+  procPanel.style.cssText = 'position:absolute;inset:0;overflow:hidden;display:none;flex-direction:column;';
+  const btnStyle = 'background:#c0c0c0;border:1px solid;border-color:#fff #808080 #808080 #fff;padding:2px 10px;font-size:10px;cursor:default;font-family:var(--sleep-font);';
+  const procToolbar = document.createElement('div');
+  procToolbar.style.cssText = 'padding:3px 4px;display:flex;gap:3px;border-bottom:1px solid #808080;flex-shrink:0;';
+  procToolbar.innerHTML = `
+    <button id="sm-kill-btn"    style="${btnStyle}">End Task</button>
+    <button id="sm-copypid-btn" style="${btnStyle}">Copy PID</button>
+    <button id="sm-refresh-btn" style="${btnStyle}">Refresh</button>`;
+  procPanel.appendChild(procToolbar);
+  const procHeader = document.createElement('div');
+  procHeader.style.cssText = 'display:flex;background:#c0c0c0;border-bottom:1px solid #808080;font-size:10px;font-weight:bold;flex-shrink:0;';
+  procHeader.innerHTML = `
+    <div style="width:54px;padding:2px 4px;border-right:1px solid #808080;">PID</div>
+    <div style="flex:1;padding:2px 4px;border-right:1px solid #808080;">Image Name</div>
+    <div style="width:52px;padding:2px 4px;border-right:1px solid #808080;">CPU %</div>
+    <div style="width:58px;padding:2px 4px;">Mem %</div>`;
+  procPanel.appendChild(procHeader);
+  const procList = document.createElement('div');
+  procList.style.cssText = 'flex:1;overflow-y:auto;background:#fff;';
+  procPanel.appendChild(procList);
+  content.appendChild(procPanel);
+
+  function getProcessList() {
+    const procs = [];
+    Object.entries(wins).forEach(([id, w]) => {
+      const rawName = w.title.split(' \u2014')[0].trim();
+      const name = (rawName.endsWith('.exe') || rawName.endsWith('.readme') || rawName.includes('.')) ? rawName : rawName + '.exe';
+      procs.push({ pid: pidFromId(id), name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
+    });
+    if (showSysProcs) {
+      getBuiltInProcesses().forEach(p => procs.push({
+        ...p,
+        cpu: parseFloat((p.cpu + (Math.random() - 0.5) * 0.2).toFixed(1)),
+        mem: parseFloat((p.mem + (Math.random() - 0.5) * 0.3).toFixed(1)),
+        winId: null,
+        isSystem: true,
+      }));
+    }
+    return procs.sort((a, b) => a.pid - b.pid);
+  }
+
+  function renderProcesses() {
+    if (!wins['sysmon']) return;
+    const procs = getProcessList();
+    procList.innerHTML = '';
+    procs.forEach(p => {
+      const sel = selectedProc && selectedProc.pid === p.pid;
+      const row = document.createElement('div');
+      row.style.cssText = `display:flex;font-size:10px;border-bottom:1px solid #f0f0f0;cursor:default;background:${sel ? '#000080' : 'transparent'};color:${sel ? '#fff' : '#000'};`;
+      row.innerHTML = `<div style="width:54px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.pid}</div><div style="flex:1;padding:1px 4px;border-right:1px solid #e8e8e8;overflow:hidden;white-space:nowrap;">${p.name}</div><div style="width:52px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.cpu.toFixed(1)}</div><div style="width:58px;padding:1px 4px;">${p.mem.toFixed(1)}</div>`;
+      row.addEventListener('click', () => { selectedProc = p; renderProcesses(); });
+      row.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        selectedProc = p;
+        renderProcesses();
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: 'End Task', action: () => procToolbar.querySelector('#sm-kill-btn').click() },
+          '-',
+          { label: 'Copy PID', action: () => procToolbar.querySelector('#sm-copypid-btn').click() },
+        ]);
+      });
+      procList.appendChild(row);
+    });
+    const ct = document.getElementById('sm-proc-count');
+    if (ct) ct.textContent = procs.length;
+  }
+
+  procToolbar.querySelector('#sm-kill-btn').addEventListener('click', () => {
+    if (!selectedProc) return;
+    if (selectedProc.isSystem) {
+      if (selectedProc.pid === 512) {
+        const result = killSoulDaemonProcess();
+        selectedProc = null;
+        renderProcesses();
+        osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), result.ok ? 'Process Update' : 'Access Denied', '⚠️');
+        return;
+      }
+      const dlgId = 'sm-killerr-' + Date.now();
+      if (mkWin({ id:dlgId, title:'Access Denied', icon:'\u26a0\ufe0f', w:290, h:110, popup:true, menubar:false, statusbar:false })) {
+        const db = document.getElementById('wb-' + dlgId);
+        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
+      }
+      return;
+    }
+    if (selectedProc.winId && wins[selectedProc.winId]) {
+      const wid = selectedProc.winId; selectedProc = null; closeWin(wid); renderProcesses();
+    }
+  });
+  procToolbar.querySelector('#sm-copypid-btn').addEventListener('click', () => {
+    if (!selectedProc) return;
+    navigator.clipboard.writeText(String(selectedProc.pid)).catch(() => {});
+    const btn = procToolbar.querySelector('#sm-copypid-btn');
+    const orig = btn.textContent; btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 800);
+  });
+  procToolbar.querySelector('#sm-refresh-btn').addEventListener('click', renderProcesses);
+
+  function switchTab(tab) {
+    activeTab = tab;
+    if (tab === 'resources') {
+      resPanel.style.display = 'block'; procPanel.style.display = 'none';
+      tabRes.style.background = '#fff'; tabRes.style.borderColor = '#fff #808080 #c0c0c0 #fff';
+      tabProc.style.background = '#c0c0c0'; tabProc.style.borderColor = '#fff #808080 #808080 #fff';
+    } else {
+      resPanel.style.display = 'none'; procPanel.style.display = 'flex';
+      tabRes.style.background = '#c0c0c0'; tabRes.style.borderColor = '#fff #808080 #808080 #fff';
+      tabProc.style.background = '#fff'; tabProc.style.borderColor = '#fff #808080 #c0c0c0 #fff';
+      renderProcesses();
+    }
+  }
+  switchTab('resources');
+
+  mb.innerHTML = '';
+  const viewSpan = document.createElement('span'); viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+  viewSpan.addEventListener('click', e => { e.stopPropagation(); showDropdown(viewSpan, [
+    { label: 'Update Speed: Fast (0.5s)',   action: () => { updateInterval = 500;  restartSmTimer(); } },
+    { label: 'Update Speed: Normal (1.5s)', action: () => { updateInterval = 1500; restartSmTimer(); } },
+    { label: 'Update Speed: Slow (3s)',     action: () => { updateInterval = 3000; restartSmTimer(); } },
+    { label: 'Update Speed: Paused',        action: () => { updateInterval = 0;    restartSmTimer(); } },
+    '-',
+    { label: 'Resources Tab', action: () => switchTab('resources') },
+    { label: 'Processes Tab', action: () => switchTab('processes') },
+  ]); });
+  mb.appendChild(viewSpan);
+  const optSpan = document.createElement('span'); optSpan.className = 'menu-item'; optSpan.textContent = 'Options';
+  optSpan.addEventListener('click', e => { e.stopPropagation(); showDropdown(optSpan, [
+    { label: (showSysProcs ? '\u2713 ' : '  ') + 'Show System Processes', action: () => { showSysProcs = !showSysProcs; if (activeTab === 'processes') renderProcesses(); } },
+    '-',
+    { label: 'Close', action: () => closeWin('sysmon') },
+  ]); });
+  mb.appendChild(optSpan);
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: 'Resources', action: () => switchTab('resources') },
+      { label: 'Processes', action: () => switchTab('processes') },
+      '-',
+      { label: updateInterval === 0 ? '\u25b6 Resume' : '\u23f8 Pause', action: () => { updateInterval = updateInterval === 0 ? 1500 : 0; restartSmTimer(); } },
+      '-',
+      { label: 'Close', action: () => closeWin('sysmon') },
+    ]);
+  });
+
+  function smTick() {
+    if (!wins['sysmon']) { clearInterval(smTimer); return; }
+    METRICS.forEach(m => {
+      let v = state[m.key] + (Math.random() - 0.5) * 7;
+      if (m.key === 'soul')    v = Math.min(92, Math.max(60, v - 0.05));
+      if (m.key === 'void' && Math.random() < 0.06) v = 75 + Math.random() * 24;
+      v = Math.max(1, Math.min(99, v));
+      state[m.key] = v;
+      const bar = document.getElementById('smbar-' + m.key);
+      const val = document.getElementById('smval-' + m.key);
+      const col = (m.key === 'void' && v > 70) ? '#cc0000' : (m.color || '#000080');
+      if (bar) { bar.style.width = v.toFixed(0) + '%'; bar.style.background = col; }
+      if (val) val.textContent = v.toFixed(0) + '%';
+    });
+    const sec = Math.floor(performance.now() / 1000);
+    const up = document.getElementById('sm-uptime');
+    if (up) up.textContent = `${String(Math.floor(sec/3600)).padStart(2,'0')}:${String(Math.floor((sec%3600)/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
+    const ct = document.getElementById('sm-proc-count');
+    if (ct) ct.textContent = Object.keys(wins).length + (showSysProcs ? getBuiltInProcesses().length : 0);
+    if (activeTab === 'processes') renderProcesses();
+  }
+
+  function restartSmTimer() {
+    if (smTimer) clearInterval(smTimer);
+    smTimer = null;
+    if (updateInterval > 0) smTimer = setInterval(smTick, updateInterval);
+    if (wins['sysmon']) wins['sysmon']._interval = smTimer;
+  }
+
+  restartSmTimer();
+}
+
+function openDefrag() {
+  if (!mkWin({ id:'defrag', title:'DEFRAG.exe - Disk Defragmenter', icon:'🧩', w:560, h:400, x:100, y:60 })) return;
+
+  const mb   = document.getElementById('mb-defrag');
+  const body = document.getElementById('wb-defrag');
+  const ws   = document.getElementById('ws-defrag');
+  body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:5px;font-size:11px;overflow:hidden;';
+
+  const COLS = 40, ROWS = 16, TOTAL = COLS * ROWS;
+  // States: 0=free, 1=used(blue), 2=optimized(green), 3=active(red)
+  const COLORS = { 0:'#ffffff', 1:'#0000aa', 2:'#00aa00', 3:'#cc2200' };
+  const lastDefragTs = Math.max(0, Math.trunc(Number(defragState.lastDefragTs) || 0));
+  const msSince = lastDefragTs ? Date.now() - lastDefragTs : null;
+  const fragLevel = getDriveFragmentationLevel();
+
+  // Build initial cell states: used blocks are green or blue based on frag level
+  const cells = Array.from({ length: TOTAL }, () => {
+    if (Math.random() > 0.68) return 0;                           // free
+    return Math.random() < fragLevel ? 1 : 2;                     // fragmented or clean
+  });
+  const USED_TOTAL = cells.filter(c => c > 0).length;
+
+  function timeAgo(ms) {
+    if (!ms) return 'never';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} min ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} hr${h !== 1 ? 's' : ''} ago`;
+    const d = Math.floor(h / 24);
+    return `${d} day${d !== 1 ? 's' : ''} ago`;
+  }
+
+  const initOptPct = getDriveOptimizationPercent();
+  const initFragPct = Math.round(fragLevel * 100);
+
+  // ── Drive info ─────────────────────────────────────────────────
+  const infoRow = document.createElement('div');
+  infoRow.style.cssText = 'display:flex;gap:16px;align-items:center;border:2px solid;border-color:#808080 #fff #fff #808080;padding:3px 8px;background:#fff;flex-shrink:0;';
+  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-last" style="color:#555;">Last defrag: ${timeAgo(msSince)}</span><span id="df-frag" style="color:#555;">Fragmentation: ${initFragPct}%</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">${initOptPct}% optimized</span>`;
+  body.appendChild(infoRow);
+
+  // ── Canvas grid ────────────────────────────────────────────────
+  const gridWrap = document.createElement('div');
+  gridWrap.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;background:#111;flex:1;min-height:0;overflow:hidden;';
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'display:block;';
+  gridWrap.appendChild(canvas);
+  body.appendChild(gridWrap);
+
+  function drawGrid() {
+    const W = gridWrap.clientWidth, H = gridWrap.clientHeight;
+    if (!W || !H) return;
+    const bw = Math.floor(W / COLS), bh = Math.floor(H / ROWS);
+    if (!bw || !bh) return;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < TOTAL; i++) {
+      ctx.fillStyle = COLORS[cells[i]];
+      ctx.fillRect((i % COLS) * bw + 1, Math.floor(i / COLS) * bh + 1, bw - 2, bh - 2);
+    }
+  }
+
+  // ── Progress bar ───────────────────────────────────────────────
+  const pbWrap = document.createElement('div');
+  pbWrap.style.cssText = 'border:2px solid;border-color:#808080 #fff #fff #808080;height:18px;background:#c0c0c0;position:relative;overflow:hidden;flex-shrink:0;';
+  const pbFill = document.createElement('div');
+  pbFill.style.cssText = `position:absolute;left:0;top:0;height:100%;width:${initOptPct}%;background:#000080;`;
+  const pbLabel = document.createElement('div');
+  pbLabel.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;mix-blend-mode:difference;';
+  pbLabel.textContent = initOptPct + '%';
+  pbWrap.appendChild(pbFill); pbWrap.appendChild(pbLabel);
+  body.appendChild(pbWrap);
+
+  // ── File label ─────────────────────────────────────────────────
+  const fileLabel = document.createElement('div');
+  fileLabel.style.cssText = 'font-size:10px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;height:13px;';
+  fileLabel.textContent = fragLevel < 0.05
+    ? 'Disk is optimized. No defragmentation necessary.'
+    : fragLevel < 0.3
+      ? `Disk is ${initFragPct}% fragmented. Some defragmentation recommended.`
+      : `Disk is ${initFragPct}% fragmented. Defragmentation recommended.`;
+  body.appendChild(fileLabel);
+
+  // ── Buttons ────────────────────────────────────────────────────
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-shrink:0;';
+  const startBtn = document.createElement('button');
+  startBtn.className = 'dlg-btn primary'; startBtn.textContent = 'Start';
+  const stopBtn = document.createElement('button');
+  stopBtn.className = 'dlg-btn'; stopBtn.textContent = 'Stop'; stopBtn.disabled = true;
+  btnRow.appendChild(startBtn); btnRow.appendChild(stopBtn);
+  body.appendChild(btnRow);
+
+  // ── Legend ─────────────────────────────────────────────────────
+  const legend = document.createElement('div');
+  legend.style.cssText = 'display:flex;gap:10px;font-size:10px;align-items:center;flex-shrink:0;';
+  [['#ffffff','Free'],['#0000aa','Used'],['#00aa00','Optimized'],['#cc2200','Reading']].forEach(([c,l]) => {
+    const wrap = document.createElement('span');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:3px;';
+    const sq = document.createElement('span');
+    sq.style.cssText = `width:12px;height:12px;background:${c};border:1px solid #808080;display:inline-block;flex-shrink:0;`;
+    wrap.appendChild(sq); wrap.appendChild(document.createTextNode(l));
+    legend.appendChild(wrap);
+  });
+  body.appendChild(legend);
+
+  // ── Animation ──────────────────────────────────────────────────
+  const FILES = [
+    'C:\\WINDOWS\\SYSTEM\\kernel32.dll',    'C:\\DREAMS\\fragment_001.tmp',
+    'C:\\USERS\\you\\desktop\\memory.old',  'C:\\VOID\\unresolved.dat',
+    'C:\\DREAMS\\fragment_047.tmp',         'C:\\WINDOWS\\TEMP\\~DF3A2.tmp',
+    'C:\\USERS\\you\\documents\\letter_unsent.txt', 'C:\\DREAMS\\fragment_112.tmp',
+    'C:\\SYSTEM32\\observer.dll',           'C:\\DREAMS\\fragment_????.tmp',
+    'C:\\USERS\\you\\pictures\\face.bmp',   'C:\\VOID\\pending.inf',
+    'C:\\DREAMS\\core_loop.dat',            'C:\\SLEEP\\log_0000.bin',
+    'C:\\USERS\\you\\desktop\\todo.txt',    'C:\\DREAMS\\fragment_[CORRUPTED]',
+    'C:\\WINDOWS\\SYSTEM\\time.dll',        'C:\\VOID\\[FILE NAME UNREADABLE]',
+  ];
+
+  let running = false, timer = null, optimized = cells.filter(c => c === 2).length, fileIdx = 0;
+  let leftPtr = 0, rightPtr = TOTAL - 1, activeCell = -1;
+
+  function updateProgress() {
+    const pct = Math.min(100, Math.round((optimized / USED_TOTAL) * 100));
+    pbFill.style.width = pct + '%';
+    pbLabel.textContent = pct + '%';
+    document.getElementById('df-pct').textContent = pct + '% optimized';
+    if (ws) ws.textContent = 'Defragmenting C:\\ - ' + pct + '%';
+  }
+
+  function step() {
+    if (!wins['defrag']) { clearTimeout(timer); return; }
+
+    // Resolve previous active cell → optimized
+    if (activeCell >= 0) { cells[activeCell] = 2; optimized++; activeCell = -1; }
+
+    // Advance pointers
+    while (leftPtr < TOTAL && cells[leftPtr] !== 0) leftPtr++;
+    while (rightPtr >= 0  && cells[rightPtr] !== 1) rightPtr--;
+
+    if (leftPtr >= rightPtr) {
+      // Finalize any remaining used-in-place blocks
+      for (let i = 0; i < TOTAL; i++) if (cells[i] === 1) { cells[i] = 2; optimized++; }
+      running = false; startBtn.disabled = false; stopBtn.disabled = true;
+      pbFill.style.width = '98%'; pbLabel.textContent = '98%';
+      document.getElementById('df-pct').textContent = '98% optimized';
+      fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
+      if (ws) ws.textContent = 'Complete - 1 file could not be moved';
+      optimizeDriveFragmentation({ targetLevel: 0.02 });
+      const lastEl = document.getElementById('df-last');
+      if (lastEl) lastEl.textContent = 'Last defrag: just now';
+      const fragEl = document.getElementById('df-frag');
+      if (fragEl) fragEl.textContent = 'Fragmentation: 2%';
+      drawGrid();
+      return;
+    }
+
+    // Move rightPtr block to leftPtr (show as red at destination)
+    cells[rightPtr] = 0;
+    cells[leftPtr]  = 3;
+    activeCell = leftPtr;
+    leftPtr++; rightPtr--;
+
+    if (fileIdx % 5 === 0) fileLabel.textContent = 'Moving: ' + FILES[fileIdx % FILES.length];
+    fileIdx++;
+
+    drawGrid();
+    updateProgress();
+    timer = setTimeout(step, 55);
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (running) return;
+    running = true; startBtn.disabled = true; stopBtn.disabled = false;
+    fileLabel.textContent = 'Analyzing C:\\ ...';
+    if (ws) ws.textContent = 'Analyzing...';
+    setTimeout(step, 700);
+  });
+  stopBtn.addEventListener('click', () => {
+    running = false; clearTimeout(timer);
+    if (activeCell >= 0) { cells[activeCell] = 1; activeCell = -1; }
+    startBtn.disabled = false; stopBtn.disabled = true;
+    fileLabel.textContent = 'Defragmentation stopped.';
+    if (ws) ws.textContent = 'Stopped';
+    drawGrid();
+  });
+
+  const dfResizeObserver = new ResizeObserver(() => drawGrid());
+  dfResizeObserver.observe(gridWrap);
+  const _origCloseDefrag = wins['defrag']?._onclose;
+  if (wins['defrag']) wins['defrag']._onclose = () => { dfResizeObserver.disconnect(); if (_origCloseDefrag) _origCloseDefrag(); };
+
+  body.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: running ? '⏹ Stop' : '▶ Start', action: () => running ? stopBtn.click() : startBtn.click() },
+      '-',
+      { label: 'Close', action: () => closeWin('defrag') },
+    ]);
+  });
+
+  // ── Menus ──────────────────────────────────────────────────────
+  function dfDropdown(anchor, items) {
+    const old = document.getElementById('active-dropdown'); if (old) old.remove();
+    const rect = anchor.getBoundingClientRect();
+    const dd = document.createElement('div');
+    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+    dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+    items.forEach(item => {
+      if (item === '-') { const s = document.createElement('div'); s.className = 'menu-dd-sep'; dd.appendChild(s); }
+      else {
+        const el = document.createElement('div'); el.className = 'menu-dd-item'; el.textContent = item.label;
+        el.addEventListener('mousedown', e => { e.stopPropagation(); dd.remove(); item.action(); });
+        dd.appendChild(el);
+      }
+    });
+    document.body.appendChild(dd);
+    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+  }
+
+  mb.innerHTML = '';
+  [
+    { label: 'Drive', items: [
+      { label: 'C:\\ (2,147 MB)  ✓', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
+      { label: 'D:\\ - [NOT FOUND]', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', '⚠️') },
+      '-',
+      { label: 'Exit', action: () => closeWin('defrag') },
+    ]},
+    { label: 'Help', items: [
+      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe - Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nLower fragmentation reduces late-stage application distortion.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
+      '-',
+      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe - Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\nA small amount of the drive always remains unmovable.', 'About DEFRAG.exe', '🧩') },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); dfDropdown(span, items); });
+    mb.appendChild(span);
+  });
+
+  setTimeout(drawGrid, 80);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BROWSER
+// ─────────────────────────────────────────────────────────────────
+function renderDaemonPanel() {
+  const body = document.getElementById('wb-daemon');
+  if (!body) return;
+  applyDaemonWindowState();
+  const title = document.getElementById('wtitle-daemon');
+  if (title) title.textContent = daemonStory.endingReached ? 'daemon.core - Archive' : 'daemon.core - Containment';
+  const telemetry = getContainmentTelemetry();
+  const mirrorLockActive = telemetry.mirrorLockActive;
+  const checklist = getContainmentChecklist();
+  const status = daemonStory.endingReached
+    ? 'Contained'
+    : daemonStory.stage >= 7 && !mirrorLockActive
+      ? 'Seal Interrupted'
+      : daemonStageLabel(daemonStory.stage);
+  const statusColor = daemonStory.endingReached
+    ? '#006400'
+    : daemonStory.stage >= 7 && !mirrorLockActive
+      ? '#aa5500'
+      : daemonStory.stage >= 5
+        ? '#800080'
+        : daemonStory.stage >= 4
+          ? '#aa0000'
+          : '#000080';
+  const notes = [];
+  if (daemonStory.endingReached) {
+    notes.push('Containment complete. The archive is quiet.');
+  } else if (daemonStory.stage >= 7 && !mirrorLockActive) {
+    notes.push('The seal lattice was ready, then the mirror lock dropped again.');
+    notes.push('Restore MIRROR_LOCK to 1 before you run ?????.exe or delete void.tmp.');
+  } else if (daemonStory.stage >= 7) {
+    notes.push('The seal lattice is ready. Run ?????.exe to write SYS\\quarantine.sig, then delete void.tmp.');
+  } else if (daemonStory.stage >= 5) {
+    notes.push('You removed the anchor. The mirror is no longer deflected away from the user.');
+    notes.push('Inspect void.tmp and CACHE\\mirror.dat. Read DOCS\\MIRROR_PROTOCOL.txt for the procedure. Restore MIRROR_LOCK when done.');
+  } else if (daemonStory.stage >= 4) {
+    notes.push('PID 512 stayed dead. The quiet that followed was a failure state, not a victory.');
+    notes.push('Lower MIRROR_LOCK in the registry, then delete SYS\\anchor.seed to open the channel. Inspect CACHE\\mirror.dat first.');
+  } else if (daemonStory.stage >= 2) {
+    notes.push('The watch layer answered your kill attempt. RESPAWN_LOCK must be cleared before PID 512 will stay down.');
+  } else {
+    notes.push('This file is the restraint, not the intrusion.');
+    notes.push('Open the raw read, then check DOCS for the first containment note.');
+  }
+  const gauge = value => `<div style="height:6px;border:1px solid #8f8f8f;background:#dadada;"><div style="height:100%;width:${Math.max(0, Math.min(100, value))}%;background:#000080;"></div></div>`;
+  body.innerHTML = `
+    <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:11px;line-height:1.5;">
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <div style="font-size:42px;line-height:1;">👁️</div>
+        <div style="flex:1;">
+          <div><b>File:</b> daemon.core</div>
+          <div><b>Status:</b> <span style="color:${statusColor};font-weight:bold">${status}</span></div>
+          <div><b>Containment:</b> <span style="color:${telemetry.rating.color};font-weight:bold">${telemetry.rating.code} / ${telemetry.rating.label}</span></div>
+          <div><b>Observed:</b> ${daemonStory.openedDaemon ? 'yes' : 'no'}</div>
+          <div><b>Last Event:</b> ${escHtml(daemonStory.lastEventText || 'none')}</div>
+          <div><b>Mirror Lock:</b> ${telemetry.mirrorLockActive ? '1' : '0'}</div>
+          <div><b>Respawn Lock:</b> ${telemetry.respawnLockActive ? '1' : '0'}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
+          <div><b>Void Pressure</b> ${telemetry.pressure}</div>
+          ${gauge(telemetry.pressure)}
+        </div>
+        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
+          <div><b>Lattice Stability</b> ${telemetry.lattice}</div>
+          ${gauge(telemetry.lattice)}
+        </div>
+        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
+          <div><b>Signal Depth</b> ${telemetry.signalDepth}</div>
+          ${gauge(telemetry.signalDepth)}
+        </div>
+        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
+          <div><b>Aperture Bias</b></div>
+          <div style="margin-top:4px;color:${telemetry.bias === 'user-facing' ? '#8a0036' : telemetry.bias === 'sealed' ? '#0a7a2a' : '#005f73'};font-weight:bold;text-transform:uppercase;">${telemetry.bias}</div>
+        </div>
+      </div>
+      <div style="border:1px solid #b0b0b0;background:#fff;padding:8px;min-height:78px;">
+        ${notes.map(line => `<div>${escHtml(line)}</div>`).join('')}
+      </div>
+      ${daemonStory.stage >= 4 ? `
+        <div style="border:1px solid #b0b0b0;background:#f7f7f7;padding:8px;">
+          <div style="font-weight:bold;margin-bottom:4px;">Containment Checklist</div>
+          ${checklist.map(item => `<div style="display:flex;align-items:center;gap:6px;color:${item.done ? '#0a662f' : '#555'};"><span style="font-weight:bold;width:12px;">${item.done ? '■' : '□'}</span><span>${escHtml(item.label)}</span></div>`).join('')}
+        </div>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <button class="dlg-btn" onclick="openNotepad('daemon.core')">Raw Read</button>
+        ${daemonStory.stage >= 4 && !daemonStory.endingReached ? `<button class="dlg-btn" onclick="openVoid()">Open void.tmp</button>` : ''}
+      </div>
+      <div style="text-align:right;">
+        <button class="dlg-btn primary" onclick="closeWin('daemon')">Close</button>
+      </div>
+    </div>`;
+  resizeDaemonWindow();
+}
+
+function resizeDaemonWindow() {
+  const daemonWin = wins.daemon?.el;
+  const body = document.getElementById('wb-daemon');
+  if (!daemonWin || !body) return;
+  if (wins.daemon.maximized) return;
+  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  if (isMobile) return;
+  const desktop = document.getElementById('desktop');
+  if (!desktop) return;
+  const stage = daemonStory.stage || 0;
+  const targetWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
+  const contentHeight = Math.ceil(body.scrollHeight);
+  const targetHeight = stage >= 7
+    ? Math.max(500, contentHeight + 76)
+    : stage >= 3
+      ? Math.max(470, contentHeight + 72)
+      : Math.max(430, contentHeight + 68);
+  const maxWidth = Math.max(360, desktop.clientWidth - 24);
+  const maxHeight = Math.max(320, desktop.clientHeight - 24);
+  const nextWidth = Math.min(maxWidth, Math.max(daemonWin.offsetWidth, targetWidth));
+  const nextHeight = Math.min(maxHeight, Math.max(daemonWin.offsetHeight, targetHeight));
+  daemonWin.style.width = nextWidth + 'px';
+  daemonWin.style.height = nextHeight + 'px';
+  const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
+  const maxTop = Math.max(0, desktop.clientHeight - nextHeight);
+  const currentLeft = parseFloat(daemonWin.style.left) || 0;
+  const currentTop = parseFloat(daemonWin.style.top) || 0;
+  daemonWin.style.left = Math.max(0, Math.min(maxLeft, currentLeft)) + 'px';
+  daemonWin.style.top = Math.max(0, Math.min(maxTop, currentTop)) + 'px';
+}
+
+function openDaemon() {
+  daemonActivate('panel');
+  const stage = daemonStory.stage || 0;
+  const initialWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
+  const initialHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
+  if (!mkWin({ id:'daemon', title:'daemon.core - Containment', icon:'👁️', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
+  renderDaemonPanel();
+}
+
+function daemonVoidAction(mode) {
+  const telemetry = getContainmentTelemetry();
+  daemonVoidFeedMode = mode;
+  if (mode === 'observe') {
+    daemonVoidFeed = daemonStory.stage >= 5
+      ? 'This is not a damaged file. This is the aperture surface.'
+      : daemonStory.stage >= 4
+        ? 'The relay went quiet and this surface brightened. Silence is not safety.'
+        : 'Nothing stable answers yet, but the file is already taking a shape.';
+  } else if (mode === 'measure') {
+    daemonVoidFeed = [
+      `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
+      `void pressure: ${telemetry.pressure}`,
+      `lattice stability: ${telemetry.lattice}`,
+      `signal depth: ${telemetry.signalDepth}`,
+      `aperture bias: ${telemetry.bias}`,
+      'disk locality: negative',
+    ].join('\n');
+  } else if (mode === 'listen') {
+    daemonVoidFeed = daemonStory.stage >= 5
+      ? 'The reflected side does not speak in words. It leans against the room tone.'
+      : daemonStory.stage >= 4
+        ? 'You hear the shape of a voice through the monitor gap.'
+        : 'Static. Then the suggestion of a room tone.';
+  } else if (mode === 'trace') {
+    daemonVoidFeed = daemonStory.stage >= 5
+      ? 'trace path:\n  user-facing aperture <- mirror offset <- unresolved source\n  return latency remains non-local'
+      : daemonStory.stage >= 4
+        ? 'trace path:\n  monitor gap -> pressure rise -> reflected surface'
+        : 'No stable trace path yet.';
+  } else if (mode === 'sample') {
+    daemonVoidFeed = daemonStory.stage >= 5
+      ? 'sample:\n  carrier mismatch: confirmed\n  human voice match: negative\n  daemon-authored signature: false'
+      : daemonStory.stage >= 4
+        ? 'sample:\n  carrier unstable\n  monitor loss amplified the return path'
+        : 'Sampling window too narrow.';
+  } else if (mode === 'stabilize') {
+    daemonVoidFeed = telemetry.mirrorLockActive
+      ? daemonStory.quarantineSigned
+        ? 'stabilize:\n  seal lattice catches for 0.8s\n  pressure drops in stepped increments'
+        : 'stabilize:\n  mirror lock absorbs part of the return\n  pressure hesitates, then climbs again'
+      : 'stabilize refused:\n  MIRROR_LOCK=0\n  aperture remains user-facing';
+    triggerGlitch({ intensity: daemonStory.stage >= 7 ? 7 : daemonStory.stage >= 5 ? 5 : 4 });
+  } else if (mode === 'pulse') {
+    daemonVoidFeed = daemonStory.quarantineSigned
+      ? 'The quarantine signature holds. The aperture recoils.'
+      : daemonStory.stage >= 5
+        ? 'A pulse returns before the machine feels ready for it, as if the file were farther away than the disk.'
+        : 'The pulse dissipates without a readable return.';
+    if (daemonStory.stage >= 5) triggerGlitch();
+  }
+  daemonRecordVoidAction(mode);
+  const out = document.getElementById('void-readout');
+  if (out) renderVoidReadout(out, daemonVoidFeed, telemetry);
+}
+
+function renderVoid() {
+  const body = document.getElementById('wb-void');
+  if (!body) return;
+  applyDaemonWindowState();
+  const title = document.getElementById('wtitle-void');
+  if (title) title.textContent = daemonStory.endingReached ? 'void.tmp - Sealed' : 'void.tmp';
+  body.style.cssText = 'background:#000;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:10px;';
+  const telemetry = getContainmentTelemetry();
+  const actions = getVoidActions();
+  const pressure = telemetry.pressure;
+  const summary = daemonStory.endingReached
+    ? 'No active signal remains.'
+    : daemonStory.stage >= 5
+      ? `This file is the breach surface.\nUse the probes here to profile it.\n${getVoidObjectiveLine()}`
+      : daemonStory.stage >= 4
+        ? `Pressure rose after the daemon relay went quiet.\nUse Measure, Listen, or Trace to make the change legible.\n${getVoidObjectiveLine()}`
+        : 'No stable observation channel yet.';
+  const readout = daemonVoidFeed || summary;
+  body.innerHTML = `
+    <div style="border:1px solid #123512;background:#030703;color:#7fd37f;padding:8px;font-size:11px;line-height:1.5;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div>
+        <div><b>CONTAINMENT:</b> ${telemetry.rating.code}</div>
+        <div style="color:${telemetry.rating.color};font-weight:bold;">${telemetry.rating.label}</div>
+      </div>
+      <div>
+        <div><b>BIAS:</b> ${telemetry.bias.toUpperCase()}</div>
+        <div><b>QUARANTINE:</b> ${daemonStory.quarantineSigned ? 'present' : 'missing'}</div>
+      </div>
+      <div>
+        <div><b>VOID PRESSURE:</b> ${pressure}</div>
+        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, pressure))}%;background:#6ab56a;"></div></div>
+      </div>
+      <div>
+        <div><b>LATTICE:</b> ${telemetry.lattice}</div>
+        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, telemetry.lattice))}%;background:#7fd37f;"></div></div>
+      </div>
+      <div>
+        <div><b>SIGNAL DEPTH:</b> ${telemetry.signalDepth}</div>
+        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, telemetry.signalDepth))}%;background:#9ee29e;"></div></div>
+      </div>
+      <div>
+        <div><b>MIRROR LOCK:</b> ${telemetry.mirrorLockActive ? '1' : '0'}</div>
+        <div><b>DELETE AUTH:</b> ${telemetry.deleteAuthorized ? 'yes' : 'no'}</div>
+      </div>
+      <div>
+        <div><b>PROBES:</b> ${actions.length}/${VOID_ACTION_ORDER.length}</div>
+        <div><b>PROFILE:</b> ${getVoidProfileLabel().toUpperCase()}</div>
+      </div>
+    </div>
+    <div id="void-readout" style="flex:1;min-height:0;overflow:auto;border:1px solid #123512;background:#020402;color:#6ab56a;padding:10px;font-size:11px;line-height:1.7;white-space:pre-wrap;">${escHtml(readout)}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;">
+      <button class="dlg-btn" onclick="daemonVoidAction('observe')">Observe</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('measure')">Measure</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('listen')">Listen</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('trace')">Trace</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('sample')">Sample</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('stabilize')">Stabilize</button>
+      <button class="dlg-btn" onclick="daemonVoidAction('pulse')">Pulse</button>
+      <button class="dlg-btn primary" onclick="closeWin('void')">Close</button>
+    </div>`;
+  renderVoidReadout(document.getElementById('void-readout'), readout, telemetry);
+  resizeVoidWindow();
+}
+
+function resizeVoidWindow() {
+  const voidWin = wins.void?.el;
+  if (!voidWin || wins.void.maximized) return;
+  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  if (isMobile) return;
+  const desktop = document.getElementById('desktop');
+  if (!desktop) return;
+  const targetWidth = daemonStory.stage >= 5 ? 560 : 540;
+  const targetHeight = daemonStory.stage >= 5 ? 520 : 500;
+  const maxWidth = Math.max(380, desktop.clientWidth - 24);
+  const maxHeight = Math.max(360, desktop.clientHeight - 24);
+  const nextWidth = Math.min(maxWidth, Math.max(voidWin.offsetWidth, targetWidth));
+  const nextHeight = Math.min(maxHeight, Math.max(voidWin.offsetHeight, targetHeight));
+  voidWin.style.width = nextWidth + 'px';
+  voidWin.style.height = nextHeight + 'px';
+  const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
+  const maxTop = Math.max(0, desktop.clientHeight - nextHeight);
+  const currentLeft = parseFloat(voidWin.style.left) || 0;
+  const currentTop = parseFloat(voidWin.style.top) || 0;
+  voidWin.style.left = Math.max(0, Math.min(maxLeft, currentLeft)) + 'px';
+  voidWin.style.top = Math.max(0, Math.min(maxTop, currentTop)) + 'px';
+}
+
+function openVoid() {
+  if (daemonStory.endingReached) {
+    osAlert('void.tmp is no longer present.', 'void.tmp', '⬛');
+    return;
+  }
+  daemonRecordInvestigation('void');
+  const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
+  const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  renderVoid();
+}
+
+function openUnknown() {
+  const wid = 'unk-warn-' + Date.now();
+  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'❓', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
+  const ready = daemonStory.stage >= 7 && !daemonStory.endingReached && Number(getContainmentValue('MIRROR_LOCK')) === 1;
+  const signed = daemonStory.quarantineSigned;
+  const inertMsg = daemonStory.stage < 4
+    ? 'The launcher does not respond.<br><br>There is nothing here for it to do yet.'
+    : daemonStory.stage < 6
+    ? 'The launcher is inert.<br><br>The investigation is incomplete. Find the channel.'
+    : 'The launcher is waiting.<br><br>MIRROR_LOCK must be restored before it will sign anything.';
+  document.getElementById('wb-' + wid).innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon">❓</div>
+      <div class="dlg-text">
+        ${signed
+          ? 'SYS\\quarantine.sig is already present.<br><br>The launcher is waiting for the final delete.'
+          : ready
+          ? 'The quarantine launcher is armed.<br><br>Running <b>?????.exe</b> will write <b>SYS\\quarantine.sig</b>.'
+          : inertMsg}
+      </div>
+    </div>
+    <div class="dlg-btns">
+      <button class="dlg-btn primary" onclick="closeWin('${wid}');runUnknown()">${signed ? 'Check Status' : ready ? 'Generate Signature' : 'Run Anyway'}</button>
+      <button class="dlg-btn" onclick="closeWin('${wid}')">Cancel</button>
+    </div>`;
+}
+
+function runUnknown() {
+  let message = '';
+  if (daemonStory.endingReached) {
+    message = 'The quarantine launcher has been archived.\nThere is nothing left to sign.';
+  } else if (daemonStory.stage < 4) {
+    message = '?????.exe does not execute.\n\nThere is nothing for it to do yet.';
+  } else if (daemonStory.stage < 6) {
+    message = '?????.exe does not execute.\n\nThe investigation is incomplete. Find and inspect the channel before you use this.';
+  } else if (daemonStory.stage < 7 || Number(getContainmentValue('MIRROR_LOCK')) !== 1) {
+    message = '?????.exe does not execute.\n\nRestore MIRROR_LOCK to 1 first. The launcher will not sign an open lattice.';
+  } else if (!daemonStory.quarantineSigned) {
+    updateDaemonStory(story => {
+      story.quarantineSigned = true;
+      story.lastEventText = 'quarantine signature written';
+      daemonVoidFeed = 'A signature passes through the aperture and the pressure drops.';
+      daemonVoidFeedMode = '';
+    }, {
+      glitch: true,
+    });
+    message = 'quarantine.sig written.\n\nDelete void.tmp to complete containment.';
+  } else {
+    message = 'SYS\\quarantine.sig is already present.\n\nThe launcher has nothing else to do.';
+  }
+  const rid = 'unk-result-' + Date.now();
+  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:360, h:220, x:180, y:110, menubar:false, statusbar:false })) return;
+  document.getElementById('wb-' + rid).innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon">❓</div>
+      <div class="dlg-text" style="white-space:pre-line;">${escHtml(message)}</div>
+    </div>
+    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
+}
+
+function openBrowser() {
+  if (!mkWin({ id:'browser', title:'sleepWEB - Web Browser', icon:'🌐', w:640, h:460, x:80, y:50 })) return;
+
+  const mb   = document.getElementById('mb-browser');
+  const body = document.getElementById('wb-browser');
+  const ws   = document.getElementById('ws-browser');
+  body.style.cssText = 'display:flex;flex-direction:column;padding:0;overflow:hidden;';
+
+  let hist = [], histIdx = -1;
+
+  // ── home page ──────────────────────────────────────────────────
+  function buildHome() {
+    const projectLinks = PROJECTS.map(p =>
+      `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${JSON.stringify(p.file).replace(/</g, '\\u003c')}},"*");return false;'>${p.emoji} ${escHtml(p.name)}</a>`
+    ).join('');
+    const favoriteLinks = browserFavorites
+      .filter(fav => !DEFAULT_BROWSER_FAVORITE_URLS.has(fav.url.toLowerCase()))
+      .map(fav => {
+        const safeUrl = JSON.stringify(fav.url).replace(/</g, '\u003c');
+        const safeTitle = escHtml(fav.title || fav.url);
+        return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>&#9734; ${safeTitle}</a>`;
+      }).join('');
+    const webLinks = DEFAULT_BROWSER_FAVORITES.map(fav => {
+      const safeUrl = JSON.stringify(fav.url).replace(/</g, '\u003c');
+      const safeTitle = escHtml(fav.title);
+      return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${fav.homeIcon} ${safeTitle}</a>`;
+    }).join('');
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
+@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
+:root{--sleep-font:'W95font',sans-serif;}
+      body{margin:0;background:#c0c0c0;font-family: var(--sleep-font);font-size:12px;}
+      h1{background:#000080;color:#fff;margin:0;padding:6px 12px;font-size:13px;}
+      .sec{padding:6px 12px;}.sec h2{font-size:11px;margin:6px 0 4px;border-bottom:1px solid #808080;}
+      .grid{display:flex;flex-wrap:wrap;gap:3px;}
+      .lnk{background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;
+           padding:1px 7px;font-size:11px;text-decoration:none;color:#000;display:inline-block;}
+      .lnk:hover{background:#000080;color:#fff;}
+    </style></head><body>
+    <h1>&#127760; sleepWEB &#8212; Start Page</h1>
+    <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${projectLinks}</div></div>
+    <div class="sec"><h2>The Web (may not load in frame)</h2><div class="grid">${webLinks}${favoriteLinks}</div></div>
+</body></html>`;
+  }
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'browser-toolbar';
+  toolbar.innerHTML = `
+    <button class="br-btn" id="br-back" title="Back" disabled>◀</button>
+    <button class="br-btn" id="br-fwd"  title="Forward" disabled>▶</button>
+    <button class="br-btn" id="br-stop" title="Stop">✕</button>
+    <button class="br-btn" id="br-ref"  title="Refresh">↻</button>
+    <button class="br-btn" id="br-home" title="Home">🏠</button>
+    <div class="br-vsep"></div>
+    <span class="br-addr-label">Address:</span>
+    <input class="br-addr" id="br-url" type="text" value="home:">
+    <button class="br-btn" id="br-go">Go</button>
+    <button class="br-btn" id="br-fav" title="Add to Favorites">⭐</button>`;
+  body.appendChild(toolbar);
+
+  // ── iframe + error overlay ─────────────────────────────────────
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'flex:1;position:relative;overflow:hidden;background:#fff;';
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+  iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation';
+  wrap.appendChild(iframe);
+
+  const errDiv = document.createElement('div');
+  errDiv.id = 'br-err';
+  errDiv.style.cssText = 'display:none;position:absolute;inset:0;background:#c0c0c0;padding:30px;';
+  const errBox = document.createElement('div');
+  errBox.style.cssText = 'background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:16px;max-width:380px;margin:auto;font-size:11px;';
+  errDiv.appendChild(errBox);
+  wrap.appendChild(errDiv);
+
+  function showError(url) {
+    errBox.innerHTML = `
+      <div style="font-size:24px;margin-bottom:8px;">🚫</div>
+      <b>This page cannot be displayed</b><br><br>
+      <span style="word-break:break-all;color:#444;">${url}</span><br><br>
+      This site sent <code style="background:#eee;padding:1px 3px;">X-Frame-Options</code> or
+      <code style="background:#eee;padding:1px 3px;">Content-Security-Policy</code> headers that
+      block embedding.<br><br>
+      To fix this on <b>your own sites</b>, add this header:<br>
+      <code style="background:#eee;padding:2px 4px;display:block;margin:4px 0;">X-Frame-Options: ALLOWALL</code>
+      <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;">
+        <button class="dlg-btn primary" id="br-err-tab">Open in New Tab</button>
+        <button class="dlg-btn" id="br-err-ok">OK</button>
+      </div>`;
+    errDiv.style.display = 'block';
+    document.getElementById('br-err-tab').onclick = () => window.open(url, '_blank');
+    document.getElementById('br-err-ok').onclick  = () => { errDiv.style.display = 'none'; };
+    if (ws) ws.textContent = 'Error: site blocked embedding';
+  }
+  body.appendChild(wrap);
+
+  // ── navigate ───────────────────────────────────────────────────
+  function updateNav() {
+    document.getElementById('br-back').disabled = histIdx <= 0;
+    document.getElementById('br-fwd').disabled  = histIdx >= hist.length - 1;
+  }
+
+  let lastAttemptedUrl = '';
+
+  function navigate(url, push = true) {
+    errDiv.style.display = 'none';
+    if (!url || url === 'home:') {
+      url = 'home:';
+      document.getElementById('br-url').value = 'home:';
+      iframe.removeAttribute('src');
+      iframe.srcdoc = buildHome();
+      if (ws) ws.textContent = 'sleepWEB Start Page';
+    } else {
+      if (!/^https?:\/\/|^data:|^about:/.test(url)) url = 'https://' + url;
+      lastAttemptedUrl = url;
+      document.getElementById('br-url').value = url;
+      iframe.removeAttribute('srcdoc');
+      iframe.src = url;
+      if (ws) ws.textContent = 'Connecting to ' + (url.split('/')[2] || url);
+    }
+    if (push) { hist = hist.slice(0, histIdx + 1); hist.push(url); histIdx = hist.length - 1; }
+    updateNav();
+  }
+
+  function syncUrl() {
+    try {
+      const loc = iframe.contentWindow.location.href;
+      if (loc && loc !== 'about:blank' && loc !== 'about:srcdoc') {
+        const bar = document.getElementById('br-url');
+        if (bar && bar.value !== loc) {
+          bar.value = loc;
+          if (hist[histIdx] !== loc) {
+            hist = hist.slice(0, histIdx + 1); hist.push(loc); histIdx = hist.length - 1;
+            updateNav();
+          }
+        }
+      }
+    } catch(e) { /* cross-origin - cannot read URL */ }
+  }
+
+  // Poll to catch SPA pushState/hash navigation and link clicks
+  const _urlPoll = setInterval(syncUrl, 600);
+
+  iframe.addEventListener('load', () => {
+    syncUrl();
+    if (ws) ws.textContent = 'Done';
+  });
+
+  // Clear poll when browser window closes
+  document.getElementById('win-browser')?.addEventListener('remove', () => clearInterval(_urlPoll), { once: true });
+  // Use MutationObserver to detect window removal
+  new MutationObserver((_, obs) => {
+    if (!document.getElementById('win-browser')) { clearInterval(_urlPoll); obs.disconnect(); }
+  }).observe(document.getElementById('desktop'), { childList: true });
+  iframe.addEventListener('error', () => showError(lastAttemptedUrl));
+
+  // ── handle nav messages from srcdoc home page ──────────────────
+  function onBrowserMsg(e) {
+    if (e.data && e.data.type === 'browser-nav') navigate(e.data.url);
+  }
+  window.addEventListener('message', onBrowserMsg);
+  // clean up when window closes
+  const winEl = document.getElementById('win-browser');
+  if (winEl) new MutationObserver((_, obs) => {
+    if (!document.getElementById('win-browser')) {
+      window.removeEventListener('message', onBrowserMsg); obs.disconnect();
+    }
+  }).observe(document.getElementById('desktop'), { childList: true });
+
+  // ── button wiring ──────────────────────────────────────────────
+  document.getElementById('br-back').addEventListener('click', () => {
+    if (histIdx > 0) { histIdx--; navigate(hist[histIdx], false); }
+  });
+  document.getElementById('br-fwd').addEventListener('click', () => {
+    if (histIdx < hist.length - 1) { histIdx++; navigate(hist[histIdx], false); }
+  });
+  document.getElementById('br-stop').addEventListener('click', () => {
+    iframe.src = 'about:blank'; if (ws) ws.textContent = 'Stopped.';
+  });
+  document.getElementById('br-ref').addEventListener('click', () => {
+    const u = hist[histIdx]; if (u === 'home:') { iframe.srcdoc = buildHome(); } else { iframe.src = iframe.src; }
+    if (ws) ws.textContent = 'Refreshing...';
+  });
+  document.getElementById('br-home').addEventListener('click', () => navigate('home:'));
+  document.getElementById('br-go').addEventListener('click', () => navigate(document.getElementById('br-url').value.trim()));
+  document.getElementById('br-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') navigate(document.getElementById('br-url').value.trim());
+  });
+
+  // ── favorites helpers ──────────────────────────────────────────
+  function currentUrl() { return hist[histIdx] || 'home:'; }
+  function refreshHome() {
+    if (currentUrl() === 'home:') iframe.srcdoc = buildHome();
+  }
+  function addToFavorites() {
+    const url = currentUrl();
+    if (url === 'home:') return;
+    if (browserFavorites.some(fav => fav.url.toLowerCase() === url.toLowerCase())) {
+      if (ws) ws.textContent = 'Site is already in Favorites.';
+      return;
+    }
+    osPrompt('Save to Favorites as:', document.getElementById('br-url').value, 'Add to Favorites', title => {
+      if (!title) return;
+      browserFavorites.push({ title, url });
+      saveFavorites();
+      refreshHome();
+      if (ws) ws.textContent = 'Added to Favorites.';
+    }, '*');
+  }
+
+  document.getElementById('br-fav').addEventListener('click', addToFavorites);
+
+  // ── browser body right-click ───────────────────────────────────
+  body.addEventListener('contextmenu', e => {
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: '◀ Back',    disabled: histIdx <= 0,               action: () => document.getElementById('br-back').click() },
+      { label: '▶ Forward', disabled: histIdx >= hist.length - 1, action: () => document.getElementById('br-fwd').click() },
+      { label: '↻ Refresh', action: () => document.getElementById('br-ref').click() },
+      '-',
+      { label: '⭐ Add to Favorites', disabled: currentUrl() === 'home:', action: addToFavorites },
+      '-',
+      { label: '🏠 Home',      action: () => navigate('home:') },
+      { label: '🔗 Open in New Tab', disabled: currentUrl() === 'home:', action: () => window.open(currentUrl(), '_blank') },
+    ]);
+  });
+
+  // ── menu bar ───────────────────────────────────────────────────
+  function brDropdown(anchor, items) {
+    const old = document.getElementById('active-dropdown'); if (old) old.remove();
+    const rect = anchor.getBoundingClientRect();
+    const dd = document.createElement('div');
+    dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
+    dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+    items.forEach(item => {
+      if (item === '-') {
+        const s = document.createElement('div'); s.className = 'menu-dd-sep'; dd.appendChild(s);
+      } else {
+        const el = document.createElement('div'); el.className = 'menu-dd-item'; el.textContent = item.label;
+        el.addEventListener('mousedown', e => { e.stopPropagation(); dd.remove(); item.action(); });
+        dd.appendChild(el);
+      }
+    });
+    document.body.appendChild(dd);
+    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+  }
+
+  mb.innerHTML = '';
+  [
+    { label: 'File', items: [
+      { label: 'Open Location...', action: () => osPrompt('Enter URL:', 'https://', 'Open Location', u => { if (u) navigate(u); }, '🌐') },
+      '-',
+      { label: 'Close', action: () => closeWin('browser') },
+    ]},
+    { label: 'View', items: [
+      { label: 'Home',    action: () => navigate('home:') },
+      { label: 'Refresh', action: () => document.getElementById('br-ref').click() },
+      { label: 'Stop',    action: () => document.getElementById('br-stop').click() },
+      '-',
+      { label: 'View Source', action: () => {
+        try {
+          const src = iframe.contentDocument.documentElement.outerHTML;
+          const w = window.open(''); w.document.write('<pre style="white-space:pre-wrap;font-size:12px;">' + src.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>');
+        } catch(e) { osAlert('Cannot view source of cross-origin pages.', 'View Source', '🚫'); }
+      }},
+    ]},
+    { label: 'Help', items: [
+      { label: 'About sleepWEB', action: () => osAlert('sleepWEB - Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', '🌐') },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); brDropdown(span, items); });
+    mb.appendChild(span);
+  });
+
+  // Favorites menu (dynamic - built on open)
+  const favSpan = document.createElement('span');
+  favSpan.className = 'menu-item'; favSpan.textContent = 'Favorites';
+  favSpan.addEventListener('click', e => {
+    e.stopPropagation();
+    const items = [
+      { label: '⭐ Add to Favorites', action: addToFavorites },
+      { label: '🗑️ Clear All Favorites', action: () => {
+        if (!browserFavorites.length) return;
+        osConfirm('Clear all favorites?', 'Confirm', ok => {
+          if (!ok) return;
+          browserFavorites.length = 0; saveFavorites(); refreshHome(); if (ws) ws.textContent = 'Favorites cleared.';
+        }, '🗑️');
+      }},
+    ];
+    if (browserFavorites.length) {
+      items.push('-');
+      browserFavorites.forEach((fav, i) => items.push({
+        label: fav.title,
+        action: () => navigate(fav.url),
+      }));
+    }
+    brDropdown(favSpan, items);
+  });
+  mb.appendChild(favSpan);
+
+  navigate('home:');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// GLITCH EFFECT
+// ─────────────────────────────────────────────────────────────────
+function triggerGlitch(options) {
+  const desktop = document.getElementById('desktop');
+  const windowsLayer = document.getElementById('windows-layer');
+  const taskbar = document.getElementById('taskbar');
+  const glitch = document.getElementById('glitch');
+  const intensity = Number(options?.intensity) || 0;
+  const subtle = !!options?.subtle;
+  pulseDaemonWindows(intensity, { subtle });
+  const targets = [desktop, windowsLayer, taskbar].filter(Boolean);
+  const glitchClass = subtle ? 'glitching-soft' : 'glitching';
+  targets.forEach(el => el.classList.add(glitchClass));
+  setTimeout(() => targets.forEach(el => {
+    el.classList.remove('glitching');
+    el.classList.remove('glitching-soft');
+  }), subtle ? 420 : intensity >= 7 ? 900 : intensity >= 5 ? 760 : 650);
+
+  if (glitch) {
+    glitch.style.display = 'block';
+    glitch.style.background = intensity >= 7
+      ? 'linear-gradient(90deg, rgba(255,0,120,0.14), transparent 22%, rgba(80,255,255,0.18) 58%, transparent 78%), repeating-linear-gradient(180deg, rgba(255,255,255,0.04) 0 2px, transparent 2px 6px)'
+      : intensity >= 5
+        ? 'linear-gradient(90deg, rgba(255,0,80,0.09), transparent 28%, rgba(90,255,240,0.12) 64%, transparent 82%), repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 8px)'
+        : 'linear-gradient(90deg, rgba(255,255,255,0.06), transparent 50%, rgba(120,255,255,0.06)), repeating-linear-gradient(180deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 10px)';
+    glitch.style.opacity = subtle
+      ? intensity >= 7 ? '0.54' : intensity >= 5 ? '0.38' : '0.24'
+      : intensity >= 7 ? '0.9' : intensity >= 5 ? '0.65' : '0.42';
+    glitch.style.transform = subtle
+      ? intensity >= 7 ? 'translateX(-2px)' : intensity >= 5 ? 'translateX(1px)' : 'translateX(0)'
+      : intensity >= 7 ? 'translateX(-6px)' : intensity >= 5 ? 'translateX(4px)' : 'translateX(0)';
+    setTimeout(() => {
+      glitch.style.display = 'none';
+      glitch.style.opacity = '';
+      glitch.style.transform = '';
+      glitch.style.background = '';
+    }, subtle ? 110 : intensity >= 7 ? 180 : 130);
+  }
+
+  // Brief scanline intensify
+  const crt = document.getElementById('crt');
+  crt.style.opacity = subtle
+    ? intensity >= 7 ? '1.55' : intensity >= 5 ? '1.35' : '1.22'
+    : intensity >= 7 ? '2.45' : intensity >= 5 ? '2.2' : '2';
+  setTimeout(() => { crt.style.opacity = '1'; }, subtle ? 150 : intensity >= 7 ? 260 : 180);
+}
+
+let endingRebootActive = false;
+const ENDING_REBOOT_ANIM_MS = 2350;
+const ENDING_REBOOT_TEXT_HOLD_MS = 2400;
+function playContainmentEndingReboot() {
+  if (endingRebootActive) return;
+  endingRebootActive = true;
+  closeStart();
+  closeDropdown();
+  closeCad();
+  if (altTabActive) closeAltTab();
+
+  const overlay = document.getElementById('ending-reboot');
+  if (overlay) {
+    overlay.classList.add('active');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+  document.body.classList.add('final-rebooting');
+
+  setTimeout(() => {
+    const desktop = document.getElementById('desktop');
+    const taskbar = document.getElementById('taskbar');
+    const daemonFx = document.getElementById('daemon-fx');
+    const bios = document.getElementById('bios');
+
+    if (overlay) {
+      overlay.classList.remove('active');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+    if (desktop) desktop.style.display = 'none';
+    if (taskbar) taskbar.style.display = 'none';
+    if (daemonFx) daemonFx.style.display = 'none';
+    document.body.classList.remove('final-rebooting');
+
+    if (bios) {
+      bios.style.display = 'flex';
+      bios.style.opacity = '1';
+      bios.style.transition = 'none';
+      bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#858585;white-space:pre;line-height:1.55;">
+Containment complete.
+Draining chroma channels...               [SEALED]
+Archiving daemon.core...                 [OK]
+Rebooting sleepOS shell...
+      </div>`;
+    }
+
+    try { sessionStorage.setItem(FORCE_BOOT_SESSION_KEY, '1'); } catch (e) {}
+    setTimeout(() => { window.location.replace('sleep-os.html'); }, ENDING_REBOOT_TEXT_HOLD_MS);
+  }, ENDING_REBOOT_ANIM_MS);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SHUTDOWN
+// ─────────────────────────────────────────────────────────────────
+function doShutdown() {
+  const id = 'shutdown';
+  const powerIconSvg = '<svg viewBox="0 -3 16 16" aria-hidden="true" focusable="false"><path d="M8 1.5v5.2"></path><path d="M4.8 3.3a5 5 0 1 0 6.4 0"></path></svg>';
+  const powerIcon = `<span class="power-icon">${powerIconSvg}</span>`;
+  if (!mkWin({ id, title:'Shut Down sleepOS', icon:powerIcon, w:300, h:165,
+               x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
+               menubar:false, statusbar:false, popup:true })) return;
+  document.getElementById('wb-shutdown').innerHTML = `
+    <div class="dlg-body">
+      <div class="dlg-icon power-icon">${powerIconSvg}</div>
+      <div class="dlg-text">
+        What do you want the computer to do?<br><br>
+        <select id="shutdown-sel" style="width:180px;font-size:11px;margin-top:2px;">
+          <option value="off">Shut down</option>
+          <option value="restart">Restart</option>
+          <option value="sleep">Sleep</option>
+          <option value="back">Return to Eve Net</option>
+        </select>
+      </div>
+    </div>
+    <div class="dlg-btns">
+      <button class="dlg-btn primary" onclick="confirmShutdown()">OK</button>
+      <button class="dlg-btn" onclick="closeWin('shutdown')">Cancel</button>
+    </div>`;
+}
+
+function confirmShutdown() {
+  const sel = document.getElementById('shutdown-sel');
+  const val = sel ? sel.value : 'back';
+  closeWin('shutdown');
+  if (val === 'sleep') {
+    enterIdleSleep(MANUAL_SLEEP_WAKE_DELAY_MS);
+    return;
+  }
+
+  const bios = document.getElementById('bios');
+  bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';
+  bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#888;white-space:pre;line-height:1.5;">
+sleepOS - ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
+
+Stopping soul_daemon.exe...              [OK]
+Stopping dream_fragment.exe...           [OK]
+Stopping unknown (PID 0333)...           [TIMEOUT]
+Stopping unknown (PID 0334)...           [TIMEOUT]
+Stopping unknown (PID 0335)...           [TIMEOUT]
+Flushing corpus cache...                 [OK]
+Unloading kernel modules...              [OK]
+Saving system state...                   [OK]
+  </div>`;
+  document.getElementById('desktop').style.display = 'none';
+  document.getElementById('taskbar').style.display = 'none';
+  setTimeout(() => { bios.style.opacity = '1'; }, 30);
+  setTimeout(() => {
+    if (val === 'back') window.location.href = '/';
+    else if (val === 'restart') window.location.href = 'sleep-os.html';
+    else window.close();
+  }, 3200);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// REGISTRY EDITOR
+// ─────────────────────────────────────────────────────────────────
+function openRegedit() {
+  if (!mkWin({ id:'regedit', title:'Registry Editor', icon:'🗝️', w:580, h:380, x:90, y:70 })) return;
+  const body = document.getElementById('wb-regedit');
+  const ws   = document.getElementById('ws-regedit');
+  const mb   = document.getElementById('mb-regedit');
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+  const REGEDIT_LOCKED_VALUE_NAMES = new Set(['OBSERVER_COUNT', 'ANCHOR_FILE', 'TEMPORAL_DRIFT']);
+
+  const layout = document.createElement('div');
+  layout.className = 'reg-layout';
+  body.appendChild(layout);
+
+  // ── Tree panel ─────────────────────────────────────────────────
+  const tree = document.createElement('div');
+  tree.className = 'reg-tree';
+  layout.appendChild(tree);
+
+  // ── Values panel ───────────────────────────────────────────────
+  const vals = document.createElement('div');
+  vals.className = 'reg-vals';
+  layout.appendChild(vals);
+
+  let selectedPath = null; // { hive, key }
+
+  function isLockedRegValue(hive, keyPath, valName) {
+    return REGEDIT_LOCKED_VALUE_NAMES.has(String(valName || '').toUpperCase());
+  }
+
+  function showLockedRegValueNotice(valName) {
+    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', '🗝️');
+  }
+
+  function buildTree() {
+    tree.innerHTML = '';
+    Object.keys(registryData).forEach(hive => {
+      const hiveEl = document.createElement('div');
+      hiveEl.style.cssText = 'margin-bottom:1px;';
+
+      const hiveRow = document.createElement('div');
+      hiveRow.className = 'reg-tree-item';
+      hiveRow.innerHTML = '<span class="reg-tree-arrow">▶</span><span class="reg-tree-icon">📁</span>&nbsp;<span>' + hive + '</span>';
+      let expanded = false;
+      const childWrap = document.createElement('div');
+      childWrap.style.paddingLeft = '12px';
+      childWrap.style.display = 'none';
+
+      hiveRow.addEventListener('click', () => {
+        expanded = !expanded;
+        childWrap.style.display = expanded ? '' : 'none';
+        hiveRow.querySelector('.reg-tree-arrow').textContent = expanded ? '▼' : '▶';
+      });
+
+      Object.keys(registryData[hive]).forEach(keyPath => {
+        const keyEl = document.createElement('div');
+        keyEl.className = 'reg-tree-item';
+        keyEl.innerHTML = '<span class="reg-tree-icon">🗂️</span>&nbsp;<span>' + keyPath + '</span>';
+        keyEl.addEventListener('click', e => {
+          e.stopPropagation();
+          tree.querySelectorAll('.reg-tree-item.selected').forEach(el => el.classList.remove('selected'));
+          keyEl.classList.add('selected');
+          selectedPath = { hive, key: keyPath };
+          renderVals(hive, keyPath);
+          if (ws) ws.textContent = hive + '\\' + keyPath;
+        });
+        childWrap.appendChild(keyEl);
+      });
+
+      hiveEl.appendChild(hiveRow);
+      hiveEl.appendChild(childWrap);
+      tree.appendChild(hiveEl);
+    });
+  }
+
+  function renderVals(hive, keyPath) {
+    vals.innerHTML = '';
+    const data = registryData[hive][keyPath];
+    const tbl = document.createElement('table');
+    tbl.className = 'reg-vals-table';
+    tbl.innerHTML = '<thead><tr><th style="width:180px;">Name</th><th style="width:100px;">Type</th><th>Data</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    Object.keys(data).forEach(valName => {
+      const entry = data[valName];
+      const locked = isLockedRegValue(hive, keyPath, valName);
+      const tr = document.createElement('tr');
+      tr.className = 'reg-val-row';
+      tr.innerHTML = '<td>📄 ' + valName + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
+      tr.addEventListener('dblclick', () => {
+        if (locked) {
+          showLockedRegValueNotice(valName);
+          return;
+        }
+        editRegValue(hive, keyPath, valName);
+      });
+      tr.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        tr.classList.add('selected');
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: 'Modify', disabled: locked, action: () => editRegValue(hive, keyPath, valName) },
+        ]);
+        setTimeout(() => tr.classList.remove('selected'), 800);
+      });
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    vals.appendChild(tbl);
+  }
+
+  function editRegValue(hive, keyPath, valName) {
+    if (isLockedRegValue(hive, keyPath, valName)) {
+      showLockedRegValueNotice(valName);
+      return;
+    }
+    const entry = registryData[hive][keyPath][valName];
+    const currentVal = String(entry.value);
+    osPrompt('Edit value for: ' + valName, currentVal, 'Edit Registry Value', newVal => {
+      if (newVal === null) return;
+      if (entry.type === 'REG_DWORD') {
+        entry.value = parseInt(newVal) || 0;
+      } else {
+        entry.value = newVal;
+      }
+      saveRegistry();
+      applyRegistryEffects(hive, keyPath, valName, entry.value);
+      renderVals(hive, keyPath);
+    }, '🗝️');
+  }
+
+  function applyRegistryEffects(hive, keyPath, valName, newValue) {
+    if (hive === 'HKEY_SLEEPBOX_MACHINE') {
+      if (keyPath === 'SYSTEM\\CurrentConfig') {
+        if (valName === 'CRT_SCANLINES') {
+          osSettings.crtScanlines = !!newValue;
+          const crt = document.getElementById('crt');
+          if (crt) crt.style.display = newValue ? '' : 'none';
+        } else if (valName === 'VIDEO_DITHER') {
+          osSettings.videoDither = !!newValue;
+          document.querySelectorAll('.vp-dither').forEach(d => d.style.display = newValue ? '' : 'none');
+        } else if (valName === 'CLOCK_FORMAT') {
+          osSettings.clock12h = (newValue === '12h');
+          updateClock();
+        }
+        saveSettings();
+      } else if (keyPath === 'SOUL\\Metrics') {
+        if (valName === 'SOUL_INTEGRITY') {
+          const bar = document.getElementById('bar-soul');
+          const val = document.getElementById('val-soul');
+          const v = Math.max(0, Math.min(99, parseInt(newValue) || 0));
+          if (bar) bar.style.width = v + '%';
+          if (val) val.textContent = v + '%';
+        } else if (valName === 'DAEMON_COUNT') {
+          const count = parseInt(newValue) || 0;
+          if (count !== 7) triggerGlitch({ intensity: Math.abs(count - 7) > 3 ? 6 : 3 });
+          updateDaemonStory(story => {
+            story.lastEventText = count > 7 ? 'daemon count elevated - ' + count : count < 7 ? 'daemon count reduced - ' + count : 'daemon count nominal';
+          }, { forceSync: true });
+          if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
+        } else if (valName === 'TEMPORAL_DRIFT') {
+          triggerGlitch({ intensity: 3 });
+          updateDaemonStory(story => { story.lastEventText = 'temporal drift set: ' + String(newValue); }, { forceSync: true });
+          if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
+        }
+      } else if (keyPath === 'VOID') {
+        if (valName === 'VOID_PRESSURE_BASE') {
+          const base = Math.max(0, Math.min(99, parseInt(newValue) || 0));
+          triggerGlitch({ intensity: base > 50 ? 7 : base > 25 ? 5 : 2 });
+          if (typeof renderVoid === 'function' && document.getElementById('wb-void')) renderVoid();
+        } else if (valName === 'OBSERVER_COUNT') {
+          const val = String(newValue).trim();
+          if (val !== '[classified]' && val !== '') {
+            triggerGlitch({ intensity: 8 });
+            updateDaemonStory(story => { story.lastEventText = 'observer count declassified: ' + val; }, { forceSync: true });
+          }
+        }
+      } else if (keyPath === 'Containment') {
+        if (valName === 'RESPAWN_LOCK') {
+          updateDaemonStory(story => {
+            if (story.openedDaemon && !story.daemonStopped) {
+              story.lastEventText = Number(newValue) === 0 ? 'respawn lock cleared' : 'respawn lock raised';
+            }
+          }, { forceSync: true });
+        } else if (valName === 'MIRROR_LOCK') {
+          updateDaemonStory(story => {
+            if (Number(newValue) === 0) {
+              if (story.stage >= 4) story.lastEventText = story.anchorDeleted ? 'mirror lattice lowered' : 'mirror lock lowered';
+            } else if (story.anchorDeleted && story.stage >= 6) {
+              story.mirrorLockRestored = true;
+              story.lastEventText = 'mirror lattice restored';
+            } else if (story.anchorDeleted) {
+              story.lastEventText = 'mirror lock raised';
+            }
+          }, { forceSync: true, glitch: Number(newValue) === 0 && daemonStory.stage >= 5 });
+        }
+      }
+    } else if (hive === 'HKEY_CURRENT_USER') {
+      if (keyPath === 'Desktop' && valName === 'Wallpaper') {
+        applyWallpaper(String(newValue), { updateRegistry: false, deferMissing: false });
+      } else if (keyPath === 'SOFTWARE\\sleepOS') {
+        if (valName === 'SkipBoot') {
+          osSettings.skipBoot = !!newValue;
+          saveSettings();
+        } else if (valName === 'IdleSleepMinutes') {
+          const normalized = normalizeIdleSleepMinutes(newValue);
+          registryData[hive][keyPath][valName].value = normalized;
+          saveRegistry();
+          scheduleIdleSleep();
+        }
+      }
+    }
+  }
+
+  // ── Menu bar ────────────────────────────────────────────────────
+  mb.innerHTML = '';
+  [
+    { label: 'Registry', items: [
+      { label: 'Export...', action: () => {
+        let txt = 'Windows Registry Editor Version 5.00\n\n';
+        Object.keys(registryData).forEach(hive => {
+          Object.keys(registryData[hive]).forEach(keyPath => {
+            txt += '[' + hive + '\\' + keyPath + ']\n';
+            const data = registryData[hive][keyPath];
+            Object.keys(data).forEach(v => {
+              const e = data[v];
+              if (e.type === 'REG_DWORD') txt += '"' + v + '"=dword:' + (e.value >>> 0).toString(16).padStart(8,'0') + '\n';
+              else txt += '"' + v + '"="' + String(e.value).replace(/\\/g,'\\\\').replace(/"/g,'\\"') + '"\n';
+            });
+            txt += '\n';
+          });
+        });
+        const fname = 'registry_export.reg';
+        fsWriteTextFile(fname, txt, '');
+        osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', '🗝️');
+      }},
+      '-',
+      { label: 'Close', action: () => closeWin('regedit') },
+    ]},
+    { label: 'Edit', items: [
+      { label: 'Modify', disabled: !selectedPath, action: () => {
+        if (!selectedPath) return;
+        const keys = Object.keys(registryData[selectedPath.hive][selectedPath.key]);
+        const editableKey = keys.find(valName => !isLockedRegValue(selectedPath.hive, selectedPath.key, valName));
+        if (editableKey) editRegValue(selectedPath.hive, selectedPath.key, editableKey);
+      }},
+    ]},
+    { label: 'Help', items: [
+      { label: 'About Registry Editor', action: () => osAlert('Registry Editor\nsleepOS v0.9β\n\nModifying registry values affects\nlive system behavior.\n\nProceed with caution.', 'About', '🗝️') },
+    ]},
+  ].forEach(({ label, items }) => {
+    const span = document.createElement('span');
+    span.className = 'menu-item'; span.textContent = label;
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, items); });
+    mb.appendChild(span);
+  });
+
+  buildTree();
+  if (ws) ws.textContent = 'My Computer';
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CALCULATOR
+// ─────────────────────────────────────────────────────────────────
+function openCalculator() {
+  if (!mkWin({ id:'calc', title:'Calculator', icon:'🔢', w:240, h:300, x:200, y:120, menubar:true, statusbar:false })) return;
+  const body = document.getElementById('wb-calc');
+  const mb   = document.getElementById('mb-calc');
+  body.style.cssText = 'padding:0;overflow:hidden;';
+
+  let calcMode = 'dec'; // dec | hex | bin
+  let calcExpr = '';
+  let calcDisplay = '0';
+  let calcOp = null;
+  let calcPrev = null;
+  let calcNewNum = true;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'calc-body';
+  body.appendChild(wrap);
+
+  const display = document.createElement('div');
+  display.className = 'calc-display';
+  display.textContent = '0';
+  wrap.appendChild(display);
+
+  const subDisplay = document.createElement('div');
+  subDisplay.style.cssText = 'font-size:10px;color:#555;text-align:right;min-height:14px;';
+  wrap.appendChild(subDisplay);
+
+  const modeRow = document.createElement('div');
+  modeRow.className = 'calc-mode-row';
+  ['dec','hex','bin'].forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'calc-mode-btn' + (m === calcMode ? ' active' : '');
+    btn.textContent = m.toUpperCase();
+    btn.setAttribute('data-mode', m);
+    btn.addEventListener('click', () => {
+      calcMode = m;
+      modeRow.querySelectorAll('.calc-mode-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-mode') === m));
+      updateDisplay();
+      renderGrid();
+    });
+    modeRow.appendChild(btn);
+  });
+  wrap.appendChild(modeRow);
+
+  const grid = document.createElement('div');
+  grid.className = 'calc-grid';
+  wrap.appendChild(grid);
+
+  function getDisplayValue() {
+    const n = parseFloat(calcDisplay);
+    if (isNaN(n)) return calcDisplay;
+    if (calcMode === 'hex') return '0x' + Math.trunc(n).toString(16).toUpperCase();
+    if (calcMode === 'bin') return '0b' + Math.trunc(n).toString(2);
+    return calcDisplay;
+  }
+
+  function updateDisplay() {
+    display.textContent = getDisplayValue();
+    if (calcOp && calcPrev !== null) {
+      subDisplay.textContent = calcPrev + ' ' + calcOp;
+    } else {
+      subDisplay.textContent = '';
+    }
+  }
+
+  function pressDigit(d) {
+    if (calcNewNum) { calcDisplay = String(d); calcNewNum = false; }
+    else { if (calcDisplay === '0' && d !== '.') calcDisplay = String(d); else calcDisplay += String(d); }
+    updateDisplay();
+  }
+
+  function pressOp(op) {
+    const cur = parseFloat(calcDisplay);
+    if (calcOp && !calcNewNum && calcPrev !== null) {
+      calcPrev = doCalc(calcPrev, cur, calcOp);
+      calcDisplay = String(calcPrev);
+    } else {
+      calcPrev = cur;
+    }
+    calcOp = op;
+    calcNewNum = true;
+    updateDisplay();
+  }
+
+  function doCalc(a, b, op) {
+    switch(op) {
+      case '+': return a + b;
+      case '-': return a - b;
+      case '*': return a * b;
+      case '/': return b === 0 ? NaN : a / b;
+      case '%': return a % b;
+    }
+    return b;
+  }
+
+  function pressEquals() {
+    const cur = parseFloat(calcDisplay);
+    if (calcOp && calcPrev !== null) {
+      const result = doCalc(calcPrev, cur, calcOp);
+      calcDisplay = isNaN(result) ? 'Error' : String(result);
+      calcOp = null; calcPrev = null; calcNewNum = true;
+      updateDisplay();
+    }
+  }
+
+  function pressClear() {
+    calcDisplay = '0'; calcOp = null; calcPrev = null; calcNewNum = true;
+    updateDisplay();
+  }
+
+  function pressCE() {
+    calcDisplay = '0'; calcNewNum = true; updateDisplay();
+  }
+
+  function pressBS() {
+    if (calcNewNum || calcDisplay.length <= 1 || calcDisplay === 'Error') {
+      calcDisplay = '0'; calcNewNum = true;
+    } else {
+      calcDisplay = calcDisplay.slice(0, -1) || '0';
+    }
+    updateDisplay();
+  }
+
+  function pressPlusMinus() {
+    const n = parseFloat(calcDisplay);
+    if (!isNaN(n) && n !== 0) { calcDisplay = String(-n); updateDisplay(); }
+  }
+
+  function renderGrid() {
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+    grid.style.gridTemplateRows = 'repeat(5, 1fr)';
+
+    const buttons = [
+      ['CE','C','BS','/'],
+      ['7','8','9','*'],
+      ['4','5','6','-'],
+      ['1','2','3','+'],
+      ['+/-','0','.','='],
+    ];
+
+    if (calcMode === 'hex') {
+      // Replace digits row 1 with hex letters
+      buttons.unshift(['A','B','C','D']);
+      buttons[1] = ['E','F','CE','C'];
+      grid.style.gridTemplateRows = 'repeat(6, 1fr)';
+    }
+
+    buttons.forEach(row => {
+      row.forEach(label => {
+        const btn = document.createElement('button');
+        const isOp  = ['+','-','*','/','%'].includes(label);
+        const isEq  = label === '=';
+        const isCl  = label === 'C' || label === 'CE';
+        btn.className = 'calc-btn' + (isOp ? ' op' : '') + (isEq ? ' equals' : '') + (isCl ? ' clear' : '');
+        btn.textContent = label;
+        btn.addEventListener('click', () => {
+          if (/^[0-9A-F]$/.test(label)) pressDigit(label);
+          else if (label === '.') { if (!calcDisplay.includes('.')) pressDigit('.'); }
+          else if (isOp) pressOp(label);
+          else if (isEq) pressEquals();
+          else if (label === 'C') pressClear();
+          else if (label === 'CE') pressCE();
+          else if (label === 'BS') pressBS();
+          else if (label === '+/-') pressPlusMinus();
+        });
+        grid.appendChild(btn);
+      });
+    });
+    updateDisplay();
+  }
+
+  // Keyboard support
+  const calcKeyHandler = e => {
+    if (!wins['calc']) { document.removeEventListener('keydown', calcKeyHandler); return; }
+    const focused = document.activeElement;
+    if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA') && focused.closest('#win-calc') === null) return;
+    const map = {
+      '0':'0','1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
+      '+':'+','-':'-','*':'*','/':'/',
+      'Enter':'=','=':'=',
+      'Backspace':'BS','Delete':'C','Escape':'C','.':'.',
+    };
+    if (map[e.key]) {
+      e.preventDefault();
+      const lbl = map[e.key];
+      if (/^[0-9]$/.test(lbl)) pressDigit(lbl);
+      else if (['+','-','*','/'].includes(lbl)) pressOp(lbl);
+      else if (lbl === '=') pressEquals();
+      else if (lbl === 'C') pressClear();
+      else if (lbl === 'BS') pressBS();
+      else if (lbl === '.') { if (!calcDisplay.includes('.')) pressDigit('.'); }
+    }
+  };
+  document.addEventListener('keydown', calcKeyHandler);
+
+  // Menu bar
+  mb.innerHTML = '';
+  const editSpan = document.createElement('span');
+  editSpan.className = 'menu-item'; editSpan.textContent = 'Edit';
+  editSpan.addEventListener('click', e => {
+    e.stopPropagation();
+    showDropdown(editSpan, [
+      { label: 'Copy', action: () => navigator.clipboard?.writeText(display.textContent) },
+      { label: 'Paste', action: () => navigator.clipboard?.readText().then(t => {
+        const n = parseFloat(t);
+        if (!isNaN(n)) { calcDisplay = String(n); calcNewNum = false; updateDisplay(); }
+      })},
+    ]);
+  });
+  mb.appendChild(editSpan);
+  const viewSpan = document.createElement('span');
+  viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+  viewSpan.addEventListener('click', e => {
+    e.stopPropagation();
+    showDropdown(viewSpan, [
+      { label: (calcMode==='dec'?'* ':'  ')+'Decimal',  action: () => { calcMode='dec'; modeRow.querySelectorAll('.calc-mode-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-mode')==='dec')); updateDisplay(); renderGrid(); }},
+      { label: (calcMode==='hex'?'* ':'  ')+'Hexadecimal', action: () => { calcMode='hex'; modeRow.querySelectorAll('.calc-mode-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-mode')==='hex')); updateDisplay(); renderGrid(); }},
+      { label: (calcMode==='bin'?'* ':'  ')+'Binary',   action: () => { calcMode='bin'; modeRow.querySelectorAll('.calc-mode-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-mode')==='bin')); updateDisplay(); renderGrid(); }},
+    ]);
+  });
+  mb.appendChild(viewSpan);
+
+  renderGrid();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RUN DIALOG
+// ─────────────────────────────────────────────────────────────────
+function openRunDialog() {
+  const id = 'run-dialog';
+  const p = _osDlgPos(360, 160);
+  if (!mkWin({ id, title:'Run', icon:'▶', w:360, h:160, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:10px;font-size:11px;';
+  body.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <div style="font-size:28px;line-height:1;">▶</div>
+      <div style="flex:1;">
+        <div style="margin-bottom:8px;line-height:1.5;">Type the name of a program to open it.</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="white-space:nowrap;">Open:</span>
+          <input id="run-input" type="text" style="flex:1;border:2px solid;border-color:#808080 #fff #fff #808080;padding:2px 4px;font-family:var(--sleep-font);font-size:11px;background:#fff;">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:6px;">
+      <button class="dlg-btn primary" id="run-ok">OK</button>
+      <button class="dlg-btn" id="run-cancel">Cancel</button>
+    </div>`;
+  const inp = document.getElementById('run-input');
+  const ok  = document.getElementById('run-ok');
+  const can = document.getElementById('run-cancel');
+
+  const RUN_MAP = {
+    'notepad': openNotepad, 'notepad.exe': openNotepad,
+    'terminal': openTerminal, 'terminal.exe': openTerminal,
+    'calc': openCalculator, 'calc.exe': openCalculator,
+    'calculator': openCalculator,
+    'regedit': openRegedit, 'regedit.exe': openRegedit,
+    'sysmon': openSysmon, 'sysmon.exe': openSysmon,
+    'explorer': openExplorer, 'explorer.exe': openExplorer,
+    'defrag': openDefrag, 'defrag.exe': openDefrag,
+    'browser': openBrowser, 'browser.exe': openBrowser,
+    'welcome': openWelcome, 'welcome.readme': openWelcome,
+    'sysmon.exe': openSysmon,
+    'void.tmp': openVoid, 'daemon.core': openDaemon,
+    '?????.exe': openUnknown,
+  };
+
+  ok.addEventListener('click', () => {
+    const v = inp.value.trim().toLowerCase();
+    if (!v) return;
+    closeWin(id);
+    const fn = RUN_MAP[v];
+    if (fn) { fn(); return; }
+    const proj = PROJECTS.find(p =>
+      p.file.toLowerCase() === v ||
+      p.file.toLowerCase().replace('.html','') === v ||
+      p.name.toLowerCase() === v
+    );
+    if (proj) { window.open(proj.file, '_blank'); return; }
+    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Run', '▶');
+  });
+  can.addEventListener('click', () => closeWin(id));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') ok.click();
+    if (e.key === 'Escape') can.click();
+  });
+  setTimeout(() => inp.focus(), 40);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SPACE+TAB / KEYBOARD SHORTCUTS
+// ─────────────────────────────────────────────────────────────────
+let altTabActive = false;
+let altTabIdx = 0;
+let altTabWinIds = [];
+let spaceTabHeld = false;
+
+function getAltTabWindowIds() {
+  return Object.entries(wins)
+    .filter(([, win]) => !win.minimized)
+    .sort(([, a], [, b]) => (parseInt(b.el.style.zIndex, 10) || 0) - (parseInt(a.el.style.zIndex, 10) || 0))
+    .map(([id]) => id);
+}
+
+function renderAltTab() {
+  const box = document.getElementById('alttab-box');
+  if (!box) return;
+  if (!altTabWinIds.length) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = '';
+  const head = document.createElement('div');
+  head.id = 'alttab-head';
+  head.innerHTML = `
+    <div id="alttab-title">Window Switcher</div>
+    <div id="alttab-hint">Hold Space, tap Tab, release Space to select</div>`;
+  box.appendChild(head);
+  const strip = document.createElement('div');
+  strip.id = 'alttab-strip';
+  altTabWinIds.forEach((id, i) => {
+    const w = wins[id];
+    const item = document.createElement('div');
+    item.className = 'alttab-item' + (i === altTabIdx ? ' focused' : '');
+    item.innerHTML = '<div class="at-icon">' + (w.icon || '📄') + '</div><div class="at-label">' + (w.title || id) + '</div>';
+    item.addEventListener('click', () => {
+      altTabIdx = i;
+      commitAltTab();
+    });
+    strip.appendChild(item);
+  });
+  box.appendChild(strip);
+}
+
+function openAltTab(direction) {
+  const ids = getAltTabWindowIds();
+  if (ids.length === 0) return;
+  const step = direction === -1 ? -1 : 1;
+  altTabWinIds = ids;
+  if (!altTabActive) altTabIdx = ids.length === 1 ? 0 : (step > 0 ? 1 : ids.length - 1);
+  else altTabIdx = (altTabIdx + step + ids.length) % ids.length;
+  renderAltTab();
+  document.getElementById('alttab-overlay').classList.add('active');
+  altTabActive = true;
+}
+
+function commitAltTab() {
+  document.getElementById('alttab-overlay').classList.remove('active');
+  altTabActive = false;
+  const id = altTabWinIds[altTabIdx];
+  if (id && wins[id]) {
+    if (wins[id].minimized) unminWin(id);
+    else focusWin(id);
+  }
+  altTabWinIds = [];
+}
+
+function closeAltTab() {
+  document.getElementById('alttab-overlay').classList.remove('active');
+  altTabActive = false;
+  altTabIdx = 0;
+  altTabWinIds = [];
+  renderAltTab();
+}
+
+function closeCad() {
+  document.getElementById('cad-overlay').classList.remove('active');
+}
+function cadAction(type) {
+  closeCad();
+  if (type === 'lock') {
+    const lock = document.createElement('div');
+    lock.id = 'lock-screen';
+    lock.style.cssText = 'position:fixed;inset:0;z-index:99995;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
+    lock.innerHTML = `
+      <div style="color:#888;font-size:28px;">🔒</div>
+      <div style="color:#ccc;font-size:13px;font-family:var(--sleep-font);">sleepOS is locked</div>
+      <div style="color:#666;font-size:11px;font-family:var(--sleep-font);">Press any key or click to unlock</div>`;
+    document.body.appendChild(lock);
+    const unlock = () => { lock.remove(); };
+    lock.addEventListener('click', unlock);
+    lock.addEventListener('keydown', unlock);
+    setTimeout(() => lock.addEventListener('keydown', unlock), 100);
+  } else if (type === 'taskmgr') {
+    openSysmon();
+  } else if (type === 'shutdown') {
+    doShutdown();
+  }
+}
+
+// ── Global keyboard shortcuts ─────────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Don't fire in inputs/textareas (except specific shortcuts)
+  const inInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+  const key = String(e.key || '').toLowerCase();
+  const secureAttention = e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && key === 'q';
+
+  if (e.code === 'Space' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (!inInput) {
+      spaceTabHeld = true;
+      e.preventDefault();
+    }
+    return;
+  }
+  if (!inInput && e.key === 'Tab' && spaceTabHeld && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    e.preventDefault();
+    openAltTab(e.shiftKey ? -1 : 1);
+    return;
+  }
+  if (inInput && !secureAttention) return;
+
+  // Ctrl+Shift+Q - secure attention sequence
+  if (secureAttention) {
+    e.preventDefault();
+    document.getElementById('cad-overlay').classList.add('active');
+    return;
+  }
+
+  // Escape - close context menus / dismiss overlays
+  if (e.key === 'Escape') {
+    closeDropdown();
+    closeStart();
+    const cad = document.getElementById('cad-overlay');
+    if (cad.classList.contains('active')) cad.classList.remove('active');
+    if (altTabActive) closeAltTab();
+    return;
+  }
+
+});
+document.addEventListener('keyup', e => {
+  if (e.code !== 'Space') return;
+  const wasHeld = spaceTabHeld;
+  spaceTabHeld = false;
+  if (!wasHeld || !altTabActive) return;
+  e.preventDefault();
+  commitAltTab();
+});
+window.addEventListener('blur', () => {
+  spaceTabHeld = false;
+  if (altTabActive) closeAltTab();
+});
+
+// ─────────────────────────────────────────────────────────────────
+// STARTUP
+// ─────────────────────────────────────────────────────────────────
+function startDesktop() {
+  document.getElementById('desktop').style.display = 'block';
+  document.getElementById('taskbar').style.display = 'flex';
+  const savedWp = getInitialWallpaperPath();
+  if (savedWp) applyWallpaper(savedWp, { deferMissing: !isSystemWallpaperPath(savedWp) });
+  applySettings();
+  applyDaemonVisualState();
+  setupIcons();
+  armIdleSleep();
+}
