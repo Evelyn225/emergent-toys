@@ -1,6 +1,7 @@
 [
   "os/vfs.js",
   "os/storage-mem.js",
+  "os/storage-local.js",
   "os/desktop-model.js",
   "os/registry.js",
   "os/bios.js",

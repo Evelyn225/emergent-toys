@@ -7,7 +7,7 @@
 // model without touching a single call site.
 
 // Error carrying a POSIX-style code. Callers branch on `.code`, never on the
-// message. Codes in use: ENOENT, EEXIST, ENOTDIR, EISDIR, ENOSPC, EINVAL.
+// message. Codes in use: ENOENT, EEXIST, ENOTDIR, EISDIR, ENOSPC, EINVAL, EACCES.
 function VfsError(code, message) {
   const err = new Error(message || code);
   err.name = 'VfsError';
