@@ -26,7 +26,7 @@ function renderDaemonPanel() {
           : '#000080';
   const notes = [];
   if (daemonStory.endingReached) {
-    notes.push('Containment complete. The archive is quiet.');
+    notes.push('Containment complete. Nothing further to do here.');
   } else if (daemonStory.stage >= 7 && !mirrorLockActive) {
     notes.push('The seal lattice was ready, then the mirror lock dropped again.');
     notes.push('Restore MIRROR_LOCK to 1 before you run ?????.exe or delete void.tmp.');
@@ -36,12 +36,11 @@ function renderDaemonPanel() {
     notes.push('You removed the anchor. The mirror is no longer deflected away from the user.');
     notes.push('Inspect void.tmp and CACHE\\mirror.dat. Read DOCS\\MIRROR_PROTOCOL.txt for the procedure. Restore MIRROR_LOCK when done.');
   } else if (daemonStory.stage >= 4) {
-    notes.push('PID 512 stayed dead. The quiet that followed was a failure state, not a victory.');
+    notes.push('PID 512 stayed dead. Conditions got worse, not better.');
     notes.push('Lower MIRROR_LOCK in the registry, then delete SYS\\anchor.seed to open the channel. Inspect CACHE\\mirror.dat first.');
   } else if (daemonStory.stage >= 2) {
     notes.push('The watch layer answered your kill attempt. RESPAWN_LOCK must be cleared before PID 512 will stay down.');
   } else {
-    notes.push('This file is the restraint, not the intrusion.');
     notes.push('Open the raw read, then check DOCS for the first containment note.');
   }
   const gauge = value => `<div style="height:6px;border:1px solid #8f8f8f;background:#dadada;"><div style="height:100%;width:${Math.max(0, Math.min(100, value))}%;background:#000080;"></div></div>`;
@@ -107,16 +106,20 @@ function resizeDaemonWindow() {
   if (!desktop) return;
   const stage = daemonStory.stage || 0;
   const targetWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
-  const contentHeight = Math.ceil(body.scrollHeight);
-  const targetHeight = stage >= 7
-    ? Math.max(500, contentHeight + 76)
-    : stage >= 3
-      ? Math.max(470, contentHeight + 72)
-      : Math.max(430, contentHeight + 68);
+  const minHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
   const maxWidth = Math.max(360, desktop.clientWidth - 24);
   const maxHeight = Math.max(320, desktop.clientHeight - 24);
+  // Grow by however much the content actually overflows, and no more.
+  //
+  // This previously measured body.scrollHeight and added a padding constant,
+  // then took Math.max against the window's current height. Because the body
+  // grows with the window, every render computed a target taller than the last,
+  // so the panel crept ~46px per Raw Read with no upper bound. Keying off the
+  // overflow makes it idempotent: once the content fits, overflow is 0 and
+  // repeated renders leave the size alone.
+  const overflow = Math.max(0, Math.ceil(body.scrollHeight - body.clientHeight));
   const nextWidth = Math.min(maxWidth, Math.max(daemonWin.offsetWidth, targetWidth));
-  const nextHeight = Math.min(maxHeight, Math.max(daemonWin.offsetHeight, targetHeight));
+  const nextHeight = Math.min(maxHeight, Math.max(daemonWin.offsetHeight + overflow, minHeight));
   daemonWin.style.width = nextWidth + 'px';
   daemonWin.style.height = nextHeight + 'px';
   const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
@@ -141,10 +144,10 @@ function daemonVoidAction(mode) {
   daemonVoidFeedMode = mode;
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'This is not a damaged file. This is the aperture surface.'
+      ? 'The file is intact. What you are looking at is the aperture surface.'
       : daemonStory.stage >= 4
-        ? 'The relay went quiet and this surface brightened. Silence is not safety.'
-        : 'Nothing stable answers yet, but the file is already taking a shape.';
+        ? 'The relay went quiet and this surface brightened at the same time.'
+        : 'Nothing stable answers yet, but the file is taking a shape.';
   } else if (mode === 'measure') {
     daemonVoidFeed = [
       `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
@@ -156,7 +159,7 @@ function daemonVoidAction(mode) {
     ].join('\n');
   } else if (mode === 'listen') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'The reflected side does not speak in words. It leans against the room tone.'
+      ? 'No words. Something on the reflected side is leaning against the room tone.'
       : daemonStory.stage >= 4
         ? 'You hear the shape of a voice through the monitor gap.'
         : 'Static. Then the suggestion of a room tone.';

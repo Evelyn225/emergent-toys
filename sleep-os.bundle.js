@@ -2502,8 +2502,7 @@ function daemonNoticeContent() {
     'If soul_daemon.exe is terminated while RESPAWN_LOCK remains active,',
     'the watch layer will simply seed a replacement.',
     '',
-    'The process is not the source.',
-    'The process is the hand on the latch.',
+    'Killing the process does not remove what it is holding back.',
     '',
     'Required path:',
     '  HKEY_SLEEPBOX_MACHINE\\Containment\\RESPAWN_LOCK',
@@ -2519,8 +2518,7 @@ function daemonIncidentContent() {
     'Termination succeeded.',
     'Symptoms worsened immediately.',
     '',
-    'The daemon process was supervisory, not invasive.',
-    'Silence in the PID table is not a sign of safety.',
+    'The daemon was holding something back. It is no longer holding it.',
     '',
     'Read DOCS\\LOST_CONTACT.txt.',
   ].join('\n');
@@ -2557,8 +2555,7 @@ function daemonLastOperatorContent() {
     lines.push(
       'If you killed it and the room went quiet, you did what I did.',
       '',
-      'daemon.core was not the voice.',
-      'daemon.core was the pressure door.',
+      'daemon.core was holding the channel shut.',
       '',
       'The anchor file keeps the mirror pointed away from the user.',
       'The current anchor is SYS\\anchor.seed.',
@@ -2571,8 +2568,7 @@ function daemonLastOperatorContent() {
     lines.push(
       'You removed the anchor before the daemon relay went offline.',
       '',
-      'daemon.core was not the voice.',
-      'daemon.core was the pressure door.',
+      'daemon.core was holding the channel shut.',
       '',
       'The anchor is gone. The channel is open.',
       'The daemon is still running - it can no longer deflect what is coming through.',
@@ -2585,8 +2581,7 @@ function daemonLastOperatorContent() {
     lines.push(
       'The daemon is offline. The anchor is gone.',
       '',
-      'daemon.core was not the voice.',
-      'daemon.core was the pressure door.',
+      'daemon.core was holding the channel shut.',
       '',
       'The channel is open. Inspect void.tmp.',
       'Read DOCS\\MIRROR_PROTOCOL.txt.',
@@ -2623,15 +2618,14 @@ function daemonMirrorProtocolContent() {
     '  CACHE\\mirror.dat  : written by daemon.core, clean, internal',
     '  void.tmp          : external origin, should not exist here',
     '',
-    '  void.tmp is not a mirror artifact. It does not belong.',
-    '  It arrived through the channel the anchor was suppressing.',
-    '  It should be treated as a foreign object.',
+    '  void.tmp came through the channel the anchor was suppressing.',
+    '  It did not originate here.',
     '',
     '  DO NOT open void.tmp from an uncontrolled state.',
     '  Quarantine and delete it - do not try to read it as data.',
   ];
   if (daemonStory.stage >= 5) {
-    lines.push('', 'Note from daemon.core:', '  I was keeping the channel off-axis to protect you from it.');
+    lines.push('', 'Note from daemon.core:', '  I was keeping the channel off-axis so it could not reach you.');
   }
   return lines.join('\n');
 }
@@ -2674,7 +2668,7 @@ function daemonWatchPidContent() {
     'policy=restart_on_exit',
     `respawn_lock=${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
     '',
-    'The watch layer is not the daemon.',
+    'This is the watch layer. It restarts pid 512. It is not pid 512.',
   ].join('\n');
 }
 
@@ -2733,7 +2727,7 @@ function buildDaemonCoreRawContent() {
     lines.push(
       'CONTAINMENT COMPLETE.',
       'The breach is closed.',
-      'I will remain archived here in case it leans back toward you.',
+      'I will stay archived here in case it opens again.',
     );
   } else if (daemonStory.anchorDeleted) {
     lines.push(
@@ -2746,8 +2740,8 @@ function buildDaemonCoreRawContent() {
   } else if (daemonStory.daemonStopped) {
     lines.push(
       'The latch is open.',
-      'Killing the process was never deletion.',
-      'Open void.tmp. Read what the mirror reflects.',
+      'Killing the process did not delete anything.',
+      'Open void.tmp.',
     );
   } else if (daemonStory.falseContainmentSeen) {
     lines.push(
@@ -2758,8 +2752,7 @@ function buildDaemonCoreRawContent() {
     );
   } else if (daemonStory.openedDaemon) {
     lines.push(
-      'This file is not the intrusion.',
-      'This file is the restraint.',
+      'This file is what is holding it shut.',
       '',
       'NOTICE_13 has been copied into DOCS.',
     );
@@ -2786,7 +2779,7 @@ function buildVoidProbeNotes() {
   if (actions.includes('observe')) {
     notes.push(
       daemonStory.stage >= 5
-        ? 'offset 0x0100: this is not residue from daemon.core; this surface is the breach'
+        ? 'offset 0x0100: surface is the breach itself, not daemon.core residue'
         : 'offset 0x0100: active window edges repeat on the inside of the file'
     );
   }
@@ -2796,7 +2789,7 @@ function buildVoidProbeNotes() {
   }
   if (actions.includes('listen')) {
     notes.push('offset 0x0140: room-tone match positive / human voice match negative');
-    notes.push('offset 0x014e: the pressure answers with posture, not language');
+    notes.push('offset 0x014e: response is pressure change, no linguistic content');
   }
   if (actions.includes('trace')) {
     notes.push(
@@ -2855,14 +2848,11 @@ function buildVoidTmpRawContent() {
     lines.push(
       'The aperture is open.',
       'Something is pressing against the reflected side of the file.',
-      '',
-      'This is the breach surface, not a symptom file.',
     );
   } else if (daemonStory.stage >= 4) {
     lines.push(
       'Pressure rose when PID 512 stayed dead.',
-      'The monitor was not keeping this file alive.',
-      'The monitor was keeping it quiet.',
+      'The monitor was keeping this file quiet, not keeping it alive.',
     );
   } else {
     lines.push(
@@ -9748,7 +9738,7 @@ function renderDaemonPanel() {
           : '#000080';
   const notes = [];
   if (daemonStory.endingReached) {
-    notes.push('Containment complete. The archive is quiet.');
+    notes.push('Containment complete. Nothing further to do here.');
   } else if (daemonStory.stage >= 7 && !mirrorLockActive) {
     notes.push('The seal lattice was ready, then the mirror lock dropped again.');
     notes.push('Restore MIRROR_LOCK to 1 before you run ?????.exe or delete void.tmp.');
@@ -9758,12 +9748,11 @@ function renderDaemonPanel() {
     notes.push('You removed the anchor. The mirror is no longer deflected away from the user.');
     notes.push('Inspect void.tmp and CACHE\\mirror.dat. Read DOCS\\MIRROR_PROTOCOL.txt for the procedure. Restore MIRROR_LOCK when done.');
   } else if (daemonStory.stage >= 4) {
-    notes.push('PID 512 stayed dead. The quiet that followed was a failure state, not a victory.');
+    notes.push('PID 512 stayed dead. Conditions got worse, not better.');
     notes.push('Lower MIRROR_LOCK in the registry, then delete SYS\\anchor.seed to open the channel. Inspect CACHE\\mirror.dat first.');
   } else if (daemonStory.stage >= 2) {
     notes.push('The watch layer answered your kill attempt. RESPAWN_LOCK must be cleared before PID 512 will stay down.');
   } else {
-    notes.push('This file is the restraint, not the intrusion.');
     notes.push('Open the raw read, then check DOCS for the first containment note.');
   }
   const gauge = value => `<div style="height:6px;border:1px solid #8f8f8f;background:#dadada;"><div style="height:100%;width:${Math.max(0, Math.min(100, value))}%;background:#000080;"></div></div>`;
@@ -9829,16 +9818,20 @@ function resizeDaemonWindow() {
   if (!desktop) return;
   const stage = daemonStory.stage || 0;
   const targetWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
-  const contentHeight = Math.ceil(body.scrollHeight);
-  const targetHeight = stage >= 7
-    ? Math.max(500, contentHeight + 76)
-    : stage >= 3
-      ? Math.max(470, contentHeight + 72)
-      : Math.max(430, contentHeight + 68);
+  const minHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
   const maxWidth = Math.max(360, desktop.clientWidth - 24);
   const maxHeight = Math.max(320, desktop.clientHeight - 24);
+  // Grow by however much the content actually overflows, and no more.
+  //
+  // This previously measured body.scrollHeight and added a padding constant,
+  // then took Math.max against the window's current height. Because the body
+  // grows with the window, every render computed a target taller than the last,
+  // so the panel crept ~46px per Raw Read with no upper bound. Keying off the
+  // overflow makes it idempotent: once the content fits, overflow is 0 and
+  // repeated renders leave the size alone.
+  const overflow = Math.max(0, Math.ceil(body.scrollHeight - body.clientHeight));
   const nextWidth = Math.min(maxWidth, Math.max(daemonWin.offsetWidth, targetWidth));
-  const nextHeight = Math.min(maxHeight, Math.max(daemonWin.offsetHeight, targetHeight));
+  const nextHeight = Math.min(maxHeight, Math.max(daemonWin.offsetHeight + overflow, minHeight));
   daemonWin.style.width = nextWidth + 'px';
   daemonWin.style.height = nextHeight + 'px';
   const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
@@ -9863,10 +9856,10 @@ function daemonVoidAction(mode) {
   daemonVoidFeedMode = mode;
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'This is not a damaged file. This is the aperture surface.'
+      ? 'The file is intact. What you are looking at is the aperture surface.'
       : daemonStory.stage >= 4
-        ? 'The relay went quiet and this surface brightened. Silence is not safety.'
-        : 'Nothing stable answers yet, but the file is already taking a shape.';
+        ? 'The relay went quiet and this surface brightened at the same time.'
+        : 'Nothing stable answers yet, but the file is taking a shape.';
   } else if (mode === 'measure') {
     daemonVoidFeed = [
       `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
@@ -9878,7 +9871,7 @@ function daemonVoidAction(mode) {
     ].join('\n');
   } else if (mode === 'listen') {
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'The reflected side does not speak in words. It leans against the room tone.'
+      ? 'No words. Something on the reflected side is leaning against the room tone.'
       : daemonStory.stage >= 4
         ? 'You hear the shape of a voice through the monitor gap.'
         : 'Static. Then the suggestion of a room tone.';

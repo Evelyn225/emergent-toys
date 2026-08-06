@@ -554,8 +554,7 @@ function daemonNoticeContent() {
     'If soul_daemon.exe is terminated while RESPAWN_LOCK remains active,',
     'the watch layer will simply seed a replacement.',
     '',
-    'The process is not the source.',
-    'The process is the hand on the latch.',
+    'Killing the process does not remove what it is holding back.',
     '',
     'Required path:',
     '  HKEY_SLEEPBOX_MACHINE\\Containment\\RESPAWN_LOCK',
@@ -571,8 +570,7 @@ function daemonIncidentContent() {
     'Termination succeeded.',
     'Symptoms worsened immediately.',
     '',
-    'The daemon process was supervisory, not invasive.',
-    'Silence in the PID table is not a sign of safety.',
+    'The daemon was holding something back. It is no longer holding it.',
     '',
     'Read DOCS\\LOST_CONTACT.txt.',
   ].join('\n');
@@ -609,8 +607,7 @@ function daemonLastOperatorContent() {
     lines.push(
       'If you killed it and the room went quiet, you did what I did.',
       '',
-      'daemon.core was not the voice.',
-      'daemon.core was the pressure door.',
+      'daemon.core was holding the channel shut.',
       '',
       'The anchor file keeps the mirror pointed away from the user.',
       'The current anchor is SYS\\anchor.seed.',
@@ -623,8 +620,7 @@ function daemonLastOperatorContent() {
     lines.push(
       'You removed the anchor before the daemon relay went offline.',
       '',
-      'daemon.core was not the voice.',
-      'daemon.core was the pressure door.',
+      'daemon.core was holding the channel shut.',
       '',
       'The anchor is gone. The channel is open.',
       'The daemon is still running - it can no longer deflect what is coming through.',
@@ -637,8 +633,7 @@ function daemonLastOperatorContent() {
     lines.push(
       'The daemon is offline. The anchor is gone.',
       '',
-      'daemon.core was not the voice.',
-      'daemon.core was the pressure door.',
+      'daemon.core was holding the channel shut.',
       '',
       'The channel is open. Inspect void.tmp.',
       'Read DOCS\\MIRROR_PROTOCOL.txt.',
@@ -675,15 +670,14 @@ function daemonMirrorProtocolContent() {
     '  CACHE\\mirror.dat  : written by daemon.core, clean, internal',
     '  void.tmp          : external origin, should not exist here',
     '',
-    '  void.tmp is not a mirror artifact. It does not belong.',
-    '  It arrived through the channel the anchor was suppressing.',
-    '  It should be treated as a foreign object.',
+    '  void.tmp came through the channel the anchor was suppressing.',
+    '  It did not originate here.',
     '',
     '  DO NOT open void.tmp from an uncontrolled state.',
     '  Quarantine and delete it - do not try to read it as data.',
   ];
   if (daemonStory.stage >= 5) {
-    lines.push('', 'Note from daemon.core:', '  I was keeping the channel off-axis to protect you from it.');
+    lines.push('', 'Note from daemon.core:', '  I was keeping the channel off-axis so it could not reach you.');
   }
   return lines.join('\n');
 }
@@ -726,7 +720,7 @@ function daemonWatchPidContent() {
     'policy=restart_on_exit',
     `respawn_lock=${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
     '',
-    'The watch layer is not the daemon.',
+    'This is the watch layer. It restarts pid 512. It is not pid 512.',
   ].join('\n');
 }
 
@@ -785,7 +779,7 @@ function buildDaemonCoreRawContent() {
     lines.push(
       'CONTAINMENT COMPLETE.',
       'The breach is closed.',
-      'I will remain archived here in case it leans back toward you.',
+      'I will stay archived here in case it opens again.',
     );
   } else if (daemonStory.anchorDeleted) {
     lines.push(
@@ -798,8 +792,8 @@ function buildDaemonCoreRawContent() {
   } else if (daemonStory.daemonStopped) {
     lines.push(
       'The latch is open.',
-      'Killing the process was never deletion.',
-      'Open void.tmp. Read what the mirror reflects.',
+      'Killing the process did not delete anything.',
+      'Open void.tmp.',
     );
   } else if (daemonStory.falseContainmentSeen) {
     lines.push(
@@ -810,8 +804,7 @@ function buildDaemonCoreRawContent() {
     );
   } else if (daemonStory.openedDaemon) {
     lines.push(
-      'This file is not the intrusion.',
-      'This file is the restraint.',
+      'This file is what is holding it shut.',
       '',
       'NOTICE_13 has been copied into DOCS.',
     );
@@ -838,7 +831,7 @@ function buildVoidProbeNotes() {
   if (actions.includes('observe')) {
     notes.push(
       daemonStory.stage >= 5
-        ? 'offset 0x0100: this is not residue from daemon.core; this surface is the breach'
+        ? 'offset 0x0100: surface is the breach itself, not daemon.core residue'
         : 'offset 0x0100: active window edges repeat on the inside of the file'
     );
   }
@@ -848,7 +841,7 @@ function buildVoidProbeNotes() {
   }
   if (actions.includes('listen')) {
     notes.push('offset 0x0140: room-tone match positive / human voice match negative');
-    notes.push('offset 0x014e: the pressure answers with posture, not language');
+    notes.push('offset 0x014e: response is pressure change, no linguistic content');
   }
   if (actions.includes('trace')) {
     notes.push(
@@ -907,14 +900,11 @@ function buildVoidTmpRawContent() {
     lines.push(
       'The aperture is open.',
       'Something is pressing against the reflected side of the file.',
-      '',
-      'This is the breach surface, not a symptom file.',
     );
   } else if (daemonStory.stage >= 4) {
     lines.push(
       'Pressure rose when PID 512 stayed dead.',
-      'The monitor was not keeping this file alive.',
-      'The monitor was keeping it quiet.',
+      'The monitor was keeping this file quiet, not keeping it alive.',
     );
   } else {
     lines.push(
