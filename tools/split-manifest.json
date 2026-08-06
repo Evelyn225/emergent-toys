@@ -19,5 +19,10 @@
   "apps/defrag.js",
   "apps/daemon-ui.js",
   "apps/browser.js",
-  "os/_remainder.js"
+  "os/shutdown.js",
+  "apps/regedit.js",
+  "apps/calc.js",
+  "os/run-dialog.js",
+  "os/alt-tab.js",
+  "os/startup.js"
 ]
