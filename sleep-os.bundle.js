@@ -453,16 +453,35 @@ async function vfsRename(dirPath, oldName, newName) {
 async function vfsMove(srcDirPath, srcName, dstDirPath, dstName) {
   const srcBase = vfsNormalizeDir(srcDirPath);
   const dstBase = vfsNormalizeDir(dstDirPath);
-  const srcDir = vfsDirNodeSync(srcBase);
   const dstDir = vfsDirNodeSync(dstBase);
-  if (!srcDir) throw VfsError('ENOENT', 'no such directory: ' + srcBase);
+  if (!vfsDirNodeSync(srcBase)) throw VfsError('ENOENT', 'no such directory: ' + srcBase);
   if (!dstDir) throw VfsError('ENOENT', 'no such directory: ' + dstBase);
   const st = vfsStatSync(srcName, srcBase);
   if (!st) return null;
+  // The source's real parent. srcBase is only the fallback directory: when
+  // srcName carries a path (DOCS\a.txt) vfsStatSync resolves into a different
+  // directory, and mutating srcBase's node instead would delete nothing and
+  // write `undefined` at the destination - a phantom entry that reports
+  // success, reads back empty, and vanishes on the next reload.
+  const from = vfsDirNodeSync(st.dirName);
+  // Refuse to move a directory into itself or into its own subtree. The
+  // destination node is resolved before the source dirent is unlinked, so
+  // without this the subtree would be re-attached to a node inside itself:
+  // unreachable from _vfsRoot, absent from the next snapshot, and gone for
+  // good 400ms later. Names in the tree are uppercase and both paths are
+  // normalized, so the prefix compare is exact.
+  if (st.kind === 'dir') {
+    const srcFull = st.dirName ? st.dirName + '\\' + st.name : st.name;
+    if (dstBase === srcFull || dstBase.startsWith(srcFull + '\\')) {
+      throw VfsError('EINVAL', 'cannot move a directory into itself: ' + srcFull);
+    }
+  }
   // Within one directory this is just a rename, so do not duplicate the logic.
-  if (srcBase === dstBase) {
-    const renamed = await vfsRename(srcBase, srcName, dstName || srcName);
-    return renamed ? (st.kind === 'dir' ? String(dstName || srcName).toUpperCase() : String(dstName || srcName)) : null;
+  // Compare the source's real parent rather than srcBase, so a path-carrying
+  // srcName still takes this branch when it resolves into the destination.
+  if (st.dirName === dstBase) {
+    const renamed = await vfsRename(st.dirName, st.name, dstName || st.name);
+    return renamed ? (st.kind === 'dir' ? String(dstName || st.name).toUpperCase() : String(dstName || st.name)) : null;
   }
   const targetName = st.kind === 'dir'
     ? String(dstName || st.name).toUpperCase()
@@ -471,23 +490,23 @@ async function vfsMove(srcDirPath, srcName, dstDirPath, dstName) {
     throw VfsError('EEXIST', 'name already in use: ' + targetName);
   }
   if (st.kind === 'text') {
-    const value = srcDir.files.get(st.name);
-    srcDir.files.delete(st.name);
+    const value = from.files.get(st.name);
+    from.files.delete(st.name);
     dstDir.files.set(targetName, value);
   } else if (st.kind === 'blob') {
-    const record = srcDir.blobs.get(st.name);
-    srcDir.blobs.delete(st.name);
+    const record = from.blobs.get(st.name);
+    from.blobs.delete(st.name);
     if (!dstDir.blobs) dstDir.blobs = new Map();
     dstDir.blobs.set(targetName, record);
   } else {
-    const sub = srcDir.subdirs ? srcDir.subdirs.get(st.name) : null;
-    srcDir.dirs.delete(st.name);
-    if (srcDir.subdirs) srcDir.subdirs.delete(st.name);
+    const sub = from.subdirs ? from.subdirs.get(st.name) : null;
+    from.dirs.delete(st.name);
+    if (from.subdirs) from.subdirs.delete(st.name);
     dstDir.dirs.add(targetName);
     if (!dstDir.subdirs) dstDir.subdirs = new Map();
     if (sub) dstDir.subdirs.set(targetName, sub);
   }
-  _vfsQueue({ op: 'move', dirName: srcBase, name: st.name, dstDirName: dstBase, newName: targetName, kind: st.kind }, 0);
+  _vfsQueue({ op: 'move', dirName: st.dirName, name: st.name, dstDirName: dstBase, newName: targetName, kind: st.kind }, 0);
   return targetName;
 }
 
@@ -960,8 +979,13 @@ function openDesktopShortcutTarget(target) {
     openExplorer(path);
     return;
   }
+  // `!st` alone is not enough: fsGetEntry returned null for a directory but
+  // vfsStatSync returns a full stat for one, and a shortcut whose persisted
+  // kind is not literally 'dir' reaches here with a directory path. Falling
+  // through would open Notepad on a directory, whose save then puts the same
+  // name in both files and dirs and makes the directory unreachable.
   const st = vfsStatSync(path);
-  if (!st) {
+  if (!st || st.type !== 'file') {
     osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
     return;
   }
@@ -1779,9 +1803,18 @@ function _uniqueNameIn(dirName, name) {
 // Recursively copy one entry into a directory that has already been checked
 // to exist. Used by the non-cut (copy) side of pasteClipboardInto, which has
 // no single VFS primitive to lean on the way a move does.
+// The caller must already have refused a paste whose destination lies inside
+// the source directory; see pasteClipboardInto. Without that check this
+// recursion never terminates, because vfsListSync(srcPath) rediscovers the
+// copy it just made one level up.
+//
+// trackFragmentation is off on all three writes because the paste this
+// replaces touched the DEFRAG meter zero times, and task 8 is a refactor under
+// a behavior-identical constraint. Whether a copy should fragment the drive is
+// a product decision, not this migration's to make.
 async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
   if (kind === 'dir') {
-    await vfsMkdir(dstName, dstCwd);
+    await vfsMkdir(dstName, dstCwd, { trackFragmentation: false });
     const srcPath = srcCwd ? srcCwd + '\\' + name : name;
     const dstPath = dstCwd ? dstCwd + '\\' + dstName : dstName;
     for (const entry of vfsListSync(srcPath)) {
@@ -1789,10 +1822,21 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
     }
   } else if (kind === 'blob') {
     const st = vfsStatSync(name, srcCwd);
-    if (st && st.blob) await vfsWriteBlob(dstName, { ...st.blob }, dstCwd);
+    if (st && st.blob) {
+      // A copied blob needs its own row in the blob store and its own object
+      // URL. Sharing the source's URL means deleting either entry revokes the
+      // other one's bytes, and with no store row under the new path the copy
+      // is gone entirely on the next boot - blobs are never in the VFS
+      // snapshot. Falls back to sharing the URL only when there is nothing
+      // stored to copy (a seeded blob), which is what the old code always did.
+      const record = { ...st.blob };
+      const url = await copyBlobEntryStorage(srcCwd, name, dstCwd, dstName);
+      if (url) record.url = url;
+      await vfsWriteBlob(dstName, record, dstCwd, { trackFragmentation: false });
+    }
   } else {
     const content = await vfsReadFile(name, srcCwd);
-    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd);
+    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd, { trackFragmentation: false });
   }
 }
 
@@ -1837,6 +1881,19 @@ async function pasteClipboardInto(dstCwd) {
           );
         }
       } else {
+        // A copy into the source's own subtree would recurse without bound:
+        // _copyEntryInto re-lists the source on every level and would keep
+        // rediscovering the directory it just created. Refuse it here rather
+        // than inside the recursion so the user gets a message instead of a
+        // silently skipped item. Same predicate vfsMove uses for a cut.
+        if (st.kind === 'dir') {
+          const srcFull = st.dirName ? st.dirName + '\\' + st.name : st.name;
+          const dstNorm = vfsNormalizeDir(dstCwd);
+          if (dstNorm === srcFull || dstNorm.startsWith(srcFull + '\\')) {
+            failMessage = failMessage || 'Cannot paste a folder into itself.';
+            continue;
+          }
+        }
         await _copyEntryInto(name, srcCwd, dstCwd, dstName, st.kind);
       }
       changed = true;
@@ -4277,6 +4334,62 @@ function moveBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
     localStorage.removeItem(oldKey);
   }
   void moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
+}
+
+// Copy variant of moveBlobEntryInDb: the source row stays exactly where it is.
+// Resolves with the stored Blob so the caller can mint a fresh object URL for
+// it, or null when there is no row to copy.
+async function copyBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName) {
+  const db = await openMediaDb();
+  if (!db) return null;
+  const oldPath = blobRelativePath(srcDirPath, srcName);
+  const newPath = blobRelativePath(dstDirPath, dstName);
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      const store = tx.objectStore(MEDIA_DB_STORE);
+      let copied = null;
+      const getReq = store.get(oldPath);
+      getReq.onsuccess = () => {
+        const data = getReq.result;
+        if (!data) return;
+        copied = data.blob || null;
+        store.put(Object.assign({}, data, { path: newPath }));
+      };
+      tx.oncomplete = () => resolve(copied);
+      tx.onerror = tx.onabort = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+// Give a copied blob its own persisted bytes under the destination path, in
+// both stores, and hand back a fresh object URL for them. A copy that shared
+// the source's URL would go blank the moment either entry was deleted, because
+// removeFsPath revokes that one string; and with no row under the new path the
+// copy would not survive a reload at all, since blobs are deliberately absent
+// from the VFS snapshot. Returns null when there is nothing stored to copy
+// (a seeded blob), leaving the caller to keep the source's URL.
+async function copyBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
+  const data = localStorage.getItem(blobStorageKey(srcDirPath, srcName));
+  if (data !== null) {
+    try { localStorage.setItem(blobStorageKey(dstDirPath, dstName), data); } catch (e) { /* quota */ }
+  }
+  const stored = await copyBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
+  if (stored) return URL.createObjectURL(stored);
+  if (data === null) return null;
+  // No IndexedDB (or no row there), but the base64 copy landed: rebuild the
+  // bytes from it rather than aliasing the source's URL.
+  try {
+    const { mime, b64 } = JSON.parse(data);
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes], { type: mime || 'application/octet-stream' }));
+  } catch (e) {
+    return null;
+  }
 }
 
 async function moveBlobSubtreeInDb(oldDirPath, newDirPath) {

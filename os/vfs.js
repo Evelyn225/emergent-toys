@@ -453,16 +453,35 @@ async function vfsRename(dirPath, oldName, newName) {
 async function vfsMove(srcDirPath, srcName, dstDirPath, dstName) {
   const srcBase = vfsNormalizeDir(srcDirPath);
   const dstBase = vfsNormalizeDir(dstDirPath);
-  const srcDir = vfsDirNodeSync(srcBase);
   const dstDir = vfsDirNodeSync(dstBase);
-  if (!srcDir) throw VfsError('ENOENT', 'no such directory: ' + srcBase);
+  if (!vfsDirNodeSync(srcBase)) throw VfsError('ENOENT', 'no such directory: ' + srcBase);
   if (!dstDir) throw VfsError('ENOENT', 'no such directory: ' + dstBase);
   const st = vfsStatSync(srcName, srcBase);
   if (!st) return null;
+  // The source's real parent. srcBase is only the fallback directory: when
+  // srcName carries a path (DOCS\a.txt) vfsStatSync resolves into a different
+  // directory, and mutating srcBase's node instead would delete nothing and
+  // write `undefined` at the destination - a phantom entry that reports
+  // success, reads back empty, and vanishes on the next reload.
+  const from = vfsDirNodeSync(st.dirName);
+  // Refuse to move a directory into itself or into its own subtree. The
+  // destination node is resolved before the source dirent is unlinked, so
+  // without this the subtree would be re-attached to a node inside itself:
+  // unreachable from _vfsRoot, absent from the next snapshot, and gone for
+  // good 400ms later. Names in the tree are uppercase and both paths are
+  // normalized, so the prefix compare is exact.
+  if (st.kind === 'dir') {
+    const srcFull = st.dirName ? st.dirName + '\\' + st.name : st.name;
+    if (dstBase === srcFull || dstBase.startsWith(srcFull + '\\')) {
+      throw VfsError('EINVAL', 'cannot move a directory into itself: ' + srcFull);
+    }
+  }
   // Within one directory this is just a rename, so do not duplicate the logic.
-  if (srcBase === dstBase) {
-    const renamed = await vfsRename(srcBase, srcName, dstName || srcName);
-    return renamed ? (st.kind === 'dir' ? String(dstName || srcName).toUpperCase() : String(dstName || srcName)) : null;
+  // Compare the source's real parent rather than srcBase, so a path-carrying
+  // srcName still takes this branch when it resolves into the destination.
+  if (st.dirName === dstBase) {
+    const renamed = await vfsRename(st.dirName, st.name, dstName || st.name);
+    return renamed ? (st.kind === 'dir' ? String(dstName || st.name).toUpperCase() : String(dstName || st.name)) : null;
   }
   const targetName = st.kind === 'dir'
     ? String(dstName || st.name).toUpperCase()
@@ -471,23 +490,23 @@ async function vfsMove(srcDirPath, srcName, dstDirPath, dstName) {
     throw VfsError('EEXIST', 'name already in use: ' + targetName);
   }
   if (st.kind === 'text') {
-    const value = srcDir.files.get(st.name);
-    srcDir.files.delete(st.name);
+    const value = from.files.get(st.name);
+    from.files.delete(st.name);
     dstDir.files.set(targetName, value);
   } else if (st.kind === 'blob') {
-    const record = srcDir.blobs.get(st.name);
-    srcDir.blobs.delete(st.name);
+    const record = from.blobs.get(st.name);
+    from.blobs.delete(st.name);
     if (!dstDir.blobs) dstDir.blobs = new Map();
     dstDir.blobs.set(targetName, record);
   } else {
-    const sub = srcDir.subdirs ? srcDir.subdirs.get(st.name) : null;
-    srcDir.dirs.delete(st.name);
-    if (srcDir.subdirs) srcDir.subdirs.delete(st.name);
+    const sub = from.subdirs ? from.subdirs.get(st.name) : null;
+    from.dirs.delete(st.name);
+    if (from.subdirs) from.subdirs.delete(st.name);
     dstDir.dirs.add(targetName);
     if (!dstDir.subdirs) dstDir.subdirs = new Map();
     if (sub) dstDir.subdirs.set(targetName, sub);
   }
-  _vfsQueue({ op: 'move', dirName: srcBase, name: st.name, dstDirName: dstBase, newName: targetName, kind: st.kind }, 0);
+  _vfsQueue({ op: 'move', dirName: st.dirName, name: st.name, dstDirName: dstBase, newName: targetName, kind: st.kind }, 0);
   return targetName;
 }
 

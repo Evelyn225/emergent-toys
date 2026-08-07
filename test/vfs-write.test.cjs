@@ -384,6 +384,64 @@ test('move refuses when the destination name is taken', async () => {
   assert.strictEqual(await ctx.vfsReadFile('A\\note.txt', ''), 'one');
 });
 
+test('move refuses to put a directory inside itself and leaves the tree untouched', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('DOCS', '');
+  await ctx.vfsWriteFile('DOCS\\note.txt', 'payload', '');
+  const before = JSON.stringify(plain(ctx.vfsSerializeTree()));
+  await assert.rejects(
+    () => ctx.vfsMove('', 'DOCS', 'DOCS'),
+    err => err.name === 'VfsError' && err.code === 'EINVAL'
+  );
+  assert.strictEqual(JSON.stringify(plain(ctx.vfsSerializeTree())), before,
+    'a refused move must not detach the subtree');
+  assert.strictEqual(ctx.vfsDirExistsSync('DOCS'), true);
+  assert.strictEqual(await ctx.vfsReadFile('DOCS\\note.txt', ''), 'payload');
+});
+
+test('move refuses to put a directory inside its own grandchild', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('A', '');
+  await ctx.vfsMkdir('A\\SUB', '');
+  await ctx.vfsMkdir('A\\SUB\\DEEP', '');
+  await ctx.vfsWriteFile('A\\SUB\\DEEP\\deep.txt', 'deep', '');
+  const before = JSON.stringify(plain(ctx.vfsSerializeTree()));
+  await assert.rejects(
+    () => ctx.vfsMove('', 'A', 'A\\SUB\\DEEP'),
+    err => err.name === 'VfsError' && err.code === 'EINVAL'
+  );
+  assert.strictEqual(JSON.stringify(plain(ctx.vfsSerializeTree())), before,
+    'a refused move must not detach the subtree');
+  assert.deepStrictEqual(plain(ctx.vfsListSync('')).map(e => e.name), ['A']);
+  assert.strictEqual(await ctx.vfsReadFile('A\\SUB\\DEEP\\deep.txt', ''), 'deep');
+});
+
+test('move resolves the source from a path in srcName, not from the fallback directory', async () => {
+  const { ctx, backend } = await mounted();
+  await ctx.vfsMkdir('DOCS', '');
+  await ctx.vfsMkdir('B', '');
+  await ctx.vfsWriteFile('DOCS\\a.txt', 'payload', '');
+  assert.strictEqual(await ctx.vfsMove('', 'DOCS\\a.txt', 'B'), 'a.txt');
+  assert.strictEqual(await ctx.vfsReadFile('DOCS\\a.txt', ''), null,
+    'the source dirent must be removed from its real parent');
+  assert.strictEqual(await ctx.vfsReadFile('B\\a.txt', ''), 'payload',
+    'the destination must receive the content, not undefined');
+  await ctx.vfsFlush();
+  assert.strictEqual(backend._snapshot.subdirs.B.files['a.txt'], 'payload',
+    'the committed snapshot must carry the moved value');
+  const moved = plain(backend._ops).filter(op => op.op === 'move').pop();
+  assert.strictEqual(moved.dirName, 'DOCS', 'the op log must name the real source directory');
+});
+
+test('move with a path in srcName that resolves into the destination is a rename', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('DOCS', '');
+  await ctx.vfsWriteFile('DOCS\\a.txt', 'payload', '');
+  assert.strictEqual(await ctx.vfsMove('', 'DOCS\\a.txt', 'DOCS', 'b.txt'), 'b.txt');
+  assert.strictEqual(await ctx.vfsReadFile('DOCS\\a.txt', ''), null);
+  assert.strictEqual(await ctx.vfsReadFile('DOCS\\b.txt', ''), 'payload');
+});
+
 test('move returns null for a missing source and ENOENT for a missing directory', async () => {
   const { ctx } = await mounted();
   await ctx.vfsMkdir('A', '');

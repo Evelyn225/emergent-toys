@@ -185,6 +185,62 @@ function moveBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
   void moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
 }
 
+// Copy variant of moveBlobEntryInDb: the source row stays exactly where it is.
+// Resolves with the stored Blob so the caller can mint a fresh object URL for
+// it, or null when there is no row to copy.
+async function copyBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName) {
+  const db = await openMediaDb();
+  if (!db) return null;
+  const oldPath = blobRelativePath(srcDirPath, srcName);
+  const newPath = blobRelativePath(dstDirPath, dstName);
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
+      const store = tx.objectStore(MEDIA_DB_STORE);
+      let copied = null;
+      const getReq = store.get(oldPath);
+      getReq.onsuccess = () => {
+        const data = getReq.result;
+        if (!data) return;
+        copied = data.blob || null;
+        store.put(Object.assign({}, data, { path: newPath }));
+      };
+      tx.oncomplete = () => resolve(copied);
+      tx.onerror = tx.onabort = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+// Give a copied blob its own persisted bytes under the destination path, in
+// both stores, and hand back a fresh object URL for them. A copy that shared
+// the source's URL would go blank the moment either entry was deleted, because
+// removeFsPath revokes that one string; and with no row under the new path the
+// copy would not survive a reload at all, since blobs are deliberately absent
+// from the VFS snapshot. Returns null when there is nothing stored to copy
+// (a seeded blob), leaving the caller to keep the source's URL.
+async function copyBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
+  const data = localStorage.getItem(blobStorageKey(srcDirPath, srcName));
+  if (data !== null) {
+    try { localStorage.setItem(blobStorageKey(dstDirPath, dstName), data); } catch (e) { /* quota */ }
+  }
+  const stored = await copyBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
+  if (stored) return URL.createObjectURL(stored);
+  if (data === null) return null;
+  // No IndexedDB (or no row there), but the base64 copy landed: rebuild the
+  // bytes from it rather than aliasing the source's URL.
+  try {
+    const { mime, b64 } = JSON.parse(data);
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes], { type: mime || 'application/octet-stream' }));
+  } catch (e) {
+    return null;
+  }
+}
+
 async function moveBlobSubtreeInDb(oldDirPath, newDirPath) {
   const db = await openMediaDb();
   if (!db) return false;

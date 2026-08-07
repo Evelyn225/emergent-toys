@@ -359,8 +359,13 @@ function openDesktopShortcutTarget(target) {
     openExplorer(path);
     return;
   }
+  // `!st` alone is not enough: fsGetEntry returned null for a directory but
+  // vfsStatSync returns a full stat for one, and a shortcut whose persisted
+  // kind is not literally 'dir' reaches here with a directory path. Falling
+  // through would open Notepad on a directory, whose save then puts the same
+  // name in both files and dirs and makes the directory unreachable.
   const st = vfsStatSync(path);
-  if (!st) {
+  if (!st || st.type !== 'file') {
     osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
     return;
   }

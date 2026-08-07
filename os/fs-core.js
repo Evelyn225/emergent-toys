@@ -20,9 +20,18 @@ function _uniqueNameIn(dirName, name) {
 // Recursively copy one entry into a directory that has already been checked
 // to exist. Used by the non-cut (copy) side of pasteClipboardInto, which has
 // no single VFS primitive to lean on the way a move does.
+// The caller must already have refused a paste whose destination lies inside
+// the source directory; see pasteClipboardInto. Without that check this
+// recursion never terminates, because vfsListSync(srcPath) rediscovers the
+// copy it just made one level up.
+//
+// trackFragmentation is off on all three writes because the paste this
+// replaces touched the DEFRAG meter zero times, and task 8 is a refactor under
+// a behavior-identical constraint. Whether a copy should fragment the drive is
+// a product decision, not this migration's to make.
 async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
   if (kind === 'dir') {
-    await vfsMkdir(dstName, dstCwd);
+    await vfsMkdir(dstName, dstCwd, { trackFragmentation: false });
     const srcPath = srcCwd ? srcCwd + '\\' + name : name;
     const dstPath = dstCwd ? dstCwd + '\\' + dstName : dstName;
     for (const entry of vfsListSync(srcPath)) {
@@ -30,10 +39,21 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
     }
   } else if (kind === 'blob') {
     const st = vfsStatSync(name, srcCwd);
-    if (st && st.blob) await vfsWriteBlob(dstName, { ...st.blob }, dstCwd);
+    if (st && st.blob) {
+      // A copied blob needs its own row in the blob store and its own object
+      // URL. Sharing the source's URL means deleting either entry revokes the
+      // other one's bytes, and with no store row under the new path the copy
+      // is gone entirely on the next boot - blobs are never in the VFS
+      // snapshot. Falls back to sharing the URL only when there is nothing
+      // stored to copy (a seeded blob), which is what the old code always did.
+      const record = { ...st.blob };
+      const url = await copyBlobEntryStorage(srcCwd, name, dstCwd, dstName);
+      if (url) record.url = url;
+      await vfsWriteBlob(dstName, record, dstCwd, { trackFragmentation: false });
+    }
   } else {
     const content = await vfsReadFile(name, srcCwd);
-    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd);
+    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd, { trackFragmentation: false });
   }
 }
 
@@ -78,6 +98,19 @@ async function pasteClipboardInto(dstCwd) {
           );
         }
       } else {
+        // A copy into the source's own subtree would recurse without bound:
+        // _copyEntryInto re-lists the source on every level and would keep
+        // rediscovering the directory it just created. Refuse it here rather
+        // than inside the recursion so the user gets a message instead of a
+        // silently skipped item. Same predicate vfsMove uses for a cut.
+        if (st.kind === 'dir') {
+          const srcFull = st.dirName ? st.dirName + '\\' + st.name : st.name;
+          const dstNorm = vfsNormalizeDir(dstCwd);
+          if (dstNorm === srcFull || dstNorm.startsWith(srcFull + '\\')) {
+            failMessage = failMessage || 'Cannot paste a folder into itself.';
+            continue;
+          }
+        }
         await _copyEntryInto(name, srcCwd, dstCwd, dstName, st.kind);
       }
       changed = true;
