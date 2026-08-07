@@ -340,3 +340,57 @@ test('pending writes are reported until they commit', async () => {
   await ctx.vfsFlush();
   assert.strictEqual(ctx.vfsHasPendingWrites(), false);
 });
+
+test('move relocates a text file between directories', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('A', '');
+  await ctx.vfsMkdir('B', '');
+  await ctx.vfsWriteFile('A\\note.txt', 'payload', '');
+  assert.strictEqual(await ctx.vfsMove('A', 'note.txt', 'B'), 'note.txt');
+  assert.strictEqual(await ctx.vfsReadFile('A\\note.txt', ''), null);
+  assert.strictEqual(await ctx.vfsReadFile('B\\note.txt', ''), 'payload');
+});
+
+test('move renames when a destination name is given', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('A', '');
+  await ctx.vfsMkdir('B', '');
+  await ctx.vfsWriteFile('A\\note.txt', 'payload', '');
+  assert.strictEqual(await ctx.vfsMove('A', 'note.txt', 'B', 'copy.txt'), 'copy.txt');
+  assert.strictEqual(await ctx.vfsReadFile('B\\copy.txt', ''), 'payload');
+});
+
+test('move carries a directory subtree with it', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('A', '');
+  await ctx.vfsMkdir('B', '');
+  await ctx.vfsMkdir('A\\SUB', '');
+  await ctx.vfsWriteFile('A\\SUB\\deep.txt', 'deep', '');
+  assert.strictEqual(await ctx.vfsMove('A', 'SUB', 'B'), 'SUB');
+  assert.strictEqual(await ctx.vfsReadFile('B\\SUB\\deep.txt', ''), 'deep');
+  assert.strictEqual(ctx.vfsDirExistsSync('A\\SUB'), false);
+});
+
+test('move refuses when the destination name is taken', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('A', '');
+  await ctx.vfsMkdir('B', '');
+  await ctx.vfsWriteFile('A\\note.txt', 'one', '');
+  await ctx.vfsWriteFile('B\\note.txt', 'two', '');
+  await assert.rejects(
+    () => ctx.vfsMove('A', 'note.txt', 'B'),
+    err => err.name === 'VfsError' && err.code === 'EEXIST'
+  );
+  assert.strictEqual(await ctx.vfsReadFile('A\\note.txt', ''), 'one');
+});
+
+test('move returns null for a missing source and ENOENT for a missing directory', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('A', '');
+  await ctx.vfsMkdir('B', '');
+  assert.strictEqual(await ctx.vfsMove('A', 'nope.txt', 'B'), null);
+  await assert.rejects(
+    () => ctx.vfsMove('A', 'x', 'NOPE'),
+    err => err.name === 'VfsError' && err.code === 'ENOENT'
+  );
+});

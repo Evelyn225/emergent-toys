@@ -446,6 +446,51 @@ async function vfsRename(dirPath, oldName, newName) {
   return true;
 }
 
+// Move an entry between directories. vfsRename is deliberately same-directory
+// only, because a rename is a single dirent update; a move touches two
+// directories and needs both to exist. Returns the name actually used at the
+// destination, or null if the source is missing.
+async function vfsMove(srcDirPath, srcName, dstDirPath, dstName) {
+  const srcBase = vfsNormalizeDir(srcDirPath);
+  const dstBase = vfsNormalizeDir(dstDirPath);
+  const srcDir = vfsDirNodeSync(srcBase);
+  const dstDir = vfsDirNodeSync(dstBase);
+  if (!srcDir) throw VfsError('ENOENT', 'no such directory: ' + srcBase);
+  if (!dstDir) throw VfsError('ENOENT', 'no such directory: ' + dstBase);
+  const st = vfsStatSync(srcName, srcBase);
+  if (!st) return null;
+  // Within one directory this is just a rename, so do not duplicate the logic.
+  if (srcBase === dstBase) {
+    const renamed = await vfsRename(srcBase, srcName, dstName || srcName);
+    return renamed ? (st.kind === 'dir' ? String(dstName || srcName).toUpperCase() : String(dstName || srcName)) : null;
+  }
+  const targetName = st.kind === 'dir'
+    ? String(dstName || st.name).toUpperCase()
+    : String(dstName || st.name);
+  if (vfsStatSync(targetName, dstBase)) {
+    throw VfsError('EEXIST', 'name already in use: ' + targetName);
+  }
+  if (st.kind === 'text') {
+    const value = srcDir.files.get(st.name);
+    srcDir.files.delete(st.name);
+    dstDir.files.set(targetName, value);
+  } else if (st.kind === 'blob') {
+    const record = srcDir.blobs.get(st.name);
+    srcDir.blobs.delete(st.name);
+    if (!dstDir.blobs) dstDir.blobs = new Map();
+    dstDir.blobs.set(targetName, record);
+  } else {
+    const sub = srcDir.subdirs ? srcDir.subdirs.get(st.name) : null;
+    srcDir.dirs.delete(st.name);
+    if (srcDir.subdirs) srcDir.subdirs.delete(st.name);
+    dstDir.dirs.add(targetName);
+    if (!dstDir.subdirs) dstDir.subdirs = new Map();
+    if (sub) dstDir.subdirs.set(targetName, sub);
+  }
+  _vfsQueue({ op: 'move', dirName: srcBase, name: st.name, dstDirName: dstBase, newName: targetName, kind: st.kind }, 0);
+  return targetName;
+}
+
 async function vfsEstimate() {
   if (!_vfsBackend) return { usage: 0, quota: 0 };
   await _vfsRefreshQuota();

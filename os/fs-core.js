@@ -4,52 +4,89 @@ let _expClipboard = null; // { items:[{name,kind,sysfile,srcCwd}], cut:bool }
 let _shellDragPayload = null; // { item, srcCwd, source:'explorer'|'desktop', sourceId?:string }
 let _explorerWinSeq = 0;
 
+// Pick a free name in dirName for `name`, appending _copy / _copy2 / _copy3...
+// on a collision. Built on vfsExistsSync so it never pokes at a dir node's
+// files/blobs/dirs directly.
+function _uniqueNameIn(dirName, name) {
+  if (!vfsExistsSync(name, dirName)) return name;
+  const dot = name.lastIndexOf('.');
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext  = dot > 0 ? name.slice(dot) : '';
+  let i = 2;
+  while (vfsExistsSync(base + '_copy' + (i > 2 ? i : '') + ext, dirName)) i++;
+  return base + '_copy' + (i > 2 ? i : '') + ext;
+}
+
+// Recursively copy one entry into a directory that has already been checked
+// to exist. Used by the non-cut (copy) side of pasteClipboardInto, which has
+// no single VFS primitive to lean on the way a move does.
+async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
+  if (kind === 'dir') {
+    await vfsMkdir(dstName, dstCwd);
+    const srcPath = srcCwd ? srcCwd + '\\' + name : name;
+    const dstPath = dstCwd ? dstCwd + '\\' + dstName : dstName;
+    for (const entry of vfsListSync(srcPath)) {
+      await _copyEntryInto(entry.name, srcPath, dstPath, entry.name, entry.kind);
+    }
+  } else if (kind === 'blob') {
+    const st = vfsStatSync(name, srcCwd);
+    if (st && st.blob) await vfsWriteBlob(dstName, { ...st.blob }, dstCwd);
+  } else {
+    const content = await vfsReadFile(name, srcCwd);
+    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd);
+  }
+}
+
 // Paste the shell clipboard into a directory. Lives here beside _expClipboard
 // rather than inside openExplorer so the desktop and every Explorer window
 // share one implementation. Returns true if anything changed; callers that
 // render their own view (Explorer) should refresh on true. The desktop needs
-// no explicit refresh because setupIcons listens for 'fs-changed'.
-function pasteClipboardInto(dstCwd) {
+// no explicit refresh because setupIcons listens for 'fs-changed', which the
+// VFS now fires itself on every mutation.
+//
+// Each item is awaited in turn rather than pasted via Promise.all/forEach: a
+// concurrent paste could resolve before every item lands, so a caller's
+// render() would draw a half-pasted directory.
+async function pasteClipboardInto(dstCwd) {
   if (!_expClipboard || dstCwd === 'PROJECTS' || dstCwd === 'RECYCLE') return false;
-  const dstDir = dstCwd ? fsGetDir(dstCwd) : termFS;
-  if (!dstDir) return false;
+  if (!vfsDirExistsSync(dstCwd)) return false;
   let changed = false;
-  _expClipboard.items.forEach(({ name, kind, srcCwd }) => {
-    const srcDirObj = srcCwd ? fsGetDir(srcCwd) : termFS;
-    if (!srcDirObj) return;
-    let dstName = name;
-    const hasDst = n => dstDir.files?.has(n) || dstDir.blobs?.has(n) || dstDir.dirs?.has(n.toUpperCase());
-    if (hasDst(dstName)) {
-      const dot = name.lastIndexOf('.');
-      const base = dot > 0 ? name.slice(0, dot) : name;
-      const ext  = dot > 0 ? name.slice(dot) : '';
-      let i = 2;
-      while (hasDst(base + '_copy' + (i > 2 ? i : '') + ext)) i++;
-      dstName = base + '_copy' + (i > 2 ? i : '') + ext;
+  let failMessage = null;
+  const items = _expClipboard.items;
+  const cut = _expClipboard.cut;
+  for (const { name, srcCwd } of items) {
+    if (!vfsDirExistsSync(srcCwd)) continue;
+    // Trust the live stat over the clipboard's remembered kind: a blob's kind
+    // is image/video/audio/binary there, not 'blob', and the entry may have
+    // changed kind entirely since it was cut or copied.
+    const st = vfsStatSync(name, srcCwd);
+    if (!st) continue;
+    const dstName = _uniqueNameIn(dstCwd, name);
+    try {
+      if (cut) {
+        const movedName = await vfsMove(srcCwd, name, dstCwd, dstName);
+        if (!movedName) continue;
+        // vfsMove only touches the in-memory tree; the blob store is keyed by
+        // path and is the caller's job to keep in sync, same as
+        // moveFsItemByPath does today.
+        if (st.kind === 'blob') {
+          moveBlobEntryStorage(srcCwd, name, dstCwd, movedName);
+        } else if (st.kind === 'dir') {
+          moveBlobStorageSubtree(
+            srcCwd ? srcCwd + '\\' + name : name,
+            dstCwd ? dstCwd + '\\' + movedName : movedName
+          );
+        }
+      } else {
+        await _copyEntryInto(name, srcCwd, dstCwd, dstName, st.kind);
+      }
+      changed = true;
+    } catch (err) {
+      failMessage = failMessage || (err.code === 'ENOSPC' ? 'Not enough space to paste this item.' : err.message);
     }
-    if (kind === 'dir') {
-      const upper = name.toUpperCase(), dstUpper = dstName.toUpperCase();
-      if (!srcDirObj.dirs?.has(upper)) return;
-      const sub = srcDirObj.subdirs?.get(upper);
-      if (_expClipboard.cut) { srcDirObj.dirs.delete(upper); srcDirObj.subdirs?.delete(upper); }
-      if (!dstDir.subdirs) dstDir.subdirs = new Map();
-      dstDir.dirs.add(dstUpper);
-      if (sub) dstDir.subdirs.set(dstUpper, sub);
-    } else if (srcDirObj.blobs?.has(name)) {
-      const blob = srcDirObj.blobs.get(name);
-      if (_expClipboard.cut) srcDirObj.blobs.delete(name);
-      if (!dstDir.blobs) dstDir.blobs = new Map();
-      dstDir.blobs.set(dstName, { ...blob });
-    } else if (srcDirObj.files?.has(name)) {
-      const content = srcDirObj.files.get(name);
-      if (_expClipboard.cut) srcDirObj.files.delete(name);
-      if (!dstDir.files) dstDir.files = new Map();
-      dstDir.files.set(dstName, content);
-    } else { return; }
-    changed = true;
-  });
-  if (_expClipboard.cut) _expClipboard = null;
-  if (changed) { schedSave(); document.dispatchEvent(new CustomEvent('fs-changed')); }
+  }
+  if (cut) _expClipboard = null;
+  if (failMessage) osAlert(failMessage, 'Paste Failed', 'X');
   return changed;
 }
 

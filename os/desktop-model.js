@@ -78,7 +78,7 @@ let desktopIconDirs = loadDesktopIconDirs();
 function getDesktopSystemIconDir(name) {
   if (isRecycleBinItemName(name)) return 'DESKTOP';
   const normalized = normalizeDesktopContainerDir(desktopIconDirs[name] || 'DESKTOP');
-  return normalized !== 'DESKTOP' && !fsGetDir(normalized) ? 'DESKTOP' : normalized;
+  return normalized !== 'DESKTOP' && !vfsDirExistsSync(normalized) ? 'DESKTOP' : normalized;
 }
 function setDesktopSystemIconDir(name, dirPath) {
   if (isRecycleBinItemName(name)) return;
@@ -117,7 +117,7 @@ function canMoveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
   const dstDir = fsNormalizeDir(dstDirPath);
   if (!isDesktopVirtualItem(item, srcDir)) return false;
   if (!isDesktopContainerPath(dstDir)) return false;
-  return dstDir === 'DESKTOP' || !!fsGetDir(dstDir);
+  return dstDir === 'DESKTOP' || vfsDirExistsSync(dstDir);
 }
 function moveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
   const srcDir = fsNormalizeDir(srcDirPath);
@@ -140,7 +140,7 @@ function canMoveShellItemToDir(item, srcDirPath, dstDirPath) {
   if (!item || item._proj || item._recycle) return false;
   if (isDesktopVirtualItem(item, srcDirPath)) return canMoveDesktopVirtualItem(item, srcDirPath, dstDir);
   if (item.sysfile || item._shortcut) return false;
-  return dstDir === '' || !!fsGetDir(dstDir);
+  return dstDir === '' || vfsDirExistsSync(dstDir);
 }
 function moveShellItemToDir(item, srcDirPath, dstDirPath) {
   const srcDir = fsNormalizeDir(srcDirPath);
@@ -288,7 +288,7 @@ function getDesktopShortcutsForDir(dirPath) {
   const normalized = normalizeDesktopContainerDir(dirPath);
   return customDesktopIcons.filter(icon => {
     const iconDir = normalizeDesktopContainerDir(icon.dirPath || 'DESKTOP');
-    const resolvedDir = iconDir !== 'DESKTOP' && !fsGetDir(iconDir) ? 'DESKTOP' : iconDir;
+    const resolvedDir = iconDir !== 'DESKTOP' && !vfsDirExistsSync(iconDir) ? 'DESKTOP' : iconDir;
     return resolvedDir === normalized;
   });
 }
@@ -359,14 +359,14 @@ function openDesktopShortcutTarget(target) {
     openExplorer(path);
     return;
   }
-  const entry = fsGetEntry(path);
-  if (!entry) {
+  const st = vfsStatSync(path);
+  if (!st) {
     osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
     return;
   }
-  if (openWithAssociation(entry.fileName, entry.dirName)) return;
-  if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
-  else openNotepad(entry.fileName, entry.dirName);
+  if (openWithAssociation(st.name, st.dirName)) return;
+  if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  else openNotepad(st.name, st.dirName);
 }
 
 function openRecycleBin() {

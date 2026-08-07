@@ -446,6 +446,51 @@ async function vfsRename(dirPath, oldName, newName) {
   return true;
 }
 
+// Move an entry between directories. vfsRename is deliberately same-directory
+// only, because a rename is a single dirent update; a move touches two
+// directories and needs both to exist. Returns the name actually used at the
+// destination, or null if the source is missing.
+async function vfsMove(srcDirPath, srcName, dstDirPath, dstName) {
+  const srcBase = vfsNormalizeDir(srcDirPath);
+  const dstBase = vfsNormalizeDir(dstDirPath);
+  const srcDir = vfsDirNodeSync(srcBase);
+  const dstDir = vfsDirNodeSync(dstBase);
+  if (!srcDir) throw VfsError('ENOENT', 'no such directory: ' + srcBase);
+  if (!dstDir) throw VfsError('ENOENT', 'no such directory: ' + dstBase);
+  const st = vfsStatSync(srcName, srcBase);
+  if (!st) return null;
+  // Within one directory this is just a rename, so do not duplicate the logic.
+  if (srcBase === dstBase) {
+    const renamed = await vfsRename(srcBase, srcName, dstName || srcName);
+    return renamed ? (st.kind === 'dir' ? String(dstName || srcName).toUpperCase() : String(dstName || srcName)) : null;
+  }
+  const targetName = st.kind === 'dir'
+    ? String(dstName || st.name).toUpperCase()
+    : String(dstName || st.name);
+  if (vfsStatSync(targetName, dstBase)) {
+    throw VfsError('EEXIST', 'name already in use: ' + targetName);
+  }
+  if (st.kind === 'text') {
+    const value = srcDir.files.get(st.name);
+    srcDir.files.delete(st.name);
+    dstDir.files.set(targetName, value);
+  } else if (st.kind === 'blob') {
+    const record = srcDir.blobs.get(st.name);
+    srcDir.blobs.delete(st.name);
+    if (!dstDir.blobs) dstDir.blobs = new Map();
+    dstDir.blobs.set(targetName, record);
+  } else {
+    const sub = srcDir.subdirs ? srcDir.subdirs.get(st.name) : null;
+    srcDir.dirs.delete(st.name);
+    if (srcDir.subdirs) srcDir.subdirs.delete(st.name);
+    dstDir.dirs.add(targetName);
+    if (!dstDir.subdirs) dstDir.subdirs = new Map();
+    if (sub) dstDir.subdirs.set(targetName, sub);
+  }
+  _vfsQueue({ op: 'move', dirName: srcBase, name: st.name, dstDirName: dstBase, newName: targetName, kind: st.kind }, 0);
+  return targetName;
+}
+
 async function vfsEstimate() {
   if (!_vfsBackend) return { usage: 0, quota: 0 };
   await _vfsRefreshQuota();
@@ -634,7 +679,7 @@ let desktopIconDirs = loadDesktopIconDirs();
 function getDesktopSystemIconDir(name) {
   if (isRecycleBinItemName(name)) return 'DESKTOP';
   const normalized = normalizeDesktopContainerDir(desktopIconDirs[name] || 'DESKTOP');
-  return normalized !== 'DESKTOP' && !fsGetDir(normalized) ? 'DESKTOP' : normalized;
+  return normalized !== 'DESKTOP' && !vfsDirExistsSync(normalized) ? 'DESKTOP' : normalized;
 }
 function setDesktopSystemIconDir(name, dirPath) {
   if (isRecycleBinItemName(name)) return;
@@ -673,7 +718,7 @@ function canMoveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
   const dstDir = fsNormalizeDir(dstDirPath);
   if (!isDesktopVirtualItem(item, srcDir)) return false;
   if (!isDesktopContainerPath(dstDir)) return false;
-  return dstDir === 'DESKTOP' || !!fsGetDir(dstDir);
+  return dstDir === 'DESKTOP' || vfsDirExistsSync(dstDir);
 }
 function moveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
   const srcDir = fsNormalizeDir(srcDirPath);
@@ -696,7 +741,7 @@ function canMoveShellItemToDir(item, srcDirPath, dstDirPath) {
   if (!item || item._proj || item._recycle) return false;
   if (isDesktopVirtualItem(item, srcDirPath)) return canMoveDesktopVirtualItem(item, srcDirPath, dstDir);
   if (item.sysfile || item._shortcut) return false;
-  return dstDir === '' || !!fsGetDir(dstDir);
+  return dstDir === '' || vfsDirExistsSync(dstDir);
 }
 function moveShellItemToDir(item, srcDirPath, dstDirPath) {
   const srcDir = fsNormalizeDir(srcDirPath);
@@ -844,7 +889,7 @@ function getDesktopShortcutsForDir(dirPath) {
   const normalized = normalizeDesktopContainerDir(dirPath);
   return customDesktopIcons.filter(icon => {
     const iconDir = normalizeDesktopContainerDir(icon.dirPath || 'DESKTOP');
-    const resolvedDir = iconDir !== 'DESKTOP' && !fsGetDir(iconDir) ? 'DESKTOP' : iconDir;
+    const resolvedDir = iconDir !== 'DESKTOP' && !vfsDirExistsSync(iconDir) ? 'DESKTOP' : iconDir;
     return resolvedDir === normalized;
   });
 }
@@ -915,14 +960,14 @@ function openDesktopShortcutTarget(target) {
     openExplorer(path);
     return;
   }
-  const entry = fsGetEntry(path);
-  if (!entry) {
+  const st = vfsStatSync(path);
+  if (!st) {
     osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
     return;
   }
-  if (openWithAssociation(entry.fileName, entry.dirName)) return;
-  if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
-  else openNotepad(entry.fileName, entry.dirName);
+  if (openWithAssociation(st.name, st.dirName)) return;
+  if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  else openNotepad(st.name, st.dirName);
 }
 
 function openRecycleBin() {
@@ -1718,52 +1763,89 @@ let _expClipboard = null; // { items:[{name,kind,sysfile,srcCwd}], cut:bool }
 let _shellDragPayload = null; // { item, srcCwd, source:'explorer'|'desktop', sourceId?:string }
 let _explorerWinSeq = 0;
 
+// Pick a free name in dirName for `name`, appending _copy / _copy2 / _copy3...
+// on a collision. Built on vfsExistsSync so it never pokes at a dir node's
+// files/blobs/dirs directly.
+function _uniqueNameIn(dirName, name) {
+  if (!vfsExistsSync(name, dirName)) return name;
+  const dot = name.lastIndexOf('.');
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext  = dot > 0 ? name.slice(dot) : '';
+  let i = 2;
+  while (vfsExistsSync(base + '_copy' + (i > 2 ? i : '') + ext, dirName)) i++;
+  return base + '_copy' + (i > 2 ? i : '') + ext;
+}
+
+// Recursively copy one entry into a directory that has already been checked
+// to exist. Used by the non-cut (copy) side of pasteClipboardInto, which has
+// no single VFS primitive to lean on the way a move does.
+async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
+  if (kind === 'dir') {
+    await vfsMkdir(dstName, dstCwd);
+    const srcPath = srcCwd ? srcCwd + '\\' + name : name;
+    const dstPath = dstCwd ? dstCwd + '\\' + dstName : dstName;
+    for (const entry of vfsListSync(srcPath)) {
+      await _copyEntryInto(entry.name, srcPath, dstPath, entry.name, entry.kind);
+    }
+  } else if (kind === 'blob') {
+    const st = vfsStatSync(name, srcCwd);
+    if (st && st.blob) await vfsWriteBlob(dstName, { ...st.blob }, dstCwd);
+  } else {
+    const content = await vfsReadFile(name, srcCwd);
+    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd);
+  }
+}
+
 // Paste the shell clipboard into a directory. Lives here beside _expClipboard
 // rather than inside openExplorer so the desktop and every Explorer window
 // share one implementation. Returns true if anything changed; callers that
 // render their own view (Explorer) should refresh on true. The desktop needs
-// no explicit refresh because setupIcons listens for 'fs-changed'.
-function pasteClipboardInto(dstCwd) {
+// no explicit refresh because setupIcons listens for 'fs-changed', which the
+// VFS now fires itself on every mutation.
+//
+// Each item is awaited in turn rather than pasted via Promise.all/forEach: a
+// concurrent paste could resolve before every item lands, so a caller's
+// render() would draw a half-pasted directory.
+async function pasteClipboardInto(dstCwd) {
   if (!_expClipboard || dstCwd === 'PROJECTS' || dstCwd === 'RECYCLE') return false;
-  const dstDir = dstCwd ? fsGetDir(dstCwd) : termFS;
-  if (!dstDir) return false;
+  if (!vfsDirExistsSync(dstCwd)) return false;
   let changed = false;
-  _expClipboard.items.forEach(({ name, kind, srcCwd }) => {
-    const srcDirObj = srcCwd ? fsGetDir(srcCwd) : termFS;
-    if (!srcDirObj) return;
-    let dstName = name;
-    const hasDst = n => dstDir.files?.has(n) || dstDir.blobs?.has(n) || dstDir.dirs?.has(n.toUpperCase());
-    if (hasDst(dstName)) {
-      const dot = name.lastIndexOf('.');
-      const base = dot > 0 ? name.slice(0, dot) : name;
-      const ext  = dot > 0 ? name.slice(dot) : '';
-      let i = 2;
-      while (hasDst(base + '_copy' + (i > 2 ? i : '') + ext)) i++;
-      dstName = base + '_copy' + (i > 2 ? i : '') + ext;
+  let failMessage = null;
+  const items = _expClipboard.items;
+  const cut = _expClipboard.cut;
+  for (const { name, srcCwd } of items) {
+    if (!vfsDirExistsSync(srcCwd)) continue;
+    // Trust the live stat over the clipboard's remembered kind: a blob's kind
+    // is image/video/audio/binary there, not 'blob', and the entry may have
+    // changed kind entirely since it was cut or copied.
+    const st = vfsStatSync(name, srcCwd);
+    if (!st) continue;
+    const dstName = _uniqueNameIn(dstCwd, name);
+    try {
+      if (cut) {
+        const movedName = await vfsMove(srcCwd, name, dstCwd, dstName);
+        if (!movedName) continue;
+        // vfsMove only touches the in-memory tree; the blob store is keyed by
+        // path and is the caller's job to keep in sync, same as
+        // moveFsItemByPath does today.
+        if (st.kind === 'blob') {
+          moveBlobEntryStorage(srcCwd, name, dstCwd, movedName);
+        } else if (st.kind === 'dir') {
+          moveBlobStorageSubtree(
+            srcCwd ? srcCwd + '\\' + name : name,
+            dstCwd ? dstCwd + '\\' + movedName : movedName
+          );
+        }
+      } else {
+        await _copyEntryInto(name, srcCwd, dstCwd, dstName, st.kind);
+      }
+      changed = true;
+    } catch (err) {
+      failMessage = failMessage || (err.code === 'ENOSPC' ? 'Not enough space to paste this item.' : err.message);
     }
-    if (kind === 'dir') {
-      const upper = name.toUpperCase(), dstUpper = dstName.toUpperCase();
-      if (!srcDirObj.dirs?.has(upper)) return;
-      const sub = srcDirObj.subdirs?.get(upper);
-      if (_expClipboard.cut) { srcDirObj.dirs.delete(upper); srcDirObj.subdirs?.delete(upper); }
-      if (!dstDir.subdirs) dstDir.subdirs = new Map();
-      dstDir.dirs.add(dstUpper);
-      if (sub) dstDir.subdirs.set(dstUpper, sub);
-    } else if (srcDirObj.blobs?.has(name)) {
-      const blob = srcDirObj.blobs.get(name);
-      if (_expClipboard.cut) srcDirObj.blobs.delete(name);
-      if (!dstDir.blobs) dstDir.blobs = new Map();
-      dstDir.blobs.set(dstName, { ...blob });
-    } else if (srcDirObj.files?.has(name)) {
-      const content = srcDirObj.files.get(name);
-      if (_expClipboard.cut) srcDirObj.files.delete(name);
-      if (!dstDir.files) dstDir.files = new Map();
-      dstDir.files.set(dstName, content);
-    } else { return; }
-    changed = true;
-  });
-  if (_expClipboard.cut) _expClipboard = null;
-  if (changed) { schedSave(); document.dispatchEvent(new CustomEvent('fs-changed')); }
+  }
+  if (cut) _expClipboard = null;
+  if (failMessage) osAlert(failMessage, 'Paste Failed', 'X');
   return changed;
 }
 
@@ -7442,7 +7524,7 @@ function openExplorer(startPath) {
         cwd = '';
         render();
         addrEl.blur();
-      } else if (normalized === 'PROJECTS' || fsGetDir(normalized)) {
+      } else if (normalized === 'PROJECTS' || vfsDirExistsSync(normalized)) {
         cwd = normalized;
         render();
         addrEl.blur();
@@ -7675,31 +7757,22 @@ function openExplorer(startPath) {
 
   function renameItem(item) {
     if (!item || item.sysfile || item._proj) return;
-    osPrompt('Rename to:', item.name, 'Rename', nextName => {
+    osPrompt('Rename to:', item.name, 'Rename', async nextName => {
       if (!nextName || nextName === item.name) return;
-      const dir = fsGetDir(cwd);
-      if (!dir) return;
-      if (item.kind === 'dir') {
-        dir.dirs.delete(item.name);
-        const sub = dir.subdirs?.get(item.name);
-        dir.dirs.add(nextName.toUpperCase());
-        if (!dir.subdirs) dir.subdirs = new Map();
-        if (sub) dir.subdirs.set(nextName.toUpperCase(), sub);
-        dir.subdirs.delete(item.name);
-      } else if (dir.blobs.has(item.name)) {
-        const blob = dir.blobs.get(item.name);
-        dir.blobs.delete(item.name);
-        dir.blobs.set(nextName, blob);
-        renameBlobEntry(cwd, item.name, nextName);
-        if (blob?.kind === 'image') handleWallpaperFileRename(cwd, item.name, nextName);
-      } else {
-        const content = dir.files.get(item.name);
-        dir.files.delete(item.name);
-        dir.files.set(nextName, content ?? '');
+      try {
+        if (!(await vfsRename(cwd, item.name, nextName))) return;
+      } catch (err) {
+        osAlert(err.code === 'EEXIST' ? 'A file with that name already exists.' : err.message, 'Rename Failed', 'X');
+        return;
+      }
+      if (item.kind !== 'dir') {
+        const st = vfsStatSync(nextName, cwd);
+        if (st && st.kind === 'blob') {
+          renameBlobEntry(cwd, item.name, nextName);
+          if (st.blob.kind === 'image') handleWallpaperFileRename(cwd, item.name, nextName);
+        }
       }
       increaseDriveFragmentation(item.kind === 'dir' ? 0.006 : 0.008);
-      schedSave();
-      document.dispatchEvent(new CustomEvent('fs-changed'));
       render();
     });
   }
@@ -7770,13 +7843,12 @@ function openExplorer(startPath) {
       openSystemFile(name);
       return;
     }
-    const dir = fsGetDir(cwd);
-    if (!dir) return;
-    if (!dir.blobs.has(name) && !dir.files.has(name)) return;
+    const st = vfsStatSync(name, cwd);
+    if (!st || st.kind === 'dir') return;
     // Registry association first; falls through to the built-in defaults when
     // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
     if (openWithAssociation(name, cwd)) return;
-    if (dir.blobs.has(name)) openMediaFile(name, cwd);
+    if (st.kind === 'blob') openMediaFile(name, cwd);
     else openNotepad(name, cwd);
   }
 
@@ -7828,6 +7900,16 @@ function openExplorer(startPath) {
     return kind === 'dir' ? 'File Folder' : kind === 'image' ? 'Image File' :
            kind === 'video' ? 'Video File' : kind === 'audio' ? 'Audio File' :
            kind === 'binary' ? 'Binary File' : 'Text File';
+  }
+
+  // vfsListSync/vfsStatSync report kind as 'dir' | 'text' | 'blob'. Explorer's
+  // item.kind is finer-grained for blobs (image/video/audio/binary), which is
+  // what getIcon/typeLabel key off of, so every VFS entry passes through here
+  // on its way into an item.
+  function explorerKindFor(entry) {
+    if (entry.kind === 'dir') return 'dir';
+    if (entry.kind === 'blob') return (entry.blob && entry.blob.kind) || inferBlobKindFromName(entry.name);
+    return 'file';
   }
 
   function makeItem(name, kind, sysfile, meta) {
@@ -8115,12 +8197,7 @@ function openExplorer(startPath) {
         sysfile: false,
         _shortcut: ic,
       }));
-      const desktopDir = fsGetDir('DESKTOP');
-      if (desktopDir) {
-        desktopDir.dirs.forEach(name => desktopItems.push({ name, kind: 'dir', sysfile: false }));
-        desktopDir.files.forEach((_, name) => desktopItems.push({ name, kind: 'file', sysfile: false }));
-        desktopDir.blobs.forEach((blob, name) => desktopItems.push({ name, kind: blob.kind || inferBlobKindFromName(name), sysfile: false }));
-      }
+      vfsListSync('DESKTOP').forEach(entry => desktopItems.push({ name: entry.name, kind: explorerKindFor(entry), sysfile: false }));
       const build = items => {
         if (viewMode === 'details') {
           const tbl = document.createElement('table');
@@ -8152,14 +8229,15 @@ function openExplorer(startPath) {
     if (!cwd) {
       items.push({ name:'DESKTOP', kind:'dir', sysfile:true });
       items.push({ name:'PROJECTS', kind:'dir', sysfile:true });
-      ['DOCS', ...termFS.dirs].filter((value, index, array) => array.indexOf(value) === index).forEach(dirName => {
-        if (dirName !== 'PROJECTS' && dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
-      });
-      termFS.files.forEach((_, name) => items.push({ name, kind:'file', sysfile:false }));
-      termFS.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
+      const rootEntries = vfsListSync('');
+      ['DOCS', ...rootEntries.filter(e => e.kind === 'dir').map(e => e.name)]
+        .filter((value, index, array) => array.indexOf(value) === index)
+        .forEach(dirName => {
+          if (dirName !== 'PROJECTS' && dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
+        });
+      rootEntries.filter(e => e.kind !== 'dir').forEach(entry => items.push({ name: entry.name, kind: explorerKindFor(entry), sysfile: false }));
     } else {
-      const dir = fsGetDir(cwd);
-      if (!dir) {
+      if (!vfsDirExistsSync(cwd)) {
         cwd = '';
         render();
         return;
@@ -8178,12 +8256,10 @@ function openExplorer(startPath) {
           _shortcut: ic,
         }));
       }
-      dir.dirs.forEach(name => {
-        if (cwd === 'CACHE' && name === 'RECYCLE_BIN') return;
-        items.push({ name, kind:'dir', sysfile:false });
+      vfsListSync(cwd).forEach(entry => {
+        if (cwd === 'CACHE' && entry.kind === 'dir' && entry.name === 'RECYCLE_BIN') return;
+        items.push({ name: entry.name, kind: explorerKindFor(entry), sysfile: false });
       });
-      dir.files.forEach((_, name) => items.push({ name, kind:'file', sysfile:false }));
-      dir.blobs.forEach((blob, name) => items.push({ name, kind:blob.kind, sysfile:false }));
     }
 
     if (viewMode === 'details') {
@@ -8249,7 +8325,17 @@ function openExplorer(startPath) {
       { label: 'Paste', disabled: !_expClipboard, action: pasteClipboard },
       '-',
       { label: 'New Folder', action: () => promptCreateFolderAt(cwd, () => render()) },
-      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', async name => {
+        if (!name) return;
+        try {
+          await vfsWriteFile(name, '', cwd);
+        } catch (err) {
+          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'X');
+          return;
+        }
+        openNotepad(name, cwd);
+        render();
+      }) },
       '-',
       { label: 'Upload File...', action: () => triggerUpload(cwd) },
       '-',
@@ -8330,7 +8416,17 @@ function openExplorer(startPath) {
       { label: 'Close', action: () => closeWin(id) },
     ] : [
       { label: 'New Folder', action: () => promptCreateFolderAt(cwd, () => render()) },
-      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', name => { if (name) { const saved = fsWriteTextFile(name, '', cwd); if (saved) { document.dispatchEvent(new CustomEvent('fs-changed')); openNotepad(name, cwd); render(); } } }) },
+      { label: 'New Text File', action: () => osPrompt('File name:', 'untitled.txt', 'New Text File', async name => {
+        if (!name) return;
+        try {
+          await vfsWriteFile(name, '', cwd);
+        } catch (err) {
+          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'X');
+          return;
+        }
+        openNotepad(name, cwd);
+        render();
+      }) },
       '-',
       { label: 'Open', disabled: !selected, action: () => { if (selected) openItem(selected); } },
       { label: 'Delete', disabled: !getDeletableSelectedItems().length, action: deleteSelected },
@@ -8380,8 +8476,8 @@ function openExplorer(startPath) {
 
   // ── Paste helper ─────────────────────────────────────────────
   // Shared with the desktop; see pasteClipboardInto in os/fs-core.js.
-  function pasteClipboard() {
-    if (pasteClipboardInto(cwd)) render();
+  async function pasteClipboard() {
+    if (await pasteClipboardInto(cwd)) render();
   }
 
   // ── Explorer keyboard shortcuts ───────────────────────────────
