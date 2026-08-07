@@ -119,7 +119,7 @@ async function renameBlobEntryInDb(dirPath, oldName, newName) {
 
 function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
   if (!fileName) return;
-  const dir = fsGetDir(dirPath);
+  const dir = vfsDirNodeSync(dirPath);
   if (!dir) return;
   const prev = dir.blobs.get(fileName);
   if (prev?.url) URL.revokeObjectURL(prev.url);
@@ -264,5 +264,4 @@ async function loadBlobsFromIndexedDb() {
     applyWallpaper(savedWp);
   }
 }
-loadBlobsFromStorage();
 

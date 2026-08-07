@@ -141,6 +141,10 @@ const VFS_FLUSH_DELAY_MS = 400;
 
 function vfsIsMounted() { return _vfsBackend !== null; }
 
+// True when mutations have been made but not yet committed. Used by the
+// unload handler to skip serializing a tree that is already durable.
+function vfsHasPendingWrites() { return _vfsPendingOps.length > 0; }
+
 function _vfsSerNode(node) {
   const out = { dirs: [...node.dirs], files: {}, subdirs: {} };
   node.files.forEach((v, k) => { out.files[k] = v; });
@@ -1647,9 +1651,27 @@ function biosFinish() {
   if (bisDone) return; bisDone = true;
   clearTimeout(biosTimer);
   const biosEl = document.getElementById('bios');
+  // Start the filesystem mount now so its I/O overlaps the 600ms fade rather
+  // than leaving a blank screen after it. By the time the fade ends this has
+  // almost always resolved, so the await below is free.
+  //
+  // Nothing before the first `await` inside vfsBootMount may touch a `const`
+  // declared later in the bundle: on the skipBoot path below, this function
+  // runs while the bundle is still evaluating. vfsBootMount's first statement
+  // is `await vfsMount(...)`, so everything after it runs as a microtask once
+  // evaluation has finished and every `const` exists. Do not move work above
+  // that await.
+  const mounted = vfsBootMount();
   biosEl.style.transition = 'opacity 0.6s';
   biosEl.style.opacity = '0';
-  setTimeout(() => { biosEl.style.display = 'none'; startDesktop(); }, 600);
+  setTimeout(() => {
+    // Never leave the OS stuck on a boot screen: a mount failure is already
+    // reported through onError, so proceed either way.
+    mounted.catch(() => {}).then(() => {
+      biosEl.style.display = 'none';
+      startDesktop();
+    });
+  }, 600);
 }
 
 function biosType() {
@@ -1678,7 +1700,10 @@ document.addEventListener('touchend',  biosFinish, { once: true });
 // Load settings early so skipBoot is available
 try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
 if (osSettings.skipBoot && !forceBootSequence) {
-  biosFinish();
+  // Deferred by a tick so nothing here runs while the bundle is still
+  // evaluating. Visually identical, and it means biosFinish cannot touch a
+  // `const` from a file that has not been reached yet.
+  setTimeout(biosFinish, 0);
 } else {
   biosLines = buildBiosLines();
   setTimeout(biosType, 250);
@@ -1760,9 +1785,11 @@ function winIdByPid(pid) {
   return null;
 }
 
-// Shared virtual filesystem (terminal + notepad + media + explorer)
+// The seeded filesystem. vfsBootMount installs this as the initial tree when
+// nothing is persisted, and re-applies the DOCS subtree on every boot.
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
-const termFS = {
+function vfsSeedTree() {
+  const seed = {
   dirs:    new Set(['DOCS']),
   files:   new Map(),
   blobs:   new Map(),
@@ -2150,11 +2177,28 @@ const termFS = {
       ].join('\n')],
     ]),
   }]]),
-};
-termFS.dirs.add('DESKTOP');
-if (!termFS.subdirs.has('DESKTOP')) {
-  termFS.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+  };
+  seed.dirs.add('DESKTOP');
+  if (!seed.subdirs.has('DESKTOP')) {
+    seed.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+  }
+  return seed;
 }
+
+// `termFS` is now a live view of the VFS tree rather than its own object.
+// Existing code that reads termFS.files / termFS.dirs keeps working against
+// the same node the VFS mutates, so old and new call sites cannot diverge
+// while the migration in tasks 7-11 proceeds file by file.
+Object.defineProperty(window, 'termFS', {
+  get() { return vfsGetTree(); },
+  configurable: true,
+});
+
+// Several modules touch termFS while the bundle is still evaluating (registry
+// defaults, recycle-bin setup). Install the seed synchronously so those reads
+// find a tree; vfsBootMount replaces it with persisted state before the
+// desktop renders.
+vfsSetTree(vfsSeedTree());
 
 // Helper: get a directory object by name ('' = root)
 function fsGetDir(path) {
@@ -2277,10 +2321,8 @@ function fsCreateDir(path, fallbackDir, options) {
 }
 
 // ── Filesystem persistence ────────────────────────────────────────
-const FS_KEY = 'sleepOS-fs';
 const DRIVE_STATE_KEY = 'sleepOS-drive-state';
 const LEGACY_DEFRAG_KEY = 'sleepOS-defrag-time';
-let _fsSaveTimer = null;
 
 function _serDir(d) {
   const out = { dirs: [...d.dirs], files: {}, subdirs: {} };
@@ -2350,18 +2392,16 @@ function refreshSeededHomeMedia() {
   });
 }
 
-function saveFS() {
-  try {
-    const data = { dirs: [...termFS.dirs], files: {}, subdirs: {} };
-    termFS.files.forEach((v, k) => { data.files[k] = v; });
-    termFS.subdirs.forEach((v, k) => { data.subdirs[k] = _serDir(v); });
-    localStorage.setItem(FS_KEY, JSON.stringify(data));
-  } catch(e) { /* quota exceeded - silently ignore */ }
-}
+function saveFS() { return vfsFlush(); }
 
+// Legacy call sites (not yet migrated to vfsWriteFile/vfsMkdir/etc. by tasks
+// 7-10) mutate the shared tree directly and never touch the VFS's own op
+// queue, so vfsFlush would see nothing to commit and vfsHasPendingWrites
+// would report false even though the tree changed underneath it. Queue a
+// marker op so both stay correct - this is the same debounced commit the old
+// schedSave/saveFS pair provided, just routed through the VFS.
 function schedSave() {
-  clearTimeout(_fsSaveTimer);
-  _fsSaveTimer = setTimeout(saveFS, 400);
+  if (typeof _vfsQueue === 'function') _vfsQueue({ op: 'legacy-write' }, 0);
 }
 
 function computeLegacyFragLevel(ms) {
@@ -2434,26 +2474,63 @@ function optimizeDriveFragmentation(options) {
   return defragState.level;
 }
 
-function loadFS() {
-  const raw = localStorage.getItem(FS_KEY);
-  if (!raw) {
-    refreshSeededDocs();
-    refreshSeededWallpaperLibrary();
-    refreshSeededHomeMedia();
-    return;
-  }
-  try {
-    const data = JSON.parse(raw);
-    if (data.dirs) data.dirs.forEach(d => termFS.dirs.add(d));
-    if (data.files) Object.entries(data.files).forEach(([k, v]) => termFS.files.set(k, v));
-    if (data.subdirs) Object.entries(data.subdirs).forEach(([k, v]) => termFS.subdirs.set(k, _desDir(v)));
-    refreshSeededDocs();
-    refreshSeededWallpaperLibrary();
-    refreshSeededHomeMedia();
-  } catch(e) { /* corrupted save - ignore */ }
+// Async boot entry point. Called from the BIOS sequence before startDesktop.
+async function vfsBootMount() {
+  await vfsMount(createLocalStorageBackend(), {
+    onChange: () => { document.dispatchEvent(new CustomEvent('fs-changed')); },
+    onError: err => { reportVfsError(err); },
+    seed: root => {
+      if (!root.dirs.size && !root.files.size) {
+        const seeded = vfsSeedTree();
+        seeded.dirs.forEach(d => root.dirs.add(d));
+        seeded.files.forEach((v, k) => root.files.set(k, v));
+        seeded.subdirs.forEach((v, k) => root.subdirs.set(k, v));
+      }
+    },
+  });
+  refreshSeededDocs();
+  refreshSeededWallpaperLibrary();
+  refreshSeededHomeMedia();
+  ensureFsDir(RECYCLE_STORAGE_DIR);
+  loadBlobsFromStorage();
+  // The load-time syncDaemonStory ran against the seed tree, which the mount
+  // then replaced. Re-run it against the real tree so the story files and the
+  // registry pointers agree. Same shape as the ensureFsDir call above.
+  syncDaemonStory({ silent: true });
 }
 
-loadFS();
+// A late commit failure has no call stack to propagate into, so it surfaces
+// here. Task 11 replaces the console fallback with the on-screen toast.
+function reportVfsError(err) {
+  if (err && err.code === 'ENOSPC') {
+    console.warn('sleepOS: disk full, changes were not saved -', err.message);
+  } else {
+    console.warn('sleepOS: filesystem error -', err && err.message);
+  }
+}
+
+// beforeunload cannot await, and a pending commit sits behind a 400ms
+// debounce, so `void vfsFlush()` here would silently drop up to 400ms of the
+// user's work on close. The old saveFS wrote synchronously and always landed;
+// losing that would be a data-loss regression in the one phase that exists to
+// stop silently losing data.
+//
+// localStorage.setItem is synchronous, so write the snapshot directly. This
+// deliberately reaches past the backend interface: it is the only place that
+// does, and it is correct only because phase 2's backend is localStorage.
+// PHASE 4 MUST REVISIT THIS - IndexedDB cannot be written synchronously at
+// all, and the answer there is flushing on `visibilitychange` instead.
+window.addEventListener('beforeunload', () => {
+  // vfsIsMounted() is the load-bearing half of this guard. vfsMount publishes
+  // _vfsBackend only after _vfsRoot holds real data, so this is what stops us
+  // serializing the seed tree over a returning visitor's filesystem if they
+  // close the tab during the BIOS sequence.
+  if (!vfsIsMounted() || !vfsHasPendingWrites()) return;
+  try {
+    localStorage.setItem(LOCAL_FS_KEY, JSON.stringify(vfsSerializeTree()));
+  } catch (e) { /* unload is too late to report anything useful */ }
+});
+
 function normalizeRecycleEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;
   const id = String(entry.id || '').trim();
@@ -2496,8 +2573,6 @@ function recycleEntryStoredPath(entry) {
 
 let recycleBinEntries = loadRecycleBin();
 ensureFsDir(RECYCLE_STORAGE_DIR);
-window.addEventListener('beforeunload', saveFS);
-document.addEventListener('fs-changed', schedSave);
 // Daemon story state and sync
 const DAEMON_STORY_KEY = 'sleepOS-daemon-story';
 const ROOT_SYSTEM_FILE_META = [
@@ -2798,6 +2873,7 @@ function removeFsPath(path, options) {
     const content = dir.files.get(fileName);
     dir.files.delete(fileName);
     if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('text', content));
+    schedSave();
     return true;
   }
   if (dir.blobs.has(fileName)) {
@@ -2807,12 +2883,14 @@ function removeFsPath(path, options) {
     dir.blobs.delete(fileName);
     removeBlobEntry(dirName, fileName);
     if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('blob', blob?.size));
+    schedSave();
     return true;
   }
   if (dir.dirs.has(upper)) {
     dir.dirs.delete(upper);
     dir.subdirs?.delete(upper);
     if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
+    schedSave();
     return true;
   }
   return false;
@@ -4053,7 +4131,7 @@ async function renameBlobEntryInDb(dirPath, oldName, newName) {
 
 function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
   if (!fileName) return;
-  const dir = fsGetDir(dirPath);
+  const dir = vfsDirNodeSync(dirPath);
   if (!dir) return;
   const prev = dir.blobs.get(fileName);
   if (prev?.url) URL.revokeObjectURL(prev.url);
@@ -4198,7 +4276,6 @@ async function loadBlobsFromIndexedDb() {
     applyWallpaper(savedWp);
   }
 }
-loadBlobsFromStorage();
 
 // ── Wallpaper persistence ─────────────────────────────────────────
 const WP_KEY = 'sleepOS-wallpaper';

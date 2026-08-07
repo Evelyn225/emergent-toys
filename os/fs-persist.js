@@ -1,8 +1,6 @@
 // ── Filesystem persistence ────────────────────────────────────────
-const FS_KEY = 'sleepOS-fs';
 const DRIVE_STATE_KEY = 'sleepOS-drive-state';
 const LEGACY_DEFRAG_KEY = 'sleepOS-defrag-time';
-let _fsSaveTimer = null;
 
 function _serDir(d) {
   const out = { dirs: [...d.dirs], files: {}, subdirs: {} };
@@ -72,18 +70,16 @@ function refreshSeededHomeMedia() {
   });
 }
 
-function saveFS() {
-  try {
-    const data = { dirs: [...termFS.dirs], files: {}, subdirs: {} };
-    termFS.files.forEach((v, k) => { data.files[k] = v; });
-    termFS.subdirs.forEach((v, k) => { data.subdirs[k] = _serDir(v); });
-    localStorage.setItem(FS_KEY, JSON.stringify(data));
-  } catch(e) { /* quota exceeded - silently ignore */ }
-}
+function saveFS() { return vfsFlush(); }
 
+// Legacy call sites (not yet migrated to vfsWriteFile/vfsMkdir/etc. by tasks
+// 7-10) mutate the shared tree directly and never touch the VFS's own op
+// queue, so vfsFlush would see nothing to commit and vfsHasPendingWrites
+// would report false even though the tree changed underneath it. Queue a
+// marker op so both stay correct - this is the same debounced commit the old
+// schedSave/saveFS pair provided, just routed through the VFS.
 function schedSave() {
-  clearTimeout(_fsSaveTimer);
-  _fsSaveTimer = setTimeout(saveFS, 400);
+  if (typeof _vfsQueue === 'function') _vfsQueue({ op: 'legacy-write' }, 0);
 }
 
 function computeLegacyFragLevel(ms) {
@@ -156,26 +152,63 @@ function optimizeDriveFragmentation(options) {
   return defragState.level;
 }
 
-function loadFS() {
-  const raw = localStorage.getItem(FS_KEY);
-  if (!raw) {
-    refreshSeededDocs();
-    refreshSeededWallpaperLibrary();
-    refreshSeededHomeMedia();
-    return;
-  }
-  try {
-    const data = JSON.parse(raw);
-    if (data.dirs) data.dirs.forEach(d => termFS.dirs.add(d));
-    if (data.files) Object.entries(data.files).forEach(([k, v]) => termFS.files.set(k, v));
-    if (data.subdirs) Object.entries(data.subdirs).forEach(([k, v]) => termFS.subdirs.set(k, _desDir(v)));
-    refreshSeededDocs();
-    refreshSeededWallpaperLibrary();
-    refreshSeededHomeMedia();
-  } catch(e) { /* corrupted save - ignore */ }
+// Async boot entry point. Called from the BIOS sequence before startDesktop.
+async function vfsBootMount() {
+  await vfsMount(createLocalStorageBackend(), {
+    onChange: () => { document.dispatchEvent(new CustomEvent('fs-changed')); },
+    onError: err => { reportVfsError(err); },
+    seed: root => {
+      if (!root.dirs.size && !root.files.size) {
+        const seeded = vfsSeedTree();
+        seeded.dirs.forEach(d => root.dirs.add(d));
+        seeded.files.forEach((v, k) => root.files.set(k, v));
+        seeded.subdirs.forEach((v, k) => root.subdirs.set(k, v));
+      }
+    },
+  });
+  refreshSeededDocs();
+  refreshSeededWallpaperLibrary();
+  refreshSeededHomeMedia();
+  ensureFsDir(RECYCLE_STORAGE_DIR);
+  loadBlobsFromStorage();
+  // The load-time syncDaemonStory ran against the seed tree, which the mount
+  // then replaced. Re-run it against the real tree so the story files and the
+  // registry pointers agree. Same shape as the ensureFsDir call above.
+  syncDaemonStory({ silent: true });
 }
 
-loadFS();
+// A late commit failure has no call stack to propagate into, so it surfaces
+// here. Task 11 replaces the console fallback with the on-screen toast.
+function reportVfsError(err) {
+  if (err && err.code === 'ENOSPC') {
+    console.warn('sleepOS: disk full, changes were not saved -', err.message);
+  } else {
+    console.warn('sleepOS: filesystem error -', err && err.message);
+  }
+}
+
+// beforeunload cannot await, and a pending commit sits behind a 400ms
+// debounce, so `void vfsFlush()` here would silently drop up to 400ms of the
+// user's work on close. The old saveFS wrote synchronously and always landed;
+// losing that would be a data-loss regression in the one phase that exists to
+// stop silently losing data.
+//
+// localStorage.setItem is synchronous, so write the snapshot directly. This
+// deliberately reaches past the backend interface: it is the only place that
+// does, and it is correct only because phase 2's backend is localStorage.
+// PHASE 4 MUST REVISIT THIS - IndexedDB cannot be written synchronously at
+// all, and the answer there is flushing on `visibilitychange` instead.
+window.addEventListener('beforeunload', () => {
+  // vfsIsMounted() is the load-bearing half of this guard. vfsMount publishes
+  // _vfsBackend only after _vfsRoot holds real data, so this is what stops us
+  // serializing the seed tree over a returning visitor's filesystem if they
+  // close the tab during the BIOS sequence.
+  if (!vfsIsMounted() || !vfsHasPendingWrites()) return;
+  try {
+    localStorage.setItem(LOCAL_FS_KEY, JSON.stringify(vfsSerializeTree()));
+  } catch (e) { /* unload is too late to report anything useful */ }
+});
+
 function normalizeRecycleEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;
   const id = String(entry.id || '').trim();
@@ -218,5 +251,3 @@ function recycleEntryStoredPath(entry) {
 
 let recycleBinEntries = loadRecycleBin();
 ensureFsDir(RECYCLE_STORAGE_DIR);
-window.addEventListener('beforeunload', saveFS);
-document.addEventListener('fs-changed', schedSave);

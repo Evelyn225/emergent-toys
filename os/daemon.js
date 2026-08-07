@@ -298,6 +298,7 @@ function removeFsPath(path, options) {
     const content = dir.files.get(fileName);
     dir.files.delete(fileName);
     if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('text', content));
+    schedSave();
     return true;
   }
   if (dir.blobs.has(fileName)) {
@@ -307,12 +308,14 @@ function removeFsPath(path, options) {
     dir.blobs.delete(fileName);
     removeBlobEntry(dirName, fileName);
     if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('blob', blob?.size));
+    schedSave();
     return true;
   }
   if (dir.dirs.has(upper)) {
     dir.dirs.delete(upper);
     dir.subdirs?.delete(upper);
     if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
+    schedSave();
     return true;
   }
   return false;

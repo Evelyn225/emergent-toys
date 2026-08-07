@@ -193,9 +193,27 @@ function biosFinish() {
   if (bisDone) return; bisDone = true;
   clearTimeout(biosTimer);
   const biosEl = document.getElementById('bios');
+  // Start the filesystem mount now so its I/O overlaps the 600ms fade rather
+  // than leaving a blank screen after it. By the time the fade ends this has
+  // almost always resolved, so the await below is free.
+  //
+  // Nothing before the first `await` inside vfsBootMount may touch a `const`
+  // declared later in the bundle: on the skipBoot path below, this function
+  // runs while the bundle is still evaluating. vfsBootMount's first statement
+  // is `await vfsMount(...)`, so everything after it runs as a microtask once
+  // evaluation has finished and every `const` exists. Do not move work above
+  // that await.
+  const mounted = vfsBootMount();
   biosEl.style.transition = 'opacity 0.6s';
   biosEl.style.opacity = '0';
-  setTimeout(() => { biosEl.style.display = 'none'; startDesktop(); }, 600);
+  setTimeout(() => {
+    // Never leave the OS stuck on a boot screen: a mount failure is already
+    // reported through onError, so proceed either way.
+    mounted.catch(() => {}).then(() => {
+      biosEl.style.display = 'none';
+      startDesktop();
+    });
+  }, 600);
 }
 
 function biosType() {
@@ -224,7 +242,10 @@ document.addEventListener('touchend',  biosFinish, { once: true });
 // Load settings early so skipBoot is available
 try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
 if (osSettings.skipBoot && !forceBootSequence) {
-  biosFinish();
+  // Deferred by a tick so nothing here runs while the bundle is still
+  // evaluating. Visually identical, and it means biosFinish cannot touch a
+  // `const` from a file that has not been reached yet.
+  setTimeout(biosFinish, 0);
 } else {
   biosLines = buildBiosLines();
   setTimeout(biosType, 250);

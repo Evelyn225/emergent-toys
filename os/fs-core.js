@@ -71,9 +71,11 @@ function winIdByPid(pid) {
   return null;
 }
 
-// Shared virtual filesystem (terminal + notepad + media + explorer)
+// The seeded filesystem. vfsBootMount installs this as the initial tree when
+// nothing is persisted, and re-applies the DOCS subtree on every boot.
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
-const termFS = {
+function vfsSeedTree() {
+  const seed = {
   dirs:    new Set(['DOCS']),
   files:   new Map(),
   blobs:   new Map(),
@@ -461,11 +463,28 @@ const termFS = {
       ].join('\n')],
     ]),
   }]]),
-};
-termFS.dirs.add('DESKTOP');
-if (!termFS.subdirs.has('DESKTOP')) {
-  termFS.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+  };
+  seed.dirs.add('DESKTOP');
+  if (!seed.subdirs.has('DESKTOP')) {
+    seed.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+  }
+  return seed;
 }
+
+// `termFS` is now a live view of the VFS tree rather than its own object.
+// Existing code that reads termFS.files / termFS.dirs keeps working against
+// the same node the VFS mutates, so old and new call sites cannot diverge
+// while the migration in tasks 7-11 proceeds file by file.
+Object.defineProperty(window, 'termFS', {
+  get() { return vfsGetTree(); },
+  configurable: true,
+});
+
+// Several modules touch termFS while the bundle is still evaluating (registry
+// defaults, recycle-bin setup). Install the seed synchronously so those reads
+// find a tree; vfsBootMount replaces it with persisted state before the
+// desktop renders.
+vfsSetTree(vfsSeedTree());
 
 // Helper: get a directory object by name ('' = root)
 function fsGetDir(path) {

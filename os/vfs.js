@@ -141,6 +141,10 @@ const VFS_FLUSH_DELAY_MS = 400;
 
 function vfsIsMounted() { return _vfsBackend !== null; }
 
+// True when mutations have been made but not yet committed. Used by the
+// unload handler to skip serializing a tree that is already durable.
+function vfsHasPendingWrites() { return _vfsPendingOps.length > 0; }
+
 function _vfsSerNode(node) {
   const out = { dirs: [...node.dirs], files: {}, subdirs: {} };
   node.files.forEach((v, k) => { out.files[k] = v; });

@@ -331,3 +331,12 @@ test('pending bytes for a write that lands mid-commit still count against quota 
   );
   assert.strictEqual(ctx.vfsExistsSync('c.txt', ''), false);
 });
+
+test('pending writes are reported until they commit', async () => {
+  const { ctx } = await mounted();
+  assert.strictEqual(ctx.vfsHasPendingWrites(), false);
+  await ctx.vfsWriteFile('a.txt', 'A', '');
+  assert.strictEqual(ctx.vfsHasPendingWrites(), true);
+  await ctx.vfsFlush();
+  assert.strictEqual(ctx.vfsHasPendingWrites(), false);
+});
