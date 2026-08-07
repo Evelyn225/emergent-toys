@@ -8771,9 +8771,8 @@ function openTerminal(startDir, initialCommand) {
   }
 
   function expandGlob(pattern) {
-    const dir = fsGetDir(cwd);
-    if (!dir) return [pattern];
-    const allNames = [...dir.files.keys(), ...dir.blobs.keys()];
+    if (!vfsDirExistsSync(cwd)) return [pattern];
+    const allNames = vfsListSync(cwd).filter(e => e.type === 'file').map(e => e.name);
     const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
     const re = new RegExp('^' + escaped + '$', 'i');
     const matches = allNames.filter(n => re.test(n));
@@ -8831,8 +8830,8 @@ function openTerminal(startDir, initialCommand) {
     const targetArg = (args || '').trim();
     if (targetArg && /[*?]/.test(targetArg)) return expandGlob(targetArg);
     const targetCwd = targetArg ? targetArg.toUpperCase() : cwd;
-    const dir = fsGetDir(targetCwd);
-    if (!dir) throw new Error(`Directory not found: ${args}`);
+    if (!vfsDirExistsSync(targetCwd)) throw new Error(`Directory not found: ${args}`);
+    const entries = vfsListSync(targetCwd);
     const path = targetCwd ? `C:\\sleepOS\\${targetCwd}` : 'C:\\sleepOS';
     const now = new Date();
     const ds = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()}`;
@@ -8854,14 +8853,14 @@ function openTerminal(startDir, initialCommand) {
       getTerminalRootSystemEntries({ includeExplorer: true }).forEach(entry => {
         lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
       });
-      termFS.dirs.forEach(d => { if (d !== 'DOCS') lines.push(`${ds}  ${ts}    <DIR>    ${d}`); });
-      termFS.files.forEach((c, n) => lines.push(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
-      termFS.blobs.forEach((b, n) => lines.push(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+      entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => lines.push(`${ds}  ${ts}    <DIR>    ${e.name}`));
+      entries.filter(e => e.kind === 'text').forEach(e => lines.push(`${ds}  ${ts}  ${String(e.size).padStart(7)}    ${e.name}`));
+      entries.filter(e => e.kind === 'blob').forEach(e => lines.push(`${ds}  ${ts}  ${fmtSize(e.size).padStart(7)}    ${e.name}  [${e.blob.kind}]`));
     } else {
-      dir.dirs.forEach(d => lines.push(`${ds}  ${ts}    <DIR>    ${d}`));
-      dir.files.forEach((c, n) => lines.push(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
-      dir.blobs.forEach((b, n) => lines.push(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
-      if (dir.files.size + dir.blobs.size + dir.dirs.size === 0) lines.push('  (empty directory)');
+      entries.filter(e => e.type === 'dir').forEach(e => lines.push(`${ds}  ${ts}    <DIR>    ${e.name}`));
+      entries.filter(e => e.kind === 'text').forEach(e => lines.push(`${ds}  ${ts}  ${String(e.size).padStart(7)}    ${e.name}`));
+      entries.filter(e => e.kind === 'blob').forEach(e => lines.push(`${ds}  ${ts}  ${fmtSize(e.size).padStart(7)}    ${e.name}  [${e.blob.kind}]`));
+      if (entries.length === 0) lines.push('  (empty directory)');
     }
     lines.push('');
     return lines;
@@ -8940,16 +8939,16 @@ function openTerminal(startDir, initialCommand) {
 
   function buildTreeLines() {
     const lines = ['C:\\sleepOS', '├── DOCS\\'];
-    const docs = fsGetDir('DOCS');
-    [...docs.files.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
-    termFS.dirs.forEach(d => {
+    const docsFiles = vfsListSync('DOCS').filter(e => e.kind === 'text').map(e => e.name);
+    docsFiles.forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
+    const rootEntries = vfsListSync('');
+    rootEntries.filter(e => e.type === 'dir').forEach(e => {
+      const d = e.name;
       if (d === 'DOCS') return;
       lines.push(`├── ${d}\\`);
-      const sub = termFS.subdirs?.get(d);
-      if (sub) {
-        [...sub.files.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
-        [...sub.blobs.keys()].forEach((n, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${n}`));
-      }
+      const subEntries = vfsListSync(d);
+      subEntries.filter(x => x.kind === 'text').forEach((x, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${x.name}`));
+      subEntries.filter(x => x.kind === 'blob').forEach((x, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${x.name}`));
     });
     getRootSystemFiles({ includeExplorer: true }).forEach(name => {
       let label = name;
@@ -8957,8 +8956,8 @@ function openTerminal(startDir, initialCommand) {
       if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
       lines.push(`├── ${label}`);
     });
-    termFS.files.forEach((_, n) => lines.push(`├── ${n}`));
-    termFS.blobs.forEach((b, n) => lines.push(`├── ${n}  [${b.kind}]`));
+    rootEntries.filter(e => e.kind === 'text').forEach(e => lines.push(`├── ${e.name}`));
+    rootEntries.filter(e => e.kind === 'blob').forEach(e => lines.push(`├── ${e.name}  [${e.blob.kind}]`));
     lines.push('└── PROJECTS\\');
     lines.push('    ├── sand playground');
     lines.push('    ├── fireworks');
@@ -8967,8 +8966,8 @@ function openTerminal(startDir, initialCommand) {
     return lines;
   }
 
-  function getPipeableText(path) {
-    const { dirName, fileName } = fsSplitPath(path, cwd);
+  async function getPipeableText(path) {
+    const { dirName, fileName } = vfsSplitPath(path, cwd);
     const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
     if (upperPath === 'DAEMON.CORE') {
       daemonActivate('raw');
@@ -8978,17 +8977,18 @@ function openTerminal(startDir, initialCommand) {
       daemonRecordInvestigation('void');
       return getVoidTmpContent().split('\n');
     }
-    const entry = fsGetEntry(path, cwd);
-    if (!entry) throw new Error('File not found: ' + path);
+    const st = vfsStatSync(path, cwd);
+    if (!st || st.type !== 'file') throw new Error('File not found: ' + path);
     if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
     if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
-    if (entry.kind === 'blob') {
+    if (st.kind === 'blob') {
       return [
-        `Binary file: ${entry.fileName} (${entry.value.kind}, ${fmtSize(entry.value.size)})`,
-        `Use OPEN ${entry.fileName} to view it.`,
+        `Binary file: ${st.name} (${st.blob.kind}, ${fmtSize(st.blob.size)})`,
+        `Use OPEN ${st.name} to view it.`,
       ];
     }
-    return entry.value ? entry.value.split('\n') : [];
+    const text = await vfsReadFile(path, cwd);
+    return text ? text.split('\n') : [];
   }
 
   async function buildPingLines(args, signal) {
@@ -9119,7 +9119,7 @@ function openTerminal(startDir, initialCommand) {
     }
     if (cmd === 'cat' || cmd === 'type') {
       const target = resolveShellText(args).trim();
-      if (target) return getPipeableText(target);
+      if (target) return await getPipeableText(target);
       if (Array.isArray(stdinLines)) return stdinLines.slice();
       throw new Error('Usage: CAT [file]');
     }
@@ -9130,7 +9130,7 @@ function openTerminal(startDir, initialCommand) {
       const target = match[2] ? unquoteShellValue(match[2]) : '';
       let re;
       try { re = new RegExp(pattern, 'i'); } catch (e) { throw new Error('Invalid regex: ' + pattern); }
-      const sourceLines = target ? getPipeableText(target) : Array.isArray(stdinLines) ? stdinLines.slice() : null;
+      const sourceLines = target ? await getPipeableText(target) : Array.isArray(stdinLines) ? stdinLines.slice() : null;
       if (!sourceLines) throw new Error('Usage: GREP <pattern> [file]');
       return sourceLines.filter(line => re.test(line));
     }
@@ -9140,10 +9140,10 @@ function openTerminal(startDir, initialCommand) {
       const targetArg = resolveShellText(args).trim();
       if (targetArg) {
         const target = unquoteShellValue(targetArg);
-        const entry = fsGetEntry(target, cwd);
-        if (!entry || entry.kind !== 'text') throw new Error('File not found: ' + target);
-        sourceText = entry.value;
-        label = '  ' + entry.fileName;
+        const st = vfsStatSync(target, cwd);
+        if (!st || st.kind !== 'text') throw new Error('File not found: ' + target);
+        sourceText = (await vfsReadFile(target, cwd)) || '';
+        label = '  ' + st.name;
       } else if (Array.isArray(stdinLines)) {
         sourceText = stdinLines.join('\n');
       } else {
@@ -9157,20 +9157,23 @@ function openTerminal(startDir, initialCommand) {
     return null;
   }
 
-  function writePipelineOutput(targetPath, lines, append) {
+  async function writePipelineOutput(targetPath, lines, append) {
     const normalizedTarget = unquoteShellValue(resolveShellText(targetPath));
     if (!normalizedTarget) throw new Error('Missing redirect target.');
-    const existing = fsGetEntry(normalizedTarget, cwd);
-    if (existing && existing.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
+    const existingStat = vfsStatSync(normalizedTarget, cwd);
+    if (existingStat && existingStat.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
     const output = lines.join('\n');
-    const existingText = existing && existing.kind === 'text' ? existing.value : '';
+    const existingText = existingStat && existingStat.kind === 'text' ? (await vfsReadFile(normalizedTarget, cwd)) || '' : '';
     const nextValue = append
       ? (existingText && output ? existingText + '\n' + output : existingText + output)
       : output;
-    const saved = fsWriteTextFile(normalizedTarget, nextValue, cwd);
-    if (!saved) throw new Error('Cannot write file: ' + normalizedTarget);
-    document.dispatchEvent(new CustomEvent('fs-changed'));
-    return saved;
+    try {
+      return await vfsWriteFile(normalizedTarget, nextValue, cwd);
+    } catch (err) {
+      throw new Error(err.code === 'ENOSPC' ? 'Disk full. Nothing was written.'
+        : err.code === 'EACCES' ? 'Storage is unavailable. Nothing was written.'
+        : 'Write failed: ' + err.message);
+    }
   }
 
   async function tryExecutePipeline(raw) {
@@ -9192,7 +9195,7 @@ function openTerminal(startDir, initialCommand) {
           const content = Array.isArray(stream) ? stream.join('\n') : '';
           const target = args.trim();
           if (target) {
-            const saved = writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
+            const saved = await writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
             print(`Opening ${saved.fileName} in Notepad...`);
             setTimeout(() => openNotepad(saved.fileName, saved.dirName), 300);
           } else {
@@ -9208,7 +9211,7 @@ function openTerminal(startDir, initialCommand) {
       }
       if (parsed.redirectOp) {
         if (consumedBySink) throw new Error('Cannot redirect output after piping into Notepad.');
-        const saved = writePipelineOutput(parsed.redirectTarget, Array.isArray(stream) ? stream : [], parsed.redirectOp === '>>');
+        const saved = await writePipelineOutput(parsed.redirectTarget, Array.isArray(stream) ? stream : [], parsed.redirectOp === '>>');
         print(`${parsed.redirectOp === '>>' ? 'Appended' : 'Wrote'}: ${saved.fileName}`);
       } else if (!consumedBySink) {
         (stream || []).forEach(line => print(line));
@@ -9264,8 +9267,8 @@ function openTerminal(startDir, initialCommand) {
     },
     dir: (args) => {
       const targetCwd = args ? args.trim().toUpperCase() : cwd;
-      const dir = fsGetDir(targetCwd);
-      if (!dir) { print(`Directory not found: ${args}`); return; }
+      if (!vfsDirExistsSync(targetCwd)) { print(`Directory not found: ${args}`); return; }
+      const entries = vfsListSync(targetCwd);
       const path = targetCwd ? `C:\\sleepOS\\${targetCwd}` : 'C:\\sleepOS';
       print('Volume in drive C is CORPUS');
       print('Volume Serial Number is DEAD-C0DE');
@@ -9288,14 +9291,14 @@ function openTerminal(startDir, initialCommand) {
           `11/13/2024  ??:??       ??    daemon.core`,
           `11/13/2024  ??:??       ??    ?????.exe`,
         ].forEach(l => print(l));
-        termFS.dirs.forEach(d => { if (d !== 'DOCS') print(`${ds}  ${ts}    <DIR>    ${d}`); });
-        termFS.files.forEach((c, n) => print(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
-        termFS.blobs.forEach((b, n) => print(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
+        entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => print(`${ds}  ${ts}    <DIR>    ${e.name}`));
+        entries.filter(e => e.kind === 'text').forEach(e => print(`${ds}  ${ts}  ${String(e.size).padStart(7)}    ${e.name}`));
+        entries.filter(e => e.kind === 'blob').forEach(e => print(`${ds}  ${ts}  ${fmtSize(e.size).padStart(7)}    ${e.name}  [${e.blob.kind}]`));
       } else {
-        dir.dirs.forEach(d => print(`${ds}  ${ts}    <DIR>    ${d}`));
-        dir.files.forEach((c, n) => print(`${ds}  ${ts}  ${c.length.toString().padStart(7)}    ${n}`));
-        dir.blobs.forEach((b, n) => print(`${ds}  ${ts}  ${fmtSize(b.size).padStart(7)}    ${n}  [${b.kind}]`));
-        if (dir.files.size + dir.blobs.size + dir.dirs.size === 0) print('  (empty directory)');
+        entries.filter(e => e.type === 'dir').forEach(e => print(`${ds}  ${ts}    <DIR>    ${e.name}`));
+        entries.filter(e => e.kind === 'text').forEach(e => print(`${ds}  ${ts}  ${String(e.size).padStart(7)}    ${e.name}`));
+        entries.filter(e => e.kind === 'blob').forEach(e => print(`${ds}  ${ts}  ${fmtSize(e.size).padStart(7)}    ${e.name}  [${e.blob.kind}]`));
+        if (entries.length === 0) print('  (empty directory)');
       }
       print('');
     },
@@ -9375,28 +9378,42 @@ function openTerminal(startDir, initialCommand) {
         if (!cwd) { print('Already at root.'); return; }
         const i = cwd.lastIndexOf('\\'); cwd = i >= 0 ? cwd.slice(0, i) : ''; updatePrompt(); return;
       } else {
-        const newCwd = cwd ? cwd + '\\' + dest.toUpperCase() : dest.toUpperCase();
-        const dir = fsGetDir(newCwd);
-        if (dir) { cwd = newCwd; updatePrompt(); }
+        const rawNewCwd = cwd ? cwd + '\\' + dest.toUpperCase() : dest.toUpperCase();
+        if (vfsDirExistsSync(rawNewCwd)) { cwd = vfsNormalizeDir(rawNewCwd); updatePrompt(); }
         else { print(`The system cannot find the path specified: ${dest}`); }
       }
     },
-    mkdir: (args) => {
+    mkdir: async (args) => {
       if (!args) { print('Usage: MKDIR [name]'); return; }
       const name = args.trim().toUpperCase();
-      const dir = fsGetDir(cwd);
-      if (dir.dirs.has(name) || ['PROJECTS','DOCS','.','..'].includes(name)) {
+      if (['PROJECTS','DOCS','.','..'].includes(name)) {
         print(`A subdirectory or file ${name} already exists.`); return;
       }
-      fsCreateDir(name, cwd);
+      let result;
+      try {
+        result = await vfsMkdir(name, cwd);
+      } catch (err) {
+        print(err.code === 'ENOSPC' ? 'Disk full. Nothing was written.'
+            : err.code === 'EACCES' ? 'Storage is unavailable. Nothing was written.'
+            : 'Write failed: ' + err.message, '#ff4444');
+        return;
+      }
+      if (!result.created) { print(`A subdirectory or file ${name} already exists.`); return; }
       print(`Directory created: ${getPromptStr().replace('>','')}\\${name}`);
     },
-    touch: (args) => {
+    touch: async (args) => {
       if (!args) { print('Usage: TOUCH [filename]'); return; }
       const name = args.trim();
-      const dir = fsGetDir(cwd);
-      if (dir.files.has(name)) { print(`File already exists: ${name}`); return; }
-      fsWriteTextFile(name, '', cwd);
+      const st = vfsStatSync(name, cwd);
+      if (st && st.kind === 'text') { print(`File already exists: ${name}`); return; }
+      try {
+        await vfsWriteFile(name, '', cwd);
+      } catch (err) {
+        print(err.code === 'ENOSPC' ? 'Disk full. Nothing was written.'
+            : err.code === 'EACCES' ? 'Storage is unavailable. Nothing was written.'
+            : 'Write failed: ' + err.message, '#ff4444');
+        return;
+      }
       print(`Created: ${name}`);
     },
     del: (args) => {
@@ -9428,25 +9445,25 @@ function openTerminal(startDir, initialCommand) {
       print('C:\\sleepOS');
       // DOCS (always)
       print('├── DOCS\\');
-      const docs = fsGetDir('DOCS');
-      [...docs.files.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
+      const docsFiles = vfsListSync('DOCS').filter(e => e.kind === 'text').map(e => e.name);
+      docsFiles.forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
       // User dirs
-      termFS.dirs.forEach(d => {
+      const rootEntries = vfsListSync('');
+      rootEntries.filter(e => e.type === 'dir').forEach(e => {
+        const d = e.name;
         if (d === 'DOCS') return;
         print(`├── ${d}\\`);
-        const sub = termFS.subdirs?.get(d);
-        if (sub) {
-          [...sub.files.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
-          [...sub.blobs.keys()].forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
-        }
+        const subEntries = vfsListSync(d);
+        subEntries.filter(x => x.kind === 'text').forEach((x, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${x.name}`));
+        subEntries.filter(x => x.kind === 'blob').forEach((x, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${x.name}`));
       });
       // System files
       ['TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe',
        'void.tmp','daemon.core              [UNREADABLE]','?????.exe                [DO NOT EXECUTE]'
       ].forEach(n => print(`├── ${n}`));
       // User files
-      termFS.files.forEach((_, n) => print(`├── ${n}`));
-      termFS.blobs.forEach((b, n) => print(`├── ${n}  [${b.kind}]`));
+      rootEntries.filter(e => e.kind === 'text').forEach(e => print(`├── ${e.name}`));
+      rootEntries.filter(e => e.kind === 'blob').forEach(e => print(`├── ${e.name}  [${e.blob.kind}]`));
       // PROJECTS
       print('└── PROJECTS\\');
       print('    ├── sand playground');
@@ -9516,10 +9533,10 @@ function openTerminal(startDir, initialCommand) {
         'PATH=C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
       ].forEach(l => print(l));
     },
-    cat: (args) => {
+    cat: async (args) => {
       const raw = (args||'').trim();
       if (!raw) { print('Usage: CAT <file>'); return; }
-      const { dirName, fileName } = fsSplitPath(raw, cwd);
+      const { dirName, fileName } = vfsSplitPath(raw, cwd);
       const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
       if (upperPath === 'DAEMON.CORE') {
         daemonActivate('raw');
@@ -9531,23 +9548,24 @@ function openTerminal(startDir, initialCommand) {
         getVoidTmpContent().split('\n').forEach(line => print(line));
         return;
       }
-      const entry = fsGetEntry(raw, cwd);
-      if (!entry) {
+      const st = vfsStatSync(raw, cwd);
+      if (!st || st.type !== 'file') {
         print('File not found: ' + raw);
         return;
       }
       if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
       if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
-      if (entry.kind === 'blob') {
-        print(`Binary file: ${entry.fileName} (${entry.value.kind}, ${fmtSize(entry.value.size)})`);
-        print(`Use OPEN ${entry.fileName} to view it.`);
+      if (st.kind === 'blob') {
+        print(`Binary file: ${st.name} (${st.blob.kind}, ${fmtSize(st.blob.size)})`);
+        print(`Use OPEN ${st.name} to view it.`);
         return;
       }
-      if (entry.value === '') {
+      const text = await vfsReadFile(raw, cwd);
+      if (text === '') {
         print('(empty file)');
         return;
       }
-      entry.value.split('\n').forEach(line => print(line));
+      (text || '').split('\n').forEach(line => print(line));
     },
     start: (args) => {
       if (!args) { print('Usage: START [program]'); return; }
@@ -9589,17 +9607,17 @@ function openTerminal(startDir, initialCommand) {
     open: (args) => {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: OPEN [filename]'); return; }
-      const split = fsSplitPath(raw, cwd);
+      const split = vfsSplitPath(raw, cwd);
       if (isVisibleSystemPath(raw, { includeExplorer: true })) {
         print(`Opening ${split.fileName}...`);
         setTimeout(() => openSystemFile(split.fileName), 300);
         return;
       }
-      const entry = fsGetEntry(raw, cwd);
-      if (entry && entry.kind === 'blob') {
+      const st = vfsStatSync(raw, cwd);
+      if (st && st.kind === 'blob') {
         print(`Opening ${raw}...`);
         setTimeout(() => openMediaFile(raw, cwd), 300);
-      } else if (entry && entry.kind === 'text') {
+      } else if (st && st.kind === 'text') {
         print(`Opening ${raw}...`);
         setTimeout(() => openNotepad(raw, cwd), 300);
       } else {
@@ -9610,25 +9628,26 @@ function openTerminal(startDir, initialCommand) {
     run: async (args) => {
       const fname = (args || '').trim();
       if (!fname) { print('Usage: RUN <script.script>'); return; }
-      const entry = fsGetEntry(fname, cwd);
-      if (!entry || entry.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
+      const st = vfsStatSync(fname, cwd);
+      if (!st || st.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
       print(`Running ${fname}...`);
-      await execScript(entry.value, print, {
-        sourceName: entry.fileName,
-        dirName: entry.dirName,
+      const text = await vfsReadFile(fname, cwd);
+      await execScript(text, print, {
+        sourceName: st.name,
+        dirName: st.dirName,
         clearFn: () => { out.innerHTML = ''; },
       });
     },
     notepad: (args) => {
       const fname = args ? args.trim() : null;
       if (fname) {
-        const entry = fsGetEntry(fname, cwd);
-        if (!entry || entry.kind !== 'text') { print(`File not found: ${fname}`); return; }
+        const st = vfsStatSync(fname, cwd);
+        if (!st || st.kind !== 'text') { print(`File not found: ${fname}`); return; }
       }
       print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
       setTimeout(() => openNotepad(fname || undefined, cwd), 300);
     },
-    grep: (args) => {
+    grep: async (args) => {
       if (!args) { print('Usage: GREP <pattern> <file>'); return; }
       const parts = args.match(/^("(?:[^"\\]|\\.)*"|[^\s]+)\s+(.+)$/);
       if (!parts) { print('Usage: GREP <pattern> <file>'); return; }
@@ -9636,9 +9655,10 @@ function openTerminal(startDir, initialCommand) {
       const fname = parts[2].trim();
       let re;
       try { re = new RegExp(pattern, 'i'); } catch(e) { print('Invalid regex: ' + pattern, '#ff4444'); return; }
-      const dir = fsGetDir(cwd);
-      if (!dir || !dir.files.has(fname)) { print('File not found: ' + fname); return; }
-      const lines = dir.files.get(fname).split('\n');
+      const st = vfsStatSync(fname, cwd);
+      if (!st || st.kind !== 'text') { print('File not found: ' + fname); return; }
+      const content = (await vfsReadFile(fname, cwd)) || '';
+      const lines = content.split('\n');
       let matches = 0;
       lines.forEach((line, i) => {
         if (re.test(line)) { print((i+1) + ':' + line); matches++; }
@@ -9646,12 +9666,12 @@ function openTerminal(startDir, initialCommand) {
       if (matches === 0) print('(no matches)');
       else print('\n' + matches + ' match' + (matches !== 1 ? 'es' : '') + ' found');
     },
-    wc: (args) => {
+    wc: async (args) => {
       const fname = (args || '').trim();
       if (!fname) { print('Usage: WC <file>'); return; }
-      const dir = fsGetDir(cwd);
-      if (!dir || !dir.files.has(fname)) { print('File not found: ' + fname); return; }
-      const content = dir.files.get(fname);
+      const st = vfsStatSync(fname, cwd);
+      if (!st || st.kind !== 'text') { print('File not found: ' + fname); return; }
+      const content = (await vfsReadFile(fname, cwd)) || '';
       const lines = content.split('\n').length;
       const words = content.trim() ? content.trim().split(/\s+/).length : 0;
       const bytes = new TextEncoder().encode(content).length;
@@ -9700,12 +9720,13 @@ function openTerminal(startDir, initialCommand) {
     const tokens = scriptTokenize(args || '');
     if (!tokens.length) { print('Usage: RUN <script.script> [args...]'); return; }
     const fname = tokens[0];
-    const entry = fsGetEntry(fname, cwd);
-    if (!entry || entry.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
+    const st = vfsStatSync(fname, cwd);
+    if (!st || st.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
     print(`Running ${fname}...`);
-    const exitCode = await execScript(entry.value, print, {
-      sourceName: entry.fileName,
-      dirName: entry.dirName,
+    const text = await vfsReadFile(fname, cwd);
+    const exitCode = await execScript(text, print, {
+      sourceName: st.name,
+      dirName: st.dirName,
       vars: shellVars,
       readLine: readTerminalLine,
       signal: getCurrentCommandSignal(),
