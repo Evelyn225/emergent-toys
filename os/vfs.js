@@ -276,7 +276,17 @@ async function vfsFlush() {
       // A remount while this was in flight means these numbers describe a
       // filesystem that is no longer mounted. Do not let them poison the new one.
       if (_vfsBackend === backend) {
-        _vfsUsageBytes = JSON.stringify(snapshot).length;
+        // Re-measure the ORIGIN, do not reseed from our own snapshot. The
+        // localStorage quota is per-origin and os/blob-store.js writes base64
+        // image content into it, so the snapshot's length describes the
+        // filesystem key alone. Assigning it here silently blinded the
+        // pre-write guard to every other key the moment the first commit
+        // landed - on a media-heavy install vfsWriteFile would accept a write
+        // the origin had no room for, report success, and only the late
+        // commit failure would tell the user, by toast, that it was gone.
+        // storage-local's estimate() already says the guard is only as honest
+        // as this number.
+        await _vfsRefreshQuota();
         // Subtract only what this commit carried. Ops that arrived mid-commit
         // are still uncommitted, and zeroing here would stop counting their
         // bytes while they are still unwritten - the same hole C2 closed.

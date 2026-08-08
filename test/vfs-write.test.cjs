@@ -489,3 +489,43 @@ test('move returns null for a missing source and ENOENT for a missing directory'
     err => err.name === 'VfsError' && err.code === 'ENOENT'
   );
 });
+
+// The localStorage quota is per-origin and os/blob-store.js writes base64 image
+// content into that same origin, so backend.estimate() deliberately measures
+// everything rather than just the filesystem key. vfsFlush used to overwrite
+// that figure with JSON.stringify(snapshot).length after every commit, throwing
+// away all foreign bytes and leaving the pre-write ENOSPC guard reporting room
+// that does not exist. This models a mount whose origin holds far more than the
+// tree does.
+test('the ENOSPC guard keeps counting origin bytes the VFS did not write', async () => {
+  const ctx = loadOsSources(makeOsContext(), ['os/vfs.js', 'os/storage-mem.js']);
+  const inner = ctx.createMemStorage({});
+  const QUOTA = 5000;
+  let foreign = 4000;          // e.g. base64 blob rows from os/blob-store.js
+  const backend = {
+    load: () => inner.load(),
+    commit: (payload) => inner.commit(payload),
+    estimate: async () => {
+      const own = await inner.estimate();
+      return { usage: own.usage + foreign, quota: QUOTA };
+    },
+  };
+  await ctx.vfsMount(backend, {});
+
+  // A small write fits and commits. Usage must NOT collapse to the tree size.
+  await ctx.vfsWriteFile('a.txt', 'x', '');
+  await ctx.vfsFlush();
+  const est = await ctx.vfsEstimate();
+  assert.ok(est.usage >= foreign,
+    'usage must still include the ' + foreign + ' foreign bytes, got ' + est.usage);
+
+  // With the origin nearly full, a write that only fits if the foreign bytes
+  // are ignored must be refused up front rather than accepted and lost later.
+  foreign = 4900;
+  await ctx.vfsWriteFile('b.txt', 'y', '');
+  await ctx.vfsFlush();
+  await assert.rejects(
+    () => ctx.vfsWriteFile('big.txt', 'Z'.repeat(2000), ''),
+    err => err.name === 'VfsError' && err.code === 'ENOSPC'
+  );
+});
