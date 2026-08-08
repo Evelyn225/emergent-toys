@@ -8330,8 +8330,11 @@ function openExplorer(startPath) {
     selectionNodes = new Map();
     const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
     addrEl.value = fullPath;
-    const titleEl = document.getElementById('wtitle-' + id);
-    if (titleEl) titleEl.textContent = 'FILE EXPLORER ? ' + fullPath;
+    // setWinTitle, not the span alone: the taskbar button, Alt+Tab and SYSMON
+    // all read wins[id].title and used to keep the folder the window opened at.
+    // The separator uses the same escape as line 3. It was a bare '?' here,
+    // mojibake that degraded the title on the first navigation; keep it escaped.
+    setWinTitle(id, 'FILE EXPLORER \u2014 ' + fullPath);
 
     if (cwd === 'PROJECTS') {
       const build = fn => {
