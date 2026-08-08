@@ -520,18 +520,35 @@ function confirmEmptyRecycleBin(onDone) {
 }
 
 function promptCreateFolderAt(dirPath, onDone) {
-  osPrompt('Folder name:', '', 'New Folder', name => {
-    if (!name) {
-      if (typeof onDone === 'function') onDone(null);
-      return;
+  // The callback may be async: osPrompt closes its window before invoking it
+  // and ignores the return value, so nothing is left on screen waiting.
+  osPrompt('Folder name:', '', 'New Folder', async name => {
+    const finish = result => { if (typeof onDone === 'function') onDone(result); };
+    if (!name) return finish(null);
+    let created;
+    try {
+      created = await vfsMkdir(name, dirPath);
+    } catch (err) {
+      // fsCreateDir returned null here and the dialog simply closed in silence.
+      // vfsMkdir throws instead, so `created?.created` would stop being a
+      // failure check at all - the error has to be caught, and a failure the
+      // user asked for is worth saying out loud. ENOENT is reachable (the
+      // target folder can be deleted while the dialog is open) and so is
+      // EINVAL (a name that is nothing but separators).
+      osAlert(
+        err.code === 'ENOENT'
+          ? 'That folder no longer exists:\nC:\\sleepOS\\' + vfsNormalizeDir(dirPath)
+          : err.message,
+        'New Folder', 'X'
+      );
+      return finish(null);
     }
-    const created = fsCreateDir(name, dirPath);
-    if (created?.created) {
-      document.dispatchEvent(new CustomEvent('fs-changed'));
-      if (typeof onDone === 'function') onDone(created);
-      return;
-    }
-    if (typeof onDone === 'function') onDone(null);
+    // No hand-rolled 'fs-changed' dispatch: vfsMkdir queues its own op and
+    // _vfsQueue fires the change callback synchronously, so the event is
+    // already out by the time this resolves. onDone (Explorer's render()) runs
+    // after the directory exists, not before.
+    if (!created.created) return finish(null);
+    finish(created);
   }, '\u{1F4C1}');
 }
 
