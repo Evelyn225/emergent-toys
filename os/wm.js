@@ -190,6 +190,22 @@ function makeResizable(win, id) {
   });
 }
 
+// Rename a live window. A window's title is shown in four places and they used
+// to be updated one at a time by whoever remembered: the titlebar span, the
+// taskbar button, and - through wins[id].title - the Alt+Tab overlay, SYSMON's
+// process list and the terminal's task list. Callers that only touched the
+// span left the other three showing the old name.
+function setWinTitle(id, title) {
+  const w = wins[id];
+  if (!w) return;
+  w.title = title;
+  const span = document.getElementById('wtitle-' + id);
+  if (span) span.textContent = title;
+  const btn = document.getElementById('tbtn-' + id);
+  // The button is `<span>icon</span><span>title</span>`; only the label moves.
+  if (btn && btn.lastElementChild) btn.lastElementChild.textContent = title;
+}
+
 function addTbBtn(id, title, icon) {
   const btn = document.createElement('button');
   btn.className = 'taskbar-btn focused';

@@ -542,6 +542,15 @@ function getVoidTmpContent() {
   return buildVoidTmpRawContent();
 }
 
+// The live Notepad window editing `pathKey`, or null. Reads `wins` directly so
+// a closed window can never leave a stale entry behind, and matches
+// case-insensitively because sleepOS paths are case-insensitive everywhere else.
+function findNotepadWindowFor(pathKey) {
+  const key = String(pathKey).toUpperCase();
+  return Object.keys(wins).find(id =>
+    wins[id].notepadPath && String(wins[id].notepadPath).toUpperCase() === key) || null;
+}
+
 function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
@@ -575,7 +584,19 @@ function openNotepad(filename, dirName, options) {
   if (isFile && fullPathUpper === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
   const { dirName: initialDir, fileName } = splitInfo;
   const pathKey = filename ? ((initialDir ? initialDir + '\\' : '') + fileName) : String(++_notepadCount);
-  const id = 'notepad-' + pathKey.replace(/\W/g,'_');
+  // Which file a window is editing lives on the window record, not in its id.
+  // The id is baked from the path at open time and cannot follow a Save As, so
+  // matching on it meant reopening the original file focused the window that
+  // had moved on to the new one, and opening the new file - whose id was still
+  // free - built a SECOND editor on it. Two windows on one file is a silent
+  // data-loss path: whichever saves last discards the other's edits.
+  const existingId = filename ? findNotepadWindowFor(pathKey) : null;
+  if (existingId) { focusWin(existingId); unminWin(existingId); return; }
+  // Suffix rather than bail out when the natural id is taken by a window that
+  // has been saved to a different name; mkWin dedupes on id and would return
+  // null, leaving the file unopenable.
+  let id = 'notepad-' + pathKey.replace(/\W/g,'_');
+  while (wins[id]) id += '_';
   const displayName = fileName || 'untitled.txt';
   const hasInitialContent = Object.prototype.hasOwnProperty.call(options, 'initialContent');
   // `initial` starts empty for a stored text file and is filled in below when
@@ -585,6 +606,8 @@ function openNotepad(filename, dirName, options) {
   // branch further down has always done.
   const initial = hasInitialContent ? String(options.initialContent ?? '') : '';
   if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
+  // Untitled documents stay null so they never match a stored file.
+  wins[id].notepadPath = filename ? pathKey : null;
 
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
@@ -763,11 +786,16 @@ function openNotepad(filename, dirName, options) {
     }
     currentFile = saved.fileName;
     currentDir = saved.dirName;
+    // Save As moves this window onto a different file. Repoint its identity so
+    // the original file can be opened again and the new one resolves here
+    // instead of getting a second editor.
+    if (wins[id]) wins[id].notepadPath = (currentDir ? currentDir + '\\' : '') + currentFile;
     // re-detect lang if filename changed
     const newLang = detectLang(currentFile);
     if (newLang !== lang) { lang = newLang; renderHighlight(); }
-    const titleEl = document.getElementById('wtitle-' + id);
-    if (titleEl) titleEl.textContent = currentFile + ' \u2014 Notepad';
+    // Not just the titlebar span: the taskbar button, Alt+Tab, SYSMON and the
+    // terminal's task list all kept showing the pre-Save-As name.
+    setWinTitle(id, currentFile + ' \u2014 Notepad');
     updateStatus();
     return true;
   }
