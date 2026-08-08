@@ -71,8 +71,7 @@ function readFileAsArrayBuffer(file) {
 async function handleFileUpload(fileList) {
   const dirPath = fsNormalizeDir(_uploadCwd || '');
   if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
-  const dir = fsGetDir(dirPath);
-  if (dirPath && !dir) {
+  if (dirPath && !vfsDirExistsSync(dirPath)) {
     osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'X');
     return;
   }
@@ -88,16 +87,23 @@ async function handleFileUpload(fileList) {
                : isText ? 'text'
                : inferredKind;
     try {
+      // The VFS throws where the old accessors returned null, and the enclosing
+      // catch already turns a failure into { ok: false }, which is what raises
+      // the "could not be uploaded" alert. So a full disk now reports the file
+      // as failed instead of claiming a successful upload.
       if (kind === 'text') {
         const content = await readFileAsText(file);
-        const saved = fsWriteTextFile(file.name, content, dirPath);
-        return saved ? { ok: true, name: file.name } : { ok: false, name: file.name };
+        await vfsWriteFile(file.name, content, dirPath);
+        return { ok: true, name: file.name };
       }
       const url = URL.createObjectURL(file);
-      const saved = fsWriteBlobFile(file.name, { url, kind, size: file.size, mime }, dirPath);
-      if (!saved) {
+      try {
+        await vfsWriteBlob(file.name, { url, kind, size: file.size, mime }, dirPath);
+      } catch (err) {
+        // Nothing else holds this URL once the tree entry was refused, so
+        // release it rather than leaking it for the rest of the session.
         URL.revokeObjectURL(url);
-        return { ok: false, name: file.name };
+        throw err;
       }
       try {
         const buffer = await readFileAsArrayBuffer(file);
@@ -111,7 +117,8 @@ async function handleFileUpload(fileList) {
   const added = results.filter(result => result.ok).map(result => result.name);
   const failed = results.filter(result => !result.ok).map(result => result.name);
   if (added.length) {
-    document.dispatchEvent(new CustomEvent('fs-changed'));
+    // No explicit 'fs-changed' dispatch: every vfsWriteFile/vfsWriteBlob above
+    // already queued an op, and the VFS onChange handler dispatches the event.
     showUploadConfirm(added, dirLabel);
   }
   if (failed.length) {
@@ -163,20 +170,23 @@ async function readBlobAsAnsiText(blobValue) {
   }
 }
 
+// Every read in this file is blob METADATA - the bytes already live behind an
+// object URL, so vfsStatSync's `.blob` record carries everything the players
+// need. Nothing here becomes async.
 function openMediaFile(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null;
+  const st = vfsStatSync(filename, dirName);
+  const blob = st && st.kind === 'blob' ? st.blob : null;
   if (!blob) { return; }
-  if (blob.kind === 'image') openImageViewer(entry.fileName, entry.dirName);
-  else if (blob.kind === 'video') openVideoPlayer(entry.fileName, entry.dirName);
-  else if (blob.kind === 'audio') openAudioPlayer(entry.fileName, entry.dirName);
-  else osAlert('Cannot open binary file:\n' + entry.fileName, 'Cannot Open', 'X');
+  if (blob.kind === 'image') openImageViewer(st.name, st.dirName);
+  else if (blob.kind === 'video') openVideoPlayer(st.name, st.dirName);
+  else if (blob.kind === 'audio') openAudioPlayer(st.name, st.dirName);
+  else osAlert('Cannot open binary file:\n' + st.name, 'Cannot Open', 'X');
 }
 
 function openImageViewer(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
-  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const st = vfsStatSync(filename, dirName);
+  const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
+  const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'img-' + pathKey.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: '🖼️', w: 520, h: 400 })) return;
   const body = document.getElementById('wb-' + id);
@@ -186,7 +196,7 @@ function openImageViewer(filename, dirName) {
   const wrap = document.createElement('div'); wrap.className = 'media-body';
   const img  = document.createElement('img'); img.src = blob.url;
   wrap.appendChild(img); body.appendChild(wrap);
-  if (ws) ws.textContent = entry.fileName + '  \u2014  ' + fmtSize(blob.size);
+  if (ws) ws.textContent = st.name + '  \u2014  ' + fmtSize(blob.size);
   if (mb) {
     const span = document.createElement('span');
     span.className = 'menu-item'; span.textContent = 'File';
@@ -205,11 +215,11 @@ function openImageViewer(filename, dirName) {
 }
 
 function openVideoPlayer(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
-  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const st = vfsStatSync(filename, dirName);
+  const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
+  const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'vid-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' \u2014 Media Player', icon: '🎬', w: 500, h: 390 })) return;
+  if (!mkWin({ id, title: iconLabel(st.name) + ' \u2014 Media Player', icon: '🎬', w: 500, h: 390 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -285,7 +295,7 @@ function openVideoPlayer(filename, dirName) {
   renderVol();
 
   const metaEl = document.createElement('div'); metaEl.className = 'vp-meta';
-  metaEl.textContent = iconLabel(entry.fileName) + '  \u00b7  ' + fmtSize(blob.size);
+  metaEl.textContent = iconLabel(st.name) + '  \u00b7  ' + fmtSize(blob.size);
 
   btnRow.appendChild(btnRew); btnRow.appendChild(btnPlay); btnRow.appendChild(btnStop);
   btnRow.appendChild(btnFwd); btnRow.appendChild(div('vp-divider'));
@@ -322,7 +332,7 @@ function openVideoPlayer(filename, dirName) {
   seek.addEventListener('mouseup', () => { seek._dragging = false; });
 
   // ── Menu bar ──────────────────────────────────────────────────
-  if (ws) ws.textContent = iconLabel(entry.fileName) + '  \u2014  ' + fmtSize(blob.size);
+  if (ws) ws.textContent = iconLabel(st.name) + '  \u2014  ' + fmtSize(blob.size);
   if (mb) {
     [
       { label: 'File', items: [{ label: 'Close', action: () => { video.pause(); closeWin(id); } }] },
@@ -343,11 +353,11 @@ function openVideoPlayer(filename, dirName) {
 }
 
 function openAudioPlayer(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
-  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const st = vfsStatSync(filename, dirName);
+  const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
+  const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'aud-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
+  if (!mkWin({ id, title: iconLabel(st.name) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
 
   const body = document.getElementById('wb-' + id);
   const ws = document.getElementById('ws-' + id);
@@ -362,8 +372,8 @@ function openAudioPlayer(filename, dirName) {
   const iconEl = document.createElement('div'); iconEl.className = 'ap-screen-icon'; iconEl.textContent = '♫';
   const metaWrap = document.createElement('div'); metaWrap.className = 'ap-screen-meta';
   const labelEl = document.createElement('div'); labelEl.className = 'ap-screen-label'; labelEl.textContent = 'SleepOS Audio Deck';
-  const titleEl = document.createElement('div'); titleEl.className = 'ap-screen-title'; titleEl.textContent = iconLabel(entry.fileName);
-  const pathEl = document.createElement('div'); pathEl.className = 'ap-screen-path'; pathEl.textContent = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const titleEl = document.createElement('div'); titleEl.className = 'ap-screen-title'; titleEl.textContent = iconLabel(st.name);
+  const pathEl = document.createElement('div'); pathEl.className = 'ap-screen-path'; pathEl.textContent = (st.dirName ? st.dirName + '\\' : '') + st.name;
   metaWrap.appendChild(labelEl);
   metaWrap.appendChild(titleEl);
   if (author) {
@@ -420,7 +430,7 @@ function openAudioPlayer(filename, dirName) {
   });
   const volEl = document.createElement('div'); volEl.className = 'vp-vol-blocks'; volEl.title = 'Volume';
   const metaEl = document.createElement('div'); metaEl.className = 'vp-meta';
-  metaEl.textContent = iconLabel(entry.fileName) + '  ·  ' + fmtSize(blob.size) + (author ? '  ·  ' + author : '');
+  metaEl.textContent = iconLabel(st.name) + '  ·  ' + fmtSize(blob.size) + (author ? '  ·  ' + author : '');
 
   btnRow.appendChild(btnRew);
   btnRow.appendChild(btnPlay);
@@ -503,7 +513,7 @@ function openAudioPlayer(filename, dirName) {
   document.addEventListener('mousemove', e => { if (volDrag) setVolFromX(e.clientX); });
   document.addEventListener('mouseup', () => { volDrag = false; });
 
-  if (ws) ws.textContent = iconLabel(entry.fileName) + '  -  ' + fmtSize(blob.size) + (author ? '  -  ' + author : '');
+  if (ws) ws.textContent = iconLabel(st.name) + '  -  ' + fmtSize(blob.size) + (author ? '  -  ' + author : '');
   if (mb) {
     [
       { label: 'File', items: [{ label: 'Close', action: () => { audio.pause(); closeWin(id); } }] },

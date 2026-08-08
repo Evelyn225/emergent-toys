@@ -5154,8 +5154,7 @@ function readFileAsArrayBuffer(file) {
 async function handleFileUpload(fileList) {
   const dirPath = fsNormalizeDir(_uploadCwd || '');
   if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
-  const dir = fsGetDir(dirPath);
-  if (dirPath && !dir) {
+  if (dirPath && !vfsDirExistsSync(dirPath)) {
     osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'X');
     return;
   }
@@ -5171,16 +5170,23 @@ async function handleFileUpload(fileList) {
                : isText ? 'text'
                : inferredKind;
     try {
+      // The VFS throws where the old accessors returned null, and the enclosing
+      // catch already turns a failure into { ok: false }, which is what raises
+      // the "could not be uploaded" alert. So a full disk now reports the file
+      // as failed instead of claiming a successful upload.
       if (kind === 'text') {
         const content = await readFileAsText(file);
-        const saved = fsWriteTextFile(file.name, content, dirPath);
-        return saved ? { ok: true, name: file.name } : { ok: false, name: file.name };
+        await vfsWriteFile(file.name, content, dirPath);
+        return { ok: true, name: file.name };
       }
       const url = URL.createObjectURL(file);
-      const saved = fsWriteBlobFile(file.name, { url, kind, size: file.size, mime }, dirPath);
-      if (!saved) {
+      try {
+        await vfsWriteBlob(file.name, { url, kind, size: file.size, mime }, dirPath);
+      } catch (err) {
+        // Nothing else holds this URL once the tree entry was refused, so
+        // release it rather than leaking it for the rest of the session.
         URL.revokeObjectURL(url);
-        return { ok: false, name: file.name };
+        throw err;
       }
       try {
         const buffer = await readFileAsArrayBuffer(file);
@@ -5194,7 +5200,8 @@ async function handleFileUpload(fileList) {
   const added = results.filter(result => result.ok).map(result => result.name);
   const failed = results.filter(result => !result.ok).map(result => result.name);
   if (added.length) {
-    document.dispatchEvent(new CustomEvent('fs-changed'));
+    // No explicit 'fs-changed' dispatch: every vfsWriteFile/vfsWriteBlob above
+    // already queued an op, and the VFS onChange handler dispatches the event.
     showUploadConfirm(added, dirLabel);
   }
   if (failed.length) {
@@ -5246,20 +5253,23 @@ async function readBlobAsAnsiText(blobValue) {
   }
 }
 
+// Every read in this file is blob METADATA - the bytes already live behind an
+// object URL, so vfsStatSync's `.blob` record carries everything the players
+// need. Nothing here becomes async.
 function openMediaFile(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null;
+  const st = vfsStatSync(filename, dirName);
+  const blob = st && st.kind === 'blob' ? st.blob : null;
   if (!blob) { return; }
-  if (blob.kind === 'image') openImageViewer(entry.fileName, entry.dirName);
-  else if (blob.kind === 'video') openVideoPlayer(entry.fileName, entry.dirName);
-  else if (blob.kind === 'audio') openAudioPlayer(entry.fileName, entry.dirName);
-  else osAlert('Cannot open binary file:\n' + entry.fileName, 'Cannot Open', 'X');
+  if (blob.kind === 'image') openImageViewer(st.name, st.dirName);
+  else if (blob.kind === 'video') openVideoPlayer(st.name, st.dirName);
+  else if (blob.kind === 'audio') openAudioPlayer(st.name, st.dirName);
+  else osAlert('Cannot open binary file:\n' + st.name, 'Cannot Open', 'X');
 }
 
 function openImageViewer(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
-  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const st = vfsStatSync(filename, dirName);
+  const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
+  const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'img-' + pathKey.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: '🖼️', w: 520, h: 400 })) return;
   const body = document.getElementById('wb-' + id);
@@ -5269,7 +5279,7 @@ function openImageViewer(filename, dirName) {
   const wrap = document.createElement('div'); wrap.className = 'media-body';
   const img  = document.createElement('img'); img.src = blob.url;
   wrap.appendChild(img); body.appendChild(wrap);
-  if (ws) ws.textContent = entry.fileName + '  \u2014  ' + fmtSize(blob.size);
+  if (ws) ws.textContent = st.name + '  \u2014  ' + fmtSize(blob.size);
   if (mb) {
     const span = document.createElement('span');
     span.className = 'menu-item'; span.textContent = 'File';
@@ -5288,11 +5298,11 @@ function openImageViewer(filename, dirName) {
 }
 
 function openVideoPlayer(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
-  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const st = vfsStatSync(filename, dirName);
+  const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
+  const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'vid-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' \u2014 Media Player', icon: '🎬', w: 500, h: 390 })) return;
+  if (!mkWin({ id, title: iconLabel(st.name) + ' \u2014 Media Player', icon: '🎬', w: 500, h: 390 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -5368,7 +5378,7 @@ function openVideoPlayer(filename, dirName) {
   renderVol();
 
   const metaEl = document.createElement('div'); metaEl.className = 'vp-meta';
-  metaEl.textContent = iconLabel(entry.fileName) + '  \u00b7  ' + fmtSize(blob.size);
+  metaEl.textContent = iconLabel(st.name) + '  \u00b7  ' + fmtSize(blob.size);
 
   btnRow.appendChild(btnRew); btnRow.appendChild(btnPlay); btnRow.appendChild(btnStop);
   btnRow.appendChild(btnFwd); btnRow.appendChild(div('vp-divider'));
@@ -5405,7 +5415,7 @@ function openVideoPlayer(filename, dirName) {
   seek.addEventListener('mouseup', () => { seek._dragging = false; });
 
   // ── Menu bar ──────────────────────────────────────────────────
-  if (ws) ws.textContent = iconLabel(entry.fileName) + '  \u2014  ' + fmtSize(blob.size);
+  if (ws) ws.textContent = iconLabel(st.name) + '  \u2014  ' + fmtSize(blob.size);
   if (mb) {
     [
       { label: 'File', items: [{ label: 'Close', action: () => { video.pause(); closeWin(id); } }] },
@@ -5426,11 +5436,11 @@ function openVideoPlayer(filename, dirName) {
 }
 
 function openAudioPlayer(filename, dirName) {
-  const entry = fsGetEntry(filename, dirName);
-  const blob = entry && entry.kind === 'blob' ? entry.value : null; if (!blob) return;
-  const pathKey = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const st = vfsStatSync(filename, dirName);
+  const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
+  const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'aud-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(entry.fileName) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
+  if (!mkWin({ id, title: iconLabel(st.name) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
 
   const body = document.getElementById('wb-' + id);
   const ws = document.getElementById('ws-' + id);
@@ -5445,8 +5455,8 @@ function openAudioPlayer(filename, dirName) {
   const iconEl = document.createElement('div'); iconEl.className = 'ap-screen-icon'; iconEl.textContent = '♫';
   const metaWrap = document.createElement('div'); metaWrap.className = 'ap-screen-meta';
   const labelEl = document.createElement('div'); labelEl.className = 'ap-screen-label'; labelEl.textContent = 'SleepOS Audio Deck';
-  const titleEl = document.createElement('div'); titleEl.className = 'ap-screen-title'; titleEl.textContent = iconLabel(entry.fileName);
-  const pathEl = document.createElement('div'); pathEl.className = 'ap-screen-path'; pathEl.textContent = (entry.dirName ? entry.dirName + '\\' : '') + entry.fileName;
+  const titleEl = document.createElement('div'); titleEl.className = 'ap-screen-title'; titleEl.textContent = iconLabel(st.name);
+  const pathEl = document.createElement('div'); pathEl.className = 'ap-screen-path'; pathEl.textContent = (st.dirName ? st.dirName + '\\' : '') + st.name;
   metaWrap.appendChild(labelEl);
   metaWrap.appendChild(titleEl);
   if (author) {
@@ -5503,7 +5513,7 @@ function openAudioPlayer(filename, dirName) {
   });
   const volEl = document.createElement('div'); volEl.className = 'vp-vol-blocks'; volEl.title = 'Volume';
   const metaEl = document.createElement('div'); metaEl.className = 'vp-meta';
-  metaEl.textContent = iconLabel(entry.fileName) + '  ·  ' + fmtSize(blob.size) + (author ? '  ·  ' + author : '');
+  metaEl.textContent = iconLabel(st.name) + '  ·  ' + fmtSize(blob.size) + (author ? '  ·  ' + author : '');
 
   btnRow.appendChild(btnRew);
   btnRow.appendChild(btnPlay);
@@ -5586,7 +5596,7 @@ function openAudioPlayer(filename, dirName) {
   document.addEventListener('mousemove', e => { if (volDrag) setVolFromX(e.clientX); });
   document.addEventListener('mouseup', () => { volDrag = false; });
 
-  if (ws) ws.textContent = iconLabel(entry.fileName) + '  -  ' + fmtSize(blob.size) + (author ? '  -  ' + author : '');
+  if (ws) ws.textContent = iconLabel(st.name) + '  -  ' + fmtSize(blob.size) + (author ? '  -  ' + author : '');
   if (mb) {
     [
       { label: 'File', items: [{ label: 'Close', action: () => { audio.pause(); closeWin(id); } }] },
@@ -7128,16 +7138,20 @@ function openSaveDialog(defaultName, callback) {
       fileList.appendChild(up);
     }
 
-    const dir = fsGetDir(saveCwd);
-    const dirs = saveCwd ? [...(dir?.dirs ?? [])]
-                         : ['DOCS', ...termFS.dirs].filter((v, i, a) => a.indexOf(v) === i);
+    // vfsListSync is synchronous metadata, so this render loop never awaits.
+    // It reports dirs first, then text files, then blobs; the dialog offers
+    // only text files to save over, exactly as the old dir.files walk did.
+    const entries = vfsListSync(saveCwd);
+    const listedDirs = entries.filter(e => e.kind === 'dir').map(e => e.name);
+    const dirs = saveCwd ? listedDirs
+                         : ['DOCS', ...listedDirs].filter((v, i, a) => a.indexOf(v) === i);
     dirs.forEach(d => {
       const el = makeFLItem('📁', d);
       el.addEventListener('dblclick', () => { saveCwd = d; renderSaveList(); });
       fileList.appendChild(el);
     });
 
-    (dir?.files ?? termFS.files).forEach((_, name) => {
+    entries.filter(e => e.kind === 'text').forEach(({ name }) => {
       const ext = (name.split('.').pop() || '').toLowerCase();
       const emoji = { script:'📜', txt:'📄', md:'📋', js:'📜', py:'🐍' }[ext] || '📄';
       const el = makeFLItem(emoji, name);
@@ -7387,15 +7401,26 @@ function openNotepad(filename, dirName, options) {
     return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', '⬛');
   }
 
-  const entry = filename ? fsGetEntry(filename, dirName) : null;
-  if (entry && fullPathUpper === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
-  if (entry && fullPathUpper === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
+  // vfsStatSync is metadata only, so the story checks and the window can all be
+  // decided synchronously. Note the `type === 'file'` test: fsGetEntry returned
+  // null for a directory, while vfsStatSync returns a stat for one, so without
+  // it a directory whose uppercased name collides with a story path would fire
+  // the investigation beat.
+  const st = filename ? vfsStatSync(filename, dirName) : null;
+  const isFile = !!st && st.type === 'file';
+  if (isFile && fullPathUpper === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
+  if (isFile && fullPathUpper === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
   const { dirName: initialDir, fileName } = splitInfo;
   const pathKey = filename ? ((initialDir ? initialDir + '\\' : '') + fileName) : String(++_notepadCount);
   const id = 'notepad-' + pathKey.replace(/\W/g,'_');
   const displayName = fileName || 'untitled.txt';
   const hasInitialContent = Object.prototype.hasOwnProperty.call(options, 'initialContent');
-  const initial = hasInitialContent ? String(options.initialContent ?? '') : entry && entry.kind === 'text' ? entry.value : '';
+  // `initial` starts empty for a stored text file and is filled in below when
+  // the async read resolves. openNotepad stays SYNCHRONOUS: it has 22 call
+  // sites - dispatch tables, menu actions, an inline HTML onclick - that are
+  // bare function references and cannot await. This mirrors what the binary
+  // branch further down has always done.
+  const initial = hasInitialContent ? String(options.initialContent ?? '') : '';
   if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
 
   const body = document.getElementById('wb-' + id);
@@ -7447,12 +7472,28 @@ function openNotepad(filename, dirName, options) {
     ws.textContent = `${fname}  -  Ln ${lineCount()}  |  ${ta.value.length} bytes  |  ${LANG_LABELS[lang] || lang}`;
   };
 
+  // Text content is async now, so the window is already on screen and the
+  // textarea fills a microtask later. Imperceptible while the tree is in
+  // memory, and still correct when phase 4 moves content to IndexedDB.
+  if (st && st.kind === 'text' && !hasInitialContent) {
+    // Read from the stat's own resolved directory and name rather than
+    // re-splitting the raw arguments, so the read cannot land anywhere other
+    // than the entry the stat found.
+    vfsReadFile(st.name, st.dirName).then(text => {
+      if (!wins[id]) return;
+      if (text == null) return;
+      ta.value = text;
+      renderHighlight();
+      updateStatus();
+    }).catch(err => { reportVfsError(err); });
+  }
+
   // Opening a binary file in Notepad shows its bytes as ANSI mojibake, the way
   // Windows does, instead of a blank document. Reading a blob is async, so the
   // window opens first and fills in. Saving over it is refused by
-  // fsWriteTextFile, so the file cannot be damaged from here.
-  if (entry && entry.kind === 'blob' && !hasInitialContent) {
-    readBlobAsAnsiText(entry.value).then(result => {
+  // vfsWriteFile, which throws EEXIST, so the file cannot be damaged from here.
+  if (st && st.kind === 'blob' && !hasInitialContent) {
+    readBlobAsAnsiText(st.blob).then(result => {
       if (!wins[id]) return;
       if (result.error) { binaryReadError = result.error; updateStatus(); return; }
       ta.value = result.text;
@@ -7532,9 +7573,31 @@ function openNotepad(filename, dirName, options) {
     }
   });
 
-  function save(fname) {
-    const saved = fsWriteTextFile(fname, ta.value, currentDir);
-    if (!saved) return;
+  // One implementation for Save and Save As. Both used to be near-duplicates,
+  // which is how a try/catch gets added to one and forgotten on the other.
+  // Returns true when the text is in the filesystem, false when the user has
+  // been told it is not - fsWriteTextFile returned null on failure and every
+  // caller ignored it, so a full disk silently ate the document.
+  //
+  // The title and status bar are updated ONLY on success. Reporting a saved
+  // document that was never written is precisely the failure this phase exists
+  // to kill.
+  async function writeAndSync(fname, dir) {
+    let saved;
+    try {
+      saved = await vfsWriteFile(fname, ta.value, dir || currentDir);
+    } catch (err) {
+      if (err.code === 'ENOSPC') {
+        osAlert('Not enough space to save this file.\nDelete something and try again.', 'Disk Full', 'X');
+      } else if (err.code === 'EACCES') {
+        osAlert('Storage is unavailable, so this file cannot be saved.', 'Cannot Save', 'X');
+      } else if (err.code === 'EEXIST') {
+        osAlert('A binary file already uses that name.', 'Cannot Save', 'X');
+      } else {
+        osAlert('Could not save: ' + err.message, 'Cannot Save', 'X');
+      }
+      return false;
+    }
     currentFile = saved.fileName;
     currentDir = saved.dirName;
     // re-detect lang if filename changed
@@ -7543,21 +7606,18 @@ function openNotepad(filename, dirName, options) {
     const titleEl = document.getElementById('wtitle-' + id);
     if (titleEl) titleEl.textContent = currentFile + ' \u2014 Notepad';
     updateStatus();
+    return true;
+  }
+
+  // Every caller is a key handler or a menu action, none of which can await.
+  // writeAndSync reports its own failures; this catch only stops an unexpected
+  // throw from becoming an unhandled rejection.
+  function save(fname, dir) {
+    writeAndSync(fname, dir).catch(err => { reportVfsError(err); });
   }
 
   function promptSaveAs() {
-    openSaveDialog(currentFile || 'untitled.txt', (fname, dir) => {
-      const saved = fsWriteTextFile(fname, ta.value, dir || currentDir);
-      if (!saved) return;
-      currentFile = saved.fileName;
-      currentDir = saved.dirName;
-      const newLang = detectLang(currentFile);
-      if (newLang !== lang) { lang = newLang; renderHighlight(); }
-      const titleEl = document.getElementById('wtitle-' + id);
-      if (titleEl) titleEl.textContent = currentFile + ' \u2014 Notepad';
-      updateStatus();
-      document.dispatchEvent(new CustomEvent('fs-changed'));
-    });
+    openSaveDialog(currentFile || 'untitled.txt', (fname, dir) => save(fname, dir));
   }
 
   function setLang(l) { lang = l; renderHighlight(); updateStatus(); }
