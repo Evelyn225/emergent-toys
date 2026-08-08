@@ -16,14 +16,23 @@ function _desDir(o) {
   return d;
 }
 
-const SEEDED_DOCS_DATA = _serDir(termFS.subdirs.get('DOCS'));
+// Read at module top level, during bundle evaluation. This is only safe
+// because the manifest loads os/vfs.js before os/fs-core.js before this file,
+// and os/fs-core.js installs the seed tree synchronously with
+// vfsSetTree(vfsSeedTree()) for exactly this reason. Do not reorder them.
+const SEEDED_DOCS_DATA = _serDir(vfsGetTree().subdirs.get('DOCS'));
 
+// Mutates the tree directly and deliberately queues no op. Unlike the legacy
+// call sites this is not a persistence bug: vfsBootMount runs it on every boot
+// from a constant, so its effect is regenerated rather than restored. Adding
+// schedSave() here would commit a snapshot on every cold boot for no gain.
 function refreshSeededDocs() {
-  termFS.dirs.add('DOCS');
-  let docs = termFS.subdirs.get('DOCS');
+  const root = vfsGetTree();
+  root.dirs.add('DOCS');
+  let docs = root.subdirs.get('DOCS');
   if (!docs) {
     docs = _desDir(SEEDED_DOCS_DATA);
-    termFS.subdirs.set('DOCS', docs);
+    root.subdirs.set('DOCS', docs);
     return;
   }
   docs.dirs = docs.dirs || new Set();
@@ -72,12 +81,16 @@ function refreshSeededHomeMedia() {
 
 function saveFS() { return vfsFlush(); }
 
-// Legacy call sites (not yet migrated to vfsWriteFile/vfsMkdir/etc. by tasks
-// 7-10) mutate the shared tree directly and never touch the VFS's own op
-// queue, so vfsFlush would see nothing to commit and vfsHasPendingWrites
-// would report false even though the tree changed underneath it. Queue a
-// marker op so both stay correct - this is the same debounced commit the old
-// schedSave/saveFS pair provided, just routed through the VFS.
+// Two call sites still mutate the shared tree directly rather than going
+// through vfsWriteFile/vfsMkdir: os/daemon.js ensureFsDir and
+// ensureStoryTextFile. A direct mutation never touches the VFS's own op queue,
+// so vfsFlush would see nothing to commit and vfsHasPendingWrites would report
+// false even though the tree changed underneath it. Queue a marker op so both
+// stay correct - this is the same debounced commit the old schedSave/saveFS
+// pair provided, just routed through the VFS. Retiring these two is tracked
+// separately; converting ensureStoryTextFile is not a one-liner, because
+// syncDaemonStoryFiles must stay synchronous and vfsWriteFile fragments the
+// drive by default.
 function schedSave() {
   if (typeof _vfsQueue === 'function') _vfsQueue({ op: 'legacy-write' }, 0);
 }
@@ -178,13 +191,22 @@ async function vfsBootMount() {
 }
 
 // A late commit failure has no call stack to propagate into, so it surfaces
-// here. Task 11 replaces the console fallback with the on-screen toast.
+// here, on screen. Silently swallowing it is what phase 2 exists to stop.
 function reportVfsError(err) {
-  if (err && err.code === 'ENOSPC') {
-    console.warn('sleepOS: disk full, changes were not saved -', err.message);
+  const code = (err && err.code) || '';
+  let msg;
+  if (code === 'ENOSPC') {
+    msg = 'Disk full. Recent changes were not saved.';
+  } else if (code === 'EACCES') {
+    // Storage disabled or blocked by private-browsing settings. Telling this
+    // user to free up space would be useless advice, which is why the
+    // localStorage backend separates this from ENOSPC.
+    msg = 'Storage is unavailable. sleepOS cannot save in this browser session.';
   } else {
-    console.warn('sleepOS: filesystem error -', err && err.message);
+    msg = 'Filesystem error: ' + ((err && err.message) || 'unknown');
   }
+  if (typeof showOsToast === 'function') showOsToast(msg);
+  else console.warn('sleepOS:', msg);
 }
 
 // beforeunload cannot await, and a pending commit sits behind a 400ms

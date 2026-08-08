@@ -7,7 +7,13 @@
 // model without touching a single call site.
 
 // Error carrying a POSIX-style code. Callers branch on `.code`, never on the
-// message. Codes in use: ENOENT, EEXIST, ENOTDIR, EISDIR, ENOSPC, EINVAL, EACCES.
+// message. Codes in use: ENOENT, EEXIST, ENOSPC, EINVAL, EACCES.
+// ENOTDIR and EISDIR were listed here from the start and were never emitted by
+// anything. They are dropped rather than added: vfsDirNodeSync cannot tell
+// "no such directory" from "that component is a file" without a signature
+// change on the one function every write path resolves through, and no caller
+// branches on either code today. Phase 4 can add ENOTDIR when it rewrites path
+// resolution against inodes; advertising it now would be a lie in a comment.
 function VfsError(code, message) {
   const err = new Error(message || code);
   err.name = 'VfsError';
@@ -15,7 +21,7 @@ function VfsError(code, message) {
   return err;
 }
 
-// ── The live tree -────────────────────────────────────────────────
+// ── The live tree ─────────────────────────────────────────────────
 // A node is { dirs:Set<UPPERNAME>, files:Map<name,string>,
 //             blobs:Map<name,{url,kind,size,mime}>, subdirs:Map<UPPERNAME,node> }
 // This is the same shape phase 1 used, so behavior is identical by
@@ -32,10 +38,16 @@ function vfsMakeNode() {
 }
 
 // ── Path helpers (pure, synchronous) ──────────────────────────────
+// The drive-prefix strip requires a separator or end of string. Without the
+// boundary, `C:\sleepOSother\x` had the literal text stripped and resolved to
+// the bogus relative path `OTHER\X`. sleepOS has exactly one drive root, so a
+// path starting `C:\sleepOS` followed by non-separator characters refers to
+// nothing that exists; failing to resolve it is better than resolving it
+// somewhere else.
 function vfsNormalizeDir(name) {
   return String(name || '')
     .trim()
-    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/^C:\\sleepOS(?:\\|$)/i, '')
     .replace(/\//g, '\\')
     .replace(/^\\+|\\+$/g, '')
     .toUpperCase();
@@ -44,7 +56,7 @@ function vfsNormalizeDir(name) {
 function vfsSplitPath(path, fallbackDir) {
   const cleaned = String(path || '')
     .trim()
-    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/^C:\\sleepOS(?:\\|$)/i, '')
     .replace(/\//g, '\\')
     .replace(/^\\+|\\+$/g, '');
   if (!cleaned) return { dirName: vfsNormalizeDir(fallbackDir), fileName: '' };
@@ -411,13 +423,19 @@ async function vfsUnlink(path, fallbackDir, options) {
 
 async function vfsRename(dirPath, oldName, newName) {
   const base = vfsNormalizeDir(dirPath);
-  const dir = vfsDirNodeSync(base);
-  if (!dir) throw VfsError('ENOENT', 'no such directory: ' + base);
+  if (!vfsDirNodeSync(base)) throw VfsError('ENOENT', 'no such directory: ' + base);
   const st = vfsStatSync(oldName, base);
   if (!st) return false;
+  // The source's real parent, exactly as vfsMove resolves it. `base` is only
+  // the fallback directory: when oldName carries a path (DOCS\a.txt) the stat
+  // lands in a different directory, and mutating base's node instead would
+  // collision-check the wrong directory, delete nothing, and set `undefined`
+  // at the target - a phantom entry that reports success, reads back empty,
+  // and vanishes on the next reload.
+  const dir = vfsDirNodeSync(st.dirName);
   const targetName = st.kind === 'dir' ? String(newName || '').toUpperCase() : String(newName || '');
   if (!targetName) throw VfsError('EINVAL', 'empty rename target');
-  const existing = vfsStatSync(targetName, base);
+  const existing = vfsStatSync(targetName, st.dirName);
   // Renaming an entry to the name it already has is a no-op, not a collision.
   // Directory names are uppercased, so typing 'docs' for DOCS lands here.
   if (existing && existing.name === st.name && existing.kind === st.kind) return true;
@@ -442,7 +460,7 @@ async function vfsRename(dirPath, oldName, newName) {
     if (!dir.subdirs) dir.subdirs = new Map();
     if (sub) dir.subdirs.set(targetName, sub);
   }
-  _vfsQueue({ op: 'rename', dirName: base, name: st.name, newName: targetName, kind: st.kind }, 0);
+  _vfsQueue({ op: 'rename', dirName: st.dirName, name: st.name, newName: targetName, kind: st.kind }, 0);
   return true;
 }
 
@@ -2350,69 +2368,20 @@ function vfsSeedTree() {
   return seed;
 }
 
-// `termFS` is now a live view of the VFS tree rather than its own object.
-// Existing code that reads termFS.files / termFS.dirs keeps working against
-// the same node the VFS mutates, so old and new call sites cannot diverge
-// while the migration in tasks 7-11 proceeds file by file.
-Object.defineProperty(window, 'termFS', {
-  get() { return vfsGetTree(); },
-  configurable: true,
-});
-
-// Several modules touch termFS while the bundle is still evaluating (registry
-// defaults, recycle-bin setup). Install the seed synchronously so those reads
-// find a tree; vfsBootMount replaces it with persisted state before the
-// desktop renders.
+// Several modules touch the filesystem while the bundle is still evaluating
+// (registry defaults, recycle-bin setup, the seeded-DOCS snapshot taken at the
+// top of os/fs-persist.js). Install the seed synchronously so those reads find
+// a tree; vfsBootMount replaces it with persisted state before the desktop
+// renders. The manifest order os/vfs.js -> os/fs-core.js -> os/fs-persist.js
+// is what makes that work and must not change.
 vfsSetTree(vfsSeedTree());
 
-// Helper: get a directory object by name ('' = root)
-function fsGetDir(path) {
-  if (!path) return termFS;
-  const parts = String(path).toUpperCase().replace(/\//g,'\\').split('\\').filter(Boolean);
-  let node = termFS;
-  for (const part of parts) {
-    if (!node.subdirs) node.subdirs = new Map();
-    if (!node.subdirs.has(part)) {
-      if (node.dirs.has(part)) node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
-      else return null;
-    }
-    node = node.subdirs.get(part);
-  }
-  return node;
-}
-
-function fsNormalizeDir(name) {
-  return String(name || '')
-    .trim()
-    .replace(/^C:\\sleepOS\\?/i, '')
-    .replace(/\//g, '\\')
-    .replace(/^\\+|\\+$/g, '')
-    .toUpperCase();
-}
-
-function fsSplitPath(path, fallbackDir) {
-  const cleaned = String(path || '')
-    .trim()
-    .replace(/^C:\\sleepOS\\?/i, '')
-    .replace(/\//g, '\\')
-    .replace(/^\\+|\\+$/g, '');
-  if (!cleaned) return { dirName: fsNormalizeDir(fallbackDir), fileName: '' };
-  const parts = cleaned.split('\\').filter(Boolean);
-  if (parts.length === 1) return { dirName: fsNormalizeDir(fallbackDir), fileName: parts[0] };
-  return {
-    dirName: fsNormalizeDir(parts.slice(0, -1).join('\\')),
-    fileName: parts[parts.length - 1],
-  };
-}
-
-function fsGetEntry(path, fallbackDir) {
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  if (dir.files.has(fileName)) return { dir, dirName, fileName, kind: 'text', value: dir.files.get(fileName) };
-  if (dir.blobs.has(fileName)) return { dir, dirName, fileName, kind: 'blob', value: dir.blobs.get(fileName) };
-  return null;
-}
+// Kept as thin wrappers rather than deleted: 47 call sites across nine files
+// still use them, and until now they were byte-identical copies of the VFS
+// versions, which is how the C:\sleepOS prefix bug came to exist in four
+// places instead of two. Delegating kills the duplication permanently.
+function fsNormalizeDir(name) { return vfsNormalizeDir(name); }
+function fsSplitPath(path, fallbackDir) { return vfsSplitPath(path, fallbackDir); }
 
 function calcTextFragmentationDelta(prevValue, nextValue, created) {
   if (prevValue === nextValue) return 0;
@@ -2432,58 +2401,6 @@ function calcRemovalFragmentationDelta(kind, payload) {
   return Math.min(0.022, 0.008 + Math.min(0.012, String(payload ?? '').length / 22000));
 }
 
-function fsWriteTextFile(path, value, fallbackDir, options) {
-  options = options || {};
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  // Refuse to write text over a binary file. Without this the name ends up in
-  // both dir.files and dir.blobs, and since fsGetEntry checks files first the
-  // text entry permanently shadows the blob -- the media is still in memory
-  // but nothing can reach it. The terminal's pipeline writer already refuses
-  // this; the guard belongs here so every caller is covered.
-  if (dir.blobs?.has(fileName)) return null;
-  const nextValue = String(value ?? '');
-  const hadFile = dir.files.has(fileName);
-  const prevValue = hadFile ? dir.files.get(fileName) : null;
-  if (hadFile && prevValue === nextValue) return { dir, dirName, fileName, created: false, unchanged: true };
-  dir.files.set(fileName, nextValue);
-  schedSave();
-  if (options.trackFragmentation !== false) {
-    increaseDriveFragmentation(calcTextFragmentationDelta(prevValue, nextValue, !hadFile));
-  }
-  return { dir, dirName, fileName, created: !hadFile };
-}
-
-function fsWriteBlobFile(path, value, fallbackDir, options) {
-  options = options || {};
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  const existing = dir.blobs.get(fileName);
-  if (existing?.url && existing.url !== value?.url) URL.revokeObjectURL(existing.url);
-  dir.blobs.set(fileName, value);
-  schedSave();
-  if (options.trackFragmentation !== false) {
-    increaseDriveFragmentation(calcBlobFragmentationDelta(value?.size, !existing));
-  }
-  return { dir, dirName, fileName, created: !existing };
-}
-
-function fsCreateDir(path, fallbackDir, options) {
-  options = options || {};
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const parent = fsGetDir(dirName);
-  const name = String(fileName || '').toUpperCase();
-  if (!parent || !name) return null;
-  if (parent.dirs.has(name)) return { dir: parent, dirName, fileName: name, created: false };
-  parent.dirs.add(name);
-  if (!parent.subdirs) parent.subdirs = new Map();
-  if (!parent.subdirs.has(name)) parent.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
-  schedSave();
-  if (options.trackFragmentation !== false) increaseDriveFragmentation(0.006);
-  return { dir: parent, dirName, fileName: name, created: true };
-}
 
 // ── Filesystem persistence ────────────────────────────────────────
 const DRIVE_STATE_KEY = 'sleepOS-drive-state';
@@ -2503,14 +2420,23 @@ function _desDir(o) {
   return d;
 }
 
-const SEEDED_DOCS_DATA = _serDir(termFS.subdirs.get('DOCS'));
+// Read at module top level, during bundle evaluation. This is only safe
+// because the manifest loads os/vfs.js before os/fs-core.js before this file,
+// and os/fs-core.js installs the seed tree synchronously with
+// vfsSetTree(vfsSeedTree()) for exactly this reason. Do not reorder them.
+const SEEDED_DOCS_DATA = _serDir(vfsGetTree().subdirs.get('DOCS'));
 
+// Mutates the tree directly and deliberately queues no op. Unlike the legacy
+// call sites this is not a persistence bug: vfsBootMount runs it on every boot
+// from a constant, so its effect is regenerated rather than restored. Adding
+// schedSave() here would commit a snapshot on every cold boot for no gain.
 function refreshSeededDocs() {
-  termFS.dirs.add('DOCS');
-  let docs = termFS.subdirs.get('DOCS');
+  const root = vfsGetTree();
+  root.dirs.add('DOCS');
+  let docs = root.subdirs.get('DOCS');
   if (!docs) {
     docs = _desDir(SEEDED_DOCS_DATA);
-    termFS.subdirs.set('DOCS', docs);
+    root.subdirs.set('DOCS', docs);
     return;
   }
   docs.dirs = docs.dirs || new Set();
@@ -2559,12 +2485,16 @@ function refreshSeededHomeMedia() {
 
 function saveFS() { return vfsFlush(); }
 
-// Legacy call sites (not yet migrated to vfsWriteFile/vfsMkdir/etc. by tasks
-// 7-10) mutate the shared tree directly and never touch the VFS's own op
-// queue, so vfsFlush would see nothing to commit and vfsHasPendingWrites
-// would report false even though the tree changed underneath it. Queue a
-// marker op so both stay correct - this is the same debounced commit the old
-// schedSave/saveFS pair provided, just routed through the VFS.
+// Two call sites still mutate the shared tree directly rather than going
+// through vfsWriteFile/vfsMkdir: os/daemon.js ensureFsDir and
+// ensureStoryTextFile. A direct mutation never touches the VFS's own op queue,
+// so vfsFlush would see nothing to commit and vfsHasPendingWrites would report
+// false even though the tree changed underneath it. Queue a marker op so both
+// stay correct - this is the same debounced commit the old schedSave/saveFS
+// pair provided, just routed through the VFS. Retiring these two is tracked
+// separately; converting ensureStoryTextFile is not a one-liner, because
+// syncDaemonStoryFiles must stay synchronous and vfsWriteFile fragments the
+// drive by default.
 function schedSave() {
   if (typeof _vfsQueue === 'function') _vfsQueue({ op: 'legacy-write' }, 0);
 }
@@ -2665,13 +2595,22 @@ async function vfsBootMount() {
 }
 
 // A late commit failure has no call stack to propagate into, so it surfaces
-// here. Task 11 replaces the console fallback with the on-screen toast.
+// here, on screen. Silently swallowing it is what phase 2 exists to stop.
 function reportVfsError(err) {
-  if (err && err.code === 'ENOSPC') {
-    console.warn('sleepOS: disk full, changes were not saved -', err.message);
+  const code = (err && err.code) || '';
+  let msg;
+  if (code === 'ENOSPC') {
+    msg = 'Disk full. Recent changes were not saved.';
+  } else if (code === 'EACCES') {
+    // Storage disabled or blocked by private-browsing settings. Telling this
+    // user to free up space would be useless advice, which is why the
+    // localStorage backend separates this from ENOSPC.
+    msg = 'Storage is unavailable. sleepOS cannot save in this browser session.';
   } else {
-    console.warn('sleepOS: filesystem error -', err && err.message);
+    msg = 'Filesystem error: ' + ((err && err.message) || 'unknown');
   }
+  if (typeof showOsToast === 'function') showOsToast(msg);
+  else console.warn('sleepOS:', msg);
 }
 
 // beforeunload cannot await, and a pending commit sits behind a 400ms
@@ -4694,8 +4633,12 @@ function scriptPathExists(path, dirName) {
   if (!target) return false;
   if (target === '.' || target === '..' || target === '\\' || /^C:\\sleepOS\\?$/i.test(target)) return true;
   if (isVisibleSystemPath(target, { includeExplorer: true })) return true;
-  if (fsGetEntry(target, dirName)) return true;
-  return !!fsGetDir(fsNormalizeDir(target));
+  // vfsExistsSync covers directories too, where fsGetEntry returned null for
+  // them, so the second check is now only for a path spelled as a directory
+  // relative to the root. Both are metadata, so this stays synchronous and
+  // scriptEvaluateCondition does not have to become async.
+  if (vfsExistsSync(target, dirName)) return true;
+  return vfsDirExistsSync(target);
 }
 
 function scriptEvaluateCondition(text, state, lineNo) {
@@ -4924,10 +4867,21 @@ async function execScriptInstruction(inst, labels, state) {
       return null;
     case 'touch': {
       if (!resolvedArg) throw makeScriptError('Usage: touch <file>', inst.lineNo);
-      const existing = fsGetEntry(resolvedArg, state.dirName);
+      // DELIBERATE BEHAVIOR CHANGE. fsGetEntry returned null for directories,
+      // so `touch DOCS` used to write an empty file that permanently shadowed
+      // the directory. vfsStatSync reports the directory, so touch now no-ops
+      // on it, which is what touch is supposed to do.
+      const existing = vfsStatSync(resolvedArg, state.dirName);
       if (!existing) {
-        const saved = fsWriteTextFile(resolvedArg, '', state.dirName);
-        if (!saved) throw makeScriptError('Cannot create file: ' + resolvedArg, inst.lineNo);
+        // The legacy accessors returned falsy on failure and the interpreter
+        // used that to attach the script line number. The VFS throws instead,
+        // so every converted site re-wraps or the error reaches the user with
+        // no line number and no source name.
+        try {
+          await vfsWriteFile(resolvedArg, '', state.dirName);
+        } catch (err) {
+          throw makeScriptError('Cannot create file: ' + resolvedArg + ' (' + err.message + ')', inst.lineNo);
+        }
         document.dispatchEvent(new CustomEvent('fs-changed'));
       }
       state.status = 0;
@@ -4935,8 +4889,12 @@ async function execScriptInstruction(inst, labels, state) {
     }
     case 'mkdir': {
       if (!resolvedArg) throw makeScriptError('Usage: mkdir <dir>', inst.lineNo);
-      const created = fsCreateDir(resolvedArg, state.dirName);
-      if (!created) throw makeScriptError('Cannot create directory: ' + resolvedArg, inst.lineNo);
+      let created;
+      try {
+        created = await vfsMkdir(resolvedArg, state.dirName);
+      } catch (err) {
+        throw makeScriptError('Cannot create directory: ' + resolvedArg + ' (' + err.message + ')', inst.lineNo);
+      }
       if (created.created) {
         document.dispatchEvent(new CustomEvent('fs-changed'));
       }
@@ -4960,10 +4918,13 @@ async function execScriptInstruction(inst, labels, state) {
         state.status = 0;
         return null;
       }
-      const entry = fsGetEntry(resolvedArg, state.dirName);
-      if (!entry) throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
-      if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
-      else openNotepad(entry.fileName, entry.dirName);
+      // `!st || st.type === 'dir'` reproduces fsGetEntry's null-for-directories
+      // exactly. Without the second half `open DOCS` would fall through to the
+      // else branch and load a directory into Notepad.
+      const st = vfsStatSync(resolvedArg, state.dirName);
+      if (!st || st.type === 'dir') throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
+      if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+      else openNotepad(st.name, st.dirName);
       state.status = 0;
       return null;
     }
@@ -5002,13 +4963,16 @@ async function execScriptInstruction(inst, labels, state) {
     case 'run': {
       const tokens = scriptTokenize(resolvedArg, inst.lineNo);
       if (!tokens.length) throw makeScriptError('Usage: run <script> [args...]', inst.lineNo);
-      const entry = fsGetEntry(tokens[0], state.dirName);
-      if (!entry || entry.kind !== 'text') throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
-      state.status = await execScript(entry.value, state.printFn, {
+      const st = vfsStatSync(tokens[0], state.dirName);
+      if (!st || st.kind !== 'text') throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
+      // Content is async now; the stat above carries no `value`.
+      const source = await vfsReadFile(st.name, st.dirName);
+      if (source === null) throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
+      state.status = await execScript(source, state.printFn, {
         vars: state.vars,
         depth: state.depth + 1,
-        dirName: entry.dirName,
-        sourceName: entry.fileName,
+        dirName: st.dirName,
+        sourceName: st.name,
         clearFn: state.clearFn,
         readLine: state.readLine,
         signal: state.signal,
@@ -5022,12 +4986,14 @@ async function execScriptInstruction(inst, labels, state) {
       const patternToken = match[1];
       const pattern = scriptUnescape(patternToken.replace(/^['"]|['"]$/g, ''));
       const fileName = match[2].replace(/^['"]|['"]$/g, '');
-      const entry = fsGetEntry(fileName, state.dirName);
-      if (!entry || entry.kind !== 'text') throw makeScriptError('File not found: ' + fileName, inst.lineNo);
+      const st = vfsStatSync(fileName, state.dirName);
+      if (!st || st.kind !== 'text') throw makeScriptError('File not found: ' + fileName, inst.lineNo);
       let re;
       try { re = new RegExp(pattern, 'i'); }
       catch (e) { throw makeScriptError('Invalid regex: ' + pattern, inst.lineNo); }
-      const lines = entry.value.split('\n');
+      const contents = await vfsReadFile(st.name, st.dirName);
+      if (contents === null) throw makeScriptError('File not found: ' + fileName, inst.lineNo);
+      const lines = contents.split('\n');
       let matches = 0;
       lines.forEach((line, index) => {
         if (re.test(line)) {
@@ -5776,6 +5742,74 @@ function showCtxMenu(x, y, items) {
     document.addEventListener('mousedown', closeDropdown, { once: true });
     document.addEventListener('touchstart', closeDropdown, { once: true, passive: true });
   }, 0);
+}
+
+// ── System toast ──────────────────────────────────────────────────
+// A disk-full notice is useless if anything can cover it, so the toast sits at
+// 99993: above every window, the 28px taskbar (9000), the start menu (9001)
+// and the alt-tab / CAD / sleep overlays (99990-99992), and below the
+// daemon-fx, glitch, CRT and context-menu layers. A low z-index fails twice
+// over - the bar renders underneath the taskbar it is anchored to, and zTop
+// starts at 100 and increments on every window FOCUS, not just creation, so
+// windows climb past a three-digit value during an ordinary session.
+var _osToastHideTimer = null;
+var _osToastClearTimer = null;
+
+function showOsToast(message) {
+  let el = document.getElementById('os-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'os-toast';
+    // pointer-events:none, following #crt: the bar must never swallow a click
+    // aimed at the desktop, and it is anchored 8px above the taskbar so the
+    // start button stays reachable while it is showing.
+    el.style.cssText = [
+      'position:fixed',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'bottom:36px',
+      'z-index:99993',
+      'max-width:min(520px, calc(100vw - 32px))',
+      'padding:12px',
+      'background:rgba(20,14,20,0.94)',
+      'border:1px solid rgba(154,179,147,0.18)',
+      'box-shadow:0 2px 14px rgba(0,0,0,0.55)',
+      'font-family:var(--sleep-font)',
+      'font-size:12px',
+      'line-height:1.5',
+      'color:rgba(255,255,255,0.8)',
+      'text-align:center',
+      'pointer-events:none',
+      'opacity:0',
+      'display:none',
+    ].join(';') + ';';
+    document.body.appendChild(el);
+  }
+  // One element, reused. A full disk fails its commit again on every retry and
+  // a column of identical toasts would bury the screen it is trying to warn
+  // about; the newest message replaces the old one and restarts the clock.
+  el.textContent = String(message == null ? '' : message);
+  clearTimeout(_osToastHideTimer);
+  clearTimeout(_osToastClearTimer);
+  // Appearing is SYNCHRONOUS and deliberately has no transition. A fade-in out
+  // of display:none does not start in the tick the element becomes displayed -
+  // there is no before-change style to interpolate from - so the declared
+  // transition pinned the computed opacity at 0 and the toast never appeared:
+  // display:block, correctly positioned, inline opacity 1, nothing on screen.
+  // Deferring to requestAnimationFrame fixes that only where frames are
+  // running; it was still invisible after four seconds on a frame-starved
+  // renderer. This is the one message that tells the user their work was not
+  // saved, so its visibility must not depend on the frame clock at all.
+  el.style.transition = 'none';
+  el.style.display = 'block';
+  el.style.opacity = '1';
+  _osToastHideTimer = setTimeout(() => {
+    // Fading OUT can safely use a transition: if it never runs, the toast
+    // simply disappears when display flips instead of dissolving.
+    el.style.transition = 'opacity 320ms ease';
+    el.style.opacity = '0';
+    _osToastClearTimer = setTimeout(() => { el.style.display = 'none'; }, 400);
+  }, 6000);
 }
 
 // ── OS-native dialog replacements (no browser prompt/alert/confirm) ──

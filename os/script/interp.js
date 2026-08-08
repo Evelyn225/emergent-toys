@@ -146,8 +146,12 @@ function scriptPathExists(path, dirName) {
   if (!target) return false;
   if (target === '.' || target === '..' || target === '\\' || /^C:\\sleepOS\\?$/i.test(target)) return true;
   if (isVisibleSystemPath(target, { includeExplorer: true })) return true;
-  if (fsGetEntry(target, dirName)) return true;
-  return !!fsGetDir(fsNormalizeDir(target));
+  // vfsExistsSync covers directories too, where fsGetEntry returned null for
+  // them, so the second check is now only for a path spelled as a directory
+  // relative to the root. Both are metadata, so this stays synchronous and
+  // scriptEvaluateCondition does not have to become async.
+  if (vfsExistsSync(target, dirName)) return true;
+  return vfsDirExistsSync(target);
 }
 
 function scriptEvaluateCondition(text, state, lineNo) {
@@ -376,10 +380,21 @@ async function execScriptInstruction(inst, labels, state) {
       return null;
     case 'touch': {
       if (!resolvedArg) throw makeScriptError('Usage: touch <file>', inst.lineNo);
-      const existing = fsGetEntry(resolvedArg, state.dirName);
+      // DELIBERATE BEHAVIOR CHANGE. fsGetEntry returned null for directories,
+      // so `touch DOCS` used to write an empty file that permanently shadowed
+      // the directory. vfsStatSync reports the directory, so touch now no-ops
+      // on it, which is what touch is supposed to do.
+      const existing = vfsStatSync(resolvedArg, state.dirName);
       if (!existing) {
-        const saved = fsWriteTextFile(resolvedArg, '', state.dirName);
-        if (!saved) throw makeScriptError('Cannot create file: ' + resolvedArg, inst.lineNo);
+        // The legacy accessors returned falsy on failure and the interpreter
+        // used that to attach the script line number. The VFS throws instead,
+        // so every converted site re-wraps or the error reaches the user with
+        // no line number and no source name.
+        try {
+          await vfsWriteFile(resolvedArg, '', state.dirName);
+        } catch (err) {
+          throw makeScriptError('Cannot create file: ' + resolvedArg + ' (' + err.message + ')', inst.lineNo);
+        }
         document.dispatchEvent(new CustomEvent('fs-changed'));
       }
       state.status = 0;
@@ -387,8 +402,12 @@ async function execScriptInstruction(inst, labels, state) {
     }
     case 'mkdir': {
       if (!resolvedArg) throw makeScriptError('Usage: mkdir <dir>', inst.lineNo);
-      const created = fsCreateDir(resolvedArg, state.dirName);
-      if (!created) throw makeScriptError('Cannot create directory: ' + resolvedArg, inst.lineNo);
+      let created;
+      try {
+        created = await vfsMkdir(resolvedArg, state.dirName);
+      } catch (err) {
+        throw makeScriptError('Cannot create directory: ' + resolvedArg + ' (' + err.message + ')', inst.lineNo);
+      }
       if (created.created) {
         document.dispatchEvent(new CustomEvent('fs-changed'));
       }
@@ -412,10 +431,13 @@ async function execScriptInstruction(inst, labels, state) {
         state.status = 0;
         return null;
       }
-      const entry = fsGetEntry(resolvedArg, state.dirName);
-      if (!entry) throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
-      if (entry.kind === 'blob') openMediaFile(entry.fileName, entry.dirName);
-      else openNotepad(entry.fileName, entry.dirName);
+      // `!st || st.type === 'dir'` reproduces fsGetEntry's null-for-directories
+      // exactly. Without the second half `open DOCS` would fall through to the
+      // else branch and load a directory into Notepad.
+      const st = vfsStatSync(resolvedArg, state.dirName);
+      if (!st || st.type === 'dir') throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
+      if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+      else openNotepad(st.name, st.dirName);
       state.status = 0;
       return null;
     }
@@ -454,13 +476,16 @@ async function execScriptInstruction(inst, labels, state) {
     case 'run': {
       const tokens = scriptTokenize(resolvedArg, inst.lineNo);
       if (!tokens.length) throw makeScriptError('Usage: run <script> [args...]', inst.lineNo);
-      const entry = fsGetEntry(tokens[0], state.dirName);
-      if (!entry || entry.kind !== 'text') throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
-      state.status = await execScript(entry.value, state.printFn, {
+      const st = vfsStatSync(tokens[0], state.dirName);
+      if (!st || st.kind !== 'text') throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
+      // Content is async now; the stat above carries no `value`.
+      const source = await vfsReadFile(st.name, st.dirName);
+      if (source === null) throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
+      state.status = await execScript(source, state.printFn, {
         vars: state.vars,
         depth: state.depth + 1,
-        dirName: entry.dirName,
-        sourceName: entry.fileName,
+        dirName: st.dirName,
+        sourceName: st.name,
         clearFn: state.clearFn,
         readLine: state.readLine,
         signal: state.signal,
@@ -474,12 +499,14 @@ async function execScriptInstruction(inst, labels, state) {
       const patternToken = match[1];
       const pattern = scriptUnescape(patternToken.replace(/^['"]|['"]$/g, ''));
       const fileName = match[2].replace(/^['"]|['"]$/g, '');
-      const entry = fsGetEntry(fileName, state.dirName);
-      if (!entry || entry.kind !== 'text') throw makeScriptError('File not found: ' + fileName, inst.lineNo);
+      const st = vfsStatSync(fileName, state.dirName);
+      if (!st || st.kind !== 'text') throw makeScriptError('File not found: ' + fileName, inst.lineNo);
       let re;
       try { re = new RegExp(pattern, 'i'); }
       catch (e) { throw makeScriptError('Invalid regex: ' + pattern, inst.lineNo); }
-      const lines = entry.value.split('\n');
+      const contents = await vfsReadFile(st.name, st.dirName);
+      if (contents === null) throw makeScriptError('File not found: ' + fileName, inst.lineNo);
+      const lines = contents.split('\n');
       let matches = 0;
       lines.forEach((line, index) => {
         if (re.test(line)) {

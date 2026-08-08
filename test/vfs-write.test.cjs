@@ -433,6 +433,43 @@ test('move resolves the source from a path in srcName, not from the fallback dir
   assert.strictEqual(moved.dirName, 'DOCS', 'the op log must name the real source directory');
 });
 
+test('rename resolves the source from a path in oldName, not from the fallback directory', async () => {
+  const { ctx, backend } = await mounted();
+  await ctx.vfsMkdir('DOCS', '');
+  await ctx.vfsWriteFile('DOCS\\a.txt', 'payload', '');
+  assert.strictEqual(await ctx.vfsRename('', 'DOCS\\a.txt', 'b.txt'), true);
+  assert.strictEqual(await ctx.vfsReadFile('DOCS\\a.txt', ''), null,
+    'the source dirent must be removed from its real parent');
+  assert.strictEqual(await ctx.vfsReadFile('DOCS\\b.txt', ''), 'payload',
+    'the new name must land in the source directory, not in the fallback');
+  assert.strictEqual(ctx.vfsExistsSync('b.txt', ''), false,
+    'the root must not gain a phantom entry');
+  await ctx.vfsFlush();
+  assert.strictEqual(backend._snapshot.subdirs.DOCS.files['b.txt'], 'payload',
+    'the committed snapshot must carry the renamed value');
+  assert.strictEqual('b.txt' in backend._snapshot.files, false);
+  const renamed = plain(backend._ops).filter(op => op.op === 'rename').pop();
+  assert.strictEqual(renamed.dirName, 'DOCS', 'the op log must name the real source directory');
+});
+
+test('rename collision-checks the source directory, not the fallback directory', async () => {
+  const { ctx } = await mounted();
+  await ctx.vfsMkdir('DOCS', '');
+  await ctx.vfsWriteFile('DOCS\\a.txt', 'payload', '');
+  // A name that is taken at the ROOT but free in DOCS must not block a rename
+  // inside DOCS, and a name taken in DOCS must block it even though the root
+  // is clear.
+  await ctx.vfsWriteFile('b.txt', 'unrelated root file', '');
+  assert.strictEqual(await ctx.vfsRename('', 'DOCS\\a.txt', 'b.txt'), true);
+  assert.strictEqual(await ctx.vfsReadFile('b.txt', ''), 'unrelated root file',
+    'the root file must be untouched');
+  await ctx.vfsWriteFile('DOCS\\c.txt', 'taken', '');
+  await assert.rejects(
+    () => ctx.vfsRename('', 'DOCS\\b.txt', 'c.txt'),
+    err => err.name === 'VfsError' && err.code === 'EEXIST'
+  );
+});
+
 test('move with a path in srcName that resolves into the destination is a rename', async () => {
   const { ctx } = await mounted();
   await ctx.vfsMkdir('DOCS', '');

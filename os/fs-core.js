@@ -541,69 +541,20 @@ function vfsSeedTree() {
   return seed;
 }
 
-// `termFS` is now a live view of the VFS tree rather than its own object.
-// Existing code that reads termFS.files / termFS.dirs keeps working against
-// the same node the VFS mutates, so old and new call sites cannot diverge
-// while the migration in tasks 7-11 proceeds file by file.
-Object.defineProperty(window, 'termFS', {
-  get() { return vfsGetTree(); },
-  configurable: true,
-});
-
-// Several modules touch termFS while the bundle is still evaluating (registry
-// defaults, recycle-bin setup). Install the seed synchronously so those reads
-// find a tree; vfsBootMount replaces it with persisted state before the
-// desktop renders.
+// Several modules touch the filesystem while the bundle is still evaluating
+// (registry defaults, recycle-bin setup, the seeded-DOCS snapshot taken at the
+// top of os/fs-persist.js). Install the seed synchronously so those reads find
+// a tree; vfsBootMount replaces it with persisted state before the desktop
+// renders. The manifest order os/vfs.js -> os/fs-core.js -> os/fs-persist.js
+// is what makes that work and must not change.
 vfsSetTree(vfsSeedTree());
 
-// Helper: get a directory object by name ('' = root)
-function fsGetDir(path) {
-  if (!path) return termFS;
-  const parts = String(path).toUpperCase().replace(/\//g,'\\').split('\\').filter(Boolean);
-  let node = termFS;
-  for (const part of parts) {
-    if (!node.subdirs) node.subdirs = new Map();
-    if (!node.subdirs.has(part)) {
-      if (node.dirs.has(part)) node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
-      else return null;
-    }
-    node = node.subdirs.get(part);
-  }
-  return node;
-}
-
-function fsNormalizeDir(name) {
-  return String(name || '')
-    .trim()
-    .replace(/^C:\\sleepOS\\?/i, '')
-    .replace(/\//g, '\\')
-    .replace(/^\\+|\\+$/g, '')
-    .toUpperCase();
-}
-
-function fsSplitPath(path, fallbackDir) {
-  const cleaned = String(path || '')
-    .trim()
-    .replace(/^C:\\sleepOS\\?/i, '')
-    .replace(/\//g, '\\')
-    .replace(/^\\+|\\+$/g, '');
-  if (!cleaned) return { dirName: fsNormalizeDir(fallbackDir), fileName: '' };
-  const parts = cleaned.split('\\').filter(Boolean);
-  if (parts.length === 1) return { dirName: fsNormalizeDir(fallbackDir), fileName: parts[0] };
-  return {
-    dirName: fsNormalizeDir(parts.slice(0, -1).join('\\')),
-    fileName: parts[parts.length - 1],
-  };
-}
-
-function fsGetEntry(path, fallbackDir) {
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  if (dir.files.has(fileName)) return { dir, dirName, fileName, kind: 'text', value: dir.files.get(fileName) };
-  if (dir.blobs.has(fileName)) return { dir, dirName, fileName, kind: 'blob', value: dir.blobs.get(fileName) };
-  return null;
-}
+// Kept as thin wrappers rather than deleted: 47 call sites across nine files
+// still use them, and until now they were byte-identical copies of the VFS
+// versions, which is how the C:\sleepOS prefix bug came to exist in four
+// places instead of two. Delegating kills the duplication permanently.
+function fsNormalizeDir(name) { return vfsNormalizeDir(name); }
+function fsSplitPath(path, fallbackDir) { return vfsSplitPath(path, fallbackDir); }
 
 function calcTextFragmentationDelta(prevValue, nextValue, created) {
   if (prevValue === nextValue) return 0;
@@ -623,56 +574,4 @@ function calcRemovalFragmentationDelta(kind, payload) {
   return Math.min(0.022, 0.008 + Math.min(0.012, String(payload ?? '').length / 22000));
 }
 
-function fsWriteTextFile(path, value, fallbackDir, options) {
-  options = options || {};
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  // Refuse to write text over a binary file. Without this the name ends up in
-  // both dir.files and dir.blobs, and since fsGetEntry checks files first the
-  // text entry permanently shadows the blob -- the media is still in memory
-  // but nothing can reach it. The terminal's pipeline writer already refuses
-  // this; the guard belongs here so every caller is covered.
-  if (dir.blobs?.has(fileName)) return null;
-  const nextValue = String(value ?? '');
-  const hadFile = dir.files.has(fileName);
-  const prevValue = hadFile ? dir.files.get(fileName) : null;
-  if (hadFile && prevValue === nextValue) return { dir, dirName, fileName, created: false, unchanged: true };
-  dir.files.set(fileName, nextValue);
-  schedSave();
-  if (options.trackFragmentation !== false) {
-    increaseDriveFragmentation(calcTextFragmentationDelta(prevValue, nextValue, !hadFile));
-  }
-  return { dir, dirName, fileName, created: !hadFile };
-}
-
-function fsWriteBlobFile(path, value, fallbackDir, options) {
-  options = options || {};
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  const existing = dir.blobs.get(fileName);
-  if (existing?.url && existing.url !== value?.url) URL.revokeObjectURL(existing.url);
-  dir.blobs.set(fileName, value);
-  schedSave();
-  if (options.trackFragmentation !== false) {
-    increaseDriveFragmentation(calcBlobFragmentationDelta(value?.size, !existing));
-  }
-  return { dir, dirName, fileName, created: !existing };
-}
-
-function fsCreateDir(path, fallbackDir, options) {
-  options = options || {};
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const parent = fsGetDir(dirName);
-  const name = String(fileName || '').toUpperCase();
-  if (!parent || !name) return null;
-  if (parent.dirs.has(name)) return { dir: parent, dirName, fileName: name, created: false };
-  parent.dirs.add(name);
-  if (!parent.subdirs) parent.subdirs = new Map();
-  if (!parent.subdirs.has(name)) parent.subdirs.set(name, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
-  schedSave();
-  if (options.trackFragmentation !== false) increaseDriveFragmentation(0.006);
-  return { dir: parent, dirName, fileName: name, created: true };
-}
 

@@ -107,6 +107,74 @@ function showCtxMenu(x, y, items) {
   }, 0);
 }
 
+// ── System toast ──────────────────────────────────────────────────
+// A disk-full notice is useless if anything can cover it, so the toast sits at
+// 99993: above every window, the 28px taskbar (9000), the start menu (9001)
+// and the alt-tab / CAD / sleep overlays (99990-99992), and below the
+// daemon-fx, glitch, CRT and context-menu layers. A low z-index fails twice
+// over - the bar renders underneath the taskbar it is anchored to, and zTop
+// starts at 100 and increments on every window FOCUS, not just creation, so
+// windows climb past a three-digit value during an ordinary session.
+var _osToastHideTimer = null;
+var _osToastClearTimer = null;
+
+function showOsToast(message) {
+  let el = document.getElementById('os-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'os-toast';
+    // pointer-events:none, following #crt: the bar must never swallow a click
+    // aimed at the desktop, and it is anchored 8px above the taskbar so the
+    // start button stays reachable while it is showing.
+    el.style.cssText = [
+      'position:fixed',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'bottom:36px',
+      'z-index:99993',
+      'max-width:min(520px, calc(100vw - 32px))',
+      'padding:12px',
+      'background:rgba(20,14,20,0.94)',
+      'border:1px solid rgba(154,179,147,0.18)',
+      'box-shadow:0 2px 14px rgba(0,0,0,0.55)',
+      'font-family:var(--sleep-font)',
+      'font-size:12px',
+      'line-height:1.5',
+      'color:rgba(255,255,255,0.8)',
+      'text-align:center',
+      'pointer-events:none',
+      'opacity:0',
+      'display:none',
+    ].join(';') + ';';
+    document.body.appendChild(el);
+  }
+  // One element, reused. A full disk fails its commit again on every retry and
+  // a column of identical toasts would bury the screen it is trying to warn
+  // about; the newest message replaces the old one and restarts the clock.
+  el.textContent = String(message == null ? '' : message);
+  clearTimeout(_osToastHideTimer);
+  clearTimeout(_osToastClearTimer);
+  // Appearing is SYNCHRONOUS and deliberately has no transition. A fade-in out
+  // of display:none does not start in the tick the element becomes displayed -
+  // there is no before-change style to interpolate from - so the declared
+  // transition pinned the computed opacity at 0 and the toast never appeared:
+  // display:block, correctly positioned, inline opacity 1, nothing on screen.
+  // Deferring to requestAnimationFrame fixes that only where frames are
+  // running; it was still invisible after four seconds on a frame-starved
+  // renderer. This is the one message that tells the user their work was not
+  // saved, so its visibility must not depend on the frame clock at all.
+  el.style.transition = 'none';
+  el.style.display = 'block';
+  el.style.opacity = '1';
+  _osToastHideTimer = setTimeout(() => {
+    // Fading OUT can safely use a transition: if it never runs, the toast
+    // simply disappears when display flips instead of dissolving.
+    el.style.transition = 'opacity 320ms ease';
+    el.style.opacity = '0';
+    _osToastClearTimer = setTimeout(() => { el.style.display = 'none'; }, 400);
+  }, 6000);
+}
+
 // ── OS-native dialog replacements (no browser prompt/alert/confirm) ──
 function _osDlgPos(w, h) {
   return { x: Math.max(20, Math.floor(window.innerWidth/2)  - Math.floor(w/2)),

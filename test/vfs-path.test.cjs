@@ -113,3 +113,30 @@ test('vfsListSync returns an empty array for a missing dir', () => {
   const ctx = ctxWithTree();
   assert.deepStrictEqual(plain(ctx.vfsListSync('NOPE')), []);
 });
+
+test('the drive prefix strip requires a separator or end of string', () => {
+  const ctx = ctxWithTree();
+  assert.strictEqual(ctx.vfsNormalizeDir('C:\\sleepOS\\DOCS'), 'DOCS');
+  assert.strictEqual(ctx.vfsNormalizeDir('C:\\sleepOS'), '');
+  // Only a prefix of a longer name: must NOT be stripped.
+  assert.strictEqual(ctx.vfsNormalizeDir('C:\\sleepOSother\\x'), 'C:\\SLEEPOSOTHER\\X');
+  assert.deepStrictEqual(
+    plain(ctx.vfsSplitPath('C:\\sleepOSother\\x.txt', '')),
+    { dirName: 'C:\\SLEEPOSOTHER', fileName: 'x.txt' }
+  );
+});
+
+// fsNormalizeDir and fsSplitPath survive as one-line delegations rather than
+// deletions: 47 call sites still use them. This pins that they really are
+// delegations, so the drive-prefix fix cannot regress in one copy only.
+test('the fs-core path helpers delegate to the VFS versions', () => {
+  const ctx = loadOsSources(makeOsContext(), ['os/vfs.js', 'os/storage-mem.js']);
+  ctx.__evalSource('function increaseDriveFragmentation() {}');
+  loadOsSources(ctx, ['os/fs-core.js']);
+  assert.strictEqual(ctx.fsNormalizeDir('C:\\sleepOSother\\x'), 'C:\\SLEEPOSOTHER\\X');
+  assert.strictEqual(ctx.fsNormalizeDir('/docs/sub/'), 'DOCS\\SUB');
+  assert.deepStrictEqual(
+    plain(ctx.fsSplitPath('docs\\MyFile.TXT', '')),
+    { dirName: 'DOCS', fileName: 'MyFile.TXT' }
+  );
+});

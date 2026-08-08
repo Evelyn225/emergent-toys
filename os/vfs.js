@@ -7,7 +7,13 @@
 // model without touching a single call site.
 
 // Error carrying a POSIX-style code. Callers branch on `.code`, never on the
-// message. Codes in use: ENOENT, EEXIST, ENOTDIR, EISDIR, ENOSPC, EINVAL, EACCES.
+// message. Codes in use: ENOENT, EEXIST, ENOSPC, EINVAL, EACCES.
+// ENOTDIR and EISDIR were listed here from the start and were never emitted by
+// anything. They are dropped rather than added: vfsDirNodeSync cannot tell
+// "no such directory" from "that component is a file" without a signature
+// change on the one function every write path resolves through, and no caller
+// branches on either code today. Phase 4 can add ENOTDIR when it rewrites path
+// resolution against inodes; advertising it now would be a lie in a comment.
 function VfsError(code, message) {
   const err = new Error(message || code);
   err.name = 'VfsError';
@@ -15,7 +21,7 @@ function VfsError(code, message) {
   return err;
 }
 
-// ── The live tree -────────────────────────────────────────────────
+// ── The live tree ─────────────────────────────────────────────────
 // A node is { dirs:Set<UPPERNAME>, files:Map<name,string>,
 //             blobs:Map<name,{url,kind,size,mime}>, subdirs:Map<UPPERNAME,node> }
 // This is the same shape phase 1 used, so behavior is identical by
@@ -32,10 +38,16 @@ function vfsMakeNode() {
 }
 
 // ── Path helpers (pure, synchronous) ──────────────────────────────
+// The drive-prefix strip requires a separator or end of string. Without the
+// boundary, `C:\sleepOSother\x` had the literal text stripped and resolved to
+// the bogus relative path `OTHER\X`. sleepOS has exactly one drive root, so a
+// path starting `C:\sleepOS` followed by non-separator characters refers to
+// nothing that exists; failing to resolve it is better than resolving it
+// somewhere else.
 function vfsNormalizeDir(name) {
   return String(name || '')
     .trim()
-    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/^C:\\sleepOS(?:\\|$)/i, '')
     .replace(/\//g, '\\')
     .replace(/^\\+|\\+$/g, '')
     .toUpperCase();
@@ -44,7 +56,7 @@ function vfsNormalizeDir(name) {
 function vfsSplitPath(path, fallbackDir) {
   const cleaned = String(path || '')
     .trim()
-    .replace(/^C:\\sleepOS\\?/i, '')
+    .replace(/^C:\\sleepOS(?:\\|$)/i, '')
     .replace(/\//g, '\\')
     .replace(/^\\+|\\+$/g, '');
   if (!cleaned) return { dirName: vfsNormalizeDir(fallbackDir), fileName: '' };
@@ -411,13 +423,19 @@ async function vfsUnlink(path, fallbackDir, options) {
 
 async function vfsRename(dirPath, oldName, newName) {
   const base = vfsNormalizeDir(dirPath);
-  const dir = vfsDirNodeSync(base);
-  if (!dir) throw VfsError('ENOENT', 'no such directory: ' + base);
+  if (!vfsDirNodeSync(base)) throw VfsError('ENOENT', 'no such directory: ' + base);
   const st = vfsStatSync(oldName, base);
   if (!st) return false;
+  // The source's real parent, exactly as vfsMove resolves it. `base` is only
+  // the fallback directory: when oldName carries a path (DOCS\a.txt) the stat
+  // lands in a different directory, and mutating base's node instead would
+  // collision-check the wrong directory, delete nothing, and set `undefined`
+  // at the target - a phantom entry that reports success, reads back empty,
+  // and vanishes on the next reload.
+  const dir = vfsDirNodeSync(st.dirName);
   const targetName = st.kind === 'dir' ? String(newName || '').toUpperCase() : String(newName || '');
   if (!targetName) throw VfsError('EINVAL', 'empty rename target');
-  const existing = vfsStatSync(targetName, base);
+  const existing = vfsStatSync(targetName, st.dirName);
   // Renaming an entry to the name it already has is a no-op, not a collision.
   // Directory names are uppercased, so typing 'docs' for DOCS lands here.
   if (existing && existing.name === st.name && existing.kind === st.kind) return true;
@@ -442,7 +460,7 @@ async function vfsRename(dirPath, oldName, newName) {
     if (!dir.subdirs) dir.subdirs = new Map();
     if (sub) dir.subdirs.set(targetName, sub);
   }
-  _vfsQueue({ op: 'rename', dirName: base, name: st.name, newName: targetName, kind: st.kind }, 0);
+  _vfsQueue({ op: 'rename', dirName: st.dirName, name: st.name, newName: targetName, kind: st.kind }, 0);
   return true;
 }
 
