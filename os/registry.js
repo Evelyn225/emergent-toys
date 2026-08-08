@@ -120,13 +120,15 @@ const registryData = {
 // Deliberately unchecked: any handler may be pointed at any file type. Opening
 // a video in NOTEPAD.exe is allowed, the same way a real OS lets you. The only
 // thing guarded is the destructive part -- see the blob check in
-// fsWriteTextFile, which stops a save from shadowing the binary.
+// vfsWriteFile, which throws EEXIST rather than letting a save shadow the
+// binary.
 const FILE_HANDLERS = {
   'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
   'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),
   'MEDIAPLAY.exe': (name, dir) => {
-    const entry = fsGetEntry(name, dir);
-    const kind = entry?.value?.kind || inferBlobKindFromName(name);
+    // Blob metadata only, so this stays synchronous.
+    const st = vfsStatSync(name, dir);
+    const kind = st?.blob?.kind || inferBlobKindFromName(name);
     if (kind === 'video') openVideoPlayer(name, dir);
     else openAudioPlayer(name, dir);
   },
@@ -235,27 +237,25 @@ function isSystemWallpaperPath(path) {
   return normalized === SYSTEM_WALLPAPER_DIR || normalized.startsWith(SYSTEM_WALLPAPER_DIR + '\\');
 }
 
-function findMapKeyInsensitive(map, key) {
-  if (!map || !key) return '';
-  if (map.has(key)) return key;
-  const target = String(key).toUpperCase();
-  for (const existing of map.keys()) {
-    if (String(existing).toUpperCase() === target) return existing;
-  }
-  return '';
+// Wallpaper paths come from the registry and from localStorage, so their case
+// may not match the tree. vfsStatSync is case-sensitive for files and blobs, so
+// the fallback scan stays - exact hit first, then a case-insensitive sweep.
+function findBlobEntryInsensitive(dirName, fileName) {
+  if (!fileName) return null;
+  const entries = vfsListSync(dirName).filter(entry => entry.kind === 'blob');
+  const exact = entries.find(entry => entry.name === fileName);
+  if (exact) return exact;
+  const target = String(fileName).toUpperCase();
+  return entries.find(entry => String(entry.name).toUpperCase() === target) || null;
 }
 
 function resolveWallpaperEntry(path, fallbackDir) {
   const normalized = normalizeWallpaperPath(path, fallbackDir);
   if (!normalized) return null;
-  const { dirName, fileName } = fsSplitPath(normalized);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  const blobName = findMapKeyInsensitive(dir.blobs, fileName);
-  if (!blobName) return null;
-  const blob = dir.blobs.get(blobName);
-  if (!blob || blob.kind !== 'image') return null;
-  return { dir, dirName, fileName: blobName, path: blobRelativePath(dirName, blobName), blob };
+  const { dirName, fileName } = vfsSplitPath(normalized);
+  const entry = findBlobEntryInsensitive(dirName, fileName);
+  if (!entry || entry.blob?.kind !== 'image') return null;
+  return { dirName, fileName: entry.name, path: blobRelativePath(dirName, entry.name), blob: entry.blob };
 }
 
 function getWallpaperRegistryValue() {
@@ -296,25 +296,28 @@ function wallpaperFilePath(id) {
 
 function getUploadedWallpaperChoices() {
   const items = [];
-  function walk(dir, dirPath) {
-    if (!dir) return;
-    dir.blobs?.forEach((blob, fileName) => {
-      if (blob.kind !== 'image') return;
-      const relPath = blobRelativePath(dirPath, fileName);
+  // The final sort below is total, so traversal order does not matter; the
+  // directories are still visited in name order to keep the walk stable.
+  function walk(dirPath) {
+    const entries = vfsListSync(dirPath);
+    entries.forEach(entry => {
+      if (entry.kind !== 'blob' || entry.blob?.kind !== 'image') return;
+      const relPath = blobRelativePath(dirPath, entry.name);
       items.push({
         id: relPath,
-        name: (SEEDED_WALLPAPER_MAP.get(relPath) || {}).label || fileName.replace(/\.[^.]+$/, ''),
+        name: (SEEDED_WALLPAPER_MAP.get(relPath) || {}).label || entry.name.replace(/\.[^.]+$/, ''),
         path: relPath,
-        url: blob.url,
+        url: entry.blob.url,
         system: isSystemWallpaperPath(relPath),
       });
     });
-    if (!dir.subdirs) return;
-    [...dir.subdirs.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .forEach(([subName, subdir]) => walk(subdir, dirPath ? dirPath + '\\' + subName : subName));
+    entries
+      .filter(entry => entry.kind === 'dir')
+      .map(entry => entry.name)
+      .sort((a, b) => a.localeCompare(b))
+      .forEach(subName => walk(dirPath ? dirPath + '\\' + subName : subName));
   }
-  walk(termFS, '');
+  walk('');
   return items.sort((a, b) => {
     if (a.system !== b.system) return a.system ? -1 : 1;
     return a.path.localeCompare(b.path);

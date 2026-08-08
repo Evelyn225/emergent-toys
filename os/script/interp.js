@@ -398,7 +398,7 @@ async function execScriptInstruction(inst, labels, state) {
     case 'del':
     case 'rm': {
       if (!resolvedArg) throw makeScriptError('Usage: del <file>', inst.lineNo);
-      const deletion = deleteVirtualPath(resolvedArg, state.dirName);
+      const deletion = await deleteVirtualPath(resolvedArg, state.dirName);
       if (!deletion.ok) throw makeScriptError(deletion.message || ('Cannot delete: ' + resolvedArg), inst.lineNo);
       state.status = 0;
       return null;

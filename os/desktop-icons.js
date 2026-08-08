@@ -115,10 +115,10 @@ function getDesktopFolderDropTarget(clientX, clientY, draggingIcons) {
   return null;
 }
 
-function moveDesktopIconIntoFolder(icon, folderIcon) {
+async function moveDesktopIconIntoFolder(icon, folderIcon) {
   if (!icon || !folderIcon?.desktopEntry || folderIcon.kind !== 'dir') return false;
   const dstDirPath = folderIcon.target.path;
-  return moveShellItemToDir(icon, 'DESKTOP', dstDirPath);
+  return await moveShellItemToDir(icon, 'DESKTOP', dstDirPath);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -139,15 +139,15 @@ function deleteDesktopSystemIcons(icons) {
   const targets = (icons || []).filter(canDeleteDesktopSystemIcon);
   if (!targets.length) return;
   const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected items?';
-  osConfirm(prompt, 'Delete', ok => {
+  osConfirm(prompt, 'Delete', async ok => {
     if (!ok) return;
     const blocked = [];
     let changed = false;
-    targets.forEach(target => {
-      const result = deleteVirtualPath(target.name);
+    for (const target of targets) {
+      const result = await deleteVirtualPath(target.name);
       if (result.ok && result.deleted) changed = true;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-    });
+    }
     if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
     if (changed) clearDesktopSel();
   }, '🗑️');
@@ -161,15 +161,15 @@ function deleteDesktopFsEntries(icons) {
   const targets = (icons || []).filter(canDeleteDesktopFsEntry);
   if (!targets.length) return;
   const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected files?';
-  osConfirm(prompt, 'Delete', ok => {
+  osConfirm(prompt, 'Delete', async ok => {
     if (!ok) return;
     const blocked = [];
     let changed = false;
-    targets.forEach(target => {
-      const result = deleteVirtualPath(target.target.path);
+    for (const target of targets) {
+      const result = await deleteVirtualPath(target.target.path);
       if (result.ok && result.deleted) changed = true;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-    });
+    }
     if (blocked.length) osAlert(blocked[0], 'Delete', 'âš ï¸');
     if (changed) {
       clearDesktopSel();
@@ -178,8 +178,8 @@ function deleteDesktopFsEntries(icons) {
   }, 'ðŸ-‘ï¸');
 }
 
-function recycleDesktopItemAtPath(path) {
-  const result = recycleVirtualPath(path);
+async function recycleDesktopItemAtPath(path) {
+  const result = await recycleVirtualPath(path);
   if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
   return result;
 }
@@ -277,7 +277,11 @@ function makeDesktopIconEl(ic) {
         });
       }
     };
-    const onUp = up => {
+    // Async is safe here in a way it would not be inside a `drop` listener:
+    // this is a pointerup, and nothing below depends on preventDefault or on
+    // the event still propagating. The geometry is all read from `up`, whose
+    // coordinates stay valid after the handler yields.
+    const onUp = async up => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup',   onUp);
       dragStates.forEach(state => {
@@ -291,7 +295,13 @@ function makeDesktopIconEl(ic) {
           const rr = recycleEl.getBoundingClientRect();
           const overRecycleBin = up.clientX >= rr.left && up.clientX <= rr.right && up.clientY >= rr.top && up.clientY <= rr.bottom;
           if (overRecycleBin) {
-            const ok = draggedIcons.every(targetIcon => recycleDesktopItemAtPath(targetIcon.target.path).ok);
+            // `every` short-circuits on the first failure, so this keeps the
+            // original semantics: stop recycling as soon as one is refused.
+            let ok = true;
+            for (const targetIcon of draggedIcons) {
+              ok = (await recycleDesktopItemAtPath(targetIcon.target.path)).ok;
+              if (!ok) break;
+            }
             if (ok) {
               clearDesktopSel();
               return;
@@ -299,7 +309,7 @@ function makeDesktopIconEl(ic) {
           }
         }
         const folderTarget = getDesktopFolderDropTarget(up.clientX, up.clientY, draggedIcons);
-        if (folderTarget && moveShellPayloadToDir(draggedPayload, folderTarget.target.path)) {
+        if (folderTarget && await moveShellPayloadToDir(draggedPayload, folderTarget.target.path)) {
           clearDesktopSel();
           return;
         }
@@ -310,7 +320,7 @@ function makeDesktopIconEl(ic) {
         const explorerPaneEl = dropNode?.closest?.('.exp-body');
         const explorerDrop = explorerItemEl?._shellDropHandler || explorerPaneEl?._shellDropHandler;
         if (explorerDrop) {
-          const ok = explorerDrop(draggedPayload);
+          const ok = await explorerDrop(draggedPayload);
           if (ok) {
             clearDesktopSel();
             return;
@@ -439,16 +449,20 @@ function makeDesktopIconEl(ic) {
       const payload = getShellDragPayload();
       setDropOutline(false);
       if (!payload || shellDragIncludesItem(payload, ic)) return;
-      let ok = false;
-      if (ic.recycleBin) {
-        ok = recycleShellPayload(payload);
-      } else {
-        ok = moveShellPayloadToDir(payload, dropDirPath);
-      }
-      if (!ok) return;
+      // The accept decision has to be made synchronously. preventDefault and
+      // stopPropagation are both no-ops once the handler has yielded - the
+      // default action fires and the event finishes bubbling the moment the
+      // listener returns at its first await - and a late clearShellDragPayload
+      // would let another handler start a second move on the same items.
+      // These are the same predicates the dragover handler above gates on.
+      const accepts = ic.recycleBin
+        ? canRecycleShellPayload(payload)
+        : canMoveShellPayloadToDir(payload, dropDirPath);
+      if (!accepts) return;
       e.preventDefault();
       e.stopPropagation();
       clearShellDragPayload();
+      void (ic.recycleBin ? recycleShellPayload(payload) : moveShellPayloadToDir(payload, dropDirPath));
     });
   }
   return div;
@@ -577,7 +591,7 @@ function setupIcons() {
     if (!payload || isDesktopSurfaceTransferBlocked(payload, 'DESKTOP') || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
     e.preventDefault();
     e.stopPropagation();
-    if (moveShellPayloadToDir(payload, 'DESKTOP')) clearShellDragPayload();
+    void moveShellPayloadToDir(payload, 'DESKTOP').then(ok => { if (ok) clearShellDragPayload(); });
   });
 
   // Desktop background right-click / long-press

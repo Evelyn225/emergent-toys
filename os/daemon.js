@@ -274,78 +274,69 @@ function daemonStoryChanged(before) {
   }
 }
 
+// Synchronous because module-level callers depend on it during bundle
+// evaluation (os/fs-persist.js seeds the wallpaper library and the recycle
+// store this way). It mutates the live tree directly and lets the VFS commit
+// on its own schedule.
 function ensureFsDir(path) {
-  const parts = fsNormalizeDir(path).split('\\').filter(Boolean);
-  let node = termFS;
+  const parts = vfsNormalizeDir(path).split('\\').filter(Boolean);
+  let node = vfsGetTree();
+  let created = false;
   parts.forEach(part => {
-    node.dirs.add(part);
+    if (!node.dirs.has(part)) { node.dirs.add(part); created = true; }
     if (!node.subdirs) node.subdirs = new Map();
-    if (!node.subdirs.has(part)) {
-      node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
-    }
+    // Materializing a node for a name that is already in `dirs` is not a
+    // filesystem change - it is the same lazy fill vfsDirNodeSync does, and it
+    // queues nothing there either. Only a new name counts as `created`.
+    if (!node.subdirs.has(part)) node.subdirs.set(part, vfsMakeNode());
     node = node.subdirs.get(part);
   });
+  // schedSave, NOT vfsFlush. vfsFlush early-returns when nothing is queued
+  // (`if (!_vfsBackend || !_vfsPendingOps.length) return;`), and this function
+  // mutates the tree directly rather than through _vfsQueue, so `void
+  // vfsFlush()` would commit nothing and every directory created here would
+  // vanish on reload. schedSave queues a `legacy-write` marker op, which is the
+  // designed escape hatch for a direct mutation.
+  if (created) schedSave();
   return node;
 }
 
-function removeFsPath(path, options) {
+// The VFS handles the fragmentation delta, the object-URL revoke and the
+// commit. What it does not know about is the wallpaper binding and the blob
+// store, so those stay here.
+async function removeFsPath(path, options) {
   options = options || {};
-  const { dirName, fileName } = fsSplitPath(path);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return false;
-  const upper = fileName.toUpperCase();
-  if (dir.files.has(fileName)) {
-    const content = dir.files.get(fileName);
-    dir.files.delete(fileName);
-    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('text', content));
-    schedSave();
-    return true;
+  const st = vfsStatSync(path);
+  if (!st) return false;
+  if (st.kind === 'blob') {
+    if (st.blob?.kind === 'image') handleWallpaperFileDelete(st.dirName, st.name);
+    removeBlobEntry(st.dirName, st.name);
   }
-  if (dir.blobs.has(fileName)) {
-    const blob = dir.blobs.get(fileName);
-    if (blob?.kind === 'image') handleWallpaperFileDelete(dirName, fileName);
-    if (blob?.url) URL.revokeObjectURL(blob.url);
-    dir.blobs.delete(fileName);
-    removeBlobEntry(dirName, fileName);
-    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('blob', blob?.size));
-    schedSave();
-    return true;
-  }
-  if (dir.dirs.has(upper)) {
-    dir.dirs.delete(upper);
-    dir.subdirs?.delete(upper);
-    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
-    schedSave();
-    return true;
-  }
-  return false;
+  // Resolve from the stat rather than re-splitting `path`, so the unlink cannot
+  // land anywhere other than the entry the stat found.
+  return await vfsUnlink(st.name, st.dirName, options);
 }
 
 function isRecycleBinItemName(name) {
   return String(name || '').trim().toUpperCase() === RECYCLE_BIN_NAME;
 }
 
+// `storage` is the physical shape ('text' | 'blob' | 'dir'); `kind` is what the
+// UI labels the item with, which for a blob is its media kind. The node itself
+// is deliberately not returned any more - every consumer now works through the
+// VFS by path.
 function getFsItemState(path, fallbackDir) {
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  if (dir.files.has(fileName)) return { dirName, dir, entryName: fileName, kind: 'file', storage: 'text' };
-  if (dir.blobs.has(fileName)) {
-    const blob = dir.blobs.get(fileName);
-    return { dirName, dir, entryName: fileName, kind: blob?.kind || 'binary', storage: 'blob', blob };
+  const st = vfsStatSync(path, fallbackDir);
+  if (!st) return null;
+  if (st.kind === 'text') return { dirName: st.dirName, entryName: st.name, kind: 'file', storage: 'text' };
+  if (st.kind === 'blob') {
+    return { dirName: st.dirName, entryName: st.name, kind: st.blob?.kind || 'binary', storage: 'blob', blob: st.blob };
   }
-  const upper = fileName.toUpperCase();
-  if (dir.dirs.has(upper)) return { dirName, dir, entryName: upper, kind: 'dir', storage: 'dir' };
-  return null;
+  return { dirName: st.dirName, entryName: st.name, kind: 'dir', storage: 'dir' };
 }
 
-function fsDirHasEntry(dir, name) {
-  if (!dir) return false;
-  return dir.files.has(name) || dir.blobs.has(name) || dir.dirs.has(String(name || '').toUpperCase());
-}
-
-function makeUniqueFsName(dir, desiredName, kind, suffixToken) {
-  const exists = name => fsDirHasEntry(dir, name);
+function makeUniqueFsName(dirName, desiredName, kind, suffixToken) {
+  const exists = name => vfsExistsSync(name, dirName);
   if (!exists(desiredName)) return desiredName;
   const token = String(suffixToken || 'copy');
   if (kind === 'dir') {
@@ -364,12 +355,11 @@ function makeUniqueFsName(dir, desiredName, kind, suffixToken) {
   return candidate;
 }
 
-function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
+async function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
   options = options || {};
   const item = getFsItemState(path, fallbackDir);
-  const dstDirName = fsNormalizeDir(dstDirPath);
-  const dstDir = fsGetDir(dstDirName);
-  if (!item || !dstDir) return null;
+  const dstDirName = vfsNormalizeDir(dstDirPath);
+  if (!item || !vfsDirExistsSync(dstDirName)) return null;
   if (item.storage === 'dir') {
     const srcPath = blobRelativePath(item.dirName, item.entryName);
     if (dstDirName === srcPath || dstDirName.startsWith(srcPath + '\\')) return null;
@@ -377,34 +367,33 @@ function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
   let nextName = String(options.newName || item.entryName || '').trim();
   if (!nextName) return null;
   if (item.storage === 'dir') nextName = nextName.toUpperCase();
-  const sameParent = dstDirName === fsNormalizeDir(item.dirName);
+  const sameParent = dstDirName === vfsNormalizeDir(item.dirName);
   const sameName = nextName === item.entryName;
   if (sameParent && sameName) return { kind: item.kind, name: nextName, dirName: dstDirName };
-  if (options.makeUnique) nextName = makeUniqueFsName(dstDir, nextName, item.storage === 'dir' ? 'dir' : 'file', options.suffixToken || 'copy');
-  else if (fsDirHasEntry(dstDir, nextName)) return null;
+  if (options.makeUnique) nextName = makeUniqueFsName(dstDirName, nextName, item.storage === 'dir' ? 'dir' : 'file', options.suffixToken || 'copy');
+  else if (vfsExistsSync(nextName, dstDirName)) return null;
 
-  if (item.storage === 'dir') {
-    const sub = item.dir.subdirs?.get(item.entryName);
-    item.dir.dirs.delete(item.entryName);
-    item.dir.subdirs?.delete(item.entryName);
-    if (!dstDir.subdirs) dstDir.subdirs = new Map();
-    dstDir.dirs.add(nextName);
-    if (sub) dstDir.subdirs.set(nextName, sub);
-    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, nextName));
-  } else if (item.storage === 'blob') {
-    const blob = item.dir.blobs.get(item.entryName);
-    item.dir.blobs.delete(item.entryName);
-    if (!dstDir.blobs) dstDir.blobs = new Map();
-    dstDir.blobs.set(nextName, blob);
-    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, nextName);
-  } else {
-    const content = item.dir.files.get(item.entryName);
-    item.dir.files.delete(item.entryName);
-    if (!dstDir.files) dstDir.files = new Map();
-    dstDir.files.set(nextName, content);
+  let moved;
+  try {
+    moved = await vfsMove(item.dirName, item.entryName, dstDirName, nextName);
+  } catch (err) {
+    // The guards above already cover EEXIST, ENOENT and the self-nesting
+    // EINVAL, so this is unreachable in practice. It stays because callers
+    // (Explorer's "Move failed.", the Recycle Bin) are written against a
+    // null-on-failure contract, and a raw VfsError escaping into a drop
+    // handler would take the whole gesture down instead.
+    return null;
   }
-  schedSave();
-  return { kind: item.kind, name: nextName, dirName: dstDirName };
+  if (!moved) return null;
+  // vfsMove moves the in-memory record only. The bytes live in a separate
+  // store keyed by path, and keeping that in step is deliberately the caller's
+  // job - the VFS must not start guessing about it.
+  if (item.storage === 'blob') {
+    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, moved);
+  } else if (item.storage === 'dir') {
+    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, moved));
+  }
+  return { kind: item.kind, name: moved, dirName: dstDirName };
 }
 
 function handleWallpaperTreeDelete(path) {
@@ -420,38 +409,36 @@ function handleWallpaperTreeDelete(path) {
   }
 }
 
-function purgeFsDirNode(dirPath, dirNode) {
-  if (!dirNode) return;
-  dirNode.subdirs?.forEach((subdir, name) => purgeFsDirNode(blobRelativePath(dirPath, name), subdir));
-  dirNode.blobs?.forEach((blob, name) => {
-    if (blob?.kind === 'image') handleWallpaperFileDelete(dirPath, name);
-    if (blob?.url) URL.revokeObjectURL(blob.url);
-    removeBlobEntry(dirPath, name);
+// vfsUnlink drops a directory's name and subtree but revokes only the single
+// blob it was handed, which is not enough for a folder: emptying the Recycle
+// Bin on a folder of images would leak one object URL per image and orphan
+// every blob-store row. This is the permanent-delete half; a move into the
+// Recycle Bin deliberately does not run it.
+function purgeFsDirNode(dirPath) {
+  vfsWalkBlobs(dirPath, (base, name, blob) => {
+    if (blob?.kind === 'image') handleWallpaperFileDelete(base, name);
+    if (blob?.url && !blob.seeded) URL.revokeObjectURL(blob.url);
+    removeBlobEntry(base, name);
   });
-  dirNode.files?.clear?.();
-  dirNode.blobs?.clear?.();
-  dirNode.dirs?.clear?.();
-  dirNode.subdirs?.clear?.();
 }
 
-function purgeFsPath(path, fallbackDir) {
+async function purgeFsPath(path, fallbackDir) {
   const item = getFsItemState(path, fallbackDir);
   if (!item) return false;
-  if (item.storage !== 'dir') return removeFsPath(path);
-  purgeFsDirNode(blobRelativePath(item.dirName, item.entryName), item.dir.subdirs?.get(item.entryName));
-  item.dir.dirs.delete(item.entryName);
-  item.dir.subdirs?.delete(item.entryName);
-  increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
-  schedSave();
-  return true;
+  // Rebuild the path from the resolved entry rather than passing `path`
+  // through: removeFsPath re-splits with no fallback directory, so a bare name
+  // plus a fallbackDir would otherwise be looked up at the root.
+  if (item.storage !== 'dir') return await removeFsPath(blobRelativePath(item.dirName, item.entryName));
+  purgeFsDirNode(blobRelativePath(item.dirName, item.entryName));
+  return await vfsUnlink(item.entryName, item.dirName);
 }
 
-function recycleVirtualPath(path, fallbackDir) {
+async function recycleVirtualPath(path, fallbackDir) {
   const item = getFsItemState(path, fallbackDir);
-  const fileLabel = fsSplitPath(path, fallbackDir).fileName || path;
+  const fileLabel = vfsSplitPath(path, fallbackDir).fileName || path;
   if (!item) return { ok: false, message: 'File not found: ' + fileLabel };
   const sourcePath = blobRelativePath(item.dirName, item.entryName);
-  if (fsNormalizeDir(sourcePath).startsWith(fsNormalizeDir(RECYCLE_STORAGE_DIR))) {
+  if (vfsNormalizeDir(sourcePath).startsWith(vfsNormalizeDir(RECYCLE_STORAGE_DIR))) {
     return { ok: false, message: 'Item is already in the Recycle Bin.' };
   }
 
@@ -462,9 +449,9 @@ function recycleVirtualPath(path, fallbackDir) {
   if (item.storage === 'blob' && item.blob?.kind === 'image') handleWallpaperFileDelete(item.dirName, item.entryName);
   if (item.storage === 'dir') handleWallpaperTreeDelete(sourcePath);
 
-  const moved = moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
+  const moved = await moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
   if (!moved) {
-    removeFsPath(storedDir, { trackFragmentation: false });
+    await removeFsPath(storedDir, { trackFragmentation: false });
     return { ok: false, message: 'Could not move ' + fileLabel + ' to the Recycle Bin.' };
   }
 
@@ -481,36 +468,38 @@ function recycleVirtualPath(path, fallbackDir) {
   return { ok: true, deleted: true, recycled: true, details: ['Moved to Recycle Bin: ' + fileLabel] };
 }
 
-function restoreRecycleEntry(entry) {
+async function restoreRecycleEntry(entry) {
   entry = normalizeRecycleEntry(entry);
   if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
   ensureFsDir(entry.originalDir);
-  const moved = moveFsItemByPath(entry.name, entry.storedDir, entry.originalDir, {
+  const moved = await moveFsItemByPath(entry.name, entry.storedDir, entry.originalDir, {
     newName: entry.name,
     makeUnique: true,
     suffixToken: 'restored',
   });
   if (!moved) return { ok: false, message: 'Could not restore ' + entry.name + '.' };
-  removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir, { trackFragmentation: false });
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
   return { ok: true, restored: true, name: moved.name, dirName: entry.originalDir };
 }
 
-function purgeRecycleEntry(entry) {
+async function purgeRecycleEntry(entry) {
   entry = normalizeRecycleEntry(entry);
   if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
-  purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
-  removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
+  await removeFsPath(entry.storedDir, { trackFragmentation: false });
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
   return { ok: true, deleted: true };
 }
 
-function emptyRecycleBin() {
-  recycleBinEntries.slice().forEach(entry => purgeRecycleEntry(entry));
+// Sequential rather than Promise.all: each purge rewrites recycleBinEntries,
+// so overlapping them would race on that array.
+async function emptyRecycleBin() {
+  for (const entry of recycleBinEntries.slice()) await purgeRecycleEntry(entry);
 }
 
 function confirmEmptyRecycleBin(onDone) {
@@ -518,12 +507,14 @@ function confirmEmptyRecycleBin(onDone) {
     if (typeof onDone === 'function') onDone(false);
     return;
   }
-  osConfirm('Permanently delete all items in the Recycle Bin?', 'Empty Recycle Bin', ok => {
+  osConfirm('Permanently delete all items in the Recycle Bin?', 'Empty Recycle Bin', async ok => {
     if (!ok) {
       if (typeof onDone === 'function') onDone(false);
       return;
     }
-    emptyRecycleBin();
+    // onDone re-renders the view, so it has to wait for the purge to finish or
+    // it draws the bin still holding everything it just deleted.
+    await emptyRecycleBin();
     if (typeof onDone === 'function') onDone(true);
   }, '\u{1F5D1}\uFE0F');
 }
@@ -1004,35 +995,41 @@ function syncDaemonStoryRegistry() {
   saveRegistry();
 }
 
+// Stays synchronous, and every removeFsPath below is deliberately floated.
+// syncDaemonStory calls this from updateDaemonStory, which runs from dozens of
+// story beats and from boot, none of which can await; and the tree mutation
+// inside vfsUnlink is itself synchronous, so the file is gone from the tree by
+// the time the promise is handed back. Only the commit is deferred, and that
+// was already debounced before this migration.
 function syncDaemonStoryFiles() {
   ensureFsDir('DOCS');
   ensureFsDir('SYS');
   ensureFsDir('CACHE');
   if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
-  else removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
-  else removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
-  else removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
   if (daemonStory.stage >= 4) {
     ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
     if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
   } else {
-    removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
-    removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
   }
   if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
-  else removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
   if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
-  else removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
   if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
-  else removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
   if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
   else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
-  else removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
   if (daemonStory.endingReached) {
-    removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
-    removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
   }
 }
 
@@ -1248,7 +1245,7 @@ function canAttemptDeleteItem(path, fallbackDir, meta) {
   return true;
 }
 
-function deleteVirtualPath(path, fallbackDir) {
+async function deleteVirtualPath(path, fallbackDir) {
   const { dirName, fileName } = fsSplitPath(path, fallbackDir);
   const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
   const fileLabel = fileName || path;
@@ -1316,7 +1313,9 @@ function deleteVirtualPath(path, fallbackDir) {
         details: ['Lower HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 0 first.'],
       };
     }
-    if (!removeFsPath(STORY_FILE_PATHS.anchorSeed)) {
+    // Must be awaited. `if (!promise)` is always false, which would kill this
+    // not-found branch outright and fire the story beat below unconditionally.
+    if (!await removeFsPath(STORY_FILE_PATHS.anchorSeed)) {
       return { ok: false, message: 'File not found: ' + fileLabel };
     }
     updateDaemonStory(story => {
@@ -1347,14 +1346,14 @@ function deleteVirtualPath(path, fallbackDir) {
     };
   }
 
-  const deleted = recycleVirtualPath(path, fallbackDir);
+  const deleted = await recycleVirtualPath(path, fallbackDir);
   if (!deleted.ok) return deleted;
   syncDaemonStory({ silent: false });
   return deleted;
 }
 
 // Testing helper: prime the endgame state, then run the real final delete.
-function forceDeleteVoidTmp() {
+async function forceDeleteVoidTmp() {
   if (daemonStory.endingReached) {
     return { ok: false, message: 'void.tmp is no longer present.' };
   }
@@ -1374,7 +1373,7 @@ function forceDeleteVoidTmp() {
     story.quarantineSigned = true;
     story.lastEventText = 'debug skip armed';
   }, { forceSync: true });
-  return deleteVirtualPath('void.tmp');
+  return await deleteVirtualPath('void.tmp');
 }
 window.forceDeleteVoidTmp = forceDeleteVoidTmp;
 

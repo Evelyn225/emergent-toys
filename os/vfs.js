@@ -510,6 +510,25 @@ async function vfsMove(srcDirPath, srcName, dstDirPath, dstName) {
   return targetName;
 }
 
+// Walk a subtree and hand every blob to a caller-supplied disposer. The VFS
+// knows the tree shape; it does not know about object URLs or the blob store,
+// so the caller supplies that half. Used when a delete is permanent (emptying
+// the Recycle Bin), not when it is a move into it.
+//
+// Iterating `subdirs` rather than `dirs` is deliberate and complete: a name in
+// `dirs` with no node in `subdirs` is a directory that was persisted but never
+// materialized, and blobs are only ever set on a materialized node, so such a
+// branch is provably blob-free.
+function vfsWalkBlobs(dirPath, visit) {
+  const node = vfsDirNodeSync(dirPath);
+  if (!node) return;
+  const base = vfsNormalizeDir(dirPath);
+  (node.blobs || new Map()).forEach((blob, name) => visit(base, name, blob));
+  (node.subdirs || new Map()).forEach((_sub, name) => {
+    vfsWalkBlobs(base ? base + '\\' + name : name, visit);
+  });
+}
+
 async function vfsEstimate() {
   if (!_vfsBackend) return { usage: 0, quota: 0 };
   await _vfsRefreshQuota();

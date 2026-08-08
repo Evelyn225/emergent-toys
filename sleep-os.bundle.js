@@ -510,6 +510,25 @@ async function vfsMove(srcDirPath, srcName, dstDirPath, dstName) {
   return targetName;
 }
 
+// Walk a subtree and hand every blob to a caller-supplied disposer. The VFS
+// knows the tree shape; it does not know about object URLs or the blob store,
+// so the caller supplies that half. Used when a delete is permanent (emptying
+// the Recycle Bin), not when it is a move into it.
+//
+// Iterating `subdirs` rather than `dirs` is deliberate and complete: a name in
+// `dirs` with no node in `subdirs` is a directory that was persisted but never
+// materialized, and blobs are only ever set on a materialized node, so such a
+// branch is provably blob-free.
+function vfsWalkBlobs(dirPath, visit) {
+  const node = vfsDirNodeSync(dirPath);
+  if (!node) return;
+  const base = vfsNormalizeDir(dirPath);
+  (node.blobs || new Map()).forEach((blob, name) => visit(base, name, blob));
+  (node.subdirs || new Map()).forEach((_sub, name) => {
+    vfsWalkBlobs(base ? base + '\\' + name : name, visit);
+  });
+}
+
 async function vfsEstimate() {
   if (!_vfsBackend) return { usage: 0, quota: 0 };
   await _vfsRefreshQuota();
@@ -762,14 +781,14 @@ function canMoveShellItemToDir(item, srcDirPath, dstDirPath) {
   if (item.sysfile || item._shortcut) return false;
   return dstDir === '' || vfsDirExistsSync(dstDir);
 }
-function moveShellItemToDir(item, srcDirPath, dstDirPath) {
+async function moveShellItemToDir(item, srcDirPath, dstDirPath) {
   const srcDir = fsNormalizeDir(srcDirPath);
   const dstDir = fsNormalizeDir(dstDirPath);
   if (isDesktopVirtualItem(item, srcDirPath)) return moveDesktopVirtualItem(item, srcDirPath, dstDir);
   if (!canMoveShellItemToDir(item, srcDirPath, dstDir)) return false;
   if (srcDir === dstDir) return true;
   const oldPath = srcDir ? srcDir + '\\' + item.name : item.name;
-  const moved = moveFsItemByPath(item.name, srcDirPath, dstDir);
+  const moved = await moveFsItemByPath(item.name, srcDirPath, dstDir);
   if (!moved) return false;
   const newPath = moved.dirName ? moved.dirName + '\\' + moved.name : moved.name;
   retargetDesktopShortcutsForMove(oldPath, newPath, item.kind);
@@ -780,9 +799,9 @@ function moveShellItemToDir(item, srcDirPath, dstDirPath) {
 function canRecycleShellItem(item, srcDirPath) {
   return !!item && !item._proj && !item._recycle && !item._shortcut && !item.sysfile && !isDesktopVirtualItem(item, srcDirPath);
 }
-function recycleShellItem(item, srcDirPath) {
+async function recycleShellItem(item, srcDirPath) {
   if (!canRecycleShellItem(item, srcDirPath)) return { ok: false, message: 'Move failed.' };
-  const result = recycleVirtualPath(item.name, srcDirPath);
+  const result = await recycleVirtualPath(item.name, srcDirPath);
   if (result.ok) {
     if (isDesktopContainerPath(srcDirPath)) clearDesktopRootIconPosition(item.name);
     document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -828,25 +847,29 @@ function canMoveShellPayloadToDir(payload, dstDirPath) {
   const items = getShellDragItems(payload);
   return !!items.length && items.every(item => canMoveShellItemToDir(item, payload.srcCwd, dstDirPath));
 }
-function moveShellPayloadToDir(payload, dstDirPath) {
+// Sequential, not Promise.all: two concurrent moves into the same directory
+// would resolve their unique-name checks against the same pre-move listing.
+async function moveShellPayloadToDir(payload, dstDirPath) {
   const items = getShellDragItems(payload);
   if (!items.length || !canMoveShellPayloadToDir(payload, dstDirPath)) return false;
   let moved = 0;
-  items.forEach(item => { if (moveShellItemToDir(item, payload.srcCwd, dstDirPath)) moved++; });
+  for (const item of items) {
+    if (await moveShellItemToDir(item, payload.srcCwd, dstDirPath)) moved++;
+  }
   return moved === items.length;
 }
 function canRecycleShellPayload(payload) {
   const items = getShellDragItems(payload);
   return !!items.length && items.every(item => canRecycleShellItem(item, payload.srcCwd));
 }
-function recycleShellPayload(payload) {
+async function recycleShellPayload(payload) {
   const items = getShellDragItems(payload);
   if (!items.length || !canRecycleShellPayload(payload)) return false;
   let recycled = 0;
-  items.forEach(item => {
-    const result = recycleShellItem(item, payload.srcCwd);
+  for (const item of items) {
+    const result = await recycleShellItem(item, payload.srcCwd);
     if (result.ok) recycled++;
-  });
+  }
   return recycled === items.length;
 }
 const SYSTEM_FILE_ICONS = DESKTOP_ICONS.reduce((icons, { name, emoji }) => {
@@ -1161,13 +1184,15 @@ const registryData = {
 // Deliberately unchecked: any handler may be pointed at any file type. Opening
 // a video in NOTEPAD.exe is allowed, the same way a real OS lets you. The only
 // thing guarded is the destructive part -- see the blob check in
-// fsWriteTextFile, which stops a save from shadowing the binary.
+// vfsWriteFile, which throws EEXIST rather than letting a save shadow the
+// binary.
 const FILE_HANDLERS = {
   'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
   'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),
   'MEDIAPLAY.exe': (name, dir) => {
-    const entry = fsGetEntry(name, dir);
-    const kind = entry?.value?.kind || inferBlobKindFromName(name);
+    // Blob metadata only, so this stays synchronous.
+    const st = vfsStatSync(name, dir);
+    const kind = st?.blob?.kind || inferBlobKindFromName(name);
     if (kind === 'video') openVideoPlayer(name, dir);
     else openAudioPlayer(name, dir);
   },
@@ -1276,27 +1301,25 @@ function isSystemWallpaperPath(path) {
   return normalized === SYSTEM_WALLPAPER_DIR || normalized.startsWith(SYSTEM_WALLPAPER_DIR + '\\');
 }
 
-function findMapKeyInsensitive(map, key) {
-  if (!map || !key) return '';
-  if (map.has(key)) return key;
-  const target = String(key).toUpperCase();
-  for (const existing of map.keys()) {
-    if (String(existing).toUpperCase() === target) return existing;
-  }
-  return '';
+// Wallpaper paths come from the registry and from localStorage, so their case
+// may not match the tree. vfsStatSync is case-sensitive for files and blobs, so
+// the fallback scan stays - exact hit first, then a case-insensitive sweep.
+function findBlobEntryInsensitive(dirName, fileName) {
+  if (!fileName) return null;
+  const entries = vfsListSync(dirName).filter(entry => entry.kind === 'blob');
+  const exact = entries.find(entry => entry.name === fileName);
+  if (exact) return exact;
+  const target = String(fileName).toUpperCase();
+  return entries.find(entry => String(entry.name).toUpperCase() === target) || null;
 }
 
 function resolveWallpaperEntry(path, fallbackDir) {
   const normalized = normalizeWallpaperPath(path, fallbackDir);
   if (!normalized) return null;
-  const { dirName, fileName } = fsSplitPath(normalized);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  const blobName = findMapKeyInsensitive(dir.blobs, fileName);
-  if (!blobName) return null;
-  const blob = dir.blobs.get(blobName);
-  if (!blob || blob.kind !== 'image') return null;
-  return { dir, dirName, fileName: blobName, path: blobRelativePath(dirName, blobName), blob };
+  const { dirName, fileName } = vfsSplitPath(normalized);
+  const entry = findBlobEntryInsensitive(dirName, fileName);
+  if (!entry || entry.blob?.kind !== 'image') return null;
+  return { dirName, fileName: entry.name, path: blobRelativePath(dirName, entry.name), blob: entry.blob };
 }
 
 function getWallpaperRegistryValue() {
@@ -1337,25 +1360,28 @@ function wallpaperFilePath(id) {
 
 function getUploadedWallpaperChoices() {
   const items = [];
-  function walk(dir, dirPath) {
-    if (!dir) return;
-    dir.blobs?.forEach((blob, fileName) => {
-      if (blob.kind !== 'image') return;
-      const relPath = blobRelativePath(dirPath, fileName);
+  // The final sort below is total, so traversal order does not matter; the
+  // directories are still visited in name order to keep the walk stable.
+  function walk(dirPath) {
+    const entries = vfsListSync(dirPath);
+    entries.forEach(entry => {
+      if (entry.kind !== 'blob' || entry.blob?.kind !== 'image') return;
+      const relPath = blobRelativePath(dirPath, entry.name);
       items.push({
         id: relPath,
-        name: (SEEDED_WALLPAPER_MAP.get(relPath) || {}).label || fileName.replace(/\.[^.]+$/, ''),
+        name: (SEEDED_WALLPAPER_MAP.get(relPath) || {}).label || entry.name.replace(/\.[^.]+$/, ''),
         path: relPath,
-        url: blob.url,
+        url: entry.blob.url,
         system: isSystemWallpaperPath(relPath),
       });
     });
-    if (!dir.subdirs) return;
-    [...dir.subdirs.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .forEach(([subName, subdir]) => walk(subdir, dirPath ? dirPath + '\\' + subName : subName));
+    entries
+      .filter(entry => entry.kind === 'dir')
+      .map(entry => entry.name)
+      .sort((a, b) => a.localeCompare(b))
+      .forEach(subName => walk(dirPath ? dirPath + '\\' + subName : subName));
   }
-  walk(termFS, '');
+  walk('');
   return items.sort((a, b) => {
     if (a.system !== b.system) return a.system ? -1 : 1;
     return a.path.localeCompare(b.path);
@@ -2988,78 +3014,69 @@ function daemonStoryChanged(before) {
   }
 }
 
+// Synchronous because module-level callers depend on it during bundle
+// evaluation (os/fs-persist.js seeds the wallpaper library and the recycle
+// store this way). It mutates the live tree directly and lets the VFS commit
+// on its own schedule.
 function ensureFsDir(path) {
-  const parts = fsNormalizeDir(path).split('\\').filter(Boolean);
-  let node = termFS;
+  const parts = vfsNormalizeDir(path).split('\\').filter(Boolean);
+  let node = vfsGetTree();
+  let created = false;
   parts.forEach(part => {
-    node.dirs.add(part);
+    if (!node.dirs.has(part)) { node.dirs.add(part); created = true; }
     if (!node.subdirs) node.subdirs = new Map();
-    if (!node.subdirs.has(part)) {
-      node.subdirs.set(part, { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
-    }
+    // Materializing a node for a name that is already in `dirs` is not a
+    // filesystem change - it is the same lazy fill vfsDirNodeSync does, and it
+    // queues nothing there either. Only a new name counts as `created`.
+    if (!node.subdirs.has(part)) node.subdirs.set(part, vfsMakeNode());
     node = node.subdirs.get(part);
   });
+  // schedSave, NOT vfsFlush. vfsFlush early-returns when nothing is queued
+  // (`if (!_vfsBackend || !_vfsPendingOps.length) return;`), and this function
+  // mutates the tree directly rather than through _vfsQueue, so `void
+  // vfsFlush()` would commit nothing and every directory created here would
+  // vanish on reload. schedSave queues a `legacy-write` marker op, which is the
+  // designed escape hatch for a direct mutation.
+  if (created) schedSave();
   return node;
 }
 
-function removeFsPath(path, options) {
+// The VFS handles the fragmentation delta, the object-URL revoke and the
+// commit. What it does not know about is the wallpaper binding and the blob
+// store, so those stay here.
+async function removeFsPath(path, options) {
   options = options || {};
-  const { dirName, fileName } = fsSplitPath(path);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return false;
-  const upper = fileName.toUpperCase();
-  if (dir.files.has(fileName)) {
-    const content = dir.files.get(fileName);
-    dir.files.delete(fileName);
-    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('text', content));
-    schedSave();
-    return true;
+  const st = vfsStatSync(path);
+  if (!st) return false;
+  if (st.kind === 'blob') {
+    if (st.blob?.kind === 'image') handleWallpaperFileDelete(st.dirName, st.name);
+    removeBlobEntry(st.dirName, st.name);
   }
-  if (dir.blobs.has(fileName)) {
-    const blob = dir.blobs.get(fileName);
-    if (blob?.kind === 'image') handleWallpaperFileDelete(dirName, fileName);
-    if (blob?.url) URL.revokeObjectURL(blob.url);
-    dir.blobs.delete(fileName);
-    removeBlobEntry(dirName, fileName);
-    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('blob', blob?.size));
-    schedSave();
-    return true;
-  }
-  if (dir.dirs.has(upper)) {
-    dir.dirs.delete(upper);
-    dir.subdirs?.delete(upper);
-    if (options.trackFragmentation !== false) increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
-    schedSave();
-    return true;
-  }
-  return false;
+  // Resolve from the stat rather than re-splitting `path`, so the unlink cannot
+  // land anywhere other than the entry the stat found.
+  return await vfsUnlink(st.name, st.dirName, options);
 }
 
 function isRecycleBinItemName(name) {
   return String(name || '').trim().toUpperCase() === RECYCLE_BIN_NAME;
 }
 
+// `storage` is the physical shape ('text' | 'blob' | 'dir'); `kind` is what the
+// UI labels the item with, which for a blob is its media kind. The node itself
+// is deliberately not returned any more - every consumer now works through the
+// VFS by path.
 function getFsItemState(path, fallbackDir) {
-  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const dir = fsGetDir(dirName);
-  if (!dir || !fileName) return null;
-  if (dir.files.has(fileName)) return { dirName, dir, entryName: fileName, kind: 'file', storage: 'text' };
-  if (dir.blobs.has(fileName)) {
-    const blob = dir.blobs.get(fileName);
-    return { dirName, dir, entryName: fileName, kind: blob?.kind || 'binary', storage: 'blob', blob };
+  const st = vfsStatSync(path, fallbackDir);
+  if (!st) return null;
+  if (st.kind === 'text') return { dirName: st.dirName, entryName: st.name, kind: 'file', storage: 'text' };
+  if (st.kind === 'blob') {
+    return { dirName: st.dirName, entryName: st.name, kind: st.blob?.kind || 'binary', storage: 'blob', blob: st.blob };
   }
-  const upper = fileName.toUpperCase();
-  if (dir.dirs.has(upper)) return { dirName, dir, entryName: upper, kind: 'dir', storage: 'dir' };
-  return null;
+  return { dirName: st.dirName, entryName: st.name, kind: 'dir', storage: 'dir' };
 }
 
-function fsDirHasEntry(dir, name) {
-  if (!dir) return false;
-  return dir.files.has(name) || dir.blobs.has(name) || dir.dirs.has(String(name || '').toUpperCase());
-}
-
-function makeUniqueFsName(dir, desiredName, kind, suffixToken) {
-  const exists = name => fsDirHasEntry(dir, name);
+function makeUniqueFsName(dirName, desiredName, kind, suffixToken) {
+  const exists = name => vfsExistsSync(name, dirName);
   if (!exists(desiredName)) return desiredName;
   const token = String(suffixToken || 'copy');
   if (kind === 'dir') {
@@ -3078,12 +3095,11 @@ function makeUniqueFsName(dir, desiredName, kind, suffixToken) {
   return candidate;
 }
 
-function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
+async function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
   options = options || {};
   const item = getFsItemState(path, fallbackDir);
-  const dstDirName = fsNormalizeDir(dstDirPath);
-  const dstDir = fsGetDir(dstDirName);
-  if (!item || !dstDir) return null;
+  const dstDirName = vfsNormalizeDir(dstDirPath);
+  if (!item || !vfsDirExistsSync(dstDirName)) return null;
   if (item.storage === 'dir') {
     const srcPath = blobRelativePath(item.dirName, item.entryName);
     if (dstDirName === srcPath || dstDirName.startsWith(srcPath + '\\')) return null;
@@ -3091,34 +3107,33 @@ function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
   let nextName = String(options.newName || item.entryName || '').trim();
   if (!nextName) return null;
   if (item.storage === 'dir') nextName = nextName.toUpperCase();
-  const sameParent = dstDirName === fsNormalizeDir(item.dirName);
+  const sameParent = dstDirName === vfsNormalizeDir(item.dirName);
   const sameName = nextName === item.entryName;
   if (sameParent && sameName) return { kind: item.kind, name: nextName, dirName: dstDirName };
-  if (options.makeUnique) nextName = makeUniqueFsName(dstDir, nextName, item.storage === 'dir' ? 'dir' : 'file', options.suffixToken || 'copy');
-  else if (fsDirHasEntry(dstDir, nextName)) return null;
+  if (options.makeUnique) nextName = makeUniqueFsName(dstDirName, nextName, item.storage === 'dir' ? 'dir' : 'file', options.suffixToken || 'copy');
+  else if (vfsExistsSync(nextName, dstDirName)) return null;
 
-  if (item.storage === 'dir') {
-    const sub = item.dir.subdirs?.get(item.entryName);
-    item.dir.dirs.delete(item.entryName);
-    item.dir.subdirs?.delete(item.entryName);
-    if (!dstDir.subdirs) dstDir.subdirs = new Map();
-    dstDir.dirs.add(nextName);
-    if (sub) dstDir.subdirs.set(nextName, sub);
-    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, nextName));
-  } else if (item.storage === 'blob') {
-    const blob = item.dir.blobs.get(item.entryName);
-    item.dir.blobs.delete(item.entryName);
-    if (!dstDir.blobs) dstDir.blobs = new Map();
-    dstDir.blobs.set(nextName, blob);
-    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, nextName);
-  } else {
-    const content = item.dir.files.get(item.entryName);
-    item.dir.files.delete(item.entryName);
-    if (!dstDir.files) dstDir.files = new Map();
-    dstDir.files.set(nextName, content);
+  let moved;
+  try {
+    moved = await vfsMove(item.dirName, item.entryName, dstDirName, nextName);
+  } catch (err) {
+    // The guards above already cover EEXIST, ENOENT and the self-nesting
+    // EINVAL, so this is unreachable in practice. It stays because callers
+    // (Explorer's "Move failed.", the Recycle Bin) are written against a
+    // null-on-failure contract, and a raw VfsError escaping into a drop
+    // handler would take the whole gesture down instead.
+    return null;
   }
-  schedSave();
-  return { kind: item.kind, name: nextName, dirName: dstDirName };
+  if (!moved) return null;
+  // vfsMove moves the in-memory record only. The bytes live in a separate
+  // store keyed by path, and keeping that in step is deliberately the caller's
+  // job - the VFS must not start guessing about it.
+  if (item.storage === 'blob') {
+    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, moved);
+  } else if (item.storage === 'dir') {
+    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, moved));
+  }
+  return { kind: item.kind, name: moved, dirName: dstDirName };
 }
 
 function handleWallpaperTreeDelete(path) {
@@ -3134,38 +3149,36 @@ function handleWallpaperTreeDelete(path) {
   }
 }
 
-function purgeFsDirNode(dirPath, dirNode) {
-  if (!dirNode) return;
-  dirNode.subdirs?.forEach((subdir, name) => purgeFsDirNode(blobRelativePath(dirPath, name), subdir));
-  dirNode.blobs?.forEach((blob, name) => {
-    if (blob?.kind === 'image') handleWallpaperFileDelete(dirPath, name);
-    if (blob?.url) URL.revokeObjectURL(blob.url);
-    removeBlobEntry(dirPath, name);
+// vfsUnlink drops a directory's name and subtree but revokes only the single
+// blob it was handed, which is not enough for a folder: emptying the Recycle
+// Bin on a folder of images would leak one object URL per image and orphan
+// every blob-store row. This is the permanent-delete half; a move into the
+// Recycle Bin deliberately does not run it.
+function purgeFsDirNode(dirPath) {
+  vfsWalkBlobs(dirPath, (base, name, blob) => {
+    if (blob?.kind === 'image') handleWallpaperFileDelete(base, name);
+    if (blob?.url && !blob.seeded) URL.revokeObjectURL(blob.url);
+    removeBlobEntry(base, name);
   });
-  dirNode.files?.clear?.();
-  dirNode.blobs?.clear?.();
-  dirNode.dirs?.clear?.();
-  dirNode.subdirs?.clear?.();
 }
 
-function purgeFsPath(path, fallbackDir) {
+async function purgeFsPath(path, fallbackDir) {
   const item = getFsItemState(path, fallbackDir);
   if (!item) return false;
-  if (item.storage !== 'dir') return removeFsPath(path);
-  purgeFsDirNode(blobRelativePath(item.dirName, item.entryName), item.dir.subdirs?.get(item.entryName));
-  item.dir.dirs.delete(item.entryName);
-  item.dir.subdirs?.delete(item.entryName);
-  increaseDriveFragmentation(calcRemovalFragmentationDelta('dir'));
-  schedSave();
-  return true;
+  // Rebuild the path from the resolved entry rather than passing `path`
+  // through: removeFsPath re-splits with no fallback directory, so a bare name
+  // plus a fallbackDir would otherwise be looked up at the root.
+  if (item.storage !== 'dir') return await removeFsPath(blobRelativePath(item.dirName, item.entryName));
+  purgeFsDirNode(blobRelativePath(item.dirName, item.entryName));
+  return await vfsUnlink(item.entryName, item.dirName);
 }
 
-function recycleVirtualPath(path, fallbackDir) {
+async function recycleVirtualPath(path, fallbackDir) {
   const item = getFsItemState(path, fallbackDir);
-  const fileLabel = fsSplitPath(path, fallbackDir).fileName || path;
+  const fileLabel = vfsSplitPath(path, fallbackDir).fileName || path;
   if (!item) return { ok: false, message: 'File not found: ' + fileLabel };
   const sourcePath = blobRelativePath(item.dirName, item.entryName);
-  if (fsNormalizeDir(sourcePath).startsWith(fsNormalizeDir(RECYCLE_STORAGE_DIR))) {
+  if (vfsNormalizeDir(sourcePath).startsWith(vfsNormalizeDir(RECYCLE_STORAGE_DIR))) {
     return { ok: false, message: 'Item is already in the Recycle Bin.' };
   }
 
@@ -3176,9 +3189,9 @@ function recycleVirtualPath(path, fallbackDir) {
   if (item.storage === 'blob' && item.blob?.kind === 'image') handleWallpaperFileDelete(item.dirName, item.entryName);
   if (item.storage === 'dir') handleWallpaperTreeDelete(sourcePath);
 
-  const moved = moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
+  const moved = await moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
   if (!moved) {
-    removeFsPath(storedDir, { trackFragmentation: false });
+    await removeFsPath(storedDir, { trackFragmentation: false });
     return { ok: false, message: 'Could not move ' + fileLabel + ' to the Recycle Bin.' };
   }
 
@@ -3195,36 +3208,38 @@ function recycleVirtualPath(path, fallbackDir) {
   return { ok: true, deleted: true, recycled: true, details: ['Moved to Recycle Bin: ' + fileLabel] };
 }
 
-function restoreRecycleEntry(entry) {
+async function restoreRecycleEntry(entry) {
   entry = normalizeRecycleEntry(entry);
   if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
   ensureFsDir(entry.originalDir);
-  const moved = moveFsItemByPath(entry.name, entry.storedDir, entry.originalDir, {
+  const moved = await moveFsItemByPath(entry.name, entry.storedDir, entry.originalDir, {
     newName: entry.name,
     makeUnique: true,
     suffixToken: 'restored',
   });
   if (!moved) return { ok: false, message: 'Could not restore ' + entry.name + '.' };
-  removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir, { trackFragmentation: false });
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
   return { ok: true, restored: true, name: moved.name, dirName: entry.originalDir };
 }
 
-function purgeRecycleEntry(entry) {
+async function purgeRecycleEntry(entry) {
   entry = normalizeRecycleEntry(entry);
   if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
-  purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
-  removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
+  await removeFsPath(entry.storedDir, { trackFragmentation: false });
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
   return { ok: true, deleted: true };
 }
 
-function emptyRecycleBin() {
-  recycleBinEntries.slice().forEach(entry => purgeRecycleEntry(entry));
+// Sequential rather than Promise.all: each purge rewrites recycleBinEntries,
+// so overlapping them would race on that array.
+async function emptyRecycleBin() {
+  for (const entry of recycleBinEntries.slice()) await purgeRecycleEntry(entry);
 }
 
 function confirmEmptyRecycleBin(onDone) {
@@ -3232,12 +3247,14 @@ function confirmEmptyRecycleBin(onDone) {
     if (typeof onDone === 'function') onDone(false);
     return;
   }
-  osConfirm('Permanently delete all items in the Recycle Bin?', 'Empty Recycle Bin', ok => {
+  osConfirm('Permanently delete all items in the Recycle Bin?', 'Empty Recycle Bin', async ok => {
     if (!ok) {
       if (typeof onDone === 'function') onDone(false);
       return;
     }
-    emptyRecycleBin();
+    // onDone re-renders the view, so it has to wait for the purge to finish or
+    // it draws the bin still holding everything it just deleted.
+    await emptyRecycleBin();
     if (typeof onDone === 'function') onDone(true);
   }, '\u{1F5D1}\uFE0F');
 }
@@ -3718,35 +3735,41 @@ function syncDaemonStoryRegistry() {
   saveRegistry();
 }
 
+// Stays synchronous, and every removeFsPath below is deliberately floated.
+// syncDaemonStory calls this from updateDaemonStory, which runs from dozens of
+// story beats and from boot, none of which can await; and the tree mutation
+// inside vfsUnlink is itself synchronous, so the file is gone from the tree by
+// the time the promise is handed back. Only the commit is deferred, and that
+// was already debounced before this migration.
 function syncDaemonStoryFiles() {
   ensureFsDir('DOCS');
   ensureFsDir('SYS');
   ensureFsDir('CACHE');
   if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
-  else removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
-  else removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
-  else removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
   if (daemonStory.stage >= 4) {
     ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
     if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
   } else {
-    removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
-    removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
   }
   if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
-  else removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
   if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
-  else removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
   if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
-  else removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
   if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
   else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
-  else removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
   if (daemonStory.endingReached) {
-    removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
-    removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
   }
 }
 
@@ -3962,7 +3985,7 @@ function canAttemptDeleteItem(path, fallbackDir, meta) {
   return true;
 }
 
-function deleteVirtualPath(path, fallbackDir) {
+async function deleteVirtualPath(path, fallbackDir) {
   const { dirName, fileName } = fsSplitPath(path, fallbackDir);
   const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
   const fileLabel = fileName || path;
@@ -4030,7 +4053,9 @@ function deleteVirtualPath(path, fallbackDir) {
         details: ['Lower HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 0 first.'],
       };
     }
-    if (!removeFsPath(STORY_FILE_PATHS.anchorSeed)) {
+    // Must be awaited. `if (!promise)` is always false, which would kill this
+    // not-found branch outright and fire the story beat below unconditionally.
+    if (!await removeFsPath(STORY_FILE_PATHS.anchorSeed)) {
       return { ok: false, message: 'File not found: ' + fileLabel };
     }
     updateDaemonStory(story => {
@@ -4061,14 +4086,14 @@ function deleteVirtualPath(path, fallbackDir) {
     };
   }
 
-  const deleted = recycleVirtualPath(path, fallbackDir);
+  const deleted = await recycleVirtualPath(path, fallbackDir);
   if (!deleted.ok) return deleted;
   syncDaemonStory({ silent: false });
   return deleted;
 }
 
 // Testing helper: prime the endgame state, then run the real final delete.
-function forceDeleteVoidTmp() {
+async function forceDeleteVoidTmp() {
   if (daemonStory.endingReached) {
     return { ok: false, message: 'void.tmp is no longer present.' };
   }
@@ -4088,7 +4113,7 @@ function forceDeleteVoidTmp() {
     story.quarantineSigned = true;
     story.lastEventText = 'debug skip armed';
   }, { forceSync: true });
-  return deleteVirtualPath('void.tmp');
+  return await deleteVirtualPath('void.tmp');
 }
 window.forceDeleteVoidTmp = forceDeleteVoidTmp;
 
@@ -4904,7 +4929,7 @@ async function execScriptInstruction(inst, labels, state) {
     case 'del':
     case 'rm': {
       if (!resolvedArg) throw makeScriptError('Usage: del <file>', inst.lineNo);
-      const deletion = deleteVirtualPath(resolvedArg, state.dirName);
+      const deletion = await deleteVirtualPath(resolvedArg, state.dirName);
       if (!deletion.ok) throw makeScriptError(deletion.message || ('Cannot delete: ' + resolvedArg), inst.lineNo);
       state.status = 0;
       return null;
@@ -6183,12 +6208,22 @@ function resolveFsIcon(name, kind) {
 }
 
 function getDesktopFsIcons() {
-  const dir = fsGetDir('DESKTOP');
-  if (!dir) return [];
-  const icons = [];
-  dir.dirs.forEach(name => icons.push({ name, kind: 'dir' }));
-  dir.files.forEach((_, name) => icons.push({ name, kind: 'file' }));
-  dir.blobs.forEach((blob, name) => icons.push({ name, kind: blob?.kind || inferBlobKindFromName(name) }));
+  // vfsListSync returns [] for a missing directory, which is what the old
+  // `if (!dir) return []` did, and it yields dirs, then text files, then blobs -
+  // the same order the three legacy loops produced, so icon order is unchanged.
+  //
+  // The kinds do NOT map one to one. vfsListSync reports 'dir' / 'text' /
+  // 'blob'; this function has always emitted 'dir' / 'file' / the blob's own
+  // media kind, and resolveFsIcon above branches on 'image' / 'video' /
+  // 'audio' / 'dir'. Passing 'blob' through would strip the icon off every
+  // uploaded image, video and audio file on the desktop. The kind also lands in
+  // the returned target, which the open path reads. So remap explicitly.
+  const icons = vfsListSync('DESKTOP').map(entry => ({
+    name: entry.name,
+    kind: entry.kind === 'dir' ? 'dir'
+        : entry.kind === 'text' ? 'file'
+        : entry.blob?.kind || inferBlobKindFromName(entry.name),
+  }));
   return icons.map(item => ({
     name: item.name,
     emoji: resolveFsIcon(item.name, item.kind),
@@ -6323,10 +6358,10 @@ function getDesktopFolderDropTarget(clientX, clientY, draggingIcons) {
   return null;
 }
 
-function moveDesktopIconIntoFolder(icon, folderIcon) {
+async function moveDesktopIconIntoFolder(icon, folderIcon) {
   if (!icon || !folderIcon?.desktopEntry || folderIcon.kind !== 'dir') return false;
   const dstDirPath = folderIcon.target.path;
-  return moveShellItemToDir(icon, 'DESKTOP', dstDirPath);
+  return await moveShellItemToDir(icon, 'DESKTOP', dstDirPath);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -6347,15 +6382,15 @@ function deleteDesktopSystemIcons(icons) {
   const targets = (icons || []).filter(canDeleteDesktopSystemIcon);
   if (!targets.length) return;
   const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected items?';
-  osConfirm(prompt, 'Delete', ok => {
+  osConfirm(prompt, 'Delete', async ok => {
     if (!ok) return;
     const blocked = [];
     let changed = false;
-    targets.forEach(target => {
-      const result = deleteVirtualPath(target.name);
+    for (const target of targets) {
+      const result = await deleteVirtualPath(target.name);
       if (result.ok && result.deleted) changed = true;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-    });
+    }
     if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
     if (changed) clearDesktopSel();
   }, '🗑️');
@@ -6369,15 +6404,15 @@ function deleteDesktopFsEntries(icons) {
   const targets = (icons || []).filter(canDeleteDesktopFsEntry);
   if (!targets.length) return;
   const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected files?';
-  osConfirm(prompt, 'Delete', ok => {
+  osConfirm(prompt, 'Delete', async ok => {
     if (!ok) return;
     const blocked = [];
     let changed = false;
-    targets.forEach(target => {
-      const result = deleteVirtualPath(target.target.path);
+    for (const target of targets) {
+      const result = await deleteVirtualPath(target.target.path);
       if (result.ok && result.deleted) changed = true;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-    });
+    }
     if (blocked.length) osAlert(blocked[0], 'Delete', 'âš ï¸');
     if (changed) {
       clearDesktopSel();
@@ -6386,8 +6421,8 @@ function deleteDesktopFsEntries(icons) {
   }, 'ðŸ-‘ï¸');
 }
 
-function recycleDesktopItemAtPath(path) {
-  const result = recycleVirtualPath(path);
+async function recycleDesktopItemAtPath(path) {
+  const result = await recycleVirtualPath(path);
   if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
   return result;
 }
@@ -6485,7 +6520,11 @@ function makeDesktopIconEl(ic) {
         });
       }
     };
-    const onUp = up => {
+    // Async is safe here in a way it would not be inside a `drop` listener:
+    // this is a pointerup, and nothing below depends on preventDefault or on
+    // the event still propagating. The geometry is all read from `up`, whose
+    // coordinates stay valid after the handler yields.
+    const onUp = async up => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup',   onUp);
       dragStates.forEach(state => {
@@ -6499,7 +6538,13 @@ function makeDesktopIconEl(ic) {
           const rr = recycleEl.getBoundingClientRect();
           const overRecycleBin = up.clientX >= rr.left && up.clientX <= rr.right && up.clientY >= rr.top && up.clientY <= rr.bottom;
           if (overRecycleBin) {
-            const ok = draggedIcons.every(targetIcon => recycleDesktopItemAtPath(targetIcon.target.path).ok);
+            // `every` short-circuits on the first failure, so this keeps the
+            // original semantics: stop recycling as soon as one is refused.
+            let ok = true;
+            for (const targetIcon of draggedIcons) {
+              ok = (await recycleDesktopItemAtPath(targetIcon.target.path)).ok;
+              if (!ok) break;
+            }
             if (ok) {
               clearDesktopSel();
               return;
@@ -6507,7 +6552,7 @@ function makeDesktopIconEl(ic) {
           }
         }
         const folderTarget = getDesktopFolderDropTarget(up.clientX, up.clientY, draggedIcons);
-        if (folderTarget && moveShellPayloadToDir(draggedPayload, folderTarget.target.path)) {
+        if (folderTarget && await moveShellPayloadToDir(draggedPayload, folderTarget.target.path)) {
           clearDesktopSel();
           return;
         }
@@ -6518,7 +6563,7 @@ function makeDesktopIconEl(ic) {
         const explorerPaneEl = dropNode?.closest?.('.exp-body');
         const explorerDrop = explorerItemEl?._shellDropHandler || explorerPaneEl?._shellDropHandler;
         if (explorerDrop) {
-          const ok = explorerDrop(draggedPayload);
+          const ok = await explorerDrop(draggedPayload);
           if (ok) {
             clearDesktopSel();
             return;
@@ -6647,16 +6692,20 @@ function makeDesktopIconEl(ic) {
       const payload = getShellDragPayload();
       setDropOutline(false);
       if (!payload || shellDragIncludesItem(payload, ic)) return;
-      let ok = false;
-      if (ic.recycleBin) {
-        ok = recycleShellPayload(payload);
-      } else {
-        ok = moveShellPayloadToDir(payload, dropDirPath);
-      }
-      if (!ok) return;
+      // The accept decision has to be made synchronously. preventDefault and
+      // stopPropagation are both no-ops once the handler has yielded - the
+      // default action fires and the event finishes bubbling the moment the
+      // listener returns at its first await - and a late clearShellDragPayload
+      // would let another handler start a second move on the same items.
+      // These are the same predicates the dragover handler above gates on.
+      const accepts = ic.recycleBin
+        ? canRecycleShellPayload(payload)
+        : canMoveShellPayloadToDir(payload, dropDirPath);
+      if (!accepts) return;
       e.preventDefault();
       e.stopPropagation();
       clearShellDragPayload();
+      void (ic.recycleBin ? recycleShellPayload(payload) : moveShellPayloadToDir(payload, dropDirPath));
     });
   }
   return div;
@@ -6785,7 +6834,7 @@ function setupIcons() {
     if (!payload || isDesktopSurfaceTransferBlocked(payload, 'DESKTOP') || !canMoveShellPayloadToDir(payload, 'DESKTOP')) return;
     e.preventDefault();
     e.stopPropagation();
-    if (moveShellPayloadToDir(payload, 'DESKTOP')) clearShellDragPayload();
+    void moveShellPayloadToDir(payload, 'DESKTOP').then(ok => { if (ok) clearShellDragPayload(); });
   });
 
   // Desktop background right-click / long-press
@@ -7831,17 +7880,17 @@ function openExplorer(startPath) {
   let selectionNodes = new Map();
   let emptyStatusText = '';
 
-  function doMoveItem(srcItem, srcCwd, dstDirPath) {
-    return moveShellItemToDir(srcItem, srcCwd, dstDirPath);
+  async function doMoveItem(srcItem, srcCwd, dstDirPath) {
+    return await moveShellItemToDir(srcItem, srcCwd, dstDirPath);
   }
-  function doRecycleItem(srcItem, srcCwd) {
-    return recycleShellItem(srcItem, srcCwd);
+  async function doRecycleItem(srcItem, srcCwd) {
+    return await recycleShellItem(srcItem, srcCwd);
   }
-  function doMovePayload(payload, dstDirPath) {
-    return moveShellPayloadToDir(payload, dstDirPath);
+  async function doMovePayload(payload, dstDirPath) {
+    return await moveShellPayloadToDir(payload, dstDirPath);
   }
-  function doRecyclePayload(payload) {
-    return recycleShellPayload(payload);
+  async function doRecyclePayload(payload) {
+    return await recycleShellPayload(payload);
   }
   function setExplorerStatus(text) {
     if (ws) ws.textContent = text;
@@ -7998,16 +8047,16 @@ function openExplorer(startPath) {
     return getSelectedItems().map(item => normalizeRecycleEntry(item._recycle)).filter(Boolean);
   }
 
-  function restoreSelectedRecycleEntries() {
+  async function restoreSelectedRecycleEntries() {
     const entries = getSelectedRecycleEntries();
     if (!entries.length) return;
     const blocked = [];
     let restoredCount = 0;
-    entries.forEach(entry => {
-      const result = restoreRecycleEntry(entry);
+    for (const entry of entries) {
+      const result = await restoreRecycleEntry(entry);
       if (result.ok && result.restored) restoredCount++;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-    });
+    }
     if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
     if (restoredCount && ws) ws.textContent = restoredCount === 1 ? '1 item restored' : restoredCount + ' items restored';
     if (restoredCount || blocked.length) render();
@@ -8019,10 +8068,14 @@ function openExplorer(startPath) {
     kind = item.kind;
     sysfile = item.sysfile;
     if (item._recycle) {
-      const result = restoreRecycleEntry(item._recycle);
-      if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
-      else if (ws) ws.textContent = 'Restored: ' + result.name;
-      render();
+      // Fired and not awaited so openItem keeps its synchronous signature -
+      // it is referenced from double-click, Enter and several dispatch tables.
+      // render() runs when the restore lands, not before.
+      void restoreRecycleEntry(item._recycle).then(result => {
+        if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+        else if (ws) ws.textContent = 'Restored: ' + result.name;
+        render();
+      });
       return;
     }
     if (isRecycleBinItemName(name)) {
@@ -8076,22 +8129,22 @@ function openExplorer(startPath) {
     const prompt = recycleView
       ? (items.length === 1 ? 'Permanently delete "' + items[0].name + '"?' : 'Permanently delete ' + items.length + ' selected items?')
       : (items.length === 1 ? 'Delete "' + items[0].name + '"?' : 'Delete ' + items.length + ' selected items?');
-    osConfirm(prompt, recycleView ? 'Delete Permanently' : 'Delete', ok => {
+    osConfirm(prompt, recycleView ? 'Delete Permanently' : 'Delete', async ok => {
       if (!ok) return;
       const blocked = [];
       let changed = false;
       if (recycleView) {
-        items.forEach(item => {
-          const result = purgeRecycleEntry(item._recycle);
+        for (const item of items) {
+          const result = await purgeRecycleEntry(item._recycle);
           if (result.ok && result.deleted) changed = true;
           else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-        });
+        }
         if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
         if (changed && ws) ws.textContent = items.length === 1 ? '1 item deleted permanently' : items.length + ' items deleted permanently';
         if (changed || blocked.length) render();
         return;
       }
-      items.forEach(item => {
+      for (const item of items) {
         if (item._shortcut) {
           const scIdx = customDesktopIcons.indexOf(item._shortcut);
           if (scIdx > -1) {
@@ -8100,13 +8153,13 @@ function openExplorer(startPath) {
             delete iconPositions[item.name];
             saveIconPositions();
             changed = true;
-            return;
+            continue;
           }
         }
-        const result = deleteVirtualPath(makeFsPath(item.name), cwd);
+        const result = await deleteVirtualPath(makeFsPath(item.name), cwd);
         if (result.ok && result.deleted) changed = true;
         else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-      });
+      }
       if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
       if (changed || blocked.length) document.dispatchEvent(new CustomEvent('fs-changed'));
       render();
@@ -8185,10 +8238,10 @@ function openExplorer(startPath) {
     }
     // ── Drag target (folders + recycle bin) ─────────────────────
     if ((kind === 'dir' && (!sysfile || isDesktopRootDir)) || isRecycleBin) {
-      el._shellDropHandler = payload => {
+      el._shellDropHandler = async payload => {
         if (!payload || shellDragIncludesItem(payload, item)) return false;
         if (isRecycleBin) {
-          const ok = doRecyclePayload(payload);
+          const ok = await doRecyclePayload(payload);
           if (!ok) setExplorerStatus('Move failed.');
           if (ok) render();
           return ok;
@@ -8196,7 +8249,7 @@ function openExplorer(startPath) {
         if (isDesktopRootDir && fsNormalizeDir(payload.srcCwd) === 'DESKTOP') return false;
         const dstPath = isDesktopRootDir ? 'DESKTOP' : (cwd ? cwd + '\\' + name : name);
         if (!canMoveShellPayloadToDir(payload, dstPath)) return false;
-        const ok = doMovePayload(payload, dstPath);
+        const ok = await doMovePayload(payload, dstPath);
         if (!ok) setExplorerStatus('Move failed.');
         if (ok) render();
         return ok;
@@ -8219,9 +8272,11 @@ function openExplorer(startPath) {
         el.classList.remove('exp-drop-target');
         const payload = getShellDragPayload();
         if (!payload || shellDragIncludesItem(payload, item)) return;
+        // preventDefault and stopPropagation stay ahead of the await - after
+        // it they are both no-ops - and they were already unconditional here.
         e.preventDefault();
         e.stopPropagation();
-        if (el._shellDropHandler(payload)) clearShellDragPayload();
+        void el._shellDropHandler(payload).then(ok => { if (ok) clearShellDragPayload(); });
       });
     }
 
@@ -8516,11 +8571,11 @@ function openExplorer(startPath) {
     if (e.target.closest(ITEM_SELECTOR)) return;
     clearSelection();
   });
-  pane._shellDropHandler = payload => {
+  pane._shellDropHandler = async payload => {
     if (!payload || cwd === 'PROJECTS' || cwd === 'RECYCLE') return false;
     if (isDesktopSurfaceTransferBlocked(payload, cwd)) return false;
     if (!canMoveShellPayloadToDir(payload, cwd)) return false;
-    const ok = doMovePayload(payload, cwd);
+    const ok = await doMovePayload(payload, cwd);
     if (!ok) setExplorerStatus('Move failed.');
     if (ok) render();
     return ok;
@@ -8606,7 +8661,7 @@ function openExplorer(startPath) {
     if (payload && !e.target.closest(ITEM_SELECTOR)) {
       e.preventDefault();
       e.stopPropagation();
-      if (pane._shellDropHandler(payload)) clearShellDragPayload();
+      void pane._shellDropHandler(payload).then(ok => { if (ok) clearShellDragPayload(); });
       return;
     }
     if (e.dataTransfer.files?.length) {
@@ -9732,10 +9787,10 @@ function openTerminal(startDir, initialCommand) {
       }
       print(`Created: ${name}`);
     },
-    del: (args) => {
+    del: async (args) => {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: DEL [filename]'); return; }
-      const result = deleteVirtualPath(raw, cwd);
+      const result = await deleteVirtualPath(raw, cwd);
       if (!result.ok) print(result.message || `Cannot delete ${raw}`, '#ff4444');
       (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
     },
@@ -10078,7 +10133,9 @@ function openTerminal(startDir, initialCommand) {
 
       if ((cmd === 'del' || cmd === 'rm') && args.includes('*')) {
         const expanded = expandGlob(args.trim());
-        expanded.forEach(name => CMDS.del(name));
+        // Sequential: DEL prints a line per file, and a parallel run would
+        // interleave those with each other and with the blank line below.
+        for (const name of expanded) await CMDS.del(name);
         print('');
         return;
       }
@@ -11715,7 +11772,7 @@ function openRegedit() {
   mb.innerHTML = '';
   [
     { label: 'Registry', items: [
-      { label: 'Export...', action: () => {
+      { label: 'Export...', action: async () => {
         let txt = 'Windows Registry Editor Version 5.00\n\n';
         Object.keys(registryData).forEach(hive => {
           Object.keys(registryData[hive]).forEach(keyPath => {
@@ -11730,7 +11787,18 @@ function openRegedit() {
           });
         });
         const fname = 'registry_export.reg';
-        fsWriteTextFile(fname, txt, '');
+        // The success alert has to sit after the await and inside the guard.
+        // Left where it was it would fire before the write resolved, and the OS
+        // would cheerfully report an export that never happened.
+        try {
+          await vfsWriteFile(fname, txt, '');
+        } catch (err) {
+          osAlert(
+            err.code === 'ENOSPC' ? 'Not enough space to export the registry.' : err.message,
+            'Export Failed', 'X'
+          );
+          return;
+        }
         osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', '🗝️');
       }},
       '-',

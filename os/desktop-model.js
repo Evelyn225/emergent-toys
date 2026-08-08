@@ -142,14 +142,14 @@ function canMoveShellItemToDir(item, srcDirPath, dstDirPath) {
   if (item.sysfile || item._shortcut) return false;
   return dstDir === '' || vfsDirExistsSync(dstDir);
 }
-function moveShellItemToDir(item, srcDirPath, dstDirPath) {
+async function moveShellItemToDir(item, srcDirPath, dstDirPath) {
   const srcDir = fsNormalizeDir(srcDirPath);
   const dstDir = fsNormalizeDir(dstDirPath);
   if (isDesktopVirtualItem(item, srcDirPath)) return moveDesktopVirtualItem(item, srcDirPath, dstDir);
   if (!canMoveShellItemToDir(item, srcDirPath, dstDir)) return false;
   if (srcDir === dstDir) return true;
   const oldPath = srcDir ? srcDir + '\\' + item.name : item.name;
-  const moved = moveFsItemByPath(item.name, srcDirPath, dstDir);
+  const moved = await moveFsItemByPath(item.name, srcDirPath, dstDir);
   if (!moved) return false;
   const newPath = moved.dirName ? moved.dirName + '\\' + moved.name : moved.name;
   retargetDesktopShortcutsForMove(oldPath, newPath, item.kind);
@@ -160,9 +160,9 @@ function moveShellItemToDir(item, srcDirPath, dstDirPath) {
 function canRecycleShellItem(item, srcDirPath) {
   return !!item && !item._proj && !item._recycle && !item._shortcut && !item.sysfile && !isDesktopVirtualItem(item, srcDirPath);
 }
-function recycleShellItem(item, srcDirPath) {
+async function recycleShellItem(item, srcDirPath) {
   if (!canRecycleShellItem(item, srcDirPath)) return { ok: false, message: 'Move failed.' };
-  const result = recycleVirtualPath(item.name, srcDirPath);
+  const result = await recycleVirtualPath(item.name, srcDirPath);
   if (result.ok) {
     if (isDesktopContainerPath(srcDirPath)) clearDesktopRootIconPosition(item.name);
     document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -208,25 +208,29 @@ function canMoveShellPayloadToDir(payload, dstDirPath) {
   const items = getShellDragItems(payload);
   return !!items.length && items.every(item => canMoveShellItemToDir(item, payload.srcCwd, dstDirPath));
 }
-function moveShellPayloadToDir(payload, dstDirPath) {
+// Sequential, not Promise.all: two concurrent moves into the same directory
+// would resolve their unique-name checks against the same pre-move listing.
+async function moveShellPayloadToDir(payload, dstDirPath) {
   const items = getShellDragItems(payload);
   if (!items.length || !canMoveShellPayloadToDir(payload, dstDirPath)) return false;
   let moved = 0;
-  items.forEach(item => { if (moveShellItemToDir(item, payload.srcCwd, dstDirPath)) moved++; });
+  for (const item of items) {
+    if (await moveShellItemToDir(item, payload.srcCwd, dstDirPath)) moved++;
+  }
   return moved === items.length;
 }
 function canRecycleShellPayload(payload) {
   const items = getShellDragItems(payload);
   return !!items.length && items.every(item => canRecycleShellItem(item, payload.srcCwd));
 }
-function recycleShellPayload(payload) {
+async function recycleShellPayload(payload) {
   const items = getShellDragItems(payload);
   if (!items.length || !canRecycleShellPayload(payload)) return false;
   let recycled = 0;
-  items.forEach(item => {
-    const result = recycleShellItem(item, payload.srcCwd);
+  for (const item of items) {
+    const result = await recycleShellItem(item, payload.srcCwd);
     if (result.ok) recycled++;
-  });
+  }
   return recycled === items.length;
 }
 const SYSTEM_FILE_ICONS = DESKTOP_ICONS.reduce((icons, { name, emoji }) => {

@@ -977,10 +977,10 @@ function openTerminal(startDir, initialCommand) {
       }
       print(`Created: ${name}`);
     },
-    del: (args) => {
+    del: async (args) => {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: DEL [filename]'); return; }
-      const result = deleteVirtualPath(raw, cwd);
+      const result = await deleteVirtualPath(raw, cwd);
       if (!result.ok) print(result.message || `Cannot delete ${raw}`, '#ff4444');
       (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
     },
@@ -1323,7 +1323,9 @@ function openTerminal(startDir, initialCommand) {
 
       if ((cmd === 'del' || cmd === 'rm') && args.includes('*')) {
         const expanded = expandGlob(args.trim());
-        expanded.forEach(name => CMDS.del(name));
+        // Sequential: DEL prints a line per file, and a parallel run would
+        // interleave those with each other and with the blank line below.
+        for (const name of expanded) await CMDS.del(name);
         print('');
         return;
       }

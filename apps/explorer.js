@@ -113,17 +113,17 @@ function openExplorer(startPath) {
   let selectionNodes = new Map();
   let emptyStatusText = '';
 
-  function doMoveItem(srcItem, srcCwd, dstDirPath) {
-    return moveShellItemToDir(srcItem, srcCwd, dstDirPath);
+  async function doMoveItem(srcItem, srcCwd, dstDirPath) {
+    return await moveShellItemToDir(srcItem, srcCwd, dstDirPath);
   }
-  function doRecycleItem(srcItem, srcCwd) {
-    return recycleShellItem(srcItem, srcCwd);
+  async function doRecycleItem(srcItem, srcCwd) {
+    return await recycleShellItem(srcItem, srcCwd);
   }
-  function doMovePayload(payload, dstDirPath) {
-    return moveShellPayloadToDir(payload, dstDirPath);
+  async function doMovePayload(payload, dstDirPath) {
+    return await moveShellPayloadToDir(payload, dstDirPath);
   }
-  function doRecyclePayload(payload) {
-    return recycleShellPayload(payload);
+  async function doRecyclePayload(payload) {
+    return await recycleShellPayload(payload);
   }
   function setExplorerStatus(text) {
     if (ws) ws.textContent = text;
@@ -280,16 +280,16 @@ function openExplorer(startPath) {
     return getSelectedItems().map(item => normalizeRecycleEntry(item._recycle)).filter(Boolean);
   }
 
-  function restoreSelectedRecycleEntries() {
+  async function restoreSelectedRecycleEntries() {
     const entries = getSelectedRecycleEntries();
     if (!entries.length) return;
     const blocked = [];
     let restoredCount = 0;
-    entries.forEach(entry => {
-      const result = restoreRecycleEntry(entry);
+    for (const entry of entries) {
+      const result = await restoreRecycleEntry(entry);
       if (result.ok && result.restored) restoredCount++;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-    });
+    }
     if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
     if (restoredCount && ws) ws.textContent = restoredCount === 1 ? '1 item restored' : restoredCount + ' items restored';
     if (restoredCount || blocked.length) render();
@@ -301,10 +301,14 @@ function openExplorer(startPath) {
     kind = item.kind;
     sysfile = item.sysfile;
     if (item._recycle) {
-      const result = restoreRecycleEntry(item._recycle);
-      if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
-      else if (ws) ws.textContent = 'Restored: ' + result.name;
-      render();
+      // Fired and not awaited so openItem keeps its synchronous signature -
+      // it is referenced from double-click, Enter and several dispatch tables.
+      // render() runs when the restore lands, not before.
+      void restoreRecycleEntry(item._recycle).then(result => {
+        if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+        else if (ws) ws.textContent = 'Restored: ' + result.name;
+        render();
+      });
       return;
     }
     if (isRecycleBinItemName(name)) {
@@ -358,22 +362,22 @@ function openExplorer(startPath) {
     const prompt = recycleView
       ? (items.length === 1 ? 'Permanently delete "' + items[0].name + '"?' : 'Permanently delete ' + items.length + ' selected items?')
       : (items.length === 1 ? 'Delete "' + items[0].name + '"?' : 'Delete ' + items.length + ' selected items?');
-    osConfirm(prompt, recycleView ? 'Delete Permanently' : 'Delete', ok => {
+    osConfirm(prompt, recycleView ? 'Delete Permanently' : 'Delete', async ok => {
       if (!ok) return;
       const blocked = [];
       let changed = false;
       if (recycleView) {
-        items.forEach(item => {
-          const result = purgeRecycleEntry(item._recycle);
+        for (const item of items) {
+          const result = await purgeRecycleEntry(item._recycle);
           if (result.ok && result.deleted) changed = true;
           else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-        });
+        }
         if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
         if (changed && ws) ws.textContent = items.length === 1 ? '1 item deleted permanently' : items.length + ' items deleted permanently';
         if (changed || blocked.length) render();
         return;
       }
-      items.forEach(item => {
+      for (const item of items) {
         if (item._shortcut) {
           const scIdx = customDesktopIcons.indexOf(item._shortcut);
           if (scIdx > -1) {
@@ -382,13 +386,13 @@ function openExplorer(startPath) {
             delete iconPositions[item.name];
             saveIconPositions();
             changed = true;
-            return;
+            continue;
           }
         }
-        const result = deleteVirtualPath(makeFsPath(item.name), cwd);
+        const result = await deleteVirtualPath(makeFsPath(item.name), cwd);
         if (result.ok && result.deleted) changed = true;
         else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-      });
+      }
       if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
       if (changed || blocked.length) document.dispatchEvent(new CustomEvent('fs-changed'));
       render();
@@ -467,10 +471,10 @@ function openExplorer(startPath) {
     }
     // ── Drag target (folders + recycle bin) ─────────────────────
     if ((kind === 'dir' && (!sysfile || isDesktopRootDir)) || isRecycleBin) {
-      el._shellDropHandler = payload => {
+      el._shellDropHandler = async payload => {
         if (!payload || shellDragIncludesItem(payload, item)) return false;
         if (isRecycleBin) {
-          const ok = doRecyclePayload(payload);
+          const ok = await doRecyclePayload(payload);
           if (!ok) setExplorerStatus('Move failed.');
           if (ok) render();
           return ok;
@@ -478,7 +482,7 @@ function openExplorer(startPath) {
         if (isDesktopRootDir && fsNormalizeDir(payload.srcCwd) === 'DESKTOP') return false;
         const dstPath = isDesktopRootDir ? 'DESKTOP' : (cwd ? cwd + '\\' + name : name);
         if (!canMoveShellPayloadToDir(payload, dstPath)) return false;
-        const ok = doMovePayload(payload, dstPath);
+        const ok = await doMovePayload(payload, dstPath);
         if (!ok) setExplorerStatus('Move failed.');
         if (ok) render();
         return ok;
@@ -501,9 +505,11 @@ function openExplorer(startPath) {
         el.classList.remove('exp-drop-target');
         const payload = getShellDragPayload();
         if (!payload || shellDragIncludesItem(payload, item)) return;
+        // preventDefault and stopPropagation stay ahead of the await - after
+        // it they are both no-ops - and they were already unconditional here.
         e.preventDefault();
         e.stopPropagation();
-        if (el._shellDropHandler(payload)) clearShellDragPayload();
+        void el._shellDropHandler(payload).then(ok => { if (ok) clearShellDragPayload(); });
       });
     }
 
@@ -798,11 +804,11 @@ function openExplorer(startPath) {
     if (e.target.closest(ITEM_SELECTOR)) return;
     clearSelection();
   });
-  pane._shellDropHandler = payload => {
+  pane._shellDropHandler = async payload => {
     if (!payload || cwd === 'PROJECTS' || cwd === 'RECYCLE') return false;
     if (isDesktopSurfaceTransferBlocked(payload, cwd)) return false;
     if (!canMoveShellPayloadToDir(payload, cwd)) return false;
-    const ok = doMovePayload(payload, cwd);
+    const ok = await doMovePayload(payload, cwd);
     if (!ok) setExplorerStatus('Move failed.');
     if (ok) render();
     return ok;
@@ -888,7 +894,7 @@ function openExplorer(startPath) {
     if (payload && !e.target.closest(ITEM_SELECTOR)) {
       e.preventDefault();
       e.stopPropagation();
-      if (pane._shellDropHandler(payload)) clearShellDragPayload();
+      void pane._shellDropHandler(payload).then(ok => { if (ok) clearShellDragPayload(); });
       return;
     }
     if (e.dataTransfer.files?.length) {

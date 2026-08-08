@@ -213,7 +213,7 @@ function openRegedit() {
   mb.innerHTML = '';
   [
     { label: 'Registry', items: [
-      { label: 'Export...', action: () => {
+      { label: 'Export...', action: async () => {
         let txt = 'Windows Registry Editor Version 5.00\n\n';
         Object.keys(registryData).forEach(hive => {
           Object.keys(registryData[hive]).forEach(keyPath => {
@@ -228,7 +228,18 @@ function openRegedit() {
           });
         });
         const fname = 'registry_export.reg';
-        fsWriteTextFile(fname, txt, '');
+        // The success alert has to sit after the await and inside the guard.
+        // Left where it was it would fire before the write resolved, and the OS
+        // would cheerfully report an export that never happened.
+        try {
+          await vfsWriteFile(fname, txt, '');
+        } catch (err) {
+          osAlert(
+            err.code === 'ENOSPC' ? 'Not enough space to export the registry.' : err.message,
+            'Export Failed', 'X'
+          );
+          return;
+        }
         osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', '🗝️');
       }},
       '-',

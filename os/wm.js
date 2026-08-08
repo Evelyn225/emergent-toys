@@ -385,12 +385,22 @@ function resolveFsIcon(name, kind) {
 }
 
 function getDesktopFsIcons() {
-  const dir = fsGetDir('DESKTOP');
-  if (!dir) return [];
-  const icons = [];
-  dir.dirs.forEach(name => icons.push({ name, kind: 'dir' }));
-  dir.files.forEach((_, name) => icons.push({ name, kind: 'file' }));
-  dir.blobs.forEach((blob, name) => icons.push({ name, kind: blob?.kind || inferBlobKindFromName(name) }));
+  // vfsListSync returns [] for a missing directory, which is what the old
+  // `if (!dir) return []` did, and it yields dirs, then text files, then blobs -
+  // the same order the three legacy loops produced, so icon order is unchanged.
+  //
+  // The kinds do NOT map one to one. vfsListSync reports 'dir' / 'text' /
+  // 'blob'; this function has always emitted 'dir' / 'file' / the blob's own
+  // media kind, and resolveFsIcon above branches on 'image' / 'video' /
+  // 'audio' / 'dir'. Passing 'blob' through would strip the icon off every
+  // uploaded image, video and audio file on the desktop. The kind also lands in
+  // the returned target, which the open path reads. So remap explicitly.
+  const icons = vfsListSync('DESKTOP').map(entry => ({
+    name: entry.name,
+    kind: entry.kind === 'dir' ? 'dir'
+        : entry.kind === 'text' ? 'file'
+        : entry.blob?.kind || inferBlobKindFromName(entry.name),
+  }));
   return icons.map(item => ({
     name: item.name,
     emoji: resolveFsIcon(item.name, item.kind),
