@@ -785,151 +785,6 @@ function openTerminal(startDir, initialCommand) {
   }
 
   const CMDS = {
-    help: () => {
-      buildHelpLines().forEach(l => print(l));
-      return;
-      [
-        'Available commands:',
-        '  HELP            - show this help',
-        '  DIR, LS         - list directory',
-        '  CD [path]       - change directory',
-        '  MKDIR [name]    - create directory',
-        '  TOUCH [name]    - create empty file',
-        '  cmd > file      - redirect command output (>> to append)',
-        '  DEL, RM [file]  - delete a file or directory',
-        '  COPY [src] [dst]- copy a file',
-        '  MOVE, MV        - move a file',
-        '  TYPE [file]     - print file contents',
-        '  TREE            - directory tree',
-        '  PS              - list running processes',
-        '  TASKKILL [pid]  - terminate a process',
-        '  IPCONFIG        - network configuration',
-        '  SET             - show environment variables',
-        '  CAT [file]      - read a file',
-        '  PING [host]     - ping a host',
-        '  ECHO [text]     - echo text',
-        '  VER             - show OS version',
-        '  WHO, WHOAMI     - current user info',
-        '  DATE            - system date',
-        '  CLS             - clear screen',
-        '  OPEN [file]     - open a file (image/video in viewer, text in editor)',
-        '  RUN <file>      - execute a .script file',
-        '  NOTEPAD [file]  - open Notepad (optionally open a file)',
-        '  cmd | NOTEPAD   - open piped output in Notepad',
-        '  START [program] - run an executable or project',
-        '  EXIT            - close terminal',
-        '',
-        'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
-        '',
-        'You can also type executables directly:',
-        '  notepad.exe, sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
-        '  or any project name (try: fireworks, fluid, ...)',
-      ].forEach(l => print(l));
-    },
-    dir: (args) => {
-      const targetCwd = args ? args.trim().toUpperCase() : cwd;
-      if (!vfsDirExistsSync(targetCwd)) { print(`Directory not found: ${args}`); return; }
-      const entries = vfsListSync(targetCwd);
-      const path = targetCwd ? `C:\\sleepOS\\${targetCwd}` : 'C:\\sleepOS';
-      print('Volume in drive C is CORPUS');
-      print('Volume Serial Number is DEAD-C0DE');
-      print('');
-      print(`Directory of ${path}`);
-      print('');
-      const now = new Date();
-      const ds = `${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')}/${now.getFullYear()}`;
-      const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-      if (!targetCwd) {
-        // Root: show system entries
-        [
-          `11/13/2024  10:31    <DIR>    .`,
-          `11/13/2024  10:31    <DIR>    ..`,
-          `11/13/2024  10:31    <DIR>    DOCS`,
-          `11/13/2024  10:31    <DIR>    PROJECTS`,
-          `11/13/2024  10:31    4,096    TERMINAL.exe`,
-          `11/13/2024  10:31    8,192    SYSMON.exe`,
-          `11/13/2024  03:17        0    void.tmp`,
-          `11/13/2024  ??:??       ??    daemon.core`,
-          `11/13/2024  ??:??       ??    ?????.exe`,
-        ].forEach(l => print(l));
-        entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => print(`${ds}  ${ts}    <DIR>    ${e.name}`));
-        entries.filter(e => e.kind === 'text').forEach(e => print(`${ds}  ${ts}  ${String(e.size).padStart(7)}    ${e.name}`));
-        entries.filter(e => e.kind === 'blob').forEach(e => print(`${ds}  ${ts}  ${fmtSize(e.size).padStart(7)}    ${e.name}  [${e.blob.kind}]`));
-      } else {
-        entries.filter(e => e.type === 'dir').forEach(e => print(`${ds}  ${ts}    <DIR>    ${e.name}`));
-        entries.filter(e => e.kind === 'text').forEach(e => print(`${ds}  ${ts}  ${String(e.size).padStart(7)}    ${e.name}`));
-        entries.filter(e => e.kind === 'blob').forEach(e => print(`${ds}  ${ts}  ${fmtSize(e.size).padStart(7)}    ${e.name}  [${e.blob.kind}]`));
-        if (entries.length === 0) print('  (empty directory)');
-      }
-      print('');
-    },
-    ls: (args) => CMDS.dir(args),
-    ps: () => {
-      print('  PID   CPU    MEM   PROCESS');
-      print('  ---   ---    ---   -------');
-      [
-        ['0001', '0.0%', ' 2.1%', 'System Idle'],
-        ['0004', '0.3%', ' 4.8%', 'kernel.exe'],
-        ['0088', '1.2%', '12.4%', 'sleep_gui.exe'],
-        ['0112', '0.8%', ' 8.3%', 'dream_fragment.exe'],
-        ['0247', '3.1%', '22.7%', 'noise_engine.exe'],
-        ['0333', '0.0%', ' 0.1%', 'UNKNOWN'],
-        ['0334', '0.0%', ' 0.1%', 'UNKNOWN'],
-        ['0335', '0.0%', ' 0.1%', 'UNKNOWN'],
-        ['0512', '7.4%', '31.2%', 'soul_daemon.exe'],
-        ['0999', '0.0%', '  ???', 'void.exe'],
-      ].forEach(([pid, cpu, mem, name]) => {
-        const isUnk = name === 'UNKNOWN';
-        print(`  ${pid}  ${cpu}  ${mem}  ${name}`, isUnk ? '#ff4444' : undefined);
-      });
-    },
-    ver: () => {
-      print('sleepOS Version 0.9\u03b2 (Build 2024.11.13-EXPERIMENTAL)');
-      print('Soul Architecture: SOMA-686  /  Corpus Mode: ACTIVE');
-    },
-    who: () => {
-      print('Current user : VISITOR\\UNKNOWN');
-      print('Domain       : sleepOS.CORPUS');
-      print('Session ID   : 0x' + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6,'0'));
-      print('Observers    : unknown (cannot enumerate)');
-    },
-    date: () => {
-      const now = new Date();
-      print('System date: ' + now.toDateString());
-      print('NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.');
-    },
-    ping: async (args) => {
-      const host = (args || 'evenet.fun').trim().replace(/^https?:\/\//i,'').replace(/[/?#].*$/,'');
-      print(`Pinging ${host} with 32 bytes of data:`);
-      const times = []; let received = 0;
-      for (let i = 0; i < 4; i++) {
-        if (i > 0) await new Promise(r => setTimeout(r, 1000));
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 4000);
-        const t0 = performance.now();
-        try {
-          await fetch(`https://${host}/`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
-          clearTimeout(tid);
-          const ms = Math.round(performance.now() - t0);
-          times.push(ms); received++;
-          print(`Reply from ${host}: bytes=32 time=${ms}ms TTL=57`);
-        } catch(e) {
-          clearTimeout(tid);
-          print(`Request timeout for ${host}.`);
-        }
-      }
-      print('');
-      print(`Ping statistics for ${host}:`);
-      const lost = 4 - received;
-      print(`  Packets: Sent = 4, Received = ${received}, Lost = ${lost} (${Math.round(lost/4*100)}% loss)`);
-      if (times.length) print(`Approximate round trip times: Min=${Math.min(...times)}ms  Max=${Math.max(...times)}ms  Avg=${Math.round(times.reduce((a,b)=>a+b)/times.length)}ms`);
-    },
-    sleep: async (args) => {
-      await scriptSleep(parseTerminalDelayMs(args));
-    },
-    echo: (args) => { if (args) print(args); },
-    cls: () => { out.innerHTML = ''; },
-    whoami: (args) => CMDS.who(args),
     type: (args) => CMDS.cat(args),
     cd: (args) => {
       const dest = (args || '').trim();
@@ -1002,36 +857,6 @@ function openTerminal(startDir, initialCommand) {
       print('They are already where they need to be.');
     },
     mv: (args) => CMDS.move(args),
-    tree: () => {
-      print('C:\\sleepOS');
-      // DOCS (always)
-      print('├── DOCS\\');
-      const docsFiles = vfsListSync('DOCS').filter(e => e.kind === 'text').map(e => e.name);
-      docsFiles.forEach((n, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${n}`));
-      // User dirs
-      const rootEntries = vfsListSync('');
-      rootEntries.filter(e => e.type === 'dir').forEach(e => {
-        const d = e.name;
-        if (d === 'DOCS') return;
-        print(`├── ${d}\\`);
-        const subEntries = vfsListSync(d);
-        subEntries.filter(x => x.kind === 'text').forEach((x, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${x.name}`));
-        subEntries.filter(x => x.kind === 'blob').forEach((x, i, a) => print(`│   ${i===a.length-1?'└':'├'}── ${x.name}`));
-      });
-      // System files
-      ['TERMINAL.exe','SYSMON.exe','NOTEPAD.exe','BROWSER.exe','DEFRAG.exe',
-       'void.tmp','daemon.core              [UNREADABLE]','?????.exe                [DO NOT EXECUTE]'
-      ].forEach(n => print(`├── ${n}`));
-      // User files
-      rootEntries.filter(e => e.kind === 'text').forEach(e => print(`├── ${e.name}`));
-      rootEntries.filter(e => e.kind === 'blob').forEach(e => print(`├── ${e.name}  [${e.blob.kind}]`));
-      // PROJECTS
-      print('└── PROJECTS\\');
-      print('    ├── sand playground');
-      print('    ├── fireworks');
-      print('    ├── ... (more objects)');
-      print('    └── [1 object cannot be listed]');
-    },
     taskkill: (args) => {
       const pidStr = (args || '').replace(/\D/g,'');
       if (!pidStr) { print('Usage: TASKKILL <pid>'); return; }
@@ -1061,38 +886,6 @@ function openTerminal(startDir, initialCommand) {
       } else {
         print(`ERROR: The process with PID ${pid} was not found.`, '#ff4444');
       }
-    },
-    ipconfig: () => {
-      [
-        'sleepOS IP Configuration',
-        '',
-        'Adapter: SOMA-686 NIC',
-        '  Connection-specific DNS  : corpus.internal',
-        '  IPv4 Address             : 0.0.0.0',
-        '  Subnet Mask              : 255.255.255.???',
-        '  Default Gateway          : [unreachable]',
-        '  DNS Servers              : unknown (responding)',
-        '',
-        'Adapter: VOID Interface',
-        '  Status                   : Connected',
-        '  Address                  : [cannot be expressed]',
-        '  Packets in               : ∞',
-        '  Packets out              : 0',
-      ].forEach(l => print(l));
-    },
-    set: () => {
-      [
-        'COMPUTERNAME=SOMA-686',
-        'USERNAME=VISITOR',
-        'OS=sleepOS 0.9b2',
-        'SOUL_INTEGRITY=87',
-        'DAEMON_COUNT=7',
-        'DAEMON_KNOWN=4',
-        'TEMPORAL_DRIFT=+/-2.3yr',
-        'VOID_PRESSURE=12',
-        'OBSERVER_COUNT=[classified]',
-        'PATH=C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
-      ].forEach(l => print(l));
     },
     cat: async (args) => {
       const raw = (args||'').trim();
@@ -1128,43 +921,6 @@ function openTerminal(startDir, initialCommand) {
       }
       (text || '').split('\n').forEach(line => print(line));
     },
-    start: (args) => {
-      if (!args) { print('Usage: START [program]'); return; }
-      // re-use the exe dispatch by simulating a command run
-      const key = args.toLowerCase().trim();
-      const EXES_start = {
-        'welcome.readme': openWelcome,
-        'welcome':        openWelcome,
-        'notepad.exe':    openNotepad,
-        'notepad':        openNotepad,
-        'explorer.exe':   openExplorer,
-        'explorer':       openExplorer,
-        'sysmon.exe':     openSysmon,
-        'sysmon':         openSysmon,
-        'browser.exe':    openBrowser,
-        'browser':        openBrowser,
-        'defrag.exe':     openDefrag,
-        'defrag':         openDefrag,
-        'daemon.core':    openDaemon,
-        'void.tmp':       openVoid,
-        '?????.exe':      openUnknown,
-      };
-      const proj = PROJECTS.find(p =>
-        p.file.toLowerCase() === key ||
-        p.file.toLowerCase().replace('.html','') === key ||
-        p.name.toLowerCase() === key ||
-        p.name.toLowerCase().replace(/ /g,'-') === key
-      );
-      if (EXES_start[key]) {
-        print(`Starting ${args}...`);
-        setTimeout(EXES_start[key], 300);
-      } else if (proj) {
-        print(`Launching ${proj.name}...`);
-        setTimeout(() => window.open(proj.file, '_blank'), 400);
-      } else {
-        print(`Cannot find program: ${args}`);
-      }
-    },
     open: (args) => {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: OPEN [filename]'); return; }
@@ -1185,19 +941,6 @@ function openTerminal(startDir, initialCommand) {
         print(`File not found: ${raw}`);
         print('Use DIR to list available files.');
       }
-    },
-    run: async (args) => {
-      const fname = (args || '').trim();
-      if (!fname) { print('Usage: RUN <script.script>'); return; }
-      const st = vfsStatSync(fname, cwd);
-      if (!st || st.kind !== 'text') { print(`Script not found: ${fname}`, '#ff4444'); return; }
-      print(`Running ${fname}...`);
-      const text = await vfsReadFile(fname, cwd);
-      await execScript(text, print, {
-        sourceName: st.name,
-        dirName: st.dirName,
-        clearFn: () => { out.innerHTML = ''; },
-      });
     },
     notepad: (args) => {
       const fname = args ? args.trim() : null;
