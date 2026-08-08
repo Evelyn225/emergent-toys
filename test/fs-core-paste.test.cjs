@@ -105,6 +105,36 @@ test('copying a folder into a different folder still copies the whole subtree', 
   assert.strictEqual(await ctx.vfsReadFile('DOCS\\added.txt', ''), null);
 });
 
+// A name collision is what makes this dangerous: _uniqueNameIn returns
+// 'PHOTOS_copy' in mixed case, vfsMkdir stores 'PHOTOS_COPY', and the recursion
+// used to carry the mixed-case string down as the destination directory. Every
+// nested blob-store row then landed under a directory name the tree can never
+// produce, and since removeBlobEntry and friends key off the normalized
+// vfsStatSync().dirName, those rows were unreachable forever: deleting the file
+// left them behind and the next boot restored an image the user had
+// permanently deleted.
+test('a colliding folder copy writes blob-store rows under the real, uppercased directory', async () => {
+  const { ctx } = await paster();
+  const copiedTo = [];
+  ctx.copyBlobEntryStorage = (srcDir, srcName, dstDir, dstName) => {
+    copiedTo.push({ dstDir, dstName });
+    return Promise.resolve(null);
+  };
+  await ctx.vfsMkdir('PHOTOS', '');
+  await ctx.vfsWriteBlob('PHOTOS\\pic.png', { url: 'blob:x', kind: 'image', size: 10, mime: 'image/png' }, '');
+
+  // Paste into the root, where PHOTOS already exists, forcing the _copy suffix.
+  setClipboard(ctx, { items: [{ name: 'PHOTOS', kind: 'dir', srcCwd: '' }], cut: false });
+  assert.strictEqual(await ctx.pasteClipboardInto(''), true);
+
+  const made = ctx.vfsListSync('').filter(e => e.kind === 'dir').map(e => e.name);
+  assert.ok(made.includes('PHOTOS_COPY'), 'the tree holds the uppercased name, got ' + JSON.stringify(made));
+  assert.deepStrictEqual(plain(copiedTo), [{ dstDir: 'PHOTOS_COPY', dstName: 'pic.png' }],
+    'the blob-store row must use the directory name the tree actually has');
+  // The key the delete path would compute must be the key that was written.
+  assert.strictEqual(ctx.vfsStatSync('pic.png', 'PHOTOS_COPY').dirName, copiedTo[0].dstDir);
+});
+
 test('a paste does not advance the drive fragmentation meter', async () => {
   const { ctx } = await paster();
   await ctx.vfsMkdir('DOCS', '');

@@ -1858,9 +1858,18 @@ function _uniqueNameIn(dirName, name) {
 // a product decision, not this migration's to make.
 async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
   if (kind === 'dir') {
-    await vfsMkdir(dstName, dstCwd, { trackFragmentation: false });
+    // Recurse under the name vfsMkdir ACTUALLY created, not the one we asked
+    // for. Directory names are uppercased in the tree, and _uniqueNameIn
+    // returns mixed case ('PHOTOS_copy'), so building the path from dstName
+    // sent every nested blob-store row to 'PHOTOS_copy\...' while the tree held
+    // 'PHOTOS_COPY'. removeBlobEntry, moveBlobEntryStorage and
+    // moveBlobStorageSubtree all key off vfsStatSync().dirName, which is
+    // normalized, so those rows could never be found again: deleting the file
+    // left them behind and the next boot restored the image the user had
+    // permanently deleted.
+    const made = await vfsMkdir(dstName, dstCwd, { trackFragmentation: false });
     const srcPath = srcCwd ? srcCwd + '\\' + name : name;
-    const dstPath = dstCwd ? dstCwd + '\\' + dstName : dstName;
+    const dstPath = dstCwd ? dstCwd + '\\' + made.fileName : made.fileName;
     for (const entry of vfsListSync(srcPath)) {
       await _copyEntryInto(entry.name, srcPath, dstPath, entry.name, entry.kind);
     }
