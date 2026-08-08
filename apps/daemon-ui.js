@@ -5,8 +5,7 @@ function renderDaemonPanel() {
   const body = document.getElementById('wb-daemon');
   if (!body) return;
   applyDaemonWindowState();
-  const title = document.getElementById('wtitle-daemon');
-  if (title) title.textContent = daemonStory.endingReached ? 'daemon.core - Archive' : 'daemon.core - Containment';
+  setWinTitle('daemon', daemonStory.endingReached ? 'daemon.core - Archive' : 'daemon.core - Containment');
   const telemetry = getContainmentTelemetry();
   const mirrorLockActive = telemetry.mirrorLockActive;
   const checklist = getContainmentChecklist();
@@ -199,8 +198,7 @@ function renderVoid() {
   const body = document.getElementById('wb-void');
   if (!body) return;
   applyDaemonWindowState();
-  const title = document.getElementById('wtitle-void');
-  if (title) title.textContent = daemonStory.endingReached ? 'void.tmp - Sealed' : 'void.tmp';
+  setWinTitle('void', daemonStory.endingReached ? 'void.tmp - Sealed' : 'void.tmp');
   body.style.cssText = 'background:#000;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:10px;';
   const telemetry = getContainmentTelemetry();
   const actions = getVoidActions();
