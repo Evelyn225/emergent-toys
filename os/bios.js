@@ -192,6 +192,12 @@ try {
 function biosFinish() {
   if (bisDone) return; bisDone = true;
   clearTimeout(biosTimer);
+  // The kernel owns the process table and the filesystem (see os/kernel.js), so
+  // it is seeded here, next to the filesystem mount below, before anything can
+  // open a window. kernelInit only touches its own module-level state, so it is
+  // safe this early even on the skipBoot path where the rest of the bundle may
+  // still be mid-evaluation.
+  kernelInit();
   const biosEl = document.getElementById('bios');
   // Start the filesystem mount now so its I/O overlaps the 600ms fade rather
   // than leaving a blank screen after it. By the time the fade ends this has

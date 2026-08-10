@@ -137,19 +137,6 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
-// Shared PID helpers (used by SYSMON and TASKKILL)
-function pidFromId(id) {
-  let h = 2000;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fff;
-  return 2000 + (h % 6000);
-}
-function winIdByPid(pid) {
-  for (const id of Object.keys(wins)) {
-    if (pidFromId(id) === pid) return id;
-  }
-  return null;
-}
-
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
 // nothing is persisted, and re-applies the DOCS subtree on every boot.
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>

@@ -1,0 +1,6 @@
+[
+  "os/worker/path-utils.js",
+  "os/worker/syscalls.js",
+  "os/script/interp.js",
+  "os/worker/host.js"
+]

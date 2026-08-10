@@ -49,6 +49,10 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
   document.getElementById('windows-layer').appendChild(el);
   wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
 
+  // Built-in apps are real processes with real lifetimes. Registering here rather
+  // than in each app means an app cannot forget to appear in ps.
+  wins[id].pid = kernelRegisterSystem(id, (title || id).split(' \u2014')[0].trim());
+
   makeDraggable(el, document.getElementById('tb-' + id));
   makeResizable(el, id);
   addTbBtn(id, title, icon);
@@ -117,6 +121,7 @@ function closeWin(id) {
   const w = wins[id]; if (!w) return;
   if (w._interval) clearInterval(w._interval);
   w.el.remove(); delete wins[id];
+  kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
 }
 

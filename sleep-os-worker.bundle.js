@@ -1,3 +1,97 @@
+// The interpreter (os/script/interp.js) calls fsNormalizeDir/fsSplitPath as
+// plain globals rather than through the fs adapter - normalizing a path
+// string touches no storage, so Task 1 left them as ordinary calls (see
+// test/interp-fs-adapter.test.cjs, which stubs exactly these two names to
+// prove nothing else is a hidden dependency). The main thread gets them from
+// os/fs-core.js's synonyms over os/vfs.js's vfsNormalizeDir/vfsSplitPath.
+//
+// A worker loads neither file - test/worker-build.test.cjs enforces that only
+// the interpreter is shared between the two bundles - so without this file
+// execScript throws "fsNormalizeDir is not defined" the instant any spawned
+// script runs, before its first instruction. This logic must stay
+// byte-identical to os/vfs.js's vfsNormalizeDir/vfsSplitPath;
+// test/worker-path-utils.test.cjs is the drift guard.
+function fsNormalizeDir(name) {
+  return String(name || '')
+    .trim()
+    .replace(/^C:\\sleepOS(?:\\|$)/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '')
+    .toUpperCase();
+}
+
+function fsSplitPath(path, fallbackDir) {
+  const cleaned = String(path || '')
+    .trim()
+    .replace(/^C:\\sleepOS(?:\\|$)/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '');
+  if (!cleaned) return { dirName: fsNormalizeDir(fallbackDir), fileName: '' };
+  const parts = cleaned.split('\\').filter(Boolean);
+  if (parts.length === 1) return { dirName: fsNormalizeDir(fallbackDir), fileName: parts[0] };
+  return {
+    dirName: fsNormalizeDir(parts.slice(0, -1).join('\\')),
+    fileName: parts[parts.length - 1],
+  };
+}
+// Worker side of the syscall boundary. Every call is a postMessage with a
+// sequence number; the reply resolves the matching promise. The worker has no
+// filesystem, no DOM, and no VFS - this file is its entire view of the OS.
+var _sysSeq = 0;
+var _sysPending = new Map();
+
+function sysCall(name, args) {
+  const seq = ++_sysSeq;
+  return new Promise((resolve, reject) => {
+    _sysPending.set(seq, { resolve, reject });
+    self.postMessage({ type: 'syscall', seq, name, args: args || [] });
+  });
+}
+
+function sysHandleReply(msg) {
+  const pending = _sysPending.get(msg.seq);
+  if (!pending) return;
+  _sysPending.delete(msg.seq);
+  if (msg.ok) { pending.resolve(msg.value); return; }
+  // Rebuild an error the interpreter recognises. It branches on `.code` to turn
+  // a filesystem failure into a script error carrying a line number, and that
+  // behaviour must survive the trip across the boundary.
+  const err = new Error(msg.error.message);
+  err.name = 'VfsError';
+  err.code = msg.error.code;
+  pending.reject(err);
+}
+
+// The same adapter shape makeVfsScriptFs produces on the main thread. The
+// interpreter cannot tell which one it has. Every method is a syscall, including
+// isSystemPath: the system-file list depends on story state, so a snapshot taken
+// at spawn would go stale.
+//
+// The directory argument is forwarded on every path syscall rather than
+// dropped: the interpreter passes the resolved directory of the *target*
+// (interp.js openUi/readFile/run/grep), which is not always the calling
+// script's own cwd. The kernel falls back to the process's cwd only when the
+// caller supplies none - see _kernelCwd in os/kernel.js.
+function makeSyscallScriptFs() {
+  return {
+    async stat(path, cwd) { return await sysCall('stat', [path, cwd]); },
+    async exists(path, cwd) { return (await sysCall('stat', [path, cwd])) !== null; },
+    async dirExists(path) { return await sysCall('dirExists', [path]); },
+    async list(path) { return await sysCall('list', [path]); },
+    async readFile(path, cwd) { return await sysCall('readFile', [path, cwd]); },
+    async writeFile(path, text, cwd) { return await sysCall('writeFile', [path, text, cwd]); },
+    async mkdir(path, cwd) { return await sysCall('mkdir', [path, cwd]); },
+    async unlink(path, cwd) { return await sysCall('unlink', [path, cwd]); },
+    async openUi(path, cwd) { return await sysCall('ui.open', [path, cwd]); },
+    async openSystem(name, cwd, arg) { return await sysCall('ui.openSystem', [name, cwd, arg]); },
+    async isSystemPath(path) { return await sysCall('ui.isSystemPath', [path]); },
+    // A worker has no DOM to refresh, and the kernel already dispatches
+    // 'fs-changed' from _vfsQueue on every mutation it performs on the worker's
+    // behalf. Calling back would be a second, redundant event.
+    async notifyChanged() {},
+    async clearScreen() {},
+  };
+}
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
 const SCRIPT_MAX_STEPS = 10000;
@@ -654,3 +748,52 @@ function makeVfsScriptFs() {
   };
 }
 
+// Worker bootstrap. Receives one init message carrying the script source, argv
+// and cwd, runs the interpreter against the syscall-backed filesystem, and
+// reports the exit code. SIGTERM sets a flag the interpreter's abort signal
+// observes between instructions, so the process can refuse it - which is the
+// difference between SIGTERM and SIGKILL.
+var _hostAborted = false;
+// scriptSleep (os/script/interp.js) is what makes SIGTERM interrupt a running
+// WAIT rather than merely being noticed at the next instruction boundary up
+// to 30s later: it registers a real 'abort' listener on the signal and rejects
+// as soon as one fires. A signal whose addEventListener is a no-op - which
+// this was - never wakes it, so a killed process' WAIT ran to completion
+// regardless of SIGTERM. This is a minimal AbortSignal-like target: dispatch
+// is a plain synchronous callback list, not the DOM event system.
+var _hostAbortListeners = [];
+
+self.onmessage = async (e) => {
+  const msg = e.data;
+  if (msg.type === 'syscall-reply') { sysHandleReply(msg); return; }
+  if (msg.type === 'signal' && msg.sig === 'SIGTERM') {
+    _hostAborted = true;
+    _hostAbortListeners.slice().forEach(fn => fn());
+    return;
+  }
+  if (msg.type !== 'init') return;
+
+  const signal = {
+    get aborted() { return _hostAborted; },
+    addEventListener(type, fn) { if (type === 'abort') _hostAbortListeners.push(fn); },
+    removeEventListener(type, fn) {
+      if (type !== 'abort') return;
+      const i = _hostAbortListeners.indexOf(fn);
+      if (i >= 0) _hostAbortListeners.splice(i, 1);
+    },
+  };
+  let code = 0;
+  try {
+    code = await execScript(msg.source, line => sysCall('write', ['stdout', String(line)]), {
+      fs: makeSyscallScriptFs(),
+      dirName: msg.cwd,
+      sourceName: msg.name,
+      args: msg.argv || [],
+      signal,
+    });
+  } catch (err) {
+    await sysCall('write', ['stderr', (err && err.message) || String(err)]);
+    code = 1;
+  }
+  self.postMessage({ type: 'syscall', seq: 0, name: 'exit', args: [code] });
+};

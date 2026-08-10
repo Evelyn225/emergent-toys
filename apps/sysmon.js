@@ -86,7 +86,7 @@ function openSysmon() {
     Object.entries(wins).forEach(([id, w]) => {
       const rawName = w.title.split(' \u2014')[0].trim();
       const name = (rawName.endsWith('.exe') || rawName.endsWith('.readme') || rawName.includes('.')) ? rawName : rawName + '.exe';
-      procs.push({ pid: pidFromId(id), name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
+      procs.push({ pid: wins[id].pid, name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
     });
     if (showSysProcs) {
       getBuiltInProcesses().forEach(p => procs.push({

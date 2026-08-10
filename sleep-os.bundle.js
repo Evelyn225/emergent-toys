@@ -562,6 +562,308 @@ async function vfsEstimate() {
   await _vfsRefreshQuota();
   return { usage: _vfsUsageBytes, quota: _vfsQuotaBytes };
 }
+// The kernel owns the process table and the filesystem. Processes run in Workers
+// and never touch storage; every path they name arrives here as a syscall. That
+// is what lets phase 4 swap the storage backend without a process noticing.
+//
+// Two kinds of process share one table. System processes are the built-in apps
+// on the main thread: real pids, real lifetimes, and `kill` closes the window,
+// which genuinely ends them. User processes are spawned scripts in Workers:
+// isolated, and killable against their will. This mirrors the distinction a Unix
+// kernel makes between kernel threads and user processes.
+var _kernelProcs = new Map();     // pid -> entry
+var _kernelByWinId = new Map();   // winId -> pid
+var _kernelNextPid = 1;
+var _kernelWaiters = new Map();   // pid -> [resolve]
+
+const KERNEL_PID = 1;
+
+// Pids 2 through 1333 (and the generated 500 + i*13 series) belong to the daemon
+// story's fictional process list in os/daemon.js - soul_svc.exe, mirror_watch.exe,
+// and the rest, including pid 512, which is scripted dialogue ("It restarts pid
+// 512. It is not pid 512."). Those are narrative constants and must never move.
+// Real allocation used to land in 2000-7999 for the same reason, back when
+// pidFromId hashed window ids into that range; this restores that floor so a
+// real window can never again collide with a scripted pid. Lowering this number
+// does not just look untidy - it breaks a story beat.
+const KERNEL_FIRST_USER_PID = 2000;
+
+function kernelInit() {
+  _kernelProcs = new Map();
+  _kernelByWinId = new Map();
+  _kernelWaiters = new Map();
+  _kernelNextPid = 1;
+  const pid = _kernelAllocPid();
+  _kernelProcs.set(pid, {
+    pid, name: 'kernel', kind: 'system', state: 'running', parentPid: 0,
+    cwd: '', env: {}, worker: null, winId: null, exitCode: null, startedAt: Date.now(),
+  });
+  _kernelNextPid = KERNEL_FIRST_USER_PID;
+}
+
+// Monotonic and never reused within a session. Reuse would make a stale pid in a
+// terminal scrollback address a different process, which is exactly the kind of
+// lie this phase exists to remove.
+function _kernelAllocPid() { return _kernelNextPid++; }
+
+function kernelRegisterSystem(winId, name) {
+  const existing = _kernelByWinId.get(winId);
+  if (existing) return existing;
+  const pid = _kernelAllocPid();
+  _kernelProcs.set(pid, {
+    pid, name, kind: 'system', state: 'running', parentPid: KERNEL_PID,
+    cwd: '', env: {}, worker: null, winId, exitCode: null, startedAt: Date.now(),
+  });
+  _kernelByWinId.set(winId, pid);
+  return pid;
+}
+
+function kernelDeregisterSystem(winId) {
+  const pid = _kernelByWinId.get(winId);
+  if (!pid) return;
+  _kernelByWinId.delete(winId);
+  kernelExit(pid, 0);
+}
+
+function kernelGetProcess(pid) { return _kernelProcs.get(pid) || null; }
+
+function kernelListProcesses() {
+  return [..._kernelProcs.values()].sort((a, b) => a.pid - b.pid);
+}
+
+function kernelSignal(pid, sig) {
+  const proc = _kernelProcs.get(pid);
+  if (!proc || proc.state !== 'running') return false;
+  if (proc.kind === 'system') {
+    // The kernel itself (pid 1) is a system-kind entry with no winId, so it
+    // used to fall through this branch and report success while closing
+    // nothing - a lie. Refuse instead of pretending: the kernel is not
+    // killable, and the caller can tell the difference now.
+    if (!proc.winId || typeof closeWin !== 'function') return false;
+    closeWin(proc.winId);
+    return true;
+  }
+  if (sig === 'SIGKILL') {
+    // kernelExit terminates proc.worker itself now (see below) - do not repeat
+    // it here, or the "who is responsible for cleanup" story splits in two.
+    kernelExit(pid, 137);
+    return true;
+  }
+  // SIGTERM is a request. The host loop checks it between instructions, so a
+  // process can finish what it is doing and exit cleanly - or ignore it.
+  if (proc.worker) proc.worker.postMessage({ type: 'signal', sig: 'SIGTERM' });
+  return true;
+}
+
+function kernelExit(pid, code) {
+  const proc = _kernelProcs.get(pid);
+  if (!proc || proc.state === 'zombie') return;
+  proc.state = 'zombie';
+  proc.exitCode = code;
+  // A dedicated Worker outlives the return of its message handler - it is not
+  // reclaimed just because the process table entry is gone. Every exit path
+  // (normal `exit` syscall, SIGTERM honoured by the script, onerror, SIGKILL)
+  // funnels through here, so this is the one place that needs to terminate it.
+  // System-kind entries (the kernel itself, windows registered through
+  // kernelRegisterSystem) never have a `worker` property, so this is a no-op
+  // for them.
+  if (proc.worker) proc.worker.terminate();
+  // Order versus the delete below does not matter: this closes over `pid`
+  // directly rather than looking the parent up in the map, and JS is
+  // single-threaded, so there is no intermediate state anything could observe
+  // either way.
+  _kernelProcs.forEach(child => { if (child.parentPid === pid) child.parentPid = KERNEL_PID; });
+  const waiters = _kernelWaiters.get(pid) || [];
+  _kernelWaiters.delete(pid);
+  waiters.forEach(resolve => resolve(code));
+  if (proc.winId) _kernelByWinId.delete(proc.winId);
+  _kernelProcs.delete(pid);
+}
+
+// TRAP: kernelWait(pid) on a pid that has already been reaped resolves 0,
+// the same value as a process that exited successfully - because kernelExit
+// deletes the table entry, there is no way to tell "already gone" apart from
+// "exited with code 0" once you get here. Deliberate, not fixed: nothing
+// outside tests calls kernelWait today. Fixing it for real means keeping a
+// zombie entry (with its exitCode) around after kernelExit until something
+// waits on it, rather than deleting immediately - a real design change to
+// process lifecycle, not a one-line patch. Whoever adds the first real
+// caller needs to make that call, not inherit this silently.
+function kernelWait(pid) {
+  const proc = _kernelProcs.get(pid);
+  if (!proc) return Promise.resolve(0);
+  return new Promise(resolve => {
+    const list = _kernelWaiters.get(pid) || [];
+    list.push(resolve);
+    _kernelWaiters.set(pid, list);
+  });
+}
+
+// Test seam: register a user process against any object exposing postMessage and
+// terminate, so the table can be exercised without a browser.
+function __spawnForTest(worker, name, parentPid) {
+  const pid = _kernelAllocPid();
+  _kernelProcs.set(pid, {
+    pid, name, kind: 'user', state: 'running', parentPid: parentPid || KERNEL_PID,
+    cwd: '', env: {}, worker, winId: null, exitCode: null, startedAt: Date.now(),
+  });
+  return pid;
+}
+
+// ── Syscall dispatch ───────────────────────────────────────────────
+// A Worker has no filesystem of its own; every path it names arrives here as
+// a syscall message and every reply crosses back the same way. Defaults to
+// the real VFS. Tests replace it so dispatch can be exercised without
+// mounting a filesystem.
+var _kernelFs = null;
+function kernelSetFs(impl) { _kernelFs = impl; }
+function _kernelFsImpl() {
+  if (_kernelFs) return _kernelFs;
+  return {
+    async readFile(path, cwd) { return await vfsReadFile(path, cwd); },
+    async writeFile(path, text, cwd) { return await vfsWriteFile(path, text, cwd); },
+    async stat(path, cwd) { return vfsStatSync(path, cwd); },
+    async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
+    // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
+    // story's undeletable files, and a worker must not be able to bypass either.
+    // deleteVirtualPath never throws - a denied or refused delete is a normal
+    // outcome it reports as a result object ({ok:false, message, details}),
+    // not an exceptional one. Do NOT inspect that .ok here and throw a coded
+    // error instead: os/script/interp.js's `del`/`rm` case (around line 416)
+    // reads `deletion.ok` itself and turns a false into a script error - that
+    // IS the adapter contract for this method, mirrored unchanged by the
+    // worker-side adapter's `unlink` (os/worker/syscalls.js) and the
+    // main-thread one (os/script/interp.js's makeVfsScriptFs, ~line 595).
+    // `reply.ok` at the syscall-reply boundary only means "this syscall did
+    // not throw"; it is a per-method contract, not a blanket success signal,
+    // and for unlink the success/failure signal is the returned object's own
+    // `.ok`. Throwing here would make the worker path reject where the
+    // main-thread path still resolves to an object, splitting the one
+    // behavior this boundary exists to keep unified.
+    async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
+    // vfsDirExistsSync -> vfsDirNodeSync, which resolves the whole path as a
+    // directory and ignores cwd. That disagrees with a stat-based derivation on
+    // root paths and relative names, so this gets its own syscall rather than
+    // being derived from stat() on the other side of the boundary.
+    async dirExists(path) { return vfsDirExistsSync(path); },
+    async list(path) { return vfsListSync(path); },
+  };
+}
+
+async function kernelHandleSyscall(pid, msg) {
+  const proc = _kernelProcs.get(pid);
+  // A worker can post one last syscall after SIGKILL, or after its own exit
+  // syscall is already in flight. Dropping it is correct; replying would post
+  // to a terminated worker.
+  if (!proc || proc.state !== 'running') return;
+  const { seq, name } = msg;
+  // One normalization for the whole dispatch: a missing (or null) `args` is as
+  // valid as an empty one, for every syscall including `exit`, which used to
+  // read args[0] before this line ran and throw an unhandled TypeError on a
+  // bare `exit` with no args key at all.
+  const args = msg.args || [];
+  if (name === 'exit') { kernelExit(pid, Math.trunc(args[0] ?? 0)); return; }
+  try {
+    const value = await _kernelSyscall(proc, name, args);
+    proc.worker.postMessage({ type: 'syscall-reply', seq, ok: true, value });
+  } catch (err) {
+    // Only code and message survive structured cloning of an Error subclass in a
+    // useful form, and the interpreter branches on code to build script errors.
+    proc.worker.postMessage({
+      type: 'syscall-reply', seq, ok: false,
+      error: { code: err && err.code ? err.code : 'EIO', message: (err && err.message) || String(err) },
+    });
+  }
+}
+
+// The directory a syscall resolves against is per-call, not per-process: the
+// interpreter passes the resolved directory of the target, which for `run` and
+// `grep` is the target's own directory rather than the script's. Fall back to
+// the process cwd only when the caller supplied none.
+function _kernelCwd(proc, arg) { return arg === undefined ? proc.cwd : arg; }
+
+async function _kernelSyscall(proc, name, args) {
+  const fs = _kernelFsImpl();
+  switch (name) {
+    case 'readFile':  return await fs.readFile(args[0], _kernelCwd(proc, args[1]));
+    case 'writeFile': return await fs.writeFile(args[0], args[1], _kernelCwd(proc, args[2]));
+    case 'stat':      return await fs.stat(args[0], _kernelCwd(proc, args[1]));
+    case 'mkdir':     return await fs.mkdir(args[0], _kernelCwd(proc, args[1]));
+    case 'unlink':    return await fs.unlink(args[0], _kernelCwd(proc, args[1]));
+    case 'dirExists': return await fs.dirExists(args[0]);
+    // vfsListSync, like vfsDirExistsSync, resolves a directory path directly
+    // and ignores cwd - no _kernelCwd fallback here, same as dirExists.
+    case 'list':      return await fs.list(args[0]);
+    case 'cwd':       return proc.cwd;
+    case 'getenv':    return proc.env[args[0]];
+    case 'sleep':     return await new Promise(r => setTimeout(r, Math.max(0, Math.trunc(args[0]) || 0)));
+    case 'write':     return _kernelWrite(proc, args[0], args[1]);
+    case 'spawn':     return await kernelSpawn(args[0], args[1] || [], { parentPid: proc.pid, cwd: proc.cwd });
+    case 'ui.open':   return _kernelUiOpen(proc, args[0], args[1]);
+    case 'ui.openSystem': return _kernelUiOpenSystem(proc, args[0], args[1], args[2]);
+    case 'ui.isSystemPath': return _kernelUiIsSystemPath(proc, args[0]);
+    default: {
+      const err = new Error('unknown syscall: ' + name);
+      err.code = 'ENOSYS';
+      throw err;
+    }
+  }
+}
+
+const WORKER_BUNDLE_URL = 'sleep-os-worker.bundle.js';
+
+// Streams live on the kernel side so a process cannot write anywhere the kernel
+// has not bound. The terminal binds stdout to its window; unbound output is
+// retained on the entry so nothing is silently dropped.
+function _kernelWrite(proc, stream, text) {
+  const line = String(text == null ? '' : text);
+  const sink = stream === 'stderr' ? proc.onStderr : proc.onStdout;
+  if (typeof sink === 'function') sink(line);
+  else (proc[stream] = proc[stream] || []).push(line);
+  return true;
+}
+
+// scriptOpenUiTarget/scriptOpenSystemProgram (os/script/interp.js) are the one
+// shared implementation makeVfsScriptFs's openUi/openSystem also call - see
+// the comments there. Both only ever run on the main thread, so calling them
+// from here (which only happens by answering a worker's syscall) is safe.
+function _kernelUiOpen(proc, path, cwd) {
+  return scriptOpenUiTarget(path, _kernelCwd(proc, cwd));
+}
+
+function _kernelUiOpenSystem(proc, name, cwd, arg) {
+  return scriptOpenSystemProgram(name, _kernelCwd(proc, cwd), arg);
+}
+
+function _kernelUiIsSystemPath(proc, path) {
+  return isVisibleSystemPath(path, { includeExplorer: true });
+}
+
+async function kernelSpawn(path, argv, opts) {
+  opts = opts || {};
+  const cwd = opts.cwd || '';
+  const st = vfsStatSync(path, cwd);
+  if (!st || st.kind !== 'text') {
+    const err = new Error('script not found: ' + path);
+    err.code = 'ENOENT';
+    throw err;
+  }
+  const source = await vfsReadFile(st.name, st.dirName);
+  const worker = new Worker(WORKER_BUNDLE_URL);
+  const pid = _kernelAllocPid();
+  _kernelProcs.set(pid, {
+    pid, name: st.name, kind: 'user', state: 'running',
+    parentPid: opts.parentPid || KERNEL_PID, cwd: st.dirName, env: {},
+    worker, winId: null, exitCode: null, startedAt: Date.now(),
+    onStdout: opts.onStdout || null, onStderr: opts.onStderr || null,
+  });
+  worker.onmessage = e => { void kernelHandleSyscall(pid, e.data); };
+  // A worker that throws before its first syscall would otherwise stay running
+  // forever in the table.
+  worker.onerror = e => { _kernelWrite(_kernelProcs.get(pid) || {}, 'stderr', e.message || 'worker error'); kernelExit(pid, 1); };
+  worker.postMessage({ type: 'init', source, name: st.name, cwd: st.dirName, argv });
+  return pid;
+}
 // In-memory backend. Used by the test suite (no IndexedDB polyfill needed)
 // and by phase 3, where processes never touch storage directly anyway.
 function createMemStorage(options) {
@@ -1773,6 +2075,12 @@ try {
 function biosFinish() {
   if (bisDone) return; bisDone = true;
   clearTimeout(biosTimer);
+  // The kernel owns the process table and the filesystem (see os/kernel.js), so
+  // it is seeded here, next to the filesystem mount below, before anything can
+  // open a window. kernelInit only touches its own module-level state, so it is
+  // safe this early even on the skipBoot path where the rest of the bundle may
+  // still be mid-evaluation.
+  kernelInit();
   const biosEl = document.getElementById('bios');
   // Start the filesystem mount now so its I/O overlaps the 600ms fade rather
   // than leaving a blank screen after it. By the time the fade ends this has
@@ -1972,19 +2280,6 @@ async function pasteClipboardInto(dstCwd) {
 function nextExplorerWinId() {
   do { _explorerWinSeq += 1; } while (wins['explorer-' + _explorerWinSeq]);
   return 'explorer-' + _explorerWinSeq;
-}
-
-// Shared PID helpers (used by SYSMON and TASKKILL)
-function pidFromId(id) {
-  let h = 2000;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fff;
-  return 2000 + (h % 6000);
-}
-function winIdByPid(pid) {
-  for (const id of Object.keys(wins)) {
-    if (pidFromId(id) === pid) return id;
-  }
-  return null;
 }
 
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
@@ -4647,20 +4942,16 @@ function scriptIsReservedVarName(name) {
   return /^(?:status|errorlevel|argc|\d+)$/i.test(String(name || ''));
 }
 
-function scriptPathExists(path, dirName) {
+async function scriptPathExists(path, state) {
   const target = String(path || '').trim();
   if (!target) return false;
   if (target === '.' || target === '..' || target === '\\' || /^C:\\sleepOS\\?$/i.test(target)) return true;
-  if (isVisibleSystemPath(target, { includeExplorer: true })) return true;
-  // vfsExistsSync covers directories too, where fsGetEntry returned null for
-  // them, so the second check is now only for a path spelled as a directory
-  // relative to the root. Both are metadata, so this stays synchronous and
-  // scriptEvaluateCondition does not have to become async.
-  if (vfsExistsSync(target, dirName)) return true;
-  return vfsDirExistsSync(target);
+  if (await state.fs.isSystemPath(target)) return true;
+  if (await state.fs.exists(target, state.dirName)) return true;
+  return await state.fs.dirExists(target);
 }
 
-function scriptEvaluateCondition(text, state, lineNo) {
+async function scriptEvaluateCondition(text, state, lineNo) {
   const tokens = scriptTokenize(text, lineNo);
   let negate = false;
   if (tokens[0] && tokens[0].toLowerCase() === 'not') {
@@ -4671,7 +4962,7 @@ function scriptEvaluateCondition(text, state, lineNo) {
     if (tokens.length !== 4 || tokens[2].toLowerCase() !== 'goto') {
       throw makeScriptError('Usage: if [not] exists <path> goto <label>', lineNo);
     }
-    const rawPassed = scriptPathExists(tokens[1], state.dirName);
+    const rawPassed = await scriptPathExists(tokens[1], state);
     return { passed: negate ? !rawPassed : rawPassed, label: tokens[3] };
   }
   if (tokens[0] && tokens[0].toLowerCase() === 'defined') {
@@ -4875,13 +5166,13 @@ async function execScriptInstruction(inst, labels, state) {
     case 'exit':
       return { type: 'exit', code: scriptParseStatusCode(resolvedArg, inst.lineNo, state.status) };
     case 'if': {
-      const result = scriptEvaluateCondition(resolvedArg, state, inst.lineNo);
+      const result = await scriptEvaluateCondition(resolvedArg, state, inst.lineNo);
       state.status = result.passed ? 0 : 1;
       if (result.passed) return { type: 'jump', pc: scriptJumpIndex(labels, result.label, inst.lineNo) };
       return null;
     }
     case 'clear':
-      (state.clearFn || (() => { const out = document.getElementById('to'); if (out) out.innerHTML = ''; }))();
+      (state.clearFn || (() => state.fs.clearScreen()))();
       state.status = 0;
       return null;
     case 'touch': {
@@ -4890,18 +5181,18 @@ async function execScriptInstruction(inst, labels, state) {
       // so `touch DOCS` used to write an empty file that permanently shadowed
       // the directory. vfsStatSync reports the directory, so touch now no-ops
       // on it, which is what touch is supposed to do.
-      const existing = vfsStatSync(resolvedArg, state.dirName);
+      const existing = await state.fs.stat(resolvedArg, state.dirName);
       if (!existing) {
         // The legacy accessors returned falsy on failure and the interpreter
         // used that to attach the script line number. The VFS throws instead,
         // so every converted site re-wraps or the error reaches the user with
         // no line number and no source name.
         try {
-          await vfsWriteFile(resolvedArg, '', state.dirName);
+          await state.fs.writeFile(resolvedArg, '', state.dirName);
         } catch (err) {
           throw makeScriptError('Cannot create file: ' + resolvedArg + ' (' + err.message + ')', inst.lineNo);
         }
-        document.dispatchEvent(new CustomEvent('fs-changed'));
+        await state.fs.notifyChanged();
       }
       state.status = 0;
       return null;
@@ -4910,12 +5201,12 @@ async function execScriptInstruction(inst, labels, state) {
       if (!resolvedArg) throw makeScriptError('Usage: mkdir <dir>', inst.lineNo);
       let created;
       try {
-        created = await vfsMkdir(resolvedArg, state.dirName);
+        created = await state.fs.mkdir(resolvedArg, state.dirName);
       } catch (err) {
         throw makeScriptError('Cannot create directory: ' + resolvedArg + ' (' + err.message + ')', inst.lineNo);
       }
       if (created.created) {
-        document.dispatchEvent(new CustomEvent('fs-changed'));
+        await state.fs.notifyChanged();
       }
       state.status = 0;
       return null;
@@ -4923,15 +5214,15 @@ async function execScriptInstruction(inst, labels, state) {
     case 'del':
     case 'rm': {
       if (!resolvedArg) throw makeScriptError('Usage: del <file>', inst.lineNo);
-      const deletion = await deleteVirtualPath(resolvedArg, state.dirName);
+      const deletion = await state.fs.unlink(resolvedArg, state.dirName);
       if (!deletion.ok) throw makeScriptError(deletion.message || ('Cannot delete: ' + resolvedArg), inst.lineNo);
       state.status = 0;
       return null;
     }
     case 'open': {
       if (!resolvedArg) throw makeScriptError('Usage: open <file>', inst.lineNo);
-      if (isVisibleSystemPath(resolvedArg, { includeExplorer: true })) {
-        if (!openSystemFile(fsSplitPath(resolvedArg, state.dirName).fileName)) {
+      if (await state.fs.isSystemPath(resolvedArg)) {
+        if (!await state.fs.openSystem(fsSplitPath(resolvedArg, state.dirName).fileName, state.dirName)) {
           throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
         }
         state.status = 0;
@@ -4940,54 +5231,34 @@ async function execScriptInstruction(inst, labels, state) {
       // `!st || st.type === 'dir'` reproduces fsGetEntry's null-for-directories
       // exactly. Without the second half `open DOCS` would fall through to the
       // else branch and load a directory into Notepad.
-      const st = vfsStatSync(resolvedArg, state.dirName);
+      const st = await state.fs.stat(resolvedArg, state.dirName);
       if (!st || st.type === 'dir') throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
-      if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
-      else openNotepad(st.name, st.dirName);
+      await state.fs.openUi(st.name, st.dirName);
       state.status = 0;
       return null;
     }
     case 'notepad':
-      openNotepad(resolvedArg || undefined, state.dirName);
+      await state.fs.openSystem('notepad', state.dirName, resolvedArg);
       state.status = 0;
       return null;
     case 'start': {
       const key = resolvedArg.toLowerCase();
-      const map = {
-        notepad: () => openNotepad(undefined, state.dirName),
-        'notepad.exe': () => openNotepad(undefined, state.dirName),
-        terminal: () => openTerminal(state.dirName),
-        'terminal.exe': () => openTerminal(state.dirName),
-        sysmon: openSysmon,
-        'sysmon.exe': openSysmon,
-        browser: openBrowser,
-        'browser.exe': openBrowser,
-        defrag: openDefrag,
-        'defrag.exe': openDefrag,
-        explorer: openExplorer,
-        'explorer.exe': openExplorer,
-        welcome: openWelcome,
-        'welcome.readme': openWelcome,
-        files: openFiles,
-        calc: openCalculator,
-        'calc.exe': openCalculator,
-        regedit: openRegedit,
-        'regedit.exe': openRegedit,
-      };
-      if (!map[key]) throw makeScriptError('Program not found: ' + resolvedArg, inst.lineNo);
-      map[key]();
+      if (!await state.fs.openSystem(key, state.dirName)) {
+        throw makeScriptError('Program not found: ' + resolvedArg, inst.lineNo);
+      }
       state.status = 0;
       return null;
     }
     case 'run': {
       const tokens = scriptTokenize(resolvedArg, inst.lineNo);
       if (!tokens.length) throw makeScriptError('Usage: run <script> [args...]', inst.lineNo);
-      const st = vfsStatSync(tokens[0], state.dirName);
+      const st = await state.fs.stat(tokens[0], state.dirName);
       if (!st || st.kind !== 'text') throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
       // Content is async now; the stat above carries no `value`.
-      const source = await vfsReadFile(st.name, st.dirName);
+      const source = await state.fs.readFile(st.name, st.dirName);
       if (source === null) throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
       state.status = await execScript(source, state.printFn, {
+        fs: state.fs,
         vars: state.vars,
         depth: state.depth + 1,
         dirName: st.dirName,
@@ -5005,12 +5276,12 @@ async function execScriptInstruction(inst, labels, state) {
       const patternToken = match[1];
       const pattern = scriptUnescape(patternToken.replace(/^['"]|['"]$/g, ''));
       const fileName = match[2].replace(/^['"]|['"]$/g, '');
-      const st = vfsStatSync(fileName, state.dirName);
+      const st = await state.fs.stat(fileName, state.dirName);
       if (!st || st.kind !== 'text') throw makeScriptError('File not found: ' + fileName, inst.lineNo);
       let re;
       try { re = new RegExp(pattern, 'i'); }
       catch (e) { throw makeScriptError('Invalid regex: ' + pattern, inst.lineNo); }
-      const contents = await vfsReadFile(st.name, st.dirName);
+      const contents = await state.fs.readFile(st.name, st.dirName);
       if (contents === null) throw makeScriptError('File not found: ' + fileName, inst.lineNo);
       const lines = contents.split('\n');
       let matches = 0;
@@ -5044,6 +5315,7 @@ async function execScript(source, printFn, options) {
     return scriptFail(err, printFn, sourceName, options.bubbleErrors);
   }
   const state = {
+    fs: options.fs,
     vars: options.vars || Object.create(null),
     depth,
     dirName: fsNormalizeDir(options.dirName),
@@ -5106,6 +5378,81 @@ async function execScript(source, printFn, options) {
     pc++;
   }
   return Math.trunc(state.status ?? 0);
+}
+
+// Shared by makeVfsScriptFs's `openUi` and the kernel's `ui.open` syscall
+// handler (os/kernel.js's _kernelUiOpen). Both callers run on the main
+// thread - a worker only ever reaches this indirectly, through the ui.open
+// syscall the kernel answers here - so referencing openMediaFile/openNotepad
+// directly is safe. Matches the shape the main-thread adapter always
+// returned (undefined), so the kernel and the terminal do not diverge.
+async function scriptOpenUiTarget(path, cwd) {
+  const st = vfsStatSync(path, cwd);
+  if (!st) return;
+  if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  else openNotepad(st.name, st.dirName);
+}
+
+// Shared by makeVfsScriptFs's `openSystem` and the kernel's `ui.openSystem`
+// syscall handler (os/kernel.js's _kernelUiOpenSystem) - one map, one seam,
+// so a spawned script's `START` reaches the same 19 programs the terminal
+// does. Absorbs the `start` command's program map and the `notepad`
+// command's blank-document case. Those map entries used to be bare
+// identifier references (`sysmon: openSysmon`), evaluated the moment the
+// object literal was built - in a Worker, just reaching the `start` case
+// threw a ReferenceError before any lookup happened, regardless of which
+// program was requested. Living here means the map is only ever built on
+// the main thread, where the globals it references are legitimately in
+// scope (a worker reaches it only via the ui.openSystem syscall, answered
+// here). `openSystemFile` stays as the fallback for names the map does not
+// recognize (WELCOME.README, void.tmp, daemon.core, etc.).
+async function scriptOpenSystemProgram(name, cwd, arg) {
+  const lower = String(name || '').toLowerCase();
+  const map = {
+    notepad: () => openNotepad(arg || undefined, cwd),
+    'notepad.exe': () => openNotepad(arg || undefined, cwd),
+    terminal: () => openTerminal(cwd),
+    'terminal.exe': () => openTerminal(cwd),
+    sysmon: openSysmon,
+    'sysmon.exe': openSysmon,
+    browser: openBrowser,
+    'browser.exe': openBrowser,
+    defrag: openDefrag,
+    'defrag.exe': openDefrag,
+    explorer: openExplorer,
+    'explorer.exe': openExplorer,
+    welcome: openWelcome,
+    'welcome.readme': openWelcome,
+    files: openFiles,
+    calc: openCalculator,
+    'calc.exe': openCalculator,
+    regedit: openRegedit,
+    'regedit.exe': openRegedit,
+  };
+  if (map[lower]) { map[lower](); return true; }
+  return !!openSystemFile(name);
+}
+
+// The main thread's adapter. The worker builds its own in os/worker/syscalls.js
+// against the same shape, so the interpreter cannot tell them apart.
+function makeVfsScriptFs() {
+  return {
+    async stat(path, cwd) { return vfsStatSync(path, cwd); },
+    async exists(path, cwd) { return vfsExistsSync(path, cwd); },
+    async dirExists(path) { return vfsDirExistsSync(path); },
+    async list(path) { return vfsListSync(path); },
+    async readFile(path, cwd) { return await vfsReadFile(path, cwd); },
+    async writeFile(path, text, cwd) { return await vfsWriteFile(path, text, cwd); },
+    async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
+    // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
+    // story's undeletable files. Deleting straight from the VFS would bypass both.
+    async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
+    async openUi(path, cwd) { return scriptOpenUiTarget(path, cwd); },
+    async openSystem(name, cwd, arg) { return scriptOpenSystemProgram(name, cwd, arg); },
+    async isSystemPath(path) { return isVisibleSystemPath(path, { includeExplorer: true }); },
+    async notifyChanged() { document.dispatchEvent(new CustomEvent('fs-changed')); },
+    async clearScreen() { const out = document.getElementById('to'); if (out) out.innerHTML = ''; },
+  };
 }
 
 function fmtSize(bytes) {
@@ -5942,6 +6289,10 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
   document.getElementById('windows-layer').appendChild(el);
   wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
 
+  // Built-in apps are real processes with real lifetimes. Registering here rather
+  // than in each app means an app cannot forget to appear in ps.
+  wins[id].pid = kernelRegisterSystem(id, (title || id).split(' \u2014')[0].trim());
+
   makeDraggable(el, document.getElementById('tb-' + id));
   makeResizable(el, id);
   addTbBtn(id, title, icon);
@@ -6010,6 +6361,7 @@ function closeWin(id) {
   const w = wins[id]; if (!w) return;
   if (w._interval) clearInterval(w._interval);
   w.el.remove(); delete wins[id];
+  kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
 }
 
@@ -7196,7 +7548,7 @@ function runScriptInPopup(name, source, dirName) {
   };
   print('Running ' + name + '...', '#888');
   print('');
-  execScript(source, print, { sourceName: name, dirName, clearFn: () => { body.innerHTML = ''; } })
+  execScript(source, print, { fs: makeVfsScriptFs(), sourceName: name, dirName, clearFn: () => { body.innerHTML = ''; } })
     .then(code => { if (code !== 0) print('Exit code: ' + code, '#dddd00'); });
 }
 
@@ -8880,6 +9232,31 @@ function openFiles() { openExplorer('PROJECTS'); }
 
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
+
+// Merges the kernel's real process table with the daemon story's fictional
+// processes (soul_svc.exe, pid 512, and the generated 500+i*13 series -
+// os/daemon.js's getBuiltInProcesses). `ps` used to show only one or the
+// other; SYSMON's process tab already merges both this way. The pid ranges
+// never collide (real allocation starts at 2000 - see KERNEL_FIRST_USER_PID
+// in os/kernel.js), and the fictional rows get an ordinary kind/state
+// ('system'/'running') so `taskkill 512` stays a discoverable story beat
+// instead of a row that visibly does not belong.
+function buildPsRows() {
+  const real = kernelListProcesses();
+  const story = getBuiltInProcesses().map(p => ({ pid: p.pid, kind: 'system', state: 'running', name: p.name }));
+  return [...real, ...story].sort((a, b) => a.pid - b.pid);
+}
+
+// Shared by CMDS.kill so it cannot disagree with `ps`/`taskkill` about which
+// pids belong to the daemon story: findBuiltInProcess is the same lookup
+// taskkill already uses, so both commands agree on what counts as a story
+// process by construction, not by a second hand-maintained list. Returns the
+// message to print and stop, or null if pid is not a story process and
+// CMDS.kill should proceed to the real kernel table.
+function buildKillDenialMessage(pid) {
+  const builtIn = findBuiltInProcess(pid);
+  return builtIn ? `${pid} is a system process. Use TASKKILL.` : null;
+}
 function openTerminal(startDir, initialCommand) {
   if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
@@ -9308,15 +9685,10 @@ function openTerminal(startDir, initialCommand) {
   }
 
   function buildPsLines() {
-    const lines = [
-      '  PID   CPU    MEM   PROCESS',
-      '  ---   ---    ---   -------',
-    ];
-    getBuiltInProcesses().forEach(proc => {
-      lines.push(`  ${String(proc.pid).padStart(4, '0')}  ${String(proc.cpu.toFixed(1)).padStart(3)}%  ${String(proc.mem.toFixed(1)).padStart(4)}%  ${proc.name}`);
+    const lines = ['   PID  KIND    STATE    PROCESS', '  ----  ----    -----    -------'];
+    buildPsRows().forEach(p => {
+      lines.push('  ' + String(p.pid).padStart(4) + '  ' + p.kind.padEnd(6) + '  ' + p.state.padEnd(7) + '  ' + p.name);
     });
-    [['0333', '0.0%', ' 0.1%', 'UNKNOWN'], ['0334', '0.0%', ' 0.1%', 'UNKNOWN'], ['0335', '0.0%', ' 0.1%', 'UNKNOWN']]
-      .forEach(([pid, cpu, mem, name]) => lines.push(`  ${pid}  ${cpu}  ${mem}  ${name}`));
     return lines;
   }
 
@@ -9490,6 +9862,8 @@ function openTerminal(startDir, initialCommand) {
       '  TREE                - directory tree',
       '  PS                  - list running processes',
       '  TASKKILL [pid]      - terminate a process',
+      '  SPAWN <script> [args] - run a script as a background process',
+      '  KILL <pid> [/F]     - terminate a process (SIGTERM, or /F for SIGKILL)',
       '  IPCONFIG            - network configuration',
       '  SET [name=value]    - show or assign shell variables',
       '  INPUT <var> [text]  - read a line into a shell variable',
@@ -9754,8 +10128,10 @@ function openTerminal(startDir, initialCommand) {
         print('System processes cannot be terminated.');
         return;
       }
-      // Look up real window by PID
-      const winId = winIdByPid(pid);
+      // Look up the real window through the kernel table - pids are real now,
+      // not a hash of the window id, so this is a table lookup rather than a guess.
+      const proc = kernelGetProcess(pid);
+      const winId = proc && proc.winId;
       if (winId && wins[winId]) {
         const name = wins[winId].title.split(' \u2014')[0].trim();
         print(`Terminating ${name} (PID ${pid})...`);
@@ -9909,6 +10285,7 @@ function openTerminal(startDir, initialCommand) {
     print(`Running ${fname}...`);
     const text = await vfsReadFile(fname, cwd);
     const exitCode = await execScript(text, print, {
+      fs: makeVfsScriptFs(),
       sourceName: st.name,
       dirName: st.dirName,
       vars: shellVars,
@@ -9918,6 +10295,38 @@ function openTerminal(startDir, initialCommand) {
       clearFn: () => { out.innerHTML = ''; },
     });
     if (exitCode !== 0) print(`Exit code: ${exitCode}`, '#dddd00');
+  };
+
+  CMDS.spawn = async (args) => {
+    const tokens = scriptTokenize(args || '');
+    if (!tokens.length) { print('Usage: SPAWN <script.script> [args...]'); return; }
+    try {
+      const pid = await kernelSpawn(tokens[0], tokens.slice(1), {
+        cwd,
+        onStdout: line => print(line),
+        onStderr: line => print(line, '#ff4444'),
+      });
+      print(`[${pid}] ${tokens[0]}`);
+    } catch (err) {
+      print(err.code === 'ENOENT' ? `Script not found: ${tokens[0]}` : err.message, '#ff4444');
+    }
+  };
+
+  CMDS.kill = (args) => {
+    const parts = (args || '').trim().split(/\s+/).filter(Boolean);
+    const force = parts.some(p => p.toLowerCase() === '/f' || p === '-9');
+    const pid = parseInt(parts.find(p => /^\d+$/.test(p)), 10);
+    if (!pid) { print('Usage: KILL <pid> [/F]'); return; }
+    const denial = buildKillDenialMessage(pid);
+    if (denial) { print(denial, '#ff4444'); return; }
+    const proc = kernelGetProcess(pid);
+    if (!proc) { print(`No such process: ${pid}`, '#ff4444'); return; }
+    // kernelSignal reports whether it actually did anything - pid 1 (the
+    // kernel) and any system process with no window return false, and this
+    // must not print a success line it did not earn.
+    const ok = kernelSignal(pid, force ? 'SIGKILL' : 'SIGTERM');
+    if (!ok) { print(`Access denied: PID ${pid} cannot be terminated.`, '#ff4444'); return; }
+    print(`[${pid}] ${force ? 'killed' : 'terminated'}`);
   };
 
   async function runTerminalCommand(raw, options) {
@@ -10151,7 +10560,7 @@ function openSysmon() {
     Object.entries(wins).forEach(([id, w]) => {
       const rawName = w.title.split(' \u2014')[0].trim();
       const name = (rawName.endsWith('.exe') || rawName.endsWith('.readme') || rawName.includes('.')) ? rawName : rawName + '.exe';
-      procs.push({ pid: pidFromId(id), name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
+      procs.push({ pid: wins[id].pid, name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
     });
     if (showSysProcs) {
       getBuiltInProcesses().forEach(p => procs.push({
