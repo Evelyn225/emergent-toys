@@ -81,3 +81,29 @@ test('a write notifies through the adapter and never touches document', async ()
   assert.strictEqual(code, 0);
   assert.deepStrictEqual(fs.events, ['fs-changed']);
 });
+
+// START used to dispatch through a local map of bare identifiers
+// (openTerminal, openSysmon, openNotepad, ...), which are main-thread globals
+// this context never loads. If the interpreter still built that map, merely
+// reaching the START case would throw a ReferenceError before any lookup - it
+// would not matter which program was requested. Routing through state.fs.openSystem
+// proves the interpreter itself carries none of those names anymore.
+test('start resolves a program through the adapter, not a local map of globals', async () => {
+  const ctx = interpCtx();
+  const calls = [];
+  const fs = stubFs({});
+  fs.openSystem = async (name) => { calls.push(name); return name === 'terminal'; };
+  const code = await ctx.execScript('start terminal', () => {}, { fs, dirName: '' });
+  assert.strictEqual(code, 0);
+  assert.deepStrictEqual(calls, ['terminal']);
+});
+
+test('start reports an unknown program as a script error, not a crash', async () => {
+  const ctx = interpCtx();
+  const out = [];
+  const fs = stubFs({});
+  fs.openSystem = async () => false;
+  const code = await ctx.execScript('start bogus.exe', s => out.push(s), { fs, dirName: '' });
+  assert.notStrictEqual(code, 0);
+  assert.ok(out.join('\n').includes('Program not found: bogus.exe'), out.join('\n'));
+});

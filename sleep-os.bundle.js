@@ -4943,34 +4943,14 @@ async function execScriptInstruction(inst, labels, state) {
       return null;
     }
     case 'notepad':
-      openNotepad(resolvedArg || undefined, state.dirName);
+      await state.fs.openSystem('notepad', state.dirName, resolvedArg);
       state.status = 0;
       return null;
     case 'start': {
       const key = resolvedArg.toLowerCase();
-      const map = {
-        notepad: () => openNotepad(undefined, state.dirName),
-        'notepad.exe': () => openNotepad(undefined, state.dirName),
-        terminal: () => openTerminal(state.dirName),
-        'terminal.exe': () => openTerminal(state.dirName),
-        sysmon: openSysmon,
-        'sysmon.exe': openSysmon,
-        browser: openBrowser,
-        'browser.exe': openBrowser,
-        defrag: openDefrag,
-        'defrag.exe': openDefrag,
-        explorer: openExplorer,
-        'explorer.exe': openExplorer,
-        welcome: openWelcome,
-        'welcome.readme': openWelcome,
-        files: openFiles,
-        calc: openCalculator,
-        'calc.exe': openCalculator,
-        regedit: openRegedit,
-        'regedit.exe': openRegedit,
-      };
-      if (!map[key]) throw makeScriptError('Program not found: ' + resolvedArg, inst.lineNo);
-      map[key]();
+      if (!await state.fs.openSystem(key, state.dirName)) {
+        throw makeScriptError('Program not found: ' + resolvedArg, inst.lineNo);
+      }
       state.status = 0;
       return null;
     }
@@ -5124,9 +5104,39 @@ function makeVfsScriptFs() {
       if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
       else openNotepad(st.name, st.dirName);
     },
-    async openSystem(name, cwd) {
+    // Absorbs the `start` command's program map and the `notepad` command's
+    // blank-document case. Those map entries used to be bare identifier
+    // references (`sysmon: openSysmon`), evaluated the moment the object
+    // literal was built - in a Worker, just reaching the `start` case threw a
+    // ReferenceError before any lookup happened, regardless of which program
+    // was requested. Living here means the map is only ever built on the main
+    // thread, where the globals it references are legitimately in scope.
+    // `openSystemFile` stays as the fallback for names the map does not
+    // recognize (WELCOME.README, void.tmp, daemon.core, etc.).
+    async openSystem(name, cwd, arg) {
       const lower = String(name || '').toLowerCase();
-      if (lower === 'terminal' || lower === 'terminal.exe') { openTerminal(cwd); return true; }
+      const map = {
+        notepad: () => openNotepad(arg || undefined, cwd),
+        'notepad.exe': () => openNotepad(arg || undefined, cwd),
+        terminal: () => openTerminal(cwd),
+        'terminal.exe': () => openTerminal(cwd),
+        sysmon: openSysmon,
+        'sysmon.exe': openSysmon,
+        browser: openBrowser,
+        'browser.exe': openBrowser,
+        defrag: openDefrag,
+        'defrag.exe': openDefrag,
+        explorer: openExplorer,
+        'explorer.exe': openExplorer,
+        welcome: openWelcome,
+        'welcome.readme': openWelcome,
+        files: openFiles,
+        calc: openCalculator,
+        'calc.exe': openCalculator,
+        regedit: openRegedit,
+        'regedit.exe': openRegedit,
+      };
+      if (map[lower]) { map[lower](); return true; }
       return !!openSystemFile(name);
     },
     async isSystemPath(path) { return isVisibleSystemPath(path, { includeExplorer: true }); },
