@@ -1,18 +1,10 @@
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
 
-// Merges the kernel's real process table with the daemon story's fictional
-// processes (soul_svc.exe, pid 512, and the generated 500+i*13 series -
-// os/daemon.js's getBuiltInProcesses). `ps` used to show only one or the
-// other; SYSMON's process tab already merges both this way. The pid ranges
-// never collide (real allocation starts at 2000 - see KERNEL_FIRST_USER_PID
-// in os/kernel.js), and the fictional rows get an ordinary kind/state
-// ('system'/'running') so `taskkill 512` stays a discoverable story beat
-// instead of a row that visibly does not belong.
+// Delegates to os/process-view.js, the one module both `ps` and SYSMON read
+// so the two views cannot disagree about what processes exist.
 function buildPsRows() {
-  const real = kernelListProcesses();
-  const story = getBuiltInProcesses().map(p => ({ pid: p.pid, kind: 'system', state: 'running', name: p.name }));
-  return [...real, ...story].sort((a, b) => a.pid - b.pid);
+  return buildProcessRows();
 }
 
 // Shared by CMDS.kill so it cannot disagree with `ps`/`taskkill` about which

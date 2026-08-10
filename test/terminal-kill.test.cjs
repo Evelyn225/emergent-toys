@@ -14,11 +14,12 @@ const { makeOsContext, loadOsSources } = require('./helpers/load-os.cjs');
 
 function terminalCtx(overrides) {
   const ctx = makeOsContext(Object.assign({
+    wins: {},
     kernelListProcesses: () => [],
     getBuiltInProcesses: () => [],
     findBuiltInProcess: () => null,
   }, overrides));
-  return loadOsSources(ctx, ['apps/terminal.js']);
+  return loadOsSources(ctx, ['os/process-view.js', 'apps/terminal.js']);
 }
 
 test('a pid ps lists from the daemon story is denied with the TASKKILL message, not "No such process"', () => {

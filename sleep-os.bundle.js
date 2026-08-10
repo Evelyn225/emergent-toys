@@ -4444,6 +4444,51 @@ function killSoulDaemonProcess() {
 
 syncDaemonStory({ silent: true });
 
+// The one place that answers "what processes exist". Both `ps` (apps/terminal.js)
+// and SYSMON (apps/sysmon.js) read it, so they cannot disagree.
+//
+// The daemon story's processes are MERGED here rather than registered into the
+// kernel table, because getBuiltInProcesses() is a live projection of story
+// state: pid 512 disappears when the daemon is stopped, mirror_watch.exe
+// appears at stage 4, and the soul_svc_NN phantoms are generated from a
+// registry key the player can edit. Registering them would put narrative state
+// inside the kernel and turn a pure function into a cache needing invalidation
+// on every story beat.
+function processDisplayName(title, fallbackId) {
+  // Window titles use two separators: an em dash (notepad, explorer) and a
+  // plain hyphen (terminal, sysmon, defrag, browser, daemon). Splitting on
+  // only the em dash is why `ps` used to report the process name of the
+  // terminal as "TERMINAL.exe - Command Prompt".
+  const raw = String(title || fallbackId || '').split(/\s—|\s-\s/)[0].trim();
+  if (!raw) return String(fallbackId || '').trim() + '.exe';
+  return raw.includes('.') ? raw : raw + '.exe';
+}
+
+function buildProcessRows() {
+  const rows = kernelListProcesses().map(proc => ({
+    pid: proc.pid,
+    // Derived live: the kernel captured a name at registration, and windows
+    // retitle themselves afterwards.
+    name: proc.winId && wins[proc.winId]
+      ? processDisplayName(wins[proc.winId].title, proc.winId)
+      : proc.name,
+    kind: proc.kind,
+    state: proc.state,
+    // Only phase 5 makes these measurable for a real process. Until then a
+    // spawned process reports nothing rather than a fabricated number.
+    cpu: null,
+    mem: null,
+    winId: proc.winId || null,
+    isStory: false,
+  }));
+  // getBuiltInProcesses returns { pid, name, cpu, mem, protected } and carries
+  // no kind or state, so they are synthesized to match what ps already prints.
+  getBuiltInProcesses().forEach(p => rows.push({
+    pid: p.pid, name: p.name, kind: 'system', state: 'running',
+    cpu: p.cpu, mem: p.mem, winId: null, isStory: true,
+  }));
+  return rows.sort((a, b) => a.pid - b.pid);
+}
 // ── Blob persistence (base64 per-file, separate localStorage keys) ─
 const BLOB_PREFIX = 'sleepOS-blob:';
 const BLOB_SIZE_LIMIT = 3 * 1024 * 1024; // skip files > 3 MB uncompressed
@@ -6291,7 +6336,7 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
 
   // Built-in apps are real processes with real lifetimes. Registering here rather
   // than in each app means an app cannot forget to appear in ps.
-  wins[id].pid = kernelRegisterSystem(id, (title || id).split(' \u2014')[0].trim());
+  wins[id].pid = kernelRegisterSystem(id, processDisplayName(title, id));
 
   makeDraggable(el, document.getElementById('tb-' + id));
   makeResizable(el, id);
@@ -9233,18 +9278,10 @@ function openFiles() { openExplorer('PROJECTS'); }
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
 
-// Merges the kernel's real process table with the daemon story's fictional
-// processes (soul_svc.exe, pid 512, and the generated 500+i*13 series -
-// os/daemon.js's getBuiltInProcesses). `ps` used to show only one or the
-// other; SYSMON's process tab already merges both this way. The pid ranges
-// never collide (real allocation starts at 2000 - see KERNEL_FIRST_USER_PID
-// in os/kernel.js), and the fictional rows get an ordinary kind/state
-// ('system'/'running') so `taskkill 512` stays a discoverable story beat
-// instead of a row that visibly does not belong.
+// Delegates to os/process-view.js, the one module both `ps` and SYSMON read
+// so the two views cannot disagree about what processes exist.
 function buildPsRows() {
-  const real = kernelListProcesses();
-  const story = getBuiltInProcesses().map(p => ({ pid: p.pid, kind: 'system', state: 'running', name: p.name }));
-  return [...real, ...story].sort((a, b) => a.pid - b.pid);
+  return buildProcessRows();
 }
 
 // Shared by CMDS.kill so it cannot disagree with `ps`/`taskkill` about which

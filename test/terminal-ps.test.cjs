@@ -13,10 +13,11 @@ const { makeOsContext, loadOsSources, plain } = require('./helpers/load-os.cjs')
 
 function terminalCtx(overrides) {
   const ctx = makeOsContext(Object.assign({
+    wins: {},
     kernelListProcesses: () => [],
     getBuiltInProcesses: () => [],
   }, overrides));
-  return loadOsSources(ctx, ['apps/terminal.js']);
+  return loadOsSources(ctx, ['os/process-view.js', 'apps/terminal.js']);
 }
 
 test('buildPsRows merges the real process table with the daemon story\'s fictional processes', () => {
@@ -35,7 +36,10 @@ test('a story pid reads as an ordinary row - same shape, kind system, state runn
   });
   const rows = plain(ctx.buildPsRows());
   const story = rows.find(r => r.pid === 512);
-  assert.deepStrictEqual(Object.keys(story).sort(), ['kind', 'name', 'pid', 'state']);
+  const real = rows.find(r => r.pid === 2000);
+  // buildProcessRows (os/process-view.js) gives every row the same shape now,
+  // so a story row's keys equal a real row's keys - not just a hand-picked subset.
+  assert.deepStrictEqual(Object.keys(story).sort(), Object.keys(real).sort());
   assert.strictEqual(story.kind, 'system');
   assert.strictEqual(story.state, 'running');
   assert.strictEqual(story.name, 'soul_svc.exe');

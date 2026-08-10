@@ -9,6 +9,7 @@
   "os/fs-core.js",
   "os/fs-persist.js",
   "os/daemon.js",
+  "os/process-view.js",
   "os/blob-store.js",
   "os/settings.js",
   "os/script/interp.js",

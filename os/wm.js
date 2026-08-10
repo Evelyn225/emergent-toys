@@ -51,7 +51,7 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
 
   // Built-in apps are real processes with real lifetimes. Registering here rather
   // than in each app means an app cannot forget to appear in ps.
-  wins[id].pid = kernelRegisterSystem(id, (title || id).split(' \u2014')[0].trim());
+  wins[id].pid = kernelRegisterSystem(id, processDisplayName(title, id));
 
   makeDraggable(el, document.getElementById('tb-' + id));
   makeResizable(el, id);
