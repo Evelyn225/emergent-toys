@@ -57,6 +57,22 @@ test('exit ends the process and does not reply', async () => {
   assert.deepStrictEqual(plain(w.posted), [], 'a process that has exited cannot receive a reply');
 });
 
+// A bare `exit` with no code the script writer omits the args key entirely,
+// not just the value inside it - `{type:'syscall', seq, name:'exit'}`. That
+// shape used to reach `args[0]` before the `args || []` fallback further
+// down ran for every other syscall, throwing an unhandled TypeError instead
+// of the structured reply this boundary exists to guarantee.
+test('exit tolerates a message with no args array at all', async () => {
+  const ctx = kernel();
+  ctx.kernelSetFs({});
+  const w = fakeWorker();
+  const pid = ctx.__spawnForTest(w, 'job.script');
+  const waited = ctx.kernelWait(pid);
+  await ctx.kernelHandleSyscall(pid, { type: 'syscall', seq: 3, name: 'exit' });
+  assert.strictEqual(await waited, 0);
+  assert.strictEqual(ctx.kernelGetProcess(pid), null);
+});
+
 test('a syscall from a dead pid is dropped', async () => {
   const ctx = kernel();
   ctx.kernelSetFs({ async readFile() { return 'x'; } });

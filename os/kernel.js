@@ -137,6 +137,20 @@ function _kernelFsImpl() {
     async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
     // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
     // story's undeletable files, and a worker must not be able to bypass either.
+    // deleteVirtualPath never throws - a denied or refused delete is a normal
+    // outcome it reports as a result object ({ok:false, message, details}),
+    // not an exceptional one. Do NOT inspect that .ok here and throw a coded
+    // error instead: os/script/interp.js's `del`/`rm` case (around line 416)
+    // reads `deletion.ok` itself and turns a false into a script error - that
+    // IS the adapter contract for this method, mirrored unchanged by the
+    // worker-side adapter's `unlink` (os/worker/syscalls.js) and the
+    // main-thread one (os/script/interp.js's makeVfsScriptFs, ~line 595).
+    // `reply.ok` at the syscall-reply boundary only means "this syscall did
+    // not throw"; it is a per-method contract, not a blanket success signal,
+    // and for unlink the success/failure signal is the returned object's own
+    // `.ok`. Throwing here would make the worker path reject where the
+    // main-thread path still resolves to an object, splitting the one
+    // behavior this boundary exists to keep unified.
     async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
     // vfsDirExistsSync -> vfsDirNodeSync, which resolves the whole path as a
     // directory and ignores cwd. That disagrees with a stat-based derivation on
@@ -153,10 +167,15 @@ async function kernelHandleSyscall(pid, msg) {
   // syscall is already in flight. Dropping it is correct; replying would post
   // to a terminated worker.
   if (!proc || proc.state !== 'running') return;
-  const { seq, name, args } = msg;
+  const { seq, name } = msg;
+  // One normalization for the whole dispatch: a missing (or null) `args` is as
+  // valid as an empty one, for every syscall including `exit`, which used to
+  // read args[0] before this line ran and throw an unhandled TypeError on a
+  // bare `exit` with no args key at all.
+  const args = msg.args || [];
   if (name === 'exit') { kernelExit(pid, Math.trunc(args[0] ?? 0)); return; }
   try {
-    const value = await _kernelSyscall(proc, name, args || []);
+    const value = await _kernelSyscall(proc, name, args);
     proc.worker.postMessage({ type: 'syscall-reply', seq, ok: true, value });
   } catch (err) {
     // Only code and message survive structured cloning of an Error subclass in a
