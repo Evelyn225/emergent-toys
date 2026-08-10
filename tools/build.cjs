@@ -11,10 +11,11 @@
 // loaded directly.
 const fs = require('fs');
 const path = require('path');
-const { readManifest } = require('./verify-split.cjs');
+const { readManifest, readWorkerManifest } = require('./verify-split.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'sleep-os.bundle.js');
+const WORKER_OUT = path.join(ROOT, 'sleep-os-worker.bundle.js');
 
 function build() {
   const manifest = readManifest();
@@ -22,10 +23,22 @@ function build() {
   return parts.join('');
 }
 
-module.exports = { build, OUT };
+// The worker runs in its own realm, so it needs its own concatenation. The
+// interpreter appears in both bundles on purpose: the terminal runs scripts on
+// the main thread and workers run the same language. One source file, so the two
+// copies cannot drift.
+function buildWorker() {
+  return readWorkerManifest().map(rel => fs.readFileSync(path.join(ROOT, rel), 'utf8')).join('');
+}
+
+module.exports = { build, OUT, buildWorker, WORKER_OUT };
 
 if (require.main === module) {
   const out = build();
   fs.writeFileSync(OUT, out);
   console.log('built sleep-os.bundle.js: ' + Buffer.byteLength(out) + ' bytes from ' + readManifest().length + ' files');
+
+  const workerOut = buildWorker();
+  fs.writeFileSync(WORKER_OUT, workerOut);
+  console.log('built sleep-os-worker.bundle.js: ' + Buffer.byteLength(workerOut) + ' bytes from ' + readWorkerManifest().length + ' files');
 }

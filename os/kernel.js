@@ -138,6 +138,12 @@ function _kernelFsImpl() {
     // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
     // story's undeletable files, and a worker must not be able to bypass either.
     async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
+    // vfsDirExistsSync -> vfsDirNodeSync, which resolves the whole path as a
+    // directory and ignores cwd. That disagrees with a stat-based derivation on
+    // root paths and relative names, so this gets its own syscall rather than
+    // being derived from stat() on the other side of the boundary.
+    async dirExists(path) { return vfsDirExistsSync(path); },
+    async list(path) { return vfsListSync(path); },
   };
 }
 
@@ -162,21 +168,32 @@ async function kernelHandleSyscall(pid, msg) {
   }
 }
 
+// The directory a syscall resolves against is per-call, not per-process: the
+// interpreter passes the resolved directory of the target, which for `run` and
+// `grep` is the target's own directory rather than the script's. Fall back to
+// the process cwd only when the caller supplied none.
+function _kernelCwd(proc, arg) { return arg === undefined ? proc.cwd : arg; }
+
 async function _kernelSyscall(proc, name, args) {
   const fs = _kernelFsImpl();
   switch (name) {
-    case 'readFile':  return await fs.readFile(args[0], proc.cwd);
-    case 'writeFile': return await fs.writeFile(args[0], args[1], proc.cwd);
-    case 'stat':      return await fs.stat(args[0], proc.cwd);
-    case 'mkdir':     return await fs.mkdir(args[0], proc.cwd);
-    case 'unlink':    return await fs.unlink(args[0], proc.cwd);
+    case 'readFile':  return await fs.readFile(args[0], _kernelCwd(proc, args[1]));
+    case 'writeFile': return await fs.writeFile(args[0], args[1], _kernelCwd(proc, args[2]));
+    case 'stat':      return await fs.stat(args[0], _kernelCwd(proc, args[1]));
+    case 'mkdir':     return await fs.mkdir(args[0], _kernelCwd(proc, args[1]));
+    case 'unlink':    return await fs.unlink(args[0], _kernelCwd(proc, args[1]));
+    case 'dirExists': return await fs.dirExists(args[0]);
+    // vfsListSync, like vfsDirExistsSync, resolves a directory path directly
+    // and ignores cwd - no _kernelCwd fallback here, same as dirExists.
+    case 'list':      return await fs.list(args[0]);
     case 'cwd':       return proc.cwd;
     case 'getenv':    return proc.env[args[0]];
     case 'sleep':     return await new Promise(r => setTimeout(r, Math.max(0, Math.trunc(args[0]) || 0)));
     case 'write':     return _kernelWrite(proc, args[0], args[1]);
     case 'spawn':     return await kernelSpawn(args[0], args[1] || [], { parentPid: proc.pid, cwd: proc.cwd });
-    case 'ui.open':   return _kernelUiOpen(proc, args[0]);
-    case 'ui.openSystem': return _kernelUiOpenSystem(proc, args[0]);
+    case 'ui.open':   return _kernelUiOpen(proc, args[0], args[1]);
+    case 'ui.openSystem': return _kernelUiOpenSystem(proc, args[0], args[1], args[2]);
+    case 'ui.isSystemPath': return _kernelUiIsSystemPath(proc, args[0]);
     default: {
       const err = new Error('unknown syscall: ' + name);
       err.code = 'ENOSYS';
@@ -186,9 +203,11 @@ async function _kernelSyscall(proc, name, args) {
 }
 
 // Stubs, deliberately: dispatch is complete now, but _kernelWrite and
-// _kernelUiOpen/_kernelUiOpenSystem are wired for real in a later task, and
-// kernelSpawn refuses rather than pretend to work until then.
+// _kernelUiOpen/_kernelUiOpenSystem/_kernelUiIsSystemPath are wired for real in
+// a later task, and kernelSpawn refuses rather than pretend to work until then.
 function _kernelWrite() { return true; }
 function _kernelUiOpen() { return true; }
 function _kernelUiOpenSystem() { return true; }
+// Task 6 wires this to isVisibleSystemPath; until then nothing is a system path.
+function _kernelUiIsSystemPath() { return false; }
 async function kernelSpawn() { const e = new Error('spawn not wired yet'); e.code = 'ENOSYS'; throw e; }
