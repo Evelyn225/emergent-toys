@@ -77,6 +77,48 @@ test('exit records the code, notifies the waiter, and reaps', async () => {
   assert.strictEqual(ctx.kernelGetProcess(pid), null, 'the entry must be reaped');
 });
 
+// A normal exit (the worker posting {name:'exit'}, or the onerror backstop) used
+// to leave the Worker thread alive forever - only kernelSignal's SIGKILL branch
+// terminated it. Every script that ran to completion leaked a thread. kernelExit
+// is the one function every exit path funnels through, so it must be the one
+// place that terminates the worker.
+test('kernelExit terminates the worker on a normal (non-SIGKILL) exit', () => {
+  const ctx = kernel();
+  const w = fakeWorker();
+  const pid = ctx.__spawnForTest(w, 'job.script');
+  ctx.kernelExit(pid, 0);
+  assert.strictEqual(w.terminated, true, 'a normal exit must not leak the worker thread');
+});
+
+// kernelExit must still do its other jobs when a worker is present: reparent
+// children, resolve kernelWait's waiters, and clear any winId mapping. None of
+// that should be disturbed by adding the terminate() call.
+test('kernelExit terminates the worker without disturbing reparenting or waiters', async () => {
+  const ctx = kernel();
+  const parent = ctx.__spawnForTest(fakeWorker(), 'parent.script');
+  const child = ctx.__spawnForTest(fakeWorker(), 'child.script', parent);
+  const w = fakeWorker();
+  const pid = ctx.__spawnForTest(w, 'job.script', parent);
+  const waited = ctx.kernelWait(pid);
+  ctx.kernelExit(pid, 5);
+  assert.strictEqual(w.terminated, true);
+  assert.strictEqual(await waited, 5);
+  assert.strictEqual(ctx.kernelGetProcess(pid), null, 'the entry must be reaped');
+  assert.strictEqual(ctx.kernelGetProcess(child).parentPid, parent, 'unrelated reparenting must be unaffected');
+  ctx.kernelExit(parent, 0);
+  assert.strictEqual(ctx.kernelGetProcess(child).parentPid, 1, 'reparenting to pid 1 must still work');
+});
+
+// System-kind entries (the kernel itself, windows registered through
+// kernelRegisterSystem) never carry a `worker` property. kernelExit's new
+// terminate() call must be a no-op for them, not throw.
+test('kernelExit is a no-op terminate for system-kind processes with no worker', () => {
+  const ctx = kernel();
+  const pid = ctx.kernelRegisterSystem('win-a', 'NOTEPAD');
+  assert.doesNotThrow(() => ctx.kernelExit(pid, 0));
+  assert.strictEqual(ctx.kernelGetProcess(pid), null);
+});
+
 test('orphans reparent to pid 1', () => {
   const ctx = kernel();
   const parent = ctx.__spawnForTest(fakeWorker(), 'parent.script');

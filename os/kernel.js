@@ -80,7 +80,8 @@ function kernelSignal(pid, sig) {
     return true;
   }
   if (sig === 'SIGKILL') {
-    if (proc.worker) proc.worker.terminate();
+    // kernelExit terminates proc.worker itself now (see below) - do not repeat
+    // it here, or the "who is responsible for cleanup" story splits in two.
     kernelExit(pid, 137);
     return true;
   }
@@ -95,6 +96,14 @@ function kernelExit(pid, code) {
   if (!proc || proc.state === 'zombie') return;
   proc.state = 'zombie';
   proc.exitCode = code;
+  // A dedicated Worker outlives the return of its message handler - it is not
+  // reclaimed just because the process table entry is gone. Every exit path
+  // (normal `exit` syscall, SIGTERM honoured by the script, onerror, SIGKILL)
+  // funnels through here, so this is the one place that needs to terminate it.
+  // System-kind entries (the kernel itself, windows registered through
+  // kernelRegisterSystem) never have a `worker` property, so this is a no-op
+  // for them.
+  if (proc.worker) proc.worker.terminate();
   // Reparent before reaping, or a child would briefly point at a pid that is
   // already gone.
   _kernelProcs.forEach(child => { if (child.parentPid === pid) child.parentPid = KERNEL_PID; });
