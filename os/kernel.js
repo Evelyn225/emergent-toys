@@ -104,8 +104,10 @@ function kernelExit(pid, code) {
   // kernelRegisterSystem) never have a `worker` property, so this is a no-op
   // for them.
   if (proc.worker) proc.worker.terminate();
-  // Reparent before reaping, or a child would briefly point at a pid that is
-  // already gone.
+  // Order versus the delete below does not matter: this closes over `pid`
+  // directly rather than looking the parent up in the map, and JS is
+  // single-threaded, so there is no intermediate state anything could observe
+  // either way.
   _kernelProcs.forEach(child => { if (child.parentPid === pid) child.parentPid = KERNEL_PID; });
   const waiters = _kernelWaiters.get(pid) || [];
   _kernelWaiters.delete(pid);
@@ -114,6 +116,15 @@ function kernelExit(pid, code) {
   _kernelProcs.delete(pid);
 }
 
+// TRAP: kernelWait(pid) on a pid that has already been reaped resolves 0,
+// the same value as a process that exited successfully - because kernelExit
+// deletes the table entry, there is no way to tell "already gone" apart from
+// "exited with code 0" once you get here. Deliberate, not fixed: nothing
+// outside tests calls kernelWait today. Fixing it for real means keeping a
+// zombie entry (with its exitCode) around after kernelExit until something
+// waits on it, rather than deleting immediately - a real design change to
+// process lifecycle, not a one-line patch. Whoever adds the first real
+// caller needs to make that call, not inherit this silently.
 function kernelWait(pid) {
   const proc = _kernelProcs.get(pid);
   if (!proc) return Promise.resolve(0);

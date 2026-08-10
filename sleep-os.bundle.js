@@ -668,8 +668,10 @@ function kernelExit(pid, code) {
   // kernelRegisterSystem) never have a `worker` property, so this is a no-op
   // for them.
   if (proc.worker) proc.worker.terminate();
-  // Reparent before reaping, or a child would briefly point at a pid that is
-  // already gone.
+  // Order versus the delete below does not matter: this closes over `pid`
+  // directly rather than looking the parent up in the map, and JS is
+  // single-threaded, so there is no intermediate state anything could observe
+  // either way.
   _kernelProcs.forEach(child => { if (child.parentPid === pid) child.parentPid = KERNEL_PID; });
   const waiters = _kernelWaiters.get(pid) || [];
   _kernelWaiters.delete(pid);
@@ -678,6 +680,15 @@ function kernelExit(pid, code) {
   _kernelProcs.delete(pid);
 }
 
+// TRAP: kernelWait(pid) on a pid that has already been reaped resolves 0,
+// the same value as a process that exited successfully - because kernelExit
+// deletes the table entry, there is no way to tell "already gone" apart from
+// "exited with code 0" once you get here. Deliberate, not fixed: nothing
+// outside tests calls kernelWait today. Fixing it for real means keeping a
+// zombie entry (with its exitCode) around after kernelExit until something
+// waits on it, rather than deleting immediately - a real design change to
+// process lifecycle, not a one-line patch. Whoever adds the first real
+// caller needs to make that call, not inherit this silently.
 function kernelWait(pid) {
   const proc = _kernelProcs.get(pid);
   if (!proc) return Promise.resolve(0);
@@ -9235,6 +9246,17 @@ function buildPsRows() {
   const story = getBuiltInProcesses().map(p => ({ pid: p.pid, kind: 'system', state: 'running', name: p.name }));
   return [...real, ...story].sort((a, b) => a.pid - b.pid);
 }
+
+// Shared by CMDS.kill so it cannot disagree with `ps`/`taskkill` about which
+// pids belong to the daemon story: findBuiltInProcess is the same lookup
+// taskkill already uses, so both commands agree on what counts as a story
+// process by construction, not by a second hand-maintained list. Returns the
+// message to print and stop, or null if pid is not a story process and
+// CMDS.kill should proceed to the real kernel table.
+function buildKillDenialMessage(pid) {
+  const builtIn = findBuiltInProcess(pid);
+  return builtIn ? `${pid} is a system process. Use TASKKILL.` : null;
+}
 function openTerminal(startDir, initialCommand) {
   if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
@@ -9663,9 +9685,9 @@ function openTerminal(startDir, initialCommand) {
   }
 
   function buildPsLines() {
-    const lines = ['  PID  KIND    STATE    PROCESS', '  ---  ----    -----    -------'];
+    const lines = ['   PID  KIND    STATE    PROCESS', '  ----  ----    -----    -------'];
     buildPsRows().forEach(p => {
-      lines.push('  ' + String(p.pid).padStart(3) + '  ' + p.kind.padEnd(6) + '  ' + p.state.padEnd(7) + '  ' + p.name);
+      lines.push('  ' + String(p.pid).padStart(4) + '  ' + p.kind.padEnd(6) + '  ' + p.state.padEnd(7) + '  ' + p.name);
     });
     return lines;
   }
@@ -10295,6 +10317,8 @@ function openTerminal(startDir, initialCommand) {
     const force = parts.some(p => p.toLowerCase() === '/f' || p === '-9');
     const pid = parseInt(parts.find(p => /^\d+$/.test(p)), 10);
     if (!pid) { print('Usage: KILL <pid> [/F]'); return; }
+    const denial = buildKillDenialMessage(pid);
+    if (denial) { print(denial, '#ff4444'); return; }
     const proc = kernelGetProcess(pid);
     if (!proc) { print(`No such process: ${pid}`, '#ff4444'); return; }
     // kernelSignal reports whether it actually did anything - pid 1 (the

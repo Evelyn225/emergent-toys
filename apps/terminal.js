@@ -14,6 +14,17 @@ function buildPsRows() {
   const story = getBuiltInProcesses().map(p => ({ pid: p.pid, kind: 'system', state: 'running', name: p.name }));
   return [...real, ...story].sort((a, b) => a.pid - b.pid);
 }
+
+// Shared by CMDS.kill so it cannot disagree with `ps`/`taskkill` about which
+// pids belong to the daemon story: findBuiltInProcess is the same lookup
+// taskkill already uses, so both commands agree on what counts as a story
+// process by construction, not by a second hand-maintained list. Returns the
+// message to print and stop, or null if pid is not a story process and
+// CMDS.kill should proceed to the real kernel table.
+function buildKillDenialMessage(pid) {
+  const builtIn = findBuiltInProcess(pid);
+  return builtIn ? `${pid} is a system process. Use TASKKILL.` : null;
+}
 function openTerminal(startDir, initialCommand) {
   if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
@@ -442,9 +453,9 @@ function openTerminal(startDir, initialCommand) {
   }
 
   function buildPsLines() {
-    const lines = ['  PID  KIND    STATE    PROCESS', '  ---  ----    -----    -------'];
+    const lines = ['   PID  KIND    STATE    PROCESS', '  ----  ----    -----    -------'];
     buildPsRows().forEach(p => {
-      lines.push('  ' + String(p.pid).padStart(3) + '  ' + p.kind.padEnd(6) + '  ' + p.state.padEnd(7) + '  ' + p.name);
+      lines.push('  ' + String(p.pid).padStart(4) + '  ' + p.kind.padEnd(6) + '  ' + p.state.padEnd(7) + '  ' + p.name);
     });
     return lines;
   }
@@ -1074,6 +1085,8 @@ function openTerminal(startDir, initialCommand) {
     const force = parts.some(p => p.toLowerCase() === '/f' || p === '-9');
     const pid = parseInt(parts.find(p => /^\d+$/.test(p)), 10);
     if (!pid) { print('Usage: KILL <pid> [/F]'); return; }
+    const denial = buildKillDenialMessage(pid);
+    if (denial) { print(denial, '#ff4444'); return; }
     const proc = kernelGetProcess(pid);
     if (!proc) { print(`No such process: ${pid}`, '#ff4444'); return; }
     // kernelSignal reports whether it actually did anything - pid 1 (the
