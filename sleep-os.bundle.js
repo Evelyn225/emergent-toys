@@ -1884,6 +1884,12 @@ try {
 function biosFinish() {
   if (bisDone) return; bisDone = true;
   clearTimeout(biosTimer);
+  // The kernel owns the process table and the filesystem (see os/kernel.js), so
+  // it is seeded here, next to the filesystem mount below, before anything can
+  // open a window. kernelInit only touches its own module-level state, so it is
+  // safe this early even on the skipBoot path where the rest of the bundle may
+  // still be mid-evaluation.
+  kernelInit();
   const biosEl = document.getElementById('bios');
   // Start the filesystem mount now so its I/O overlaps the 600ms fade rather
   // than leaving a blank screen after it. By the time the fade ends this has
@@ -2083,19 +2089,6 @@ async function pasteClipboardInto(dstCwd) {
 function nextExplorerWinId() {
   do { _explorerWinSeq += 1; } while (wins['explorer-' + _explorerWinSeq]);
   return 'explorer-' + _explorerWinSeq;
-}
-
-// Shared PID helpers (used by SYSMON and TASKKILL)
-function pidFromId(id) {
-  let h = 2000;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7fff;
-  return 2000 + (h % 6000);
-}
-function winIdByPid(pid) {
-  for (const id of Object.keys(wins)) {
-    if (pidFromId(id) === pid) return id;
-  }
-  return null;
 }
 
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
@@ -6090,6 +6083,10 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
   document.getElementById('windows-layer').appendChild(el);
   wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
 
+  // Built-in apps are real processes with real lifetimes. Registering here rather
+  // than in each app means an app cannot forget to appear in ps.
+  wins[id].pid = kernelRegisterSystem(id, (title || id).split(' \u2014')[0].trim());
+
   makeDraggable(el, document.getElementById('tb-' + id));
   makeResizable(el, id);
   addTbBtn(id, title, icon);
@@ -6158,6 +6155,7 @@ function closeWin(id) {
   const w = wins[id]; if (!w) return;
   if (w._interval) clearInterval(w._interval);
   w.el.remove(); delete wins[id];
+  kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
 }
 
@@ -9456,15 +9454,10 @@ function openTerminal(startDir, initialCommand) {
   }
 
   function buildPsLines() {
-    const lines = [
-      '  PID   CPU    MEM   PROCESS',
-      '  ---   ---    ---   -------',
-    ];
-    getBuiltInProcesses().forEach(proc => {
-      lines.push(`  ${String(proc.pid).padStart(4, '0')}  ${String(proc.cpu.toFixed(1)).padStart(3)}%  ${String(proc.mem.toFixed(1)).padStart(4)}%  ${proc.name}`);
+    const lines = ['  PID  KIND    STATE    PROCESS', '  ---  ----    -----    -------'];
+    kernelListProcesses().forEach(p => {
+      lines.push('  ' + String(p.pid).padStart(3) + '  ' + p.kind.padEnd(6) + '  ' + p.state.padEnd(7) + '  ' + p.name);
     });
-    [['0333', '0.0%', ' 0.1%', 'UNKNOWN'], ['0334', '0.0%', ' 0.1%', 'UNKNOWN'], ['0335', '0.0%', ' 0.1%', 'UNKNOWN']]
-      .forEach(([pid, cpu, mem, name]) => lines.push(`  ${pid}  ${cpu}  ${mem}  ${name}`));
     return lines;
   }
 
@@ -9902,8 +9895,10 @@ function openTerminal(startDir, initialCommand) {
         print('System processes cannot be terminated.');
         return;
       }
-      // Look up real window by PID
-      const winId = winIdByPid(pid);
+      // Look up the real window through the kernel table - pids are real now,
+      // not a hash of the window id, so this is a table lookup rather than a guess.
+      const proc = kernelGetProcess(pid);
+      const winId = proc && proc.winId;
       if (winId && wins[winId]) {
         const name = wins[winId].title.split(' \u2014')[0].trim();
         print(`Terminating ${name} (PID ${pid})...`);
@@ -10300,7 +10295,7 @@ function openSysmon() {
     Object.entries(wins).forEach(([id, w]) => {
       const rawName = w.title.split(' \u2014')[0].trim();
       const name = (rawName.endsWith('.exe') || rawName.endsWith('.readme') || rawName.includes('.')) ? rawName : rawName + '.exe';
-      procs.push({ pid: pidFromId(id), name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
+      procs.push({ pid: wins[id].pid, name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
     });
     if (showSysProcs) {
       getBuiltInProcesses().forEach(p => procs.push({

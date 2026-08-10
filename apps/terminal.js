@@ -428,15 +428,10 @@ function openTerminal(startDir, initialCommand) {
   }
 
   function buildPsLines() {
-    const lines = [
-      '  PID   CPU    MEM   PROCESS',
-      '  ---   ---    ---   -------',
-    ];
-    getBuiltInProcesses().forEach(proc => {
-      lines.push(`  ${String(proc.pid).padStart(4, '0')}  ${String(proc.cpu.toFixed(1)).padStart(3)}%  ${String(proc.mem.toFixed(1)).padStart(4)}%  ${proc.name}`);
+    const lines = ['  PID  KIND    STATE    PROCESS', '  ---  ----    -----    -------'];
+    kernelListProcesses().forEach(p => {
+      lines.push('  ' + String(p.pid).padStart(3) + '  ' + p.kind.padEnd(6) + '  ' + p.state.padEnd(7) + '  ' + p.name);
     });
-    [['0333', '0.0%', ' 0.1%', 'UNKNOWN'], ['0334', '0.0%', ' 0.1%', 'UNKNOWN'], ['0335', '0.0%', ' 0.1%', 'UNKNOWN']]
-      .forEach(([pid, cpu, mem, name]) => lines.push(`  ${pid}  ${cpu}  ${mem}  ${name}`));
     return lines;
   }
 
@@ -874,8 +869,10 @@ function openTerminal(startDir, initialCommand) {
         print('System processes cannot be terminated.');
         return;
       }
-      // Look up real window by PID
-      const winId = winIdByPid(pid);
+      // Look up the real window through the kernel table - pids are real now,
+      // not a hash of the window id, so this is a table lookup rather than a guess.
+      const proc = kernelGetProcess(pid);
+      const winId = proc && proc.winId;
       if (winId && wins[winId]) {
         const name = wins[winId].title.split(' \u2014')[0].trim();
         print(`Terminating ${name} (PID ${pid})...`);
