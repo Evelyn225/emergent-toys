@@ -38,7 +38,7 @@ function openBrowser() {
     </style></head><body>
     <h1>&#127760; sleepWEB &#8212; Start Page</h1>
     <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${projectLinks}</div></div>
-    <div class="sec"><h2>The Web (may not load in frame)</h2><div class="grid">${webLinks}${favoriteLinks}</div></div>
+    <div class="sec"><h2>The Web</h2><div class="grid">${webLinks}${favoriteLinks}</div></div>
 </body></html>`;
   }
 
