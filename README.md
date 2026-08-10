@@ -1,6 +1,6 @@
 # eve net
 
-*a cabinet of interactive curiosities*
+*a collection of interactive curiosities*
 
 → **[evenet.fun](https://evenet.fun)**
 
