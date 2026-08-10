@@ -684,6 +684,78 @@ function __spawnForTest(worker, name, parentPid) {
   });
   return pid;
 }
+
+// ── Syscall dispatch ───────────────────────────────────────────────
+// A Worker has no filesystem of its own; every path it names arrives here as
+// a syscall message and every reply crosses back the same way. Defaults to
+// the real VFS. Tests replace it so dispatch can be exercised without
+// mounting a filesystem.
+var _kernelFs = null;
+function kernelSetFs(impl) { _kernelFs = impl; }
+function _kernelFsImpl() {
+  if (_kernelFs) return _kernelFs;
+  return {
+    async readFile(path, cwd) { return await vfsReadFile(path, cwd); },
+    async writeFile(path, text, cwd) { return await vfsWriteFile(path, text, cwd); },
+    async stat(path, cwd) { return vfsStatSync(path, cwd); },
+    async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
+    // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
+    // story's undeletable files, and a worker must not be able to bypass either.
+    async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
+  };
+}
+
+async function kernelHandleSyscall(pid, msg) {
+  const proc = _kernelProcs.get(pid);
+  // A worker can post one last syscall after SIGKILL, or after its own exit
+  // syscall is already in flight. Dropping it is correct; replying would post
+  // to a terminated worker.
+  if (!proc || proc.state !== 'running') return;
+  const { seq, name, args } = msg;
+  if (name === 'exit') { kernelExit(pid, Math.trunc(args[0] ?? 0)); return; }
+  try {
+    const value = await _kernelSyscall(proc, name, args || []);
+    proc.worker.postMessage({ type: 'syscall-reply', seq, ok: true, value });
+  } catch (err) {
+    // Only code and message survive structured cloning of an Error subclass in a
+    // useful form, and the interpreter branches on code to build script errors.
+    proc.worker.postMessage({
+      type: 'syscall-reply', seq, ok: false,
+      error: { code: err && err.code ? err.code : 'EIO', message: (err && err.message) || String(err) },
+    });
+  }
+}
+
+async function _kernelSyscall(proc, name, args) {
+  const fs = _kernelFsImpl();
+  switch (name) {
+    case 'readFile':  return await fs.readFile(args[0], proc.cwd);
+    case 'writeFile': return await fs.writeFile(args[0], args[1], proc.cwd);
+    case 'stat':      return await fs.stat(args[0], proc.cwd);
+    case 'mkdir':     return await fs.mkdir(args[0], proc.cwd);
+    case 'unlink':    return await fs.unlink(args[0], proc.cwd);
+    case 'cwd':       return proc.cwd;
+    case 'getenv':    return proc.env[args[0]];
+    case 'sleep':     return await new Promise(r => setTimeout(r, Math.max(0, Math.trunc(args[0]) || 0)));
+    case 'write':     return _kernelWrite(proc, args[0], args[1]);
+    case 'spawn':     return await kernelSpawn(args[0], args[1] || [], { parentPid: proc.pid, cwd: proc.cwd });
+    case 'ui.open':   return _kernelUiOpen(proc, args[0]);
+    case 'ui.openSystem': return _kernelUiOpenSystem(proc, args[0]);
+    default: {
+      const err = new Error('unknown syscall: ' + name);
+      err.code = 'ENOSYS';
+      throw err;
+    }
+  }
+}
+
+// Stubs, deliberately: dispatch is complete now, but _kernelWrite and
+// _kernelUiOpen/_kernelUiOpenSystem are wired for real in a later task, and
+// kernelSpawn refuses rather than pretend to work until then.
+function _kernelWrite() { return true; }
+function _kernelUiOpen() { return true; }
+function _kernelUiOpenSystem() { return true; }
+async function kernelSpawn() { const e = new Error('spawn not wired yet'); e.code = 'ENOSYS'; throw e; }
 // In-memory backend. Used by the test suite (no IndexedDB polyfill needed)
 // and by phase 3, where processes never touch storage directly anyway.
 function createMemStorage(options) {
