@@ -1,3 +1,39 @@
+// The interpreter (os/script/interp.js) calls fsNormalizeDir/fsSplitPath as
+// plain globals rather than through the fs adapter - normalizing a path
+// string touches no storage, so Task 1 left them as ordinary calls (see
+// test/interp-fs-adapter.test.cjs, which stubs exactly these two names to
+// prove nothing else is a hidden dependency). The main thread gets them from
+// os/fs-core.js's synonyms over os/vfs.js's vfsNormalizeDir/vfsSplitPath.
+//
+// A worker loads neither file - test/worker-build.test.cjs enforces that only
+// the interpreter is shared between the two bundles - so without this file
+// execScript throws "fsNormalizeDir is not defined" the instant any spawned
+// script runs, before its first instruction. This logic must stay
+// byte-identical to os/vfs.js's vfsNormalizeDir/vfsSplitPath;
+// test/worker-path-utils.test.cjs is the drift guard.
+function fsNormalizeDir(name) {
+  return String(name || '')
+    .trim()
+    .replace(/^C:\\sleepOS(?:\\|$)/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '')
+    .toUpperCase();
+}
+
+function fsSplitPath(path, fallbackDir) {
+  const cleaned = String(path || '')
+    .trim()
+    .replace(/^C:\\sleepOS(?:\\|$)/i, '')
+    .replace(/\//g, '\\')
+    .replace(/^\\+|\\+$/g, '');
+  if (!cleaned) return { dirName: fsNormalizeDir(fallbackDir), fileName: '' };
+  const parts = cleaned.split('\\').filter(Boolean);
+  if (parts.length === 1) return { dirName: fsNormalizeDir(fallbackDir), fileName: parts[0] };
+  return {
+    dirName: fsNormalizeDir(parts.slice(0, -1).join('\\')),
+    fileName: parts[parts.length - 1],
+  };
+}
 // Worker side of the syscall boundary. Every call is a postMessage with a
 // sequence number; the reply resolves the matching promise. The worker has no
 // filesystem, no DOM, and no VFS - this file is its entire view of the OS.
@@ -637,6 +673,59 @@ async function execScript(source, printFn, options) {
   return Math.trunc(state.status ?? 0);
 }
 
+// Shared by makeVfsScriptFs's `openUi` and the kernel's `ui.open` syscall
+// handler (os/kernel.js's _kernelUiOpen). Both callers run on the main
+// thread - a worker only ever reaches this indirectly, through the ui.open
+// syscall the kernel answers here - so referencing openMediaFile/openNotepad
+// directly is safe. Matches the shape the main-thread adapter always
+// returned (undefined), so the kernel and the terminal do not diverge.
+async function scriptOpenUiTarget(path, cwd) {
+  const st = vfsStatSync(path, cwd);
+  if (!st) return;
+  if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  else openNotepad(st.name, st.dirName);
+}
+
+// Shared by makeVfsScriptFs's `openSystem` and the kernel's `ui.openSystem`
+// syscall handler (os/kernel.js's _kernelUiOpenSystem) - one map, one seam,
+// so a spawned script's `START` reaches the same 19 programs the terminal
+// does. Absorbs the `start` command's program map and the `notepad`
+// command's blank-document case. Those map entries used to be bare
+// identifier references (`sysmon: openSysmon`), evaluated the moment the
+// object literal was built - in a Worker, just reaching the `start` case
+// threw a ReferenceError before any lookup happened, regardless of which
+// program was requested. Living here means the map is only ever built on
+// the main thread, where the globals it references are legitimately in
+// scope (a worker reaches it only via the ui.openSystem syscall, answered
+// here). `openSystemFile` stays as the fallback for names the map does not
+// recognize (WELCOME.README, void.tmp, daemon.core, etc.).
+async function scriptOpenSystemProgram(name, cwd, arg) {
+  const lower = String(name || '').toLowerCase();
+  const map = {
+    notepad: () => openNotepad(arg || undefined, cwd),
+    'notepad.exe': () => openNotepad(arg || undefined, cwd),
+    terminal: () => openTerminal(cwd),
+    'terminal.exe': () => openTerminal(cwd),
+    sysmon: openSysmon,
+    'sysmon.exe': openSysmon,
+    browser: openBrowser,
+    'browser.exe': openBrowser,
+    defrag: openDefrag,
+    'defrag.exe': openDefrag,
+    explorer: openExplorer,
+    'explorer.exe': openExplorer,
+    welcome: openWelcome,
+    'welcome.readme': openWelcome,
+    files: openFiles,
+    calc: openCalculator,
+    'calc.exe': openCalculator,
+    regedit: openRegedit,
+    'regedit.exe': openRegedit,
+  };
+  if (map[lower]) { map[lower](); return true; }
+  return !!openSystemFile(name);
+}
+
 // The main thread's adapter. The worker builds its own in os/worker/syscalls.js
 // against the same shape, so the interpreter cannot tell them apart.
 function makeVfsScriptFs() {
@@ -651,47 +740,8 @@ function makeVfsScriptFs() {
     // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
     // story's undeletable files. Deleting straight from the VFS would bypass both.
     async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
-    async openUi(path, cwd) {
-      const st = vfsStatSync(path, cwd);
-      if (!st) return;
-      if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
-      else openNotepad(st.name, st.dirName);
-    },
-    // Absorbs the `start` command's program map and the `notepad` command's
-    // blank-document case. Those map entries used to be bare identifier
-    // references (`sysmon: openSysmon`), evaluated the moment the object
-    // literal was built - in a Worker, just reaching the `start` case threw a
-    // ReferenceError before any lookup happened, regardless of which program
-    // was requested. Living here means the map is only ever built on the main
-    // thread, where the globals it references are legitimately in scope.
-    // `openSystemFile` stays as the fallback for names the map does not
-    // recognize (WELCOME.README, void.tmp, daemon.core, etc.).
-    async openSystem(name, cwd, arg) {
-      const lower = String(name || '').toLowerCase();
-      const map = {
-        notepad: () => openNotepad(arg || undefined, cwd),
-        'notepad.exe': () => openNotepad(arg || undefined, cwd),
-        terminal: () => openTerminal(cwd),
-        'terminal.exe': () => openTerminal(cwd),
-        sysmon: openSysmon,
-        'sysmon.exe': openSysmon,
-        browser: openBrowser,
-        'browser.exe': openBrowser,
-        defrag: openDefrag,
-        'defrag.exe': openDefrag,
-        explorer: openExplorer,
-        'explorer.exe': openExplorer,
-        welcome: openWelcome,
-        'welcome.readme': openWelcome,
-        files: openFiles,
-        calc: openCalculator,
-        'calc.exe': openCalculator,
-        regedit: openRegedit,
-        'regedit.exe': openRegedit,
-      };
-      if (map[lower]) { map[lower](); return true; }
-      return !!openSystemFile(name);
-    },
+    async openUi(path, cwd) { return scriptOpenUiTarget(path, cwd); },
+    async openSystem(name, cwd, arg) { return scriptOpenSystemProgram(name, cwd, arg); },
     async isSystemPath(path) { return isVisibleSystemPath(path, { includeExplorer: true }); },
     async notifyChanged() { document.dispatchEvent(new CustomEvent('fs-changed')); },
     async clearScreen() { const out = document.getElementById('to'); if (out) out.innerHTML = ''; },
@@ -704,14 +754,34 @@ function makeVfsScriptFs() {
 // observes between instructions, so the process can refuse it - which is the
 // difference between SIGTERM and SIGKILL.
 var _hostAborted = false;
+// scriptSleep (os/script/interp.js) is what makes SIGTERM interrupt a running
+// WAIT rather than merely being noticed at the next instruction boundary up
+// to 30s later: it registers a real 'abort' listener on the signal and rejects
+// as soon as one fires. A signal whose addEventListener is a no-op - which
+// this was - never wakes it, so a killed process' WAIT ran to completion
+// regardless of SIGTERM. This is a minimal AbortSignal-like target: dispatch
+// is a plain synchronous callback list, not the DOM event system.
+var _hostAbortListeners = [];
 
 self.onmessage = async (e) => {
   const msg = e.data;
   if (msg.type === 'syscall-reply') { sysHandleReply(msg); return; }
-  if (msg.type === 'signal' && msg.sig === 'SIGTERM') { _hostAborted = true; return; }
+  if (msg.type === 'signal' && msg.sig === 'SIGTERM') {
+    _hostAborted = true;
+    _hostAbortListeners.slice().forEach(fn => fn());
+    return;
+  }
   if (msg.type !== 'init') return;
 
-  const signal = { get aborted() { return _hostAborted; }, addEventListener() {}, removeEventListener() {} };
+  const signal = {
+    get aborted() { return _hostAborted; },
+    addEventListener(type, fn) { if (type === 'abort') _hostAbortListeners.push(fn); },
+    removeEventListener(type, fn) {
+      if (type !== 'abort') return;
+      const i = _hostAbortListeners.indexOf(fn);
+      if (i >= 0) _hostAbortListeners.splice(i, 1);
+    },
+  };
   let code = 0;
   try {
     code = await execScript(msg.source, line => sysCall('write', ['stdout', String(line)]), {

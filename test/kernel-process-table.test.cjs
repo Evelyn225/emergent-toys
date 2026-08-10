@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { makeOsContext, loadOsSources } = require('./helpers/load-os.cjs');
+const { makeOsContext, loadOsSources, plain } = require('./helpers/load-os.cjs');
 
 function kernel() {
   const ctx = loadOsSources(makeOsContext(), ['os/kernel.js']);
@@ -47,6 +47,25 @@ test('SIGKILL terminates the worker, SIGTERM only flags it', () => {
 
 test('signalling an unknown pid returns false rather than throwing', () => {
   assert.strictEqual(kernel().kernelSignal(9999, 'SIGKILL'), false);
+});
+
+// pid 1 is the kernel: kind 'system' with no winId. Before this fix that fell
+// through the system-kind branch and returned true unconditionally, claiming
+// success while closing nothing. The kernel must refuse - report false - not
+// silently no-op while lying about it.
+test('signalling pid 1 (the kernel) reports refusal rather than a false success', () => {
+  const ctx = kernel();
+  assert.strictEqual(ctx.kernelSignal(1, 'SIGTERM'), false);
+  assert.strictEqual(ctx.kernelGetProcess(1).state, 'running', 'the kernel must not be killable');
+});
+
+test('signalling a system process with a real window still closes it and reports success', () => {
+  let closed = null;
+  const ctx = loadOsSources(makeOsContext({ closeWin: (id) => { closed = id; } }), ['os/kernel.js']);
+  ctx.kernelInit();
+  const pid = ctx.kernelRegisterSystem('win-a', 'NOTEPAD');
+  assert.strictEqual(ctx.kernelSignal(pid, 'SIGTERM'), true);
+  assert.strictEqual(closed, 'win-a');
 });
 
 test('exit records the code, notifies the waiter, and reaps', async () => {
@@ -103,4 +122,68 @@ test('no allocated pid ever lands in the daemon story range', () => {
   allocated.forEach(pid => {
     assert.ok(pid > DAEMON_STORY_PID_CEILING, `pid ${pid} collides with the daemon story range (<= ${DAEMON_STORY_PID_CEILING})`);
   });
+});
+
+// A fake `Worker` global lets kernelSpawn be exercised without a browser: it
+// records what it was constructed with and what was posted to it, the same
+// shape __spawnForTest hands the table for a process already running.
+function FakeWorkerCtor(posts) {
+  return function Worker(url) {
+    this.url = url;
+    this.posted = [];
+    this.postMessage = (m) => { this.posted.push(m); posts.push(m); };
+    this.terminate = () => {};
+  };
+}
+
+function kernelWithSpawn(files) {
+  const posts = [];
+  const ctx = makeOsContext({
+    Worker: FakeWorkerCtor(posts),
+    vfsStatSync: (path) => (Object.prototype.hasOwnProperty.call(files, path) ? { name: path, dirName: '', kind: 'text' } : null),
+    vfsReadFile: async (name) => files[name],
+  });
+  loadOsSources(ctx, ['os/kernel.js']);
+  ctx.kernelInit();
+  return { ctx, posts };
+}
+
+test('kernelSpawn allocates a real pid, registers a running user process, and posts init to the worker', async () => {
+  const { ctx, posts } = kernelWithSpawn({ 'job.script': 'PRINT hi' });
+  const pid = await ctx.kernelSpawn('job.script', ['a', 'b'], { cwd: 'DOCS' });
+  assert.ok(pid >= 2000, 'a spawned process is a real pid, not a story one');
+  const proc = ctx.kernelGetProcess(pid);
+  assert.strictEqual(proc.kind, 'user');
+  assert.strictEqual(proc.state, 'running');
+  assert.strictEqual(posts.length, 1);
+  assert.strictEqual(posts[0].type, 'init');
+  assert.strictEqual(posts[0].source, 'PRINT hi');
+  assert.deepStrictEqual(posts[0].argv, ['a', 'b']);
+});
+
+test('kernelSpawn refuses a missing script with ENOENT and creates no process', async () => {
+  const { ctx } = kernelWithSpawn({});
+  const before = ctx.kernelListProcesses().length;
+  await assert.rejects(ctx.kernelSpawn('nope.script', [], {}), (err) => {
+    assert.strictEqual(err.code, 'ENOENT');
+    return true;
+  });
+  assert.strictEqual(ctx.kernelListProcesses().length, before, 'a failed spawn must not leave a table entry');
+});
+
+// _kernelWrite is what the worker's `write` syscall (os/kernel.js dispatch)
+// and kernelSpawn's onerror backstop both call. It must route to the bound
+// callback when one exists and retain output on the entry when it does not,
+// per the comment above it in os/kernel.js.
+test('_kernelWrite routes to the bound sink and retains output when nothing is bound', () => {
+  const ctx = loadOsSources(makeOsContext(), ['os/kernel.js']);
+  ctx.kernelInit();
+  const seen = [];
+  const boundProc = { onStdout: (line) => seen.push(line) };
+  assert.strictEqual(ctx._kernelWrite(boundProc, 'stdout', 'hello'), true);
+  assert.deepStrictEqual(seen, ['hello']);
+
+  const unboundProc = {};
+  ctx._kernelWrite(unboundProc, 'stderr', 'oops');
+  assert.deepStrictEqual(plain(unboundProc.stderr), ['oops']);
 });

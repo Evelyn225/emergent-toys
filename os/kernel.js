@@ -71,7 +71,12 @@ function kernelSignal(pid, sig) {
   const proc = _kernelProcs.get(pid);
   if (!proc || proc.state !== 'running') return false;
   if (proc.kind === 'system') {
-    if (proc.winId && typeof closeWin === 'function') closeWin(proc.winId);
+    // The kernel itself (pid 1) is a system-kind entry with no winId, so it
+    // used to fall through this branch and report success while closing
+    // nothing - a lie. Refuse instead of pretending: the kernel is not
+    // killable, and the caller can tell the difference now.
+    if (!proc.winId || typeof closeWin !== 'function') return false;
+    closeWin(proc.winId);
     return true;
   }
   if (sig === 'SIGKILL') {
@@ -221,12 +226,57 @@ async function _kernelSyscall(proc, name, args) {
   }
 }
 
-// Stubs, deliberately: dispatch is complete now, but _kernelWrite and
-// _kernelUiOpen/_kernelUiOpenSystem/_kernelUiIsSystemPath are wired for real in
-// a later task, and kernelSpawn refuses rather than pretend to work until then.
-function _kernelWrite() { return true; }
-function _kernelUiOpen() { return true; }
-function _kernelUiOpenSystem() { return true; }
-// Task 6 wires this to isVisibleSystemPath; until then nothing is a system path.
-function _kernelUiIsSystemPath() { return false; }
-async function kernelSpawn() { const e = new Error('spawn not wired yet'); e.code = 'ENOSYS'; throw e; }
+const WORKER_BUNDLE_URL = 'sleep-os-worker.bundle.js';
+
+// Streams live on the kernel side so a process cannot write anywhere the kernel
+// has not bound. The terminal binds stdout to its window; unbound output is
+// retained on the entry so nothing is silently dropped.
+function _kernelWrite(proc, stream, text) {
+  const line = String(text == null ? '' : text);
+  const sink = stream === 'stderr' ? proc.onStderr : proc.onStdout;
+  if (typeof sink === 'function') sink(line);
+  else (proc[stream] = proc[stream] || []).push(line);
+  return true;
+}
+
+// scriptOpenUiTarget/scriptOpenSystemProgram (os/script/interp.js) are the one
+// shared implementation makeVfsScriptFs's openUi/openSystem also call - see
+// the comments there. Both only ever run on the main thread, so calling them
+// from here (which only happens by answering a worker's syscall) is safe.
+function _kernelUiOpen(proc, path, cwd) {
+  return scriptOpenUiTarget(path, _kernelCwd(proc, cwd));
+}
+
+function _kernelUiOpenSystem(proc, name, cwd, arg) {
+  return scriptOpenSystemProgram(name, _kernelCwd(proc, cwd), arg);
+}
+
+function _kernelUiIsSystemPath(proc, path) {
+  return isVisibleSystemPath(path, { includeExplorer: true });
+}
+
+async function kernelSpawn(path, argv, opts) {
+  opts = opts || {};
+  const cwd = opts.cwd || '';
+  const st = vfsStatSync(path, cwd);
+  if (!st || st.kind !== 'text') {
+    const err = new Error('script not found: ' + path);
+    err.code = 'ENOENT';
+    throw err;
+  }
+  const source = await vfsReadFile(st.name, st.dirName);
+  const worker = new Worker(WORKER_BUNDLE_URL);
+  const pid = _kernelAllocPid();
+  _kernelProcs.set(pid, {
+    pid, name: st.name, kind: 'user', state: 'running',
+    parentPid: opts.parentPid || KERNEL_PID, cwd: st.dirName, env: {},
+    worker, winId: null, exitCode: null, startedAt: Date.now(),
+    onStdout: opts.onStdout || null, onStderr: opts.onStderr || null,
+  });
+  worker.onmessage = e => { void kernelHandleSyscall(pid, e.data); };
+  // A worker that throws before its first syscall would otherwise stay running
+  // forever in the table.
+  worker.onerror = e => { _kernelWrite(_kernelProcs.get(pid) || {}, 'stderr', e.message || 'worker error'); kernelExit(pid, 1); };
+  worker.postMessage({ type: 'init', source, name: st.name, cwd: st.dirName, argv });
+  return pid;
+}

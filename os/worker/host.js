@@ -4,14 +4,34 @@
 // observes between instructions, so the process can refuse it - which is the
 // difference between SIGTERM and SIGKILL.
 var _hostAborted = false;
+// scriptSleep (os/script/interp.js) is what makes SIGTERM interrupt a running
+// WAIT rather than merely being noticed at the next instruction boundary up
+// to 30s later: it registers a real 'abort' listener on the signal and rejects
+// as soon as one fires. A signal whose addEventListener is a no-op - which
+// this was - never wakes it, so a killed process' WAIT ran to completion
+// regardless of SIGTERM. This is a minimal AbortSignal-like target: dispatch
+// is a plain synchronous callback list, not the DOM event system.
+var _hostAbortListeners = [];
 
 self.onmessage = async (e) => {
   const msg = e.data;
   if (msg.type === 'syscall-reply') { sysHandleReply(msg); return; }
-  if (msg.type === 'signal' && msg.sig === 'SIGTERM') { _hostAborted = true; return; }
+  if (msg.type === 'signal' && msg.sig === 'SIGTERM') {
+    _hostAborted = true;
+    _hostAbortListeners.slice().forEach(fn => fn());
+    return;
+  }
   if (msg.type !== 'init') return;
 
-  const signal = { get aborted() { return _hostAborted; }, addEventListener() {}, removeEventListener() {} };
+  const signal = {
+    get aborted() { return _hostAborted; },
+    addEventListener(type, fn) { if (type === 'abort') _hostAbortListeners.push(fn); },
+    removeEventListener(type, fn) {
+      if (type !== 'abort') return;
+      const i = _hostAbortListeners.indexOf(fn);
+      if (i >= 0) _hostAbortListeners.splice(i, 1);
+    },
+  };
   let code = 0;
   try {
     code = await execScript(msg.source, line => sysCall('write', ['stdout', String(line)]), {

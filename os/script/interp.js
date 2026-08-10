@@ -579,6 +579,59 @@ async function execScript(source, printFn, options) {
   return Math.trunc(state.status ?? 0);
 }
 
+// Shared by makeVfsScriptFs's `openUi` and the kernel's `ui.open` syscall
+// handler (os/kernel.js's _kernelUiOpen). Both callers run on the main
+// thread - a worker only ever reaches this indirectly, through the ui.open
+// syscall the kernel answers here - so referencing openMediaFile/openNotepad
+// directly is safe. Matches the shape the main-thread adapter always
+// returned (undefined), so the kernel and the terminal do not diverge.
+async function scriptOpenUiTarget(path, cwd) {
+  const st = vfsStatSync(path, cwd);
+  if (!st) return;
+  if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  else openNotepad(st.name, st.dirName);
+}
+
+// Shared by makeVfsScriptFs's `openSystem` and the kernel's `ui.openSystem`
+// syscall handler (os/kernel.js's _kernelUiOpenSystem) - one map, one seam,
+// so a spawned script's `START` reaches the same 19 programs the terminal
+// does. Absorbs the `start` command's program map and the `notepad`
+// command's blank-document case. Those map entries used to be bare
+// identifier references (`sysmon: openSysmon`), evaluated the moment the
+// object literal was built - in a Worker, just reaching the `start` case
+// threw a ReferenceError before any lookup happened, regardless of which
+// program was requested. Living here means the map is only ever built on
+// the main thread, where the globals it references are legitimately in
+// scope (a worker reaches it only via the ui.openSystem syscall, answered
+// here). `openSystemFile` stays as the fallback for names the map does not
+// recognize (WELCOME.README, void.tmp, daemon.core, etc.).
+async function scriptOpenSystemProgram(name, cwd, arg) {
+  const lower = String(name || '').toLowerCase();
+  const map = {
+    notepad: () => openNotepad(arg || undefined, cwd),
+    'notepad.exe': () => openNotepad(arg || undefined, cwd),
+    terminal: () => openTerminal(cwd),
+    'terminal.exe': () => openTerminal(cwd),
+    sysmon: openSysmon,
+    'sysmon.exe': openSysmon,
+    browser: openBrowser,
+    'browser.exe': openBrowser,
+    defrag: openDefrag,
+    'defrag.exe': openDefrag,
+    explorer: openExplorer,
+    'explorer.exe': openExplorer,
+    welcome: openWelcome,
+    'welcome.readme': openWelcome,
+    files: openFiles,
+    calc: openCalculator,
+    'calc.exe': openCalculator,
+    regedit: openRegedit,
+    'regedit.exe': openRegedit,
+  };
+  if (map[lower]) { map[lower](); return true; }
+  return !!openSystemFile(name);
+}
+
 // The main thread's adapter. The worker builds its own in os/worker/syscalls.js
 // against the same shape, so the interpreter cannot tell them apart.
 function makeVfsScriptFs() {
@@ -593,47 +646,8 @@ function makeVfsScriptFs() {
     // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
     // story's undeletable files. Deleting straight from the VFS would bypass both.
     async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
-    async openUi(path, cwd) {
-      const st = vfsStatSync(path, cwd);
-      if (!st) return;
-      if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
-      else openNotepad(st.name, st.dirName);
-    },
-    // Absorbs the `start` command's program map and the `notepad` command's
-    // blank-document case. Those map entries used to be bare identifier
-    // references (`sysmon: openSysmon`), evaluated the moment the object
-    // literal was built - in a Worker, just reaching the `start` case threw a
-    // ReferenceError before any lookup happened, regardless of which program
-    // was requested. Living here means the map is only ever built on the main
-    // thread, where the globals it references are legitimately in scope.
-    // `openSystemFile` stays as the fallback for names the map does not
-    // recognize (WELCOME.README, void.tmp, daemon.core, etc.).
-    async openSystem(name, cwd, arg) {
-      const lower = String(name || '').toLowerCase();
-      const map = {
-        notepad: () => openNotepad(arg || undefined, cwd),
-        'notepad.exe': () => openNotepad(arg || undefined, cwd),
-        terminal: () => openTerminal(cwd),
-        'terminal.exe': () => openTerminal(cwd),
-        sysmon: openSysmon,
-        'sysmon.exe': openSysmon,
-        browser: openBrowser,
-        'browser.exe': openBrowser,
-        defrag: openDefrag,
-        'defrag.exe': openDefrag,
-        explorer: openExplorer,
-        'explorer.exe': openExplorer,
-        welcome: openWelcome,
-        'welcome.readme': openWelcome,
-        files: openFiles,
-        calc: openCalculator,
-        'calc.exe': openCalculator,
-        regedit: openRegedit,
-        'regedit.exe': openRegedit,
-      };
-      if (map[lower]) { map[lower](); return true; }
-      return !!openSystemFile(name);
-    },
+    async openUi(path, cwd) { return scriptOpenUiTarget(path, cwd); },
+    async openSystem(name, cwd, arg) { return scriptOpenSystemProgram(name, cwd, arg); },
     async isSystemPath(path) { return isVisibleSystemPath(path, { includeExplorer: true }); },
     async notifyChanged() { document.dispatchEvent(new CustomEvent('fs-changed')); },
     async clearScreen() { const out = document.getElementById('to'); if (out) out.innerHTML = ''; },

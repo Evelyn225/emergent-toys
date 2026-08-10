@@ -1,5 +1,19 @@
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
+
+// Merges the kernel's real process table with the daemon story's fictional
+// processes (soul_svc.exe, pid 512, and the generated 500+i*13 series -
+// os/daemon.js's getBuiltInProcesses). `ps` used to show only one or the
+// other; SYSMON's process tab already merges both this way. The pid ranges
+// never collide (real allocation starts at 2000 - see KERNEL_FIRST_USER_PID
+// in os/kernel.js), and the fictional rows get an ordinary kind/state
+// ('system'/'running') so `taskkill 512` stays a discoverable story beat
+// instead of a row that visibly does not belong.
+function buildPsRows() {
+  const real = kernelListProcesses();
+  const story = getBuiltInProcesses().map(p => ({ pid: p.pid, kind: 'system', state: 'running', name: p.name }));
+  return [...real, ...story].sort((a, b) => a.pid - b.pid);
+}
 function openTerminal(startDir, initialCommand) {
   if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
@@ -429,7 +443,7 @@ function openTerminal(startDir, initialCommand) {
 
   function buildPsLines() {
     const lines = ['  PID  KIND    STATE    PROCESS', '  ---  ----    -----    -------'];
-    kernelListProcesses().forEach(p => {
+    buildPsRows().forEach(p => {
       lines.push('  ' + String(p.pid).padStart(3) + '  ' + p.kind.padEnd(6) + '  ' + p.state.padEnd(7) + '  ' + p.name);
     });
     return lines;
@@ -605,6 +619,8 @@ function openTerminal(startDir, initialCommand) {
       '  TREE                - directory tree',
       '  PS                  - list running processes',
       '  TASKKILL [pid]      - terminate a process',
+      '  SPAWN <script> [args] - run a script as a background process',
+      '  KILL <pid> [/F]     - terminate a process (SIGTERM, or /F for SIGKILL)',
       '  IPCONFIG            - network configuration',
       '  SET [name=value]    - show or assign shell variables',
       '  INPUT <var> [text]  - read a line into a shell variable',
@@ -1036,6 +1052,36 @@ function openTerminal(startDir, initialCommand) {
       clearFn: () => { out.innerHTML = ''; },
     });
     if (exitCode !== 0) print(`Exit code: ${exitCode}`, '#dddd00');
+  };
+
+  CMDS.spawn = async (args) => {
+    const tokens = scriptTokenize(args || '');
+    if (!tokens.length) { print('Usage: SPAWN <script.script> [args...]'); return; }
+    try {
+      const pid = await kernelSpawn(tokens[0], tokens.slice(1), {
+        cwd,
+        onStdout: line => print(line),
+        onStderr: line => print(line, '#ff4444'),
+      });
+      print(`[${pid}] ${tokens[0]}`);
+    } catch (err) {
+      print(err.code === 'ENOENT' ? `Script not found: ${tokens[0]}` : err.message, '#ff4444');
+    }
+  };
+
+  CMDS.kill = (args) => {
+    const parts = (args || '').trim().split(/\s+/).filter(Boolean);
+    const force = parts.some(p => p.toLowerCase() === '/f' || p === '-9');
+    const pid = parseInt(parts.find(p => /^\d+$/.test(p)), 10);
+    if (!pid) { print('Usage: KILL <pid> [/F]'); return; }
+    const proc = kernelGetProcess(pid);
+    if (!proc) { print(`No such process: ${pid}`, '#ff4444'); return; }
+    // kernelSignal reports whether it actually did anything - pid 1 (the
+    // kernel) and any system process with no window return false, and this
+    // must not print a success line it did not earn.
+    const ok = kernelSignal(pid, force ? 'SIGKILL' : 'SIGTERM');
+    if (!ok) { print(`Access denied: PID ${pid} cannot be terminated.`, '#ff4444'); return; }
+    print(`[${pid}] ${force ? 'killed' : 'terminated'}`);
   };
 
   async function runTerminalCommand(raw, options) {

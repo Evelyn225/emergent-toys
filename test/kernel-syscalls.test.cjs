@@ -3,8 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { makeOsContext, loadOsSources, plain } = require('./helpers/load-os.cjs');
 
-function kernel() {
-  const ctx = loadOsSources(makeOsContext(), ['os/kernel.js']);
+function kernel(overrides) {
+  const ctx = loadOsSources(makeOsContext(overrides), ['os/kernel.js']);
   ctx.kernelInit();
   return ctx;
 }
@@ -187,8 +187,13 @@ test('a blob list entry survives structured cloning across the syscall reply', a
   assert.deepStrictEqual(reply.value[0].blob, blobEntry.blob);
 });
 
+// _kernelUiIsSystemPath calls isVisibleSystemPath (os/daemon.js), which this
+// kernel-only context never loads - so it is stubbed here, the same way the
+// interpreter's own tests stub fsNormalizeDir/fsSplitPath. test/kernel-ui-
+// syscalls.test.cjs exercises ui.open/ui.openSystem/ui.isSystemPath against
+// the real program map and the real isVisibleSystemPath together.
 test('ui.isSystemPath is answered rather than refused with ENOSYS', async () => {
-  const ctx = kernel();
+  const ctx = kernel({ isVisibleSystemPath: () => false });
   ctx.kernelSetFs({});
   const w = fakeWorker();
   const pid = ctx.__spawnForTest(w, 'job.script');
@@ -196,4 +201,16 @@ test('ui.isSystemPath is answered rather than refused with ENOSYS', async () => 
   const reply = plain(w.posted)[0];
   assert.strictEqual(reply.ok, true);
   assert.strictEqual(reply.value, false);
+});
+
+test('ui.isSystemPath forwards the path and includeExplorer:true to isVisibleSystemPath', async () => {
+  const calls = [];
+  const ctx = kernel({ isVisibleSystemPath: (path, opts) => { calls.push([path, opts]); return true; } });
+  ctx.kernelSetFs({});
+  const w = fakeWorker();
+  const pid = ctx.__spawnForTest(w, 'job.script');
+  await ctx.kernelHandleSyscall(pid, { type: 'syscall', seq: 1, name: 'ui.isSystemPath', args: ['void.tmp'] });
+  assert.deepStrictEqual(plain(calls), [['void.tmp', { includeExplorer: true }]]);
+  const reply = plain(w.posted)[0];
+  assert.strictEqual(reply.value, true);
 });
