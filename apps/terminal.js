@@ -1029,6 +1029,7 @@ function openTerminal(startDir, initialCommand) {
     print(`Running ${fname}...`);
     const text = await vfsReadFile(fname, cwd);
     const exitCode = await execScript(text, print, {
+      fs: makeVfsScriptFs(),
       sourceName: st.name,
       dirName: st.dirName,
       vars: shellVars,

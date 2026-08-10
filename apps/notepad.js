@@ -224,7 +224,7 @@ function runScriptInPopup(name, source, dirName) {
   };
   print('Running ' + name + '...', '#888');
   print('');
-  execScript(source, print, { sourceName: name, dirName, clearFn: () => { body.innerHTML = ''; } })
+  execScript(source, print, { fs: makeVfsScriptFs(), sourceName: name, dirName, clearFn: () => { body.innerHTML = ''; } })
     .then(code => { if (code !== 0) print('Exit code: ' + code, '#dddd00'); });
 }
 

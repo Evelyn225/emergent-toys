@@ -141,20 +141,16 @@ function scriptIsReservedVarName(name) {
   return /^(?:status|errorlevel|argc|\d+)$/i.test(String(name || ''));
 }
 
-function scriptPathExists(path, dirName) {
+async function scriptPathExists(path, state) {
   const target = String(path || '').trim();
   if (!target) return false;
   if (target === '.' || target === '..' || target === '\\' || /^C:\\sleepOS\\?$/i.test(target)) return true;
-  if (isVisibleSystemPath(target, { includeExplorer: true })) return true;
-  // vfsExistsSync covers directories too, where fsGetEntry returned null for
-  // them, so the second check is now only for a path spelled as a directory
-  // relative to the root. Both are metadata, so this stays synchronous and
-  // scriptEvaluateCondition does not have to become async.
-  if (vfsExistsSync(target, dirName)) return true;
-  return vfsDirExistsSync(target);
+  if (await state.fs.isSystemPath(target)) return true;
+  if (await state.fs.exists(target, state.dirName)) return true;
+  return await state.fs.dirExists(target);
 }
 
-function scriptEvaluateCondition(text, state, lineNo) {
+async function scriptEvaluateCondition(text, state, lineNo) {
   const tokens = scriptTokenize(text, lineNo);
   let negate = false;
   if (tokens[0] && tokens[0].toLowerCase() === 'not') {
@@ -165,7 +161,7 @@ function scriptEvaluateCondition(text, state, lineNo) {
     if (tokens.length !== 4 || tokens[2].toLowerCase() !== 'goto') {
       throw makeScriptError('Usage: if [not] exists <path> goto <label>', lineNo);
     }
-    const rawPassed = scriptPathExists(tokens[1], state.dirName);
+    const rawPassed = await scriptPathExists(tokens[1], state);
     return { passed: negate ? !rawPassed : rawPassed, label: tokens[3] };
   }
   if (tokens[0] && tokens[0].toLowerCase() === 'defined') {
@@ -369,13 +365,13 @@ async function execScriptInstruction(inst, labels, state) {
     case 'exit':
       return { type: 'exit', code: scriptParseStatusCode(resolvedArg, inst.lineNo, state.status) };
     case 'if': {
-      const result = scriptEvaluateCondition(resolvedArg, state, inst.lineNo);
+      const result = await scriptEvaluateCondition(resolvedArg, state, inst.lineNo);
       state.status = result.passed ? 0 : 1;
       if (result.passed) return { type: 'jump', pc: scriptJumpIndex(labels, result.label, inst.lineNo) };
       return null;
     }
     case 'clear':
-      (state.clearFn || (() => { const out = document.getElementById('to'); if (out) out.innerHTML = ''; }))();
+      (state.clearFn || (() => state.fs.clearScreen()))();
       state.status = 0;
       return null;
     case 'touch': {
@@ -384,18 +380,18 @@ async function execScriptInstruction(inst, labels, state) {
       // so `touch DOCS` used to write an empty file that permanently shadowed
       // the directory. vfsStatSync reports the directory, so touch now no-ops
       // on it, which is what touch is supposed to do.
-      const existing = vfsStatSync(resolvedArg, state.dirName);
+      const existing = await state.fs.stat(resolvedArg, state.dirName);
       if (!existing) {
         // The legacy accessors returned falsy on failure and the interpreter
         // used that to attach the script line number. The VFS throws instead,
         // so every converted site re-wraps or the error reaches the user with
         // no line number and no source name.
         try {
-          await vfsWriteFile(resolvedArg, '', state.dirName);
+          await state.fs.writeFile(resolvedArg, '', state.dirName);
         } catch (err) {
           throw makeScriptError('Cannot create file: ' + resolvedArg + ' (' + err.message + ')', inst.lineNo);
         }
-        document.dispatchEvent(new CustomEvent('fs-changed'));
+        await state.fs.notifyChanged();
       }
       state.status = 0;
       return null;
@@ -404,12 +400,12 @@ async function execScriptInstruction(inst, labels, state) {
       if (!resolvedArg) throw makeScriptError('Usage: mkdir <dir>', inst.lineNo);
       let created;
       try {
-        created = await vfsMkdir(resolvedArg, state.dirName);
+        created = await state.fs.mkdir(resolvedArg, state.dirName);
       } catch (err) {
         throw makeScriptError('Cannot create directory: ' + resolvedArg + ' (' + err.message + ')', inst.lineNo);
       }
       if (created.created) {
-        document.dispatchEvent(new CustomEvent('fs-changed'));
+        await state.fs.notifyChanged();
       }
       state.status = 0;
       return null;
@@ -417,15 +413,15 @@ async function execScriptInstruction(inst, labels, state) {
     case 'del':
     case 'rm': {
       if (!resolvedArg) throw makeScriptError('Usage: del <file>', inst.lineNo);
-      const deletion = await deleteVirtualPath(resolvedArg, state.dirName);
+      const deletion = await state.fs.unlink(resolvedArg, state.dirName);
       if (!deletion.ok) throw makeScriptError(deletion.message || ('Cannot delete: ' + resolvedArg), inst.lineNo);
       state.status = 0;
       return null;
     }
     case 'open': {
       if (!resolvedArg) throw makeScriptError('Usage: open <file>', inst.lineNo);
-      if (isVisibleSystemPath(resolvedArg, { includeExplorer: true })) {
-        if (!openSystemFile(fsSplitPath(resolvedArg, state.dirName).fileName)) {
+      if (await state.fs.isSystemPath(resolvedArg)) {
+        if (!await state.fs.openSystem(fsSplitPath(resolvedArg, state.dirName).fileName, state.dirName)) {
           throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
         }
         state.status = 0;
@@ -434,10 +430,9 @@ async function execScriptInstruction(inst, labels, state) {
       // `!st || st.type === 'dir'` reproduces fsGetEntry's null-for-directories
       // exactly. Without the second half `open DOCS` would fall through to the
       // else branch and load a directory into Notepad.
-      const st = vfsStatSync(resolvedArg, state.dirName);
+      const st = await state.fs.stat(resolvedArg, state.dirName);
       if (!st || st.type === 'dir') throw makeScriptError('File not found: ' + resolvedArg, inst.lineNo);
-      if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
-      else openNotepad(st.name, st.dirName);
+      await state.fs.openUi(st.name, st.dirName);
       state.status = 0;
       return null;
     }
@@ -476,12 +471,13 @@ async function execScriptInstruction(inst, labels, state) {
     case 'run': {
       const tokens = scriptTokenize(resolvedArg, inst.lineNo);
       if (!tokens.length) throw makeScriptError('Usage: run <script> [args...]', inst.lineNo);
-      const st = vfsStatSync(tokens[0], state.dirName);
+      const st = await state.fs.stat(tokens[0], state.dirName);
       if (!st || st.kind !== 'text') throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
       // Content is async now; the stat above carries no `value`.
-      const source = await vfsReadFile(st.name, st.dirName);
+      const source = await state.fs.readFile(st.name, st.dirName);
       if (source === null) throw makeScriptError('Script not found: ' + tokens[0], inst.lineNo);
       state.status = await execScript(source, state.printFn, {
+        fs: state.fs,
         vars: state.vars,
         depth: state.depth + 1,
         dirName: st.dirName,
@@ -499,12 +495,12 @@ async function execScriptInstruction(inst, labels, state) {
       const patternToken = match[1];
       const pattern = scriptUnescape(patternToken.replace(/^['"]|['"]$/g, ''));
       const fileName = match[2].replace(/^['"]|['"]$/g, '');
-      const st = vfsStatSync(fileName, state.dirName);
+      const st = await state.fs.stat(fileName, state.dirName);
       if (!st || st.kind !== 'text') throw makeScriptError('File not found: ' + fileName, inst.lineNo);
       let re;
       try { re = new RegExp(pattern, 'i'); }
       catch (e) { throw makeScriptError('Invalid regex: ' + pattern, inst.lineNo); }
-      const contents = await vfsReadFile(st.name, st.dirName);
+      const contents = await state.fs.readFile(st.name, st.dirName);
       if (contents === null) throw makeScriptError('File not found: ' + fileName, inst.lineNo);
       const lines = contents.split('\n');
       let matches = 0;
@@ -538,6 +534,7 @@ async function execScript(source, printFn, options) {
     return scriptFail(err, printFn, sourceName, options.bubbleErrors);
   }
   const state = {
+    fs: options.fs,
     vars: options.vars || Object.create(null),
     depth,
     dirName: fsNormalizeDir(options.dirName),
@@ -600,5 +597,35 @@ async function execScript(source, printFn, options) {
     pc++;
   }
   return Math.trunc(state.status ?? 0);
+}
+
+// The main thread's adapter. The worker builds its own in os/worker/syscalls.js
+// against the same shape, so the interpreter cannot tell them apart.
+function makeVfsScriptFs() {
+  return {
+    async stat(path, cwd) { return vfsStatSync(path, cwd); },
+    async exists(path, cwd) { return vfsExistsSync(path, cwd); },
+    async dirExists(path) { return vfsDirExistsSync(path); },
+    async readFile(path, cwd) { return await vfsReadFile(path, cwd); },
+    async writeFile(path, text, cwd) { return await vfsWriteFile(path, text, cwd); },
+    async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
+    // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
+    // story's undeletable files. Deleting straight from the VFS would bypass both.
+    async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
+    async openUi(path, cwd) {
+      const st = vfsStatSync(path, cwd);
+      if (!st) return;
+      if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+      else openNotepad(st.name, st.dirName);
+    },
+    async openSystem(name, cwd) {
+      const lower = String(name || '').toLowerCase();
+      if (lower === 'terminal' || lower === 'terminal.exe') { openTerminal(cwd); return true; }
+      return !!openSystemFile(name);
+    },
+    async isSystemPath(path) { return isVisibleSystemPath(path, { includeExplorer: true }); },
+    async notifyChanged() { document.dispatchEvent(new CustomEvent('fs-changed')); },
+    async clearScreen() { const out = document.getElementById('to'); if (out) out.innerHTML = ''; },
+  };
 }
 
