@@ -14,6 +14,16 @@ var _kernelWaiters = new Map();   // pid -> [resolve]
 
 const KERNEL_PID = 1;
 
+// Pids 2 through 1333 (and the generated 500 + i*13 series) belong to the daemon
+// story's fictional process list in os/daemon.js - soul_svc.exe, mirror_watch.exe,
+// and the rest, including pid 512, which is scripted dialogue ("It restarts pid
+// 512. It is not pid 512."). Those are narrative constants and must never move.
+// Real allocation used to land in 2000-7999 for the same reason, back when
+// pidFromId hashed window ids into that range; this restores that floor so a
+// real window can never again collide with a scripted pid. Lowering this number
+// does not just look untidy - it breaks a story beat.
+const KERNEL_FIRST_USER_PID = 2000;
+
 function kernelInit() {
   _kernelProcs = new Map();
   _kernelByWinId = new Map();
@@ -24,6 +34,7 @@ function kernelInit() {
     pid, name: 'kernel', kind: 'system', state: 'running', parentPid: 0,
     cwd: '', env: {}, worker: null, winId: null, exitCode: null, startedAt: Date.now(),
   });
+  _kernelNextPid = KERNEL_FIRST_USER_PID;
 }
 
 // Monotonic and never reused within a session. Reuse would make a stale pid in a

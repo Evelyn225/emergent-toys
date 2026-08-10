@@ -75,3 +75,32 @@ test('listProcesses is sorted by pid and labels both kinds', () => {
   assert.deepStrictEqual(list.map(p => p.pid), list.map(p => p.pid).slice().sort((x, y) => x - y));
   assert.deepStrictEqual(new Set(list.map(p => p.kind)), new Set(['system', 'user']));
 });
+
+// os/daemon.js hardcodes a fictional process list (BUILTIN_PROCESS_SEED and the
+// generated 500 + i*13 series) that never exceeds pid 1333, including pid 512,
+// which is scripted dialogue and cannot move. Real allocation must stay clear of
+// that whole range - see the KERNEL_FIRST_USER_PID comment in os/kernel.js.
+// kernel.js is loaded in isolation here (no os/daemon.js), so the ceiling is
+// asserted as the constant the story actually uses rather than loaded live.
+const DAEMON_STORY_PID_CEILING = 1333;
+
+test('pid 1 is reserved for the kernel and real allocation starts at 2000, clear of the daemon story', () => {
+  const ctx = kernel();
+  assert.strictEqual(ctx.kernelGetProcess(1).name, 'kernel');
+  const first = ctx.kernelRegisterSystem('win-a', 'NOTEPAD');
+  assert.ok(first >= 2000, `first real pid ${first} must be >= 2000`);
+});
+
+test('no allocated pid ever lands in the daemon story range', () => {
+  const ctx = kernel();
+  const allocated = [
+    ctx.kernelRegisterSystem('win-a', 'NOTEPAD'),
+    ctx.kernelRegisterSystem('win-b', 'EXPLORER'),
+    ctx.__spawnForTest(fakeWorker(), 'job.script'),
+  ];
+  ctx.kernelDeregisterSystem('win-a');
+  allocated.push(ctx.kernelRegisterSystem('win-c', 'CALC'));
+  allocated.forEach(pid => {
+    assert.ok(pid > DAEMON_STORY_PID_CEILING, `pid ${pid} collides with the daemon story range (<= ${DAEMON_STORY_PID_CEILING})`);
+  });
+});
