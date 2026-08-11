@@ -33,18 +33,20 @@ const RECYCLE_STORAGE_DIR = 'CACHE\\RECYCLE_BIN';
 const RECYCLE_BIN_KEY = 'sleepOS-recycle-bin';
 
 const DESKTOP_ICONS = [
-  { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
-  { name: 'NOTEPAD.exe',    emoji: '📝', action: 'openNotepad' },
-  { name: 'EXPLORER.exe',   emoji: '🗂️', action: 'openExplorer' },
-  { name: 'TERMINAL.exe',   emoji: '💻', action: 'openTerminal' },
-  { name: 'SYSMON.exe',     emoji: '📊', action: 'openSysmon' },
-  { name: 'BROWSER.exe',    emoji: '🌐', action: 'openBrowser' },
-  { name: 'DEFRAG.exe',     emoji: '🧩', action: 'openDefrag' },
-  { name: 'CALC.exe',       emoji: '🔢', action: 'openCalculator' },
-  { name: 'REGEDIT.exe',    emoji: '🗝️', action: 'openRegedit' },
-  { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
-  { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
-  { name: RECYCLE_BIN_NAME, emoji: '\u{1F5D1}\uFE0F', action: 'openRecycleBin', recycleBin: true },
+  { name: 'WELCOME.README', emoji: 'icon:text',     action: 'openWelcome' },
+  { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
+  { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
+  { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },
+  { name: 'SYSMON.exe',     emoji: 'icon:sysmon',   action: 'openSysmon' },
+  { name: 'BROWSER.exe',    emoji: 'icon:browser',  action: 'openBrowser' },
+  { name: 'DEFRAG.exe',     emoji: 'icon:defrag',   action: 'openDefrag' },
+  { name: 'CALC.exe',       emoji: 'icon:calc',     action: 'openCalculator' },
+  { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
+  { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
+  { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },
+  // Not in the static map alone: the bin's icon depends on whether it holds
+  // anything, so resolveFsIcon picks between empty and full at render time.
+  { name: RECYCLE_BIN_NAME, emoji: 'icon:recycle-empty', action: 'openRecycleBin', recycleBin: true },
 ];
 function getExeDisplayName() {
   return daemonStory.quarantineSigned ? 'quarantine.exe' : '?????.exe';
@@ -326,7 +328,7 @@ function openSystemFile(name) {
   const key = String(name || '').trim();
   if (!key) return false;
   if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
-    osAlert('void.tmp is no longer present.', 'void.tmp', '⬛');
+    osAlert('void.tmp is no longer present.', 'void.tmp', 'icon:void');
     return true;
   }
   const SYS = {
@@ -355,7 +357,7 @@ function openDesktopShortcutTarget(target) {
   const name = String(target.name || path.split('\\').pop() || '').trim();
   if (target.sysfile) {
     if (!openSystemFile(name || path)) {
-      osAlert('Shortcut target not found:\n' + (name || path || 'Unknown target'), 'Missing Shortcut', 'X');
+      osAlert('Shortcut target not found:\n' + (name || path || 'Unknown target'), 'Missing Shortcut', 'icon:error');
     }
     return;
   }
@@ -370,7 +372,7 @@ function openDesktopShortcutTarget(target) {
   // name in both files and dirs and makes the directory unreachable.
   const st = vfsStatSync(path);
   if (!st || st.type !== 'file') {
-    osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
+    osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'icon:error');
     return;
   }
   if (openWithAssociation(st.name, st.dirName)) return;

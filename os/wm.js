@@ -1,4 +1,4 @@
-function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
+function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
 
@@ -32,8 +32,8 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
     <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>
     <div class="win-titlebar" id="tb-${id}">
       <div class="win-title-text">
-        <span class="win-icon">${icon}</span>
-        <span id="wtitle-${id}">${title}</span>
+        <span class="win-icon">${iconMarkup(icon)}</span>
+        <span id="wtitle-${id}">${escHtml(title == null ? '' : String(title))}</span>
       </div>
       <div class="win-controls">
         <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
@@ -223,7 +223,8 @@ function addTbBtn(id, title, icon) {
   const btn = document.createElement('button');
   btn.className = 'taskbar-btn focused';
   btn.id = 'tbtn-' + id;
-  btn.innerHTML = `<span>${icon}</span><span>${title}</span>`;
+  btn.innerHTML = `<span class="tb-icon">${iconMarkup(icon)}</span><span></span>`;
+  btn.lastElementChild.textContent = title;
   btn.addEventListener('click', () => {
     const w = wins[id]; if (!w) return;
     if (w.minimized) { unminWin(id); }
@@ -384,20 +385,25 @@ function iconLabel(name) {
 }
 
 function resolveFsIcon(name, kind) {
-  if (isRecycleBinItemName(name)) return SYSTEM_FILE_ICONS[RECYCLE_BIN_NAME] || '\u{1F5D1}\uFE0F';
-  if (kind === 'image') return '\u{1F5BC}\uFE0F';
-  if (kind === 'video') return '\u{1F3AC}';
-  if (kind === 'audio') return '\u{1F3B5}';
-  if (kind === 'dir') return '\u{1F4C1}';
+  // The bin is the one icon with two states, so it is resolved here rather than
+  // read out of SYSTEM_FILE_ICONS' static map. recycleBinEntries is declared in
+  // fs-persist.js, which the bundle loads well before this ever runs.
+  if (isRecycleBinItemName(name)) {
+    return recycleBinEntries.length ? 'icon:recycle-full' : 'icon:recycle-empty';
+  }
+  if (kind === 'image') return 'icon:image';
+  if (kind === 'video') return 'icon:video';
+  if (kind === 'audio') return 'icon:audio';
+  if (kind === 'dir') return 'icon:folder';
   const systemIcon = SYSTEM_FILE_ICONS[String(name).toUpperCase()];
   if (systemIcon) return systemIcon;
   const ext = (String(name || '').split('.').pop() || '').toLowerCase();
   return {
-    exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
-    json:'\u{1F4CB}', js:'\u{1F4DC}', ts:'\u{1F4DC}', jsx:'\u{1F4DC}', tsx:'\u{1F4DC}',
-    html:'\u{1F310}', htm:'\u{1F310}', css:'\u{1F3A8}', py:'\u{1F40D}',
-    tmp:'\u{1F5D1}\uFE0F', log:'\u{1F4CB}', csv:'\u{1F4CA}', core:'\u{1F4A5}'
-  }[ext] || '\u{1F4C4}';
+    exe:'icon:exe', script:'icon:script', txt:'icon:text', readme:'icon:text', md:'icon:text',
+    json:'icon:script', js:'icon:script', ts:'icon:script', jsx:'icon:script', tsx:'icon:script',
+    html:'icon:browser', htm:'icon:browser', css:'icon:script', py:'icon:script',
+    tmp:'icon:void', log:'icon:text', csv:'icon:sysmon', core:'icon:daemon'
+  }[ext] || 'icon:unknown';
 }
 
 function getDesktopFsIcons() {

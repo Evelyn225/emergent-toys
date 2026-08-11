@@ -70,6 +70,36 @@ body {
   background: #008080;
 }
 
+/* ── Pixel-art icons ─────────────────────────────────────────── */
+/* Every PNG under os/icons/ is natively 32x32. Only 16px and 32px are used, so
+   nearest-neighbour scaling always lands on whole source pixels - a 1.5x size
+   like 24px would smear every edge, which is why the mobile bumps below stay
+   on 32px and grow the label instead.
+   Containers that may still hold an emoji (a project entry, a shortcut
+   persisted before the icon set existed) keep their font-size alongside. */
+.os-icon {
+  width: var(--os-icon-size, 16px);
+  height: var(--os-icon-size, 16px);
+  image-rendering: pixelated;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+  user-select: none; -webkit-user-drag: none;
+}
+/* 32px slots draw the art 1:1, or 2:1 on a HiDPI screen, so nearest-neighbour
+   above keeps them crisp. The 16px slots below are a true half-size downscale,
+   where nearest-neighbour throws away three of every four pixels - fatal for
+   the dithered Win95 fills. The closed folder's body is a yellow/silver
+   checkerboard; sampling it collapses the body to flat #c0c0c0, which is
+   exactly the menu background, so the folder vanishes. A real box filter
+   averages the dither back into the pale yellow it is meant to read as. */
+.win-icon .os-icon, .tb-icon .os-icon, .tray-icon .os-icon, .sm-icon .os-icon,
+.menu-dd-icon .os-icon, .reg-tree-icon .os-icon, .reg-val-name .os-icon,
+.exp-list-icon .os-icon, .exp-det-icon .os-icon, .cad-action-icon .os-icon,
+#br-home .os-icon, #br-fav .os-icon {
+  image-rendering: auto;
+}
+
 /* ── Desktop icons ───────────────────────────────────────────── */
 #icons-layer {
   position: absolute; inset: 0;
@@ -93,7 +123,7 @@ body {
 }
 .desktop-icon:hover { border: 1px dotted rgba(255,255,255,0.55); background: rgba(0,0,128,0.28); }
 .desktop-icon.selected { border: 1px dotted #fff; background: rgba(0,0,128,0.5); }
-.di-img { font-size: 26px; line-height: 1; flex-shrink: 0; }
+.di-img { --os-icon-size: 32px; font-size: 26px; line-height: 1; flex-shrink: 0; height: 32px; display: flex; align-items: center; justify-content: center; }
 .di-name {
   font-size: 10px; color: #fff;
   text-align: center; text-shadow: 1px 1px 1px #000;
@@ -138,7 +168,7 @@ body {
   overflow: hidden; white-space: nowrap; flex: 1;
   font-size: 11px; font-weight: bold;
 }
-.win-icon { font-size: 12px; }
+.win-icon { --os-icon-size: 16px; font-size: 12px; display: flex; align-items: center; flex-shrink: 0; }
 .win-controls { display: flex; gap: 1px; flex-shrink: 0; }
 .win-btn {
   width: 16px; height: 14px;
@@ -197,6 +227,8 @@ body {
 }
 .taskbar-btn.focused { border-color: #808080 #fff #fff #808080; background: #b4b4b4; }
 .taskbar-btn span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.tb-icon { --os-icon-size: 16px; display: flex; align-items: center; flex-shrink: 0; }
+.tray-icon { --os-icon-size: 16px; display: flex; align-items: center; }
 #system-tray {
   height: 22px;
   border: 1px solid; border-color: #808080 #fff #fff #808080;
@@ -230,14 +262,9 @@ body {
 }
 .sm-item:hover { background: #000080; color: #fff; }
 .sm-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; flex-shrink: 0; }
-.sm-icon-power svg, .power-icon svg { display: block; overflow: visible; }
-.sm-icon-power svg { width: 12px; height: 12px; }
-.sm-icon-power svg path, .power-icon svg path {
-  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
-}
-.power-icon { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
-.win-icon .power-icon svg { width: 12px; height: 12px; }
-.sm-icon img { width: 16px; height: 16px; display: block; }
+/* Sized off the same variable as .os-icon so the mobile bump reaches the one
+   plain <img> in this menu (the Eve Net home link) as well as the icon set. */
+.sm-icon img { width: var(--os-icon-size, 16px); height: var(--os-icon-size, 16px); display: block; image-rendering: pixelated; }
 .sm-sep { height: 1px; margin: 2px 4px; background: linear-gradient(to right, #808080, #fff); }
 
 /* ── Dropdown menus ──────────────────────────────────────────── */
@@ -250,6 +277,19 @@ body {
 .menu-dd-item {
   padding: 2px 4px 2px 20px; font-size: 11px;
   cursor: default; white-space: nowrap; user-select: none;
+}
+/* The 20px left padding above has always been the icon gutter; .has-gutter
+   just fills it. Items in the same menu with no art still get the empty slot,
+   so every label in the menu starts on the same column. */
+.menu-dd-item.has-gutter {
+  padding-left: 4px;
+  display: flex; align-items: center; gap: 4px;
+}
+.menu-dd-icon {
+  --os-icon-size: 16px;
+  width: 16px; height: 16px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; line-height: 1;
 }
 .menu-dd-item:hover { background: #000080; color: #fff; }
 .menu-dd-item.disabled { color: #808080; pointer-events: none; }
@@ -267,7 +307,7 @@ body {
 }
 .file-item:hover { border-color: #000080; background: rgba(0,0,128,0.1); }
 .file-item.selected { background: #000080; color: #fff; border-color: #000080; }
-.fi-icon { font-size: 24px; }
+.fi-icon { --os-icon-size: 32px; font-size: 24px; height: 32px; display: flex; align-items: center; justify-content: center; }
 .fi-name { font-size: 10px; word-break: break-word; line-height: 1.2; }
 /* list view */
 .file-list { padding: 4px; }
@@ -345,11 +385,22 @@ body {
 
 /* ── Dialog ───────────────────────────────────────────────────── */
 .dlg-body { padding: 12px; display: flex; gap: 12px; align-items: flex-start; }
-.dlg-icon { font-size: 32px; flex-shrink: 0; line-height: 1; }
-.dlg-icon.power-icon { width: 32px; height: 32px; }
-.dlg-icon.power-icon svg { width: 28px; height: 28px; }
+.dlg-icon {
+  --os-icon-size: 32px;
+  font-size: 32px; flex-shrink: 0; line-height: 1;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+}
 .dlg-text { font-size: 11px; line-height: 1.6; flex: 1; }
 .dlg-btns { padding: 8px; display: flex; justify-content: center; gap: 8px; border-top: 1px solid #d0d0d0; }
+/* A dialog window is a fixed height but its message is not, so the button row
+   used to sit directly under a short body and strand itself mid-window with a
+   band of dead grey beneath it - and its separator line with it. A message box
+   keeps that row on the bottom edge, so the slack goes above it instead.
+   Scoped by :has so it only touches windows that actually are dialogs; the Run
+   dialog builds its own right-aligned row and is deliberately not caught. */
+.win-body:has(> .dlg-btns) { display: flex; flex-direction: column; }
+.win-body:has(> .dlg-btns) > .dlg-body { flex: 1; }
 .dlg-btn {
   min-width: 75px; height: 23px; background: #c0c0c0;
   border: 2px solid; border-color: #fff #808080 #808080 #fff;
@@ -812,7 +863,20 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 }
 .exp-item:hover { background: #000080; color: #fff; border-color: #000080; }
 .exp-item.selected { background: #000080; color: #fff; border-color: #000080; }
-.exp-item .exp-icon { font-size: 28px; margin-bottom: 2px; pointer-events: none; }
+.exp-item .exp-icon {
+  --os-icon-size: 32px;
+  font-size: 28px; margin-bottom: 2px; pointer-events: none;
+  height: 32px; display: flex; align-items: center; justify-content: center;
+}
+/* List and details rows: a fixed 16px slot so names start on one column
+   whether the row shows a PNG or a project's emoji. */
+.exp-list-icon {
+  --os-icon-size: 16px;
+  width: 18px; flex-shrink: 0; font-size: 14px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.exp-det-icon { width: 22px; font-size: 12px; }
+.exp-det-icon .os-icon { --os-icon-size: 16px; margin: 0 auto; }
 .exp-item span { pointer-events: none; }
 .exp-sysfile {  }
 .exp-drop-target { outline: 2px solid #000080; background: rgba(0,0,128,0.15) !important; }
@@ -820,9 +884,10 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 
 /* ── Drop zone overlay ───────────────────────────────────────── */
 #drop-overlay {
+  --os-icon-size: 32px;
   display: none; position: fixed; inset: 0; z-index: 99999;
   background: rgba(0,0,128,0.55); border: 4px dashed #fff;
-  align-items: center; justify-content: center;
+  align-items: center; justify-content: center; gap: 10px;
   color: #fff; font-family: var(--sleep-font); font-size: 22px;
   pointer-events: none;
 }
@@ -1084,7 +1149,8 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 .reg-tree-item:hover { background:rgba(0,0,128,0.1); }
 .reg-tree-item.selected { background:#000080; color:#fff; }
 .reg-tree-arrow { width:10px; flex-shrink:0; text-align:center; font-size:9px; }
-.reg-tree-icon { flex-shrink:0; }
+.reg-tree-icon { --os-icon-size: 16px; flex-shrink:0; display:inline-flex; align-items:center; vertical-align:middle; }
+.reg-val-name { display:flex; align-items:center; gap:5px; --os-icon-size: 16px; }
 .reg-vals {
   flex:1; overflow:auto; background:#fff; font-size:11px;
 }
@@ -1127,6 +1193,13 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 .calc-btn.equals { background:#000080; color:#fff; }
 .calc-btn.clear { background:#c04040; color:#fff; }
 
+/* Icon slots owned by individual apps */
+.daemon-eye-large { --os-icon-size: 32px; flex-shrink: 0; }
+.lock-screen-icon { --os-icon-size: 32px; }
+.br-err-icon     { --os-icon-size: 32px; margin-bottom: 8px; }
+.fl-icon         { --os-icon-size: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+#br-home .os-icon, #br-fav .os-icon { --os-icon-size: 16px; }
+
 /* ── Window switcher overlay ─────────────────────────────────── */
 #alttab-overlay {
   display:none; position:fixed; inset:0; z-index:99990;
@@ -1164,7 +1237,7 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
   min-width:64px;
 }
 .alttab-item.focused { border-color:#000080; background:rgba(0,0,128,0.15); }
-.alttab-item .at-icon { font-size:24px; }
+.alttab-item .at-icon { --os-icon-size:32px; font-size:24px; height:32px; display:flex; align-items:center; justify-content:center; }
 .alttab-item .at-label { font-size:10px; text-align:center; max-width:72px; word-break:break-word; }
 
 /* ── Ctrl+Shift+Q overlay ────────────────────────────────────── */
@@ -1187,6 +1260,7 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 }
 #cad-hero { display:flex; gap:12px; align-items:flex-start; }
 #cad-glyph {
+  --os-icon-size:32px;
   width:48px; height:48px; flex:0 0 48px; display:flex; align-items:center; justify-content:center;
   background:linear-gradient(180deg,#1f5ca8,#000080); color:#fff; font-size:22px;
   border:2px solid; border-color:#fff #6f6f6f #6f6f6f #fff;
@@ -1224,7 +1298,9 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
   outline:none;
 }
 .cad-action-icon {
-  width:22px; flex:0 0 22px; font-size:18px; line-height:1.1; text-align:center;
+  --os-icon-size:16px;
+  width:22px; flex:0 0 22px; font-size:18px; line-height:1.1;
+  display:flex; align-items:center; justify-content:center;
 }
 .cad-action-copy {
   display:flex; flex-direction:column; gap:3px; min-width:0;
@@ -1264,9 +1340,18 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
   display:flex; flex-direction:column; align-items:center; gap:10px;
   min-width:min(420px, calc(100vw - 48px));
 }
+/* moon.png is a flat white silhouette on transparent, so it is used as a MASK
+   rather than an <img>: the fill stays the sigil's green and the glow stays a
+   real shadow, which an <img> would have flattened to a white cut-out. It is
+   also the one image in os/icons/ that is not 32px pixel art - it is a
+   high-resolution shape scaled down, so it anti-aliases instead of snapping to
+   the grid, and it is deliberately kept out of the OS_ICONS registry. */
 #sleep-sigil {
-  font-size:38px; line-height:1;
-  color:#b6d2b0; text-shadow:0 0 14px rgba(120,170,120,0.28);
+  width:44px; height:48px;
+  background-color:#b6d2b0;
+  -webkit-mask:url('icons/moon.png') no-repeat center / contain;
+          mask:url('icons/moon.png') no-repeat center / contain;
+  filter:drop-shadow(0 0 14px rgba(120,170,120,0.28));
 }
 #sleep-clock {
   font-size:30px; letter-spacing:0.16em; color:#d9e7d1;
@@ -1287,6 +1372,9 @@ body.idle-sleeping { cursor:none; }
   .win-rz { display: none; }
 
   .desktop-icon { width: 96px; height: 96px; padding: 6px; gap: 5px; }
+  /* Icons stay at their native 32px here rather than following the emoji up to
+     36px: 36 is 1.125x of the source grid, so every icon would land on
+     fractional pixels. The label carries the size increase instead. */
   .di-img { font-size: 36px; }
   .di-name { font-size: 12px; }
 
@@ -1316,7 +1404,11 @@ body.idle-sleeping { cursor:none; }
 
   #start-menu { width: 290px; }
   .sm-item { padding: 15px 12px 15px 8px; font-size: 16px; }
-  .sm-icon { width: 28px; height: 28px; font-size: 26px; }
+  /* 32px, not 28: a whole 1x of the source art rather than a 0.875x resample.
+     At full size there is no downscale left to filter, so it goes back to
+     nearest-neighbour like every other 32px slot. */
+  .sm-icon { --os-icon-size: 32px; width: 32px; height: 32px; font-size: 26px; }
+  .sm-icon .os-icon { image-rendering: pixelated; }
 
   .dlg-body { padding: 16px; }
   .dlg-text { font-size: 16px; line-height: 1.7; }
@@ -1324,7 +1416,7 @@ body.idle-sleeping { cursor:none; }
 
   #cad-actions { grid-template-columns: 1fr; }
   #cad-hero { flex-direction: column; }
-  #cad-glyph { width: 40px; height: 40px; flex-basis: 40px; font-size: 18px; }
+  #cad-glyph { --os-icon-size: 32px; width: 40px; height: 40px; flex-basis: 40px; font-size: 18px; }
   #cad-footer { flex-direction: column; align-items: stretch; }
   #cad-footnote { text-align: center; }
 

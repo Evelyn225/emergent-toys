@@ -1,6 +1,6 @@
 function openExplorer(startPath) {
   const id = nextExplorerWinId();
-  if (!mkWin({ id, title:'FILE EXPLORER \u2014 C:\\sleepOS', icon:'\u{1F5C2}\uFE0F', w:560, h:400, x:110, y:65 })) return;
+  if (!mkWin({ id, title:'FILE EXPLORER \u2014 C:\\sleepOS', icon:'icon:explorer', w:560, h:400, x:110, y:65 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -261,7 +261,7 @@ function openExplorer(startPath) {
       try {
         if (!(await vfsRename(cwd, item.name, nextName))) return;
       } catch (err) {
-        osAlert(err.code === 'EEXIST' ? 'A file with that name already exists.' : err.message, 'Rename Failed', 'X');
+        osAlert(err.code === 'EEXIST' ? 'A file with that name already exists.' : err.message, 'Rename Failed', 'icon:error');
         return;
       }
       if (item.kind !== 'dir') {
@@ -290,7 +290,7 @@ function openExplorer(startPath) {
       if (result.ok && result.restored) restoredCount++;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
     }
-    if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
+    if (blocked.length) osAlert(blocked[0], 'Recycle Bin', 'icon:warning');
     if (restoredCount && ws) ws.textContent = restoredCount === 1 ? '1 item restored' : restoredCount + ' items restored';
     if (restoredCount || blocked.length) render();
   }
@@ -305,7 +305,7 @@ function openExplorer(startPath) {
       // it is referenced from double-click, Enter and several dispatch tables.
       // render() runs when the restore lands, not before.
       void restoreRecycleEntry(item._recycle).then(result => {
-        if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+        if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', 'icon:warning');
         else if (ws) ws.textContent = 'Restored: ' + result.name;
         render();
       });
@@ -372,7 +372,7 @@ function openExplorer(startPath) {
           if (result.ok && result.deleted) changed = true;
           else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
         }
-        if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
+        if (blocked.length) osAlert(blocked[0], 'Recycle Bin', 'icon:warning');
         if (changed && ws) ws.textContent = items.length === 1 ? '1 item deleted permanently' : items.length + ' items deleted permanently';
         if (changed || blocked.length) render();
         return;
@@ -393,10 +393,10 @@ function openExplorer(startPath) {
         if (result.ok && result.deleted) changed = true;
         else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
       }
-      if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
+      if (blocked.length) osAlert(blocked[0], 'Delete', 'icon:warning');
       if (changed || blocked.length) document.dispatchEvent(new CustomEvent('fs-changed'));
       render();
-    }, '\u{1F5D1}\uFE0F');
+    }, 'icon:recycle-full');
   }
 
   function typeLabel(kind) {
@@ -425,15 +425,15 @@ function openExplorer(startPath) {
     if (viewMode === 'list') {
       el = document.createElement('div');
       el.className = 'exp-list-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = '<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">' + icon + '</span><span>' + iconLabel(name) + '</span>';
+      el.innerHTML = '<span class="exp-list-icon">' + iconMarkup(icon) + '</span><span>' + escHtml(iconLabel(name)) + '</span>';
     } else if (viewMode === 'details') {
       el = document.createElement('tr');
       el.className = 'exp-det-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = '<td style="font-size:12px;width:22px;">' + icon + '</td><td>' + iconLabel(name) + '</td><td>' + typeLabel(kind) + '</td>';
+      el.innerHTML = '<td class="exp-det-icon">' + iconMarkup(icon) + '</td><td>' + escHtml(iconLabel(name)) + '</td><td>' + typeLabel(kind) + '</td>';
     } else {
       el = document.createElement('div');
       el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = '<div class="exp-icon">' + icon + '</div><span>' + iconLabel(name) + '</span>';
+      el.innerHTML = '<div class="exp-icon">' + iconMarkup(icon) + '</div><span>' + escHtml(iconLabel(name)) + '</span>';
     }
     registerSelectionNode(el, item);
     el.addEventListener('click', e => {
@@ -578,15 +578,15 @@ function openExplorer(startPath) {
     if (viewMode === 'details') {
       el = document.createElement('tr');
       el.className = 'exp-det-item';
-      el.innerHTML = '<td style="font-size:12px;width:22px;">' + project.emoji + '</td><td>' + project.name + '</td><td>HTML Application</td>';
+      el.innerHTML = '<td class="exp-det-icon">' + iconMarkup(project.emoji) + '</td><td>' + escHtml(project.name) + '</td><td>HTML Application</td>';
     } else if (viewMode === 'list') {
       el = document.createElement('div');
       el.className = 'exp-list-item';
-      el.innerHTML = '<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">' + project.emoji + '</span><span>' + project.name + '</span>';
+      el.innerHTML = '<span class="exp-list-icon">' + iconMarkup(project.emoji) + '</span><span>' + escHtml(project.name) + '</span>';
     } else {
       el = document.createElement('div');
       el.className = 'exp-item';
-      el.innerHTML = '<div class="exp-icon">' + project.emoji + '</div><span>' + project.name + '</span>';
+      el.innerHTML = '<div class="exp-icon">' + iconMarkup(project.emoji) + '</div><span>' + escHtml(project.name) + '</span>';
     }
     registerSelectionNode(el, item);
     el.addEventListener('click', e => {
@@ -602,7 +602,7 @@ function openExplorer(startPath) {
       showCtxMenu(e.clientX, e.clientY, [
         { label: 'Open', action: openProject },
         '-',
-        { label: 'Properties', action: () => osAlert('Name:\t' + project.name + '\nFile:\t' + project.file + '\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\', 'Properties', '??') },
+        { label: 'Properties', action: () => osAlert('Name:\t' + project.name + '\nFile:\t' + project.file + '\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\', 'Properties', 'icon:info') },
         '-',
         { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || project.name) },
       ]);
@@ -838,7 +838,7 @@ function openExplorer(startPath) {
         try {
           await vfsWriteFile(name, '', cwd);
         } catch (err) {
-          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'X');
+          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'icon:error');
           return;
         }
         openNotepad(name, cwd);
@@ -929,7 +929,7 @@ function openExplorer(startPath) {
         try {
           await vfsWriteFile(name, '', cwd);
         } catch (err) {
-          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'X');
+          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'icon:error');
           return;
         }
         openNotepad(name, cwd);

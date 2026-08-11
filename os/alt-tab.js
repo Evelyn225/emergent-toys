@@ -30,7 +30,7 @@ function renderAltTab() {
     const w = wins[id];
     const item = document.createElement('div');
     item.className = 'alttab-item' + (i === altTabIdx ? ' focused' : '');
-    item.innerHTML = '<div class="at-icon">' + (w.icon || '📄') + '</div><div class="at-label">' + (w.title || id) + '</div>';
+    item.innerHTML = '<div class="at-icon">' + iconMarkup(w.icon || 'icon:text') + '</div><div class="at-label">' + escHtml(w.title || id) + '</div>';
     item.addEventListener('click', () => {
       altTabIdx = i;
       commitAltTab();
@@ -81,7 +81,7 @@ function cadAction(type) {
     lock.id = 'lock-screen';
     lock.style.cssText = 'position:fixed;inset:0;z-index:99995;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
     lock.innerHTML = `
-      <div style="color:#888;font-size:28px;">🔒</div>
+      <div class="lock-screen-icon">${iconMarkup('icon:lock')}</div>
       <div style="color:#ccc;font-size:13px;font-family:var(--sleep-font);">sleepOS is locked</div>
       <div style="color:#666;font-size:11px;font-family:var(--sleep-font);">Press any key or click to unlock</div>`;
     document.body.appendChild(lock);

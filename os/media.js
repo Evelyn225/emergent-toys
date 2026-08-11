@@ -72,7 +72,7 @@ async function handleFileUpload(fileList) {
   const dirPath = fsNormalizeDir(_uploadCwd || '');
   if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
   if (dirPath && !vfsDirExistsSync(dirPath)) {
-    osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'X');
+    osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'icon:error');
     return;
   }
   const dirLabel = dirPath ? `C:\\sleepOS\\${dirPath}\\` : 'C:\\sleepOS';
@@ -125,7 +125,7 @@ async function handleFileUpload(fileList) {
     const msg = failed.length === 1
       ? `"${failed[0]}" could not be uploaded to ${dirLabel}`
       : `${failed.length} files could not be uploaded to ${dirLabel}`;
-    osAlert(msg, 'Upload Failed', 'X');
+    osAlert(msg, 'Upload Failed', 'icon:error');
   }
 }
 
@@ -135,10 +135,10 @@ function showUploadConfirm(names, dirLabel) {
     ? `"${names[0]}" uploaded to ${dirLabel}`
     : `${names.length} files uploaded to ${dirLabel}`;
   const id = 'upload-confirm-' + Date.now();
-  if (!mkWin({ id, title: 'Upload Complete', icon: '📤', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
+  if (!mkWin({ id, title: 'Upload Complete', icon: 'icon:success', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:14px;font-family: var(--sleep-font);font-size:12px;';
-  body.innerHTML = `<div style="margin-bottom:12px;">📁 ${msg}</div>
+  body.innerHTML = `<div style="margin-bottom:12px;">${msg}</div>
     <div style="margin-bottom:8px;color:#555;">Use OPEN &lt;filename&gt; in terminal, or type the filename to view.</div>
     <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
 }
@@ -180,7 +180,7 @@ function openMediaFile(filename, dirName) {
   if (blob.kind === 'image') openImageViewer(st.name, st.dirName);
   else if (blob.kind === 'video') openVideoPlayer(st.name, st.dirName);
   else if (blob.kind === 'audio') openAudioPlayer(st.name, st.dirName);
-  else osAlert('Cannot open binary file:\n' + st.name, 'Cannot Open', 'X');
+  else osAlert('Cannot open binary file:\n' + st.name, 'Cannot Open', 'icon:error');
 }
 
 function openImageViewer(filename, dirName) {
@@ -188,7 +188,7 @@ function openImageViewer(filename, dirName) {
   const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
   const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'img-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: '🖼️', w: 520, h: 400 })) return;
+  if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: 'icon:image', w: 520, h: 400 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -219,7 +219,7 @@ function openVideoPlayer(filename, dirName) {
   const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
   const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'vid-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(st.name) + ' \u2014 Media Player', icon: '🎬', w: 500, h: 390 })) return;
+  if (!mkWin({ id, title: iconLabel(st.name) + ' \u2014 Media Player', icon: 'icon:video', w: 500, h: 390 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -357,7 +357,7 @@ function openAudioPlayer(filename, dirName) {
   const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
   const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'aud-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(st.name) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
+  if (!mkWin({ id, title: iconLabel(st.name) + ' - Media Player', icon: 'icon:audio', w: 420, h: 240 })) return;
 
   const body = document.getElementById('wb-' + id);
   const ws = document.getElementById('ws-' + id);

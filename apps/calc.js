@@ -1,5 +1,5 @@
 function openCalculator() {
-  if (!mkWin({ id:'calc', title:'Calculator', icon:'🔢', w:240, h:300, x:200, y:120, menubar:true, statusbar:false })) return;
+  if (!mkWin({ id:'calc', title:'Calculator', icon:'icon:calc', w:240, h:300, x:200, y:120, menubar:true, statusbar:false })) return;
   const body = document.getElementById('wb-calc');
   const mb   = document.getElementById('mb-calc');
   body.style.cssText = 'padding:0;overflow:hidden;';

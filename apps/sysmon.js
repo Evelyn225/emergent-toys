@@ -1,5 +1,5 @@
 function openSysmon() {
-  if (!mkWin({ id:'sysmon', title:'SYSMON.exe - System Monitor', icon:'📊', w:460, h:400, x:160, y:80 })) return;
+  if (!mkWin({ id:'sysmon', title:'SYSMON.exe - System Monitor', icon:'icon:sysmon', w:460, h:400, x:160, y:80 })) return;
   const mb   = document.getElementById('mb-sysmon');
   const body = document.getElementById('wb-sysmon');
   body.style.cssText = 'background:#c0c0c0;overflow:hidden;display:flex;flex-direction:column;';
@@ -132,11 +132,11 @@ function openSysmon() {
         const result = killSoulDaemonProcess();
         selectedProc = null;
         renderProcesses();
-        osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), result.ok ? 'Process Update' : 'Access Denied', '⚠️');
+        osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), result.ok ? 'Process Update' : 'Access Denied', 'icon:warning');
         return;
       }
       const dlgId = 'sm-killerr-' + Date.now();
-      if (mkWin({ id:dlgId, title:'Access Denied', icon:'\u26a0\ufe0f', w:290, h:110, popup:true, menubar:false, statusbar:false })) {
+      if (mkWin({ id:dlgId, title:'Access Denied', icon:'icon:warning', w:290, h:110, popup:true, menubar:false, statusbar:false })) {
         const db = document.getElementById('wb-' + dlgId);
         if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
       }
@@ -148,7 +148,7 @@ function openSysmon() {
       // click landing. Match the terminal's KILL wording for the identical
       // case (apps/terminal.js) so the two surfaces agree about what
       // happened, instead of this button quietly doing nothing.
-      osAlert(`Access denied: PID ${selectedProc.pid} cannot be terminated.`, 'Access Denied', '⚠️');
+      osAlert(`Access denied: PID ${selectedProc.pid} cannot be terminated.`, 'Access Denied', 'icon:warning');
       return;
     }
     // action is 'closed' or 'signalled': endProcessAction already told the

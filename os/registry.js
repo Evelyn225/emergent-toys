@@ -457,7 +457,7 @@ function handleWallpaperFileDelete(dirPath, name) {
 }
 
 function openAppearance() {
-  if (!mkWin({ id:'appearance', title:'Appearance', icon:'\u{1F5BC}\uFE0F', w:410, h:360, x:130, y:90, menubar:false, statusbar:false }) && !document.getElementById('wb-appearance')) return;
+  if (!mkWin({ id:'appearance', title:'Appearance', icon:'icon:image', w:410, h:360, x:130, y:90, menubar:false, statusbar:false }) && !document.getElementById('wb-appearance')) return;
   renderAppearanceWindow();
 }
 
@@ -465,7 +465,7 @@ function openSettings() {
   // 316 = 18px titlebar + 4px borders + the panel's exact content height. The
   // old 294 already left ~70px of dead space below the footer; adding the
   // Sound section without re-measuring would have kept it.
-  if (!mkWin({ id:'settings', title:'Settings', icon:'\u2699\uFE0F', w:390, h:316, x:145, y:95, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:'settings', title:'Settings', icon:'icon:settings', w:390, h:316, x:145, y:95, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-settings');
   body.className = 'win-body st-panel';
 

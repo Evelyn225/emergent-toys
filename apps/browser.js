@@ -1,5 +1,5 @@
 function openBrowser() {
-  if (!mkWin({ id:'browser', title:'sleepWEB - Web Browser', icon:'🌐', w:640, h:460, x:80, y:50 })) return;
+  if (!mkWin({ id:'browser', title:'sleepWEB - Web Browser', icon:'icon:browser', w:640, h:460, x:80, y:50 })) return;
 
   const mb   = document.getElementById('mb-browser');
   const body = document.getElementById('wb-browser');
@@ -49,12 +49,12 @@ function openBrowser() {
     <button class="br-btn" id="br-fwd"  title="Forward" disabled>▶</button>
     <button class="br-btn" id="br-stop" title="Stop">✕</button>
     <button class="br-btn" id="br-ref"  title="Refresh">↻</button>
-    <button class="br-btn" id="br-home" title="Home">🏠</button>
+    <button class="br-btn" id="br-home" title="Home">${iconMarkup('icon:home')}</button>
     <div class="br-vsep"></div>
     <span class="br-addr-label">Address:</span>
     <input class="br-addr" id="br-url" type="text" value="home:">
     <button class="br-btn" id="br-go">Go</button>
-    <button class="br-btn" id="br-fav" title="Add to Favorites">⭐</button>`;
+    <button class="br-btn" id="br-fav" title="Add to Favorites">${iconMarkup('icon:star')}</button>`;
   body.appendChild(toolbar);
 
   // ── iframe + error overlay ─────────────────────────────────────
@@ -76,7 +76,7 @@ function openBrowser() {
 
   function showError(url) {
     errBox.innerHTML = `
-      <div style="font-size:24px;margin-bottom:8px;">🚫</div>
+      <div class="br-err-icon">${iconMarkup('icon:error')}</div>
       <b>This page cannot be displayed</b><br><br>
       <span style="word-break:break-all;color:#444;">${url}</span><br><br>
       This site sent <code style="background:#eee;padding:1px 3px;">X-Frame-Options</code> or
@@ -206,7 +206,7 @@ function openBrowser() {
       saveFavorites();
       refreshHome();
       if (ws) ws.textContent = 'Added to Favorites.';
-    }, '*');
+    }, 'icon:star');
   }
 
   document.getElementById('br-fav').addEventListener('click', addToFavorites);
@@ -220,10 +220,10 @@ function openBrowser() {
       { label: '▶ Forward', disabled: histIdx >= hist.length - 1, action: () => document.getElementById('br-fwd').click() },
       { label: '↻ Refresh', action: () => document.getElementById('br-ref').click() },
       '-',
-      { label: '⭐ Add to Favorites', disabled: currentUrl() === 'home:', action: addToFavorites },
+      { label: 'Add to Favorites', icon: 'icon:star', disabled: currentUrl() === 'home:', action: addToFavorites },
       '-',
-      { label: '🏠 Home',      action: () => navigate('home:') },
-      { label: '🔗 Open in New Tab', disabled: currentUrl() === 'home:', action: () => window.open(currentUrl(), '_blank') },
+      { label: 'Home', icon: 'icon:home', action: () => navigate('home:') },
+      { label: 'Open in New Tab', disabled: currentUrl() === 'home:', action: () => window.open(currentUrl(), '_blank') },
     ]);
   });
 
@@ -250,7 +250,7 @@ function openBrowser() {
   mb.innerHTML = '';
   [
     { label: 'File', items: [
-      { label: 'Open Location...', action: () => osPrompt('Enter URL:', 'https://', 'Open Location', u => { if (u) navigate(u); }, '🌐') },
+      { label: 'Open Location...', action: () => osPrompt('Enter URL:', 'https://', 'Open Location', u => { if (u) navigate(u); }, 'icon:browser') },
       '-',
       { label: 'Close', action: () => closeWin('browser') },
     ]},
@@ -263,11 +263,11 @@ function openBrowser() {
         try {
           const src = iframe.contentDocument.documentElement.outerHTML;
           const w = window.open(''); w.document.write('<pre style="white-space:pre-wrap;font-size:12px;">' + src.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>');
-        } catch(e) { osAlert('Cannot view source of cross-origin pages.', 'View Source', '🚫'); }
+        } catch(e) { osAlert('Cannot view source of cross-origin pages.', 'View Source', 'icon:error'); }
       }},
     ]},
     { label: 'Help', items: [
-      { label: 'About sleepWEB', action: () => osAlert('sleepWEB - Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', '🌐') },
+      { label: 'About sleepWEB', action: () => osAlert('sleepWEB - Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', 'icon:browser') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -282,13 +282,13 @@ function openBrowser() {
   favSpan.addEventListener('click', e => {
     e.stopPropagation();
     const items = [
-      { label: '⭐ Add to Favorites', action: addToFavorites },
-      { label: '🗑️ Clear All Favorites', action: () => {
+      { label: 'Add to Favorites', icon: 'icon:star', action: addToFavorites },
+      { label: 'Clear All Favorites', icon: 'icon:recycle-full', action: () => {
         if (!browserFavorites.length) return;
         osConfirm('Clear all favorites?', 'Confirm', ok => {
           if (!ok) return;
           browserFavorites.length = 0; saveFavorites(); refreshHome(); if (ws) ws.textContent = 'Favorites cleared.';
-        }, '🗑️');
+        }, 'icon:recycle-full');
       }},
     ];
     if (browserFavorites.length) {

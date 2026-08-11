@@ -148,7 +148,7 @@ let _notepadCount = 0;
 
 function openDecompilerView(filename) {
   const id = 'decompile-' + filename.replace(/\W/g,'_');
-  if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: '\u2699\uFE0F', w:500, h:360 })) return;
+  if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -201,7 +201,7 @@ function openDecompilerView(filename) {
 
 function openLoreNotepad(filename, content, title, icon) {
   const id = 'lore-' + (filename || '').replace(/\W/g,'_');
-  if (!mkWin({ id, title: title + ' \u2014 Notepad', icon: icon || '📝', w:440, h:320, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id, title: title + ' \u2014 Notepad', icon: icon || 'icon:notepad', w:440, h:320, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:0;overflow:hidden;';
   const pre = document.createElement('pre');
@@ -212,7 +212,7 @@ function openLoreNotepad(filename, content, title, icon) {
 
 function runScriptInPopup(name, source, dirName) {
   const id = 'script-out-' + Date.now();
-  if (!mkWin({ id, title: name + ' - Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
+  if (!mkWin({ id, title: name + ' - Script Output', icon: 'icon:script', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'background:#000;padding:6px;overflow:auto;font-family: var(--sleep-font);font-size:12px;color:#ccc;';
   const print = (text, color) => {
@@ -242,7 +242,7 @@ function runScriptInTerminal(name, dirName, args) {
 
 function openSaveDialog(defaultName, callback) {
   const id = 'saveas-' + Date.now();
-  if (!mkWin({ id, title: 'Save As', icon: '💾', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+  if (!mkWin({ id, title: 'Save As', icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
 
@@ -282,10 +282,10 @@ function openSaveDialog(defaultName, callback) {
   btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
   body.appendChild(btnRow);
 
-  function makeFLItem(emoji, label) {
+  function makeFLItem(icon, label) {
     const el = document.createElement('div');
     el.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:68px;padding:3px;cursor:default;border:1px solid transparent;font-size:10px;text-align:center;word-break:break-word;';
-    el.innerHTML = `<div style="font-size:22px;">${emoji}</div><span>${label}</span>`;
+    el.innerHTML = `<div class="fl-icon">${iconMarkup(icon)}</div><span>${escHtml(label)}</span>`;
     el.addEventListener('mouseover', () => { el.style.background='#000080'; el.style.color='#fff'; });
     el.addEventListener('mouseout',  () => { el.style.background='';        el.style.color=''; });
     return el;
@@ -296,7 +296,7 @@ function openSaveDialog(defaultName, callback) {
     locDisp.textContent = saveCwd ? `C:\\sleepOS\\${saveCwd}` : 'C:\\sleepOS';
 
     if (saveCwd) {
-      const up = makeFLItem('📁', '..');
+      const up = makeFLItem('icon:folder', '..');
       up.addEventListener('dblclick', () => { saveCwd = ''; renderSaveList(); });
       fileList.appendChild(up);
     }
@@ -309,15 +309,15 @@ function openSaveDialog(defaultName, callback) {
     const dirs = saveCwd ? listedDirs
                          : ['DOCS', ...listedDirs].filter((v, i, a) => a.indexOf(v) === i);
     dirs.forEach(d => {
-      const el = makeFLItem('📁', d);
+      const el = makeFLItem('icon:folder', d);
       el.addEventListener('dblclick', () => { saveCwd = d; renderSaveList(); });
       fileList.appendChild(el);
     });
 
     entries.filter(e => e.kind === 'text').forEach(({ name }) => {
-      const ext = (name.split('.').pop() || '').toLowerCase();
-      const emoji = { script:'📜', txt:'📄', md:'📋', js:'📜', py:'🐍' }[ext] || '📄';
-      const el = makeFLItem(emoji, name);
+      // resolveFsIcon already owns the extension table; this dialog used to
+      // keep a second, smaller copy of it that drifted from the real one.
+      const el = makeFLItem(resolveFsIcon(name, 'file'), name);
       el.addEventListener('click', () => { nameInput.value = name; });
       el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
       fileList.appendChild(el);
@@ -566,11 +566,11 @@ function openNotepad(filename, dirName, options) {
   }
   if (isDaemonCore) {
     daemonActivate('raw');
-    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', '👁️');
+    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', 'icon:daemon');
   }
   if (isVoidTmp) {
     daemonRecordInvestigation('void');
-    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', '⬛');
+    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', 'icon:void');
   }
 
   // vfsStatSync is metadata only, so the story checks and the window can all be
@@ -605,7 +605,7 @@ function openNotepad(filename, dirName, options) {
   // bare function references and cannot await. This mirrors what the binary
   // branch further down has always done.
   const initial = hasInitialContent ? String(options.initialContent ?? '') : '';
-  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
+  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: 'icon:notepad', w:500, h:360 })) return;
   // Untitled documents stay null so they never match a stored file.
   wins[id].notepadPath = filename ? pathKey : null;
 
@@ -774,13 +774,13 @@ function openNotepad(filename, dirName, options) {
       saved = await vfsWriteFile(fname, ta.value, dir || currentDir);
     } catch (err) {
       if (err.code === 'ENOSPC') {
-        osAlert('Not enough space to save this file.\nDelete something and try again.', 'Disk Full', 'X');
+        osAlert('Not enough space to save this file.\nDelete something and try again.', 'Disk Full', 'icon:error');
       } else if (err.code === 'EACCES') {
-        osAlert('Storage is unavailable, so this file cannot be saved.', 'Cannot Save', 'X');
+        osAlert('Storage is unavailable, so this file cannot be saved.', 'Cannot Save', 'icon:error');
       } else if (err.code === 'EEXIST') {
-        osAlert('A binary file already uses that name.', 'Cannot Save', 'X');
+        osAlert('A binary file already uses that name.', 'Cannot Save', 'icon:error');
       } else {
-        osAlert('Could not save: ' + err.message, 'Cannot Save', 'X');
+        osAlert('Could not save: ' + err.message, 'Cannot Save', 'icon:error');
       }
       return false;
     }
@@ -850,9 +850,11 @@ function openNotepad(filename, dirName, options) {
     e.preventDefault();
     const hasSel = ta.selectionStart !== ta.selectionEnd;
     showCtxMenu(e.clientX, e.clientY, [
-      { label: '✂️ Cut',              disabled: !hasSel, action: () => document.execCommand('cut') },
-      { label: '📋 Copy',             disabled: !hasSel, action: () => document.execCommand('copy') },
-      { label: '📄 Paste',            action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
+      // No art for the clipboard verbs, and no other item here has an icon
+      // either, so this menu stays text-only and keeps no gutter at all.
+      { label: 'Cut',                 disabled: !hasSel, action: () => document.execCommand('cut') },
+      { label: 'Copy',                disabled: !hasSel, action: () => document.execCommand('copy') },
+      { label: 'Paste',               action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
       '-',
       { label: 'Select All',          action: () => { ta.focus(); ta.select(); } },
       { label: 'Toggle Comment',      action: () => ta.dispatchEvent(Object.assign(new KeyboardEvent('keydown', { key: '/', ctrlKey: true, bubbles: true }))) },

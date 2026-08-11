@@ -1,3 +1,90 @@
+// ─────────────────────────────────────────────────────────────────
+// ICON REGISTRY
+// ─────────────────────────────────────────────────────────────────
+// Icon values travel through the OS as opaque strings: DESKTOP_ICONS entries
+// carry one, mkWin takes one, osAlert takes one, resolveFsIcon returns one, and
+// desktop shortcuts persist one into localStorage. Every one of those strings
+// used to be an emoji, injected straight into innerHTML.
+//
+// A token ('icon:notepad') names a PNG in os/icons/. Anything else is still
+// rendered as text, so the twenty-five PROJECTS emoji, the Start button, and
+// any shortcut already persisted under the old scheme keep working untouched -
+// and an unmapped emoji upgrades to art the moment a key is added below.
+//
+// ALWAYS render an icon value through iconMarkup(). Assigning one to
+// textContent prints the raw token.
+const OS_ICON_BASE = 'os/icons/';
+const OS_ICON_TOKEN = 'icon:';
+const OS_ICONS = {
+  // ── Programs ──────────────────────────────────────────────────
+  terminal:      'console_prompt-0.png',
+  notepad:       'notepad-1.png',
+  browser:       'browser.png',
+  calc:          'calculator-0.png',
+  sysmon:        'chart1-4.png',
+  regedit:       'regedit-0.png',
+  defrag:        'clean_drive.png',
+  explorer:      'directory_open_file_mydocs-0.png',
+  settings:      'settings.png',
+  daemon:        'daemon_eye.png',
+  void:          'void.png',
+  // ── Filesystem ────────────────────────────────────────────────
+  folder:        'directory_closed-0.png',
+  'folder-open': 'directory_open_file_mydocs-0.png',
+  text:          'file_lines-0.png',
+  script:        'executable_script-1.png',
+  exe:           'executable_script-1.png',
+  image:         'image.png',
+  video:         'media.png',
+  audio:         'music.png',
+  unknown:       'unknown-file.png',
+  // The bare drive, as opposed to `defrag`'s drive-being-cleaned.
+  disk:          'hard_disk_drive-0.png',
+  lock:          'key_padlock-0.png',
+  upload:        'upload.png',
+  // ── Shell ─────────────────────────────────────────────────────
+  'recycle-empty': 'recycle_bin_empty-0.png',
+  'recycle-full':  'recycle_bin_full-0.png',
+  home:          'homepage_alt.png',
+  star:          'star.png',
+  network:       'network.png',
+  standby:       'standby_icon.png',
+  // ── Dialogs ───────────────────────────────────────────────────
+  warning:       'warning.png',
+  error:         'restricted.png',
+  // `info` is the identity of a thing (Properties, About); `tip` is advice, and
+  // is what a bare osAlert falls back to.
+  info:          'info.png',
+  tip:           'tip.png',
+  success:       'checkmark.png',
+};
+
+function osIconKey(value) {
+  const s = String(value == null ? '' : value);
+  if (!s.startsWith(OS_ICON_TOKEN)) return '';
+  const key = s.slice(OS_ICON_TOKEN.length);
+  return Object.prototype.hasOwnProperty.call(OS_ICONS, key) ? key : '';
+}
+function isOsIcon(value) {
+  return !!osIconKey(value);
+}
+function osIconSrc(value) {
+  const key = osIconKey(value);
+  return key ? OS_ICON_BASE + OS_ICONS[key] : '';
+}
+// The `alt` is deliberately empty: every icon in this OS sits beside a text
+// label that already names the thing, so alt text would only double it up.
+function iconMarkup(value) {
+  const key = osIconKey(value);
+  if (key) return '<img class="os-icon" src="' + OS_ICON_BASE + OS_ICONS[key] + '" alt="" draggable="false">';
+  return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+// For the callers that build DOM nodes instead of HTML strings.
+function setIconContent(el, value) {
+  if (!el) return el;
+  el.innerHTML = iconMarkup(value);
+  return el;
+}
 // Virtual filesystem. Metadata (path resolution, stat, listing, existence) is
 // served synchronously from an in-memory tree. File content reads and all
 // writes are async, because phase 4 moves them to IndexedDB.
@@ -1016,18 +1103,20 @@ const RECYCLE_STORAGE_DIR = 'CACHE\\RECYCLE_BIN';
 const RECYCLE_BIN_KEY = 'sleepOS-recycle-bin';
 
 const DESKTOP_ICONS = [
-  { name: 'WELCOME.README', emoji: '📄', action: 'openWelcome' },
-  { name: 'NOTEPAD.exe',    emoji: '📝', action: 'openNotepad' },
-  { name: 'EXPLORER.exe',   emoji: '🗂️', action: 'openExplorer' },
-  { name: 'TERMINAL.exe',   emoji: '💻', action: 'openTerminal' },
-  { name: 'SYSMON.exe',     emoji: '📊', action: 'openSysmon' },
-  { name: 'BROWSER.exe',    emoji: '🌐', action: 'openBrowser' },
-  { name: 'DEFRAG.exe',     emoji: '🧩', action: 'openDefrag' },
-  { name: 'CALC.exe',       emoji: '🔢', action: 'openCalculator' },
-  { name: 'REGEDIT.exe',    emoji: '🗝️', action: 'openRegedit' },
-  { name: 'daemon.core',    emoji: '👁️',  action: 'openDaemon' },
-  { name: 'void.tmp',       emoji: '⬛', action: 'openVoid' },
-  { name: RECYCLE_BIN_NAME, emoji: '\u{1F5D1}\uFE0F', action: 'openRecycleBin', recycleBin: true },
+  { name: 'WELCOME.README', emoji: 'icon:text',     action: 'openWelcome' },
+  { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
+  { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
+  { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },
+  { name: 'SYSMON.exe',     emoji: 'icon:sysmon',   action: 'openSysmon' },
+  { name: 'BROWSER.exe',    emoji: 'icon:browser',  action: 'openBrowser' },
+  { name: 'DEFRAG.exe',     emoji: 'icon:defrag',   action: 'openDefrag' },
+  { name: 'CALC.exe',       emoji: 'icon:calc',     action: 'openCalculator' },
+  { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
+  { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
+  { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },
+  // Not in the static map alone: the bin's icon depends on whether it holds
+  // anything, so resolveFsIcon picks between empty and full at render time.
+  { name: RECYCLE_BIN_NAME, emoji: 'icon:recycle-empty', action: 'openRecycleBin', recycleBin: true },
 ];
 function getExeDisplayName() {
   return daemonStory.quarantineSigned ? 'quarantine.exe' : '?????.exe';
@@ -1309,7 +1398,7 @@ function openSystemFile(name) {
   const key = String(name || '').trim();
   if (!key) return false;
   if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
-    osAlert('void.tmp is no longer present.', 'void.tmp', '⬛');
+    osAlert('void.tmp is no longer present.', 'void.tmp', 'icon:void');
     return true;
   }
   const SYS = {
@@ -1338,7 +1427,7 @@ function openDesktopShortcutTarget(target) {
   const name = String(target.name || path.split('\\').pop() || '').trim();
   if (target.sysfile) {
     if (!openSystemFile(name || path)) {
-      osAlert('Shortcut target not found:\n' + (name || path || 'Unknown target'), 'Missing Shortcut', 'X');
+      osAlert('Shortcut target not found:\n' + (name || path || 'Unknown target'), 'Missing Shortcut', 'icon:error');
     }
     return;
   }
@@ -1353,7 +1442,7 @@ function openDesktopShortcutTarget(target) {
   // name in both files and dirs and makes the directory unreachable.
   const st = vfsStatSync(path);
   if (!st || st.type !== 'file') {
-    osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'X');
+    osAlert('Shortcut target not found:\n' + (path || name || 'Unknown target'), 'Missing Shortcut', 'icon:error');
     return;
   }
   if (openWithAssociation(st.name, st.dirName)) return;
@@ -1865,7 +1954,7 @@ function handleWallpaperFileDelete(dirPath, name) {
 }
 
 function openAppearance() {
-  if (!mkWin({ id:'appearance', title:'Appearance', icon:'\u{1F5BC}\uFE0F', w:410, h:360, x:130, y:90, menubar:false, statusbar:false }) && !document.getElementById('wb-appearance')) return;
+  if (!mkWin({ id:'appearance', title:'Appearance', icon:'icon:image', w:410, h:360, x:130, y:90, menubar:false, statusbar:false }) && !document.getElementById('wb-appearance')) return;
   renderAppearanceWindow();
 }
 
@@ -1873,7 +1962,7 @@ function openSettings() {
   // 316 = 18px titlebar + 4px borders + the panel's exact content height. The
   // old 294 already left ~70px of dead space below the footer; adding the
   // Sound section without re-measuring would have kept it.
-  if (!mkWin({ id:'settings', title:'Settings', icon:'\u2699\uFE0F', w:390, h:316, x:145, y:95, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:'settings', title:'Settings', icon:'icon:settings', w:390, h:316, x:145, y:95, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-settings');
   body.className = 'win-body st-panel';
 
@@ -2826,7 +2915,7 @@ async function pasteClipboardInto(dstCwd) {
     }
   }
   if (cut) _expClipboard = null;
-  if (failMessage) osAlert(failMessage, 'Paste Failed', 'X');
+  if (failMessage) osAlert(failMessage, 'Paste Failed', 'icon:error');
   return changed;
 }
 
@@ -4070,7 +4159,7 @@ function confirmEmptyRecycleBin(onDone) {
     // it draws the bin still holding everything it just deleted.
     await emptyRecycleBin();
     if (typeof onDone === 'function') onDone(true);
-  }, '\u{1F5D1}\uFE0F');
+  }, 'icon:recycle-full');
 }
 
 function promptCreateFolderAt(dirPath, onDone) {
@@ -4093,7 +4182,7 @@ function promptCreateFolderAt(dirPath, onDone) {
         err.code === 'ENOENT'
           ? 'That folder no longer exists:\nC:\\sleepOS\\' + vfsNormalizeDir(dirPath)
           : err.message,
-        'New Folder', 'X'
+        'New Folder', 'icon:error'
       );
       return finish(null);
     }
@@ -4103,7 +4192,7 @@ function promptCreateFolderAt(dirPath, onDone) {
     // after the directory exists, not before.
     if (!created.created) return finish(null);
     finish(created);
-  }, '\u{1F4C1}');
+  }, 'icon:folder');
 }
 
 function ensureStoryTextFile(path, value) {
@@ -4719,9 +4808,9 @@ function updateDaemonStory(mutator, options) {
   if (options?.glitch) triggerGlitch();
   if (options?.notice) {
     const info = typeof options.notice === 'string'
-      ? { message: options.notice, title: 'Containment Notice', icon: '👁️' }
+      ? { message: options.notice, title: 'Containment Notice', icon: 'icon:daemon' }
       : options.notice;
-    osAlert(info.message, info.title || 'Containment Notice', info.icon || '👁️');
+    osAlert(info.message, info.title || 'Containment Notice', info.icon || 'icon:daemon');
   }
   return true;
 }
@@ -4898,7 +4987,7 @@ async function deleteVirtualPath(path, fallbackDir) {
       glitch: true,
       notice: {
         title: 'Anchor Lost',
-        icon: '⬛',
+        icon: 'icon:void',
         message: 'The mirror anchor is gone.\n\nKeep daemon.core and void.tmp isolated from your active work while you inspect the breach.',
       },
     });
@@ -4988,7 +5077,7 @@ function killSoulDaemonProcess() {
     glitch: true,
     notice: {
       title: 'Monitor Link Lost',
-      icon: '⚠️',
+      icon: 'icon:warning',
       message: 'PID 512 stayed dead.\n\nvoid.tmp and CACHE\\mirror.dat should now be treated as active evidence.',
     },
   });
@@ -6195,7 +6284,7 @@ async function handleFileUpload(fileList) {
   const dirPath = fsNormalizeDir(_uploadCwd || '');
   if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
   if (dirPath && !vfsDirExistsSync(dirPath)) {
-    osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'X');
+    osAlert('Upload target not found:\nC:\\sleepOS\\' + dirPath, 'Upload Failed', 'icon:error');
     return;
   }
   const dirLabel = dirPath ? `C:\\sleepOS\\${dirPath}\\` : 'C:\\sleepOS';
@@ -6248,7 +6337,7 @@ async function handleFileUpload(fileList) {
     const msg = failed.length === 1
       ? `"${failed[0]}" could not be uploaded to ${dirLabel}`
       : `${failed.length} files could not be uploaded to ${dirLabel}`;
-    osAlert(msg, 'Upload Failed', 'X');
+    osAlert(msg, 'Upload Failed', 'icon:error');
   }
 }
 
@@ -6258,10 +6347,10 @@ function showUploadConfirm(names, dirLabel) {
     ? `"${names[0]}" uploaded to ${dirLabel}`
     : `${names.length} files uploaded to ${dirLabel}`;
   const id = 'upload-confirm-' + Date.now();
-  if (!mkWin({ id, title: 'Upload Complete', icon: '📤', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
+  if (!mkWin({ id, title: 'Upload Complete', icon: 'icon:success', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:14px;font-family: var(--sleep-font);font-size:12px;';
-  body.innerHTML = `<div style="margin-bottom:12px;">📁 ${msg}</div>
+  body.innerHTML = `<div style="margin-bottom:12px;">${msg}</div>
     <div style="margin-bottom:8px;color:#555;">Use OPEN &lt;filename&gt; in terminal, or type the filename to view.</div>
     <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
 }
@@ -6303,7 +6392,7 @@ function openMediaFile(filename, dirName) {
   if (blob.kind === 'image') openImageViewer(st.name, st.dirName);
   else if (blob.kind === 'video') openVideoPlayer(st.name, st.dirName);
   else if (blob.kind === 'audio') openAudioPlayer(st.name, st.dirName);
-  else osAlert('Cannot open binary file:\n' + st.name, 'Cannot Open', 'X');
+  else osAlert('Cannot open binary file:\n' + st.name, 'Cannot Open', 'icon:error');
 }
 
 function openImageViewer(filename, dirName) {
@@ -6311,7 +6400,7 @@ function openImageViewer(filename, dirName) {
   const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
   const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'img-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: '🖼️', w: 520, h: 400 })) return;
+  if (!mkWin({ id, title: filename + ' \u2014 Image Viewer', icon: 'icon:image', w: 520, h: 400 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -6342,7 +6431,7 @@ function openVideoPlayer(filename, dirName) {
   const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
   const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'vid-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(st.name) + ' \u2014 Media Player', icon: '🎬', w: 500, h: 390 })) return;
+  if (!mkWin({ id, title: iconLabel(st.name) + ' \u2014 Media Player', icon: 'icon:video', w: 500, h: 390 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -6480,7 +6569,7 @@ function openAudioPlayer(filename, dirName) {
   const blob = st && st.kind === 'blob' ? st.blob : null; if (!blob) return;
   const pathKey = (st.dirName ? st.dirName + '\\' : '') + st.name;
   const id = 'aud-' + pathKey.replace(/\W/g,'_');
-  if (!mkWin({ id, title: iconLabel(st.name) + ' - Media Player', icon: '🎵', w: 420, h: 240 })) return;
+  if (!mkWin({ id, title: iconLabel(st.name) + ' - Media Player', icon: 'icon:audio', w: 420, h: 240 })) return;
 
   const body = document.getElementById('wb-' + id);
   const ws = document.getElementById('ws-' + id);
@@ -6706,19 +6795,39 @@ function closeDropdown() {
   const old = document.getElementById('active-dropdown');
   if (old) old.remove();
 }
+// A menu item may carry an `icon`. Items are laid out with a fixed 16px gutter
+// so their labels line up whether or not each one has art - but only if some
+// item in THIS menu has an icon, so the File/Edit/View menubar dropdowns, which
+// never do, stay as tight as they were.
+function buildMenuItemEl(item, gutter) {
+  const el = document.createElement('div');
+  el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '') + (gutter ? ' has-gutter' : '');
+  if (gutter) {
+    const ic = document.createElement('span');
+    ic.className = 'menu-dd-icon';
+    ic.innerHTML = iconMarkup(item.icon || '');
+    el.appendChild(ic);
+  }
+  const label = document.createElement('span');
+  label.textContent = item.label;
+  el.appendChild(label);
+  return el;
+}
+function menuNeedsGutter(items) {
+  return items.some(item => item !== '-' && item.icon);
+}
 function showDropdown(anchor, items) {
   closeDropdown();
   const rect = anchor.getBoundingClientRect();
   const dd = document.createElement('div');
   dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
   dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+  const gutter = menuNeedsGutter(items);
   items.forEach(item => {
     if (item === '-') {
       const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
     } else {
-      const el = document.createElement('div');
-      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
-      el.textContent = item.label;
+      const el = buildMenuItemEl(item, gutter);
       if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
       dd.appendChild(el);
     }
@@ -6754,13 +6863,12 @@ function showCtxMenu(x, y, items) {
   dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
   // Keep menu on screen
   dd.style.left = x + 'px'; dd.style.top = y + 'px';
+  const gutter = menuNeedsGutter(items);
   items.forEach(item => {
     if (item === '-') {
       const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
     } else {
-      const el = document.createElement('div');
-      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
-      el.textContent = item.label;
+      const el = buildMenuItemEl(item, gutter);
       if (!item.disabled) el.addEventListener('pointerdown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
       dd.appendChild(el);
     }
@@ -6856,18 +6964,21 @@ function _osDlgPos(w, h) {
 // fire on "About DEFRAG.exe". Only failures get the sound, recognised from the
 // two arguments every call site already passes.
 //
-// 'X' leads the icon list because it is what this codebase actually uses for a
-// failure - Paste Failed, Upload Failed, Cannot Open, Cannot Create, Cannot
-// Save, Disk Full, Rename Failed, Missing Shortcut all pass it, and nothing
-// informational does. The warning sign appears in both its bare and emoji
-// presentations ('⚠' and '⚠️' differ by a trailing U+FE0F) and call sites here
-// use each.
+// 'icon:error' leads the list because it is what this codebase actually uses
+// for a failure - Paste Failed, Upload Failed, Cannot Open, Cannot Create,
+// Cannot Save, Disk Full, Rename Failed, Missing Shortcut all pass it, and
+// nothing informational does. 'icon:warning' covers the softer refusals
+// (blocked delete, access denied, drive not found).
+//
+// The bare emoji are kept alongside the tokens. Nothing in the OS passes them
+// any more, but they cost one Set entry each and they are what a stale window
+// or an old persisted shortcut would still carry.
 //
 // Deliberately NOT matched against the message body, only the title and icon.
 // The body is where the tempting words are, and also where they lie: Help
 // Topics for DEFRAG.exe contains "some system files cannot be moved", which a
 // body scan would hear as an error.
-const ALERT_ERROR_ICONS = new Set(['X', '⚠', '⚠️', '❌', '\u{1F6AB}', '⛔', '\u{1F4A5}']);
+const ALERT_ERROR_ICONS = new Set(['icon:error', 'icon:warning', 'X', '⚠', '⚠️', '❌', '\u{1F6AB}', '⛔', '\u{1F4A5}']);
 const ALERT_ERROR_TITLE = /\b(error|fail(ed|ure|s)?|denied|invalid|refused|corrupt|unavailable|not found|no such|cannot|can't)\b/i;
 function isErrorAlert(title, icon) {
   return ALERT_ERROR_ICONS.has(String(icon == null ? '' : icon).trim())
@@ -6875,13 +6986,13 @@ function isErrorAlert(title, icon) {
 }
 
 function osAlert(msg, title, icon) {
-  title = title || 'sleepOS'; icon = icon || '🔔';
+  title = title || 'sleepOS'; icon = icon || 'icon:tip';
   const id = 'os-alert-' + Date.now();
   const p = _osDlgPos(320, 175);
   if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   if (isErrorAlert(title, icon)) playSound('error');
   const b = document.getElementById('wb-' + id);
-  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
+  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
   const ok = document.getElementById(id + '-ok');
   ok.onclick = () => closeWin(id);
   ok.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') closeWin(id); });
@@ -6893,7 +7004,7 @@ function osConfirm(msg, title, cb, icon) {
   const p = _osDlgPos(320, 175);
   if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   const b = document.getElementById('wb-' + id);
-  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
+  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
   const row = document.getElementById(id + '-btns');
   const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
   const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = 'Cancel';
@@ -6930,7 +7041,7 @@ function osPrompt(msg, def, title, cb, icon) {
   setTimeout(() => { inp.focus(); inp.select(); }, 40);
 }
 
-function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
+function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
 
@@ -6964,8 +7075,8 @@ function mkWin({ id, title, icon = '📄', x, y, w = 500, h = 380,
     <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>
     <div class="win-titlebar" id="tb-${id}">
       <div class="win-title-text">
-        <span class="win-icon">${icon}</span>
-        <span id="wtitle-${id}">${title}</span>
+        <span class="win-icon">${iconMarkup(icon)}</span>
+        <span id="wtitle-${id}">${escHtml(title == null ? '' : String(title))}</span>
       </div>
       <div class="win-controls">
         <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
@@ -7155,7 +7266,8 @@ function addTbBtn(id, title, icon) {
   const btn = document.createElement('button');
   btn.className = 'taskbar-btn focused';
   btn.id = 'tbtn-' + id;
-  btn.innerHTML = `<span>${icon}</span><span>${title}</span>`;
+  btn.innerHTML = `<span class="tb-icon">${iconMarkup(icon)}</span><span></span>`;
+  btn.lastElementChild.textContent = title;
   btn.addEventListener('click', () => {
     const w = wins[id]; if (!w) return;
     if (w.minimized) { unminWin(id); }
@@ -7316,20 +7428,25 @@ function iconLabel(name) {
 }
 
 function resolveFsIcon(name, kind) {
-  if (isRecycleBinItemName(name)) return SYSTEM_FILE_ICONS[RECYCLE_BIN_NAME] || '\u{1F5D1}\uFE0F';
-  if (kind === 'image') return '\u{1F5BC}\uFE0F';
-  if (kind === 'video') return '\u{1F3AC}';
-  if (kind === 'audio') return '\u{1F3B5}';
-  if (kind === 'dir') return '\u{1F4C1}';
+  // The bin is the one icon with two states, so it is resolved here rather than
+  // read out of SYSTEM_FILE_ICONS' static map. recycleBinEntries is declared in
+  // fs-persist.js, which the bundle loads well before this ever runs.
+  if (isRecycleBinItemName(name)) {
+    return recycleBinEntries.length ? 'icon:recycle-full' : 'icon:recycle-empty';
+  }
+  if (kind === 'image') return 'icon:image';
+  if (kind === 'video') return 'icon:video';
+  if (kind === 'audio') return 'icon:audio';
+  if (kind === 'dir') return 'icon:folder';
   const systemIcon = SYSTEM_FILE_ICONS[String(name).toUpperCase()];
   if (systemIcon) return systemIcon;
   const ext = (String(name || '').split('.').pop() || '').toLowerCase();
   return {
-    exe:'\u2699\uFE0F', script:'\u{1F4DC}', txt:'\u{1F4C4}', readme:'\u{1F4C4}', md:'\u{1F4CB}',
-    json:'\u{1F4CB}', js:'\u{1F4DC}', ts:'\u{1F4DC}', jsx:'\u{1F4DC}', tsx:'\u{1F4DC}',
-    html:'\u{1F310}', htm:'\u{1F310}', css:'\u{1F3A8}', py:'\u{1F40D}',
-    tmp:'\u{1F5D1}\uFE0F', log:'\u{1F4CB}', csv:'\u{1F4CA}', core:'\u{1F4A5}'
-  }[ext] || '\u{1F4C4}';
+    exe:'icon:exe', script:'icon:script', txt:'icon:text', readme:'icon:text', md:'icon:text',
+    json:'icon:script', js:'icon:script', ts:'icon:script', jsx:'icon:script', tsx:'icon:script',
+    html:'icon:browser', htm:'icon:browser', css:'icon:script', py:'icon:script',
+    tmp:'icon:void', log:'icon:text', csv:'icon:sysmon', core:'icon:daemon'
+  }[ext] || 'icon:unknown';
 }
 
 function getDesktopFsIcons() {
@@ -7516,9 +7633,9 @@ function deleteDesktopSystemIcons(icons) {
       if (result.ok && result.deleted) changed = true;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
     }
-    if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
+    if (blocked.length) osAlert(blocked[0], 'Delete', 'icon:warning');
     if (changed) clearDesktopSel();
-  }, '🗑️');
+  }, 'icon:recycle-full');
 }
 
 function canDeleteDesktopFsEntry(ic) {
@@ -7538,17 +7655,17 @@ function deleteDesktopFsEntries(icons) {
       if (result.ok && result.deleted) changed = true;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
     }
-    if (blocked.length) osAlert(blocked[0], 'Delete', 'âš ï¸');
+    if (blocked.length) osAlert(blocked[0], 'Delete', 'icon:warning');
     if (changed) {
       clearDesktopSel();
       document.dispatchEvent(new CustomEvent('fs-changed'));
     }
-  }, 'ðŸ-‘ï¸');
+  }, 'icon:recycle-full');
 }
 
 async function recycleDesktopItemAtPath(path) {
   const result = await recycleVirtualPath(path);
-  if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+  if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', 'icon:warning');
   return result;
 }
 
@@ -7556,7 +7673,10 @@ function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
   const displayName = ic.name === '?????.exe' ? getExeDisplayName() : ic.name;
-  div.innerHTML = '<div class="di-img">' + ic.emoji + '</div><div class="di-name">' + iconLabel(displayName) + '</div>';
+  // The bin is the one desktop icon whose art depends on live state, so it is
+  // resolved per render instead of read off the static DESKTOP_ICONS entry.
+  const icon = isRecycleBinItemName(ic.name) ? resolveFsIcon(ic.name) : ic.emoji;
+  div.innerHTML = '<div class="di-img">' + iconMarkup(icon) + '</div><div class="di-name">' + escHtml(iconLabel(displayName)) + '</div>';
   div._ic = ic;
   function activate() {
     if (ic.action) window[ic.action]?.();
@@ -7969,18 +8089,20 @@ function setupIcons() {
     e.preventDefault();
     clearDesktopSel();
     showCtxMenu(e.clientX, e.clientY, [
-      { label: '💻 Open Terminal',    action: openTerminal },
-      { label: '🗂️ Open Explorer',    action: openExplorer },
-      { label: '📝 Open Notepad',     action: openNotepad },
-      { label: '🌐 Open Browser',     action: openBrowser },
+      { label: 'Open Terminal',    icon: 'icon:terminal', action: openTerminal },
+      { label: 'Open Explorer',    icon: 'icon:explorer', action: openExplorer },
+      { label: 'Open Notepad',     icon: 'icon:notepad',  action: openNotepad },
+      { label: 'Open Browser',     icon: 'icon:browser',  action: openBrowser },
       '-',
-      { label: '📋 Paste', disabled: !_expClipboard, action: () => pasteClipboardInto('DESKTOP') },
+      // No clipboard or upload art yet, so these two ride the gutter empty
+      // rather than sitting flush left and breaking the column.
+      { label: 'Paste', disabled: !_expClipboard, action: () => pasteClipboardInto('DESKTOP') },
       '-',
-      { label: '📁 New Folder',      action: () => promptCreateFolderAt('DESKTOP') },
-      { label: '📤 Upload File...',  action: () => triggerUpload('DESKTOP') },
-      { label: '🖼️ Change Wallpaper', action: openAppearance },
+      { label: 'New Folder',       icon: 'icon:folder',   action: () => promptCreateFolderAt('DESKTOP') },
+      { label: 'Upload File...',  icon: 'icon:upload',   action: () => triggerUpload('DESKTOP') },
+      { label: 'Change Wallpaper', icon: 'icon:image',    action: openAppearance },
       '-',
-      { label: 'ℹ️ Properties', action: () => osAlert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686', 'Properties', 'ℹ️') },
+      { label: 'Properties', icon: 'icon:info', action: () => osAlert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686', 'Properties', 'icon:info') },
     ]);
   });
 
@@ -8175,7 +8297,7 @@ let _notepadCount = 0;
 
 function openDecompilerView(filename) {
   const id = 'decompile-' + filename.replace(/\W/g,'_');
-  if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: '\u2699\uFE0F', w:500, h:360 })) return;
+  if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -8228,7 +8350,7 @@ function openDecompilerView(filename) {
 
 function openLoreNotepad(filename, content, title, icon) {
   const id = 'lore-' + (filename || '').replace(/\W/g,'_');
-  if (!mkWin({ id, title: title + ' \u2014 Notepad', icon: icon || '📝', w:440, h:320, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id, title: title + ' \u2014 Notepad', icon: icon || 'icon:notepad', w:440, h:320, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:0;overflow:hidden;';
   const pre = document.createElement('pre');
@@ -8239,7 +8361,7 @@ function openLoreNotepad(filename, content, title, icon) {
 
 function runScriptInPopup(name, source, dirName) {
   const id = 'script-out-' + Date.now();
-  if (!mkWin({ id, title: name + ' - Script Output', icon: '📜', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
+  if (!mkWin({ id, title: name + ' - Script Output', icon: 'icon:script', w: 420, h: 280, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'background:#000;padding:6px;overflow:auto;font-family: var(--sleep-font);font-size:12px;color:#ccc;';
   const print = (text, color) => {
@@ -8269,7 +8391,7 @@ function runScriptInTerminal(name, dirName, args) {
 
 function openSaveDialog(defaultName, callback) {
   const id = 'saveas-' + Date.now();
-  if (!mkWin({ id, title: 'Save As', icon: '💾', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+  if (!mkWin({ id, title: 'Save As', icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
 
@@ -8309,10 +8431,10 @@ function openSaveDialog(defaultName, callback) {
   btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
   body.appendChild(btnRow);
 
-  function makeFLItem(emoji, label) {
+  function makeFLItem(icon, label) {
     const el = document.createElement('div');
     el.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:68px;padding:3px;cursor:default;border:1px solid transparent;font-size:10px;text-align:center;word-break:break-word;';
-    el.innerHTML = `<div style="font-size:22px;">${emoji}</div><span>${label}</span>`;
+    el.innerHTML = `<div class="fl-icon">${iconMarkup(icon)}</div><span>${escHtml(label)}</span>`;
     el.addEventListener('mouseover', () => { el.style.background='#000080'; el.style.color='#fff'; });
     el.addEventListener('mouseout',  () => { el.style.background='';        el.style.color=''; });
     return el;
@@ -8323,7 +8445,7 @@ function openSaveDialog(defaultName, callback) {
     locDisp.textContent = saveCwd ? `C:\\sleepOS\\${saveCwd}` : 'C:\\sleepOS';
 
     if (saveCwd) {
-      const up = makeFLItem('📁', '..');
+      const up = makeFLItem('icon:folder', '..');
       up.addEventListener('dblclick', () => { saveCwd = ''; renderSaveList(); });
       fileList.appendChild(up);
     }
@@ -8336,15 +8458,15 @@ function openSaveDialog(defaultName, callback) {
     const dirs = saveCwd ? listedDirs
                          : ['DOCS', ...listedDirs].filter((v, i, a) => a.indexOf(v) === i);
     dirs.forEach(d => {
-      const el = makeFLItem('📁', d);
+      const el = makeFLItem('icon:folder', d);
       el.addEventListener('dblclick', () => { saveCwd = d; renderSaveList(); });
       fileList.appendChild(el);
     });
 
     entries.filter(e => e.kind === 'text').forEach(({ name }) => {
-      const ext = (name.split('.').pop() || '').toLowerCase();
-      const emoji = { script:'📜', txt:'📄', md:'📋', js:'📜', py:'🐍' }[ext] || '📄';
-      const el = makeFLItem(emoji, name);
+      // resolveFsIcon already owns the extension table; this dialog used to
+      // keep a second, smaller copy of it that drifted from the real one.
+      const el = makeFLItem(resolveFsIcon(name, 'file'), name);
       el.addEventListener('click', () => { nameInput.value = name; });
       el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
       fileList.appendChild(el);
@@ -8593,11 +8715,11 @@ function openNotepad(filename, dirName, options) {
   }
   if (isDaemonCore) {
     daemonActivate('raw');
-    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', '👁️');
+    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', 'icon:daemon');
   }
   if (isVoidTmp) {
     daemonRecordInvestigation('void');
-    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', '⬛');
+    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', 'icon:void');
   }
 
   // vfsStatSync is metadata only, so the story checks and the window can all be
@@ -8632,7 +8754,7 @@ function openNotepad(filename, dirName, options) {
   // bare function references and cannot await. This mirrors what the binary
   // branch further down has always done.
   const initial = hasInitialContent ? String(options.initialContent ?? '') : '';
-  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: '📝', w:500, h:360 })) return;
+  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: 'icon:notepad', w:500, h:360 })) return;
   // Untitled documents stay null so they never match a stored file.
   wins[id].notepadPath = filename ? pathKey : null;
 
@@ -8801,13 +8923,13 @@ function openNotepad(filename, dirName, options) {
       saved = await vfsWriteFile(fname, ta.value, dir || currentDir);
     } catch (err) {
       if (err.code === 'ENOSPC') {
-        osAlert('Not enough space to save this file.\nDelete something and try again.', 'Disk Full', 'X');
+        osAlert('Not enough space to save this file.\nDelete something and try again.', 'Disk Full', 'icon:error');
       } else if (err.code === 'EACCES') {
-        osAlert('Storage is unavailable, so this file cannot be saved.', 'Cannot Save', 'X');
+        osAlert('Storage is unavailable, so this file cannot be saved.', 'Cannot Save', 'icon:error');
       } else if (err.code === 'EEXIST') {
-        osAlert('A binary file already uses that name.', 'Cannot Save', 'X');
+        osAlert('A binary file already uses that name.', 'Cannot Save', 'icon:error');
       } else {
-        osAlert('Could not save: ' + err.message, 'Cannot Save', 'X');
+        osAlert('Could not save: ' + err.message, 'Cannot Save', 'icon:error');
       }
       return false;
     }
@@ -8877,9 +8999,11 @@ function openNotepad(filename, dirName, options) {
     e.preventDefault();
     const hasSel = ta.selectionStart !== ta.selectionEnd;
     showCtxMenu(e.clientX, e.clientY, [
-      { label: '✂️ Cut',              disabled: !hasSel, action: () => document.execCommand('cut') },
-      { label: '📋 Copy',             disabled: !hasSel, action: () => document.execCommand('copy') },
-      { label: '📄 Paste',            action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
+      // No art for the clipboard verbs, and no other item here has an icon
+      // either, so this menu stays text-only and keeps no gutter at all.
+      { label: 'Cut',                 disabled: !hasSel, action: () => document.execCommand('cut') },
+      { label: 'Copy',                disabled: !hasSel, action: () => document.execCommand('copy') },
+      { label: 'Paste',               action: () => { ta.focus(); navigator.clipboard?.readText().then(t => document.execCommand('insertText', false, t)); } },
       '-',
       { label: 'Select All',          action: () => { ta.focus(); ta.select(); } },
       { label: 'Toggle Comment',      action: () => ta.dispatchEvent(Object.assign(new KeyboardEvent('keydown', { key: '/', ctrlKey: true, bubbles: true }))) },
@@ -8892,7 +9016,7 @@ function openNotepad(filename, dirName, options) {
 
 function openExplorer(startPath) {
   const id = nextExplorerWinId();
-  if (!mkWin({ id, title:'FILE EXPLORER \u2014 C:\\sleepOS', icon:'\u{1F5C2}\uFE0F', w:560, h:400, x:110, y:65 })) return;
+  if (!mkWin({ id, title:'FILE EXPLORER \u2014 C:\\sleepOS', icon:'icon:explorer', w:560, h:400, x:110, y:65 })) return;
   const body = document.getElementById('wb-' + id);
   const ws   = document.getElementById('ws-' + id);
   const mb   = document.getElementById('mb-' + id);
@@ -9153,7 +9277,7 @@ function openExplorer(startPath) {
       try {
         if (!(await vfsRename(cwd, item.name, nextName))) return;
       } catch (err) {
-        osAlert(err.code === 'EEXIST' ? 'A file with that name already exists.' : err.message, 'Rename Failed', 'X');
+        osAlert(err.code === 'EEXIST' ? 'A file with that name already exists.' : err.message, 'Rename Failed', 'icon:error');
         return;
       }
       if (item.kind !== 'dir') {
@@ -9182,7 +9306,7 @@ function openExplorer(startPath) {
       if (result.ok && result.restored) restoredCount++;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
     }
-    if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
+    if (blocked.length) osAlert(blocked[0], 'Recycle Bin', 'icon:warning');
     if (restoredCount && ws) ws.textContent = restoredCount === 1 ? '1 item restored' : restoredCount + ' items restored';
     if (restoredCount || blocked.length) render();
   }
@@ -9197,7 +9321,7 @@ function openExplorer(startPath) {
       // it is referenced from double-click, Enter and several dispatch tables.
       // render() runs when the restore lands, not before.
       void restoreRecycleEntry(item._recycle).then(result => {
-        if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+        if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', 'icon:warning');
         else if (ws) ws.textContent = 'Restored: ' + result.name;
         render();
       });
@@ -9264,7 +9388,7 @@ function openExplorer(startPath) {
           if (result.ok && result.deleted) changed = true;
           else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
         }
-        if (blocked.length) osAlert(blocked[0], 'Recycle Bin', '⚠️');
+        if (blocked.length) osAlert(blocked[0], 'Recycle Bin', 'icon:warning');
         if (changed && ws) ws.textContent = items.length === 1 ? '1 item deleted permanently' : items.length + ' items deleted permanently';
         if (changed || blocked.length) render();
         return;
@@ -9285,10 +9409,10 @@ function openExplorer(startPath) {
         if (result.ok && result.deleted) changed = true;
         else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
       }
-      if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
+      if (blocked.length) osAlert(blocked[0], 'Delete', 'icon:warning');
       if (changed || blocked.length) document.dispatchEvent(new CustomEvent('fs-changed'));
       render();
-    }, '\u{1F5D1}\uFE0F');
+    }, 'icon:recycle-full');
   }
 
   function typeLabel(kind) {
@@ -9317,15 +9441,15 @@ function openExplorer(startPath) {
     if (viewMode === 'list') {
       el = document.createElement('div');
       el.className = 'exp-list-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = '<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">' + icon + '</span><span>' + iconLabel(name) + '</span>';
+      el.innerHTML = '<span class="exp-list-icon">' + iconMarkup(icon) + '</span><span>' + escHtml(iconLabel(name)) + '</span>';
     } else if (viewMode === 'details') {
       el = document.createElement('tr');
       el.className = 'exp-det-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = '<td style="font-size:12px;width:22px;">' + icon + '</td><td>' + iconLabel(name) + '</td><td>' + typeLabel(kind) + '</td>';
+      el.innerHTML = '<td class="exp-det-icon">' + iconMarkup(icon) + '</td><td>' + escHtml(iconLabel(name)) + '</td><td>' + typeLabel(kind) + '</td>';
     } else {
       el = document.createElement('div');
       el.className = 'exp-item' + (sysfile ? ' exp-sysfile' : '');
-      el.innerHTML = '<div class="exp-icon">' + icon + '</div><span>' + iconLabel(name) + '</span>';
+      el.innerHTML = '<div class="exp-icon">' + iconMarkup(icon) + '</div><span>' + escHtml(iconLabel(name)) + '</span>';
     }
     registerSelectionNode(el, item);
     el.addEventListener('click', e => {
@@ -9470,15 +9594,15 @@ function openExplorer(startPath) {
     if (viewMode === 'details') {
       el = document.createElement('tr');
       el.className = 'exp-det-item';
-      el.innerHTML = '<td style="font-size:12px;width:22px;">' + project.emoji + '</td><td>' + project.name + '</td><td>HTML Application</td>';
+      el.innerHTML = '<td class="exp-det-icon">' + iconMarkup(project.emoji) + '</td><td>' + escHtml(project.name) + '</td><td>HTML Application</td>';
     } else if (viewMode === 'list') {
       el = document.createElement('div');
       el.className = 'exp-list-item';
-      el.innerHTML = '<span style="font-size:14px;width:18px;flex-shrink:0;text-align:center;">' + project.emoji + '</span><span>' + project.name + '</span>';
+      el.innerHTML = '<span class="exp-list-icon">' + iconMarkup(project.emoji) + '</span><span>' + escHtml(project.name) + '</span>';
     } else {
       el = document.createElement('div');
       el.className = 'exp-item';
-      el.innerHTML = '<div class="exp-icon">' + project.emoji + '</div><span>' + project.name + '</span>';
+      el.innerHTML = '<div class="exp-icon">' + iconMarkup(project.emoji) + '</div><span>' + escHtml(project.name) + '</span>';
     }
     registerSelectionNode(el, item);
     el.addEventListener('click', e => {
@@ -9494,7 +9618,7 @@ function openExplorer(startPath) {
       showCtxMenu(e.clientX, e.clientY, [
         { label: 'Open', action: openProject },
         '-',
-        { label: 'Properties', action: () => osAlert('Name:\t' + project.name + '\nFile:\t' + project.file + '\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\', 'Properties', '??') },
+        { label: 'Properties', action: () => osAlert('Name:\t' + project.name + '\nFile:\t' + project.file + '\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\', 'Properties', 'icon:info') },
         '-',
         { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || project.name) },
       ]);
@@ -9730,7 +9854,7 @@ function openExplorer(startPath) {
         try {
           await vfsWriteFile(name, '', cwd);
         } catch (err) {
-          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'X');
+          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'icon:error');
           return;
         }
         openNotepad(name, cwd);
@@ -9821,7 +9945,7 @@ function openExplorer(startPath) {
         try {
           await vfsWriteFile(name, '', cwd);
         } catch (err) {
-          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'X');
+          osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this file.' : err.message, 'Cannot Create', 'icon:error');
           return;
         }
         openNotepad(name, cwd);
@@ -9953,7 +10077,7 @@ function buildKillDenialMessage(pid) {
   return builtIn ? `${pid} is a system process. Use TASKKILL.` : null;
 }
 function openTerminal(startDir, initialCommand) {
-  if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
+  if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'icon:terminal', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
     if (initialCommand && _termExec) _termExec(initialCommand);
     return;
@@ -9976,10 +10100,10 @@ function openTerminal(startDir, initialCommand) {
     e.preventDefault();
     const sel = window.getSelection()?.toString();
     showCtxMenu(e.clientX, e.clientY, [
-      { label: '📋 Copy',         disabled: !sel, action: () => sel && navigator.clipboard?.writeText(sel) },
-      { label: '📄 Paste',        action: () => navigator.clipboard?.readText().then(t => { inp.value += t; inp.focus(); }) },
+      { label: 'Copy',            disabled: !sel, action: () => sel && navigator.clipboard?.writeText(sel) },
+      { label: 'Paste',           action: () => navigator.clipboard?.readText().then(t => { inp.value += t; inp.focus(); }) },
       '-',
-      { label: '🧹 Clear Screen', action: () => { out.innerHTML = ''; } },
+      { label: 'Clear Screen',    action: () => { out.innerHTML = ''; } },
       '-',
       { label: 'Close',           action: () => closeWin('terminal') },
     ]);
@@ -11169,7 +11293,7 @@ function openTerminal(startDir, initialCommand) {
 }
 
 function openSysmon() {
-  if (!mkWin({ id:'sysmon', title:'SYSMON.exe - System Monitor', icon:'📊', w:460, h:400, x:160, y:80 })) return;
+  if (!mkWin({ id:'sysmon', title:'SYSMON.exe - System Monitor', icon:'icon:sysmon', w:460, h:400, x:160, y:80 })) return;
   const mb   = document.getElementById('mb-sysmon');
   const body = document.getElementById('wb-sysmon');
   body.style.cssText = 'background:#c0c0c0;overflow:hidden;display:flex;flex-direction:column;';
@@ -11302,11 +11426,11 @@ function openSysmon() {
         const result = killSoulDaemonProcess();
         selectedProc = null;
         renderProcesses();
-        osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), result.ok ? 'Process Update' : 'Access Denied', '⚠️');
+        osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), result.ok ? 'Process Update' : 'Access Denied', 'icon:warning');
         return;
       }
       const dlgId = 'sm-killerr-' + Date.now();
-      if (mkWin({ id:dlgId, title:'Access Denied', icon:'\u26a0\ufe0f', w:290, h:110, popup:true, menubar:false, statusbar:false })) {
+      if (mkWin({ id:dlgId, title:'Access Denied', icon:'icon:warning', w:290, h:110, popup:true, menubar:false, statusbar:false })) {
         const db = document.getElementById('wb-' + dlgId);
         if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
       }
@@ -11318,7 +11442,7 @@ function openSysmon() {
       // click landing. Match the terminal's KILL wording for the identical
       // case (apps/terminal.js) so the two surfaces agree about what
       // happened, instead of this button quietly doing nothing.
-      osAlert(`Access denied: PID ${selectedProc.pid} cannot be terminated.`, 'Access Denied', '⚠️');
+      osAlert(`Access denied: PID ${selectedProc.pid} cannot be terminated.`, 'Access Denied', 'icon:warning');
       return;
     }
     // action is 'closed' or 'signalled': endProcessAction already told the
@@ -11415,7 +11539,7 @@ function openSysmon() {
 }
 
 function openDefrag() {
-  if (!mkWin({ id:'defrag', title:'DEFRAG.exe - Disk Defragmenter', icon:'🧩', w:560, h:400, x:100, y:60 })) return;
+  if (!mkWin({ id:'defrag', title:'DEFRAG.exe - Disk Defragmenter', icon:'icon:defrag', w:560, h:400, x:100, y:60 })) return;
 
   const mb   = document.getElementById('mb-defrag');
   const body = document.getElementById('wb-defrag');
@@ -11651,15 +11775,18 @@ function openDefrag() {
   mb.innerHTML = '';
   [
     { label: 'Drive', items: [
-      { label: 'C:\\ (2,147 MB)  ✓', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
-      { label: 'D:\\ - [NOT FOUND]', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', '⚠️') },
+      // The plain drive art lives here, now that DEFRAG's own icon is the drive
+      // being cleaned. The tick stays in the label: the gutter is the icon's
+      // now, so it can no longer double as the selected-drive marker.
+      { label: 'C:\\ (2,147 MB)  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
+      { label: 'D:\\ - [NOT FOUND]', icon: 'icon:disk', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', 'icon:warning') },
       '-',
       { label: 'Exit', action: () => closeWin('defrag') },
     ]},
     { label: 'Help', items: [
-      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe - Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nLower fragmentation reduces late-stage application distortion.\n\nNote: some system files cannot be moved.', 'Help Topics', '❓') },
+      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe - Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nLower fragmentation reduces late-stage application distortion.\n\nNote: some system files cannot be moved.', 'Help Topics', 'icon:tip') },
       '-',
-      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe - Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\nA small amount of the drive always remains unmovable.', 'About DEFRAG.exe', '🧩') },
+      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe - Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\nA small amount of the drive always remains unmovable.', 'About DEFRAG.exe', 'icon:defrag') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -11719,7 +11846,7 @@ function renderDaemonPanel() {
   body.innerHTML = `
     <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:11px;line-height:1.5;">
       <div style="display:flex;gap:12px;align-items:flex-start;">
-        <div style="font-size:42px;line-height:1;">👁️</div>
+        <div class="daemon-eye-large">${iconMarkup('icon:daemon')}</div>
         <div style="flex:1;">
           <div><b>File:</b> daemon.core</div>
           <div><b>Status:</b> <span style="color:${statusColor};font-weight:bold">${status}</span></div>
@@ -11807,7 +11934,7 @@ function openDaemon() {
   const stage = daemonStory.stage || 0;
   const initialWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
   const initialHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
-  if (!mkWin({ id:'daemon', title:'daemon.core - Containment', icon:'👁️', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
+  if (!mkWin({ id:'daemon', title:'daemon.core - Containment', icon:'icon:daemon', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
   renderDaemonPanel();
 }
 
@@ -11955,19 +12082,19 @@ function resizeVoidWindow() {
 
 function openVoid() {
   if (daemonStory.endingReached) {
-    osAlert('void.tmp is no longer present.', 'void.tmp', '⬛');
+    osAlert('void.tmp is no longer present.', 'void.tmp', 'icon:void');
     return;
   }
   daemonRecordInvestigation('void');
   const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
   const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'icon:void', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
   renderVoid();
 }
 
 function openUnknown() {
   const wid = 'unk-warn-' + Date.now();
-  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'❓', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'icon:unknown', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
   const ready = daemonStory.stage >= 7 && !daemonStory.endingReached && Number(getContainmentValue('MIRROR_LOCK')) === 1;
   const signed = daemonStory.quarantineSigned;
   const inertMsg = daemonStory.stage < 4
@@ -11977,7 +12104,7 @@ function openUnknown() {
     : 'The launcher is waiting.<br><br>MIRROR_LOCK must be restored before it will sign anything.';
   document.getElementById('wb-' + wid).innerHTML = `
     <div class="dlg-body">
-      <div class="dlg-icon">❓</div>
+      <div class="dlg-icon">${iconMarkup('icon:unknown')}</div>
       <div class="dlg-text">
         ${signed
           ? 'SYS\\quarantine.sig is already present.<br><br>The launcher is waiting for the final delete.'
@@ -12016,17 +12143,17 @@ function runUnknown() {
     message = 'SYS\\quarantine.sig is already present.\n\nThe launcher has nothing else to do.';
   }
   const rid = 'unk-result-' + Date.now();
-  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:360, h:220, x:180, y:110, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:rid, title:'?????.exe', icon:'icon:unknown', w:360, h:220, x:180, y:110, menubar:false, statusbar:false })) return;
   document.getElementById('wb-' + rid).innerHTML = `
     <div class="dlg-body">
-      <div class="dlg-icon">❓</div>
+      <div class="dlg-icon">${iconMarkup('icon:unknown')}</div>
       <div class="dlg-text" style="white-space:pre-line;">${escHtml(message)}</div>
     </div>
     <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
 }
 
 function openBrowser() {
-  if (!mkWin({ id:'browser', title:'sleepWEB - Web Browser', icon:'🌐', w:640, h:460, x:80, y:50 })) return;
+  if (!mkWin({ id:'browser', title:'sleepWEB - Web Browser', icon:'icon:browser', w:640, h:460, x:80, y:50 })) return;
 
   const mb   = document.getElementById('mb-browser');
   const body = document.getElementById('wb-browser');
@@ -12076,12 +12203,12 @@ function openBrowser() {
     <button class="br-btn" id="br-fwd"  title="Forward" disabled>▶</button>
     <button class="br-btn" id="br-stop" title="Stop">✕</button>
     <button class="br-btn" id="br-ref"  title="Refresh">↻</button>
-    <button class="br-btn" id="br-home" title="Home">🏠</button>
+    <button class="br-btn" id="br-home" title="Home">${iconMarkup('icon:home')}</button>
     <div class="br-vsep"></div>
     <span class="br-addr-label">Address:</span>
     <input class="br-addr" id="br-url" type="text" value="home:">
     <button class="br-btn" id="br-go">Go</button>
-    <button class="br-btn" id="br-fav" title="Add to Favorites">⭐</button>`;
+    <button class="br-btn" id="br-fav" title="Add to Favorites">${iconMarkup('icon:star')}</button>`;
   body.appendChild(toolbar);
 
   // ── iframe + error overlay ─────────────────────────────────────
@@ -12103,7 +12230,7 @@ function openBrowser() {
 
   function showError(url) {
     errBox.innerHTML = `
-      <div style="font-size:24px;margin-bottom:8px;">🚫</div>
+      <div class="br-err-icon">${iconMarkup('icon:error')}</div>
       <b>This page cannot be displayed</b><br><br>
       <span style="word-break:break-all;color:#444;">${url}</span><br><br>
       This site sent <code style="background:#eee;padding:1px 3px;">X-Frame-Options</code> or
@@ -12233,7 +12360,7 @@ function openBrowser() {
       saveFavorites();
       refreshHome();
       if (ws) ws.textContent = 'Added to Favorites.';
-    }, '*');
+    }, 'icon:star');
   }
 
   document.getElementById('br-fav').addEventListener('click', addToFavorites);
@@ -12247,10 +12374,10 @@ function openBrowser() {
       { label: '▶ Forward', disabled: histIdx >= hist.length - 1, action: () => document.getElementById('br-fwd').click() },
       { label: '↻ Refresh', action: () => document.getElementById('br-ref').click() },
       '-',
-      { label: '⭐ Add to Favorites', disabled: currentUrl() === 'home:', action: addToFavorites },
+      { label: 'Add to Favorites', icon: 'icon:star', disabled: currentUrl() === 'home:', action: addToFavorites },
       '-',
-      { label: '🏠 Home',      action: () => navigate('home:') },
-      { label: '🔗 Open in New Tab', disabled: currentUrl() === 'home:', action: () => window.open(currentUrl(), '_blank') },
+      { label: 'Home', icon: 'icon:home', action: () => navigate('home:') },
+      { label: 'Open in New Tab', disabled: currentUrl() === 'home:', action: () => window.open(currentUrl(), '_blank') },
     ]);
   });
 
@@ -12277,7 +12404,7 @@ function openBrowser() {
   mb.innerHTML = '';
   [
     { label: 'File', items: [
-      { label: 'Open Location...', action: () => osPrompt('Enter URL:', 'https://', 'Open Location', u => { if (u) navigate(u); }, '🌐') },
+      { label: 'Open Location...', action: () => osPrompt('Enter URL:', 'https://', 'Open Location', u => { if (u) navigate(u); }, 'icon:browser') },
       '-',
       { label: 'Close', action: () => closeWin('browser') },
     ]},
@@ -12290,11 +12417,11 @@ function openBrowser() {
         try {
           const src = iframe.contentDocument.documentElement.outerHTML;
           const w = window.open(''); w.document.write('<pre style="white-space:pre-wrap;font-size:12px;">' + src.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>');
-        } catch(e) { osAlert('Cannot view source of cross-origin pages.', 'View Source', '🚫'); }
+        } catch(e) { osAlert('Cannot view source of cross-origin pages.', 'View Source', 'icon:error'); }
       }},
     ]},
     { label: 'Help', items: [
-      { label: 'About sleepWEB', action: () => osAlert('sleepWEB - Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', '🌐') },
+      { label: 'About sleepWEB', action: () => osAlert('sleepWEB - Web Browser\nsleepOS v1.0\n\nNote: many modern sites block\nbeing loaded inside frames.', 'About sleepWEB', 'icon:browser') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -12309,13 +12436,13 @@ function openBrowser() {
   favSpan.addEventListener('click', e => {
     e.stopPropagation();
     const items = [
-      { label: '⭐ Add to Favorites', action: addToFavorites },
-      { label: '🗑️ Clear All Favorites', action: () => {
+      { label: 'Add to Favorites', icon: 'icon:star', action: addToFavorites },
+      { label: 'Clear All Favorites', icon: 'icon:recycle-full', action: () => {
         if (!browserFavorites.length) return;
         osConfirm('Clear all favorites?', 'Confirm', ok => {
           if (!ok) return;
           browserFavorites.length = 0; saveFavorites(); refreshHome(); if (ws) ws.textContent = 'Favorites cleared.';
-        }, '🗑️');
+        }, 'icon:recycle-full');
       }},
     ];
     if (browserFavorites.length) {
@@ -12443,14 +12570,12 @@ Rebooting sleepOS shell...
 // ─────────────────────────────────────────────────────────────────
 function doShutdown() {
   const id = 'shutdown';
-  const powerIconSvg = '<svg viewBox="0 -3 16 16" aria-hidden="true" focusable="false"><path d="M8 1.5v5.2"></path><path d="M4.8 3.3a5 5 0 1 0 6.4 0"></path></svg>';
-  const powerIcon = `<span class="power-icon">${powerIconSvg}</span>`;
-  if (!mkWin({ id, title:'Shut Down sleepOS', icon:powerIcon, w:300, h:165,
+  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'icon:standby', w:300, h:165,
                x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
                menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-shutdown').innerHTML = `
     <div class="dlg-body">
-      <div class="dlg-icon power-icon">${powerIconSvg}</div>
+      <div class="dlg-icon">${iconMarkup('icon:standby')}</div>
       <div class="dlg-text">
         What do you want the computer to do?<br><br>
         <select id="shutdown-sel" style="width:180px;font-size:11px;margin-top:2px;">
@@ -12509,7 +12634,7 @@ Saving system state...                   [OK]
 // REGISTRY EDITOR
 // ─────────────────────────────────────────────────────────────────
 function openRegedit() {
-  if (!mkWin({ id:'regedit', title:'Registry Editor', icon:'🗝️', w:580, h:380, x:90, y:70 })) return;
+  if (!mkWin({ id:'regedit', title:'Registry Editor', icon:'icon:regedit', w:580, h:380, x:90, y:70 })) return;
   const body = document.getElementById('wb-regedit');
   const ws   = document.getElementById('ws-regedit');
   const mb   = document.getElementById('mb-regedit');
@@ -12537,7 +12662,7 @@ function openRegedit() {
   }
 
   function showLockedRegValueNotice(valName) {
-    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', '🗝️');
+    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', 'icon:regedit');
   }
 
   function buildTree() {
@@ -12548,7 +12673,7 @@ function openRegedit() {
 
       const hiveRow = document.createElement('div');
       hiveRow.className = 'reg-tree-item';
-      hiveRow.innerHTML = '<span class="reg-tree-arrow">▶</span><span class="reg-tree-icon">📁</span>&nbsp;<span>' + hive + '</span>';
+      hiveRow.innerHTML = '<span class="reg-tree-arrow">\u25b6</span><span class="reg-tree-icon">' + iconMarkup('icon:folder') + '</span>&nbsp;<span>' + hive + '</span>';
       let expanded = false;
       const childWrap = document.createElement('div');
       childWrap.style.paddingLeft = '12px';
@@ -12563,7 +12688,7 @@ function openRegedit() {
       Object.keys(registryData[hive]).forEach(keyPath => {
         const keyEl = document.createElement('div');
         keyEl.className = 'reg-tree-item';
-        keyEl.innerHTML = '<span class="reg-tree-icon">🗂️</span>&nbsp;<span>' + keyPath + '</span>';
+        keyEl.innerHTML = '<span class="reg-tree-icon">' + iconMarkup('icon:folder-open') + '</span>&nbsp;<span>' + keyPath + '</span>';
         keyEl.addEventListener('click', e => {
           e.stopPropagation();
           tree.querySelectorAll('.reg-tree-item.selected').forEach(el => el.classList.remove('selected'));
@@ -12594,7 +12719,7 @@ function openRegedit() {
       const locked = isLockedRegValue(hive, keyPath, valName);
       const tr = document.createElement('tr');
       tr.className = 'reg-val-row';
-      tr.innerHTML = '<td>📄 ' + valName + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
+      tr.innerHTML = '<td class="reg-val-name">' + iconMarkup('icon:text') + escHtml(valName) + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
       tr.addEventListener('dblclick', () => {
         if (locked) {
           showLockedRegValueNotice(valName);
@@ -12633,7 +12758,7 @@ function openRegedit() {
       saveRegistry();
       applyRegistryEffects(hive, keyPath, valName, entry.value);
       renderVals(hive, keyPath);
-    }, '🗝️');
+    }, 'icon:regedit');
   }
 
   function applyRegistryEffects(hive, keyPath, valName, newValue) {
@@ -12746,11 +12871,11 @@ function openRegedit() {
         } catch (err) {
           osAlert(
             err.code === 'ENOSPC' ? 'Not enough space to export the registry.' : err.message,
-            'Export Failed', 'X'
+            'Export Failed', 'icon:error'
           );
           return;
         }
-        osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', '🗝️');
+        osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', 'icon:regedit');
       }},
       '-',
       { label: 'Close', action: () => closeWin('regedit') },
@@ -12764,7 +12889,7 @@ function openRegedit() {
       }},
     ]},
     { label: 'Help', items: [
-      { label: 'About Registry Editor', action: () => osAlert('Registry Editor\nsleepOS v0.9β\n\nModifying registry values affects\nlive system behavior.\n\nProceed with caution.', 'About', '🗝️') },
+      { label: 'About Registry Editor', action: () => osAlert('Registry Editor\nsleepOS v0.9β\n\nModifying registry values affects\nlive system behavior.\n\nProceed with caution.', 'About', 'icon:regedit') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -12781,7 +12906,7 @@ function openRegedit() {
 // CALCULATOR
 // ─────────────────────────────────────────────────────────────────
 function openCalculator() {
-  if (!mkWin({ id:'calc', title:'Calculator', icon:'🔢', w:240, h:300, x:200, y:120, menubar:true, statusbar:false })) return;
+  if (!mkWin({ id:'calc', title:'Calculator', icon:'icon:calc', w:240, h:300, x:200, y:120, menubar:true, statusbar:false })) return;
   const body = document.getElementById('wb-calc');
   const mb   = document.getElementById('mb-calc');
   body.style.cssText = 'padding:0;overflow:hidden;';
@@ -13011,12 +13136,12 @@ function openCalculator() {
 function openRunDialog() {
   const id = 'run-dialog';
   const p = _osDlgPos(360, 160);
-  if (!mkWin({ id, title:'Run', icon:'▶', w:360, h:160, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id, title:'Run', icon:'icon:exe', w:360, h:160, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:10px;font-size:11px;';
   body.innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:10px;">
-      <div style="font-size:28px;line-height:1;">▶</div>
+      <div class="dlg-icon">${iconMarkup('icon:exe')}</div>
       <div style="flex:1;">
         <div style="margin-bottom:8px;line-height:1.5;">Type the name of a program to open it.</div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -13061,9 +13186,9 @@ function openRunDialog() {
       p.name.toLowerCase() === v
     );
     if (proj) { window.open(proj.file, '_blank'); return; }
-    // 'X', not the Run dialog's own '▶': this is a failure, and every other
-    // failure in the OS is titled and iconed as one.
-    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Cannot Find Program', 'X');
+    // The error icon, not the Run dialog's own executable one: this is a
+    // failure, and every other failure in the OS is titled and iconed as one.
+    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Cannot Find Program', 'icon:error');
   });
   can.addEventListener('click', () => closeWin(id));
   inp.addEventListener('keydown', e => {
@@ -13108,7 +13233,7 @@ function renderAltTab() {
     const w = wins[id];
     const item = document.createElement('div');
     item.className = 'alttab-item' + (i === altTabIdx ? ' focused' : '');
-    item.innerHTML = '<div class="at-icon">' + (w.icon || '📄') + '</div><div class="at-label">' + (w.title || id) + '</div>';
+    item.innerHTML = '<div class="at-icon">' + iconMarkup(w.icon || 'icon:text') + '</div><div class="at-label">' + escHtml(w.title || id) + '</div>';
     item.addEventListener('click', () => {
       altTabIdx = i;
       commitAltTab();
@@ -13159,7 +13284,7 @@ function cadAction(type) {
     lock.id = 'lock-screen';
     lock.style.cssText = 'position:fixed;inset:0;z-index:99995;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
     lock.innerHTML = `
-      <div style="color:#888;font-size:28px;">🔒</div>
+      <div class="lock-screen-icon">${iconMarkup('icon:lock')}</div>
       <div style="color:#ccc;font-size:13px;font-family:var(--sleep-font);">sleepOS is locked</div>
       <div style="color:#666;font-size:11px;font-family:var(--sleep-font);">Press any key or click to unlock</div>`;
     document.body.appendChild(lock);

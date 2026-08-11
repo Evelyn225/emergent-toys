@@ -1,12 +1,12 @@
 function openRunDialog() {
   const id = 'run-dialog';
   const p = _osDlgPos(360, 160);
-  if (!mkWin({ id, title:'Run', icon:'▶', w:360, h:160, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id, title:'Run', icon:'icon:exe', w:360, h:160, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:10px;font-size:11px;';
   body.innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:10px;">
-      <div style="font-size:28px;line-height:1;">▶</div>
+      <div class="dlg-icon">${iconMarkup('icon:exe')}</div>
       <div style="flex:1;">
         <div style="margin-bottom:8px;line-height:1.5;">Type the name of a program to open it.</div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -51,9 +51,9 @@ function openRunDialog() {
       p.name.toLowerCase() === v
     );
     if (proj) { window.open(proj.file, '_blank'); return; }
-    // 'X', not the Run dialog's own '▶': this is a failure, and every other
-    // failure in the OS is titled and iconed as one.
-    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Cannot Find Program', 'X');
+    // The error icon, not the Run dialog's own executable one: this is a
+    // failure, and every other failure in the OS is titled and iconed as one.
+    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Cannot Find Program', 'icon:error');
   });
   can.addEventListener('click', () => closeWin(id));
   inp.addEventListener('keydown', e => {

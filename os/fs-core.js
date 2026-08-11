@@ -128,7 +128,7 @@ async function pasteClipboardInto(dstCwd) {
     }
   }
   if (cut) _expClipboard = null;
-  if (failMessage) osAlert(failMessage, 'Paste Failed', 'X');
+  if (failMessage) osAlert(failMessage, 'Paste Failed', 'icon:error');
   return changed;
 }
 

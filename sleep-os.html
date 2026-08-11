@@ -36,7 +36,7 @@
 <div id="bios"><div id="bios-text"></div></div>
 
 <!-- Drop overlay -->
-<div id="drop-overlay">📁 Drop files to upload to sleepOS</div>
+<div id="drop-overlay"><img class="os-icon" src="os/icons/upload.png" alt="" draggable="false"><span>Drop files to upload to sleepOS</span></div>
 
 <!-- Window switcher overlay -->
 <div id="alttab-overlay">
@@ -49,7 +49,7 @@
     <div id="cad-title">sleepOS Security</div>
     <div id="cad-body">
       <div id="cad-hero">
-        <div id="cad-glyph">⚠</div>
+        <div id="cad-glyph"><img class="os-icon" src="os/icons/warning.png" alt="" draggable="false"></div>
         <div id="cad-copy">
           <div id="cad-kicker">Secure Attention Sequence</div>
           <div id="cad-headline">Session controls are available for the current desktop.</div>
@@ -66,21 +66,21 @@
       </div>
       <div id="cad-actions">
         <button class="cad-action" onclick="cadAction('lock')">
-          <span class="cad-action-icon">🔒</span>
+          <span class="cad-action-icon"><img class="os-icon" src="os/icons/key_padlock-0.png" alt="" draggable="false"></span>
           <span class="cad-action-copy">
             <strong>Lock Session</strong>
             <span>Blank the desktop until the next keypress or click.</span>
           </span>
         </button>
         <button class="cad-action" onclick="cadAction('taskmgr')">
-          <span class="cad-action-icon">📊</span>
+          <span class="cad-action-icon"><img class="os-icon" src="os/icons/chart1-4.png" alt="" draggable="false"></span>
           <span class="cad-action-copy">
             <strong>System Monitorr</strong>
             <span>Inspect active windows and process IDs before forcing changes.</span>
           </span>
         </button>
         <button class="cad-action power" onclick="cadAction('shutdown')">
-          <span class="cad-action-icon">⏻</span>
+          <span class="cad-action-icon"><img class="os-icon" src="os/icons/standby_icon.png" alt="" draggable="false"></span>
           <span class="cad-action-copy">
             <strong>Shut Down</strong>
             <span>Open power options for shutdown or restart.</span>
@@ -96,7 +96,7 @@
 </div>
 <div id="sleep-overlay" tabindex="-1" aria-hidden="true">
   <div id="sleep-shell">
-    <div id="sleep-sigil">☾</div>
+    <div id="sleep-sigil" aria-hidden="true"></div>
     <div id="sleep-clock">--:--</div>
     <div id="sleep-title">Idle Sleep State</div>
     <div id="sleep-copy">Move the mouse, click, or press any key to wake sleepOS.</div>
@@ -120,7 +120,8 @@
   <div class="tb-divider"></div>
   <div id="taskbar-programs"></div>
   <div id="system-tray">
-    <span title="sleepOS network active">📶</span>
+    <span class="tray-icon" title="sleepOS network active"><img class="os-icon" src="os/icons/network.png" alt="" draggable="false"></span>
+    <span class="tray-icon"><img class="os-icon" src="os/icons/clock.png" alt="" draggable="false"></span>
     <span id="clock">--:--</span>
   </div>
 </div>
@@ -130,32 +131,32 @@
   <div id="sm-sidebar"><span>sleepOS</span></div>
   <div id="sm-items">
     <div class="sm-item" onclick="closeStart();openNotepad()">
-      <span class="sm-icon">📝</span><span>Notepad</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/notepad-1.png" alt="" draggable="false"></span><span>Notepad</span>
     </div>
     <div class="sm-item" onclick="closeStart();openExplorer()">
-      <span class="sm-icon">🗂️</span><span>File Explorer</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/directory_open_file_mydocs-0.png" alt="" draggable="false"></span><span>File Explorer</span>
     </div>
     <div class="sm-item" onclick="closeStart();openFiles()">
-      <span class="sm-icon">📁</span><span>Projects</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/directory_closed-0.png" alt="" draggable="false"></span><span>Projects</span>
     </div>
     <div class="sm-item" onclick="closeStart();openTerminal()">
-      <span class="sm-icon">💻</span><span>Terminal</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/console_prompt-0.png" alt="" draggable="false"></span><span>Terminal</span>
     </div>
     <div class="sm-item" onclick="closeStart();openSysmon()">
-      <span class="sm-icon">📊</span><span>System Monitor</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/chart1-4.png" alt="" draggable="false"></span><span>System Monitor</span>
     </div>
     <div class="sm-item" onclick="closeStart();openCalculator()">
-      <span class="sm-icon">🔢</span><span>Calculator</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/calculator-0.png" alt="" draggable="false"></span><span>Calculator</span>
     </div>
     <div class="sm-item" onclick="closeStart();openRegedit()">
-      <span class="sm-icon">🗝️</span><span>Registry Editor</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/regedit-0.png" alt="" draggable="false"></span><span>Registry Editor</span>
     </div>
     <div class="sm-item" onclick="closeStart();openSettings()">
-      <span class="sm-icon">&#9881;&#65039;</span><span>Settings</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/settings.png" alt="" draggable="false"></span><span>Settings</span>
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="closeStart();openRunDialog()">
-      <span class="sm-icon">▶</span><span>Run...</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/executable_script-1.png" alt="" draggable="false"></span><span>Run...</span>
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="window.location='/'">
@@ -163,7 +164,7 @@
     </div>
     <div class="sm-sep"></div>
     <div class="sm-item" onclick="closeStart();doShutdown()">
-      <span class="sm-icon sm-icon-power"><svg viewBox="0 -3 16 16" aria-hidden="true" focusable="false"><path d="M8 1.5v5.2"></path><path d="M4.8 3.3a5 5 0 1 0 6.4 0"></path></svg></span><span>Shut Down...</span>
+      <span class="sm-icon"><img class="os-icon" src="os/icons/standby_icon.png" alt="" draggable="false"></span><span>Shut Down...</span>
     </div>
   </div>
 </div>

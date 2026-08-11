@@ -46,7 +46,7 @@ function renderDaemonPanel() {
   body.innerHTML = `
     <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:11px;line-height:1.5;">
       <div style="display:flex;gap:12px;align-items:flex-start;">
-        <div style="font-size:42px;line-height:1;">👁️</div>
+        <div class="daemon-eye-large">${iconMarkup('icon:daemon')}</div>
         <div style="flex:1;">
           <div><b>File:</b> daemon.core</div>
           <div><b>Status:</b> <span style="color:${statusColor};font-weight:bold">${status}</span></div>
@@ -134,7 +134,7 @@ function openDaemon() {
   const stage = daemonStory.stage || 0;
   const initialWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
   const initialHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
-  if (!mkWin({ id:'daemon', title:'daemon.core - Containment', icon:'👁️', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
+  if (!mkWin({ id:'daemon', title:'daemon.core - Containment', icon:'icon:daemon', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
   renderDaemonPanel();
 }
 
@@ -282,19 +282,19 @@ function resizeVoidWindow() {
 
 function openVoid() {
   if (daemonStory.endingReached) {
-    osAlert('void.tmp is no longer present.', 'void.tmp', '⬛');
+    osAlert('void.tmp is no longer present.', 'void.tmp', 'icon:void');
     return;
   }
   daemonRecordInvestigation('void');
   const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
   const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'⬛', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  if (!mkWin({ id:'void', title:'void.tmp', icon:'icon:void', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
   renderVoid();
 }
 
 function openUnknown() {
   const wid = 'unk-warn-' + Date.now();
-  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'❓', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
+  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'icon:unknown', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
   const ready = daemonStory.stage >= 7 && !daemonStory.endingReached && Number(getContainmentValue('MIRROR_LOCK')) === 1;
   const signed = daemonStory.quarantineSigned;
   const inertMsg = daemonStory.stage < 4
@@ -304,7 +304,7 @@ function openUnknown() {
     : 'The launcher is waiting.<br><br>MIRROR_LOCK must be restored before it will sign anything.';
   document.getElementById('wb-' + wid).innerHTML = `
     <div class="dlg-body">
-      <div class="dlg-icon">❓</div>
+      <div class="dlg-icon">${iconMarkup('icon:unknown')}</div>
       <div class="dlg-text">
         ${signed
           ? 'SYS\\quarantine.sig is already present.<br><br>The launcher is waiting for the final delete.'
@@ -343,10 +343,10 @@ function runUnknown() {
     message = 'SYS\\quarantine.sig is already present.\n\nThe launcher has nothing else to do.';
   }
   const rid = 'unk-result-' + Date.now();
-  if (!mkWin({ id:rid, title:'?????.exe', icon:'❓', w:360, h:220, x:180, y:110, menubar:false, statusbar:false })) return;
+  if (!mkWin({ id:rid, title:'?????.exe', icon:'icon:unknown', w:360, h:220, x:180, y:110, menubar:false, statusbar:false })) return;
   document.getElementById('wb-' + rid).innerHTML = `
     <div class="dlg-body">
-      <div class="dlg-icon">❓</div>
+      <div class="dlg-icon">${iconMarkup('icon:unknown')}</div>
       <div class="dlg-text" style="white-space:pre-line;">${escHtml(message)}</div>
     </div>
     <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;

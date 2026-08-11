@@ -1,4 +1,5 @@
 [
+  "os/icons.js",
   "os/vfs.js",
   "os/kernel.js",
   "os/storage-mem.js",

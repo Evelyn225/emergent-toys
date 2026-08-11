@@ -18,7 +18,7 @@ function buildKillDenialMessage(pid) {
   return builtIn ? `${pid} is a system process. Use TASKKILL.` : null;
 }
 function openTerminal(startDir, initialCommand) {
-  if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'💻', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
+  if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'icon:terminal', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
     if (initialCommand && _termExec) _termExec(initialCommand);
     return;
@@ -41,10 +41,10 @@ function openTerminal(startDir, initialCommand) {
     e.preventDefault();
     const sel = window.getSelection()?.toString();
     showCtxMenu(e.clientX, e.clientY, [
-      { label: '📋 Copy',         disabled: !sel, action: () => sel && navigator.clipboard?.writeText(sel) },
-      { label: '📄 Paste',        action: () => navigator.clipboard?.readText().then(t => { inp.value += t; inp.focus(); }) },
+      { label: 'Copy',            disabled: !sel, action: () => sel && navigator.clipboard?.writeText(sel) },
+      { label: 'Paste',           action: () => navigator.clipboard?.readText().then(t => { inp.value += t; inp.focus(); }) },
       '-',
-      { label: '🧹 Clear Screen', action: () => { out.innerHTML = ''; } },
+      { label: 'Clear Screen',    action: () => { out.innerHTML = ''; } },
       '-',
       { label: 'Close',           action: () => closeWin('terminal') },
     ]);

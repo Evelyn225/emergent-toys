@@ -37,19 +37,39 @@ function closeDropdown() {
   const old = document.getElementById('active-dropdown');
   if (old) old.remove();
 }
+// A menu item may carry an `icon`. Items are laid out with a fixed 16px gutter
+// so their labels line up whether or not each one has art - but only if some
+// item in THIS menu has an icon, so the File/Edit/View menubar dropdowns, which
+// never do, stay as tight as they were.
+function buildMenuItemEl(item, gutter) {
+  const el = document.createElement('div');
+  el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '') + (gutter ? ' has-gutter' : '');
+  if (gutter) {
+    const ic = document.createElement('span');
+    ic.className = 'menu-dd-icon';
+    ic.innerHTML = iconMarkup(item.icon || '');
+    el.appendChild(ic);
+  }
+  const label = document.createElement('span');
+  label.textContent = item.label;
+  el.appendChild(label);
+  return el;
+}
+function menuNeedsGutter(items) {
+  return items.some(item => item !== '-' && item.icon);
+}
 function showDropdown(anchor, items) {
   closeDropdown();
   const rect = anchor.getBoundingClientRect();
   const dd = document.createElement('div');
   dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
   dd.style.left = rect.left + 'px'; dd.style.top = rect.bottom + 'px';
+  const gutter = menuNeedsGutter(items);
   items.forEach(item => {
     if (item === '-') {
       const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
     } else {
-      const el = document.createElement('div');
-      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
-      el.textContent = item.label;
+      const el = buildMenuItemEl(item, gutter);
       if (!item.disabled) el.addEventListener('mousedown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
       dd.appendChild(el);
     }
@@ -85,13 +105,12 @@ function showCtxMenu(x, y, items) {
   dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
   // Keep menu on screen
   dd.style.left = x + 'px'; dd.style.top = y + 'px';
+  const gutter = menuNeedsGutter(items);
   items.forEach(item => {
     if (item === '-') {
       const sep = document.createElement('div'); sep.className = 'menu-dd-sep'; dd.appendChild(sep);
     } else {
-      const el = document.createElement('div');
-      el.className = 'menu-dd-item' + (item.disabled ? ' disabled' : '');
-      el.textContent = item.label;
+      const el = buildMenuItemEl(item, gutter);
       if (!item.disabled) el.addEventListener('pointerdown', e => { e.stopPropagation(); closeDropdown(); item.action(); });
       dd.appendChild(el);
     }
@@ -187,18 +206,21 @@ function _osDlgPos(w, h) {
 // fire on "About DEFRAG.exe". Only failures get the sound, recognised from the
 // two arguments every call site already passes.
 //
-// 'X' leads the icon list because it is what this codebase actually uses for a
-// failure - Paste Failed, Upload Failed, Cannot Open, Cannot Create, Cannot
-// Save, Disk Full, Rename Failed, Missing Shortcut all pass it, and nothing
-// informational does. The warning sign appears in both its bare and emoji
-// presentations ('⚠' and '⚠️' differ by a trailing U+FE0F) and call sites here
-// use each.
+// 'icon:error' leads the list because it is what this codebase actually uses
+// for a failure - Paste Failed, Upload Failed, Cannot Open, Cannot Create,
+// Cannot Save, Disk Full, Rename Failed, Missing Shortcut all pass it, and
+// nothing informational does. 'icon:warning' covers the softer refusals
+// (blocked delete, access denied, drive not found).
+//
+// The bare emoji are kept alongside the tokens. Nothing in the OS passes them
+// any more, but they cost one Set entry each and they are what a stale window
+// or an old persisted shortcut would still carry.
 //
 // Deliberately NOT matched against the message body, only the title and icon.
 // The body is where the tempting words are, and also where they lie: Help
 // Topics for DEFRAG.exe contains "some system files cannot be moved", which a
 // body scan would hear as an error.
-const ALERT_ERROR_ICONS = new Set(['X', '⚠', '⚠️', '❌', '\u{1F6AB}', '⛔', '\u{1F4A5}']);
+const ALERT_ERROR_ICONS = new Set(['icon:error', 'icon:warning', 'X', '⚠', '⚠️', '❌', '\u{1F6AB}', '⛔', '\u{1F4A5}']);
 const ALERT_ERROR_TITLE = /\b(error|fail(ed|ure|s)?|denied|invalid|refused|corrupt|unavailable|not found|no such|cannot|can't)\b/i;
 function isErrorAlert(title, icon) {
   return ALERT_ERROR_ICONS.has(String(icon == null ? '' : icon).trim())
@@ -206,13 +228,13 @@ function isErrorAlert(title, icon) {
 }
 
 function osAlert(msg, title, icon) {
-  title = title || 'sleepOS'; icon = icon || '🔔';
+  title = title || 'sleepOS'; icon = icon || 'icon:tip';
   const id = 'os-alert-' + Date.now();
   const p = _osDlgPos(320, 175);
   if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   if (isErrorAlert(title, icon)) playSound('error');
   const b = document.getElementById('wb-' + id);
-  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
+  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
   const ok = document.getElementById(id + '-ok');
   ok.onclick = () => closeWin(id);
   ok.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') closeWin(id); });
@@ -224,7 +246,7 @@ function osConfirm(msg, title, cb, icon) {
   const p = _osDlgPos(320, 175);
   if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   const b = document.getElementById('wb-' + id);
-  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
+  b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
   const row = document.getElementById(id + '-btns');
   const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
   const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = 'Cancel';

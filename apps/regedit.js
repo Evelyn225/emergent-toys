@@ -1,5 +1,5 @@
 function openRegedit() {
-  if (!mkWin({ id:'regedit', title:'Registry Editor', icon:'🗝️', w:580, h:380, x:90, y:70 })) return;
+  if (!mkWin({ id:'regedit', title:'Registry Editor', icon:'icon:regedit', w:580, h:380, x:90, y:70 })) return;
   const body = document.getElementById('wb-regedit');
   const ws   = document.getElementById('ws-regedit');
   const mb   = document.getElementById('mb-regedit');
@@ -27,7 +27,7 @@ function openRegedit() {
   }
 
   function showLockedRegValueNotice(valName) {
-    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', '🗝️');
+    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', 'icon:regedit');
   }
 
   function buildTree() {
@@ -38,7 +38,7 @@ function openRegedit() {
 
       const hiveRow = document.createElement('div');
       hiveRow.className = 'reg-tree-item';
-      hiveRow.innerHTML = '<span class="reg-tree-arrow">▶</span><span class="reg-tree-icon">📁</span>&nbsp;<span>' + hive + '</span>';
+      hiveRow.innerHTML = '<span class="reg-tree-arrow">\u25b6</span><span class="reg-tree-icon">' + iconMarkup('icon:folder') + '</span>&nbsp;<span>' + hive + '</span>';
       let expanded = false;
       const childWrap = document.createElement('div');
       childWrap.style.paddingLeft = '12px';
@@ -53,7 +53,7 @@ function openRegedit() {
       Object.keys(registryData[hive]).forEach(keyPath => {
         const keyEl = document.createElement('div');
         keyEl.className = 'reg-tree-item';
-        keyEl.innerHTML = '<span class="reg-tree-icon">🗂️</span>&nbsp;<span>' + keyPath + '</span>';
+        keyEl.innerHTML = '<span class="reg-tree-icon">' + iconMarkup('icon:folder-open') + '</span>&nbsp;<span>' + keyPath + '</span>';
         keyEl.addEventListener('click', e => {
           e.stopPropagation();
           tree.querySelectorAll('.reg-tree-item.selected').forEach(el => el.classList.remove('selected'));
@@ -84,7 +84,7 @@ function openRegedit() {
       const locked = isLockedRegValue(hive, keyPath, valName);
       const tr = document.createElement('tr');
       tr.className = 'reg-val-row';
-      tr.innerHTML = '<td>📄 ' + valName + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
+      tr.innerHTML = '<td class="reg-val-name">' + iconMarkup('icon:text') + escHtml(valName) + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
       tr.addEventListener('dblclick', () => {
         if (locked) {
           showLockedRegValueNotice(valName);
@@ -123,7 +123,7 @@ function openRegedit() {
       saveRegistry();
       applyRegistryEffects(hive, keyPath, valName, entry.value);
       renderVals(hive, keyPath);
-    }, '🗝️');
+    }, 'icon:regedit');
   }
 
   function applyRegistryEffects(hive, keyPath, valName, newValue) {
@@ -236,11 +236,11 @@ function openRegedit() {
         } catch (err) {
           osAlert(
             err.code === 'ENOSPC' ? 'Not enough space to export the registry.' : err.message,
-            'Export Failed', 'X'
+            'Export Failed', 'icon:error'
           );
           return;
         }
-        osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', '🗝️');
+        osAlert('Registry exported to:\nC:\\sleepOS\\' + fname, 'Export', 'icon:regedit');
       }},
       '-',
       { label: 'Close', action: () => closeWin('regedit') },
@@ -254,7 +254,7 @@ function openRegedit() {
       }},
     ]},
     { label: 'Help', items: [
-      { label: 'About Registry Editor', action: () => osAlert('Registry Editor\nsleepOS v0.9β\n\nModifying registry values affects\nlive system behavior.\n\nProceed with caution.', 'About', '🗝️') },
+      { label: 'About Registry Editor', action: () => osAlert('Registry Editor\nsleepOS v0.9β\n\nModifying registry values affects\nlive system behavior.\n\nProceed with caution.', 'About', 'icon:regedit') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');

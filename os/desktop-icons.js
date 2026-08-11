@@ -148,9 +148,9 @@ function deleteDesktopSystemIcons(icons) {
       if (result.ok && result.deleted) changed = true;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
     }
-    if (blocked.length) osAlert(blocked[0], 'Delete', '⚠️');
+    if (blocked.length) osAlert(blocked[0], 'Delete', 'icon:warning');
     if (changed) clearDesktopSel();
-  }, '🗑️');
+  }, 'icon:recycle-full');
 }
 
 function canDeleteDesktopFsEntry(ic) {
@@ -170,17 +170,17 @@ function deleteDesktopFsEntries(icons) {
       if (result.ok && result.deleted) changed = true;
       else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
     }
-    if (blocked.length) osAlert(blocked[0], 'Delete', 'âš ï¸');
+    if (blocked.length) osAlert(blocked[0], 'Delete', 'icon:warning');
     if (changed) {
       clearDesktopSel();
       document.dispatchEvent(new CustomEvent('fs-changed'));
     }
-  }, 'ðŸ-‘ï¸');
+  }, 'icon:recycle-full');
 }
 
 async function recycleDesktopItemAtPath(path) {
   const result = await recycleVirtualPath(path);
-  if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', '⚠️');
+  if (!result.ok) osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), 'Recycle Bin', 'icon:warning');
   return result;
 }
 
@@ -188,7 +188,10 @@ function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
   const displayName = ic.name === '?????.exe' ? getExeDisplayName() : ic.name;
-  div.innerHTML = '<div class="di-img">' + ic.emoji + '</div><div class="di-name">' + iconLabel(displayName) + '</div>';
+  // The bin is the one desktop icon whose art depends on live state, so it is
+  // resolved per render instead of read off the static DESKTOP_ICONS entry.
+  const icon = isRecycleBinItemName(ic.name) ? resolveFsIcon(ic.name) : ic.emoji;
+  div.innerHTML = '<div class="di-img">' + iconMarkup(icon) + '</div><div class="di-name">' + escHtml(iconLabel(displayName)) + '</div>';
   div._ic = ic;
   function activate() {
     if (ic.action) window[ic.action]?.();
@@ -601,18 +604,20 @@ function setupIcons() {
     e.preventDefault();
     clearDesktopSel();
     showCtxMenu(e.clientX, e.clientY, [
-      { label: '💻 Open Terminal',    action: openTerminal },
-      { label: '🗂️ Open Explorer',    action: openExplorer },
-      { label: '📝 Open Notepad',     action: openNotepad },
-      { label: '🌐 Open Browser',     action: openBrowser },
+      { label: 'Open Terminal',    icon: 'icon:terminal', action: openTerminal },
+      { label: 'Open Explorer',    icon: 'icon:explorer', action: openExplorer },
+      { label: 'Open Notepad',     icon: 'icon:notepad',  action: openNotepad },
+      { label: 'Open Browser',     icon: 'icon:browser',  action: openBrowser },
       '-',
-      { label: '📋 Paste', disabled: !_expClipboard, action: () => pasteClipboardInto('DESKTOP') },
+      // No clipboard or upload art yet, so these two ride the gutter empty
+      // rather than sitting flush left and breaking the column.
+      { label: 'Paste', disabled: !_expClipboard, action: () => pasteClipboardInto('DESKTOP') },
       '-',
-      { label: '📁 New Folder',      action: () => promptCreateFolderAt('DESKTOP') },
-      { label: '📤 Upload File...',  action: () => triggerUpload('DESKTOP') },
-      { label: '🖼️ Change Wallpaper', action: openAppearance },
+      { label: 'New Folder',       icon: 'icon:folder',   action: () => promptCreateFolderAt('DESKTOP') },
+      { label: 'Upload File...',  icon: 'icon:upload',   action: () => triggerUpload('DESKTOP') },
+      { label: 'Change Wallpaper', icon: 'icon:image',    action: openAppearance },
       '-',
-      { label: 'ℹ️ Properties', action: () => osAlert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686', 'Properties', 'ℹ️') },
+      { label: 'Properties', icon: 'icon:info', action: () => osAlert('sleepOS v0.9β\nBuild: 2024.11.13-EXPERIMENTAL\nSOMATIC KERNEL 686', 'Properties', 'icon:info') },
     ]);
   });
 

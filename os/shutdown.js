@@ -106,14 +106,12 @@ Rebooting sleepOS shell...
 // ─────────────────────────────────────────────────────────────────
 function doShutdown() {
   const id = 'shutdown';
-  const powerIconSvg = '<svg viewBox="0 -3 16 16" aria-hidden="true" focusable="false"><path d="M8 1.5v5.2"></path><path d="M4.8 3.3a5 5 0 1 0 6.4 0"></path></svg>';
-  const powerIcon = `<span class="power-icon">${powerIconSvg}</span>`;
-  if (!mkWin({ id, title:'Shut Down sleepOS', icon:powerIcon, w:300, h:165,
+  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'icon:standby', w:300, h:165,
                x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
                menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-shutdown').innerHTML = `
     <div class="dlg-body">
-      <div class="dlg-icon power-icon">${powerIconSvg}</div>
+      <div class="dlg-icon">${iconMarkup('icon:standby')}</div>
       <div class="dlg-text">
         What do you want the computer to do?<br><br>
         <select id="shutdown-sel" style="width:180px;font-size:11px;margin-top:2px;">

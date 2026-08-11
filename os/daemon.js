@@ -516,7 +516,7 @@ function confirmEmptyRecycleBin(onDone) {
     // it draws the bin still holding everything it just deleted.
     await emptyRecycleBin();
     if (typeof onDone === 'function') onDone(true);
-  }, '\u{1F5D1}\uFE0F');
+  }, 'icon:recycle-full');
 }
 
 function promptCreateFolderAt(dirPath, onDone) {
@@ -539,7 +539,7 @@ function promptCreateFolderAt(dirPath, onDone) {
         err.code === 'ENOENT'
           ? 'That folder no longer exists:\nC:\\sleepOS\\' + vfsNormalizeDir(dirPath)
           : err.message,
-        'New Folder', 'X'
+        'New Folder', 'icon:error'
       );
       return finish(null);
     }
@@ -549,7 +549,7 @@ function promptCreateFolderAt(dirPath, onDone) {
     // after the directory exists, not before.
     if (!created.created) return finish(null);
     finish(created);
-  }, '\u{1F4C1}');
+  }, 'icon:folder');
 }
 
 function ensureStoryTextFile(path, value) {
@@ -1165,9 +1165,9 @@ function updateDaemonStory(mutator, options) {
   if (options?.glitch) triggerGlitch();
   if (options?.notice) {
     const info = typeof options.notice === 'string'
-      ? { message: options.notice, title: 'Containment Notice', icon: '👁️' }
+      ? { message: options.notice, title: 'Containment Notice', icon: 'icon:daemon' }
       : options.notice;
-    osAlert(info.message, info.title || 'Containment Notice', info.icon || '👁️');
+    osAlert(info.message, info.title || 'Containment Notice', info.icon || 'icon:daemon');
   }
   return true;
 }
@@ -1344,7 +1344,7 @@ async function deleteVirtualPath(path, fallbackDir) {
       glitch: true,
       notice: {
         title: 'Anchor Lost',
-        icon: '⬛',
+        icon: 'icon:void',
         message: 'The mirror anchor is gone.\n\nKeep daemon.core and void.tmp isolated from your active work while you inspect the breach.',
       },
     });
@@ -1434,7 +1434,7 @@ function killSoulDaemonProcess() {
     glitch: true,
     notice: {
       title: 'Monitor Link Lost',
-      icon: '⚠️',
+      icon: 'icon:warning',
       message: 'PID 512 stayed dead.\n\nvoid.tmp and CACHE\\mirror.dat should now be treated as active evidence.',
     },
   });
