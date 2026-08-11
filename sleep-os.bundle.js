@@ -627,6 +627,10 @@ function kernelDeregisterSystem(winId) {
 
 function kernelGetProcess(pid) { return _kernelProcs.get(pid) || null; }
 
+// The terminal knows its own winId but needs its pid to parent the processes
+// it spawns.
+function kernelPidForWin(winId) { return _kernelByWinId.get(winId) || null; }
+
 function kernelListProcesses() {
   return [..._kernelProcs.values()].sort((a, b) => a.pid - b.pid);
 }
@@ -672,7 +676,17 @@ function kernelExit(pid, code) {
   // directly rather than looking the parent up in the map, and JS is
   // single-threaded, so there is no intermediate state anything could observe
   // either way.
-  _kernelProcs.forEach(child => { if (child.parentPid === pid) child.parentPid = KERNEL_PID; });
+  _kernelProcs.forEach(child => {
+    if (child.parentPid !== pid) return;
+    child.parentPid = KERNEL_PID;
+    // The sinks close over the exiting parent's window: onStdout writes into
+    // that window's output element. Clearing them makes _kernelWrite fall back
+    // to buffering on the entry, so a process outliving its terminal keeps
+    // running and its output is retained rather than written into a detached
+    // DOM node.
+    child.onStdout = null;
+    child.onStderr = null;
+  });
   const waiters = _kernelWaiters.get(pid) || [];
   _kernelWaiters.delete(pid);
   waiters.forEach(resolve => resolve(code));
@@ -10360,6 +10374,7 @@ function openTerminal(startDir, initialCommand) {
     try {
       const pid = await kernelSpawn(tokens[0], tokens.slice(1), {
         cwd,
+        parentPid: kernelPidForWin('terminal'),
         onStdout: line => print(line),
         onStderr: line => print(line, '#ff4444'),
       });

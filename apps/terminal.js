@@ -1063,6 +1063,7 @@ function openTerminal(startDir, initialCommand) {
     try {
       const pid = await kernelSpawn(tokens[0], tokens.slice(1), {
         cwd,
+        parentPid: kernelPidForWin('terminal'),
         onStdout: line => print(line),
         onStderr: line => print(line, '#ff4444'),
       });
