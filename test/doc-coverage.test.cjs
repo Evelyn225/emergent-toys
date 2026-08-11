@@ -1,0 +1,72 @@
+'use strict';
+// The same failure is one commit away every time a command is added: phase 3
+// shipped SPAWN and KILL in the live HELP output and never updated
+// COMMANDS.txt or SCRIPTING.txt. This makes that a build failure, not a bug
+// report from a confused player.
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.join(__dirname, '..');
+const interpSrc = fs.readFileSync(path.join(ROOT, 'os/script/interp.js'), 'utf8');
+const fsCoreSrc = fs.readFileSync(path.join(ROOT, 'os/fs-core.js'), 'utf8');
+const terminalSrc = fs.readFileSync(path.join(ROOT, 'apps/terminal.js'), 'utf8');
+
+// Both sets are empty on purpose, and that was verified rather than assumed:
+// the only gaps at the time of writing were SPAWN, KILL, DIR and RM, all
+// genuine omissions rather than secrets. The guard inspects `CMDS.<name>`
+// assignments, and sleepOS's hidden story commands are not dispatched that
+// way, so it cannot demand that a story beat be spoiled. A future hidden
+// command added AS a CMDS entry would need an entry here, with a one-line
+// reason.
+const UNDOCUMENTED_SCRIPT_COMMANDS = new Set([]);
+const UNDOCUMENTED_TERMINAL_COMMANDS = new Set([]);
+
+function docBlock(name) {
+  const start = fsCoreSrc.indexOf(`['${name}', [`);
+  assert.notStrictEqual(start, -1, `${name} not found in os/fs-core.js`);
+  const end = fsCoreSrc.indexOf('].join(', start);
+  assert.notStrictEqual(end, -1, `${name} block is not terminated`);
+  return fsCoreSrc.slice(start, end);
+}
+
+// Match only the command column - the text before the first run of two or
+// more spaces - with <placeholder> and [optional] removed. Two reasons:
+// `mkdir <dir>` must not certify `dir` (the whole-block search that a naive
+// version of this guard would use matches `dir` inside the `<dir>`
+// placeholder on the mkdir line, since `<` and `>` are non-word characters),
+// and grouped alias lines like "ADD, SUB, MUL, DIV, MOD" and "WHO, WHOAMI"
+// must still certify each name they list, which a line-anchored pattern
+// would miss.
+function commandColumns(block) {
+  return block.split('\n').map(line => {
+    const stripped = line.replace(/^\s*'?\s*/, '');
+    const col = stripped.split(/\s{2,}/)[0] || '';
+    return col.replace(/<[^>]*>/g, '').replace(/\[[^\]]*\]/g, '');
+  }).join('\n').toLowerCase();
+}
+
+function documents(columns, command) {
+  return new RegExp('\\b' + command.replace(/\./g, '\\.') + '\\b').test(columns);
+}
+
+test('every script command appears in SCRIPTING.txt', () => {
+  const columns = commandColumns(docBlock('SCRIPTING.txt'));
+  const commands = [...new Set([...interpSrc.matchAll(/case '([a-z][a-z0-9_.]*)':/g)].map(m => m[1]))];
+  assert.ok(commands.length >= 20, `expected to find the command switch, found ${commands.length}`);
+  const missing = commands
+    .filter(c => !UNDOCUMENTED_SCRIPT_COMMANDS.has(c))
+    .filter(c => !documents(columns, c));
+  assert.deepStrictEqual(missing, [], 'undocumented script commands: ' + missing.join(', '));
+});
+
+test('every terminal command appears in COMMANDS.txt', () => {
+  const columns = commandColumns(docBlock('COMMANDS.txt'));
+  const commands = [...new Set([...terminalSrc.matchAll(/CMDS\.([a-z][a-z0-9_]*)\s*=/g)].map(m => m[1]))];
+  assert.ok(commands.length >= 25, `expected to find CMDS assignments, found ${commands.length}`);
+  const missing = commands
+    .filter(c => !UNDOCUMENTED_TERMINAL_COMMANDS.has(c))
+    .filter(c => !documents(columns, c));
+  assert.deepStrictEqual(missing, [], 'undocumented terminal commands: ' + missing.join(', '));
+});
