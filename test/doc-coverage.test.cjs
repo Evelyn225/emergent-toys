@@ -50,26 +50,41 @@ function docBlock(name) {
 //
 // Honest bound on what this still does NOT catch: a command is missed by
 // this guard only if it has no tabular entry of its own AND its name never
-// appears in another entry's command column. This was verified, not assumed,
-// by mechanically deleting each real command row from a copy of each block
-// and re-running commandColumns/documents against the rest - the residual
-// leaks found this way, and the ONLY ones, are:
+// appears in another entry's command column. That second condition is not a
+// fixed list - it is a property of the current prose, and it moves every
+// time either document is edited. Do not extend the list below by
+// inspection; re-derive it: delete a command's canonical row from a copy of
+// its block, re-run commandColumns/documents against what is left, and see
+// whether it still reports as documented. A claim that a list like this is
+// exhaustive is exactly the kind of stale certainty that let SPAWN and KILL
+// go undocumented in the first place - a method survives edits; a list does
+// not.
+//
+// Leaks found this way as of this writing (not a guarantee it is complete
+// going forward):
 //   - `print` in SCRIPTING.txt, via the COLORS section's own usage rows
 //     ("print [red]    error text" and neighbours) and the VARIABLES
-//     section's "print Arg 1: $1  / argc=$argc" - both legitimately show
-//     PRINT in use with a 2+ space gap before their own description.
+//     section's "print Arg 1: $1  / argc=$argc".
 //   - `goto` in SCRIPTING.txt, via the CONTROL FLOW section's
-//     "if a == b goto x   branch on a comparison" line, which documents the
-//     `if ... goto` branch syntax and genuinely contains the word.
+//     "if a == b goto x   branch on a comparison" line.
 //   - `run` in SCRIPTING.txt, via the intro sentence
 //     "Run one with:    RUN myscript.script".
 //   - `echo` in COMMANDS.txt, via the SCRIPTING section's
 //     "ECHO text > file     write text to file" and "ECHO text >> file"
 //     redirect-syntax rows.
-// `call`, `exit`, `start` and every other command were checked the same way
-// and are NOT residual leaks - deleting their real row does make the guard
-// fail, because nothing else in either block mentions them with a 2+ space
-// gap. These four leaks are accepted as-is: each source line is a genuine
+//   - `ls` in COMMANDS.txt, via the SEARCH & PIPES section's
+//     "LS *.ext               wildcard glob listing" row, distinct from its
+//     canonical "DIR, LS              list current directory" entry.
+// `call`, `exit`, `start` were checked the same way and are NOT leaks -
+// deleting their canonical row does fail the test.
+//
+// Inert today, worth knowing about: `GREP <pattern> <file>` also appears in
+// COMMANDS.txt only via "CAT f | GREP pattern   pipe output to command", the
+// same shape of leak - but `grep` is not a `CMDS.` handler, so the terminal
+// test never asks about it. If `CMDS.grep` is ever added, that pipe-example
+// row would silently certify it exactly like the leaks above.
+//
+// All of the above are accepted as-is: each source line is a genuine
 // sentence a player actually reads, not noise, and reshaping player-facing
 // prose just to starve a text-matching test would be the tail wagging the
 // dog. A command with no table row and no mention anywhere in its block is
