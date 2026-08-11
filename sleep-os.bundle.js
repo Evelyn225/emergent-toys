@@ -7052,6 +7052,43 @@ function osPrompt(msg, def, title, cb, icon) {
   setTimeout(() => { inp.focus(); inp.select(); }, 40);
 }
 
+// ─────────────────────────────────────────────────────────────────
+// WINDOW GEOMETRY CLAMPING
+// ─────────────────────────────────────────────────────────────────
+// A window whose titlebar leaves the desktop is unrecoverable: the drag handle
+// and the close button go with it, so it can be neither moved back nor closed.
+// Every path that writes a window's left/top/width/height ends in
+// clampWinGeometry so that state is unreachable - cascade spawns, resize
+// handles, unmaximize, and viewport resizes all funnel through here.
+const WIN_MIN_W = 180, WIN_MIN_H = 80;   // must match .os-window min-width/min-height
+
+function desktopBounds() {
+  const d = document.getElementById('desktop');
+  // #desktop is display:none until boot finishes, so a window created during
+  // startup would otherwise be clamped into a 0x0 box. Fall back to the
+  // viewport minus the taskbar, matching the CSS.
+  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  const taskbarH = isMobile ? 56 : 28;
+  return {
+    w: d && d.offsetWidth  ? d.offsetWidth  : window.innerWidth,
+    h: d && d.offsetHeight ? d.offsetHeight : Math.max(WIN_MIN_H, window.innerHeight - taskbarH),
+  };
+}
+
+// Shrinks an oversized window and pulls a stray one back inside the desktop.
+// Minimized windows are display:none, so their offset* are all 0 - clamping one
+// would slam it to the top-left and lose its position. They get clamped when
+// they are restored instead (see unminWin).
+function clampWinGeometry(el) {
+  if (!el || el.style.display === 'none' || !el.offsetWidth) return;
+  const { w: dw, h: dh } = desktopBounds();
+  let W = el.offsetWidth, H = el.offsetHeight;
+  if (W > dw) { W = Math.max(WIN_MIN_W, dw); el.style.width  = W + 'px'; }
+  if (H > dh) { H = Math.max(WIN_MIN_H, dh); el.style.height = H + 'px'; }
+  el.style.left = Math.max(0, Math.min(Math.max(0, dw - W), el.offsetLeft)) + 'px';
+  el.style.top  = Math.max(0, Math.min(Math.max(0, dh - H), el.offsetTop))  + 'px';
+}
+
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
@@ -7059,18 +7096,25 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   // Default position: slightly random cascade; on mobile fill viewport (except small popups)
   const count = Object.keys(wins).length;
   const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
-  const taskbarH = isMobile ? 44 : 28;
+  const bounds = desktopBounds();
   if (isMobile && !popup) {
     x = 0; y = 0;
-    w = window.innerWidth;
-    h = window.innerHeight - taskbarH;
+    w = bounds.w;
+    h = bounds.h;
   } else {
-    if (x === undefined) x = 80 + count * 22;
-    if (y === undefined) y = 44 + count * 22;
+    // Cascade wraps back to the origin instead of marching off the bottom-right
+    // corner once enough windows are open.
+    if (x === undefined || y === undefined) {
+      const room = Math.min(bounds.w - w - 80, bounds.h - h - 44);
+      const slots = Math.max(1, Math.floor(room / 22) + 1);
+      const step = (count % slots) * 22;
+      if (x === undefined) x = 80 + step;
+      if (y === undefined) y = 44 + step;
+    }
     // Center popups on mobile
     if (isMobile && popup) {
-      x = Math.max(4, Math.floor((window.innerWidth - w) / 2));
-      y = Math.max(4, Math.floor((window.innerHeight - taskbarH - h) / 3));
+      x = Math.max(4, Math.floor((bounds.w - w) / 2));
+      y = Math.max(4, Math.floor((bounds.h - h) / 3));
     }
   }
 
@@ -7101,6 +7145,7 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   `;
 
   document.getElementById('windows-layer').appendChild(el);
+  clampWinGeometry(el);   // callers pass explicit x/y/w/h that may not fit this viewport
   wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
 
   // Built-in apps are real processes with real lifetimes. Registering here rather
@@ -7136,7 +7181,20 @@ function minWin(id) {
 
 function unminWin(id) {
   const w = wins[id]; if (!w) return;
-  w.minimized = false; w.el.style.display = 'flex'; focusWin(id);
+  w.minimized = false; w.el.style.display = 'flex';
+  // Minimized windows are skipped by the resize clamp (they have no layout box),
+  // so a window minimized on a large viewport and restored on a small one gets
+  // pulled back inside here.
+  if (w.maximized) fitMaximized(w); else clampWinGeometry(w.el);
+  focusWin(id);
+}
+
+function fitMaximized(w) {
+  const { w: dw, h: dh } = desktopBounds();
+  w.el.style.left   = '0';
+  w.el.style.top    = '0';
+  w.el.style.width  = dw + 'px';
+  w.el.style.height = dh + 'px';
 }
 
 function maxWin(id) {
@@ -7144,13 +7202,12 @@ function maxWin(id) {
   if (w.maximized) {
     w.el.style.cssText = w.origStyle;
     w.maximized = false;
+    // origStyle was captured against whatever the desktop measured at the time;
+    // it can be stale by now.
+    clampWinGeometry(w.el);
   } else {
     w.origStyle = w.el.style.cssText;
-    const d = document.getElementById('desktop');
-    w.el.style.left   = '0';
-    w.el.style.top    = '0';
-    w.el.style.width  = d.offsetWidth + 'px';
-    w.el.style.height = d.offsetHeight + 'px';
+    fitMaximized(w);
     w.el.style.zIndex = ++zTop;
     w.maximized = true;
   }
@@ -7164,9 +7221,10 @@ function restoreMaximizedForDrag(id, clientX, clientY) {
   w.el.style.cssText = w.origStyle;
   w.maximized = false;
   w.el.style.zIndex = ++zTop;
-  const desktop = document.getElementById('desktop');
-  const maxLeft = Math.max(0, desktop.offsetWidth - w.el.offsetWidth);
-  const maxTop = Math.max(0, desktop.offsetHeight - w.el.offsetHeight);
+  clampWinGeometry(w.el);   // the restored size may not fit the current desktop
+  const { w: dw, h: dh } = desktopBounds();
+  const maxLeft = Math.max(0, dw - w.el.offsetWidth);
+  const maxTop = Math.max(0, dh - w.el.offsetHeight);
   w.el.style.left = Math.max(0, Math.min(maxLeft, clientX - w.el.offsetWidth * pointerRatio)) + 'px';
   w.el.style.top = Math.max(0, Math.min(maxTop, clientY - 14)) + 'px';
 }
@@ -7196,9 +7254,9 @@ function makeDraggable(win, handle) {
     sl = win.offsetLeft; st = win.offsetTop;
   }
   function moveDrag(cx, cy) {
-    const desktop = document.getElementById('desktop');
-    const maxLeft = Math.max(0, desktop.offsetWidth - win.offsetWidth);
-    const maxTop = Math.max(0, desktop.offsetHeight - win.offsetHeight);
+    const { w: dw, h: dh } = desktopBounds();
+    const maxLeft = Math.max(0, dw - win.offsetWidth);
+    const maxTop = Math.max(0, dh - win.offsetHeight);
     win.style.left = Math.max(0, Math.min(maxLeft, sl + cx - sx)) + 'px';
     win.style.top  = Math.max(0, Math.min(maxTop, st + cy - sy)) + 'px';
   }
@@ -7230,7 +7288,7 @@ function makeDraggable(win, handle) {
 }
 
 function makeResizable(win, id) {
-  const MIN_W = 180, MIN_H = 80;
+  const MIN_W = WIN_MIN_W, MIN_H = WIN_MIN_H;
   win.querySelectorAll('.win-rz').forEach(handle => {
     const a = [...handle.classList].find(c => c.startsWith('win-rz-') && c !== 'win-rz').replace('win-rz-','');
     handle.addEventListener('mousedown', e => {
@@ -7242,11 +7300,17 @@ function makeResizable(win, id) {
       const L0 = win.offsetLeft,  T0 = win.offsetTop;
       const onMove = e => {
         const dx = e.clientX - x0, dy = e.clientY - y0;
+        const { w: dw, h: dh } = desktopBounds();
         let W = W0, H = H0, L = L0, T = T0;
-        if (a.includes('e')) W = Math.max(MIN_W, W0 + dx);
-        if (a.includes('s')) H = Math.max(MIN_H, H0 + dy);
-        if (a.includes('w')) { W = Math.max(MIN_W, W0 - dx); L = L0 + W0 - W; }
-        if (a.includes('n')) { H = Math.max(MIN_H, H0 - dy); T = T0 + H0 - H; }
+        // Each edge is capped at the desktop edge it is heading for. Without
+        // this, an east drag pushes the titlebar's close/maximize buttons past
+        // the right edge, and a west drag puts the window's origin at a
+        // negative left - in both cases the window is stuck there, since the
+        // drag clamp can only move it within the desktop.
+        if (a.includes('e')) W = Math.max(MIN_W, Math.min(W0 + dx, dw - L0));
+        if (a.includes('s')) H = Math.max(MIN_H, Math.min(H0 + dy, dh - T0));
+        if (a.includes('w')) { W = Math.max(MIN_W, Math.min(W0 - dx, L0 + W0)); L = L0 + W0 - W; }
+        if (a.includes('n')) { H = Math.max(MIN_H, Math.min(H0 - dy, T0 + H0)); T = T0 + H0 - H; }
         win.style.width = W+'px'; win.style.height = H+'px';
         win.style.left  = L+'px'; win.style.top    = T+'px';
       };
@@ -7256,6 +7320,24 @@ function makeResizable(win, id) {
     });
   });
 }
+
+// Shrinking the browser window used to strand every window that sat past the
+// new edge: nothing re-measured them, and the drag clamp could not pull back a
+// titlebar that was already outside the desktop. Re-clamp on every viewport
+// change, and re-fit maximized windows to the new desktop while at it.
+// rAF-coalesced because resize fires continuously during a drag.
+let _wmReflowPending = false;
+function reflowWindows() {
+  Object.values(wins).forEach(w => {
+    if (w.minimized) return;   // clamped on restore instead - see unminWin
+    if (w.maximized) fitMaximized(w); else clampWinGeometry(w.el);
+  });
+}
+window.addEventListener('resize', () => {
+  if (_wmReflowPending) return;
+  _wmReflowPending = true;
+  requestAnimationFrame(() => { _wmReflowPending = false; reflowWindows(); });
+});
 
 // Rename a live window. A window's title is shown in four places and they used
 // to be updated one at a time by whoever remembered: the titlebar span, the
