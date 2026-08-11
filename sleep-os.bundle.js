@@ -2038,7 +2038,7 @@ const SOUND_FILES = {
 // deliberately far below everything else: it plays for the whole session and
 // is meant to sit under the OS, not in front of it.
 const SOUND_GAIN = {
-  ambience: 0.30,
+  ambience: 0.40,
   boot:     0.75,
   shutdown: 0.75,
   defrag:   0.40,
@@ -2059,11 +2059,17 @@ const AMBIENCE_SLEEP_DUCK = 0.3;
 // exponentialRampToValueAtTime cannot reach or cross zero.
 const GAIN_FLOOR = 0.0001;
 const DEFAULT_SOUND_VOLUME = 0.6;
+// How long the master takes to reach silence before the context is suspended
+// on tab-hide, and to come back after it resumes. Long enough that the output
+// lands on silence instead of stepping to it, short enough that a quick flick
+// to another tab and back does not sound like a fade effect.
+const HIDE_FADE_SEC = 0.18;
 
 let audioCtx = null;
 let audioMaster = null;
 let audioUnlocked = false;
 let audioSuspendedByHide = false;
+let audioHideFadeTimer = null;
 let systemAudioInited = false;
 const audioBuffers = new Map();
 const audioLoads = new Map();
@@ -2090,7 +2096,7 @@ function ensureAudioContext() {
     return null;
   }
   audioMaster = audioCtx.createGain();
-  audioMaster.gain.value = systemAudioEnabled() ? getSystemVolume() : 0;
+  audioMaster.gain.value = masterTargetGain();
   audioMaster.connect(audioCtx.destination);
   return audioCtx;
 }
@@ -2306,18 +2312,33 @@ function duckSoundLoop(name, factor, seconds = 0.6) {
     Math.max(GAIN_FLOOR, entry.volume * entry.duck), now + Math.max(0.01, seconds));
 }
 
+// Where the master gain belongs right now. Floored rather than allowed to
+// reach a true zero: every ramp here is exponential, and an exponential ramp
+// cannot start from or cross zero - parking the master at exactly 0 would mean
+// the next fade back up did nothing at all. GAIN_FLOOR is -80dB, so the
+// difference from silence is not a thing anyone can hear.
+function masterTargetGain() {
+  return Math.max(GAIN_FLOOR, systemAudioEnabled() ? getSystemVolume() : 0);
+}
+
+function rampMasterTo(target, seconds) {
+  if (!audioCtx || !audioMaster) return;
+  const now = audioCtx.currentTime;
+  const gain = audioMaster.gain;
+  gain.cancelScheduledValues(now);
+  gain.setValueAtTime(Math.max(GAIN_FLOOR, gain.value), now);
+  gain.exponentialRampToValueAtTime(Math.max(GAIN_FLOOR, target), now + Math.max(0.01, seconds));
+}
+
 // Called by applySettings whenever osSettings changes, from either the
 // Settings window or REGEDIT.
 function applySystemAudioSettings() {
   const enabled = systemAudioEnabled();
-  if (audioCtx && audioMaster) {
-    // Ramped rather than assigned: a step change on a gain node is an audible
-    // click, which is a poor sound for the control that turns sound off.
-    const now = audioCtx.currentTime;
-    audioMaster.gain.cancelScheduledValues(now);
-    audioMaster.gain.setValueAtTime(audioMaster.gain.value, now);
-    audioMaster.gain.linearRampToValueAtTime(enabled ? getSystemVolume() : 0, now + 0.08);
-  }
+  // Ramped rather than assigned: a step change on a gain node is an audible
+  // click, which is a poor sound for the control that turns sound off. Skipped
+  // while hidden, where the master is parked at the floor by the visibility
+  // handler below - the new level is picked up by the fade back in.
+  if (!document.hidden) rampMasterTo(masterTargetGain(), 0.08);
   // Muting is not enough for the loops: a silent ambience would keep a decoder
   // running for the rest of the session. They are torn down and re-primed.
   audioLoops.forEach((entry, name) => {
@@ -2361,20 +2382,50 @@ function initSystemAudio() {
 // The whole point of the Web Audio path: one call stops everything, including
 // mid-flight one-shots and both kinds of loop, and resuming picks up where it
 // left off because ctx.currentTime did not advance while suspended.
+//
+// It cannot be that one call on its own, though. ctx.suspend() halts the graph
+// wherever the waveform happens to be, and a step from that sample straight to
+// silence is, precisely, a click - the ambience is a continuous hum, so it is
+// essentially never near a zero crossing at the moment a tab is switched.
+// Resuming does the same in reverse. So the master is faded to the floor first
+// and the context suspended only once that fade has been rendered, and on the
+// way back the context is resumed while still silent and faded up after.
 document.addEventListener('visibilitychange', () => {
   if (!audioCtx) return;
+  clearTimeout(audioHideFadeTimer);
+  audioHideFadeTimer = null;
+
   if (document.hidden) {
     if (audioCtx.state !== 'running') return;
     audioSuspendedByHide = true;
-    audioCtx.suspend().catch(() => {});
+    rampMasterTo(GAIN_FLOOR, HIDE_FADE_SEC);
+    // Background tabs clamp setTimeout to about a second, so this can land
+    // well after the fade it is waiting on. That is harmless: the fade is
+    // scheduled on the AudioParam and rendered by the audio thread on time
+    // regardless of what the timer does, so a late suspend costs a moment of
+    // silent processing. An early one costs the click this exists to remove.
+    audioHideFadeTimer = setTimeout(() => {
+      audioHideFadeTimer = null;
+      if (document.hidden && audioCtx.state === 'running') audioCtx.suspend().catch(() => {});
+    }, HIDE_FADE_SEC * 1000 + 40);
     return;
   }
+
   if (!audioSuspendedByHide) return;
   audioSuspendedByHide = false;
+  // Back before the timer fired: the context never stopped, so only the fade
+  // needs reversing.
+  if (audioCtx.state === 'running') { rampMasterTo(masterTargetGain(), HIDE_FADE_SEC); return; }
+  // Resume first, fade second. Ramps are scheduled against ctx.currentTime,
+  // which is frozen until the resume resolves.
+  //
   // May be rejected if the browser has since dropped this page's activation.
   // unlockSystemAudio re-checks ctx.state on the next gesture, so the failure
-  // costs one click rather than the session.
-  audioCtx.resume().catch(() => {});
+  // costs one click rather than the session - but the master would be left at
+  // the floor, so it is restored on that path too.
+  audioCtx.resume()
+    .then(() => rampMasterTo(masterTargetGain(), HIDE_FADE_SEC))
+    .catch(() => rampMasterTo(masterTargetGain(), HIDE_FADE_SEC));
 });
 
 // Registered at load, not from initSystemAudio: clicking through the BIOS
