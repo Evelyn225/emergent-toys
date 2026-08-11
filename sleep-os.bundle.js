@@ -4454,12 +4454,18 @@ syncDaemonStory({ silent: true });
 // registry key the player can edit. Registering them would put narrative state
 // inside the kernel and turn a pure function into a cache needing invalidation
 // on every story beat.
+//
+// The naive concatenate-then-sort in buildProcessRows below is safe only
+// because the two pid ranges never collide: real allocation starts at
+// KERNEL_FIRST_USER_PID = 2000 (os/kernel.js), while the daemon story's pids
+// stay at or below 1333 (os/kernel.js, os/daemon.js). Neither range may move
+// without checking the other.
 function processDisplayName(title, fallbackId) {
   // Window titles use two separators: an em dash (notepad, explorer) and a
   // plain hyphen (terminal, sysmon, defrag, browser, daemon). Splitting on
   // only the em dash is why `ps` used to report the process name of the
   // terminal as "TERMINAL.exe - Command Prompt".
-  const raw = String(title || fallbackId || '').split(/\s—|\s-\s/)[0].trim();
+  const raw = String(title || fallbackId || '').split(/\s\u2014|\s-\s/)[0].trim();
   if (!raw) return String(fallbackId || '').trim() + '.exe';
   return raw.includes('.') ? raw : raw + '.exe';
 }
@@ -4488,6 +4494,20 @@ function buildProcessRows() {
     cpu: p.cpu, mem: p.mem, winId: null, isStory: true,
   }));
   return rows.sort((a, b) => a.pid - b.pid);
+}
+
+// SYSMON's End Process used to call closeWin(row.winId) for everything. A
+// spawned process has no winId, so that was a button that silently did
+// nothing. A story row is not routed to a refusal here: SYSMON's own story
+// branch has two distinct outcomes (the pid-512 branch mutates story state,
+// every other story pid shows Access Denied), so this router hands story
+// rows straight back and touches neither the kernel nor the window manager.
+// Returns what it did so the caller can decide what to show.
+function endProcessAction(row) {
+  if (row.isStory) return 'story';
+  if (row.winId && wins[row.winId]) { closeWin(row.winId); return 'closed'; }
+  kernelSignal(row.pid, 'SIGTERM');
+  return 'signalled';
 }
 // ── Blob persistence (base64 per-file, separate localStorage keys) ─
 const BLOB_PREFIX = 'sleepOS-blob:';
@@ -10637,7 +10657,8 @@ function openSysmon() {
 
   procToolbar.querySelector('#sm-kill-btn').addEventListener('click', () => {
     if (!selectedProc) return;
-    if (selectedProc.isStory) {
+    const action = endProcessAction(selectedProc);
+    if (action === 'story') {
       if (selectedProc.pid === 512) {
         const result = killSoulDaemonProcess();
         selectedProc = null;
@@ -10652,9 +10673,10 @@ function openSysmon() {
       }
       return;
     }
-    if (selectedProc.winId && wins[selectedProc.winId]) {
-      const wid = selectedProc.winId; selectedProc = null; closeWin(wid); renderProcesses();
-    }
+    // action is 'closed' or 'signalled': endProcessAction already told the
+    // window manager or the kernel what to do.
+    selectedProc = null;
+    renderProcesses();
   });
   procToolbar.querySelector('#sm-copypid-btn').addEventListener('click', () => {
     if (!selectedProc) return;

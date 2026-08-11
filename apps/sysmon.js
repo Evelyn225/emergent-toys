@@ -126,7 +126,8 @@ function openSysmon() {
 
   procToolbar.querySelector('#sm-kill-btn').addEventListener('click', () => {
     if (!selectedProc) return;
-    if (selectedProc.isStory) {
+    const action = endProcessAction(selectedProc);
+    if (action === 'story') {
       if (selectedProc.pid === 512) {
         const result = killSoulDaemonProcess();
         selectedProc = null;
@@ -141,9 +142,10 @@ function openSysmon() {
       }
       return;
     }
-    if (selectedProc.winId && wins[selectedProc.winId]) {
-      const wid = selectedProc.winId; selectedProc = null; closeWin(wid); renderProcesses();
-    }
+    // action is 'closed' or 'signalled': endProcessAction already told the
+    // window manager or the kernel what to do.
+    selectedProc = null;
+    renderProcesses();
   });
   procToolbar.querySelector('#sm-copypid-btn').addEventListener('click', () => {
     if (!selectedProc) return;
