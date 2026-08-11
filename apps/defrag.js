@@ -145,6 +145,7 @@ function openDefrag() {
       // Finalize any remaining used-in-place blocks
       for (let i = 0; i < TOTAL; i++) if (cells[i] === 1) { cells[i] = 2; optimized++; }
       running = false; startBtn.disabled = false; stopBtn.disabled = true;
+      stopSoundLoop('defrag', { fade: 0.6 });
       pbFill.style.width = '98%'; pbLabel.textContent = '98%';
       document.getElementById('df-pct').textContent = '98% optimized';
       fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
@@ -175,12 +176,16 @@ function openDefrag() {
   startBtn.addEventListener('click', () => {
     if (running) return;
     running = true; startBtn.disabled = true; stopBtn.disabled = false;
+    // The drive noise starts with the analysis pass, not with the first block
+    // move, so the 700ms of "Analyzing C:\..." is not silent.
+    startSoundLoop('defrag', { crossfade: DEFRAG_CROSSFADE_SEC });
     fileLabel.textContent = 'Analyzing C:\\ ...';
     if (ws) ws.textContent = 'Analyzing...';
     setTimeout(step, 700);
   });
   stopBtn.addEventListener('click', () => {
     running = false; clearTimeout(timer);
+    stopSoundLoop('defrag', { fade: 0.25 });
     if (activeCell >= 0) { cells[activeCell] = 1; activeCell = -1; }
     startBtn.disabled = false; stopBtn.disabled = true;
     fileLabel.textContent = 'Defragmentation stopped.';
@@ -191,7 +196,13 @@ function openDefrag() {
   const dfResizeObserver = new ResizeObserver(() => drawGrid());
   dfResizeObserver.observe(gridWrap);
   const _origCloseDefrag = wins['defrag']?._onclose;
-  if (wins['defrag']) wins['defrag']._onclose = () => { dfResizeObserver.disconnect(); if (_origCloseDefrag) _origCloseDefrag(); };
+  if (wins['defrag']) wins['defrag']._onclose = () => {
+    dfResizeObserver.disconnect();
+    // Closing the window mid-run must take the drive noise with it; step()
+    // stops itself on the same condition but has no way to say so.
+    stopSoundLoop('defrag', { fade: 0.2 });
+    if (_origCloseDefrag) _origCloseDefrag();
+  };
 
   body.addEventListener('contextmenu', e => {
     e.preventDefault();

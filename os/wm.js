@@ -120,6 +120,14 @@ function restoreMaximizedForDrag(id, clientX, clientY) {
 function closeWin(id) {
   const w = wins[id]; if (!w) return;
   if (w._interval) clearInterval(w._interval);
+  // Apps that own something outside their DOM subtree - an observer, a running
+  // sound, a subscription - hang a teardown here. DEFRAG.exe has set _onclose
+  // since it was written and nothing ever called it, so its ResizeObserver
+  // outlived every window it was created for. Wrapped because a throwing
+  // teardown must not leave a closed window in `wins` and on the taskbar.
+  if (typeof w._onclose === 'function') {
+    try { w._onclose(); } catch (e) {}
+  }
   w.el.remove(); delete wins[id];
   kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
@@ -293,6 +301,8 @@ function enterIdleSleep(wakeLockMs = 0) {
   document.body.classList.add('idle-sleeping');
   overlay.classList.add('active');
   overlay.setAttribute('aria-hidden', 'false');
+  // The monitor sleeps; the machine does not. Ducked rather than stopped.
+  duckSoundLoop('ambience', AMBIENCE_SLEEP_DUCK, 1.2);
   updateClock();
   overlay.focus();
 }
@@ -306,6 +316,7 @@ function wakeIdleSleep() {
     overlay.setAttribute('aria-hidden', 'true');
   }
   document.body.classList.remove('idle-sleeping');
+  duckSoundLoop('ambience', 1, 0.9);
   idleLastActivityTs = Date.now();
   scheduleIdleSleep();
 }

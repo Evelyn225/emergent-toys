@@ -1409,7 +1409,7 @@ if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
 // ── Settings bootstrap (must be early so BIOS skip works) ────────
 const SETTINGS_KEY = 'sleepOS-settings';
 const FORCE_BOOT_SESSION_KEY = 'sleepOS-force-boot';
-const osSettings = { crtScanlines: true, videoDither: true, clock12h: false, skipBoot: false };
+const osSettings = { crtScanlines: true, videoDither: true, clock12h: false, skipBoot: false, sounds: true, soundVolume: 0.6 };
 try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
 
 // ── Registry data ─────────────────────────────────────────────────
@@ -1511,6 +1511,8 @@ const registryData = {
     'SOFTWARE\\sleepOS': {
       SkipBoot:           { type:'REG_DWORD', value: 0 },
       IdleSleepMinutes:   { type:'REG_DWORD', value: 10 },
+      SoundEnabled:       { type:'REG_DWORD', value: 1 },
+      SoundVolume:        { type:'REG_DWORD', value: 60 },
     },
     'SOFTWARE\\sleepOS\\Daemon': {
       STATUS:             { type:'REG_SZ',    value: 'Dormant' },
@@ -1596,6 +1598,17 @@ function getIdleSleepMinutes() {
 function getIdleSleepMs() {
   return getIdleSleepMinutes() * 60 * 1000;
 }
+// Stored as a REG_DWORD percentage because that is what a registry value looks
+// like; osSettings.soundVolume carries the 0..1 the gain node wants. REGEDIT
+// can be pointed at this key by hand, so anything out of range is clamped
+// rather than trusted. DEFAULT_SOUND_VOLUME lives in os/audio.js, which the
+// bundle reaches after this file - safe here because nothing calls this during
+// evaluation, only from applyRegistrySettings and the Settings window.
+function normalizeSoundVolumePercent(value) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return Math.round(DEFAULT_SOUND_VOLUME * 100);
+  return Math.max(0, Math.min(100, parsed));
+}
 registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'].IdleSleepMinutes.value = getIdleSleepMinutes();
 function saveRegistry() {
   const out = {};
@@ -1617,6 +1630,8 @@ function applyRegistrySettings() {
   osSettings.videoDither   = !!cc.VIDEO_DITHER.value;
   osSettings.clock12h      = cc.CLOCK_FORMAT.value === '12h';
   osSettings.skipBoot      = !!cu.SkipBoot.value;
+  osSettings.sounds        = !!cu.SoundEnabled.value;
+  osSettings.soundVolume   = normalizeSoundVolumePercent(cu.SoundVolume.value) / 100;
   cu.IdleSleepMinutes.value = getIdleSleepMinutes();
   saveSettings();
   applySettings();
@@ -1855,13 +1870,19 @@ function openAppearance() {
 }
 
 function openSettings() {
-  if (!mkWin({ id:'settings', title:'Settings', icon:'\u2699\uFE0F', w:390, h:294, x:145, y:95, menubar:false, statusbar:false })) return;
+  // 316 = 18px titlebar + 4px borders + the panel's exact content height. The
+  // old 294 already left ~70px of dead space below the footer; adding the
+  // Sound section without re-measuring would have kept it.
+  if (!mkWin({ id:'settings', title:'Settings', icon:'\u2699\uFE0F', w:390, h:316, x:145, y:95, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-settings');
   body.className = 'win-body st-panel';
 
   body.innerHTML =     `<div class="st-section">Display</div>
      <div class="st-row"><div class="st-label">CRT scan lines</div><button class="st-toggle" data-setting="crtScanlines"></button></div>
      <div class="st-row"><div class="st-label">Video dithering</div><button class="st-toggle" data-setting="videoDither"></button></div>
+     <div class="st-section">Sound</div>
+     <div class="st-row"><div class="st-label">System sounds</div><button class="st-toggle" data-setting="sounds"></button></div>
+     <div class="st-row"><div class="st-label">Volume</div><div class="st-vol vp-vol-blocks" id="settings-volume" role="slider" tabindex="0" aria-label="System volume" aria-valuemin="0" aria-valuemax="100" title="System volume"></div></div>
      <div class="st-section">System</div>
      <div class="st-row"><div class="st-label">12-hour clock</div><button class="st-toggle" data-setting="clock12h"></button></div>
 
@@ -1871,6 +1892,85 @@ function openSettings() {
        <button class="dlg-btn" id="settings-close">Close</button>
      </div>`;
 
+  // \u2500\u2500 Volume, drawn as the media player's block meter \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const VOL_BLOCKS = 10;
+  const volEl = document.getElementById('settings-volume');
+  let volDragging = false;
+
+  function renderVolume() {
+    const filled = osSettings.sounds ? Math.round(getSystemVolume() * VOL_BLOCKS) : 0;
+    volEl.innerHTML =
+      `<span style="color:#000080">${'&#9632;'.repeat(filled)}</span>` +
+      `<span style="color:#6a6a6a">${'&#9643;'.repeat(VOL_BLOCKS - filled)}</span>`;
+    volEl.classList.toggle('off', !osSettings.sounds);
+    volEl.setAttribute('aria-valuenow', String(Math.round(getSystemVolume() * 100)));
+  }
+
+  // Quantised to the blocks that are actually drawn: clicking a block should
+  // land on that block, not on a continuous value that rounds to its neighbour.
+  function setVolumeStep(step) {
+    const clamped = Math.max(0, Math.min(VOL_BLOCKS, step));
+    osSettings.soundVolume = clamped / VOL_BLOCKS;
+    // Dragging a muted slider upwards unmutes, the way every OS mixer does.
+    if (clamped > 0 && !osSettings.sounds) osSettings.sounds = true;
+  }
+
+  // Live during a drag, but nothing is written to disk until the pointer is
+  // released - saveSettings and saveRegistry both hit localStorage, and
+  // pointermove fires at frame rate.
+  function previewVolume(clientX) {
+    // Measured against the content box, not the border box: the blocks are
+    // drawn inside 2px of bevel and 6px of padding, and mapping the pointer
+    // across the full width would land a click a block away from the one it
+    // was aimed at near either end.
+    const r = volEl.getBoundingClientRect();
+    const cs = getComputedStyle(volEl);
+    const inset = n => parseFloat(cs.getPropertyValue(n)) || 0;
+    const left = r.left + inset('border-left-width') + inset('padding-left');
+    const width = Math.max(1, r.width - inset('border-left-width') - inset('border-right-width')
+                                      - inset('padding-left') - inset('padding-right'));
+    setVolumeStep(Math.round(((clientX - left) / width) * VOL_BLOCKS));
+    applySystemAudioSettings();
+    renderVolume();
+  }
+
+  function commitVolume() {
+    saveSettings();
+    applySettings();
+    refresh();
+    playSound('click');
+  }
+
+  // Pointer capture instead of document-level move/up listeners: those would
+  // outlive the window and stack up one pair per Settings open.
+  volEl.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    volDragging = true;
+    try { volEl.setPointerCapture(e.pointerId); } catch (err) {}
+    previewVolume(e.clientX);
+  });
+  volEl.addEventListener('pointermove', e => { if (volDragging) previewVolume(e.clientX); });
+  volEl.addEventListener('pointerup', e => {
+    if (!volDragging) return;
+    volDragging = false;
+    try { volEl.releasePointerCapture(e.pointerId); } catch (err) {}
+    commitVolume();
+  });
+  volEl.addEventListener('pointercancel', () => {
+    if (!volDragging) return;
+    volDragging = false;
+    commitVolume();
+  });
+  volEl.addEventListener('keydown', e => {
+    const dir = (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? 1
+              : (e.key === 'ArrowLeft'  || e.key === 'ArrowDown') ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    setVolumeStep(Math.round(getSystemVolume() * VOL_BLOCKS) + dir);
+    commitVolume();
+  });
+
   function refresh() {
     body.querySelectorAll('[data-setting]').forEach(btn => {
       const key = btn.dataset.setting;
@@ -1879,6 +1979,7 @@ function openSettings() {
       btn.textContent = enabled ? 'ON' : 'OFF';
       btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     });
+    renderVolume();
   }
 
   body.querySelectorAll('[data-setting]').forEach(btn => {
@@ -1888,6 +1989,10 @@ function openSettings() {
       saveSettings();
       applySettings();
       refresh();
+      // The click feedback on this button fires at pointerdown, while sound is
+      // still off, so switching it on would otherwise be silent - the one
+      // control whose effect you most want to hear.
+      if (key === 'sounds' && osSettings.sounds) playSound('click');
     });
   });
 
@@ -1895,6 +2000,389 @@ function openSettings() {
   document.getElementById('settings-close').addEventListener('click', () => closeWin('settings'));
   refresh();
 }
+// ─────────────────────────────────────────────────────────────────
+// SYSTEM AUDIO
+// ─────────────────────────────────────────────────────────────────
+// One AudioContext for the whole OS, chosen over <audio> elements for three
+// reasons that all show up in this codebase:
+//
+//   - The Settings volume is one assignment on a master gain node, not a walk
+//     over every element that happens to be playing.
+//   - ctx.suspend() silences everything on tab-hide in a single call, with no
+//     bookkeeping about what was mid-playback and no restart glitch on the way
+//     back. Scheduled times are expressed against ctx.currentTime, which stops
+//     advancing while suspended, so a loop resumes exactly where it froze.
+//   - Overlapping one-shots (a click during a glitch, two clicks in 40ms) come
+//     free. HTMLAudioElement restarts the single element instead, so the usual
+//     workaround is cloneNode per shot.
+//
+// The context cannot exist before a user gesture: browsers create it suspended
+// and refuse to resume it. Every entry point here is therefore a no-op until
+// unlockSystemAudio() has run, and no caller has to check - playSound and
+// startSoundLoop are safe to call at any time, including during boot, and
+// startSoundLoop remembers the request so the loop begins at the first click.
+
+const SOUND_DIR = 'os/sounds/';
+const SOUND_FILES = {
+  ambience: 'computerAmbience.ogg',
+  boot:     'win95Start.ogg',
+  shutdown: 'ShutdownJingle.ogg',
+  defrag:   'defrag.ogg',
+  error:    'error.ogg',
+  glitch:   'glitch.ogg',
+  click:    'mouseClick.ogg',
+};
+
+// Per-sound trim, so the mix lives in one table instead of being spread across
+// call sites. These multiply the master volume from Settings. The ambience is
+// deliberately far below everything else: it plays for the whole session and
+// is meant to sit under the OS, not in front of it.
+const SOUND_GAIN = {
+  ambience: 0.30,
+  boot:     0.75,
+  shutdown: 0.75,
+  defrag:   0.40,
+  error:    0.65,
+  glitch:   0.50,
+  click:    0.30,
+};
+
+// defrag.ogg does not loop seamlessly and a slow run can outlast its ~1 minute,
+// so its tail is overlapped with its head by this much. Long enough to bury the
+// discontinuity in drive chatter, short enough that the overlap is not heard as
+// a doubling. A seam-matched source file would let this drop to 0 and use the
+// seamless path below instead.
+const DEFRAG_CROSSFADE_SEC = 0.35;
+// The monitor sleeps; the machine does not. Ambience drops to this while the
+// idle-sleep overlay is up rather than stopping.
+const AMBIENCE_SLEEP_DUCK = 0.3;
+// exponentialRampToValueAtTime cannot reach or cross zero.
+const GAIN_FLOOR = 0.0001;
+const DEFAULT_SOUND_VOLUME = 0.6;
+
+let audioCtx = null;
+let audioMaster = null;
+let audioUnlocked = false;
+let audioSuspendedByHide = false;
+let systemAudioInited = false;
+const audioBuffers = new Map();
+const audioLoads = new Map();
+// name -> { volume, crossfade, duck, active, buffer, gain, passes:Set, nextStart }
+const audioLoops = new Map();
+
+function systemAudioEnabled() {
+  return osSettings.sounds !== false;
+}
+
+function getSystemVolume() {
+  const v = Number(osSettings.soundVolume);
+  if (!Number.isFinite(v)) return DEFAULT_SOUND_VOLUME;
+  return Math.max(0, Math.min(1, v));
+}
+
+function ensureAudioContext() {
+  if (audioCtx) return audioCtx;
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return null;
+  try {
+    audioCtx = new Ctor();
+  } catch (e) {
+    return null;
+  }
+  audioMaster = audioCtx.createGain();
+  audioMaster.gain.value = systemAudioEnabled() ? getSystemVolume() : 0;
+  audioMaster.connect(audioCtx.destination);
+  return audioCtx;
+}
+
+// Called from the gesture listeners at the bottom of this file, and again by
+// them if a resume() was ever rejected, so a revoked activation heals on the
+// next click instead of leaving the OS permanently silent.
+function unlockSystemAudio() {
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+  if (audioUnlocked && ctx.state === 'running') return;
+  if (ctx.state === 'running') { markAudioUnlocked(); return; }
+  ctx.resume().then(markAudioUnlocked).catch(() => {});
+}
+
+function markAudioUnlocked() {
+  if (!audioCtx || audioCtx.state !== 'running') return;
+  audioUnlocked = true;
+  // Loops asked for before the first gesture - the desktop ambience starts
+  // during boot - have been waiting on exactly this.
+  audioLoops.forEach((entry, name) => { if (entry.active) primeLoop(name, entry); });
+}
+
+function loadSound(name) {
+  if (audioBuffers.has(name)) return Promise.resolve(audioBuffers.get(name));
+  const pending = audioLoads.get(name);
+  if (pending) return pending;
+  const file = SOUND_FILES[name];
+  const ctx = ensureAudioContext();
+  if (!file || !ctx) return Promise.resolve(null);
+  const load = fetch(SOUND_DIR + file)
+    .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.arrayBuffer(); })
+    .then(data => ctx.decodeAudioData(data))
+    .then(buffer => { audioBuffers.set(name, buffer); return buffer; })
+    .catch(() => {
+      // A missing or undecodable sound must never break the thing it decorates.
+      // Forgetting the rejection lets a later call retry rather than caching
+      // the failure for the rest of the session.
+      audioLoads.delete(name);
+      return null;
+    });
+  audioLoads.set(name, load);
+  return load;
+}
+
+// Fire-and-forget one-shot. `volume` is a multiplier on the sound's entry in
+// SOUND_GAIN, for callers that vary intensity (see triggerGlitch).
+function playSound(name, options = {}) {
+  if (!audioUnlocked || !systemAudioEnabled() || document.hidden) return;
+  const scale = Number.isFinite(Number(options.volume)) ? Number(options.volume) : 1;
+  loadSound(name).then(buffer => {
+    // Re-checked after the decode: on the very first play of a sound this
+    // resolves a frame or more later, by which time the tab may be hidden or
+    // the user may have switched sound off.
+    if (!buffer || !audioUnlocked || !systemAudioEnabled() || document.hidden) return;
+    const src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    const gain = audioCtx.createGain();
+    gain.gain.value = Math.max(0, (SOUND_GAIN[name] ?? 0.5) * scale);
+    src.connect(gain);
+    gain.connect(audioMaster);
+    src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
+    src.start();
+  });
+}
+
+// Idempotent: calling this on an already-running loop does nothing, so a
+// caller does not have to track whether it already started one.
+function startSoundLoop(name, options = {}) {
+  let entry = audioLoops.get(name);
+  if (!entry) {
+    entry = {
+      volume: SOUND_GAIN[name] ?? 0.5,
+      crossfade: 0,
+      duck: 1,
+      active: false,
+      buffer: null,
+      gain: null,
+      passes: new Set(),
+      nextStart: 0,
+    };
+    audioLoops.set(name, entry);
+  }
+  // Re-read on every start rather than only at creation. The entry outlives the
+  // loop - stopping keeps it so `duck` survives - and reading the option once
+  // would mean the second start of a sound silently used the first one's
+  // scheduling mode.
+  if ('crossfade' in options) entry.crossfade = Math.max(0, Number(options.crossfade) || 0);
+  if (entry.active) return;
+  entry.active = true;
+  primeLoop(name, entry);
+}
+
+function stopSoundLoop(name, options = {}) {
+  const entry = audioLoops.get(name);
+  if (!entry) return;
+  entry.active = false;
+  stopLoopPasses(entry, Math.max(0, Number(options.fade) || 0));
+}
+
+function primeLoop(name, entry) {
+  if (!audioUnlocked || !systemAudioEnabled()) return;
+  if (entry.passes.size) return;
+  loadSound(name).then(buffer => {
+    // Same re-check as playSound: the first prime waits on a decode, and the
+    // loop may have been stopped in the meantime.
+    if (!buffer || !entry.active || !audioUnlocked || !systemAudioEnabled()) return;
+    if (entry.passes.size) return;
+    entry.buffer = buffer;
+
+    if (!entry.gain) {
+      entry.gain = audioCtx.createGain();
+      entry.gain.connect(audioMaster);
+    }
+    // Always reset: a previous stop may have left this ramped down to the floor.
+    const now = audioCtx.currentTime;
+    entry.gain.gain.cancelScheduledValues(now);
+    entry.gain.gain.setValueAtTime(Math.max(GAIN_FLOOR, entry.volume * entry.duck), now);
+
+    if (!entry.crossfade) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      src.connect(entry.gain);
+      entry.passes.add(src);
+      src.start();
+      return;
+    }
+
+    // Crossfaded loop. Two passes are queued up front and every pass queues the
+    // one two ahead of it when it ends. Chaining a single pass on `ended` would
+    // always be late by exactly the crossfade length, because pass N+1 has to
+    // START before pass N finishes - so the schedule runs one pass deep. With a
+    // one-minute file and a 350ms overlap that is ~59 seconds of lead, and it
+    // needs no timers: setTimeout is throttled in a background tab, while
+    // buffer sources are scheduled against ctx.currentTime, which is frozen for
+    // exactly as long as the context is suspended.
+    entry.nextStart = audioCtx.currentTime + 0.02;
+    queueLoopPass(entry);
+    queueLoopPass(entry);
+  });
+}
+
+function queueLoopPass(entry) {
+  const buffer = entry.buffer;
+  if (!buffer) return;
+  const fade = Math.min(entry.crossfade, buffer.duration / 3);
+  const at = entry.nextStart;
+  entry.nextStart = at + Math.max(0.05, buffer.duration - fade);
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const gain = audioCtx.createGain();
+  src.connect(gain);
+  gain.connect(entry.gain);
+
+  // Equal-gain in and out across the overlap. The pass envelope peaks at 1 and
+  // entry.gain carries the trim, so volume and ducking stay one node away from
+  // the scheduling.
+  gain.gain.setValueAtTime(GAIN_FLOOR, at);
+  gain.gain.exponentialRampToValueAtTime(1, at + fade);
+  gain.gain.setValueAtTime(1, at + buffer.duration - fade);
+  gain.gain.exponentialRampToValueAtTime(GAIN_FLOOR, at + buffer.duration);
+
+  // So stopLoopPasses can tear the pair down without closing over this scope.
+  src._passGain = gain;
+  entry.passes.add(src);
+  src.onended = () => {
+    entry.passes.delete(src);
+    try { src.disconnect(); gain.disconnect(); } catch (e) {}
+    if (entry.active && audioUnlocked && systemAudioEnabled()) queueLoopPass(entry);
+  };
+  src.start(at);
+}
+
+// Tears down the sources without clearing `active`, so the caller decides
+// whether this is a stop or a pause that should re-prime later.
+function stopLoopPasses(entry, fadeSec) {
+  const passes = [...entry.passes];
+  entry.passes.clear();
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  if (entry.gain && fadeSec > 0) {
+    entry.gain.gain.cancelScheduledValues(now);
+    entry.gain.gain.setValueAtTime(Math.max(GAIN_FLOOR, entry.gain.gain.value), now);
+    entry.gain.gain.exponentialRampToValueAtTime(GAIN_FLOOR, now + fadeSec);
+  }
+  passes.forEach(src => {
+    // Replaced, not dropped, and the disconnect happens in it rather than
+    // here: the handler being replaced is the one that queues the next pass,
+    // and a stop must not schedule more audio on its way out - but
+    // disconnecting a node that is still fading cuts it dead and there is no
+    // fade left to hear.
+    src.onended = () => {
+      try { src.disconnect(); } catch (e) {}
+      try { if (src._passGain) src._passGain.disconnect(); } catch (e) {}
+    };
+    try { fadeSec > 0 ? src.stop(now + fadeSec) : src.stop(); } catch (e) {}
+  });
+}
+
+// Ramps a running loop to `factor` of its normal level and keeps it there.
+// The factor is remembered, so a loop ducked while stopped comes back ducked.
+function duckSoundLoop(name, factor, seconds = 0.6) {
+  const entry = audioLoops.get(name);
+  if (!entry) return;
+  entry.duck = Math.max(0, Math.min(1, Number(factor) || 0));
+  if (!entry.gain || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  entry.gain.gain.cancelScheduledValues(now);
+  entry.gain.gain.setValueAtTime(Math.max(GAIN_FLOOR, entry.gain.gain.value), now);
+  entry.gain.gain.exponentialRampToValueAtTime(
+    Math.max(GAIN_FLOOR, entry.volume * entry.duck), now + Math.max(0.01, seconds));
+}
+
+// Called by applySettings whenever osSettings changes, from either the
+// Settings window or REGEDIT.
+function applySystemAudioSettings() {
+  const enabled = systemAudioEnabled();
+  if (audioCtx && audioMaster) {
+    // Ramped rather than assigned: a step change on a gain node is an audible
+    // click, which is a poor sound for the control that turns sound off.
+    const now = audioCtx.currentTime;
+    audioMaster.gain.cancelScheduledValues(now);
+    audioMaster.gain.setValueAtTime(audioMaster.gain.value, now);
+    audioMaster.gain.linearRampToValueAtTime(enabled ? getSystemVolume() : 0, now + 0.08);
+  }
+  // Muting is not enough for the loops: a silent ambience would keep a decoder
+  // running for the rest of the session. They are torn down and re-primed.
+  audioLoops.forEach((entry, name) => {
+    if (!entry.active) return;
+    if (enabled) primeLoop(name, entry);
+    else stopLoopPasses(entry, 0.08);
+  });
+}
+
+// Which chrome clicks: buttons, menu entries, icons and titlebar controls.
+// Deliberately not text fields, window bodies, the bare desktop, or drags -
+// a click on every pointerdown is authentic for about ninety seconds and
+// unbearable after that.
+const CLICK_SOUND_SELECTOR = [
+  '#start-btn',
+  '.sm-item',
+  '.taskbar-btn',
+  '.desktop-icon',
+  '.dlg-btn',
+  '.win-btn',
+  '.menu-item',
+  '.menu-dd-item:not(.disabled)',
+  '.st-toggle',
+  '.cad-action',
+  '.vp-btn',
+].join(',');
+
+function initSystemAudio() {
+  if (systemAudioInited) return;
+  systemAudioInited = true;
+  // Capture phase: several apps stopPropagation on their own menu handling,
+  // and the click feedback should not depend on which of them do.
+  document.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const target = e.target instanceof Element ? e.target.closest(CLICK_SOUND_SELECTOR) : null;
+    if (!target || target.disabled) return;
+    playSound('click');
+  }, true);
+}
+
+// The whole point of the Web Audio path: one call stops everything, including
+// mid-flight one-shots and both kinds of loop, and resuming picks up where it
+// left off because ctx.currentTime did not advance while suspended.
+document.addEventListener('visibilitychange', () => {
+  if (!audioCtx) return;
+  if (document.hidden) {
+    if (audioCtx.state !== 'running') return;
+    audioSuspendedByHide = true;
+    audioCtx.suspend().catch(() => {});
+    return;
+  }
+  if (!audioSuspendedByHide) return;
+  audioSuspendedByHide = false;
+  // May be rejected if the browser has since dropped this page's activation.
+  // unlockSystemAudio re-checks ctx.state on the next gesture, so the failure
+  // costs one click rather than the session.
+  audioCtx.resume().catch(() => {});
+});
+
+// Registered at load, not from initSystemAudio: clicking through the BIOS
+// screen has to count as the unlocking gesture, or the startup jingle that
+// plays right after it would be blocked.
+['pointerdown', 'keydown', 'touchstart'].forEach(type => {
+  document.addEventListener(type, unlockSystemAudio, { capture: true, passive: true });
+});
 function getBootRegistryNumber(keyPath, valueName, fallback, min = 0, max = 999) {
   const parsed = Number(registryData['HKEY_SLEEPBOX_MACHINE']?.[keyPath]?.[valueName]?.value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -4901,9 +5389,12 @@ function applySettings() {
     if (cu) {
       cu.SkipBoot.value = osSettings.skipBoot ? 1 : 0;
       cu.IdleSleepMinutes.value = getIdleSleepMinutes();
+      cu.SoundEnabled.value = osSettings.sounds ? 1 : 0;
+      cu.SoundVolume.value = Math.round(getSystemVolume() * 100);
     }
     saveRegistry();
   }
+  applySystemAudioSettings();
 }
 
 document.addEventListener('fs-changed', refreshAppearanceWindow);
@@ -6279,6 +6770,9 @@ function showOsToast(message) {
   // a column of identical toasts would bury the screen it is trying to warn
   // about; the newest message replaces the old one and restarts the clock.
   el.textContent = String(message == null ? '' : message);
+  // The toast only ever reports a failure (a commit that could not be saved),
+  // so unlike osAlert it needs no test for what kind of message this is.
+  playSound('error');
   clearTimeout(_osToastHideTimer);
   clearTimeout(_osToastClearTimer);
   // Appearing is SYNCHRONOUS and deliberately has no transition. A fade-in out
@@ -6307,11 +6801,34 @@ function _osDlgPos(w, h) {
   return { x: Math.max(20, Math.floor(window.innerWidth/2)  - Math.floor(w/2)),
            y: Math.max(20, Math.floor(window.innerHeight/2) - Math.floor(h/2)) };
 }
+// osAlert is also the About and Help dialog, so an unconditional buzz would
+// fire on "About DEFRAG.exe". Only failures get the sound, recognised from the
+// two arguments every call site already passes.
+//
+// 'X' leads the icon list because it is what this codebase actually uses for a
+// failure - Paste Failed, Upload Failed, Cannot Open, Cannot Create, Cannot
+// Save, Disk Full, Rename Failed, Missing Shortcut all pass it, and nothing
+// informational does. The warning sign appears in both its bare and emoji
+// presentations ('⚠' and '⚠️' differ by a trailing U+FE0F) and call sites here
+// use each.
+//
+// Deliberately NOT matched against the message body, only the title and icon.
+// The body is where the tempting words are, and also where they lie: Help
+// Topics for DEFRAG.exe contains "some system files cannot be moved", which a
+// body scan would hear as an error.
+const ALERT_ERROR_ICONS = new Set(['X', '⚠', '⚠️', '❌', '\u{1F6AB}', '⛔', '\u{1F4A5}']);
+const ALERT_ERROR_TITLE = /\b(error|fail(ed|ure|s)?|denied|invalid|refused|corrupt|unavailable|not found|no such|cannot|can't)\b/i;
+function isErrorAlert(title, icon) {
+  return ALERT_ERROR_ICONS.has(String(icon == null ? '' : icon).trim())
+      || ALERT_ERROR_TITLE.test(String(title == null ? '' : title));
+}
+
 function osAlert(msg, title, icon) {
   title = title || 'sleepOS'; icon = icon || '🔔';
   const id = 'os-alert-' + Date.now();
   const p = _osDlgPos(320, 175);
   if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  if (isErrorAlert(title, icon)) playSound('error');
   const b = document.getElementById('wb-' + id);
   b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
   const ok = document.getElementById(id + '-ok');
@@ -6484,6 +7001,14 @@ function restoreMaximizedForDrag(id, clientX, clientY) {
 function closeWin(id) {
   const w = wins[id]; if (!w) return;
   if (w._interval) clearInterval(w._interval);
+  // Apps that own something outside their DOM subtree - an observer, a running
+  // sound, a subscription - hang a teardown here. DEFRAG.exe has set _onclose
+  // since it was written and nothing ever called it, so its ResizeObserver
+  // outlived every window it was created for. Wrapped because a throwing
+  // teardown must not leave a closed window in `wins` and on the taskbar.
+  if (typeof w._onclose === 'function') {
+    try { w._onclose(); } catch (e) {}
+  }
   w.el.remove(); delete wins[id];
   kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
@@ -6657,6 +7182,8 @@ function enterIdleSleep(wakeLockMs = 0) {
   document.body.classList.add('idle-sleeping');
   overlay.classList.add('active');
   overlay.setAttribute('aria-hidden', 'false');
+  // The monitor sleeps; the machine does not. Ducked rather than stopped.
+  duckSoundLoop('ambience', AMBIENCE_SLEEP_DUCK, 1.2);
   updateClock();
   overlay.focus();
 }
@@ -6670,6 +7197,7 @@ function wakeIdleSleep() {
     overlay.setAttribute('aria-hidden', 'true');
   }
   document.body.classList.remove('idle-sleeping');
+  duckSoundLoop('ambience', 1, 0.9);
   idleLastActivityTs = Date.now();
   scheduleIdleSleep();
 }
@@ -10982,6 +11510,7 @@ function openDefrag() {
       // Finalize any remaining used-in-place blocks
       for (let i = 0; i < TOTAL; i++) if (cells[i] === 1) { cells[i] = 2; optimized++; }
       running = false; startBtn.disabled = false; stopBtn.disabled = true;
+      stopSoundLoop('defrag', { fade: 0.6 });
       pbFill.style.width = '98%'; pbLabel.textContent = '98%';
       document.getElementById('df-pct').textContent = '98% optimized';
       fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
@@ -11012,12 +11541,16 @@ function openDefrag() {
   startBtn.addEventListener('click', () => {
     if (running) return;
     running = true; startBtn.disabled = true; stopBtn.disabled = false;
+    // The drive noise starts with the analysis pass, not with the first block
+    // move, so the 700ms of "Analyzing C:\..." is not silent.
+    startSoundLoop('defrag', { crossfade: DEFRAG_CROSSFADE_SEC });
     fileLabel.textContent = 'Analyzing C:\\ ...';
     if (ws) ws.textContent = 'Analyzing...';
     setTimeout(step, 700);
   });
   stopBtn.addEventListener('click', () => {
     running = false; clearTimeout(timer);
+    stopSoundLoop('defrag', { fade: 0.25 });
     if (activeCell >= 0) { cells[activeCell] = 1; activeCell = -1; }
     startBtn.disabled = false; stopBtn.disabled = true;
     fileLabel.textContent = 'Defragmentation stopped.';
@@ -11028,7 +11561,13 @@ function openDefrag() {
   const dfResizeObserver = new ResizeObserver(() => drawGrid());
   dfResizeObserver.observe(gridWrap);
   const _origCloseDefrag = wins['defrag']?._onclose;
-  if (wins['defrag']) wins['defrag']._onclose = () => { dfResizeObserver.disconnect(); if (_origCloseDefrag) _origCloseDefrag(); };
+  if (wins['defrag']) wins['defrag']._onclose = () => {
+    dfResizeObserver.disconnect();
+    // Closing the window mid-run must take the drive noise with it; step()
+    // stops itself on the same condition but has no way to say so.
+    stopSoundLoop('defrag', { fade: 0.2 });
+    if (_origCloseDefrag) _origCloseDefrag();
+  };
 
   body.addEventListener('contextmenu', e => {
     e.preventDefault();
@@ -11752,6 +12291,11 @@ function triggerGlitch(options) {
   const glitch = document.getElementById('glitch');
   const intensity = Number(options?.intensity) || 0;
   const subtle = !!options?.subtle;
+  // Tracks the visual scaling below, so a subtle background flicker does not
+  // arrive at the same volume as a full-intensity tear.
+  playSound('glitch', {
+    volume: subtle ? 0.4 : intensity >= 7 ? 1 : intensity >= 5 ? 0.78 : 0.58,
+  });
   pulseDaemonWindows(intensity, { subtle });
   const targets = [desktop, windowsLayer, taskbar].filter(Boolean);
   const glitchClass = subtle ? 'glitching-soft' : 'glitching';
@@ -11800,6 +12344,9 @@ function playContainmentEndingReboot() {
   closeDropdown();
   closeCad();
   if (altTabActive) closeAltTab();
+
+  stopSoundLoop('ambience', { fade: 0.7 });
+  playSound('shutdown');
 
   const overlay = document.getElementById('ending-reboot');
   if (overlay) {
@@ -11874,9 +12421,14 @@ function confirmShutdown() {
   const val = sel ? sel.value : 'back';
   closeWin('shutdown');
   if (val === 'sleep') {
+    // Sleep is not a power-off: enterIdleSleep ducks the ambience instead, and
+    // a shutdown jingle here would contradict the machine still running.
     enterIdleSleep(MANUAL_SLEEP_WAKE_DELAY_MS);
     return;
   }
+
+  stopSoundLoop('ambience', { fade: 0.9 });
+  playSound('shutdown');
 
   const bios = document.getElementById('bios');
   bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';
@@ -12458,7 +13010,9 @@ function openRunDialog() {
       p.name.toLowerCase() === v
     );
     if (proj) { window.open(proj.file, '_blank'); return; }
-    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Run', '▶');
+    // 'X', not the Run dialog's own '▶': this is a failure, and every other
+    // failure in the OS is titled and iconed as one.
+    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Cannot Find Program', 'X');
   });
   can.addEventListener('click', () => closeWin(id));
   inp.addEventListener('keydown', e => {
@@ -12632,5 +13186,14 @@ function startDesktop() {
   applySettings();
   applyDaemonVisualState();
   setupIcons();
+  initSystemAudio();
+  // Silent unless the user already clicked or typed - most often to skip the
+  // BIOS screen, which is exactly when a startup jingle belongs. On a cold load
+  // that runs the boot text to the end, no gesture has happened and the browser
+  // will not let audio start, so this is a no-op rather than a chime that fires
+  // late. The ambience below has no such problem: it records the request and
+  // begins at the first click.
+  playSound('boot');
+  startSoundLoop('ambience');
   armIdleSleep();
 }

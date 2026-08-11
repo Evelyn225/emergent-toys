@@ -5,6 +5,11 @@ function triggerGlitch(options) {
   const glitch = document.getElementById('glitch');
   const intensity = Number(options?.intensity) || 0;
   const subtle = !!options?.subtle;
+  // Tracks the visual scaling below, so a subtle background flicker does not
+  // arrive at the same volume as a full-intensity tear.
+  playSound('glitch', {
+    volume: subtle ? 0.4 : intensity >= 7 ? 1 : intensity >= 5 ? 0.78 : 0.58,
+  });
   pulseDaemonWindows(intensity, { subtle });
   const targets = [desktop, windowsLayer, taskbar].filter(Boolean);
   const glitchClass = subtle ? 'glitching-soft' : 'glitching';
@@ -53,6 +58,9 @@ function playContainmentEndingReboot() {
   closeDropdown();
   closeCad();
   if (altTabActive) closeAltTab();
+
+  stopSoundLoop('ambience', { fade: 0.7 });
+  playSound('shutdown');
 
   const overlay = document.getElementById('ending-reboot');
   if (overlay) {
@@ -127,9 +135,14 @@ function confirmShutdown() {
   const val = sel ? sel.value : 'back';
   closeWin('shutdown');
   if (val === 'sleep') {
+    // Sleep is not a power-off: enterIdleSleep ducks the ambience instead, and
+    // a shutdown jingle here would contradict the machine still running.
     enterIdleSleep(MANUAL_SLEEP_WAKE_DELAY_MS);
     return;
   }
+
+  stopSoundLoop('ambience', { fade: 0.9 });
+  playSound('shutdown');
 
   const bios = document.getElementById('bios');
   bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';

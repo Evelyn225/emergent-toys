@@ -23,9 +23,12 @@ function applySettings() {
     if (cu) {
       cu.SkipBoot.value = osSettings.skipBoot ? 1 : 0;
       cu.IdleSleepMinutes.value = getIdleSleepMinutes();
+      cu.SoundEnabled.value = osSettings.sounds ? 1 : 0;
+      cu.SoundVolume.value = Math.round(getSystemVolume() * 100);
     }
     saveRegistry();
   }
+  applySystemAudioSettings();
 }
 
 document.addEventListener('fs-changed', refreshAppearanceWindow);

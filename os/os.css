@@ -1012,6 +1012,18 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 }
 .st-toggle:active { border-color: #808080 #fff #fff #808080; }
 .st-toggle.on { background: #000080; color: #fff; border-color: #808080 #fff #fff #808080; }
+/* Reuses .vp-vol-blocks; this only pins it to the .st-toggle metrics so the
+   Sound rows line up with the toggle rows above and below them. */
+.st-vol {
+  min-width: 96px; height: 19px; box-sizing: border-box; padding: 0 6px;
+  /* flex-start, not center: a meter fills from a fixed left edge, and a
+     centred string would also drift sideways as ■ replaces ▫ in any font
+     where the two glyphs have different advance widths. */
+  display: flex; align-items: center; justify-content: flex-start;
+  cursor: pointer; touch-action: none; user-select: none;
+}
+.st-vol:focus-visible { outline: 1px dotted #000; outline-offset: -3px; }
+.st-vol.off { opacity: 0.45; }
 .st-footer { display: flex; gap: 6px; padding: 8px 2px 0; border-top: 1px solid #d0d0d0; margin-top: 6px; }
 
 /* ── Welcome text window ─────────────────────────────────────── */

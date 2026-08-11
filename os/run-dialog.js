@@ -51,7 +51,9 @@ function openRunDialog() {
       p.name.toLowerCase() === v
     );
     if (proj) { window.open(proj.file, '_blank'); return; }
-    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Run', '▶');
+    // 'X', not the Run dialog's own '▶': this is a failure, and every other
+    // failure in the OS is titled and iconed as one.
+    osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Cannot Find Program', 'X');
   });
   can.addEventListener('click', () => closeWin(id));
   inp.addEventListener('keydown', e => {

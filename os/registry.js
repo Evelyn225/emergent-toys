@@ -1,7 +1,7 @@
 // ── Settings bootstrap (must be early so BIOS skip works) ────────
 const SETTINGS_KEY = 'sleepOS-settings';
 const FORCE_BOOT_SESSION_KEY = 'sleepOS-force-boot';
-const osSettings = { crtScanlines: true, videoDither: true, clock12h: false, skipBoot: false };
+const osSettings = { crtScanlines: true, videoDither: true, clock12h: false, skipBoot: false, sounds: true, soundVolume: 0.6 };
 try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
 
 // ── Registry data ─────────────────────────────────────────────────
@@ -103,6 +103,8 @@ const registryData = {
     'SOFTWARE\\sleepOS': {
       SkipBoot:           { type:'REG_DWORD', value: 0 },
       IdleSleepMinutes:   { type:'REG_DWORD', value: 10 },
+      SoundEnabled:       { type:'REG_DWORD', value: 1 },
+      SoundVolume:        { type:'REG_DWORD', value: 60 },
     },
     'SOFTWARE\\sleepOS\\Daemon': {
       STATUS:             { type:'REG_SZ',    value: 'Dormant' },
@@ -188,6 +190,17 @@ function getIdleSleepMinutes() {
 function getIdleSleepMs() {
   return getIdleSleepMinutes() * 60 * 1000;
 }
+// Stored as a REG_DWORD percentage because that is what a registry value looks
+// like; osSettings.soundVolume carries the 0..1 the gain node wants. REGEDIT
+// can be pointed at this key by hand, so anything out of range is clamped
+// rather than trusted. DEFAULT_SOUND_VOLUME lives in os/audio.js, which the
+// bundle reaches after this file - safe here because nothing calls this during
+// evaluation, only from applyRegistrySettings and the Settings window.
+function normalizeSoundVolumePercent(value) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return Math.round(DEFAULT_SOUND_VOLUME * 100);
+  return Math.max(0, Math.min(100, parsed));
+}
 registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'].IdleSleepMinutes.value = getIdleSleepMinutes();
 function saveRegistry() {
   const out = {};
@@ -209,6 +222,8 @@ function applyRegistrySettings() {
   osSettings.videoDither   = !!cc.VIDEO_DITHER.value;
   osSettings.clock12h      = cc.CLOCK_FORMAT.value === '12h';
   osSettings.skipBoot      = !!cu.SkipBoot.value;
+  osSettings.sounds        = !!cu.SoundEnabled.value;
+  osSettings.soundVolume   = normalizeSoundVolumePercent(cu.SoundVolume.value) / 100;
   cu.IdleSleepMinutes.value = getIdleSleepMinutes();
   saveSettings();
   applySettings();
@@ -447,13 +462,19 @@ function openAppearance() {
 }
 
 function openSettings() {
-  if (!mkWin({ id:'settings', title:'Settings', icon:'\u2699\uFE0F', w:390, h:294, x:145, y:95, menubar:false, statusbar:false })) return;
+  // 316 = 18px titlebar + 4px borders + the panel's exact content height. The
+  // old 294 already left ~70px of dead space below the footer; adding the
+  // Sound section without re-measuring would have kept it.
+  if (!mkWin({ id:'settings', title:'Settings', icon:'\u2699\uFE0F', w:390, h:316, x:145, y:95, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-settings');
   body.className = 'win-body st-panel';
 
   body.innerHTML =     `<div class="st-section">Display</div>
      <div class="st-row"><div class="st-label">CRT scan lines</div><button class="st-toggle" data-setting="crtScanlines"></button></div>
      <div class="st-row"><div class="st-label">Video dithering</div><button class="st-toggle" data-setting="videoDither"></button></div>
+     <div class="st-section">Sound</div>
+     <div class="st-row"><div class="st-label">System sounds</div><button class="st-toggle" data-setting="sounds"></button></div>
+     <div class="st-row"><div class="st-label">Volume</div><div class="st-vol vp-vol-blocks" id="settings-volume" role="slider" tabindex="0" aria-label="System volume" aria-valuemin="0" aria-valuemax="100" title="System volume"></div></div>
      <div class="st-section">System</div>
      <div class="st-row"><div class="st-label">12-hour clock</div><button class="st-toggle" data-setting="clock12h"></button></div>
 
@@ -463,6 +484,85 @@ function openSettings() {
        <button class="dlg-btn" id="settings-close">Close</button>
      </div>`;
 
+  // \u2500\u2500 Volume, drawn as the media player's block meter \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const VOL_BLOCKS = 10;
+  const volEl = document.getElementById('settings-volume');
+  let volDragging = false;
+
+  function renderVolume() {
+    const filled = osSettings.sounds ? Math.round(getSystemVolume() * VOL_BLOCKS) : 0;
+    volEl.innerHTML =
+      `<span style="color:#000080">${'&#9632;'.repeat(filled)}</span>` +
+      `<span style="color:#6a6a6a">${'&#9643;'.repeat(VOL_BLOCKS - filled)}</span>`;
+    volEl.classList.toggle('off', !osSettings.sounds);
+    volEl.setAttribute('aria-valuenow', String(Math.round(getSystemVolume() * 100)));
+  }
+
+  // Quantised to the blocks that are actually drawn: clicking a block should
+  // land on that block, not on a continuous value that rounds to its neighbour.
+  function setVolumeStep(step) {
+    const clamped = Math.max(0, Math.min(VOL_BLOCKS, step));
+    osSettings.soundVolume = clamped / VOL_BLOCKS;
+    // Dragging a muted slider upwards unmutes, the way every OS mixer does.
+    if (clamped > 0 && !osSettings.sounds) osSettings.sounds = true;
+  }
+
+  // Live during a drag, but nothing is written to disk until the pointer is
+  // released - saveSettings and saveRegistry both hit localStorage, and
+  // pointermove fires at frame rate.
+  function previewVolume(clientX) {
+    // Measured against the content box, not the border box: the blocks are
+    // drawn inside 2px of bevel and 6px of padding, and mapping the pointer
+    // across the full width would land a click a block away from the one it
+    // was aimed at near either end.
+    const r = volEl.getBoundingClientRect();
+    const cs = getComputedStyle(volEl);
+    const inset = n => parseFloat(cs.getPropertyValue(n)) || 0;
+    const left = r.left + inset('border-left-width') + inset('padding-left');
+    const width = Math.max(1, r.width - inset('border-left-width') - inset('border-right-width')
+                                      - inset('padding-left') - inset('padding-right'));
+    setVolumeStep(Math.round(((clientX - left) / width) * VOL_BLOCKS));
+    applySystemAudioSettings();
+    renderVolume();
+  }
+
+  function commitVolume() {
+    saveSettings();
+    applySettings();
+    refresh();
+    playSound('click');
+  }
+
+  // Pointer capture instead of document-level move/up listeners: those would
+  // outlive the window and stack up one pair per Settings open.
+  volEl.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    volDragging = true;
+    try { volEl.setPointerCapture(e.pointerId); } catch (err) {}
+    previewVolume(e.clientX);
+  });
+  volEl.addEventListener('pointermove', e => { if (volDragging) previewVolume(e.clientX); });
+  volEl.addEventListener('pointerup', e => {
+    if (!volDragging) return;
+    volDragging = false;
+    try { volEl.releasePointerCapture(e.pointerId); } catch (err) {}
+    commitVolume();
+  });
+  volEl.addEventListener('pointercancel', () => {
+    if (!volDragging) return;
+    volDragging = false;
+    commitVolume();
+  });
+  volEl.addEventListener('keydown', e => {
+    const dir = (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? 1
+              : (e.key === 'ArrowLeft'  || e.key === 'ArrowDown') ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    setVolumeStep(Math.round(getSystemVolume() * VOL_BLOCKS) + dir);
+    commitVolume();
+  });
+
   function refresh() {
     body.querySelectorAll('[data-setting]').forEach(btn => {
       const key = btn.dataset.setting;
@@ -471,6 +571,7 @@ function openSettings() {
       btn.textContent = enabled ? 'ON' : 'OFF';
       btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     });
+    renderVolume();
   }
 
   body.querySelectorAll('[data-setting]').forEach(btn => {
@@ -480,6 +581,10 @@ function openSettings() {
       saveSettings();
       applySettings();
       refresh();
+      // The click feedback on this button fires at pointerdown, while sound is
+      // still off, so switching it on would otherwise be silent - the one
+      // control whose effect you most want to hear.
+      if (key === 'sounds' && osSettings.sounds) playSound('click');
     });
   });
 

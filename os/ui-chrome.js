@@ -152,6 +152,9 @@ function showOsToast(message) {
   // a column of identical toasts would bury the screen it is trying to warn
   // about; the newest message replaces the old one and restarts the clock.
   el.textContent = String(message == null ? '' : message);
+  // The toast only ever reports a failure (a commit that could not be saved),
+  // so unlike osAlert it needs no test for what kind of message this is.
+  playSound('error');
   clearTimeout(_osToastHideTimer);
   clearTimeout(_osToastClearTimer);
   // Appearing is SYNCHRONOUS and deliberately has no transition. A fade-in out
@@ -180,11 +183,34 @@ function _osDlgPos(w, h) {
   return { x: Math.max(20, Math.floor(window.innerWidth/2)  - Math.floor(w/2)),
            y: Math.max(20, Math.floor(window.innerHeight/2) - Math.floor(h/2)) };
 }
+// osAlert is also the About and Help dialog, so an unconditional buzz would
+// fire on "About DEFRAG.exe". Only failures get the sound, recognised from the
+// two arguments every call site already passes.
+//
+// 'X' leads the icon list because it is what this codebase actually uses for a
+// failure - Paste Failed, Upload Failed, Cannot Open, Cannot Create, Cannot
+// Save, Disk Full, Rename Failed, Missing Shortcut all pass it, and nothing
+// informational does. The warning sign appears in both its bare and emoji
+// presentations ('⚠' and '⚠️' differ by a trailing U+FE0F) and call sites here
+// use each.
+//
+// Deliberately NOT matched against the message body, only the title and icon.
+// The body is where the tempting words are, and also where they lie: Help
+// Topics for DEFRAG.exe contains "some system files cannot be moved", which a
+// body scan would hear as an error.
+const ALERT_ERROR_ICONS = new Set(['X', '⚠', '⚠️', '❌', '\u{1F6AB}', '⛔', '\u{1F4A5}']);
+const ALERT_ERROR_TITLE = /\b(error|fail(ed|ure|s)?|denied|invalid|refused|corrupt|unavailable|not found|no such|cannot|can't)\b/i;
+function isErrorAlert(title, icon) {
+  return ALERT_ERROR_ICONS.has(String(icon == null ? '' : icon).trim())
+      || ALERT_ERROR_TITLE.test(String(title == null ? '' : title));
+}
+
 function osAlert(msg, title, icon) {
   title = title || 'sleepOS'; icon = icon || '🔔';
   const id = 'os-alert-' + Date.now();
   const p = _osDlgPos(320, 175);
   if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  if (isErrorAlert(title, icon)) playSound('error');
   const b = document.getElementById('wb-' + id);
   b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${icon}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
   const ok = document.getElementById(id + '-ok');
