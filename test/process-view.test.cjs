@@ -81,3 +81,22 @@ test('a kernel process with no window keeps its stored name', () => {
   });
   assert.strictEqual(ctx.buildProcessRows()[0].name, 'job.script');
 });
+
+test('the story toggle filters story rows and leaves real ones', () => {
+  const ctx = view({
+    kernelListProcesses: () => [{ pid: 2001, name: 'job.script', kind: 'user', state: 'running', winId: null }],
+    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', cpu: 7.4, mem: 31.2, protected: true }],
+  });
+  const rows = ctx.buildProcessRows();
+  assert.deepStrictEqual(rows.filter(r => !r.isStory).map(r => r.pid), [2001]);
+  assert.deepStrictEqual(rows.map(r => r.pid), [512, 2001]);
+});
+
+test('pid 1 is present, which is why SYSMON used to be missing it', () => {
+  // SYSMON enumerated `wins`, and the kernel has no window, so pid 1 could
+  // never appear there while `ps` listed it throughout.
+  const ctx = view({
+    kernelListProcesses: () => [{ pid: 1, name: 'kernel', kind: 'system', state: 'running', winId: null }],
+  });
+  assert.deepStrictEqual(ctx.buildProcessRows().map(r => r.pid), [1]);
+});

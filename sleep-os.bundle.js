@@ -10593,22 +10593,18 @@ function openSysmon() {
   content.appendChild(procPanel);
 
   function getProcessList() {
-    const procs = [];
-    Object.entries(wins).forEach(([id, w]) => {
-      const rawName = w.title.split(' \u2014')[0].trim();
-      const name = (rawName.endsWith('.exe') || rawName.endsWith('.readme') || rawName.includes('.')) ? rawName : rawName + '.exe';
-      procs.push({ pid: wins[id].pid, name, cpu: parseFloat((0.3 + Math.random() * 4).toFixed(1)), mem: parseFloat((1 + Math.random() * 12).toFixed(1)), winId: id, isSystem: false });
-    });
-    if (showSysProcs) {
-      getBuiltInProcesses().forEach(p => procs.push({
+    // Story rows keep their authored cpu/mem plus jitter, applied here at
+    // presentation time rather than in the shared view: jitter is a display
+    // concern, not a fact about a process, and `ps` must not show randomized
+    // numbers. Real (kernel-table) rows carry null cpu/mem straight through -
+    // phase 5 makes those genuinely measurable.
+    return buildProcessRows()
+      .filter(p => showSysProcs || !p.isStory)
+      .map(p => p.isStory ? {
         ...p,
         cpu: parseFloat((p.cpu + (Math.random() - 0.5) * 0.2).toFixed(1)),
         mem: parseFloat((p.mem + (Math.random() - 0.5) * 0.3).toFixed(1)),
-        winId: null,
-        isSystem: true,
-      }));
-    }
-    return procs.sort((a, b) => a.pid - b.pid);
+      } : p);
   }
 
   function renderProcesses() {
@@ -10619,7 +10615,9 @@ function openSysmon() {
       const sel = selectedProc && selectedProc.pid === p.pid;
       const row = document.createElement('div');
       row.style.cssText = `display:flex;font-size:10px;border-bottom:1px solid #f0f0f0;cursor:default;background:${sel ? '#000080' : 'transparent'};color:${sel ? '#fff' : '#000'};`;
-      row.innerHTML = `<div style="width:54px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.pid}</div><div style="flex:1;padding:1px 4px;border-right:1px solid #e8e8e8;overflow:hidden;white-space:nowrap;">${p.name}</div><div style="width:52px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.cpu.toFixed(1)}</div><div style="width:58px;padding:1px 4px;">${p.mem.toFixed(1)}</div>`;
+      const cpuText = p.cpu === null ? '-' : p.cpu.toFixed(1);
+      const memText = p.mem === null ? '-' : p.mem.toFixed(1);
+      row.innerHTML = `<div style="width:54px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.pid}</div><div style="flex:1;padding:1px 4px;border-right:1px solid #e8e8e8;overflow:hidden;white-space:nowrap;">${p.name}</div><div style="width:52px;padding:1px 4px;border-right:1px solid #e8e8e8;">${cpuText}</div><div style="width:58px;padding:1px 4px;">${memText}</div>`;
       row.addEventListener('click', () => { selectedProc = p; renderProcesses(); });
       row.addEventListener('contextmenu', e => {
         e.preventDefault();
@@ -10639,7 +10637,7 @@ function openSysmon() {
 
   procToolbar.querySelector('#sm-kill-btn').addEventListener('click', () => {
     if (!selectedProc) return;
-    if (selectedProc.isSystem) {
+    if (selectedProc.isStory) {
       if (selectedProc.pid === 512) {
         const result = killSoulDaemonProcess();
         selectedProc = null;
@@ -10732,7 +10730,7 @@ function openSysmon() {
     const up = document.getElementById('sm-uptime');
     if (up) up.textContent = `${String(Math.floor(sec/3600)).padStart(2,'0')}:${String(Math.floor((sec%3600)/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
     const ct = document.getElementById('sm-proc-count');
-    if (ct) ct.textContent = Object.keys(wins).length + (showSysProcs ? getBuiltInProcesses().length : 0);
+    if (ct) ct.textContent = getProcessList().length;
     if (activeTab === 'processes') renderProcesses();
   }
 
