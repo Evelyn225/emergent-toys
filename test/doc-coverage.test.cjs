@@ -115,10 +115,53 @@ test('every script command appears in SCRIPTING.txt', () => {
   assert.deepStrictEqual(missing, [], 'undocumented script commands: ' + missing.join(', '));
 });
 
+// CMDS is declared as `const CMDS = { type: ..., cd: ..., ... }` - an object
+// literal - and then extended with `CMDS.help = ...`, `CMDS.dir = ...` etc.
+// A regex over `CMDS\.x =` alone only sees the second half: it found 30
+// commands and missed the 16 declared as literal keys (type, cd, mkdir,
+// touch, del, rm, copy, move, mv, taskkill, cat, open, notepad, grep, wc,
+// exit), two of which - move and mv - were genuinely undocumented and the
+// guard still passed. That is the enumerator lying about coverage, which is
+// worse than the matcher being wrong: a wrong matcher fails loudly on a
+// known command, a blind enumerator never asks about the command at all.
+//
+// The fix ought to be reading Object.keys(CMDS) out of a live terminal
+// instance - enumeration by execution cannot drift with declaration style.
+// CMDS lives inside openTerminal()'s closure, though, and openTerminal()
+// builds a real DOM subtree (mkWin, document.createElement panels with
+// style/appendChild/scrollTop, a contextmenu listener that calls
+// window.getSelection() and navigator.clipboard) before CMDS is even
+// assigned. No test in this suite stands up that much of a DOM double, and
+// building one solely so this guard can read a property list is a large,
+// fragile surface for a test whose only job is enumeration - any future
+// unrelated addition to openTerminal's DOM setup would need to be mocked
+// here too, or the guard breaks for reasons that have nothing to do with
+// documentation. So this takes the reviewer's named fallback instead: union
+// the `CMDS.x =` assignments with the literal's own keys, read directly out
+// of the `const CMDS = {` block by indentation (its keys are 4-space
+// indented; nothing else at that exact indentation inside the block matches
+// `identifier:`, verified by running this against the current file and
+// checking the result equals openTerminal's real dispatch table by hand).
+function terminalCommands() {
+  const blockStart = terminalSrc.indexOf('const CMDS = {');
+  assert.notStrictEqual(blockStart, -1, 'const CMDS = { not found in apps/terminal.js');
+  const blockEnd = terminalSrc.indexOf('\n  };', blockStart);
+  assert.notStrictEqual(blockEnd, -1, 'CMDS object literal is not terminated');
+  const cmdsBlock = terminalSrc.slice(blockStart, blockEnd);
+  const literalKeys = [...cmdsBlock.matchAll(/^\s{4}([a-z][a-z0-9_]*)\s*:/gm)].map(m => m[1]);
+  const assignedKeys = [...terminalSrc.matchAll(/CMDS\.([a-z][a-z0-9_]*)\s*=/g)].map(m => m[1]);
+  return [...new Set([...literalKeys, ...assignedKeys])];
+}
+
 test('every terminal command appears in COMMANDS.txt', () => {
   const columns = commandColumns(docBlock('COMMANDS.txt'));
-  const commands = [...new Set([...terminalSrc.matchAll(/CMDS\.([a-z][a-z0-9_]*)\s*=/g)].map(m => m[1]))];
-  assert.ok(commands.length >= 25, `expected to find CMDS assignments, found ${commands.length}`);
+  const commands = terminalCommands();
+  // 46 as of this writing (16 literal keys + 30 CMDS.x = assignments). Set at
+  // 45 rather than the exact count so one legitimate removal does not fail
+  // this line - the point is to catch the enumerator silently losing an
+  // entire declaration style again (that regression drops the count to 30),
+  // not to pin the roster.
+  assert.ok(commands.length >= 45, `expected to find CMDS commands (literal keys + assignments), found ${commands.length}`);
   const missing = commands
     .filter(c => !UNDOCUMENTED_TERMINAL_COMMANDS.has(c))
     .filter(c => !documents(columns, c));

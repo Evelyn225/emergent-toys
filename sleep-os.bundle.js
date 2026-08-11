@@ -2383,7 +2383,8 @@ function vfsSeedTree() {
         '  clear              clear the terminal output',
         '  touch <file>       create an empty file',
         '  mkdir <dir>        create a directory',
-        '  dir [path]         list a directory',
+        '  dir [path]         list a directory (path is root-relative, not',
+        '                     relative to the running script)',
         '  del <file>         delete a file',
         '  rm <file>          same as del',
         '  open <file>        open file in viewer',
@@ -2486,6 +2487,7 @@ function vfsSeedTree() {
         '  DEL, RM <file>       delete file/directory',
         '  CAT, TYPE <file>     read file contents',
         '  COPY <src> <dst>     copy a file',
+        '  MOVE, MV <src> <dst>  always fails - files are already home',
         '  TREE                 show directory tree',
         '  OPEN <file>          open in viewer/editor',
         '',
@@ -4464,8 +4466,19 @@ function killSoulDaemonProcess() {
 
 syncDaemonStory({ silent: true });
 
-// The one place that answers "what processes exist". Both `ps` (apps/terminal.js)
-// and SYSMON (apps/sysmon.js) read it, so they cannot disagree.
+// The one place that answers "what processes exist" - and, since this phase,
+// the one place that decides what happens when a process row's End Task /
+// TASKKILL-equivalent action is triggered. Both `ps` (apps/terminal.js) and
+// SYSMON (apps/sysmon.js) read buildProcessRows, so they cannot disagree
+// about what processes exist; both also route their "end this process"
+// action through endProcessAction below, so they cannot disagree about what
+// happens when the user tries to end one either. endProcessAction lives here
+// rather than in apps/sysmon.js's closure because it is unit-testable here
+// and is not there (see test/sysmon-end-process.test.cjs); that is also why
+// closeWin and kernelSignal are dependencies of this module now, alongside
+// the kernel/window-manager reads buildProcessRows already needed. The next
+// person adding a UI action for a process row belongs here too, for the
+// same reason - not back in apps/sysmon.js's untestable closure.
 //
 // The daemon story's processes are MERGED here rather than registered into the
 // kernel table, because getBuiltInProcesses() is a live projection of story
@@ -4523,11 +4536,22 @@ function buildProcessRows() {
 // every other story pid shows Access Denied), so this router hands story
 // rows straight back and touches neither the kernel nor the window manager.
 // Returns what it did so the caller can decide what to show.
+//
+// kernelSignal's return value is not discarded: it is false for the kernel
+// itself (pid 1, a system-kind process with no winId - os/kernel.js refuses
+// rather than pretend to close a window that does not exist) and for any
+// process that already exited between the row being rendered and the click
+// landing. Both are real refusals, not successes, so both come back here as
+// 'refused' rather than the caller silently doing nothing. The terminal's
+// KILL command hits the identical kernelSignal-returns-false case and prints
+// "Access denied: PID N cannot be terminated." - SYSMON must say the same
+// thing for the same outcome, or the two surfaces disagree about the result
+// of the same operation, which is the one thing this whole module exists to
+// prevent.
 function endProcessAction(row) {
   if (row.isStory) return 'story';
   if (row.winId && wins[row.winId]) { closeWin(row.winId); return 'closed'; }
-  kernelSignal(row.pid, 'SIGTERM');
-  return 'signalled';
+  return kernelSignal(row.pid, 'SIGTERM') ? 'signalled' : 'refused';
 }
 // ── Blob persistence (base64 per-file, separate localStorage keys) ─
 const BLOB_PREFIX = 'sleepOS-blob:';
@@ -5305,7 +5329,7 @@ async function execScriptInstruction(inst, labels, state) {
         throw makeScriptError('Directory not found: ' + target, inst.lineNo);
       }
       const entries = await state.fs.list(target);
-      entries.forEach(entry => {
+      (entries || []).forEach(entry => {
         state.printFn(entry.type === 'dir' ? entry.name + '\\' : entry.name);
       });
       state.status = 0;
@@ -10707,6 +10731,15 @@ function openSysmon() {
         const db = document.getElementById('wb-' + dlgId);
         if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
       }
+      return;
+    }
+    if (action === 'refused') {
+      // kernelSignal said no - the kernel process itself (pid 1), or a
+      // process that already exited between this row rendering and the
+      // click landing. Match the terminal's KILL wording for the identical
+      // case (apps/terminal.js) so the two surfaces agree about what
+      // happened, instead of this button quietly doing nothing.
+      osAlert(`Access denied: PID ${selectedProc.pid} cannot be terminated.`, 'Access Denied', '⚠️');
       return;
     }
     // action is 'closed' or 'signalled': endProcessAction already told the

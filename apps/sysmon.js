@@ -142,6 +142,15 @@ function openSysmon() {
       }
       return;
     }
+    if (action === 'refused') {
+      // kernelSignal said no - the kernel process itself (pid 1), or a
+      // process that already exited between this row rendering and the
+      // click landing. Match the terminal's KILL wording for the identical
+      // case (apps/terminal.js) so the two surfaces agree about what
+      // happened, instead of this button quietly doing nothing.
+      osAlert(`Access denied: PID ${selectedProc.pid} cannot be terminated.`, 'Access Denied', '⚠️');
+      return;
+    }
     // action is 'closed' or 'signalled': endProcessAction already told the
     // window manager or the kernel what to do.
     selectedProc = null;

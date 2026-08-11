@@ -419,7 +419,7 @@ async function execScriptInstruction(inst, labels, state) {
         throw makeScriptError('Directory not found: ' + target, inst.lineNo);
       }
       const entries = await state.fs.list(target);
-      entries.forEach(entry => {
+      (entries || []).forEach(entry => {
         state.printFn(entry.type === 'dir' ? entry.name + '\\' : entry.name);
       });
       state.status = 0;
