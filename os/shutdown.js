@@ -128,6 +128,17 @@ function doShutdown() {
     </div>`;
 }
 
+// How long the shutdown screen is held before the machine actually goes.
+//
+// The floor is the old fixed value, and it is what runs whenever the jingle
+// cannot play - muted, never unlocked, tab hidden. Below it the log is gone
+// before it can be read.
+const SHUTDOWN_MIN_HOLD_MS = 3200;
+// A beat of quiet after the last note, so the screen does not vanish on it.
+const SHUTDOWN_TAIL_MS = 350;
+// Nothing may wedge a power-off. If the sound never reports back, this fires.
+const SHUTDOWN_MAX_HOLD_MS = 12000;
+
 function confirmShutdown() {
   const sel = document.getElementById('shutdown-sel');
   const val = sel ? sel.value : 'back';
@@ -140,7 +151,8 @@ function confirmShutdown() {
   }
 
   stopSoundLoop('ambience', { fade: 0.9 });
-  playSound('shutdown');
+  const startedAt = Date.now();
+  const jingle = playSound('shutdown');
 
   const bios = document.getElementById('bios');
   bios.style.display = 'flex'; bios.style.opacity = '0'; bios.style.transition = 'opacity 0.6s';
@@ -159,11 +171,72 @@ Saving system state...                   [OK]
   document.getElementById('desktop').style.display = 'none';
   document.getElementById('taskbar').style.display = 'none';
   setTimeout(() => { bios.style.opacity = '1'; }, 30);
+
+  let powered = false;
+  const powerOff = () => {
+    if (powered) return;
+    powered = true;
+    if (val === 'back') { window.location.href = '/'; return; }
+    if (val === 'restart') { window.location.href = 'sleep-os.html'; return; }
+    closeSleepOSTab();
+  };
+
+  // Restart and Return navigate somewhere the user is waiting on, and the
+  // navigation tears the AudioContext down anyway, so holding six seconds for a
+  // jingle that dies at the page boundary would just be six seconds of nothing.
+  // Shutting down is the one exit with nothing after it, so it gets the whole
+  // sound.
+  if (val !== 'off') {
+    setTimeout(powerOff, SHUTDOWN_MIN_HOLD_MS);
+    return;
+  }
+  jingle.then(ms => {
+    // Measured from before the sound was requested: the first play of the
+    // jingle waits on a fetch and a decode, and that time is part of the hold
+    // the user is already watching, not extra on top of it.
+    const hold = Math.max(SHUTDOWN_MIN_HOLD_MS, ms + SHUTDOWN_TAIL_MS);
+    setTimeout(powerOff, Math.max(0, hold - (Date.now() - startedAt)));
+  });
+  setTimeout(powerOff, SHUTDOWN_MAX_HOLD_MS);
+}
+
+// window.close() only works on a tab that script opened. Every current browser
+// silently refuses it anywhere else - no exception to catch, no way to ask in
+// advance - so on a tab the user opened themselves this does nothing at all,
+// which is what "shut down" has been doing all along.
+//
+// The only detection available is noticing we are still running a moment later,
+// and the honest thing to show then is the screen every machine of this vintage
+// ended on.
+function closeSleepOSTab() {
+  window.close();
+  setTimeout(showSafeToTurnOff, 500);
+}
+
+let safeToTurnOffShown = false;
+function showSafeToTurnOff() {
+  const bios = document.getElementById('bios');
+  if (!bios || safeToTurnOffShown) return;
+  // Re-entry would stack a second pair of wake listeners while the first pair
+  // is already past its guard window, so the next input would reboot instantly
+  // instead of being swallowed.
+  safeToTurnOffShown = true;
+  bios.style.transition = 'none';
+  bios.style.opacity = '1';
+  bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);text-align:center;padding:2rem;">
+<span style="display:block;font-size:22px;color:#ffa733;line-height:1.6;">It's now safe to turn off<br>your computer.</span>
+<span style="display:block;margin-top:2.5rem;font-size:11px;color:#4a4a4a;">press any key to restart</span>
+</div>`;
+  // A real machine needed the power switch. A browser tab that cannot be closed
+  // and cannot be left is just broken, so the power switch is any key.
+  const restart = () => {
+    try { sessionStorage.setItem(FORCE_BOOT_SESSION_KEY, '1'); } catch (e) {}
+    window.location.replace('sleep-os.html');
+  };
   setTimeout(() => {
-    if (val === 'back') window.location.href = '/';
-    else if (val === 'restart') window.location.href = 'sleep-os.html';
-    else window.close();
-  }, 3200);
+    document.addEventListener('keydown', restart, { once: true });
+    document.addEventListener('pointerdown', restart, { once: true });
+  }, 600);
 }
 
 // ─────────────────────────────────────────────────────────────────

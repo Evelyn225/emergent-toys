@@ -142,14 +142,24 @@ function loadSound(name) {
 
 // Fire-and-forget one-shot. `volume` is a multiplier on the sound's entry in
 // SOUND_GAIN, for callers that vary intensity (see triggerGlitch).
+//
+// Returns a promise resolving to how many milliseconds the sound will play for,
+// or 0 if it did not play at all - for callers that need to sequence something
+// after it, like the shutdown flow holding the screen until the jingle is done.
+// Nearly every caller ignores it.
+//
+// It resolves when playback STARTS, not when it ends, and that is deliberate:
+// an `ended` event never arrives if a tab switch suspends the context mid-sound,
+// so a caller awaiting the end could wait forever. Resolving with the duration
+// up front lets the caller decide its own deadline against the wall clock.
 function playSound(name, options = {}) {
-  if (!audioUnlocked || !systemAudioEnabled() || document.hidden) return;
+  if (!audioUnlocked || !systemAudioEnabled() || document.hidden) return Promise.resolve(0);
   const scale = Number.isFinite(Number(options.volume)) ? Number(options.volume) : 1;
-  loadSound(name).then(buffer => {
+  return loadSound(name).then(buffer => {
     // Re-checked after the decode: on the very first play of a sound this
     // resolves a frame or more later, by which time the tab may be hidden or
     // the user may have switched sound off.
-    if (!buffer || !audioUnlocked || !systemAudioEnabled() || document.hidden) return;
+    if (!buffer || !audioUnlocked || !systemAudioEnabled() || document.hidden) return 0;
     const src = audioCtx.createBufferSource();
     src.buffer = buffer;
     const gain = audioCtx.createGain();
@@ -158,6 +168,7 @@ function playSound(name, options = {}) {
     gain.connect(audioMaster);
     src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
     src.start();
+    return Math.round(buffer.duration * 1000);
   });
 }
 
