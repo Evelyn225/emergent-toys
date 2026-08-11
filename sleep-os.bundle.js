@@ -5290,6 +5290,21 @@ async function execScriptInstruction(inst, labels, state) {
       state.status = 0;
       return null;
     }
+    case 'dir': {
+      const target = resolvedArg || state.dirName;
+      // vfsListSync returns [] for a missing directory, so list alone cannot
+      // tell "empty" from "does not exist". dirExists is the only way to
+      // distinguish them, and both are syscalls in a worker.
+      if (!await state.fs.dirExists(target)) {
+        throw makeScriptError('Directory not found: ' + target, inst.lineNo);
+      }
+      const entries = await state.fs.list(target);
+      entries.forEach(entry => {
+        state.printFn(entry.type === 'dir' ? entry.name + '\\' : entry.name);
+      });
+      state.status = 0;
+      return null;
+    }
     case 'del':
     case 'rm': {
       if (!resolvedArg) throw makeScriptError('Usage: del <file>', inst.lineNo);

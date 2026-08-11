@@ -24,7 +24,16 @@ function loadWorker() {
     postMessage(m) {
       posted.push(m);
       if (m.type === 'syscall' && m.name !== 'exit') {
-        ctx.sysHandleReply({ seq: m.seq, ok: true, value: m.name === 'write' ? true : null });
+        let value = null;
+        if (m.name === 'write') value = true;
+        else if (m.name === 'dirExists') value = true;
+        else if (m.name === 'list') {
+          value = [
+            { name: 'NOTES.txt', type: 'file', kind: 'text', size: 12 },
+            { name: 'SUB', type: 'dir', kind: 'dir', size: 0 },
+          ];
+        }
+        ctx.sysHandleReply({ seq: m.seq, ok: true, value });
       }
     },
   };
@@ -55,4 +64,24 @@ test('execScript runs a filesystem-touching command against the worker manifest'
     sourceName: 'job.script',
   });
   assert.strictEqual(code, 0);
+});
+
+// DIR is the first script command to reach dirExists and list - before this
+// task neither syscall had a caller anywhere in the script language. Assert
+// on the syscall names actually emitted, not just the printed output, so a
+// regression that skips dirExists (and silently mistakes "empty" for
+// "missing") or skips list would fail here even if the output looked right.
+test('execScript runs DIR against the worker manifest, crossing the dirExists and list syscalls', async () => {
+  const { ctx, posted } = loadWorker();
+  const lines = [];
+  const code = await ctx.execScript('DIR', l => lines.push(l), {
+    fs: ctx.makeSyscallScriptFs(),
+    dirName: '',
+    sourceName: 'job.script',
+  });
+  assert.strictEqual(code, 0);
+  assert.deepStrictEqual(lines, ['NOTES.txt', 'SUB\\']);
+  const syscallNames = posted.filter(m => m.type === 'syscall').map(m => m.name);
+  assert.ok(syscallNames.includes('dirExists'), 'expected a dirExists syscall: ' + JSON.stringify(syscallNames));
+  assert.ok(syscallNames.includes('list'), 'expected a list syscall: ' + JSON.stringify(syscallNames));
 });
