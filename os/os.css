@@ -1342,15 +1342,16 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 }
 /* moon.png is a flat white silhouette on transparent, so it is used as a MASK
    rather than an <img>: the fill stays the sigil's green and the glow stays a
-   real shadow, which an <img> would have flattened to a white cut-out. It is
-   also the one image in os/icons/ that is not 32px pixel art - it is a
-   high-resolution shape scaled down, so it anti-aliases instead of snapping to
-   the grid, and it is deliberately kept out of the OS_ICONS registry. */
+   real shadow, which an <img> would have flattened to a white cut-out.
+   The art is a 29x32 sprite with hard on/off alpha, drawn at exactly 2x so the
+   staircase stays a staircase. It is the one image in os/icons/ that is not
+   32x32, so it is deliberately kept out of the OS_ICONS registry. */
 #sleep-sigil {
-  width:44px; height:48px;
+  width:58px; height:64px;
   background-color:#b6d2b0;
   -webkit-mask:url('icons/moon.png') no-repeat center / contain;
           mask:url('icons/moon.png') no-repeat center / contain;
+  image-rendering:pixelated;
   filter:drop-shadow(0 0 14px rgba(120,170,120,0.28));
 }
 #sleep-clock {
