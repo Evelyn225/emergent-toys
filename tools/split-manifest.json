@@ -5,6 +5,7 @@
   "os/storage-mem.js",
   "os/storage-local.js",
   "os/desktop-model.js",
+  "os/programs.js",
   "os/registry.js",
   "os/audio.js",
   "os/bios.js",
