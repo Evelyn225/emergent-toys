@@ -10674,66 +10674,33 @@ function openTerminal(startDir, initialCommand) {
     return [value];
   }
 
-  function findTerminalProject(key) {
-    return PROJECTS.find(p =>
-      p.file.toLowerCase() === key ||
-      p.file.toLowerCase().replace('.html', '') === key ||
-      p.name.toLowerCase() === key ||
-      p.name.toLowerCase().replace(/ /g, '-') === key
-    );
-  }
-
+  // Resolution goes through os/programs.js, which searches the current
+  // directory first and then each PATH entry. The `launchers` map that used to
+  // live here was one of three lists of the same programs; it is gone, and the
+  // launch banners and the daemon's 320ms beat moved into the registry with
+  // the programs they belong to.
   function launchTerminalTarget(rawTarget) {
-    const key = resolveShellText(rawTarget).trim().toLowerCase();
+    const key = resolveShellText(rawTarget).trim();
     if (!key) return false;
-    if (key === 'void.tmp' && daemonStory.endingReached) {
+    // Checked before resolution so the message is about the story, not about
+    // PATH. void.tmp is already absent from the root set after the ending, so
+    // without this the player would get "not recognized" for a file the story
+    // says was removed.
+    if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
       print('void.tmp is no longer present.');
       return true;
     }
-
-    const openExplorerAtCwd = () => openExplorer(cwd || '');
-    const launchers = {
-      'welcome.readme': { lines: ['Opening WELCOME.README...'], action: openWelcome },
-      welcome: { lines: ['Opening WELCOME.README...'], action: openWelcome },
-      'notepad.exe': { lines: ['Opening Notepad...'], action: () => openNotepad(undefined, cwd) },
-      notepad: { lines: ['Opening Notepad...'], action: () => openNotepad(undefined, cwd) },
-      'terminal.exe': { lines: ['TERMINAL.exe is already running.', 'You are inside it.'] },
-      terminal: { lines: ['TERMINAL.exe is already running.', 'You are inside it.'] },
-      'explorer.exe': { lines: ['Opening File Explorer...'], action: openExplorerAtCwd },
-      explorer: { lines: ['Opening File Explorer...'], action: openExplorerAtCwd },
-      files: { lines: ['Opening Files...'], action: openFiles },
-      'sysmon.exe': { lines: ['Starting SYSMON.exe...'], action: openSysmon },
-      sysmon: { lines: ['Starting SYSMON.exe...'], action: openSysmon },
-      'browser.exe': { lines: ['Starting BROWSER.exe...'], action: openBrowser },
-      browser: { lines: ['Starting BROWSER.exe...'], action: openBrowser },
-      'defrag.exe': { lines: ['Starting DEFRAG.exe...'], action: openDefrag },
-      defrag: { lines: ['Starting DEFRAG.exe...'], action: openDefrag },
-      'calc.exe': { lines: ['Starting CALC.exe...'], action: openCalculator },
-      calc: { lines: ['Starting CALC.exe...'], action: openCalculator },
-      'regedit.exe': { lines: ['Starting REGEDIT.exe...'], action: openRegedit },
-      regedit: { lines: ['Starting REGEDIT.exe...'], action: openRegedit },
-      'daemon.core': {
-        lines: ['Opening daemon.core...'],
-        action: openDaemon,
-        delay: 320,
-      },
-      'void.tmp': { lines: ['Opening void.tmp...'], action: openVoid },
-      '?????.exe': { lines: ['Executing ?????.exe...'], action: openUnknown },
-      '?????': { lines: ['Executing ?????.exe...'], action: openUnknown },
-    };
-
-    const entry = launchers[key];
-    if (entry) {
-      (entry.lines || []).forEach(line => print(line));
-      if (entry.action) setTimeout(entry.action, entry.delay ?? 300);
+    const hit = programResolve(key, cwd, shellVars.PATH);
+    if (!hit) return false;
+    const program = hit.program;
+    // TERMINAL.exe resolving from inside the terminal is the one program whose
+    // launch is a message rather than an action.
+    if (program.selfLines) {
+      program.selfLines.forEach(line => print(line));
       return true;
     }
-
-    const project = findTerminalProject(key);
-    if (!project) return false;
-    print(`Launching ${project.name}...`);
-    print('Opening in new tab.');
-    setTimeout(() => window.open(project.file, '_blank'), 400);
+    program.lines.forEach(line => print(line));
+    if (program.open) setTimeout(() => program.open({ cwd }), program.delay);
     return true;
   }
 
@@ -11460,7 +11427,16 @@ function openTerminal(startDir, initialCommand) {
         // launched directly
       } else {
         print(`'${parts[0]}' is not recognized as an internal or external command.`);
-        print('Type HELP for a list of commands, or DIR to list executables.');
+        // A player who narrows PATH and then gets a generic "not recognized"
+        // concludes the OS is broken rather than that they changed it. Naming
+        // the directory the program is actually in is the whole payoff for
+        // making PATH real, so it is not an optional nicety.
+        const elsewhere = programFindAnywhere(resolveShellText(parts[0]).trim());
+        if (elsewhere) {
+          print(`${elsewhere.program.name} exists in ${programDisplayDir(elsewhere.dir)}, which is not on PATH.`);
+        } else {
+          print('Type HELP for a list of commands, or DIR to list executables.');
+        }
       }
     } catch (err) {
       if (!isAbortError(err)) print(err.message || String(err), '#ff4444');
