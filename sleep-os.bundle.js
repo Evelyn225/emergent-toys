@@ -11420,10 +11420,26 @@ function openTerminal(startDir, initialCommand) {
         // no-op
       } else if (CMDS[cmd]) {
         await CMDS[cmd](args);
-      } else if (exeAlias && CMDS[exeAlias]) {
+      } else if (args && exeAlias && CMDS[exeAlias]) {
+        // A .exe name given WITH arguments (NOTEPAD.exe README.txt) is asking
+        // the builtin to open a specific file - the registry launcher takes
+        // no arguments, so this has always gone straight to the builtin and
+        // was never PATH-gated. Handled before the launcher branch so the
+        // !args guard below can stay a plain PATH-resolution attempt.
         await CMDS[exeAlias](args);
       } else if (!args && launchTerminalTarget(parts[0])) {
-        // launched directly
+        // A bare name ending in .exe is unambiguously asking to run a
+        // program, so it goes through PATH resolution, and a resolution
+        // failure is final here - it must NOT fall back to a builtin alias.
+        // An earlier version of this reorder kept `exeAlias && CMDS[exeAlias]`
+        // as an unconditional branch below this one, so when PATH resolution
+        // failed, control fell through to it anyway: NOTEPAD.exe (which has
+        // both a CMDS.notepad builtin and a PATH-governed registry entry)
+        // kept opening Notepad even with PATH narrowed away from it,
+        // reintroducing the exact bug this reorder exists to fix. Bare
+        // NOTEPAD still hits CMDS[cmd] above and keeps builtin precedence,
+        // same as cmd.exe treats a bare name vs one with an explicit
+        // extension.
       } else {
         print(`'${parts[0]}' is not recognized as an internal or external command.`);
         // A player who narrows PATH and then gets a generic "not recognized"
