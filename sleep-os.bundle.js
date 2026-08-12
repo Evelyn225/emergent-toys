@@ -11420,26 +11420,27 @@ function openTerminal(startDir, initialCommand) {
         // no-op
       } else if (CMDS[cmd]) {
         await CMDS[cmd](args);
-      } else if (args && exeAlias && CMDS[exeAlias]) {
-        // A .exe name given WITH arguments (NOTEPAD.exe README.txt) is asking
-        // the builtin to open a specific file - the registry launcher takes
-        // no arguments, so this has always gone straight to the builtin and
-        // was never PATH-gated. Handled before the launcher branch so the
-        // !args guard below can stay a plain PATH-resolution attempt.
-        await CMDS[exeAlias](args);
       } else if (!args && launchTerminalTarget(parts[0])) {
         // A bare name ending in .exe is unambiguously asking to run a
-        // program, so it goes through PATH resolution, and a resolution
-        // failure is final here - it must NOT fall back to a builtin alias.
-        // An earlier version of this reorder kept `exeAlias && CMDS[exeAlias]`
-        // as an unconditional branch below this one, so when PATH resolution
-        // failed, control fell through to it anyway: NOTEPAD.exe (which has
-        // both a CMDS.notepad builtin and a PATH-governed registry entry)
-        // kept opening Notepad even with PATH narrowed away from it,
-        // reintroducing the exact bug this reorder exists to fix. Bare
-        // NOTEPAD still hits CMDS[cmd] above and keeps builtin precedence,
-        // same as cmd.exe treats a bare name vs one with an explicit
-        // extension.
+        // program, so it goes through PATH resolution first.
+      } else if (exeAlias && CMDS[exeAlias] && (args || !programFindAnywhere(parts[0]))) {
+        // Whether the trailing alias branch may still catch a PATH miss
+        // depends on whether the name is a real program at all, not just on
+        // whether the launcher branch above fired.
+        //   - A name WITH arguments (NOTEPAD.exe README.txt) always reaches
+        //     here directly - the registry launcher takes no arguments, so
+        //     this was never PATH-gated to begin with.
+        //   - A bare name whose launcher attempt above failed reaches here
+        //     only if programFindAnywhere says it isn't a real program (DIR,
+        //     HELP, VER, DATE, ... have no registry entry - there is nothing
+        //     for PATH to govern, so DIR.exe keeps working exactly like
+        //     bare DIR always has). If it IS a real program (NOTEPAD.exe),
+        //     the failed PATH lookup is the final answer and must not fall
+        //     back to the same-named builtin - an earlier version of this
+        //     reorder let that fallback stay unconditional, so a PATH-denied
+        //     NOTEPAD.exe kept opening Notepad anyway, reintroducing the
+        //     exact bug this reorder exists to fix.
+        await CMDS[exeAlias](args);
       } else {
         print(`'${parts[0]}' is not recognized as an internal or external command.`);
         // A player who narrows PATH and then gets a generic "not recognized"
