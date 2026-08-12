@@ -49,6 +49,22 @@ const OS_ICONS = {
   star:          'star.png',
   network:       'network.png',
   standby:       'standby_icon.png',
+  // ── Registry value types ──────────────────────────────────────
+  // Real regedit draws string values with an "ab" glyph and numeric ones with
+  // the binary glyph, which is why REG_DWORD gets the binary icon rather than
+  // an icon of its own: the registry only holds REG_SZ and REG_DWORD, and
+  // lumping DWORD in with binary is what the OS being imitated actually does.
+  'regedit-string': 'regedit_string.png',
+  'regedit-binary': 'regedit_binary.png',
+  // ── Web links (browser start page) ────────────────────────────
+  wikipedia:         'wikipedia.png',
+  'internet-archive': 'internet_archive.png',
+  poolsuite:         'poolsuite-fm.png',
+  // Keys are matched by test/icon-assets.test.cjs with [a-z][a-z-]* - no
+  // digits - so the win98icons.alexmeub.com link cannot be keyed 'win98icons'.
+  // A key with a digit is silently skipped by the registry parser there, which
+  // would drop the file out of every icon guard at once.
+  'win-icons':       'win98icons.png',
   // ── Dialogs ───────────────────────────────────────────────────
   warning:       'warning.png',
   error:         'restricted.png',
@@ -1500,10 +1516,16 @@ function openRecycleBin() {
   openExplorer('RECYCLE');
 }
 
+// `homeIcon` is an icon token rather than an HTML entity now, and buildHome
+// (apps/browser.js) runs it through iconMarkup. It stays a per-entry field
+// rather than being derived from the URL because these are the only favourites
+// that get branded art: one a player adds themselves has no icon to use, and
+// falls back to the same star the project links carry.
 const DEFAULT_BROWSER_FAVORITES = [
-  { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: '&#128214;' },
-  { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: '&#128230;' },
-  { title: 'Poolsuite FM',      url: 'https://poolsuite.net', homeIcon: '&#128251;' },
+  { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: 'icon:wikipedia' },
+  { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: 'icon:internet-archive' },
+  { title: 'Poolsuite FM',      url: 'https://poolsuite.net', homeIcon: 'icon:poolsuite' },
+  { title: 'Win98 Icons',       url: 'https://win98icons.alexmeub.com', homeIcon: 'icon:win-icons' },
 ];
 const DEFAULT_BROWSER_FAVORITE_URLS = new Set(DEFAULT_BROWSER_FAVORITES.map(fav => fav.url.toLowerCase()));
 function normalizeFavoriteEntry(entry) {
@@ -12437,7 +12459,11 @@ function openBrowser() {
     const webLinks = DEFAULT_BROWSER_FAVORITES.map(fav => {
       const safeUrl = JSON.stringify(fav.url).replace(/</g, '\u003c');
       const safeTitle = escHtml(fav.title);
-      return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${fav.homeIcon} ${safeTitle}</a>`;
+      // iconMarkup emits <img class="os-icon">, but this document is an iframe
+      // srcdoc with its own stylesheet - os/os.css never reaches it - so .lnk img
+      // below is what sizes these, not the .os-icon rule. The relative src
+      // resolves because a srcdoc document inherits its parent's base URL.
+      return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${iconMarkup(fav.homeIcon)}${safeTitle}</a>`;
     }).join('');
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
 @font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
@@ -12446,9 +12472,17 @@ function openBrowser() {
       h1{background:#000080;color:#fff;margin:0;padding:6px 12px;font-size:13px;}
       .sec{padding:6px 12px;}.sec h2{font-size:11px;margin:6px 0 4px;border-bottom:1px solid #808080;}
       .grid{display:flex;flex-wrap:wrap;gap:3px;}
+      /* line-height matches the 16px icon so a chip carrying one is exactly as
+         tall as a chip carrying only an emoji. Without it the Web row sits 1px
+         taller than the Projects row above it. */
       .lnk{background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;
-           padding:1px 7px;font-size:11px;text-decoration:none;color:#000;display:inline-block;}
+           padding:1px 7px;font-size:11px;line-height:16px;text-decoration:none;color:#000;
+           display:inline-flex;align-items:center;gap:4px;}
       .lnk:hover{background:#000080;color:#fff;}
+      /* The web-link art is native 16x16, so this is a 1:1 draw and pixelated
+         keeps it exact. The star on project links is a text glyph, not an img,
+         and is unaffected by this rule. */
+      .lnk img{width:16px;height:16px;image-rendering:pixelated;flex-shrink:0;}
     </style></head><body>
     <h1>&#127760; sleepWEB &#8212; Start Page</h1>
     <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${projectLinks}</div></div>
@@ -13052,7 +13086,12 @@ function openRegedit() {
       const locked = isLockedRegValue(hive, keyPath, valName);
       const tr = document.createElement('tr');
       tr.className = 'reg-val-row';
-      tr.innerHTML = '<td class="reg-val-name">' + iconMarkup('icon:text') + escHtml(valName) + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
+      // Value rows used to draw the generic text-file icon whatever the type
+      // was, which made the type column the only way to tell a string from a
+      // number. Real regedit distinguishes them in the icon, so the type is
+      // readable at a glance down the column.
+      const valIcon = entry.type === 'REG_SZ' ? 'icon:regedit-string' : 'icon:regedit-binary';
+      tr.innerHTML = '<td class="reg-val-name">' + iconMarkup(valIcon) + escHtml(valName) + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
       tr.addEventListener('dblclick', () => {
         if (locked) {
           showLockedRegValueNotice(valName);

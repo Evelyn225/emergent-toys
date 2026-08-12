@@ -84,7 +84,12 @@ function openRegedit() {
       const locked = isLockedRegValue(hive, keyPath, valName);
       const tr = document.createElement('tr');
       tr.className = 'reg-val-row';
-      tr.innerHTML = '<td class="reg-val-name">' + iconMarkup('icon:text') + escHtml(valName) + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
+      // Value rows used to draw the generic text-file icon whatever the type
+      // was, which made the type column the only way to tell a string from a
+      // number. Real regedit distinguishes them in the icon, so the type is
+      // readable at a glance down the column.
+      const valIcon = entry.type === 'REG_SZ' ? 'icon:regedit-string' : 'icon:regedit-binary';
+      tr.innerHTML = '<td class="reg-val-name">' + iconMarkup(valIcon) + escHtml(valName) + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
       tr.addEventListener('dblclick', () => {
         if (locked) {
           showLockedRegValueNotice(valName);

@@ -383,10 +383,16 @@ function openRecycleBin() {
   openExplorer('RECYCLE');
 }
 
+// `homeIcon` is an icon token rather than an HTML entity now, and buildHome
+// (apps/browser.js) runs it through iconMarkup. It stays a per-entry field
+// rather than being derived from the URL because these are the only favourites
+// that get branded art: one a player adds themselves has no icon to use, and
+// falls back to the same star the project links carry.
 const DEFAULT_BROWSER_FAVORITES = [
-  { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: '&#128214;' },
-  { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: '&#128230;' },
-  { title: 'Poolsuite FM',      url: 'https://poolsuite.net', homeIcon: '&#128251;' },
+  { title: 'Wikipedia: Random', url: 'https://en.wikipedia.org/wiki/Special:Random', homeIcon: 'icon:wikipedia' },
+  { title: 'Internet Archive',  url: 'https://archive.org', homeIcon: 'icon:internet-archive' },
+  { title: 'Poolsuite FM',      url: 'https://poolsuite.net', homeIcon: 'icon:poolsuite' },
+  { title: 'Win98 Icons',       url: 'https://win98icons.alexmeub.com', homeIcon: 'icon:win-icons' },
 ];
 const DEFAULT_BROWSER_FAVORITE_URLS = new Set(DEFAULT_BROWSER_FAVORITES.map(fav => fav.url.toLowerCase()));
 function normalizeFavoriteEntry(entry) {

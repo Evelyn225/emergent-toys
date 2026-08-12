@@ -23,7 +23,11 @@ function openBrowser() {
     const webLinks = DEFAULT_BROWSER_FAVORITES.map(fav => {
       const safeUrl = JSON.stringify(fav.url).replace(/</g, '\u003c');
       const safeTitle = escHtml(fav.title);
-      return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${fav.homeIcon} ${safeTitle}</a>`;
+      // iconMarkup emits <img class="os-icon">, but this document is an iframe
+      // srcdoc with its own stylesheet - os/os.css never reaches it - so .lnk img
+      // below is what sizes these, not the .os-icon rule. The relative src
+      // resolves because a srcdoc document inherits its parent's base URL.
+      return `<a class="lnk" href="#" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${iconMarkup(fav.homeIcon)}${safeTitle}</a>`;
     }).join('');
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
 @font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
@@ -32,9 +36,17 @@ function openBrowser() {
       h1{background:#000080;color:#fff;margin:0;padding:6px 12px;font-size:13px;}
       .sec{padding:6px 12px;}.sec h2{font-size:11px;margin:6px 0 4px;border-bottom:1px solid #808080;}
       .grid{display:flex;flex-wrap:wrap;gap:3px;}
+      /* line-height matches the 16px icon so a chip carrying one is exactly as
+         tall as a chip carrying only an emoji. Without it the Web row sits 1px
+         taller than the Projects row above it. */
       .lnk{background:#fff;border:2px solid;border-color:#fff #808080 #808080 #fff;
-           padding:1px 7px;font-size:11px;text-decoration:none;color:#000;display:inline-block;}
+           padding:1px 7px;font-size:11px;line-height:16px;text-decoration:none;color:#000;
+           display:inline-flex;align-items:center;gap:4px;}
       .lnk:hover{background:#000080;color:#fff;}
+      /* The web-link art is native 16x16, so this is a 1:1 draw and pixelated
+         keeps it exact. The star on project links is a text glyph, not an img,
+         and is unaffected by this rule. */
+      .lnk img{width:16px;height:16px;image-rendering:pixelated;flex-shrink:0;}
     </style></head><body>
     <h1>&#127760; sleepWEB &#8212; Start Page</h1>
     <div class="sec"><h2>sleepOS Projects</h2><div class="grid">${projectLinks}</div></div>

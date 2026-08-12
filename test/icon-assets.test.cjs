@@ -47,13 +47,55 @@ test('every icon in OS_ICONS exists in os/icons', () => {
 // The CSS sizes every slot at 16px or 32px and leans on those being a whole
 // 1:1 or 2:1 of the source. Art at any other size resamples onto fractions of a
 // pixel, which is the one thing the whole set is meant to avoid.
-test('every icon is 32x32', () => {
+//
+// These keys are 16x16 instead, and that is not a relaxation of the rule above
+// - it is the same rule. They are list-row art that only ever lands in a 16px
+// slot (`.reg-val-name .os-icon` for registry values, and the browser start
+// page's own `.lnk img`), where 16x16 draws 1:1 and is strictly sharper than
+// downscaling 32x32 art would be.
+//
+// The constraint that comes with them: NEVER use one of these in a 32px slot -
+// a window titlebar, a desktop icon, a dialog. There it would be upscaled 2:1
+// and read as chunky beside native 32x32 neighbours. Adding a key here is a
+// promise about where it gets used, so add one only alongside the 16px call
+// site that needs it.
+const SMALL_16PX_ICONS = new Set([
+  'regedit-string',
+  'regedit-binary',
+  'wikipedia',
+  'internet-archive',
+  'poolsuite',
+  'win-icons',
+]);
+
+test('every icon is 32x32, or 16x16 if it is declared list-row art', () => {
   for (const { key, file } of registry()) {
     const buf = fs.readFileSync(path.join(ROOT, 'os/icons', file));
     assert.strictEqual(buf.toString('ascii', 12, 16), 'IHDR', `os/icons/${file} is not a PNG`);
     const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
-    assert.strictEqual(`${w}x${h}`, '32x32', `${key} (os/icons/${file}) is ${w}x${h}, not 32x32`);
+    const expected = SMALL_16PX_ICONS.has(key) ? '16x16' : '32x32';
+    assert.strictEqual(`${w}x${h}`, expected,
+      `${key} (os/icons/${file}) is ${w}x${h}, not ${expected}` +
+      (expected === '32x32' ? ' - add it to SMALL_16PX_ICONS only if it is 16px list-row art' : ''));
   }
+});
+
+// A 16x16 icon in a 32px slot is upscaled 2:1 and looks chunky next to the
+// native 32x32 set, so the promise made by SMALL_16PX_ICONS is enforced rather
+// than trusted. mkWin's `icon:` argument and DESKTOP_ICONS entries are the two
+// 32px slots a small icon could plausibly reach by mistake.
+test('no 16x16 icon is used in a 32px slot', () => {
+  const bad = [];
+  for (const { rel, text } of sources()) {
+    if (rel === 'os/icons.js') continue;
+    text.split('\n').forEach((line, i) => {
+      for (const m of line.matchAll(/'icon:([a-z-]+)'/g)) {
+        if (!SMALL_16PX_ICONS.has(m[1])) continue;
+        if (/\bmkWin\(|icon:\s*'icon:|DESKTOP_ICONS/.test(line)) bad.push(`${rel}:${i + 1} uses icon:${m[1]}`);
+      }
+    });
+  }
+  assert.deepStrictEqual(bad, [], 'these put 16x16 list-row art into a 32px slot, where it upscales and looks chunky');
 });
 
 test('every icon: token used in the OS resolves to a registry key', () => {

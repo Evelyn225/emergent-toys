@@ -49,6 +49,22 @@ const OS_ICONS = {
   star:          'star.png',
   network:       'network.png',
   standby:       'standby_icon.png',
+  // ── Registry value types ──────────────────────────────────────
+  // Real regedit draws string values with an "ab" glyph and numeric ones with
+  // the binary glyph, which is why REG_DWORD gets the binary icon rather than
+  // an icon of its own: the registry only holds REG_SZ and REG_DWORD, and
+  // lumping DWORD in with binary is what the OS being imitated actually does.
+  'regedit-string': 'regedit_string.png',
+  'regedit-binary': 'regedit_binary.png',
+  // ── Web links (browser start page) ────────────────────────────
+  wikipedia:         'wikipedia.png',
+  'internet-archive': 'internet_archive.png',
+  poolsuite:         'poolsuite-fm.png',
+  // Keys are matched by test/icon-assets.test.cjs with [a-z][a-z-]* - no
+  // digits - so the win98icons.alexmeub.com link cannot be keyed 'win98icons'.
+  // A key with a digit is silently skipped by the registry parser there, which
+  // would drop the file out of every icon guard at once.
+  'win-icons':       'win98icons.png',
   // ── Dialogs ───────────────────────────────────────────────────
   warning:       'warning.png',
   error:         'restricted.png',
