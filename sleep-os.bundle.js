@@ -1123,7 +1123,6 @@ const PROJECTS = [
   { name: 'bug hotline',        emoji: '🐛', file: 'evenet.fun/critters.html' },
   { name: 'fireworks',          emoji: '🎆', file: 'evenet.fun/fireworks.html' },
   { name: 'pixel splatter',     emoji: '🔮', file: 'pixel-splatter.html' },
-  { name: 'anime hell',         emoji: '🔥', file: 'evenet.fun/hell.html' },
   { name: 'fluid',              emoji: '💧', file: 'evenet.fun/fluido.html' },
   { name: 'web wizard casino',  emoji: '🎰', file: 'evenet.fun/webwizardcasino.html' },
   { name: 'automata garden',    emoji: '🌱', file: 'evenet.fun/automata-garden.html' },

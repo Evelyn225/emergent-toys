@@ -86,11 +86,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://evenet.fun/hell.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://evenet.fun/lissajous.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
