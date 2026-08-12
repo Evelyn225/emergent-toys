@@ -24,6 +24,44 @@ const KERNEL_PID = 1;
 // does not just look untidy - it breaks a story beat.
 const KERNEL_FIRST_USER_PID = 2000;
 
+// The machine's identity, and the root of the environment tree. This used to
+// be DEFAULT_SHELL_VARS inside apps/terminal.js's openTerminal closure, which
+// meant the OS's own name and PATH lived inside one window's local scope and
+// no other process could see them. Every process inherits from its parent and
+// every chain ends here, at pid 1.
+//
+// PATH is read by programResolve (os/programs.js). It is no longer decorative:
+// changing it changes what the terminal can find.
+const KERNEL_DEFAULT_ENV = {
+  COMPUTERNAME: 'SOMA-686',
+  USERNAME: 'VISITOR',
+  OS: 'sleepOS 0.9b2',
+  SOUL_INTEGRITY: '87',
+  DAEMON_COUNT: '7',
+  DAEMON_KNOWN: '4',
+  TEMPORAL_DRIFT: '+/-2.3yr',
+  VOID_PRESSURE: '12',
+  OBSERVER_COUNT: '[classified]',
+  PATH: 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+};
+
+// A copy every time. Handing out the shared table would let one process's SET
+// rewrite the defaults every later process inherits.
+function kernelDefaultEnv() {
+  return Object.assign({}, KERNEL_DEFAULT_ENV);
+}
+
+// Shallow copy of a flat string map, which is what exec does: a child gets the
+// parent's environment as it stood at spawn, and can never write back into it.
+// Falls back to the kernel's own environment when the parent is gone or was
+// never given - an orphan gets the machine defaults rather than nothing.
+function kernelInheritEnv(parentPid) {
+  const parent = _kernelProcs.get(parentPid);
+  if (parent && parent.env) return Object.assign({}, parent.env);
+  const root = _kernelProcs.get(KERNEL_PID);
+  return root && root.env ? Object.assign({}, root.env) : kernelDefaultEnv();
+}
+
 function kernelInit() {
   _kernelProcs = new Map();
   _kernelByWinId = new Map();
@@ -32,7 +70,7 @@ function kernelInit() {
   const pid = _kernelAllocPid();
   _kernelProcs.set(pid, {
     pid, name: 'kernel', kind: 'system', state: 'running', parentPid: 0,
-    cwd: '', env: {}, worker: null, winId: null, exitCode: null, startedAt: Date.now(),
+    cwd: '', env: kernelDefaultEnv(), worker: null, winId: null, exitCode: null, startedAt: Date.now(),
   });
   _kernelNextPid = KERNEL_FIRST_USER_PID;
 }
@@ -48,7 +86,7 @@ function kernelRegisterSystem(winId, name) {
   const pid = _kernelAllocPid();
   _kernelProcs.set(pid, {
     pid, name, kind: 'system', state: 'running', parentPid: KERNEL_PID,
-    cwd: '', env: {}, worker: null, winId, exitCode: null, startedAt: Date.now(),
+    cwd: '', env: kernelInheritEnv(KERNEL_PID), worker: null, winId, exitCode: null, startedAt: Date.now(),
   });
   _kernelByWinId.set(winId, pid);
   return pid;
@@ -153,9 +191,10 @@ function kernelWait(pid) {
 // terminate, so the table can be exercised without a browser.
 function __spawnForTest(worker, name, parentPid) {
   const pid = _kernelAllocPid();
+  const parent = parentPid || KERNEL_PID;
   _kernelProcs.set(pid, {
-    pid, name, kind: 'user', state: 'running', parentPid: parentPid || KERNEL_PID,
-    cwd: '', env: {}, worker, winId: null, exitCode: null, startedAt: Date.now(),
+    pid, name, kind: 'user', state: 'running', parentPid: parent,
+    cwd: '', env: kernelInheritEnv(parent), worker, winId: null, exitCode: null, startedAt: Date.now(),
   });
   return pid;
 }
@@ -301,9 +340,11 @@ async function kernelSpawn(path, argv, opts) {
   const source = await vfsReadFile(st.name, st.dirName);
   const worker = new Worker(WORKER_BUNDLE_URL);
   const pid = _kernelAllocPid();
+  const parentPid = opts.parentPid || KERNEL_PID;
+  const env = kernelInheritEnv(parentPid);
   _kernelProcs.set(pid, {
     pid, name: st.name, kind: 'user', state: 'running',
-    parentPid: opts.parentPid || KERNEL_PID, cwd: st.dirName, env: {},
+    parentPid, cwd: st.dirName, env,
     worker, winId: null, exitCode: null, startedAt: Date.now(),
     onStdout: opts.onStdout || null, onStderr: opts.onStderr || null,
   });
@@ -311,6 +352,12 @@ async function kernelSpawn(path, argv, opts) {
   // A worker that throws before its first syscall would otherwise stay running
   // forever in the table.
   worker.onerror = e => { _kernelWrite(_kernelProcs.get(pid) || {}, 'stderr', e.message || 'worker error'); kernelExit(pid, 1); };
-  worker.postMessage({ type: 'init', source, name: st.name, cwd: st.dirName, argv });
+  // env crosses at init rather than being fetched with the getenv syscall on
+  // demand: scriptResolveText (os/script/interp.js) expands $name with a
+  // synchronous object lookup inside a regex replace, so a lazy read would
+  // mean making variable expansion async through the whole interpreter in both
+  // realms. Copying at exec time is what real systems do anyway, and it hands
+  // the child a private copy for free.
+  worker.postMessage({ type: 'init', source, name: st.name, cwd: st.dirName, argv, env });
   return pid;
 }

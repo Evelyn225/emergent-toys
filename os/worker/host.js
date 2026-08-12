@@ -39,6 +39,13 @@ self.onmessage = async (e) => {
       dirName: msg.cwd,
       sourceName: msg.name,
       args: msg.argv || [],
+      // The inherited environment arrives as ordinary script variables, so a
+      // spawned script reads $PATH and $USERNAME with no new syntax. This is
+      // already a private copy (kernelInheritEnv copied it), and Object.assign
+      // onto a null-prototype object matches what execScript builds when no
+      // vars are supplied - see os/script/interp.js's `options.vars ||
+      // Object.create(null)`.
+      vars: Object.assign(Object.create(null), msg.env || {}),
       signal,
     });
   } catch (err) {
