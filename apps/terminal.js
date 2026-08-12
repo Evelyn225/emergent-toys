@@ -66,19 +66,25 @@ function openTerminal(startDir, initialCommand) {
 
   let cmdHistory = [], histIdx = -1;
   let cwd = startDir ? startDir.toUpperCase() : ''; // '' = root, 'DOCS' = DOCS dir, etc.
-  const DEFAULT_SHELL_VARS = {
-    COMPUTERNAME: 'SOMA-686',
-    USERNAME: 'VISITOR',
-    OS: 'sleepOS 0.9b2',
-    SOUL_INTEGRITY: '87',
-    DAEMON_COUNT: '7',
-    DAEMON_KNOWN: '4',
-    TEMPORAL_DRIFT: '+/-2.3yr',
-    VOID_PRESSURE: '12',
-    OBSERVER_COUNT: '[classified]',
-    PATH: 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
-  };
-  let shellVars = Object.assign(Object.create(null), DEFAULT_SHELL_VARS);
+  // The environment is the terminal PROCESS's, not the terminal WINDOW's.
+  // shellVars is a live reference into the kernel process table, so SET, INC,
+  // INPUT and $var expansion all read and write the same object a spawned
+  // child will inherit - no copying, no syncing, and no second source of
+  // truth. The defaults live in os/kernel.js as KERNEL_DEFAULT_ENV.
+  //
+  // A consequence, and a deliberate one: closing the terminal destroys the
+  // process entry, so reopening it gets a fresh environment inherited from the
+  // kernel. A new shell does not remember the last shell's PATH. Persisting
+  // that would mean putting the environment in the registry, which is a
+  // different feature.
+  //
+  // The fallback covers callers that reach openTerminal without a registered
+  // window, which is what the test harness does.
+  const _termPid = typeof kernelPidForWin === 'function' ? kernelPidForWin('terminal') : null;
+  const _termProc = _termPid ? kernelGetProcess(_termPid) : null;
+  const shellVars = _termProc && _termProc.env
+    ? _termProc.env
+    : Object.assign(Object.create(null), kernelDefaultEnv());
   let promptOverride = '';
   let activeCommandController = null;
   let pendingRead = null;
@@ -357,53 +363,6 @@ function openTerminal(startDir, initialCommand) {
     return matches.length ? matches : [pattern];
   }
 
-  function buildHelpLines() {
-    return [
-      'Available commands:',
-      '  HELP                - show this help',
-      '  DIR, LS             - list directory',
-      '  CD [path]           - change directory',
-      '  MKDIR [name]        - create a directory',
-      '  TOUCH [name]        - create empty file',
-      '  ECHO [text]         - print text',
-      '  DEL, RM [file]      - delete a file or directory',
-      '  COPY [src] [dst]    - copy a file',
-      '  MOVE, MV            - move a file',
-      '  TYPE, CAT [file]    - read file contents',
-      '  GREP <pattern> [f]  - filter a file or piped text',
-      '  WC [file]           - count lines, words, bytes',
-      '  TREE                - directory tree',
-      '  PS                  - list running processes',
-      '  TASKKILL [pid]      - terminate a process',
-      '  IPCONFIG            - network configuration',
-      '  SET                 - show environment variables',
-      '  PING [host]         - ping a host',
-      '  SLEEP <ms>          - pause for a number of milliseconds',
-      '  VER                 - show OS version',
-      '  WHO, WHOAMI         - current user info',
-      '  DATE                - system date',
-      '  CLS                 - clear screen',
-      '  OPEN [file]         - open a file (image/video in viewer, text in editor)',
-      '  RUN <file>          - execute a .script file',
-      '  NOTEPAD [file]      - open Notepad (optionally open a file)',
-      '  START [program]     - run an executable or project',
-      '  EXIT                - close terminal',
-      '',
-      'Pipes and redirection:',
-      '  DIR | GREP txt',
-      '  CAT README.txt | NOTEPAD',
-      '  DIR > listing.txt',
-      '  CAT README.txt | GREP TODO >> notes.txt',
-      '',
-      'Scripting: see DOCS/SCRIPTING.txt  (CD DOCS, CAT SCRIPTING.txt)',
-      '  Scripts now support labels, goto, if, inc, and dec.',
-      '',
-      'You can also type executables directly:',
-      '  notepad.exe, sysmon.exe, welcome.readme, void.tmp, daemon.core, ?????.exe',
-      '  or any project name (try: fireworks, fluid, ...)',
-    ];
-  }
-
   function buildDirLines(args) {
     const targetArg = (args || '').trim();
     if (targetArg && /[*?]/.test(targetArg)) return expandGlob(targetArg);
@@ -473,21 +432,6 @@ function openTerminal(startDir, initialCommand) {
     return [
       'System date: ' + now.toDateString(),
       'NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.',
-    ];
-  }
-
-  function buildSetLines() {
-    return [
-      'COMPUTERNAME=SOMA-686',
-      'USERNAME=VISITOR',
-      'OS=sleepOS 0.9b2',
-      'SOUL_INTEGRITY=87',
-      'DAEMON_COUNT=7',
-      'DAEMON_KNOWN=4',
-      'TEMPORAL_DRIFT=+/-2.3yr',
-      'VOID_PRESSURE=12',
-      'OBSERVER_COUNT=[classified]',
-      'PATH=C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
     ];
   }
 
