@@ -38,10 +38,20 @@
 //
 // PHASE 6 SEAM: when executables become real VFS files (master spec phase 6),
 // programsInDir gains a vfsListSync pass yielding entries whose `open` spawns
-// the script. Nothing else here changes - programResolve, programPathDirs and
-// all four terminal commands work against whatever programsInDir returns. That
-// is why `open` is a closure rather than a name: a spawned .exe and a built-in
-// window have to sit in the same table.
+// the script. programResolve, programPathDirs and all four terminal commands
+// work against whatever programsInDir returns, so none of them need touching.
+// That is why `open` is a closure rather than a name: a spawned .exe and a
+// built-in window have to sit in the same table.
+//
+// ONE CONSUMER IS NOT COVERED BY THAT SENTENCE. openSystemFile
+// (os/desktop-model.js) also reads programsInDir(''), and it treats every
+// entry it gets back as GUI-launchable - `if (!program || !program.open)` is
+// its only gate. Harmless today, because every entry is a built-in with a real
+// `open`. The moment a vfsListSync pass starts contributing entries for
+// arbitrary root files, that call would make any root .txt or blob "launch"
+// and report success to Explorer's double-click (which ignores the return
+// value, so the failure is invisible there) and to the terminal's OPEN. Phase
+// 6 needs an executables-only filter at THAT call site, not only in here.
 
 // Keyed by uppercase name. ROOT_SYSTEM_FILE_META stays the source of which
 // programs exist at the root and of their DIR display metadata; this is the
