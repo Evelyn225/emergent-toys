@@ -537,6 +537,9 @@ function openTerminal(startDir, initialCommand) {
       '  KILL <pid> [/F]     - terminate a process (SIGTERM, or /F for SIGKILL)',
       '  IPCONFIG            - network configuration',
       '  SET [name=value]    - show or assign shell variables',
+      '  ENV                 - show the process environment',
+      '  PATH [value]        - show or set the executable search path',
+      '  WHERE <name>        - show which directory a program resolves from',
       '  INPUT <var> [text]  - read a line into a shell variable',
       '  INC, DEC <var> [n]  - adjust numeric shell variables',
       '  ADD, SUB, MUL, DIV, MOD - arithmetic on shell variables',
@@ -567,6 +570,7 @@ function openTerminal(startDir, initialCommand) {
       '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
       '  welcome.readme, void.tmp, daemon.core, ?????.exe',
       '  or any project name (try: fireworks, fluid, ...)',
+      '  Programs are found in the current directory first, then along PATH.',
     ];
   }
 
@@ -576,6 +580,34 @@ function openTerminal(startDir, initialCommand) {
     return Object.prototype.hasOwnProperty.call(shellVars, nameFilter)
       ? [`${nameFilter}=${shellVars[nameFilter]}`]
       : [`Variable not defined: ${nameFilter}`];
+  }
+
+  // The same table SET prints, under the name a person types. Delegating rather
+  // than re-listing shellVars is what stops the two from ever disagreeing about
+  // what the environment contains.
+  function buildEnvLines() {
+    return buildSetLines();
+  }
+
+  function buildWhereLines(rawArgs) {
+    const name = unquoteShellValue(resolveShellText(rawArgs)).trim();
+    if (!name) throw new Error('Usage: WHERE <name>');
+    const hit = programResolve(name, cwd, shellVars.PATH);
+    // The message where.exe gives, quoting and all: a player who recognises it
+    // learns the command behaves the way they already expect.
+    if (!hit) return [`INFO: Could not find "${name}".`];
+    return [programDisplayDir(hit.dir) + '\\' + hit.program.name];
+  }
+
+  // cmd.exe's PATH: bare prints, with a value assigns. Sugar over SET PATH=,
+  // and the thing a person actually types. Writes straight through shellVars,
+  // which is the terminal process's env, so a PATH set here is the same PATH
+  // programResolve reads and the same one a spawned child inherits.
+  function applyShellPath(rawArgs) {
+    const text = String(rawArgs ?? '').trim();
+    if (!text) return [`PATH=${shellVars.PATH === undefined ? '' : shellVars.PATH}`];
+    shellVars.PATH = scriptStripOuterQuotes(resolveShellText(text));
+    return [];
   }
 
   async function runPipeStage(cmd, args, stdinLines) {
@@ -588,6 +620,13 @@ function openTerminal(startDir, initialCommand) {
     if (cmd === 'who' || cmd === 'whoami') return buildWhoLines();
     if (cmd === 'date') return buildDateLines();
     if (cmd === 'set') return applyShellSet(args);
+    // Registering these here as well as in CMDS is not belt-and-braces: an
+    // unknown command makes runPipeStage return null, which the caller turns
+    // into "Piping not supported for command: X". A command added to CMDS
+    // alone would look supported right up until someone piped or redirected it.
+    if (cmd === 'env') return buildEnvLines();
+    if (cmd === 'where') return buildWhereLines(args);
+    if (cmd === 'path') return applyShellPath(args);
     if (cmd === 'input') return runShellInputCommand(args);
     if (cmd === 'inc' || cmd === 'dec' || cmd === 'add' || cmd === 'sub' || cmd === 'mul' || cmd === 'div' || cmd === 'mod') {
       return runShellNumericCommand(cmd, args);
@@ -933,6 +972,9 @@ function openTerminal(startDir, initialCommand) {
   CMDS.cls = () => { out.innerHTML = ''; };
   CMDS.clear = () => CMDS.cls();
   CMDS.set = (args) => applyShellSet(args).forEach(line => print(line));
+  CMDS.env = () => buildEnvLines().forEach(line => print(line));
+  CMDS.where = (args) => buildWhereLines(args).forEach(line => print(line));
+  CMDS.path = (args) => applyShellPath(args).forEach(line => print(line));
   CMDS.input = async (args) => {
     await runShellInputCommand(args);
   };
