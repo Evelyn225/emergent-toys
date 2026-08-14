@@ -16,8 +16,8 @@ const assert = require('node:assert');
 const { makeOsContext, loadOsSources } = require('./helpers/load-os.cjs');
 
 // ROOT_SYSTEM_FILE_META normally lives in os/daemon.js (manifest position
-// 14, well after both os/desktop-model.js at position 6 and os/programs.js
-// at position 8), so it has to arrive as a context override rather than be
+// 13, well after both os/desktop-model.js at position 6 and os/programs.js
+// at position 7), so it has to arrive as a context override rather than be
 // loaded for real - the same approach test/programs-resolve.test.cjs uses.
 // Values are copied from os/daemon.js's real table so the registry under
 // test has the same eight root programs it does in production.

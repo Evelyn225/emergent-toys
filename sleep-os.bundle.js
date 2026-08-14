@@ -714,19 +714,34 @@ const KERNEL_DEFAULT_ENV = {
 
 // A copy every time. Handing out the shared table would let one process's SET
 // rewrite the defaults every later process inherits.
+//
+// Object.create(null), not {}: scriptResolveText (os/script/interp.js)
+// expands `$name` as `vars[key] ?? ''`, which is a prototype-reachable
+// lookup. An ordinary object leaks `constructor`, `toString` and every other
+// Object.prototype member into the variable namespace ($constructor prints
+// "function Object() { [native code] }"), and it also makes `__proto__`
+// unassignable - `SET __proto__=hello` silently hits Object.prototype's
+// `__proto__` setter instead of creating a variable. os/worker/host.js
+// rebuilds the environment the same way for exactly this reason, and
+// os/script/interp.js:533 falls back to `Object.create(null)` when no vars
+// are supplied at all - this keeps the process table's own default in step
+// with that fallback.
 function kernelDefaultEnv() {
-  return Object.assign({}, KERNEL_DEFAULT_ENV);
+  return Object.assign(Object.create(null), KERNEL_DEFAULT_ENV);
 }
 
 // Shallow copy of a flat string map, which is what exec does: a child gets the
 // parent's environment as it stood at spawn, and can never write back into it.
 // Falls back to the kernel's own environment when the parent is gone or was
 // never given - an orphan gets the machine defaults rather than nothing.
+// Object.create(null) here too, for the same reason as kernelDefaultEnv above -
+// a plain {} would reintroduce the prototype-pollution hole on every child a
+// process spawns, not just on the machine defaults.
 function kernelInheritEnv(parentPid) {
   const parent = _kernelProcs.get(parentPid);
-  if (parent && parent.env) return Object.assign({}, parent.env);
+  if (parent && parent.env) return Object.assign(Object.create(null), parent.env);
   const root = _kernelProcs.get(KERNEL_PID);
-  return root && root.env ? Object.assign({}, root.env) : kernelDefaultEnv();
+  return root && root.env ? Object.assign(Object.create(null), root.env) : kernelDefaultEnv();
 }
 
 function kernelInit() {
@@ -1474,6 +1489,30 @@ function openSystemFile(name) {
   // where the thing is, and this is what keeps a player who breaks PATH from
   // also losing their desktop icons. Same reason Windows launches a
   // double-clicked file without searching.
+  //
+  // Two constraints on this call, both correct today only because of what
+  // programsInDir('') currently returns:
+  //
+  // 1. Everything programsInDir('') hands back is treated as GUI-launchable -
+  //    `if (!program || !program.open) return false` is the only gate, and
+  //    every entry the registry can produce today has an `open`. Phase 6
+  //    (master spec) adds a vfsListSync pass to programsInDir so real VFS
+  //    `.exe` files show up too; the day that lands, a naive read of this
+  //    function will make any root file - a stray .txt, a blob - something
+  //    openSystemFile "launches" and reports true for. That silently changes
+  //    behaviour for both of this function's callers: Explorer's
+  //    double-click (which ignores the return value, so it would just start
+  //    quietly doing nothing useful) and the terminal's OPEN command (which
+  //    would report success for a file it did not actually open). Phase 6
+  //    needs an executables-only filter here, not just in programsInDir.
+  //
+  // 2. This only ever searches '' (the root). Explorer calls openSystemFile
+  //    with a bare name from whatever directory it is currently showing, not
+  //    necessarily the root - correct today only because programsInDir has
+  //    programs solely at the root ('' and 'PROJECTS', and PROJECTS entries
+  //    are not opened through this path). If a future directory ever gains
+  //    launchable entries, this needs the caller's directory, not a
+  //    hardcoded ''.
   const program = programsInDir('').find(entry =>
     entry.name.toLowerCase() === key.toLowerCase());
   if (!program || !program.open) return false;
@@ -1561,17 +1600,42 @@ if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
 }
 
 // One table of everything sleepOS can launch, and the resolver that finds an
-// entry by name. This replaces three lists that had to be edited together and
-// silently disagreed when they were not: `launchers` in apps/terminal.js, `SYS`
-// in os/desktop-model.js, and the launcher half of ROOT_SYSTEM_FILE_META.
+// entry by name. This replaces the three lists the original spec inventoried
+// that had to be edited together and silently disagreed when they were not:
+// `launchers` in apps/terminal.js, `SYS` in os/desktop-model.js, and the
+// launcher half of ROOT_SYSTEM_FILE_META.
+//
+// It does NOT replace every hand-maintained name -> launcher map in the
+// codebase - two more are still live, and adding an entry here today is
+// invisible to both of them:
+//   - os/run-dialog.js's RUN_MAP (the Run... dialog)
+//   - os/script/interp.js's scriptOpenSystemProgram map (reached by a
+//     .script file's START/OPEN, and by a spawned worker's ui.openSystem
+//     syscall)
+// A PROGRAM_LAUNCHERS entry with no matching RUN_MAP/scriptOpenSystemProgram
+// entry launches fine from the desktop and the terminal's own START, but Run...
+// reports "Cannot find program" and a script's START/OPEN falls through to
+// openSystemFile instead of running it. Folding those two in is known
+// follow-up work, not done here.
 //
 // Every `open` is an arrow rather than a direct function reference. The
 // launchers it names (openNotepad, openDaemon, openVoid) are declared in files
 // that come LATER in tools/split-manifest.json, and while a hoisted function
 // declaration is safe to call later, it is not safe to reference while this
-// file is still evaluating. Same reason PROJECTS and ROOT_SYSTEM_FILE_META are
-// read inside function bodies: they are `const` in files that load after this
-// one, and touching them at evaluation time would throw on boot.
+// file is still evaluating.
+//
+// PROJECTS and ROOT_SYSTEM_FILE_META are read inside function bodies too, but
+// not for the same reason as each other, and not for the reason once claimed
+// here. Per tools/split-manifest.json, os/desktop-model.js (PROJECTS) is
+// manifest position 6 and this file, os/programs.js, is position 7 - PROJECTS
+// loads BEFORE PROGRAM_LAUNCHERS, not after, so referencing it at evaluation
+// time would already be safe. It is read lazily inside programProjectEntry
+// anyway, purely so every registry-consuming function shares the same
+// lazy-read shape. ROOT_SYSTEM_FILE_META is the one where lazy reading is
+// load-bearing: it is `const` in os/daemon.js, manifest position 13, which
+// genuinely loads after this file, so touching it at evaluation time (rather
+// than inside programsInDir, which only runs once the OS is up) would throw
+// on boot.
 //
 // PHASE 6 SEAM: when executables become real VFS files (master spec phase 6),
 // programsInDir gains a vfsListSync pass yielding entries whose `open` spawns
@@ -1613,6 +1677,14 @@ const PROGRAM_LAUNCHERS = {
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
   // list them. Both were reachable from the old `launchers`/`SYS` maps and
   // stay reachable; neither has ever been a file.
+  //
+  // FILES specifically is programsInDir('')'s thirteenth root entry - it is
+  // appended alongside WELCOME.README in the '' branch below even though it
+  // has no ROOT_SYSTEM_FILE_META row and DIR never lists it, preserving what
+  // the old `launchers.files` entry did. That means `WHERE files` resolves
+  // and prints a C:\sleepOS\FILES path that does not exist as a file; this
+  // is the same launchable-but-not-a-file behaviour as WELCOME.README's
+  // aliasing, just undeclared until now.
   'FILES': { lines: ['Opening Files...'], open: () => openFiles() },
 };
 
@@ -3419,6 +3491,11 @@ function vfsSeedTree() {
         '  PATH                 print the search path',
         '  PATH C:\\sleepOS      set it',
         '  WHERE calc           C:\\sleepOS\\CALC.exe',
+        '',
+        '  SET PATH=            removes PATH entirely, so SET and ENV',
+        '  stop listing it - PATH <value> recreates it. A script that',
+        '  reads $PATH after that gets an empty string, even though',
+        '  SCRIPTING.txt says PATH is already set when a script starts.',
         '',
         '  Because the current folder is searched first,',
         '  the programs in C:\\sleepOS always run from',
@@ -11039,8 +11116,11 @@ function openTerminal(startDir, initialCommand) {
     const name = unquoteShellValue(resolveShellText(rawArgs)).trim();
     if (!name) throw new Error('Usage: WHERE <name>');
     const hit = programResolve(name, cwd, shellVars.PATH);
-    // The message where.exe gives, quoting and all: a player who recognises it
-    // learns the command behaves the way they already expect.
+    // NOT the message real where.exe gives - Windows prints "INFO: Could not
+    // find files for the given pattern(s)." and does not echo the name back.
+    // Kept this way anyway: naming the thing that was searched for is more
+    // useful than the real message's fidelity, and this shell already departs
+    // from cmd.exe in plenty of other places.
     if (!hit) return [`INFO: Could not find "${name}".`];
     return [programDisplayDir(hit.dir) + '\\' + hit.program.name];
   }
@@ -11051,7 +11131,7 @@ function openTerminal(startDir, initialCommand) {
   // programResolve reads and the same one a spawned child inherits.
   function applyShellPath(rawArgs) {
     const text = String(rawArgs ?? '').trim();
-    if (!text) return [`PATH=${shellVars.PATH === undefined ? '' : shellVars.PATH}`];
+    if (!text) return [`PATH=${shellVars.PATH ?? ''}`];
     shellVars.PATH = scriptStripOuterQuotes(resolveShellText(text));
     return [];
   }
@@ -13620,7 +13700,7 @@ function openRunDialog() {
     'calc': openCalculator, 'calc.exe': openCalculator,
     'calculator': openCalculator,
     'regedit': openRegedit, 'regedit.exe': openRegedit,
-    'sysmon': openSysmon, 'sysmon.exe': openSysmon,
+    'sysmon': openSysmon,
     'explorer': openExplorer, 'explorer.exe': openExplorer,
     'defrag': openDefrag, 'defrag.exe': openDefrag,
     'browser': openBrowser, 'browser.exe': openBrowser,
@@ -13636,10 +13716,16 @@ function openRunDialog() {
     closeWin(id);
     const fn = RUN_MAP[v];
     if (fn) { fn(); return; }
+    // Four forms, matching what the registry's programProjectEntry (os/programs.js)
+    // and the old findTerminalProject both accept: the file name, the file name
+    // minus .html, the project name, and the project name with spaces hyphenated.
+    // That last form used to be missing here, so a Run... of "sand-playground"
+    // failed while START sand-playground (going through the registry) worked.
     const proj = PROJECTS.find(p =>
       p.file.toLowerCase() === v ||
       p.file.toLowerCase().replace('.html','') === v ||
-      p.name.toLowerCase() === v
+      p.name.toLowerCase() === v ||
+      p.name.toLowerCase().replace(/ /g, '-') === v
     );
     if (proj) { window.open(proj.file, '_blank'); return; }
     // The error icon, not the Run dialog's own executable one: this is a

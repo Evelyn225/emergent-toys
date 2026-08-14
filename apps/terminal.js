@@ -593,8 +593,11 @@ function openTerminal(startDir, initialCommand) {
     const name = unquoteShellValue(resolveShellText(rawArgs)).trim();
     if (!name) throw new Error('Usage: WHERE <name>');
     const hit = programResolve(name, cwd, shellVars.PATH);
-    // The message where.exe gives, quoting and all: a player who recognises it
-    // learns the command behaves the way they already expect.
+    // NOT the message real where.exe gives - Windows prints "INFO: Could not
+    // find files for the given pattern(s)." and does not echo the name back.
+    // Kept this way anyway: naming the thing that was searched for is more
+    // useful than the real message's fidelity, and this shell already departs
+    // from cmd.exe in plenty of other places.
     if (!hit) return [`INFO: Could not find "${name}".`];
     return [programDisplayDir(hit.dir) + '\\' + hit.program.name];
   }
@@ -605,7 +608,7 @@ function openTerminal(startDir, initialCommand) {
   // programResolve reads and the same one a spawned child inherits.
   function applyShellPath(rawArgs) {
     const text = String(rawArgs ?? '').trim();
-    if (!text) return [`PATH=${shellVars.PATH === undefined ? '' : shellVars.PATH}`];
+    if (!text) return [`PATH=${shellVars.PATH ?? ''}`];
     shellVars.PATH = scriptStripOuterQuotes(resolveShellText(text));
     return [];
   }

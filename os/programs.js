@@ -1,15 +1,40 @@
 // One table of everything sleepOS can launch, and the resolver that finds an
-// entry by name. This replaces three lists that had to be edited together and
-// silently disagreed when they were not: `launchers` in apps/terminal.js, `SYS`
-// in os/desktop-model.js, and the launcher half of ROOT_SYSTEM_FILE_META.
+// entry by name. This replaces the three lists the original spec inventoried
+// that had to be edited together and silently disagreed when they were not:
+// `launchers` in apps/terminal.js, `SYS` in os/desktop-model.js, and the
+// launcher half of ROOT_SYSTEM_FILE_META.
+//
+// It does NOT replace every hand-maintained name -> launcher map in the
+// codebase - two more are still live, and adding an entry here today is
+// invisible to both of them:
+//   - os/run-dialog.js's RUN_MAP (the Run... dialog)
+//   - os/script/interp.js's scriptOpenSystemProgram map (reached by a
+//     .script file's START/OPEN, and by a spawned worker's ui.openSystem
+//     syscall)
+// A PROGRAM_LAUNCHERS entry with no matching RUN_MAP/scriptOpenSystemProgram
+// entry launches fine from the desktop and the terminal's own START, but Run...
+// reports "Cannot find program" and a script's START/OPEN falls through to
+// openSystemFile instead of running it. Folding those two in is known
+// follow-up work, not done here.
 //
 // Every `open` is an arrow rather than a direct function reference. The
 // launchers it names (openNotepad, openDaemon, openVoid) are declared in files
 // that come LATER in tools/split-manifest.json, and while a hoisted function
 // declaration is safe to call later, it is not safe to reference while this
-// file is still evaluating. Same reason PROJECTS and ROOT_SYSTEM_FILE_META are
-// read inside function bodies: they are `const` in files that load after this
-// one, and touching them at evaluation time would throw on boot.
+// file is still evaluating.
+//
+// PROJECTS and ROOT_SYSTEM_FILE_META are read inside function bodies too, but
+// not for the same reason as each other, and not for the reason once claimed
+// here. Per tools/split-manifest.json, os/desktop-model.js (PROJECTS) is
+// manifest position 6 and this file, os/programs.js, is position 7 - PROJECTS
+// loads BEFORE PROGRAM_LAUNCHERS, not after, so referencing it at evaluation
+// time would already be safe. It is read lazily inside programProjectEntry
+// anyway, purely so every registry-consuming function shares the same
+// lazy-read shape. ROOT_SYSTEM_FILE_META is the one where lazy reading is
+// load-bearing: it is `const` in os/daemon.js, manifest position 13, which
+// genuinely loads after this file, so touching it at evaluation time (rather
+// than inside programsInDir, which only runs once the OS is up) would throw
+// on boot.
 //
 // PHASE 6 SEAM: when executables become real VFS files (master spec phase 6),
 // programsInDir gains a vfsListSync pass yielding entries whose `open` spawns
@@ -51,6 +76,14 @@ const PROGRAM_LAUNCHERS = {
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
   // list them. Both were reachable from the old `launchers`/`SYS` maps and
   // stay reachable; neither has ever been a file.
+  //
+  // FILES specifically is programsInDir('')'s thirteenth root entry - it is
+  // appended alongside WELCOME.README in the '' branch below even though it
+  // has no ROOT_SYSTEM_FILE_META row and DIR never lists it, preserving what
+  // the old `launchers.files` entry did. That means `WHERE files` resolves
+  // and prints a C:\sleepOS\FILES path that does not exist as a file; this
+  // is the same launchable-but-not-a-file behaviour as WELCOME.README's
+  // aliasing, just undeclared until now.
   'FILES': { lines: ['Opening Files...'], open: () => openFiles() },
 };
 

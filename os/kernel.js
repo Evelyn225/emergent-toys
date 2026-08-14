@@ -47,19 +47,34 @@ const KERNEL_DEFAULT_ENV = {
 
 // A copy every time. Handing out the shared table would let one process's SET
 // rewrite the defaults every later process inherits.
+//
+// Object.create(null), not {}: scriptResolveText (os/script/interp.js)
+// expands `$name` as `vars[key] ?? ''`, which is a prototype-reachable
+// lookup. An ordinary object leaks `constructor`, `toString` and every other
+// Object.prototype member into the variable namespace ($constructor prints
+// "function Object() { [native code] }"), and it also makes `__proto__`
+// unassignable - `SET __proto__=hello` silently hits Object.prototype's
+// `__proto__` setter instead of creating a variable. os/worker/host.js
+// rebuilds the environment the same way for exactly this reason, and
+// os/script/interp.js:533 falls back to `Object.create(null)` when no vars
+// are supplied at all - this keeps the process table's own default in step
+// with that fallback.
 function kernelDefaultEnv() {
-  return Object.assign({}, KERNEL_DEFAULT_ENV);
+  return Object.assign(Object.create(null), KERNEL_DEFAULT_ENV);
 }
 
 // Shallow copy of a flat string map, which is what exec does: a child gets the
 // parent's environment as it stood at spawn, and can never write back into it.
 // Falls back to the kernel's own environment when the parent is gone or was
 // never given - an orphan gets the machine defaults rather than nothing.
+// Object.create(null) here too, for the same reason as kernelDefaultEnv above -
+// a plain {} would reintroduce the prototype-pollution hole on every child a
+// process spawns, not just on the machine defaults.
 function kernelInheritEnv(parentPid) {
   const parent = _kernelProcs.get(parentPid);
-  if (parent && parent.env) return Object.assign({}, parent.env);
+  if (parent && parent.env) return Object.assign(Object.create(null), parent.env);
   const root = _kernelProcs.get(KERNEL_PID);
-  return root && root.env ? Object.assign({}, root.env) : kernelDefaultEnv();
+  return root && root.env ? Object.assign(Object.create(null), root.env) : kernelDefaultEnv();
 }
 
 function kernelInit() {

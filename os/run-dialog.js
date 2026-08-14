@@ -29,7 +29,7 @@ function openRunDialog() {
     'calc': openCalculator, 'calc.exe': openCalculator,
     'calculator': openCalculator,
     'regedit': openRegedit, 'regedit.exe': openRegedit,
-    'sysmon': openSysmon, 'sysmon.exe': openSysmon,
+    'sysmon': openSysmon,
     'explorer': openExplorer, 'explorer.exe': openExplorer,
     'defrag': openDefrag, 'defrag.exe': openDefrag,
     'browser': openBrowser, 'browser.exe': openBrowser,
@@ -45,10 +45,16 @@ function openRunDialog() {
     closeWin(id);
     const fn = RUN_MAP[v];
     if (fn) { fn(); return; }
+    // Four forms, matching what the registry's programProjectEntry (os/programs.js)
+    // and the old findTerminalProject both accept: the file name, the file name
+    // minus .html, the project name, and the project name with spaces hyphenated.
+    // That last form used to be missing here, so a Run... of "sand-playground"
+    // failed while START sand-playground (going through the registry) worked.
     const proj = PROJECTS.find(p =>
       p.file.toLowerCase() === v ||
       p.file.toLowerCase().replace('.html','') === v ||
-      p.name.toLowerCase() === v
+      p.name.toLowerCase() === v ||
+      p.name.toLowerCase().replace(/ /g, '-') === v
     );
     if (proj) { window.open(proj.file, '_blank'); return; }
     // The error icon, not the Run dialog's own executable one: this is a

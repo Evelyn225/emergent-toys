@@ -136,6 +136,29 @@ test('kernelSpawn inherits from opts.parentPid, not unconditionally from pid 1',
 // Worker.postMessage structured-clones, but the fake Worker here does not, so
 // an identity/mutation assertion would pass or fail for a reason that does not
 // exist in production.
+// This is the regression the null-prototype fix exists for. Before it, both
+// helpers built the env with Object.assign({}, ...), which carries
+// Object.prototype - and scriptResolveText (os/script/interp.js) expands
+// $name as `vars[key] ?? ''`, a prototype-reachable lookup. That let
+// $constructor and $toString resolve to native function source, and made
+// __proto__ silently unassignable via SET. Object.create(null) closes both
+// holes; this asserts the prototype is actually null, not just that the
+// values look right (deepStrictEqual would pass on a polluted object too).
+test('kernelDefaultEnv and kernelInheritEnv build a null-prototype object', () => {
+  const ctx = kernel();
+  const fresh = ctx.kernelDefaultEnv();
+  assert.strictEqual(Object.getPrototypeOf(fresh), null);
+  assert.strictEqual(fresh.constructor, undefined);
+  assert.strictEqual(fresh.toString, undefined);
+
+  const parent = ctx.kernelRegisterSystem('terminal', 'TERMINAL.exe');
+  const child = ctx.__spawnForTest(fakeWorker(), 'job.script', parent);
+  const inherited = ctx.kernelGetProcess(child).env;
+  assert.strictEqual(Object.getPrototypeOf(inherited), null);
+  assert.strictEqual(inherited.constructor, undefined);
+  assert.strictEqual(inherited.toString, undefined);
+});
+
 test('kernelSpawn posts the same environment values it stores on the process entry', async () => {
   const { ctx, posts } = kernelWithSpawn({ 'job.script': 'PRINT hi' });
   const parent = ctx.kernelRegisterSystem('terminal', 'TERMINAL.exe');

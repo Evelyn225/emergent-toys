@@ -341,6 +341,30 @@ function openSystemFile(name) {
   // where the thing is, and this is what keeps a player who breaks PATH from
   // also losing their desktop icons. Same reason Windows launches a
   // double-clicked file without searching.
+  //
+  // Two constraints on this call, both correct today only because of what
+  // programsInDir('') currently returns:
+  //
+  // 1. Everything programsInDir('') hands back is treated as GUI-launchable -
+  //    `if (!program || !program.open) return false` is the only gate, and
+  //    every entry the registry can produce today has an `open`. Phase 6
+  //    (master spec) adds a vfsListSync pass to programsInDir so real VFS
+  //    `.exe` files show up too; the day that lands, a naive read of this
+  //    function will make any root file - a stray .txt, a blob - something
+  //    openSystemFile "launches" and reports true for. That silently changes
+  //    behaviour for both of this function's callers: Explorer's
+  //    double-click (which ignores the return value, so it would just start
+  //    quietly doing nothing useful) and the terminal's OPEN command (which
+  //    would report success for a file it did not actually open). Phase 6
+  //    needs an executables-only filter here, not just in programsInDir.
+  //
+  // 2. This only ever searches '' (the root). Explorer calls openSystemFile
+  //    with a bare name from whatever directory it is currently showing, not
+  //    necessarily the root - correct today only because programsInDir has
+  //    programs solely at the root ('' and 'PROJECTS', and PROJECTS entries
+  //    are not opened through this path). If a future directory ever gains
+  //    launchable entries, this needs the caller's directory, not a
+  //    hardcoded ''.
   const program = programsInDir('').find(entry =>
     entry.name.toLowerCase() === key.toLowerCase());
   if (!program || !program.open) return false;
