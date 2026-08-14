@@ -1,0 +1,22 @@
+# test/bundle-current.test.cjs guards the two committed bundles with a
+# byte-exact comparison:
+#
+#   assert.strictEqual(fs.readFileSync(OUT, 'utf8'), build())
+#
+# `build()` concatenates the source files as they sit on disk, so that
+# comparison only holds when the bundle and its sources have the SAME line
+# endings. On Windows, core.autocrlf=true checks everything out as CRLF, which
+# happens to be self-consistent - but it makes the suite's result depend on a
+# per-developer git setting rather than on the repository, and it breaks the
+# moment one side is pinned and the other is not.
+#
+# Pinning every JS file to LF removes that dependency: the working copy then
+# matches the blobs git already stores (git normalises to LF internally), so
+# `build()` reads LF, writes LF, and the checked-out bundle is LF too, on every
+# platform and whatever autocrlf says.
+#
+# This produces no commit diff. The stored blobs are already LF; the only thing
+# that changes is what lands in the working copy on checkout.
+*.js       text eol=lf
+*.cjs      text eol=lf
+*.json     text eol=lf
