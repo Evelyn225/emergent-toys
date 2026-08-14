@@ -330,24 +330,21 @@ function openSystemFile(name) {
     osAlert('void.tmp is no longer present.', 'void.tmp', 'icon:void');
     return true;
   }
-  const SYS = {
-    'WELCOME.README': openWelcome,
-    'TERMINAL.exe': openTerminal,
-    'SYSMON.exe': openSysmon,
-    'NOTEPAD.exe': openNotepad,
-    'BROWSER.exe': openBrowser,
-    'DEFRAG.exe': openDefrag,
-    'CALC.exe': openCalculator,
-    'REGEDIT.exe': openRegedit,
-    'EXPLORER.exe': openExplorer,
-    'void.tmp': openVoid,
-    'daemon.core': openDaemon,
-    '?????.exe': openUnknown,
-    [RECYCLE_BIN_NAME]: openRecycleBin,
-  };
-  const resolvedKey = Object.keys(SYS).find(entry => entry.toLowerCase() === key.toLowerCase());
-  if (!resolvedKey) return false;
-  SYS[resolvedKey]();
+  // The Recycle Bin is a desktop object rather than a program, so it stays
+  // here rather than going in the registry - it has no directory, cannot be
+  // typed at the terminal, and must never resolve on PATH.
+  if (key.toLowerCase() === String(RECYCLE_BIN_NAME).toLowerCase()) {
+    openRecycleBin();
+    return true;
+  }
+  // A GUI launch does not consult PATH. Explorer and the desktop already know
+  // where the thing is, and this is what keeps a player who breaks PATH from
+  // also losing their desktop icons. Same reason Windows launches a
+  // double-clicked file without searching.
+  const program = programsInDir('').find(entry =>
+    entry.name.toLowerCase() === key.toLowerCase());
+  if (!program || !program.open) return false;
+  program.open({ cwd: '' });
   return true;
 }
 function openDesktopShortcutTarget(target) {
