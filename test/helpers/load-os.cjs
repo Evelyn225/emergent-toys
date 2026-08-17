@@ -70,59 +70,215 @@ function makeDocumentStub() {
 // the assumptions of the code under test, so it can only catch mistakes in the
 // adapter's logic, not mistakes in our reading of the IndexedDB spec. The
 // browser pass is what covers the latter.
-function makeIndexedDbStub() {
+//
+// Task 4.5: the original version of this stub aliased values in and out of
+// its Maps and applied every put/delete the instant it ran, which meant it
+// could not distinguish "persisted" from "merely mutated in memory" - exactly
+// the distinction transaction atomicity turns on. A test written against that
+// stub would pass whether or not os/storage-idb.js's commit was actually
+// atomic. It now: (1) deep-clones on every put and get, so a caller mutating
+// an object after handing it to put() cannot retroactively change what was
+// "persisted", and Uint8Array survives as Uint8Array rather than becoming a
+// plain object; (2) buffers a transaction's writes and applies them to the
+// backing store only when the transaction completes, discarding them on
+// abort; (3) throws NotFoundError for an object store that was never
+// created, rather than silently inventing one, the way real IndexedDB does.
+// Each transaction also snapshots the committed state of every store it
+// touches at the moment it opens, so two reads issued against the SAME open
+// transaction can never observe a write that lands between them - the
+// property os/storage-idb.js's fixed scan() depends on.
+function _idbClone(value) {
+  if (value === undefined || value === null) return value;
+  if (value instanceof Uint8Array) return new Uint8Array(value);
+  if (Array.isArray(value)) return value.map(_idbClone);
+  if (typeof value === 'object') {
+    const out = {};
+    Object.keys(value).forEach(k => { out[k] = _idbClone(value[k]); });
+    return out;
+  }
+  return value;
+}
+
+function makeIndexedDbStub(options) {
+  options = options || {};
   const databases = new Map();
+  let writeCount = 0;
+  let failAt = Number.isFinite(options.failWriteAt) ? options.failWriteAt : null;
   function later(fn) { Promise.resolve().then(fn); }
 
-  function makeRequest(run) {
-    const req = { onsuccess: null, onerror: null, result: undefined };
-    later(() => {
-      try {
-        req.result = run();
-        if (req.onsuccess) req.onsuccess({ target: req });
-      } catch (e) {
-        req.error = e;
-        if (req.onerror) req.onerror({ target: req });
-      }
-    });
-    return req;
-  }
-
-  function makeStore(map) {
-    return {
-      get: (k) => makeRequest(() => map.get(String(k))),
-      put: (v, k) => makeRequest(() => { map.set(String(k), v); return undefined; }),
-      delete: (k) => makeRequest(() => { map.delete(String(k)); return undefined; }),
-      clear: () => makeRequest(() => { map.clear(); return undefined; }),
-      getAll: () => makeRequest(() => [...map.values()]),
-      getAllKeys: () => makeRequest(() => [...map.keys()]),
-    };
+  // Test hook: makes the Nth put/delete request across the whole stub
+  // instance throw, the way a real write can fail mid-transaction (disk
+  // pressure, a closed connection, etc). Needed to prove a partial commit
+  // rolls back rather than half-applying - nothing else in this stub can ever
+  // fail a request, since Map operations don't throw.
+  function _maybeInjectFailure() {
+    writeCount++;
+    if (failAt !== null && writeCount === failAt) {
+      const err = new Error('SimulatedFailure: injected failure on write #' + writeCount);
+      err.name = 'SimulatedFailure';
+      throw err;
+    }
   }
 
   function makeDb(name) {
-    const stores = new Map();
+    const stores = new Map(); // storeName -> Map(key -> clonedValue): the committed data
     const db = {
       name,
       objectStoreNames: { contains: (n) => stores.has(n) },
-      createObjectStore(n) { stores.set(n, new Map()); return makeStore(stores.get(n)); },
+      createObjectStore(n) { stores.set(n, new Map()); },
       close() {},
-      transaction() {
-        const tx = { oncomplete: null, onerror: null, onabort: null, abort() {} };
-        later(() => { if (tx.oncomplete) tx.oncomplete(); });
-        return Object.assign(tx, {
-          objectStore(n) {
-            if (!stores.has(n)) stores.set(n, new Map());
-            return makeStore(stores.get(n));
-          },
+      transaction(names) {
+        const storeNames = Array.isArray(names) ? names : [names];
+        storeNames.forEach(n => {
+          if (!stores.has(n)) {
+            const err = new Error('No objectStore named "' + n + '" in this database');
+            err.name = 'NotFoundError';
+            throw err;
+          }
         });
+        return makeTransaction(stores, storeNames);
       },
       _stores: stores,
     };
     return db;
   }
 
+  function makeTransaction(stores, storeNames) {
+    // Snapshot each touched store's committed state at open time, and every
+    // read against this transaction is served from base+buffer rather than
+    // the live `stores` map. That is what makes "reuse the same transaction
+    // for two reads" an actual guarantee rather than a smaller race window:
+    // nothing any OTHER transaction commits in the meantime is visible here.
+    const bases = new Map();
+    const buffers = new Map();
+    storeNames.forEach(n => {
+      bases.set(n, new Map(stores.get(n)));
+      buffers.set(n, new Map());
+    });
+
+    let pending = 0;
+    let settled = false;
+
+    const tx = {
+      oncomplete: null, onerror: null, onabort: null,
+      abort() { settle(false); },
+    };
+
+    function settle(commit) {
+      if (settled) return;
+      settled = true;
+      if (commit) {
+        buffers.forEach((buf, name) => {
+          const live = stores.get(name);
+          buf.forEach((entry, key) => {
+            if (entry.deleted) live.delete(key);
+            else live.set(key, entry.value);
+          });
+        });
+        if (tx.oncomplete) tx.oncomplete();
+      } else if (tx.onabort) {
+        tx.onabort();
+      }
+    }
+
+    // A transaction "completes" once nothing is pending and the event loop
+    // returns to a macrotask boundary with nothing new queued - the same
+    // rule that lets real IndexedDB transactions span a whole chain of
+    // awaited requests as long as nothing but microtasks runs between them
+    // (the pattern the `idb` package relies on, and the reason this stub's
+    // own request() resolves via a microtask rather than a timer).
+    //
+    // A single extra microtask is NOT long enough to detect "idle" here: the
+    // adapter's real call chain nests several layers of its own awaits
+    // between one request finishing and the next one being issued
+    // (_fsIdbRequest's Promise wrapper, the tx-store method's own async
+    // function, fsWriteEntry's await, sometimes another async helper on top
+    // of that), and each layer costs its own microtask tick. Checking after
+    // only one tick settled the transaction - applying an empty buffer -
+    // right after the very first read in a multi-request batch, silently
+    // discarding every write that followed. setImmediate only fires once the
+    // ENTIRE microtask queue has drained, however many hops that took, which
+    // is what actually matches "no more IDB work is coming".
+    function maybeSettle() {
+      if (settled || pending > 0) return;
+      setImmediate(() => {
+        if (!settled && pending === 0) settle(true);
+      });
+    }
+
+    function request(run) {
+      const req = { onsuccess: null, onerror: null, result: undefined };
+      pending++;
+      later(() => {
+        try {
+          req.result = run();
+          pending--;
+          if (req.onsuccess) req.onsuccess({ target: req });
+          maybeSettle();
+        } catch (e) {
+          pending--;
+          req.error = e;
+          if (req.onerror) req.onerror({ target: req });
+          // An unhandled request error aborts its transaction in real
+          // IndexedDB. The adapter's own explicit abort() on catch is then a
+          // harmless no-op (settle() already guards on `settled`).
+          settle(false);
+        }
+      });
+      return req;
+    }
+
+    function view(name) {
+      const merged = new Map(bases.get(name));
+      buffers.get(name).forEach((entry, key) => {
+        if (entry.deleted) merged.delete(key);
+        else merged.set(key, entry.value);
+      });
+      return merged;
+    }
+
+    function boundStore(name) {
+      const buf = buffers.get(name);
+      return {
+        get: (k) => request(() => _idbClone(view(name).get(String(k)))),
+        put: (v, k) => request(() => {
+          _maybeInjectFailure();
+          buf.set(String(k), { deleted: false, value: _idbClone(v) });
+          return undefined;
+        }),
+        delete: (k) => request(() => {
+          _maybeInjectFailure();
+          buf.set(String(k), { deleted: true });
+          return undefined;
+        }),
+        clear: () => request(() => {
+          view(name).forEach((_, k) => buf.set(k, { deleted: true }));
+          return undefined;
+        }),
+        getAll: () => request(() => [...view(name).values()].map(_idbClone)),
+        getAllKeys: () => request(() => [...view(name).keys()]),
+      };
+    }
+
+    return Object.assign(tx, {
+      objectStore(n) {
+        if (!buffers.has(n)) {
+          const err = new Error('objectStore "' + n + '" is not in this transaction\'s scope');
+          err.name = 'NotFoundError';
+          throw err;
+        }
+        return boundStore(n);
+      },
+    });
+  }
+
   return {
     _databases: databases,
+    // Test hook: arms the stub to fail the Nth put/delete request counting
+    // from THIS call, not from stub creation - so a test can let setup writes
+    // land normally and then fail a specific write inside the commit under
+    // test.
+    _failNthWriteFromNow(n) { failAt = writeCount + n; },
     open(name) {
       const req = { onsuccess: null, onerror: null, onupgradeneeded: null, result: undefined };
       later(() => {
@@ -135,7 +291,13 @@ function makeIndexedDbStub() {
       return req;
     },
     deleteDatabase(name) {
-      return makeRequest(() => { databases.delete(name); return undefined; });
+      const req = { onsuccess: null, onerror: null, result: undefined };
+      later(() => {
+        databases.delete(name);
+        req.result = undefined;
+        if (req.onsuccess) req.onsuccess({ target: req });
+      });
+      return req;
     },
   };
 }

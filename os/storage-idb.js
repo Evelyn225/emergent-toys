@@ -42,7 +42,11 @@ async function fsIdbDeleteDatabase() {
   await _fsIdbRequest(indexedDB.deleteDatabase(FS_IDB_NAME));
 }
 
-// The abstract store from os/fs-format.js, over a real database.
+// The abstract store from os/fs-format.js, over a real database. Used only
+// for the one-off reads load() and estimate() need before any commit is in
+// flight - each call opens its own transaction, so this carries no atomicity
+// guarantee across two calls and must never be used for commit()'s write
+// phase (see _fsIdbTxStore below for that).
 function _fsIdbStore(db) {
   function tx(name, mode) {
     return db.transaction([name], mode).objectStore(name);
@@ -51,13 +55,39 @@ function _fsIdbStore(db) {
     async get(name, key) { return await _fsIdbRequest(tx(name, 'readonly').get(String(key))); },
     async put(name, key, value) { await _fsIdbRequest(tx(name, 'readwrite').put(value, String(key))); },
     async del(name, key) { await _fsIdbRequest(tx(name, 'readwrite').delete(String(key))); },
+    // Both reads go through the SAME already-open store rather than each
+    // calling tx() again. Two separate transactions here used to let a write
+    // from anywhere else - another tab, or just another commit - land between
+    // the key read and the value read, silently pairing keys from one moment
+    // with values from another. IndexedDB is shared across tabs on the same
+    // origin, so this was reachable without any bug in this file at all.
     async scan(name) {
       const store = tx(name, 'readonly');
       const keys = await _fsIdbRequest(store.getAllKeys());
-      const values = await _fsIdbRequest(tx(name, 'readonly').getAll());
+      const values = await _fsIdbRequest(store.getAll());
       return keys.map((k, i) => [k, values[i]]);
     },
     async clear(name) { await _fsIdbRequest(tx(name, 'readwrite').clear()); },
+  };
+}
+
+// The same abstract store shape, bound to an ALREADY-OPEN transaction rather
+// than opening one per request. commit()'s write phase runs its whole batch
+// through one of these, which is what makes the batch commit or roll back as
+// a single unit instead of as N independent transactions.
+function _fsIdbTxStore(tx) {
+  function os(name) { return tx.objectStore(name); }
+  return {
+    async get(name, key) { return await _fsIdbRequest(os(name).get(String(key))); },
+    async put(name, key, value) { await _fsIdbRequest(os(name).put(value, String(key))); },
+    async del(name, key) { await _fsIdbRequest(os(name).delete(String(key))); },
+    async scan(name) {
+      const store = os(name);
+      const keys = await _fsIdbRequest(store.getAllKeys());
+      const values = await _fsIdbRequest(store.getAll());
+      return keys.map((k, i) => [k, values[i]]);
+    },
+    async clear(name) { await _fsIdbRequest(os(name).clear()); },
   };
 }
 
@@ -67,6 +97,10 @@ function createIdbBackend(options) {
   let db = null;
   let store = null;
   let sb = null;
+  // True only for the session that actually created the superblock. load()
+  // keys its null-vs-empty-tree signal off this, not off the dirent count -
+  // see load() below for why the two are not the same thing.
+  let freshlyCreated = false;
   // Directory ino lookups, rebuilt on load. Ops name a directory by path, and
   // dirents are keyed by parent ino, so something has to hold the mapping.
   let dirInos = new Map();
@@ -76,16 +110,22 @@ function createIdbBackend(options) {
     db = await _fsIdbOpen();
     store = _fsIdbStore(db);
     sb = await store.get(FS_STORE_SUPERBLOCK, 'sb');
-    if (!sb) {
+    if (sb) {
+      freshlyCreated = false;
+    } else {
       sb = fsMakeSuperblock(totalBlocks);
       await store.put(FS_STORE_SUPERBLOCK, 'sb', sb);
+      freshlyCreated = true;
     }
   }
 
   // '' is the root and is always ino 0. Anything deeper is looked up, and
   // created if an op names a directory we have not seen - which happens when a
-  // mkdir and a write inside it land in the same commit.
-  async function inoForDir(dirName) {
+  // mkdir and a write inside it land in the same commit. Takes the active
+  // store explicitly (rather than closing over the module-level one) because
+  // commit()'s write phase must resolve directories through the SAME
+  // transaction as everything else in the batch, not through a one-off read.
+  async function inoForDir(activeStore, dirName) {
     const path = String(dirName || '');
     if (!path) return 0;
     if (dirInos.has(path)) return dirInos.get(path);
@@ -94,8 +134,8 @@ function createIdbBackend(options) {
     for (const part of path.split('\\')) {
       sofar = sofar ? sofar + '\\' + part : part;
       if (dirInos.has(sofar)) { parent = dirInos.get(sofar); continue; }
-      let ino = await store.get(FS_STORE_DIRENTS, String(parent) + '/' + part);
-      if (ino === undefined) ino = await fsWriteEntry(store, sb, parent, part, { type: 'dir' });
+      let ino = await activeStore.get(FS_STORE_DIRENTS, String(parent) + '/' + part);
+      if (ino === undefined) ino = await fsWriteEntry(activeStore, sb, parent, part, { type: 'dir' });
       dirInos.set(sofar, ino);
       parent = ino;
     }
@@ -135,55 +175,115 @@ function createIdbBackend(options) {
 
     async load() {
       await ensure();
-      const dirents = await store.scan(FS_STORE_DIRENTS);
-      if (!dirents.length) return null;
+      // A zero-dirent tree means one of two very different things: this
+      // database was never written (the VFS should seed the default tree),
+      // or a prior session emptied it (the user's empty drive is real and
+      // must not be silently re-seeded). Dirent count cannot tell them
+      // apart; whether THIS session created the superblock can, because a
+      // re-seed only ever needs to happen the very first time a database
+      // exists at all.
+      if (freshlyCreated) return null;
       await rebuildDirInos();
       return await fsReadTree(store);
     },
 
     async commit({ ops, readEntry }) {
       await ensure();
-      for (const op of ops || []) {
-        const parent = await inoForDir(op.dirName);
-        if (op.op === 'mkdir') {
-          const ino = await fsWriteEntry(store, sb, parent, op.name, { type: 'dir' });
-          const path = op.dirName ? op.dirName + '\\' + op.name : op.name;
-          dirInos.set(path, ino);
-          continue;
-        }
-        if (op.op === 'unlink') {
-          await fsDeleteEntry(store, sb, parent, op.name);
-          continue;
-        }
-        if (op.op === 'rename') {
-          await fsRenameEntry(store, parent, op.name, parent, op.newName);
-          continue;
-        }
-        if (op.op === 'move') {
-          const dst = await inoForDir(op.dstDirName);
-          await fsRenameEntry(store, parent, op.name, dst, op.newName);
-          continue;
-        }
-        // write and writeBlob both land here: one allocator, one code path.
-        // Awaited because readEntry has to fetch a blob's object URL to get
-        // its bytes; the record itself carries none.
-        const entry = readEntry ? await readEntry(op.dirName, op.name) : null;
-        if (!entry) continue;
-        if (entry.kind === 'blob') {
-          await fsWriteEntry(store, sb, parent, op.name, {
-            type: 'blob',
-            bytes: entry.bytes || new Uint8Array(0),
-            // `url` is deliberately not persisted: an object URL is dead on the
-            // next boot. It is rebuilt from these bytes on load.
-            meta: { kind: entry.blob && entry.blob.kind, mime: entry.blob && entry.blob.mime },
-          });
+      const list = ops || [];
+      if (!list.length) return;
+
+      // Phase 1: no transaction open yet. Resolve every content op's
+      // readEntry up front, because readEntry can await fetch() on a blob's
+      // object URL - non-IDB work that would kill a transaction if it ran
+      // while one was held open. Directory resolution (inoForDir) is IDB
+      // work and happens in phase 2 instead, on the transaction that also
+      // does the writes, so a mkdir and a write into it stay part of the
+      // same atomic batch.
+      const resolved = [];
+      for (const op of list) {
+        if (op.op === 'write' || op.op === 'writeBlob') {
+          resolved.push({ op, entry: readEntry ? await readEntry(op.dirName, op.name) : null });
         } else {
-          await fsWriteEntry(store, sb, parent, op.name, {
-            type: 'file', bytes: fsEncodeText(entry.text || ''),
-          });
+          resolved.push({ op, entry: undefined });
         }
       }
-      await store.put(FS_STORE_SUPERBLOCK, 'sb', sb);
+
+      // Phase 2: IDB work only, on one read-write transaction spanning every
+      // store the format touches, so the whole batch commits or rolls back
+      // as a single unit - not as one independent transaction per request,
+      // which is what let an interrupted commit leave an inode referencing
+      // blocks the free bitmap still called free, or referencing blocks
+      // whose data had already been deleted out from under it.
+      const tx = db.transaction(
+        [FS_STORE_SUPERBLOCK, FS_STORE_INODES, FS_STORE_DIRENTS, FS_STORE_BLOCKS], 'readwrite');
+      const txStore = _fsIdbTxStore(tx);
+      try {
+        for (const { op, entry } of resolved) {
+          const parent = await inoForDir(txStore, op.dirName);
+          if (op.op === 'mkdir') {
+            const ino = await fsWriteEntry(txStore, sb, parent, op.name, { type: 'dir' });
+            const path = op.dirName ? op.dirName + '\\' + op.name : op.name;
+            dirInos.set(path, ino);
+            continue;
+          }
+          if (op.op === 'unlink') {
+            await fsDeleteEntry(txStore, sb, parent, op.name);
+            continue;
+          }
+          if (op.op === 'rename') {
+            await fsRenameEntry(txStore, parent, op.name, parent, op.newName);
+            continue;
+          }
+          if (op.op === 'move') {
+            const dst = await inoForDir(txStore, op.dstDirName);
+            await fsRenameEntry(txStore, parent, op.name, dst, op.newName);
+            continue;
+          }
+          // write and writeBlob both land here: one allocator, one code path.
+          if (!entry) continue;
+          if (entry.kind === 'blob') {
+            await fsWriteEntry(txStore, sb, parent, op.name, {
+              type: 'blob',
+              bytes: entry.bytes || new Uint8Array(0),
+              // `url` is deliberately not persisted: an object URL is dead on
+              // the next boot. It is rebuilt from these bytes on load.
+              meta: { kind: entry.blob && entry.blob.kind, mime: entry.blob && entry.blob.mime },
+            });
+          } else {
+            await fsWriteEntry(txStore, sb, parent, op.name, {
+              type: 'file', bytes: fsEncodeText(entry.text || ''),
+            });
+          }
+        }
+        await txStore.put(FS_STORE_SUPERBLOCK, 'sb', sb);
+        // Every request resolving is not the same as the transaction being
+        // durable: IndexedDB only actually applies a transaction's writes
+        // when the transaction itself completes, which - like committing at
+        // all - is a separate event from any one request inside it
+        // succeeding. Returning as soon as the last request's promise
+        // resolved would let a caller (and this backend's own next commit)
+        // observe "done" before the write was ever guaranteed to survive.
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onabort = () => reject(VfsError('EIO', 'IndexedDB transaction aborted'));
+        });
+      } catch (err) {
+        tx.abort();
+        // fsAllocBlocks/fsFreeBlocks mutate `sb` in memory synchronously,
+        // well before the request that would have persisted it either lands
+        // or fails - so by the time a write fails, `sb` may already disagree
+        // with what is actually durable. A cached copy that survives a
+        // rolled-back transaction is its own corruption source (blocks it
+        // thinks are taken stay invisible to every future allocation), and
+        // it would only surface on whichever commit runs after this one.
+        // Discarding it, along with the directory cache built against it,
+        // forces the next ensure() to re-read authoritative state instead of
+        // trusting memory that this transaction never actually committed.
+        store = null;
+        sb = null;
+        dirInos = new Map();
+        throw err;
+      }
     },
 
     async estimate() {
