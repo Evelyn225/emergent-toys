@@ -118,3 +118,56 @@ test('rename and move emit ops carrying the destination', async () => {
   assert.strictEqual(mv.dstDirName, 'SUB');
   assert.strictEqual(mv.newName, 'B.txt');
 });
+
+// ── Task 3.5: the two direct-tree mutators in os/daemon.js ───────
+
+test('a direct mkdir queues an op carrying its path', async () => {
+  const backend = recordingBackend({ needsSnapshot: false });
+  const ctx = await mounted(backend);
+  ctx.vfsQueueDirectMkdir('', 'DOCS');
+  await ctx.vfsFlush();
+  const op = backend.commits[0].ops.find(o => o.op === 'mkdir');
+  assert.ok(op, 'a direct mkdir must emit a real mkdir op, not a pathless marker');
+  assert.strictEqual(op.dirName, '');
+  assert.strictEqual(op.name, 'DOCS');
+});
+
+test('a direct write queues an op a backend can resolve to content', async () => {
+  const backend = recordingBackend({ needsSnapshot: false });
+  const ctx = await mounted(backend);
+  // Mutate the tree directly, exactly as os/daemon.js ensureStoryTextFile does.
+  ctx.vfsGetTree().files.set('NOTICE.txt', 'the story text');
+  ctx.vfsQueueDirectWrite('', 'NOTICE.txt', null);
+  await ctx.vfsFlush();
+  const entry = backend.commits[0].entries['write:/NOTICE.txt'];
+  assert.ok(entry, 'a direct write must emit an op readEntry can resolve');
+  assert.strictEqual(entry.kind, 'file');
+  assert.strictEqual(entry.text, 'the story text');
+});
+
+test('a direct write of unchanged content queues nothing', async () => {
+  const backend = recordingBackend({ needsSnapshot: false });
+  const ctx = await mounted(backend);
+  ctx.vfsGetTree().files.set('SAME.txt', 'identical');
+  ctx.vfsQueueDirectWrite('', 'SAME.txt', 'identical');
+  await ctx.vfsFlush();
+  assert.strictEqual(backend.commits.length, 0,
+    'story beats re-set identical content constantly; queuing a commit each time is write amplification');
+});
+
+test('no op the VFS emits is missing a path', async () => {
+  const backend = recordingBackend({ needsSnapshot: false });
+  const ctx = await mounted(backend);
+  await ctx.vfsMkdir('SUB');
+  await ctx.vfsWriteFile('A.txt', 'a');
+  ctx.vfsQueueDirectMkdir('', 'DIRECT');
+  ctx.vfsGetTree().files.set('D.txt', 'd');
+  ctx.vfsQueueDirectWrite('', 'D.txt', null);
+  await ctx.vfsFlush();
+  backend.commits[0].ops.forEach(op => {
+    assert.ok(typeof op.dirName === 'string',
+      op.op + ' op has no dirName - an ops-only backend cannot act on it');
+    assert.ok(typeof op.name === 'string' && op.name,
+      op.op + ' op has no name - an ops-only backend cannot act on it');
+  });
+});

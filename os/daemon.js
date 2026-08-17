@@ -281,23 +281,23 @@ function daemonStoryChanged(before) {
 function ensureFsDir(path) {
   const parts = vfsNormalizeDir(path).split('\\').filter(Boolean);
   let node = vfsGetTree();
-  let created = false;
+  let parentPath = '';
   parts.forEach(part => {
-    if (!node.dirs.has(part)) { node.dirs.add(part); created = true; }
+    if (!node.dirs.has(part)) {
+      node.dirs.add(part);
+      // One op per directory actually created, carrying its own parent. A
+      // single marker for the whole walk could not tell a backend which of
+      // DOCS, DOCS\SYS, DOCS\SYS\CACHE were new.
+      vfsQueueDirectMkdir(parentPath, part);
+    }
     if (!node.subdirs) node.subdirs = new Map();
     // Materializing a node for a name that is already in `dirs` is not a
     // filesystem change - it is the same lazy fill vfsDirNodeSync does, and it
-    // queues nothing there either. Only a new name counts as `created`.
+    // queues nothing there either.
     if (!node.subdirs.has(part)) node.subdirs.set(part, vfsMakeNode());
     node = node.subdirs.get(part);
+    parentPath = parentPath ? parentPath + '\\' + part : part;
   });
-  // schedSave, NOT vfsFlush. vfsFlush early-returns when nothing is queued
-  // (`if (!_vfsBackend || !_vfsPendingOps.length) return;`), and this function
-  // mutates the tree directly rather than through _vfsQueue, so `void
-  // vfsFlush()` would commit nothing and every directory created here would
-  // vanish on reload. schedSave queues a `legacy-write` marker op, which is the
-  // designed escape hatch for a direct mutation.
-  if (created) schedSave();
   return node;
 }
 
@@ -555,7 +555,9 @@ function promptCreateFolderAt(dirPath, onDone) {
 function ensureStoryTextFile(path, value) {
   const { dirName, fileName } = fsSplitPath(path);
   const dir = ensureFsDir(dirName);
+  const prev = dir.files.has(fileName) ? dir.files.get(fileName) : null;
   dir.files.set(fileName, value);
+  vfsQueueDirectWrite(dirName, fileName, prev);
 }
 
 function daemonNoticeContent() {
@@ -1152,7 +1154,6 @@ function syncDaemonStory(options) {
   saveDaemonStory();
   syncDaemonStoryRegistry();
   syncDaemonStoryFiles();
-  schedSave();
   if (!opts.silent) refreshDaemonStoryViews();
 }
 

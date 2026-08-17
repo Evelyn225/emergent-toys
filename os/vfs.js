@@ -252,6 +252,40 @@ function _vfsQueue(op, deltaBytes) {
   _vfsFlushTimer = setTimeout(() => { void vfsFlush(); }, VFS_FLUSH_DELAY_MS);
 }
 
+// The escape hatch for the two remaining direct-tree mutators in os/daemon.js
+// (ensureFsDir, ensureStoryTextFile). Both must stay synchronous - module-level
+// callers depend on ensureFsDir during bundle evaluation, and
+// syncDaemonStoryFiles is synchronous - so neither can go through the async
+// vfsMkdir/vfsWriteFile. What they emitted before was a pathless
+// `legacy-write` marker, or for a write into an existing directory, nothing at
+// all: both were invisible to a backend that commits from ops alone, and both
+// only worked because every backend took a whole-tree snapshot that happened to
+// include the mutation. These emit the same op shapes the real writers do, so a
+// direct mutation is indistinguishable from a normal one downstream. Safe
+// because readEntry resolves against the LIVE tree at commit time, and the
+// caller has already mutated it.
+function vfsQueueDirectMkdir(dirName, name) {
+  _vfsQueue({ op: 'mkdir', dirName, name }, 0);
+}
+
+// `prevValue` is what the caller overwrote, needed only for the byte delta.
+// Deliberately does NOT call _vfsAssertRoom: these callers are synchronous
+// story-beat code with no path to handle an ENOSPC throw, and adding one would
+// turn a full disk into a thrown error in the middle of a narrative beat. The
+// bytes are still counted so the quota guard on normal writes stays honest.
+function vfsQueueDirectWrite(dirName, name, prevValue) {
+  const dir = vfsDirNodeSync(dirName);
+  if (!dir || !dir.files || !dir.files.has(name)) return;
+  const nextValue = dir.files.get(name);
+  // Identical content is not a change. syncDaemonStoryFiles re-sets the same
+  // text from dozens of story beats and from boot; emitting an op for each
+  // would commit constantly and write the same blocks over and over.
+  if (prevValue !== null && prevValue !== undefined && prevValue === nextValue) return;
+  _vfsQueue({ op: 'write', dirName, name },
+            _vfsTextCost(name, nextValue)
+              - (prevValue === null || prevValue === undefined ? 0 : _vfsTextCost(name, prevValue)));
+}
+
 // The accessor handed to backend.commit. Returns null for a path that no
 // longer exists, which is the normal case for an `unlink` op: the backend
 // needs to know the entry is gone, not to be handed a stale copy of it.

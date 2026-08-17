@@ -10,7 +10,7 @@ const ROOT = path.join(__dirname, '..');
 // Phase 2 replaced these with the VFS. They are gone rather than deprecated
 // because a second way to reach the filesystem is exactly how the tree and
 // the persisted snapshot drift apart.
-const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDir', 'fsGetDir', 'termFS'];
+const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDir', 'fsGetDir', 'termFS', 'schedSave'];
 
 test('no source reaches the filesystem outside the VFS', () => {
   const offenders = [];
@@ -26,4 +26,21 @@ test('no source reaches the filesystem outside the VFS', () => {
     });
   }
   assert.deepStrictEqual(offenders, [], 'legacy filesystem access:\n  ' + offenders.join('\n  '));
+});
+
+// os/daemon.js is not loadable in the vm harness, so its two direct-tree
+// mutators cannot be covered by a behavioural test. Guard them at the source
+// level instead: a pathless op is invisible to a backend that commits from ops
+// alone, and the failure mode is silent - the story files simply stop
+// persisting, with no error anywhere.
+test('no source queues a pathless op', () => {
+  const offenders = [];
+  for (const rel of readManifest()) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    src.split(/\r?\n/).forEach((line, i) => {
+      if (/^\s*(\/\/|\*)/.test(line)) return;
+      if (/\blegacy-write\b/.test(line)) offenders.push(`${rel}:${i + 1}: legacy-write`);
+    });
+  }
+  assert.deepStrictEqual(offenders, [], 'pathless ops:\n  ' + offenders.join('\n  '));
 });

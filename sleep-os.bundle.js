@@ -355,6 +355,40 @@ function _vfsQueue(op, deltaBytes) {
   _vfsFlushTimer = setTimeout(() => { void vfsFlush(); }, VFS_FLUSH_DELAY_MS);
 }
 
+// The escape hatch for the two remaining direct-tree mutators in os/daemon.js
+// (ensureFsDir, ensureStoryTextFile). Both must stay synchronous - module-level
+// callers depend on ensureFsDir during bundle evaluation, and
+// syncDaemonStoryFiles is synchronous - so neither can go through the async
+// vfsMkdir/vfsWriteFile. What they emitted before was a pathless
+// `legacy-write` marker, or for a write into an existing directory, nothing at
+// all: both were invisible to a backend that commits from ops alone, and both
+// only worked because every backend took a whole-tree snapshot that happened to
+// include the mutation. These emit the same op shapes the real writers do, so a
+// direct mutation is indistinguishable from a normal one downstream. Safe
+// because readEntry resolves against the LIVE tree at commit time, and the
+// caller has already mutated it.
+function vfsQueueDirectMkdir(dirName, name) {
+  _vfsQueue({ op: 'mkdir', dirName, name }, 0);
+}
+
+// `prevValue` is what the caller overwrote, needed only for the byte delta.
+// Deliberately does NOT call _vfsAssertRoom: these callers are synchronous
+// story-beat code with no path to handle an ENOSPC throw, and adding one would
+// turn a full disk into a thrown error in the middle of a narrative beat. The
+// bytes are still counted so the quota guard on normal writes stays honest.
+function vfsQueueDirectWrite(dirName, name, prevValue) {
+  const dir = vfsDirNodeSync(dirName);
+  if (!dir || !dir.files || !dir.files.has(name)) return;
+  const nextValue = dir.files.get(name);
+  // Identical content is not a change. syncDaemonStoryFiles re-sets the same
+  // text from dozens of story beats and from boot; emitting an op for each
+  // would commit constantly and write the same blocks over and over.
+  if (prevValue !== null && prevValue !== undefined && prevValue === nextValue) return;
+  _vfsQueue({ op: 'write', dirName, name },
+            _vfsTextCost(name, nextValue)
+              - (prevValue === null || prevValue === undefined ? 0 : _vfsTextCost(name, prevValue)));
+}
+
 // The accessor handed to backend.commit. Returns null for a path that no
 // longer exists, which is the normal case for an `unlink` op: the backend
 // needs to know the entry is gone, not to be handed a stale copy of it.
@@ -4230,20 +4264,6 @@ function refreshSeededHomeMedia() {
 
 function saveFS() { return vfsFlush(); }
 
-// Two call sites still mutate the shared tree directly rather than going
-// through vfsWriteFile/vfsMkdir: os/daemon.js ensureFsDir and
-// ensureStoryTextFile. A direct mutation never touches the VFS's own op queue,
-// so vfsFlush would see nothing to commit and vfsHasPendingWrites would report
-// false even though the tree changed underneath it. Queue a marker op so both
-// stay correct - this is the same debounced commit the old schedSave/saveFS
-// pair provided, just routed through the VFS. Retiring these two is tracked
-// separately; converting ensureStoryTextFile is not a one-liner, because
-// syncDaemonStoryFiles must stay synchronous and vfsWriteFile fragments the
-// drive by default.
-function schedSave() {
-  if (typeof _vfsQueue === 'function') _vfsQueue({ op: 'legacy-write' }, 0);
-}
-
 function computeLegacyFragLevel(ms) {
   if (ms === null) return 0.68;
   const hours = ms / 3600000;
@@ -4705,23 +4725,23 @@ function daemonStoryChanged(before) {
 function ensureFsDir(path) {
   const parts = vfsNormalizeDir(path).split('\\').filter(Boolean);
   let node = vfsGetTree();
-  let created = false;
+  let parentPath = '';
   parts.forEach(part => {
-    if (!node.dirs.has(part)) { node.dirs.add(part); created = true; }
+    if (!node.dirs.has(part)) {
+      node.dirs.add(part);
+      // One op per directory actually created, carrying its own parent. A
+      // single marker for the whole walk could not tell a backend which of
+      // DOCS, DOCS\SYS, DOCS\SYS\CACHE were new.
+      vfsQueueDirectMkdir(parentPath, part);
+    }
     if (!node.subdirs) node.subdirs = new Map();
     // Materializing a node for a name that is already in `dirs` is not a
     // filesystem change - it is the same lazy fill vfsDirNodeSync does, and it
-    // queues nothing there either. Only a new name counts as `created`.
+    // queues nothing there either.
     if (!node.subdirs.has(part)) node.subdirs.set(part, vfsMakeNode());
     node = node.subdirs.get(part);
+    parentPath = parentPath ? parentPath + '\\' + part : part;
   });
-  // schedSave, NOT vfsFlush. vfsFlush early-returns when nothing is queued
-  // (`if (!_vfsBackend || !_vfsPendingOps.length) return;`), and this function
-  // mutates the tree directly rather than through _vfsQueue, so `void
-  // vfsFlush()` would commit nothing and every directory created here would
-  // vanish on reload. schedSave queues a `legacy-write` marker op, which is the
-  // designed escape hatch for a direct mutation.
-  if (created) schedSave();
   return node;
 }
 
@@ -4979,7 +4999,9 @@ function promptCreateFolderAt(dirPath, onDone) {
 function ensureStoryTextFile(path, value) {
   const { dirName, fileName } = fsSplitPath(path);
   const dir = ensureFsDir(dirName);
+  const prev = dir.files.has(fileName) ? dir.files.get(fileName) : null;
   dir.files.set(fileName, value);
+  vfsQueueDirectWrite(dirName, fileName, prev);
 }
 
 function daemonNoticeContent() {
@@ -5576,7 +5598,6 @@ function syncDaemonStory(options) {
   saveDaemonStory();
   syncDaemonStoryRegistry();
   syncDaemonStoryFiles();
-  schedSave();
   if (!opts.silent) refreshDaemonStoryViews();
 }
 

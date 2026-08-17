@@ -81,20 +81,6 @@ function refreshSeededHomeMedia() {
 
 function saveFS() { return vfsFlush(); }
 
-// Two call sites still mutate the shared tree directly rather than going
-// through vfsWriteFile/vfsMkdir: os/daemon.js ensureFsDir and
-// ensureStoryTextFile. A direct mutation never touches the VFS's own op queue,
-// so vfsFlush would see nothing to commit and vfsHasPendingWrites would report
-// false even though the tree changed underneath it. Queue a marker op so both
-// stay correct - this is the same debounced commit the old schedSave/saveFS
-// pair provided, just routed through the VFS. Retiring these two is tracked
-// separately; converting ensureStoryTextFile is not a one-liner, because
-// syncDaemonStoryFiles must stay synchronous and vfsWriteFile fragments the
-// drive by default.
-function schedSave() {
-  if (typeof _vfsQueue === 'function') _vfsQueue({ op: 'legacy-write' }, 0);
-}
-
 function computeLegacyFragLevel(ms) {
   if (ms === null) return 0.68;
   const hours = ms / 3600000;
