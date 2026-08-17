@@ -107,3 +107,119 @@ test('fragmentation of an empty disk is zero rather than NaN', () => {
   assert.strictEqual(ctx.fsComputeFragmentation([]), 0);
   assert.strictEqual(ctx.fsComputeFragmentation([{ blocks: [] }]), 0);
 });
+
+// ── Task 2: records and tree reconstruction ──────────────────────
+
+async function seeded() {
+  const ctx = fmt();
+  const store = ctx.fsMakeStore();
+  const sb = ctx.fsMakeSuperblock(256);
+  await store.put('superblock', 'sb', sb);
+  return { ctx, store, sb };
+}
+
+test('a text entry round-trips through blocks as UTF-8', async () => {
+  const { ctx, store, sb } = await seeded();
+  const text = 'hello éè world';
+  const ino = await ctx.fsWriteEntry(store, sb, 0, 'NOTES.txt', {
+    type: 'file', bytes: ctx.fsEncodeText(text),
+  });
+  assert.ok(ino > 0, 'inode numbers start at 1 so 0 can mean none');
+  const back = ctx.fsDecodeText(await ctx.fsReadEntryBytes(store, sb, ino));
+  assert.strictEqual(back, text);
+});
+
+test('a file larger than one block spans several and still round-trips', async () => {
+  const { ctx, store, sb } = await seeded();
+  // 3 blocks and a bit, so the tail block is deliberately partial.
+  const text = 'x'.repeat(4096 * 3 + 17);
+  const ino = await ctx.fsWriteEntry(store, sb, 0, 'BIG.txt', {
+    type: 'file', bytes: ctx.fsEncodeText(text),
+  });
+  const inode = await store.get('inodes', ino);
+  assert.strictEqual(inode.blocks.length, 4);
+  assert.strictEqual(inode.size, text.length);
+  const back = ctx.fsDecodeText(await ctx.fsReadEntryBytes(store, sb, ino));
+  assert.strictEqual(back.length, text.length);
+  assert.strictEqual(back, text);
+});
+
+test('binary bytes round-trip exactly, with no base64 in the middle', async () => {
+  const { ctx, store, sb } = await seeded();
+  const bytes = new Uint8Array([0, 255, 13, 10, 128, 1, 0, 7]);
+  const ino = await ctx.fsWriteEntry(store, sb, 0, 'IMG.png', { type: 'blob', bytes });
+  const back = await ctx.fsReadEntryBytes(store, sb, ino);
+  assert.deepStrictEqual(Array.from(back), Array.from(bytes));
+});
+
+test('rewriting an entry frees its old blocks rather than leaking them', async () => {
+  const { ctx, store, sb } = await seeded();
+  const big = ctx.fsEncodeText('y'.repeat(4096 * 4));
+  await ctx.fsWriteEntry(store, sb, 0, 'A.txt', { type: 'file', bytes: big });
+  const afterBig = ctx.fsCountFreeBlocks(sb);
+  await ctx.fsWriteEntry(store, sb, 0, 'A.txt', { type: 'file', bytes: ctx.fsEncodeText('tiny') });
+  assert.ok(ctx.fsCountFreeBlocks(sb) > afterBig,
+    'shrinking a file must return blocks to the pool');
+});
+
+test('deleting an entry frees its blocks and removes both records', async () => {
+  const { ctx, store, sb } = await seeded();
+  const before = ctx.fsCountFreeBlocks(sb);
+  const ino = await ctx.fsWriteEntry(store, sb, 0, 'GONE.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('bye'),
+  });
+  assert.strictEqual(await ctx.fsDeleteEntry(store, sb, 0, 'GONE.txt'), true);
+  assert.strictEqual(ctx.fsCountFreeBlocks(sb), before);
+  assert.strictEqual(await store.get('inodes', ino), undefined);
+  assert.strictEqual(await store.get('dirents', '0/GONE.txt'), undefined);
+});
+
+test('deleting something that is not there reports false rather than throwing', async () => {
+  const { ctx, store, sb } = await seeded();
+  assert.strictEqual(await ctx.fsDeleteEntry(store, sb, 0, 'NOPE.txt'), false);
+});
+
+test('rename rewrites one dirent and does not touch a single block', async () => {
+  const { ctx, store, sb } = await seeded();
+  const ino = await ctx.fsWriteEntry(store, sb, 0, 'OLD.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('same bytes'),
+  });
+  const freeBefore = ctx.fsCountFreeBlocks(sb);
+  const inodeBefore = plain(await store.get('inodes', ino));
+
+  assert.strictEqual(await ctx.fsRenameEntry(store, 0, 'OLD.txt', 0, 'NEW.txt'), true);
+
+  assert.strictEqual(await store.get('dirents', '0/OLD.txt'), undefined);
+  assert.strictEqual(await store.get('dirents', '0/NEW.txt'), ino);
+  assert.strictEqual(ctx.fsCountFreeBlocks(sb), freeBefore, 'rename must not reallocate');
+  assert.deepStrictEqual(plain(await store.get('inodes', ino)), inodeBefore,
+    'rename must not rewrite the inode');
+  assert.strictEqual(ctx.fsDecodeText(await ctx.fsReadEntryBytes(store, sb, ino)), 'same bytes');
+});
+
+test('the tree rebuilds from a full dirent scan, nested and typed', async () => {
+  const { ctx, store, sb } = await seeded();
+  const docsIno = await ctx.fsWriteEntry(store, sb, 0, 'DOCS', { type: 'dir' });
+  await ctx.fsWriteEntry(store, sb, 0, 'ROOT.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('at the root'),
+  });
+  await ctx.fsWriteEntry(store, sb, docsIno, 'INNER.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('nested'),
+  });
+  await ctx.fsWriteEntry(store, sb, 0, 'PIC.png', {
+    type: 'blob', bytes: new Uint8Array([1, 2, 3]), meta: { kind: 'image', size: 3 },
+  });
+
+  const tree = await ctx.fsReadTree(store);
+  assert.deepStrictEqual(plain(tree.dirs).sort(), ['DOCS']);
+  assert.strictEqual(tree.files['ROOT.txt'], 'at the root');
+  assert.strictEqual(tree.subdirs.DOCS.files['INNER.txt'], 'nested');
+  assert.strictEqual(tree.blobs['PIC.png'].kind, 'image');
+});
+
+test('an empty store rebuilds as an empty tree rather than throwing', async () => {
+  const { ctx, store } = await seeded();
+  const tree = await ctx.fsReadTree(store);
+  assert.deepStrictEqual(plain(tree.dirs), []);
+  assert.deepStrictEqual(plain(tree.files), {});
+});
