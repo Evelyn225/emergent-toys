@@ -252,6 +252,41 @@ function _vfsQueue(op, deltaBytes) {
   _vfsFlushTimer = setTimeout(() => { void vfsFlush(); }, VFS_FLUSH_DELAY_MS);
 }
 
+// The accessor handed to backend.commit. Returns null for a path that no
+// longer exists, which is the normal case for an `unlink` op: the backend
+// needs to know the entry is gone, not to be handed a stale copy of it.
+//
+// Async because of blobs. A blob's in-memory record is { url, kind, size,
+// mime } and holds no bytes at all - the bytes are in the Blob behind that
+// object URL. Fetching the URL is the only way to get them that works however
+// the blob was created, and it is asynchronous. The alternative, adding a
+// bytes field to the record, would keep a second full copy of every image and
+// video in memory for the whole session on top of the Blob the URL pins.
+async function _vfsReadEntryForCommit(dirName, name) {
+  const dir = vfsDirNodeSync(dirName);
+  if (!dir) return null;
+  if (dir.files && dir.files.has(name)) {
+    return { kind: 'file', text: dir.files.get(name), dirName, name };
+  }
+  if (dir.blobs && dir.blobs.has(name)) {
+    const blob = dir.blobs.get(name);
+    let bytes = new Uint8Array(0);
+    try {
+      if (blob && blob.url) {
+        bytes = new Uint8Array(await (await fetch(blob.url)).arrayBuffer());
+      }
+    } catch (e) {
+      // A revoked or unreachable object URL must not fail the whole commit.
+      // Persisting the record with no bytes keeps the file listed and its
+      // metadata intact, which is strictly better than losing the commit that
+      // carried every other change in this batch.
+    }
+    return { kind: 'blob', blob, bytes, dirName, name };
+  }
+  if (dir.dirs && dir.dirs.has(name)) return { kind: 'dir', dirName, name };
+  return null;
+}
+
 // Commit pending mutations. This never rejects - `onError` is the reporting
 // channel, because the debounce path discards this promise and a rejection
 // there would be an unhandled rejection with no caller to catch it.
@@ -270,9 +305,19 @@ async function vfsFlush() {
   const opsBytes = _vfsPendingBytes;
   _vfsPendingOps = [];
   const flushed = (async () => {
-    const snapshot = vfsSerializeTree();
+    // Skip the whole-tree walk for a backend that does not read it. The
+    // IndexedDB backend commits from `ops` alone, and serializing the entire
+    // filesystem on every commit just to throw it away would undo the main
+    // reason for moving off the snapshot model. Undeclared means true, so
+    // storage-local and storage-mem keep working untouched.
+    const wantsSnapshot = backend.needsSnapshot !== false;
+    const snapshot = wantsSnapshot ? vfsSerializeTree() : undefined;
     try {
-      await backend.commit({ ops, snapshot });
+      // `ops` are path descriptors and carry no content, so a backend writing
+      // incrementally needs a way to read the current state of a named entry.
+      // Reading live rather than from a snapshot is deliberate: by the time a
+      // commit runs, the tree is the truth.
+      await backend.commit({ ops, snapshot, readEntry: _vfsReadEntryForCommit });
       // A remount while this was in flight means these numbers describe a
       // filesystem that is no longer mounted. Do not let them poison the new one.
       if (_vfsBackend === backend) {
