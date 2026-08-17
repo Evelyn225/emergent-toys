@@ -268,7 +268,20 @@ function createIdbBackend(options) {
           tx.onabort = () => reject(VfsError('EIO', 'IndexedDB transaction aborted'));
         });
       } catch (err) {
-        tx.abort();
+        // A failing request auto-aborts its own transaction in real
+        // IndexedDB the instant the unhandled error fires, so by the time
+        // this runs the abort() below is usually redundant - and .abort() on
+        // a transaction that has already finished throws InvalidStateError.
+        // That is expected, not a new failure: the transaction is already in
+        // the state this call was trying to put it in, so it is swallowed.
+        // Anything else abort() throws is a genuinely different, unexpected
+        // problem and is kept - as what this function ultimately throws,
+        // taking priority over `err` since it represents a problem `err`
+        // does not describe - rather than silently discarded.
+        let abortErr = null;
+        try { tx.abort(); } catch (e) {
+          if (e.name !== 'InvalidStateError') abortErr = e;
+        }
         // fsAllocBlocks/fsFreeBlocks mutate `sb` in memory synchronously,
         // well before the request that would have persisted it either lands
         // or fails - so by the time a write fails, `sb` may already disagree
@@ -279,10 +292,13 @@ function createIdbBackend(options) {
         // Discarding it, along with the directory cache built against it,
         // forces the next ensure() to re-read authoritative state instead of
         // trusting memory that this transaction never actually committed.
+        // This runs unconditionally - whether abort() threw InvalidStateError,
+        // threw something else, or didn't throw at all - because none of
+        // those outcomes changes the fact that `sb` may no longer be trustworthy.
         store = null;
         sb = null;
         dirInos = new Map();
-        throw err;
+        throw abortErr || err;
       }
     },
 

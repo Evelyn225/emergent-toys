@@ -161,7 +161,23 @@ function makeIndexedDbStub(options) {
 
     const tx = {
       oncomplete: null, onerror: null, onabort: null,
-      abort() { settle(false); },
+      // Real IndexedDB throws InvalidStateError for abort() on a transaction
+      // that has already finished (committed OR aborted) - which includes
+      // the common case of a caller calling abort() defensively after a
+      // request error already auto-aborted the transaction on its own (see
+      // request()'s catch below). Silently no-opping here, as an earlier
+      // version of this stub did, hid exactly that: a caller relying on its
+      // own abort() call to run cleanup code finds out only in a real
+      // browser that the call throws before that code ever executes.
+      abort() {
+        if (settled) {
+          const err = new Error(
+            "Failed to execute 'abort' on 'IDBTransaction': The transaction has finished.");
+          err.name = 'InvalidStateError';
+          throw err;
+        }
+        settle(false);
+      },
     };
 
     function settle(commit) {

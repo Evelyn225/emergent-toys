@@ -332,3 +332,65 @@ test('a rewrite interrupted mid-release leaves the original file intact, not int
     'a rolled-back rewrite must leave the original content completely intact, not spliced ' +
     'with a neighboring block\'s bytes');
 });
+
+// ── Task 4.6: the failure path must not fail ──────────────────────
+
+test('a write REQUEST failure (the kind that auto-aborts its own transaction) still lets the next commit run clean', async () => {
+  // Distinct from 4.5's "stale in-memory superblock" test in what it is
+  // actually proving: that test caught the underlying bug too, but this one
+  // exists specifically to guard the interaction 4.6 fixes - a failing
+  // request auto-aborts the transaction before commit()'s own catch block
+  // ever calls tx.abort(), so that call is redundant and (in a real browser)
+  // throws InvalidStateError. If that throw escapes commit()'s catch block
+  // before the cache-discard lines run, the stale sb survives and this test
+  // fails the same way the 4.5 one did.
+  const { ctx, stub } = idbWithFailure();
+  const backend = ctx.createIdbBackend({ totalBlocks: 4 });
+  await backend.load();
+
+  // _failNthWriteFromNow fails a real put() REQUEST from inside the store,
+  // not a hand-thrown error from the commit loop's own logic - this is what
+  // disk pressure, a quota rejection, or a closed connection look like.
+  stub._failNthWriteFromNow(2);
+  let threw = null;
+  try {
+    await backend.commit({
+      ops: [{ op: 'write', dirName: '', name: 'FAIL.txt' }],
+      readEntry: () => ({ kind: 'file', text: 'x'.repeat(4096 * 2), dirName: '', name: 'FAIL.txt' }),
+    });
+  } catch (e) { threw = e; }
+  assert.ok(threw, 'setup: the injected write failure must actually fire');
+
+  // No further failure armed. A stale sb surviving the failed commit above
+  // would make this throw a fabricated ENOSPC, because it would still think
+  // 2 of the 4 blocks are taken even though nothing from that commit ever
+  // actually persisted.
+  await backend.commit({
+    ops: [{ op: 'write', dirName: '', name: 'OK.txt' }],
+    readEntry: () => ({ kind: 'file', text: 'x'.repeat(4096 * 3), dirName: '', name: 'OK.txt' }),
+  });
+
+  const tree = await ctx.createIdbBackend().load();
+  assert.strictEqual(tree.files['OK.txt'], 'x'.repeat(4096 * 3));
+  assert.strictEqual(tree.files['FAIL.txt'], undefined, 'the failed write must not have landed');
+});
+
+test('commit() rejects with the real cause, not the InvalidStateError from a redundant abort', async () => {
+  const { ctx, stub } = idbWithFailure();
+  const backend = ctx.createIdbBackend();
+  await backend.load();
+
+  stub._failNthWriteFromNow(1);
+  let threw = null;
+  try {
+    await backend.commit({
+      ops: [{ op: 'write', dirName: '', name: 'A.txt' }],
+      readEntry: () => ({ kind: 'file', text: 'x', dirName: '', name: 'A.txt' }),
+    });
+  } catch (e) { threw = e; }
+  assert.ok(threw, 'setup: the injected write failure must actually fire');
+  // The real cause is what needs to reach vfsFlush's onError and, from
+  // there, the user - not an artifact of cleaning up a transaction that a
+  // failing request had already finished on its own.
+  assert.strictEqual(threw.name, 'SimulatedFailure');
+});
