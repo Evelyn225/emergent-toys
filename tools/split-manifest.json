@@ -2,6 +2,7 @@
   "os/icons.js",
   "os/vfs.js",
   "os/fs-format.js",
+  "os/storage-idb.js",
   "os/kernel.js",
   "os/storage-mem.js",
   "os/storage-local.js",
