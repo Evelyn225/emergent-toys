@@ -179,6 +179,57 @@ test('deleting something that is not there reports false rather than throwing', 
   assert.strictEqual(await ctx.fsDeleteEntry(store, sb, 0, 'NOPE.txt'), false);
 });
 
+test('deleting a directory frees the blocks of the file inside it', async () => {
+  const { ctx, store, sb } = await seeded();
+  const before = ctx.fsCountFreeBlocks(sb);
+  const dirIno = await ctx.fsWriteEntry(store, sb, 0, 'FOLDER', { type: 'dir' });
+  await ctx.fsWriteEntry(store, sb, dirIno, 'INSIDE.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('y'.repeat(4096 * 3 + 5)),
+  });
+  assert.ok(ctx.fsCountFreeBlocks(sb) < before, 'the file must actually have taken blocks');
+
+  assert.strictEqual(await ctx.fsDeleteEntry(store, sb, 0, 'FOLDER'), true);
+  assert.strictEqual(ctx.fsCountFreeBlocks(sb), before,
+    'every block the nested file held must be returned to the pool');
+});
+
+test('deleting a directory recurses through a nested subdirectory', async () => {
+  const { ctx, store, sb } = await seeded();
+  const before = ctx.fsCountFreeBlocks(sb);
+  const dirIno = await ctx.fsWriteEntry(store, sb, 0, 'DIR', { type: 'dir' });
+  const subdirIno = await ctx.fsWriteEntry(store, sb, dirIno, 'SUBDIR', { type: 'dir' });
+  const fileIno = await ctx.fsWriteEntry(store, sb, subdirIno, 'DEEP.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('z'.repeat(4096 * 2 + 1)),
+  });
+  assert.ok(ctx.fsCountFreeBlocks(sb) < before, 'the nested file must actually have taken blocks');
+
+  assert.strictEqual(await ctx.fsDeleteEntry(store, sb, 0, 'DIR'), true);
+  assert.strictEqual(ctx.fsCountFreeBlocks(sb), before,
+    'a single level of recursion is not enough - the deep file must be freed too');
+
+  // The descendant records must be gone from the store, not merely
+  // unreachable from root: an orphaned record with no freed blocks would
+  // still make this assertion pass, so check the records directly too.
+  assert.strictEqual(await store.get('inodes', fileIno), undefined);
+  assert.strictEqual(await store.get('inodes', subdirIno), undefined);
+  assert.strictEqual(await store.get('inodes', dirIno), undefined);
+  assert.strictEqual(await store.get('dirents', `${dirIno}/SUBDIR`), undefined);
+  assert.strictEqual(await store.get('dirents', `${subdirIno}/DEEP.txt`), undefined);
+  assert.strictEqual(await store.get('dirents', '0/DIR'), undefined);
+});
+
+test('deleting a plain file is unaffected by the recursive directory handling', async () => {
+  const { ctx, store, sb } = await seeded();
+  const before = ctx.fsCountFreeBlocks(sb);
+  const ino = await ctx.fsWriteEntry(store, sb, 0, 'PLAIN.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('just a file'),
+  });
+  assert.strictEqual(await ctx.fsDeleteEntry(store, sb, 0, 'PLAIN.txt'), true);
+  assert.strictEqual(ctx.fsCountFreeBlocks(sb), before);
+  assert.strictEqual(await store.get('inodes', ino), undefined);
+  assert.strictEqual(await store.get('dirents', '0/PLAIN.txt'), undefined);
+});
+
 test('rename rewrites one dirent and does not touch a single block', async () => {
   const { ctx, store, sb } = await seeded();
   const ino = await ctx.fsWriteEntry(store, sb, 0, 'OLD.txt', {

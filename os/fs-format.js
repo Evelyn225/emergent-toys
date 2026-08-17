@@ -243,10 +243,54 @@ async function fsReadEntryBytes(store, sb, ino) {
   return out;
 }
 
+// Every descendant of a deleted directory needs its blocks freed and its
+// inode/dirent records removed, or they sit in the store unreachable from
+// root forever: fsReadTree only ever walks down from root via dirent parent
+// links, so an orphan never shows up again, but its bitmap bits stay set and
+// free space quietly shrinks every session. One scan of the whole dirent
+// store, grouped by parent, rather than one scan per recursion level - a
+// scan per level is quadratic on a deep tree, and boot already pays for a
+// full scan in fsReadTree so this is no new cost class.
+async function _fsCollectSubtree(store, rootIno) {
+  const dirents = await store.scan(FS_STORE_DIRENTS);
+  const byParent = new Map();
+  dirents.forEach(([key, ino]) => {
+    const slash = key.indexOf('/');
+    const parent = Number(key.slice(0, slash));
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push({ key, ino });
+  });
+
+  // Depth is user-controlled (nested folders can go arbitrarily deep), so
+  // this is an explicit worklist rather than a recursive call that could
+  // blow the stack on a deeply nested tree.
+  const out = [];
+  const work = [rootIno];
+  while (work.length) {
+    const ino = work.pop();
+    for (const child of byParent.get(ino) || []) {
+      out.push(child);
+      work.push(child.ino);
+    }
+  }
+  return out;
+}
+
 async function fsDeleteEntry(store, sb, parentIno, name) {
   const key = _fsDirentKey(parentIno, name);
   const ino = await store.get(FS_STORE_DIRENTS, key);
   if (ino === undefined) return false;
+
+  const inode = await store.get(FS_STORE_INODES, ino);
+  if (inode && inode.type === 'dir') {
+    const descendants = await _fsCollectSubtree(store, ino);
+    for (const { key: dKey, ino: dIno } of descendants) {
+      await _fsReleaseInode(store, sb, dIno);
+      await store.del(FS_STORE_INODES, dIno);
+      await store.del(FS_STORE_DIRENTS, dKey);
+    }
+  }
+
   await _fsReleaseInode(store, sb, ino);
   await store.del(FS_STORE_INODES, ino);
   await store.del(FS_STORE_DIRENTS, key);
