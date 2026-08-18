@@ -129,11 +129,20 @@ function makeIndexedDbStub(options) {
 
   function makeDb(name) {
     const stores = new Map(); // storeName -> Map(key -> clonedValue): the committed data
+    // Real IndexedDB tracks every open() call as its own connection and only
+    // actually goes away once close() runs on each of them. This stub
+    // returns the SAME db object for every open() of a given name (see
+    // open() below) rather than modelling distinct connection objects, but a
+    // shared live-connection COUNT is enough to model what deleteDatabase()
+    // actually needs to know: is anything still connected right now.
+    let liveConnections = 0;
     const db = {
       name,
       objectStoreNames: { contains: (n) => stores.has(n) },
       createObjectStore(n) { stores.set(n, new Map()); },
-      close() {},
+      close() { if (liveConnections > 0) liveConnections--; },
+      _registerConnection() { liveConnections++; },
+      _liveConnections() { return liveConnections; },
       transaction(names) {
         const storeNames = Array.isArray(names) ? names : [names];
         storeNames.forEach(n => {
@@ -317,15 +326,27 @@ function makeIndexedDbStub(options) {
       later(() => {
         const fresh = !databases.has(name);
         if (fresh) databases.set(name, makeDb(name));
-        req.result = databases.get(name);
+        const opened = databases.get(name);
+        opened._registerConnection();
+        req.result = opened;
         if (fresh && req.onupgradeneeded) req.onupgradeneeded({ target: req });
         if (req.onsuccess) req.onsuccess({ target: req });
       });
       return req;
     },
     deleteDatabase(name) {
-      const req = { onsuccess: null, onerror: null, result: undefined };
+      const req = { onsuccess: null, onerror: null, onblocked: null, result: undefined };
       later(() => {
+        const existing = databases.get(name);
+        if (existing && existing._liveConnections() > 0) {
+          // Real IndexedDB does not fail a blocked delete - it fires
+          // onblocked and then waits, indefinitely, for every connection to
+          // close, never calling onsuccess or onerror on its own. Modelling
+          // that "forever" faithfully is the whole point: it is what makes a
+          // caller that only wires onsuccess/onerror hang instead of fail.
+          if (req.onblocked) req.onblocked({ target: req });
+          return;
+        }
         databases.delete(name);
         req.result = undefined;
         if (req.onsuccess) req.onsuccess({ target: req });

@@ -62,6 +62,11 @@ test('deleting the database really removes it', async () => {
     readEntry: () => ({ kind: 'file', text: 'x', dirName: '', name: 'A.txt' }),
   });
   assert.strictEqual(stub._databases.size, 1);
+  // Task 5.1: deleteDatabase() now defers behind onblocked for as long as any
+  // connection stays open, matching real IndexedDB - this backend's own
+  // connection is exactly such a connection, so it has to be closed first,
+  // the same way migration's abort path (os/fs-migrate.js) does.
+  await backend._close();
   await ctx.fsIdbDeleteDatabase();
   assert.strictEqual(stub._databases.size, 0);
 });

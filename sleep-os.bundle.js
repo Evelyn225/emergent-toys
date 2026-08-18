@@ -1127,9 +1127,26 @@ function _fsIdbOpen() {
   });
 }
 
+// Not routed through _fsIdbRequest: deleteDatabase() has a third outcome
+// that plain get/put/delete requests never do. If any connection to the
+// database - including this backend's own, unless the caller closed it
+// first - is still open, IndexedDB does not fail the request; it fires
+// onblocked and then waits, indefinitely, for every connection to close,
+// never calling onsuccess or onerror on its own. _fsIdbRequest only wires
+// onsuccess/onerror, so a blocked delete would leave its promise permanently
+// unsettled - exactly the shape of hang this function exists to avoid.
+// Failing fast on onblocked is a deliberate choice: the caller (migration's
+// abort path) needs to know NOW that the partial database is still there,
+// not wait on a request that may never resolve because some other tab has
+// its own connection open.
 async function fsIdbDeleteDatabase() {
   if (!fsIdbAvailable()) return;
-  await _fsIdbRequest(indexedDB.deleteDatabase(FS_IDB_NAME));
+  await new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(FS_IDB_NAME);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error || VfsError('EIO', 'could not delete ' + FS_IDB_NAME));
+    req.onblocked = () => reject(VfsError('EBUSY', 'delete of ' + FS_IDB_NAME + ' blocked by an open connection'));
+  });
 }
 
 // The abstract store from os/fs-format.js, over a real database. Used only
@@ -1419,6 +1436,23 @@ function createIdbBackend(options) {
     // triggered it.
     async _store() { await ensure(); return store; },
 
+    // Closes THIS backend's own IndexedDB connection. Deliberately narrow:
+    // call this only from migration's abort path (fs-migrate.js), right
+    // before deleting the database, never from an ordinary commit failure.
+    // deleteDatabase() defers behind onblocked for as long as ANY
+    // connection stays open, including this backend's own - closing it here
+    // is what lets migration's cleanup delete actually complete instead of
+    // hanging on a connection it forgot it was still holding. An ordinary
+    // commit failure has no reason to give up the connection at all: the
+    // backend is expected to keep working afterward, and ensure()'s cheap
+    // early return (`if (store) return;`) depends on `store` staying set for
+    // the backend's whole normal lifetime.
+    async _close() {
+      if (db) db.close();
+      db = null;
+      store = null;
+    },
+
     // Runs a whole batch of writes as ONE transaction, exactly the way
     // commit()'s write phase does above - same store shape, same guarded
     // abort (InvalidStateError from a request failure that already
@@ -1536,8 +1570,36 @@ async function fsMigrateFromLocalStorage(backend, options) {
     return { migrated: true, reason: 'ok' };
   } catch (err) {
     // Rule 2. Destroy the partial database before anything can read it.
-    try { await fsIdbDeleteDatabase(); } catch (e) { /* nothing further to try */ }
-    return { migrated: false, reason: 'failed', error: (err && err.message) || String(err) };
+    //
+    // Close THIS backend's own connection first. deleteDatabase() defers
+    // behind onblocked for as long as any connection to the database stays
+    // open - including ours - and without this the delete below would never
+    // resolve at all rather than fail: real IndexedDB does not time out or
+    // reject a blocked delete on its own, it just waits.
+    //
+    // Closing our connection is not a guarantee the delete will succeed:
+    // IndexedDB is per-origin, so another tab can hold a connection open
+    // regardless of anything this function does. `databaseDeleted` records
+    // which actually happened, because the two outcomes are materially
+    // different - not just "did the delete API call resolve" bookkeeping.
+    // A successful delete means the partial database is really gone; a
+    // blocked one means it is still sitting there, unreachable through
+    // `migrated` (still false, so the next boot's retry will converge over
+    // it) but not actually destroyed. A caller that cannot tell those apart
+    // would report a clean abort when a partial database is still on disk.
+    let databaseDeleted = true;
+    try {
+      await backend._close();
+      await fsIdbDeleteDatabase();
+    } catch (e) {
+      databaseDeleted = false;
+    }
+    return {
+      migrated: false,
+      reason: 'failed',
+      databaseDeleted,
+      error: (err && err.message) || String(err),
+    };
   }
 }
 
@@ -1567,11 +1629,15 @@ async function _fsMarkMigrated(backend) {
 // bytes live in os/blob-store.js under its own keys. Migrating those is a
 // separate concern and is not in this task.
 //
-// onProgress must NOT await or otherwise yield. This entire walk runs inside
-// one IndexedDB transaction, and any non-IDB work - including a callback
-// that awaits something - is exactly what would kill it early: the same
-// constraint that forced commit()'s readEntry resolution into its own phase
-// before any transaction opens.
+// onProgress is called but never awaited: this entire walk runs inside one
+// IndexedDB transaction, and it is the AWAITING, not the yielding an async
+// callback would do on its own, that would put non-IDB work on the critical
+// path and risk the transaction going inactive - the same reason
+// commit()'s readEntry resolution had to move into its own phase before any
+// transaction opens. Because this call is never awaited, an async
+// onProgress does not break anything; it is simply fire-and-forgotten, its
+// own promise left to settle on its own time, off this transaction's path
+// entirely.
 async function _fsImportNode(store, sb, node, parentIno, onProgress) {
   for (const [name, text] of Object.entries((node && node.files) || {})) {
     await fsWriteEntry(store, sb, parentIno, name, {

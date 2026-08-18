@@ -92,3 +92,108 @@ test('a failure partway deletes the database and leaves localStorage untouched',
   assert.strictEqual(ls.getItem('sleepOS-fs'), JSON.stringify(OLD_TREE),
     'localStorage is the fallback and must be exactly as it was');
 });
+
+// ── Task 5.1: deleteDatabase() defers behind onblocked ────────────
+
+test('the abort path closes this backend\'s own connection so the delete actually completes', async () => {
+  const { ctx, ls, stub } = migrating();
+  const backend = ctx.createIdbBackend();
+  let calls = 0;
+  const realWrite = ctx.fsWriteEntry;
+  ctx.fsWriteEntry = async (...args) => {
+    calls++;
+    if (calls === 2) throw new Error('disk went away mid-migration');
+    return realWrite(...args);
+  };
+
+  const result = await ctx.fsMigrateFromLocalStorage(backend);
+  ctx.fsWriteEntry = realWrite;
+
+  assert.strictEqual(result.migrated, false);
+  assert.strictEqual(result.reason, 'failed');
+  assert.strictEqual(result.databaseDeleted, true,
+    'with nothing else connected, closing this backend\'s own connection must let the delete complete');
+  assert.strictEqual(stub._databases.size, 0,
+    'a partly written database must be destroyed, not left for the next boot to read');
+  assert.strictEqual(ls.getItem('sleepOS-fs'), JSON.stringify(OLD_TREE));
+});
+
+// A short explicit timeout: if this regresses to the pre-5.1 shape (no
+// onblocked handling), the delete request never settles and this test would
+// otherwise hang the whole suite rather than fail loudly.
+test('a second open connection blocks the delete, and migration fails instead of hanging', { timeout: 2000 }, async () => {
+  const { ctx, ls, stub } = migrating();
+  const backend = ctx.createIdbBackend();
+
+  // Get the database created the same way fsMigrateFromLocalStorage itself
+  // does, then open a SECOND, independent connection to it and deliberately
+  // never close it - standing in for another tab that is still connected
+  // when this one tries to clean up after a failed migration.
+  await backend._store();
+  const outsideReq = stub.open('sleepOS-fs');
+  const outsideConn = await new Promise((res, rej) => {
+    outsideReq.onsuccess = () => res(outsideReq.result);
+    outsideReq.onerror = () => rej(outsideReq.error);
+  });
+
+  let calls = 0;
+  const realWrite = ctx.fsWriteEntry;
+  ctx.fsWriteEntry = async (...args) => {
+    calls++;
+    if (calls === 2) throw new Error('disk went away mid-migration');
+    return realWrite(...args);
+  };
+
+  const result = await ctx.fsMigrateFromLocalStorage(backend);
+  ctx.fsWriteEntry = realWrite;
+  outsideConn.close();
+
+  assert.strictEqual(result.migrated, false);
+  assert.strictEqual(result.reason, 'failed');
+  assert.strictEqual(result.databaseDeleted, false,
+    'a connection this backend does not own must block the delete, not be silently ignored');
+  // The partial database is still there - not gone, but not readable as a
+  // real filesystem either, since `migrated` was never set on it.
+  assert.strictEqual(stub._databases.size, 1);
+  assert.strictEqual(ls.getItem('sleepOS-fs'), JSON.stringify(OLD_TREE));
+});
+
+test('a blocked delete is distinguishable from a clean abort in the return value', async () => {
+  function inject(ctx) {
+    let calls = 0;
+    const realWrite = ctx.fsWriteEntry;
+    ctx.fsWriteEntry = async (...args) => {
+      calls++;
+      if (calls === 2) throw new Error('disk went away mid-migration');
+      return realWrite(...args);
+    };
+    return () => { ctx.fsWriteEntry = realWrite; };
+  }
+
+  const clean = migrating();
+  const restoreClean = inject(clean.ctx);
+  const cleanResult = await clean.ctx.fsMigrateFromLocalStorage(clean.ctx.createIdbBackend());
+  restoreClean();
+
+  const blocked = migrating();
+  const blockedBackend = blocked.ctx.createIdbBackend();
+  await blockedBackend._store();
+  const outsideReq = blocked.stub.open('sleepOS-fs');
+  const outsideConn = await new Promise((res, rej) => {
+    outsideReq.onsuccess = () => res(outsideReq.result);
+    outsideReq.onerror = () => rej(outsideReq.error);
+  });
+  const restoreBlocked = inject(blocked.ctx);
+  const blockedResult = await blocked.ctx.fsMigrateFromLocalStorage(blockedBackend);
+  restoreBlocked();
+  outsideConn.close();
+
+  // Both are commit failures and share the same `reason` - `reason` alone
+  // cannot tell Task 6 "the partial database is really gone" apart from
+  // "it is still sitting there, unreachable but not destroyed". That is
+  // exactly what databaseDeleted is for.
+  assert.strictEqual(cleanResult.reason, 'failed');
+  assert.strictEqual(blockedResult.reason, 'failed');
+  assert.strictEqual(cleanResult.databaseDeleted, true);
+  assert.strictEqual(blockedResult.databaseDeleted, false);
+});

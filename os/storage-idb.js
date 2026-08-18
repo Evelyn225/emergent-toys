@@ -37,9 +37,26 @@ function _fsIdbOpen() {
   });
 }
 
+// Not routed through _fsIdbRequest: deleteDatabase() has a third outcome
+// that plain get/put/delete requests never do. If any connection to the
+// database - including this backend's own, unless the caller closed it
+// first - is still open, IndexedDB does not fail the request; it fires
+// onblocked and then waits, indefinitely, for every connection to close,
+// never calling onsuccess or onerror on its own. _fsIdbRequest only wires
+// onsuccess/onerror, so a blocked delete would leave its promise permanently
+// unsettled - exactly the shape of hang this function exists to avoid.
+// Failing fast on onblocked is a deliberate choice: the caller (migration's
+// abort path) needs to know NOW that the partial database is still there,
+// not wait on a request that may never resolve because some other tab has
+// its own connection open.
 async function fsIdbDeleteDatabase() {
   if (!fsIdbAvailable()) return;
-  await _fsIdbRequest(indexedDB.deleteDatabase(FS_IDB_NAME));
+  await new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(FS_IDB_NAME);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error || VfsError('EIO', 'could not delete ' + FS_IDB_NAME));
+    req.onblocked = () => reject(VfsError('EBUSY', 'delete of ' + FS_IDB_NAME + ' blocked by an open connection'));
+  });
 }
 
 // The abstract store from os/fs-format.js, over a real database. Used only
@@ -328,6 +345,23 @@ function createIdbBackend(options) {
     // to one database is how a migration ends up racing the boot that
     // triggered it.
     async _store() { await ensure(); return store; },
+
+    // Closes THIS backend's own IndexedDB connection. Deliberately narrow:
+    // call this only from migration's abort path (fs-migrate.js), right
+    // before deleting the database, never from an ordinary commit failure.
+    // deleteDatabase() defers behind onblocked for as long as ANY
+    // connection stays open, including this backend's own - closing it here
+    // is what lets migration's cleanup delete actually complete instead of
+    // hanging on a connection it forgot it was still holding. An ordinary
+    // commit failure has no reason to give up the connection at all: the
+    // backend is expected to keep working afterward, and ensure()'s cheap
+    // early return (`if (store) return;`) depends on `store` staying set for
+    // the backend's whole normal lifetime.
+    async _close() {
+      if (db) db.close();
+      db = null;
+      store = null;
+    },
 
     // Runs a whole batch of writes as ONE transaction, exactly the way
     // commit()'s write phase does above - same store shape, same guarded
