@@ -37,7 +37,7 @@ test('no source reaches the filesystem outside the VFS', () => {
 // level instead: a pathless op is invisible to a backend that commits from ops
 // alone, and the failure mode is silent - the story files simply stop
 // persisting, with no error anywhere.
-test('no source queues a pathless op', () => {
+test('no source reintroduces the retired legacy-write pathless-op marker', () => {
   const offenders = [];
   for (const rel of readManifest()) {
     const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');

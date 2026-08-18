@@ -400,6 +400,15 @@ function vfsQueueDirectWrite(dirName, name, prevValue) {
 // longer exists, which is the normal case for an `unlink` op: the backend
 // needs to know the entry is gone, not to be handed a stale copy of it.
 //
+// A non-null result for an `unlink` op is equally normal and just as real: it
+// reads the LIVE tree, not a snapshot of what existed when the op was queued,
+// so an unlink followed by a re-create of the same path within one debounce
+// window resolves to the NEW entry, not "gone." A backend that gates deletion
+// on `readEntry` returning null, rather than on `op.op === 'unlink'`, would
+// silently keep the old generation's content around instead of overwriting
+// it - os/storage-idb.js's commit() branches on op.op for exactly this
+// reason and only falls through to readEntry's result for write/writeBlob.
+//
 // Async because of blobs. A blob's in-memory record is { url, kind, size,
 // mime } and holds no bytes at all - the bytes are in the Blob behind that
 // object URL. Fetching the URL is the only way to get them that works however
@@ -513,7 +522,18 @@ async function vfsFlush() {
       // user's last save is gone with only a transient callback to show for it.
       // Deliberately no auto-retry: on a persistently full disk that would be
       // an error-toast storm. The next mutation or explicit flush retries, and
-      // because the snapshot is whole-tree that one commit carries everything.
+      // replaying these ops again is safe for either backend kind: a
+      // snapshot backend re-sends the whole tree regardless of which ops
+      // triggered it, and an ops-only backend (IndexedDB, needsSnapshot:
+      // false) resolves `readEntry` against the LIVE tree at replay time, not
+      // against whatever content was current when the op first queued - so a
+      // stale value from the failed attempt can never be replayed. Per-op
+      // idempotency backs this up: fsDeleteEntry and fsRenameEntry
+      // (os/fs-format.js) return false rather than throwing when the target
+      // is already gone or already moved, and fsWriteEntry releases a
+      // rewritten entry's old blocks before allocating new ones, so a write
+      // that partially landed before the failure does not double-allocate on
+      // replay.
       if (_vfsBackend === backend) _vfsPendingOps = ops.concat(_vfsPendingOps);
       throw err;
     } finally {
@@ -4828,9 +4848,13 @@ function _desDir(o) {
 const SEEDED_DOCS_DATA = _serDir(vfsGetTree().subdirs.get('DOCS'));
 
 // Mutates the tree directly and deliberately queues no op. Unlike the legacy
-// call sites this is not a persistence bug: vfsBootMount runs it on every boot
-// from a constant, so its effect is regenerated rather than restored. Adding
-// schedSave() here would commit a snapshot on every cold boot for no gain.
+// call sites this is not a persistence bug: vfsBootMount runs this from a
+// constant on every boot, so its effect is regenerated rather than restored,
+// and there is nothing here that needs a commit to survive. If a later real
+// write is the first thing to ever target DOCS, the backend's inoForDir
+// (os/storage-idb.js) creates the directory on demand rather than requiring
+// a prior mkdir op to have reserved its ino - so skipping a commit here
+// leaves nothing dangling for that write to find missing.
 function refreshSeededDocs() {
   const root = vfsGetTree();
   root.dirs.add('DOCS');

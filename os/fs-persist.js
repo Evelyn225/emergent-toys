@@ -23,9 +23,13 @@ function _desDir(o) {
 const SEEDED_DOCS_DATA = _serDir(vfsGetTree().subdirs.get('DOCS'));
 
 // Mutates the tree directly and deliberately queues no op. Unlike the legacy
-// call sites this is not a persistence bug: vfsBootMount runs it on every boot
-// from a constant, so its effect is regenerated rather than restored. Adding
-// schedSave() here would commit a snapshot on every cold boot for no gain.
+// call sites this is not a persistence bug: vfsBootMount runs this from a
+// constant on every boot, so its effect is regenerated rather than restored,
+// and there is nothing here that needs a commit to survive. If a later real
+// write is the first thing to ever target DOCS, the backend's inoForDir
+// (os/storage-idb.js) creates the directory on demand rather than requiring
+// a prior mkdir op to have reserved its ino - so skipping a commit here
+// leaves nothing dangling for that write to find missing.
 function refreshSeededDocs() {
   const root = vfsGetTree();
   root.dirs.add('DOCS');
