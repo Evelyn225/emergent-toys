@@ -3,6 +3,7 @@
 // a vm context makes its `function` declarations context properties, which is
 // how the tests reach them. `const` and `let` do NOT become properties, so
 // anything a test needs must be declared with `function`.
+const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -409,4 +410,50 @@ function plain(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
-module.exports = { makeOsContext, loadOsSources, makeLocalStorageStub, makeIndexedDbStub, ROOT, plain };
+// Pulls one function's full source text out of a file read as a plain
+// string, for a test that needs to eval a single function in a vm context
+// without loading (and running the side effects of) the whole file it lives
+// in. test/fs-boot-backend.test.cjs uses this to reach fsChooseBackend
+// without dragging in os/fs-persist.js's loadFS() call at parse time;
+// test/daemon-corruption.test.cjs uses it as a plain source-level guard
+// because os/daemon.js cannot be loaded in this harness at all.
+//
+// Finds the function by name (with or without a leading `async`) and then
+// walks brace depth from its opening `{` to find the matching closing one,
+// rather than guessing "the next line that starts with `}`". A textual guess
+// silently truncates the slice the moment a future edit ever dedents an
+// inner block (an `if`, a `catch`) to column 0 - and the truncated piece can
+// still happen to parse, so a caller would evaluate a fragment while
+// believing it evaluated the whole function. A depth counter that never
+// returns to zero fails loudly instead.
+//
+// This is a plain brace counter: it does not track string, comment, or
+// regex-literal contents, so a `{` or `}` inside any of those would mis-scan
+// it. That is a standing precondition for every caller, not a fact about one
+// past function - check by hand that the function you are extracting has
+// none of the three before relying on this, and re-check if you ever add
+// code that does.
+function extractFunctionSource(src, fnName) {
+  const marker = new RegExp('(?:async\\s+)?function\\s+' + fnName + '\\s*\\(');
+  const match = marker.exec(src);
+  assert.notStrictEqual(match, null, fnName + ' not found');
+  const start = match.index;
+  const braceStart = src.indexOf('{', start);
+  assert.notStrictEqual(braceStart, -1, 'no opening brace found for ' + fnName);
+  let depth = 0;
+  let end = -1;
+  for (let i = braceStart; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) { end = i + 1; break; }
+    }
+  }
+  assert.notStrictEqual(end, -1, 'never found the closing brace for ' + fnName);
+  assert.strictEqual(depth, 0, 'unbalanced braces while extracting ' + fnName + ' - slice would be truncated');
+  return src.slice(start, end);
+}
+
+module.exports = {
+  makeOsContext, loadOsSources, makeLocalStorageStub, makeIndexedDbStub, ROOT, plain, extractFunctionSource,
+};

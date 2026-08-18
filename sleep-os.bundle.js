@@ -5115,6 +5115,7 @@ function createDaemonStoryDefaults() {
     quarantineSigned: false,
     endingReached: false,
     lastEventText: 'none',
+    corruption: 0,
   };
 }
 
@@ -6114,11 +6115,32 @@ function getDaemonVisualStage() {
   return 0;
 }
 
+// The daemon's own corruption dial, in [0,1].
+//
+// These two visual consumers used to read getDriveFragmentationLevel(). That
+// worked only because the old fragmentation number was fake and idled near
+// 0.68 - it was a mood dial wearing a disk metric's name. Phase 4 made
+// fragmentation a real measurement, and a real filesystem on a fresh install
+// scores near 0, which would have driven the visual level to 0 and stopped the
+// glitches appearing at all for most players. No test would have caught it.
+//
+// So the story owns its own number now. The stage mapping reproduces the
+// visual levels the old fake value produced at each stage: stage 4 crosses the
+// old 0.22 threshold, stage 5 crosses 0.42, and stage 7 crosses 0.62.
+function getDaemonCorruption() {
+  if (daemonStory.endingReached) return 0;
+  const stage = getDaemonVisualStage();
+  if (stage >= 7) return 0.72;
+  if (stage >= 5) return 0.5;
+  if (stage >= 4) return 0.3;
+  return 0.05;
+}
+
 function getDriveFragmentationVisualLevel() {
   if (daemonStory.endingReached) return 0;
   const visualStage = getDaemonVisualStage();
   if (visualStage < 4) return 0;
-  const fragLevel = getDriveFragmentationLevel();
+  const fragLevel = getDaemonCorruption();
   if (fragLevel < 0.22) return 0;
   if (visualStage >= 7 && fragLevel >= 0.62) return 3;
   if (visualStage >= 5 && fragLevel >= 0.42) return 2;
@@ -6130,7 +6152,7 @@ function scheduleDaemonPulse() {
   daemonPulseTimer = null;
   const visualStage = getDaemonVisualStage();
   if (!visualStage) return;
-  const fragLevel = getDriveFragmentationLevel();
+  const fragLevel = getDaemonCorruption();
   const fragFactor = Math.max(0, Math.min(1, (fragLevel - 0.02) / 0.9));
   const delayScale = 1.7 - fragFactor * 0.7;
   const baseMinDelay = visualStage >= 7 ? 3800 : visualStage >= 5 ? 6200 : 9800;
