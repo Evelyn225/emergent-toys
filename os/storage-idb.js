@@ -185,6 +185,77 @@ function createIdbBackend(options) {
     }
   }
 
+  // Runs a whole batch of writes as ONE transaction: opens it, hands `fn`
+  // a transaction-scoped store and the live superblock, waits for the
+  // transaction to actually complete (a request resolving is not the same
+  // as the transaction being durable - IndexedDB only applies a
+  // transaction's writes when the transaction itself does), and on any
+  // failure runs the guarded abort and stale-cache discard below.
+  //
+  // Both commit() and migration (os/fs-migrate.js, via the `_runInWriteTransaction`
+  // property this function is exposed as) go through this - one copy of a
+  // sequence that has needed three separate hardening rounds (4.5's
+  // transaction-completion timing, 4.6's redundant-abort throw, 4.7's
+  // error-precedence rule) rather than two copies a fourth fix would have
+  // to be applied to twice, and might not be.
+  async function _runInWriteTransaction(fn) {
+    await ensure();
+    const tx = db.transaction(
+      [FS_STORE_SUPERBLOCK, FS_STORE_INODES, FS_STORE_DIRENTS, FS_STORE_BLOCKS], 'readwrite');
+    const txStore = _fsIdbTxStore(tx);
+    try {
+      const result = await fn(txStore, sb);
+      // Every request resolving is not the same as the transaction being
+      // durable: IndexedDB only actually applies a transaction's writes
+      // when the transaction itself completes, which - like committing at
+      // all - is a separate event from any one request inside it
+      // succeeding. Returning as soon as the last request's promise
+      // resolved would let a caller (and this backend's own next write)
+      // observe "done" before the write was ever guaranteed to survive.
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(VfsError('EIO', 'IndexedDB transaction aborted'));
+      });
+      return result;
+    } catch (err) {
+      // Two different triggers land here, and only one of them touches an
+      // IDB request at all: a write request failing (disk pressure, quota,
+      // a closed connection) auto-aborts its own transaction the instant
+      // the unhandled error fires, making the abort() below redundant - but
+      // fsAllocBlocks/fsFreeBlocks throwing ENOSPC is a pure in-fiction,
+      // application-level throw with no request involved, so nothing has
+      // aborted anything yet and this abort() is the one doing real work.
+      // Either way, .abort() on a transaction that has already finished
+      // throws InvalidStateError, which is expected on the first path (the
+      // transaction is already in the state this call was trying to put it
+      // in) and swallowed. Anything else abort() throws is a genuinely
+      // different, unexpected problem, and is attached to `err` rather than
+      // thrown in its place - `err` is why the write actually failed and is
+      // what needs to reach vfsFlush's onError and the user; a secondary
+      // cleanup failure must not hide it, but must not be lost either.
+      try { tx.abort(); } catch (e) {
+        if (e.name !== 'InvalidStateError') err.abortError = e;
+      }
+      // fsAllocBlocks/fsFreeBlocks mutate `sb` in memory synchronously,
+      // well before the request that would have persisted it either lands
+      // or fails - so by the time a write fails, `sb` may already disagree
+      // with what is actually durable. A cached copy that survives a
+      // rolled-back transaction is its own corruption source (blocks it
+      // thinks are taken stay invisible to every future allocation), and
+      // it would only surface on whichever write runs after this one.
+      // Discarding it, along with the directory cache built against it,
+      // forces the next ensure() to re-read authoritative state instead of
+      // trusting memory that this transaction never actually committed.
+      // This runs unconditionally - whether abort() threw InvalidStateError,
+      // threw something else, or didn't throw at all - because none of
+      // those outcomes changes the fact that `sb` may no longer be trustworthy.
+      store = null;
+      sb = null;
+      dirInos = new Map();
+      throw err;
+    }
+  }
+
   return {
     // The whole reason this backend exists: it writes from ops and has no use
     // for a whole-tree snapshot.
@@ -225,26 +296,23 @@ function createIdbBackend(options) {
         }
       }
 
-      // Phase 2: IDB work only, on one read-write transaction spanning every
-      // store the format touches, so the whole batch commits or rolls back
-      // as a single unit - not as one independent transaction per request,
-      // which is what let an interrupted commit leave an inode referencing
-      // blocks the free bitmap still called free, or referencing blocks
-      // whose data had already been deleted out from under it.
-      const tx = db.transaction(
-        [FS_STORE_SUPERBLOCK, FS_STORE_INODES, FS_STORE_DIRENTS, FS_STORE_BLOCKS], 'readwrite');
-      const txStore = _fsIdbTxStore(tx);
-      try {
+      // Phase 2: IDB work only, run as one transaction that commits or
+      // rolls back the whole batch as a single unit - not as one
+      // independent transaction per request, which is what let an
+      // interrupted commit leave an inode referencing blocks the free
+      // bitmap still called free, or referencing blocks whose data had
+      // already been deleted out from under it.
+      await _runInWriteTransaction(async (txStore, txSb) => {
         for (const { op, entry } of resolved) {
           const parent = await inoForDir(txStore, op.dirName);
           if (op.op === 'mkdir') {
-            const ino = await fsWriteEntry(txStore, sb, parent, op.name, { type: 'dir' });
+            const ino = await fsWriteEntry(txStore, txSb, parent, op.name, { type: 'dir' });
             const path = op.dirName ? op.dirName + '\\' + op.name : op.name;
             dirInos.set(path, ino);
             continue;
           }
           if (op.op === 'unlink') {
-            await fsDeleteEntry(txStore, sb, parent, op.name);
+            await fsDeleteEntry(txStore, txSb, parent, op.name);
             continue;
           }
           if (op.op === 'rename') {
@@ -259,7 +327,7 @@ function createIdbBackend(options) {
           // write and writeBlob both land here: one allocator, one code path.
           if (!entry) continue;
           if (entry.kind === 'blob') {
-            await fsWriteEntry(txStore, sb, parent, op.name, {
+            await fsWriteEntry(txStore, txSb, parent, op.name, {
               type: 'blob',
               bytes: entry.bytes || new Uint8Array(0),
               // `url` is deliberately not persisted: an object URL is dead on
@@ -267,60 +335,13 @@ function createIdbBackend(options) {
               meta: { kind: entry.blob && entry.blob.kind, mime: entry.blob && entry.blob.mime },
             });
           } else {
-            await fsWriteEntry(txStore, sb, parent, op.name, {
+            await fsWriteEntry(txStore, txSb, parent, op.name, {
               type: 'file', bytes: fsEncodeText(entry.text || ''),
             });
           }
         }
-        await txStore.put(FS_STORE_SUPERBLOCK, 'sb', sb);
-        // Every request resolving is not the same as the transaction being
-        // durable: IndexedDB only actually applies a transaction's writes
-        // when the transaction itself completes, which - like committing at
-        // all - is a separate event from any one request inside it
-        // succeeding. Returning as soon as the last request's promise
-        // resolved would let a caller (and this backend's own next commit)
-        // observe "done" before the write was ever guaranteed to survive.
-        await new Promise((resolve, reject) => {
-          tx.oncomplete = () => resolve();
-          tx.onabort = () => reject(VfsError('EIO', 'IndexedDB transaction aborted'));
-        });
-      } catch (err) {
-        // Two different triggers land here, and only one of them touches an
-        // IDB request at all: a write request failing (disk pressure, quota,
-        // a closed connection) auto-aborts its own transaction the instant
-        // the unhandled error fires, making the abort() below redundant - but
-        // fsAllocBlocks/fsFreeBlocks throwing ENOSPC is a pure in-fiction,
-        // application-level throw with no request involved, so nothing has
-        // aborted anything yet and this abort() is the one doing real work.
-        // Either way, .abort() on a transaction that has already finished
-        // throws InvalidStateError, which is expected on the first path (the
-        // transaction is already in the state this call was trying to put it
-        // in) and swallowed. Anything else abort() throws is a genuinely
-        // different, unexpected problem, and is attached to `err` rather than
-        // thrown in its place - `err` is why the write actually failed and is
-        // what needs to reach vfsFlush's onError and the user; a secondary
-        // cleanup failure must not hide it, but must not be lost either.
-        try { tx.abort(); } catch (e) {
-          if (e.name !== 'InvalidStateError') err.abortError = e;
-        }
-        // fsAllocBlocks/fsFreeBlocks mutate `sb` in memory synchronously,
-        // well before the request that would have persisted it either lands
-        // or fails - so by the time a write fails, `sb` may already disagree
-        // with what is actually durable. A cached copy that survives a
-        // rolled-back transaction is its own corruption source (blocks it
-        // thinks are taken stay invisible to every future allocation), and
-        // it would only surface on whichever commit runs after this one.
-        // Discarding it, along with the directory cache built against it,
-        // forces the next ensure() to re-read authoritative state instead of
-        // trusting memory that this transaction never actually committed.
-        // This runs unconditionally - whether abort() threw InvalidStateError,
-        // threw something else, or didn't throw at all - because none of
-        // those outcomes changes the fact that `sb` may no longer be trustworthy.
-        store = null;
-        sb = null;
-        dirInos = new Map();
-        throw err;
-      }
+        await txStore.put(FS_STORE_SUPERBLOCK, 'sb', txSb);
+      });
     },
 
     async estimate() {
@@ -357,47 +378,29 @@ function createIdbBackend(options) {
     // backend is expected to keep working afterward, and ensure()'s cheap
     // early return (`if (store) return;`) depends on `store` staying set for
     // the backend's whole normal lifetime.
+    //
+    // Nulls sb/dirInos too, matching the discard in _runInWriteTransaction's
+    // catch: a closed connection makes both just as untrustworthy as a
+    // rolled-back transaction does, even though nothing reachable today
+    // calls _close() and then keeps using this backend without going through
+    // ensure() again first.
     async _close() {
       if (db) db.close();
       db = null;
       store = null;
+      sb = null;
+      dirInos = new Map();
     },
 
-    // Runs a whole batch of writes as ONE transaction, exactly the way
-    // commit()'s write phase does above - same store shape, same guarded
-    // abort (InvalidStateError from a request failure that already
-    // auto-aborted is swallowed; anything else is attached to the real error
-    // rather than replacing it), same stale-cache discard on failure.
-    //
-    // Migration needs this because commit() itself isn't the right vehicle:
-    // migration doesn't have `ops` to hand it, and importing an entire
-    // localStorage tree through commit()'s per-op readEntry/write-phase split
-    // would mean a mid-import failure leaves whatever files landed before it
-    // sitting in the live store as a real, readable, half-imported
-    // filesystem - exactly the outcome migration exists to rule out. One
-    // transaction means either the whole import becomes visible at once, or
-    // none of it does.
-    async _runInWriteTransaction(fn) {
-      await ensure();
-      const tx = db.transaction(
-        [FS_STORE_SUPERBLOCK, FS_STORE_INODES, FS_STORE_DIRENTS, FS_STORE_BLOCKS], 'readwrite');
-      const txStore = _fsIdbTxStore(tx);
-      try {
-        const result = await fn(txStore, sb);
-        await new Promise((resolve, reject) => {
-          tx.oncomplete = () => resolve();
-          tx.onabort = () => reject(VfsError('EIO', 'IndexedDB transaction aborted'));
-        });
-        return result;
-      } catch (err) {
-        try { tx.abort(); } catch (e) {
-          if (e.name !== 'InvalidStateError') err.abortError = e;
-        }
-        store = null;
-        sb = null;
-        dirInos = new Map();
-        throw err;
-      }
-    },
+    // Runs a whole batch of writes as ONE transaction - exposed here for
+    // migration (os/fs-migrate.js), which needs this because commit() itself
+    // isn't the right vehicle: migration doesn't have `ops` to hand it, and
+    // importing an entire localStorage tree through commit()'s per-op
+    // readEntry/write-phase split would mean a mid-import failure leaves
+    // whatever files landed before it sitting in the live store as a real,
+    // readable, half-imported filesystem - exactly the outcome migration
+    // exists to rule out. commit() above runs through this very same
+    // function.
+    _runInWriteTransaction,
   };
 }
