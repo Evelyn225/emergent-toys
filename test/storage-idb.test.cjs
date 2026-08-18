@@ -394,3 +394,33 @@ test('commit() rejects with the real cause, not the InvalidStateError from a red
   // failing request had already finished on its own.
   assert.strictEqual(threw.name, 'SimulatedFailure');
 });
+
+// ── Task 4.7: a cleanup failure must not displace the real one ───────
+
+test('an abort() failure other than InvalidStateError is attached to the original error, not thrown in its place', async () => {
+  const { ctx, stub } = idbWithFailure();
+  const backend = ctx.createIdbBackend();
+  await backend.load();
+
+  stub._failNthWriteFromNow(1);
+  const weirdAbortError = new Error('the connection just died mid-abort');
+  weirdAbortError.name = 'WeirdAbortError';
+  stub._forceNextAbortToThrow(weirdAbortError);
+
+  let threw = null;
+  try {
+    await backend.commit({
+      ops: [{ op: 'write', dirName: '', name: 'A.txt' }],
+      readEntry: () => ({ kind: 'file', text: 'x', dirName: '', name: 'A.txt' }),
+    });
+  } catch (e) { threw = e; }
+  assert.ok(threw, 'setup: the injected write failure must actually fire');
+  // `err` (the write failure) is why the commit actually failed and is what
+  // must reach vfsFlush's onError - a second, unrelated cleanup failure must
+  // not hide it by taking its place.
+  assert.strictEqual(threw.name, 'SimulatedFailure',
+    'the write failure must remain the primary error, not be displaced by the abort failure');
+  // But the cleanup failure is real too and must not simply vanish.
+  assert.strictEqual(threw.abortError, weirdAbortError,
+    'a non-InvalidStateError abort failure must still be reachable from the thrown error');
+});

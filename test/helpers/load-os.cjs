@@ -104,6 +104,13 @@ function makeIndexedDbStub(options) {
   const databases = new Map();
   let writeCount = 0;
   let failAt = Number.isFinite(options.failWriteAt) ? options.failWriteAt : null;
+  // Test hook: makes the very next abort() call on ANY transaction throw
+  // this instead of its normal behavior (InvalidStateError on an
+  // already-settled transaction, or a plain successful abort otherwise).
+  // One-shot, and consumed regardless of which transaction calls abort()
+  // first, since a test cannot reach into commit()'s private `tx` to arm
+  // this on the specific instance it is about to create.
+  let forcedAbortError = null;
   function later(fn) { Promise.resolve().then(fn); }
 
   // Test hook: makes the Nth put/delete request across the whole stub
@@ -170,6 +177,11 @@ function makeIndexedDbStub(options) {
       // own abort() call to run cleanup code finds out only in a real
       // browser that the call throws before that code ever executes.
       abort() {
+        if (forcedAbortError) {
+          const err = forcedAbortError;
+          forcedAbortError = null;
+          throw err;
+        }
         if (settled) {
           const err = new Error(
             "Failed to execute 'abort' on 'IDBTransaction': The transaction has finished.");
@@ -295,6 +307,11 @@ function makeIndexedDbStub(options) {
     // land normally and then fail a specific write inside the commit under
     // test.
     _failNthWriteFromNow(n) { failAt = writeCount + n; },
+    // Test hook: makes the next abort() call, on whichever transaction calls
+    // it first, throw this specific error instead of its normal behavior -
+    // used to prove a cleanup-path failure that is NOT the expected
+    // InvalidStateError is preserved rather than silently discarded.
+    _forceNextAbortToThrow(err) { forcedAbortError = err; },
     open(name) {
       const req = { onsuccess: null, onerror: null, onupgradeneeded: null, result: undefined };
       later(() => {

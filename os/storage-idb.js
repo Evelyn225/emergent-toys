@@ -268,19 +268,23 @@ function createIdbBackend(options) {
           tx.onabort = () => reject(VfsError('EIO', 'IndexedDB transaction aborted'));
         });
       } catch (err) {
-        // A failing request auto-aborts its own transaction in real
-        // IndexedDB the instant the unhandled error fires, so by the time
-        // this runs the abort() below is usually redundant - and .abort() on
-        // a transaction that has already finished throws InvalidStateError.
-        // That is expected, not a new failure: the transaction is already in
-        // the state this call was trying to put it in, so it is swallowed.
-        // Anything else abort() throws is a genuinely different, unexpected
-        // problem and is kept - as what this function ultimately throws,
-        // taking priority over `err` since it represents a problem `err`
-        // does not describe - rather than silently discarded.
-        let abortErr = null;
+        // Two different triggers land here, and only one of them touches an
+        // IDB request at all: a write request failing (disk pressure, quota,
+        // a closed connection) auto-aborts its own transaction the instant
+        // the unhandled error fires, making the abort() below redundant - but
+        // fsAllocBlocks/fsFreeBlocks throwing ENOSPC is a pure in-fiction,
+        // application-level throw with no request involved, so nothing has
+        // aborted anything yet and this abort() is the one doing real work.
+        // Either way, .abort() on a transaction that has already finished
+        // throws InvalidStateError, which is expected on the first path (the
+        // transaction is already in the state this call was trying to put it
+        // in) and swallowed. Anything else abort() throws is a genuinely
+        // different, unexpected problem, and is attached to `err` rather than
+        // thrown in its place - `err` is why the write actually failed and is
+        // what needs to reach vfsFlush's onError and the user; a secondary
+        // cleanup failure must not hide it, but must not be lost either.
         try { tx.abort(); } catch (e) {
-          if (e.name !== 'InvalidStateError') abortErr = e;
+          if (e.name !== 'InvalidStateError') err.abortError = e;
         }
         // fsAllocBlocks/fsFreeBlocks mutate `sb` in memory synchronously,
         // well before the request that would have persisted it either lands
@@ -298,7 +302,7 @@ function createIdbBackend(options) {
         store = null;
         sb = null;
         dirInos = new Map();
-        throw abortErr || err;
+        throw err;
       }
     },
 
