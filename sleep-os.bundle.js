@@ -4901,9 +4901,56 @@ function optimizeDriveFragmentation(options) {
   return defragState.level;
 }
 
+// Which backend actually mounted. SYSMON reports it, and Task 7's
+// fragmentation reads the real bitmap only when it is 'idb'.
+var fsActiveBackendKind = 'local';
+function fsGetActiveBackendKind() { return fsActiveBackendKind; }
+
+// Pick the filesystem backend, and migrate on the first boot that finds one.
+//
+// IndexedDB is not guaranteed: private browsing, disabled storage, and a
+// database that simply refuses to open are all real. None of them may stop the
+// desktop appearing, so every failure path here ends at the localStorage
+// backend the OS shipped with. A visitor in that state keeps a working, if
+// smaller, filesystem and loses nothing.
+async function fsChooseBackend() {
+  if (!fsIdbAvailable()) return { backend: createLocalStorageBackend(), kind: 'local' };
+  try {
+    const backend = createIdbBackend();
+    // Force the connection open now rather than on the first write, so a
+    // refusal is caught here where there is still a fallback to take.
+    // (estimate() never touches the database - it only calls
+    // navigator.storage.estimate() and swallows every error - so it cannot do
+    // this on its own. _store() is what actually opens the connection via
+    // ensure(), and is what can throw here.)
+    await backend._store();
+    const result = await fsMigrateFromLocalStorage(backend);
+    if (result.reason === 'failed') {
+      // Boot from localStorage exactly as before and try again next time.
+      //
+      // Migration's abort path tries to destroy the database, but it can fail
+      // to - another tab holding a connection blocks the delete, and it fails
+      // fast rather than hanging (result.databaseDeleted records which
+      // happened). Deliberately not branching on that here: the import runs as
+      // ONE transaction, so a failed import commits no content at all, and
+      // whatever database survives holds nothing but the superblock ensure()
+      // wrote when it opened. `migrated` stays false either way, so the next
+      // boot re-imports over it and converges. The delete is defensive
+      // cleanup, not a correctness requirement - which is exactly why a
+      // blocked one is safe to ignore.
+      return { backend: createLocalStorageBackend(), kind: 'local' };
+    }
+    return { backend, kind: 'idb' };
+  } catch (e) {
+    return { backend: createLocalStorageBackend(), kind: 'local' };
+  }
+}
+
 // Async boot entry point. Called from the BIOS sequence before startDesktop.
 async function vfsBootMount() {
-  await vfsMount(createLocalStorageBackend(), {
+  const chosen = await fsChooseBackend();
+  fsActiveBackendKind = chosen.kind;
+  await vfsMount(chosen.backend, {
     onChange: () => { document.dispatchEvent(new CustomEvent('fs-changed')); },
     onError: err => { reportVfsError(err); },
     seed: root => {
