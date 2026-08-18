@@ -243,6 +243,55 @@ async function fsReadEntryBytes(store, sb, ino) {
   return out;
 }
 
+// Resolves a directory name to its ino by walking dirents, one path
+// component at a time - the same backslash-joined convention os/storage-idb.js's
+// inoForDir uses, and the same dirent-key shape (_fsDirentKey) fsWriteEntry
+// and fsDeleteEntry both write through. Deliberately NOT reusing inoForDir
+// itself: that function creates a missing directory as it walks, which is
+// correct for a write (a mkdir and a write into it can land in the same
+// commit) and wrong for a read - a lookup must never mutate the tree as a
+// side effect of failing to find something. Returns -1 for a component that
+// does not resolve, rather than throwing, so a caller can tell "not found"
+// from every other outcome with one comparison.
+async function _fsResolveDirIno(store, dirName) {
+  const path = String(dirName || '');
+  if (!path) return 0;
+  let parent = 0;
+  for (const part of path.split('\\')) {
+    if (!part) continue;
+    const ino = await store.get(FS_STORE_DIRENTS, _fsDirentKey(parent, part));
+    if (ino === undefined) return -1;
+    parent = ino;
+  }
+  return parent;
+}
+
+// The read half of blob persistence (Task 9a). Blob bytes go IN through
+// fsWriteEntry (called from os/storage-idb.js's commit(), entry.kind ===
+// 'blob'), but until this nothing could bring them back OUT: fsReadTree
+// returns a blob dirent as metadata only (see `build` below), and
+// fsReadEntryBytes was called from exactly one place, for text files.
+//
+// Returns null, not an empty Uint8Array, for anything that isn't a readable
+// blob at that exact path: a directory component that doesn't exist, a name
+// that doesn't exist in a directory that does, AND a name that exists but is
+// a file or dir rather than a blob. That last case is deliberate and is not
+// the same kind of "missing" as the first two - the entry is right there -
+// but this function exists specifically to serve blob bytes, and a same-named
+// text file's UTF-8-encoded bytes are not that; handing them back would look
+// like a successful blob read to a caller that never asked to distinguish the
+// two. An empty Uint8Array is reserved for what it already means elsewhere in
+// this file: a real, zero-byte blob.
+async function fsReadBlobBytesAtPath(store, sb, dirName, name) {
+  const parent = await _fsResolveDirIno(store, dirName);
+  if (parent < 0) return null;
+  const ino = await store.get(FS_STORE_DIRENTS, _fsDirentKey(parent, name));
+  if (ino === undefined) return null;
+  const inode = await store.get(FS_STORE_INODES, ino);
+  if (!inode || inode.type !== 'blob') return null;
+  return await fsReadEntryBytes(store, sb, ino);
+}
+
 // Every descendant of a deleted directory needs its blocks freed and its
 // inode/dirent records removed, or they sit in the store unreachable from
 // root forever: fsReadTree only ever walks down from root via dirent parent

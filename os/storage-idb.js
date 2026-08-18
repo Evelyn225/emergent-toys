@@ -361,6 +361,19 @@ function createIdbBackend(options) {
     },
     get _superblock() { return sb; },
 
+    // The read half of blob persistence (Task 9a) - fsReadTree only ever
+    // hands back a blob's metadata, never its bytes, and this is what a
+    // caller (os/blob-store.js, once Task 9b wires it in) uses to fetch them
+    // lazily, on demand, rather than loading every image, video and audio
+    // file into memory at boot the way the base64 mirror's atob pass does.
+    // Goes through the one-off _fsIdbStore() read store, same as
+    // _readInodes above, not _runInWriteTransaction: this opens no write
+    // transaction, so a failed or missing read has no cache to discard.
+    async _readBlobBytes(dirName, name) {
+      await ensure();
+      return await fsReadBlobBytesAtPath(store, sb, dirName, name);
+    },
+
     // Migration (os/fs-migrate.js) writes through the same store this
     // backend owns, rather than opening its own connection. Two connections
     // to one database is how a migration ends up racing the boot that
