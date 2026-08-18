@@ -275,7 +275,7 @@ function openExplorer(startPath) {
       // measured from the real block layout, not nudged. A rename would have
       // been a fiction here regardless - fsRenameEntry only moves a dirent
       // key, never a block, so the disk's real layout is untouched, and the
-      // rename's own queued op already triggers vfsBootMount's onChange
+      // rename's own queued op already triggers vfsBootMount's onCommit
       // handler, which calls fsRefreshFragmentation() after every commit.
       render();
     });

@@ -217,9 +217,19 @@ async function vfsBootMount() {
   await vfsMount(chosen.backend, {
     onChange: () => {
       document.dispatchEvent(new CustomEvent('fs-changed'));
-      // Recompute after the write lands rather than before. Deliberately not
-      // awaited: onChange is called from a synchronous queue path and a
-      // rejected promise here must not surface as an unhandled rejection.
+    },
+    // Recompute here, not from onChange. onChange fires the instant an op is
+    // queued - up to 400ms before the debounced vfsFlush() actually commits
+    // it - and fsRefreshFragmentation() reads backend._readInodes(), which
+    // only ever sees durably committed IndexedDB state. Computing from
+    // onChange reads that state before the write which triggered the
+    // recompute has landed, so the cached number is stale by one commit and
+    // nothing corrects it until an unrelated later write or a reload happens
+    // to come along. onCommit fires only once the commit that produced `ops`
+    // has actually landed, so the read is of the state it just produced.
+    // Deliberately not awaited: vfsFlush never awaits onCommit, and a
+    // rejected promise here must not surface as an unhandled rejection.
+    onCommit: () => {
       void fsRefreshFragmentation();
     },
     onError: err => { reportVfsError(err); },

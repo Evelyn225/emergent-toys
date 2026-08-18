@@ -28,10 +28,37 @@ function recordingBackend(opts) {
   };
 }
 
-async function mounted(backend) {
+async function mounted(backend, options) {
   const ctx = loadOsSources(makeOsContext(), ['os/vfs.js']);
-  await ctx.vfsMount(backend, {});
+  await ctx.vfsMount(backend, options || {});
   return ctx;
+}
+
+// A backend that only ever reports what it has durably applied - `commit()`
+// doesn't touch `durable` until every op in the batch has been read via
+// `readEntry` and folded in, so a read through `_read` before `commit()`
+// resolves would see nothing. This is what lets a test tell "fired when the
+// op was queued" apart from "fired after the commit actually landed": the
+// two only differ once something reads back through the backend, not just by
+// counting calls.
+function commitTrackingBackend() {
+  const durable = new Map();
+  return {
+    needsSnapshot: false,
+    async load() { return null; },
+    async commit(payload) {
+      for (const op of payload.ops) {
+        if (op.op === 'write') {
+          const entry = await payload.readEntry(op.dirName, op.name);
+          durable.set(op.name, entry ? entry.text : undefined);
+        } else if (op.op === 'unlink') {
+          durable.delete(op.name);
+        }
+      }
+    },
+    async estimate() { return { usage: 0, quota: Infinity }; },
+    _read(name) { return durable.get(name); },
+  };
 }
 
 test('a backend that wants no snapshot is not given one', async () => {
@@ -170,4 +197,83 @@ test('no op the VFS emits is missing a path', async () => {
     assert.ok(typeof op.name === 'string' && op.name,
       op.op + ' op has no name - an ops-only backend cannot act on it');
   });
+});
+
+// ── onCommit: a post-commit signal, distinct from onChange's queue-time one ──
+//
+// os/fs-persist.js recomputes drive fragmentation from `backend._readInodes()`,
+// which only ever sees durably committed state. Wiring that recompute to
+// onChange - which fires the instant an op is queued, 400ms before the
+// debounced vfsFlush() actually commits it - reads state from before the
+// write it's reacting to has landed. onCommit exists to give a caller a hook
+// that actually fires after commit.
+
+test('onCommit fires after a commit actually lands, and a backend read inside it observes the committed write', async () => {
+  const backend = commitTrackingBackend();
+  let observedDuringCommit;
+  const ctx = await mounted(backend, {
+    onCommit: () => { observedDuringCommit = backend._read('A.txt'); },
+  });
+  await ctx.vfsWriteFile('A.txt', 'the committed value');
+  await ctx.vfsFlush();
+  assert.strictEqual(observedDuringCommit, 'the committed value',
+    'onCommit must fire only after the write has actually landed in the backend');
+});
+
+test('onChange still fires at queue time, before any commit', async () => {
+  const backend = commitTrackingBackend();
+  const changeEvents = [];
+  const ctx = await mounted(backend, {
+    onChange: op => changeEvents.push({ op, readBack: backend._read('A.txt') }),
+  });
+  await ctx.vfsWriteFile('A.txt', 'queued but not yet committed');
+  assert.strictEqual(changeEvents.length, 1, 'onChange must fire when the op is queued, not on a later flush');
+  assert.strictEqual(changeEvents[0].readBack, undefined,
+    'the backend must not have this write yet - onChange really did fire before the commit');
+  await ctx.vfsFlush();
+});
+
+test('a commit that fails does not fire onCommit', async () => {
+  const backend = recordingBackend({ needsSnapshot: false });
+  backend.commit = async () => { throw new Error('boom'); };
+  let fired = false;
+  const errors = [];
+  const ctx = await mounted(backend, {
+    onCommit: () => { fired = true; },
+    onError: err => errors.push(err),
+  });
+  await ctx.vfsWriteFile('A.txt', 'x');
+  await ctx.vfsFlush();
+  assert.strictEqual(fired, false, 'a failed commit must not fire onCommit');
+  assert.strictEqual(errors.length, 1, 'the failure must still reach onError');
+});
+
+test('a throwing onCommit does not break vfsFlush or the commit it followed', async () => {
+  const backend = recordingBackend({ needsSnapshot: false });
+  const ctx = await mounted(backend, {
+    onCommit: () => { throw new Error('onCommit blew up'); },
+  });
+  await ctx.vfsWriteFile('A.txt', 'x');
+  await assert.doesNotReject(() => ctx.vfsFlush());
+  assert.strictEqual(backend.commits.length, 1, 'the commit itself must still have landed');
+});
+
+test('a rejecting onCommit does not surface as an unhandled rejection', async () => {
+  const backend = recordingBackend({ needsSnapshot: false });
+  const ctx = await mounted(backend, {
+    onCommit: () => Promise.reject(new Error('onCommit rejected')),
+  });
+  let unhandled = null;
+  const onUnhandledRejection = err => { unhandled = err; };
+  process.on('unhandledRejection', onUnhandledRejection);
+  try {
+    await ctx.vfsWriteFile('A.txt', 'x');
+    await ctx.vfsFlush();
+    // Give a same-tick-scheduled unhandled rejection a chance to surface
+    // before the test ends and the listener is torn down.
+    await new Promise(r => setImmediate(r));
+  } finally {
+    process.off('unhandledRejection', onUnhandledRejection);
+  }
+  assert.strictEqual(unhandled, null, 'a rejecting onCommit must not produce an unhandled rejection');
 });

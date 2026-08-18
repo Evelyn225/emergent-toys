@@ -141,6 +141,7 @@ function vfsListSync(dirPath) {
 // ── Mount, persistence, and the write path ────────────────────────
 var _vfsBackend = null;
 var _vfsOnChange = null;
+var _vfsOnCommit = null;
 var _vfsOnError = null;
 var _vfsPendingOps = [];
 var _vfsFlushTimer = null;
@@ -195,6 +196,7 @@ async function vfsMount(backend, options) {
   _vfsPendingOps = [];
   _vfsPendingBytes = 0;
   _vfsOnChange = typeof options.onChange === 'function' ? options.onChange : null;
+  _vfsOnCommit = typeof options.onCommit === 'function' ? options.onCommit : null;
   _vfsOnError = typeof options.onError === 'function' ? options.onError : null;
 
   let stored = null;
@@ -375,6 +377,33 @@ async function vfsFlush() {
         // are still uncommitted, and zeroing here would stop counting their
         // bytes while they are still unwritten - the same hole C2 closed.
         _vfsPendingBytes = Math.max(0, _vfsPendingBytes - opsBytes);
+        // Fire only now that `ops` are durable - the whole reason this exists
+        // separately from onChange. onChange fires the moment an op is
+        // queued, 400ms before this; a caller that needs to read back what it
+        // just wrote (fs-persist.js's fragmentation recompute reads the
+        // backend's own allocation map) needs a signal that actually comes
+        // after the commit, not before it.
+        //
+        // Same treatment as onChange: never let a throwing or rejecting
+        // handler reach here as an unhandled rejection or interrupt the
+        // commit path. vfsFlush deliberately never rejects, and this must not
+        // become the exception. Deliberately NOT routed through _vfsOnError:
+        // that channel means "this write did not persist" and drives a
+        // user-facing toast (reportVfsError). The write already landed by
+        // this point - a bug in a post-commit handler is not a save failure,
+        // and reporting it as one would be a lie on screen.
+        if (_vfsOnCommit) {
+          try {
+            const result = _vfsOnCommit(ops);
+            if (result && typeof result.catch === 'function') {
+              result.catch(e => {
+                console.warn('sleepOS VFS: onCommit handler rejected -', (e && e.message) || e);
+              });
+            }
+          } catch (e) {
+            console.warn('sleepOS VFS: onCommit handler threw -', (e && e.message) || e);
+          }
+        }
       }
     } catch (err) {
       // Put the ops back rather than dropping them. Losing them means the
