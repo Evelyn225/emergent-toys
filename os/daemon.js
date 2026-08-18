@@ -451,7 +451,7 @@ async function recycleVirtualPath(path, fallbackDir) {
 
   const moved = await moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
   if (!moved) {
-    await removeFsPath(storedDir, { trackFragmentation: false });
+    await removeFsPath(storedDir);
     return { ok: false, message: 'Could not move ' + fileLabel + ' to the Recycle Bin.' };
   }
 
@@ -478,7 +478,7 @@ async function restoreRecycleEntry(entry) {
     suffixToken: 'restored',
   });
   if (!moved) return { ok: false, message: 'Could not restore ' + entry.name + '.' };
-  await removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir);
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -489,7 +489,7 @@ async function purgeRecycleEntry(entry) {
   entry = normalizeRecycleEntry(entry);
   if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
   await purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
-  await removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir);
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -1025,30 +1025,30 @@ function syncDaemonStoryFiles() {
   ensureFsDir('SYS');
   ensureFsDir('CACHE');
   if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
-  else void removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.notice);
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
-  else void removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.incident);
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
-  else void removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.lostContact);
   if (daemonStory.stage >= 4) {
     ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
     if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
   } else {
-    void removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.lastOperator);
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
   }
   if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
-  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol);
   if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
-  else void removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.anchorSeed);
   if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
-  else void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.watchPid);
   if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
   else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
-  else void removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.quarantineSig);
   if (daemonStory.endingReached) {
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
-    void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
+    void removeFsPath(STORY_FILE_PATHS.watchPid);
   }
 }
 

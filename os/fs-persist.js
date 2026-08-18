@@ -81,18 +81,9 @@ function refreshSeededHomeMedia() {
 
 function saveFS() { return vfsFlush(); }
 
-function computeLegacyFragLevel(ms) {
-  if (ms === null) return 0.68;
-  const hours = ms / 3600000;
-  if (hours < 0.01) return 0.02;
-  return Math.min(0.9, 0.02 + 0.88 * Math.pow(hours / 168, 0.38));
-}
-
 function createDriveStateDefaults(fromLegacy) {
   const legacyTs = fromLegacy ? parseInt(localStorage.getItem(LEGACY_DEFRAG_KEY) || '0', 10) || 0 : 0;
-  const msSince = legacyTs ? Date.now() - legacyTs : null;
   return {
-    level: computeLegacyFragLevel(msSince),
     lastDefragTs: legacyTs,
     changeCount: 0,
     lastMutationTs: 0,
@@ -101,7 +92,6 @@ function createDriveStateDefaults(fromLegacy) {
 
 function normalizeDriveState(saved) {
   const next = Object.assign(createDriveStateDefaults(false), saved || {});
-  next.level = Math.max(0.02, Math.min(0.92, Number(next.level) || 0.68));
   next.lastDefragTs = Math.max(0, Math.trunc(Number(next.lastDefragTs) || 0));
   next.changeCount = Math.max(0, Math.trunc(Number(next.changeCount) || 0));
   next.lastMutationTs = Math.max(0, Math.trunc(Number(next.lastMutationTs) || 0));
@@ -122,33 +112,57 @@ function saveDriveState() {
 
 let defragState = loadDriveState();
 
+// Fragmentation used to be a number nudged by hand-tuned deltas on every
+// write, clamped to 0.02-0.92, and persisted to localStorage. Nothing measured
+// anything: DEFRAG.exe animated against a fiction and the deltas existed only
+// to make the fiction drift.
+//
+// It is now the ratio of extra block runs to total blocks, computed from the
+// real allocation map. It is cached because reading it walks every inode and
+// SYSMON asks often; fsRefreshFragmentation() is what recomputes.
+var fsFragmentationLevel = 0;
+
 function getDriveFragmentationLevel() {
-  return Math.max(0.02, Math.min(0.92, Number(defragState?.level) || 0.68));
+  return fsFragmentationLevel;
 }
 
 function getDriveOptimizationPercent() {
   return Math.round((1 - getDriveFragmentationLevel()) * 100);
 }
 
-function increaseDriveFragmentation(amount, options) {
-  const delta = Number(amount) || 0;
-  if (!(delta > 0)) return getDriveFragmentationLevel();
-  defragState.level = Math.min(0.92, getDriveFragmentationLevel() + delta);
-  defragState.changeCount = Math.max(0, Math.trunc(Number(defragState.changeCount) || 0)) + 1;
-  defragState.lastMutationTs = Date.now();
-  saveDriveState();
-  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
-  return defragState.level;
+// Recompute from the allocation map. Only the IndexedDB backend has one; on
+// the localStorage fallback there are no blocks to measure, so the honest
+// answer is 0 rather than an invented number.
+async function fsRefreshFragmentation() {
+  if (fsGetActiveBackendKind() !== 'idb') { fsFragmentationLevel = 0; return 0; }
+  try {
+    const backend = vfsGetBackend();
+    const inodes = backend && backend._readInodes ? await backend._readInodes() : [];
+    fsFragmentationLevel = fsComputeFragmentation(inodes);
+  } catch (e) {
+    // Leave the last known value rather than reporting a drop that did not
+    // happen. A transient read failure is not a defragmentation.
+  }
+  return fsFragmentationLevel;
 }
 
-function optimizeDriveFragmentation(options) {
-  const targetLevel = Math.max(0.02, Math.min(0.12, Number(options?.targetLevel) || 0.06));
-  defragState.level = targetLevel;
+// DEFRAG.exe calls this when the user runs an optimization pass. It records
+// when the pass happened, which is what the "Last defrag" line reads, and then
+// recomputes from the allocation map.
+//
+// It does NOT yet move any blocks, so the number it recomputes will barely
+// change. That is deliberate and it is honest: actually rewriting blocks into
+// contiguous runs is phase 5's job, per the master spec's phase order. The
+// targetLevel option callers still pass is ignored rather than removed,
+// because inventing a post-defrag number is exactly the fiction this phase
+// exists to delete.
+async function optimizeDriveFragmentation(options) {
   defragState.lastDefragTs = Date.now();
   saveDriveState();
   try { localStorage.setItem(LEGACY_DEFRAG_KEY, String(defragState.lastDefragTs)); } catch (e) {}
+  const level = await fsRefreshFragmentation();
   if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
-  return defragState.level;
+  return level;
 }
 
 // Which backend actually mounted. SYSMON reports it, and Task 7's
@@ -201,7 +215,13 @@ async function vfsBootMount() {
   const chosen = await fsChooseBackend();
   fsActiveBackendKind = chosen.kind;
   await vfsMount(chosen.backend, {
-    onChange: () => { document.dispatchEvent(new CustomEvent('fs-changed')); },
+    onChange: () => {
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+      // Recompute after the write lands rather than before. Deliberately not
+      // awaited: onChange is called from a synchronous queue path and a
+      // rejected promise here must not surface as an unhandled rejection.
+      void fsRefreshFragmentation();
+    },
     onError: err => { reportVfsError(err); },
     seed: root => {
       if (!root.dirs.size && !root.files.size) {
@@ -221,6 +241,7 @@ async function vfsBootMount() {
   // then replaced. Re-run it against the real tree so the story files and the
   // registry pointers agree. Same shape as the ensureFsDir call above.
   syncDaemonStory({ silent: true });
+  await fsRefreshFragmentation();
 }
 
 // A late commit failure has no call stack to propagate into, so it surfaces

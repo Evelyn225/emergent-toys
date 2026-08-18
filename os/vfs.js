@@ -153,6 +153,11 @@ const VFS_FLUSH_DELAY_MS = 400;
 
 function vfsIsMounted() { return _vfsBackend !== null; }
 
+// The mounted backend, for callers that need something only a specific backend
+// offers - today that is the IndexedDB backend's allocation map, which is what
+// makes fragmentation a measurement. Returns null when nothing is mounted.
+function vfsGetBackend() { return _vfsBackend; }
+
 // True when mutations have been made but not yet committed. Used by the
 // unload handler to skip serializing a tree that is already durable.
 function vfsHasPendingWrites() { return _vfsPendingOps.length > 0; }
@@ -436,9 +441,6 @@ async function vfsWriteFile(path, text, fallbackDir, options) {
   dir.files.set(fileName, nextValue);
   _vfsQueue({ op: 'write', dirName, name: fileName },
             _vfsTextCost(fileName, nextValue) - (hadFile ? _vfsTextCost(fileName, prevValue) : 0));
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(calcTextFragmentationDelta(prevValue, nextValue, !hadFile));
-  }
   return { dirName, fileName, created: !hadFile, unchanged: false };
 }
 
@@ -459,9 +461,6 @@ async function vfsWriteBlob(path, record, fallbackDir, options) {
   }
   dir.blobs.set(fileName, record);
   _vfsQueue({ op: 'writeBlob', dirName, name: fileName });
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(calcBlobFragmentationDelta(record && record.size, !existing));
-  }
   return { dirName, fileName, created: !existing };
 }
 
@@ -477,9 +476,6 @@ async function vfsMkdir(path, fallbackDir, options) {
   if (!parent.subdirs) parent.subdirs = new Map();
   if (!parent.subdirs.has(name)) parent.subdirs.set(name, vfsMakeNode());
   _vfsQueue({ op: 'mkdir', dirName, name });
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(0.006);
-  }
   return { dirName, fileName: name, created: true };
 }
 
@@ -488,13 +484,10 @@ async function vfsUnlink(path, fallbackDir, options) {
   const st = vfsStatSync(path, fallbackDir);
   if (!st) return false;
   const dir = vfsDirNodeSync(st.dirName);
-  let payload = null;
   if (st.kind === 'text') {
-    payload = dir.files.get(st.name);
     dir.files.delete(st.name);
   } else if (st.kind === 'blob') {
     const blob = dir.blobs.get(st.name);
-    payload = (blob && blob.size) || 0;
     if (blob && blob.url && !blob.seeded) URL.revokeObjectURL(blob.url);
     dir.blobs.delete(st.name);
   } else {
@@ -502,11 +495,6 @@ async function vfsUnlink(path, fallbackDir, options) {
     if (dir.subdirs) dir.subdirs.delete(st.name);
   }
   _vfsQueue({ op: 'unlink', dirName: st.dirName, name: st.name, kind: st.kind }, 0);
-  if (options.trackFragmentation !== false
-      && typeof increaseDriveFragmentation === 'function'
-      && typeof calcRemovalFragmentationDelta === 'function') {
-    increaseDriveFragmentation(calcRemovalFragmentationDelta(st.kind, payload));
-  }
   return true;
 }
 

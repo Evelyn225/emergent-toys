@@ -10,7 +10,11 @@ const ROOT = path.join(__dirname, '..');
 // Phase 2 replaced these with the VFS. They are gone rather than deprecated
 // because a second way to reach the filesystem is exactly how the tree and
 // the persisted snapshot drift apart.
-const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDir', 'fsGetDir', 'termFS', 'schedSave'];
+const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDir', 'fsGetDir', 'termFS', 'schedSave',
+  // Phase 4: fragmentation became a measurement, so the machinery that faked
+  // it is gone. Listed here so it cannot creep back one call site at a time.
+  'trackFragmentation', 'increaseDriveFragmentation', 'calcTextFragmentationDelta',
+  'calcBlobFragmentationDelta', 'calcRemovalFragmentationDelta'];
 
 test('no source reaches the filesystem outside the VFS', () => {
   const offenders = [];

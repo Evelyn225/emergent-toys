@@ -256,6 +256,11 @@ const VFS_FLUSH_DELAY_MS = 400;
 
 function vfsIsMounted() { return _vfsBackend !== null; }
 
+// The mounted backend, for callers that need something only a specific backend
+// offers - today that is the IndexedDB backend's allocation map, which is what
+// makes fragmentation a measurement. Returns null when nothing is mounted.
+function vfsGetBackend() { return _vfsBackend; }
+
 // True when mutations have been made but not yet committed. Used by the
 // unload handler to skip serializing a tree that is already durable.
 function vfsHasPendingWrites() { return _vfsPendingOps.length > 0; }
@@ -539,9 +544,6 @@ async function vfsWriteFile(path, text, fallbackDir, options) {
   dir.files.set(fileName, nextValue);
   _vfsQueue({ op: 'write', dirName, name: fileName },
             _vfsTextCost(fileName, nextValue) - (hadFile ? _vfsTextCost(fileName, prevValue) : 0));
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(calcTextFragmentationDelta(prevValue, nextValue, !hadFile));
-  }
   return { dirName, fileName, created: !hadFile, unchanged: false };
 }
 
@@ -562,9 +564,6 @@ async function vfsWriteBlob(path, record, fallbackDir, options) {
   }
   dir.blobs.set(fileName, record);
   _vfsQueue({ op: 'writeBlob', dirName, name: fileName });
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(calcBlobFragmentationDelta(record && record.size, !existing));
-  }
   return { dirName, fileName, created: !existing };
 }
 
@@ -580,9 +579,6 @@ async function vfsMkdir(path, fallbackDir, options) {
   if (!parent.subdirs) parent.subdirs = new Map();
   if (!parent.subdirs.has(name)) parent.subdirs.set(name, vfsMakeNode());
   _vfsQueue({ op: 'mkdir', dirName, name });
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(0.006);
-  }
   return { dirName, fileName: name, created: true };
 }
 
@@ -591,13 +587,10 @@ async function vfsUnlink(path, fallbackDir, options) {
   const st = vfsStatSync(path, fallbackDir);
   if (!st) return false;
   const dir = vfsDirNodeSync(st.dirName);
-  let payload = null;
   if (st.kind === 'text') {
-    payload = dir.files.get(st.name);
     dir.files.delete(st.name);
   } else if (st.kind === 'blob') {
     const blob = dir.blobs.get(st.name);
-    payload = (blob && blob.size) || 0;
     if (blob && blob.url && !blob.seeded) URL.revokeObjectURL(blob.url);
     dir.blobs.delete(st.name);
   } else {
@@ -605,11 +598,6 @@ async function vfsUnlink(path, fallbackDir, options) {
     if (dir.subdirs) dir.subdirs.delete(st.name);
   }
   _vfsQueue({ op: 'unlink', dirName: st.dirName, name: st.name, kind: st.kind }, 0);
-  if (options.trackFragmentation !== false
-      && typeof increaseDriveFragmentation === 'function'
-      && typeof calcRemovalFragmentationDelta === 'function') {
-    increaseDriveFragmentation(calcRemovalFragmentationDelta(st.kind, payload));
-  }
   return true;
 }
 
@@ -4143,11 +4131,6 @@ function _uniqueNameIn(dirName, name) {
 // the source directory; see pasteClipboardInto. Without that check this
 // recursion never terminates, because vfsListSync(srcPath) rediscovers the
 // copy it just made one level up.
-//
-// trackFragmentation is off on all three writes because the paste this
-// replaces touched the DEFRAG meter zero times, and task 8 is a refactor under
-// a behavior-identical constraint. Whether a copy should fragment the drive is
-// a product decision, not this migration's to make.
 async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
   if (kind === 'dir') {
     // Recurse under the name vfsMkdir ACTUALLY created, not the one we asked
@@ -4159,7 +4142,7 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
     // normalized, so those rows could never be found again: deleting the file
     // left them behind and the next boot restored the image the user had
     // permanently deleted.
-    const made = await vfsMkdir(dstName, dstCwd, { trackFragmentation: false });
+    const made = await vfsMkdir(dstName, dstCwd);
     const srcPath = srcCwd ? srcCwd + '\\' + name : name;
     const dstPath = dstCwd ? dstCwd + '\\' + made.fileName : made.fileName;
     for (const entry of vfsListSync(srcPath)) {
@@ -4177,11 +4160,11 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
       const record = { ...st.blob };
       const url = await copyBlobEntryStorage(srcCwd, name, dstCwd, dstName);
       if (url) record.url = url;
-      await vfsWriteBlob(dstName, record, dstCwd, { trackFragmentation: false });
+      await vfsWriteBlob(dstName, record, dstCwd);
     }
   } else {
     const content = await vfsReadFile(name, srcCwd);
-    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd, { trackFragmentation: false });
+    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd);
   }
 }
 
@@ -4729,25 +4712,6 @@ vfsSetTree(vfsSeedTree());
 function fsNormalizeDir(name) { return vfsNormalizeDir(name); }
 function fsSplitPath(path, fallbackDir) { return vfsSplitPath(path, fallbackDir); }
 
-function calcTextFragmentationDelta(prevValue, nextValue, created) {
-  if (prevValue === nextValue) return 0;
-  const prevLen = String(prevValue ?? '').length;
-  const nextLen = String(nextValue ?? '').length;
-  const contentWeight = Math.max(nextLen, Math.abs(nextLen - prevLen));
-  return Math.min(0.035, (created ? 0.014 : 0.009) + Math.min(0.018, contentWeight / 18000));
-}
-
-function calcBlobFragmentationDelta(size, created) {
-  return Math.min(0.04, (created ? 0.016 : 0.01) + Math.min(0.02, Math.max(0, Number(size) || 0) / 180000));
-}
-
-function calcRemovalFragmentationDelta(kind, payload) {
-  if (kind === 'dir') return 0.007;
-  if (kind === 'blob') return Math.min(0.026, 0.009 + Math.min(0.014, Math.max(0, Number(payload) || 0) / 220000));
-  return Math.min(0.022, 0.008 + Math.min(0.012, String(payload ?? '').length / 22000));
-}
-
-
 // ── Filesystem persistence ────────────────────────────────────────
 const DRIVE_STATE_KEY = 'sleepOS-drive-state';
 const LEGACY_DEFRAG_KEY = 'sleepOS-defrag-time';
@@ -4831,18 +4795,9 @@ function refreshSeededHomeMedia() {
 
 function saveFS() { return vfsFlush(); }
 
-function computeLegacyFragLevel(ms) {
-  if (ms === null) return 0.68;
-  const hours = ms / 3600000;
-  if (hours < 0.01) return 0.02;
-  return Math.min(0.9, 0.02 + 0.88 * Math.pow(hours / 168, 0.38));
-}
-
 function createDriveStateDefaults(fromLegacy) {
   const legacyTs = fromLegacy ? parseInt(localStorage.getItem(LEGACY_DEFRAG_KEY) || '0', 10) || 0 : 0;
-  const msSince = legacyTs ? Date.now() - legacyTs : null;
   return {
-    level: computeLegacyFragLevel(msSince),
     lastDefragTs: legacyTs,
     changeCount: 0,
     lastMutationTs: 0,
@@ -4851,7 +4806,6 @@ function createDriveStateDefaults(fromLegacy) {
 
 function normalizeDriveState(saved) {
   const next = Object.assign(createDriveStateDefaults(false), saved || {});
-  next.level = Math.max(0.02, Math.min(0.92, Number(next.level) || 0.68));
   next.lastDefragTs = Math.max(0, Math.trunc(Number(next.lastDefragTs) || 0));
   next.changeCount = Math.max(0, Math.trunc(Number(next.changeCount) || 0));
   next.lastMutationTs = Math.max(0, Math.trunc(Number(next.lastMutationTs) || 0));
@@ -4872,33 +4826,57 @@ function saveDriveState() {
 
 let defragState = loadDriveState();
 
+// Fragmentation used to be a number nudged by hand-tuned deltas on every
+// write, clamped to 0.02-0.92, and persisted to localStorage. Nothing measured
+// anything: DEFRAG.exe animated against a fiction and the deltas existed only
+// to make the fiction drift.
+//
+// It is now the ratio of extra block runs to total blocks, computed from the
+// real allocation map. It is cached because reading it walks every inode and
+// SYSMON asks often; fsRefreshFragmentation() is what recomputes.
+var fsFragmentationLevel = 0;
+
 function getDriveFragmentationLevel() {
-  return Math.max(0.02, Math.min(0.92, Number(defragState?.level) || 0.68));
+  return fsFragmentationLevel;
 }
 
 function getDriveOptimizationPercent() {
   return Math.round((1 - getDriveFragmentationLevel()) * 100);
 }
 
-function increaseDriveFragmentation(amount, options) {
-  const delta = Number(amount) || 0;
-  if (!(delta > 0)) return getDriveFragmentationLevel();
-  defragState.level = Math.min(0.92, getDriveFragmentationLevel() + delta);
-  defragState.changeCount = Math.max(0, Math.trunc(Number(defragState.changeCount) || 0)) + 1;
-  defragState.lastMutationTs = Date.now();
-  saveDriveState();
-  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
-  return defragState.level;
+// Recompute from the allocation map. Only the IndexedDB backend has one; on
+// the localStorage fallback there are no blocks to measure, so the honest
+// answer is 0 rather than an invented number.
+async function fsRefreshFragmentation() {
+  if (fsGetActiveBackendKind() !== 'idb') { fsFragmentationLevel = 0; return 0; }
+  try {
+    const backend = vfsGetBackend();
+    const inodes = backend && backend._readInodes ? await backend._readInodes() : [];
+    fsFragmentationLevel = fsComputeFragmentation(inodes);
+  } catch (e) {
+    // Leave the last known value rather than reporting a drop that did not
+    // happen. A transient read failure is not a defragmentation.
+  }
+  return fsFragmentationLevel;
 }
 
-function optimizeDriveFragmentation(options) {
-  const targetLevel = Math.max(0.02, Math.min(0.12, Number(options?.targetLevel) || 0.06));
-  defragState.level = targetLevel;
+// DEFRAG.exe calls this when the user runs an optimization pass. It records
+// when the pass happened, which is what the "Last defrag" line reads, and then
+// recomputes from the allocation map.
+//
+// It does NOT yet move any blocks, so the number it recomputes will barely
+// change. That is deliberate and it is honest: actually rewriting blocks into
+// contiguous runs is phase 5's job, per the master spec's phase order. The
+// targetLevel option callers still pass is ignored rather than removed,
+// because inventing a post-defrag number is exactly the fiction this phase
+// exists to delete.
+async function optimizeDriveFragmentation(options) {
   defragState.lastDefragTs = Date.now();
   saveDriveState();
   try { localStorage.setItem(LEGACY_DEFRAG_KEY, String(defragState.lastDefragTs)); } catch (e) {}
+  const level = await fsRefreshFragmentation();
   if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
-  return defragState.level;
+  return level;
 }
 
 // Which backend actually mounted. SYSMON reports it, and Task 7's
@@ -4951,7 +4929,13 @@ async function vfsBootMount() {
   const chosen = await fsChooseBackend();
   fsActiveBackendKind = chosen.kind;
   await vfsMount(chosen.backend, {
-    onChange: () => { document.dispatchEvent(new CustomEvent('fs-changed')); },
+    onChange: () => {
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+      // Recompute after the write lands rather than before. Deliberately not
+      // awaited: onChange is called from a synchronous queue path and a
+      // rejected promise here must not surface as an unhandled rejection.
+      void fsRefreshFragmentation();
+    },
     onError: err => { reportVfsError(err); },
     seed: root => {
       if (!root.dirs.size && !root.files.size) {
@@ -4971,6 +4955,7 @@ async function vfsBootMount() {
   // then replaced. Re-run it against the real tree so the story files and the
   // registry pointers agree. Same shape as the ensureFsDir call above.
   syncDaemonStory({ silent: true });
+  await fsRefreshFragmentation();
 }
 
 // A late commit failure has no call stack to propagate into, so it surfaces
@@ -5509,7 +5494,7 @@ async function recycleVirtualPath(path, fallbackDir) {
 
   const moved = await moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
   if (!moved) {
-    await removeFsPath(storedDir, { trackFragmentation: false });
+    await removeFsPath(storedDir);
     return { ok: false, message: 'Could not move ' + fileLabel + ' to the Recycle Bin.' };
   }
 
@@ -5536,7 +5521,7 @@ async function restoreRecycleEntry(entry) {
     suffixToken: 'restored',
   });
   if (!moved) return { ok: false, message: 'Could not restore ' + entry.name + '.' };
-  await removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir);
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -5547,7 +5532,7 @@ async function purgeRecycleEntry(entry) {
   entry = normalizeRecycleEntry(entry);
   if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
   await purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
-  await removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir);
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -6083,30 +6068,30 @@ function syncDaemonStoryFiles() {
   ensureFsDir('SYS');
   ensureFsDir('CACHE');
   if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
-  else void removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.notice);
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
-  else void removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.incident);
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
-  else void removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.lostContact);
   if (daemonStory.stage >= 4) {
     ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
     if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
   } else {
-    void removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.lastOperator);
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
   }
   if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
-  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol);
   if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
-  else void removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.anchorSeed);
   if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
-  else void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.watchPid);
   if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
   else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
-  else void removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.quarantineSig);
   if (daemonStory.endingReached) {
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
-    void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
+    void removeFsPath(STORY_FILE_PATHS.watchPid);
   }
 }
 
@@ -10785,7 +10770,12 @@ function openExplorer(startPath) {
           if (st.blob.kind === 'image') handleWallpaperFileRename(cwd, item.name, nextName);
         }
       }
-      increaseDriveFragmentation(item.kind === 'dir' ? 0.006 : 0.008);
+      // increaseDriveFragmentation retired with phase 4: fragmentation is now
+      // measured from the real block layout, not nudged. A rename would have
+      // been a fiction here regardless - fsRenameEntry only moves a dirent
+      // key, never a block, so the disk's real layout is untouched, and the
+      // rename's own queued op already triggers vfsBootMount's onChange
+      // handler, which calls fsRefreshFragmentation() after every commit.
       render();
     });
   }

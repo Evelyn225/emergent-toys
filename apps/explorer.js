@@ -271,7 +271,12 @@ function openExplorer(startPath) {
           if (st.blob.kind === 'image') handleWallpaperFileRename(cwd, item.name, nextName);
         }
       }
-      increaseDriveFragmentation(item.kind === 'dir' ? 0.006 : 0.008);
+      // increaseDriveFragmentation retired with phase 4: fragmentation is now
+      // measured from the real block layout, not nudged. A rename would have
+      // been a fiction here regardless - fsRenameEntry only moves a dirent
+      // key, never a block, so the disk's real layout is untouched, and the
+      // rename's own queued op already triggers vfsBootMount's onChange
+      // handler, which calls fsRefreshFragmentation() after every commit.
       render();
     });
   }

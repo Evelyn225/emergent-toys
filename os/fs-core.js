@@ -24,11 +24,6 @@ function _uniqueNameIn(dirName, name) {
 // the source directory; see pasteClipboardInto. Without that check this
 // recursion never terminates, because vfsListSync(srcPath) rediscovers the
 // copy it just made one level up.
-//
-// trackFragmentation is off on all three writes because the paste this
-// replaces touched the DEFRAG meter zero times, and task 8 is a refactor under
-// a behavior-identical constraint. Whether a copy should fragment the drive is
-// a product decision, not this migration's to make.
 async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
   if (kind === 'dir') {
     // Recurse under the name vfsMkdir ACTUALLY created, not the one we asked
@@ -40,7 +35,7 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
     // normalized, so those rows could never be found again: deleting the file
     // left them behind and the next boot restored the image the user had
     // permanently deleted.
-    const made = await vfsMkdir(dstName, dstCwd, { trackFragmentation: false });
+    const made = await vfsMkdir(dstName, dstCwd);
     const srcPath = srcCwd ? srcCwd + '\\' + name : name;
     const dstPath = dstCwd ? dstCwd + '\\' + made.fileName : made.fileName;
     for (const entry of vfsListSync(srcPath)) {
@@ -58,11 +53,11 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
       const record = { ...st.blob };
       const url = await copyBlobEntryStorage(srcCwd, name, dstCwd, dstName);
       if (url) record.url = url;
-      await vfsWriteBlob(dstName, record, dstCwd, { trackFragmentation: false });
+      await vfsWriteBlob(dstName, record, dstCwd);
     }
   } else {
     const content = await vfsReadFile(name, srcCwd);
-    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd, { trackFragmentation: false });
+    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd);
   }
 }
 
@@ -609,23 +604,4 @@ vfsSetTree(vfsSeedTree());
 // places instead of two. Delegating kills the duplication permanently.
 function fsNormalizeDir(name) { return vfsNormalizeDir(name); }
 function fsSplitPath(path, fallbackDir) { return vfsSplitPath(path, fallbackDir); }
-
-function calcTextFragmentationDelta(prevValue, nextValue, created) {
-  if (prevValue === nextValue) return 0;
-  const prevLen = String(prevValue ?? '').length;
-  const nextLen = String(nextValue ?? '').length;
-  const contentWeight = Math.max(nextLen, Math.abs(nextLen - prevLen));
-  return Math.min(0.035, (created ? 0.014 : 0.009) + Math.min(0.018, contentWeight / 18000));
-}
-
-function calcBlobFragmentationDelta(size, created) {
-  return Math.min(0.04, (created ? 0.016 : 0.01) + Math.min(0.02, Math.max(0, Number(size) || 0) / 180000));
-}
-
-function calcRemovalFragmentationDelta(kind, payload) {
-  if (kind === 'dir') return 0.007;
-  if (kind === 'blob') return Math.min(0.026, 0.009 + Math.min(0.014, Math.max(0, Number(payload) || 0) / 220000));
-  return Math.min(0.022, 0.008 + Math.min(0.012, String(payload ?? '').length / 22000));
-}
-
 
