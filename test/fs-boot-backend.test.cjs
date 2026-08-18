@@ -1,7 +1,47 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
 const { makeOsContext, loadOsSources, makeLocalStorageStub, makeIndexedDbStub } = require('./helpers/load-os.cjs');
+
+// fsChooseBackend lives in os/fs-persist.js, which runs loadFS() at parse
+// time and drags in the whole desktop. Declaring the same function here
+// would test a copy. Instead the real one is read out of the source and
+// evaluated in this context - the same trick test/load-os-harness.test.cjs
+// uses to reach into a module without booting it.
+//
+// Extraction walks brace depth from the function's opening `{` rather than
+// stopping at the first `\n}`, and asserts the depth actually returns to
+// zero. A textual "find the next line that starts with a closing brace"
+// would silently truncate the slice - and the truncated piece could still
+// happen to parse - the moment a future edit ever dedented an inner block
+// (an `if`, a `catch`) to column 0. A depth counter that ends unbalanced
+// fails loudly instead.
+//
+// This does not track string or comment contents, so it would mis-scan a
+// function containing a literal '{' or '}' inside a string or comment.
+// fsChooseBackend has neither - checked by hand against the source below -
+// so the simple version is safe here. Re-check by hand if that ever changes.
+function extractFunctionSource(src, fnName) {
+  const marker = 'async function ' + fnName;
+  const start = src.indexOf(marker);
+  assert.notStrictEqual(start, -1, fnName + ' not found in os/fs-persist.js');
+  const braceStart = src.indexOf('{', start);
+  assert.notStrictEqual(braceStart, -1, 'no opening brace found for ' + fnName);
+  let depth = 0;
+  let end = -1;
+  for (let i = braceStart; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) { end = i + 1; break; }
+    }
+  }
+  assert.notStrictEqual(end, -1, 'never found the closing brace for ' + fnName);
+  assert.strictEqual(depth, 0, 'unbalanced braces while extracting ' + fnName + ' - slice would be truncated');
+  return src.slice(start, end);
+}
 
 function boot(overrides) {
   const ctx = makeOsContext(Object.assign({
@@ -12,18 +52,8 @@ function boot(overrides) {
   loadOsSources(ctx, [
     'os/vfs.js', 'os/fs-format.js', 'os/storage-idb.js', 'os/fs-migrate.js', 'os/storage-local.js',
   ]);
-  // fsChooseBackend lives in os/fs-persist.js, which runs loadFS() at parse
-  // time and drags in the whole desktop. Declaring the same function here
-  // would test a copy. Instead the real one is read out of the source and
-  // evaluated in this context - the same trick test/load-os-harness.test.cjs
-  // uses to reach into a module without booting it.
-  const fs = require('fs');
-  const path = require('path');
   const src = fs.readFileSync(path.join(__dirname, '..', 'os', 'fs-persist.js'), 'utf8');
-  const start = src.indexOf('async function fsChooseBackend');
-  assert.notStrictEqual(start, -1, 'fsChooseBackend not found in os/fs-persist.js');
-  const end = src.indexOf('\n}', start) + 2;
-  ctx.__evalSource(src.slice(start, end), 'fs-persist-slice');
+  ctx.__evalSource(extractFunctionSource(src, 'fsChooseBackend'), 'fs-persist-slice');
   return ctx;
 }
 
@@ -49,4 +79,24 @@ test('a database that refuses to open falls back rather than throwing', async ()
   const ctx = boot({ indexedDB: angry });
   const chosen = await ctx.fsChooseBackend();
   assert.strictEqual(chosen.kind, 'local');
+});
+
+test('a migration that fails mid-import falls back to localStorage rather than surfacing the failure', async () => {
+  // Give localStorage a real legacy tree to import - with nothing to
+  // migrate, fsMigrateFromLocalStorage takes the "nothing-to-migrate" exit
+  // and never touches the import transaction this test needs to fail.
+  const localStorage = makeLocalStorageStub();
+  localStorage.setItem('sleepOS-fs', JSON.stringify({
+    dirs: [], files: { 'hello.txt': 'hi' }, subdirs: {},
+  }));
+  const indexedDB = makeIndexedDbStub();
+  const ctx = boot({ localStorage, indexedDB });
+  // Write #1 is the superblock ensure() creates on the fresh database, made
+  // by fsChooseBackend's own backend._store() call before migration ever
+  // runs. Write #2 is therefore the first write inside the import's single
+  // transaction - failing it fails the whole atomic import.
+  indexedDB._failNthWriteFromNow(2);
+  const chosen = await ctx.fsChooseBackend();
+  assert.strictEqual(chosen.kind, 'local');
+  assert.notStrictEqual(chosen.backend.needsSnapshot, false);
 });
