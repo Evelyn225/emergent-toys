@@ -322,5 +322,48 @@ function createIdbBackend(options) {
       return (await store.scan(FS_STORE_INODES)).map(([, inode]) => inode);
     },
     get _superblock() { return sb; },
+
+    // Migration (os/fs-migrate.js) writes through the same store this
+    // backend owns, rather than opening its own connection. Two connections
+    // to one database is how a migration ends up racing the boot that
+    // triggered it.
+    async _store() { await ensure(); return store; },
+
+    // Runs a whole batch of writes as ONE transaction, exactly the way
+    // commit()'s write phase does above - same store shape, same guarded
+    // abort (InvalidStateError from a request failure that already
+    // auto-aborted is swallowed; anything else is attached to the real error
+    // rather than replacing it), same stale-cache discard on failure.
+    //
+    // Migration needs this because commit() itself isn't the right vehicle:
+    // migration doesn't have `ops` to hand it, and importing an entire
+    // localStorage tree through commit()'s per-op readEntry/write-phase split
+    // would mean a mid-import failure leaves whatever files landed before it
+    // sitting in the live store as a real, readable, half-imported
+    // filesystem - exactly the outcome migration exists to rule out. One
+    // transaction means either the whole import becomes visible at once, or
+    // none of it does.
+    async _runInWriteTransaction(fn) {
+      await ensure();
+      const tx = db.transaction(
+        [FS_STORE_SUPERBLOCK, FS_STORE_INODES, FS_STORE_DIRENTS, FS_STORE_BLOCKS], 'readwrite');
+      const txStore = _fsIdbTxStore(tx);
+      try {
+        const result = await fn(txStore, sb);
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onabort = () => reject(VfsError('EIO', 'IndexedDB transaction aborted'));
+        });
+        return result;
+      } catch (err) {
+        try { tx.abort(); } catch (e) {
+          if (e.name !== 'InvalidStateError') err.abortError = e;
+        }
+        store = null;
+        sb = null;
+        dirInos = new Map();
+        throw err;
+      }
+    },
   };
 }
