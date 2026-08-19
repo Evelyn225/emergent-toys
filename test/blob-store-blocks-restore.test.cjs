@@ -8,9 +8,15 @@ const { makeOsContext, loadOsSources, makeIndexedDbStub } = require('./helpers/l
 // the localStorage base64 mirror and the separate media IndexedDB - never
 // blocks, even though os/storage-idb.js's _readBlobBytes (Task 9a) has
 // existed since then with zero callers. Now a boot-time pass reads blocks
-// first (loadBlobsFromBlocks) and the two mirrors only fill paths blocks did
-// NOT provide, rather than unconditionally overwriting whatever blocks
-// already restored.
+// first (loadBlobsFromBlocks) and the surviving mirror only fills paths
+// blocks did NOT provide, rather than unconditionally overwriting whatever
+// blocks already restored.
+//
+// Task 9e deleted the media-IndexedDB mirror entirely, so the coverage here
+// is narrower than when this file was written: only the localStorage mirror
+// still needs a skip-check test. What used to be "the media-DB mirror is
+// skipped..." is gone rather than updated - there is nothing left for it to
+// prove.
 //
 // A real object-URL/fetch pair, not the bare stubs makeOsContext ships with:
 // createObjectURL must return a DIFFERENT url per Blob, and fetch(url) must
@@ -42,8 +48,8 @@ function makeCtx(overrides) {
     URL, fetch, Blob,
     btoa: str => Buffer.from(str, 'binary').toString('base64'),
     atob: b64 => Buffer.from(b64, 'base64').toString('binary'),
-    // loadBlobsFromIndexedDb's tail calls these (os/settings.js); not under
-    // test here, so stubbed to a no-op rather than pulled in.
+    // loadBlobsFromStorage's wallpaper-apply tail calls these (os/settings.js);
+    // not under test here, so stubbed to a no-op rather than pulled in.
     getInitialWallpaperPath: () => null,
     applyWallpaper: () => {},
   }, overrides || {}));
@@ -103,27 +109,6 @@ test('the localStorage mirror is skipped for a path blocks already cover, even t
     'blocks must win - the mirror must not clobber a path blocks already provided');
 });
 
-test('the media-DB mirror is skipped for a path blocks already cover', async () => {
-  const ctx = makeCtx();
-  const writer = ctx.createIdbBackend();
-  await writer.load();
-  await writer.commit({
-    ops: [{ op: 'writeBlob', dirName: '', name: 'pic.png' }],
-    readEntry: () => ({ kind: 'blob', blob: { kind: 'image', mime: 'image/png' },
-      bytes: new Uint8Array([1, 1, 1]), dirName: '', name: 'pic.png' }),
-  });
-  await ctx.vfsMount(ctx.createIdbBackend(), {});
-
-  // Seed the media DB directly with different bytes at the same path.
-  await ctx.storeBlobEntryInDb('', 'pic.png', 'image', 3, 'image/png', new Uint8Array([2, 2, 2]).buffer);
-
-  await ctx.loadBlobsFromBlocks();
-  await ctx.loadBlobsFromIndexedDb();
-
-  assert.deepStrictEqual(await bytesAt(ctx, 'pic.png'), [1, 1, 1],
-    'blocks must win over the media DB too');
-});
-
 test('mirrors still restore a path blocks do not have at all', async () => {
   const ctx = makeCtx();
   const backend = ctx.createIdbBackend();
@@ -141,11 +126,11 @@ test('mirrors still restore a path blocks do not have at all', async () => {
 
 // The carry-forward the 9c review flagged: on a readFailed rewrite, blocks
 // keep the OLD bytes (os/storage-idb.js skips the write) while the live tree
-// (and, independently, any mirror write that does not depend on re-fetching
-// the object URL) can hold the NEW ones. This proves what a reload actually
-// shows once blocks are the read source: the OLD, persisted content - not
-// the newer, never-actually-saved one - because loadBlobsFromBlocks treats
-// blocks as authoritative and the mirrors are gap-fills only.
+// shows the NEW record from the moment vfsWriteBlob ran, well before the
+// commit that discovers the fetch failure. This proves what a reload
+// actually shows once blocks are the read source: the OLD, persisted
+// content - not whatever the live session showed in the meantime - because
+// loadBlobsFromBlocks treats blocks as authoritative.
 test('after a readFailed rewrite, a reload restores the OLD bytes blocks actually persisted, not the newer unsaved ones', async () => {
   let fetchShouldFail = false;
   const idbStub = makeIndexedDbStub();
@@ -172,15 +157,12 @@ test('after a readFailed rewrite, a reload restores the OLD bytes blocks actuall
   await ctx.vfsFlush();
   assert.strictEqual(errors.length, 0, 'setup: the first write must land cleanly');
 
-  // Rewrite: the tree gets new bytes, but the fetch behind the commit fails,
-  // so blocks keep the old ones. A mirror write independent of the object
-  // URL (e.g. handleFileUpload's readFileAsArrayBuffer, which reads the raw
-  // File rather than re-fetching the blob: URL) can still land here.
+  // Rewrite: the live tree gets a new record immediately, but the fetch
+  // behind the commit fails, so blocks keep the old bytes.
   fetchShouldFail = true;
   await ctx.vfsWriteBlob('pic.png', { url: 'blob:doomed-rewrite', kind: 'image', size: 3, mime: 'image/png' }, '');
   await ctx.vfsFlush();
   assert.strictEqual(errors.length, 1, 'setup: the rewrite must be reported as a failed save');
-  await ctx.storeBlobEntryInDb('', 'pic.png', 'image', 3, 'image/png', new Uint8Array([9, 9, 9]).buffer);
 
   // "Reload": a fresh backend instance over the same underlying database,
   // fetch working again.
@@ -189,8 +171,7 @@ test('after a readFailed rewrite, a reload restores the OLD bytes blocks actuall
   const reloadErrors = [];
   await ctx.vfsMount(reloadedBackend, { onError: e => reloadErrors.push(e) });
   await ctx.loadBlobsFromBlocks();
-  await ctx.loadBlobsFromIndexedDb();
 
   assert.deepStrictEqual(await bytesAt(ctx, 'pic.png'), [1, 1, 1],
-    'the reload must show the OLD, actually-persisted bytes - not the newer bytes that only ever reached the media DB');
+    'the reload must show the OLD, actually-persisted bytes - not the newer, never-actually-saved ones');
 });

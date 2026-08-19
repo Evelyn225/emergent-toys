@@ -14,7 +14,11 @@ const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDi
   // Phase 4: fragmentation became a measurement, so the machinery that faked
   // it is gone. Listed here so it cannot creep back one call site at a time.
   'trackFragmentation', 'increaseDriveFragmentation', 'calcTextFragmentationDelta',
-  'calcBlobFragmentationDelta', 'calcRemovalFragmentationDelta'];
+  'calcBlobFragmentationDelta', 'calcRemovalFragmentationDelta',
+  // Task 9e: the media-IndexedDB blob mirror. Blocks (os/storage-idb.js) are
+  // the durable store now; this whole second copy is gone, not just unused.
+  'openMediaDb', 'storeBlobEntryInDb', 'removeBlobEntryFromDb', 'renameBlobEntryInDb',
+  'moveBlobEntryInDb', 'copyBlobEntryInDb', 'moveBlobSubtreeInDb', 'loadBlobsFromIndexedDb'];
 
 test('no source reaches the filesystem outside the VFS', () => {
   const offenders = [];

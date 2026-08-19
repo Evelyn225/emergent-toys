@@ -3,53 +3,61 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { makeOsContext, loadOsSources, makeIndexedDbStub } = require('./helpers/load-os.cjs');
 
-// Prerequisite hardening for Task 9 (blocks become the primary blob store):
-// os/blob-store.js's saveBlobEntry fired storeBlobEntryInDb() with `void`,
-// discarding the one signal that the write failed - storeBlobEntryInDb and
-// openMediaDb never reject, every failure path resolves false/null, so
-// nothing else could ever catch this. Above BLOB_SIZE_LIMIT (3MB) there is
-// no localStorage fallback at all, so today - before any block-layer read
-// path is wired in - a failed media-DB write for a large file is invisible,
-// unconditional data loss: nothing else durable and boot-recoverable exists
-// for that file.
+// Task 9e deleted the media-IndexedDB mirror (openMediaDb, storeBlobEntryInDb
+// and friends): blocks are the durable store now, reached upstream of
+// saveBlobEntry via vfsWriteBlob, and Task 9d already made blocks readable
+// again on boot. saveBlobEntry's only remaining job is the localStorage
+// base64 mirror, so this file - which used to prove the >3MB media-DB write
+// mattered - now only proves the localStorage half's own honesty: it must
+// report whether ITS write actually landed, not silently claim success.
+// (This file itself is retired in Task 9f, once saveBlobEntry has nothing
+// left to do at all.)
 function blobStore(overrides) {
   const ctx = makeOsContext(Object.assign({
     btoa: str => Buffer.from(str, 'binary').toString('base64'),
-    Blob, // storeBlobEntryInDb wraps the arrayBuffer in a real Blob before put()
+    Blob, // still needed pre-Task-9e: storeBlobEntryInDb wraps bytes in a real Blob
   }, overrides || {}));
   loadOsSources(ctx, ['os/vfs.js', 'os/blob-store.js']);
   return ctx;
 }
 
-test('saveBlobEntry resolves false when nothing durable landed for a file over the size limit', async () => {
-  const ctx = blobStore({ indexedDB: undefined }); // openMediaDb() -> null -> storeBlobEntryInDb() -> false
-  const big = new Uint8Array(4 * 1024 * 1024).buffer; // over the 3 MB localStorage cap
+test('saveBlobEntry resolves false for a file over the size limit - no store can hold it any more', async () => {
+  // Task 9e removed the only thing that used to cover this case (the media
+  // DB); the localStorage mirror was never able to (BLOB_SIZE_LIMIT skips it
+  // outright above 3 MB). A large upload landing only in blocks is expected
+  // and covered elsewhere (Task 9d's block-restore tests) - this file is
+  // only about what saveBlobEntry itself can honestly report.
+  const ctx = blobStore();
+  const big = new Uint8Array(4 * 1024 * 1024).buffer; // over the 3 MB cap
   const result = await ctx.saveBlobEntry('', 'movie.mp4', 'video', big.byteLength, 'video/mp4', big);
-  assert.strictEqual(result, false,
-    'with no IndexedDB and a file above the localStorage size cap, no store actually got the ' +
-    'bytes - that must be reported, not silently discarded');
+  assert.strictEqual(result, false);
 });
 
-test('saveBlobEntry resolves true once the media DB write actually lands', async () => {
+test('saveBlobEntry resolves true for a small file that fits the localStorage mirror', async () => {
+  const ctx = blobStore();
+  const small = new Uint8Array(10).buffer;
+  const result = await ctx.saveBlobEntry('', 'note.png', 'image', 10, 'image/png', small);
+  assert.strictEqual(result, true);
+});
+
+test('saveBlobEntry resolves false for a small file when the localStorage write itself fails', async () => {
+  const ctx = blobStore({ quotaBytes: 0 }); // makes every localStorage.setItem throw
+  const small = new Uint8Array(10).buffer;
+  const result = await ctx.saveBlobEntry('', 'note.png', 'image', 10, 'image/png', small);
+  assert.strictEqual(result, false);
+});
+
+test('saveBlobEntry no longer consults IndexedDB at all, even a working one', async () => {
+  // The actual regression guard for Task 9e's deletion: before it,
+  // saveBlobEntry would have tried the media DB FIRST and returned true for
+  // this large file the instant that write landed, indexedDB not being read
+  // at all otherwise. This proves that path is gone, not merely untested -
+  // a real, working IndexedDB is provided and a large upload must still
+  // report false.
   const stub = makeIndexedDbStub();
   const ctx = blobStore({ indexedDB: stub });
   const big = new Uint8Array(4 * 1024 * 1024).buffer;
   const result = await ctx.saveBlobEntry('', 'movie.mp4', 'video', big.byteLength, 'video/mp4', big);
-  assert.strictEqual(result, true);
-});
-
-test('saveBlobEntry resolves true for a small file even with no media DB, because localStorage covers it', async () => {
-  const ctx = blobStore({ indexedDB: undefined });
-  const small = new Uint8Array(10).buffer;
-  const result = await ctx.saveBlobEntry('', 'note.png', 'image', 10, 'image/png', small);
-  assert.strictEqual(result, true);
-});
-
-test('saveBlobEntry resolves false for a small file when both stores fail', async () => {
-  // A quota of 0 makes every localStorage.setItem throw, and no indexedDB
-  // means the media DB never lands either - neither copy exists.
-  const ctx = blobStore({ indexedDB: undefined, quotaBytes: 0 });
-  const small = new Uint8Array(10).buffer;
-  const result = await ctx.saveBlobEntry('', 'note.png', 'image', 10, 'image/png', small);
-  assert.strictEqual(result, false);
+  assert.strictEqual(result, false,
+    'a working IndexedDB must not rescue this any more - the media-DB code path is retired');
 });
