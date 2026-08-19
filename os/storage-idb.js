@@ -279,6 +279,13 @@ function createIdbBackend(options) {
       await ensure();
       const list = ops || [];
       if (!list.length) return;
+      // A blob op whose bytes could not be read (_vfsReadEntryForCommit's
+      // readFailed) is collected here rather than thrown: the whole point is
+      // that ONE unreadable object URL must not roll back every other op in
+      // the same transaction. Handed back to vfsFlush, which reports each one
+      // through onError - the same "did not persist" channel any other save
+      // failure uses.
+      const failedBlobs = [];
 
       // Phase 1: no transaction open yet. Resolve every content op's
       // readEntry up front, because readEntry can await fetch() on a blob's
@@ -327,6 +334,16 @@ function createIdbBackend(options) {
           // write and writeBlob both land here: one allocator, one code path.
           if (!entry) continue;
           if (entry.kind === 'blob') {
+            if (entry.readFailed) {
+              // Do not write anything for this op: for a rewrite, that
+              // leaves the existing inode and its blocks exactly as they
+              // were; for a brand-new path, it leaves no dirent at all
+              // rather than a phantom zero-byte one. Either way this is
+              // strictly better than persisting `readFailed`'s unknown bytes
+              // as if they were the file's real, empty content.
+              failedBlobs.push({ dirName: op.dirName, name: op.name });
+              continue;
+            }
             await fsWriteEntry(txStore, txSb, parent, op.name, {
               type: 'blob',
               bytes: entry.bytes || new Uint8Array(0),
@@ -342,6 +359,7 @@ function createIdbBackend(options) {
         }
         await txStore.put(FS_STORE_SUPERBLOCK, 'sb', txSb);
       });
+      return { failedBlobs };
     },
 
     async estimate() {

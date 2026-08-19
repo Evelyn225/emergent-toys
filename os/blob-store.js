@@ -127,13 +127,25 @@ function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
   dir.blobs.set(fileName, { url: URL.createObjectURL(blob), kind, size, mime });
 }
 
-// Save a single blob entry immediately (called at upload time when we have the raw File)
-function saveBlobEntry(dirPath, name, kind, size, mime, arrayBuffer) {
-  void storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer);
-  if (size > BLOB_SIZE_LIMIT) return;
-  try { localStorage.setItem(blobStorageKey(dirPath, name),
-    JSON.stringify({ kind, size, mime, b64: _ab2b64(arrayBuffer) })); }
-  catch(ex) { /* quota */ }
+// Save a single blob entry immediately (called at upload time when we have
+// the raw File). Async and returns whether the bytes actually landed
+// somewhere that survives a reload - `void`-ing storeBlobEntryInDb() used to
+// throw that answer away, and storeBlobEntryInDb/openMediaDb never reject
+// (every failure path resolves false/null), so the caller had no other way
+// to find out. Above BLOB_SIZE_LIMIT the localStorage mirror is skipped
+// entirely, so for a large file the media DB is the only thing that can make
+// this true; a caller that ignores a false here loses the file invisibly.
+async function saveBlobEntry(dirPath, name, kind, size, mime, arrayBuffer) {
+  const dbOk = await storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer);
+  let localOk = false;
+  if (size <= BLOB_SIZE_LIMIT) {
+    try {
+      localStorage.setItem(blobStorageKey(dirPath, name),
+        JSON.stringify({ kind, size, mime, b64: _ab2b64(arrayBuffer) }));
+      localOk = true;
+    } catch (ex) { /* quota */ }
+  }
+  return dbOk || localOk;
 }
 
 function removeBlobEntry(dirPath, name) {

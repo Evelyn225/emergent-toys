@@ -320,18 +320,27 @@ async function _vfsReadEntryForCommit(dirName, name) {
   }
   if (dir.blobs && dir.blobs.has(name)) {
     const blob = dir.blobs.get(name);
-    let bytes = new Uint8Array(0);
-    try {
-      if (blob && blob.url) {
-        bytes = new Uint8Array(await (await fetch(blob.url)).arrayBuffer());
-      }
-    } catch (e) {
-      // A revoked or unreachable object URL must not fail the whole commit.
-      // Persisting the record with no bytes keeps the file listed and its
-      // metadata intact, which is strictly better than losing the commit that
-      // carried every other change in this batch.
+    // No URL at all is a genuinely empty blob (nothing was ever there to
+    // fetch) - not a read failure, so it takes the normal zero-byte path.
+    if (!blob || !blob.url) {
+      return { kind: 'blob', blob, bytes: new Uint8Array(0), dirName, name };
     }
-    return { kind: 'blob', blob, bytes, dirName, name };
+    try {
+      const bytes = new Uint8Array(await (await fetch(blob.url)).arrayBuffer());
+      return { kind: 'blob', blob, bytes, dirName, name };
+    } catch (e) {
+      // A revoked or unreachable object URL must not fail the whole commit -
+      // one bad blob must not drop every other change in this batch. But
+      // `bytes` must NOT default to empty here: with the block layer as the
+      // source of truth, empty bytes are a real, valid file, and persisting
+      // them over an existing entry would silently destroy it. readFailed
+      // marks this as "we don't know what these bytes are", distinct from
+      // "these bytes are empty" - storage-idb.js's commit() skips the write
+      // entirely for a readFailed entry (new or existing) rather than
+      // treating no answer as an answer, and vfsFlush reports it through
+      // onError, the same channel a save failure normally uses.
+      return { kind: 'blob', blob, bytes: null, readFailed: true, dirName, name };
+    }
   }
   if (dir.dirs && dir.dirs.has(name)) return { kind: 'dir', dirName, name };
   return null;
@@ -367,7 +376,21 @@ async function vfsFlush() {
       // incrementally needs a way to read the current state of a named entry.
       // Reading live rather than from a snapshot is deliberate: by the time a
       // commit runs, the tree is the truth.
-      await backend.commit({ ops, snapshot, readEntry: _vfsReadEntryForCommit });
+      const commitResult = await backend.commit({ ops, snapshot, readEntry: _vfsReadEntryForCommit });
+      // A per-op failure (currently: a blob whose bytes could not be read -
+      // see _vfsReadEntryForCommit's readFailed) is NOT a whole-commit
+      // failure: the rest of the batch above already landed, so this must
+      // not throw (that would re-queue ops that already committed) or go
+      // unreported (that would be exactly the silent zero-byte overwrite
+      // this exists to prevent). It gets its own onError call per failed
+      // path, same channel and same "did not persist" meaning as any other
+      // save failure.
+      if (commitResult && commitResult.failedBlobs && commitResult.failedBlobs.length && _vfsOnError) {
+        commitResult.failedBlobs.forEach(({ dirName, name }) => {
+          _vfsOnError(VfsError('EIO', 'blob content unreadable, not saved: ' +
+            (dirName ? dirName + '\\' : '') + name));
+        });
+      }
       // A remount while this was in flight means these numbers describe a
       // filesystem that is no longer mounted. Do not let them poison the new one.
       if (_vfsBackend === backend) {

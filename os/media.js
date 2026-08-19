@@ -107,8 +107,15 @@ async function handleFileUpload(fileList) {
       }
       try {
         const buffer = await readFileAsArrayBuffer(file);
-        saveBlobEntry(dirPath, file.name, kind, file.size, mime, buffer);
-      } catch (e) {}
+        const persisted = await saveBlobEntry(dirPath, file.name, kind, file.size, mime, buffer);
+        if (!persisted) {
+          console.warn('sleepOS: "' + file.name + '" did not persist to any blob store');
+          return { ok: false, name: file.name };
+        }
+      } catch (e) {
+        console.warn('sleepOS: "' + file.name + '" did not persist -', (e && e.message) || e);
+        return { ok: false, name: file.name };
+      }
       return { ok: true, name: file.name };
     } catch (e) {
       return { ok: false, name: file.name };
