@@ -67,25 +67,34 @@ function makeLocalStorageStub(quotaBytes) {
   });
 }
 
-function makeDocumentStub() {
+// The EventTarget half of a stub, bolted onto an existing object. Both the
+// document stub and the context object itself need it: os/fs-persist.js
+// registers its visibilitychange handler on `document` and its beforeunload
+// handler on `window`, and makeOsContext sets ctx.window = ctx, so the
+// context is the window as far as the sources are concerned.
+function addListenerSupport(target) {
   const listeners = new Map();
-  return {
-    addEventListener(type, fn) {
-      if (!listeners.has(type)) listeners.set(type, []);
-      listeners.get(type).push(fn);
-    },
-    removeEventListener(type, fn) {
-      const arr = listeners.get(type) || [];
-      const i = arr.indexOf(fn);
-      if (i >= 0) arr.splice(i, 1);
-    },
-    dispatchEvent(evt) {
-      (listeners.get(evt.type) || []).forEach(fn => fn(evt));
-      return true;
-    },
-    getElementById() { return null; },
-    _listeners: listeners,
+  target.addEventListener = function (type, fn) {
+    if (!listeners.has(type)) listeners.set(type, []);
+    listeners.get(type).push(fn);
   };
+  target.removeEventListener = function (type, fn) {
+    const arr = listeners.get(type) || [];
+    const i = arr.indexOf(fn);
+    if (i >= 0) arr.splice(i, 1);
+  };
+  target.dispatchEvent = function (evt) {
+    (listeners.get(evt.type) || []).forEach(fn => fn(evt));
+    return true;
+  };
+  target._listeners = listeners;
+  return target;
+}
+
+function makeDocumentStub() {
+  return addListenerSupport({
+    getElementById() { return null; },
+  });
 }
 
 // A deliberately small IndexedDB stand-in. It implements only what
@@ -411,6 +420,7 @@ function makeOsContext(overrides) {
   };
   ctx.window = ctx;
   ctx.globalThis = ctx;
+  addListenerSupport(ctx);
   vm.createContext(ctx);
   ctx.__evalSource = function (src, filename) {
     new vm.Script(src, { filename: filename || 'inline' }).runInContext(ctx);

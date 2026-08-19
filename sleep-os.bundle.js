@@ -5176,18 +5176,45 @@ function reportVfsError(err) {
   else console.warn('sleepOS:', msg);
 }
 
-// beforeunload cannot await, and a pending commit sits behind a 400ms
-// debounce, so `void vfsFlush()` here would silently drop up to 400ms of the
-// user's work on close. The old saveFS wrote synchronously and always landed;
-// losing that would be a data-loss regression in the one phase that exists to
-// stop silently losing data.
+// Start the commit as the page goes away, rather than waiting out the rest of
+// the 400ms debounce. IndexedDB cannot be written synchronously at all, so
+// there is nothing to do from beforeunload on that path; visibilitychange is
+// the earlier signal, and it fires while the page is still alive and
+// scriptable, which beforeunload does not reliably do on mobile.
 //
-// localStorage.setItem is synchronous, so write the snapshot directly. This
+// This buys the commit more time. It does not make it durable: vfsFlush is
+// async and the page can still be killed mid-commit, so this narrows the
+// window rather than closing it.
+//
+// Deliberately not gated on backend kind - committing early is right for
+// both. Firing on ordinary tab switches and minimises costs nothing either:
+// vfsFlush early-returns when no ops are pending, and when ops ARE pending
+// the commit was going to happen within 400ms regardless.
+function fsFlushOnHidden() {
+  if (document.visibilityState !== 'hidden') return;
+  void vfsFlush();
+}
+document.addEventListener('visibilitychange', fsFlushOnHidden);
+
+// The localStorage backend's last-ditch save. beforeunload cannot await, and a
+// pending commit sits behind a 400ms debounce, so `void vfsFlush()` here would
+// silently drop up to 400ms of the user's work on close. localStorage.setItem
+// is synchronous and does land, so write the snapshot directly. This
 // deliberately reaches past the backend interface: it is the only place that
-// does, and it is correct only because phase 2's backend is localStorage.
-// PHASE 4 MUST REVISIT THIS - IndexedDB cannot be written synchronously at
-// all, and the answer there is flushing on `visibilitychange` instead.
-window.addEventListener('beforeunload', () => {
+// does, and it is correct only for the backend whose storage this actually is.
+//
+// Hence the backend-kind gate. Under IndexedDB this write is not merely
+// useless, it is destructive: LOCAL_FS_KEY (os/storage-local.js) and
+// FS_MIGRATE_SOURCE_KEY (os/fs-migrate.js) are the same string, 'sleepOS-fs'.
+// Migration leaves that key in place for one release on purpose, as the
+// recovery path if the database is ever lost - `migrated` lives in the IDB
+// superblock, not in localStorage, so the next boot really does re-import from
+// it. Writing here would overwrite that frozen pre-migration snapshot on every
+// tab close with a vfsSerializeTree copy, which is text-only and therefore has
+// every image and sound stripped out - and it would still not save the pending
+// IndexedDB writes. fsFlushOnHidden above is what covers those instead.
+function fsSnapshotOnUnload() {
+  if (fsGetActiveBackendKind() !== 'local') return;
   // vfsIsMounted() is the load-bearing half of this guard. vfsMount publishes
   // _vfsBackend only after _vfsRoot holds real data, so this is what stops us
   // serializing the seed tree over a returning visitor's filesystem if they
@@ -5196,7 +5223,8 @@ window.addEventListener('beforeunload', () => {
   try {
     localStorage.setItem(LOCAL_FS_KEY, JSON.stringify(vfsSerializeTree()));
   } catch (e) { /* unload is too late to report anything useful */ }
-});
+}
+window.addEventListener('beforeunload', fsSnapshotOnUnload);
 
 function normalizeRecycleEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;
