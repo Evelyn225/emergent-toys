@@ -18,7 +18,7 @@ function makeLocalStorageStub(quotaBytes) {
     map.forEach((v, k) => { n += k.length + v.length; });
     return n;
   }
-  return {
+  const base = {
     get length() { return map.size; },
     key(i) { return [...map.keys()][i] ?? null; },
     getItem(k) { return map.has(String(k)) ? map.get(String(k)) : null; },
@@ -37,6 +37,34 @@ function makeLocalStorageStub(quotaBytes) {
     _map: map,
     _used: used,
   };
+  // Real Storage objects expose every stored key as an enumerable own
+  // property, which is what lets `Object.keys(localStorage)` see them -
+  // os/blob-store.js's boot restore enumerates its blob keys exactly that
+  // way. A plain object like `base` does not: Object.keys() on it would
+  // return this stub's OWN method names (getItem, setItem, ...) rather than
+  // anything ever stored, silently turning every stored key invisible to
+  // that enumeration. The Proxy makes stored keys show up in ownKeys() /
+  // getOwnPropertyDescriptor() the way a real Storage object's do, while
+  // every method call still passes straight through to `base` - guarded by
+  // `!(prop in target)` so a key that collides with an actual method name
+  // (e.g. a test storing "length") can never shadow the real method.
+  return new Proxy(base, {
+    ownKeys(target) {
+      return [...new Set([...Reflect.ownKeys(target), ...map.keys()])];
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      if (typeof prop === 'string' && map.has(prop) && !(prop in target)) {
+        return { value: map.get(prop), enumerable: true, configurable: true, writable: true };
+      }
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
+    get(target, prop, receiver) {
+      if (typeof prop === 'string' && map.has(prop) && !(prop in target)) {
+        return map.get(prop);
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
 }
 
 function makeDocumentStub() {

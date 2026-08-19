@@ -174,9 +174,37 @@ function _vfsDesNode(obj) {
   const node = vfsMakeNode();
   (obj.dirs || []).forEach(d => node.dirs.add(d));
   Object.entries(obj.files || {}).forEach(([k, v]) => node.files.set(k, v));
+  // Metadata only (size/kind/mime, no url/bytes). `obj.blobs` only ever has
+  // content for the IndexedDB backend - fsReadTree (os/fs-format.js) is the
+  // one place that produces it; storage-mem/storage-local's load() round-
+  // trips vfsSerializeTree(), which deliberately omits blobs (see that
+  // function below), so this is always {} for them. Filling it in here is
+  // what makes a block-persisted blob dirent show up in a listing at all
+  // immediately after mount - it used to be silently dropped on the floor,
+  // invisible until os/blob-store.js's localStorage/media-DB restore
+  // separately reintroduced the same path moments later.
+  Object.entries(obj.blobs || {}).forEach(([k, v]) => node.blobs.set(k, Object.assign({}, v)));
   Object.entries(obj.subdirs || {}).forEach(([k, v]) => node.subdirs.set(k, _vfsDesNode(v)));
   return node;
 }
+
+// The blob paths the mounted backend's block layer actually persisted, taken
+// as a snapshot right after _vfsDesNode builds the live tree and before
+// `seed` (or anything else) can run. A seeded wallpaper/home-media
+// placeholder (os/fs-persist.js) writes straight into dir.blobs at a fixed
+// path; if a real block-backed blob ever shares that path, the placeholder's
+// write would silently erase the metadata this snapshot exists to preserve.
+// os/blob-store.js's boot restore uses this list to know which paths blocks
+// already answer for - fetching those from blocks (loadBlobsFromBlocks)
+// rather than the localStorage/media-DB mirrors, and skipping those same
+// paths in the mirrors' own restore passes. Blocks is the source of truth
+// once a real backend has one, including a stale one: see os/vfs.js's
+// readFailed handling in _vfsReadEntryForCommit, which deliberately leaves
+// blocks holding OLD bytes rather than overwriting them with nothing - a
+// mirror that clobbered this path on the next boot would erase that
+// protection.
+var _vfsBlockBlobEntries = [];
+function vfsBlockBlobEntries() { return _vfsBlockBlobEntries.slice(); }
 
 // Blobs are deliberately absent from the snapshot. Their bytes live in
 // IndexedDB via the blob store and their in-memory record is an object URL,
@@ -208,6 +236,12 @@ async function vfsMount(backend, options) {
     if (_vfsOnError) _vfsOnError(e);
   }
   _vfsRoot = stored ? _vfsDesNode(stored) : vfsMakeNode();
+  // Snapshot before `seed` runs - see vfsBlockBlobEntries's own comment for
+  // why order matters here.
+  _vfsBlockBlobEntries = [];
+  vfsWalkBlobs('', (dirName, name, blob) => {
+    _vfsBlockBlobEntries.push({ dirName, name, size: (blob && blob.size) || 0, kind: blob && blob.kind, mime: blob && blob.mime });
+  });
   if (typeof options.seed === 'function') options.seed(_vfsRoot);
   // Publish the backend only once the tree behind it is real, so there is no
   // window where vfsIsMounted() is true but a write throws ENOENT on the root.
@@ -377,23 +411,26 @@ async function vfsFlush() {
       // Reading live rather than from a snapshot is deliberate: by the time a
       // commit runs, the tree is the truth.
       const commitResult = await backend.commit({ ops, snapshot, readEntry: _vfsReadEntryForCommit });
-      // A per-op failure (currently: a blob whose bytes could not be read -
-      // see _vfsReadEntryForCommit's readFailed) is NOT a whole-commit
-      // failure: the rest of the batch above already landed, so this must
-      // not throw (that would re-queue ops that already committed) or go
-      // unreported (that would be exactly the silent zero-byte overwrite
-      // this exists to prevent). It gets its own onError call per failed
-      // path, same channel and same "did not persist" meaning as any other
-      // save failure.
-      if (commitResult && commitResult.failedBlobs && commitResult.failedBlobs.length && _vfsOnError) {
-        commitResult.failedBlobs.forEach(({ dirName, name }) => {
-          _vfsOnError(VfsError('EIO', 'blob content unreadable, not saved: ' +
-            (dirName ? dirName + '\\' : '') + name));
-        });
-      }
-      // A remount while this was in flight means these numbers describe a
-      // filesystem that is no longer mounted. Do not let them poison the new one.
+      // A remount while this was in flight means these numbers - and this
+      // commit's own failedBlobs report - describe a filesystem that is no
+      // longer mounted. Do not let them poison the new one, or its onError
+      // handler: a stale "did not persist" toast about a backend nobody is
+      // looking at any more would be actively misleading.
       if (_vfsBackend === backend) {
+        // A per-op failure (currently: a blob whose bytes could not be read -
+        // see _vfsReadEntryForCommit's readFailed) is NOT a whole-commit
+        // failure: the rest of the batch above already landed, so this must
+        // not throw (that would re-queue ops that already committed) or go
+        // unreported (that would be exactly the silent zero-byte overwrite
+        // this exists to prevent). It gets its own onError call per failed
+        // path, same channel and same "did not persist" meaning as any other
+        // save failure.
+        if (commitResult && commitResult.failedBlobs && commitResult.failedBlobs.length && _vfsOnError) {
+          commitResult.failedBlobs.forEach(({ dirName, name }) => {
+            _vfsOnError(VfsError('EIO', 'blob content unreadable, not saved: ' +
+              (dirName ? dirName + '\\' : '') + name));
+          });
+        }
         // Re-measure the ORIGIN, do not reseed from our own snapshot. The
         // localStorage quota is per-origin and os/blob-store.js writes base64
         // image content into it, so the snapshot's length describes the

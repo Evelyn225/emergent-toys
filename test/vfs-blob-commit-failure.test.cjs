@@ -93,3 +93,34 @@ test('one unreadable blob does not drop the rest of the batch', async () => {
   const deadBytes = await backend._readBlobBytes('', 'dead.png');
   assert.strictEqual(deadBytes, null, 'the unreadable blob must not land as a zero-byte entry');
 });
+
+// Task 9c review, MINOR-1: the failedBlobs -> onError loop wasn't gated by
+// `_vfsBackend === backend`, unlike the quota refresh and onCommit dispatch
+// immediately below it in vfsFlush. A remount racing an in-flight commit
+// could surface a stale-backend toast through the NEW backend's onError
+// handler - a one-line inconsistency with the adjacent, already-guarded code.
+test('a failed-blob report from a stale, no-longer-mounted commit does not reach any onError handler', async () => {
+  const ctx = loadOsSources(makeOsContext(), ['os/vfs.js', 'os/storage-mem.js']);
+  const backendA = ctx.createMemStorage();
+  const errorsA = [];
+  await ctx.vfsMount(backendA, { onError: e => errorsA.push(e) });
+
+  let release;
+  const gate = new Promise(r => { release = r; });
+  backendA.commit = async () => { await gate; return { failedBlobs: [{ dirName: '', name: 'stale.png' }] }; };
+
+  await ctx.vfsWriteFile('a.txt', 'x', ''); // gives vfsFlush something to commit
+  const flushPromise = ctx.vfsFlush(); // in flight against backendA, gated
+
+  // A remount lands while backendA's commit is still pending.
+  const backendB = ctx.createMemStorage();
+  const errorsB = [];
+  await ctx.vfsMount(backendB, { onError: e => errorsB.push(e) });
+
+  release();
+  await flushPromise;
+
+  assert.strictEqual(errorsA.length, 0, 'backend A is no longer mounted; its own stale handler must not fire either');
+  assert.strictEqual(errorsB.length, 0,
+    "a stale commit's failedBlobs must not report through the NEW backend's onError channel");
+});
