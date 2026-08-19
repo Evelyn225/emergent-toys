@@ -3,20 +3,11 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { makeOsContext, loadOsSources, makeIndexedDbStub } = require('./helpers/load-os.cjs');
 
-// Task 9d: make the block layer the primary blob source. Before this, boot
-// restore (os/fs-persist.js's vfsBootMount -> loadBlobsFromStorage) read only
-// the localStorage base64 mirror and the separate media IndexedDB - never
-// blocks, even though os/storage-idb.js's _readBlobBytes (Task 9a) has
-// existed since then with zero callers. Now a boot-time pass reads blocks
-// first (loadBlobsFromBlocks) and the surviving mirror only fills paths
-// blocks did NOT provide, rather than unconditionally overwriting whatever
-// blocks already restored.
-//
-// Task 9e deleted the media-IndexedDB mirror entirely, so the coverage here
-// is narrower than when this file was written: only the localStorage mirror
-// still needs a skip-check test. What used to be "the media-DB mirror is
-// skipped..." is gone rather than updated - there is nothing left for it to
-// prove.
+// Task 9d made the block layer the primary blob source; Tasks 9e and 9f then
+// deleted both mirrors it used to have to defer to (a separate media
+// IndexedDB, and a base64-in-localStorage copy). loadBlobsFromBlocks is now
+// the entire boot-time blob restore, and the sole thing that fetches saved
+// blob bytes back out of blocks and turns them into real object URLs.
 //
 // A real object-URL/fetch pair, not the bare stubs makeOsContext ships with:
 // createObjectURL must return a DIFFERENT url per Blob, and fetch(url) must
@@ -46,9 +37,7 @@ function makeCtx(overrides) {
     indexedDB: idbStub,
     navigator: { storage: { estimate: async () => ({ usage: 0, quota: Infinity }) } },
     URL, fetch, Blob,
-    btoa: str => Buffer.from(str, 'binary').toString('base64'),
-    atob: b64 => Buffer.from(b64, 'base64').toString('binary'),
-    // loadBlobsFromStorage's wallpaper-apply tail calls these (os/settings.js);
+    // loadBlobsFromBlocks's wallpaper-apply tail calls these (os/settings.js);
     // not under test here, so stubbed to a no-op rather than pulled in.
     getInitialWallpaperPath: () => null,
     applyWallpaper: () => {},
@@ -64,7 +53,7 @@ async function bytesAt(ctx, path) {
   return [...new Uint8Array(buf)];
 }
 
-test('loadBlobsFromBlocks restores a blob that lives only in blocks', async () => {
+test('loadBlobsFromBlocks restores a blob persisted in blocks', async () => {
   const ctx = makeCtx();
   const writer = ctx.createIdbBackend();
   await writer.load();
@@ -85,43 +74,35 @@ test('loadBlobsFromBlocks restores a blob that lives only in blocks', async () =
   assert.deepStrictEqual(await bytesAt(ctx, 'pic.png'), [10, 20, 30]);
 });
 
-test('the localStorage mirror is skipped for a path blocks already cover, even though blocks itself only wrote metadata at mount time', async () => {
-  const ctx = makeCtx();
-  const writer = ctx.createIdbBackend();
-  await writer.load();
-  // Blocks hold the OLD bytes.
-  await writer.commit({
-    ops: [{ op: 'writeBlob', dirName: '', name: 'pic.png' }],
-    readEntry: () => ({ kind: 'blob', blob: { kind: 'image', mime: 'image/png' },
-      bytes: new Uint8Array([1, 1, 1]), dirName: '', name: 'pic.png' }),
-  });
-  // localStorage independently holds NEWER bytes for the exact same path -
-  // e.g. from a save whose block write failed but whose mirror write did not
-  // (see the readFailed test below for how that happens for real).
-  const b64 = Buffer.from([2, 2, 2]).toString('base64');
-  ctx.localStorage.setItem('sleepOS-blob:pic.png', JSON.stringify({ kind: 'image', size: 3, mime: 'image/png', b64 }));
+// Task 9f folded the wallpaper-apply tail (which used to run from
+// loadBlobsFromIndexedDb, deleted in 9e) into loadBlobsFromBlocks itself.
+// That tail must run unconditionally - not skipped by an early return for a
+// non-IndexedDB backend, or one with no block-backed blobs at all - or a
+// saved wallpaper would silently stop applying on exactly those boots.
+test('the wallpaper-apply tail still runs when there is nothing in blocks to restore', async () => {
+  const applied = [];
+  const ctx = makeCtx({ applyWallpaper: path => applied.push(path) });
+  const backend = ctx.createIdbBackend();
+  await backend.load(); // never committed anything - blocks are empty
+  await ctx.vfsMount(backend, {});
 
-  await ctx.vfsMount(ctx.createIdbBackend(), {});
-  ctx.loadBlobsFromStorage(); // drives both the sync localStorage pass and loadBlobsFromBlocks
-  await ctx.loadBlobsFromBlocks(); // the sync call above only fires it - await it directly for determinism here
+  ctx.getInitialWallpaperPath = () => 'DOCS\\wall.png';
+  await ctx.loadBlobsFromBlocks();
 
-  assert.deepStrictEqual(await bytesAt(ctx, 'pic.png'), [1, 1, 1],
-    'blocks must win - the mirror must not clobber a path blocks already provided');
+  assert.deepStrictEqual(applied, ['DOCS\\wall.png']);
 });
 
-test('mirrors still restore a path blocks do not have at all', async () => {
-  const ctx = makeCtx();
-  const backend = ctx.createIdbBackend();
-  await backend.load();
-  await ctx.vfsMount(backend, {}); // first-ever mount, nothing committed, nothing in blocks
+test('the wallpaper-apply tail still runs on a backend with no _readBlobBytes at all', async () => {
+  const applied = [];
+  const ctx = loadOsSources(makeOsContext({
+    getInitialWallpaperPath: () => 'DOCS\\wall.png',
+    applyWallpaper: path => applied.push(path),
+  }), ['os/vfs.js', 'os/storage-mem.js', 'os/blob-store.js']);
+  await ctx.vfsMount(ctx.createMemStorage({}), {});
 
-  const b64 = Buffer.from([7, 7]).toString('base64');
-  ctx.localStorage.setItem('sleepOS-blob:only-local.png', JSON.stringify({ kind: 'image', size: 2, mime: 'image/png', b64 }));
+  await ctx.loadBlobsFromBlocks();
 
-  await ctx.loadBlobsFromBlocks(); // no-op, blocks has nothing
-  ctx.loadBlobsFromStorage();
-
-  assert.deepStrictEqual(await bytesAt(ctx, 'only-local.png'), [7, 7]);
+  assert.deepStrictEqual(applied, ['DOCS\\wall.png']);
 });
 
 // The carry-forward the 9c review flagged: on a readFailed rewrite, blocks
@@ -141,7 +122,6 @@ test('after a readFailed rewrite, a reload restores the OLD bytes blocks actuall
     URL,
     fetch: async url => { if (fetchShouldFail) throw new Error('NetworkError'); return realFetch(url); },
     Blob,
-    btoa: str => Buffer.from(str, 'binary').toString('base64'),
     getInitialWallpaperPath: () => null,
     applyWallpaper: () => {},
   });

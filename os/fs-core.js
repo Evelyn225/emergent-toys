@@ -29,12 +29,7 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
     // Recurse under the name vfsMkdir ACTUALLY created, not the one we asked
     // for. Directory names are uppercased in the tree, and _uniqueNameIn
     // returns mixed case ('PHOTOS_copy'), so building the path from dstName
-    // sent every nested blob-store row to 'PHOTOS_copy\...' while the tree held
-    // 'PHOTOS_COPY'. removeBlobEntry, moveBlobEntryStorage and
-    // moveBlobStorageSubtree all key off vfsStatSync().dirName, which is
-    // normalized, so those rows could never be found again: deleting the file
-    // left them behind and the next boot restored the image the user had
-    // permanently deleted.
+    // would resolve to a name the tree never actually used.
     const made = await vfsMkdir(dstName, dstCwd);
     const srcPath = srcCwd ? srcCwd + '\\' + name : name;
     const dstPath = dstCwd ? dstCwd + '\\' + made.fileName : made.fileName;
@@ -44,15 +39,25 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
   } else if (kind === 'blob') {
     const st = vfsStatSync(name, srcCwd);
     if (st && st.blob) {
-      // A copied blob needs its own row in the blob store and its own object
-      // URL. Sharing the source's URL means deleting either entry revokes the
-      // other one's bytes, and with no store row under the new path the copy
-      // is gone entirely on the next boot - blobs are never in the VFS
-      // snapshot. Falls back to sharing the URL only when there is nothing
-      // stored to copy (a seeded blob), which is what the old code always did.
+      // A copy needs its own independent object URL - sharing the source's
+      // means deleting either entry revokes the other one's bytes (removeFsPath
+      // and purgeFsDirNode both revoke the exact URL they were handed). Task
+      // 9e/9f deleted the blob-store mirror this used to lean on for a spare
+      // copy of the bytes; re-fetching the source's live URL and minting a
+      // fresh Blob from it gets the same independence directly, with no
+      // separate store involved - vfsWriteBlob below queues the usual commit
+      // that persists these bytes to blocks under the new path.
       const record = { ...st.blob };
-      const url = await copyBlobEntryStorage(srcCwd, name, dstCwd, dstName);
-      if (url) record.url = url;
+      if (record.url) {
+        try {
+          const bytes = await (await fetch(record.url)).arrayBuffer();
+          record.url = URL.createObjectURL(new Blob([bytes], { type: record.mime || 'application/octet-stream' }));
+        } catch (e) {
+          // Unreachable (a seeded item's external URL is CORS-blocked, or the
+          // source URL was already revoked): fall back to sharing the
+          // source's URL, same as the old code's seeded-blob case.
+        }
+      }
       await vfsWriteBlob(dstName, record, dstCwd);
     }
   } else {
@@ -90,17 +95,8 @@ async function pasteClipboardInto(dstCwd) {
       if (cut) {
         const movedName = await vfsMove(srcCwd, name, dstCwd, dstName);
         if (!movedName) continue;
-        // vfsMove only touches the in-memory tree; the blob store is keyed by
-        // path and is the caller's job to keep in sync, same as
-        // moveFsItemByPath does today.
-        if (st.kind === 'blob') {
-          moveBlobEntryStorage(srcCwd, name, dstCwd, movedName);
-        } else if (st.kind === 'dir') {
-          moveBlobStorageSubtree(
-            srcCwd ? srcCwd + '\\' + name : name,
-            dstCwd ? dstCwd + '\\' + movedName : movedName
-          );
-        }
+        // vfsMove already queues the block-layer's own move op - nothing
+        // further to keep in sync.
       } else {
         // A copy into the source's own subtree would recurse without bound:
         // _copyEntryInto re-lists the source on every level and would keep

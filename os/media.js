@@ -59,15 +59,6 @@ function readFileAsText(file) {
   });
 }
 
-function readFileAsArrayBuffer(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target?.result);
-    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
 async function handleFileUpload(fileList) {
   const dirPath = fsNormalizeDir(_uploadCwd || '');
   if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
@@ -98,23 +89,21 @@ async function handleFileUpload(fileList) {
       }
       const url = URL.createObjectURL(file);
       try {
+        // The write is queued here; its actual durability (the block-layer
+        // commit, up to 400ms later) is reported separately, through
+        // reportVfsError's toast if it fails - the same channel every other
+        // write in this OS already relies on, and the only one that can be
+        // honest about a failure this far in the future. Reporting {ok:false}
+        // here for that would be reporting a failure that has not happened
+        // (or might never happen) yet: before Task 9e/9f this branch instead
+        // waited on a synchronous mirror write to know a real answer early,
+        // but that mirror is gone and blocks give no synchronous answer at all.
         await vfsWriteBlob(file.name, { url, kind, size: file.size, mime }, dirPath);
       } catch (err) {
         // Nothing else holds this URL once the tree entry was refused, so
         // release it rather than leaking it for the rest of the session.
         URL.revokeObjectURL(url);
         throw err;
-      }
-      try {
-        const buffer = await readFileAsArrayBuffer(file);
-        const persisted = await saveBlobEntry(dirPath, file.name, kind, file.size, mime, buffer);
-        if (!persisted) {
-          console.warn('sleepOS: "' + file.name + '" did not persist to any blob store');
-          return { ok: false, name: file.name };
-        }
-      } catch (e) {
-        console.warn('sleepOS: "' + file.name + '" did not persist -', (e && e.message) || e);
-        return { ok: false, name: file.name };
       }
       return { ok: true, name: file.name };
     } catch (e) {

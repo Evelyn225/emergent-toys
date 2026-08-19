@@ -15,13 +15,18 @@ const mediaSrc = fs.readFileSync(path.join(ROOT, 'os/media.js'), 'utf8');
 // helpers it calls) and runs it against hand-mocked globals - the same
 // source-slice pattern test/daemon-corruption.test.cjs uses for os/daemon.js.
 //
-// The only caller of saveBlobEntry is handleFileUpload, at the end of an
-// already-async per-file handler that already has an { ok:false, name }
-// failure channel feeding the user-visible added/failed lists. Before this
-// fix, saveBlobEntry's result was never read at all - the surrounding
-// try/catch swallowed it and the function unconditionally returned
-// { ok: true }, so a save that persisted nowhere still told the user it
-// worked.
+// Tasks 9e/9f deleted saveBlobEntry and the mirrors it wrote to (the only
+// thing that used to give a blob upload a synchronous-ish "did this actually
+// persist" answer). A blob's bytes now reach the block layer entirely
+// through the vfsWriteBlob call already in this function, and that write's
+// real durability (the commit, up to 400ms later) is reported separately
+// through reportVfsError's toast if it fails - the same channel every other
+// write in this OS already relies on. handleFileUpload's added/failed lists
+// now report only what they can actually know synchronously: whether
+// vfsWriteFile/vfsWriteBlob itself accepted the write (a full disk still
+// throws ENOSPC up front). `saveBlobEntry` is deliberately NOT stubbed
+// below - if handleFileUpload ever called it again, that call would throw
+// (nothing defines it in this context) and the success-path test would fail.
 function makeUploadCtx(overrides) {
   const ctx = Object.assign({
     console,
@@ -34,7 +39,6 @@ function makeUploadCtx(overrides) {
     showUploadConfirm: () => {},
     URL: { createObjectURL: () => 'blob:stub', revokeObjectURL: () => {} },
     readFileAsText: async () => '',
-    readFileAsArrayBuffer: async () => new ArrayBuffer(0),
     vfsWriteFile: async () => ({}),
     vfsWriteBlob: async () => ({}),
   }, overrides || {});
@@ -48,31 +52,38 @@ function makeUploadCtx(overrides) {
   return ctx;
 }
 
-test('a blob whose bytes fail to persist is reported as failed, not silently ok', async () => {
+test('a blob upload is reported as added once vfsWriteBlob accepts it, with no separate persistence check', async () => {
+  const writes = [];
   const ctx = makeUploadCtx({
-    saveBlobEntry: async () => false, // every persistence path failed
-  });
-  const alerts = [];
-  ctx.showUploadConfirm = names => { throw new Error('must not report success for: ' + names); };
-  ctx.osAlert = msg => alerts.push(msg);
-
-  const file = { name: 'big.png', size: 5 * 1024 * 1024, type: 'image/png' };
-  await ctx.handleFileUpload([file]);
-
-  assert.strictEqual(alerts.length, 1, 'a failed persist must produce exactly one Upload Failed alert');
-  assert.ok(/could not be uploaded/.test(alerts[0]), alerts[0]);
-});
-
-test('a blob that persists successfully is still reported as added', async () => {
-  const ctx = makeUploadCtx({
-    saveBlobEntry: async () => true,
+    vfsWriteBlob: async (name, record, dirPath) => { writes.push({ name, record, dirPath }); return {}; },
   });
   let confirmed = null;
   ctx.showUploadConfirm = names => { confirmed = names; };
   ctx.osAlert = () => { throw new Error('must not alert on a successful upload'); };
 
-  const file = { name: 'ok.png', size: 100, type: 'image/png' };
+  const file = { name: 'ok.png', size: 5 * 1024 * 1024, type: 'image/png' }; // large: no mirror ever covered this
   await ctx.handleFileUpload([file]);
 
   assert.deepStrictEqual(confirmed, ['ok.png']);
+  assert.strictEqual(writes.length, 1, 'the blob must reach vfsWriteBlob exactly once');
+  assert.strictEqual(writes[0].record.url, 'blob:stub');
+});
+
+test('a blob upload vfsWriteBlob refuses is reported as failed, and its object URL is released', async () => {
+  const revoked = [];
+  const ctx = makeUploadCtx({
+    vfsWriteBlob: async () => { const err = new Error('not enough space'); err.code = 'ENOSPC'; throw err; },
+    URL: { createObjectURL: () => 'blob:doomed', revokeObjectURL: url => revoked.push(url) },
+  });
+  const alerts = [];
+  ctx.showUploadConfirm = names => { throw new Error('must not report success for: ' + names); };
+  ctx.osAlert = msg => alerts.push(msg);
+
+  const file = { name: 'full-disk.png', size: 100, type: 'image/png' };
+  await ctx.handleFileUpload([file]);
+
+  assert.strictEqual(alerts.length, 1, 'a refused write must produce exactly one Upload Failed alert');
+  assert.ok(/could not be uploaded/.test(alerts[0]), alerts[0]);
+  assert.deepStrictEqual(revoked, ['blob:doomed'],
+    'the object URL must be released once the tree entry was refused, not leaked');
 });

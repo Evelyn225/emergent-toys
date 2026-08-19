@@ -266,9 +266,8 @@ function openExplorer(startPath) {
       }
       if (item.kind !== 'dir') {
         const st = vfsStatSync(nextName, cwd);
-        if (st && st.kind === 'blob') {
-          renameBlobEntry(cwd, item.name, nextName);
-          if (st.blob.kind === 'image') handleWallpaperFileRename(cwd, item.name, nextName);
+        if (st && st.kind === 'blob' && st.blob.kind === 'image') {
+          handleWallpaperFileRename(cwd, item.name, nextName);
         }
       }
       // increaseDriveFragmentation retired with phase 4: fragmentation is now

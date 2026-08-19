@@ -302,17 +302,14 @@ function ensureFsDir(path) {
   return node;
 }
 
-// The VFS handles the fragmentation delta, the object-URL revoke and the
-// commit. What it does not know about is the wallpaper binding and the blob
-// store, so those stay here.
+// The VFS handles the block-layer cleanup, the object-URL revoke and the
+// commit. What it does not know about is the wallpaper binding, so that
+// stays here.
 async function removeFsPath(path, options) {
   options = options || {};
   const st = vfsStatSync(path);
   if (!st) return false;
-  if (st.kind === 'blob') {
-    if (st.blob?.kind === 'image') handleWallpaperFileDelete(st.dirName, st.name);
-    removeBlobEntry(st.dirName, st.name);
-  }
+  if (st.kind === 'blob' && st.blob?.kind === 'image') handleWallpaperFileDelete(st.dirName, st.name);
   // Resolve from the stat rather than re-splitting `path`, so the unlink cannot
   // land anywhere other than the entry the stat found.
   return await vfsUnlink(st.name, st.dirName, options);
@@ -386,14 +383,9 @@ async function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
     return null;
   }
   if (!moved) return null;
-  // vfsMove moves the in-memory record only. The bytes live in a separate
-  // store keyed by path, and keeping that in step is deliberately the caller's
-  // job - the VFS must not start guessing about it.
-  if (item.storage === 'blob') {
-    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, moved);
-  } else if (item.storage === 'dir') {
-    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, moved));
-  }
+  // vfsMove already updates the block layer through its own queued op - the
+  // bytes live there now, keyed by dirent, not by a separate path-keyed
+  // mirror this caller used to have to keep in step by hand.
   return { kind: item.kind, name: moved, dirName: dstDirName };
 }
 
@@ -410,16 +402,16 @@ function handleWallpaperTreeDelete(path) {
   }
 }
 
-// vfsUnlink drops a directory's name and subtree but revokes only the single
-// blob it was handed, which is not enough for a folder: emptying the Recycle
-// Bin on a folder of images would leak one object URL per image and orphan
-// every blob-store row. This is the permanent-delete half; a move into the
-// Recycle Bin deliberately does not run it.
+// vfsUnlink drops a directory's name and subtree - including the block layer
+// underneath every blob in it - but revokes only the single object URL it was
+// handed, which is not enough for a folder: emptying the Recycle Bin on a
+// folder of images would leak one object URL per image. This is the
+// permanent-delete half; a move into the Recycle Bin deliberately does not
+// run it.
 function purgeFsDirNode(dirPath) {
   vfsWalkBlobs(dirPath, (base, name, blob) => {
     if (blob?.kind === 'image') handleWallpaperFileDelete(base, name);
     if (blob?.url && !blob.seeded) URL.revokeObjectURL(blob.url);
-    removeBlobEntry(base, name);
   });
 }
 

@@ -250,7 +250,7 @@ async function vfsBootMount() {
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);
-  void loadBlobsFromStorage();
+  void loadBlobsFromBlocks();
   // The load-time syncDaemonStory ran against the seed tree, which the mount
   // then replaced. Re-run it against the real tree so the story files and the
   // registry pointers agree. Same shape as the ensureFsDir call above.

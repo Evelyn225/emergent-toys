@@ -11,15 +11,15 @@ function setClipboard(ctx, clipboard) {
   ctx.__evalSource('_expClipboard = ' + JSON.stringify(clipboard) + ';', 'set-clipboard');
 }
 
-async function paster() {
-  const ctx = loadOsSources(makeOsContext(), ['os/vfs.js', 'os/storage-mem.js', 'os/fs-core.js']);
+// _copyEntryInto's blob branch re-fetches the source's object URL to mint an
+// independent copy. Not provided by default (makeOsContext ships no `fetch`
+// at all) - callers that exercise a blob copy add their own fetch/URL pair;
+// everything else here never touches a blob's bytes, so the plain default
+// context (fetch undefined, URL a static stub) is enough.
+async function paster(overrides) {
+  const ctx = loadOsSources(makeOsContext(overrides), ['os/vfs.js', 'os/storage-mem.js', 'os/fs-core.js']);
   const alerts = [];
   ctx.osAlert = message => alerts.push(message);
-  // The cut path keeps the blob store in step with the tree. None of these
-  // cases involve a blob; stub them so a missing global cannot masquerade as
-  // the refusal being tested.
-  ctx.moveBlobEntryStorage = () => {};
-  ctx.moveBlobStorageSubtree = () => {};
   await ctx.vfsMount(ctx.createMemStorage({}), {});
   // Bound the recursion so a runaway copy fails the test instead of hanging it.
   // Every await inside _copyEntryInto resolves as a microtask, so a timeout
@@ -107,19 +107,15 @@ test('copying a folder into a different folder still copies the whole subtree', 
 
 // A name collision is what makes this dangerous: _uniqueNameIn returns
 // 'PHOTOS_copy' in mixed case, vfsMkdir stores 'PHOTOS_COPY', and the recursion
-// used to carry the mixed-case string down as the destination directory. Every
-// nested blob-store row then landed under a directory name the tree can never
-// produce, and since removeBlobEntry and friends key off the normalized
-// vfsStatSync().dirName, those rows were unreachable forever: deleting the file
-// left them behind and the next boot restored an image the user had
-// permanently deleted.
-test('a colliding folder copy writes blob-store rows under the real, uppercased directory', async () => {
+// used to carry the mixed-case string down as the destination directory before
+// the fix noted above it. With no more separate blob-store row to land under
+// the wrong name, the failure mode this guarded against can no longer exist
+// structurally - vfsWriteBlob is the only place a blob's destination path is
+// computed at all, and it is fed the same `dstCwd` the tree itself used. This
+// now checks that guarantee directly: the copied blob must be findable at the
+// tree's real, uppercased directory.
+test('a colliding folder copy places its blob under the real, uppercased directory', async () => {
   const { ctx } = await paster();
-  const copiedTo = [];
-  ctx.copyBlobEntryStorage = (srcDir, srcName, dstDir, dstName) => {
-    copiedTo.push({ dstDir, dstName });
-    return Promise.resolve(null);
-  };
   await ctx.vfsMkdir('PHOTOS', '');
   await ctx.vfsWriteBlob('PHOTOS\\pic.png', { url: 'blob:x', kind: 'image', size: 10, mime: 'image/png' }, '');
 
@@ -129,10 +125,47 @@ test('a colliding folder copy writes blob-store rows under the real, uppercased 
 
   const made = ctx.vfsListSync('').filter(e => e.kind === 'dir').map(e => e.name);
   assert.ok(made.includes('PHOTOS_COPY'), 'the tree holds the uppercased name, got ' + JSON.stringify(made));
-  assert.deepStrictEqual(plain(copiedTo), [{ dstDir: 'PHOTOS_COPY', dstName: 'pic.png' }],
-    'the blob-store row must use the directory name the tree actually has');
-  // The key the delete path would compute must be the key that was written.
-  assert.strictEqual(ctx.vfsStatSync('pic.png', 'PHOTOS_COPY').dirName, copiedTo[0].dstDir);
+  const stat = ctx.vfsStatSync('pic.png', 'PHOTOS_COPY');
+  assert.ok(stat && stat.kind === 'blob', 'the copied blob must be findable under the real directory name');
+});
+
+// _copyEntryInto's own new job, now that the blob-store mirror it used to
+// lean on for a spare copy of the bytes is gone: mint the copy's own object
+// URL directly, by re-fetching the source's live URL, rather than aliasing
+// the source's URL the way a bare `{ ...st.blob }` spread would.
+test('copying a blob mints its own independent object URL when the source can be re-fetched', async () => {
+  let nextUrl = 0;
+  const { ctx } = await paster({
+    URL: {
+      createObjectURL: () => 'blob:' + (nextUrl++),
+      revokeObjectURL: () => {},
+    },
+    fetch: async () => ({ arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }),
+    Blob, // _copyEntryInto wraps the re-fetched bytes in a real Blob before minting the copy's URL
+  });
+  const srcUrl = ctx.URL.createObjectURL();
+  await ctx.vfsWriteBlob('pic.png', { url: srcUrl, kind: 'image', size: 3, mime: 'image/png' }, '');
+
+  setClipboard(ctx, { items: [{ name: 'pic.png', kind: 'blob', srcCwd: '' }], cut: false });
+  assert.strictEqual(await ctx.pasteClipboardInto(''), true);
+
+  const copyUrl = ctx.vfsStatSync('pic_copy.png', '').blob.url;
+  assert.notStrictEqual(copyUrl, srcUrl, 'the copy must not alias the source\'s object URL');
+});
+
+test('copying a blob whose source cannot be re-fetched falls back to sharing its URL', async () => {
+  // No `fetch` override at all - makeOsContext ships none, so the fetch call
+  // throws (matching an offline seeded asset or an already-revoked URL) and
+  // the fallback below must still leave the copy usable.
+  const { ctx } = await paster();
+  await ctx.vfsWriteBlob('pic.png', { url: 'blob:unreachable', kind: 'image', size: 3, mime: 'image/png' }, '');
+
+  setClipboard(ctx, { items: [{ name: 'pic.png', kind: 'blob', srcCwd: '' }], cut: false });
+  assert.strictEqual(await ctx.pasteClipboardInto(''), true);
+
+  const copyUrl = ctx.vfsStatSync('pic_copy.png', '').blob.url;
+  assert.strictEqual(copyUrl, 'blob:unreachable',
+    'with nothing to re-fetch from, the copy must still work by sharing the source\'s URL');
 });
 
 test('a paste does not advance the drive fragmentation meter', async () => {
