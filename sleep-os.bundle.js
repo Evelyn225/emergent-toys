@@ -4910,6 +4910,12 @@ function fsSplitPath(path, fallbackDir) { return vfsSplitPath(path, fallbackDir)
 
 // ── Filesystem persistence ────────────────────────────────────────
 const DRIVE_STATE_KEY = 'sleepOS-drive-state';
+// Pre-phase-2. Read exactly once, by createDriveStateDefaults(true), and only
+// when DRIVE_STATE_KEY is absent - so for any profile that has booted since,
+// it can never be read again. It was also being rewritten on every defrag pass,
+// a mirror with no reader, which is the same shape as the blob mirrors tasks 9e
+// and 9f deleted. The write is gone; the read stays one more release so a
+// returning visitor keeps their "Last defrag" time.
 const LEGACY_DEFRAG_KEY = 'sleepOS-defrag-time';
 
 function _serDir(d) {
@@ -5031,8 +5037,9 @@ let defragState = loadDriveState();
 // anything: DEFRAG.exe animated against a fiction and the deltas existed only
 // to make the fiction drift.
 //
-// It is now the ratio of extra block runs to total blocks, computed from the
-// real allocation map. It is cached because reading it walks every inode and
+// It is now computed from the real allocation map: the number of extra block
+// runs beyond the one run per file that is unavoidable, over the most extra
+// runs those same blocks could have had. It is cached because reading it walks every inode and
 // SYSMON asks often; fsRefreshFragmentation() is what recomputes.
 var fsFragmentationLevel = 0;
 
@@ -5077,7 +5084,6 @@ async function fsRefreshFragmentation() {
 async function optimizeDriveFragmentation(options) {
   defragState.lastDefragTs = Date.now();
   saveDriveState();
-  try { localStorage.setItem(LEGACY_DEFRAG_KEY, String(defragState.lastDefragTs)); } catch (e) {}
   const level = await fsRefreshFragmentation();
   if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
   return level;
