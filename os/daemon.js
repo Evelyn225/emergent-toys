@@ -72,7 +72,6 @@ function createDaemonStoryDefaults() {
     quarantineSigned: false,
     endingReached: false,
     lastEventText: 'none',
-    corruption: 0,
   };
 }
 
@@ -1064,7 +1063,9 @@ function getDaemonVisualStage() {
   return 0;
 }
 
-// The daemon's own corruption dial, in [0,1].
+// The daemon's own corruption dial, in [0,1]. Derived from the story stage,
+// not stored - there is nothing here that a reload could not recompute, and a
+// persisted copy would be one more field able to disagree with the stage.
 //
 // These two visual consumers used to read getDriveFragmentationLevel(). That
 // worked only because the old fragmentation number was fake and idled near

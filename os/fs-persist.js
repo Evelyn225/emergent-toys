@@ -129,8 +129,9 @@ let defragState = loadDriveState();
 //
 // It is now computed from the real allocation map: the number of extra block
 // runs beyond the one run per file that is unavoidable, over the most extra
-// runs those same blocks could have had. It is cached because reading it walks every inode and
-// SYSMON asks often; fsRefreshFragmentation() is what recomputes.
+// runs those same blocks could have had. It is cached because reading it walks
+// every inode and SYSMON asks often; fsRefreshFragmentation() is what
+// recomputes.
 var fsFragmentationLevel = 0;
 
 function getDriveFragmentationLevel() {

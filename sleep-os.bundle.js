@@ -4681,7 +4681,6 @@ function vfsSeedTree() {
         '  process ends, so a new terminal starts from the',
         '  system defaults and forgets your PATH edits.',
         '',
-        '',
         '── DISK ─────────────────────────────────────',
         '  The drive is a real block device now: 4 KB',
         '  blocks, a real allocator, and a fragmentation',
@@ -4692,6 +4691,7 @@ function vfsSeedTree() {
         '  across on first boot. The old copy is kept for',
         '  one release, so nothing is lost if the copy',
         '  went wrong.',
+        '',
         '── SYSTEM ───────────────────────────────────',
         '  VER                  OS version',
         '  WHO, WHOAMI          current user',
@@ -5039,8 +5039,9 @@ let defragState = loadDriveState();
 //
 // It is now computed from the real allocation map: the number of extra block
 // runs beyond the one run per file that is unavoidable, over the most extra
-// runs those same blocks could have had. It is cached because reading it walks every inode and
-// SYSMON asks often; fsRefreshFragmentation() is what recomputes.
+// runs those same blocks could have had. It is cached because reading it walks
+// every inode and SYSMON asks often; fsRefreshFragmentation() is what
+// recomputes.
 var fsFragmentationLevel = 0;
 
 function getDriveFragmentationLevel() {
@@ -5363,7 +5364,6 @@ function createDaemonStoryDefaults() {
     quarantineSigned: false,
     endingReached: false,
     lastEventText: 'none',
-    corruption: 0,
   };
 }
 
@@ -6355,7 +6355,9 @@ function getDaemonVisualStage() {
   return 0;
 }
 
-// The daemon's own corruption dial, in [0,1].
+// The daemon's own corruption dial, in [0,1]. Derived from the story stage,
+// not stored - there is nothing here that a reload could not recompute, and a
+// persisted copy would be one more field able to disagree with the stage.
 //
 // These two visual consumers used to read getDriveFragmentationLevel(). That
 // worked only because the old fragmentation number was fake and idled near

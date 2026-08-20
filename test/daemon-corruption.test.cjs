@@ -24,11 +24,35 @@ test('the daemon reads its own corruption value, not disk fragmentation', () => 
     'visuals appearing at all. Use getDaemonCorruption() instead.');
 });
 
-test('corruption is part of the daemon story state and starts defined', () => {
-  assert.ok(/corruption\s*:/.test(daemonSrc),
-    'daemonStory needs a corruption field so the value is saved and restored with the story');
+// The plan specified BOTH a `corruption: 0` field on daemonStory and a
+// getDaemonCorruption() derived entirely from getDaemonVisualStage(). Those
+// two are not compatible, and the implementation - correctly - built the
+// derived one, leaving the field written into every player's saved story and
+// read by nothing. The original version of this test asserted the field
+// existed "so the value is saved and restored with the story", which the code
+// it was passing against did not do. It was certifying an intent, not a
+// mechanism.
+//
+// So the assertion is inverted: corruption must NOT be persisted. Everything
+// it depends on is already in `stage`, and a stored copy is a second source of
+// truth that a stage change can silently contradict.
+test('corruption is derived from the story, not persisted alongside it', () => {
   assert.ok(/function getDaemonCorruption\s*\(/.test(daemonSrc),
     'getDaemonCorruption is the accessor the two visual consumers read');
+  const offenders = [];
+  daemonSrc.split('\n').forEach((line, i) => {
+    if (/^\s*(\/\/|\*)/.test(line)) return;
+    // A story field, or an assignment to one. The accessor's own name and its
+    // local variables are not matched: this is specifically `corruption:` as
+    // an object key and `.corruption =` as a write.
+    if (/(^|[^A-Za-z0-9_])corruption\s*:/.test(line) || /\.corruption\s*=/.test(line)) {
+      offenders.push((i + 1) + ': ' + line.trim());
+    }
+  });
+  assert.deepStrictEqual(offenders, [],
+    'corruption must stay derived from getDaemonVisualStage(). A persisted field is a second\n' +
+    'source of truth for something `stage` already determines, and nothing reads it - it was\n' +
+    'saved into every story and never consulted.');
 });
 
 test('corruption rises with daemon stage so the visuals still escalate', () => {
