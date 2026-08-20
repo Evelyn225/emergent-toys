@@ -147,14 +147,23 @@ function openDefrag() {
       running = false; startBtn.disabled = false; stopBtn.disabled = true;
       stopSoundLoop('defrag', { fade: 0.6 });
       pbFill.style.width = '98%'; pbLabel.textContent = '98%';
-      document.getElementById('df-pct').textContent = '98% optimized';
       fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
       if (ws) ws.textContent = 'Complete - 1 file could not be moved';
-      optimizeDriveFragmentation({ targetLevel: 0.02 });
+      // The 98% progress bar above is the story beat - one file that will not
+      // move. The two drive stats below are not: they read the real allocation
+      // map. This used to overwrite "% optimized" with the same 98% and write a
+      // hardcoded "Fragmentation: 2%", alongside a targetLevel option
+      // that optimizeDriveFragmentation stopped honouring when fragmentation
+      // became a measurement, so DEFRAG claimed a drop it had not made and could
+      // not make - nothing moves blocks until phase 5.
       const lastEl = document.getElementById('df-last');
       if (lastEl) lastEl.textContent = 'Last defrag: just now';
-      const fragEl = document.getElementById('df-frag');
-      if (fragEl) fragEl.textContent = 'Fragmentation: 2%';
+      optimizeDriveFragmentation().then(level => {
+        const fragEl = document.getElementById('df-frag');
+        if (fragEl) fragEl.textContent = 'Fragmentation: ' + Math.round(level * 100) + '%';
+        const pctEl = document.getElementById('df-pct');
+        if (pctEl) pctEl.textContent = getDriveOptimizationPercent() + '% optimized';
+      }).catch(() => {});
       drawGrid();
       return;
     }

@@ -27,7 +27,12 @@ const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDi
   // saveBlobEntry's only caller's only reason to read a File's bytes twice.
   'blobStorageKey', 'saveBlobEntry', 'removeBlobEntry', 'renameBlobEntry',
   'moveBlobEntryStorage', 'copyBlobEntryStorage', 'moveBlobStorageSubtree',
-  'loadBlobsFromStorage', 'readFileAsArrayBuffer'];
+  'loadBlobsFromStorage', 'readFileAsArrayBuffer',
+  // Task 10: optimizeDriveFragmentation's targetLevel option. It asked for a
+  // post-defrag number instead of measuring one, and it outlived the code that
+  // honoured it - apps/defrag.js kept passing it for a whole phase while it
+  // did nothing.
+  'targetLevel'];
 
 test('no source reaches the filesystem outside the VFS', () => {
   const offenders = [];
@@ -50,6 +55,28 @@ test('no source reaches the filesystem outside the VFS', () => {
 // level instead: a pathless op is invisible to a backend that commits from ops
 // alone, and the failure mode is silent - the story files simply stop
 // persisting, with no error anywhere.
+// The RETIRED list above catches a dead identifier coming back. It cannot
+// catch the other half of the same bug, which is what actually shipped: the
+// identifier went away and the UI simply hardcoded the number it used to
+// produce. apps/defrag.js is not loadable in this harness - openDefrag builds
+// a real DOM subtree through mkWin before any of its logic runs - so this is a
+// source-level guard rather than a behavioural one. It is narrow on purpose:
+// it asserts only that no percentage is written into one of the two drive
+// stats as a literal, which is the precise shape of the regression.
+test('DEFRAG.exe does not paint a hardcoded drive statistic', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'apps/defrag.js'), 'utf8');
+  const offenders = [];
+  src.split(/\r?\n/).forEach((line, i) => {
+    if (/^\s*(\/\/|\*)/.test(line)) return;
+    // Only lines that write one of the two drive stats. The progress bar
+    // (pbFill/pbLabel) is deliberately not matched - its 98% is a story beat
+    // about a file that will not move, not a measurement of anything.
+    if (!/df-frag|df-pct|Fragmentation:|% optimized/.test(line)) return;
+    if (/\d+ ?%/.test(line)) offenders.push('apps/defrag.js:' + (i + 1) + ': ' + line.trim());
+  });
+  assert.deepStrictEqual(offenders, [], 'hardcoded drive statistic:\n  ' + offenders.join('\n  '));
+});
+
 test('no source reintroduces the retired legacy-write pathless-op marker', () => {
   const offenders = [];
   for (const rel of readManifest()) {

@@ -156,10 +156,14 @@ async function fsRefreshFragmentation() {
 //
 // It does NOT yet move any blocks, so the number it recomputes will barely
 // change. That is deliberate and it is honest: actually rewriting blocks into
-// contiguous runs is phase 5's job, per the master spec's phase order. The
-// targetLevel option callers still pass is ignored rather than removed,
-// because inventing a post-defrag number is exactly the fiction this phase
-// exists to delete.
+// contiguous runs is phase 5's job, per the master spec's phase order.
+//
+// The returned level is what DEFRAG.exe renders. It briefly did not: this
+// function stopped honouring the targetLevel option its one caller passed, and
+// that caller went on painting a hardcoded "Fragmentation: 2%" of its own, so
+// the fake post-defrag drop survived in the UI after being deleted from the
+// model. Inventing that number is the exact fiction this phase exists to
+// delete, so the option is gone rather than ignored.
 async function optimizeDriveFragmentation(options) {
   defragState.lastDefragTs = Date.now();
   saveDriveState();
