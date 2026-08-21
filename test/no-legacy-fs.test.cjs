@@ -88,3 +88,43 @@ test('no source reintroduces the retired legacy-write pathless-op marker', () =>
   }
   assert.deepStrictEqual(offenders, [], 'pathless ops:\n  ' + offenders.join('\n  '));
 });
+
+// The dirent key format (`parentIno + '/' + name`) was written out by hand in
+// four places and parsed by hand in three more, across os/fs-format.js,
+// os/storage-idb.js and os/fs-migrate.js. Nothing was wrong with any single
+// copy - they agreed - but the format was spread across the codebase instead
+// of owned by it, and changing it would have meant finding every copy.
+//
+// The spec named this exact failure in advance: os/storage-idb.js was to stay
+// "well under a hundred lines; if it grows past that, logic has leaked out of
+// the pure core and belongs back in it". It reached 437 lines, and this was
+// the leak.
+//
+// Two checkable rules, both currently true with zero exceptions:
+//   - only os/fs-format.js reads or writes an individual dirent by key
+//     (naming the store for a schema or a transaction scope is not that, and
+//     neither is scanning every row)
+//   - only os/fs-format.js parses a key apart
+//
+// What this does NOT catch: a hand-built key passed through a variable, or a
+// split written some other way. It catches the shapes that were actually
+// there, which is what a guard can honestly promise.
+test('the dirent key format lives in exactly one file', () => {
+  const offenders = [];
+  for (const rel of readManifest()) {
+    if (rel === 'os/fs-format.js') continue;
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    src.split(/\r?\n/).forEach((line, i) => {
+      if (/^\s*(\/\/|\*)/.test(line)) return;
+      if (/\.(get|put|del)\(\s*FS_STORE_DIRENTS/.test(line)) {
+        offenders.push(`${rel}:${i + 1}: keyed dirent access outside fs-format`);
+      }
+      if (/indexOf\(\s*'\/'\s*\)/.test(line) && /key|dirent/i.test(line)) {
+        offenders.push(`${rel}:${i + 1}: hand-parsed dirent key`);
+      }
+    });
+  }
+  assert.deepStrictEqual(offenders, [],
+    'the dirent key shape belongs to os/fs-format.js - use _fsDirentKey / _fsDirentSplit:\n  '
+    + offenders.join('\n  '));
+});

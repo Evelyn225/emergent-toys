@@ -143,29 +143,13 @@ function createIdbBackend(options) {
   // commit()'s write phase must resolve directories through the SAME
   // transaction as everything else in the batch, not through a one-off read.
   async function inoForDir(activeStore, dirName) {
-    const path = String(dirName || '');
-    if (!path) return 0;
-    if (dirInos.has(path)) return dirInos.get(path);
-    let parent = 0;
-    let sofar = '';
-    for (const part of path.split('\\')) {
-      sofar = sofar ? sofar + '\\' + part : part;
-      if (dirInos.has(sofar)) { parent = dirInos.get(sofar); continue; }
-      let ino = await activeStore.get(FS_STORE_DIRENTS, String(parent) + '/' + part);
-      if (ino === undefined) ino = await fsWriteEntry(activeStore, sb, parent, part, { type: 'dir' });
-      dirInos.set(sofar, ino);
-      parent = ino;
-    }
-    return parent;
+    return await fsResolveOrCreateDirIno(activeStore, sb, dirName, dirInos);
   }
 
   async function rebuildDirInos() {
     dirInos = new Map();
     const dirents = await store.scan(FS_STORE_DIRENTS);
-    const rows = dirents.map(([key, ino]) => {
-      const slash = key.indexOf('/');
-      return { parent: Number(key.slice(0, slash)), name: key.slice(slash + 1), ino };
-    });
+    const rows = dirents.map(([key, ino]) => Object.assign(_fsDirentSplit(key), { ino }));
     const pathOf = new Map([[0, '']]);
     // Repeat until nothing new resolves, because a child can be seen before
     // its parent in an unordered scan.

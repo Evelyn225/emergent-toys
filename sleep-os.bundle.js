@@ -1019,6 +1019,47 @@ function _fsDirentKey(parentIno, name) {
   return String(parentIno) + '/' + name;
 }
 
+// The inverse. A name may itself contain '/', so this splits on the FIRST
+// separator only - the parent ino cannot contain one.
+//
+// This exists because the encoding was written out by hand in four places and
+// decoded by hand in two more, across three files. That is a format spread
+// across the codebase rather than owned by it, and changing it would have
+// meant finding every copy. os/storage-idb.js is the adapter; the key shape is
+// the pure core's business.
+function _fsDirentSplit(key) {
+  const str = String(key);
+  const slash = str.indexOf('/');
+  return { parent: Number(str.slice(0, slash)), name: str.slice(slash + 1) };
+}
+
+// Walks a backslash-joined directory path to its ino, creating any component
+// that does not exist yet. Distinct from _fsResolveDirIno, which returns -1
+// rather than creating - both callers here genuinely want creation: a commit
+// where a mkdir and a write inside it land in the same batch, and migration
+// importing a blob whose directory the tree snapshot did not name.
+//
+// `cache` is optional and maps full path -> ino. os/storage-idb.js keeps one
+// across a session so a deep path is not re-walked on every op; migration
+// passes none, since it walks each path once.
+async function fsResolveOrCreateDirIno(store, sb, dirName, cache) {
+  const path = String(dirName || '');
+  if (!path) return 0;
+  if (cache && cache.has(path)) return cache.get(path);
+  let parent = 0;
+  let sofar = '';
+  for (const part of path.split('\\')) {
+    if (!part) continue;
+    sofar = sofar ? sofar + '\\' + part : part;
+    if (cache && cache.has(sofar)) { parent = cache.get(sofar); continue; }
+    let ino = await store.get(FS_STORE_DIRENTS, _fsDirentKey(parent, part));
+    if (ino === undefined) ino = await fsWriteEntry(store, sb, parent, part, { type: 'dir' });
+    if (cache) cache.set(sofar, ino);
+    parent = ino;
+  }
+  return parent;
+}
+
 async function _fsPutSuperblock(store, sb) {
   await store.put(FS_STORE_SUPERBLOCK, 'sb', sb);
 }
@@ -1147,8 +1188,7 @@ async function _fsCollectSubtree(store, rootIno) {
   const dirents = await store.scan(FS_STORE_DIRENTS);
   const byParent = new Map();
   dirents.forEach(([key, ino]) => {
-    const slash = key.indexOf('/');
-    const parent = Number(key.slice(0, slash));
+    const { parent } = _fsDirentSplit(key);
     if (!byParent.has(parent)) byParent.set(parent, []);
     byParent.get(parent).push({ key, ino });
   });
@@ -1221,9 +1261,7 @@ async function fsReadTree(store) {
   const dirents = await store.scan(FS_STORE_DIRENTS);
   const byParent = new Map();
   dirents.forEach(([key, ino]) => {
-    const slash = key.indexOf('/');
-    const parent = Number(key.slice(0, slash));
-    const name = key.slice(slash + 1);
+    const { parent, name } = _fsDirentSplit(key);
     if (!byParent.has(parent)) byParent.set(parent, []);
     byParent.get(parent).push({ name, ino });
   });
@@ -1391,29 +1429,13 @@ function createIdbBackend(options) {
   // commit()'s write phase must resolve directories through the SAME
   // transaction as everything else in the batch, not through a one-off read.
   async function inoForDir(activeStore, dirName) {
-    const path = String(dirName || '');
-    if (!path) return 0;
-    if (dirInos.has(path)) return dirInos.get(path);
-    let parent = 0;
-    let sofar = '';
-    for (const part of path.split('\\')) {
-      sofar = sofar ? sofar + '\\' + part : part;
-      if (dirInos.has(sofar)) { parent = dirInos.get(sofar); continue; }
-      let ino = await activeStore.get(FS_STORE_DIRENTS, String(parent) + '/' + part);
-      if (ino === undefined) ino = await fsWriteEntry(activeStore, sb, parent, part, { type: 'dir' });
-      dirInos.set(sofar, ino);
-      parent = ino;
-    }
-    return parent;
+    return await fsResolveOrCreateDirIno(activeStore, sb, dirName, dirInos);
   }
 
   async function rebuildDirInos() {
     dirInos = new Map();
     const dirents = await store.scan(FS_STORE_DIRENTS);
-    const rows = dirents.map(([key, ino]) => {
-      const slash = key.indexOf('/');
-      return { parent: Number(key.slice(0, slash)), name: key.slice(slash + 1), ino };
-    });
+    const rows = dirents.map(([key, ino]) => Object.assign(_fsDirentSplit(key), { ino }));
     const pathOf = new Map([[0, '']]);
     // Repeat until nothing new resolves, because a child can be seen before
     // its parent in an unordered scan.
@@ -1979,25 +2001,11 @@ async function _fsCollectLegacyBlobs() {
   return { blobs: [...found.values()], skipped };
 }
 
-// Resolves a directory path to its ino, creating any missing component. The
-// tree import runs first and creates every directory the snapshot named, so
-// this normally just walks. It creates anyway rather than skipping a blob
-// whose directory is somehow absent - losing the file would be the worse
-// failure, and an empty directory is harmless.
-async function _fsImportDirIno(store, sb, dirPath) {
-  let parent = 0;
-  for (const part of String(dirPath || '').split('\\')) {
-    if (!part) continue;
-    let ino = await store.get(FS_STORE_DIRENTS, _fsDirentKey(parent, part));
-    if (ino === undefined) ino = await fsWriteEntry(store, sb, parent, part, { type: 'dir' });
-    parent = ino;
-  }
-  return parent;
-}
-
 async function _fsImportBlobs(store, sb, blobs, onProgress) {
   for (const blob of blobs) {
-    const parentIno = await _fsImportDirIno(store, sb, blob.dirPath);
+    // Creates the directory if the tree snapshot did not name it: losing the
+    // file would be the worse failure, and an empty directory is harmless.
+    const parentIno = await fsResolveOrCreateDirIno(store, sb, blob.dirPath);
     await fsWriteEntry(store, sb, parentIno, blob.name, {
       type: 'blob',
       bytes: blob.bytes,

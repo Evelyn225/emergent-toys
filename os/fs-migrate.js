@@ -280,25 +280,11 @@ async function _fsCollectLegacyBlobs() {
   return { blobs: [...found.values()], skipped };
 }
 
-// Resolves a directory path to its ino, creating any missing component. The
-// tree import runs first and creates every directory the snapshot named, so
-// this normally just walks. It creates anyway rather than skipping a blob
-// whose directory is somehow absent - losing the file would be the worse
-// failure, and an empty directory is harmless.
-async function _fsImportDirIno(store, sb, dirPath) {
-  let parent = 0;
-  for (const part of String(dirPath || '').split('\\')) {
-    if (!part) continue;
-    let ino = await store.get(FS_STORE_DIRENTS, _fsDirentKey(parent, part));
-    if (ino === undefined) ino = await fsWriteEntry(store, sb, parent, part, { type: 'dir' });
-    parent = ino;
-  }
-  return parent;
-}
-
 async function _fsImportBlobs(store, sb, blobs, onProgress) {
   for (const blob of blobs) {
-    const parentIno = await _fsImportDirIno(store, sb, blob.dirPath);
+    // Creates the directory if the tree snapshot did not name it: losing the
+    // file would be the worse failure, and an empty directory is harmless.
+    const parentIno = await fsResolveOrCreateDirIno(store, sb, blob.dirPath);
     await fsWriteEntry(store, sb, parentIno, blob.name, {
       type: 'blob',
       bytes: blob.bytes,
