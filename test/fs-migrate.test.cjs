@@ -266,3 +266,90 @@ test('a deliberately emptied drive is not re-seeded on a later boot', async () =
   assert.strictEqual(tree.dirs.length, 0);
   assert.strictEqual(Object.keys(tree.files).length, 0);
 });
+
+// ── Legacy blob import ────────────────────────────────────────────
+//
+// Found in the browser, not here: the tree snapshot contains no blobs at all
+// (vfsSerializeTree omits them on purpose), so importing only the snapshot
+// carried every text file across and silently dropped every image, video and
+// sound the visitor had ever uploaded. Tasks 9e/9f had deleted the code that
+// read the two places those bytes actually lived.
+const RED_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFklEQVR42mP8z8BQz0AEYBxVSF+FAAhKDveksOjmAAAAAElFTkSuQmCC';
+
+function bytesOf(b64) {
+  return new Uint8Array(Buffer.from(b64, 'base64'));
+}
+
+test('a blob in the legacy localStorage mirror is imported into blocks', async () => {
+  const { ctx, ls } = migrating();
+  ls.setItem('sleepOS-blob:PIC.png', JSON.stringify({
+    kind: 'image', size: 78, mime: 'image/png', b64: RED_PNG_B64,
+  }));
+
+  const backend = ctx.createIdbBackend();
+  await backend._store();
+  const result = await ctx.fsMigrateFromLocalStorage(backend);
+  assert.strictEqual(result.migrated, true);
+  assert.strictEqual(result.blobsImported, 1);
+  assert.strictEqual(result.blobsSkipped, 0);
+
+  // In the tree, as a blob record with its metadata - which is what makes it
+  // show up in a listing at all.
+  const tree = await backend.load();
+  assert.ok(tree.blobs['PIC.png'], 'the blob is missing from the imported tree');
+  assert.strictEqual(tree.blobs['PIC.png'].kind, 'image');
+  assert.strictEqual(tree.blobs['PIC.png'].mime, 'image/png');
+
+  // And the bytes are really in blocks, byte for byte. Metadata alone would
+  // give a listing entry that opens to nothing, which is barely better than
+  // losing it outright.
+  const bytes = await backend._readBlobBytes('', 'PIC.png');
+  assert.deepStrictEqual([...bytes], [...bytesOf(RED_PNG_B64)]);
+});
+
+test('a blob nested in a directory keeps its path', async () => {
+  const { ctx, ls } = migrating();
+  ls.setItem('sleepOS-blob:DOCS\\DEEP.png', JSON.stringify({
+    kind: 'image', size: 78, mime: 'image/png', b64: RED_PNG_B64,
+  }));
+  const backend = ctx.createIdbBackend();
+  await backend._store();
+  await ctx.fsMigrateFromLocalStorage(backend);
+
+  const tree = await backend.load();
+  assert.ok(tree.subdirs.DOCS.blobs['DEEP.png'], 'the nested blob did not land under DOCS');
+  const bytes = await backend._readBlobBytes('DOCS', 'DEEP.png');
+  assert.deepStrictEqual([...bytes], [...bytesOf(RED_PNG_B64)]);
+});
+
+test('a corrupt legacy blob is counted, not thrown, and the rest still migrate', async () => {
+  const { ctx, ls } = migrating();
+  ls.setItem('sleepOS-blob:GOOD.png', JSON.stringify({
+    kind: 'image', size: 78, mime: 'image/png', b64: RED_PNG_B64,
+  }));
+  ls.setItem('sleepOS-blob:BROKEN.png', '{not json at all');
+
+  const backend = ctx.createIdbBackend();
+  await backend._store();
+  const result = await ctx.fsMigrateFromLocalStorage(backend);
+
+  assert.strictEqual(result.migrated, true);
+  assert.strictEqual(result.blobsImported, 1);
+  assert.strictEqual(result.blobsSkipped, 1);
+  const tree = await backend.load();
+  assert.ok(tree.blobs['GOOD.png'], 'one unreadable blob cost the others');
+  // The text tree must survive an unreadable blob too - losing a visitor's
+  // documents because one image was corrupt would be far worse than the bug
+  // this whole import exists to fix.
+  assert.strictEqual(tree.files['ROOT.txt'], 'at the root');
+});
+
+test('probing for an absent legacy media database does not create one', async () => {
+  const { ctx, stub } = migrating();
+  const backend = ctx.createIdbBackend();
+  await backend._store();
+  await ctx.fsMigrateFromLocalStorage(backend);
+  assert.ok(!stub._databases.has('sleepOS-media'),
+    'the existence probe must abort its upgrade, or it creates the very database it is checking for');
+});

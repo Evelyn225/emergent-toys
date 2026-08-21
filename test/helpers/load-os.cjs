@@ -360,14 +360,43 @@ function makeIndexedDbStub(options) {
     // InvalidStateError is preserved rather than silently discarded.
     _forceNextAbortToThrow(err) { forcedAbortError = err; },
     open(name) {
-      const req = { onsuccess: null, onerror: null, onupgradeneeded: null, result: undefined };
+      const req = {
+        onsuccess: null, onerror: null, onupgradeneeded: null, onblocked: null,
+        result: undefined, error: undefined, transaction: null,
+      };
       later(() => {
         const fresh = !databases.has(name);
         if (fresh) databases.set(name, makeDb(name));
         const opened = databases.get(name);
         opened._registerConnection();
         req.result = opened;
-        if (fresh && req.onupgradeneeded) req.onupgradeneeded({ target: req });
+        if (fresh && req.onupgradeneeded) {
+          // Real IndexedDB exposes the versionchange transaction on the
+          // request, and aborting it rolls the entire upgrade back: for a
+          // database that did not exist, the database is NOT created and the
+          // open request FAILS rather than succeeding.
+          //
+          // That matters because it is the standard way to ask "does this
+          // database exist" without creating it - open it, abort on upgrade -
+          // which is what os/fs-migrate.js does to probe for the legacy media
+          // database. A stub that ignored abort() here would report every
+          // absent database as present-and-empty, and would leave a database
+          // behind that a real browser never creates.
+          let aborted = false;
+          req.transaction = { abort() { aborted = true; } };
+          req.onupgradeneeded({ target: req });
+          req.transaction = null;
+          if (aborted) {
+            opened.close();
+            databases.delete(name);
+            req.result = undefined;
+            const err = new Error("Failed to execute 'open': The upgrade transaction was aborted.");
+            err.name = 'AbortError';
+            req.error = err;
+            if (req.onerror) req.onerror({ target: req });
+            return;
+          }
+        }
         if (req.onsuccess) req.onsuccess({ target: req });
       });
       return req;
@@ -410,6 +439,12 @@ function makeOsContext(overrides) {
     Uint8Array,
     TextEncoder,
     TextDecoder,
+    // Same reason as the three above: the vm sandbox has none of these, and
+    // os/fs-migrate.js's legacy blob import needs both - atob to decode the
+    // base64 localStorage copies, Blob to read the media database's rows.
+    // Node provides both globally, so this aliases rather than fakes them.
+    atob,
+    Blob,
     localStorage: makeLocalStorageStub(overrides.quotaBytes),
     document: makeDocumentStub(),
     navigator: { storage: { estimate: async () => ({ usage: 0, quota: 5 * 1024 * 1024 }) } },
