@@ -1204,6 +1204,18 @@ async function fsRenameEntry(store, parentIno, name, newParentIno, newName) {
 // Rebuild the shape vfsMount's backend.load() must return. One full scan of
 // dirents, which is why no parentIno index is maintained: boot reads all of
 // them anyway and nothing else ever queries them.
+// True when a node holds nothing at all. os/storage-idb.js's load() uses this
+// on the root to tell "this database has never been written" from "this drive
+// was deliberately emptied", which decides whether the VFS seeds a default
+// tree over the top.
+function _fsTreeIsEmpty(node) {
+  if (!node) return true;
+  return !(node.dirs || []).length
+    && !Object.keys(node.files || {}).length
+    && !Object.keys(node.blobs || {}).length
+    && !Object.keys(node.subdirs || {}).length;
+}
+
 async function fsReadTree(store) {
   const sb = await store.get(FS_STORE_SUPERBLOCK, 'sb');
   const dirents = await store.scan(FS_STORE_DIRENTS);
@@ -1350,9 +1362,9 @@ function createIdbBackend(options) {
   let db = null;
   let store = null;
   let sb = null;
-  // True only for the session that actually created the superblock. load()
-  // keys its null-vs-empty-tree signal off this, not off the dirent count -
-  // see load() below for why the two are not the same thing.
+  // True only for the session that actually created the superblock. This is
+  // half of load()'s seed-or-not decision; the tree being empty is the other
+  // half, and neither is sufficient alone - see load() below.
   let freshlyCreated = false;
   // Directory ino lookups, rebuilt on load. Ops name a directory by path, and
   // dirents are keyed by parent ino, so something has to hold the mapping.
@@ -1499,16 +1511,30 @@ function createIdbBackend(options) {
 
     async load() {
       await ensure();
-      // A zero-dirent tree means one of two very different things: this
-      // database was never written (the VFS should seed the default tree),
-      // or a prior session emptied it (the user's empty drive is real and
-      // must not be silently re-seeded). Dirent count cannot tell them
-      // apart; whether THIS session created the superblock can, because a
-      // re-seed only ever needs to happen the very first time a database
-      // exists at all.
-      if (freshlyCreated) return null;
       await rebuildDirInos();
-      return await fsReadTree(store);
+      const tree = await fsReadTree(store);
+      // Returning null asks the VFS to seed the default tree, and getting the
+      // condition for it wrong is destructive in both directions. It takes
+      // BOTH halves, and an earlier version of this used only the first:
+      //
+      //   freshlyCreated alone is wrong. Migration imports into the very
+      //   session that creates the superblock - fsChooseBackend calls
+      //   _store() to force the connection open, THEN migrates, THEN mounts
+      //   this same instance - so on the one boot that matters, a
+      //   freshly-created database already holds the user's entire
+      //   filesystem. Keying off this flag alone threw that tree away and
+      //   showed the seed tree instead, on the first boot after upgrading.
+      //   Their files were still in the database and came back on the next
+      //   reload, which is the only reason this was recoverable at all.
+      //
+      //   An empty tree alone is wrong too. A visitor who deleted everything
+      //   has a real empty drive, and re-seeding it would resurrect files
+      //   they removed on purpose.
+      //
+      // Together they mean what is actually being asked: nothing has ever
+      // been written here, so there is no filesystem to lose by seeding one.
+      if (freshlyCreated && _fsTreeIsEmpty(tree)) return null;
+      return tree;
     },
 
     async commit({ ops, readEntry }) {

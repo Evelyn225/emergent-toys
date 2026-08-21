@@ -197,3 +197,72 @@ test('a blocked delete is distinguishable from a clean abort in the return value
   assert.strictEqual(cleanResult.databaseDeleted, true);
   assert.strictEqual(blockedResult.databaseDeleted, false);
 });
+
+// The bug this exists for, found in the browser and not by any of the tests
+// above: on the FIRST boot after an upgrade, the user's whole filesystem was
+// imported into IndexedDB and then thrown away, and they were shown the seed
+// tree instead.
+//
+// Every other migration test in this file verifies the import by loading
+// through a SECOND backend instance - `ctx.createIdbBackend().load()`. That
+// instance did not create the superblock, so its `freshlyCreated` is false and
+// its load() returns the tree. The real boot does not work that way:
+// fsChooseBackend opens ONE backend, calls _store() on it (which creates the
+// superblock, setting freshlyCreated), migrates into it, and then mounts THAT
+// SAME instance. Its load() hit `if (freshlyCreated) return null` and the VFS
+// seeded over the top.
+//
+// So the whole suite proved "the data reached the database" and never "the
+// boot that migrated it can read it back". This asserts the second thing, on
+// the one instance that matters.
+test('the same backend that migrates can read the tree back on that boot', async () => {
+  const { ctx } = migrating();
+  const backend = ctx.createIdbBackend();
+  // Exactly fsChooseBackend's order: force the connection open first, so the
+  // superblock is created by this instance, then migrate into it.
+  await backend._store();
+  const result = await ctx.fsMigrateFromLocalStorage(backend);
+  assert.strictEqual(result.migrated, true);
+
+  const tree = await backend.load();
+  assert.ok(tree, 'load() returned null, so the VFS would seed the default tree over a real filesystem');
+  assert.strictEqual(tree.files['ROOT.txt'], 'at the root');
+  assert.strictEqual(tree.subdirs.DOCS.files['INNER.txt'], 'nested content');
+});
+
+// The other half of the same condition, and the reason the fix cannot simply
+// delete the freshlyCreated check: a brand-new visitor with nothing to migrate
+// must still get null, or the VFS skips seeding and they boot into a
+// filesystem with no DOCS and no README.
+test('a first boot with nothing to migrate still asks the VFS to seed', async () => {
+  const { ctx, ls } = migrating();
+  ls.removeItem('sleepOS-fs');
+  const backend = ctx.createIdbBackend();
+  await backend._store();
+  const result = await ctx.fsMigrateFromLocalStorage(backend);
+  assert.strictEqual(result.reason, 'nothing-to-migrate');
+  assert.strictEqual(await backend.load(), null,
+    'an empty database created this session means seed the defaults');
+});
+
+// And the third case, which is why emptiness alone is not the signal either:
+// a returning visitor who deleted everything has a real empty drive, and
+// re-seeding it would resurrect files they deleted on purpose.
+test('a deliberately emptied drive is not re-seeded on a later boot', async () => {
+  const { ctx, ls } = migrating();
+  ls.removeItem('sleepOS-fs');
+  await ctx.createIdbBackend()._store();          // first boot creates the db
+  // The stub commits a transaction on a setImmediate once its requests drain,
+  // so the superblock ensure() just wrote is still buffered here. Without this
+  // yield the next backend opens before that commit lands, sees no superblock,
+  // creates its own, and this test passes or fails on stub timing rather than
+  // on the behavior it names.
+  await new Promise(r => setImmediate(r));
+  const later = ctx.createIdbBackend();            // a later boot, same db
+  const tree = await later.load();
+  assert.notStrictEqual(tree, null, 'an existing empty database is a real empty drive, not a fresh install');
+  // Length rather than deepStrictEqual: the array comes from the vm realm, so
+  // it is not reference-equal to a host [] even when its contents match.
+  assert.strictEqual(tree.dirs.length, 0);
+  assert.strictEqual(Object.keys(tree.files).length, 0);
+});

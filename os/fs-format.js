@@ -361,6 +361,18 @@ async function fsRenameEntry(store, parentIno, name, newParentIno, newName) {
 // Rebuild the shape vfsMount's backend.load() must return. One full scan of
 // dirents, which is why no parentIno index is maintained: boot reads all of
 // them anyway and nothing else ever queries them.
+// True when a node holds nothing at all. os/storage-idb.js's load() uses this
+// on the root to tell "this database has never been written" from "this drive
+// was deliberately emptied", which decides whether the VFS seeds a default
+// tree over the top.
+function _fsTreeIsEmpty(node) {
+  if (!node) return true;
+  return !(node.dirs || []).length
+    && !Object.keys(node.files || {}).length
+    && !Object.keys(node.blobs || {}).length
+    && !Object.keys(node.subdirs || {}).length;
+}
+
 async function fsReadTree(store) {
   const sb = await store.get(FS_STORE_SUPERBLOCK, 'sb');
   const dirents = await store.scan(FS_STORE_DIRENTS);
