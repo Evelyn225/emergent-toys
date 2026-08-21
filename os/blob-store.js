@@ -1,122 +1,21 @@
-// ── Blob persistence (base64 per-file, separate localStorage keys) ─
-const BLOB_PREFIX = 'sleepOS-blob:';
-const BLOB_SIZE_LIMIT = 3 * 1024 * 1024; // skip files > 3 MB uncompressed
-const MEDIA_DB_NAME = 'sleepOS-media';
-const MEDIA_DB_VERSION = 1;
-const MEDIA_DB_STORE = 'blobs';
-let _mediaDbPromise = null;
+// ── Blob restore ────────────────────────────────────────────────────
+// Blob bytes live in the block layer (os/storage-idb.js) and reach it
+// through the normal vfsWriteBlob -> commit path, same as any other write.
+// What is left here is purely the read side: the in-memory tree's blob
+// entries hold an object URL, never bytes, and something has to turn a
+// block-persisted blob dirent back into a real URL at boot. Tasks 9e and 9f
+// deleted the two mirrors (a separate media IndexedDB, and a base64-in-
+// localStorage copy) this file used to also maintain - blocks are the only
+// store now.
 
 function blobRelativePath(dirPath, name) {
   return (dirPath ? dirPath + '\\' : '') + name;
 }
 
-function blobStorageKey(dirPath, name) {
-  return BLOB_PREFIX + blobRelativePath(dirPath, name);
-}
-
-function splitBlobRelativePath(path) {
-  const clean = String(path || '').replace(/\//g, '\\').replace(/^\\+|\\+$/g, '');
-  const lastSlash = clean.lastIndexOf('\\');
-  return {
-    dirPath: lastSlash === -1 ? '' : clean.slice(0, lastSlash),
-    fileName: lastSlash === -1 ? clean : clean.slice(lastSlash + 1),
-  };
-}
-
-function _ab2b64(ab) {
-  const bytes = new Uint8Array(ab);
-  let out = '';
-  for (let i = 0; i < bytes.length; i += 8192)
-    out += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length)));
-  return btoa(out);
-}
-
-function openMediaDb() {
-  if (!window.indexedDB) return Promise.resolve(null);
-  if (_mediaDbPromise) return _mediaDbPromise;
-  _mediaDbPromise = new Promise(resolve => {
-    try {
-      const req = indexedDB.open(MEDIA_DB_NAME, MEDIA_DB_VERSION);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(MEDIA_DB_STORE)) {
-          db.createObjectStore(MEDIA_DB_STORE, { keyPath: 'path' });
-        }
-      };
-      req.onsuccess = () => {
-        const db = req.result;
-        db.onversionchange = () => db.close();
-        resolve(db);
-      };
-      req.onerror = req.onblocked = () => resolve(null);
-    } catch (e) {
-      resolve(null);
-    }
-  });
-  return _mediaDbPromise;
-}
-
-async function storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      tx.objectStore(MEDIA_DB_STORE).put({
-        path: blobRelativePath(dirPath, name),
-        kind,
-        size,
-        mime,
-        blob: new Blob([arrayBuffer], { type: mime || 'application/octet-stream' }),
-      });
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
-async function removeBlobEntryFromDb(dirPath, name) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      tx.objectStore(MEDIA_DB_STORE).delete(blobRelativePath(dirPath, name));
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
-async function renameBlobEntryInDb(dirPath, oldName, newName) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  const oldPath = blobRelativePath(dirPath, oldName);
-  const newPath = blobRelativePath(dirPath, newName);
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      const store = tx.objectStore(MEDIA_DB_STORE);
-      const getReq = store.get(oldPath);
-      getReq.onsuccess = () => {
-        const data = getReq.result;
-        if (!data) return;
-        data.path = newPath;
-        store.put(data);
-        store.delete(oldPath);
-      };
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
+// Builds a real Blob + object URL for an entry and installs it in the live
+// tree, revoking whatever URL (if any) was there before. `rawBlob` may be an
+// already-real Blob or raw bytes (Uint8Array/ArrayBuffer) - callers pass
+// whichever they have on hand.
 function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
   if (!fileName) return;
   const dir = vfsDirNodeSync(dirPath);
@@ -127,197 +26,42 @@ function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
   dir.blobs.set(fileName, { url: URL.createObjectURL(blob), kind, size, mime });
 }
 
-// Save a single blob entry immediately (called at upload time when we have the raw File)
-function saveBlobEntry(dirPath, name, kind, size, mime, arrayBuffer) {
-  void storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer);
-  if (size > BLOB_SIZE_LIMIT) return;
-  try { localStorage.setItem(blobStorageKey(dirPath, name),
-    JSON.stringify({ kind, size, mime, b64: _ab2b64(arrayBuffer) })); }
-  catch(ex) { /* quota */ }
-}
-
-function removeBlobEntry(dirPath, name) {
-  localStorage.removeItem(blobStorageKey(dirPath, name));
-  void removeBlobEntryFromDb(dirPath, name);
-}
-
-function renameBlobEntry(dirPath, oldName, newName) {
-  const oldKey = blobStorageKey(dirPath, oldName);
-  const newKey = blobStorageKey(dirPath, newName);
-  const data = localStorage.getItem(oldKey);
-  if (data) { try { localStorage.setItem(newKey, data); } catch(ex) {} localStorage.removeItem(oldKey); }
-  void renameBlobEntryInDb(dirPath, oldName, newName);
-}
-
-async function moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  const oldPath = blobRelativePath(srcDirPath, srcName);
-  const newPath = blobRelativePath(dstDirPath, dstName);
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      const store = tx.objectStore(MEDIA_DB_STORE);
-      const getReq = store.get(oldPath);
-      getReq.onsuccess = () => {
-        const data = getReq.result;
-        if (!data) return;
-        data.path = newPath;
-        store.put(data);
-        store.delete(oldPath);
-      };
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
-function moveBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
-  const oldKey = blobStorageKey(srcDirPath, srcName);
-  const newKey = blobStorageKey(dstDirPath, dstName);
-  const data = localStorage.getItem(oldKey);
-  if (data) {
-    try { localStorage.setItem(newKey, data); } catch (e) {}
-    localStorage.removeItem(oldKey);
-  }
-  void moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
-}
-
-// Copy variant of moveBlobEntryInDb: the source row stays exactly where it is.
-// Resolves with the stored Blob so the caller can mint a fresh object URL for
-// it, or null when there is no row to copy.
-async function copyBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName) {
-  const db = await openMediaDb();
-  if (!db) return null;
-  const oldPath = blobRelativePath(srcDirPath, srcName);
-  const newPath = blobRelativePath(dstDirPath, dstName);
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      const store = tx.objectStore(MEDIA_DB_STORE);
-      let copied = null;
-      const getReq = store.get(oldPath);
-      getReq.onsuccess = () => {
-        const data = getReq.result;
-        if (!data) return;
-        copied = data.blob || null;
-        store.put(Object.assign({}, data, { path: newPath }));
-      };
-      tx.oncomplete = () => resolve(copied);
-      tx.onerror = tx.onabort = () => resolve(null);
-    } catch (e) {
-      resolve(null);
-    }
-  });
-}
-
-// Give a copied blob its own persisted bytes under the destination path, in
-// both stores, and hand back a fresh object URL for them. A copy that shared
-// the source's URL would go blank the moment either entry was deleted, because
-// removeFsPath revokes that one string; and with no row under the new path the
-// copy would not survive a reload at all, since blobs are deliberately absent
-// from the VFS snapshot. Returns null when there is nothing stored to copy
-// (a seeded blob), leaving the caller to keep the source's URL.
-async function copyBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
-  const data = localStorage.getItem(blobStorageKey(srcDirPath, srcName));
-  if (data !== null) {
-    try { localStorage.setItem(blobStorageKey(dstDirPath, dstName), data); } catch (e) { /* quota */ }
-  }
-  const stored = await copyBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
-  if (stored) return URL.createObjectURL(stored);
-  if (data === null) return null;
-  // No IndexedDB (or no row there), but the base64 copy landed: rebuild the
-  // bytes from it rather than aliasing the source's URL.
-  try {
-    const { mime, b64 } = JSON.parse(data);
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return URL.createObjectURL(new Blob([bytes], { type: mime || 'application/octet-stream' }));
-  } catch (e) {
-    return null;
-  }
-}
-
-async function moveBlobSubtreeInDb(oldDirPath, newDirPath) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  const prefix = oldDirPath ? oldDirPath + '\\' : '';
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      const store = tx.objectStore(MEDIA_DB_STORE);
-      const req = store.getAll();
-      req.onsuccess = () => {
-        (req.result || []).forEach(item => {
-          if (!String(item.path || '').startsWith(prefix)) return;
-          const nextPath = newDirPath + '\\' + String(item.path).slice(prefix.length);
-          store.put(Object.assign({}, item, { path: nextPath }));
-          store.delete(item.path);
-        });
-      };
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
-function moveBlobStorageSubtree(oldDirPath, newDirPath) {
-  const from = fsNormalizeDir(oldDirPath);
-  const to = fsNormalizeDir(newDirPath);
-  const prefix = BLOB_PREFIX + (from ? from + '\\' : '');
-  Object.keys(localStorage)
-    .filter(key => key.startsWith(prefix))
-    .forEach(key => {
-      const data = localStorage.getItem(key);
-      const suffix = key.slice(prefix.length);
-      if (data !== null) {
-        try { localStorage.setItem(BLOB_PREFIX + to + '\\' + suffix, data); } catch (e) {}
+// Boot-time restore, and the OS's one entry point for it (os/fs-persist.js's
+// vfsBootMount calls this, fire-and-forget). Fetches every block-persisted
+// blob's real bytes via vfsBlockBlobEntries() - the snapshot os/vfs.js's
+// vfsMount takes right after building the live tree, of every blob path the
+// mounted backend's block layer actually has - and restores each one with a
+// real object URL. Runs eagerly, all of them, before the wallpaper-apply
+// tail below - not deferred to first display, which would be a bigger,
+// separate change to how the UI requests blobs. A single unreadable entry
+// does not stop the rest from restoring: a corrupted or mid-migration store
+// should not take down every other file's return, and the wallpaper tail
+// must still run even when there is nothing in blocks at all (a non-IndexedDB
+// backend, or a install with no blobs yet).
+async function loadBlobsFromBlocks() {
+  const backend = vfsGetBackend();
+  if (backend && typeof backend._readBlobBytes === 'function') {
+    const entries = vfsBlockBlobEntries();
+    let restored = 0;
+    for (const { dirName, name, size, kind, mime } of entries) {
+      try {
+        const bytes = await backend._readBlobBytes(dirName, name);
+        // null means the path is gone by the time this runs - e.g. deleted
+        // or renamed between mount and this fetch. Nothing to restore; the
+        // tree already reflects whatever that later mutation did.
+        if (!bytes) continue;
+        restoreBlobIntoFs(dirName, name, kind, size, mime, bytes);
+        restored++;
+      } catch (e) {
+        // One bad block entry must not stop the rest of the boot restore.
       }
-      localStorage.removeItem(key);
-    });
-  void moveBlobSubtreeInDb(from, to);
-}
-
-function loadBlobsFromStorage() {
-  Object.keys(localStorage).filter(k => k.startsWith(BLOB_PREFIX)).forEach(k => {
-    try {
-      const { kind, size, mime, b64 } = JSON.parse(localStorage.getItem(k));
-      const binary = atob(b64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const { dirPath, fileName } = splitBlobRelativePath(k.slice(BLOB_PREFIX.length));
-      restoreBlobIntoFs(dirPath, fileName, kind, size, mime, new Blob([bytes], { type: mime }));
-    } catch(e) { /* corrupted ? skip */ }
-  });
-  void loadBlobsFromIndexedDb();
-}
-
-async function loadBlobsFromIndexedDb() {
-  const db = await openMediaDb();
-  if (!db) return;
-  const items = await new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readonly');
-      const req = tx.objectStore(MEDIA_DB_STORE).getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
-    } catch (e) {
-      resolve([]);
     }
-  });
-  items.forEach(item => {
-    const { dirPath, fileName } = splitBlobRelativePath(item.path);
-    restoreBlobIntoFs(dirPath, fileName, item.kind, item.size, item.mime, item.blob);
-  });
-  if (items.length) document.dispatchEvent(new CustomEvent('fs-changed'));
+    if (restored) document.dispatchEvent(new CustomEvent('fs-changed'));
+  }
+  // A block-restored wallpaper is guaranteed ready by this point, since
+  // everything above already ran and awaited.
   const savedWp = getInitialWallpaperPath();
   if (savedWp) {
     applyWallpaper(savedWp);
   }
 }
-

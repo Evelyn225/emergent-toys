@@ -141,6 +141,7 @@ function vfsListSync(dirPath) {
 // ── Mount, persistence, and the write path ────────────────────────
 var _vfsBackend = null;
 var _vfsOnChange = null;
+var _vfsOnCommit = null;
 var _vfsOnError = null;
 var _vfsPendingOps = [];
 var _vfsFlushTimer = null;
@@ -152,6 +153,11 @@ var _vfsPendingBytes = 0;
 const VFS_FLUSH_DELAY_MS = 400;
 
 function vfsIsMounted() { return _vfsBackend !== null; }
+
+// The mounted backend, for callers that need something only a specific backend
+// offers - today that is the IndexedDB backend's allocation map, which is what
+// makes fragmentation a measurement. Returns null when nothing is mounted.
+function vfsGetBackend() { return _vfsBackend; }
 
 // True when mutations have been made but not yet committed. Used by the
 // unload handler to skip serializing a tree that is already durable.
@@ -168,9 +174,37 @@ function _vfsDesNode(obj) {
   const node = vfsMakeNode();
   (obj.dirs || []).forEach(d => node.dirs.add(d));
   Object.entries(obj.files || {}).forEach(([k, v]) => node.files.set(k, v));
+  // Metadata only (size/kind/mime, no url/bytes). `obj.blobs` only ever has
+  // content for the IndexedDB backend - fsReadTree (os/fs-format.js) is the
+  // one place that produces it; storage-mem/storage-local's load() round-
+  // trips vfsSerializeTree(), which deliberately omits blobs (see that
+  // function below), so this is always {} for them. Filling it in here is
+  // what makes a block-persisted blob dirent show up in a listing at all
+  // immediately after mount - it used to be silently dropped on the floor,
+  // invisible until os/blob-store.js's localStorage/media-DB restore
+  // separately reintroduced the same path moments later.
+  Object.entries(obj.blobs || {}).forEach(([k, v]) => node.blobs.set(k, Object.assign({}, v)));
   Object.entries(obj.subdirs || {}).forEach(([k, v]) => node.subdirs.set(k, _vfsDesNode(v)));
   return node;
 }
+
+// The blob paths the mounted backend's block layer actually persisted, taken
+// as a snapshot right after _vfsDesNode builds the live tree and before
+// `seed` (or anything else) can run. A seeded wallpaper/home-media
+// placeholder (os/fs-persist.js) writes straight into dir.blobs at a fixed
+// path; if a real block-backed blob ever shares that path, the placeholder's
+// write would silently erase the metadata this snapshot exists to preserve.
+// os/blob-store.js's boot restore uses this list to know which paths blocks
+// already answer for - fetching those from blocks (loadBlobsFromBlocks)
+// rather than the localStorage/media-DB mirrors, and skipping those same
+// paths in the mirrors' own restore passes. Blocks is the source of truth
+// once a real backend has one, including a stale one: see os/vfs.js's
+// readFailed handling in _vfsReadEntryForCommit, which deliberately leaves
+// blocks holding OLD bytes rather than overwriting them with nothing - a
+// mirror that clobbered this path on the next boot would erase that
+// protection.
+var _vfsBlockBlobEntries = [];
+function vfsBlockBlobEntries() { return _vfsBlockBlobEntries.slice(); }
 
 // Blobs are deliberately absent from the snapshot. Their bytes live in
 // IndexedDB via the blob store and their in-memory record is an object URL,
@@ -190,6 +224,7 @@ async function vfsMount(backend, options) {
   _vfsPendingOps = [];
   _vfsPendingBytes = 0;
   _vfsOnChange = typeof options.onChange === 'function' ? options.onChange : null;
+  _vfsOnCommit = typeof options.onCommit === 'function' ? options.onCommit : null;
   _vfsOnError = typeof options.onError === 'function' ? options.onError : null;
 
   let stored = null;
@@ -201,6 +236,12 @@ async function vfsMount(backend, options) {
     if (_vfsOnError) _vfsOnError(e);
   }
   _vfsRoot = stored ? _vfsDesNode(stored) : vfsMakeNode();
+  // Snapshot before `seed` runs - see vfsBlockBlobEntries's own comment for
+  // why order matters here.
+  _vfsBlockBlobEntries = [];
+  vfsWalkBlobs('', (dirName, name, blob) => {
+    _vfsBlockBlobEntries.push({ dirName, name, size: (blob && blob.size) || 0, kind: blob && blob.kind, mime: blob && blob.mime });
+  });
   if (typeof options.seed === 'function') options.seed(_vfsRoot);
   // Publish the backend only once the tree behind it is real, so there is no
   // window where vfsIsMounted() is true but a write throws ENOENT on the root.
@@ -252,6 +293,93 @@ function _vfsQueue(op, deltaBytes) {
   _vfsFlushTimer = setTimeout(() => { void vfsFlush(); }, VFS_FLUSH_DELAY_MS);
 }
 
+// The escape hatch for the two remaining direct-tree mutators in os/daemon.js
+// (ensureFsDir, ensureStoryTextFile). Both must stay synchronous - module-level
+// callers depend on ensureFsDir during bundle evaluation, and
+// syncDaemonStoryFiles is synchronous - so neither can go through the async
+// vfsMkdir/vfsWriteFile. What they emitted before was a pathless
+// `legacy-write` marker, or for a write into an existing directory, nothing at
+// all: both were invisible to a backend that commits from ops alone, and both
+// only worked because every backend took a whole-tree snapshot that happened to
+// include the mutation. These emit the same op shapes the real writers do, so a
+// direct mutation is indistinguishable from a normal one downstream. Safe
+// because readEntry resolves against the LIVE tree at commit time, and the
+// caller has already mutated it.
+function vfsQueueDirectMkdir(dirName, name) {
+  _vfsQueue({ op: 'mkdir', dirName, name }, 0);
+}
+
+// `prevValue` is what the caller overwrote, needed only for the byte delta.
+// Deliberately does NOT call _vfsAssertRoom: these callers are synchronous
+// story-beat code with no path to handle an ENOSPC throw, and adding one would
+// turn a full disk into a thrown error in the middle of a narrative beat. The
+// bytes are still counted so the quota guard on normal writes stays honest.
+function vfsQueueDirectWrite(dirName, name, prevValue) {
+  const dir = vfsDirNodeSync(dirName);
+  if (!dir || !dir.files || !dir.files.has(name)) return;
+  const nextValue = dir.files.get(name);
+  // Identical content is not a change. syncDaemonStoryFiles re-sets the same
+  // text from dozens of story beats and from boot; emitting an op for each
+  // would commit constantly and write the same blocks over and over.
+  if (prevValue !== null && prevValue !== undefined && prevValue === nextValue) return;
+  _vfsQueue({ op: 'write', dirName, name },
+            _vfsTextCost(name, nextValue)
+              - (prevValue === null || prevValue === undefined ? 0 : _vfsTextCost(name, prevValue)));
+}
+
+// The accessor handed to backend.commit. Returns null for a path that no
+// longer exists, which is the normal case for an `unlink` op: the backend
+// needs to know the entry is gone, not to be handed a stale copy of it.
+//
+// A non-null result for an `unlink` op is equally normal and just as real: it
+// reads the LIVE tree, not a snapshot of what existed when the op was queued,
+// so an unlink followed by a re-create of the same path within one debounce
+// window resolves to the NEW entry, not "gone." A backend that gates deletion
+// on `readEntry` returning null, rather than on `op.op === 'unlink'`, would
+// silently keep the old generation's content around instead of overwriting
+// it - os/storage-idb.js's commit() branches on op.op for exactly this
+// reason and only falls through to readEntry's result for write/writeBlob.
+//
+// Async because of blobs. A blob's in-memory record is { url, kind, size,
+// mime } and holds no bytes at all - the bytes are in the Blob behind that
+// object URL. Fetching the URL is the only way to get them that works however
+// the blob was created, and it is asynchronous. The alternative, adding a
+// bytes field to the record, would keep a second full copy of every image and
+// video in memory for the whole session on top of the Blob the URL pins.
+async function _vfsReadEntryForCommit(dirName, name) {
+  const dir = vfsDirNodeSync(dirName);
+  if (!dir) return null;
+  if (dir.files && dir.files.has(name)) {
+    return { kind: 'file', text: dir.files.get(name), dirName, name };
+  }
+  if (dir.blobs && dir.blobs.has(name)) {
+    const blob = dir.blobs.get(name);
+    // No URL at all is a genuinely empty blob (nothing was ever there to
+    // fetch) - not a read failure, so it takes the normal zero-byte path.
+    if (!blob || !blob.url) {
+      return { kind: 'blob', blob, bytes: new Uint8Array(0), dirName, name };
+    }
+    try {
+      const bytes = new Uint8Array(await (await fetch(blob.url)).arrayBuffer());
+      return { kind: 'blob', blob, bytes, dirName, name };
+    } catch (e) {
+      // A revoked or unreachable object URL must not fail the whole commit -
+      // one bad blob must not drop every other change in this batch. But
+      // `bytes` must NOT default to empty here: with the block layer as the
+      // source of truth, empty bytes are a real, valid file, and persisting
+      // them over an existing entry would silently destroy it. readFailed
+      // marks this as "we don't know what these bytes are", distinct from
+      // "these bytes are empty" - storage-idb.js's commit() skips the write
+      // entirely for a readFailed entry (new or existing) rather than
+      // treating no answer as an answer, and vfsFlush reports it through
+      // onError, the same channel a save failure normally uses.
+      return { kind: 'blob', blob, bytes: null, readFailed: true, dirName, name };
+    }
+  }
+  if (dir.dirs && dir.dirs.has(name)) return { kind: 'dir', dirName, name };
+  return null;
+}
+
 // Commit pending mutations. This never rejects - `onError` is the reporting
 // channel, because the debounce path discards this promise and a rejection
 // there would be an unhandled rejection with no caller to catch it.
@@ -270,12 +398,39 @@ async function vfsFlush() {
   const opsBytes = _vfsPendingBytes;
   _vfsPendingOps = [];
   const flushed = (async () => {
-    const snapshot = vfsSerializeTree();
+    // Skip the whole-tree walk for a backend that does not read it. The
+    // IndexedDB backend commits from `ops` alone, and serializing the entire
+    // filesystem on every commit just to throw it away would undo the main
+    // reason for moving off the snapshot model. Undeclared means true, so
+    // storage-local and storage-mem keep working untouched.
+    const wantsSnapshot = backend.needsSnapshot !== false;
+    const snapshot = wantsSnapshot ? vfsSerializeTree() : undefined;
     try {
-      await backend.commit({ ops, snapshot });
-      // A remount while this was in flight means these numbers describe a
-      // filesystem that is no longer mounted. Do not let them poison the new one.
+      // `ops` are path descriptors and carry no content, so a backend writing
+      // incrementally needs a way to read the current state of a named entry.
+      // Reading live rather than from a snapshot is deliberate: by the time a
+      // commit runs, the tree is the truth.
+      const commitResult = await backend.commit({ ops, snapshot, readEntry: _vfsReadEntryForCommit });
+      // A remount while this was in flight means these numbers - and this
+      // commit's own failedBlobs report - describe a filesystem that is no
+      // longer mounted. Do not let them poison the new one, or its onError
+      // handler: a stale "did not persist" toast about a backend nobody is
+      // looking at any more would be actively misleading.
       if (_vfsBackend === backend) {
+        // A per-op failure (currently: a blob whose bytes could not be read -
+        // see _vfsReadEntryForCommit's readFailed) is NOT a whole-commit
+        // failure: the rest of the batch above already landed, so this must
+        // not throw (that would re-queue ops that already committed) or go
+        // unreported (that would be exactly the silent zero-byte overwrite
+        // this exists to prevent). It gets its own onError call per failed
+        // path, same channel and same "did not persist" meaning as any other
+        // save failure.
+        if (commitResult && commitResult.failedBlobs && commitResult.failedBlobs.length && _vfsOnError) {
+          commitResult.failedBlobs.forEach(({ dirName, name }) => {
+            _vfsOnError(VfsError('EIO', 'blob content unreadable, not saved: ' +
+              (dirName ? dirName + '\\' : '') + name));
+          });
+        }
         // Re-measure the ORIGIN, do not reseed from our own snapshot. The
         // localStorage quota is per-origin and os/blob-store.js writes base64
         // image content into it, so the snapshot's length describes the
@@ -291,13 +446,51 @@ async function vfsFlush() {
         // are still uncommitted, and zeroing here would stop counting their
         // bytes while they are still unwritten - the same hole C2 closed.
         _vfsPendingBytes = Math.max(0, _vfsPendingBytes - opsBytes);
+        // Fire only now that `ops` are durable - the whole reason this exists
+        // separately from onChange. onChange fires the moment an op is
+        // queued, 400ms before this; a caller that needs to read back what it
+        // just wrote (fs-persist.js's fragmentation recompute reads the
+        // backend's own allocation map) needs a signal that actually comes
+        // after the commit, not before it.
+        //
+        // Same treatment as onChange: never let a throwing or rejecting
+        // handler reach here as an unhandled rejection or interrupt the
+        // commit path. vfsFlush deliberately never rejects, and this must not
+        // become the exception. Deliberately NOT routed through _vfsOnError:
+        // that channel means "this write did not persist" and drives a
+        // user-facing toast (reportVfsError). The write already landed by
+        // this point - a bug in a post-commit handler is not a save failure,
+        // and reporting it as one would be a lie on screen.
+        if (_vfsOnCommit) {
+          try {
+            const result = _vfsOnCommit(ops);
+            if (result && typeof result.catch === 'function') {
+              result.catch(e => {
+                console.warn('sleepOS VFS: onCommit handler rejected -', (e && e.message) || e);
+              });
+            }
+          } catch (e) {
+            console.warn('sleepOS VFS: onCommit handler threw -', (e && e.message) || e);
+          }
+        }
       }
     } catch (err) {
       // Put the ops back rather than dropping them. Losing them means the
       // user's last save is gone with only a transient callback to show for it.
       // Deliberately no auto-retry: on a persistently full disk that would be
       // an error-toast storm. The next mutation or explicit flush retries, and
-      // because the snapshot is whole-tree that one commit carries everything.
+      // replaying these ops again is safe for either backend kind: a
+      // snapshot backend re-sends the whole tree regardless of which ops
+      // triggered it, and an ops-only backend (IndexedDB, needsSnapshot:
+      // false) resolves `readEntry` against the LIVE tree at replay time, not
+      // against whatever content was current when the op first queued - so a
+      // stale value from the failed attempt can never be replayed. Per-op
+      // idempotency backs this up: fsDeleteEntry and fsRenameEntry
+      // (os/fs-format.js) return false rather than throwing when the target
+      // is already gone or already moved, and fsWriteEntry releases a
+      // rewritten entry's old blocks before allocating new ones, so a write
+      // that partially landed before the failure does not double-allocate on
+      // replay.
       if (_vfsBackend === backend) _vfsPendingOps = ops.concat(_vfsPendingOps);
       throw err;
     } finally {
@@ -357,9 +550,6 @@ async function vfsWriteFile(path, text, fallbackDir, options) {
   dir.files.set(fileName, nextValue);
   _vfsQueue({ op: 'write', dirName, name: fileName },
             _vfsTextCost(fileName, nextValue) - (hadFile ? _vfsTextCost(fileName, prevValue) : 0));
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(calcTextFragmentationDelta(prevValue, nextValue, !hadFile));
-  }
   return { dirName, fileName, created: !hadFile, unchanged: false };
 }
 
@@ -380,9 +570,6 @@ async function vfsWriteBlob(path, record, fallbackDir, options) {
   }
   dir.blobs.set(fileName, record);
   _vfsQueue({ op: 'writeBlob', dirName, name: fileName });
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(calcBlobFragmentationDelta(record && record.size, !existing));
-  }
   return { dirName, fileName, created: !existing };
 }
 
@@ -398,9 +585,6 @@ async function vfsMkdir(path, fallbackDir, options) {
   if (!parent.subdirs) parent.subdirs = new Map();
   if (!parent.subdirs.has(name)) parent.subdirs.set(name, vfsMakeNode());
   _vfsQueue({ op: 'mkdir', dirName, name });
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(0.006);
-  }
   return { dirName, fileName: name, created: true };
 }
 
@@ -409,13 +593,10 @@ async function vfsUnlink(path, fallbackDir, options) {
   const st = vfsStatSync(path, fallbackDir);
   if (!st) return false;
   const dir = vfsDirNodeSync(st.dirName);
-  let payload = null;
   if (st.kind === 'text') {
-    payload = dir.files.get(st.name);
     dir.files.delete(st.name);
   } else if (st.kind === 'blob') {
     const blob = dir.blobs.get(st.name);
-    payload = (blob && blob.size) || 0;
     if (blob && blob.url && !blob.seeded) URL.revokeObjectURL(blob.url);
     dir.blobs.delete(st.name);
   } else {
@@ -423,11 +604,6 @@ async function vfsUnlink(path, fallbackDir, options) {
     if (dir.subdirs) dir.subdirs.delete(st.name);
   }
   _vfsQueue({ op: 'unlink', dirName: st.dirName, name: st.name, kind: st.kind }, 0);
-  if (options.trackFragmentation !== false
-      && typeof increaseDriveFragmentation === 'function'
-      && typeof calcRemovalFragmentationDelta === 'function') {
-    increaseDriveFragmentation(calcRemovalFragmentationDelta(st.kind, payload));
-  }
   return true;
 }
 

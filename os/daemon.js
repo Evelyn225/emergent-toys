@@ -281,37 +281,34 @@ function daemonStoryChanged(before) {
 function ensureFsDir(path) {
   const parts = vfsNormalizeDir(path).split('\\').filter(Boolean);
   let node = vfsGetTree();
-  let created = false;
+  let parentPath = '';
   parts.forEach(part => {
-    if (!node.dirs.has(part)) { node.dirs.add(part); created = true; }
+    if (!node.dirs.has(part)) {
+      node.dirs.add(part);
+      // One op per directory actually created, carrying its own parent. A
+      // single marker for the whole walk could not tell a backend which of
+      // DOCS, DOCS\SYS, DOCS\SYS\CACHE were new.
+      vfsQueueDirectMkdir(parentPath, part);
+    }
     if (!node.subdirs) node.subdirs = new Map();
     // Materializing a node for a name that is already in `dirs` is not a
     // filesystem change - it is the same lazy fill vfsDirNodeSync does, and it
-    // queues nothing there either. Only a new name counts as `created`.
+    // queues nothing there either.
     if (!node.subdirs.has(part)) node.subdirs.set(part, vfsMakeNode());
     node = node.subdirs.get(part);
+    parentPath = parentPath ? parentPath + '\\' + part : part;
   });
-  // schedSave, NOT vfsFlush. vfsFlush early-returns when nothing is queued
-  // (`if (!_vfsBackend || !_vfsPendingOps.length) return;`), and this function
-  // mutates the tree directly rather than through _vfsQueue, so `void
-  // vfsFlush()` would commit nothing and every directory created here would
-  // vanish on reload. schedSave queues a `legacy-write` marker op, which is the
-  // designed escape hatch for a direct mutation.
-  if (created) schedSave();
   return node;
 }
 
-// The VFS handles the fragmentation delta, the object-URL revoke and the
-// commit. What it does not know about is the wallpaper binding and the blob
-// store, so those stay here.
+// The VFS handles the block-layer cleanup, the object-URL revoke and the
+// commit. What it does not know about is the wallpaper binding, so that
+// stays here.
 async function removeFsPath(path, options) {
   options = options || {};
   const st = vfsStatSync(path);
   if (!st) return false;
-  if (st.kind === 'blob') {
-    if (st.blob?.kind === 'image') handleWallpaperFileDelete(st.dirName, st.name);
-    removeBlobEntry(st.dirName, st.name);
-  }
+  if (st.kind === 'blob' && st.blob?.kind === 'image') handleWallpaperFileDelete(st.dirName, st.name);
   // Resolve from the stat rather than re-splitting `path`, so the unlink cannot
   // land anywhere other than the entry the stat found.
   return await vfsUnlink(st.name, st.dirName, options);
@@ -385,14 +382,9 @@ async function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
     return null;
   }
   if (!moved) return null;
-  // vfsMove moves the in-memory record only. The bytes live in a separate
-  // store keyed by path, and keeping that in step is deliberately the caller's
-  // job - the VFS must not start guessing about it.
-  if (item.storage === 'blob') {
-    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, moved);
-  } else if (item.storage === 'dir') {
-    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, moved));
-  }
+  // vfsMove already updates the block layer through its own queued op - the
+  // bytes live there now, keyed by dirent, not by a separate path-keyed
+  // mirror this caller used to have to keep in step by hand.
   return { kind: item.kind, name: moved, dirName: dstDirName };
 }
 
@@ -409,16 +401,16 @@ function handleWallpaperTreeDelete(path) {
   }
 }
 
-// vfsUnlink drops a directory's name and subtree but revokes only the single
-// blob it was handed, which is not enough for a folder: emptying the Recycle
-// Bin on a folder of images would leak one object URL per image and orphan
-// every blob-store row. This is the permanent-delete half; a move into the
-// Recycle Bin deliberately does not run it.
+// vfsUnlink drops a directory's name and subtree - including the block layer
+// underneath every blob in it - but revokes only the single object URL it was
+// handed, which is not enough for a folder: emptying the Recycle Bin on a
+// folder of images would leak one object URL per image. This is the
+// permanent-delete half; a move into the Recycle Bin deliberately does not
+// run it.
 function purgeFsDirNode(dirPath) {
   vfsWalkBlobs(dirPath, (base, name, blob) => {
     if (blob?.kind === 'image') handleWallpaperFileDelete(base, name);
     if (blob?.url && !blob.seeded) URL.revokeObjectURL(blob.url);
-    removeBlobEntry(base, name);
   });
 }
 
@@ -451,7 +443,7 @@ async function recycleVirtualPath(path, fallbackDir) {
 
   const moved = await moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
   if (!moved) {
-    await removeFsPath(storedDir, { trackFragmentation: false });
+    await removeFsPath(storedDir);
     return { ok: false, message: 'Could not move ' + fileLabel + ' to the Recycle Bin.' };
   }
 
@@ -478,7 +470,7 @@ async function restoreRecycleEntry(entry) {
     suffixToken: 'restored',
   });
   if (!moved) return { ok: false, message: 'Could not restore ' + entry.name + '.' };
-  await removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir);
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -489,7 +481,7 @@ async function purgeRecycleEntry(entry) {
   entry = normalizeRecycleEntry(entry);
   if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
   await purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
-  await removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir);
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -555,7 +547,9 @@ function promptCreateFolderAt(dirPath, onDone) {
 function ensureStoryTextFile(path, value) {
   const { dirName, fileName } = fsSplitPath(path);
   const dir = ensureFsDir(dirName);
+  const prev = dir.files.has(fileName) ? dir.files.get(fileName) : null;
   dir.files.set(fileName, value);
+  vfsQueueDirectWrite(dirName, fileName, prev);
 }
 
 function daemonNoticeContent() {
@@ -1023,30 +1017,30 @@ function syncDaemonStoryFiles() {
   ensureFsDir('SYS');
   ensureFsDir('CACHE');
   if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
-  else void removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.notice);
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
-  else void removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.incident);
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
-  else void removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.lostContact);
   if (daemonStory.stage >= 4) {
     ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
     if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
   } else {
-    void removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.lastOperator);
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
   }
   if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
-  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol);
   if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
-  else void removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.anchorSeed);
   if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
-  else void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.watchPid);
   if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
   else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
-  else void removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.quarantineSig);
   if (daemonStory.endingReached) {
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
-    void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
+    void removeFsPath(STORY_FILE_PATHS.watchPid);
   }
 }
 
@@ -1069,11 +1063,34 @@ function getDaemonVisualStage() {
   return 0;
 }
 
+// The daemon's own corruption dial, in [0,1]. Derived from the story stage,
+// not stored - there is nothing here that a reload could not recompute, and a
+// persisted copy would be one more field able to disagree with the stage.
+//
+// These two visual consumers used to read getDriveFragmentationLevel(). That
+// worked only because the old fragmentation number was fake and idled near
+// 0.68 - it was a mood dial wearing a disk metric's name. Phase 4 made
+// fragmentation a real measurement, and a real filesystem on a fresh install
+// scores near 0, which would have driven the visual level to 0 and stopped the
+// glitches appearing at all for most players. No test would have caught it.
+//
+// So the story owns its own number now. The stage mapping reproduces the
+// visual levels the old fake value produced at each stage: stage 4 crosses the
+// old 0.22 threshold, stage 5 crosses 0.42, and stage 7 crosses 0.62.
+function getDaemonCorruption() {
+  if (daemonStory.endingReached) return 0;
+  const stage = getDaemonVisualStage();
+  if (stage >= 7) return 0.72;
+  if (stage >= 5) return 0.5;
+  if (stage >= 4) return 0.3;
+  return 0.05;
+}
+
 function getDriveFragmentationVisualLevel() {
   if (daemonStory.endingReached) return 0;
   const visualStage = getDaemonVisualStage();
   if (visualStage < 4) return 0;
-  const fragLevel = getDriveFragmentationLevel();
+  const fragLevel = getDaemonCorruption();
   if (fragLevel < 0.22) return 0;
   if (visualStage >= 7 && fragLevel >= 0.62) return 3;
   if (visualStage >= 5 && fragLevel >= 0.42) return 2;
@@ -1085,7 +1102,7 @@ function scheduleDaemonPulse() {
   daemonPulseTimer = null;
   const visualStage = getDaemonVisualStage();
   if (!visualStage) return;
-  const fragLevel = getDriveFragmentationLevel();
+  const fragLevel = getDaemonCorruption();
   const fragFactor = Math.max(0, Math.min(1, (fragLevel - 0.02) / 0.9));
   const delayScale = 1.7 - fragFactor * 0.7;
   const baseMinDelay = visualStage >= 7 ? 3800 : visualStage >= 5 ? 6200 : 9800;
@@ -1152,7 +1169,6 @@ function syncDaemonStory(options) {
   saveDaemonStory();
   syncDaemonStoryRegistry();
   syncDaemonStoryFiles();
-  schedSave();
   if (!opts.silent) refreshDaemonStoryViews();
 }
 

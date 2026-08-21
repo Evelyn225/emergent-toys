@@ -244,6 +244,7 @@ function vfsListSync(dirPath) {
 // ── Mount, persistence, and the write path ────────────────────────
 var _vfsBackend = null;
 var _vfsOnChange = null;
+var _vfsOnCommit = null;
 var _vfsOnError = null;
 var _vfsPendingOps = [];
 var _vfsFlushTimer = null;
@@ -255,6 +256,11 @@ var _vfsPendingBytes = 0;
 const VFS_FLUSH_DELAY_MS = 400;
 
 function vfsIsMounted() { return _vfsBackend !== null; }
+
+// The mounted backend, for callers that need something only a specific backend
+// offers - today that is the IndexedDB backend's allocation map, which is what
+// makes fragmentation a measurement. Returns null when nothing is mounted.
+function vfsGetBackend() { return _vfsBackend; }
 
 // True when mutations have been made but not yet committed. Used by the
 // unload handler to skip serializing a tree that is already durable.
@@ -271,9 +277,37 @@ function _vfsDesNode(obj) {
   const node = vfsMakeNode();
   (obj.dirs || []).forEach(d => node.dirs.add(d));
   Object.entries(obj.files || {}).forEach(([k, v]) => node.files.set(k, v));
+  // Metadata only (size/kind/mime, no url/bytes). `obj.blobs` only ever has
+  // content for the IndexedDB backend - fsReadTree (os/fs-format.js) is the
+  // one place that produces it; storage-mem/storage-local's load() round-
+  // trips vfsSerializeTree(), which deliberately omits blobs (see that
+  // function below), so this is always {} for them. Filling it in here is
+  // what makes a block-persisted blob dirent show up in a listing at all
+  // immediately after mount - it used to be silently dropped on the floor,
+  // invisible until os/blob-store.js's localStorage/media-DB restore
+  // separately reintroduced the same path moments later.
+  Object.entries(obj.blobs || {}).forEach(([k, v]) => node.blobs.set(k, Object.assign({}, v)));
   Object.entries(obj.subdirs || {}).forEach(([k, v]) => node.subdirs.set(k, _vfsDesNode(v)));
   return node;
 }
+
+// The blob paths the mounted backend's block layer actually persisted, taken
+// as a snapshot right after _vfsDesNode builds the live tree and before
+// `seed` (or anything else) can run. A seeded wallpaper/home-media
+// placeholder (os/fs-persist.js) writes straight into dir.blobs at a fixed
+// path; if a real block-backed blob ever shares that path, the placeholder's
+// write would silently erase the metadata this snapshot exists to preserve.
+// os/blob-store.js's boot restore uses this list to know which paths blocks
+// already answer for - fetching those from blocks (loadBlobsFromBlocks)
+// rather than the localStorage/media-DB mirrors, and skipping those same
+// paths in the mirrors' own restore passes. Blocks is the source of truth
+// once a real backend has one, including a stale one: see os/vfs.js's
+// readFailed handling in _vfsReadEntryForCommit, which deliberately leaves
+// blocks holding OLD bytes rather than overwriting them with nothing - a
+// mirror that clobbered this path on the next boot would erase that
+// protection.
+var _vfsBlockBlobEntries = [];
+function vfsBlockBlobEntries() { return _vfsBlockBlobEntries.slice(); }
 
 // Blobs are deliberately absent from the snapshot. Their bytes live in
 // IndexedDB via the blob store and their in-memory record is an object URL,
@@ -293,6 +327,7 @@ async function vfsMount(backend, options) {
   _vfsPendingOps = [];
   _vfsPendingBytes = 0;
   _vfsOnChange = typeof options.onChange === 'function' ? options.onChange : null;
+  _vfsOnCommit = typeof options.onCommit === 'function' ? options.onCommit : null;
   _vfsOnError = typeof options.onError === 'function' ? options.onError : null;
 
   let stored = null;
@@ -304,6 +339,12 @@ async function vfsMount(backend, options) {
     if (_vfsOnError) _vfsOnError(e);
   }
   _vfsRoot = stored ? _vfsDesNode(stored) : vfsMakeNode();
+  // Snapshot before `seed` runs - see vfsBlockBlobEntries's own comment for
+  // why order matters here.
+  _vfsBlockBlobEntries = [];
+  vfsWalkBlobs('', (dirName, name, blob) => {
+    _vfsBlockBlobEntries.push({ dirName, name, size: (blob && blob.size) || 0, kind: blob && blob.kind, mime: blob && blob.mime });
+  });
   if (typeof options.seed === 'function') options.seed(_vfsRoot);
   // Publish the backend only once the tree behind it is real, so there is no
   // window where vfsIsMounted() is true but a write throws ENOENT on the root.
@@ -355,6 +396,93 @@ function _vfsQueue(op, deltaBytes) {
   _vfsFlushTimer = setTimeout(() => { void vfsFlush(); }, VFS_FLUSH_DELAY_MS);
 }
 
+// The escape hatch for the two remaining direct-tree mutators in os/daemon.js
+// (ensureFsDir, ensureStoryTextFile). Both must stay synchronous - module-level
+// callers depend on ensureFsDir during bundle evaluation, and
+// syncDaemonStoryFiles is synchronous - so neither can go through the async
+// vfsMkdir/vfsWriteFile. What they emitted before was a pathless
+// `legacy-write` marker, or for a write into an existing directory, nothing at
+// all: both were invisible to a backend that commits from ops alone, and both
+// only worked because every backend took a whole-tree snapshot that happened to
+// include the mutation. These emit the same op shapes the real writers do, so a
+// direct mutation is indistinguishable from a normal one downstream. Safe
+// because readEntry resolves against the LIVE tree at commit time, and the
+// caller has already mutated it.
+function vfsQueueDirectMkdir(dirName, name) {
+  _vfsQueue({ op: 'mkdir', dirName, name }, 0);
+}
+
+// `prevValue` is what the caller overwrote, needed only for the byte delta.
+// Deliberately does NOT call _vfsAssertRoom: these callers are synchronous
+// story-beat code with no path to handle an ENOSPC throw, and adding one would
+// turn a full disk into a thrown error in the middle of a narrative beat. The
+// bytes are still counted so the quota guard on normal writes stays honest.
+function vfsQueueDirectWrite(dirName, name, prevValue) {
+  const dir = vfsDirNodeSync(dirName);
+  if (!dir || !dir.files || !dir.files.has(name)) return;
+  const nextValue = dir.files.get(name);
+  // Identical content is not a change. syncDaemonStoryFiles re-sets the same
+  // text from dozens of story beats and from boot; emitting an op for each
+  // would commit constantly and write the same blocks over and over.
+  if (prevValue !== null && prevValue !== undefined && prevValue === nextValue) return;
+  _vfsQueue({ op: 'write', dirName, name },
+            _vfsTextCost(name, nextValue)
+              - (prevValue === null || prevValue === undefined ? 0 : _vfsTextCost(name, prevValue)));
+}
+
+// The accessor handed to backend.commit. Returns null for a path that no
+// longer exists, which is the normal case for an `unlink` op: the backend
+// needs to know the entry is gone, not to be handed a stale copy of it.
+//
+// A non-null result for an `unlink` op is equally normal and just as real: it
+// reads the LIVE tree, not a snapshot of what existed when the op was queued,
+// so an unlink followed by a re-create of the same path within one debounce
+// window resolves to the NEW entry, not "gone." A backend that gates deletion
+// on `readEntry` returning null, rather than on `op.op === 'unlink'`, would
+// silently keep the old generation's content around instead of overwriting
+// it - os/storage-idb.js's commit() branches on op.op for exactly this
+// reason and only falls through to readEntry's result for write/writeBlob.
+//
+// Async because of blobs. A blob's in-memory record is { url, kind, size,
+// mime } and holds no bytes at all - the bytes are in the Blob behind that
+// object URL. Fetching the URL is the only way to get them that works however
+// the blob was created, and it is asynchronous. The alternative, adding a
+// bytes field to the record, would keep a second full copy of every image and
+// video in memory for the whole session on top of the Blob the URL pins.
+async function _vfsReadEntryForCommit(dirName, name) {
+  const dir = vfsDirNodeSync(dirName);
+  if (!dir) return null;
+  if (dir.files && dir.files.has(name)) {
+    return { kind: 'file', text: dir.files.get(name), dirName, name };
+  }
+  if (dir.blobs && dir.blobs.has(name)) {
+    const blob = dir.blobs.get(name);
+    // No URL at all is a genuinely empty blob (nothing was ever there to
+    // fetch) - not a read failure, so it takes the normal zero-byte path.
+    if (!blob || !blob.url) {
+      return { kind: 'blob', blob, bytes: new Uint8Array(0), dirName, name };
+    }
+    try {
+      const bytes = new Uint8Array(await (await fetch(blob.url)).arrayBuffer());
+      return { kind: 'blob', blob, bytes, dirName, name };
+    } catch (e) {
+      // A revoked or unreachable object URL must not fail the whole commit -
+      // one bad blob must not drop every other change in this batch. But
+      // `bytes` must NOT default to empty here: with the block layer as the
+      // source of truth, empty bytes are a real, valid file, and persisting
+      // them over an existing entry would silently destroy it. readFailed
+      // marks this as "we don't know what these bytes are", distinct from
+      // "these bytes are empty" - storage-idb.js's commit() skips the write
+      // entirely for a readFailed entry (new or existing) rather than
+      // treating no answer as an answer, and vfsFlush reports it through
+      // onError, the same channel a save failure normally uses.
+      return { kind: 'blob', blob, bytes: null, readFailed: true, dirName, name };
+    }
+  }
+  if (dir.dirs && dir.dirs.has(name)) return { kind: 'dir', dirName, name };
+  return null;
+}
+
 // Commit pending mutations. This never rejects - `onError` is the reporting
 // channel, because the debounce path discards this promise and a rejection
 // there would be an unhandled rejection with no caller to catch it.
@@ -373,12 +501,39 @@ async function vfsFlush() {
   const opsBytes = _vfsPendingBytes;
   _vfsPendingOps = [];
   const flushed = (async () => {
-    const snapshot = vfsSerializeTree();
+    // Skip the whole-tree walk for a backend that does not read it. The
+    // IndexedDB backend commits from `ops` alone, and serializing the entire
+    // filesystem on every commit just to throw it away would undo the main
+    // reason for moving off the snapshot model. Undeclared means true, so
+    // storage-local and storage-mem keep working untouched.
+    const wantsSnapshot = backend.needsSnapshot !== false;
+    const snapshot = wantsSnapshot ? vfsSerializeTree() : undefined;
     try {
-      await backend.commit({ ops, snapshot });
-      // A remount while this was in flight means these numbers describe a
-      // filesystem that is no longer mounted. Do not let them poison the new one.
+      // `ops` are path descriptors and carry no content, so a backend writing
+      // incrementally needs a way to read the current state of a named entry.
+      // Reading live rather than from a snapshot is deliberate: by the time a
+      // commit runs, the tree is the truth.
+      const commitResult = await backend.commit({ ops, snapshot, readEntry: _vfsReadEntryForCommit });
+      // A remount while this was in flight means these numbers - and this
+      // commit's own failedBlobs report - describe a filesystem that is no
+      // longer mounted. Do not let them poison the new one, or its onError
+      // handler: a stale "did not persist" toast about a backend nobody is
+      // looking at any more would be actively misleading.
       if (_vfsBackend === backend) {
+        // A per-op failure (currently: a blob whose bytes could not be read -
+        // see _vfsReadEntryForCommit's readFailed) is NOT a whole-commit
+        // failure: the rest of the batch above already landed, so this must
+        // not throw (that would re-queue ops that already committed) or go
+        // unreported (that would be exactly the silent zero-byte overwrite
+        // this exists to prevent). It gets its own onError call per failed
+        // path, same channel and same "did not persist" meaning as any other
+        // save failure.
+        if (commitResult && commitResult.failedBlobs && commitResult.failedBlobs.length && _vfsOnError) {
+          commitResult.failedBlobs.forEach(({ dirName, name }) => {
+            _vfsOnError(VfsError('EIO', 'blob content unreadable, not saved: ' +
+              (dirName ? dirName + '\\' : '') + name));
+          });
+        }
         // Re-measure the ORIGIN, do not reseed from our own snapshot. The
         // localStorage quota is per-origin and os/blob-store.js writes base64
         // image content into it, so the snapshot's length describes the
@@ -394,13 +549,51 @@ async function vfsFlush() {
         // are still uncommitted, and zeroing here would stop counting their
         // bytes while they are still unwritten - the same hole C2 closed.
         _vfsPendingBytes = Math.max(0, _vfsPendingBytes - opsBytes);
+        // Fire only now that `ops` are durable - the whole reason this exists
+        // separately from onChange. onChange fires the moment an op is
+        // queued, 400ms before this; a caller that needs to read back what it
+        // just wrote (fs-persist.js's fragmentation recompute reads the
+        // backend's own allocation map) needs a signal that actually comes
+        // after the commit, not before it.
+        //
+        // Same treatment as onChange: never let a throwing or rejecting
+        // handler reach here as an unhandled rejection or interrupt the
+        // commit path. vfsFlush deliberately never rejects, and this must not
+        // become the exception. Deliberately NOT routed through _vfsOnError:
+        // that channel means "this write did not persist" and drives a
+        // user-facing toast (reportVfsError). The write already landed by
+        // this point - a bug in a post-commit handler is not a save failure,
+        // and reporting it as one would be a lie on screen.
+        if (_vfsOnCommit) {
+          try {
+            const result = _vfsOnCommit(ops);
+            if (result && typeof result.catch === 'function') {
+              result.catch(e => {
+                console.warn('sleepOS VFS: onCommit handler rejected -', (e && e.message) || e);
+              });
+            }
+          } catch (e) {
+            console.warn('sleepOS VFS: onCommit handler threw -', (e && e.message) || e);
+          }
+        }
       }
     } catch (err) {
       // Put the ops back rather than dropping them. Losing them means the
       // user's last save is gone with only a transient callback to show for it.
       // Deliberately no auto-retry: on a persistently full disk that would be
       // an error-toast storm. The next mutation or explicit flush retries, and
-      // because the snapshot is whole-tree that one commit carries everything.
+      // replaying these ops again is safe for either backend kind: a
+      // snapshot backend re-sends the whole tree regardless of which ops
+      // triggered it, and an ops-only backend (IndexedDB, needsSnapshot:
+      // false) resolves `readEntry` against the LIVE tree at replay time, not
+      // against whatever content was current when the op first queued - so a
+      // stale value from the failed attempt can never be replayed. Per-op
+      // idempotency backs this up: fsDeleteEntry and fsRenameEntry
+      // (os/fs-format.js) return false rather than throwing when the target
+      // is already gone or already moved, and fsWriteEntry releases a
+      // rewritten entry's old blocks before allocating new ones, so a write
+      // that partially landed before the failure does not double-allocate on
+      // replay.
       if (_vfsBackend === backend) _vfsPendingOps = ops.concat(_vfsPendingOps);
       throw err;
     } finally {
@@ -460,9 +653,6 @@ async function vfsWriteFile(path, text, fallbackDir, options) {
   dir.files.set(fileName, nextValue);
   _vfsQueue({ op: 'write', dirName, name: fileName },
             _vfsTextCost(fileName, nextValue) - (hadFile ? _vfsTextCost(fileName, prevValue) : 0));
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(calcTextFragmentationDelta(prevValue, nextValue, !hadFile));
-  }
   return { dirName, fileName, created: !hadFile, unchanged: false };
 }
 
@@ -483,9 +673,6 @@ async function vfsWriteBlob(path, record, fallbackDir, options) {
   }
   dir.blobs.set(fileName, record);
   _vfsQueue({ op: 'writeBlob', dirName, name: fileName });
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(calcBlobFragmentationDelta(record && record.size, !existing));
-  }
   return { dirName, fileName, created: !existing };
 }
 
@@ -501,9 +688,6 @@ async function vfsMkdir(path, fallbackDir, options) {
   if (!parent.subdirs) parent.subdirs = new Map();
   if (!parent.subdirs.has(name)) parent.subdirs.set(name, vfsMakeNode());
   _vfsQueue({ op: 'mkdir', dirName, name });
-  if (options.trackFragmentation !== false && typeof increaseDriveFragmentation === 'function') {
-    increaseDriveFragmentation(0.006);
-  }
   return { dirName, fileName: name, created: true };
 }
 
@@ -512,13 +696,10 @@ async function vfsUnlink(path, fallbackDir, options) {
   const st = vfsStatSync(path, fallbackDir);
   if (!st) return false;
   const dir = vfsDirNodeSync(st.dirName);
-  let payload = null;
   if (st.kind === 'text') {
-    payload = dir.files.get(st.name);
     dir.files.delete(st.name);
   } else if (st.kind === 'blob') {
     const blob = dir.blobs.get(st.name);
-    payload = (blob && blob.size) || 0;
     if (blob && blob.url && !blob.seeded) URL.revokeObjectURL(blob.url);
     dir.blobs.delete(st.name);
   } else {
@@ -526,11 +707,6 @@ async function vfsUnlink(path, fallbackDir, options) {
     if (dir.subdirs) dir.subdirs.delete(st.name);
   }
   _vfsQueue({ op: 'unlink', dirName: st.dirName, name: st.name, kind: st.kind }, 0);
-  if (options.trackFragmentation !== false
-      && typeof increaseDriveFragmentation === 'function'
-      && typeof calcRemovalFragmentationDelta === 'function') {
-    increaseDriveFragmentation(calcRemovalFragmentationDelta(st.kind, payload));
-  }
   return true;
 }
 
@@ -664,6 +840,1181 @@ async function vfsEstimate() {
   if (!_vfsBackend) return { usage: 0, quota: 0 };
   await _vfsRefreshQuota();
   return { usage: _vfsUsageBytes, quota: _vfsQuotaBytes };
+}
+// The on-disk format, with no IO in it.
+//
+// Everything here operates on plain values and on an abstract store that the
+// caller supplies, so the allocator, the bitmap and the fragmentation maths are
+// testable in node with a Map behind them. os/storage-idb.js implements that
+// store over IndexedDB. This is the same split phase 2 made between
+// storage-local.js and storage-mem.js, and it is what keeps the risky logic out
+// of the layer that needs a browser to run.
+//
+// NOTE ON THE IN-MEMORY TREE: this is a PERSISTENCE representation only.
+// os/vfs.js keeps its Maps-and-Sets tree exactly as before. Inodes and dirents
+// buy cheap renames and per-file writes at commit time; they are not what any
+// read goes through. See the Non-goals section of the phase 4 design spec.
+
+// 4 KB, matching the block size of the filesystems this is imitating. It is
+// recorded in the superblock rather than read from here at each call site, so a
+// future change is a format version bump rather than a code hunt.
+const FS_BLOCK_SIZE = 4096;
+const FS_FORMAT_VERSION = 1;
+
+function fsMakeSuperblock(totalBlocks) {
+  const count = Math.max(0, Math.trunc(Number(totalBlocks) || 0));
+  return {
+    version: FS_FORMAT_VERSION,
+    // Ino 0 is never handed out, so 0 can mean "no inode" without ambiguity.
+    nextIno: 1,
+    blockSize: FS_BLOCK_SIZE,
+    totalBlocks: count,
+    // One bit per block, set when the block is in use. A Uint8Array rather than
+    // an array of booleans because IndexedDB structured-clones typed arrays
+    // directly, so this needs no encode step on the way in or out.
+    freeBitmap: new Uint8Array(Math.ceil(count / 8)),
+    migrated: false,
+  };
+}
+
+function fsBitGet(bitmap, index) {
+  return (bitmap[index >> 3] >> (index & 7)) & 1;
+}
+
+function fsBitSet(bitmap, index, value) {
+  const byte = index >> 3;
+  const mask = 1 << (index & 7);
+  if (value) bitmap[byte] |= mask;
+  else bitmap[byte] &= ~mask;
+}
+
+function fsCountFreeBlocks(sb) {
+  let free = 0;
+  for (let i = 0; i < sb.totalBlocks; i++) if (!fsBitGet(sb.freeBitmap, i)) free++;
+  return free;
+}
+
+// Find the first free run of at least `count` blocks, or -1.
+function _fsFindRun(sb, count) {
+  let start = -1;
+  let len = 0;
+  for (let i = 0; i < sb.totalBlocks; i++) {
+    if (fsBitGet(sb.freeBitmap, i)) { start = -1; len = 0; continue; }
+    if (start < 0) start = i;
+    len++;
+    if (len >= count) return start;
+  }
+  return -1;
+}
+
+// Contiguous-first, scattered-fallback. Preferring a run is what keeps
+// fragmentation low for the common case of writing a whole file at once, and
+// the scattered fallback is what stops a partly-full disk refusing a write it
+// has room for.
+function fsAllocBlocks(sb, count) {
+  const need = Math.max(0, Math.trunc(Number(count) || 0));
+  if (!need) return [];
+
+  const runStart = _fsFindRun(sb, need);
+  if (runStart >= 0) {
+    const out = [];
+    for (let i = 0; i < need; i++) {
+      out.push(runStart + i);
+      fsBitSet(sb.freeBitmap, runStart + i, 1);
+    }
+    return out;
+  }
+
+  const out = [];
+  for (let i = 0; i < sb.totalBlocks && out.length < need; i++) {
+    if (fsBitGet(sb.freeBitmap, i)) continue;
+    out.push(i);
+    fsBitSet(sb.freeBitmap, i, 1);
+  }
+  if (out.length < need) {
+    // Roll the partial allocation back before throwing. Without this a failed
+    // write leaks every block it managed to take, so a user retrying a save on
+    // a nearly-full disk would watch the disk shrink with each attempt.
+    fsFreeBlocks(sb, out);
+    throw VfsError('ENOSPC', 'no space for ' + need + ' blocks, ' + fsCountFreeBlocks(sb) + ' free');
+  }
+  return out;
+}
+
+function fsFreeBlocks(sb, indices) {
+  (indices || []).forEach(i => {
+    if (i >= 0 && i < sb.totalBlocks) fsBitSet(sb.freeBitmap, i, 0);
+  });
+}
+
+// Fragmentation is measured PER FILE, not across the disk as a whole: a disk
+// holding five contiguous files is not fragmented, it is just occupied. So the
+// question is how many extra runs each file's blocks are broken into beyond the
+// one run it would occupy if it were whole.
+//
+//   0 -> every file's blocks are contiguous
+//   1 -> every block of every file is isolated
+//
+// Computed from the inodes rather than the bitmap because the bitmap alone
+// cannot tell which blocks belong together.
+function fsComputeFragmentation(inodes) {
+  let totalBlocks = 0;
+  let totalRuns = 0;
+  let filesWithBlocks = 0;
+  (inodes || []).forEach(inode => {
+    const blocks = (inode && inode.blocks) || [];
+    if (!blocks.length) return;
+    filesWithBlocks++;
+    totalBlocks += blocks.length;
+    const sorted = blocks.slice().sort((a, b) => a - b);
+    totalRuns++;
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] !== sorted[i - 1] + 1) totalRuns++;
+    }
+  });
+  // An empty disk is not fragmented, and the denominator below would be 0.
+  const maxExtraRuns = totalBlocks - filesWithBlocks;
+  if (maxExtraRuns <= 0) return 0;
+  return (totalRuns - filesWithBlocks) / maxExtraRuns;
+}
+
+// ── Records and tree reconstruction ───────────────────────────────
+
+const FS_STORE_SUPERBLOCK = 'superblock';
+const FS_STORE_INODES = 'inodes';
+const FS_STORE_DIRENTS = 'dirents';
+const FS_STORE_BLOCKS = 'blocks';
+
+// The abstract store. Everything above the IndexedDB adapter talks to this
+// shape, which is why the whole format is testable with Maps. Async on every
+// method because the IndexedDB implementation has no choice; the in-memory one
+// resolves immediately.
+function fsMakeStore() {
+  const stores = new Map();
+  function of(name) {
+    if (!stores.has(name)) stores.set(name, new Map());
+    return stores.get(name);
+  }
+  return {
+    async get(name, key) { return of(name).get(String(key)); },
+    async put(name, key, value) { of(name).set(String(key), value); },
+    async del(name, key) { of(name).delete(String(key)); },
+    async scan(name) { return [...of(name).entries()]; },
+    async clear(name) { of(name).clear(); },
+  };
+}
+
+// TextEncoder/TextDecoder exist in browsers and in node, and the terminal
+// already relies on TextEncoder for WC's byte count, so this adds no new
+// platform assumption.
+function fsEncodeText(str) {
+  return new TextEncoder().encode(String(str == null ? '' : str));
+}
+
+function fsDecodeText(bytes) {
+  return new TextDecoder().decode(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []));
+}
+
+function _fsDirentKey(parentIno, name) {
+  return String(parentIno) + '/' + name;
+}
+
+// The inverse. A name may itself contain '/', so this splits on the FIRST
+// separator only - the parent ino cannot contain one.
+//
+// This exists because the encoding was written out by hand in four places and
+// decoded by hand in two more, across three files. That is a format spread
+// across the codebase rather than owned by it, and changing it would have
+// meant finding every copy. os/storage-idb.js is the adapter; the key shape is
+// the pure core's business.
+function _fsDirentSplit(key) {
+  const str = String(key);
+  const slash = str.indexOf('/');
+  return { parent: Number(str.slice(0, slash)), name: str.slice(slash + 1) };
+}
+
+// Walks a backslash-joined directory path to its ino, creating any component
+// that does not exist yet. Distinct from _fsResolveDirIno, which returns -1
+// rather than creating - both callers here genuinely want creation: a commit
+// where a mkdir and a write inside it land in the same batch, and migration
+// importing a blob whose directory the tree snapshot did not name.
+//
+// `cache` is optional and maps full path -> ino. os/storage-idb.js keeps one
+// across a session so a deep path is not re-walked on every op; migration
+// passes none, since it walks each path once.
+async function fsResolveOrCreateDirIno(store, sb, dirName, cache) {
+  const path = String(dirName || '');
+  if (!path) return 0;
+  if (cache && cache.has(path)) return cache.get(path);
+  let parent = 0;
+  let sofar = '';
+  for (const part of path.split('\\')) {
+    if (!part) continue;
+    sofar = sofar ? sofar + '\\' + part : part;
+    if (cache && cache.has(sofar)) { parent = cache.get(sofar); continue; }
+    let ino = await store.get(FS_STORE_DIRENTS, _fsDirentKey(parent, part));
+    if (ino === undefined) ino = await fsWriteEntry(store, sb, parent, part, { type: 'dir' });
+    if (cache) cache.set(sofar, ino);
+    parent = ino;
+  }
+  return parent;
+}
+
+async function _fsPutSuperblock(store, sb) {
+  await store.put(FS_STORE_SUPERBLOCK, 'sb', sb);
+}
+
+// Splits bytes across freshly allocated blocks. The tail block is written
+// short rather than padded: the inode's `size` is what bounds a read, so
+// padding would only cost space and prove nothing.
+async function _fsWriteBlocks(store, sb, bytes) {
+  const count = Math.ceil(bytes.length / sb.blockSize);
+  const indices = fsAllocBlocks(sb, count);
+  for (let i = 0; i < indices.length; i++) {
+    const start = i * sb.blockSize;
+    await store.put(FS_STORE_BLOCKS, indices[i], bytes.slice(start, start + sb.blockSize));
+  }
+  return indices;
+}
+
+async function _fsReleaseInode(store, sb, ino) {
+  const inode = await store.get(FS_STORE_INODES, ino);
+  if (!inode) return;
+  for (const idx of inode.blocks || []) await store.del(FS_STORE_BLOCKS, idx);
+  fsFreeBlocks(sb, inode.blocks || []);
+}
+
+async function fsWriteEntry(store, sb, parentIno, name, entry) {
+  entry = entry || {};
+  const key = _fsDirentKey(parentIno, name);
+  const existingIno = await store.get(FS_STORE_DIRENTS, key);
+  // Reuse the inode number on a rewrite so anything holding it stays valid,
+  // but release the old blocks first or a shrinking file leaks the difference.
+  if (existingIno !== undefined) await _fsReleaseInode(store, sb, existingIno);
+
+  const bytes = entry.bytes instanceof Uint8Array ? entry.bytes : new Uint8Array(0);
+  const blocks = entry.type === 'dir' ? [] : await _fsWriteBlocks(store, sb, bytes);
+  const ino = existingIno !== undefined ? existingIno : sb.nextIno++;
+  const now = Date.now();
+  const prior = existingIno !== undefined ? await store.get(FS_STORE_INODES, ino) : null;
+
+  await store.put(FS_STORE_INODES, ino, {
+    type: entry.type || 'file',
+    size: entry.type === 'dir' ? 0 : bytes.length,
+    ctime: prior ? prior.ctime : now,
+    mtime: now,
+    blocks,
+    meta: entry.meta || null,
+  });
+  await store.put(FS_STORE_DIRENTS, key, ino);
+  await _fsPutSuperblock(store, sb);
+  return ino;
+}
+
+async function fsReadEntryBytes(store, sb, ino) {
+  const inode = await store.get(FS_STORE_INODES, ino);
+  if (!inode) return new Uint8Array(0);
+  const out = new Uint8Array(inode.size);
+  let offset = 0;
+  for (const idx of inode.blocks || []) {
+    const block = await store.get(FS_STORE_BLOCKS, idx);
+    if (!block) continue;
+    const chunk = block instanceof Uint8Array ? block : new Uint8Array(block);
+    const room = Math.min(chunk.length, out.length - offset);
+    out.set(chunk.subarray(0, room), offset);
+    offset += room;
+  }
+  return out;
+}
+
+// Resolves a directory name to its ino by walking dirents, one path
+// component at a time - the same backslash-joined convention os/storage-idb.js's
+// inoForDir uses, and the same dirent-key shape (_fsDirentKey) fsWriteEntry
+// and fsDeleteEntry both write through. Deliberately NOT reusing inoForDir
+// itself: that function creates a missing directory as it walks, which is
+// correct for a write (a mkdir and a write into it can land in the same
+// commit) and wrong for a read - a lookup must never mutate the tree as a
+// side effect of failing to find something. Returns -1 for a component that
+// does not resolve, rather than throwing, so a caller can tell "not found"
+// from every other outcome with one comparison.
+async function _fsResolveDirIno(store, dirName) {
+  const path = String(dirName || '');
+  if (!path) return 0;
+  let parent = 0;
+  for (const part of path.split('\\')) {
+    if (!part) continue;
+    const ino = await store.get(FS_STORE_DIRENTS, _fsDirentKey(parent, part));
+    if (ino === undefined) return -1;
+    parent = ino;
+  }
+  return parent;
+}
+
+// The read half of blob persistence (Task 9a). Blob bytes go IN through
+// fsWriteEntry (called from os/storage-idb.js's commit(), entry.kind ===
+// 'blob'), but until this nothing could bring them back OUT: fsReadTree
+// returns a blob dirent as metadata only (see `build` below), and
+// fsReadEntryBytes was called from exactly one place, for text files.
+//
+// Returns null, not an empty Uint8Array, for anything that isn't a readable
+// blob at that exact path: a directory component that doesn't exist, a name
+// that doesn't exist in a directory that does, AND a name that exists but is
+// a file or dir rather than a blob. That last case is deliberate and is not
+// the same kind of "missing" as the first two - the entry is right there -
+// but this function exists specifically to serve blob bytes, and a same-named
+// text file's UTF-8-encoded bytes are not that; handing them back would look
+// like a successful blob read to a caller that never asked to distinguish the
+// two. An empty Uint8Array is reserved for what it already means elsewhere in
+// this file: a real, zero-byte blob.
+async function fsReadBlobBytesAtPath(store, sb, dirName, name) {
+  const parent = await _fsResolveDirIno(store, dirName);
+  if (parent < 0) return null;
+  const ino = await store.get(FS_STORE_DIRENTS, _fsDirentKey(parent, name));
+  if (ino === undefined) return null;
+  const inode = await store.get(FS_STORE_INODES, ino);
+  if (!inode || inode.type !== 'blob') return null;
+  return await fsReadEntryBytes(store, sb, ino);
+}
+
+// Every descendant of a deleted directory needs its blocks freed and its
+// inode/dirent records removed, or they sit in the store unreachable from
+// root forever: fsReadTree only ever walks down from root via dirent parent
+// links, so an orphan never shows up again, but its bitmap bits stay set and
+// free space quietly shrinks every session. One scan of the whole dirent
+// store, grouped by parent, rather than one scan per recursion level - a
+// scan per level is quadratic on a deep tree, and boot already pays for a
+// full scan in fsReadTree so this is no new cost class.
+async function _fsCollectSubtree(store, rootIno) {
+  const dirents = await store.scan(FS_STORE_DIRENTS);
+  const byParent = new Map();
+  dirents.forEach(([key, ino]) => {
+    const { parent } = _fsDirentSplit(key);
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push({ key, ino });
+  });
+
+  // Depth is user-controlled (nested folders can go arbitrarily deep), so
+  // this is an explicit worklist rather than a recursive call that could
+  // blow the stack on a deeply nested tree.
+  const out = [];
+  const work = [rootIno];
+  while (work.length) {
+    const ino = work.pop();
+    for (const child of byParent.get(ino) || []) {
+      out.push(child);
+      work.push(child.ino);
+    }
+  }
+  return out;
+}
+
+async function fsDeleteEntry(store, sb, parentIno, name) {
+  const key = _fsDirentKey(parentIno, name);
+  const ino = await store.get(FS_STORE_DIRENTS, key);
+  if (ino === undefined) return false;
+
+  const inode = await store.get(FS_STORE_INODES, ino);
+  if (inode && inode.type === 'dir') {
+    const descendants = await _fsCollectSubtree(store, ino);
+    for (const { key: dKey, ino: dIno } of descendants) {
+      await _fsReleaseInode(store, sb, dIno);
+      await store.del(FS_STORE_INODES, dIno);
+      await store.del(FS_STORE_DIRENTS, dKey);
+    }
+  }
+
+  await _fsReleaseInode(store, sb, ino);
+  await store.del(FS_STORE_INODES, ino);
+  await store.del(FS_STORE_DIRENTS, key);
+  await _fsPutSuperblock(store, sb);
+  return true;
+}
+
+// The cheap operation the whole dirent split exists for: one key moves, the
+// inode and every block stay exactly where they are.
+async function fsRenameEntry(store, parentIno, name, newParentIno, newName) {
+  const from = _fsDirentKey(parentIno, name);
+  const ino = await store.get(FS_STORE_DIRENTS, from);
+  if (ino === undefined) return false;
+  await store.put(FS_STORE_DIRENTS, _fsDirentKey(newParentIno, newName), ino);
+  await store.del(FS_STORE_DIRENTS, from);
+  return true;
+}
+
+// Rebuild the shape vfsMount's backend.load() must return. One full scan of
+// dirents, which is why no parentIno index is maintained: boot reads all of
+// them anyway and nothing else ever queries them.
+// True when a node holds nothing at all. os/storage-idb.js's load() uses this
+// on the root to tell "this database has never been written" from "this drive
+// was deliberately emptied", which decides whether the VFS seeds a default
+// tree over the top.
+function _fsTreeIsEmpty(node) {
+  if (!node) return true;
+  return !(node.dirs || []).length
+    && !Object.keys(node.files || {}).length
+    && !Object.keys(node.blobs || {}).length
+    && !Object.keys(node.subdirs || {}).length;
+}
+
+async function fsReadTree(store) {
+  const sb = await store.get(FS_STORE_SUPERBLOCK, 'sb');
+  const dirents = await store.scan(FS_STORE_DIRENTS);
+  const byParent = new Map();
+  dirents.forEach(([key, ino]) => {
+    const { parent, name } = _fsDirentSplit(key);
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push({ name, ino });
+  });
+
+  async function build(parentIno) {
+    const node = { dirs: [], files: {}, blobs: {}, subdirs: {} };
+    for (const { name, ino } of (byParent.get(parentIno) || [])) {
+      const inode = await store.get(FS_STORE_INODES, ino);
+      if (!inode) continue;
+      if (inode.type === 'dir') {
+        node.dirs.push(name);
+        node.subdirs[name] = await build(ino);
+      } else if (inode.type === 'blob') {
+        node.blobs[name] = Object.assign({ size: inode.size }, inode.meta || {});
+      } else {
+        node.files[name] = fsDecodeText(await fsReadEntryBytes(store, sb, ino));
+      }
+    }
+    return node;
+  }
+  return await build(0);
+}
+// IndexedDB backend. Thin on purpose: it opens the database, exposes the
+// abstract store os/fs-format.js expects, and translates the VFS's ops into
+// format calls. Every decision about the format itself lives in fs-format,
+// which is why that file is testable with a Map and this one needs a browser.
+//
+// If this file grows past roughly a hundred lines, logic has leaked out of the
+// pure core and belongs back in it.
+const FS_IDB_NAME = 'sleepOS-fs';
+const FS_IDB_VERSION = 1;
+// Sized so the disk is a believable 32 MB at 4 KB per block. IndexedDB itself
+// is bounded by the origin quota, which estimate() reports honestly; this is
+// the in-fiction disk size, and it is what DEFRAG's grid renders.
+const FS_IDB_TOTAL_BLOCKS = 8192;
+
+function fsIdbAvailable() {
+  try { return typeof indexedDB !== 'undefined' && !!indexedDB; } catch (e) { return false; }
+}
+
+function _fsIdbRequest(req) {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || VfsError('EIO', 'IndexedDB request failed'));
+  });
+}
+
+function _fsIdbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(FS_IDB_NAME, FS_IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      [FS_STORE_SUPERBLOCK, FS_STORE_INODES, FS_STORE_DIRENTS, FS_STORE_BLOCKS].forEach(name => {
+        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
+      });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || VfsError('EIO', 'could not open ' + FS_IDB_NAME));
+  });
+}
+
+// Not routed through _fsIdbRequest: deleteDatabase() has a third outcome
+// that plain get/put/delete requests never do. If any connection to the
+// database - including this backend's own, unless the caller closed it
+// first - is still open, IndexedDB does not fail the request; it fires
+// onblocked and then waits, indefinitely, for every connection to close,
+// never calling onsuccess or onerror on its own. _fsIdbRequest only wires
+// onsuccess/onerror, so a blocked delete would leave its promise permanently
+// unsettled - exactly the shape of hang this function exists to avoid.
+// Failing fast on onblocked is a deliberate choice: the caller (migration's
+// abort path) needs to know NOW that the partial database is still there,
+// not wait on a request that may never resolve because some other tab has
+// its own connection open.
+async function fsIdbDeleteDatabase() {
+  if (!fsIdbAvailable()) return;
+  await new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(FS_IDB_NAME);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error || VfsError('EIO', 'could not delete ' + FS_IDB_NAME));
+    req.onblocked = () => reject(VfsError('EBUSY', 'delete of ' + FS_IDB_NAME + ' blocked by an open connection'));
+  });
+}
+
+// The abstract store from os/fs-format.js, over a real database. Used only
+// for the one-off reads load() and estimate() need before any commit is in
+// flight - each call opens its own transaction, so this carries no atomicity
+// guarantee across two calls and must never be used for commit()'s write
+// phase (see _fsIdbTxStore below for that).
+function _fsIdbStore(db) {
+  function tx(name, mode) {
+    return db.transaction([name], mode).objectStore(name);
+  }
+  return {
+    async get(name, key) { return await _fsIdbRequest(tx(name, 'readonly').get(String(key))); },
+    async put(name, key, value) { await _fsIdbRequest(tx(name, 'readwrite').put(value, String(key))); },
+    async del(name, key) { await _fsIdbRequest(tx(name, 'readwrite').delete(String(key))); },
+    // Both reads go through the SAME already-open store rather than each
+    // calling tx() again. Two separate transactions here used to let a write
+    // from anywhere else - another tab, or just another commit - land between
+    // the key read and the value read, silently pairing keys from one moment
+    // with values from another. IndexedDB is shared across tabs on the same
+    // origin, so this was reachable without any bug in this file at all.
+    async scan(name) {
+      const store = tx(name, 'readonly');
+      const keys = await _fsIdbRequest(store.getAllKeys());
+      const values = await _fsIdbRequest(store.getAll());
+      return keys.map((k, i) => [k, values[i]]);
+    },
+    async clear(name) { await _fsIdbRequest(tx(name, 'readwrite').clear()); },
+  };
+}
+
+// The same abstract store shape, bound to an ALREADY-OPEN transaction rather
+// than opening one per request. commit()'s write phase runs its whole batch
+// through one of these, which is what makes the batch commit or roll back as
+// a single unit instead of as N independent transactions.
+function _fsIdbTxStore(tx) {
+  function os(name) { return tx.objectStore(name); }
+  return {
+    async get(name, key) { return await _fsIdbRequest(os(name).get(String(key))); },
+    async put(name, key, value) { await _fsIdbRequest(os(name).put(value, String(key))); },
+    async del(name, key) { await _fsIdbRequest(os(name).delete(String(key))); },
+    async scan(name) {
+      const store = os(name);
+      const keys = await _fsIdbRequest(store.getAllKeys());
+      const values = await _fsIdbRequest(store.getAll());
+      return keys.map((k, i) => [k, values[i]]);
+    },
+    async clear(name) { await _fsIdbRequest(os(name).clear()); },
+  };
+}
+
+function createIdbBackend(options) {
+  options = options || {};
+  const totalBlocks = Number.isFinite(options.totalBlocks) ? options.totalBlocks : FS_IDB_TOTAL_BLOCKS;
+  let db = null;
+  let store = null;
+  let sb = null;
+  // True only for the session that actually created the superblock. This is
+  // half of load()'s seed-or-not decision; the tree being empty is the other
+  // half, and neither is sufficient alone - see load() below.
+  let freshlyCreated = false;
+  // Directory ino lookups, rebuilt on load. Ops name a directory by path, and
+  // dirents are keyed by parent ino, so something has to hold the mapping.
+  let dirInos = new Map();
+
+  async function ensure() {
+    if (store) return;
+    db = await _fsIdbOpen();
+    store = _fsIdbStore(db);
+    sb = await store.get(FS_STORE_SUPERBLOCK, 'sb');
+    if (sb) {
+      freshlyCreated = false;
+    } else {
+      sb = fsMakeSuperblock(totalBlocks);
+      await store.put(FS_STORE_SUPERBLOCK, 'sb', sb);
+      freshlyCreated = true;
+    }
+  }
+
+  // '' is the root and is always ino 0. Anything deeper is looked up, and
+  // created if an op names a directory we have not seen - which happens when a
+  // mkdir and a write inside it land in the same commit. Takes the active
+  // store explicitly (rather than closing over the module-level one) because
+  // commit()'s write phase must resolve directories through the SAME
+  // transaction as everything else in the batch, not through a one-off read.
+  async function inoForDir(activeStore, dirName) {
+    return await fsResolveOrCreateDirIno(activeStore, sb, dirName, dirInos);
+  }
+
+  async function rebuildDirInos() {
+    dirInos = new Map();
+    const dirents = await store.scan(FS_STORE_DIRENTS);
+    const rows = dirents.map(([key, ino]) => Object.assign(_fsDirentSplit(key), { ino }));
+    const pathOf = new Map([[0, '']]);
+    // Repeat until nothing new resolves, because a child can be seen before
+    // its parent in an unordered scan.
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const row of rows) {
+        if (pathOf.has(row.ino) || !pathOf.has(row.parent)) continue;
+        const inode = await store.get(FS_STORE_INODES, row.ino);
+        if (!inode || inode.type !== 'dir') continue;
+        const base = pathOf.get(row.parent);
+        const full = base ? base + '\\' + row.name : row.name;
+        pathOf.set(row.ino, full);
+        dirInos.set(full, row.ino);
+        changed = true;
+      }
+    }
+  }
+
+  // Runs a whole batch of writes as ONE transaction: opens it, hands `fn`
+  // a transaction-scoped store and the live superblock, waits for the
+  // transaction to actually complete (a request resolving is not the same
+  // as the transaction being durable - IndexedDB only applies a
+  // transaction's writes when the transaction itself does), and on any
+  // failure runs the guarded abort and stale-cache discard below.
+  //
+  // Both commit() and migration (os/fs-migrate.js, via the `_runInWriteTransaction`
+  // property this function is exposed as) go through this - one copy of a
+  // sequence that has needed three separate hardening rounds (4.5's
+  // transaction-completion timing, 4.6's redundant-abort throw, 4.7's
+  // error-precedence rule) rather than two copies a fourth fix would have
+  // to be applied to twice, and might not be.
+  async function _runInWriteTransaction(fn) {
+    await ensure();
+    const tx = db.transaction(
+      [FS_STORE_SUPERBLOCK, FS_STORE_INODES, FS_STORE_DIRENTS, FS_STORE_BLOCKS], 'readwrite');
+    const txStore = _fsIdbTxStore(tx);
+    try {
+      const result = await fn(txStore, sb);
+      // Every request resolving is not the same as the transaction being
+      // durable: IndexedDB only actually applies a transaction's writes
+      // when the transaction itself completes, which - like committing at
+      // all - is a separate event from any one request inside it
+      // succeeding. Returning as soon as the last request's promise
+      // resolved would let a caller (and this backend's own next write)
+      // observe "done" before the write was ever guaranteed to survive.
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(VfsError('EIO', 'IndexedDB transaction aborted'));
+      });
+      return result;
+    } catch (err) {
+      // Two different triggers land here, and only one of them touches an
+      // IDB request at all: a write request failing (disk pressure, quota,
+      // a closed connection) auto-aborts its own transaction the instant
+      // the unhandled error fires, making the abort() below redundant - but
+      // fsAllocBlocks/fsFreeBlocks throwing ENOSPC is a pure in-fiction,
+      // application-level throw with no request involved, so nothing has
+      // aborted anything yet and this abort() is the one doing real work.
+      // Either way, .abort() on a transaction that has already finished
+      // throws InvalidStateError, which is expected on the first path (the
+      // transaction is already in the state this call was trying to put it
+      // in) and swallowed. Anything else abort() throws is a genuinely
+      // different, unexpected problem, and is attached to `err` rather than
+      // thrown in its place - `err` is why the write actually failed and is
+      // what needs to reach vfsFlush's onError and the user; a secondary
+      // cleanup failure must not hide it, but must not be lost either.
+      try { tx.abort(); } catch (e) {
+        if (e.name !== 'InvalidStateError') err.abortError = e;
+      }
+      // fsAllocBlocks/fsFreeBlocks mutate `sb` in memory synchronously,
+      // well before the request that would have persisted it either lands
+      // or fails - so by the time a write fails, `sb` may already disagree
+      // with what is actually durable. A cached copy that survives a
+      // rolled-back transaction is its own corruption source (blocks it
+      // thinks are taken stay invisible to every future allocation), and
+      // it would only surface on whichever write runs after this one.
+      // Discarding it, along with the directory cache built against it,
+      // forces the next ensure() to re-read authoritative state instead of
+      // trusting memory that this transaction never actually committed.
+      // This runs unconditionally - whether abort() threw InvalidStateError,
+      // threw something else, or didn't throw at all - because none of
+      // those outcomes changes the fact that `sb` may no longer be trustworthy.
+      store = null;
+      sb = null;
+      dirInos = new Map();
+      throw err;
+    }
+  }
+
+  return {
+    // The whole reason this backend exists: it writes from ops and has no use
+    // for a whole-tree snapshot.
+    needsSnapshot: false,
+
+    async load() {
+      await ensure();
+      await rebuildDirInos();
+      const tree = await fsReadTree(store);
+      // Returning null asks the VFS to seed the default tree, and getting the
+      // condition for it wrong is destructive in both directions. It takes
+      // BOTH halves, and an earlier version of this used only the first:
+      //
+      //   freshlyCreated alone is wrong. Migration imports into the very
+      //   session that creates the superblock - fsChooseBackend calls
+      //   _store() to force the connection open, THEN migrates, THEN mounts
+      //   this same instance - so on the one boot that matters, a
+      //   freshly-created database already holds the user's entire
+      //   filesystem. Keying off this flag alone threw that tree away and
+      //   showed the seed tree instead, on the first boot after upgrading.
+      //   Their files were still in the database and came back on the next
+      //   reload, which is the only reason this was recoverable at all.
+      //
+      //   An empty tree alone is wrong too. A visitor who deleted everything
+      //   has a real empty drive, and re-seeding it would resurrect files
+      //   they removed on purpose.
+      //
+      // Together they mean what is actually being asked: nothing has ever
+      // been written here, so there is no filesystem to lose by seeding one.
+      if (freshlyCreated && _fsTreeIsEmpty(tree)) return null;
+      return tree;
+    },
+
+    async commit({ ops, readEntry }) {
+      await ensure();
+      const list = ops || [];
+      if (!list.length) return;
+      // A blob op whose bytes could not be read (_vfsReadEntryForCommit's
+      // readFailed) is collected here rather than thrown: the whole point is
+      // that ONE unreadable object URL must not roll back every other op in
+      // the same transaction. Handed back to vfsFlush, which reports each one
+      // through onError - the same "did not persist" channel any other save
+      // failure uses.
+      const failedBlobs = [];
+
+      // Phase 1: no transaction open yet. Resolve every content op's
+      // readEntry up front, because readEntry can await fetch() on a blob's
+      // object URL - non-IDB work that would kill a transaction if it ran
+      // while one was held open. Directory resolution (inoForDir) is IDB
+      // work and happens in phase 2 instead, on the transaction that also
+      // does the writes, so a mkdir and a write into it stay part of the
+      // same atomic batch.
+      const resolved = [];
+      for (const op of list) {
+        if (op.op === 'write' || op.op === 'writeBlob') {
+          resolved.push({ op, entry: readEntry ? await readEntry(op.dirName, op.name) : null });
+        } else {
+          resolved.push({ op, entry: undefined });
+        }
+      }
+
+      // Phase 2: IDB work only, run as one transaction that commits or
+      // rolls back the whole batch as a single unit - not as one
+      // independent transaction per request, which is what let an
+      // interrupted commit leave an inode referencing blocks the free
+      // bitmap still called free, or referencing blocks whose data had
+      // already been deleted out from under it.
+      await _runInWriteTransaction(async (txStore, txSb) => {
+        for (const { op, entry } of resolved) {
+          const parent = await inoForDir(txStore, op.dirName);
+          if (op.op === 'mkdir') {
+            const ino = await fsWriteEntry(txStore, txSb, parent, op.name, { type: 'dir' });
+            const path = op.dirName ? op.dirName + '\\' + op.name : op.name;
+            dirInos.set(path, ino);
+            continue;
+          }
+          if (op.op === 'unlink') {
+            await fsDeleteEntry(txStore, txSb, parent, op.name);
+            continue;
+          }
+          if (op.op === 'rename') {
+            await fsRenameEntry(txStore, parent, op.name, parent, op.newName);
+            continue;
+          }
+          if (op.op === 'move') {
+            const dst = await inoForDir(txStore, op.dstDirName);
+            await fsRenameEntry(txStore, parent, op.name, dst, op.newName);
+            continue;
+          }
+          // write and writeBlob both land here: one allocator, one code path.
+          if (!entry) continue;
+          if (entry.kind === 'blob') {
+            if (entry.readFailed) {
+              // Do not write anything for this op: for a rewrite, that
+              // leaves the existing inode and its blocks exactly as they
+              // were; for a brand-new path, it leaves no dirent at all
+              // rather than a phantom zero-byte one. Either way this is
+              // strictly better than persisting `readFailed`'s unknown bytes
+              // as if they were the file's real, empty content.
+              failedBlobs.push({ dirName: op.dirName, name: op.name });
+              continue;
+            }
+            await fsWriteEntry(txStore, txSb, parent, op.name, {
+              type: 'blob',
+              bytes: entry.bytes || new Uint8Array(0),
+              // `url` is deliberately not persisted: an object URL is dead on
+              // the next boot. It is rebuilt from these bytes on load.
+              meta: { kind: entry.blob && entry.blob.kind, mime: entry.blob && entry.blob.mime },
+            });
+          } else {
+            await fsWriteEntry(txStore, txSb, parent, op.name, {
+              type: 'file', bytes: fsEncodeText(entry.text || ''),
+            });
+          }
+        }
+        await txStore.put(FS_STORE_SUPERBLOCK, 'sb', txSb);
+      });
+      return { failedBlobs };
+    },
+
+    async estimate() {
+      try {
+        const est = await navigator.storage.estimate();
+        return { usage: Number(est.usage) || 0, quota: Number(est.quota) || Infinity };
+      } catch (e) {
+        return { usage: 0, quota: Infinity };
+      }
+    },
+
+    // Read by the fragmentation code in Task 7. Exposed on the backend rather
+    // than through a global so there is exactly one owner of the superblock.
+    async _readInodes() {
+      await ensure();
+      return (await store.scan(FS_STORE_INODES)).map(([, inode]) => inode);
+    },
+    get _superblock() { return sb; },
+
+    // The read half of blob persistence (Task 9a) - fsReadTree only ever
+    // hands back a blob's metadata, never its bytes, and this is what a
+    // caller (os/blob-store.js, once Task 9b wires it in) uses to fetch them
+    // lazily, on demand, rather than loading every image, video and audio
+    // file into memory at boot the way the base64 mirror's atob pass does.
+    // Goes through the one-off _fsIdbStore() read store, same as
+    // _readInodes above, not _runInWriteTransaction: this opens no write
+    // transaction, so a failed or missing read has no cache to discard.
+    async _readBlobBytes(dirName, name) {
+      await ensure();
+      return await fsReadBlobBytesAtPath(store, sb, dirName, name);
+    },
+
+    // Migration (os/fs-migrate.js) writes through the same store this
+    // backend owns, rather than opening its own connection. Two connections
+    // to one database is how a migration ends up racing the boot that
+    // triggered it.
+    async _store() { await ensure(); return store; },
+
+    // Closes THIS backend's own IndexedDB connection. Deliberately narrow:
+    // call this only from migration's abort path (fs-migrate.js), right
+    // before deleting the database, never from an ordinary commit failure.
+    // deleteDatabase() defers behind onblocked for as long as ANY
+    // connection stays open, including this backend's own - closing it here
+    // is what lets migration's cleanup delete actually complete instead of
+    // hanging on a connection it forgot it was still holding. An ordinary
+    // commit failure has no reason to give up the connection at all: the
+    // backend is expected to keep working afterward, and ensure()'s cheap
+    // early return (`if (store) return;`) depends on `store` staying set for
+    // the backend's whole normal lifetime.
+    //
+    // Nulls sb/dirInos too, matching the discard in _runInWriteTransaction's
+    // catch: a closed connection makes both just as untrustworthy as a
+    // rolled-back transaction does, even though nothing reachable today
+    // calls _close() and then keeps using this backend without going through
+    // ensure() again first.
+    async _close() {
+      if (db) db.close();
+      db = null;
+      store = null;
+      sb = null;
+      dirInos = new Map();
+    },
+
+    // Runs a whole batch of writes as ONE transaction - exposed here for
+    // migration (os/fs-migrate.js), which needs this because commit() itself
+    // isn't the right vehicle: migration doesn't have `ops` to hand it, and
+    // importing an entire localStorage tree through commit()'s per-op
+    // readEntry/write-phase split would mean a mid-import failure leaves
+    // whatever files landed before it sitting in the live store as a real,
+    // readable, half-imported filesystem - exactly the outcome migration
+    // exists to rule out. commit() above runs through this very same
+    // function.
+    _runInWriteTransaction,
+  };
+}
+// One-shot import of a phase 2 localStorage filesystem into the block layer.
+//
+// Two rules govern everything here:
+//
+//   1. The old localStorage keys are LEFT IN PLACE for one release. A failed
+//      migration is then recoverable and re-runnable, and a visitor whose
+//      import went wrong still has their files.
+//   2. A failure partway DELETES THE INDEXEDDB DATABASE ENTIRELY. A
+//      half-migrated filesystem is worse than an unmigrated one: the next boot
+//      would read it, find some of the files, and quietly present that as the
+//      whole disk.
+//
+// This function never throws. A caller booting the OS cannot usefully handle
+// an exception here, and an unhandled one would stop the desktop rendering, so
+// every outcome comes back as a value.
+//
+// DURABILITY, decided before any of this was written: the whole import -
+// every file and directory, and marking the superblock migrated - runs
+// inside ONE read-write transaction (backend._runInWriteTransaction, in
+// os/storage-idb.js), not one write per request the way an earlier draft of
+// this file did. Per-request writes would still never LOSE anything -
+// localStorage is never touched until `migrated` is set, and a re-run
+// converges: fsWriteEntry reuses an existing dirent's ino and frees its old
+// blocks before allocating new ones, so a second attempt reclaims whatever
+// its interrupted predecessor took rather than piling on top of it. But a
+// partial database sitting between a tab close and the next boot's retry is
+// momentarily READABLE: load() returns whatever tree is there once the
+// superblock is not freshly created this session, with no way to tell "this
+// is the real, complete filesystem" from "this is half an import". One
+// transaction closes that window rather than relying on convergence to make
+// it harmless: either the whole import becomes visible at once, or none of
+// it does.
+const FS_MIGRATE_SOURCE_KEY = 'sleepOS-fs';
+
+async function fsMigrateFromLocalStorage(backend, options) {
+  options = options || {};
+  if (!fsIdbAvailable()) return { migrated: false, reason: 'no-indexeddb' };
+
+  // Open the store FIRST. createIdbBackend builds its superblock lazily inside
+  // ensure(), so reading backend._superblock before this point returns null,
+  // the already-migrated check silently passes, and a second boot re-imports
+  // the whole tree over the top of itself.
+  try { await backend._store(); } catch (e) { return { migrated: false, reason: 'no-indexeddb' }; }
+
+  const sb = backend._superblock || null;
+  if (sb && sb.migrated) return { migrated: false, reason: 'already-migrated' };
+
+  let raw = null;
+  try { raw = localStorage.getItem(FS_MIGRATE_SOURCE_KEY); } catch (e) { raw = null; }
+  if (!raw) {
+    await _fsMarkMigrated(backend);
+    return { migrated: false, reason: 'nothing-to-migrate' };
+  }
+
+  let tree = null;
+  try { tree = JSON.parse(raw); } catch (e) { tree = null; }
+  if (!tree || typeof tree !== 'object') {
+    // Deliberately NOT marked migrated. The data is unreadable now, but the
+    // key is still there, and a future release with a repair path should get
+    // the chance to try again rather than find the door already closed.
+    return { migrated: false, reason: 'unreadable' };
+  }
+
+  // Collected before the transaction opens, not inside it. Reading a Blob's
+  // bytes and reading the legacy media database are both awaits that are not
+  // requests on our own transaction, and either would let it auto-commit
+  // underneath the import. See _fsCollectLegacyBlobs.
+  const { blobs, skipped: blobsSkipped } = await _fsCollectLegacyBlobs();
+
+  try {
+    // The import and marking `migrated` both happen inside this one
+    // transaction. Splitting them - import first, mark migrated as a
+    // separate write afterward - would reopen exactly the window this whole
+    // design exists to close: a tab closing in the gap between them leaves a
+    // complete, correctly-written filesystem sitting there with `migrated`
+    // still false, so the next boot would re-run the entire import over it
+    // rather than simply finding it already done.
+    //
+    // The blobs go in the same transaction for the same reason: a visitor's
+    // media and their tree are one filesystem, and half of it appearing is
+    // the state rule 2 exists to prevent.
+    await backend._runInWriteTransaction(async (store, txSb) => {
+      await _fsImportNode(store, txSb, tree, 0, options.onProgress);
+      await _fsImportBlobs(store, txSb, blobs, options.onProgress);
+      txSb.migrated = true;
+      await store.put(FS_STORE_SUPERBLOCK, 'sb', txSb);
+    });
+    return { migrated: true, reason: 'ok', blobsImported: blobs.length, blobsSkipped };
+  } catch (err) {
+    // Rule 2. Destroy the partial database before anything can read it.
+    //
+    // Close THIS backend's own connection first. deleteDatabase() defers
+    // behind onblocked for as long as any connection to the database stays
+    // open - including ours - and without this the delete below would never
+    // resolve at all rather than fail: real IndexedDB does not time out or
+    // reject a blocked delete on its own, it just waits.
+    //
+    // Closing our connection is not a guarantee the delete will succeed:
+    // IndexedDB is per-origin, so another tab can hold a connection open
+    // regardless of anything this function does. `databaseDeleted` records
+    // which actually happened, because the two outcomes are materially
+    // different - not just "did the delete API call resolve" bookkeeping.
+    // A successful delete means the partial database is really gone; a
+    // blocked one means it is still sitting there, unreachable through
+    // `migrated` (still false, so the next boot's retry will converge over
+    // it) but not actually destroyed. A caller that cannot tell those apart
+    // would report a clean abort when a partial database is still on disk.
+    let databaseDeleted = true;
+    try {
+      await backend._close();
+      await fsIdbDeleteDatabase();
+    } catch (e) {
+      databaseDeleted = false;
+    }
+    return {
+      migrated: false,
+      reason: 'failed',
+      databaseDeleted,
+      error: (err && err.message) || String(err),
+    };
+  }
+}
+
+// Only reached when there is nothing to import (no key) or migration has
+// already run - a real import marks migrated as the last step of its own
+// transaction instead (see fsMigrateFromLocalStorage above), so this never
+// needs to coordinate with any in-flight write.
+async function _fsMarkMigrated(backend) {
+  const sb = backend._superblock;
+  if (!sb) return;
+  await backend._runInWriteTransaction(async (store, txSb) => {
+    txSb.migrated = true;
+    await store.put(FS_STORE_SUPERBLOCK, 'sb', txSb);
+  });
+}
+
+// Depth-first, directories before their contents, so a child always has a
+// parent ino to attach to. Takes the transaction-scoped store and superblock
+// directly rather than fetching them itself, so every write in the walk -
+// however deep the recursion goes - lands on the SAME transaction
+// fsMigrateFromLocalStorage opened, never a fresh one per call.
+//
+// NOTE ON BLOBS, so nobody "fixes" their absence: this walks files, dirs and
+// subdirs and nothing else, because that is all the source data has.
+// _vfsSerNode (os/vfs.js:160-165) serializes exactly { dirs, files, subdirs }
+// - the snapshot in localStorage has never contained blobs. Image and video
+// bytes live in os/blob-store.js under its own keys. Migrating those is a
+// separate concern and is not in this task.
+//
+// onProgress is called but never awaited: this entire walk runs inside one
+// IndexedDB transaction, and it is the AWAITING, not the yielding an async
+// callback would do on its own, that would put non-IDB work on the critical
+// path and risk the transaction going inactive - the same reason
+// commit()'s readEntry resolution had to move into its own phase before any
+// transaction opens. Because this call is never awaited, an async
+// onProgress does not break anything; it is simply fire-and-forgotten, its
+// own promise left to settle on its own time, off this transaction's path
+// entirely.
+async function _fsImportNode(store, sb, node, parentIno, onProgress) {
+  for (const [name, text] of Object.entries((node && node.files) || {})) {
+    await fsWriteEntry(store, sb, parentIno, name, {
+      type: 'file', bytes: fsEncodeText(text),
+    });
+    if (onProgress) onProgress(name);
+  }
+
+  for (const name of (node && node.dirs) || []) {
+    const ino = await fsWriteEntry(store, sb, parentIno, name, { type: 'dir' });
+    const child = ((node.subdirs || {})[name]) || { dirs: [], files: {}, subdirs: {} };
+    await _fsImportNode(store, sb, child, ino, onProgress);
+  }
+}
+
+// ── Legacy blob import ────────────────────────────────────────────
+//
+// The tree snapshot under FS_MIGRATE_SOURCE_KEY contains NO blobs at all -
+// vfsSerializeTree omits them deliberately, because a blob's in-memory record
+// is an object URL and persisting one would produce a dead string. Before
+// phase 4 the bytes lived in two other places instead, and tasks 9e/9f deleted
+// the code that read them. So importing only the snapshot silently dropped
+// every image, video and sound a visitor had ever uploaded - the tree would
+// come across intact and the media would simply be gone.
+//
+// These two constants are the only remaining description of that old format,
+// and this is the right place for them: they are legacy knowledge used once,
+// by the importer, and nothing else in the OS should learn them again.
+const FS_MIGRATE_BLOB_PREFIX = 'sleepOS-blob:';
+const FS_MIGRATE_MEDIA_DB = 'sleepOS-media';
+const FS_MIGRATE_MEDIA_STORE = 'blobs';
+
+function _fsSplitLegacyBlobPath(path) {
+  const clean = String(path || '').replace(/\//g, '\\').replace(/^\\+|\\+$/g, '');
+  const lastSlash = clean.lastIndexOf('\\');
+  return {
+    dirPath: lastSlash === -1 ? '' : clean.slice(0, lastSlash),
+    name: lastSlash === -1 ? clean : clean.slice(lastSlash + 1),
+  };
+}
+
+function _fsB64ToBytes(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+// Reads the legacy media IndexedDB. Resolves to [] rather than rejecting for
+// every failure mode including "the database does not exist", which is the
+// normal case for a visitor who never uploaded anything.
+async function _fsReadLegacyMediaRows() {
+  if (!fsIdbAvailable()) return [];
+  return new Promise(resolve => {
+    let req;
+    try { req = indexedDB.open(FS_MIGRATE_MEDIA_DB, 1); } catch (e) { return resolve([]); }
+    // Opening at version 1 CREATES the database if it is absent, which would
+    // then have no object store. Handled by the contains() check below rather
+    // than by trying to avoid the creation: there is no way to ask IndexedDB
+    // "does this exist" that is available everywhere.
+    req.onupgradeneeded = () => {
+      try { req.transaction.abort(); } catch (e) {}
+    };
+    req.onerror = req.onblocked = () => resolve([]);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(FS_MIGRATE_MEDIA_STORE)) {
+        try { db.close(); } catch (e) {}
+        return resolve([]);
+      }
+      try {
+        const tx = db.transaction(FS_MIGRATE_MEDIA_STORE, 'readonly');
+        const all = tx.objectStore(FS_MIGRATE_MEDIA_STORE).getAll();
+        all.onsuccess = () => { try { db.close(); } catch (e) {} resolve(all.result || []); };
+        all.onerror = () => { try { db.close(); } catch (e) {} resolve([]); };
+      } catch (e) {
+        try { db.close(); } catch (e2) {}
+        resolve([]);
+      }
+    };
+  });
+}
+
+// Every legacy blob, keyed by path, with its bytes already resolved. Runs
+// BEFORE the import transaction opens, and must: reading a Blob's bytes and
+// reading another IndexedDB database are both async work that is not a request
+// on the migration's own transaction, and awaiting either would let that
+// transaction auto-commit underneath us. This is the same shape commit()
+// (os/storage-idb.js) uses for the same reason.
+//
+// Best-effort per entry. One unreadable row must not cost a visitor the rest
+// of their media, and it must not cost them the text tree either - the count
+// of what could not be read comes back in the migration result instead, and
+// the legacy keys stay on disk for a release, so a later fix can retry.
+async function _fsCollectLegacyBlobs() {
+  const found = new Map();   // 'dir\\name' -> { dirPath, name, kind, size, mime, bytes }
+  let skipped = 0;
+
+  // localStorage first, so the media DB can overwrite it: the base64 copy was
+  // only ever written for files under 3 MB, so where both exist the media row
+  // is the one guaranteed to hold the whole file.
+  let keys = [];
+  try { keys = Object.keys(localStorage).filter(k => k.startsWith(FS_MIGRATE_BLOB_PREFIX)); } catch (e) { keys = []; }
+  for (const key of keys) {
+    try {
+      const { kind, size, mime, b64 } = JSON.parse(localStorage.getItem(key));
+      const { dirPath, name } = _fsSplitLegacyBlobPath(key.slice(FS_MIGRATE_BLOB_PREFIX.length));
+      if (!name) continue;
+      found.set(dirPath + '\\' + name, { dirPath, name, kind, size, mime, bytes: _fsB64ToBytes(b64) });
+    } catch (e) { skipped++; }
+  }
+
+  for (const row of await _fsReadLegacyMediaRows()) {
+    try {
+      const { dirPath, name } = _fsSplitLegacyBlobPath(row && row.path);
+      if (!name || !row.blob) continue;
+      const bytes = new Uint8Array(await row.blob.arrayBuffer());
+      found.set(dirPath + '\\' + name, { dirPath, name, kind: row.kind, size: row.size, mime: row.mime, bytes });
+    } catch (e) { skipped++; }
+  }
+
+  return { blobs: [...found.values()], skipped };
+}
+
+async function _fsImportBlobs(store, sb, blobs, onProgress) {
+  for (const blob of blobs) {
+    // Creates the directory if the tree snapshot did not name it: losing the
+    // file would be the worse failure, and an empty directory is harmless.
+    const parentIno = await fsResolveOrCreateDirIno(store, sb, blob.dirPath);
+    await fsWriteEntry(store, sb, parentIno, blob.name, {
+      type: 'blob',
+      bytes: blob.bytes,
+      // Matches what os/storage-idb.js's commit() writes for a blob, and what
+      // fsReadTree reads back out as the tree's blob record.
+      meta: { kind: blob.kind, mime: blob.mime },
+    });
+    if (onProgress) onProgress(blob.name);
+  }
 }
 // The kernel owns the process table and the filesystem. Processes run in Workers
 // and never touch storage; every path they name arrives here as a syscall. That
@@ -3153,23 +4504,13 @@ function _uniqueNameIn(dirName, name) {
 // the source directory; see pasteClipboardInto. Without that check this
 // recursion never terminates, because vfsListSync(srcPath) rediscovers the
 // copy it just made one level up.
-//
-// trackFragmentation is off on all three writes because the paste this
-// replaces touched the DEFRAG meter zero times, and task 8 is a refactor under
-// a behavior-identical constraint. Whether a copy should fragment the drive is
-// a product decision, not this migration's to make.
 async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
   if (kind === 'dir') {
     // Recurse under the name vfsMkdir ACTUALLY created, not the one we asked
     // for. Directory names are uppercased in the tree, and _uniqueNameIn
     // returns mixed case ('PHOTOS_copy'), so building the path from dstName
-    // sent every nested blob-store row to 'PHOTOS_copy\...' while the tree held
-    // 'PHOTOS_COPY'. removeBlobEntry, moveBlobEntryStorage and
-    // moveBlobStorageSubtree all key off vfsStatSync().dirName, which is
-    // normalized, so those rows could never be found again: deleting the file
-    // left them behind and the next boot restored the image the user had
-    // permanently deleted.
-    const made = await vfsMkdir(dstName, dstCwd, { trackFragmentation: false });
+    // would resolve to a name the tree never actually used.
+    const made = await vfsMkdir(dstName, dstCwd);
     const srcPath = srcCwd ? srcCwd + '\\' + name : name;
     const dstPath = dstCwd ? dstCwd + '\\' + made.fileName : made.fileName;
     for (const entry of vfsListSync(srcPath)) {
@@ -3178,20 +4519,30 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
   } else if (kind === 'blob') {
     const st = vfsStatSync(name, srcCwd);
     if (st && st.blob) {
-      // A copied blob needs its own row in the blob store and its own object
-      // URL. Sharing the source's URL means deleting either entry revokes the
-      // other one's bytes, and with no store row under the new path the copy
-      // is gone entirely on the next boot - blobs are never in the VFS
-      // snapshot. Falls back to sharing the URL only when there is nothing
-      // stored to copy (a seeded blob), which is what the old code always did.
+      // A copy needs its own independent object URL - sharing the source's
+      // means deleting either entry revokes the other one's bytes (removeFsPath
+      // and purgeFsDirNode both revoke the exact URL they were handed). Task
+      // 9e/9f deleted the blob-store mirror this used to lean on for a spare
+      // copy of the bytes; re-fetching the source's live URL and minting a
+      // fresh Blob from it gets the same independence directly, with no
+      // separate store involved - vfsWriteBlob below queues the usual commit
+      // that persists these bytes to blocks under the new path.
       const record = { ...st.blob };
-      const url = await copyBlobEntryStorage(srcCwd, name, dstCwd, dstName);
-      if (url) record.url = url;
-      await vfsWriteBlob(dstName, record, dstCwd, { trackFragmentation: false });
+      if (record.url) {
+        try {
+          const bytes = await (await fetch(record.url)).arrayBuffer();
+          record.url = URL.createObjectURL(new Blob([bytes], { type: record.mime || 'application/octet-stream' }));
+        } catch (e) {
+          // Unreachable (a seeded item's external URL is CORS-blocked, or the
+          // source URL was already revoked): fall back to sharing the
+          // source's URL, same as the old code's seeded-blob case.
+        }
+      }
+      await vfsWriteBlob(dstName, record, dstCwd);
     }
   } else {
     const content = await vfsReadFile(name, srcCwd);
-    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd, { trackFragmentation: false });
+    await vfsWriteFile(dstName, content == null ? '' : content, dstCwd);
   }
 }
 
@@ -3224,17 +4575,8 @@ async function pasteClipboardInto(dstCwd) {
       if (cut) {
         const movedName = await vfsMove(srcCwd, name, dstCwd, dstName);
         if (!movedName) continue;
-        // vfsMove only touches the in-memory tree; the blob store is keyed by
-        // path and is the caller's job to keep in sync, same as
-        // moveFsItemByPath does today.
-        if (st.kind === 'blob') {
-          moveBlobEntryStorage(srcCwd, name, dstCwd, movedName);
-        } else if (st.kind === 'dir') {
-          moveBlobStorageSubtree(
-            srcCwd ? srcCwd + '\\' + name : name,
-            dstCwd ? dstCwd + '\\' + movedName : movedName
-          );
-        }
+        // vfsMove already queues the block-layer's own move op - nothing
+        // further to keep in sync.
       } else {
         // A copy into the source's own subtree would recurse without bound:
         // _copyEntryInto re-lists the source on every level and would keep
@@ -3523,6 +4865,17 @@ function vfsSeedTree() {
         '  process ends, so a new terminal starts from the',
         '  system defaults and forgets your PATH edits.',
         '',
+        '── DISK ─────────────────────────────────────',
+        '  The drive is a real block device now: 4 KB',
+        '  blocks, a real allocator, and a fragmentation',
+        '  figure measured from the allocation map rather',
+        '  than guessed at.',
+        '',
+        '  Files you made before the upgrade were copied',
+        '  across on first boot. The old copy is kept for',
+        '  one release, so nothing is lost if the copy',
+        '  went wrong.',
+        '',
         '── SYSTEM ───────────────────────────────────',
         '  VER                  OS version',
         '  WHO, WHOAMI          current user',
@@ -3739,27 +5092,14 @@ vfsSetTree(vfsSeedTree());
 function fsNormalizeDir(name) { return vfsNormalizeDir(name); }
 function fsSplitPath(path, fallbackDir) { return vfsSplitPath(path, fallbackDir); }
 
-function calcTextFragmentationDelta(prevValue, nextValue, created) {
-  if (prevValue === nextValue) return 0;
-  const prevLen = String(prevValue ?? '').length;
-  const nextLen = String(nextValue ?? '').length;
-  const contentWeight = Math.max(nextLen, Math.abs(nextLen - prevLen));
-  return Math.min(0.035, (created ? 0.014 : 0.009) + Math.min(0.018, contentWeight / 18000));
-}
-
-function calcBlobFragmentationDelta(size, created) {
-  return Math.min(0.04, (created ? 0.016 : 0.01) + Math.min(0.02, Math.max(0, Number(size) || 0) / 180000));
-}
-
-function calcRemovalFragmentationDelta(kind, payload) {
-  if (kind === 'dir') return 0.007;
-  if (kind === 'blob') return Math.min(0.026, 0.009 + Math.min(0.014, Math.max(0, Number(payload) || 0) / 220000));
-  return Math.min(0.022, 0.008 + Math.min(0.012, String(payload ?? '').length / 22000));
-}
-
-
 // ── Filesystem persistence ────────────────────────────────────────
 const DRIVE_STATE_KEY = 'sleepOS-drive-state';
+// Pre-phase-2. Read exactly once, by createDriveStateDefaults(true), and only
+// when DRIVE_STATE_KEY is absent - so for any profile that has booted since,
+// it can never be read again. It was also being rewritten on every defrag pass,
+// a mirror with no reader, which is the same shape as the blob mirrors tasks 9e
+// and 9f deleted. The write is gone; the read stays one more release so a
+// returning visitor keeps their "Last defrag" time.
 const LEGACY_DEFRAG_KEY = 'sleepOS-defrag-time';
 
 function _serDir(d) {
@@ -3783,9 +5123,13 @@ function _desDir(o) {
 const SEEDED_DOCS_DATA = _serDir(vfsGetTree().subdirs.get('DOCS'));
 
 // Mutates the tree directly and deliberately queues no op. Unlike the legacy
-// call sites this is not a persistence bug: vfsBootMount runs it on every boot
-// from a constant, so its effect is regenerated rather than restored. Adding
-// schedSave() here would commit a snapshot on every cold boot for no gain.
+// call sites this is not a persistence bug: vfsBootMount runs this from a
+// constant on every boot, so its effect is regenerated rather than restored,
+// and there is nothing here that needs a commit to survive. If a later real
+// write is the first thing to ever target DOCS, the backend's inoForDir
+// (os/storage-idb.js) creates the directory on demand rather than requiring
+// a prior mkdir op to have reserved its ino - so skipping a commit here
+// leaves nothing dangling for that write to find missing.
 function refreshSeededDocs() {
   const root = vfsGetTree();
   root.dirs.add('DOCS');
@@ -3841,32 +5185,9 @@ function refreshSeededHomeMedia() {
 
 function saveFS() { return vfsFlush(); }
 
-// Two call sites still mutate the shared tree directly rather than going
-// through vfsWriteFile/vfsMkdir: os/daemon.js ensureFsDir and
-// ensureStoryTextFile. A direct mutation never touches the VFS's own op queue,
-// so vfsFlush would see nothing to commit and vfsHasPendingWrites would report
-// false even though the tree changed underneath it. Queue a marker op so both
-// stay correct - this is the same debounced commit the old schedSave/saveFS
-// pair provided, just routed through the VFS. Retiring these two is tracked
-// separately; converting ensureStoryTextFile is not a one-liner, because
-// syncDaemonStoryFiles must stay synchronous and vfsWriteFile fragments the
-// drive by default.
-function schedSave() {
-  if (typeof _vfsQueue === 'function') _vfsQueue({ op: 'legacy-write' }, 0);
-}
-
-function computeLegacyFragLevel(ms) {
-  if (ms === null) return 0.68;
-  const hours = ms / 3600000;
-  if (hours < 0.01) return 0.02;
-  return Math.min(0.9, 0.02 + 0.88 * Math.pow(hours / 168, 0.38));
-}
-
 function createDriveStateDefaults(fromLegacy) {
   const legacyTs = fromLegacy ? parseInt(localStorage.getItem(LEGACY_DEFRAG_KEY) || '0', 10) || 0 : 0;
-  const msSince = legacyTs ? Date.now() - legacyTs : null;
   return {
-    level: computeLegacyFragLevel(msSince),
     lastDefragTs: legacyTs,
     changeCount: 0,
     lastMutationTs: 0,
@@ -3875,7 +5196,6 @@ function createDriveStateDefaults(fromLegacy) {
 
 function normalizeDriveState(saved) {
   const next = Object.assign(createDriveStateDefaults(false), saved || {});
-  next.level = Math.max(0.02, Math.min(0.92, Number(next.level) || 0.68));
   next.lastDefragTs = Math.max(0, Math.trunc(Number(next.lastDefragTs) || 0));
   next.changeCount = Math.max(0, Math.trunc(Number(next.changeCount) || 0));
   next.lastMutationTs = Math.max(0, Math.trunc(Number(next.lastMutationTs) || 0));
@@ -3896,39 +5216,131 @@ function saveDriveState() {
 
 let defragState = loadDriveState();
 
+// Fragmentation used to be a number nudged by hand-tuned deltas on every
+// write, clamped to 0.02-0.92, and persisted to localStorage. Nothing measured
+// anything: DEFRAG.exe animated against a fiction and the deltas existed only
+// to make the fiction drift.
+//
+// It is now computed from the real allocation map: the number of extra block
+// runs beyond the one run per file that is unavoidable, over the most extra
+// runs those same blocks could have had. It is cached because reading it walks
+// every inode and SYSMON asks often; fsRefreshFragmentation() is what
+// recomputes.
+var fsFragmentationLevel = 0;
+
 function getDriveFragmentationLevel() {
-  return Math.max(0.02, Math.min(0.92, Number(defragState?.level) || 0.68));
+  return fsFragmentationLevel;
 }
 
 function getDriveOptimizationPercent() {
   return Math.round((1 - getDriveFragmentationLevel()) * 100);
 }
 
-function increaseDriveFragmentation(amount, options) {
-  const delta = Number(amount) || 0;
-  if (!(delta > 0)) return getDriveFragmentationLevel();
-  defragState.level = Math.min(0.92, getDriveFragmentationLevel() + delta);
-  defragState.changeCount = Math.max(0, Math.trunc(Number(defragState.changeCount) || 0)) + 1;
-  defragState.lastMutationTs = Date.now();
-  saveDriveState();
-  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
-  return defragState.level;
+// Recompute from the allocation map. Only the IndexedDB backend has one; on
+// the localStorage fallback there are no blocks to measure, so the honest
+// answer is 0 rather than an invented number.
+async function fsRefreshFragmentation() {
+  if (fsGetActiveBackendKind() !== 'idb') { fsFragmentationLevel = 0; return 0; }
+  try {
+    const backend = vfsGetBackend();
+    const inodes = backend && backend._readInodes ? await backend._readInodes() : [];
+    fsFragmentationLevel = fsComputeFragmentation(inodes);
+  } catch (e) {
+    // Leave the last known value rather than reporting a drop that did not
+    // happen. A transient read failure is not a defragmentation.
+  }
+  return fsFragmentationLevel;
 }
 
-function optimizeDriveFragmentation(options) {
-  const targetLevel = Math.max(0.02, Math.min(0.12, Number(options?.targetLevel) || 0.06));
-  defragState.level = targetLevel;
+// DEFRAG.exe calls this when the user runs an optimization pass. It records
+// when the pass happened, which is what the "Last defrag" line reads, and then
+// recomputes from the allocation map.
+//
+// It does NOT yet move any blocks, so the number it recomputes will barely
+// change. That is deliberate and it is honest: actually rewriting blocks into
+// contiguous runs is phase 5's job, per the master spec's phase order.
+//
+// The returned level is what DEFRAG.exe renders. It briefly did not: this
+// function stopped honouring the targetLevel option its one caller passed, and
+// that caller went on painting a hardcoded "Fragmentation: 2%" of its own, so
+// the fake post-defrag drop survived in the UI after being deleted from the
+// model. Inventing that number is the exact fiction this phase exists to
+// delete, so the option is gone rather than ignored.
+async function optimizeDriveFragmentation(options) {
   defragState.lastDefragTs = Date.now();
   saveDriveState();
-  try { localStorage.setItem(LEGACY_DEFRAG_KEY, String(defragState.lastDefragTs)); } catch (e) {}
+  const level = await fsRefreshFragmentation();
   if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
-  return defragState.level;
+  return level;
+}
+
+// Which backend actually mounted. SYSMON reports it, and Task 7's
+// fragmentation reads the real bitmap only when it is 'idb'.
+var fsActiveBackendKind = 'local';
+function fsGetActiveBackendKind() { return fsActiveBackendKind; }
+
+// Pick the filesystem backend, and migrate on the first boot that finds one.
+//
+// IndexedDB is not guaranteed: private browsing, disabled storage, and a
+// database that simply refuses to open are all real. None of them may stop the
+// desktop appearing, so every failure path here ends at the localStorage
+// backend the OS shipped with. A visitor in that state keeps a working, if
+// smaller, filesystem and loses nothing.
+async function fsChooseBackend() {
+  if (!fsIdbAvailable()) return { backend: createLocalStorageBackend(), kind: 'local' };
+  try {
+    const backend = createIdbBackend();
+    // Force the connection open now rather than on the first write, so a
+    // refusal is caught here where there is still a fallback to take.
+    // (estimate() never touches the database - it only calls
+    // navigator.storage.estimate() and swallows every error - so it cannot do
+    // this on its own. _store() is what actually opens the connection via
+    // ensure(), and is what can throw here.)
+    await backend._store();
+    const result = await fsMigrateFromLocalStorage(backend);
+    if (result.reason === 'failed') {
+      // Boot from localStorage exactly as before and try again next time.
+      //
+      // Migration's abort path tries to destroy the database, but it can fail
+      // to - another tab holding a connection blocks the delete, and it fails
+      // fast rather than hanging (result.databaseDeleted records which
+      // happened). Deliberately not branching on that here: the import runs as
+      // ONE transaction, so a failed import commits no content at all, and
+      // whatever database survives holds nothing but the superblock ensure()
+      // wrote when it opened. `migrated` stays false either way, so the next
+      // boot re-imports over it and converges. The delete is defensive
+      // cleanup, not a correctness requirement - which is exactly why a
+      // blocked one is safe to ignore.
+      return { backend: createLocalStorageBackend(), kind: 'local' };
+    }
+    return { backend, kind: 'idb' };
+  } catch (e) {
+    return { backend: createLocalStorageBackend(), kind: 'local' };
+  }
 }
 
 // Async boot entry point. Called from the BIOS sequence before startDesktop.
 async function vfsBootMount() {
-  await vfsMount(createLocalStorageBackend(), {
-    onChange: () => { document.dispatchEvent(new CustomEvent('fs-changed')); },
+  const chosen = await fsChooseBackend();
+  fsActiveBackendKind = chosen.kind;
+  await vfsMount(chosen.backend, {
+    onChange: () => {
+      document.dispatchEvent(new CustomEvent('fs-changed'));
+    },
+    // Recompute here, not from onChange. onChange fires the instant an op is
+    // queued - up to 400ms before the debounced vfsFlush() actually commits
+    // it - and fsRefreshFragmentation() reads backend._readInodes(), which
+    // only ever sees durably committed IndexedDB state. Computing from
+    // onChange reads that state before the write which triggered the
+    // recompute has landed, so the cached number is stale by one commit and
+    // nothing corrects it until an unrelated later write or a reload happens
+    // to come along. onCommit fires only once the commit that produced `ops`
+    // has actually landed, so the read is of the state it just produced.
+    // Deliberately not awaited: vfsFlush never awaits onCommit, and a
+    // rejected promise here must not surface as an unhandled rejection.
+    onCommit: () => {
+      void fsRefreshFragmentation();
+    },
     onError: err => { reportVfsError(err); },
     seed: root => {
       if (!root.dirs.size && !root.files.size) {
@@ -3943,11 +5355,12 @@ async function vfsBootMount() {
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);
-  loadBlobsFromStorage();
+  void loadBlobsFromBlocks();
   // The load-time syncDaemonStory ran against the seed tree, which the mount
   // then replaced. Re-run it against the real tree so the story files and the
   // registry pointers agree. Same shape as the ensureFsDir call above.
   syncDaemonStory({ silent: true });
+  await fsRefreshFragmentation();
 }
 
 // A late commit failure has no call stack to propagate into, so it surfaces
@@ -3969,18 +5382,45 @@ function reportVfsError(err) {
   else console.warn('sleepOS:', msg);
 }
 
-// beforeunload cannot await, and a pending commit sits behind a 400ms
-// debounce, so `void vfsFlush()` here would silently drop up to 400ms of the
-// user's work on close. The old saveFS wrote synchronously and always landed;
-// losing that would be a data-loss regression in the one phase that exists to
-// stop silently losing data.
+// Start the commit as the page goes away, rather than waiting out the rest of
+// the 400ms debounce. IndexedDB cannot be written synchronously at all, so
+// there is nothing to do from beforeunload on that path; visibilitychange is
+// the earlier signal, and it fires while the page is still alive and
+// scriptable, which beforeunload does not reliably do on mobile.
 //
-// localStorage.setItem is synchronous, so write the snapshot directly. This
+// This buys the commit more time. It does not make it durable: vfsFlush is
+// async and the page can still be killed mid-commit, so this narrows the
+// window rather than closing it.
+//
+// Deliberately not gated on backend kind - committing early is right for
+// both. Firing on ordinary tab switches and minimises costs nothing either:
+// vfsFlush early-returns when no ops are pending, and when ops ARE pending
+// the commit was going to happen within 400ms regardless.
+function fsFlushOnHidden() {
+  if (document.visibilityState !== 'hidden') return;
+  void vfsFlush();
+}
+document.addEventListener('visibilitychange', fsFlushOnHidden);
+
+// The localStorage backend's last-ditch save. beforeunload cannot await, and a
+// pending commit sits behind a 400ms debounce, so `void vfsFlush()` here would
+// silently drop up to 400ms of the user's work on close. localStorage.setItem
+// is synchronous and does land, so write the snapshot directly. This
 // deliberately reaches past the backend interface: it is the only place that
-// does, and it is correct only because phase 2's backend is localStorage.
-// PHASE 4 MUST REVISIT THIS - IndexedDB cannot be written synchronously at
-// all, and the answer there is flushing on `visibilitychange` instead.
-window.addEventListener('beforeunload', () => {
+// does, and it is correct only for the backend whose storage this actually is.
+//
+// Hence the backend-kind gate. Under IndexedDB this write is not merely
+// useless, it is destructive: LOCAL_FS_KEY (os/storage-local.js) and
+// FS_MIGRATE_SOURCE_KEY (os/fs-migrate.js) are the same string, 'sleepOS-fs'.
+// Migration leaves that key in place for one release on purpose, as the
+// recovery path if the database is ever lost - `migrated` lives in the IDB
+// superblock, not in localStorage, so the next boot really does re-import from
+// it. Writing here would overwrite that frozen pre-migration snapshot on every
+// tab close with a vfsSerializeTree copy, which is text-only and therefore has
+// every image and sound stripped out - and it would still not save the pending
+// IndexedDB writes. fsFlushOnHidden above is what covers those instead.
+function fsSnapshotOnUnload() {
+  if (fsGetActiveBackendKind() !== 'local') return;
   // vfsIsMounted() is the load-bearing half of this guard. vfsMount publishes
   // _vfsBackend only after _vfsRoot holds real data, so this is what stops us
   // serializing the seed tree over a returning visitor's filesystem if they
@@ -3989,7 +5429,8 @@ window.addEventListener('beforeunload', () => {
   try {
     localStorage.setItem(LOCAL_FS_KEY, JSON.stringify(vfsSerializeTree()));
   } catch (e) { /* unload is too late to report anything useful */ }
-});
+}
+window.addEventListener('beforeunload', fsSnapshotOnUnload);
 
 function normalizeRecycleEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;
@@ -4316,37 +5757,34 @@ function daemonStoryChanged(before) {
 function ensureFsDir(path) {
   const parts = vfsNormalizeDir(path).split('\\').filter(Boolean);
   let node = vfsGetTree();
-  let created = false;
+  let parentPath = '';
   parts.forEach(part => {
-    if (!node.dirs.has(part)) { node.dirs.add(part); created = true; }
+    if (!node.dirs.has(part)) {
+      node.dirs.add(part);
+      // One op per directory actually created, carrying its own parent. A
+      // single marker for the whole walk could not tell a backend which of
+      // DOCS, DOCS\SYS, DOCS\SYS\CACHE were new.
+      vfsQueueDirectMkdir(parentPath, part);
+    }
     if (!node.subdirs) node.subdirs = new Map();
     // Materializing a node for a name that is already in `dirs` is not a
     // filesystem change - it is the same lazy fill vfsDirNodeSync does, and it
-    // queues nothing there either. Only a new name counts as `created`.
+    // queues nothing there either.
     if (!node.subdirs.has(part)) node.subdirs.set(part, vfsMakeNode());
     node = node.subdirs.get(part);
+    parentPath = parentPath ? parentPath + '\\' + part : part;
   });
-  // schedSave, NOT vfsFlush. vfsFlush early-returns when nothing is queued
-  // (`if (!_vfsBackend || !_vfsPendingOps.length) return;`), and this function
-  // mutates the tree directly rather than through _vfsQueue, so `void
-  // vfsFlush()` would commit nothing and every directory created here would
-  // vanish on reload. schedSave queues a `legacy-write` marker op, which is the
-  // designed escape hatch for a direct mutation.
-  if (created) schedSave();
   return node;
 }
 
-// The VFS handles the fragmentation delta, the object-URL revoke and the
-// commit. What it does not know about is the wallpaper binding and the blob
-// store, so those stay here.
+// The VFS handles the block-layer cleanup, the object-URL revoke and the
+// commit. What it does not know about is the wallpaper binding, so that
+// stays here.
 async function removeFsPath(path, options) {
   options = options || {};
   const st = vfsStatSync(path);
   if (!st) return false;
-  if (st.kind === 'blob') {
-    if (st.blob?.kind === 'image') handleWallpaperFileDelete(st.dirName, st.name);
-    removeBlobEntry(st.dirName, st.name);
-  }
+  if (st.kind === 'blob' && st.blob?.kind === 'image') handleWallpaperFileDelete(st.dirName, st.name);
   // Resolve from the stat rather than re-splitting `path`, so the unlink cannot
   // land anywhere other than the entry the stat found.
   return await vfsUnlink(st.name, st.dirName, options);
@@ -4420,14 +5858,9 @@ async function moveFsItemByPath(path, fallbackDir, dstDirPath, options) {
     return null;
   }
   if (!moved) return null;
-  // vfsMove moves the in-memory record only. The bytes live in a separate
-  // store keyed by path, and keeping that in step is deliberately the caller's
-  // job - the VFS must not start guessing about it.
-  if (item.storage === 'blob') {
-    moveBlobEntryStorage(item.dirName, item.entryName, dstDirName, moved);
-  } else if (item.storage === 'dir') {
-    moveBlobStorageSubtree(blobRelativePath(item.dirName, item.entryName), blobRelativePath(dstDirName, moved));
-  }
+  // vfsMove already updates the block layer through its own queued op - the
+  // bytes live there now, keyed by dirent, not by a separate path-keyed
+  // mirror this caller used to have to keep in step by hand.
   return { kind: item.kind, name: moved, dirName: dstDirName };
 }
 
@@ -4444,16 +5877,16 @@ function handleWallpaperTreeDelete(path) {
   }
 }
 
-// vfsUnlink drops a directory's name and subtree but revokes only the single
-// blob it was handed, which is not enough for a folder: emptying the Recycle
-// Bin on a folder of images would leak one object URL per image and orphan
-// every blob-store row. This is the permanent-delete half; a move into the
-// Recycle Bin deliberately does not run it.
+// vfsUnlink drops a directory's name and subtree - including the block layer
+// underneath every blob in it - but revokes only the single object URL it was
+// handed, which is not enough for a folder: emptying the Recycle Bin on a
+// folder of images would leak one object URL per image. This is the
+// permanent-delete half; a move into the Recycle Bin deliberately does not
+// run it.
 function purgeFsDirNode(dirPath) {
   vfsWalkBlobs(dirPath, (base, name, blob) => {
     if (blob?.kind === 'image') handleWallpaperFileDelete(base, name);
     if (blob?.url && !blob.seeded) URL.revokeObjectURL(blob.url);
-    removeBlobEntry(base, name);
   });
 }
 
@@ -4486,7 +5919,7 @@ async function recycleVirtualPath(path, fallbackDir) {
 
   const moved = await moveFsItemByPath(path, fallbackDir, storedDir, { newName: item.entryName });
   if (!moved) {
-    await removeFsPath(storedDir, { trackFragmentation: false });
+    await removeFsPath(storedDir);
     return { ok: false, message: 'Could not move ' + fileLabel + ' to the Recycle Bin.' };
   }
 
@@ -4513,7 +5946,7 @@ async function restoreRecycleEntry(entry) {
     suffixToken: 'restored',
   });
   if (!moved) return { ok: false, message: 'Could not restore ' + entry.name + '.' };
-  await removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir);
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -4524,7 +5957,7 @@ async function purgeRecycleEntry(entry) {
   entry = normalizeRecycleEntry(entry);
   if (!entry) return { ok: false, message: 'Recycle entry is missing.' };
   await purgeFsPath(recycleEntryStoredPath(entry), entry.storedDir);
-  await removeFsPath(entry.storedDir, { trackFragmentation: false });
+  await removeFsPath(entry.storedDir);
   recycleBinEntries = recycleBinEntries.filter(item => item.id !== entry.id);
   saveRecycleBin();
   document.dispatchEvent(new CustomEvent('fs-changed'));
@@ -4590,7 +6023,9 @@ function promptCreateFolderAt(dirPath, onDone) {
 function ensureStoryTextFile(path, value) {
   const { dirName, fileName } = fsSplitPath(path);
   const dir = ensureFsDir(dirName);
+  const prev = dir.files.has(fileName) ? dir.files.get(fileName) : null;
   dir.files.set(fileName, value);
+  vfsQueueDirectWrite(dirName, fileName, prev);
 }
 
 function daemonNoticeContent() {
@@ -5058,30 +6493,30 @@ function syncDaemonStoryFiles() {
   ensureFsDir('SYS');
   ensureFsDir('CACHE');
   if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
-  else void removeFsPath(STORY_FILE_PATHS.notice, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.notice);
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
-  else void removeFsPath(STORY_FILE_PATHS.incident, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.incident);
   if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
-  else void removeFsPath(STORY_FILE_PATHS.lostContact, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.lostContact);
   if (daemonStory.stage >= 4) {
     ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
     if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
   } else {
-    void removeFsPath(STORY_FILE_PATHS.lastOperator, { trackFragmentation: false });
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.lastOperator);
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
   }
   if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
-  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol);
   if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
-  else void removeFsPath(STORY_FILE_PATHS.anchorSeed, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.anchorSeed);
   if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
-  else void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.watchPid);
   if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
   else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
-  else void removeFsPath(STORY_FILE_PATHS.quarantineSig, { trackFragmentation: false });
+  else void removeFsPath(STORY_FILE_PATHS.quarantineSig);
   if (daemonStory.endingReached) {
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat, { trackFragmentation: false });
-    void removeFsPath(STORY_FILE_PATHS.watchPid, { trackFragmentation: false });
+    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
+    void removeFsPath(STORY_FILE_PATHS.watchPid);
   }
 }
 
@@ -5104,11 +6539,34 @@ function getDaemonVisualStage() {
   return 0;
 }
 
+// The daemon's own corruption dial, in [0,1]. Derived from the story stage,
+// not stored - there is nothing here that a reload could not recompute, and a
+// persisted copy would be one more field able to disagree with the stage.
+//
+// These two visual consumers used to read getDriveFragmentationLevel(). That
+// worked only because the old fragmentation number was fake and idled near
+// 0.68 - it was a mood dial wearing a disk metric's name. Phase 4 made
+// fragmentation a real measurement, and a real filesystem on a fresh install
+// scores near 0, which would have driven the visual level to 0 and stopped the
+// glitches appearing at all for most players. No test would have caught it.
+//
+// So the story owns its own number now. The stage mapping reproduces the
+// visual levels the old fake value produced at each stage: stage 4 crosses the
+// old 0.22 threshold, stage 5 crosses 0.42, and stage 7 crosses 0.62.
+function getDaemonCorruption() {
+  if (daemonStory.endingReached) return 0;
+  const stage = getDaemonVisualStage();
+  if (stage >= 7) return 0.72;
+  if (stage >= 5) return 0.5;
+  if (stage >= 4) return 0.3;
+  return 0.05;
+}
+
 function getDriveFragmentationVisualLevel() {
   if (daemonStory.endingReached) return 0;
   const visualStage = getDaemonVisualStage();
   if (visualStage < 4) return 0;
-  const fragLevel = getDriveFragmentationLevel();
+  const fragLevel = getDaemonCorruption();
   if (fragLevel < 0.22) return 0;
   if (visualStage >= 7 && fragLevel >= 0.62) return 3;
   if (visualStage >= 5 && fragLevel >= 0.42) return 2;
@@ -5120,7 +6578,7 @@ function scheduleDaemonPulse() {
   daemonPulseTimer = null;
   const visualStage = getDaemonVisualStage();
   if (!visualStage) return;
-  const fragLevel = getDriveFragmentationLevel();
+  const fragLevel = getDaemonCorruption();
   const fragFactor = Math.max(0, Math.min(1, (fragLevel - 0.02) / 0.9));
   const delayScale = 1.7 - fragFactor * 0.7;
   const baseMinDelay = visualStage >= 7 ? 3800 : visualStage >= 5 ? 6200 : 9800;
@@ -5187,7 +6645,6 @@ function syncDaemonStory(options) {
   saveDaemonStory();
   syncDaemonStoryRegistry();
   syncDaemonStoryFiles();
-  schedSave();
   if (!opts.silent) refreshDaemonStoryViews();
 }
 
@@ -5573,125 +7030,24 @@ function endProcessAction(row) {
   if (row.winId && wins[row.winId]) { closeWin(row.winId); return 'closed'; }
   return kernelSignal(row.pid, 'SIGTERM') ? 'signalled' : 'refused';
 }
-// ── Blob persistence (base64 per-file, separate localStorage keys) ─
-const BLOB_PREFIX = 'sleepOS-blob:';
-const BLOB_SIZE_LIMIT = 3 * 1024 * 1024; // skip files > 3 MB uncompressed
-const MEDIA_DB_NAME = 'sleepOS-media';
-const MEDIA_DB_VERSION = 1;
-const MEDIA_DB_STORE = 'blobs';
-let _mediaDbPromise = null;
+// ── Blob restore ────────────────────────────────────────────────────
+// Blob bytes live in the block layer (os/storage-idb.js) and reach it
+// through the normal vfsWriteBlob -> commit path, same as any other write.
+// What is left here is purely the read side: the in-memory tree's blob
+// entries hold an object URL, never bytes, and something has to turn a
+// block-persisted blob dirent back into a real URL at boot. Tasks 9e and 9f
+// deleted the two mirrors (a separate media IndexedDB, and a base64-in-
+// localStorage copy) this file used to also maintain - blocks are the only
+// store now.
 
 function blobRelativePath(dirPath, name) {
   return (dirPath ? dirPath + '\\' : '') + name;
 }
 
-function blobStorageKey(dirPath, name) {
-  return BLOB_PREFIX + blobRelativePath(dirPath, name);
-}
-
-function splitBlobRelativePath(path) {
-  const clean = String(path || '').replace(/\//g, '\\').replace(/^\\+|\\+$/g, '');
-  const lastSlash = clean.lastIndexOf('\\');
-  return {
-    dirPath: lastSlash === -1 ? '' : clean.slice(0, lastSlash),
-    fileName: lastSlash === -1 ? clean : clean.slice(lastSlash + 1),
-  };
-}
-
-function _ab2b64(ab) {
-  const bytes = new Uint8Array(ab);
-  let out = '';
-  for (let i = 0; i < bytes.length; i += 8192)
-    out += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length)));
-  return btoa(out);
-}
-
-function openMediaDb() {
-  if (!window.indexedDB) return Promise.resolve(null);
-  if (_mediaDbPromise) return _mediaDbPromise;
-  _mediaDbPromise = new Promise(resolve => {
-    try {
-      const req = indexedDB.open(MEDIA_DB_NAME, MEDIA_DB_VERSION);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(MEDIA_DB_STORE)) {
-          db.createObjectStore(MEDIA_DB_STORE, { keyPath: 'path' });
-        }
-      };
-      req.onsuccess = () => {
-        const db = req.result;
-        db.onversionchange = () => db.close();
-        resolve(db);
-      };
-      req.onerror = req.onblocked = () => resolve(null);
-    } catch (e) {
-      resolve(null);
-    }
-  });
-  return _mediaDbPromise;
-}
-
-async function storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      tx.objectStore(MEDIA_DB_STORE).put({
-        path: blobRelativePath(dirPath, name),
-        kind,
-        size,
-        mime,
-        blob: new Blob([arrayBuffer], { type: mime || 'application/octet-stream' }),
-      });
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
-async function removeBlobEntryFromDb(dirPath, name) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      tx.objectStore(MEDIA_DB_STORE).delete(blobRelativePath(dirPath, name));
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
-async function renameBlobEntryInDb(dirPath, oldName, newName) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  const oldPath = blobRelativePath(dirPath, oldName);
-  const newPath = blobRelativePath(dirPath, newName);
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      const store = tx.objectStore(MEDIA_DB_STORE);
-      const getReq = store.get(oldPath);
-      getReq.onsuccess = () => {
-        const data = getReq.result;
-        if (!data) return;
-        data.path = newPath;
-        store.put(data);
-        store.delete(oldPath);
-      };
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
+// Builds a real Blob + object URL for an entry and installs it in the live
+// tree, revoking whatever URL (if any) was there before. `rawBlob` may be an
+// already-real Blob or raw bytes (Uint8Array/ArrayBuffer) - callers pass
+// whichever they have on hand.
 function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
   if (!fileName) return;
   const dir = vfsDirNodeSync(dirPath);
@@ -5702,200 +7058,45 @@ function restoreBlobIntoFs(dirPath, fileName, kind, size, mime, rawBlob) {
   dir.blobs.set(fileName, { url: URL.createObjectURL(blob), kind, size, mime });
 }
 
-// Save a single blob entry immediately (called at upload time when we have the raw File)
-function saveBlobEntry(dirPath, name, kind, size, mime, arrayBuffer) {
-  void storeBlobEntryInDb(dirPath, name, kind, size, mime, arrayBuffer);
-  if (size > BLOB_SIZE_LIMIT) return;
-  try { localStorage.setItem(blobStorageKey(dirPath, name),
-    JSON.stringify({ kind, size, mime, b64: _ab2b64(arrayBuffer) })); }
-  catch(ex) { /* quota */ }
-}
-
-function removeBlobEntry(dirPath, name) {
-  localStorage.removeItem(blobStorageKey(dirPath, name));
-  void removeBlobEntryFromDb(dirPath, name);
-}
-
-function renameBlobEntry(dirPath, oldName, newName) {
-  const oldKey = blobStorageKey(dirPath, oldName);
-  const newKey = blobStorageKey(dirPath, newName);
-  const data = localStorage.getItem(oldKey);
-  if (data) { try { localStorage.setItem(newKey, data); } catch(ex) {} localStorage.removeItem(oldKey); }
-  void renameBlobEntryInDb(dirPath, oldName, newName);
-}
-
-async function moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  const oldPath = blobRelativePath(srcDirPath, srcName);
-  const newPath = blobRelativePath(dstDirPath, dstName);
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      const store = tx.objectStore(MEDIA_DB_STORE);
-      const getReq = store.get(oldPath);
-      getReq.onsuccess = () => {
-        const data = getReq.result;
-        if (!data) return;
-        data.path = newPath;
-        store.put(data);
-        store.delete(oldPath);
-      };
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
-function moveBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
-  const oldKey = blobStorageKey(srcDirPath, srcName);
-  const newKey = blobStorageKey(dstDirPath, dstName);
-  const data = localStorage.getItem(oldKey);
-  if (data) {
-    try { localStorage.setItem(newKey, data); } catch (e) {}
-    localStorage.removeItem(oldKey);
-  }
-  void moveBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
-}
-
-// Copy variant of moveBlobEntryInDb: the source row stays exactly where it is.
-// Resolves with the stored Blob so the caller can mint a fresh object URL for
-// it, or null when there is no row to copy.
-async function copyBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName) {
-  const db = await openMediaDb();
-  if (!db) return null;
-  const oldPath = blobRelativePath(srcDirPath, srcName);
-  const newPath = blobRelativePath(dstDirPath, dstName);
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      const store = tx.objectStore(MEDIA_DB_STORE);
-      let copied = null;
-      const getReq = store.get(oldPath);
-      getReq.onsuccess = () => {
-        const data = getReq.result;
-        if (!data) return;
-        copied = data.blob || null;
-        store.put(Object.assign({}, data, { path: newPath }));
-      };
-      tx.oncomplete = () => resolve(copied);
-      tx.onerror = tx.onabort = () => resolve(null);
-    } catch (e) {
-      resolve(null);
-    }
-  });
-}
-
-// Give a copied blob its own persisted bytes under the destination path, in
-// both stores, and hand back a fresh object URL for them. A copy that shared
-// the source's URL would go blank the moment either entry was deleted, because
-// removeFsPath revokes that one string; and with no row under the new path the
-// copy would not survive a reload at all, since blobs are deliberately absent
-// from the VFS snapshot. Returns null when there is nothing stored to copy
-// (a seeded blob), leaving the caller to keep the source's URL.
-async function copyBlobEntryStorage(srcDirPath, srcName, dstDirPath, dstName) {
-  const data = localStorage.getItem(blobStorageKey(srcDirPath, srcName));
-  if (data !== null) {
-    try { localStorage.setItem(blobStorageKey(dstDirPath, dstName), data); } catch (e) { /* quota */ }
-  }
-  const stored = await copyBlobEntryInDb(srcDirPath, srcName, dstDirPath, dstName);
-  if (stored) return URL.createObjectURL(stored);
-  if (data === null) return null;
-  // No IndexedDB (or no row there), but the base64 copy landed: rebuild the
-  // bytes from it rather than aliasing the source's URL.
-  try {
-    const { mime, b64 } = JSON.parse(data);
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return URL.createObjectURL(new Blob([bytes], { type: mime || 'application/octet-stream' }));
-  } catch (e) {
-    return null;
-  }
-}
-
-async function moveBlobSubtreeInDb(oldDirPath, newDirPath) {
-  const db = await openMediaDb();
-  if (!db) return false;
-  const prefix = oldDirPath ? oldDirPath + '\\' : '';
-  return new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readwrite');
-      const store = tx.objectStore(MEDIA_DB_STORE);
-      const req = store.getAll();
-      req.onsuccess = () => {
-        (req.result || []).forEach(item => {
-          if (!String(item.path || '').startsWith(prefix)) return;
-          const nextPath = newDirPath + '\\' + String(item.path).slice(prefix.length);
-          store.put(Object.assign({}, item, { path: nextPath }));
-          store.delete(item.path);
-        });
-      };
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = tx.onabort = () => resolve(false);
-    } catch (e) {
-      resolve(false);
-    }
-  });
-}
-
-function moveBlobStorageSubtree(oldDirPath, newDirPath) {
-  const from = fsNormalizeDir(oldDirPath);
-  const to = fsNormalizeDir(newDirPath);
-  const prefix = BLOB_PREFIX + (from ? from + '\\' : '');
-  Object.keys(localStorage)
-    .filter(key => key.startsWith(prefix))
-    .forEach(key => {
-      const data = localStorage.getItem(key);
-      const suffix = key.slice(prefix.length);
-      if (data !== null) {
-        try { localStorage.setItem(BLOB_PREFIX + to + '\\' + suffix, data); } catch (e) {}
+// Boot-time restore, and the OS's one entry point for it (os/fs-persist.js's
+// vfsBootMount calls this, fire-and-forget). Fetches every block-persisted
+// blob's real bytes via vfsBlockBlobEntries() - the snapshot os/vfs.js's
+// vfsMount takes right after building the live tree, of every blob path the
+// mounted backend's block layer actually has - and restores each one with a
+// real object URL. Runs eagerly, all of them, before the wallpaper-apply
+// tail below - not deferred to first display, which would be a bigger,
+// separate change to how the UI requests blobs. A single unreadable entry
+// does not stop the rest from restoring: a corrupted or mid-migration store
+// should not take down every other file's return, and the wallpaper tail
+// must still run even when there is nothing in blocks at all (a non-IndexedDB
+// backend, or a install with no blobs yet).
+async function loadBlobsFromBlocks() {
+  const backend = vfsGetBackend();
+  if (backend && typeof backend._readBlobBytes === 'function') {
+    const entries = vfsBlockBlobEntries();
+    let restored = 0;
+    for (const { dirName, name, size, kind, mime } of entries) {
+      try {
+        const bytes = await backend._readBlobBytes(dirName, name);
+        // null means the path is gone by the time this runs - e.g. deleted
+        // or renamed between mount and this fetch. Nothing to restore; the
+        // tree already reflects whatever that later mutation did.
+        if (!bytes) continue;
+        restoreBlobIntoFs(dirName, name, kind, size, mime, bytes);
+        restored++;
+      } catch (e) {
+        // One bad block entry must not stop the rest of the boot restore.
       }
-      localStorage.removeItem(key);
-    });
-  void moveBlobSubtreeInDb(from, to);
-}
-
-function loadBlobsFromStorage() {
-  Object.keys(localStorage).filter(k => k.startsWith(BLOB_PREFIX)).forEach(k => {
-    try {
-      const { kind, size, mime, b64 } = JSON.parse(localStorage.getItem(k));
-      const binary = atob(b64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const { dirPath, fileName } = splitBlobRelativePath(k.slice(BLOB_PREFIX.length));
-      restoreBlobIntoFs(dirPath, fileName, kind, size, mime, new Blob([bytes], { type: mime }));
-    } catch(e) { /* corrupted ? skip */ }
-  });
-  void loadBlobsFromIndexedDb();
-}
-
-async function loadBlobsFromIndexedDb() {
-  const db = await openMediaDb();
-  if (!db) return;
-  const items = await new Promise(resolve => {
-    try {
-      const tx = db.transaction(MEDIA_DB_STORE, 'readonly');
-      const req = tx.objectStore(MEDIA_DB_STORE).getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
-    } catch (e) {
-      resolve([]);
     }
-  });
-  items.forEach(item => {
-    const { dirPath, fileName } = splitBlobRelativePath(item.path);
-    restoreBlobIntoFs(dirPath, fileName, item.kind, item.size, item.mime, item.blob);
-  });
-  if (items.length) document.dispatchEvent(new CustomEvent('fs-changed'));
+    if (restored) document.dispatchEvent(new CustomEvent('fs-changed'));
+  }
+  // A block-restored wallpaper is guaranteed ready by this point, since
+  // everything above already ran and awaited.
   const savedWp = getInitialWallpaperPath();
   if (savedWp) {
     applyWallpaper(savedWp);
   }
 }
-
 // ── Wallpaper persistence ─────────────────────────────────────────
 const WP_KEY = 'sleepOS-wallpaper';
 
@@ -6663,15 +7864,6 @@ function readFileAsText(file) {
   });
 }
 
-function readFileAsArrayBuffer(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target?.result);
-    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
 async function handleFileUpload(fileList) {
   const dirPath = fsNormalizeDir(_uploadCwd || '');
   if (dirPath === 'DESKTOP') ensureFsDir('DESKTOP');
@@ -6702,6 +7894,15 @@ async function handleFileUpload(fileList) {
       }
       const url = URL.createObjectURL(file);
       try {
+        // The write is queued here; its actual durability (the block-layer
+        // commit, up to 400ms later) is reported separately, through
+        // reportVfsError's toast if it fails - the same channel every other
+        // write in this OS already relies on, and the only one that can be
+        // honest about a failure this far in the future. Reporting {ok:false}
+        // here for that would be reporting a failure that has not happened
+        // (or might never happen) yet: before Task 9e/9f this branch instead
+        // waited on a synchronous mirror write to know a real answer early,
+        // but that mirror is gone and blocks give no synchronous answer at all.
         await vfsWriteBlob(file.name, { url, kind, size: file.size, mime }, dirPath);
       } catch (err) {
         // Nothing else holds this URL once the tree entry was refused, so
@@ -6709,10 +7910,6 @@ async function handleFileUpload(fileList) {
         URL.revokeObjectURL(url);
         throw err;
       }
-      try {
-        const buffer = await readFileAsArrayBuffer(file);
-        saveBlobEntry(dirPath, file.name, kind, file.size, mime, buffer);
-      } catch (e) {}
       return { ok: true, name: file.name };
     } catch (e) {
       return { ok: false, name: file.name };
@@ -9756,12 +10953,16 @@ function openExplorer(startPath) {
       }
       if (item.kind !== 'dir') {
         const st = vfsStatSync(nextName, cwd);
-        if (st && st.kind === 'blob') {
-          renameBlobEntry(cwd, item.name, nextName);
-          if (st.blob.kind === 'image') handleWallpaperFileRename(cwd, item.name, nextName);
+        if (st && st.kind === 'blob' && st.blob.kind === 'image') {
+          handleWallpaperFileRename(cwd, item.name, nextName);
         }
       }
-      increaseDriveFragmentation(item.kind === 'dir' ? 0.006 : 0.008);
+      // increaseDriveFragmentation retired with phase 4: fragmentation is now
+      // measured from the real block layout, not nudged. A rename would have
+      // been a fiction here regardless - fsRenameEntry only moves a dirent
+      // key, never a block, so the disk's real layout is untouched, and the
+      // rename's own queued op already triggers vfsBootMount's onCommit
+      // handler, which calls fsRefreshFragmentation() after every commit.
       render();
     });
   }
@@ -12143,14 +13344,23 @@ function openDefrag() {
       running = false; startBtn.disabled = false; stopBtn.disabled = true;
       stopSoundLoop('defrag', { fade: 0.6 });
       pbFill.style.width = '98%'; pbLabel.textContent = '98%';
-      document.getElementById('df-pct').textContent = '98% optimized';
       fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
       if (ws) ws.textContent = 'Complete - 1 file could not be moved';
-      optimizeDriveFragmentation({ targetLevel: 0.02 });
+      // The 98% progress bar above is the story beat - one file that will not
+      // move. The two drive stats below are not: they read the real allocation
+      // map. This used to overwrite "% optimized" with the same 98% and write a
+      // hardcoded "Fragmentation: 2%", alongside a targetLevel option
+      // that optimizeDriveFragmentation stopped honouring when fragmentation
+      // became a measurement, so DEFRAG claimed a drop it had not made and could
+      // not make - nothing moves blocks until phase 5.
       const lastEl = document.getElementById('df-last');
       if (lastEl) lastEl.textContent = 'Last defrag: just now';
-      const fragEl = document.getElementById('df-frag');
-      if (fragEl) fragEl.textContent = 'Fragmentation: 2%';
+      optimizeDriveFragmentation().then(level => {
+        const fragEl = document.getElementById('df-frag');
+        if (fragEl) fragEl.textContent = 'Fragmentation: ' + Math.round(level * 100) + '%';
+        const pctEl = document.getElementById('df-pct');
+        if (pctEl) pctEl.textContent = getDriveOptimizationPercent() + '% optimized';
+      }).catch(() => {});
       drawGrid();
       return;
     }
