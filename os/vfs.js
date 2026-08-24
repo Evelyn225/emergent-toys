@@ -154,6 +154,21 @@ const VFS_FLUSH_DELAY_MS = 400;
 
 function vfsIsMounted() { return _vfsBackend !== null; }
 
+// Set while DEFRAG.exe is relocating blocks. A commit landing mid-compaction
+// would allocate blocks and rewrite inodes underneath a plan computed from a
+// snapshot, so vfsFlush defers for the duration - ops accumulate in the
+// pending queue exactly as they already do behind the 400ms debounce, and land
+// when the run ends.
+//
+// Deferring writes for a few seconds during an explicitly user-initiated
+// defragmentation is what real defragmenters do. The danger is the flag being
+// left set: that silently stops the filesystem persisting for the rest of the
+// session, so every exit path in fsRunCompaction clears it, including the
+// throwing one.
+var _vfsDefragActive = false;
+function vfsSetDefragActive(active) { _vfsDefragActive = !!active; }
+function vfsIsDefragActive() { return _vfsDefragActive; }
+
 // The mounted backend, for callers that need something only a specific backend
 // offers - today that is the IndexedDB backend's allocation map, which is what
 // makes fragmentation a measurement. Returns null when nothing is mounted.
@@ -392,7 +407,7 @@ async function vfsFlush() {
   while (_vfsFlushPromise) {
     try { await _vfsFlushPromise; } catch (e) { /* reported via onError already */ }
   }
-  if (!_vfsBackend || !_vfsPendingOps.length) return;
+  if (!_vfsBackend || !_vfsPendingOps.length || _vfsDefragActive) return;
   const backend = _vfsBackend;
   const ops = _vfsPendingOps;
   const opsBytes = _vfsPendingBytes;
