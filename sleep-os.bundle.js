@@ -978,6 +978,104 @@ function fsComputeFragmentation(inodes) {
   return (totalRuns - filesWithBlocks) / maxExtraRuns;
 }
 
+// Plans a compaction: every file's blocks contiguous and in order, packed
+// toward block 0, files in ascending ino order. Pure - it mutates neither the
+// superblock nor the inodes, and returns an ordered list of moves for
+// os/storage-idb.js's _moveBlock to apply one transaction at a time.
+//
+// A move is { ino, slot, from, to }, where slot is the index within that
+// inode's blocks array. Every move is self-describing so that stopping after
+// any prefix leaves a consistent disk - which is the whole crash-safety story,
+// and is what test/fs-compaction.test.cjs checks over every prefix.
+//
+// THE ORDERING PROBLEM, which is the only hard part: the target for position t
+// is usually occupied by a block that has not moved yet. The plan is a
+// permutation and permutations have cycles. Breaking a cycle needs a spare
+// slot, and the disk's own free space is the spare - relocate the occupant
+// into a free block, then complete the intended move. One hole is enough to
+// realise any permutation (the fifteen-puzzle argument), at a cost of up to
+// two moves per placed block.
+//
+// Targets are processed in ascending order, which makes each placement
+// permanent: position t is written once and never revisited. That is what
+// guarantees termination even when a spare block sits inside the target range.
+function fsPlanCompaction(inodeEntries, sb) {
+  const moves = [];
+
+  // Where each block currently lives, both directions.
+  const ownerOf = new Map();          // blockIdx -> 'ino:slot'
+  const locOf = new Map();            // 'ino:slot' -> blockIdx
+  const desired = [];                 // target blockIdx -> 'ino:slot'
+
+  const sorted = (inodeEntries || [])
+    .filter(([, inode]) => inode && (inode.blocks || []).length)
+    .sort((a, b) => Number(a[0]) - Number(b[0]));
+
+  sorted.forEach(([ino, inode]) => {
+    inode.blocks.forEach((blockIdx, slot) => {
+      const tag = String(ino) + ':' + slot;
+      ownerOf.set(blockIdx, tag);
+      locOf.set(tag, blockIdx);
+      desired.push(tag);
+    });
+  });
+
+  // A Set, not an array, and emit() maintains BOTH directions of it. An
+  // earlier version only pushed the vacated block and never removed the
+  // destination, so a cycle break - emit(occupant, t, spare) followed by
+  // emit(want, loc, t) - left t sitting in the free list while it was live
+  // again. A later takeFree() could then hand out t as a spare and overwrite
+  // a file's block. Silent data loss, and the kind a hand-picked test fixture
+  // can miss entirely.
+  const free = new Set();
+  for (let i = sb.totalBlocks - 1; i >= 0; i--) {
+    if (!fsBitGet(sb.freeBitmap, i) && !ownerOf.has(i)) free.add(i);
+  }
+
+  // Prefers the highest free block: it is furthest from the region being
+  // packed, so it is least likely to be wanted as a target soon, which keeps
+  // the move count down. Linear per call, but called at most once per cycle
+  // break, and correctness does not depend on which free block is chosen.
+  function takeFree() {
+    let best = -1;
+    free.forEach(idx => { if (idx > best) best = idx; });
+    if (best >= 0) free.delete(best);
+    return best;
+  }
+
+  function emit(tag, from, to) {
+    const colon = tag.lastIndexOf(':');
+    moves.push({
+      ino: Number(tag.slice(0, colon)),
+      slot: Number(tag.slice(colon + 1)),
+      from,
+      to,
+    });
+    ownerOf.delete(from);
+    ownerOf.set(to, tag);
+    locOf.set(tag, to);
+    free.delete(to);
+    free.add(from);
+  }
+
+  for (let t = 0; t < desired.length; t++) {
+    const want = desired[t];
+    if (ownerOf.get(t) === want) continue;      // already in place
+
+    if (ownerOf.has(t)) {
+      // Someone else is sitting on this target. Park them in a free block.
+      const spare = takeFree();
+      if (spare < 0) {
+        throw VfsError('ENOSPC', 'compaction needs at least one free block to break a cycle');
+      }
+      emit(ownerOf.get(t), t, spare);
+    }
+    emit(want, locOf.get(want), t);
+  }
+
+  return moves;
+}
+
 // ── Records and tree reconstruction ───────────────────────────────
 
 const FS_STORE_SUPERBLOCK = 'superblock';
