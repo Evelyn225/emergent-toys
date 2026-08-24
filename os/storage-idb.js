@@ -381,6 +381,49 @@ function createIdbBackend(options) {
       await ensure();
       return (await store.scan(FS_STORE_INODES)).map(([, inode]) => inode);
     },
+
+    // Like _readInodes, but keeps the ino. fsPlanCompaction needs it to say
+    // which inode a move belongs to; _readInodes deliberately keeps its old
+    // shape because fsRefreshFragmentation depends on it and would go on
+    // "working" against the wrong data if it silently changed.
+    async _readInodeEntries() {
+      await ensure();
+      return (await store.scan(FS_STORE_INODES)).map(([key, inode]) => [Number(key), inode]);
+    },
+
+    // Applies ONE move from fsPlanCompaction, in one transaction. That
+    // boundary is the entire crash-safety argument: IndexedDB applies a
+    // transaction wholly or not at all, so a crash leaves each move either
+    // fully applied or absent, and either way every inode points at blocks
+    // that exist and hold that file's bytes. The disk ends up consistent and
+    // merely partly compacted, never corrupt. The worst residue is a leaked
+    // block, which the allocator already tolerates.
+    //
+    // Nothing is persisted about the run itself. The target layout is a pure
+    // function of the current disk, so an interrupted run needs no saved
+    // state - the next one replans from wherever the disk got to. That is why
+    // Stop, crash recovery and resume are one mechanism rather than three.
+    async _moveBlock(move) {
+      await ensure();
+      await _runInWriteTransaction(async (txStore, txSb) => {
+        const inode = await txStore.get(FS_STORE_INODES, move.ino);
+        if (!inode || (inode.blocks || [])[move.slot] !== move.from) {
+          // The disk is not where the plan thought it was. Refusing is right:
+          // writing anyway would move a block on behalf of an inode that no
+          // longer claims it.
+          throw VfsError('EINVAL', 'stale compaction move for inode ' + move.ino);
+        }
+        const bytes = await txStore.get(FS_STORE_BLOCKS, move.from);
+        await txStore.put(FS_STORE_BLOCKS, move.to, bytes);
+        inode.blocks[move.slot] = move.to;
+        await txStore.put(FS_STORE_INODES, move.ino, inode);
+        fsBitSet(txSb.freeBitmap, move.to, 1);
+        fsBitSet(txSb.freeBitmap, move.from, 0);
+        await txStore.del(FS_STORE_BLOCKS, move.from);
+        await txStore.put(FS_STORE_SUPERBLOCK, 'sb', txSb);
+      });
+    },
+
     get _superblock() { return sb; },
 
     // The read half of blob persistence (Task 9a) - fsReadTree only ever
