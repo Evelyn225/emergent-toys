@@ -429,3 +429,14 @@ test('an abort() failure other than InvalidStateError is attached to the origina
   assert.strictEqual(threw.abortError, weirdAbortError,
     'a non-InvalidStateError abort failure must still be reachable from the thrown error');
 });
+
+test('the drive is 4096 blocks, which is 16 MB at 4 KB per block', async () => {
+  const { ctx } = idb();
+  const backend = ctx.createIdbBackend();
+  await backend._store();
+  const sb = backend._superblock;
+  assert.strictEqual(sb.totalBlocks, 4096);
+  assert.strictEqual(sb.totalBlocks * sb.blockSize, 16 * 1024 * 1024);
+  // 4096 blocks needs 512 bytes of bitmap.
+  assert.strictEqual(sb.freeBitmap.length, 512);
+});

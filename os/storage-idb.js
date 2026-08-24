@@ -7,10 +7,16 @@
 // pure core and belongs back in it.
 const FS_IDB_NAME = 'sleepOS-fs';
 const FS_IDB_VERSION = 1;
-// Sized so the disk is a believable 32 MB at 4 KB per block. IndexedDB itself
-// is bounded by the origin quota, which estimate() reports honestly; this is
-// the in-fiction disk size, and it is what DEFRAG's grid renders.
-const FS_IDB_TOTAL_BLOCKS = 8192;
+// 4096 blocks x 4 KB = 16 MB. Deliberately smaller than the 32 MB this
+// shipped with: fragmentation is a real measurement now, and a drive nothing
+// ever fills is a drive that never fragments, which makes DEFRAG a utility
+// with nothing to do. 16 MB is still 3.2x the 5 MB localStorage drive it
+// replaced, so a single large upload still fits and ENOSPC stays rare.
+//
+// Only ever read when creating a superblock that does not exist yet. Every
+// other code path reads sb.totalBlocks, so an existing profile keeps whatever
+// size it was created with.
+const FS_IDB_TOTAL_BLOCKS = 4096;
 
 function fsIdbAvailable() {
   try { return typeof indexedDB !== 'undefined' && !!indexedDB; } catch (e) { return false; }
