@@ -5444,6 +5444,73 @@ async function optimizeDriveFragmentation(options) {
   return level;
 }
 
+// Walks a compaction plan, one transaction per move, deferring commits for the
+// duration. This is what DEFRAG.exe drives.
+//
+// Never throws. DEFRAG is a UI with no useful way to handle an exception
+// mid-animation, and an unhandled one would leave the defer flag set, which
+// silently stops the filesystem persisting for the rest of the session. Every
+// outcome comes back as a value, the same rule fsMigrateFromLocalStorage
+// follows.
+//
+// The plan is deliberately not persisted. The target layout is a pure function
+// of the current disk, so an interrupted run needs no saved state: the next
+// run replans from wherever this one got to. Stop, crash recovery and resume
+// are therefore one mechanism instead of three.
+async function fsRunCompaction(options) {
+  options = options || {};
+  const result = {
+    ran: false, reason: 'not-idb', moved: 0, total: 0,
+    stopped: false, fragBefore: getDriveFragmentationLevel(), fragAfter: getDriveFragmentationLevel(),
+  };
+  if (fsGetActiveBackendKind() !== 'idb') return result;
+
+  const backend = vfsGetBackend();
+  if (!backend || typeof backend._moveBlock !== 'function') return result;
+
+  vfsSetDefragActive(true);
+  try {
+    const entries = await backend._readInodeEntries();
+    let plan;
+    try {
+      plan = fsPlanCompaction(entries, backend._superblock);
+    } catch (err) {
+      result.ran = true;
+      result.reason = err && err.code === 'ENOSPC' ? 'no-space' : 'failed';
+      return result;
+    }
+
+    result.ran = true;
+    result.total = plan.length;
+    if (!plan.length) { result.reason = 'nothing-to-do'; return result; }
+    result.reason = 'ok';
+
+    for (const move of plan) {
+      if (options.shouldStop && options.shouldStop()) { result.stopped = true; break; }
+      try {
+        await backend._moveBlock(move);
+      } catch (err) {
+        // One failed move ends the run. The disk is still consistent - the
+        // transaction rolled back - and the next run replans from here.
+        result.reason = 'failed';
+        break;
+      }
+      result.moved++;
+      if (options.onProgress) options.onProgress(move, result.moved, result.total);
+    }
+    return result;
+  } catch (err) {
+    result.reason = 'failed';
+    return result;
+  } finally {
+    vfsSetDefragActive(false);
+    defragState.lastDefragTs = Date.now();
+    saveDriveState();
+    result.fragAfter = await fsRefreshFragmentation();
+    void vfsFlush();
+  }
+}
+
 // Which backend actually mounted. SYSMON reports it, and Task 7's
 // fragmentation reads the real bitmap only when it is 'idb'.
 var fsActiveBackendKind = 'local';
