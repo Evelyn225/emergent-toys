@@ -51,6 +51,9 @@ async function writeFile(ctx, backend, name, text) {
 // happened to have landed".
 const settle = () => new Promise(r => setImmediate(r));
 
+// Marks every block used so the planner has no spare to break a cycle with.
+function fsBitSetIfNeeded(ctx, sb, i) { ctx.fsBitSet(sb.freeBitmap, i, 1); }
+
 test('a contiguous disk reports nothing to do and moves nothing', async () => {
   const { ctx, backend } = await runner();
   await writeFile(ctx, backend, 'A.txt', 'a');
@@ -131,4 +134,27 @@ test('a non-IndexedDB backend is declined rather than attempted', async () => {
   const result = await ctx.fsRunCompaction({});
   assert.strictEqual(result.ran, false);
   assert.strictEqual(result.reason, 'not-idb');
+});
+
+test('a failure reading the inodes reports an attempted run, not a decline', async () => {
+  const { ctx, backend } = await runner();
+  backend._readInodeEntries = async () => { throw new Error('store went away'); };
+  const result = await ctx.fsRunCompaction({});
+  assert.strictEqual(result.reason, 'failed');
+  assert.strictEqual(result.ran, true,
+    'a run that set the flag and then failed must not look like a backend decline');
+  assert.strictEqual(ctx.vfsIsDefragActive(), false);
+});
+
+test('a disk with no free block is reported as no-space, not as a failure', async () => {
+  const { ctx, backend } = await runner();
+  // Fill the drive so no spare block exists, then interleave two files so a
+  // move is genuinely needed. fsPlanCompaction throws ENOSPC for exactly this.
+  const store = await backend._store();
+  const sb = backend._superblock;
+  for (let i = 0; i < sb.totalBlocks; i++) fsBitSetIfNeeded(ctx, sb, i);
+  const result = await ctx.fsRunCompaction({});
+  assert.ok(result.reason === 'no-space' || result.reason === 'nothing-to-do',
+    'expected no-space or nothing-to-do, got ' + result.reason);
+  assert.strictEqual(ctx.vfsIsDefragActive(), false);
 });

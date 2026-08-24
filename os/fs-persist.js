@@ -236,6 +236,11 @@ async function fsRunCompaction(options) {
     }
     return result;
   } catch (err) {
+    // `ran` means "the flag was set and work was attempted", which is true by
+    // the time we are here - this catch is downstream of vfsSetDefragActive(true).
+    // Leaving it false would make a real failure look like the early declines
+    // above, where nothing was attempted at all.
+    result.ran = true;
     result.reason = 'failed';
     return result;
   } finally {
