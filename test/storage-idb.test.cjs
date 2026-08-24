@@ -515,3 +515,33 @@ test('a stale move is refused and changes nothing', async () => {
     ctx.fsDecodeText(await ctx.fsReadEntryBytes(store2, backend._superblock, ino)),
     'intact');
 });
+
+test('a move onto a live block is refused rather than overwriting it', async () => {
+  const { ctx } = idb();
+  const backend = ctx.createIdbBackend();
+  const store = await backend._store();
+  const sb = backend._superblock;
+  const a = await ctx.fsWriteEntry(store, sb, 0, 'A.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('keep me'),
+  });
+  const b = await ctx.fsWriteEntry(store, sb, 0, 'B.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('other'),
+  });
+  await settle();
+  const aBlock = (await store.get('inodes', a)).blocks[0];
+  const bBlock = (await store.get('inodes', b)).blocks[0];
+
+  // B's block is live. Moving A on top of it must be refused, not applied.
+  await assert.rejects(
+    () => backend._moveBlock({ ino: a, slot: 0, from: aBlock, to: bBlock }),
+    err => err.code === 'EINVAL');
+  await settle();
+
+  const store2 = await backend._store();
+  assert.strictEqual(
+    ctx.fsDecodeText(await ctx.fsReadEntryBytes(store2, backend._superblock, b)),
+    'other', 'B was overwritten by a move that should have been refused');
+  assert.strictEqual(
+    ctx.fsDecodeText(await ctx.fsReadEntryBytes(store2, backend._superblock, a)),
+    'keep me');
+});

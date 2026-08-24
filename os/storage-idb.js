@@ -413,6 +413,14 @@ function createIdbBackend(options) {
           // longer claims it.
           throw VfsError('EINVAL', 'stale compaction move for inode ' + move.ino);
         }
+        // The symmetric half of the staleness check above. The planner is
+        // responsible for never targeting a live block, and this is what makes
+        // a planner bug loud instead of silent: without it, a bad `to` quietly
+        // overwrites another inode's data and the damage is only visible later,
+        // as a file that reads back as garbage.
+        if (fsBitGet(txSb.freeBitmap, move.to)) {
+          throw VfsError('EINVAL', 'compaction move would overwrite live block ' + move.to);
+        }
         const bytes = await txStore.get(FS_STORE_BLOCKS, move.from);
         await txStore.put(FS_STORE_BLOCKS, move.to, bytes);
         inode.blocks[move.slot] = move.to;
