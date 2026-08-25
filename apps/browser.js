@@ -152,7 +152,7 @@ function openBrowser() {
   }
 
   // Poll to catch SPA pushState/hash navigation and link clicks
-  const _urlPoll = setInterval(syncUrl, 600);
+  const _urlPoll = procSetInterval('browser', syncUrl, 600);
 
   iframe.addEventListener('load', () => {
     syncUrl();
@@ -256,7 +256,7 @@ function openBrowser() {
       }
     });
     document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+    procSetTimeout('browser', () => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
   }
 
   mb.innerHTML = '';

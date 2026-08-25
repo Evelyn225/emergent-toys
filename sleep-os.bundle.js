@@ -8950,6 +8950,63 @@ function instWindowSample(nowMs) {
   instWindowOpen(nowMs);
   return out;
 }
+
+// ---- Main-thread attribution -------------------------------------------
+//
+// Timers first, because they are the simple half: a timer never touches the
+// DOM, so the capture probe below cannot see it. The owning window is captured
+// at registration and the callback is bracketed on invocation.
+function _instRunFor(winId, fn) {
+  const pid = typeof kernelPidForWin === 'function' ? kernelPidForWin(winId) : null;
+  const t0 = performance.now();
+  try {
+    return fn();
+  } finally {
+    // finally, so a throwing callback still reports the time it burned. A
+    // handler that throws on every tick is exactly the one worth seeing.
+    instBusyAdd(pid, performance.now() - t0);
+  }
+}
+
+function procSetTimeout(winId, fn, ms) {
+  return setTimeout(function () { _instRunFor(winId, fn); }, ms);
+}
+
+function procSetInterval(winId, fn, ms) {
+  return setInterval(function () { _instRunFor(winId, fn); }, ms);
+}
+
+// The probe. One capture-phase listener on the window root, per event type.
+//
+// Capture runs root-to-target, so this fires before any handler registered
+// inside the subtree no matter what order they were added in. The measurement
+// is closed on a microtask rather than by a bubble-phase listener on the same
+// root, and that is not a stylistic choice: apps/ contains 25
+// stopPropagation() calls, every one of which would stop a bubble listener
+// firing and silently under-report exactly the paths doing the most work.
+// Microtasks drain once the JS stack empties - after the whole synchronous
+// dispatch - so neither stopPropagation nor a throwing handler can prevent the
+// close.
+var INST_PROBE_EVENTS = ['click', 'mousedown', 'mouseup', 'keydown', 'keyup',
+                         'input', 'change', 'contextmenu', 'wheel', 'dblclick'];
+
+function instInstallProbe(rootEl, winId) {
+  if (!rootEl || !rootEl.addEventListener) return function () {};
+  const onEvent = function () {
+    const pid = typeof kernelPidForWin === 'function' ? kernelPidForWin(winId) : null;
+    if (!pid) return;
+    const t0 = performance.now();
+    queueMicrotask(function () { instBusyAdd(pid, performance.now() - t0); });
+  };
+  INST_PROBE_EVENTS.forEach(function (type) {
+    rootEl.addEventListener(type, onEvent, true);
+  });
+  return function instRemoveProbe() {
+    INST_PROBE_EVENTS.forEach(function (type) {
+      rootEl.removeEventListener(type, onEvent, true);
+    });
+  };
+}
 // ─────────────────────────────────────────────────────────────────
 // WINDOW GEOMETRY CLAMPING
 // ─────────────────────────────────────────────────────────────────
@@ -9050,6 +9107,11 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   // than in each app means an app cannot forget to appear in ps.
   wins[id].pid = kernelRegisterSystem(id, processDisplayName(title, id));
 
+  // Every app reaches the OS through mkWin, so the probe goes here rather than
+  // into eight app files. A future app is instrumented the moment it opens a
+  // window, with nothing to remember.
+  wins[id].removeProbe = instInstallProbe(el, id);
+
   makeDraggable(el, document.getElementById('tb-' + id));
   makeResizable(el, id);
   addTbBtn(id, title, icon);
@@ -9138,6 +9200,7 @@ function closeWin(id) {
   if (typeof w._onclose === 'function') {
     try { w._onclose(); } catch (e) {}
   }
+  if (wins[id] && typeof wins[id].removeProbe === 'function') wins[id].removeProbe();
   w.el.remove(); delete wins[id];
   kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
@@ -10477,7 +10540,7 @@ function openSaveDialog(defaultName, callback) {
   });
 
   renderSaveList();
-  setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+  procSetTimeout(id, () => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
 // Lore-ified pseudo-bytecode for .exe decompiler view
@@ -11036,7 +11099,7 @@ function openExplorer(startPath) {
         addrEl.blur();
       } else {
         addrEl.style.background = 'rgba(180,0,0,0.25)';
-        setTimeout(() => { addrEl.style.background = ''; }, 600);
+        procSetTimeout(id, () => { addrEl.style.background = ''; }, 600);
         const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
         addrEl.value = fullPath;
         addrEl.blur();
@@ -12371,7 +12434,7 @@ function openTerminal(startDir, initialCommand) {
       return true;
     }
     program.lines.forEach(line => print(line));
-    if (program.open) setTimeout(() => program.open({ cwd }), program.delay);
+    if (program.open) procSetTimeout('terminal', () => program.open({ cwd }), program.delay);
     return true;
   }
 
@@ -12538,7 +12601,7 @@ function openTerminal(startDir, initialCommand) {
       throwIfAborted(signal);
       if (i > 0) await scriptSleep(1000, signal);
       const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const tid = procSetTimeout('terminal', () => ctrl.abort(), 4000);
       const abortFetch = () => ctrl.abort();
       if (signal) signal.addEventListener('abort', abortFetch, { once: true });
       const t0 = performance.now();
@@ -12779,10 +12842,10 @@ function openTerminal(startDir, initialCommand) {
           if (target) {
             const saved = await writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
             print(`Opening ${saved.fileName} in Notepad...`);
-            setTimeout(() => openNotepad(saved.fileName, saved.dirName), 300);
+            procSetTimeout('terminal', () => openNotepad(saved.fileName, saved.dirName), 300);
           } else {
             print('Opening piped output in Notepad...');
-            setTimeout(() => openNotepad(undefined, cwd, { initialContent: content }), 300);
+            procSetTimeout('terminal', () => openNotepad(undefined, cwd, { initialContent: content }), 300);
           }
           consumedBySink = true;
           break;
@@ -12865,7 +12928,7 @@ function openTerminal(startDir, initialCommand) {
       const parts = (args || '').trim().split(/\s+/);
       if (parts.length < 2) { print('Usage: COPY [source] [destination]'); return; }
       print(`Copying '${parts[0]}' to '${parts[1]}'...`);
-      setTimeout(() => {
+      procSetTimeout('terminal', () => {
         print('1 file(s) copied.');
         print(`WARNING: The copy is not identical to the original.`);
         print('This is considered normal.');
@@ -12902,7 +12965,7 @@ function openTerminal(startDir, initialCommand) {
       if (winId && wins[winId]) {
         const name = wins[winId].title.split(' \u2014')[0].trim();
         print(`Terminating ${name} (PID ${pid})...`);
-        setTimeout(() => {
+        procSetTimeout('terminal', () => {
           closeWin(winId);
           print(`SUCCESS: Process "${name}" (PID ${pid}) terminated.`);
         }, 400);
@@ -12950,16 +13013,16 @@ function openTerminal(startDir, initialCommand) {
       const split = vfsSplitPath(raw, cwd);
       if (isVisibleSystemPath(raw, { includeExplorer: true })) {
         print(`Opening ${split.fileName}...`);
-        setTimeout(() => openSystemFile(split.fileName), 300);
+        procSetTimeout('terminal', () => openSystemFile(split.fileName), 300);
         return;
       }
       const st = vfsStatSync(raw, cwd);
       if (st && st.kind === 'blob') {
         print(`Opening ${raw}...`);
-        setTimeout(() => openMediaFile(raw, cwd), 300);
+        procSetTimeout('terminal', () => openMediaFile(raw, cwd), 300);
       } else if (st && st.kind === 'text') {
         print(`Opening ${raw}...`);
-        setTimeout(() => openNotepad(raw, cwd), 300);
+        procSetTimeout('terminal', () => openNotepad(raw, cwd), 300);
       } else {
         print(`File not found: ${raw}`);
         print('Use DIR to list available files.');
@@ -12972,7 +13035,7 @@ function openTerminal(startDir, initialCommand) {
         if (!st || st.kind !== 'text') { print(`File not found: ${fname}`); return; }
       }
       print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
-      setTimeout(() => openNotepad(fname || undefined, cwd), 300);
+      procSetTimeout('terminal', () => openNotepad(fname || undefined, cwd), 300);
     },
     grep: async (args) => {
       if (!args) { print('Usage: GREP <pattern> <file>'); return; }
@@ -13265,8 +13328,8 @@ function openTerminal(startDir, initialCommand) {
 
   refreshTerminalInputMode();
   document.getElementById('tw').addEventListener('click', () => inp.focus());
-  setTimeout(() => inp.focus(), 80);
-  if (initialCommand) setTimeout(() => { if (_termExec) _termExec(initialCommand); }, 30);
+  procSetTimeout('terminal', () => inp.focus(), 80);
+  if (initialCommand) procSetTimeout('terminal', () => { if (_termExec) _termExec(initialCommand); }, 30);
 }
 
 function openSysmon() {
@@ -13432,7 +13495,7 @@ function openSysmon() {
     navigator.clipboard.writeText(String(selectedProc.pid)).catch(() => {});
     const btn = procToolbar.querySelector('#sm-copypid-btn');
     const orig = btn.textContent; btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = orig; }, 800);
+    procSetTimeout('sysmon', () => { btn.textContent = orig; }, 800);
   });
   procToolbar.querySelector('#sm-refresh-btn').addEventListener('click', renderProcesses);
 
@@ -13508,7 +13571,7 @@ function openSysmon() {
   function restartSmTimer() {
     if (smTimer) clearInterval(smTimer);
     smTimer = null;
-    if (updateInterval > 0) smTimer = setInterval(smTick, updateInterval);
+    if (updateInterval > 0) smTimer = procSetInterval('sysmon', smTick, updateInterval);
     if (wins['sysmon']) wins['sysmon']._interval = smTimer;
   }
 
@@ -13810,7 +13873,7 @@ function openDefrag() {
       }
     });
     document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+    procSetTimeout('defrag', () => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
   }
 
   mb.innerHTML = '';
@@ -13836,7 +13899,7 @@ function openDefrag() {
     mb.appendChild(span);
   });
 
-  setTimeout(drawGrid, 80);
+  procSetTimeout('defrag', drawGrid, 80);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -14347,7 +14410,7 @@ function openBrowser() {
   }
 
   // Poll to catch SPA pushState/hash navigation and link clicks
-  const _urlPoll = setInterval(syncUrl, 600);
+  const _urlPoll = procSetInterval('browser', syncUrl, 600);
 
   iframe.addEventListener('load', () => {
     syncUrl();
@@ -14451,7 +14514,7 @@ function openBrowser() {
       }
     });
     document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+    procSetTimeout('browser', () => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
   }
 
   mb.innerHTML = '';
@@ -14864,7 +14927,7 @@ function openRegedit() {
         showCtxMenu(e.clientX, e.clientY, [
           { label: 'Modify', disabled: locked, action: () => editRegValue(hive, keyPath, valName) },
         ]);
-        setTimeout(() => tr.classList.remove('selected'), 800);
+        procSetTimeout('regedit', () => tr.classList.remove('selected'), 800);
       });
       tbody.appendChild(tr);
     });

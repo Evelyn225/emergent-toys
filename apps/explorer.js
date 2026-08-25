@@ -29,7 +29,7 @@ function openExplorer(startPath) {
         addrEl.blur();
       } else {
         addrEl.style.background = 'rgba(180,0,0,0.25)';
-        setTimeout(() => { addrEl.style.background = ''; }, 600);
+        procSetTimeout(id, () => { addrEl.style.background = ''; }, 600);
         const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
         addrEl.value = fullPath;
         addrEl.blur();

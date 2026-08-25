@@ -161,7 +161,7 @@ function openSysmon() {
     navigator.clipboard.writeText(String(selectedProc.pid)).catch(() => {});
     const btn = procToolbar.querySelector('#sm-copypid-btn');
     const orig = btn.textContent; btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = orig; }, 800);
+    procSetTimeout('sysmon', () => { btn.textContent = orig; }, 800);
   });
   procToolbar.querySelector('#sm-refresh-btn').addEventListener('click', renderProcesses);
 
@@ -237,7 +237,7 @@ function openSysmon() {
   function restartSmTimer() {
     if (smTimer) clearInterval(smTimer);
     smTimer = null;
-    if (updateInterval > 0) smTimer = setInterval(smTick, updateInterval);
+    if (updateInterval > 0) smTimer = procSetInterval('sysmon', smTick, updateInterval);
     if (wins['sysmon']) wins['sysmon']._interval = smTimer;
   }
 
