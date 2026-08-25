@@ -13423,18 +13423,18 @@ function openSysmon() {
   const body = document.getElementById('wb-sysmon');
   body.style.cssText = 'background:#c0c0c0;overflow:hidden;display:flex;flex-direction:column;';
 
+  // Two meters, both measured. The six flavor meters that used to sit here
+  // were a random walk wearing a percentage sign, and a system monitor is the
+  // one place that fiction cannot live. They were deleted rather than
+  // relocated: a meter that exists only to be invented has no honest home.
+  //
+  // There is deliberately no RAM bar. Summing interpreter bytes and DOM nodes
+  // produces a quantity that means nothing, and no meter beats an incoherent
+  // one.
   const METRICS = [
-    { key:'cpu',       label:'CPU Usage',      val:34, color:'#000080' },
-    { key:'ram',       label:'RAM Usage',       val:61, color:'#000080' },
-    { key:'soul',      label:'Soul Integrity',  val:87, color:'#006400' },
-    { key:'dream',     label:'Dream Cache',     val:23, color:'#800080' },
-    { key:'entropy',   label:'Entropy Level',   val:74, color:'#8b4513' },
-    { key:'void',      label:'Void Pressure',   val:12, color:'#000080' },
-    { key:'daemon',    label:'Daemon Activity', val:45, color:'#800000' },
-    { key:'coherence', label:'Coherence',       val:91, color:'#006060' },
+    { key: 'cpu',  label: 'CPU Usage', color: '#000080' },
+    { key: 'disk', label: 'Disk Used', color: '#000080' },
   ];
-  const state = {};
-  METRICS.forEach(m => { state[m.key] = m.val; });
 
   let updateInterval = 1500;
   let showSysProcs   = true;
@@ -13467,9 +13467,9 @@ function openSysmon() {
     <div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
       <div style="width:112px;font-size:10px;white-space:nowrap;">${m.label}</div>
       <div style="flex:1;height:14px;border:1px solid;border-color:#808080 #fff #fff #808080;background:#fff;position:relative;min-width:60px;">
-        <div id="smbar-${m.key}" style="position:absolute;inset:0;right:auto;width:${m.val}%;background:${m.color || '#000080'};"></div>
+        <div id="smbar-${m.key}" style="position:absolute;inset:0;right:auto;width:0%;background:${m.color || '#000080'};"></div>
       </div>
-      <div id="smval-${m.key}" style="width:30px;font-size:10px;text-align:right;">${m.val}%</div>
+      <div id="smval-${m.key}" style="width:30px;font-size:10px;text-align:right;">-</div>
     </div>`).join('') + `
     <div style="margin-top:6px;padding:3px 0 0;font-size:10px;color:#444;border-top:1px solid #b0b0b0;">
       <b>Processes:</b> <span id="sm-proc-count">--</span> running &nbsp;|&nbsp; <b>Uptime:</b> <span id="sm-uptime">--:--:--</span>
@@ -13493,7 +13493,7 @@ function openSysmon() {
     <div style="width:54px;padding:2px 4px;border-right:1px solid #808080;">PID</div>
     <div style="flex:1;padding:2px 4px;border-right:1px solid #808080;">Image Name</div>
     <div style="width:52px;padding:2px 4px;border-right:1px solid #808080;">CPU %</div>
-    <div style="width:58px;padding:2px 4px;">Mem %</div>`;
+    <div style="width:96px;padding:2px 4px;">Mem</div>`;
   procPanel.appendChild(procHeader);
   const procList = document.createElement('div');
   procList.style.cssText = 'flex:1;overflow-y:auto;background:#fff;';
@@ -13517,9 +13517,25 @@ function openSysmon() {
       const sel = selectedProc && selectedProc.pid === p.pid;
       const row = document.createElement('div');
       row.style.cssText = `display:flex;font-size:10px;border-bottom:1px solid #f0f0f0;cursor:default;background:${sel ? '#000080' : 'transparent'};color:${sel ? '#fff' : '#000'};`;
+      let mem = p.mem, memUnit = p.memUnit;
+      // A script row's mem/memUnit come straight through from
+      // buildProcessRows (interpreter-tracked bytes). An app row measures
+      // nothing there - its cost is the DOM subtree of its own window, and
+      // that's the OS layer's business, not process-view.js's, so it's
+      // counted here at render time.
+      if (mem === null && p.winId && wins[p.winId] && wins[p.winId].el) {
+        mem = wins[p.winId].el.getElementsByTagName('*').length + 1;
+        memUnit = 'nodes';
+      }
       const cpuText = p.cpu === null ? '-' : p.cpu.toFixed(1);
-      const memText = p.mem === null ? '-' : p.mem.toFixed(1);
-      row.innerHTML = `<div style="width:54px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.pid}</div><div style="flex:1;padding:1px 4px;border-right:1px solid #e8e8e8;overflow:hidden;white-space:nowrap;">${p.name}</div><div style="width:52px;padding:1px 4px;border-right:1px solid #e8e8e8;">${cpuText}</div><div style="width:58px;padding:1px 4px;">${memText}</div>`;
+      // Each cell carries its own unit because the two process classes report
+      // genuinely different things: a script reports interpreter-tracked bytes,
+      // an app reports the node count of its window subtree. Neither is heap
+      // and the column header claims neither.
+      const memText = mem === null ? '-'
+        : memUnit === 'nodes' ? mem.toLocaleString() + ' nodes'
+        : (mem / 1024).toFixed(1) + ' KB';
+      row.innerHTML = `<div style="width:54px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.pid}</div><div style="flex:1;padding:1px 4px;border-right:1px solid #e8e8e8;overflow:hidden;white-space:nowrap;">${p.name}</div><div style="width:52px;padding:1px 4px;border-right:1px solid #e8e8e8;">${cpuText}</div><div style="width:96px;padding:1px 4px;">${memText}</div>`;
       row.addEventListener('click', () => { selectedProc = p; renderProcesses(); });
       row.addEventListener('contextmenu', e => {
         e.preventDefault();
@@ -13627,17 +13643,30 @@ function openSysmon() {
 
   function smTick() {
     if (!wins['sysmon']) { clearInterval(smTimer); return; }
-    METRICS.forEach(m => {
-      let v = state[m.key] + (Math.random() - 0.5) * 7;
-      if (m.key === 'soul')    v = Math.min(92, Math.max(60, v - 0.05));
-      if (m.key === 'void' && Math.random() < 0.06) v = 75 + Math.random() * 24;
-      v = Math.max(1, Math.min(99, v));
-      state[m.key] = v;
+    const sample = instWindowSample(performance.now());
+    let cpuTotal = 0;
+    sample.forEach(function (pct) { cpuTotal += pct; });
+    getProcessList().forEach(function (p) {
+      if (p.cpu != null) cpuTotal += p.cpu;
+    });
+    cpuTotal = Math.min(100, cpuTotal);
+
+    const backend = typeof vfsGetBackend === 'function' ? vfsGetBackend() : null;
+    const sb = backend && backend._superblock;
+    const diskPct = sb
+      ? ((sb.totalBlocks - fsCountFreeBlocks(sb)) / sb.totalBlocks) * 100
+      : null;
+
+    const values = { cpu: cpuTotal, disk: diskPct };
+    METRICS.forEach(function (m) {
+      const v = values[m.key];
       const bar = document.getElementById('smbar-' + m.key);
       const val = document.getElementById('smval-' + m.key);
-      const col = (m.key === 'void' && v > 70) ? '#cc0000' : (m.color || '#000080');
-      if (bar) { bar.style.width = v.toFixed(0) + '%'; bar.style.background = col; }
-      if (val) val.textContent = v.toFixed(0) + '%';
+      // A null reading renders as a dash, never as 0%. The superblock is
+      // briefly absent after a failed write transaction discards it, and
+      // painting 0% there would be a fabricated number.
+      if (bar) { bar.style.width = (v == null ? 0 : v).toFixed(0) + '%'; bar.style.background = m.color; }
+      if (val) { val.textContent = v == null ? '-' : v.toFixed(0) + '%'; }
     });
     const sec = Math.floor(performance.now() / 1000);
     const up = document.getElementById('sm-uptime');
@@ -13654,6 +13683,9 @@ function openSysmon() {
     if (wins['sysmon']) wins['sysmon']._interval = smTimer;
   }
 
+  // Open the first window now so the first tick measures a real interval
+  // rather than dividing by the time since page load.
+  instWindowOpen(performance.now());
   restartSmTimer();
 }
 
