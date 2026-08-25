@@ -9,7 +9,7 @@ const assert = require('node:assert');
 const { makeOsContext, loadOsSources } = require('./helpers/load-os.cjs');
 
 function loadAdapters() {
-  const ctx = loadOsSources(makeOsContext(), ['os/script/interp.js', 'os/worker/syscalls.js']);
+  const ctx = loadOsSources(makeOsContext(), ['os/park.js', 'os/script/interp.js', 'os/worker/syscalls.js']);
   return { mainFs: ctx.makeVfsScriptFs(), workerFs: ctx.makeSyscallScriptFs() };
 }
 
@@ -29,7 +29,7 @@ test('every shared method has matching arity between the two adapters', () => {
 function loadAdapterWithSelf() {
   const posted = [];
   const self = { postMessage(m) { posted.push(m); } };
-  const ctx = loadOsSources(makeOsContext({ self }), ['os/worker/syscalls.js']);
+  const ctx = loadOsSources(makeOsContext({ self }), ['os/park.js', 'os/worker/syscalls.js']);
   return { ctx, posted };
 }
 

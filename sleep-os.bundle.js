@@ -7641,23 +7641,33 @@ function parseScript(source) {
 }
 
 async function scriptSleep(ms, signal) {
+  // Checked BEFORE parking: a pre-aborted sleep never waits, so recording it
+  // as parked time would credit the process with idleness it never had.
   throwIfAborted(signal);
-  await new Promise((resolve, reject) => {
-    const tid = setTimeout(done, ms);
-    function cleanup() {
-      clearTimeout(tid);
-      if (signal) signal.removeEventListener('abort', onAbort);
-    }
-    function done() {
-      cleanup();
-      resolve();
-    }
-    function onAbort() {
-      cleanup();
-      reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
-    }
-    if (signal) signal.addEventListener('abort', onAbort, { once: true });
-  });
+  parkBegin();
+  try {
+    await new Promise((resolve, reject) => {
+      const tid = setTimeout(done, ms);
+      function cleanup() {
+        clearTimeout(tid);
+        if (signal) signal.removeEventListener('abort', onAbort);
+      }
+      function done() {
+        cleanup();
+        resolve();
+      }
+      function onAbort() {
+        cleanup();
+        reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
+      }
+      if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    });
+  } finally {
+    // finally, not after the await: a SIGTERM rejects this promise, and a park
+    // left open by that path would make every later sample report the process
+    // as permanently idle.
+    parkEnd();
+  }
 }
 
 function scriptJumpIndex(labels, labelName, lineNo) {

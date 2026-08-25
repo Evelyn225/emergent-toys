@@ -8,6 +8,10 @@ function sysCall(name, args) {
   const seq = ++_sysSeq;
   return new Promise((resolve, reject) => {
     _sysPending.set(seq, { resolve, reject });
+    // Parked from the moment the message goes out. Everything after this is
+    // the main thread's time, not ours - counting it as busy would make a
+    // script blocked on disk I/O look like an infinite loop.
+    parkBegin();
     self.postMessage({ type: 'syscall', seq, name, args: args || [] });
   });
 }
@@ -16,6 +20,9 @@ function sysHandleReply(msg) {
   const pending = _sysPending.get(msg.seq);
   if (!pending) return;
   _sysPending.delete(msg.seq);
+  // Closed before resolving, so the continuation that runs on resolve is
+  // accounted as busy rather than as part of the wait.
+  parkEnd();
   if (msg.ok) { pending.resolve(msg.value); return; }
   // Rebuild an error the interpreter recognises. It branches on `.code` to turn
   // a filesystem failure into a script error carrying a line number, and that
