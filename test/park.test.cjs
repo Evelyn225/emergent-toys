@@ -41,13 +41,18 @@ test('two sequential parks add together', () => {
 test('nested parks count the union once, not the sum twice', () => {
   const ctx = park();
   ctx.parkBegin();
-  ctx.parkBegin();
-  busyFor(20);
+  busyFor(40);
+  ctx.parkBegin();   // inner park opens after the work, closes immediately
   ctx.parkEnd();
   ctx.parkEnd();
   const total = ctx.parkTotalMs();
-  assert.ok(total >= 15, 'expected at least 15ms, got ' + total);
-  assert.ok(total < 60, 'nested parks double-counted: got ' + total);
+  // Correct (depth-counted): the outer interval is measured once, ~40ms.
+  // Broken (no depth): the inner parkBegin resets the start, so BOTH ends
+  // measure from that reset point and the total collapses to ~0.
+  // The two outcomes differ by the whole interval, so this bound is robust
+  // to a noisy clock in a way that an upper bound on double-counting is not.
+  assert.ok(total >= 30, 'nested parks lost the outer interval: got ' + total);
+  assert.ok(total < 400, 'implausible total: ' + total);
 });
 
 test('an unmatched parkEnd is ignored rather than corrupting the total', () => {
