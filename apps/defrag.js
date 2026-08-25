@@ -293,7 +293,7 @@ function openDefrag() {
       }
     });
     document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+    procSetTimeout('defrag', () => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
   }
 
   mb.innerHTML = '';
@@ -319,6 +319,6 @@ function openDefrag() {
     mb.appendChild(span);
   });
 
-  setTimeout(drawGrid, 80);
+  procSetTimeout('defrag', drawGrid, 80);
 }
 

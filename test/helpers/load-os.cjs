@@ -429,6 +429,8 @@ function makeOsContext(overrides) {
     console,
     setTimeout,
     clearTimeout,
+    setInterval,
+    clearInterval,
     Promise,
     Date,
     Math,
@@ -445,6 +447,10 @@ function makeOsContext(overrides) {
     // Node provides both globally, so this aliases rather than fakes them.
     atob,
     Blob,
+    // performance.now() is the clock every CPU measurement in phase 5b reads.
+    // Aliasing node's real one rather than faking it keeps the arithmetic under
+    // test real; tests that need determinism inject their own `now` instead.
+    performance,
     localStorage: makeLocalStorageStub(overrides.quotaBytes),
     document: makeDocumentStub(),
     navigator: { storage: { estimate: async () => ({ usage: 0, quota: 5 * 1024 * 1024 }) } },

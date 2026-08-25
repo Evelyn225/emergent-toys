@@ -44,6 +44,10 @@ function sysCall(name, args) {
   const seq = ++_sysSeq;
   return new Promise((resolve, reject) => {
     _sysPending.set(seq, { resolve, reject });
+    // Parked from the moment the message goes out. Everything after this is
+    // the main thread's time, not ours - counting it as busy would make a
+    // script blocked on disk I/O look like an infinite loop.
+    parkBegin();
     self.postMessage({ type: 'syscall', seq, name, args: args || [] });
   });
 }
@@ -52,6 +56,9 @@ function sysHandleReply(msg) {
   const pending = _sysPending.get(msg.seq);
   if (!pending) return;
   _sysPending.delete(msg.seq);
+  // Closed before resolving, so the continuation that runs on resolve is
+  // accounted as busy rather than as part of the wait.
+  parkEnd();
   if (msg.ok) { pending.resolve(msg.value); return; }
   // Rebuild an error the interpreter recognises. It branches on `.code` to turn
   // a filesystem failure into a script error carrying a line number, and that
@@ -92,11 +99,107 @@ function makeSyscallScriptFs() {
     async clearScreen() {},
   };
 }
+// Parked time for the current realm.
+//
+// A process is "parked" when it is waiting on something rather than occupying
+// its thread. Worker CPU is computed as wall time minus parked time, which is
+// both cheaper and more accurate than bracketing every interpreter
+// instruction: two clock reads per instruction is real overhead on a loop that
+// runs to SCRIPT_MAX_STEPS, and it would still miss interpreter work happening
+// between instructions.
+//
+// This file is in BOTH bundles. os/script/interp.js is too, and its
+// scriptSleep parks; a worker-only accumulator would leave the main-thread
+// copy referencing an undefined function.
+var _parkTotalMs = 0;
+var _parkDepth = 0;
+var _parkStartedAt = 0;
+
+// Depth-counted rather than a plain begin/end pair, because syscalls can be in
+// flight concurrently. Two overlapping parks mean the process was parked ONCE
+// across the union of their intervals - counting each separately would
+// subtract the overlap twice and report a busy process as idle.
+function parkBegin() {
+  if (_parkDepth === 0) _parkStartedAt = performance.now();
+  _parkDepth++;
+}
+
+function parkEnd() {
+  // A stray end (a reply arriving after parkReset, say) must not open a
+  // negative depth that swallows the next real interval.
+  if (_parkDepth === 0) return;
+  _parkDepth--;
+  if (_parkDepth === 0) _parkTotalMs += performance.now() - _parkStartedAt;
+}
+
+// Includes the open interval, not just closed ones. A heartbeat that samples
+// while a script is parked would otherwise see zero subtracted and report a
+// sleeping process as 100% busy - which is precisely the WAIT-reports-100%-CPU
+// lie this whole mechanism exists to prevent.
+function parkTotalMs() {
+  return _parkDepth > 0
+    ? _parkTotalMs + (performance.now() - _parkStartedAt)
+    : _parkTotalMs;
+}
+
+function parkReset() {
+  _parkTotalMs = 0;
+  _parkDepth = 0;
+  _parkStartedAt = 0;
+}
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
 const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
+// A CPU-bound instruction (SET, GOTO, IF...) resolves its awaited promise on
+// the microtask queue, never the macrotask queue where setInterval/setTimeout
+// live. A tight loop of those keeps the microtask queue permanently non-empty,
+// which starves every timer in the realm for as long as the loop runs -
+// including os/worker/host.js's heartbeat, which is exactly the RUNAWAY.exe
+// scenario SYSMON exists to show. Ceding the macrotask queue periodically
+// breaks that starvation; SCRIPT_YIELD_EVERY is chosen small enough that the
+// cost (a handful of these per script, worst case) is noise next to
+// SCRIPT_MAX_STEPS's own ceiling.
+const SCRIPT_YIELD_EVERY = 2000;
 const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
+
+// Interpreter-tracked memory: bytes held in variables, string allocations,
+// call stack depth and loaded source size.
+//
+// This is NOT heap, and SYSMON never calls it heap. Per-worker heap is not
+// exposed to JS, and the one API that could attribute it
+// (performance.measureUserAgentSpecificMemory) needs cross-origin isolation,
+// whose COEP would break every image sleepOS loads from
+// raw.githubusercontent.com. This figure is real data about the process and
+// responsive to allocation, which is the honest thing available.
+var SCRIPT_FRAME_BYTES = 64;
+
+function scriptStateBytes(state) {
+  if (!state || typeof state !== 'object') return 0;
+  let bytes = 0;
+  const vars = state.vars;
+  if (vars && typeof vars === 'object') {
+    Object.keys(vars).forEach(function (key) {
+      // UTF-16 code units, which is what a JS string actually costs.
+      bytes += key.length * 2;
+      const v = vars[key];
+      bytes += typeof v === 'string' ? v.length * 2 : 8;
+    });
+  }
+  if (Array.isArray(state.frames)) bytes += state.frames.length * SCRIPT_FRAME_BYTES;
+  if (Array.isArray(state.callStack)) bytes += state.callStack.length * SCRIPT_FRAME_BYTES;
+  if (typeof state.sourceText === 'string') bytes += state.sourceText.length * 2;
+  return bytes;
+}
+
+// The state of the script currently executing in this realm, or null. The
+// worker heartbeat reads this; nothing else may hold onto it, because it is a
+// live object that execScript mutates in place.
+var _scriptLiveState = null;
+
+function scriptLiveStateBytes() {
+  return _scriptLiveState ? scriptStateBytes(_scriptLiveState) : 0;
+}
 
 function makeScriptError(message, lineNo, sourceName) {
   const err = new Error(message);
@@ -337,23 +440,33 @@ function parseScript(source) {
 }
 
 async function scriptSleep(ms, signal) {
+  // Checked BEFORE parking: a pre-aborted sleep never waits, so recording it
+  // as parked time would credit the process with idleness it never had.
   throwIfAborted(signal);
-  await new Promise((resolve, reject) => {
-    const tid = setTimeout(done, ms);
-    function cleanup() {
-      clearTimeout(tid);
-      if (signal) signal.removeEventListener('abort', onAbort);
-    }
-    function done() {
-      cleanup();
-      resolve();
-    }
-    function onAbort() {
-      cleanup();
-      reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
-    }
-    if (signal) signal.addEventListener('abort', onAbort, { once: true });
-  });
+  parkBegin();
+  try {
+    await new Promise((resolve, reject) => {
+      const tid = setTimeout(done, ms);
+      function cleanup() {
+        clearTimeout(tid);
+        if (signal) signal.removeEventListener('abort', onAbort);
+      }
+      function done() {
+        cleanup();
+        resolve();
+      }
+      function onAbort() {
+        cleanup();
+        reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
+      }
+      if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    });
+  } finally {
+    // finally, not after the await: a SIGTERM rejects this promise, and a park
+    // left open by that path would make every later sample report the process
+    // as permanently idle.
+    parkEnd();
+  }
 }
 
 function scriptJumpIndex(labels, labelName, lineNo) {
@@ -635,57 +748,66 @@ async function execScript(source, printFn, options) {
     frames: [scriptBuildArgFrame(options.targetName || sourceName, options.args || [])],
     callStack: [],
   };
+  _scriptLiveState = state;
   let pc = 0;
   let steps = 0;
-  while (pc < parsed.instructions.length) {
-    const inst = parsed.instructions[pc];
-    steps++;
-    try {
-      throwIfAborted(state.signal);
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
-    }
-    if (steps > SCRIPT_MAX_STEPS) {
-      return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
-    }
-    try {
-      const action = await execScriptInstruction(inst, parsed.labels, state);
-      if (action && action.type === 'jump') {
-        pc = action.pc;
-        continue;
+  try {
+    while (pc < parsed.instructions.length) {
+      const inst = parsed.instructions[pc];
+      steps++;
+      // See SCRIPT_YIELD_EVERY above: cede the macrotask queue periodically so
+      // a CPU-bound loop cannot starve the worker heartbeat (or, on the main
+      // thread, anything else waiting on a timer) for its whole run.
+      if (steps % SCRIPT_YIELD_EVERY === 0) await new Promise(resolve => setTimeout(resolve, 0));
+      try {
+        throwIfAborted(state.signal);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'call') {
-        state.callStack.push({ returnPc: pc + 1 });
-        state.frames.push(action.frame);
-        pc = action.pc;
-        continue;
+      if (steps > SCRIPT_MAX_STEPS) {
+        return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'return') {
-        if (!state.callStack.length || state.frames.length <= 1) {
-          throw makeScriptError('RETURN without CALL.', inst.lineNo);
+      try {
+        const action = await execScriptInstruction(inst, parsed.labels, state);
+        if (action && action.type === 'jump') {
+          pc = action.pc;
+          continue;
         }
-        const frame = state.callStack.pop();
-        state.frames.pop();
-        state.status = action.code;
-        pc = frame.returnPc;
-        continue;
+        if (action && action.type === 'call') {
+          state.callStack.push({ returnPc: pc + 1 });
+          state.frames.push(action.frame);
+          pc = action.pc;
+          continue;
+        }
+        if (action && action.type === 'return') {
+          if (!state.callStack.length || state.frames.length <= 1) {
+            throw makeScriptError('RETURN without CALL.', inst.lineNo);
+          }
+          const frame = state.callStack.pop();
+          state.frames.pop();
+          state.status = action.code;
+          pc = frame.returnPc;
+          continue;
+        }
+        if (action && action.type === 'exit') {
+          state.status = action.code;
+          return state.status;
+        }
+        if (typeof action === 'number') {
+          pc = action;
+          continue;
+        }
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'exit') {
-        state.status = action.code;
-        return state.status;
-      }
-      if (typeof action === 'number') {
-        pc = action;
-        continue;
-      }
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+      pc++;
     }
-    pc++;
+    return Math.trunc(state.status ?? 0);
+  } finally {
+    _scriptLiveState = null;
   }
-  return Math.trunc(state.status ?? 0);
 }
 
 // Shared by makeVfsScriptFs's `openUi` and the kernel's `ui.open` syscall
@@ -797,6 +919,27 @@ self.onmessage = async (e) => {
       if (i >= 0) _hostAbortListeners.splice(i, 1);
     },
   };
+  const startedAt = performance.now();
+  // Busy is wall minus parked. Reported on a heartbeat so a long-running
+  // script shows up while it runs, not only when it finishes - which is the
+  // whole point of watching RUNAWAY.exe pin the graph.
+  const heartbeat = setInterval(function () {
+    const wallMs = performance.now() - startedAt;
+    self.postMessage({
+      type: 'metrics',
+      // parkTotalMs() reads its own, slightly later clock than wallMs above
+      // (it now counts an open park through to the moment it's called - see
+      // os/park.js). On a script that has been parked for its entire life,
+      // that later read can exceed this wallMs snapshot by a hair, which
+      // would otherwise report negative busy time. Clamp rather than let
+      // that arithmetic quirk become a visible number.
+      busyMs: Math.max(0, wallMs - parkTotalMs()),
+      wallMs,
+      // Read live rather than captured at spawn: the whole point of the column
+      // is that it responds to what the script allocates while it runs.
+      memBytes: scriptLiveStateBytes(),
+    });
+  }, 1000);
   let code = 0;
   try {
     code = await execScript(msg.source, line => sysCall('write', ['stdout', String(line)]), {
@@ -817,5 +960,6 @@ self.onmessage = async (e) => {
     await sysCall('write', ['stderr', (err && err.message) || String(err)]);
     code = 1;
   }
+  clearInterval(heartbeat);
   self.postMessage({ type: 'syscall', seq: 0, name: 'exit', args: [code] });
 };

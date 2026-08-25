@@ -2200,6 +2200,31 @@ var _kernelByWinId = new Map();   // winId -> pid
 var _kernelNextPid = 1;
 var _kernelWaiters = new Map();   // pid -> [resolve]
 
+// Per-pid figures reported by workers. Absent means "not measured", which is
+// what SYSMON renders as a dash - and after this phase a dash has one precise
+// meaning: no measurable execution context.
+var _kernelMetrics = new Map();
+
+function kernelMetricsFor(pid) {
+  const m = _kernelMetrics.get(pid);
+  if (!m) return { cpu: null, mem: null, memUnit: null };
+  return { cpu: m.cpu, mem: m.mem, memUnit: 'bytes' };
+}
+
+function kernelRecordMetrics(pid, msg) {
+  const prev = _kernelMetrics.get(pid) || { lastBusyMs: 0, lastWallMs: 0 };
+  const dBusy = Math.max(0, msg.busyMs - prev.lastBusyMs);
+  const dWall = Math.max(0, msg.wallMs - prev.lastWallMs);
+  _kernelMetrics.set(pid, {
+    lastBusyMs: msg.busyMs,
+    lastWallMs: msg.wallMs,
+    // Share of one core since the previous heartbeat, not since spawn: a
+    // script that looped hard then went idle must stop reporting busy.
+    cpu: dWall > 0 ? Math.min(100, (dBusy / dWall) * 100) : 0,
+    mem: msg.memBytes == null ? null : msg.memBytes,
+  });
+}
+
 const KERNEL_PID = 1;
 
 // Pids 2 through 1333 (and the generated 500 + i*13 series) belong to the daemon
@@ -2369,6 +2394,7 @@ function kernelExit(pid, code) {
   waiters.forEach(resolve => resolve(code));
   if (proc.winId) _kernelByWinId.delete(proc.winId);
   _kernelProcs.delete(pid);
+  _kernelMetrics.delete(pid);
 }
 
 // TRAP: kernelWait(pid) on a pid that has already been reaped resolves 0,
@@ -2551,7 +2577,10 @@ async function kernelSpawn(path, argv, opts) {
     worker, winId: null, exitCode: null, startedAt: Date.now(),
     onStdout: opts.onStdout || null, onStderr: opts.onStderr || null,
   });
-  worker.onmessage = e => { void kernelHandleSyscall(pid, e.data); };
+  worker.onmessage = e => {
+    if (e.data && e.data.type === 'metrics') { kernelRecordMetrics(pid, e.data); return; }
+    void kernelHandleSyscall(pid, e.data);
+  };
   // A worker that throws before its first syscall would otherwise stay running
   // forever in the table.
   worker.onerror = e => { _kernelWrite(_kernelProcs.get(pid) || {}, 'stderr', e.message || 'worker error'); kernelExit(pid, 1); };
@@ -5050,6 +5079,12 @@ function vfsSeedTree() {
         '  one release, so nothing is lost if the copy',
         '  went wrong.',
         '',
+        '── SYSMON ───────────────────────────────────',
+        '  SYSMON measures what it can and says so. CPU',
+        '  is real. Memory is counted, not sampled from',
+        '  the heap, which no browser will show us.',
+        '  A dash means there is nothing to measure.',
+        '',
         '── SYSTEM ───────────────────────────────────',
         '  VER                  OS version',
         '  WHO, WHOAMI          current user',
@@ -5722,16 +5757,21 @@ const STORY_FILE_PATHS = {
   quarantineSig: 'SYS\\quarantine.sig',
   mirrorDat: 'CACHE\\mirror.dat',
 };
+// The story's processes exist; their numbers never did. Phase 5b deleted the
+// authored cpu/mem, because a process with no window and no interpreter has no
+// measurable execution context and a dash says exactly that. The rows stay:
+// TASKKILL 512 is a real story beat, the protected pids answer Access Denied,
+// and DAEMON_COUNT spawns phantoms for a player who goes looking.
 const BUILTIN_PROCESS_SEED = [
-  { pid: 4, name: 'System', cpu: 0.1, mem: 0.5, protected: true },
-  { pid: 52, name: 'csrss.exe', cpu: 0.1, mem: 1.2, protected: true },
-  { pid: 116, name: 'services.exe', cpu: 0.2, mem: 2.1, protected: true },
-  { pid: 124, name: 'lsass.exe', cpu: 0.3, mem: 3.4, protected: true },
-  { pid: 280, name: 'svchost.exe', cpu: 0.5, mem: 4.8, protected: true },
-  { pid: 312, name: 'svchost.exe', cpu: 0.1, mem: 2.3, protected: true },
-  { pid: 440, name: 'dream_kernel.exe', cpu: 1.2, mem: 8.5, protected: true },
-  { pid: 666, name: 'daemon.core', cpu: 2.1, mem: 12.3, protected: true },
-  { pid: 999, name: 'void_monitor.exe', cpu: 0.4, mem: 5.2, protected: true },
+  { pid: 4, name: 'System', protected: true },
+  { pid: 52, name: 'csrss.exe', protected: true },
+  { pid: 116, name: 'services.exe', protected: true },
+  { pid: 124, name: 'lsass.exe', protected: true },
+  { pid: 280, name: 'svchost.exe', protected: true },
+  { pid: 312, name: 'svchost.exe', protected: true },
+  { pid: 440, name: 'dream_kernel.exe', protected: true },
+  { pid: 666, name: 'daemon.core', protected: true },
+  { pid: 999, name: 'void_monitor.exe', protected: true },
 ];
 const VOID_ACTION_ORDER = ['observe', 'measure', 'listen', 'trace', 'sample', 'stabilize', 'pulse'];
 const VOID_ACTION_LABELS = {
@@ -6674,21 +6714,19 @@ function getBuiltInProcesses() {
     base.push({
       pid: 512,
       name: daemonStory.stage >= 1 ? 'soul_daemon.exe' : 'soul_svc.exe',
-      cpu: daemonStory.stage >= 4 ? 11.8 : 7.4,
-      mem: daemonStory.stage >= 4 ? 36.9 : 31.2,
       protected: daemonStory.stage < 1,
     });
   }
   if (daemonStory.stage >= 4 && !daemonStory.endingReached) {
-    base.push({ pid: 1008, name: 'mirror_watch.exe', cpu: 2.7, mem: 9.4, protected: true });
+    base.push({ pid: 1008, name: 'mirror_watch.exe', protected: true });
   }
   if (daemonStory.stage >= 5 && !daemonStory.endingReached) {
-    base.push({ pid: 1333, name: 'signal_window.exe', cpu: 1.5, mem: 4.2, protected: true });
+    base.push({ pid: 1333, name: 'signal_window.exe', protected: true });
   }
   // DAEMON_COUNT registry key: extra phantom processes when count > 7
   const daemonCount = parseInt(registryData['HKEY_SLEEPBOX_MACHINE']?.['SOUL\\Metrics']?.DAEMON_COUNT?.value) || 7;
   for (let i = 8; i <= Math.min(daemonCount, 20); i++) {
-    base.push({ pid: 500 + i * 13, name: 'soul_svc_' + String(i).padStart(2, '0') + '.exe', cpu: 0.1 + (i % 3) * 0.4, mem: 2.1 + (i % 5) * 1.2, protected: true });
+    base.push({ pid: 500 + i * 13, name: 'soul_svc_' + String(i).padStart(2, '0') + '.exe', protected: true });
   }
   return base.sort((a, b) => a.pid - b.pid);
 }
@@ -7204,6 +7242,13 @@ function processDisplayName(title, fallbackId) {
   return raw.includes('.') ? raw : raw + '.exe';
 }
 
+// Indirected so the tests can stub it without loading os/kernel.js, matching
+// how kernelListProcesses and getBuiltInProcesses are already stubbed here.
+function _pvMetrics(pid) {
+  if (typeof kernelMetricsFor !== 'function') return { cpu: null, mem: null, memUnit: null };
+  return kernelMetricsFor(pid);
+}
+
 function buildProcessRows() {
   const rows = kernelListProcesses().map(proc => ({
     pid: proc.pid,
@@ -7214,18 +7259,21 @@ function buildProcessRows() {
       : proc.name,
     kind: proc.kind,
     state: proc.state,
-    // Only phase 5 makes these measurable for a real process. Until then a
-    // spawned process reports nothing rather than a fabricated number.
-    cpu: null,
-    mem: null,
+    // Measured, or null. Never zero: zero claims a measurement that was never
+    // taken, and telling those apart is the whole point of this phase.
+    cpu: _pvMetrics(proc.pid).cpu,
+    mem: _pvMetrics(proc.pid).mem,
+    memUnit: _pvMetrics(proc.pid).memUnit,
     winId: proc.winId || null,
     isStory: false,
   }));
-  // getBuiltInProcesses returns { pid, name, cpu, mem, protected } and carries
-  // no kind or state, so they are synthesized to match what ps already prints.
+  // getBuiltInProcesses returns { pid, name, protected } and carries no kind,
+  // state, cpu, or mem, so they are synthesized to match what ps already
+  // prints. A story process has no window and no interpreter - no measurable
+  // execution context - so it reports null, not an invented number.
   getBuiltInProcesses().forEach(p => rows.push({
     pid: p.pid, name: p.name, kind: 'system', state: 'running',
-    cpu: p.cpu, mem: p.mem, winId: null, isStory: true,
+    cpu: null, mem: null, memUnit: null, winId: null, isStory: true,
   }));
   return rows.sort((a, b) => a.pid - b.pid);
 }
@@ -7356,11 +7404,107 @@ function applySettings() {
 
 document.addEventListener('fs-changed', refreshAppearanceWindow);
 
+// Parked time for the current realm.
+//
+// A process is "parked" when it is waiting on something rather than occupying
+// its thread. Worker CPU is computed as wall time minus parked time, which is
+// both cheaper and more accurate than bracketing every interpreter
+// instruction: two clock reads per instruction is real overhead on a loop that
+// runs to SCRIPT_MAX_STEPS, and it would still miss interpreter work happening
+// between instructions.
+//
+// This file is in BOTH bundles. os/script/interp.js is too, and its
+// scriptSleep parks; a worker-only accumulator would leave the main-thread
+// copy referencing an undefined function.
+var _parkTotalMs = 0;
+var _parkDepth = 0;
+var _parkStartedAt = 0;
+
+// Depth-counted rather than a plain begin/end pair, because syscalls can be in
+// flight concurrently. Two overlapping parks mean the process was parked ONCE
+// across the union of their intervals - counting each separately would
+// subtract the overlap twice and report a busy process as idle.
+function parkBegin() {
+  if (_parkDepth === 0) _parkStartedAt = performance.now();
+  _parkDepth++;
+}
+
+function parkEnd() {
+  // A stray end (a reply arriving after parkReset, say) must not open a
+  // negative depth that swallows the next real interval.
+  if (_parkDepth === 0) return;
+  _parkDepth--;
+  if (_parkDepth === 0) _parkTotalMs += performance.now() - _parkStartedAt;
+}
+
+// Includes the open interval, not just closed ones. A heartbeat that samples
+// while a script is parked would otherwise see zero subtracted and report a
+// sleeping process as 100% busy - which is precisely the WAIT-reports-100%-CPU
+// lie this whole mechanism exists to prevent.
+function parkTotalMs() {
+  return _parkDepth > 0
+    ? _parkTotalMs + (performance.now() - _parkStartedAt)
+    : _parkTotalMs;
+}
+
+function parkReset() {
+  _parkTotalMs = 0;
+  _parkDepth = 0;
+  _parkStartedAt = 0;
+}
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
 const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
+// A CPU-bound instruction (SET, GOTO, IF...) resolves its awaited promise on
+// the microtask queue, never the macrotask queue where setInterval/setTimeout
+// live. A tight loop of those keeps the microtask queue permanently non-empty,
+// which starves every timer in the realm for as long as the loop runs -
+// including os/worker/host.js's heartbeat, which is exactly the RUNAWAY.exe
+// scenario SYSMON exists to show. Ceding the macrotask queue periodically
+// breaks that starvation; SCRIPT_YIELD_EVERY is chosen small enough that the
+// cost (a handful of these per script, worst case) is noise next to
+// SCRIPT_MAX_STEPS's own ceiling.
+const SCRIPT_YIELD_EVERY = 2000;
 const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
+
+// Interpreter-tracked memory: bytes held in variables, string allocations,
+// call stack depth and loaded source size.
+//
+// This is NOT heap, and SYSMON never calls it heap. Per-worker heap is not
+// exposed to JS, and the one API that could attribute it
+// (performance.measureUserAgentSpecificMemory) needs cross-origin isolation,
+// whose COEP would break every image sleepOS loads from
+// raw.githubusercontent.com. This figure is real data about the process and
+// responsive to allocation, which is the honest thing available.
+var SCRIPT_FRAME_BYTES = 64;
+
+function scriptStateBytes(state) {
+  if (!state || typeof state !== 'object') return 0;
+  let bytes = 0;
+  const vars = state.vars;
+  if (vars && typeof vars === 'object') {
+    Object.keys(vars).forEach(function (key) {
+      // UTF-16 code units, which is what a JS string actually costs.
+      bytes += key.length * 2;
+      const v = vars[key];
+      bytes += typeof v === 'string' ? v.length * 2 : 8;
+    });
+  }
+  if (Array.isArray(state.frames)) bytes += state.frames.length * SCRIPT_FRAME_BYTES;
+  if (Array.isArray(state.callStack)) bytes += state.callStack.length * SCRIPT_FRAME_BYTES;
+  if (typeof state.sourceText === 'string') bytes += state.sourceText.length * 2;
+  return bytes;
+}
+
+// The state of the script currently executing in this realm, or null. The
+// worker heartbeat reads this; nothing else may hold onto it, because it is a
+// live object that execScript mutates in place.
+var _scriptLiveState = null;
+
+function scriptLiveStateBytes() {
+  return _scriptLiveState ? scriptStateBytes(_scriptLiveState) : 0;
+}
 
 function makeScriptError(message, lineNo, sourceName) {
   const err = new Error(message);
@@ -7601,23 +7745,33 @@ function parseScript(source) {
 }
 
 async function scriptSleep(ms, signal) {
+  // Checked BEFORE parking: a pre-aborted sleep never waits, so recording it
+  // as parked time would credit the process with idleness it never had.
   throwIfAborted(signal);
-  await new Promise((resolve, reject) => {
-    const tid = setTimeout(done, ms);
-    function cleanup() {
-      clearTimeout(tid);
-      if (signal) signal.removeEventListener('abort', onAbort);
-    }
-    function done() {
-      cleanup();
-      resolve();
-    }
-    function onAbort() {
-      cleanup();
-      reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
-    }
-    if (signal) signal.addEventListener('abort', onAbort, { once: true });
-  });
+  parkBegin();
+  try {
+    await new Promise((resolve, reject) => {
+      const tid = setTimeout(done, ms);
+      function cleanup() {
+        clearTimeout(tid);
+        if (signal) signal.removeEventListener('abort', onAbort);
+      }
+      function done() {
+        cleanup();
+        resolve();
+      }
+      function onAbort() {
+        cleanup();
+        reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
+      }
+      if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    });
+  } finally {
+    // finally, not after the await: a SIGTERM rejects this promise, and a park
+    // left open by that path would make every later sample report the process
+    // as permanently idle.
+    parkEnd();
+  }
 }
 
 function scriptJumpIndex(labels, labelName, lineNo) {
@@ -7899,57 +8053,66 @@ async function execScript(source, printFn, options) {
     frames: [scriptBuildArgFrame(options.targetName || sourceName, options.args || [])],
     callStack: [],
   };
+  _scriptLiveState = state;
   let pc = 0;
   let steps = 0;
-  while (pc < parsed.instructions.length) {
-    const inst = parsed.instructions[pc];
-    steps++;
-    try {
-      throwIfAborted(state.signal);
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
-    }
-    if (steps > SCRIPT_MAX_STEPS) {
-      return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
-    }
-    try {
-      const action = await execScriptInstruction(inst, parsed.labels, state);
-      if (action && action.type === 'jump') {
-        pc = action.pc;
-        continue;
+  try {
+    while (pc < parsed.instructions.length) {
+      const inst = parsed.instructions[pc];
+      steps++;
+      // See SCRIPT_YIELD_EVERY above: cede the macrotask queue periodically so
+      // a CPU-bound loop cannot starve the worker heartbeat (or, on the main
+      // thread, anything else waiting on a timer) for its whole run.
+      if (steps % SCRIPT_YIELD_EVERY === 0) await new Promise(resolve => setTimeout(resolve, 0));
+      try {
+        throwIfAborted(state.signal);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'call') {
-        state.callStack.push({ returnPc: pc + 1 });
-        state.frames.push(action.frame);
-        pc = action.pc;
-        continue;
+      if (steps > SCRIPT_MAX_STEPS) {
+        return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'return') {
-        if (!state.callStack.length || state.frames.length <= 1) {
-          throw makeScriptError('RETURN without CALL.', inst.lineNo);
+      try {
+        const action = await execScriptInstruction(inst, parsed.labels, state);
+        if (action && action.type === 'jump') {
+          pc = action.pc;
+          continue;
         }
-        const frame = state.callStack.pop();
-        state.frames.pop();
-        state.status = action.code;
-        pc = frame.returnPc;
-        continue;
+        if (action && action.type === 'call') {
+          state.callStack.push({ returnPc: pc + 1 });
+          state.frames.push(action.frame);
+          pc = action.pc;
+          continue;
+        }
+        if (action && action.type === 'return') {
+          if (!state.callStack.length || state.frames.length <= 1) {
+            throw makeScriptError('RETURN without CALL.', inst.lineNo);
+          }
+          const frame = state.callStack.pop();
+          state.frames.pop();
+          state.status = action.code;
+          pc = frame.returnPc;
+          continue;
+        }
+        if (action && action.type === 'exit') {
+          state.status = action.code;
+          return state.status;
+        }
+        if (typeof action === 'number') {
+          pc = action;
+          continue;
+        }
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'exit') {
-        state.status = action.code;
-        return state.status;
-      }
-      if (typeof action === 'number') {
-        pc = action;
-        continue;
-      }
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+      pc++;
     }
-    pc++;
+    return Math.trunc(state.status ?? 0);
+  } finally {
+    _scriptLiveState = null;
   }
-  return Math.trunc(state.status ?? 0);
 }
 
 // Shared by makeVfsScriptFs's `openUi` and the kernel's `ui.open` syscall
@@ -8854,6 +9017,109 @@ function osPrompt(msg, def, title, cb, icon) {
   setTimeout(() => { inp.focus(); inp.select(); }, 40);
 }
 
+// Per-pid CPU accounting over a sample window.
+//
+// Pure arithmetic: every entry point takes the current time rather than
+// reading a clock, so the whole thing is testable in node without faking
+// performance.now(). The callers that DO read a clock are the probe in
+// os/wm.js and the tick in apps/sysmon.js.
+//
+// "CPU %" means busy milliseconds attributed to a process divided by
+// wall-clock milliseconds in the window - share of one core over the window.
+// The same definition covers main-thread apps and worker scripts, which is
+// what makes the two comparable in one column.
+var _instBusyMs = new Map();
+var _instWindowOpenedAt = null;
+
+function instBusyAdd(pid, ms) {
+  // A window event on a chrome element with no owning process, or a
+  // zero-length dispatch, carries no information and must not create a row.
+  if (!pid || !(ms > 0)) return;
+  _instBusyMs.set(pid, (_instBusyMs.get(pid) || 0) + ms);
+}
+
+function instBusyMsFor(pid) { return _instBusyMs.get(pid) || 0; }
+
+function instWindowOpen(nowMs) {
+  _instWindowOpenedAt = nowMs;
+  _instBusyMs.clear();
+}
+
+function instWindowSample(nowMs) {
+  const out = new Map();
+  const elapsed = _instWindowOpenedAt === null ? 0 : nowMs - _instWindowOpenedAt;
+  if (elapsed > 0) {
+    _instBusyMs.forEach(function (ms, pid) {
+      // Capped at 100: a single worker cannot occupy more than one core's
+      // worth of a window, and main-thread apps share one thread by
+      // definition. A figure above 100 would mean the measurement is wrong,
+      // and printing it would be worse than clamping it.
+      out.set(pid, Math.min(100, (ms / elapsed) * 100));
+    });
+  }
+  // Always reopen, including on a zero-length window. Leaving the old totals
+  // in place would report the same work again next tick and keep an idle
+  // process looking busy.
+  instWindowOpen(nowMs);
+  return out;
+}
+
+// ---- Main-thread attribution -------------------------------------------
+//
+// Timers first, because they are the simple half: a timer never touches the
+// DOM, so the capture probe below cannot see it. The owning window is captured
+// at registration and the callback is bracketed on invocation.
+function _instRunFor(winId, fn) {
+  const pid = typeof kernelPidForWin === 'function' ? kernelPidForWin(winId) : null;
+  const t0 = performance.now();
+  try {
+    return fn();
+  } finally {
+    // finally, so a throwing callback still reports the time it burned. A
+    // handler that throws on every tick is exactly the one worth seeing.
+    instBusyAdd(pid, performance.now() - t0);
+  }
+}
+
+function procSetTimeout(winId, fn, ms) {
+  return setTimeout(function () { _instRunFor(winId, fn); }, ms);
+}
+
+function procSetInterval(winId, fn, ms) {
+  return setInterval(function () { _instRunFor(winId, fn); }, ms);
+}
+
+// The probe. One capture-phase listener on the window root, per event type.
+//
+// Capture runs root-to-target, so this fires before any handler registered
+// inside the subtree no matter what order they were added in. The measurement
+// is closed on a microtask rather than by a bubble-phase listener on the same
+// root, and that is not a stylistic choice: apps/ contains 25
+// stopPropagation() calls, every one of which would stop a bubble listener
+// firing and silently under-report exactly the paths doing the most work.
+// Microtasks drain once the JS stack empties - after the whole synchronous
+// dispatch - so neither stopPropagation nor a throwing handler can prevent the
+// close.
+var INST_PROBE_EVENTS = ['click', 'mousedown', 'mouseup', 'keydown', 'keyup',
+                         'input', 'change', 'contextmenu', 'wheel', 'dblclick'];
+
+function instInstallProbe(rootEl, winId) {
+  if (!rootEl || !rootEl.addEventListener) return function () {};
+  const onEvent = function () {
+    const pid = typeof kernelPidForWin === 'function' ? kernelPidForWin(winId) : null;
+    if (!pid) return;
+    const t0 = performance.now();
+    queueMicrotask(function () { instBusyAdd(pid, performance.now() - t0); });
+  };
+  INST_PROBE_EVENTS.forEach(function (type) {
+    rootEl.addEventListener(type, onEvent, true);
+  });
+  return function instRemoveProbe() {
+    INST_PROBE_EVENTS.forEach(function (type) {
+      rootEl.removeEventListener(type, onEvent, true);
+    });
+  };
+}
 // ─────────────────────────────────────────────────────────────────
 // WINDOW GEOMETRY CLAMPING
 // ─────────────────────────────────────────────────────────────────
@@ -8954,6 +9220,11 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   // than in each app means an app cannot forget to appear in ps.
   wins[id].pid = kernelRegisterSystem(id, processDisplayName(title, id));
 
+  // Every app reaches the OS through mkWin, so the probe goes here rather than
+  // into eight app files. A future app is instrumented the moment it opens a
+  // window, with nothing to remember.
+  wins[id].removeProbe = instInstallProbe(el, id);
+
   makeDraggable(el, document.getElementById('tb-' + id));
   makeResizable(el, id);
   addTbBtn(id, title, icon);
@@ -9042,6 +9313,7 @@ function closeWin(id) {
   if (typeof w._onclose === 'function') {
     try { w._onclose(); } catch (e) {}
   }
+  if (wins[id] && typeof wins[id].removeProbe === 'function') wins[id].removeProbe();
   w.el.remove(); delete wins[id];
   kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
@@ -10381,7 +10653,7 @@ function openSaveDialog(defaultName, callback) {
   });
 
   renderSaveList();
-  setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+  procSetTimeout(id, () => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
 // Lore-ified pseudo-bytecode for .exe decompiler view
@@ -10940,7 +11212,7 @@ function openExplorer(startPath) {
         addrEl.blur();
       } else {
         addrEl.style.background = 'rgba(180,0,0,0.25)';
-        setTimeout(() => { addrEl.style.background = ''; }, 600);
+        procSetTimeout(id, () => { addrEl.style.background = ''; }, 600);
         const fullPath = cwd ? 'C:\\sleepOS\\' + cwd : 'C:\\sleepOS';
         addrEl.value = fullPath;
         addrEl.blur();
@@ -12275,7 +12547,7 @@ function openTerminal(startDir, initialCommand) {
       return true;
     }
     program.lines.forEach(line => print(line));
-    if (program.open) setTimeout(() => program.open({ cwd }), program.delay);
+    if (program.open) procSetTimeout('terminal', () => program.open({ cwd }), program.delay);
     return true;
   }
 
@@ -12442,7 +12714,7 @@ function openTerminal(startDir, initialCommand) {
       throwIfAborted(signal);
       if (i > 0) await scriptSleep(1000, signal);
       const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const tid = procSetTimeout('terminal', () => ctrl.abort(), 4000);
       const abortFetch = () => ctrl.abort();
       if (signal) signal.addEventListener('abort', abortFetch, { once: true });
       const t0 = performance.now();
@@ -12683,10 +12955,10 @@ function openTerminal(startDir, initialCommand) {
           if (target) {
             const saved = await writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
             print(`Opening ${saved.fileName} in Notepad...`);
-            setTimeout(() => openNotepad(saved.fileName, saved.dirName), 300);
+            procSetTimeout('terminal', () => openNotepad(saved.fileName, saved.dirName), 300);
           } else {
             print('Opening piped output in Notepad...');
-            setTimeout(() => openNotepad(undefined, cwd, { initialContent: content }), 300);
+            procSetTimeout('terminal', () => openNotepad(undefined, cwd, { initialContent: content }), 300);
           }
           consumedBySink = true;
           break;
@@ -12769,7 +13041,7 @@ function openTerminal(startDir, initialCommand) {
       const parts = (args || '').trim().split(/\s+/);
       if (parts.length < 2) { print('Usage: COPY [source] [destination]'); return; }
       print(`Copying '${parts[0]}' to '${parts[1]}'...`);
-      setTimeout(() => {
+      procSetTimeout('terminal', () => {
         print('1 file(s) copied.');
         print(`WARNING: The copy is not identical to the original.`);
         print('This is considered normal.');
@@ -12806,7 +13078,7 @@ function openTerminal(startDir, initialCommand) {
       if (winId && wins[winId]) {
         const name = wins[winId].title.split(' \u2014')[0].trim();
         print(`Terminating ${name} (PID ${pid})...`);
-        setTimeout(() => {
+        procSetTimeout('terminal', () => {
           closeWin(winId);
           print(`SUCCESS: Process "${name}" (PID ${pid}) terminated.`);
         }, 400);
@@ -12854,16 +13126,16 @@ function openTerminal(startDir, initialCommand) {
       const split = vfsSplitPath(raw, cwd);
       if (isVisibleSystemPath(raw, { includeExplorer: true })) {
         print(`Opening ${split.fileName}...`);
-        setTimeout(() => openSystemFile(split.fileName), 300);
+        procSetTimeout('terminal', () => openSystemFile(split.fileName), 300);
         return;
       }
       const st = vfsStatSync(raw, cwd);
       if (st && st.kind === 'blob') {
         print(`Opening ${raw}...`);
-        setTimeout(() => openMediaFile(raw, cwd), 300);
+        procSetTimeout('terminal', () => openMediaFile(raw, cwd), 300);
       } else if (st && st.kind === 'text') {
         print(`Opening ${raw}...`);
-        setTimeout(() => openNotepad(raw, cwd), 300);
+        procSetTimeout('terminal', () => openNotepad(raw, cwd), 300);
       } else {
         print(`File not found: ${raw}`);
         print('Use DIR to list available files.');
@@ -12876,7 +13148,7 @@ function openTerminal(startDir, initialCommand) {
         if (!st || st.kind !== 'text') { print(`File not found: ${fname}`); return; }
       }
       print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
-      setTimeout(() => openNotepad(fname || undefined, cwd), 300);
+      procSetTimeout('terminal', () => openNotepad(fname || undefined, cwd), 300);
     },
     grep: async (args) => {
       if (!args) { print('Usage: GREP <pattern> <file>'); return; }
@@ -13169,8 +13441,8 @@ function openTerminal(startDir, initialCommand) {
 
   refreshTerminalInputMode();
   document.getElementById('tw').addEventListener('click', () => inp.focus());
-  setTimeout(() => inp.focus(), 80);
-  if (initialCommand) setTimeout(() => { if (_termExec) _termExec(initialCommand); }, 30);
+  procSetTimeout('terminal', () => inp.focus(), 80);
+  if (initialCommand) procSetTimeout('terminal', () => { if (_termExec) _termExec(initialCommand); }, 30);
 }
 
 function openSysmon() {
@@ -13179,24 +13451,28 @@ function openSysmon() {
   const body = document.getElementById('wb-sysmon');
   body.style.cssText = 'background:#c0c0c0;overflow:hidden;display:flex;flex-direction:column;';
 
+  // Two meters, both measured. The six flavor meters that used to sit here
+  // were a random walk wearing a percentage sign, and a system monitor is the
+  // one place that fiction cannot live. They were deleted rather than
+  // relocated: a meter that exists only to be invented has no honest home.
+  //
+  // There is deliberately no RAM bar. Summing interpreter bytes and DOM nodes
+  // produces a quantity that means nothing, and no meter beats an incoherent
+  // one.
   const METRICS = [
-    { key:'cpu',       label:'CPU Usage',      val:34, color:'#000080' },
-    { key:'ram',       label:'RAM Usage',       val:61, color:'#000080' },
-    { key:'soul',      label:'Soul Integrity',  val:87, color:'#006400' },
-    { key:'dream',     label:'Dream Cache',     val:23, color:'#800080' },
-    { key:'entropy',   label:'Entropy Level',   val:74, color:'#8b4513' },
-    { key:'void',      label:'Void Pressure',   val:12, color:'#000080' },
-    { key:'daemon',    label:'Daemon Activity', val:45, color:'#800000' },
-    { key:'coherence', label:'Coherence',       val:91, color:'#006060' },
+    { key: 'cpu',  label: 'CPU Usage', color: '#000080' },
+    { key: 'disk', label: 'Disk Used', color: '#000080' },
   ];
-  const state = {};
-  METRICS.forEach(m => { state[m.key] = m.val; });
 
   let updateInterval = 1500;
   let showSysProcs   = true;
   let activeTab      = 'resources';
   let selectedProc   = null;
   let smTimer        = null;
+  // The probe's per-app percentages. instWindowSample RESETS the window as a
+  // side effect, so the result has to be held here: renderProcesses runs later
+  // in the same tick and would otherwise find the totals already cleared.
+  let lastCpuSample = new Map();
 
   // Tab bar
   const tabBar = document.createElement('div');
@@ -13223,9 +13499,9 @@ function openSysmon() {
     <div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
       <div style="width:112px;font-size:10px;white-space:nowrap;">${m.label}</div>
       <div style="flex:1;height:14px;border:1px solid;border-color:#808080 #fff #fff #808080;background:#fff;position:relative;min-width:60px;">
-        <div id="smbar-${m.key}" style="position:absolute;inset:0;right:auto;width:${m.val}%;background:${m.color || '#000080'};"></div>
+        <div id="smbar-${m.key}" style="position:absolute;inset:0;right:auto;width:0%;background:${m.color || '#000080'};"></div>
       </div>
-      <div id="smval-${m.key}" style="width:30px;font-size:10px;text-align:right;">${m.val}%</div>
+      <div id="smval-${m.key}" style="width:30px;font-size:10px;text-align:right;">-</div>
     </div>`).join('') + `
     <div style="margin-top:6px;padding:3px 0 0;font-size:10px;color:#444;border-top:1px solid #b0b0b0;">
       <b>Processes:</b> <span id="sm-proc-count">--</span> running &nbsp;|&nbsp; <b>Uptime:</b> <span id="sm-uptime">--:--:--</span>
@@ -13249,7 +13525,7 @@ function openSysmon() {
     <div style="width:54px;padding:2px 4px;border-right:1px solid #808080;">PID</div>
     <div style="flex:1;padding:2px 4px;border-right:1px solid #808080;">Image Name</div>
     <div style="width:52px;padding:2px 4px;border-right:1px solid #808080;">CPU %</div>
-    <div style="width:58px;padding:2px 4px;">Mem %</div>`;
+    <div style="width:96px;padding:2px 4px;">Mem</div>`;
   procPanel.appendChild(procHeader);
   const procList = document.createElement('div');
   procList.style.cssText = 'flex:1;overflow-y:auto;background:#fff;';
@@ -13257,18 +13533,12 @@ function openSysmon() {
   content.appendChild(procPanel);
 
   function getProcessList() {
-    // Story rows keep their authored cpu/mem plus jitter, applied here at
-    // presentation time rather than in the shared view: jitter is a display
-    // concern, not a fact about a process, and `ps` must not show randomized
-    // numbers. Real (kernel-table) rows carry null cpu/mem straight through -
-    // phase 5 makes those genuinely measurable.
-    return buildProcessRows()
-      .filter(p => showSysProcs || !p.isStory)
-      .map(p => p.isStory ? {
-        ...p,
-        cpu: parseFloat((p.cpu + (Math.random() - 0.5) * 0.2).toFixed(1)),
-        mem: parseFloat((p.mem + (Math.random() - 0.5) * 0.3).toFixed(1)),
-      } : p);
+    // Phase 5b deleted the story rows' authored cpu/mem, so there is nothing
+    // left to jitter: a story process has no window and no interpreter, so it
+    // has no measurable execution context and reports null like any other
+    // unmeasured row. Real (kernel-table) rows carry their measured cpu/mem
+    // straight through from buildProcessRows.
+    return buildProcessRows().filter(p => showSysProcs || !p.isStory);
   }
 
   function renderProcesses() {
@@ -13279,9 +13549,35 @@ function openSysmon() {
       const sel = selectedProc && selectedProc.pid === p.pid;
       const row = document.createElement('div');
       row.style.cssText = `display:flex;font-size:10px;border-bottom:1px solid #f0f0f0;cursor:default;background:${sel ? '#000080' : 'transparent'};color:${sel ? '#fff' : '#000'};`;
-      const cpuText = p.cpu === null ? '-' : p.cpu.toFixed(1);
-      const memText = p.mem === null ? '-' : p.mem.toFixed(1);
-      row.innerHTML = `<div style="width:54px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.pid}</div><div style="flex:1;padding:1px 4px;border-right:1px solid #e8e8e8;overflow:hidden;white-space:nowrap;">${p.name}</div><div style="width:52px;padding:1px 4px;border-right:1px solid #e8e8e8;">${cpuText}</div><div style="width:58px;padding:1px 4px;">${memText}</div>`;
+      let mem = p.mem, memUnit = p.memUnit;
+      // A script row's mem/memUnit come straight through from
+      // buildProcessRows (interpreter-tracked bytes). An app row measures
+      // nothing there - its cost is the DOM subtree of its own window, and
+      // that's the OS layer's business, not process-view.js's, so it's
+      // counted here at render time.
+      if (mem === null && p.winId && wins[p.winId] && wins[p.winId].el) {
+        mem = wins[p.winId].el.getElementsByTagName('*').length + 1;
+        memUnit = 'nodes';
+      }
+      // Three cases, and the difference between the last two is the point of
+      // this phase. A worker reports interpreter-measured CPU. An app has a
+      // live window, so it IS measurable - if the probe recorded nothing this
+      // window it was genuinely idle, which is 0.0, not "unmeasurable". A row
+      // with no window and no interpreter has no execution context at all, and
+      // only that reads as a dash.
+      let cpu = p.cpu;
+      if (cpu === null && p.winId && wins[p.winId]) {
+        cpu = lastCpuSample.get(p.pid) || 0;
+      }
+      const cpuText = cpu === null ? '-' : cpu.toFixed(1);
+      // Each cell carries its own unit because the two process classes report
+      // genuinely different things: a script reports interpreter-tracked bytes,
+      // an app reports the node count of its window subtree. Neither is heap
+      // and the column header claims neither.
+      const memText = mem === null ? '-'
+        : memUnit === 'nodes' ? mem.toLocaleString() + ' nodes'
+        : (mem / 1024).toFixed(1) + ' KB';
+      row.innerHTML = `<div style="width:54px;padding:1px 4px;border-right:1px solid #e8e8e8;">${p.pid}</div><div style="flex:1;padding:1px 4px;border-right:1px solid #e8e8e8;overflow:hidden;white-space:nowrap;">${p.name}</div><div style="width:52px;padding:1px 4px;border-right:1px solid #e8e8e8;">${cpuText}</div><div style="width:96px;padding:1px 4px;">${memText}</div>`;
       row.addEventListener('click', () => { selectedProc = p; renderProcesses(); });
       row.addEventListener('contextmenu', e => {
         e.preventDefault();
@@ -13336,7 +13632,7 @@ function openSysmon() {
     navigator.clipboard.writeText(String(selectedProc.pid)).catch(() => {});
     const btn = procToolbar.querySelector('#sm-copypid-btn');
     const orig = btn.textContent; btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = orig; }, 800);
+    procSetTimeout('sysmon', () => { btn.textContent = orig; }, 800);
   });
   procToolbar.querySelector('#sm-refresh-btn').addEventListener('click', renderProcesses);
 
@@ -13389,17 +13685,30 @@ function openSysmon() {
 
   function smTick() {
     if (!wins['sysmon']) { clearInterval(smTimer); return; }
-    METRICS.forEach(m => {
-      let v = state[m.key] + (Math.random() - 0.5) * 7;
-      if (m.key === 'soul')    v = Math.min(92, Math.max(60, v - 0.05));
-      if (m.key === 'void' && Math.random() < 0.06) v = 75 + Math.random() * 24;
-      v = Math.max(1, Math.min(99, v));
-      state[m.key] = v;
+    lastCpuSample = instWindowSample(performance.now());
+    let cpuTotal = 0;
+    lastCpuSample.forEach(function (pct) { cpuTotal += pct; });
+    getProcessList().forEach(function (p) {
+      if (p.cpu != null) cpuTotal += p.cpu;
+    });
+    cpuTotal = Math.min(100, cpuTotal);
+
+    const backend = typeof vfsGetBackend === 'function' ? vfsGetBackend() : null;
+    const sb = backend && backend._superblock;
+    const diskPct = sb
+      ? ((sb.totalBlocks - fsCountFreeBlocks(sb)) / sb.totalBlocks) * 100
+      : null;
+
+    const values = { cpu: cpuTotal, disk: diskPct };
+    METRICS.forEach(function (m) {
+      const v = values[m.key];
       const bar = document.getElementById('smbar-' + m.key);
       const val = document.getElementById('smval-' + m.key);
-      const col = (m.key === 'void' && v > 70) ? '#cc0000' : (m.color || '#000080');
-      if (bar) { bar.style.width = v.toFixed(0) + '%'; bar.style.background = col; }
-      if (val) val.textContent = v.toFixed(0) + '%';
+      // A null reading renders as a dash, never as 0%. The superblock is
+      // briefly absent after a failed write transaction discards it, and
+      // painting 0% there would be a fabricated number.
+      if (bar) { bar.style.width = (v == null ? 0 : v).toFixed(0) + '%'; bar.style.background = m.color; }
+      if (val) { val.textContent = v == null ? '-' : v.toFixed(0) + '%'; }
     });
     const sec = Math.floor(performance.now() / 1000);
     const up = document.getElementById('sm-uptime');
@@ -13412,10 +13721,13 @@ function openSysmon() {
   function restartSmTimer() {
     if (smTimer) clearInterval(smTimer);
     smTimer = null;
-    if (updateInterval > 0) smTimer = setInterval(smTick, updateInterval);
+    if (updateInterval > 0) smTimer = procSetInterval('sysmon', smTick, updateInterval);
     if (wins['sysmon']) wins['sysmon']._interval = smTimer;
   }
 
+  // Open the first window now so the first tick measures a real interval
+  // rather than dividing by the time since page load.
+  instWindowOpen(performance.now());
   restartSmTimer();
 }
 
@@ -13714,7 +14026,7 @@ function openDefrag() {
       }
     });
     document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+    procSetTimeout('defrag', () => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
   }
 
   mb.innerHTML = '';
@@ -13740,7 +14052,7 @@ function openDefrag() {
     mb.appendChild(span);
   });
 
-  setTimeout(drawGrid, 80);
+  procSetTimeout('defrag', drawGrid, 80);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -14251,7 +14563,7 @@ function openBrowser() {
   }
 
   // Poll to catch SPA pushState/hash navigation and link clicks
-  const _urlPoll = setInterval(syncUrl, 600);
+  const _urlPoll = procSetInterval('browser', syncUrl, 600);
 
   iframe.addEventListener('load', () => {
     syncUrl();
@@ -14355,7 +14667,7 @@ function openBrowser() {
       }
     });
     document.body.appendChild(dd);
-    setTimeout(() => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
+    procSetTimeout('browser', () => document.addEventListener('mousedown', () => { const d = document.getElementById('active-dropdown'); if (d) d.remove(); }, { once: true }), 0);
   }
 
   mb.innerHTML = '';
@@ -14768,7 +15080,7 @@ function openRegedit() {
         showCtxMenu(e.clientX, e.clientY, [
           { label: 'Modify', disabled: locked, action: () => editRegValue(hive, keyPath, valName) },
         ]);
-        setTimeout(() => tr.classList.remove('selected'), 800);
+        procSetTimeout('regedit', () => tr.classList.remove('selected'), 800);
       });
       tbody.appendChild(tr);
     });

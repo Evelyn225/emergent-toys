@@ -32,6 +32,27 @@ self.onmessage = async (e) => {
       if (i >= 0) _hostAbortListeners.splice(i, 1);
     },
   };
+  const startedAt = performance.now();
+  // Busy is wall minus parked. Reported on a heartbeat so a long-running
+  // script shows up while it runs, not only when it finishes - which is the
+  // whole point of watching RUNAWAY.exe pin the graph.
+  const heartbeat = setInterval(function () {
+    const wallMs = performance.now() - startedAt;
+    self.postMessage({
+      type: 'metrics',
+      // parkTotalMs() reads its own, slightly later clock than wallMs above
+      // (it now counts an open park through to the moment it's called - see
+      // os/park.js). On a script that has been parked for its entire life,
+      // that later read can exceed this wallMs snapshot by a hair, which
+      // would otherwise report negative busy time. Clamp rather than let
+      // that arithmetic quirk become a visible number.
+      busyMs: Math.max(0, wallMs - parkTotalMs()),
+      wallMs,
+      // Read live rather than captured at spawn: the whole point of the column
+      // is that it responds to what the script allocates while it runs.
+      memBytes: scriptLiveStateBytes(),
+    });
+  }, 1000);
   let code = 0;
   try {
     code = await execScript(msg.source, line => sysCall('write', ['stdout', String(line)]), {
@@ -52,5 +73,6 @@ self.onmessage = async (e) => {
     await sysCall('write', ['stderr', (err && err.message) || String(err)]);
     code = 1;
   }
+  clearInterval(heartbeat);
   self.postMessage({ type: 'syscall', seq: 0, name: 'exit', args: [code] });
 };

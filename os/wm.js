@@ -98,6 +98,11 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   // than in each app means an app cannot forget to appear in ps.
   wins[id].pid = kernelRegisterSystem(id, processDisplayName(title, id));
 
+  // Every app reaches the OS through mkWin, so the probe goes here rather than
+  // into eight app files. A future app is instrumented the moment it opens a
+  // window, with nothing to remember.
+  wins[id].removeProbe = instInstallProbe(el, id);
+
   makeDraggable(el, document.getElementById('tb-' + id));
   makeResizable(el, id);
   addTbBtn(id, title, icon);
@@ -186,6 +191,7 @@ function closeWin(id) {
   if (typeof w._onclose === 'function') {
     try { w._onclose(); } catch (e) {}
   }
+  if (wins[id] && typeof wins[id].removeProbe === 'function') wins[id].removeProbe();
   w.el.remove(); delete wins[id];
   kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();

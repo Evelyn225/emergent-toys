@@ -337,7 +337,7 @@ function openSaveDialog(defaultName, callback) {
   });
 
   renderSaveList();
-  setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+  procSetTimeout(id, () => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
 // Lore-ified pseudo-bytecode for .exe decompiler view

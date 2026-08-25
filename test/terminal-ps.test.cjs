@@ -16,6 +16,7 @@ function terminalCtx(overrides) {
     wins: {},
     kernelListProcesses: () => [],
     getBuiltInProcesses: () => [],
+    kernelMetricsFor: () => ({ cpu: null, mem: null, memUnit: null }),
   }, overrides));
   return loadOsSources(ctx, ['os/process-view.js', 'apps/terminal.js']);
 }
@@ -23,7 +24,7 @@ function terminalCtx(overrides) {
 test('buildPsRows merges the real process table with the daemon story\'s fictional processes', () => {
   const ctx = terminalCtx({
     kernelListProcesses: () => [{ pid: 2000, kind: 'system', state: 'running', name: 'TERMINAL' }],
-    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', cpu: 7.4, mem: 31.2, protected: true }],
+    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', protected: true }],
   });
   const rows = plain(ctx.buildPsRows());
   assert.deepStrictEqual(rows.map(r => r.pid), [512, 2000]);
@@ -32,7 +33,7 @@ test('buildPsRows merges the real process table with the daemon story\'s fiction
 test('a story pid reads as an ordinary row - same shape, kind system, state running - not visibly second-class', () => {
   const ctx = terminalCtx({
     kernelListProcesses: () => [{ pid: 2000, kind: 'user', state: 'running', name: 'job.script' }],
-    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', cpu: 7.4, mem: 31.2, protected: true }],
+    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', protected: true }],
   });
   const rows = plain(ctx.buildPsRows());
   const story = rows.find(r => r.pid === 512);

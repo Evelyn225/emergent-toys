@@ -14,10 +14,10 @@ test('every worker source exists and parses', () => {
   }
 });
 
-test('the interpreter is in both bundles and nothing else is', () => {
+test('only the interpreter and the park accumulator are in both bundles', () => {
   const shared = readManifest().filter(f => readWorkerManifest().includes(f));
-  assert.deepStrictEqual(shared, ['os/script/interp.js'],
-    'only the interpreter may be shared; both contexts run scripts');
+  assert.deepStrictEqual(shared, ['os/park.js', 'os/script/interp.js'],
+    'only interp.js (both contexts run scripts) and park.js (both contexts park) may be shared');
 });
 
 test('the worker bundle is current', () => {

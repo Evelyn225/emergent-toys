@@ -11,6 +11,7 @@ function view(overrides) {
     wins: {},
     kernelListProcesses: () => [],
     getBuiltInProcesses: () => [],
+    kernelMetricsFor: () => ({ cpu: null, mem: null, memUnit: null }),
   }, overrides || {}));
   return loadOsSources(ctx, ['os/process-view.js']);
 }
@@ -40,12 +41,12 @@ test('a spawned process carries null cpu and mem, not invented numbers', () => {
 
 test('story rows get kind and state synthesized and are flagged isStory', () => {
   const ctx = view({
-    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', cpu: 7.4, mem: 31.2, protected: true }],
+    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', protected: true }],
   });
   const rows = plain(ctx.buildProcessRows());
   assert.deepStrictEqual(rows, [{
     pid: 512, name: 'soul_svc.exe', kind: 'system', state: 'running',
-    cpu: 7.4, mem: 31.2, winId: null, isStory: true,
+    cpu: null, mem: null, memUnit: null, winId: null, isStory: true,
   }]);
 });
 
@@ -85,7 +86,7 @@ test('a kernel process with no window keeps its stored name', () => {
 test('the story toggle filters story rows and leaves real ones', () => {
   const ctx = view({
     kernelListProcesses: () => [{ pid: 2001, name: 'job.script', kind: 'user', state: 'running', winId: null }],
-    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', cpu: 7.4, mem: 31.2, protected: true }],
+    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', protected: true }],
   });
   const rows = ctx.buildProcessRows();
   assert.deepStrictEqual(rows.filter(r => !r.isStory).map(r => r.pid), [2001]);
@@ -99,4 +100,38 @@ test('pid 1 is present, which is why SYSMON used to be missing it', () => {
     kernelListProcesses: () => [{ pid: 1, name: 'kernel', kind: 'system', state: 'running', winId: null }],
   });
   assert.deepStrictEqual(ctx.buildProcessRows().map(r => r.pid), [1]);
+});
+
+// After this phase a dash has one precise meaning: no measurable execution
+// context. A story process genuinely has none - no window, no interpreter -
+// so it reports null rather than the 7.4 / 31.2 it used to invent.
+test('a story row carries no fabricated cpu or mem', () => {
+  const ctx = view({
+    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', protected: true }],
+  });
+  const row = plain(ctx.buildProcessRows()).find(r => r.pid === 512);
+  assert.strictEqual(row.cpu, null);
+  assert.strictEqual(row.mem, null);
+  assert.strictEqual(row.memUnit, null);
+  assert.strictEqual(row.isStory, true);
+});
+
+test('a measured worker row carries its figures and byte unit', () => {
+  const ctx = view({
+    kernelListProcesses: () => [{ pid: 2001, name: 'RUNAWAY.exe', kind: 'script', state: 'running', winId: null }],
+    kernelMetricsFor: (pid) => pid === 2001 ? { cpu: 97.5, mem: 8192, memUnit: 'bytes' } : { cpu: null, mem: null, memUnit: null },
+  });
+  const row = plain(ctx.buildProcessRows()).find(r => r.pid === 2001);
+  assert.strictEqual(row.cpu, 97.5);
+  assert.strictEqual(row.mem, 8192);
+  assert.strictEqual(row.memUnit, 'bytes');
+});
+
+test('an unmeasured process reports null rather than zero', () => {
+  const ctx = view({
+    kernelListProcesses: () => [{ pid: 2000, name: 'TERMINAL.exe', kind: 'system', state: 'running', winId: null }],
+    kernelMetricsFor: () => ({ cpu: null, mem: null, memUnit: null }),
+  });
+  const row = plain(ctx.buildProcessRows()).find(r => r.pid === 2000);
+  assert.strictEqual(row.cpu, null, 'zero would claim a measurement that was never taken');
 });

@@ -35,6 +35,13 @@ function processDisplayName(title, fallbackId) {
   return raw.includes('.') ? raw : raw + '.exe';
 }
 
+// Indirected so the tests can stub it without loading os/kernel.js, matching
+// how kernelListProcesses and getBuiltInProcesses are already stubbed here.
+function _pvMetrics(pid) {
+  if (typeof kernelMetricsFor !== 'function') return { cpu: null, mem: null, memUnit: null };
+  return kernelMetricsFor(pid);
+}
+
 function buildProcessRows() {
   const rows = kernelListProcesses().map(proc => ({
     pid: proc.pid,
@@ -45,18 +52,21 @@ function buildProcessRows() {
       : proc.name,
     kind: proc.kind,
     state: proc.state,
-    // Only phase 5 makes these measurable for a real process. Until then a
-    // spawned process reports nothing rather than a fabricated number.
-    cpu: null,
-    mem: null,
+    // Measured, or null. Never zero: zero claims a measurement that was never
+    // taken, and telling those apart is the whole point of this phase.
+    cpu: _pvMetrics(proc.pid).cpu,
+    mem: _pvMetrics(proc.pid).mem,
+    memUnit: _pvMetrics(proc.pid).memUnit,
     winId: proc.winId || null,
     isStory: false,
   }));
-  // getBuiltInProcesses returns { pid, name, cpu, mem, protected } and carries
-  // no kind or state, so they are synthesized to match what ps already prints.
+  // getBuiltInProcesses returns { pid, name, protected } and carries no kind,
+  // state, cpu, or mem, so they are synthesized to match what ps already
+  // prints. A story process has no window and no interpreter - no measurable
+  // execution context - so it reports null, not an invented number.
   getBuiltInProcesses().forEach(p => rows.push({
     pid: p.pid, name: p.name, kind: 'system', state: 'running',
-    cpu: p.cpu, mem: p.mem, winId: null, isStory: true,
+    cpu: null, mem: null, memUnit: null, winId: null, isStory: true,
   }));
   return rows.sort((a, b) => a.pid - b.pid);
 }

@@ -103,7 +103,7 @@ function openRegedit() {
         showCtxMenu(e.clientX, e.clientY, [
           { label: 'Modify', disabled: locked, action: () => editRegValue(hive, keyPath, valName) },
         ]);
-        setTimeout(() => tr.classList.remove('selected'), 800);
+        procSetTimeout('regedit', () => tr.classList.remove('selected'), 800);
       });
       tbody.appendChild(tr);
     });

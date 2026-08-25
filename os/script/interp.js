@@ -2,7 +2,55 @@
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
 const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
+// A CPU-bound instruction (SET, GOTO, IF...) resolves its awaited promise on
+// the microtask queue, never the macrotask queue where setInterval/setTimeout
+// live. A tight loop of those keeps the microtask queue permanently non-empty,
+// which starves every timer in the realm for as long as the loop runs -
+// including os/worker/host.js's heartbeat, which is exactly the RUNAWAY.exe
+// scenario SYSMON exists to show. Ceding the macrotask queue periodically
+// breaks that starvation; SCRIPT_YIELD_EVERY is chosen small enough that the
+// cost (a handful of these per script, worst case) is noise next to
+// SCRIPT_MAX_STEPS's own ceiling.
+const SCRIPT_YIELD_EVERY = 2000;
 const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
+
+// Interpreter-tracked memory: bytes held in variables, string allocations,
+// call stack depth and loaded source size.
+//
+// This is NOT heap, and SYSMON never calls it heap. Per-worker heap is not
+// exposed to JS, and the one API that could attribute it
+// (performance.measureUserAgentSpecificMemory) needs cross-origin isolation,
+// whose COEP would break every image sleepOS loads from
+// raw.githubusercontent.com. This figure is real data about the process and
+// responsive to allocation, which is the honest thing available.
+var SCRIPT_FRAME_BYTES = 64;
+
+function scriptStateBytes(state) {
+  if (!state || typeof state !== 'object') return 0;
+  let bytes = 0;
+  const vars = state.vars;
+  if (vars && typeof vars === 'object') {
+    Object.keys(vars).forEach(function (key) {
+      // UTF-16 code units, which is what a JS string actually costs.
+      bytes += key.length * 2;
+      const v = vars[key];
+      bytes += typeof v === 'string' ? v.length * 2 : 8;
+    });
+  }
+  if (Array.isArray(state.frames)) bytes += state.frames.length * SCRIPT_FRAME_BYTES;
+  if (Array.isArray(state.callStack)) bytes += state.callStack.length * SCRIPT_FRAME_BYTES;
+  if (typeof state.sourceText === 'string') bytes += state.sourceText.length * 2;
+  return bytes;
+}
+
+// The state of the script currently executing in this realm, or null. The
+// worker heartbeat reads this; nothing else may hold onto it, because it is a
+// live object that execScript mutates in place.
+var _scriptLiveState = null;
+
+function scriptLiveStateBytes() {
+  return _scriptLiveState ? scriptStateBytes(_scriptLiveState) : 0;
+}
 
 function makeScriptError(message, lineNo, sourceName) {
   const err = new Error(message);
@@ -243,23 +291,33 @@ function parseScript(source) {
 }
 
 async function scriptSleep(ms, signal) {
+  // Checked BEFORE parking: a pre-aborted sleep never waits, so recording it
+  // as parked time would credit the process with idleness it never had.
   throwIfAborted(signal);
-  await new Promise((resolve, reject) => {
-    const tid = setTimeout(done, ms);
-    function cleanup() {
-      clearTimeout(tid);
-      if (signal) signal.removeEventListener('abort', onAbort);
-    }
-    function done() {
-      cleanup();
-      resolve();
-    }
-    function onAbort() {
-      cleanup();
-      reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
-    }
-    if (signal) signal.addEventListener('abort', onAbort, { once: true });
-  });
+  parkBegin();
+  try {
+    await new Promise((resolve, reject) => {
+      const tid = setTimeout(done, ms);
+      function cleanup() {
+        clearTimeout(tid);
+        if (signal) signal.removeEventListener('abort', onAbort);
+      }
+      function done() {
+        cleanup();
+        resolve();
+      }
+      function onAbort() {
+        cleanup();
+        reject(signal.reason && isAbortError(signal.reason) ? signal.reason : makeAbortError());
+      }
+      if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    });
+  } finally {
+    // finally, not after the await: a SIGTERM rejects this promise, and a park
+    // left open by that path would make every later sample report the process
+    // as permanently idle.
+    parkEnd();
+  }
 }
 
 function scriptJumpIndex(labels, labelName, lineNo) {
@@ -541,57 +599,66 @@ async function execScript(source, printFn, options) {
     frames: [scriptBuildArgFrame(options.targetName || sourceName, options.args || [])],
     callStack: [],
   };
+  _scriptLiveState = state;
   let pc = 0;
   let steps = 0;
-  while (pc < parsed.instructions.length) {
-    const inst = parsed.instructions[pc];
-    steps++;
-    try {
-      throwIfAborted(state.signal);
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
-    }
-    if (steps > SCRIPT_MAX_STEPS) {
-      return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
-    }
-    try {
-      const action = await execScriptInstruction(inst, parsed.labels, state);
-      if (action && action.type === 'jump') {
-        pc = action.pc;
-        continue;
+  try {
+    while (pc < parsed.instructions.length) {
+      const inst = parsed.instructions[pc];
+      steps++;
+      // See SCRIPT_YIELD_EVERY above: cede the macrotask queue periodically so
+      // a CPU-bound loop cannot starve the worker heartbeat (or, on the main
+      // thread, anything else waiting on a timer) for its whole run.
+      if (steps % SCRIPT_YIELD_EVERY === 0) await new Promise(resolve => setTimeout(resolve, 0));
+      try {
+        throwIfAborted(state.signal);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'call') {
-        state.callStack.push({ returnPc: pc + 1 });
-        state.frames.push(action.frame);
-        pc = action.pc;
-        continue;
+      if (steps > SCRIPT_MAX_STEPS) {
+        return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'return') {
-        if (!state.callStack.length || state.frames.length <= 1) {
-          throw makeScriptError('RETURN without CALL.', inst.lineNo);
+      try {
+        const action = await execScriptInstruction(inst, parsed.labels, state);
+        if (action && action.type === 'jump') {
+          pc = action.pc;
+          continue;
         }
-        const frame = state.callStack.pop();
-        state.frames.pop();
-        state.status = action.code;
-        pc = frame.returnPc;
-        continue;
+        if (action && action.type === 'call') {
+          state.callStack.push({ returnPc: pc + 1 });
+          state.frames.push(action.frame);
+          pc = action.pc;
+          continue;
+        }
+        if (action && action.type === 'return') {
+          if (!state.callStack.length || state.frames.length <= 1) {
+            throw makeScriptError('RETURN without CALL.', inst.lineNo);
+          }
+          const frame = state.callStack.pop();
+          state.frames.pop();
+          state.status = action.code;
+          pc = frame.returnPc;
+          continue;
+        }
+        if (action && action.type === 'exit') {
+          state.status = action.code;
+          return state.status;
+        }
+        if (typeof action === 'number') {
+          pc = action;
+          continue;
+        }
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'exit') {
-        state.status = action.code;
-        return state.status;
-      }
-      if (typeof action === 'number') {
-        pc = action;
-        continue;
-      }
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+      pc++;
     }
-    pc++;
+    return Math.trunc(state.status ?? 0);
+  } finally {
+    _scriptLiveState = null;
   }
-  return Math.trunc(state.status ?? 0);
 }
 
 // Shared by makeVfsScriptFs's `openUi` and the kernel's `ui.open` syscall

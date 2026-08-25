@@ -317,7 +317,7 @@ function openTerminal(startDir, initialCommand) {
       return true;
     }
     program.lines.forEach(line => print(line));
-    if (program.open) setTimeout(() => program.open({ cwd }), program.delay);
+    if (program.open) procSetTimeout('terminal', () => program.open({ cwd }), program.delay);
     return true;
   }
 
@@ -484,7 +484,7 @@ function openTerminal(startDir, initialCommand) {
       throwIfAborted(signal);
       if (i > 0) await scriptSleep(1000, signal);
       const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const tid = procSetTimeout('terminal', () => ctrl.abort(), 4000);
       const abortFetch = () => ctrl.abort();
       if (signal) signal.addEventListener('abort', abortFetch, { once: true });
       const t0 = performance.now();
@@ -725,10 +725,10 @@ function openTerminal(startDir, initialCommand) {
           if (target) {
             const saved = await writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
             print(`Opening ${saved.fileName} in Notepad...`);
-            setTimeout(() => openNotepad(saved.fileName, saved.dirName), 300);
+            procSetTimeout('terminal', () => openNotepad(saved.fileName, saved.dirName), 300);
           } else {
             print('Opening piped output in Notepad...');
-            setTimeout(() => openNotepad(undefined, cwd, { initialContent: content }), 300);
+            procSetTimeout('terminal', () => openNotepad(undefined, cwd, { initialContent: content }), 300);
           }
           consumedBySink = true;
           break;
@@ -811,7 +811,7 @@ function openTerminal(startDir, initialCommand) {
       const parts = (args || '').trim().split(/\s+/);
       if (parts.length < 2) { print('Usage: COPY [source] [destination]'); return; }
       print(`Copying '${parts[0]}' to '${parts[1]}'...`);
-      setTimeout(() => {
+      procSetTimeout('terminal', () => {
         print('1 file(s) copied.');
         print(`WARNING: The copy is not identical to the original.`);
         print('This is considered normal.');
@@ -848,7 +848,7 @@ function openTerminal(startDir, initialCommand) {
       if (winId && wins[winId]) {
         const name = wins[winId].title.split(' \u2014')[0].trim();
         print(`Terminating ${name} (PID ${pid})...`);
-        setTimeout(() => {
+        procSetTimeout('terminal', () => {
           closeWin(winId);
           print(`SUCCESS: Process "${name}" (PID ${pid}) terminated.`);
         }, 400);
@@ -896,16 +896,16 @@ function openTerminal(startDir, initialCommand) {
       const split = vfsSplitPath(raw, cwd);
       if (isVisibleSystemPath(raw, { includeExplorer: true })) {
         print(`Opening ${split.fileName}...`);
-        setTimeout(() => openSystemFile(split.fileName), 300);
+        procSetTimeout('terminal', () => openSystemFile(split.fileName), 300);
         return;
       }
       const st = vfsStatSync(raw, cwd);
       if (st && st.kind === 'blob') {
         print(`Opening ${raw}...`);
-        setTimeout(() => openMediaFile(raw, cwd), 300);
+        procSetTimeout('terminal', () => openMediaFile(raw, cwd), 300);
       } else if (st && st.kind === 'text') {
         print(`Opening ${raw}...`);
-        setTimeout(() => openNotepad(raw, cwd), 300);
+        procSetTimeout('terminal', () => openNotepad(raw, cwd), 300);
       } else {
         print(`File not found: ${raw}`);
         print('Use DIR to list available files.');
@@ -918,7 +918,7 @@ function openTerminal(startDir, initialCommand) {
         if (!st || st.kind !== 'text') { print(`File not found: ${fname}`); return; }
       }
       print(fname ? `Opening ${fname} in Notepad...` : 'Opening Notepad...');
-      setTimeout(() => openNotepad(fname || undefined, cwd), 300);
+      procSetTimeout('terminal', () => openNotepad(fname || undefined, cwd), 300);
     },
     grep: async (args) => {
       if (!args) { print('Usage: GREP <pattern> <file>'); return; }
@@ -1211,7 +1211,7 @@ function openTerminal(startDir, initialCommand) {
 
   refreshTerminalInputMode();
   document.getElementById('tw').addEventListener('click', () => inp.focus());
-  setTimeout(() => inp.focus(), 80);
-  if (initialCommand) setTimeout(() => { if (_termExec) _termExec(initialCommand); }, 30);
+  procSetTimeout('terminal', () => inp.focus(), 80);
+  if (initialCommand) procSetTimeout('terminal', () => { if (_termExec) _termExec(initialCommand); }, 30);
 }
 
