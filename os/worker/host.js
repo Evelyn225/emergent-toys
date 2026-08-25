@@ -37,10 +37,17 @@ self.onmessage = async (e) => {
   // script shows up while it runs, not only when it finishes - which is the
   // whole point of watching RUNAWAY.exe pin the graph.
   const heartbeat = setInterval(function () {
+    const wallMs = performance.now() - startedAt;
     self.postMessage({
       type: 'metrics',
-      busyMs: (performance.now() - startedAt) - parkTotalMs(),
-      wallMs: performance.now() - startedAt,
+      // parkTotalMs() reads its own, slightly later clock than wallMs above
+      // (it now counts an open park through to the moment it's called - see
+      // os/park.js). On a script that has been parked for its entire life,
+      // that later read can exceed this wallMs snapshot by a hair, which
+      // would otherwise report negative busy time. Clamp rather than let
+      // that arithmetic quirk become a visible number.
+      busyMs: Math.max(0, wallMs - parkTotalMs()),
+      wallMs,
       // Read live rather than captured at spawn: the whole point of the column
       // is that it responds to what the script allocates while it runs.
       memBytes: scriptLiveStateBytes(),

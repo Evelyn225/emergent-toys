@@ -65,6 +65,20 @@ test('an unmatched parkEnd is ignored rather than corrupting the total', () => {
   assert.strictEqual(ctx.parkTotalMs(), good, 'stray parkEnd changed the total');
 });
 
+// THE regression test for the WAIT-reports-100%-CPU trap: a heartbeat can
+// sample parkTotalMs() WHILE a park is still open (mid-WAIT), not only after
+// it closes. Every other test in this file samples after parkEnd, which is
+// exactly why this defect survived the whole suite.
+test('a park that is still open is already counted', async () => {
+  const ctx = park();
+  ctx.parkBegin();
+  await new Promise(r => setTimeout(r, 60));
+  const during = ctx.parkTotalMs();   // sampled BEFORE parkEnd
+  assert.ok(during >= 40, 'an open park reported ' + during + 'ms; a heartbeat here would report 100% CPU');
+  ctx.parkEnd();
+  assert.ok(ctx.parkTotalMs() >= during, 'closing the park lost time');
+});
+
 test('parkReset clears the total and any open depth', () => {
   const ctx = park();
   ctx.parkBegin();

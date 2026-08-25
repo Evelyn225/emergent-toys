@@ -31,7 +31,15 @@ function parkEnd() {
   if (_parkDepth === 0) _parkTotalMs += performance.now() - _parkStartedAt;
 }
 
-function parkTotalMs() { return _parkTotalMs; }
+// Includes the open interval, not just closed ones. A heartbeat that samples
+// while a script is parked would otherwise see zero subtracted and report a
+// sleeping process as 100% busy - which is precisely the WAIT-reports-100%-CPU
+// lie this whole mechanism exists to prevent.
+function parkTotalMs() {
+  return _parkDepth > 0
+    ? _parkTotalMs + (performance.now() - _parkStartedAt)
+    : _parkTotalMs;
+}
 
 function parkReset() {
   _parkTotalMs = 0;

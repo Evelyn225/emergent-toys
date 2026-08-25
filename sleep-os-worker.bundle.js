@@ -132,7 +132,15 @@ function parkEnd() {
   if (_parkDepth === 0) _parkTotalMs += performance.now() - _parkStartedAt;
 }
 
-function parkTotalMs() { return _parkTotalMs; }
+// Includes the open interval, not just closed ones. A heartbeat that samples
+// while a script is parked would otherwise see zero subtracted and report a
+// sleeping process as 100% busy - which is precisely the WAIT-reports-100%-CPU
+// lie this whole mechanism exists to prevent.
+function parkTotalMs() {
+  return _parkDepth > 0
+    ? _parkTotalMs + (performance.now() - _parkStartedAt)
+    : _parkTotalMs;
+}
 
 function parkReset() {
   _parkTotalMs = 0;
@@ -143,6 +151,16 @@ function parkReset() {
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
 const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
+// A CPU-bound instruction (SET, GOTO, IF...) resolves its awaited promise on
+// the microtask queue, never the macrotask queue where setInterval/setTimeout
+// live. A tight loop of those keeps the microtask queue permanently non-empty,
+// which starves every timer in the realm for as long as the loop runs -
+// including os/worker/host.js's heartbeat, which is exactly the RUNAWAY.exe
+// scenario SYSMON exists to show. Ceding the macrotask queue periodically
+// breaks that starvation; SCRIPT_YIELD_EVERY is chosen small enough that the
+// cost (a handful of these per script, worst case) is noise next to
+// SCRIPT_MAX_STEPS's own ceiling.
+const SCRIPT_YIELD_EVERY = 2000;
 const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
 
 // Interpreter-tracked memory: bytes held in variables, string allocations,
@@ -737,6 +755,10 @@ async function execScript(source, printFn, options) {
     while (pc < parsed.instructions.length) {
       const inst = parsed.instructions[pc];
       steps++;
+      // See SCRIPT_YIELD_EVERY above: cede the macrotask queue periodically so
+      // a CPU-bound loop cannot starve the worker heartbeat (or, on the main
+      // thread, anything else waiting on a timer) for its whole run.
+      if (steps % SCRIPT_YIELD_EVERY === 0) await new Promise(resolve => setTimeout(resolve, 0));
       try {
         throwIfAborted(state.signal);
       } catch (err) {
@@ -902,10 +924,17 @@ self.onmessage = async (e) => {
   // script shows up while it runs, not only when it finishes - which is the
   // whole point of watching RUNAWAY.exe pin the graph.
   const heartbeat = setInterval(function () {
+    const wallMs = performance.now() - startedAt;
     self.postMessage({
       type: 'metrics',
-      busyMs: (performance.now() - startedAt) - parkTotalMs(),
-      wallMs: performance.now() - startedAt,
+      // parkTotalMs() reads its own, slightly later clock than wallMs above
+      // (it now counts an open park through to the moment it's called - see
+      // os/park.js). On a script that has been parked for its entire life,
+      // that later read can exceed this wallMs snapshot by a hair, which
+      // would otherwise report negative busy time. Clamp rather than let
+      // that arithmetic quirk become a visible number.
+      busyMs: Math.max(0, wallMs - parkTotalMs()),
+      wallMs,
       // Read live rather than captured at spawn: the whole point of the column
       // is that it responds to what the script allocates while it runs.
       memBytes: scriptLiveStateBytes(),

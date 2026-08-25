@@ -2,6 +2,16 @@
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
 const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
+// A CPU-bound instruction (SET, GOTO, IF...) resolves its awaited promise on
+// the microtask queue, never the macrotask queue where setInterval/setTimeout
+// live. A tight loop of those keeps the microtask queue permanently non-empty,
+// which starves every timer in the realm for as long as the loop runs -
+// including os/worker/host.js's heartbeat, which is exactly the RUNAWAY.exe
+// scenario SYSMON exists to show. Ceding the macrotask queue periodically
+// breaks that starvation; SCRIPT_YIELD_EVERY is chosen small enough that the
+// cost (a handful of these per script, worst case) is noise next to
+// SCRIPT_MAX_STEPS's own ceiling.
+const SCRIPT_YIELD_EVERY = 2000;
 const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
 
 // Interpreter-tracked memory: bytes held in variables, string allocations,
@@ -596,6 +606,10 @@ async function execScript(source, printFn, options) {
     while (pc < parsed.instructions.length) {
       const inst = parsed.instructions[pc];
       steps++;
+      // See SCRIPT_YIELD_EVERY above: cede the macrotask queue periodically so
+      // a CPU-bound loop cannot starve the worker heartbeat (or, on the main
+      // thread, anything else waiting on a timer) for its whole run.
+      if (steps % SCRIPT_YIELD_EVERY === 0) await new Promise(resolve => setTimeout(resolve, 0));
       try {
         throwIfAborted(state.signal);
       } catch (err) {
