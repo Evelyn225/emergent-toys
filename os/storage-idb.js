@@ -7,10 +7,16 @@
 // pure core and belongs back in it.
 const FS_IDB_NAME = 'sleepOS-fs';
 const FS_IDB_VERSION = 1;
-// Sized so the disk is a believable 32 MB at 4 KB per block. IndexedDB itself
-// is bounded by the origin quota, which estimate() reports honestly; this is
-// the in-fiction disk size, and it is what DEFRAG's grid renders.
-const FS_IDB_TOTAL_BLOCKS = 8192;
+// 4096 blocks x 4 KB = 16 MB. Deliberately smaller than the 32 MB this
+// shipped with: fragmentation is a real measurement now, and a drive nothing
+// ever fills is a drive that never fragments, which makes DEFRAG a utility
+// with nothing to do. 16 MB is still 3.2x the 5 MB localStorage drive it
+// replaced, so a single large upload still fits and ENOSPC stays rare.
+//
+// Only ever read when creating a superblock that does not exist yet. Every
+// other code path reads sb.totalBlocks, so an existing profile keeps whatever
+// size it was created with.
+const FS_IDB_TOTAL_BLOCKS = 4096;
 
 function fsIdbAvailable() {
   try { return typeof indexedDB !== 'undefined' && !!indexedDB; } catch (e) { return false; }
@@ -375,6 +381,57 @@ function createIdbBackend(options) {
       await ensure();
       return (await store.scan(FS_STORE_INODES)).map(([, inode]) => inode);
     },
+
+    // Like _readInodes, but keeps the ino. fsPlanCompaction needs it to say
+    // which inode a move belongs to; _readInodes deliberately keeps its old
+    // shape because fsRefreshFragmentation depends on it and would go on
+    // "working" against the wrong data if it silently changed.
+    async _readInodeEntries() {
+      await ensure();
+      return (await store.scan(FS_STORE_INODES)).map(([key, inode]) => [Number(key), inode]);
+    },
+
+    // Applies ONE move from fsPlanCompaction, in one transaction. That
+    // boundary is the entire crash-safety argument: IndexedDB applies a
+    // transaction wholly or not at all, so a crash leaves each move either
+    // fully applied or absent, and either way every inode points at blocks
+    // that exist and hold that file's bytes. The disk ends up consistent and
+    // merely partly compacted, never corrupt. The worst residue is a leaked
+    // block, which the allocator already tolerates.
+    //
+    // Nothing is persisted about the run itself. The target layout is a pure
+    // function of the current disk, so an interrupted run needs no saved
+    // state - the next one replans from wherever the disk got to. That is why
+    // Stop, crash recovery and resume are one mechanism rather than three.
+    async _moveBlock(move) {
+      await ensure();
+      await _runInWriteTransaction(async (txStore, txSb) => {
+        const inode = await txStore.get(FS_STORE_INODES, move.ino);
+        if (!inode || (inode.blocks || [])[move.slot] !== move.from) {
+          // The disk is not where the plan thought it was. Refusing is right:
+          // writing anyway would move a block on behalf of an inode that no
+          // longer claims it.
+          throw VfsError('EINVAL', 'stale compaction move for inode ' + move.ino);
+        }
+        // The symmetric half of the staleness check above. The planner is
+        // responsible for never targeting a live block, and this is what makes
+        // a planner bug loud instead of silent: without it, a bad `to` quietly
+        // overwrites another inode's data and the damage is only visible later,
+        // as a file that reads back as garbage.
+        if (fsBitGet(txSb.freeBitmap, move.to)) {
+          throw VfsError('EINVAL', 'compaction move would overwrite live block ' + move.to);
+        }
+        const bytes = await txStore.get(FS_STORE_BLOCKS, move.from);
+        await txStore.put(FS_STORE_BLOCKS, move.to, bytes);
+        inode.blocks[move.slot] = move.to;
+        await txStore.put(FS_STORE_INODES, move.ino, inode);
+        fsBitSet(txSb.freeBitmap, move.to, 1);
+        fsBitSet(txSb.freeBitmap, move.from, 0);
+        await txStore.del(FS_STORE_BLOCKS, move.from);
+        await txStore.put(FS_STORE_SUPERBLOCK, 'sb', txSb);
+      });
+    },
+
     get _superblock() { return sb; },
 
     // The read half of blob persistence (Task 9a) - fsReadTree only ever

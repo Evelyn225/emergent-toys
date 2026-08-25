@@ -158,26 +158,76 @@ async function fsRefreshFragmentation() {
   return fsFragmentationLevel;
 }
 
-// DEFRAG.exe calls this when the user runs an optimization pass. It records
-// when the pass happened, which is what the "Last defrag" line reads, and then
-// recomputes from the allocation map.
+// Walks a compaction plan, one transaction per move, deferring commits for the
+// duration. This is what DEFRAG.exe drives.
 //
-// It does NOT yet move any blocks, so the number it recomputes will barely
-// change. That is deliberate and it is honest: actually rewriting blocks into
-// contiguous runs is phase 5's job, per the master spec's phase order.
+// Never throws. DEFRAG is a UI with no useful way to handle an exception
+// mid-animation, and an unhandled one would leave the defer flag set, which
+// silently stops the filesystem persisting for the rest of the session. Every
+// outcome comes back as a value, the same rule fsMigrateFromLocalStorage
+// follows.
 //
-// The returned level is what DEFRAG.exe renders. It briefly did not: this
-// function stopped honouring the targetLevel option its one caller passed, and
-// that caller went on painting a hardcoded "Fragmentation: 2%" of its own, so
-// the fake post-defrag drop survived in the UI after being deleted from the
-// model. Inventing that number is the exact fiction this phase exists to
-// delete, so the option is gone rather than ignored.
-async function optimizeDriveFragmentation(options) {
-  defragState.lastDefragTs = Date.now();
-  saveDriveState();
-  const level = await fsRefreshFragmentation();
-  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
-  return level;
+// The plan is deliberately not persisted. The target layout is a pure function
+// of the current disk, so an interrupted run needs no saved state: the next
+// run replans from wherever this one got to. Stop, crash recovery and resume
+// are therefore one mechanism instead of three.
+async function fsRunCompaction(options) {
+  options = options || {};
+  const result = {
+    ran: false, reason: 'not-idb', moved: 0, total: 0,
+    stopped: false, fragBefore: getDriveFragmentationLevel(), fragAfter: getDriveFragmentationLevel(),
+  };
+  if (fsGetActiveBackendKind() !== 'idb') return result;
+
+  const backend = vfsGetBackend();
+  if (!backend || typeof backend._moveBlock !== 'function') return result;
+
+  vfsSetDefragActive(true);
+  try {
+    const entries = await backend._readInodeEntries();
+    let plan;
+    try {
+      plan = fsPlanCompaction(entries, backend._superblock);
+    } catch (err) {
+      result.ran = true;
+      result.reason = err && err.code === 'ENOSPC' ? 'no-space' : 'failed';
+      return result;
+    }
+
+    result.ran = true;
+    result.total = plan.length;
+    if (!plan.length) { result.reason = 'nothing-to-do'; return result; }
+    result.reason = 'ok';
+
+    for (const move of plan) {
+      if (options.shouldStop && options.shouldStop()) { result.stopped = true; break; }
+      try {
+        await backend._moveBlock(move);
+      } catch (err) {
+        // One failed move ends the run. The disk is still consistent - the
+        // transaction rolled back - and the next run replans from here.
+        result.reason = 'failed';
+        break;
+      }
+      result.moved++;
+      if (options.onProgress) options.onProgress(move, result.moved, result.total);
+    }
+    return result;
+  } catch (err) {
+    // `ran` means "the flag was set and work was attempted", which is true by
+    // the time we are here - this catch is downstream of vfsSetDefragActive(true).
+    // Leaving it false would make a real failure look like the early declines
+    // above, where nothing was attempted at all.
+    result.ran = true;
+    result.reason = 'failed';
+    return result;
+  } finally {
+    vfsSetDefragActive(false);
+    defragState.lastDefragTs = Date.now();
+    saveDriveState();
+    result.fragAfter = await fsRefreshFragmentation();
+    void vfsFlush();
+  }
 }
 
 // Which backend actually mounted. SYSMON reports it, and Task 7's

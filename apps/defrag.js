@@ -1,24 +1,51 @@
 function openDefrag() {
-  if (!mkWin({ id:'defrag', title:'DEFRAG.exe - Disk Defragmenter', icon:'icon:defrag', w:560, h:400, x:100, y:60 })) return;
+  if (!mkWin({ id:'defrag', title:'DEFRAG.exe - Disk Defragmenter', icon:'icon:defrag', w:680, h:520, x:100, y:60 })) return;
 
   const mb   = document.getElementById('mb-defrag');
   const body = document.getElementById('wb-defrag');
   const ws   = document.getElementById('ws-defrag');
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:5px;font-size:11px;overflow:hidden;';
 
-  const COLS = 40, ROWS = 16, TOTAL = COLS * ROWS;
-  // States: 0=free, 1=used(blue), 2=optimized(green), 3=active(red)
-  const COLORS = { 0:'#ffffff', 1:'#0000aa', 2:'#00aa00', 3:'#cc2200' };
+  // One cell per block. 128x32 = 4096, matching FS_IDB_TOTAL_BLOCKS. The grid
+  // area is wide and short (roughly 664x378 in a 680x520 window), so this
+  // gives a 5x11px cell; a square 64x64 would give 8x3 and disappear after the
+  // 1px inset.
+  const COLS = 128, ROWS = 32, TOTAL = COLS * ROWS;
+  // 0 = free, 1 = allocated, 2 = moving right now.
+  const CELL_FREE = 0, CELL_USED = 1, CELL_MOVING = 2;
+  const FREE_COLOR = '#ffffff', MOVING_COLOR = '#cc2200';
+
   const lastDefragTs = Math.max(0, Math.trunc(Number(defragState.lastDefragTs) || 0));
   const msSince = lastDefragTs ? Date.now() - lastDefragTs : null;
   const fragLevel = getDriveFragmentationLevel();
 
-  // Build initial cell states: used blocks are green or blue based on frag level
-  const cells = Array.from({ length: TOTAL }, () => {
-    if (Math.random() > 0.68) return 0;                           // free
-    return Math.random() < fragLevel ? 1 : 2;                     // fragmented or clean
-  });
-  const USED_TOTAL = cells.filter(c => c > 0).length;
+  // Which inode owns each block, so a contiguous file reads as one solid band
+  // and a scattered one reads as speckle. That is what makes fragmentation
+  // legible as a shape, which matters now that the number rounds to 0% in
+  // almost every state.
+  let cells = new Uint8Array(TOTAL);
+  let owners = new Int32Array(TOTAL).fill(-1);
+
+  // Hue derived arithmetically rather than from a palette: the file count is
+  // unbounded, and 137.5 degrees is the golden angle, which keeps consecutive
+  // inodes visually distinct instead of walking slowly around the wheel.
+  function dfInodeHue(ino) { return (ino * 137.508) % 360; }
+
+  async function dfReadDiskCells() {
+    const backend = typeof vfsGetBackend === 'function' ? vfsGetBackend() : null;
+    if (!backend || typeof backend._readInodeEntries !== 'function') return false;
+    const sb = backend._superblock;
+    if (!sb) return false;
+    const next = new Uint8Array(TOTAL);
+    const nextOwners = new Int32Array(TOTAL).fill(-1);
+    const limit = Math.min(TOTAL, sb.totalBlocks);
+    for (let i = 0; i < limit; i++) next[i] = fsBitGet(sb.freeBitmap, i) ? CELL_USED : CELL_FREE;
+    (await backend._readInodeEntries()).forEach(([ino, inode]) => {
+      (inode && inode.blocks || []).forEach(b => { if (b >= 0 && b < TOTAL) nextOwners[b] = ino; });
+    });
+    cells = next; owners = nextOwners;
+    return true;
+  }
 
   function timeAgo(ms) {
     if (!ms) return 'never';
@@ -36,10 +63,32 @@ function openDefrag() {
   const initFragPct = Math.round(fragLevel * 100);
 
   // ── Drive info ─────────────────────────────────────────────────
+  function dfDriveText() {
+    const backend = typeof vfsGetBackend === 'function' ? vfsGetBackend() : null;
+    const sb = backend && backend._superblock;
+    if (!sb) return { capacity: '-', free: '-' };
+    return {
+      capacity: fmtSize(sb.totalBlocks * sb.blockSize),
+      free: fmtSize(fsCountFreeBlocks(sb) * sb.blockSize),
+    };
+  }
+  const drive0 = dfDriveText();
   const infoRow = document.createElement('div');
   infoRow.style.cssText = 'display:flex;gap:16px;align-items:center;border:2px solid;border-color:#808080 #fff #fff #808080;padding:3px 8px;background:#fff;flex-shrink:0;';
-  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span>Capacity: 2,147 MB</span><span>Free: 683 MB</span><span id="df-last" style="color:#555;">Last defrag: ${timeAgo(msSince)}</span><span id="df-frag" style="color:#555;">Fragmentation: ${initFragPct}%</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">${initOptPct}% optimized</span>`;
+  infoRow.innerHTML = `<span>Drive: <b>C:\\</b></span><span id="df-cap">Capacity: ${drive0.capacity}</span><span id="df-free">Free: ${drive0.free}</span><span id="df-last" style="color:#555;">Last defrag: ${timeAgo(msSince)}</span><span id="df-frag" style="color:#555;">Fragmentation: ${initFragPct}%</span><span id="df-pct" style="margin-left:auto;font-weight:bold;">${initOptPct}% optimized</span>`;
   body.appendChild(infoRow);
+
+  function dfRefreshStats() {
+    const drive = dfDriveText();
+    const capEl = document.getElementById('df-cap');
+    const freeEl = document.getElementById('df-free');
+    const fragEl = document.getElementById('df-frag');
+    const pctEl = document.getElementById('df-pct');
+    if (capEl) capEl.textContent = 'Capacity: ' + drive.capacity;
+    if (freeEl) freeEl.textContent = 'Free: ' + drive.free;
+    if (fragEl) fragEl.textContent = 'Fragmentation: ' + Math.round(getDriveFragmentationLevel() * 100) + '%';
+    if (pctEl) pctEl.textContent = getDriveOptimizationPercent() + '% optimized';
+  }
 
   // ── Canvas grid ────────────────────────────────────────────────
   const gridWrap = document.createElement('div');
@@ -58,7 +107,10 @@ function openDefrag() {
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
     for (let i = 0; i < TOTAL; i++) {
-      ctx.fillStyle = COLORS[cells[i]];
+      if (cells[i] === CELL_MOVING) ctx.fillStyle = MOVING_COLOR;
+      else if (cells[i] === CELL_FREE) ctx.fillStyle = FREE_COLOR;
+      else if (owners[i] < 0) ctx.fillStyle = '#808080';
+      else ctx.fillStyle = 'hsl(' + dfInodeHue(owners[i]).toFixed(1) + ',65%,45%)';
       ctx.fillRect((i % COLS) * bw + 1, Math.floor(i / COLS) * bh + 1, bw - 2, bh - 2);
     }
   }
@@ -97,7 +149,7 @@ function openDefrag() {
   // ── Legend ─────────────────────────────────────────────────────
   const legend = document.createElement('div');
   legend.style.cssText = 'display:flex;gap:10px;font-size:10px;align-items:center;flex-shrink:0;';
-  [['#ffffff','Free'],['#0000aa','Used'],['#00aa00','Optimized'],['#cc2200','Reading']].forEach(([c,l]) => {
+  [[FREE_COLOR,'Free'],['hsl(200,65%,45%)','Allocated (by file)'],[MOVING_COLOR,'Moving']].forEach(([c,l]) => {
     const wrap = document.createElement('span');
     wrap.style.cssText = 'display:flex;align-items:center;gap:3px;';
     const sq = document.createElement('span');
@@ -107,99 +159,101 @@ function openDefrag() {
   });
   body.appendChild(legend);
 
-  // ── Animation ──────────────────────────────────────────────────
-  const FILES = [
-    'C:\\WINDOWS\\SYSTEM\\kernel32.dll',    'C:\\DREAMS\\fragment_001.tmp',
-    'C:\\USERS\\you\\desktop\\memory.old',  'C:\\VOID\\unresolved.dat',
-    'C:\\DREAMS\\fragment_047.tmp',         'C:\\WINDOWS\\TEMP\\~DF3A2.tmp',
-    'C:\\USERS\\you\\documents\\letter_unsent.txt', 'C:\\DREAMS\\fragment_112.tmp',
-    'C:\\SYSTEM32\\observer.dll',           'C:\\DREAMS\\fragment_????.tmp',
-    'C:\\USERS\\you\\pictures\\face.bmp',   'C:\\VOID\\pending.inf',
-    'C:\\DREAMS\\core_loop.dat',            'C:\\SLEEP\\log_0000.bin',
-    'C:\\USERS\\you\\desktop\\todo.txt',    'C:\\DREAMS\\fragment_[CORRUPTED]',
-    'C:\\WINDOWS\\SYSTEM\\time.dll',        'C:\\VOID\\[FILE NAME UNREADABLE]',
-  ];
+  // Fire and forget: the window is already on screen, and a disk read that
+  // fails leaves an all-free grid rather than blocking the app from opening.
+  void dfReadDiskCells().then(ok => { if (ok) drawGrid(); });
 
-  let running = false, timer = null, optimized = cells.filter(c => c === 2).length, fileIdx = 0;
-  let leftPtr = 0, rightPtr = TOTAL - 1, activeCell = -1;
+  // ── Run ────────────────────────────────────────────────────────
+  let running = false;
 
-  function updateProgress() {
-    const pct = Math.min(100, Math.round((optimized / USED_TOTAL) * 100));
-    pbFill.style.width = pct + '%';
-    pbLabel.textContent = pct + '%';
-    document.getElementById('df-pct').textContent = pct + '% optimized';
-    if (ws) ws.textContent = 'Defragmenting C:\\ - ' + pct + '%';
-  }
-
-  function step() {
-    if (!wins['defrag']) { clearTimeout(timer); return; }
-
-    // Resolve previous active cell → optimized
-    if (activeCell >= 0) { cells[activeCell] = 2; optimized++; activeCell = -1; }
-
-    // Advance pointers
-    while (leftPtr < TOTAL && cells[leftPtr] !== 0) leftPtr++;
-    while (rightPtr >= 0  && cells[rightPtr] !== 1) rightPtr--;
-
-    if (leftPtr >= rightPtr) {
-      // Finalize any remaining used-in-place blocks
-      for (let i = 0; i < TOTAL; i++) if (cells[i] === 1) { cells[i] = 2; optimized++; }
-      running = false; startBtn.disabled = false; stopBtn.disabled = true;
-      stopSoundLoop('defrag', { fade: 0.6 });
-      pbFill.style.width = '98%'; pbLabel.textContent = '98%';
-      fileLabel.textContent = 'Defragmentation complete.  1 file could not be moved: C:\\VOID\\[FILE NAME UNREADABLE]';
-      if (ws) ws.textContent = 'Complete - 1 file could not be moved';
-      // The 98% progress bar above is the story beat - one file that will not
-      // move. The two drive stats below are not: they read the real allocation
-      // map. This used to overwrite "% optimized" with the same 98% and write a
-      // hardcoded "Fragmentation: 2%", alongside a targetLevel option
-      // that optimizeDriveFragmentation stopped honouring when fragmentation
-      // became a measurement, so DEFRAG claimed a drop it had not made and could
-      // not make - nothing moves blocks until phase 5.
-      const lastEl = document.getElementById('df-last');
-      if (lastEl) lastEl.textContent = 'Last defrag: just now';
-      optimizeDriveFragmentation().then(level => {
-        const fragEl = document.getElementById('df-frag');
-        if (fragEl) fragEl.textContent = 'Fragmentation: ' + Math.round(level * 100) + '%';
-        const pctEl = document.getElementById('df-pct');
-        if (pctEl) pctEl.textContent = getDriveOptimizationPercent() + '% optimized';
-      }).catch(() => {});
-      drawGrid();
-      return;
-    }
-
-    // Move rightPtr block to leftPtr (show as red at destination)
-    cells[rightPtr] = 0;
-    cells[leftPtr]  = 3;
-    activeCell = leftPtr;
-    leftPtr++; rightPtr--;
-
-    if (fileIdx % 5 === 0) fileLabel.textContent = 'Moving: ' + FILES[fileIdx % FILES.length];
-    fileIdx++;
-
-    drawGrid();
-    updateProgress();
-    timer = setTimeout(step, 55);
-  }
-
-  startBtn.addEventListener('click', () => {
+  startBtn.addEventListener('click', async () => {
     if (running) return;
     running = true; startBtn.disabled = true; stopBtn.disabled = false;
-    // The drive noise starts with the analysis pass, not with the first block
-    // move, so the 700ms of "Analyzing C:\..." is not silent.
     startSoundLoop('defrag', { crossfade: DEFRAG_CROSSFADE_SEC });
     fileLabel.textContent = 'Analyzing C:\\ ...';
     if (ws) ws.textContent = 'Analyzing...';
-    setTimeout(step, 700);
-  });
-  stopBtn.addEventListener('click', () => {
-    running = false; clearTimeout(timer);
-    stopSoundLoop('defrag', { fade: 0.25 });
-    if (activeCell >= 0) { cells[activeCell] = 1; activeCell = -1; }
-    startBtn.disabled = false; stopBtn.disabled = true;
-    fileLabel.textContent = 'Defragmentation stopped.';
-    if (ws) ws.textContent = 'Stopped';
+    // Clear last run's bar before this one reports anything. A run that moves
+    // nothing fires no onProgress, so without this it would still show the
+    // previous run's 100%.
+    pbFill.style.width = '0%';
+    pbLabel.textContent = '0%';
+    let lastMoved = -1;
+    await dfReadDiskCells();
     drawGrid();
+
+    const result = await fsRunCompaction({
+      shouldStop: () => !running || !wins['defrag'],
+      onProgress: (move, done, total) => {
+        // Paint the block that just landed, so the animation marks a real
+        // transaction rather than a timer tick. Only ONE cell is ever red:
+        // the previous one reverts to its allocated colour first, or red
+        // cells would accumulate across the whole run instead of showing
+        // where the drive is working.
+        if (lastMoved >= 0) cells[lastMoved] = CELL_USED;
+        if (move.from >= 0 && move.from < TOTAL) { cells[move.from] = CELL_FREE; owners[move.from] = -1; }
+        if (move.to >= 0 && move.to < TOTAL) {
+          cells[move.to] = CELL_MOVING;
+          owners[move.to] = move.ino;
+          lastMoved = move.to;
+        }
+        const pct = Math.min(100, Math.round((done / total) * 100));
+        pbFill.style.width = pct + '%';
+        pbLabel.textContent = pct + '%';
+        if (ws) ws.textContent = 'Defragmenting C:\\ - ' + pct + '%';
+        fileLabel.textContent = 'Moving block ' + move.from + ' to ' + move.to;
+        drawGrid();
+      },
+    });
+
+    running = false;
+    startBtn.disabled = false; stopBtn.disabled = true;
+    stopSoundLoop('defrag', { fade: 0.6 });
+    await dfReadDiskCells();
+    drawGrid();
+    dfRefreshStats();
+
+    const lastEl = document.getElementById('df-last');
+    if (lastEl) lastEl.textContent = 'Last defrag: just now';
+
+    if (result.reason === 'no-space') {
+      fileLabel.textContent = 'Cannot defragment: the drive has no free block to work in.';
+      if (ws) ws.textContent = 'Cannot defragment';
+    } else if (result.reason === 'nothing-to-do') {
+      fileLabel.textContent = 'Disk is already contiguous. Nothing to move.';
+      if (ws) ws.textContent = 'Nothing to do';
+    } else if (result.stopped) {
+      fileLabel.textContent = 'Stopped after ' + result.moved + ' of ' + result.total + ' blocks.';
+      if (ws) ws.textContent = 'Stopped';
+    } else if (result.reason === 'failed') {
+      fileLabel.textContent = 'Defragmentation failed after ' + result.moved + ' blocks. The drive is unchanged from that point.';
+      if (ws) ws.textContent = 'Failed';
+    } else {
+      pbFill.style.width = '100%'; pbLabel.textContent = '100%';
+      // Blocks moved is the effort; the fragmentation pair is the result, and
+      // reporting only the first is how a defragmenter ends up sounding busy
+      // without saying whether it achieved anything. Rounded exactly like the
+      // info row above so the two can never disagree on screen - including on
+      // a barely-fragmented disk, where a real drop honestly reads 0% -> 0%.
+      const pctOf = (lvl) => Math.round((lvl || 0) * 100) + '%';
+      fileLabel.textContent = 'Defragmentation complete. ' + result.moved + ' blocks moved. ' +
+        'Fragmentation ' + pctOf(result.fragBefore) + ' -> ' + pctOf(result.fragAfter) + '.';
+      // The story entity has no inode and no blocks, so DEFRAG genuinely never
+      // examined it. Say that, rather than claiming a move that was never
+      // attempted, and only while it actually exists.
+      if (ws) {
+        ws.textContent = (typeof daemonStory === 'object' && daemonStory && !daemonStory.endingReached)
+          ? 'Complete - 1 file could not be read: C:\\VOID\\[FILE NAME UNREADABLE]'
+          : 'Complete';
+      }
+    }
+  });
+
+  stopBtn.addEventListener('click', () => {
+    // fsRunCompaction polls shouldStop before each move, so clearing this is
+    // all it takes: the run ends between transactions, leaving the disk
+    // consistent and partly compacted, and the next run replans from there.
+    running = false;
+    stopBtn.disabled = true;
   });
 
   const dfResizeObserver = new ResizeObserver(() => drawGrid());
@@ -207,7 +261,8 @@ function openDefrag() {
   const _origCloseDefrag = wins['defrag']?._onclose;
   if (wins['defrag']) wins['defrag']._onclose = () => {
     dfResizeObserver.disconnect();
-    // Closing the window mid-run must take the drive noise with it; step()
+    running = false;
+    // Closing the window mid-run must take the drive noise with it; the run
     // stops itself on the same condition but has no way to say so.
     stopSoundLoop('defrag', { fade: 0.2 });
     if (_origCloseDefrag) _origCloseDefrag();
@@ -247,7 +302,7 @@ function openDefrag() {
       // The plain drive art lives here, now that DEFRAG's own icon is the drive
       // being cleaned. The tick stays in the label: the gutter is the icon's
       // now, so it can no longer double as the selected-drive marker.
-      { label: 'C:\\ (2,147 MB)  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
+      { label: 'C:\\ (' + dfDriveText().capacity + ')  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
       { label: 'D:\\ - [NOT FOUND]', icon: 'icon:disk', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', 'icon:warning') },
       '-',
       { label: 'Exit', action: () => closeWin('defrag') },

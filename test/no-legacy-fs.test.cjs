@@ -32,7 +32,12 @@ const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDi
   // post-defrag number instead of measuring one, and it outlived the code that
   // honoured it - apps/defrag.js kept passing it for a whole phase while it
   // did nothing.
-  'targetLevel'];
+  'targetLevel',
+  // Phase 5: DEFRAG drives fsRunCompaction directly now. This was its old
+  // entry point and became unreachable the moment compaction became real -
+  // everything it did except applyDaemonVisualState (obsolete since phase 4
+  // gave the daemon its own corruption dial) is in fsRunCompaction's finally.
+  'optimizeDriveFragmentation'];
 
 test('no source reaches the filesystem outside the VFS', () => {
   const offenders = [];
@@ -75,6 +80,32 @@ test('DEFRAG.exe does not paint a hardcoded drive statistic', () => {
     if (/\d+ ?%/.test(line)) offenders.push('apps/defrag.js:' + (i + 1) + ': ' + line.trim());
   });
   assert.deepStrictEqual(offenders, [], 'hardcoded drive statistic:\n  ' + offenders.join('\n  '));
+  // Capacity and Free were string literals describing a 2 GB drive that never
+  // existed. They must come from the superblock now.
+  assert.ok(!/Capacity:\s*[\d,]+\s*MB/.test(src), 'Capacity is still a hardcoded string');
+  assert.ok(!/Free:\s*[\d,]+\s*MB/.test(src), 'Free is still a hardcoded string');
+  assert.ok(/fsRunCompaction/.test(src), 'Start does not run a real compaction');
+  // The Drive menu label carried its own fabricated capacity for a whole phase
+  // because the guard only looked at the info row's prefixes.
+  assert.ok(!/\(\s*[\d,]{4,}\s*MB\s*\)/.test(src),
+    'a hardcoded drive size is back in a menu label or similar');
+});
+
+// apps/defrag.js cannot be loaded in this harness - openDefrag builds a real
+// DOM subtree through mkWin before any of its logic runs - so this is a
+// source-level guard, narrow on purpose. It catches the exact regression this
+// task exists to fix: a grid built from random numbers instead of the disk.
+test('DEFRAG.exe builds its grid from the disk, not from random numbers', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'apps/defrag.js'), 'utf8');
+  const offenders = [];
+  src.split(/\r?\n/).forEach((line, i) => {
+    if (/^\s*(\/\/|\*)/.test(line)) return;
+    if (/Math\.random/.test(line)) offenders.push(`apps/defrag.js:${i + 1}: ${line.trim()}`);
+  });
+  assert.deepStrictEqual(offenders, [], 'the block grid must render the real bitmap:\n  ' + offenders.join('\n  '));
+  assert.ok(/fsBitGet|_readInodeEntries/.test(src), 'nothing in DEFRAG reads the real allocation map');
+  assert.ok(/COLS\s*=\s*128/.test(src) && /ROWS\s*=\s*32/.test(src),
+    'the grid must be 128x32, one cell per block on a 4096-block drive');
 });
 
 test('no source reintroduces the retired legacy-write pathless-op marker', () => {

@@ -277,3 +277,25 @@ test('a rejecting onCommit does not surface as an unhandled rejection', async ()
   }
   assert.strictEqual(unhandled, null, 'a rejecting onCommit must not produce an unhandled rejection');
 });
+
+test('a flush during compaction defers instead of committing', async () => {
+  const backend = recordingBackend();
+  const ctx = await mounted(backend);
+  await ctx.vfsWriteFile('A.txt', 'first', '');
+  ctx.vfsSetDefragActive(true);
+  await ctx.vfsFlush();
+  assert.strictEqual(backend.commits.length, 0, 'a commit landed while compaction was running');
+  assert.strictEqual(ctx.vfsHasPendingWrites(), true, 'the op was dropped rather than deferred');
+});
+
+test('the deferred write commits once compaction is over', async () => {
+  const backend = recordingBackend();
+  const ctx = await mounted(backend);
+  await ctx.vfsWriteFile('A.txt', 'first', '');
+  ctx.vfsSetDefragActive(true);
+  await ctx.vfsFlush();
+  ctx.vfsSetDefragActive(false);
+  await ctx.vfsFlush();
+  assert.strictEqual(backend.commits.length, 1);
+  assert.strictEqual(ctx.vfsHasPendingWrites(), false);
+});

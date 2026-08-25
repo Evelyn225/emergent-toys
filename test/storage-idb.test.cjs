@@ -429,3 +429,119 @@ test('an abort() failure other than InvalidStateError is attached to the origina
   assert.strictEqual(threw.abortError, weirdAbortError,
     'a non-InvalidStateError abort failure must still be reachable from the thrown error');
 });
+
+test('the drive is 4096 blocks, which is 16 MB at 4 KB per block', async () => {
+  const { ctx } = idb();
+  const backend = ctx.createIdbBackend();
+  await backend._store();
+  const sb = backend._superblock;
+  assert.strictEqual(sb.totalBlocks, 4096);
+  assert.strictEqual(sb.totalBlocks * sb.blockSize, 16 * 1024 * 1024);
+  // 4096 blocks needs 512 bytes of bitmap.
+  assert.strictEqual(sb.freeBitmap.length, 512);
+});
+
+// The stub settles a transaction on a setImmediate once its requests drain, so a
+// read issued in the same tick as a write opens its transaction before the write
+// has committed and sees nothing. Yielding a macrotask is what makes a read-back
+// mean "what is durable" rather than "what happened to have landed".
+const settle = () => new Promise(r => setImmediate(r));
+
+test('_readInodeEntries hands back the ino alongside each inode', async () => {
+  const { ctx } = idb();
+  const backend = ctx.createIdbBackend();
+  const store = await backend._store();
+  const ino = await ctx.fsWriteEntry(store, backend._superblock, 0, 'A.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('hello'),
+  });
+  await settle();
+  const entries = await backend._readInodeEntries();
+  const found = entries.find(([k]) => k === ino);
+  assert.ok(found, 'the written inode is missing from the entries');
+  assert.strictEqual(found[1].type, 'file');
+  assert.strictEqual(typeof found[0], 'number', 'the ino must be a Number, not a key string');
+});
+
+test('_moveBlock relocates the bytes, the inode slot and both bitmap bits', async () => {
+  const { ctx } = idb();
+  const backend = ctx.createIdbBackend();
+  const store = await backend._store();
+  const sb = backend._superblock;
+  const ino = await ctx.fsWriteEntry(store, sb, 0, 'A.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('move me'),
+  });
+  await settle();
+  const before = (await store.get('inodes', ino)).blocks[0];
+  const target = sb.totalBlocks - 1;
+
+  await backend._moveBlock({ ino, slot: 0, from: before, to: target });
+  await settle();
+
+  const after = await store.get('inodes', ino);
+  assert.strictEqual(after.blocks[0], target, 'the inode still points at the old block');
+  assert.strictEqual(ctx.fsBitGet(backend._superblock.freeBitmap, target), 1, 'destination not marked used');
+  assert.strictEqual(ctx.fsBitGet(backend._superblock.freeBitmap, before), 0, 'source not freed');
+  assert.strictEqual(await store.get('blocks', before), undefined, 'the old block was not deleted');
+  assert.strictEqual(
+    ctx.fsDecodeText(await ctx.fsReadEntryBytes(store, backend._superblock, ino)),
+    'move me');
+});
+
+test('a stale move is refused and changes nothing', async () => {
+  const { ctx } = idb();
+  const backend = ctx.createIdbBackend();
+  const store = await backend._store();
+  const sb = backend._superblock;
+  const ino = await ctx.fsWriteEntry(store, sb, 0, 'A.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('intact'),
+  });
+  await settle();
+  const real = (await store.get('inodes', ino)).blocks[0];
+
+  // `from` names a block this inode does not own. That means the disk is not
+  // where the plan thought it was, and moving anyway would relocate a block on
+  // behalf of an inode that stopped claiming it.
+  await assert.rejects(
+    () => backend._moveBlock({ ino, slot: 0, from: real + 50, to: sb.totalBlocks - 1 }),
+    err => err.code === 'EINVAL');
+  await settle();
+
+  // The backend discards its cached superblock on a rolled-back transaction,
+  // so re-open before reading anything back.
+  const store2 = await backend._store();
+  assert.strictEqual((await store2.get('inodes', ino)).blocks[0], real,
+    'the inode moved despite the move being refused');
+  assert.strictEqual(
+    ctx.fsDecodeText(await ctx.fsReadEntryBytes(store2, backend._superblock, ino)),
+    'intact');
+});
+
+test('a move onto a live block is refused rather than overwriting it', async () => {
+  const { ctx } = idb();
+  const backend = ctx.createIdbBackend();
+  const store = await backend._store();
+  const sb = backend._superblock;
+  const a = await ctx.fsWriteEntry(store, sb, 0, 'A.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('keep me'),
+  });
+  const b = await ctx.fsWriteEntry(store, sb, 0, 'B.txt', {
+    type: 'file', bytes: ctx.fsEncodeText('other'),
+  });
+  await settle();
+  const aBlock = (await store.get('inodes', a)).blocks[0];
+  const bBlock = (await store.get('inodes', b)).blocks[0];
+
+  // B's block is live. Moving A on top of it must be refused, not applied.
+  await assert.rejects(
+    () => backend._moveBlock({ ino: a, slot: 0, from: aBlock, to: bBlock }),
+    err => err.code === 'EINVAL');
+  await settle();
+
+  const store2 = await backend._store();
+  assert.strictEqual(
+    ctx.fsDecodeText(await ctx.fsReadEntryBytes(store2, backend._superblock, b)),
+    'other', 'B was overwritten by a move that should have been refused');
+  assert.strictEqual(
+    ctx.fsDecodeText(await ctx.fsReadEntryBytes(store2, backend._superblock, a)),
+    'keep me');
+});
