@@ -32,7 +32,12 @@ const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDi
   // post-defrag number instead of measuring one, and it outlived the code that
   // honoured it - apps/defrag.js kept passing it for a whole phase while it
   // did nothing.
-  'targetLevel'];
+  'targetLevel',
+  // Phase 5: DEFRAG drives fsRunCompaction directly now. This was its old
+  // entry point and became unreachable the moment compaction became real -
+  // everything it did except applyDaemonVisualState (obsolete since phase 4
+  // gave the daemon its own corruption dial) is in fsRunCompaction's finally.
+  'optimizeDriveFragmentation'];
 
 test('no source reaches the filesystem outside the VFS', () => {
   const offenders = [];
@@ -80,6 +85,10 @@ test('DEFRAG.exe does not paint a hardcoded drive statistic', () => {
   assert.ok(!/Capacity:\s*[\d,]+\s*MB/.test(src), 'Capacity is still a hardcoded string');
   assert.ok(!/Free:\s*[\d,]+\s*MB/.test(src), 'Free is still a hardcoded string');
   assert.ok(/fsRunCompaction/.test(src), 'Start does not run a real compaction');
+  // The Drive menu label carried its own fabricated capacity for a whole phase
+  // because the guard only looked at the info row's prefixes.
+  assert.ok(!/\(\s*[\d,]{4,}\s*MB\s*\)/.test(src),
+    'a hardcoded drive size is back in a menu label or similar');
 });
 
 // apps/defrag.js cannot be loaded in this harness - openDefrag builds a real

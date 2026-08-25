@@ -5422,28 +5422,6 @@ async function fsRefreshFragmentation() {
   return fsFragmentationLevel;
 }
 
-// DEFRAG.exe calls this when the user runs an optimization pass. It records
-// when the pass happened, which is what the "Last defrag" line reads, and then
-// recomputes from the allocation map.
-//
-// It does NOT yet move any blocks, so the number it recomputes will barely
-// change. That is deliberate and it is honest: actually rewriting blocks into
-// contiguous runs is phase 5's job, per the master spec's phase order.
-//
-// The returned level is what DEFRAG.exe renders. It briefly did not: this
-// function stopped honouring the targetLevel option its one caller passed, and
-// that caller went on painting a hardcoded "Fragmentation: 2%" of its own, so
-// the fake post-defrag drop survived in the UI after being deleted from the
-// model. Inventing that number is the exact fiction this phase exists to
-// delete, so the option is gone rather than ignored.
-async function optimizeDriveFragmentation(options) {
-  defragState.lastDefragTs = Date.now();
-  saveDriveState();
-  const level = await fsRefreshFragmentation();
-  if (!options?.silent && typeof applyDaemonVisualState === 'function') applyDaemonVisualState();
-  return level;
-}
-
 // Walks a compaction plan, one transaction per move, deferring commits for the
 // duration. This is what DEFRAG.exe drives.
 //
@@ -13611,6 +13589,11 @@ function openDefrag() {
     startSoundLoop('defrag', { crossfade: DEFRAG_CROSSFADE_SEC });
     fileLabel.textContent = 'Analyzing C:\\ ...';
     if (ws) ws.textContent = 'Analyzing...';
+    // Clear last run's bar before this one reports anything. A run that moves
+    // nothing fires no onProgress, so without this it would still show the
+    // previous run's 100%.
+    pbFill.style.width = '0%';
+    pbLabel.textContent = '0%';
     let lastMoved = -1;
     await dfReadDiskCells();
     drawGrid();
@@ -13729,7 +13712,7 @@ function openDefrag() {
       // The plain drive art lives here, now that DEFRAG's own icon is the drive
       // being cleaned. The tick stays in the label: the gutter is the icon's
       // now, so it can no longer double as the selected-drive marker.
-      { label: 'C:\\ (2,147 MB)  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
+      { label: 'C:\\ (' + dfDriveText().capacity + ')  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
       { label: 'D:\\ - [NOT FOUND]', icon: 'icon:disk', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', 'icon:warning') },
       '-',
       { label: 'Exit', action: () => closeWin('defrag') },

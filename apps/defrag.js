@@ -172,6 +172,11 @@ function openDefrag() {
     startSoundLoop('defrag', { crossfade: DEFRAG_CROSSFADE_SEC });
     fileLabel.textContent = 'Analyzing C:\\ ...';
     if (ws) ws.textContent = 'Analyzing...';
+    // Clear last run's bar before this one reports anything. A run that moves
+    // nothing fires no onProgress, so without this it would still show the
+    // previous run's 100%.
+    pbFill.style.width = '0%';
+    pbLabel.textContent = '0%';
     let lastMoved = -1;
     await dfReadDiskCells();
     drawGrid();
@@ -290,7 +295,7 @@ function openDefrag() {
       // The plain drive art lives here, now that DEFRAG's own icon is the drive
       // being cleaned. The tick stays in the label: the gutter is the icon's
       // now, so it can no longer double as the selected-drive marker.
-      { label: 'C:\\ (2,147 MB)  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
+      { label: 'C:\\ (' + dfDriveText().capacity + ')  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
       { label: 'D:\\ - [NOT FOUND]', icon: 'icon:disk', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', 'icon:warning') },
       '-',
       { label: 'Exit', action: () => closeWin('defrag') },
