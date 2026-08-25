@@ -32,6 +32,20 @@ self.onmessage = async (e) => {
       if (i >= 0) _hostAbortListeners.splice(i, 1);
     },
   };
+  const startedAt = performance.now();
+  // Busy is wall minus parked. Reported on a heartbeat so a long-running
+  // script shows up while it runs, not only when it finishes - which is the
+  // whole point of watching RUNAWAY.exe pin the graph.
+  const heartbeat = setInterval(function () {
+    self.postMessage({
+      type: 'metrics',
+      busyMs: (performance.now() - startedAt) - parkTotalMs(),
+      wallMs: performance.now() - startedAt,
+      // Read live rather than captured at spawn: the whole point of the column
+      // is that it responds to what the script allocates while it runs.
+      memBytes: scriptLiveStateBytes(),
+    });
+  }, 1000);
   let code = 0;
   try {
     code = await execScript(msg.source, line => sysCall('write', ['stdout', String(line)]), {
@@ -52,5 +66,6 @@ self.onmessage = async (e) => {
     await sysCall('write', ['stderr', (err && err.message) || String(err)]);
     code = 1;
   }
+  clearInterval(heartbeat);
   self.postMessage({ type: 'syscall', seq: 0, name: 'exit', args: [code] });
 };

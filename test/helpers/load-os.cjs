@@ -429,6 +429,8 @@ function makeOsContext(overrides) {
     console,
     setTimeout,
     clearTimeout,
+    setInterval,
+    clearInterval,
     Promise,
     Date,
     Math,

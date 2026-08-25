@@ -145,6 +145,44 @@ const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
 const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
 
+// Interpreter-tracked memory: bytes held in variables, string allocations,
+// call stack depth and loaded source size.
+//
+// This is NOT heap, and SYSMON never calls it heap. Per-worker heap is not
+// exposed to JS, and the one API that could attribute it
+// (performance.measureUserAgentSpecificMemory) needs cross-origin isolation,
+// whose COEP would break every image sleepOS loads from
+// raw.githubusercontent.com. This figure is real data about the process and
+// responsive to allocation, which is the honest thing available.
+var SCRIPT_FRAME_BYTES = 64;
+
+function scriptStateBytes(state) {
+  if (!state || typeof state !== 'object') return 0;
+  let bytes = 0;
+  const vars = state.vars;
+  if (vars && typeof vars === 'object') {
+    Object.keys(vars).forEach(function (key) {
+      // UTF-16 code units, which is what a JS string actually costs.
+      bytes += key.length * 2;
+      const v = vars[key];
+      bytes += typeof v === 'string' ? v.length * 2 : 8;
+    });
+  }
+  if (Array.isArray(state.frames)) bytes += state.frames.length * SCRIPT_FRAME_BYTES;
+  if (Array.isArray(state.callStack)) bytes += state.callStack.length * SCRIPT_FRAME_BYTES;
+  if (typeof state.sourceText === 'string') bytes += state.sourceText.length * 2;
+  return bytes;
+}
+
+// The state of the script currently executing in this realm, or null. The
+// worker heartbeat reads this; nothing else may hold onto it, because it is a
+// live object that execScript mutates in place.
+var _scriptLiveState = null;
+
+function scriptLiveStateBytes() {
+  return _scriptLiveState ? scriptStateBytes(_scriptLiveState) : 0;
+}
+
 function makeScriptError(message, lineNo, sourceName) {
   const err = new Error(message);
   err.lineNo = lineNo || 0;
@@ -692,57 +730,62 @@ async function execScript(source, printFn, options) {
     frames: [scriptBuildArgFrame(options.targetName || sourceName, options.args || [])],
     callStack: [],
   };
+  _scriptLiveState = state;
   let pc = 0;
   let steps = 0;
-  while (pc < parsed.instructions.length) {
-    const inst = parsed.instructions[pc];
-    steps++;
-    try {
-      throwIfAborted(state.signal);
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
-    }
-    if (steps > SCRIPT_MAX_STEPS) {
-      return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
-    }
-    try {
-      const action = await execScriptInstruction(inst, parsed.labels, state);
-      if (action && action.type === 'jump') {
-        pc = action.pc;
-        continue;
+  try {
+    while (pc < parsed.instructions.length) {
+      const inst = parsed.instructions[pc];
+      steps++;
+      try {
+        throwIfAborted(state.signal);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'call') {
-        state.callStack.push({ returnPc: pc + 1 });
-        state.frames.push(action.frame);
-        pc = action.pc;
-        continue;
+      if (steps > SCRIPT_MAX_STEPS) {
+        return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'return') {
-        if (!state.callStack.length || state.frames.length <= 1) {
-          throw makeScriptError('RETURN without CALL.', inst.lineNo);
+      try {
+        const action = await execScriptInstruction(inst, parsed.labels, state);
+        if (action && action.type === 'jump') {
+          pc = action.pc;
+          continue;
         }
-        const frame = state.callStack.pop();
-        state.frames.pop();
-        state.status = action.code;
-        pc = frame.returnPc;
-        continue;
+        if (action && action.type === 'call') {
+          state.callStack.push({ returnPc: pc + 1 });
+          state.frames.push(action.frame);
+          pc = action.pc;
+          continue;
+        }
+        if (action && action.type === 'return') {
+          if (!state.callStack.length || state.frames.length <= 1) {
+            throw makeScriptError('RETURN without CALL.', inst.lineNo);
+          }
+          const frame = state.callStack.pop();
+          state.frames.pop();
+          state.status = action.code;
+          pc = frame.returnPc;
+          continue;
+        }
+        if (action && action.type === 'exit') {
+          state.status = action.code;
+          return state.status;
+        }
+        if (typeof action === 'number') {
+          pc = action;
+          continue;
+        }
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'exit') {
-        state.status = action.code;
-        return state.status;
-      }
-      if (typeof action === 'number') {
-        pc = action;
-        continue;
-      }
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+      pc++;
     }
-    pc++;
+    return Math.trunc(state.status ?? 0);
+  } finally {
+    _scriptLiveState = null;
   }
-  return Math.trunc(state.status ?? 0);
 }
 
 // Shared by makeVfsScriptFs's `openUi` and the kernel's `ui.open` syscall
@@ -854,6 +897,20 @@ self.onmessage = async (e) => {
       if (i >= 0) _hostAbortListeners.splice(i, 1);
     },
   };
+  const startedAt = performance.now();
+  // Busy is wall minus parked. Reported on a heartbeat so a long-running
+  // script shows up while it runs, not only when it finishes - which is the
+  // whole point of watching RUNAWAY.exe pin the graph.
+  const heartbeat = setInterval(function () {
+    self.postMessage({
+      type: 'metrics',
+      busyMs: (performance.now() - startedAt) - parkTotalMs(),
+      wallMs: performance.now() - startedAt,
+      // Read live rather than captured at spawn: the whole point of the column
+      // is that it responds to what the script allocates while it runs.
+      memBytes: scriptLiveStateBytes(),
+    });
+  }, 1000);
   let code = 0;
   try {
     code = await execScript(msg.source, line => sysCall('write', ['stdout', String(line)]), {
@@ -874,5 +931,6 @@ self.onmessage = async (e) => {
     await sysCall('write', ['stderr', (err && err.message) || String(err)]);
     code = 1;
   }
+  clearInterval(heartbeat);
   self.postMessage({ type: 'syscall', seq: 0, name: 'exit', args: [code] });
 };

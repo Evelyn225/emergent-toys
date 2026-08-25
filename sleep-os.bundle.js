@@ -2200,6 +2200,31 @@ var _kernelByWinId = new Map();   // winId -> pid
 var _kernelNextPid = 1;
 var _kernelWaiters = new Map();   // pid -> [resolve]
 
+// Per-pid figures reported by workers. Absent means "not measured", which is
+// what SYSMON renders as a dash - and after this phase a dash has one precise
+// meaning: no measurable execution context.
+var _kernelMetrics = new Map();
+
+function kernelMetricsFor(pid) {
+  const m = _kernelMetrics.get(pid);
+  if (!m) return { cpu: null, mem: null, memUnit: null };
+  return { cpu: m.cpu, mem: m.mem, memUnit: 'bytes' };
+}
+
+function kernelRecordMetrics(pid, msg) {
+  const prev = _kernelMetrics.get(pid) || { lastBusyMs: 0, lastWallMs: 0 };
+  const dBusy = Math.max(0, msg.busyMs - prev.lastBusyMs);
+  const dWall = Math.max(0, msg.wallMs - prev.lastWallMs);
+  _kernelMetrics.set(pid, {
+    lastBusyMs: msg.busyMs,
+    lastWallMs: msg.wallMs,
+    // Share of one core since the previous heartbeat, not since spawn: a
+    // script that looped hard then went idle must stop reporting busy.
+    cpu: dWall > 0 ? Math.min(100, (dBusy / dWall) * 100) : 0,
+    mem: msg.memBytes == null ? null : msg.memBytes,
+  });
+}
+
 const KERNEL_PID = 1;
 
 // Pids 2 through 1333 (and the generated 500 + i*13 series) belong to the daemon
@@ -2369,6 +2394,7 @@ function kernelExit(pid, code) {
   waiters.forEach(resolve => resolve(code));
   if (proc.winId) _kernelByWinId.delete(proc.winId);
   _kernelProcs.delete(pid);
+  _kernelMetrics.delete(pid);
 }
 
 // TRAP: kernelWait(pid) on a pid that has already been reaped resolves 0,
@@ -2551,7 +2577,10 @@ async function kernelSpawn(path, argv, opts) {
     worker, winId: null, exitCode: null, startedAt: Date.now(),
     onStdout: opts.onStdout || null, onStderr: opts.onStderr || null,
   });
-  worker.onmessage = e => { void kernelHandleSyscall(pid, e.data); };
+  worker.onmessage = e => {
+    if (e.data && e.data.type === 'metrics') { kernelRecordMetrics(pid, e.data); return; }
+    void kernelHandleSyscall(pid, e.data);
+  };
   // A worker that throws before its first syscall would otherwise stay running
   // forever in the table.
   worker.onerror = e => { _kernelWrite(_kernelProcs.get(pid) || {}, 'stderr', e.message || 'worker error'); kernelExit(pid, 1); };
@@ -7402,6 +7431,44 @@ const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
 const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
 
+// Interpreter-tracked memory: bytes held in variables, string allocations,
+// call stack depth and loaded source size.
+//
+// This is NOT heap, and SYSMON never calls it heap. Per-worker heap is not
+// exposed to JS, and the one API that could attribute it
+// (performance.measureUserAgentSpecificMemory) needs cross-origin isolation,
+// whose COEP would break every image sleepOS loads from
+// raw.githubusercontent.com. This figure is real data about the process and
+// responsive to allocation, which is the honest thing available.
+var SCRIPT_FRAME_BYTES = 64;
+
+function scriptStateBytes(state) {
+  if (!state || typeof state !== 'object') return 0;
+  let bytes = 0;
+  const vars = state.vars;
+  if (vars && typeof vars === 'object') {
+    Object.keys(vars).forEach(function (key) {
+      // UTF-16 code units, which is what a JS string actually costs.
+      bytes += key.length * 2;
+      const v = vars[key];
+      bytes += typeof v === 'string' ? v.length * 2 : 8;
+    });
+  }
+  if (Array.isArray(state.frames)) bytes += state.frames.length * SCRIPT_FRAME_BYTES;
+  if (Array.isArray(state.callStack)) bytes += state.callStack.length * SCRIPT_FRAME_BYTES;
+  if (typeof state.sourceText === 'string') bytes += state.sourceText.length * 2;
+  return bytes;
+}
+
+// The state of the script currently executing in this realm, or null. The
+// worker heartbeat reads this; nothing else may hold onto it, because it is a
+// live object that execScript mutates in place.
+var _scriptLiveState = null;
+
+function scriptLiveStateBytes() {
+  return _scriptLiveState ? scriptStateBytes(_scriptLiveState) : 0;
+}
+
 function makeScriptError(message, lineNo, sourceName) {
   const err = new Error(message);
   err.lineNo = lineNo || 0;
@@ -7949,57 +8016,62 @@ async function execScript(source, printFn, options) {
     frames: [scriptBuildArgFrame(options.targetName || sourceName, options.args || [])],
     callStack: [],
   };
+  _scriptLiveState = state;
   let pc = 0;
   let steps = 0;
-  while (pc < parsed.instructions.length) {
-    const inst = parsed.instructions[pc];
-    steps++;
-    try {
-      throwIfAborted(state.signal);
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
-    }
-    if (steps > SCRIPT_MAX_STEPS) {
-      return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
-    }
-    try {
-      const action = await execScriptInstruction(inst, parsed.labels, state);
-      if (action && action.type === 'jump') {
-        pc = action.pc;
-        continue;
+  try {
+    while (pc < parsed.instructions.length) {
+      const inst = parsed.instructions[pc];
+      steps++;
+      try {
+        throwIfAborted(state.signal);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'call') {
-        state.callStack.push({ returnPc: pc + 1 });
-        state.frames.push(action.frame);
-        pc = action.pc;
-        continue;
+      if (steps > SCRIPT_MAX_STEPS) {
+        return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'return') {
-        if (!state.callStack.length || state.frames.length <= 1) {
-          throw makeScriptError('RETURN without CALL.', inst.lineNo);
+      try {
+        const action = await execScriptInstruction(inst, parsed.labels, state);
+        if (action && action.type === 'jump') {
+          pc = action.pc;
+          continue;
         }
-        const frame = state.callStack.pop();
-        state.frames.pop();
-        state.status = action.code;
-        pc = frame.returnPc;
-        continue;
+        if (action && action.type === 'call') {
+          state.callStack.push({ returnPc: pc + 1 });
+          state.frames.push(action.frame);
+          pc = action.pc;
+          continue;
+        }
+        if (action && action.type === 'return') {
+          if (!state.callStack.length || state.frames.length <= 1) {
+            throw makeScriptError('RETURN without CALL.', inst.lineNo);
+          }
+          const frame = state.callStack.pop();
+          state.frames.pop();
+          state.status = action.code;
+          pc = frame.returnPc;
+          continue;
+        }
+        if (action && action.type === 'exit') {
+          state.status = action.code;
+          return state.status;
+        }
+        if (typeof action === 'number') {
+          pc = action;
+          continue;
+        }
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (action && action.type === 'exit') {
-        state.status = action.code;
-        return state.status;
-      }
-      if (typeof action === 'number') {
-        pc = action;
-        continue;
-      }
-    } catch (err) {
-      if (isAbortError(err)) throw err;
-      return scriptFail(err, printFn, sourceName, options.bubbleErrors);
+      pc++;
     }
-    pc++;
+    return Math.trunc(state.status ?? 0);
+  } finally {
+    _scriptLiveState = null;
   }
-  return Math.trunc(state.status ?? 0);
 }
 
 // Shared by makeVfsScriptFs's `openUi` and the kernel's `ui.open` syscall

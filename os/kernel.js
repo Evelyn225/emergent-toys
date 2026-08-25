@@ -12,6 +12,31 @@ var _kernelByWinId = new Map();   // winId -> pid
 var _kernelNextPid = 1;
 var _kernelWaiters = new Map();   // pid -> [resolve]
 
+// Per-pid figures reported by workers. Absent means "not measured", which is
+// what SYSMON renders as a dash - and after this phase a dash has one precise
+// meaning: no measurable execution context.
+var _kernelMetrics = new Map();
+
+function kernelMetricsFor(pid) {
+  const m = _kernelMetrics.get(pid);
+  if (!m) return { cpu: null, mem: null, memUnit: null };
+  return { cpu: m.cpu, mem: m.mem, memUnit: 'bytes' };
+}
+
+function kernelRecordMetrics(pid, msg) {
+  const prev = _kernelMetrics.get(pid) || { lastBusyMs: 0, lastWallMs: 0 };
+  const dBusy = Math.max(0, msg.busyMs - prev.lastBusyMs);
+  const dWall = Math.max(0, msg.wallMs - prev.lastWallMs);
+  _kernelMetrics.set(pid, {
+    lastBusyMs: msg.busyMs,
+    lastWallMs: msg.wallMs,
+    // Share of one core since the previous heartbeat, not since spawn: a
+    // script that looped hard then went idle must stop reporting busy.
+    cpu: dWall > 0 ? Math.min(100, (dBusy / dWall) * 100) : 0,
+    mem: msg.memBytes == null ? null : msg.memBytes,
+  });
+}
+
 const KERNEL_PID = 1;
 
 // Pids 2 through 1333 (and the generated 500 + i*13 series) belong to the daemon
@@ -181,6 +206,7 @@ function kernelExit(pid, code) {
   waiters.forEach(resolve => resolve(code));
   if (proc.winId) _kernelByWinId.delete(proc.winId);
   _kernelProcs.delete(pid);
+  _kernelMetrics.delete(pid);
 }
 
 // TRAP: kernelWait(pid) on a pid that has already been reaped resolves 0,
@@ -363,7 +389,10 @@ async function kernelSpawn(path, argv, opts) {
     worker, winId: null, exitCode: null, startedAt: Date.now(),
     onStdout: opts.onStdout || null, onStderr: opts.onStderr || null,
   });
-  worker.onmessage = e => { void kernelHandleSyscall(pid, e.data); };
+  worker.onmessage = e => {
+    if (e.data && e.data.type === 'metrics') { kernelRecordMetrics(pid, e.data); return; }
+    void kernelHandleSyscall(pid, e.data);
+  };
   // A worker that throws before its first syscall would otherwise stay running
   // forever in the table.
   worker.onerror = e => { _kernelWrite(_kernelProcs.get(pid) || {}, 'stderr', e.message || 'worker error'); kernelExit(pid, 1); };
