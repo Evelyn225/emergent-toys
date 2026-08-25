@@ -22,6 +22,10 @@ function openSysmon() {
   let activeTab      = 'resources';
   let selectedProc   = null;
   let smTimer        = null;
+  // The probe's per-app percentages. instWindowSample RESETS the window as a
+  // side effect, so the result has to be held here: renderProcesses runs later
+  // in the same tick and would otherwise find the totals already cleared.
+  let lastCpuSample = new Map();
 
   // Tab bar
   const tabBar = document.createElement('div');
@@ -108,7 +112,17 @@ function openSysmon() {
         mem = wins[p.winId].el.getElementsByTagName('*').length + 1;
         memUnit = 'nodes';
       }
-      const cpuText = p.cpu === null ? '-' : p.cpu.toFixed(1);
+      // Three cases, and the difference between the last two is the point of
+      // this phase. A worker reports interpreter-measured CPU. An app has a
+      // live window, so it IS measurable - if the probe recorded nothing this
+      // window it was genuinely idle, which is 0.0, not "unmeasurable". A row
+      // with no window and no interpreter has no execution context at all, and
+      // only that reads as a dash.
+      let cpu = p.cpu;
+      if (cpu === null && p.winId && wins[p.winId]) {
+        cpu = lastCpuSample.get(p.pid) || 0;
+      }
+      const cpuText = cpu === null ? '-' : cpu.toFixed(1);
       // Each cell carries its own unit because the two process classes report
       // genuinely different things: a script reports interpreter-tracked bytes,
       // an app reports the node count of its window subtree. Neither is heap
@@ -224,9 +238,9 @@ function openSysmon() {
 
   function smTick() {
     if (!wins['sysmon']) { clearInterval(smTimer); return; }
-    const sample = instWindowSample(performance.now());
+    lastCpuSample = instWindowSample(performance.now());
     let cpuTotal = 0;
-    sample.forEach(function (pct) { cpuTotal += pct; });
+    lastCpuSample.forEach(function (pct) { cpuTotal += pct; });
     getProcessList().forEach(function (p) {
       if (p.cpu != null) cpuTotal += p.cpu;
     });
