@@ -22,6 +22,7 @@
   "os/script/interp.js",
   "os/media.js",
   "os/ui-chrome.js",
+  "os/instrument.js",
   "os/wm.js",
   "os/desktop-icons.js",
   "apps/notepad.js",
