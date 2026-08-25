@@ -18,12 +18,13 @@ function terminalCtx(overrides) {
     kernelListProcesses: () => [],
     getBuiltInProcesses: () => [],
     findBuiltInProcess: () => null,
+    kernelMetricsFor: () => ({ cpu: null, mem: null, memUnit: null }),
   }, overrides));
   return loadOsSources(ctx, ['os/process-view.js', 'apps/terminal.js']);
 }
 
 test('a pid ps lists from the daemon story is denied with the TASKKILL message, not "No such process"', () => {
-  const storyProc = { pid: 512, name: 'soul_svc.exe', cpu: 7.4, mem: 31.2, protected: true };
+  const storyProc = { pid: 512, name: 'soul_svc.exe', protected: true };
   const ctx = terminalCtx({
     getBuiltInProcesses: () => [storyProc],
     findBuiltInProcess: (pid) => (pid === 512 ? storyProc : null),

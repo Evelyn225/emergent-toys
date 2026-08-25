@@ -22,16 +22,21 @@ const STORY_FILE_PATHS = {
   quarantineSig: 'SYS\\quarantine.sig',
   mirrorDat: 'CACHE\\mirror.dat',
 };
+// The story's processes exist; their numbers never did. Phase 5b deleted the
+// authored cpu/mem, because a process with no window and no interpreter has no
+// measurable execution context and a dash says exactly that. The rows stay:
+// TASKKILL 512 is a real story beat, the protected pids answer Access Denied,
+// and DAEMON_COUNT spawns phantoms for a player who goes looking.
 const BUILTIN_PROCESS_SEED = [
-  { pid: 4, name: 'System', cpu: 0.1, mem: 0.5, protected: true },
-  { pid: 52, name: 'csrss.exe', cpu: 0.1, mem: 1.2, protected: true },
-  { pid: 116, name: 'services.exe', cpu: 0.2, mem: 2.1, protected: true },
-  { pid: 124, name: 'lsass.exe', cpu: 0.3, mem: 3.4, protected: true },
-  { pid: 280, name: 'svchost.exe', cpu: 0.5, mem: 4.8, protected: true },
-  { pid: 312, name: 'svchost.exe', cpu: 0.1, mem: 2.3, protected: true },
-  { pid: 440, name: 'dream_kernel.exe', cpu: 1.2, mem: 8.5, protected: true },
-  { pid: 666, name: 'daemon.core', cpu: 2.1, mem: 12.3, protected: true },
-  { pid: 999, name: 'void_monitor.exe', cpu: 0.4, mem: 5.2, protected: true },
+  { pid: 4, name: 'System', protected: true },
+  { pid: 52, name: 'csrss.exe', protected: true },
+  { pid: 116, name: 'services.exe', protected: true },
+  { pid: 124, name: 'lsass.exe', protected: true },
+  { pid: 280, name: 'svchost.exe', protected: true },
+  { pid: 312, name: 'svchost.exe', protected: true },
+  { pid: 440, name: 'dream_kernel.exe', protected: true },
+  { pid: 666, name: 'daemon.core', protected: true },
+  { pid: 999, name: 'void_monitor.exe', protected: true },
 ];
 const VOID_ACTION_ORDER = ['observe', 'measure', 'listen', 'trace', 'sample', 'stabilize', 'pulse'];
 const VOID_ACTION_LABELS = {
@@ -974,21 +979,19 @@ function getBuiltInProcesses() {
     base.push({
       pid: 512,
       name: daemonStory.stage >= 1 ? 'soul_daemon.exe' : 'soul_svc.exe',
-      cpu: daemonStory.stage >= 4 ? 11.8 : 7.4,
-      mem: daemonStory.stage >= 4 ? 36.9 : 31.2,
       protected: daemonStory.stage < 1,
     });
   }
   if (daemonStory.stage >= 4 && !daemonStory.endingReached) {
-    base.push({ pid: 1008, name: 'mirror_watch.exe', cpu: 2.7, mem: 9.4, protected: true });
+    base.push({ pid: 1008, name: 'mirror_watch.exe', protected: true });
   }
   if (daemonStory.stage >= 5 && !daemonStory.endingReached) {
-    base.push({ pid: 1333, name: 'signal_window.exe', cpu: 1.5, mem: 4.2, protected: true });
+    base.push({ pid: 1333, name: 'signal_window.exe', protected: true });
   }
   // DAEMON_COUNT registry key: extra phantom processes when count > 7
   const daemonCount = parseInt(registryData['HKEY_SLEEPBOX_MACHINE']?.['SOUL\\Metrics']?.DAEMON_COUNT?.value) || 7;
   for (let i = 8; i <= Math.min(daemonCount, 20); i++) {
-    base.push({ pid: 500 + i * 13, name: 'soul_svc_' + String(i).padStart(2, '0') + '.exe', cpu: 0.1 + (i % 3) * 0.4, mem: 2.1 + (i % 5) * 1.2, protected: true });
+    base.push({ pid: 500 + i * 13, name: 'soul_svc_' + String(i).padStart(2, '0') + '.exe', protected: true });
   }
   return base.sort((a, b) => a.pid - b.pid);
 }

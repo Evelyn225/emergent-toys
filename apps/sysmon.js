@@ -82,18 +82,12 @@ function openSysmon() {
   content.appendChild(procPanel);
 
   function getProcessList() {
-    // Story rows keep their authored cpu/mem plus jitter, applied here at
-    // presentation time rather than in the shared view: jitter is a display
-    // concern, not a fact about a process, and `ps` must not show randomized
-    // numbers. Real (kernel-table) rows carry null cpu/mem straight through -
-    // phase 5 makes those genuinely measurable.
-    return buildProcessRows()
-      .filter(p => showSysProcs || !p.isStory)
-      .map(p => p.isStory ? {
-        ...p,
-        cpu: parseFloat((p.cpu + (Math.random() - 0.5) * 0.2).toFixed(1)),
-        mem: parseFloat((p.mem + (Math.random() - 0.5) * 0.3).toFixed(1)),
-      } : p);
+    // Phase 5b deleted the story rows' authored cpu/mem, so there is nothing
+    // left to jitter: a story process has no window and no interpreter, so it
+    // has no measurable execution context and reports null like any other
+    // unmeasured row. Real (kernel-table) rows carry their measured cpu/mem
+    // straight through from buildProcessRows.
+    return buildProcessRows().filter(p => showSysProcs || !p.isStory);
   }
 
   function renderProcesses() {
