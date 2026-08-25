@@ -13650,7 +13650,14 @@ function openDefrag() {
       if (ws) ws.textContent = 'Failed';
     } else {
       pbFill.style.width = '100%'; pbLabel.textContent = '100%';
-      fileLabel.textContent = 'Defragmentation complete. ' + result.moved + ' blocks moved.';
+      // Blocks moved is the effort; the fragmentation pair is the result, and
+      // reporting only the first is how a defragmenter ends up sounding busy
+      // without saying whether it achieved anything. Rounded exactly like the
+      // info row above so the two can never disagree on screen - including on
+      // a barely-fragmented disk, where a real drop honestly reads 0% -> 0%.
+      const pctOf = (lvl) => Math.round((lvl || 0) * 100) + '%';
+      fileLabel.textContent = 'Defragmentation complete. ' + result.moved + ' blocks moved. ' +
+        'Fragmentation ' + pctOf(result.fragBefore) + ' -> ' + pctOf(result.fragAfter) + '.';
       // The story entity has no inode and no blocks, so DEFRAG genuinely never
       // examined it. Say that, rather than claiming a move that was never
       // attempted, and only while it actually exists.
