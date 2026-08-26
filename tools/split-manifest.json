@@ -19,6 +19,7 @@
   "os/blob-store.js",
   "os/settings.js",
   "os/park.js",
+  "os/stream.js",
   "os/script/interp.js",
   "os/media.js",
   "os/ui-chrome.js",
