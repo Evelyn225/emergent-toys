@@ -494,12 +494,14 @@ function openTerminal(startDir, initialCommand) {
       subEntries.filter(x => x.kind === 'text').forEach((x, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${x.name}`));
       subEntries.filter(x => x.kind === 'blob').forEach((x, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${x.name}`));
     });
-    getRootSystemFiles({ includeExplorer: true }).forEach(name => {
-      let label = name;
-      if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
-      if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
-      lines.push(`├── ${label}`);
-    });
+    getRootSystemFiles({ includeExplorer: true })
+      .filter(name => !vfsStatSync(name, ''))
+      .forEach(name => {
+        let label = name;
+        if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
+        if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
+        lines.push(`├── ${label}`);
+      });
     rootEntries.filter(e => e.kind === 'text').forEach(e => lines.push(`├── ${e.name}`));
     rootEntries.filter(e => e.kind === 'blob').forEach(e => lines.push(`├── ${e.name}  [${e.blob.kind}]`));
     lines.push('└── PROJECTS\\');
