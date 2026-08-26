@@ -60,3 +60,54 @@ test('an explicit low maxSteps overrides the default in the other direction', as
   assert.notStrictEqual(code, 0);
   assert.ok(printed.some(l => /Instruction limit exceeded/i.test(l)));
 });
+
+// The `run <script>` instruction spawns a nested script through a SECOND
+// execScript call (os/script/interp.js:542). It reads maxSteps off `state`
+// because execScriptInstruction is a separate top-level function that cannot
+// see execScript's local. Without that, a worker script's nested RUN would
+// silently re-cap at 10000 - the exact bug this task removes, and invisible
+// to every other test here.
+const NESTED_CHILD = [
+  'SET J 0',
+  ':c',
+  'INC J',
+  'IF $J < 12000 GOTO c',
+  'EXIT 0',
+].join('\n');
+
+function nestedFs() {
+  return {
+    stat: async (name) => (name === 'child.script'
+      ? { name: 'child.script', dirName: '', kind: 'text' }
+      : null),
+    readFile: async () => NESTED_CHILD,
+    notifyChanged: async () => {},
+  };
+}
+
+test('a nested RUN inherits an uncapped parent\'s ceiling', async () => {
+  const ctx = interpCtx();
+  const printed = [];
+  const code = await ctx.execScript('RUN child.script', line => printed.push(String(line)), {
+    fs: nestedFs(),
+    maxSteps: Infinity,
+  });
+  assert.strictEqual(code, 0, 'nested child must not re-cap: ' + JSON.stringify(printed));
+  assert.ok(
+    !printed.some(l => /Instruction limit exceeded/i.test(l)),
+    'nested child hit a limit its parent does not have: ' + JSON.stringify(printed),
+  );
+});
+
+test('a nested RUN inherits a capped parent\'s ceiling too', async () => {
+  const ctx = interpCtx();
+  const printed = [];
+  const code = await ctx.execScript('RUN child.script', line => printed.push(String(line)), {
+    fs: nestedFs(),
+  });
+  assert.notStrictEqual(code, 0);
+  assert.ok(
+    printed.some(l => /Instruction limit exceeded/i.test(l)),
+    'a capped parent must still cap its child: ' + JSON.stringify(printed),
+  );
+});
