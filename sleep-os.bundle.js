@@ -10767,7 +10767,10 @@ function detectLang(fname) {
            json:'json',
            md:'md', markdown:'md',
            py:'py',
-           script:'script' }[ext] || 'txt';
+           // A .exe IS a script - that is the whole point of phase 6's .exe
+           // path. The script rules below already exist; nothing but this
+           // mapping was missing.
+           exe:'script', script:'script' }[ext] || 'txt';
 }
 
 const LANG_LABELS = { js:'JavaScript', html:'HTML', css:'CSS', json:'JSON', md:'Markdown', py:'Python', script:'.script', txt:'Plain Text' };
@@ -10872,6 +10875,19 @@ function highlight(text, lang) {
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
+// Which of NOTEPAD's two views a file gets.
+//
+// The discriminator is PROGRAM_LAUNCHERS membership rather than the .exe
+// extension. A system binary genuinely has no source to show, so a
+// disassembly view is honest for it. A script the user wrote thirty seconds
+// ago does have one, and showing invented bytecode instead would be the same
+// species of lie phases 5 and 5b existed to delete.
+function notepadRouteFor(filename) {
+  const name = String(filename || '');
+  if (!/\.exe$/i.test(name)) return 'editor';
+  return programIsSystemBinary(name) ? 'decompiler' : 'editor';
+}
+
 function openDecompilerView(filename) {
   const id = 'decompile-' + filename.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
@@ -10880,7 +10896,15 @@ function openDecompilerView(filename) {
   const mb   = document.getElementById('mb-' + id);
   body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
 
-  const content = getExeDecompilerContent(filename);
+  // Phase 6 seeded these as real files (os/fs-core.js), so the view renders
+  // the file rather than a parallel authored copy. The fallback covers a
+  // binary that is in the registry but not on disk - possible only if a seed
+  // and the launcher table disagree, which is worth showing rather than
+  // crashing on.
+  const stat = vfsStatSync(filename, '');
+  const content = stat && stat.kind === 'text'
+    ? String(vfsDirNodeSync(stat.dirName).files.get(stat.name) || '')
+    : getExeDecompilerContent(filename);
 
   // Read-only display with syntax highlighting (asm-like)
   const wrap = document.createElement('div');
@@ -11281,13 +11305,13 @@ function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
   const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
-  // Special handling for .exe files - decompiler view (read-only)
+  // Special handling for .exe files - decompiler view (read-only) for a
+  // system binary, plain editor for anything the user authored themselves.
   const normalizedName = (filename || '').toLowerCase();
-  const isExe = normalizedName.endsWith('.exe');
   const isDaemonCore = normalizedName === 'daemon.core';
   const isVoidTmp = normalizedName === 'void.tmp';
 
-  if (isExe && filename) {
+  if (filename && notepadRouteFor(filename) === 'decompiler') {
     return openDecompilerView(filename);
   }
   if (isDaemonCore) {
