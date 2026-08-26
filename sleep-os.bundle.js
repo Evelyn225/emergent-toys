@@ -12348,8 +12348,8 @@ async function runPipelineStages(stages, deps) {
       break;
     }
     const result = await deps.runStage(cmd, args, stream);
-    if (!result) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
-    stream = result;
+    if (result === null || result === undefined) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
+    stream = streamNormalize(result);
   }
   return { stream, consumedBySink };
 }
@@ -12966,7 +12966,7 @@ function openTerminal(startDir, initialCommand) {
     return [];
   }
 
-  async function runPipeStage(cmd, args, stdinLines) {
+  async function runPipeStage(cmd, args, stdin) {
     cmd = ({ print: 'echo', wait: 'sleep', clear: 'cls' }[cmd] || cmd);
     if (cmd === 'echo') return [unquoteShellValue(resolveShellText(args))];
     if (cmd === 'help') return buildHelpLines();
@@ -12992,16 +12992,16 @@ function openTerminal(startDir, initialCommand) {
     if (cmd === 'ping') return buildPingLines(resolveShellText(args), getCurrentCommandSignal());
     if (cmd === 'sleep') {
       await scriptSleep(parseTerminalDelayMs(resolveShellText(args)), getCurrentCommandSignal());
-      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+      return stdin || [];
     }
     if (cmd === 'cls') {
       out.innerHTML = '';
-      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+      return stdin || [];
     }
     if (cmd === 'cat' || cmd === 'type') {
       const target = resolveShellText(args).trim();
-      if (target) return await getPipeableText(target);
-      if (Array.isArray(stdinLines)) return stdinLines.slice();
+      if (target) return streamFromLines(await getPipeableText(target));
+      if (stdin) return stdin;
       throw new Error('Usage: CAT [file]');
     }
     if (cmd === 'grep') {
@@ -13011,9 +13011,9 @@ function openTerminal(startDir, initialCommand) {
       const target = match[2] ? unquoteShellValue(match[2]) : '';
       let re;
       try { re = new RegExp(pattern, 'i'); } catch (e) { throw new Error('Invalid regex: ' + pattern); }
-      const sourceLines = target ? await getPipeableText(target) : Array.isArray(stdinLines) ? stdinLines.slice() : null;
-      if (!sourceLines) throw new Error('Usage: GREP <pattern> [file]');
-      return sourceLines.filter(line => re.test(line));
+      const source = target ? streamFromLines(await getPipeableText(target)) : stdin;
+      if (!source) throw new Error('Usage: GREP <pattern> [file]');
+      return streamGrep(source, re);
     }
     if (cmd === 'wc') {
       let sourceText = '';
@@ -13025,8 +13025,8 @@ function openTerminal(startDir, initialCommand) {
         if (!st || st.kind !== 'text') throw new Error('File not found: ' + target);
         sourceText = (await vfsReadFile(target, cwd)) || '';
         label = '  ' + st.name;
-      } else if (Array.isArray(stdinLines)) {
-        sourceText = stdinLines.join('\n');
+      } else if (stdin) {
+        sourceText = (await streamCollect(stdin)).join('\n');
       } else {
         throw new Error('Usage: WC [file]');
       }
@@ -13070,7 +13070,7 @@ function openTerminal(startDir, initialCommand) {
         getCommandParts,
         runStage: runPipeStage,
         onNotepadSink: async (args, upstream) => {
-          const lines = Array.isArray(upstream) ? upstream : [];
+          const lines = await streamCollect(upstream);
           const content = lines.join('\n');
           const target = args.trim();
           if (target) {
@@ -13085,10 +13085,15 @@ function openTerminal(startDir, initialCommand) {
       });
       if (parsed.redirectOp) {
         if (consumedBySink) throw new Error('Cannot redirect output after piping into Notepad.');
-        const saved = await writePipelineOutput(parsed.redirectTarget, Array.isArray(stream) ? stream : [], parsed.redirectOp === '>>');
+        // A file write is a fold, like WC: nothing can be written until the
+        // whole stream has arrived, so collecting here is not a streaming
+        // failure.
+        const saved = await writePipelineOutput(parsed.redirectTarget, await streamCollect(stream), parsed.redirectOp === '>>');
         print(`${parsed.redirectOp === '>>' ? 'Appended' : 'Wrote'}: ${saved.fileName}`);
-      } else if (!consumedBySink) {
-        (stream || []).forEach(line => print(line));
+      } else if (!consumedBySink && stream) {
+        // Progressive: this is what makes an unterminated producer observable
+        // at all rather than a hang followed by nothing.
+        for await (const line of stream) print(line);
       }
     } catch (err) {
       print(err.message || String(err), '#ff4444');
