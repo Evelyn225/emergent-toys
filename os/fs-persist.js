@@ -58,6 +58,30 @@ function refreshSeededDocs() {
   });
 }
 
+// The eight system binaries (SYSTEM_BINARY_SOURCES, os/fs-core.js), restored
+// on every boot for a user whose root already had content. vfsBootMount's
+// seed callback above only runs `if (!root.dirs.size && !root.files.size)` -
+// a completely empty root - so it never fires for anyone who has booted
+// sleepOS before, meaning phase 6's seeding alone dropped all eight binaries
+// out of DIR for every returning user the moment they next loaded the OS.
+//
+// Unlike refreshSeededDocs above, this is fill-if-absent rather than an
+// unconditional rewrite: DOCS's seeded files are meant to look identical
+// every boot, but a binary is a real file a player can open in Notepad and
+// edit, so overwriting it here on every boot would silently discard that the
+// same way Task 11 exists to stop DOCS from doing. A binary the player
+// deletes comes back next boot (vfsStatSync finds nothing, so it is
+// refilled); one they edit does not revert (vfsStatSync finds it, so it is
+// left alone). Mutates the live tree directly with no queued commit op, the
+// same as refreshSeededDocs and for the same reason: this function runs
+// again on every future boot, so a refill that is never durably persisted to
+// IndexedDB still reappears the next time it is needed.
+function refreshSeededSystemBinaries() {
+  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
+    if (!vfsStatSync(name, '')) vfsGetTree().files.set(name, SYSTEM_BINARY_SOURCES[name]);
+  });
+}
+
 function refreshSeededWallpaperLibrary() {
   const dir = ensureFsDir(SYSTEM_WALLPAPER_DIR);
   SEEDED_WALLPAPERS.forEach(item => {
@@ -308,6 +332,7 @@ async function vfsBootMount() {
     },
   });
   refreshSeededDocs();
+  refreshSeededSystemBinaries();
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);

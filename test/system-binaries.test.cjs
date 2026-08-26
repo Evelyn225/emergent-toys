@@ -5,7 +5,9 @@
 // them is the same defect phase 5b deleted from the process table.
 const test = require('node:test');
 const assert = require('node:assert');
-const { makeOsContext, loadOsSources } = require('./helpers/load-os.cjs');
+const fs = require('fs');
+const path = require('path');
+const { makeOsContext, loadOsSources, extractFunctionSource } = require('./helpers/load-os.cjs');
 
 function fsCtx() {
   const ctx = makeOsContext({
@@ -14,6 +16,17 @@ function fsCtx() {
     RECYCLE_BIN_NAME: 'Recycle Bin',
   });
   return loadOsSources(ctx, ['os/vfs.js', 'os/fs-core.js']);
+}
+
+// os/fs-persist.js runs loadDriveState() and ensureFsDir() at parse time and
+// drags in the whole desktop (see test/fs-boot-backend.test.cjs's boot()),
+// so refreshSeededSystemBinaries is read out of the source and evaluated
+// directly, the same trick that test uses for fsChooseBackend.
+function fsCtxWithRefresh() {
+  const ctx = fsCtx();
+  const src = fs.readFileSync(path.join(__dirname, '..', 'os', 'fs-persist.js'), 'utf8');
+  ctx.__evalSource(extractFunctionSource(src, 'refreshSeededSystemBinaries'), 'fs-persist-slice');
+  return ctx;
 }
 
 const SYSTEM_BINARIES = [
@@ -60,4 +73,59 @@ test('a system binary reads back the content it was seeded with', () => {
   const tree = ctx.vfsGetTree();
   const text = tree.files.get('TERMINAL.exe');
   assert.ok(/section \.text/.test(text), 'expected a disassembly listing, got: ' + String(text).slice(0, 80));
+});
+
+// vfsBootMount's seed callback only fires `if (!root.dirs.size &&
+// !root.files.size)` - a completely empty root. Anyone who has booted
+// sleepOS before has a persisted root with content, so that guard is always
+// skipped for them and the eight binaries never get seeded by vfsSeedTree.
+// refreshSeededSystemBinaries (os/fs-persist.js) is what restores them on
+// every boot regardless of that guard.
+function makeReturningUserRoot(ctx) {
+  const tree = ctx.vfsGetTree();
+  // Simulate a root persisted before phase 6: the eight binaries were never
+  // written, but the root plainly has content (DOCS, DESKTOP), so the seed
+  // guard would have been skipped for this user.
+  SYSTEM_BINARIES.forEach(name => tree.files.delete(name));
+  assert.ok(tree.dirs.size > 0 || tree.files.size > 0,
+    'fixture is invalid: an empty root would hit the seed guard instead of the returning-user path this test targets');
+  return tree;
+}
+
+test('a returning user (seed guard skipped) still gets all eight after the refresh runs', () => {
+  const ctx = fsCtxWithRefresh();
+  makeReturningUserRoot(ctx);
+  SYSTEM_BINARIES.forEach(name => assert.strictEqual(ctx.vfsStatSync(name, ''), null, name + ' should be absent before the refresh'));
+  ctx.refreshSeededSystemBinaries();
+  SYSTEM_BINARIES.forEach(name => assert.ok(ctx.vfsStatSync(name, ''), name + ' was not restored by the refresh'));
+});
+
+test('the refresh does not overwrite a binary whose content was changed', () => {
+  const ctx = fsCtxWithRefresh();
+  const tree = ctx.vfsGetTree();
+  tree.files.set('TERMINAL.exe', 'the player edited this in Notepad');
+  ctx.refreshSeededSystemBinaries();
+  assert.strictEqual(tree.files.get('TERMINAL.exe'), 'the player edited this in Notepad',
+    'refreshSeededSystemBinaries must be fill-if-absent, not an unconditional rewrite');
+});
+
+test('a deleted binary is restored by the refresh', () => {
+  const ctx = fsCtxWithRefresh();
+  const tree = ctx.vfsGetTree();
+  const original = tree.files.get('SYSMON.exe');
+  tree.files.delete('SYSMON.exe');
+  assert.strictEqual(ctx.vfsStatSync('SYSMON.exe', ''), null);
+  ctx.refreshSeededSystemBinaries();
+  assert.strictEqual(tree.files.get('SYSMON.exe'), original);
+});
+
+test('running the refresh twice does not duplicate or corrupt anything', () => {
+  const ctx = fsCtxWithRefresh();
+  const tree = ctx.vfsGetTree();
+  ctx.refreshSeededSystemBinaries();
+  const after1 = SYSTEM_BINARIES.map(n => tree.files.get(n));
+  ctx.refreshSeededSystemBinaries();
+  const after2 = SYSTEM_BINARIES.map(n => tree.files.get(n));
+  assert.deepStrictEqual(after2, after1, 'a second run must be a no-op on already-present binaries');
+  assert.strictEqual(tree.files.size, new Set(tree.files.keys()).size, 'file names must stay unique - a Map cannot literally duplicate a key, but this guards the invariant explicitly');
 });
