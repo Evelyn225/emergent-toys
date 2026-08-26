@@ -140,16 +140,72 @@ function programProjectEntry(project) {
   };
 }
 
+// The discriminator the whole .exe path turns on. A system binary is
+// precisely one whose launch opens a built-in window, and PROGRAM_LAUNCHERS
+// is the table that records exactly that - so this is the definition, not a
+// heuristic standing in for one.
+//
+// Declared with `function` on purpose: the vm test harness only exposes
+// function declarations, and PROGRAM_LAUNCHERS is a const. Callers outside
+// this file (apps/notepad.js, apps/terminal.js) go through here rather than
+// reaching for the table.
+function programIsSystemBinary(name) {
+  const key = String(name || '').trim().toUpperCase();
+  if (!key) return false;
+  if (PROGRAM_LAUNCHERS[key]) return true;
+  if (PROGRAM_LAUNCHERS[key + '.EXE']) return true;
+  return Object.keys(PROGRAM_LAUNCHERS).some(k => {
+    const spec = PROGRAM_LAUNCHERS[k];
+    return (spec.aliases || []).some(a => String(a).toUpperCase() === key);
+  });
+}
+
+// An entry is executable when it can actually be launched. Used by
+// os/desktop-model.js's openSystemFile, which previously treated everything
+// programsInDir returned as GUI-launchable - see the hazard note above.
+function programIsExecutableEntry(entry) {
+  return !!(entry && typeof entry.open === 'function');
+}
+
+// A .exe text file in the VFS, presented the same way a built-in is. `open`
+// spawns it, which is why the seam comment insists `open` be a closure.
+function programVfsEntry(stat) {
+  return {
+    name: stat.name,
+    dir: stat.dirName,
+    lines: ['Starting ' + stat.name + '...'],
+    delay: 300,
+    open: ctx => {
+      const cwd = (ctx && ctx.cwd) || stat.dirName;
+      return kernelSpawn(stat.name, [], { cwd, parentPid: KERNEL_PID });
+    },
+    aliases: [],
+  };
+}
+
+// Executables in `dir` that are not already built-ins. The built-in wins on a
+// name collision: a user file called CALC.exe must not shadow the real
+// calculator, and appearing twice would be worse than either.
+function programVfsExecutables(dir, taken) {
+  if (typeof vfsListSync !== 'function') return [];
+  return vfsListSync(dir)
+    .filter(e => e.kind === 'text' && /\.exe$/i.test(e.name))
+    .filter(e => !taken.has(e.name.toUpperCase()))
+    .map(programVfsEntry);
+}
+
 function programsInDir(dir) {
   const key = String(dir || '').toUpperCase();
+  if (key === 'PROJECTS') return PROJECTS.map(programProjectEntry);
+  let builtIns = [];
   if (key === '') {
     const names = ROOT_SYSTEM_FILE_META.map(meta => meta.name)
       .concat(programStoryRootNames())
       .concat(['WELCOME.README', 'FILES']);
-    return names.map(name => programEntry(name, '')).filter(Boolean);
+    builtIns = names.map(name => programEntry(name, '')).filter(Boolean);
   }
-  if (key === 'PROJECTS') return PROJECTS.map(programProjectEntry);
-  return [];
+  const taken = new Set(builtIns.map(e => e.name.toUpperCase()));
+  return builtIns.concat(programVfsExecutables(key, taken));
 }
 
 // Delegates to vfsNormalizeDir rather than parsing paths itself: its prefix
@@ -225,10 +281,3 @@ function programDisplayDir(dir) {
   const key = vfsNormalizeDir(dir || '');
   return key ? 'C:\\sleepOS\\' + key : 'C:\\sleepOS';
 }
-
-// Task 6 placeholder: the real version tells a pipeline stage's ".exe" name
-// apart from a built-in window's (NOTEPAD.exe, TERMINAL.exe, ...) so a
-// built-in cannot be shadowed by spawning a same-named VFS script. Task 5
-// only needs the call site to resolve; it always says "not a system binary"
-// until Task 6 replaces this body.
-function programIsSystemBinary() { return false; }
