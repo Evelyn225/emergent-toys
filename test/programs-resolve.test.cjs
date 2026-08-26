@@ -134,8 +134,8 @@ test('an unknown directory has no programs', () => {
 // rather than loading os/fs-core.js, which seeds a whole filesystem (and
 // pulls in PROJECTS/RECYCLE_BIN_NAME/localStorage machinery) these tests
 // don't want.
-function programsWithFiles(files) {
-  const ctx = programs();
+function programsWithFiles(files, overrides) {
+  const ctx = programs(overrides);
   ctx.vfsSetTree({ dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
   const tree = ctx.vfsGetTree();
   Object.entries(files).forEach(([dir, entries]) => {
@@ -174,8 +174,36 @@ test('a non-executable file is not a program', () => {
 
 test('a VFS .exe does not duplicate a built-in of the same name', () => {
   const ctx = programsWithFiles({ '': { 'CALC.exe': 'PRINT not the real one' } });
-  const names = ctx.programsInDir('').filter(n => n.name.toLowerCase() === 'calc.exe');
-  assert.strictEqual(names.length, 1, 'the built-in must win, exactly once');
+  const survivors = ctx.programsInDir('').filter(n => n.name.toLowerCase() === 'calc.exe');
+  assert.strictEqual(survivors.length, 1, 'the built-in must win, exactly once');
+  // Both entries share the same name, so checking the name alone would pass
+  // even if the VFS fake displaced the built-in. programEntry('CALC.exe', '')
+  // returns the built-in with `open: spec.open` - the very PROGRAM_LAUNCHERS
+  // function reference - while programVfsEntry builds a fresh closure per
+  // call, so reference equality on `open` is what actually tells the built-in
+  // apart from the fake.
+  const builtIn = ctx.programEntry('CALC.exe', '');
+  assert.strictEqual(survivors[0].open, builtIn.open, 'the survivor must be the real built-in, not the VFS fake');
+});
+
+test('a VFS .exe found via PATH from a different cwd spawns in its own directory, not the caller\'s', () => {
+  // Regression for a bug in the original brief: open() preferred ctx.cwd over
+  // stat.dirName, which happened to look correct from the root only because
+  // '' is falsy and `||` fell through to stat.dirName by accident. Standing
+  // anywhere else (a non-empty cwd) exposed it - kernelSpawn's `cwd` option is
+  // the SEARCH directory for a bare filename, so a program resolved via PATH
+  // out of DOCS must still spawn with cwd DOCS, not wherever the caller stood.
+  const spawnCalls = [];
+  const ctx = programsWithFiles({ DOCS: { 'HELLO.exe': 'PRINT hi' } }, {
+    kernelSpawn: (name, argv, opts) => { spawnCalls.push({ name, opts }); return Promise.resolve('spawned'); },
+    KERNEL_PID: 0,
+  });
+  const hit = ctx.programResolve('HELLO.exe', 'PROJECTS', 'C:\\sleepOS\\DOCS');
+  assert.strictEqual(hit.via, 'path');
+  assert.strictEqual(hit.dir, 'DOCS');
+  hit.program.open({ cwd: 'PROJECTS' });
+  assert.strictEqual(spawnCalls.length, 1);
+  assert.strictEqual(spawnCalls[0].opts.cwd, 'DOCS', 'must spawn where the file lives, not the caller\'s cwd');
 });
 
 test('programIsSystemBinary knows the built-ins and nothing else', () => {

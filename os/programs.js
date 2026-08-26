@@ -175,9 +175,24 @@ function programVfsEntry(stat) {
     dir: stat.dirName,
     lines: ['Starting ' + stat.name + '...'],
     delay: 300,
-    open: ctx => {
-      const cwd = (ctx && ctx.cwd) || stat.dirName;
-      return kernelSpawn(stat.name, [], { cwd, parentPid: KERNEL_PID });
+    open: () => {
+      // stat.dirName, never the caller's cwd. kernelSpawn treats its `cwd`
+      // option as the SEARCH directory for a bare filename, so handing it the
+      // shell's cwd looks the program up where it does not live - which is
+      // exactly what happens when programResolve found it via PATH rather than
+      // in the current directory. The entry already knows where it lives.
+      //
+      // The caller (apps/terminal.js's procSetTimeout) discards this promise,
+      // so a rejection here - the file vanished between listing and launch,
+      // or any other kernelSpawn failure - would otherwise be a silent
+      // unhandled rejection with nothing reaching the user. There is no
+      // process/stderr to write into yet at this point (spawning is what
+      // would create one), so this reports the only way available at this
+      // call site.
+      return kernelSpawn(stat.name, [], { cwd: stat.dirName, parentPid: KERNEL_PID })
+        .catch(e => {
+          console.error('sleepOS: failed to spawn ' + stat.name + ' -', (e && e.message) || e);
+        });
     },
     aliases: [],
   };
@@ -204,6 +219,12 @@ function programsInDir(dir) {
       .concat(['WELCOME.README', 'FILES']);
     builtIns = names.map(name => programEntry(name, '')).filter(Boolean);
   }
+  // Matches on literal name only, not on aliases - a VFS file named
+  // WELCOME.exe would not collide with the WELCOME.README entry's 'welcome'
+  // alias here. Currently unexploitable: WELCOME.README loses on collision
+  // anyway because built-ins are concatenated first, and ?????.exe is both
+  // the literal name and the alias, never divergent. Worth another look only
+  // if a future built-in's alias itself ends in .exe.
   const taken = new Set(builtIns.map(e => e.name.toUpperCase()));
   return builtIns.concat(programVfsExecutables(key, taken));
 }
