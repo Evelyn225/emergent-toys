@@ -65,20 +65,29 @@ function refreshSeededDocs() {
 // sleepOS before, meaning phase 6's seeding alone dropped all eight binaries
 // out of DIR for every returning user the moment they next loaded the OS.
 //
-// Unlike refreshSeededDocs above, this is fill-if-absent rather than an
-// unconditional rewrite: DOCS's seeded files are meant to look identical
-// every boot, but a binary is a real file a player can open in Notepad and
-// edit, so overwriting it here on every boot would silently discard that the
-// same way Task 11 exists to stop DOCS from doing. A binary the player
-// deletes comes back next boot (vfsStatSync finds nothing, so it is
-// refilled); one they edit does not revert (vfsStatSync finds it, so it is
-// left alone). Mutates the live tree directly with no queued commit op, the
-// same as refreshSeededDocs and for the same reason: this function runs
-// again on every future boot, so a refill that is never durably persisted to
+// This HEALS rather than fill-if-absent, the same policy refreshSeededDocs
+// already applies to README.txt and the rest of DOCS: whatever a player did
+// to the content, this restores it to SYSTEM_BINARY_SOURCES on the next boot.
+// That is deliberately NOT the DOCS-vs-programs distinction it looks like at
+// first glance - "docs heal, programs do not" was about the demo .exe/.script
+// files a player is meant to author and have survive (HELLO.exe and friends,
+// PROGRAM_LAUNCHERS has no entry for those, so programIsSystemBinary is
+// false and this function never touches them). A system binary is not one of
+// those: its NOTEPAD view is read-only by design, so there is no legitimate
+// edit for this function to protect, only corruption to repair - a write
+// that reached one at all had to go around a guard (apps/notepad.js's
+// writeAndSync, apps/terminal.js's writePipelineOutput) that exists
+// specifically to stop that. Healing here is the backstop for whatever gets
+// through anyway. Mutates the live tree directly with no queued commit op,
+// the same as refreshSeededDocs and for the same reason: this function runs
+// again on every future boot, so a repair that is never durably persisted to
 // IndexedDB still reappears the next time it is needed.
 function refreshSeededSystemBinaries() {
+  const tree = vfsGetTree();
   Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
-    if (!vfsStatSync(name, '')) vfsGetTree().files.set(name, SYSTEM_BINARY_SOURCES[name]);
+    if (tree.files.get(name) !== SYSTEM_BINARY_SOURCES[name]) {
+      tree.files.set(name, SYSTEM_BINARY_SOURCES[name]);
+    }
   });
 }
 

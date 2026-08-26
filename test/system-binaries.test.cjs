@@ -100,13 +100,41 @@ test('a returning user (seed guard skipped) still gets all eight after the refre
   SYSTEM_BINARIES.forEach(name => assert.ok(ctx.vfsStatSync(name, ''), name + ' was not restored by the refresh'));
 });
 
-test('the refresh does not overwrite a binary whose content was changed', () => {
+// FIX ROUND 1 (task-9-report.md): a system binary corrupted by a write that
+// got past notepadGuardProtectedSave/terminalProtectedWriteError (or reached
+// the tree some other way) used to stay corrupted forever - fill-if-absent
+// only refills an ABSENT file, and nothing else in the OS can repair one that
+// exists with the wrong content. This flips the policy to heal, the same way
+// refreshSeededDocs already treats README.txt: on the next boot, a binary's
+// content is restored to SYSTEM_BINARY_SOURCES whenever it does not match,
+// corrupted or merely missing.
+test('a binary whose content was corrupted is healed by the refresh, byte-equal to the seed', () => {
   const ctx = fsCtxWithRefresh();
   const tree = ctx.vfsGetTree();
-  tree.files.set('TERMINAL.exe', 'the player edited this in Notepad');
+  const original = tree.files.get('TERMINAL.exe');
+  const beforeLen = original.length;
+  tree.files.set('TERMINAL.exe', 'junk');
+  assert.strictEqual(tree.files.get('TERMINAL.exe').length, 4, 'fixture is invalid: corruption did not take');
   ctx.refreshSeededSystemBinaries();
-  assert.strictEqual(tree.files.get('TERMINAL.exe'), 'the player edited this in Notepad',
-    'refreshSeededSystemBinaries must be fill-if-absent, not an unconditional rewrite');
+  const healed = tree.files.get('TERMINAL.exe');
+  assert.strictEqual(healed, original, 'refreshSeededSystemBinaries must heal a corrupted binary back to its seeded content');
+  assert.strictEqual(healed.length, beforeLen, 'healed length: ' + healed.length + ', seeded length: ' + beforeLen);
+});
+
+// The healing above must stay scoped to exactly the eight SYSTEM_BINARY_SOURCES
+// keys. A player-authored script sitting in DOCS - the .exe/.script files
+// phase 6 lets a player write and re-edit, per test/programs-resolve.test.cjs's
+// "the demo scripts live in DOCS" - is not one of those keys, so this proves
+// the two policies (system binaries heal, everything else does not) stayed
+// separate rather than the healing sweep leaking onto player content.
+test('a player script living in DOCS is untouched by the system-binary healing', () => {
+  const ctx = fsCtxWithRefresh();
+  const docs = ctx.vfsGetTree().subdirs.get('DOCS');
+  docs.files.set('HELLO.exe', 'print hello');
+  docs.files.set('HELLO.exe', 'print hello, edited by the player');
+  ctx.refreshSeededSystemBinaries();
+  assert.strictEqual(docs.files.get('HELLO.exe'), 'print hello, edited by the player',
+    'refreshSeededSystemBinaries touched a file outside SYSTEM_BINARY_SOURCES - the DOCS/system-binary policies leaked into each other');
 });
 
 test('a deleted binary is restored by the refresh', () => {

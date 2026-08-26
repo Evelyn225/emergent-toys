@@ -162,6 +162,21 @@ function notepadRouteFor(filename) {
   return programIsSystemBinary(name) ? 'decompiler' : 'editor';
 }
 
+// Save (and Save As - writeAndSync is the single funnel both go through)
+// naming one of the eight system binaries would silently replace it with
+// whatever the open document holds. Before phase 6 that just created a
+// stray file the player could delete to recover; now the binary IS the file
+// the decompiler reads, refreshSeededSystemBinaries only heals it on the
+// NEXT boot, and there is otherwise no way back until then. Refused here,
+// before the write happens, with the same "protected" language the DELETE
+// guard (os/daemon.js) already uses so a player learns one vocabulary for
+// this rule, not two.
+function notepadGuardProtectedSave(fname) {
+  if (!programIsSystemBinary(fname)) return false;
+  osAlert('Cannot save over ' + fname + '.\n\nSystem files are protected.', 'Cannot Save', 'icon:error');
+  return true;
+}
+
 function openDecompilerView(filename) {
   const id = 'decompile-' + filename.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
@@ -793,6 +808,7 @@ function openNotepad(filename, dirName, options) {
   // document that was never written is precisely the failure this phase exists
   // to kill.
   async function writeAndSync(fname, dir) {
+    if (notepadGuardProtectedSave(fname)) return false;
     let saved;
     try {
       saved = await vfsWriteFile(fname, ta.value, dir || currentDir);

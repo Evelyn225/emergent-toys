@@ -5624,20 +5624,29 @@ function refreshSeededDocs() {
 // sleepOS before, meaning phase 6's seeding alone dropped all eight binaries
 // out of DIR for every returning user the moment they next loaded the OS.
 //
-// Unlike refreshSeededDocs above, this is fill-if-absent rather than an
-// unconditional rewrite: DOCS's seeded files are meant to look identical
-// every boot, but a binary is a real file a player can open in Notepad and
-// edit, so overwriting it here on every boot would silently discard that the
-// same way Task 11 exists to stop DOCS from doing. A binary the player
-// deletes comes back next boot (vfsStatSync finds nothing, so it is
-// refilled); one they edit does not revert (vfsStatSync finds it, so it is
-// left alone). Mutates the live tree directly with no queued commit op, the
-// same as refreshSeededDocs and for the same reason: this function runs
-// again on every future boot, so a refill that is never durably persisted to
+// This HEALS rather than fill-if-absent, the same policy refreshSeededDocs
+// already applies to README.txt and the rest of DOCS: whatever a player did
+// to the content, this restores it to SYSTEM_BINARY_SOURCES on the next boot.
+// That is deliberately NOT the DOCS-vs-programs distinction it looks like at
+// first glance - "docs heal, programs do not" was about the demo .exe/.script
+// files a player is meant to author and have survive (HELLO.exe and friends,
+// PROGRAM_LAUNCHERS has no entry for those, so programIsSystemBinary is
+// false and this function never touches them). A system binary is not one of
+// those: its NOTEPAD view is read-only by design, so there is no legitimate
+// edit for this function to protect, only corruption to repair - a write
+// that reached one at all had to go around a guard (apps/notepad.js's
+// writeAndSync, apps/terminal.js's writePipelineOutput) that exists
+// specifically to stop that. Healing here is the backstop for whatever gets
+// through anyway. Mutates the live tree directly with no queued commit op,
+// the same as refreshSeededDocs and for the same reason: this function runs
+// again on every future boot, so a repair that is never durably persisted to
 // IndexedDB still reappears the next time it is needed.
 function refreshSeededSystemBinaries() {
+  const tree = vfsGetTree();
   Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
-    if (!vfsStatSync(name, '')) vfsGetTree().files.set(name, SYSTEM_BINARY_SOURCES[name]);
+    if (tree.files.get(name) !== SYSTEM_BINARY_SOURCES[name]) {
+      tree.files.set(name, SYSTEM_BINARY_SOURCES[name]);
+    }
   });
 }
 
@@ -10888,6 +10897,21 @@ function notepadRouteFor(filename) {
   return programIsSystemBinary(name) ? 'decompiler' : 'editor';
 }
 
+// Save (and Save As - writeAndSync is the single funnel both go through)
+// naming one of the eight system binaries would silently replace it with
+// whatever the open document holds. Before phase 6 that just created a
+// stray file the player could delete to recover; now the binary IS the file
+// the decompiler reads, refreshSeededSystemBinaries only heals it on the
+// NEXT boot, and there is otherwise no way back until then. Refused here,
+// before the write happens, with the same "protected" language the DELETE
+// guard (os/daemon.js) already uses so a player learns one vocabulary for
+// this rule, not two.
+function notepadGuardProtectedSave(fname) {
+  if (!programIsSystemBinary(fname)) return false;
+  osAlert('Cannot save over ' + fname + '.\n\nSystem files are protected.', 'Cannot Save', 'icon:error');
+  return true;
+}
+
 function openDecompilerView(filename) {
   const id = 'decompile-' + filename.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
@@ -11519,6 +11543,7 @@ function openNotepad(filename, dirName, options) {
   // document that was never written is precisely the failure this phase exists
   // to kill.
   async function writeAndSync(fname, dir) {
+    if (notepadGuardProtectedSave(fname)) return false;
     let saved;
     try {
       saved = await vfsWriteFile(fname, ta.value, dir || currentDir);
@@ -12665,6 +12690,19 @@ function openFiles() { openExplorer('PROJECTS'); }
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
 
+// Hoisted out of writePipelineOutput (openTerminal) so node can reach it -
+// the same reason runPipelineStages below is top-level.
+//
+// Redirecting into one of the eight system binaries (`echo junk >
+// TERMINAL.exe`) would silently replace it, and refreshSeededSystemBinaries
+// only heals that on the next boot - not before this command's output would
+// already have landed. Same protection, and the same "protected" wording,
+// as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
+function terminalProtectedWriteError(target) {
+  if (!programIsSystemBinary(target)) return null;
+  return new Error('Cannot overwrite ' + target + ': System files are protected.');
+}
+
 // The pipeline driver, hoisted out of openTerminal so node can reach it -
 // the same reason buildPsRows is top-level. Dependencies are injected rather
 // than closed over because every one of them (getCommandParts, runPipeStage,
@@ -13424,6 +13462,8 @@ function openTerminal(startDir, initialCommand) {
   async function writePipelineOutput(targetPath, lines, append) {
     const normalizedTarget = unquoteShellValue(resolveShellText(targetPath));
     if (!normalizedTarget) throw new Error('Missing redirect target.');
+    const guardErr = terminalProtectedWriteError(normalizedTarget);
+    if (guardErr) throw guardErr;
     const existingStat = vfsStatSync(normalizedTarget, cwd);
     if (existingStat && existingStat.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
     const output = lines.join('\n');

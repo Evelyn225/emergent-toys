@@ -1,6 +1,19 @@
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
 
+// Hoisted out of writePipelineOutput (openTerminal) so node can reach it -
+// the same reason runPipelineStages below is top-level.
+//
+// Redirecting into one of the eight system binaries (`echo junk >
+// TERMINAL.exe`) would silently replace it, and refreshSeededSystemBinaries
+// only heals that on the next boot - not before this command's output would
+// already have landed. Same protection, and the same "protected" wording,
+// as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
+function terminalProtectedWriteError(target) {
+  if (!programIsSystemBinary(target)) return null;
+  return new Error('Cannot overwrite ' + target + ': System files are protected.');
+}
+
 // The pipeline driver, hoisted out of openTerminal so node can reach it -
 // the same reason buildPsRows is top-level. Dependencies are injected rather
 // than closed over because every one of them (getCommandParts, runPipeStage,
@@ -760,6 +773,8 @@ function openTerminal(startDir, initialCommand) {
   async function writePipelineOutput(targetPath, lines, append) {
     const normalizedTarget = unquoteShellValue(resolveShellText(targetPath));
     if (!normalizedTarget) throw new Error('Missing redirect target.');
+    const guardErr = terminalProtectedWriteError(normalizedTarget);
+    if (guardErr) throw guardErr;
     const existingStat = vfsStatSync(normalizedTarget, cwd);
     if (existingStat && existingStat.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
     const output = lines.join('\n');
