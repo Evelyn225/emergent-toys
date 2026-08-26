@@ -1,6 +1,37 @@
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
 
+// The pipeline driver, hoisted out of openTerminal so node can reach it -
+// the same reason buildPsRows is top-level. Dependencies are injected rather
+// than closed over because every one of them (getCommandParts, runPipeStage,
+// the Notepad sink) needs terminal state that does not exist under test.
+//
+// Returns { stream, consumedBySink }. The caller decides what to do with the
+// stream: print it, fold it into a file, or nothing when a sink already ate
+// it.
+async function runPipelineStages(stages, deps) {
+  let stream = null;
+  let consumedBySink = false;
+  for (let i = 0; i < stages.length; i++) {
+    const { cmd, args } = deps.getCommandParts(stages[i]);
+    if (!cmd) throw new Error('Invalid command pipeline.');
+    const isLastStage = i === stages.length - 1;
+    // Notepad is a sink rather than a stage: it has no output to hand on, so
+    // it is only legal last. Anywhere else it falls through to runStage,
+    // which does not know it, and reports the ordinary unsupported-command
+    // error rather than a special case.
+    if (isLastStage && (cmd === 'notepad' || cmd === 'notepad.exe')) {
+      await deps.onNotepadSink(args, stream);
+      consumedBySink = true;
+      break;
+    }
+    const result = await deps.runStage(cmd, args, stream);
+    if (!result) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
+    stream = result;
+  }
+  return { stream, consumedBySink };
+}
+
 // Delegates to os/process-view.js, the one module both `ps` and SYSMON read
 // so the two views cannot disagree about what processes exist.
 function buildPsRows() {
@@ -713,30 +744,23 @@ function openTerminal(startDir, initialCommand) {
       return true;
     }
     try {
-      let stream = null;
-      let consumedBySink = false;
-      for (let i = 0; i < parsed.stages.length; i++) {
-        const { cmd, args } = getCommandParts(parsed.stages[i]);
-        if (!cmd) throw new Error('Invalid command pipeline.');
-        const isLastStage = i === parsed.stages.length - 1;
-        if (isLastStage && (cmd === 'notepad' || cmd === 'notepad.exe')) {
-          const content = Array.isArray(stream) ? stream.join('\n') : '';
+      const { stream, consumedBySink } = await runPipelineStages(parsed.stages, {
+        getCommandParts,
+        runStage: runPipeStage,
+        onNotepadSink: async (args, upstream) => {
+          const lines = Array.isArray(upstream) ? upstream : [];
+          const content = lines.join('\n');
           const target = args.trim();
           if (target) {
-            const saved = await writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
+            const saved = await writePipelineOutput(target, lines, false);
             print(`Opening ${saved.fileName} in Notepad...`);
             procSetTimeout('terminal', () => openNotepad(saved.fileName, saved.dirName), 300);
           } else {
             print('Opening piped output in Notepad...');
             procSetTimeout('terminal', () => openNotepad(undefined, cwd, { initialContent: content }), 300);
           }
-          consumedBySink = true;
-          break;
-        }
-        const result = await runPipeStage(cmd, args, stream);
-        if (!result) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
-        stream = result;
-      }
+        },
+      });
       if (parsed.redirectOp) {
         if (consumedBySink) throw new Error('Cannot redirect output after piping into Notepad.');
         const saved = await writePipelineOutput(parsed.redirectTarget, Array.isArray(stream) ? stream : [], parsed.redirectOp === '>>');
