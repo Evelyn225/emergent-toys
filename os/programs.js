@@ -225,3 +225,10 @@ function programDisplayDir(dir) {
   const key = vfsNormalizeDir(dir || '');
   return key ? 'C:\\sleepOS\\' + key : 'C:\\sleepOS';
 }
+
+// Task 6 placeholder: the real version tells a pipeline stage's ".exe" name
+// apart from a built-in window's (NOTEPAD.exe, TERMINAL.exe, ...) so a
+// built-in cannot be shadowed by spawning a same-named VFS script. Task 5
+// only needs the call site to resolve; it always says "not a system binary"
+// until Task 6 replaces this body.
+function programIsSystemBinary() { return false; }

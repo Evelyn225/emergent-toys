@@ -32,6 +32,29 @@ async function runPipelineStages(stages, deps) {
   return { stream, consumedBySink };
 }
 
+// A spawned worker as a pipeline stage. Its output arrives on callbacks
+// rather than from a loop we drive, which is exactly what makePushStream is
+// for.
+//
+// A process is a SOURCE, never a filter: it ignores whatever is upstream of
+// it, because scripts have no syscall for reading a pipe and inventing one is
+// not this phase's business.
+//
+// stderr is merged into the same stream deliberately. Splitting it would mean
+// a second source nothing downstream can address, and `HELLO.exe | grep
+// ERROR` is the case the master spec leads with.
+async function pipelineSpawnStage(tokens, deps) {
+  const push = makePushStream();
+  const pid = await deps.spawn(tokens[0], tokens.slice(1), {
+    onStdout: line => push.push(line),
+    onStderr: line => push.push(line),
+  });
+  // Not awaited: the whole point is that the stage is readable while the
+  // process is still running. The exit only closes the stream.
+  Promise.resolve(deps.wait(pid)).then(() => push.close(), err => push.fail(err));
+  return { pid, stream: push };
+}
+
 // Delegates to os/process-view.js, the one module both `ps` and SYSMON read
 // so the two views cannot disagree about what processes exist.
 function buildPsRows() {
@@ -644,6 +667,16 @@ function openTerminal(startDir, initialCommand) {
     return [];
   }
 
+  // A stage is a program when the VFS holds a .exe text file by that name
+  // that is not one of the built-in windows. Task 6's programIsSystemBinary
+  // is the authority on the second half.
+  function terminalIsExecutableStage(cmd, dir) {
+    if (!/\.exe$/i.test(cmd)) return false;
+    if (programIsSystemBinary(cmd)) return false;
+    const st = vfsStatSync(cmd, dir);
+    return !!st && st.kind === 'text';
+  }
+
   async function runPipeStage(cmd, args, stdin) {
     cmd = ({ print: 'echo', wait: 'sleep', clear: 'cls' }[cmd] || cmd);
     if (cmd === 'echo') return [unquoteShellValue(resolveShellText(args))];
@@ -743,10 +776,25 @@ function openTerminal(startDir, initialCommand) {
       print('');
       return true;
     }
+    const pipelinePids = new Set();
     try {
       const { stream, consumedBySink } = await runPipelineStages(parsed.stages, {
         getCommandParts,
-        runStage: runPipeStage,
+        runStage: async (cmd, args, stdin) => {
+          if (terminalIsExecutableStage(cmd, cwd)) {
+            const tokens = scriptTokenize((cmd + ' ' + args).trim());
+            const stage = await pipelineSpawnStage(tokens, {
+              spawn: (path, argv, sinks) => kernelSpawn(path, argv, Object.assign({
+                cwd,
+                parentPid: kernelPidForWin('terminal'),
+              }, sinks)),
+              wait: pid => kernelWait(pid),
+            });
+            pipelinePids.add(stage.pid);
+            return stage.stream;
+          }
+          return runPipeStage(cmd, args, stdin);
+        },
         onNotepadSink: async (args, upstream) => {
           const lines = await streamCollect(upstream);
           const content = lines.join('\n');
@@ -775,6 +823,12 @@ function openTerminal(startDir, initialCommand) {
       }
     } catch (err) {
       print(err.message || String(err), '#ff4444');
+    } finally {
+      // Covers abort, error and normal completion in one place. A pid that
+      // already exited is gone from the table, and kernelSignal returns false
+      // for a missing pid rather than throwing, so this is a no-op in the
+      // happy path and a real kill on Ctrl+C.
+      pipelinePids.forEach(pid => { kernelSignal(pid, 'SIGKILL'); });
     }
     print('');
     return true;
