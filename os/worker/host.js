@@ -68,6 +68,11 @@ self.onmessage = async (e) => {
       // Object.create(null)`.
       vars: Object.assign(Object.create(null), msg.env || {}),
       signal,
+      // Uncapped on purpose. A worker cannot block the UI thread - that is
+      // the entire reason it exists - and kernelExit terminates it
+      // unconditionally, so no loop here is unkillable. RUNAWAY.exe is
+      // supposed to run away.
+      maxSteps: Infinity,
     });
   } catch (err) {
     await sysCall('write', ['stderr', (err && err.message) || String(err)]);

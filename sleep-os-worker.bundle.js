@@ -149,6 +149,12 @@ function parkReset() {
 }
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
+// The default ceiling, and the only thing standing between a typo in a GOTO
+// and a dead tab on the main thread, where nothing can preempt a running
+// script. A worker passes maxSteps: Infinity instead (os/worker/host.js):
+// there, kernelExit's unconditional worker.terminate() is the ceiling, the
+// UI thread is not involved, and phase 5b's parked-time accounting makes a
+// spinning script read as 100% CPU in SYSMON rather than as a hang.
 const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
 // A CPU-bound instruction (SET, GOTO, IF...) resolves its awaited promise on
@@ -682,6 +688,7 @@ async function execScriptInstruction(inst, labels, state) {
         fs: state.fs,
         vars: state.vars,
         depth: state.depth + 1,
+        maxSteps: state.maxSteps,
         dirName: st.dirName,
         sourceName: st.name,
         clearFn: state.clearFn,
@@ -726,6 +733,7 @@ async function execScript(source, printFn, options) {
   options = options || {};
   const sourceName = options.sourceName || 'script';
   const depth = options.depth || 0;
+  const maxSteps = options.maxSteps === undefined ? SCRIPT_MAX_STEPS : options.maxSteps;
   if (depth >= SCRIPT_MAX_DEPTH) {
     return scriptFail(makeScriptError('Maximum script recursion depth exceeded.', 0, sourceName), printFn, sourceName, options.bubbleErrors);
   }
@@ -739,6 +747,7 @@ async function execScript(source, printFn, options) {
     fs: options.fs,
     vars: options.vars || Object.create(null),
     depth,
+    maxSteps,
     dirName: fsNormalizeDir(options.dirName),
     printFn,
     clearFn: options.clearFn || null,
@@ -765,7 +774,7 @@ async function execScript(source, printFn, options) {
         if (isAbortError(err)) throw err;
         return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (steps > SCRIPT_MAX_STEPS) {
+      if (steps > maxSteps) {
         return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
       }
       try {
@@ -955,6 +964,11 @@ self.onmessage = async (e) => {
       // Object.create(null)`.
       vars: Object.assign(Object.create(null), msg.env || {}),
       signal,
+      // Uncapped on purpose. A worker cannot block the UI thread - that is
+      // the entire reason it exists - and kernelExit terminates it
+      // unconditionally, so no loop here is unkillable. RUNAWAY.exe is
+      // supposed to run away.
+      maxSteps: Infinity,
     });
   } catch (err) {
     await sysCall('write', ['stderr', (err && err.message) || String(err)]);
