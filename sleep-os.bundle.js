@@ -3043,18 +3043,19 @@ function openSystemFile(name) {
   // Two constraints on this call, both correct today only because of what
   // programsInDir('') currently returns:
   //
-  // 1. Everything programsInDir('') hands back is treated as GUI-launchable -
-  //    `if (!program || !program.open) return false` is the only gate, and
-  //    every entry the registry can produce today has an `open`. Phase 6
-  //    (master spec) adds a vfsListSync pass to programsInDir so real VFS
-  //    `.exe` files show up too; the day that lands, a naive read of this
-  //    function will make any root file - a stray .txt, a blob - something
-  //    openSystemFile "launches" and reports true for. That silently changes
-  //    behaviour for both of this function's callers: Explorer's
-  //    double-click (which ignores the return value, so it would just start
-  //    quietly doing nothing useful) and the terminal's OPEN command (which
-  //    would report success for a file it did not actually open). Phase 6
-  //    needs an executables-only filter here, not just in programsInDir.
+  // 1. Phase 6 added a vfsListSync pass to programsInDir, so real VFS `.exe`
+  //    files show up alongside built-ins. That pass (programVfsExecutables in
+  //    os/programs.js) already filters to `kind === 'text' && /\.exe$/i`
+  //    before an entry ever reaches programsInDir(''), so nothing
+  //    non-launchable can reach this line today - the executables-only
+  //    filter below (programIsExecutableEntry) is defence in depth, not
+  //    load-bearing. It stays because this call site's failure mode is
+  //    silent: Explorer's double-click ignores the return value, so a wrong
+  //    `true` here would just quietly do nothing useful, and the terminal's
+  //    OPEN command would report success for a file it did not actually
+  //    open. It would become load-bearing again the moment programsInDir
+  //    gains any entry source that does not already filter for
+  //    executability itself.
   //
   // 2. This only ever searches '' (the root). Explorer calls openSystemFile
   //    with a bare name from whatever directory it is currently showing, not
@@ -3065,7 +3066,7 @@ function openSystemFile(name) {
   //    hardcoded ''.
   const program = programsInDir('').find(entry =>
     entry.name.toLowerCase() === key.toLowerCase());
-  if (!program || !program.open) return false;
+  if (!programIsExecutableEntry(program)) return false;
   program.open({ cwd: '' });
   return true;
 }
@@ -3195,14 +3196,16 @@ if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
 // built-in window have to sit in the same table.
 //
 // ONE CONSUMER IS NOT COVERED BY THAT SENTENCE. openSystemFile
-// (os/desktop-model.js) also reads programsInDir(''), and it treats every
-// entry it gets back as GUI-launchable - `if (!program || !program.open)` is
-// its only gate. Harmless today, because every entry is a built-in with a real
-// `open`. The moment a vfsListSync pass starts contributing entries for
-// arbitrary root files, that call would make any root .txt or blob "launch"
-// and report success to Explorer's double-click (which ignores the return
-// value, so the failure is invisible there) and to the terminal's OPEN. Phase
-// 6 needs an executables-only filter at THAT call site, not only in here.
+// (os/desktop-model.js) also reads programsInDir(''). The vfsListSync pass
+// above already filters VFS entries to `kind === 'text' && /\.exe$/i` before
+// they ever reach programsInDir, so that call site cannot actually be handed
+// a non-executable entry today. It still filters with programIsExecutableEntry
+// below, same as this file's own consumers do, purely as defence in depth:
+// its failure mode is silent (Explorer's double-click ignores the return
+// value, so a bad `true` would just quietly do nothing useful; the
+// terminal's OPEN would report success for a file it did not open), and a
+// future entry source added to programsInDir that skips its own
+// executability filter would make this guard load-bearing again.
 
 // Keyed by uppercase name. ROOT_SYSTEM_FILE_META stays the source of which
 // programs exist at the root and of their DIR display metadata; this is the

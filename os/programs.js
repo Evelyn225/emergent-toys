@@ -44,14 +44,16 @@
 // built-in window have to sit in the same table.
 //
 // ONE CONSUMER IS NOT COVERED BY THAT SENTENCE. openSystemFile
-// (os/desktop-model.js) also reads programsInDir(''), and it treats every
-// entry it gets back as GUI-launchable - `if (!program || !program.open)` is
-// its only gate. Harmless today, because every entry is a built-in with a real
-// `open`. The moment a vfsListSync pass starts contributing entries for
-// arbitrary root files, that call would make any root .txt or blob "launch"
-// and report success to Explorer's double-click (which ignores the return
-// value, so the failure is invisible there) and to the terminal's OPEN. Phase
-// 6 needs an executables-only filter at THAT call site, not only in here.
+// (os/desktop-model.js) also reads programsInDir(''). The vfsListSync pass
+// above already filters VFS entries to `kind === 'text' && /\.exe$/i` before
+// they ever reach programsInDir, so that call site cannot actually be handed
+// a non-executable entry today. It still filters with programIsExecutableEntry
+// below, same as this file's own consumers do, purely as defence in depth:
+// its failure mode is silent (Explorer's double-click ignores the return
+// value, so a bad `true` would just quietly do nothing useful; the
+// terminal's OPEN would report success for a file it did not open), and a
+// future entry source added to programsInDir that skips its own
+// executability filter would make this guard load-bearing again.
 
 // Keyed by uppercase name. ROOT_SYSTEM_FILE_META stays the source of which
 // programs exist at the root and of their DIR display metadata; this is the
