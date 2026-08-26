@@ -3336,13 +3336,24 @@ function programVfsEntry(stat) {
       // The caller (apps/terminal.js's procSetTimeout) discards this promise,
       // so a rejection here - the file vanished between listing and launch,
       // or any other kernelSpawn failure - would otherwise be a silent
-      // unhandled rejection with nothing reaching the user. There is no
-      // process/stderr to write into yet at this point (spawning is what
-      // would create one), so this reports the only way available at this
-      // call site.
+      // unhandled rejection with nothing reaching the user.
       return kernelSpawn(stat.name, [], { cwd: stat.dirName, parentPid: KERNEL_PID })
-        .catch(e => {
-          console.error('sleepOS: failed to spawn ' + stat.name + ' -', (e && e.message) || e);
+        .catch(err => {
+          // osAlert is os/ui-chrome.js:230, the established convention for this
+          // exact failure class - os/run-dialog.js:62 uses it for "Cannot Find
+          // Program". It is a standalone modal, so it needs no process or
+          // stderr sink. This file is manifest position 10 and ui-chrome.js is
+          // 24, but the bundle is one hoisted scope and `open` only runs long
+          // after boot, so the reference resolves.
+          //
+          // The typeof guard is for the node test harness, where a context may
+          // load os/programs.js without os/ui-chrome.js.
+          const detail = (err && err.message) || String(err);
+          if (typeof osAlert === 'function') {
+            osAlert('Cannot run:\n"' + stat.name + '"\n\n' + detail, 'Cannot Run Program', 'icon:error');
+          } else {
+            console.error('sleepOS: failed to spawn ' + stat.name + ' - ' + detail);
+          }
         });
     },
     aliases: [],

@@ -206,6 +206,31 @@ test('a VFS .exe found via PATH from a different cwd spawns in its own directory
   assert.strictEqual(spawnCalls[0].opts.cwd, 'DOCS', 'must spawn where the file lives, not the caller\'s cwd');
 });
 
+test('a spawn rejection surfaces through osAlert, not silently', async () => {
+  // Regression for fix-round-2: open()'s .catch used to report only via
+  // console.error, which is invisible in this browser toy (no visible
+  // console). osAlert is the established convention for this failure class -
+  // os/run-dialog.js:62 uses it for "Cannot Find Program" - so a spawn
+  // failure (file deleted between listing and launch, worker failed to
+  // start, ...) must reach the player the same way.
+  const alertCalls = [];
+  const ctx = programsWithFiles({ '': { 'HELLO.exe': 'PRINT hi' } }, {
+    kernelSpawn: () => Promise.reject(new Error('script not found: HELLO.exe')),
+    KERNEL_PID: 0,
+    osAlert: (msg, title, icon) => { alertCalls.push({ msg, title, icon }); },
+  });
+  const hello = ctx.programsInDir('').find(e => e.name === 'HELLO.exe');
+  // open() returns kernelSpawn(...).catch(...) directly, so awaiting it waits
+  // for the catch handler to actually run - no separate tick-flush needed,
+  // and it doubles as proof the rejection is handled rather than escaping
+  // as an unhandled rejection (node's test runner would fail the process on
+  // that).
+  await hello.open();
+  assert.strictEqual(alertCalls.length, 1);
+  assert.ok(alertCalls[0].msg.includes('HELLO.exe'), 'got: ' + alertCalls[0].msg);
+  assert.strictEqual(alertCalls[0].icon, 'icon:error');
+});
+
 test('programIsSystemBinary knows the built-ins and nothing else', () => {
   const ctx = programs();
   assert.strictEqual(ctx.programIsSystemBinary('TERMINAL.exe'), true);
