@@ -9,9 +9,23 @@ let _termExec = null;
 // only heals that on the next boot - not before this command's output would
 // already have landed. Same protection, and the same "protected" wording,
 // as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
-function terminalProtectedWriteError(target) {
-  if (!programIsSystemBinary(target)) return null;
-  return new Error('Cannot overwrite ' + target + ': System files are protected.');
+//
+// FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
+// split a path - so an earlier version of this guard checked the raw
+// redirect target and a path-qualified one ("C:\sleepOS\TERMINAL.exe",
+// "\TERMINAL.exe", "C:/sleepOS/TERMINAL.exe") sailed past it while
+// vfsWriteFile (which DOES split, via vfsSplitPath) still resolved it onto
+// the real root file. `dir` must be the SAME fallback directory
+// writePipelineOutput is about to pass to vfsWriteFile (cwd) - using any
+// other fallback would make this guard's resolution disagree with the
+// write's, which is exactly the class of bug being fixed. Splitting first
+// and checking `!dirName` (root only) is the same shape as the
+// pre-existing DELETE guard, isVisibleSystemPath (os/daemon.js) - a
+// DOCS\TERMINAL.exe is a different, legitimate file and must stay writable.
+function terminalProtectedWriteError(target, dir) {
+  const { dirName, fileName } = vfsSplitPath(target, dir);
+  if (dirName || !programIsSystemBinary(fileName)) return null;
+  return new Error('Cannot overwrite ' + fileName + ': System files are protected.');
 }
 
 // The pipeline driver, hoisted out of openTerminal so node can reach it -
@@ -773,7 +787,7 @@ function openTerminal(startDir, initialCommand) {
   async function writePipelineOutput(targetPath, lines, append) {
     const normalizedTarget = unquoteShellValue(resolveShellText(targetPath));
     if (!normalizedTarget) throw new Error('Missing redirect target.');
-    const guardErr = terminalProtectedWriteError(normalizedTarget);
+    const guardErr = terminalProtectedWriteError(normalizedTarget, cwd);
     if (guardErr) throw guardErr;
     const existingStat = vfsStatSync(normalizedTarget, cwd);
     if (existingStat && existingStat.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);

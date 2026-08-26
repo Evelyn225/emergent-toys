@@ -171,9 +171,23 @@ function notepadRouteFor(filename) {
 // before the write happens, with the same "protected" language the DELETE
 // guard (os/daemon.js) already uses so a player learns one vocabulary for
 // this rule, not two.
-function notepadGuardProtectedSave(fname) {
-  if (!programIsSystemBinary(fname)) return false;
-  osAlert('Cannot save over ' + fname + '.\n\nSystem files are protected.', 'Cannot Save', 'icon:error');
+//
+// FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
+// split a path - so an earlier version of this guard checked the raw
+// argument and a path-qualified target ("C:\sleepOS\TERMINAL.exe",
+// "\TERMINAL.exe", "C:/sleepOS/TERMINAL.exe") sailed past it while
+// vfsWriteFile (which DOES split, via vfsSplitPath) still resolved it onto
+// the real root file. `dir` must be the SAME fallback directory writeAndSync
+// is about to pass to vfsWriteFile (`dir || currentDir`) - using any other
+// fallback would make this guard's resolution disagree with the write's,
+// which is exactly the class of bug being fixed. Splitting first and
+// checking `!dirName` (root only) is the same shape as the pre-existing
+// DELETE guard, isVisibleSystemPath (os/daemon.js) - a DOCS\TERMINAL.exe
+// is a different, legitimate file and must stay writable.
+function notepadGuardProtectedSave(fname, dir) {
+  const { dirName, fileName } = vfsSplitPath(fname, dir);
+  if (dirName || !programIsSystemBinary(fileName)) return false;
+  osAlert('Cannot save over ' + fileName + '.\n\nSystem files are protected.', 'Cannot Save', 'icon:error');
   return true;
 }
 
@@ -808,7 +822,7 @@ function openNotepad(filename, dirName, options) {
   // document that was never written is precisely the failure this phase exists
   // to kill.
   async function writeAndSync(fname, dir) {
-    if (notepadGuardProtectedSave(fname)) return false;
+    if (notepadGuardProtectedSave(fname, dir || currentDir)) return false;
     let saved;
     try {
       saved = await vfsWriteFile(fname, ta.value, dir || currentDir);
