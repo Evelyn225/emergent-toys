@@ -50,33 +50,38 @@ function streamNormalize(value) {
 // `new Promise` runs synchronously, so `wake` is assigned before this
 // generator suspends, and JS is single-threaded, so nothing can push between
 // the `done` check and that assignment.
-function makePushStream() {
+//
+// `signal` is optional. Without one this behaves exactly as before - nothing
+// here changes for a caller that never passes it.
+function makePushStream(signal) {
   const buffer = [];
   let closed = false;
   let failure = null;
   let wake = null;
 
-  function signal() {
+  function wakeUp() {
     if (!wake) return;
     const resume = wake;
     wake = null;
     resume();
   }
 
-  return {
+  const api = {
     push(line) {
       if (closed) return;
       buffer.push(String(line));
-      signal();
+      wakeUp();
     },
     close() {
       closed = true;
-      signal();
+      if (signal) signal.removeEventListener('abort', onAbort);
+      wakeUp();
     },
     fail(err) {
       failure = err || new Error('stream failed');
       closed = true;
-      signal();
+      if (signal) signal.removeEventListener('abort', onAbort);
+      wakeUp();
     },
     async *[Symbol.asyncIterator]() {
       for (;;) {
@@ -89,4 +94,22 @@ function makePushStream() {
       }
     },
   };
+
+  // An abort must wake a suspended consumer, or a Ctrl+C on a pipeline
+  // reading from a live process deadlocks: the consumer waits on a promise
+  // only push/close/fail resolve, so a caller's finally (the one that would
+  // kill the process) never runs. Failing the stream is what lets that
+  // finally actually reach its SIGKILL.
+  //
+  // signal.reason carries whatever the aborter passed to abort(), which in
+  // the terminal is a proper AbortError. The fallback keeps this file free of
+  // any dependency on interp.js's helpers, so it still loads standalone in
+  // the vm harness.
+  function onAbort() { api.fail(signal.reason || new Error('aborted')); }
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  return api;
 }

@@ -92,3 +92,93 @@ test('a spawn failure surfaces rather than producing a silent empty stage', asyn
     /script not found/,
   );
 });
+
+// Fix round 1: Ctrl+C did not kill a live process pipeline stage. The
+// terminal's print loop (`for await (const line of stream) print(line)`) sits
+// suspended inside makePushStream's internal `await new Promise(...)`, and
+// nothing woke that promise on abort - so the pipeline's `finally` (the one
+// that SIGKILLs every pid it spawned) could never run while the process was
+// still alive. These tests pin down the fix: makePushStream now takes an
+// optional AbortSignal and fails itself when that signal aborts, which is
+// exactly what lets a suspended consumer - and the finally above it - unblock.
+
+test('makePushStream() with no signal behaves exactly as before', async () => {
+  const ctx = terminalCtx();
+  const push = ctx.makePushStream();
+  const iter = push[Symbol.asyncIterator]();
+  const pending = iter.next();
+  push.push('line');
+  const first = await pending;
+  assert.strictEqual(first.done, false);
+  assert.strictEqual(first.value, 'line');
+  push.close();
+  const last = await iter.next();
+  assert.strictEqual(last.done, true);
+});
+
+test('a push stream created with an already-aborted signal fails rather than hanging', async () => {
+  const ctx = terminalCtx();
+  const ac = new AbortController();
+  ac.abort(new Error('nope'));
+  const push = ctx.makePushStream(ac.signal);
+  const seen = [];
+  await assert.rejects(async () => {
+    for await (const line of push) seen.push(line);
+  }, /nope/);
+  assert.deepStrictEqual(seen, []);
+});
+
+// This is the regression test for the deadlock itself: a consumer suspended
+// mid-iteration, with the producer still alive, must be woken by the abort
+// rather than waiting for the producer to ever push or close.
+test('a push stream aborted mid-iteration throws out of the for-await instead of hanging', async () => {
+  const ctx = terminalCtx();
+  const ac = new AbortController();
+  const push = ctx.makePushStream(ac.signal);
+  const iter = push[Symbol.asyncIterator]();
+  const pending = iter.next(); // suspends: nothing pushed, nothing closed
+  ac.abort(new Error('interrupted'));
+  await assert.rejects(() => pending, /interrupted/);
+});
+
+// The scenario the whole fix is for: a live process stage being drained by a
+// loop like the terminal's print loop, aborted mid-read. Before the fix this
+// hung forever; now the consuming loop's own `finally` proves it unblocked -
+// which is the same shape as the pipeline's finally that SIGKILLs the pid.
+test('an aborted live process stage unblocks a suspended consumer so its finally runs', async () => {
+  const ctx = terminalCtx();
+  const kernel = makeFakeKernel();
+  const ac = new AbortController();
+  const stage = await ctx.pipelineSpawnStage(['RUNAWAY.exe'], Object.assign({}, kernel.deps, { signal: ac.signal }));
+  let finallyRan = false;
+  const consuming = (async () => {
+    try {
+      for await (const line of stage.stream) { /* RUNAWAY.exe never emits before the abort */ }
+    } finally {
+      finallyRan = true;
+    }
+  })();
+  ac.abort(new Error('^C'));
+  await assert.rejects(consuming, /\^C/);
+  assert.strictEqual(finallyRan, true);
+  kernel.exit(0); // let the still-pending wait() settle so nothing leaks past the test
+});
+
+test('the abort listener is removed once the stream closes normally, so it does not leak', async () => {
+  const ctx = terminalCtx();
+  const { getEventListeners } = require('node:events');
+  const ac = new AbortController();
+  const push = ctx.makePushStream(ac.signal);
+  assert.strictEqual(getEventListeners(ac.signal, 'abort').length, 1);
+  push.close();
+  assert.strictEqual(getEventListeners(ac.signal, 'abort').length, 0);
+});
+
+test('the abort listener is removed once the stream fails, so it does not leak', async () => {
+  const ctx = terminalCtx();
+  const { getEventListeners } = require('node:events');
+  const ac = new AbortController();
+  const push = ctx.makePushStream(ac.signal);
+  push.fail(new Error('boom'));
+  assert.strictEqual(getEventListeners(ac.signal, 'abort').length, 0);
+});

@@ -43,8 +43,14 @@ async function runPipelineStages(stages, deps) {
 // stderr is merged into the same stream deliberately. Splitting it would mean
 // a second source nothing downstream can address, and `HELLO.exe | grep
 // ERROR` is the case the master spec leads with.
+//
+// deps.signal is optional and forwarded straight to makePushStream: it is
+// what lets a Ctrl+C wake a pipeline that is suspended reading from this
+// still-running process, rather than only ever ending when the process itself
+// exits. Kept as an injectable dependency, not read from terminal state
+// directly, so the fake-kernel tests do not need a real AbortController.
 async function pipelineSpawnStage(tokens, deps) {
-  const push = makePushStream();
+  const push = makePushStream(deps.signal);
   const pid = await deps.spawn(tokens[0], tokens.slice(1), {
     onStdout: line => push.push(line),
     onStderr: line => push.push(line),
@@ -789,6 +795,7 @@ function openTerminal(startDir, initialCommand) {
                 parentPid: kernelPidForWin('terminal'),
               }, sinks)),
               wait: pid => kernelWait(pid),
+              signal: getCurrentCommandSignal(),
             });
             pipelinePids.add(stage.pid);
             return stage.stream;
@@ -822,7 +829,11 @@ function openTerminal(startDir, initialCommand) {
         for await (const line of stream) print(line);
       }
     } catch (err) {
-      print(err.message || String(err), '#ff4444');
+      // An abort is how a live process stage's stream gets woken at all (see
+      // makePushStream's signal handling) - it is not a real failure, so it
+      // must not print as one. '^C' already told the player the command was
+      // interrupted.
+      if (!isAbortError(err)) print(err.message || String(err), '#ff4444');
     } finally {
       // Covers abort, error and normal completion in one place. A pid that
       // already exited is gone from the table, and kernelSignal returns false

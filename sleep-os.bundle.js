@@ -7511,33 +7511,38 @@ function streamNormalize(value) {
 // `new Promise` runs synchronously, so `wake` is assigned before this
 // generator suspends, and JS is single-threaded, so nothing can push between
 // the `done` check and that assignment.
-function makePushStream() {
+//
+// `signal` is optional. Without one this behaves exactly as before - nothing
+// here changes for a caller that never passes it.
+function makePushStream(signal) {
   const buffer = [];
   let closed = false;
   let failure = null;
   let wake = null;
 
-  function signal() {
+  function wakeUp() {
     if (!wake) return;
     const resume = wake;
     wake = null;
     resume();
   }
 
-  return {
+  const api = {
     push(line) {
       if (closed) return;
       buffer.push(String(line));
-      signal();
+      wakeUp();
     },
     close() {
       closed = true;
-      signal();
+      if (signal) signal.removeEventListener('abort', onAbort);
+      wakeUp();
     },
     fail(err) {
       failure = err || new Error('stream failed');
       closed = true;
-      signal();
+      if (signal) signal.removeEventListener('abort', onAbort);
+      wakeUp();
     },
     async *[Symbol.asyncIterator]() {
       for (;;) {
@@ -7550,6 +7555,24 @@ function makePushStream() {
       }
     },
   };
+
+  // An abort must wake a suspended consumer, or a Ctrl+C on a pipeline
+  // reading from a live process deadlocks: the consumer waits on a promise
+  // only push/close/fail resolve, so a caller's finally (the one that would
+  // kill the process) never runs. Failing the stream is what lets that
+  // finally actually reach its SIGKILL.
+  //
+  // signal.reason carries whatever the aborter passed to abort(), which in
+  // the terminal is a proper AbortError. The fallback keeps this file free of
+  // any dependency on interp.js's helpers, so it still loads standalone in
+  // the vm harness.
+  function onAbort() { api.fail(signal.reason || new Error('aborted')); }
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  return api;
 }
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
@@ -12381,8 +12404,14 @@ async function runPipelineStages(stages, deps) {
 // stderr is merged into the same stream deliberately. Splitting it would mean
 // a second source nothing downstream can address, and `HELLO.exe | grep
 // ERROR` is the case the master spec leads with.
+//
+// deps.signal is optional and forwarded straight to makePushStream: it is
+// what lets a Ctrl+C wake a pipeline that is suspended reading from this
+// still-running process, rather than only ever ending when the process itself
+// exits. Kept as an injectable dependency, not read from terminal state
+// directly, so the fake-kernel tests do not need a real AbortController.
 async function pipelineSpawnStage(tokens, deps) {
-  const push = makePushStream();
+  const push = makePushStream(deps.signal);
   const pid = await deps.spawn(tokens[0], tokens.slice(1), {
     onStdout: line => push.push(line),
     onStderr: line => push.push(line),
@@ -13127,6 +13156,7 @@ function openTerminal(startDir, initialCommand) {
                 parentPid: kernelPidForWin('terminal'),
               }, sinks)),
               wait: pid => kernelWait(pid),
+              signal: getCurrentCommandSignal(),
             });
             pipelinePids.add(stage.pid);
             return stage.stream;
@@ -13160,7 +13190,11 @@ function openTerminal(startDir, initialCommand) {
         for await (const line of stream) print(line);
       }
     } catch (err) {
-      print(err.message || String(err), '#ff4444');
+      // An abort is how a live process stage's stream gets woken at all (see
+      // makePushStream's signal handling) - it is not a real failure, so it
+      // must not print as one. '^C' already told the player the command was
+      // interrupted.
+      if (!isAbortError(err)) print(err.message || String(err), '#ff4444');
     } finally {
       // Covers abort, error and normal completion in one place. A pid that
       // already exited is gone from the table, and kernelSignal returns false
