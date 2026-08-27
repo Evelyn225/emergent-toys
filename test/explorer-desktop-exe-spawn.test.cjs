@@ -12,7 +12,15 @@
 //   3. the desktop shortcut path behaves identically;
 //   4. neither consumer still carries its own inline copy of the test -
 //      a source grep, the same kind of guard this repo already uses
-//      elsewhere (see e.g. test/icon-assets.test.cjs).
+//      elsewhere (see e.g. test/icon-assets.test.cjs);
+//   5. a rejected spawn (the file vanished between listing and click)
+//      surfaces through osAlert on both surfaces, rather than escaping as a
+//      silent unhandled rejection - the exact hole Task 6 already closed
+//      once for the terminal's own spawn path (programVfsEntry.open, see
+//      test/programs-resolve.test.cjs's "a spawn rejection surfaces through
+//      osAlert"). All three now share one helper, programSpawnOrAlert
+//      (os/programs.js), for the same reason programIsSpawnableExe is
+//      shared: three copies of the same .catch would drift too.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -115,8 +123,8 @@ function makeDocStub() {
 // seeds ROOT_SYSTEM_FILE_META, the table programIsSystemBinary consults -
 // this is what makes an entry a "system binary" rather than a user .exe, the
 // same override pattern test/desktop-open-system-file.test.cjs uses.
-function explorerCtx(files, rootMeta) {
-  const calls = { spawn: [], notepad: [] };
+function explorerCtx(files, rootMeta, kernelSpawnImpl) {
+  const calls = { spawn: [], notepad: [], alert: [] };
   const doc = makeDocStub();
   const ctx = makeOsContext({
     document: doc,
@@ -154,11 +162,12 @@ function explorerCtx(files, rootMeta) {
     openDesktopShortcutTarget: () => {},
     openSystemFile: () => false,
     openNotepad: (...args) => { calls.notepad.push(args); },
+    osAlert: (msg, title, icon) => { calls.alert.push({ msg, title, icon }); },
     // kernelSpawn must return a real Promise, never a bare value - the
-    // caller (openItem) does `void kernelSpawn(...)`; a bare value would
-    // still pass a truthiness check but this matches production shape and
-    // catches a caller that ever adds a `.catch` or `.then`.
-    kernelSpawn: (p, argv, opts) => { calls.spawn.push({ p, argv: [...argv], opts }); return Promise.resolve(1); },
+    // caller (openItem) does `void programSpawnOrAlert(...)`, which itself
+    // does `kernelSpawn(...).catch(...)`; a bare value has no .catch and
+    // would throw synchronously the moment a test needed the reject path.
+    kernelSpawn: kernelSpawnImpl || ((p, argv, opts) => { calls.spawn.push({ p, argv: [...argv], opts }); return Promise.resolve(1); }),
   });
   loadOsSources(ctx, ['os/vfs.js', 'os/programs.js', 'apps/explorer.js']);
   ctx.vfsSetTree({ dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
@@ -217,10 +226,36 @@ test('Explorer: double-clicking a system binary does not spawn - it goes to Note
   assert.strictEqual(calls.notepad[0][0], 'CALC.exe');
 });
 
+// Fix round 1: openItem's `void kernelSpawn(...)` (now `void
+// programSpawnOrAlert(...)`) had no .catch, reopening the exact hole Task 6
+// closed in programVfsEntry.open (test/programs-resolve.test.cjs's "a spawn
+// rejection surfaces through osAlert, not silently") - a file deleted,
+// renamed or recycled between the listing render and the double-click makes
+// kernelSpawn reject ENOENT, and with nothing to catch it that used to be a
+// silent unhandled rejection: double-click, nothing happens, no error.
+test('Explorer: a spawn failure alerts instead of failing silently', async () => {
+  let spawnPromise;
+  const { calls, body } = explorerCtx(
+    { 'HELLO.exe': 'PRINT hi' },
+    [{ name: 'CALC.exe' }],
+    () => { spawnPromise = Promise.reject(new Error('script not found: HELLO.exe')); return spawnPromise; },
+  );
+  dblclick(body, 'HELLO.exe');
+  // programSpawnOrAlert's own .catch is attached synchronously, inside the
+  // dblclick handler, before dispatchEvent returns above - so this await,
+  // attached after, is guaranteed to resolve after that .catch has already
+  // run and pushed the alert. Node's test runner would fail the whole
+  // process on an unhandled rejection, which doubles as proof none escaped.
+  await spawnPromise.catch(() => {});
+  assert.strictEqual(calls.alert.length, 1);
+  assert.ok(calls.alert[0].msg.includes('HELLO.exe'), 'got: ' + calls.alert[0].msg);
+  assert.strictEqual(calls.alert[0].icon, 'icon:error');
+});
+
 // ── Desktop ─────────────────────────────────────────────────────────────
 
-function desktopCtx() {
-  const calls = { spawn: [], notepad: [] };
+function desktopCtx(kernelSpawnImpl) {
+  const calls = { spawn: [], notepad: [], alert: [] };
   const ctx = makeOsContext({
     ROOT_SYSTEM_FILE_META: [{ name: 'CALC.exe' }],
     RECYCLE_BIN_NAME: 'Recycle Bin',
@@ -229,9 +264,9 @@ function desktopCtx() {
     openWithAssociation: () => false,
     openMediaFile: () => {},
     openExplorer: () => {},
-    osAlert: () => {},
+    osAlert: (msg, title, icon) => { calls.alert.push({ msg, title, icon }); },
     openNotepad: (...args) => { calls.notepad.push(args); },
-    kernelSpawn: (p, argv, opts) => { calls.spawn.push({ p, argv: [...argv], opts }); return Promise.resolve(1); },
+    kernelSpawn: kernelSpawnImpl || ((p, argv, opts) => { calls.spawn.push({ p, argv: [...argv], opts }); return Promise.resolve(1); }),
   });
   loadOsSources(ctx, ['os/vfs.js', 'os/desktop-model.js', 'os/programs.js']);
   ctx.vfsSetTree({ dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
@@ -254,6 +289,26 @@ test('Desktop: a shortcut to a system binary does not spawn - it goes to Notepad
   assert.deepStrictEqual(calls.spawn, []);
   assert.strictEqual(calls.notepad.length, 1);
   assert.strictEqual(calls.notepad[0][0], 'CALC.exe');
+});
+
+// Same fix-round-1 regression as Explorer's, for the other call site: a
+// shortcut's target can vanish between being created and being clicked.
+test('Desktop: a spawn failure alerts instead of failing silently', async () => {
+  let spawnPromise;
+  const { ctx, calls } = desktopCtx(() => {
+    spawnPromise = Promise.reject(new Error('script not found: HELLO.exe'));
+    return spawnPromise;
+  });
+  ctx.vfsGetTree().files.set('HELLO.exe', 'PRINT hi');
+  ctx.openDesktopShortcutTarget({ path: 'C:\\sleepOS\\HELLO.exe', name: 'HELLO.exe', kind: 'file' });
+  // Same reasoning as the Explorer test above: openDesktopShortcutTarget's
+  // .catch (inside programSpawnOrAlert) is attached synchronously before
+  // this call returns, so awaiting the same promise afterward is guaranteed
+  // to run after it.
+  await spawnPromise.catch(() => {});
+  assert.strictEqual(calls.alert.length, 1);
+  assert.ok(calls.alert[0].msg.includes('HELLO.exe'), 'got: ' + calls.alert[0].msg);
+  assert.strictEqual(calls.alert[0].icon, 'icon:error');
 });
 
 // ── No duplicated inline copy ───────────────────────────────────────────

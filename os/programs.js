@@ -182,6 +182,40 @@ function programIsSpawnableExe(name) {
   return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
 }
 
+// Every real launch of a user .exe - the terminal running one off
+// programsInDir (below), Explorer's double-click, the desktop's shortcut
+// target - goes through this, so a failed spawn always surfaces the same
+// way instead of three near-identical copies of the same .catch drifting
+// apart. `dir` is the SEARCH directory for kernelSpawn's bare-filename
+// lookup, always wherever the file actually lives (never a caller's cwd if
+// that differs - see the callers below for why that distinction matters).
+//
+// The caller discards this promise (`void programSpawnOrAlert(...)`),
+// which is exactly why the .catch has to live in here: without it, a file
+// that vanished between listing and launch - deleted, renamed, recycled -
+// would throw ENOENT as a silent unhandled rejection. Double-click and
+// nothing happens, no error, no explanation.
+function programSpawnOrAlert(name, dir) {
+  return kernelSpawn(name, [], { cwd: dir, parentPid: KERNEL_PID })
+    .catch(err => {
+      // osAlert is os/ui-chrome.js:230, the established convention for this
+      // exact failure class - os/run-dialog.js:62 uses it for "Cannot Find
+      // Program". It is a standalone modal, so it needs no process or
+      // stderr sink. This file is manifest position 10 and ui-chrome.js is
+      // 24, but the bundle is one hoisted scope and every caller of this
+      // function only runs long after boot, so the reference resolves.
+      //
+      // The typeof guard is for the node test harness, where a context may
+      // load os/programs.js without os/ui-chrome.js.
+      const detail = (err && err.message) || String(err);
+      if (typeof osAlert === 'function') {
+        osAlert('Cannot run:\n"' + name + '"\n\n' + detail, 'Cannot Run Program', 'icon:error');
+      } else {
+        console.error('sleepOS: failed to spawn ' + name + ' - ' + detail);
+      }
+    });
+}
+
 // A .exe text file in the VFS, presented the same way a built-in is. `open`
 // spawns it, which is why the seam comment insists `open` be a closure.
 function programVfsEntry(stat) {
@@ -190,36 +224,11 @@ function programVfsEntry(stat) {
     dir: stat.dirName,
     lines: ['Starting ' + stat.name + '...'],
     delay: 300,
-    open: () => {
-      // stat.dirName, never the caller's cwd. kernelSpawn treats its `cwd`
-      // option as the SEARCH directory for a bare filename, so handing it the
-      // shell's cwd looks the program up where it does not live - which is
-      // exactly what happens when programResolve found it via PATH rather than
-      // in the current directory. The entry already knows where it lives.
-      //
-      // The caller (apps/terminal.js's procSetTimeout) discards this promise,
-      // so a rejection here - the file vanished between listing and launch,
-      // or any other kernelSpawn failure - would otherwise be a silent
-      // unhandled rejection with nothing reaching the user.
-      return kernelSpawn(stat.name, [], { cwd: stat.dirName, parentPid: KERNEL_PID })
-        .catch(err => {
-          // osAlert is os/ui-chrome.js:230, the established convention for this
-          // exact failure class - os/run-dialog.js:62 uses it for "Cannot Find
-          // Program". It is a standalone modal, so it needs no process or
-          // stderr sink. This file is manifest position 10 and ui-chrome.js is
-          // 24, but the bundle is one hoisted scope and `open` only runs long
-          // after boot, so the reference resolves.
-          //
-          // The typeof guard is for the node test harness, where a context may
-          // load os/programs.js without os/ui-chrome.js.
-          const detail = (err && err.message) || String(err);
-          if (typeof osAlert === 'function') {
-            osAlert('Cannot run:\n"' + stat.name + '"\n\n' + detail, 'Cannot Run Program', 'icon:error');
-          } else {
-            console.error('sleepOS: failed to spawn ' + stat.name + ' - ' + detail);
-          }
-        });
-    },
+    // stat.dirName, never the caller's cwd - see programSpawnOrAlert. The
+    // caller here is apps/terminal.js's procSetTimeout, which is why this
+    // needed the .catch in the first place before it moved into the shared
+    // helper.
+    open: () => programSpawnOrAlert(stat.name, stat.dirName),
     aliases: [],
   };
 }

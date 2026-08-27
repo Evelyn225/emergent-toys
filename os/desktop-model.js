@@ -410,9 +410,12 @@ function openDesktopShortcutTarget(target) {
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
   // A .exe the user wrote runs; a system binary opens its decompiler view
   // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
-  // for why this test lives there rather than here.
+  // for why this test lives there rather than here. programSpawnOrAlert
+  // (also os/programs.js) is what turns a spawn failure - the file vanished
+  // between the shortcut being created and being clicked - into an osAlert
+  // instead of a silent unhandled rejection.
   else if (programIsSpawnableExe(st.name)) {
-    void kernelSpawn(st.name, [], { cwd: st.dirName, parentPid: KERNEL_PID });
+    void programSpawnOrAlert(st.name, st.dirName);
   }
   else openNotepad(st.name, st.dirName);
 }
