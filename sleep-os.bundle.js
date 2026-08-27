@@ -5756,17 +5756,34 @@ function refreshSeededDocs() {
 // that reached one at all had to go around a guard (apps/notepad.js's
 // writeAndSync, apps/terminal.js's writePipelineOutput) that exists
 // specifically to stop that. Healing here is the backstop for whatever gets
-// through anyway. Mutates the live tree directly with no queued commit op,
-// the same as refreshSeededDocs and for the same reason: this function runs
-// again on every future boot, so a repair that is never durably persisted to
-// IndexedDB still reappears the next time it is needed.
-function refreshSeededSystemBinaries() {
+// through anyway.
+//
+// Unlike refreshSeededDocs, the heal below goes through vfsWriteFile rather
+// than poking tree.files directly, so a repair queues a real commit op and
+// the binary ends up occupying actual disk blocks - SYSMON's disk meter and
+// DEFRAG's map both read the backend's block counts, not the tree, so a
+// binary that only exists in memory reports as zero bytes used. The
+// content comparison still runs first, and only a mismatch reaches
+// vfsWriteFile, so a normal boot where all eight already match queues
+// nothing at all - same cost as before. If the write itself throws (ENOSPC
+// via _vfsAssertRoom in os/vfs.js is the realistic case, on a full disk),
+// the catch below falls back to the old in-memory tree.files.set so the
+// binary is still correct for this session - the phase 6 guarantee that a
+// corrupted binary always heals must survive a full disk, it just will not
+// stick across a reload - and reports the failure through reportVfsError,
+// the same channel every other late VFS failure in this file uses.
+async function refreshSeededSystemBinaries() {
   const tree = vfsGetTree();
-  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
-    if (tree.files.get(name) !== SYSTEM_BINARY_SOURCES[name]) {
-      tree.files.set(name, SYSTEM_BINARY_SOURCES[name]);
+  for (const name of Object.keys(SYSTEM_BINARY_SOURCES)) {
+    const want = SYSTEM_BINARY_SOURCES[name];
+    if (tree.files.get(name) === want) continue;
+    try {
+      await vfsWriteFile(name, want, '');
+    } catch (err) {
+      tree.files.set(name, want);
+      reportVfsError(err);
     }
-  });
+  }
 }
 
 function refreshSeededWallpaperLibrary() {
@@ -6019,7 +6036,7 @@ async function vfsBootMount() {
     },
   });
   refreshSeededDocs();
-  refreshSeededSystemBinaries();
+  await refreshSeededSystemBinaries();
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);
