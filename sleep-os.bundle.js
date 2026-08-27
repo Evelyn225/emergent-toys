@@ -3064,6 +3064,16 @@ function openSystemFile(name) {
   //    are not opened through this path). If a future directory ever gains
   //    launchable entries, this needs the caller's directory, not a
   //    hardcoded ''.
+  //
+  // The match below is exact name only - no alias, no optional .exe suffix
+  // the way programMatches gives programResolve. That is deliberate, not an
+  // oversight: every caller already hands over a fully-qualified name -
+  // Explorer passes what its own listing displayed, a desktop shortcut
+  // replays the exact target it was created with, and the terminal's OPEN
+  // only reaches this function once isVisibleSystemPath has confirmed an
+  // exact (case-insensitive) match itself. There is no path that lets a
+  // bare or aliased name arrive here today; if one is added, match through
+  // programFindIn instead of duplicating programMatches by hand.
   const program = programsInDir('').find(entry =>
     entry.name.toLowerCase() === key.toLowerCase());
   if (!programIsExecutableEntry(program)) return false;
@@ -3096,6 +3106,12 @@ function openDesktopShortcutTarget(target) {
   }
   if (openWithAssociation(st.name, st.dirName)) return;
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  // A .exe the user wrote runs; a system binary opens its decompiler view
+  // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+  // for why this test lives there rather than here.
+  else if (programIsSpawnableExe(st.name)) {
+    void kernelSpawn(st.name, [], { cwd: st.dirName, parentPid: KERNEL_PID });
+  }
   else openNotepad(st.name, st.dirName);
 }
 
@@ -3319,6 +3335,19 @@ function programIsSystemBinary(name) {
 // programsInDir returned as GUI-launchable - see the hazard note above.
 function programIsExecutableEntry(entry) {
   return !!(entry && typeof entry.open === 'function');
+}
+
+// A double-click (Explorer's openItem, the desktop's
+// openDesktopShortcutTarget) spawns a `.exe` instead of opening it in
+// Notepad, UNLESS it is one of the eight system binaries - those still route
+// to Notepad, which sends them on to the decompiler view via
+// notepadRouteFor. Both call sites need the exact same test, so it lives
+// here once rather than as two inline copies that could drift.
+//
+// Declared with `function` for the same reason as programIsSystemBinary
+// above: the vm test harness only exposes function declarations.
+function programIsSpawnableExe(name) {
+  return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
 }
 
 // A .exe text file in the VFS, presented the same way a built-in is. `open`
@@ -12012,6 +12041,12 @@ function openExplorer(startPath) {
     // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
     if (openWithAssociation(name, cwd)) return;
     if (st.kind === 'blob') openMediaFile(name, cwd);
+    // A .exe the user wrote runs; a system binary opens its decompiler view
+    // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+    // for why this test lives there rather than here.
+    else if (programIsSpawnableExe(name)) {
+      void kernelSpawn(name, [], { cwd, parentPid: KERNEL_PID });
+    }
     else openNotepad(name, cwd);
   }
 

@@ -169,6 +169,19 @@ function programIsExecutableEntry(entry) {
   return !!(entry && typeof entry.open === 'function');
 }
 
+// A double-click (Explorer's openItem, the desktop's
+// openDesktopShortcutTarget) spawns a `.exe` instead of opening it in
+// Notepad, UNLESS it is one of the eight system binaries - those still route
+// to Notepad, which sends them on to the decompiler view via
+// notepadRouteFor. Both call sites need the exact same test, so it lives
+// here once rather than as two inline copies that could drift.
+//
+// Declared with `function` for the same reason as programIsSystemBinary
+// above: the vm test harness only exposes function declarations.
+function programIsSpawnableExe(name) {
+  return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
+}
+
 // A .exe text file in the VFS, presented the same way a built-in is. `open`
 // spawns it, which is why the seam comment insists `open` be a closure.
 function programVfsEntry(stat) {

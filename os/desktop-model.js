@@ -366,6 +366,16 @@ function openSystemFile(name) {
   //    are not opened through this path). If a future directory ever gains
   //    launchable entries, this needs the caller's directory, not a
   //    hardcoded ''.
+  //
+  // The match below is exact name only - no alias, no optional .exe suffix
+  // the way programMatches gives programResolve. That is deliberate, not an
+  // oversight: every caller already hands over a fully-qualified name -
+  // Explorer passes what its own listing displayed, a desktop shortcut
+  // replays the exact target it was created with, and the terminal's OPEN
+  // only reaches this function once isVisibleSystemPath has confirmed an
+  // exact (case-insensitive) match itself. There is no path that lets a
+  // bare or aliased name arrive here today; if one is added, match through
+  // programFindIn instead of duplicating programMatches by hand.
   const program = programsInDir('').find(entry =>
     entry.name.toLowerCase() === key.toLowerCase());
   if (!programIsExecutableEntry(program)) return false;
@@ -398,6 +408,12 @@ function openDesktopShortcutTarget(target) {
   }
   if (openWithAssociation(st.name, st.dirName)) return;
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  // A .exe the user wrote runs; a system binary opens its decompiler view
+  // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+  // for why this test lives there rather than here.
+  else if (programIsSpawnableExe(st.name)) {
+    void kernelSpawn(st.name, [], { cwd: st.dirName, parentPid: KERNEL_PID });
+  }
   else openNotepad(st.name, st.dirName);
 }
 
