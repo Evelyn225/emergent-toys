@@ -195,8 +195,18 @@ function programIsSpawnableExe(name) {
 // that vanished between listing and launch - deleted, renamed, recycled -
 // would throw ENOENT as a silent unhandled rejection. Double-click and
 // nothing happens, no error, no explanation.
-function programSpawnOrAlert(name, dir) {
-  return kernelSpawn(name, [], { cwd: dir, parentPid: KERNEL_PID })
+//
+// `sinks` (optional) is {onStdout, onStderr} - kernelSpawn's own contract,
+// passed straight through. Explorer's double-click and the desktop's
+// shortcut target have no window for a spawned process's output to land in,
+// so both omit it and get kernelExit's ordinary post-exit buffering; the
+// terminal is the one caller with somewhere for stdout to go, and supplies
+// it (see programVfsEntry.open below and launchTerminalTarget in
+// apps/terminal.js). Never invent a sink here for the GUI callers - a fake
+// sink would silently swallow output nobody is displaying, indistinguishable
+// from stdout actually reaching a window.
+function programSpawnOrAlert(name, dir, sinks) {
+  return kernelSpawn(name, [], Object.assign({ cwd: dir, parentPid: KERNEL_PID }, sinks))
     .catch(err => {
       // osAlert is os/ui-chrome.js:230, the established convention for this
       // exact failure class - os/run-dialog.js:62 uses it for "Cannot Find
@@ -228,7 +238,14 @@ function programVfsEntry(stat) {
     // caller here is apps/terminal.js's procSetTimeout, which is why this
     // needed the .catch in the first place before it moved into the shared
     // helper.
-    open: () => programSpawnOrAlert(stat.name, stat.dirName),
+    //
+    // `ctx` is the same object every PROGRAM_LAUNCHERS `open` receives
+    // (`{ cwd, sinks }` - see launchTerminalTarget in apps/terminal.js); a
+    // built-in's own `open` just ignores `ctx.sinks` since it has no
+    // subprocess stdout to bind. `ctx` itself can be omitted entirely (every
+    // GUI double-click calls `.open()` with no argument at all), hence the
+    // guard rather than destructuring it directly.
+    open: (ctx) => programSpawnOrAlert(stat.name, stat.dirName, ctx && ctx.sinks),
     aliases: [],
   };
 }

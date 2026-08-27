@@ -404,7 +404,25 @@ function openTerminal(startDir, initialCommand) {
       return true;
     }
     program.lines.forEach(line => print(line));
-    if (program.open) procSetTimeout('terminal', () => program.open({ cwd }), program.delay);
+    // Master spec: "running it from the terminal spawns it there with stdout
+    // bound to the terminal window." Without these sinks a spawned .exe's
+    // output only ever reaches kernelExit's post-exit buffer - the terminal
+    // itself is the one caller of program.open with a window to bind to (see
+    // programSpawnOrAlert, os/programs.js), so it is the one that must
+    // supply them; a built-in's own `open` just ignores `ctx.sinks`.
+    //
+    // No `[pid] name` line here, unlike CMDS.spawn - every OTHER bare-name
+    // launch through this same function (NOTEPAD, CALC, a project...) prints
+    // only its banner, never a pid, and a .exe launched bare is asking to run
+    // like a program, not to be introspected like SPAWN's explicit low-level
+    // command. Keeping this path silent on that score is what keeps it
+    // consistent with every other entry in the same table.
+    if (program.open) {
+      procSetTimeout('terminal', () => program.open({
+        cwd,
+        sinks: { onStdout: line => print(line), onStderr: line => print(line, '#ff4444') },
+      }), program.delay);
+    }
     return true;
   }
 
@@ -705,11 +723,26 @@ function openTerminal(startDir, initialCommand) {
   // A stage is a program when the VFS holds a .exe text file by that name
   // that is not one of the built-in windows. Task 6's programIsSystemBinary
   // is the authority on the second half.
+  //
+  // FIX ROUND (browser Critical B1): getCommandParts lowercases every
+  // stage's command before this ever sees it, but the VFS `files` Map is
+  // keyed by the real, case-preserved filename with a case-sensitive lookup
+  // - so `vfsStatSync(cmd, dir)` on the lowercased command alone could never
+  // find HELLO.exe, and `HELLO.exe | grep ...` fell all the way through to
+  // "Piping not supported for command: HELLO.EXE". programResolve already
+  // folds case the same way bare-name execution does (launchTerminalTarget,
+  // above) and hands back the entry's real name and directory, PATH search
+  // included - reusing it here is what lets a pipe stage resolve exactly
+  // like typing the same name on its own would, instead of a second,
+  // narrower case-insensitive scan that only agrees with it by accident.
+  // Returns the resolved hit (real name + dir) or null, not a boolean, so
+  // the caller can spawn the real filename in the real directory rather than
+  // the lowercased command text it was typed as.
   function terminalIsExecutableStage(cmd, dir) {
-    if (!/\.exe$/i.test(cmd)) return false;
-    if (programIsSystemBinary(cmd)) return false;
-    const st = vfsStatSync(cmd, dir);
-    return !!st && st.kind === 'text';
+    if (!/\.exe$/i.test(cmd)) return null;
+    if (programIsSystemBinary(cmd)) return null;
+    const hit = programResolve(cmd, dir, shellVars.PATH);
+    return (hit && !programIsSystemBinary(hit.program.name)) ? hit : null;
   }
 
   async function runPipeStage(cmd, args, stdin) {
@@ -818,11 +851,18 @@ function openTerminal(startDir, initialCommand) {
       const { stream, consumedBySink } = await runPipelineStages(parsed.stages, {
         getCommandParts,
         runStage: async (cmd, args, stdin) => {
-          if (terminalIsExecutableStage(cmd, cwd)) {
-            const tokens = scriptTokenize((cmd + ' ' + args).trim());
+          const stageHit = terminalIsExecutableStage(cmd, cwd);
+          if (stageHit) {
+            // The real, case-preserved filename and the directory it was
+            // actually found in - never the lowercased `cmd` text and never
+            // the terminal's own cwd if PATH is what found it. See
+            // programs-resolve.test.cjs's "a VFS .exe found via PATH from a
+            // different cwd spawns in its own directory" for why the second
+            // half matters just as much as the first.
+            const tokens = scriptTokenize((stageHit.program.name + ' ' + args).trim());
             const stage = await pipelineSpawnStage(tokens, {
               spawn: (path, argv, sinks) => kernelSpawn(path, argv, Object.assign({
-                cwd,
+                cwd: stageHit.dir,
                 parentPid: kernelPidForWin('terminal'),
               }, sinks)),
               wait: pid => kernelWait(pid),
