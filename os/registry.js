@@ -61,6 +61,7 @@ const registryData = {
       '.html':   { type:'REG_SZ', value:'NOTEPAD.exe' },
       '.log':    { type:'REG_SZ', value:'NOTEPAD.exe' },
       '.script': { type:'REG_SZ', value:'NOTEPAD.exe' },
+      '.url':    { type:'REG_SZ', value:'BROWSER.exe' },
     },
     'Associations\\Media': {
       '.png':  { type:'REG_SZ', value:'IMAGEVIEW.exe' },
@@ -135,7 +136,13 @@ const FILE_HANDLERS = {
     else openAudioPlayer(name, dir);
   },
   'TERMINAL.exe':  (name, dir) => runScriptInTerminal(name, dir),
-  'BROWSER.exe':   () => openBrowser(),
+  // No arguments (the desktop icon, Start menu, and RUN_MAP all call it that
+  // way) opens a blank browser on the home page, same as before. Called with
+  // a .url file, it reads the URL out of that file first - see
+  // openBrowserFromUrlFile in apps/browser.js for the parse-and-alert path
+  // that keeps a hand-edited or malformed shortcut from silently opening
+  // home: instead of failing loudly.
+  'BROWSER.exe':   (name, dir) => { if (!name) { openBrowser(); return; } openBrowserFromUrlFile(name, dir); },
 };
 
 // Returns the configured app for a filename's extension, or '' if unassociated.
