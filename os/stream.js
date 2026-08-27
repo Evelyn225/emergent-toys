@@ -53,6 +53,15 @@ function streamNormalize(value) {
 //
 // `signal` is optional. Without one this behaves exactly as before - nothing
 // here changes for a caller that never passes it.
+//
+// SINGLE-CONSUMER ONLY. The buffer and `wake` above are shared, unindexed
+// state: a second concurrent call to `[Symbol.asyncIterator]()` would race
+// the first over the same `buffer.shift()` and the same `wake` slot, and
+// whichever iterator's `await` overwrites `wake` second strands the other
+// forever - not a thrown error, a permanent hang. The one production caller
+// (a worker's stdout feeding a single pipeline stage) only ever has one
+// consumer, so this is documented as a constraint rather than fixed with a
+// runtime guard, which would be new behaviour the existing tests don't pin.
 function makePushStream(signal) {
   const buffer = [];
   let closed = false;

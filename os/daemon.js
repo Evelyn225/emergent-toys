@@ -970,7 +970,7 @@ function isVisibleSystemPath(path, options) {
 // vfsListSync in buildDirLines like any other file. void.tmp, daemon.core and
 // ?????.exe stay here because their existence is conditional on story state
 // and a real file cannot be conditionally absent.
-function getTerminalRootSystemEntries(options) {
+function getTerminalRootSystemEntries() {
   const entries = [];
   if (!daemonStory.endingReached) entries.push({ name: 'void.tmp', size: '0', date: '11/13/2024  03:17' });
   entries.push({ name: 'daemon.core', size: '??', date: '11/13/2024  ??:??' });

@@ -459,7 +459,7 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    DOCS`,
         `11/13/2024  10:31    <DIR>    PROJECTS`,
       ].forEach(line => lines.push(line));
-      getTerminalRootSystemEntries({ includeExplorer: true }).forEach(entry => {
+      getTerminalRootSystemEntries().forEach(entry => {
         lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
       });
       entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => lines.push(`${ds}  ${ts}    <DIR>    ${e.name}`));

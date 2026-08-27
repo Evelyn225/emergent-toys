@@ -56,6 +56,24 @@ function refreshSeededDocs() {
     // scripts exist to be edited, and overwriting them would have destroyed
     // every edit at the next reload with no message. Delete one and it comes
     // back fresh.
+    //
+    // Deliberately a bare regex, not programIsSpawnableExe (os/programs.js),
+    // even though the two agree for every name that can reach this loop
+    // today (it only ever iterates SEEDED_DOCS_DATA.files' own keys - the
+    // demo README/HELLO.exe/RUNAWAY.exe seed set - none of which is one of
+    // the eight system binary names, so programIsSpawnableExe's extra
+    // "and it's not a system binary" clause never fires here). The two
+    // predicates answer different questions: programIsSpawnableExe asks
+    // whether a root-level name is launchable, keyed off PROGRAM_LAUNCHERS;
+    // this asks whether a DOCS seed entry is fill-if-absent or heal-every-
+    // boot, and has nothing to do with what's launchable. Swapping in the
+    // canonical predicate would couple this file's persistence policy to
+    // os/programs.js's launcher table, so a future PROGRAM_LAUNCHERS entry
+    // that happened to collide with a seed demo script's name would flip
+    // that script from fill-if-absent to silently overwritten every boot,
+    // discarding a player's edits - a change nobody editing os/programs.js
+    // would have reason to expect. Keeping this predicate local avoids that
+    // action-at-a-distance.
     if (/\.exe$/i.test(name) && docs.files.has(name)) return;
     docs.files.set(name, value);
   });

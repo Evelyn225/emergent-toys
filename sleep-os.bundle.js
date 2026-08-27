@@ -5709,6 +5709,24 @@ function refreshSeededDocs() {
     // scripts exist to be edited, and overwriting them would have destroyed
     // every edit at the next reload with no message. Delete one and it comes
     // back fresh.
+    //
+    // Deliberately a bare regex, not programIsSpawnableExe (os/programs.js),
+    // even though the two agree for every name that can reach this loop
+    // today (it only ever iterates SEEDED_DOCS_DATA.files' own keys - the
+    // demo README/HELLO.exe/RUNAWAY.exe seed set - none of which is one of
+    // the eight system binary names, so programIsSpawnableExe's extra
+    // "and it's not a system binary" clause never fires here). The two
+    // predicates answer different questions: programIsSpawnableExe asks
+    // whether a root-level name is launchable, keyed off PROGRAM_LAUNCHERS;
+    // this asks whether a DOCS seed entry is fill-if-absent or heal-every-
+    // boot, and has nothing to do with what's launchable. Swapping in the
+    // canonical predicate would couple this file's persistence policy to
+    // os/programs.js's launcher table, so a future PROGRAM_LAUNCHERS entry
+    // that happened to collide with a seed demo script's name would flip
+    // that script from fill-if-absent to silently overwritten every boot,
+    // discarding a player's edits - a change nobody editing os/programs.js
+    // would have reason to expect. Keeping this predicate local avoids that
+    // action-at-a-distance.
     if (/\.exe$/i.test(name) && docs.files.has(name)) return;
     docs.files.set(name, value);
   });
@@ -7096,7 +7114,7 @@ function isVisibleSystemPath(path, options) {
 // vfsListSync in buildDirLines like any other file. void.tmp, daemon.core and
 // ?????.exe stay here because their existence is conditional on story state
 // and a real file cannot be conditionally absent.
-function getTerminalRootSystemEntries(options) {
+function getTerminalRootSystemEntries() {
   const entries = [];
   if (!daemonStory.endingReached) entries.push({ name: 'void.tmp', size: '0', date: '11/13/2024  03:17' });
   entries.push({ name: 'daemon.core', size: '??', date: '11/13/2024  ??:??' });
@@ -7903,6 +7921,15 @@ function streamNormalize(value) {
 //
 // `signal` is optional. Without one this behaves exactly as before - nothing
 // here changes for a caller that never passes it.
+//
+// SINGLE-CONSUMER ONLY. The buffer and `wake` above are shared, unindexed
+// state: a second concurrent call to `[Symbol.asyncIterator]()` would race
+// the first over the same `buffer.shift()` and the same `wake` slot, and
+// whichever iterator's `await` overwrites `wake` second strands the other
+// forever - not a thrown error, a permanent hang. The one production caller
+// (a worker's stdout feeding a single pipeline stage) only ever has one
+// consumer, so this is documented as a constraint rather than fixed with a
+// runtime guard, which would be new behaviour the existing tests don't pin.
 function makePushStream(signal) {
   const buffer = [];
   let closed = false;
@@ -13272,7 +13299,7 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    DOCS`,
         `11/13/2024  10:31    <DIR>    PROJECTS`,
       ].forEach(line => lines.push(line));
-      getTerminalRootSystemEntries({ includeExplorer: true }).forEach(entry => {
+      getTerminalRootSystemEntries().forEach(entry => {
         lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
       });
       entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => lines.push(`${ds}  ${ts}    <DIR>    ${e.name}`));
