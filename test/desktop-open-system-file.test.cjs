@@ -172,3 +172,70 @@ test('a GUI launch does not consult PATH, unlike the terminal\'s resolver', () =
   assert.strictEqual(ctx.openSystemFile('CALC.exe'), true);
   assert.deepStrictEqual(calls, [['calc']]);
 });
+
+// ── Phase 6 ──────────────────────────────────────────────────────
+// openSystemFile gated only on `!program || !program.open`, which was
+// harmless while every programsInDir entry was a built-in with a real open.
+// Task 6 made the registry yield VFS entries, and this call site treats
+// whatever it gets back as GUI-launchable. Explorer's double-click ignores
+// the return value, so a wrong `true` here fails invisibly - which is
+// exactly why it needs its own test rather than trust in the caller.
+//
+// desktop() loads only os/vfs.js, os/desktop-model.js and os/programs.js -
+// no os/fs-core.js - so there is no filesystem tree until a test installs
+// one itself via vfsSetTree. The shape matches vfsMakeNode()'s real one:
+// { dirs: Set, files: Map, blobs: Map, subdirs: Map }.
+test('a root text file is not launchable through openSystemFile', () => {
+  const { ctx, calls } = desktop();
+  ctx.vfsSetTree({ dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+  ctx.vfsGetTree().files.set('notes.txt', 'just a file');
+  assert.strictEqual(ctx.openSystemFile('notes.txt'), false,
+    'a plain .txt must not report a successful launch');
+  assert.deepStrictEqual(calls, []);
+});
+
+test('a root .exe script IS launchable through openSystemFile', () => {
+  // A VFS entry's open() calls kernelSpawn(..., { parentPid: KERNEL_PID }).
+  // os/kernel.js (where KERNEL_PID is really declared, as `const`) is not
+  // part of desktop()'s load list, so it must arrive as a context override
+  // here, same as test/programs-resolve.test.cjs does for the same reason.
+  const { ctx, calls } = desktop({ kernelSpawn: () => Promise.resolve(100), KERNEL_PID: 0 });
+  ctx.vfsSetTree({ dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
+  ctx.vfsGetTree().files.set('HELLO.exe', 'PRINT hi');
+  assert.strictEqual(ctx.openSystemFile('HELLO.exe'), true);
+  assert.deepStrictEqual(calls, []);
+});
+
+test('the built-in programs still launch, unaffected by the executables filter', () => {
+  const { ctx, calls } = desktop();
+  assert.strictEqual(ctx.openSystemFile('CALC.exe'), true);
+  assert.deepStrictEqual(calls, [['calc']]);
+});
+
+// The two tests above alone do not exercise the guard: programVfsExecutables
+// (os/programs.js) already filters VFS entries to `kind === 'text' &&
+// /\.exe$/i` before they ever reach programsInDir(''), so 'notes.txt' never
+// becomes a registry entry at all - openSystemFile returns false via the
+// leading `!program` half of the check, regardless of which guard follows
+// it. Proven by reverting the guard to `if (!program || !program.open)
+// return false;` locally and re-running this file: every test above still
+// passes.
+//
+// The guard's actual job is narrower than "reject non-.exe files" - it is
+// "never treat a registry entry as launchable unless its `open` is really
+// callable". `!program.open` and `programIsExecutableEntry` (which requires
+// `typeof entry.open === 'function'`) diverge only on an entry whose `open`
+// is truthy but not a function, which nothing programsInDir('') can
+// currently produce - every built-in comes from PROGRAM_LAUNCHERS (a real
+// closure or absent) and every VFS entry comes from programVfsEntry (always
+// a real closure). Overriding programsInDir directly, bypassing that
+// production shape, is what actually pins the guard down: with the old
+// `!program.open` check this throws `program.open is not a function` from
+// `program.open({ cwd: '' })` on line after the guard, instead of returning
+// false.
+test('an entry with a truthy but non-callable open is rejected by the guard, not crashed into', () => {
+  const { ctx, calls } = desktop();
+  ctx.programsInDir = () => [{ name: 'WEIRD.exe', open: 'not-callable', aliases: [] }];
+  assert.strictEqual(ctx.openSystemFile('WEIRD.exe'), false);
+  assert.deepStrictEqual(calls, []);
+});

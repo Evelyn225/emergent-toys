@@ -41,7 +41,10 @@ function detectLang(fname) {
            json:'json',
            md:'md', markdown:'md',
            py:'py',
-           script:'script' }[ext] || 'txt';
+           // A .exe IS a script - that is the whole point of phase 6's .exe
+           // path. The script rules below already exist; nothing but this
+           // mapping was missing.
+           exe:'script', script:'script' }[ext] || 'txt';
 }
 
 const LANG_LABELS = { js:'JavaScript', html:'HTML', css:'CSS', json:'JSON', md:'Markdown', py:'Python', script:'.script', txt:'Plain Text' };
@@ -146,6 +149,48 @@ function highlight(text, lang) {
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
+// Which of NOTEPAD's two views a file gets.
+//
+// The discriminator is PROGRAM_LAUNCHERS membership rather than the .exe
+// extension. A system binary genuinely has no source to show, so a
+// disassembly view is honest for it. A script the user wrote thirty seconds
+// ago does have one, and showing invented bytecode instead would be the same
+// species of lie phases 5 and 5b existed to delete.
+function notepadRouteFor(filename) {
+  const name = String(filename || '');
+  if (!/\.exe$/i.test(name)) return 'editor';
+  return programIsSystemBinary(name) ? 'decompiler' : 'editor';
+}
+
+// Save (and Save As - writeAndSync is the single funnel both go through)
+// naming one of the eight system binaries would silently replace it with
+// whatever the open document holds. Before phase 6 that just created a
+// stray file the player could delete to recover; now the binary IS the file
+// the decompiler reads, refreshSeededSystemBinaries only heals it on the
+// NEXT boot, and there is otherwise no way back until then. Refused here,
+// before the write happens, with the same "protected" language the DELETE
+// guard (os/daemon.js) already uses so a player learns one vocabulary for
+// this rule, not two.
+//
+// FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
+// split a path - so an earlier version of this guard checked the raw
+// argument and a path-qualified target ("C:\sleepOS\TERMINAL.exe",
+// "\TERMINAL.exe", "C:/sleepOS/TERMINAL.exe") sailed past it while
+// vfsWriteFile (which DOES split, via vfsSplitPath) still resolved it onto
+// the real root file. `dir` must be the SAME fallback directory writeAndSync
+// is about to pass to vfsWriteFile (`dir || currentDir`) - using any other
+// fallback would make this guard's resolution disagree with the write's,
+// which is exactly the class of bug being fixed. Splitting first and
+// checking `!dirName` (root only) is the same shape as the pre-existing
+// DELETE guard, isVisibleSystemPath (os/daemon.js) - a DOCS\TERMINAL.exe
+// is a different, legitimate file and must stay writable.
+function notepadGuardProtectedSave(fname, dir) {
+  const { dirName, fileName } = vfsSplitPath(fname, dir);
+  if (dirName || !programIsSystemBinary(fileName)) return false;
+  osAlert('Cannot save over ' + fileName + '.\n\nSystem files are protected.', 'Cannot Save', 'icon:error');
+  return true;
+}
+
 function openDecompilerView(filename) {
   const id = 'decompile-' + filename.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
@@ -154,7 +199,15 @@ function openDecompilerView(filename) {
   const mb   = document.getElementById('mb-' + id);
   body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
 
-  const content = getExeDecompilerContent(filename);
+  // Phase 6 seeded these as real files (os/fs-core.js), so the view renders
+  // the file rather than a parallel authored copy. The fallback covers a
+  // binary that is in the registry but not on disk - possible only if a seed
+  // and the launcher table disagree, which is worth showing rather than
+  // crashing on.
+  const stat = vfsStatSync(filename, '');
+  const content = stat && stat.kind === 'text'
+    ? String(vfsDirNodeSync(stat.dirName).files.get(stat.name) || '')
+    : getExeDecompilerContent(filename);
 
   // Read-only display with syntax highlighting (asm-like)
   const wrap = document.createElement('div');
@@ -555,13 +608,13 @@ function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
   const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
-  // Special handling for .exe files - decompiler view (read-only)
+  // Special handling for .exe files - decompiler view (read-only) for a
+  // system binary, plain editor for anything the user authored themselves.
   const normalizedName = (filename || '').toLowerCase();
-  const isExe = normalizedName.endsWith('.exe');
   const isDaemonCore = normalizedName === 'daemon.core';
   const isVoidTmp = normalizedName === 'void.tmp';
 
-  if (isExe && filename) {
+  if (filename && notepadRouteFor(filename) === 'decompiler') {
     return openDecompilerView(filename);
   }
   if (isDaemonCore) {
@@ -769,6 +822,7 @@ function openNotepad(filename, dirName, options) {
   // document that was never written is precisely the failure this phase exists
   // to kill.
   async function writeAndSync(fname, dir) {
+    if (notepadGuardProtectedSave(fname, dir || currentDir)) return false;
     let saved;
     try {
       saved = await vfsWriteFile(fname, ta.value, dir || currentDir);

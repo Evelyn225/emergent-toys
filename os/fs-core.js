@@ -128,6 +128,168 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
+// The eight system binaries, as real files.
+//
+// These were authored metadata rows in os/daemon.js with hardcoded sizes
+// ('4,096'), which since phase 4 has meant eight invented numbers sitting in
+// a DIR listing next to sizes measured off the superblock. Seeding them makes
+// the size measured like everything else and gives the decompiler view
+// something real to read - it stops being an overlay and becomes what it
+// claims to be.
+//
+// The listings are duplicated here rather than read from
+// getExeDecompilerContent (apps/notepad.js) because that file is manifest
+// position 27 and this one is 14: calling it at seed time would throw on
+// boot. os/fs-core.js is the source of the bytes; apps/notepad.js renders
+// whatever the file holds. Content here must stay byte-identical to
+// getExeDecompilerContent's loreMap entries - test/system-binaries.test.cjs
+// checks the shape, but nothing enforces the exact text except this comment
+// and care.
+//
+// Text rather than blob is forced by the data: the only blob seed path
+// (refreshSeededWallpaperLibrary) produces URL-backed entries with size 0,
+// which would put a 0 in DIR - a worse number than the fake 4,096, not a
+// better one.
+const SYSTEM_BINARY_SOURCES = {
+  'TERMINAL.exe': [
+    '; TERMINAL.exe - Disassembly v1.0',
+    'section .text',
+    '  PUSH soul_daemon',
+    '  CALL obsv.sys',
+    '  MOV  eax, [STDIN_HANDLE]',
+    '  CMP  eax, 0x00000000',
+    '  JE   void_fallback',
+    '  CALL parse_command',
+    '  JMP  main_loop',
+    'void_fallback:',
+    '  MOV  [VOID_PRESSURE], 0xFF',
+    '  RET',
+    '; NOTE: 3 subroutines unresolved',
+    '; CALL 0xDEAD???? - target unknown',
+  ].join('\n'),
+  'SYSMON.exe': [
+    '; SYSMON.exe - Disassembly',
+    'section .data',
+    '  soul_integrity  DD 0x57',
+    '  daemon_count    DD 0x07',
+    '  observer_ref    DD [CLASSIFIED]',
+    'section .text',
+    '  PUSH soul_integrity',
+    '  CALL read_corpus_metrics',
+    '  MOV  eax, [soul_integrity]',
+    '  SUB  eax, 0x01',
+    '  JLE  integrity_critical',
+    '  CALL update_display',
+    '  JMP  tick_loop',
+    'integrity_critical:',
+    '  CALL emit_warning',
+    '  PUSH 0xDEAD',
+    '  RET',
+  ].join('\n'),
+  'BROWSER.exe': [
+    '; BROWSER.exe - Disassembly',
+    'section .rodata',
+    '  home_url  DB "sleep://home", 0',
+    '  err_msg   DB "site blocked by void", 0',
+    'section .text',
+    '  MOV  esi, home_url',
+    '  CALL resolve_sleep_addr',
+    '  TEST eax, eax',
+    '  JZ   frame_blocked',
+    '  CALL render_page',
+    '  JMP  event_loop',
+    'frame_blocked:',
+    '  PUSH err_msg',
+    '  CALL show_error',
+    '  ; observer may intercept traffic here',
+    '  RET',
+  ].join('\n'),
+  'DEFRAG.exe': [
+    '; DEFRAG.exe - Disassembly',
+    'section .bss',
+    '  corpus_blocks RESB 640',
+    '  void_fragment DB [CANNOT RESOLVE]',
+    'section .text',
+    '  MOV  ecx, 0x280',
+    '  LEA  edi, [corpus_blocks]',
+    '  CALL scan_fragments',
+    '  MOV  eax, [void_fragment]',
+    '  CMP  eax, 0x00',
+    '  JNE  skip_void',
+    '  ; void_fragment cannot be moved',
+    '  ; it has always been here',
+    'skip_void:',
+    '  CALL compact_corpus',
+    '  JMP  defrag_loop',
+  ].join('\n'),
+  'NOTEPAD.exe': [
+    '; NOTEPAD.exe - Disassembly',
+    'section .data',
+    '  welcome_readme DB "WELCOME.README", 0',
+    '  null_text      DD 0x00',
+    'section .text',
+    '  MOV  esi, welcome_readme',
+    '  CALL fs_open_read',
+    '  TEST eax, eax',
+    '  JZ   open_blank',
+    '  CALL load_text_buffer',
+    '  JMP  editor_loop',
+    'open_blank:',
+    '  MOV  [text_buffer], null_text',
+    '  CALL init_editor',
+    '  RET',
+  ].join('\n'),
+  'EXPLORER.exe': [
+    '; EXPLORER.exe - Disassembly',
+    'section .data',
+    '  root_path DB "C:\\sleepOS\\", 0',
+    '  sys_files DD 9',
+    'section .text',
+    '  PUSH root_path',
+    '  CALL enumerate_fs',
+    '  MOV  ecx, sys_files',
+    '  CALL add_system_entries',
+    '  ; 1 entry cannot be enumerated',
+    '  ; see: ?????.exe',
+    '  CALL render_icon_grid',
+    '  JMP  window_loop',
+  ].join('\n'),
+  'CALC.exe': [
+    '; CALC.exe - Disassembly',
+    'section .data',
+    '  display_buf DB 32 dup(0)',
+    '  soul_pi     DQ 3.14159265358979',
+    'section .text',
+    '  MOV  eax, 0x00',
+    '  MOV  [accumulator], eax',
+    '  CALL init_display',
+    '  JMP  calc_loop',
+    'calc_loop:',
+    '  CALL wait_keypress',
+    '  CALL eval_operation',
+    '  PUSH [accumulator]',
+    '  CALL update_display',
+    '  JMP  calc_loop',
+    '; NOTE: division by zero returns VOID',
+  ].join('\n'),
+  'REGEDIT.exe': [
+    '; REGEDIT.exe - Disassembly',
+    'section .data',
+    '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
+    '  soul_key  DB "SOUL\\Metrics", 0',
+    'section .text',
+    '  PUSH hive_root',
+    '  CALL open_registry_hive',
+    '  MOV  esi, soul_key',
+    '  CALL reg_open_key',
+    '  CALL enumerate_values',
+    '  ; WARNING: OBSERVER_COUNT is classified',
+    '  ; ACCESS DENIED for key VOID\\',
+    '  CALL render_tree',
+    '  JMP  edit_loop',
+  ].join('\n'),
+};
+
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
 // nothing is persisted, and re-applies the DOCS subtree on every boot.
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
@@ -597,9 +759,48 @@ function vfsSeedTree() {
         'print [red] The control loop goes silent.',
         'exit $status',
       ].join('\n')],
+      ['HELLO.exe', [
+        '# HELLO.exe - a worked example.',
+        '#',
+        '# Run it:            HELLO.exe',
+        '# Pipe it:           HELLO.exe | grep GREET',
+        '# Redirect it:       HELLO.exe | grep GREET > DOCS\\out.txt',
+        '#',
+        '# Everything printed goes to stdout, which is what a pipe reads.',
+        '',
+        'SET NAME operator',
+        'PRINT GREET: hello, $NAME',
+        'PRINT GREET: this line came from a real process',
+        'PRINT NOTE: edit this file - your changes stick',
+        '',
+        '# Read a file, transform it, write the result.',
+        'SET SRC DOCS\\README.txt',
+        'IF NOT EXISTS $SRC GOTO done',
+        'PRINT NOTE: $SRC is present',
+        ':done',
+        'EXIT 0',
+      ].join('\n')],
+      ['RUNAWAY.exe', [
+        '# RUNAWAY.exe - an unapologetic infinite loop.',
+        '#',
+        '# Spawned from the terminal it runs in a Worker, so the OS stays smooth',
+        '# while it burns. Open SYSMON and watch CPU pin, drag a window to prove',
+        '# nothing is frozen, then: KILL <pid>',
+        '#',
+        '# RUN RUNAWAY.exe would run it on the main thread instead, where the',
+        '# 10000-instruction cap stops it. That difference is the point.',
+        '',
+        'SET N 0',
+        ':spin',
+        'INC N',
+        'GOTO spin',
+      ].join('\n')],
     ]),
   }]]),
   };
+  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
+    seed.files.set(name, SYSTEM_BINARY_SOURCES[name]);
+  });
   seed.dirs.add('DESKTOP');
   if (!seed.subdirs.has('DESKTOP')) {
     seed.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });

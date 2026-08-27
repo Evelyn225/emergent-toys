@@ -50,11 +50,69 @@ function refreshSeededDocs() {
   docs.blobs = docs.blobs || new Map();
   docs.subdirs = docs.subdirs || new Map();
   Object.entries(SEEDED_DOCS_DATA.files || {}).forEach(([name, value]) => {
+    // Two kinds of thing, two policies. Reference text is regenerated every
+    // boot, so a mangled README self-heals - that is what the note above this
+    // function has always meant. A seeded program is fill-if-absent: the demo
+    // scripts exist to be edited, and overwriting them would have destroyed
+    // every edit at the next reload with no message. Delete one and it comes
+    // back fresh.
+    //
+    // Deliberately a bare regex, not programIsSpawnableExe (os/programs.js),
+    // even though the two agree for every name that can reach this loop
+    // today (it only ever iterates SEEDED_DOCS_DATA.files' own keys - the
+    // demo README/HELLO.exe/RUNAWAY.exe seed set - none of which is one of
+    // the eight system binary names, so programIsSpawnableExe's extra
+    // "and it's not a system binary" clause never fires here). The two
+    // predicates answer different questions: programIsSpawnableExe asks
+    // whether a root-level name is launchable, keyed off PROGRAM_LAUNCHERS;
+    // this asks whether a DOCS seed entry is fill-if-absent or heal-every-
+    // boot, and has nothing to do with what's launchable. Swapping in the
+    // canonical predicate would couple this file's persistence policy to
+    // os/programs.js's launcher table, so a future PROGRAM_LAUNCHERS entry
+    // that happened to collide with a seed demo script's name would flip
+    // that script from fill-if-absent to silently overwritten every boot,
+    // discarding a player's edits - a change nobody editing os/programs.js
+    // would have reason to expect. Keeping this predicate local avoids that
+    // action-at-a-distance.
+    if (/\.exe$/i.test(name) && docs.files.has(name)) return;
     docs.files.set(name, value);
   });
   Object.entries(SEEDED_DOCS_DATA.subdirs || {}).forEach(([name, value]) => {
     docs.dirs.add(name);
     docs.subdirs.set(name, _desDir(value));
+  });
+}
+
+// The eight system binaries (SYSTEM_BINARY_SOURCES, os/fs-core.js), restored
+// on every boot for a user whose root already had content. vfsBootMount's
+// seed callback above only runs `if (!root.dirs.size && !root.files.size)` -
+// a completely empty root - so it never fires for anyone who has booted
+// sleepOS before, meaning phase 6's seeding alone dropped all eight binaries
+// out of DIR for every returning user the moment they next loaded the OS.
+//
+// This HEALS rather than fill-if-absent, the same policy refreshSeededDocs
+// already applies to README.txt and the rest of DOCS: whatever a player did
+// to the content, this restores it to SYSTEM_BINARY_SOURCES on the next boot.
+// That is deliberately NOT the DOCS-vs-programs distinction it looks like at
+// first glance - "docs heal, programs do not" was about the demo .exe/.script
+// files a player is meant to author and have survive (HELLO.exe and friends,
+// PROGRAM_LAUNCHERS has no entry for those, so programIsSystemBinary is
+// false and this function never touches them). A system binary is not one of
+// those: its NOTEPAD view is read-only by design, so there is no legitimate
+// edit for this function to protect, only corruption to repair - a write
+// that reached one at all had to go around a guard (apps/notepad.js's
+// writeAndSync, apps/terminal.js's writePipelineOutput) that exists
+// specifically to stop that. Healing here is the backstop for whatever gets
+// through anyway. Mutates the live tree directly with no queued commit op,
+// the same as refreshSeededDocs and for the same reason: this function runs
+// again on every future boot, so a repair that is never durably persisted to
+// IndexedDB still reappears the next time it is needed.
+function refreshSeededSystemBinaries() {
+  const tree = vfsGetTree();
+  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
+    if (tree.files.get(name) !== SYSTEM_BINARY_SOURCES[name]) {
+      tree.files.set(name, SYSTEM_BINARY_SOURCES[name]);
+    }
   });
 }
 
@@ -308,6 +366,7 @@ async function vfsBootMount() {
     },
   });
   refreshSeededDocs();
+  refreshSeededSystemBinaries();
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);

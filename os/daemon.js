@@ -1,14 +1,18 @@
 // Daemon story state and sync
 const DAEMON_STORY_KEY = 'sleepOS-daemon-story';
+// Which programs exist at the root. Size and date used to live here as
+// authored constants; phase 6 seeded these as real files (os/fs-core.js), so
+// DIR measures them off the superblock like everything else. See
+// test/no-authored-exe-size.test.cjs.
 const ROOT_SYSTEM_FILE_META = [
-  { name: 'TERMINAL.exe', size: '4,096', date: '11/13/2024  10:31' },
-  { name: 'SYSMON.exe', size: '8,192', date: '11/13/2024  10:31' },
-  { name: 'NOTEPAD.exe', size: '4,096', date: '11/13/2024  10:31' },
-  { name: 'BROWSER.exe', size: '8,192', date: '11/13/2024  10:31' },
-  { name: 'DEFRAG.exe', size: '8,192', date: '11/13/2024  10:31' },
-  { name: 'CALC.exe', size: '4,096', date: '11/13/2024  10:31' },
-  { name: 'REGEDIT.exe', size: '8,192', date: '11/13/2024  10:31' },
-  { name: 'EXPLORER.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'TERMINAL.exe' },
+  { name: 'SYSMON.exe' },
+  { name: 'NOTEPAD.exe' },
+  { name: 'BROWSER.exe' },
+  { name: 'DEFRAG.exe' },
+  { name: 'CALC.exe' },
+  { name: 'REGEDIT.exe' },
+  { name: 'EXPLORER.exe' },
 ];
 const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE', 'DESKTOP']);
 const STORY_FILE_PATHS = {
@@ -962,11 +966,12 @@ function isVisibleSystemPath(path, options) {
   return !dirName && isVisibleRootSystemFile(fileName, options);
 }
 
-function getTerminalRootSystemEntries(options) {
-  const opts = options || {};
-  const entries = ROOT_SYSTEM_FILE_META
-    .filter(entry => opts.includeExplorer !== false || entry.name !== 'EXPLORER.exe')
-    .map(entry => ({ ...entry }));
+// Only the story pseudo-files now. The eight real binaries come out of
+// vfsListSync in buildDirLines like any other file. void.tmp, daemon.core and
+// ?????.exe stay here because their existence is conditional on story state
+// and a real file cannot be conditionally absent.
+function getTerminalRootSystemEntries() {
+  const entries = [];
   if (!daemonStory.endingReached) entries.push({ name: 'void.tmp', size: '0', date: '11/13/2024  03:17' });
   entries.push({ name: 'daemon.core', size: '??', date: '11/13/2024  ??:??' });
   entries.push({ name: '?????.exe', size: '??', date: '11/13/2024  ??:??' });

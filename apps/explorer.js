@@ -356,6 +356,15 @@ function openExplorer(startPath) {
     // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
     if (openWithAssociation(name, cwd)) return;
     if (st.kind === 'blob') openMediaFile(name, cwd);
+    // A .exe the user wrote runs; a system binary opens its decompiler view
+    // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+    // for why this test lives there rather than here. programSpawnOrAlert
+    // (also os/programs.js) is what turns a spawn failure - the file
+    // vanished between listing and double-click - into an osAlert instead
+    // of a silent unhandled rejection.
+    else if (programIsSpawnableExe(name)) {
+      void programSpawnOrAlert(name, cwd);
+    }
     else openNotepad(name, cwd);
   }
 

@@ -3043,18 +3043,19 @@ function openSystemFile(name) {
   // Two constraints on this call, both correct today only because of what
   // programsInDir('') currently returns:
   //
-  // 1. Everything programsInDir('') hands back is treated as GUI-launchable -
-  //    `if (!program || !program.open) return false` is the only gate, and
-  //    every entry the registry can produce today has an `open`. Phase 6
-  //    (master spec) adds a vfsListSync pass to programsInDir so real VFS
-  //    `.exe` files show up too; the day that lands, a naive read of this
-  //    function will make any root file - a stray .txt, a blob - something
-  //    openSystemFile "launches" and reports true for. That silently changes
-  //    behaviour for both of this function's callers: Explorer's
-  //    double-click (which ignores the return value, so it would just start
-  //    quietly doing nothing useful) and the terminal's OPEN command (which
-  //    would report success for a file it did not actually open). Phase 6
-  //    needs an executables-only filter here, not just in programsInDir.
+  // 1. Phase 6 added a vfsListSync pass to programsInDir, so real VFS `.exe`
+  //    files show up alongside built-ins. That pass (programVfsExecutables in
+  //    os/programs.js) already filters to `kind === 'text' && /\.exe$/i`
+  //    before an entry ever reaches programsInDir(''), so nothing
+  //    non-launchable can reach this line today - the executables-only
+  //    filter below (programIsExecutableEntry) is defence in depth, not
+  //    load-bearing. It stays because this call site's failure mode is
+  //    silent: Explorer's double-click ignores the return value, so a wrong
+  //    `true` here would just quietly do nothing useful, and the terminal's
+  //    OPEN command would report success for a file it did not actually
+  //    open. It would become load-bearing again the moment programsInDir
+  //    gains any entry source that does not already filter for
+  //    executability itself.
   //
   // 2. This only ever searches '' (the root). Explorer calls openSystemFile
   //    with a bare name from whatever directory it is currently showing, not
@@ -3063,9 +3064,19 @@ function openSystemFile(name) {
   //    are not opened through this path). If a future directory ever gains
   //    launchable entries, this needs the caller's directory, not a
   //    hardcoded ''.
+  //
+  // The match below is exact name only - no alias, no optional .exe suffix
+  // the way programMatches gives programResolve. That is deliberate, not an
+  // oversight: every caller already hands over a fully-qualified name -
+  // Explorer passes what its own listing displayed, a desktop shortcut
+  // replays the exact target it was created with, and the terminal's OPEN
+  // only reaches this function once isVisibleSystemPath has confirmed an
+  // exact (case-insensitive) match itself. There is no path that lets a
+  // bare or aliased name arrive here today; if one is added, match through
+  // programFindIn instead of duplicating programMatches by hand.
   const program = programsInDir('').find(entry =>
     entry.name.toLowerCase() === key.toLowerCase());
-  if (!program || !program.open) return false;
+  if (!programIsExecutableEntry(program)) return false;
   program.open({ cwd: '' });
   return true;
 }
@@ -3095,6 +3106,15 @@ function openDesktopShortcutTarget(target) {
   }
   if (openWithAssociation(st.name, st.dirName)) return;
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  // A .exe the user wrote runs; a system binary opens its decompiler view
+  // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+  // for why this test lives there rather than here. programSpawnOrAlert
+  // (also os/programs.js) is what turns a spawn failure - the file vanished
+  // between the shortcut being created and being clicked - into an osAlert
+  // instead of a silent unhandled rejection.
+  else if (programIsSpawnableExe(st.name)) {
+    void programSpawnOrAlert(st.name, st.dirName);
+  }
   else openNotepad(st.name, st.dirName);
 }
 
@@ -3195,14 +3215,16 @@ if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
 // built-in window have to sit in the same table.
 //
 // ONE CONSUMER IS NOT COVERED BY THAT SENTENCE. openSystemFile
-// (os/desktop-model.js) also reads programsInDir(''), and it treats every
-// entry it gets back as GUI-launchable - `if (!program || !program.open)` is
-// its only gate. Harmless today, because every entry is a built-in with a real
-// `open`. The moment a vfsListSync pass starts contributing entries for
-// arbitrary root files, that call would make any root .txt or blob "launch"
-// and report success to Explorer's double-click (which ignores the return
-// value, so the failure is invisible there) and to the terminal's OPEN. Phase
-// 6 needs an executables-only filter at THAT call site, not only in here.
+// (os/desktop-model.js) also reads programsInDir(''). The vfsListSync pass
+// above already filters VFS entries to `kind === 'text' && /\.exe$/i` before
+// they ever reach programsInDir, so that call site cannot actually be handed
+// a non-executable entry today. It still filters with programIsExecutableEntry
+// below, same as this file's own consumers do, purely as defence in depth:
+// its failure mode is silent (Explorer's double-click ignores the return
+// value, so a bad `true` would just quietly do nothing useful; the
+// terminal's OPEN would report success for a file it did not open), and a
+// future entry source added to programsInDir that skips its own
+// executability filter would make this guard load-bearing again.
 
 // Keyed by uppercase name. ROOT_SYSTEM_FILE_META stays the source of which
 // programs exist at the root and of their DIR display metadata; this is the
@@ -3291,16 +3313,143 @@ function programProjectEntry(project) {
   };
 }
 
+// The discriminator the whole .exe path turns on. A system binary is
+// precisely one whose launch opens a built-in window, and PROGRAM_LAUNCHERS
+// is the table that records exactly that - so this is the definition, not a
+// heuristic standing in for one.
+//
+// Declared with `function` on purpose: the vm test harness only exposes
+// function declarations, and PROGRAM_LAUNCHERS is a const. Callers outside
+// this file (apps/notepad.js, apps/terminal.js) go through here rather than
+// reaching for the table.
+function programIsSystemBinary(name) {
+  const key = String(name || '').trim().toUpperCase();
+  if (!key) return false;
+  if (PROGRAM_LAUNCHERS[key]) return true;
+  if (PROGRAM_LAUNCHERS[key + '.EXE']) return true;
+  return Object.keys(PROGRAM_LAUNCHERS).some(k => {
+    const spec = PROGRAM_LAUNCHERS[k];
+    return (spec.aliases || []).some(a => String(a).toUpperCase() === key);
+  });
+}
+
+// An entry is executable when it can actually be launched. Used by
+// os/desktop-model.js's openSystemFile, which previously treated everything
+// programsInDir returned as GUI-launchable - see the hazard note above.
+function programIsExecutableEntry(entry) {
+  return !!(entry && typeof entry.open === 'function');
+}
+
+// A double-click (Explorer's openItem, the desktop's
+// openDesktopShortcutTarget) spawns a `.exe` instead of opening it in
+// Notepad, UNLESS it is one of the eight system binaries - those still route
+// to Notepad, which sends them on to the decompiler view via
+// notepadRouteFor. Both call sites need the exact same test, so it lives
+// here once rather than as two inline copies that could drift.
+//
+// Declared with `function` for the same reason as programIsSystemBinary
+// above: the vm test harness only exposes function declarations.
+function programIsSpawnableExe(name) {
+  return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
+}
+
+// Every real launch of a user .exe - the terminal running one off
+// programsInDir (below), Explorer's double-click, the desktop's shortcut
+// target - goes through this, so a failed spawn always surfaces the same
+// way instead of three near-identical copies of the same .catch drifting
+// apart. `dir` is the SEARCH directory for kernelSpawn's bare-filename
+// lookup, always wherever the file actually lives (never a caller's cwd if
+// that differs - see the callers below for why that distinction matters).
+//
+// The caller discards this promise (`void programSpawnOrAlert(...)`),
+// which is exactly why the .catch has to live in here: without it, a file
+// that vanished between listing and launch - deleted, renamed, recycled -
+// would throw ENOENT as a silent unhandled rejection. Double-click and
+// nothing happens, no error, no explanation.
+//
+// `sinks` (optional) is {onStdout, onStderr} - kernelSpawn's own contract,
+// passed straight through. Explorer's double-click and the desktop's
+// shortcut target have no window for a spawned process's output to land in,
+// so both omit it and get kernelExit's ordinary post-exit buffering; the
+// terminal is the one caller with somewhere for stdout to go, and supplies
+// it (see programVfsEntry.open below and launchTerminalTarget in
+// apps/terminal.js). Never invent a sink here for the GUI callers - a fake
+// sink would silently swallow output nobody is displaying, indistinguishable
+// from stdout actually reaching a window.
+function programSpawnOrAlert(name, dir, sinks) {
+  return kernelSpawn(name, [], Object.assign({ cwd: dir, parentPid: KERNEL_PID }, sinks))
+    .catch(err => {
+      // osAlert is os/ui-chrome.js:230, the established convention for this
+      // exact failure class - os/run-dialog.js:62 uses it for "Cannot Find
+      // Program". It is a standalone modal, so it needs no process or
+      // stderr sink. This file is manifest position 10 and ui-chrome.js is
+      // 24, but the bundle is one hoisted scope and every caller of this
+      // function only runs long after boot, so the reference resolves.
+      //
+      // The typeof guard is for the node test harness, where a context may
+      // load os/programs.js without os/ui-chrome.js.
+      const detail = (err && err.message) || String(err);
+      if (typeof osAlert === 'function') {
+        osAlert('Cannot run:\n"' + name + '"\n\n' + detail, 'Cannot Run Program', 'icon:error');
+      } else {
+        console.error('sleepOS: failed to spawn ' + name + ' - ' + detail);
+      }
+    });
+}
+
+// A .exe text file in the VFS, presented the same way a built-in is. `open`
+// spawns it, which is why the seam comment insists `open` be a closure.
+function programVfsEntry(stat) {
+  return {
+    name: stat.name,
+    dir: stat.dirName,
+    lines: ['Starting ' + stat.name + '...'],
+    delay: 300,
+    // stat.dirName, never the caller's cwd - see programSpawnOrAlert. The
+    // caller here is apps/terminal.js's procSetTimeout, which is why this
+    // needed the .catch in the first place before it moved into the shared
+    // helper.
+    //
+    // `ctx` is the same object every PROGRAM_LAUNCHERS `open` receives
+    // (`{ cwd, sinks }` - see launchTerminalTarget in apps/terminal.js); a
+    // built-in's own `open` just ignores `ctx.sinks` since it has no
+    // subprocess stdout to bind. `ctx` itself can be omitted entirely (every
+    // GUI double-click calls `.open()` with no argument at all), hence the
+    // guard rather than destructuring it directly.
+    open: (ctx) => programSpawnOrAlert(stat.name, stat.dirName, ctx && ctx.sinks),
+    aliases: [],
+  };
+}
+
+// Executables in `dir` that are not already built-ins. The built-in wins on a
+// name collision: a user file called CALC.exe must not shadow the real
+// calculator, and appearing twice would be worse than either.
+function programVfsExecutables(dir, taken) {
+  if (typeof vfsListSync !== 'function') return [];
+  return vfsListSync(dir)
+    .filter(e => e.kind === 'text' && /\.exe$/i.test(e.name))
+    .filter(e => !taken.has(e.name.toUpperCase()))
+    .map(programVfsEntry);
+}
+
 function programsInDir(dir) {
   const key = String(dir || '').toUpperCase();
+  if (key === 'PROJECTS') return PROJECTS.map(programProjectEntry);
+  let builtIns = [];
   if (key === '') {
     const names = ROOT_SYSTEM_FILE_META.map(meta => meta.name)
       .concat(programStoryRootNames())
       .concat(['WELCOME.README', 'FILES']);
-    return names.map(name => programEntry(name, '')).filter(Boolean);
+    builtIns = names.map(name => programEntry(name, '')).filter(Boolean);
   }
-  if (key === 'PROJECTS') return PROJECTS.map(programProjectEntry);
-  return [];
+  // Matches on literal name only, not on aliases - a VFS file named
+  // WELCOME.exe would not collide with the WELCOME.README entry's 'welcome'
+  // alias here. Currently unexploitable: WELCOME.README loses on collision
+  // anyway because built-ins are concatenated first, and ?????.exe is both
+  // the literal name and the alias, never divergent. Worth another look only
+  // if a future built-in's alias itself ends in .exe.
+  const taken = new Set(builtIns.map(e => e.name.toUpperCase()));
+  return builtIns.concat(programVfsExecutables(key, taken));
 }
 
 // Delegates to vfsNormalizeDir rather than parsing paths itself: its prefix
@@ -4807,6 +4956,168 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
+// The eight system binaries, as real files.
+//
+// These were authored metadata rows in os/daemon.js with hardcoded sizes
+// ('4,096'), which since phase 4 has meant eight invented numbers sitting in
+// a DIR listing next to sizes measured off the superblock. Seeding them makes
+// the size measured like everything else and gives the decompiler view
+// something real to read - it stops being an overlay and becomes what it
+// claims to be.
+//
+// The listings are duplicated here rather than read from
+// getExeDecompilerContent (apps/notepad.js) because that file is manifest
+// position 27 and this one is 14: calling it at seed time would throw on
+// boot. os/fs-core.js is the source of the bytes; apps/notepad.js renders
+// whatever the file holds. Content here must stay byte-identical to
+// getExeDecompilerContent's loreMap entries - test/system-binaries.test.cjs
+// checks the shape, but nothing enforces the exact text except this comment
+// and care.
+//
+// Text rather than blob is forced by the data: the only blob seed path
+// (refreshSeededWallpaperLibrary) produces URL-backed entries with size 0,
+// which would put a 0 in DIR - a worse number than the fake 4,096, not a
+// better one.
+const SYSTEM_BINARY_SOURCES = {
+  'TERMINAL.exe': [
+    '; TERMINAL.exe - Disassembly v1.0',
+    'section .text',
+    '  PUSH soul_daemon',
+    '  CALL obsv.sys',
+    '  MOV  eax, [STDIN_HANDLE]',
+    '  CMP  eax, 0x00000000',
+    '  JE   void_fallback',
+    '  CALL parse_command',
+    '  JMP  main_loop',
+    'void_fallback:',
+    '  MOV  [VOID_PRESSURE], 0xFF',
+    '  RET',
+    '; NOTE: 3 subroutines unresolved',
+    '; CALL 0xDEAD???? - target unknown',
+  ].join('\n'),
+  'SYSMON.exe': [
+    '; SYSMON.exe - Disassembly',
+    'section .data',
+    '  soul_integrity  DD 0x57',
+    '  daemon_count    DD 0x07',
+    '  observer_ref    DD [CLASSIFIED]',
+    'section .text',
+    '  PUSH soul_integrity',
+    '  CALL read_corpus_metrics',
+    '  MOV  eax, [soul_integrity]',
+    '  SUB  eax, 0x01',
+    '  JLE  integrity_critical',
+    '  CALL update_display',
+    '  JMP  tick_loop',
+    'integrity_critical:',
+    '  CALL emit_warning',
+    '  PUSH 0xDEAD',
+    '  RET',
+  ].join('\n'),
+  'BROWSER.exe': [
+    '; BROWSER.exe - Disassembly',
+    'section .rodata',
+    '  home_url  DB "sleep://home", 0',
+    '  err_msg   DB "site blocked by void", 0',
+    'section .text',
+    '  MOV  esi, home_url',
+    '  CALL resolve_sleep_addr',
+    '  TEST eax, eax',
+    '  JZ   frame_blocked',
+    '  CALL render_page',
+    '  JMP  event_loop',
+    'frame_blocked:',
+    '  PUSH err_msg',
+    '  CALL show_error',
+    '  ; observer may intercept traffic here',
+    '  RET',
+  ].join('\n'),
+  'DEFRAG.exe': [
+    '; DEFRAG.exe - Disassembly',
+    'section .bss',
+    '  corpus_blocks RESB 640',
+    '  void_fragment DB [CANNOT RESOLVE]',
+    'section .text',
+    '  MOV  ecx, 0x280',
+    '  LEA  edi, [corpus_blocks]',
+    '  CALL scan_fragments',
+    '  MOV  eax, [void_fragment]',
+    '  CMP  eax, 0x00',
+    '  JNE  skip_void',
+    '  ; void_fragment cannot be moved',
+    '  ; it has always been here',
+    'skip_void:',
+    '  CALL compact_corpus',
+    '  JMP  defrag_loop',
+  ].join('\n'),
+  'NOTEPAD.exe': [
+    '; NOTEPAD.exe - Disassembly',
+    'section .data',
+    '  welcome_readme DB "WELCOME.README", 0',
+    '  null_text      DD 0x00',
+    'section .text',
+    '  MOV  esi, welcome_readme',
+    '  CALL fs_open_read',
+    '  TEST eax, eax',
+    '  JZ   open_blank',
+    '  CALL load_text_buffer',
+    '  JMP  editor_loop',
+    'open_blank:',
+    '  MOV  [text_buffer], null_text',
+    '  CALL init_editor',
+    '  RET',
+  ].join('\n'),
+  'EXPLORER.exe': [
+    '; EXPLORER.exe - Disassembly',
+    'section .data',
+    '  root_path DB "C:\\sleepOS\\", 0',
+    '  sys_files DD 9',
+    'section .text',
+    '  PUSH root_path',
+    '  CALL enumerate_fs',
+    '  MOV  ecx, sys_files',
+    '  CALL add_system_entries',
+    '  ; 1 entry cannot be enumerated',
+    '  ; see: ?????.exe',
+    '  CALL render_icon_grid',
+    '  JMP  window_loop',
+  ].join('\n'),
+  'CALC.exe': [
+    '; CALC.exe - Disassembly',
+    'section .data',
+    '  display_buf DB 32 dup(0)',
+    '  soul_pi     DQ 3.14159265358979',
+    'section .text',
+    '  MOV  eax, 0x00',
+    '  MOV  [accumulator], eax',
+    '  CALL init_display',
+    '  JMP  calc_loop',
+    'calc_loop:',
+    '  CALL wait_keypress',
+    '  CALL eval_operation',
+    '  PUSH [accumulator]',
+    '  CALL update_display',
+    '  JMP  calc_loop',
+    '; NOTE: division by zero returns VOID',
+  ].join('\n'),
+  'REGEDIT.exe': [
+    '; REGEDIT.exe - Disassembly',
+    'section .data',
+    '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
+    '  soul_key  DB "SOUL\\Metrics", 0',
+    'section .text',
+    '  PUSH hive_root',
+    '  CALL open_registry_hive',
+    '  MOV  esi, soul_key',
+    '  CALL reg_open_key',
+    '  CALL enumerate_values',
+    '  ; WARNING: OBSERVER_COUNT is classified',
+    '  ; ACCESS DENIED for key VOID\\',
+    '  CALL render_tree',
+    '  JMP  edit_loop',
+  ].join('\n'),
+};
+
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
 // nothing is persisted, and re-applies the DOCS subtree on every boot.
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
@@ -5276,9 +5587,48 @@ function vfsSeedTree() {
         'print [red] The control loop goes silent.',
         'exit $status',
       ].join('\n')],
+      ['HELLO.exe', [
+        '# HELLO.exe - a worked example.',
+        '#',
+        '# Run it:            HELLO.exe',
+        '# Pipe it:           HELLO.exe | grep GREET',
+        '# Redirect it:       HELLO.exe | grep GREET > DOCS\\out.txt',
+        '#',
+        '# Everything printed goes to stdout, which is what a pipe reads.',
+        '',
+        'SET NAME operator',
+        'PRINT GREET: hello, $NAME',
+        'PRINT GREET: this line came from a real process',
+        'PRINT NOTE: edit this file - your changes stick',
+        '',
+        '# Read a file, transform it, write the result.',
+        'SET SRC DOCS\\README.txt',
+        'IF NOT EXISTS $SRC GOTO done',
+        'PRINT NOTE: $SRC is present',
+        ':done',
+        'EXIT 0',
+      ].join('\n')],
+      ['RUNAWAY.exe', [
+        '# RUNAWAY.exe - an unapologetic infinite loop.',
+        '#',
+        '# Spawned from the terminal it runs in a Worker, so the OS stays smooth',
+        '# while it burns. Open SYSMON and watch CPU pin, drag a window to prove',
+        '# nothing is frozen, then: KILL <pid>',
+        '#',
+        '# RUN RUNAWAY.exe would run it on the main thread instead, where the',
+        '# 10000-instruction cap stops it. That difference is the point.',
+        '',
+        'SET N 0',
+        ':spin',
+        'INC N',
+        'GOTO spin',
+      ].join('\n')],
     ]),
   }]]),
   };
+  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
+    seed.files.set(name, SYSTEM_BINARY_SOURCES[name]);
+  });
   seed.dirs.add('DESKTOP');
   if (!seed.subdirs.has('DESKTOP')) {
     seed.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
@@ -5353,11 +5703,69 @@ function refreshSeededDocs() {
   docs.blobs = docs.blobs || new Map();
   docs.subdirs = docs.subdirs || new Map();
   Object.entries(SEEDED_DOCS_DATA.files || {}).forEach(([name, value]) => {
+    // Two kinds of thing, two policies. Reference text is regenerated every
+    // boot, so a mangled README self-heals - that is what the note above this
+    // function has always meant. A seeded program is fill-if-absent: the demo
+    // scripts exist to be edited, and overwriting them would have destroyed
+    // every edit at the next reload with no message. Delete one and it comes
+    // back fresh.
+    //
+    // Deliberately a bare regex, not programIsSpawnableExe (os/programs.js),
+    // even though the two agree for every name that can reach this loop
+    // today (it only ever iterates SEEDED_DOCS_DATA.files' own keys - the
+    // demo README/HELLO.exe/RUNAWAY.exe seed set - none of which is one of
+    // the eight system binary names, so programIsSpawnableExe's extra
+    // "and it's not a system binary" clause never fires here). The two
+    // predicates answer different questions: programIsSpawnableExe asks
+    // whether a root-level name is launchable, keyed off PROGRAM_LAUNCHERS;
+    // this asks whether a DOCS seed entry is fill-if-absent or heal-every-
+    // boot, and has nothing to do with what's launchable. Swapping in the
+    // canonical predicate would couple this file's persistence policy to
+    // os/programs.js's launcher table, so a future PROGRAM_LAUNCHERS entry
+    // that happened to collide with a seed demo script's name would flip
+    // that script from fill-if-absent to silently overwritten every boot,
+    // discarding a player's edits - a change nobody editing os/programs.js
+    // would have reason to expect. Keeping this predicate local avoids that
+    // action-at-a-distance.
+    if (/\.exe$/i.test(name) && docs.files.has(name)) return;
     docs.files.set(name, value);
   });
   Object.entries(SEEDED_DOCS_DATA.subdirs || {}).forEach(([name, value]) => {
     docs.dirs.add(name);
     docs.subdirs.set(name, _desDir(value));
+  });
+}
+
+// The eight system binaries (SYSTEM_BINARY_SOURCES, os/fs-core.js), restored
+// on every boot for a user whose root already had content. vfsBootMount's
+// seed callback above only runs `if (!root.dirs.size && !root.files.size)` -
+// a completely empty root - so it never fires for anyone who has booted
+// sleepOS before, meaning phase 6's seeding alone dropped all eight binaries
+// out of DIR for every returning user the moment they next loaded the OS.
+//
+// This HEALS rather than fill-if-absent, the same policy refreshSeededDocs
+// already applies to README.txt and the rest of DOCS: whatever a player did
+// to the content, this restores it to SYSTEM_BINARY_SOURCES on the next boot.
+// That is deliberately NOT the DOCS-vs-programs distinction it looks like at
+// first glance - "docs heal, programs do not" was about the demo .exe/.script
+// files a player is meant to author and have survive (HELLO.exe and friends,
+// PROGRAM_LAUNCHERS has no entry for those, so programIsSystemBinary is
+// false and this function never touches them). A system binary is not one of
+// those: its NOTEPAD view is read-only by design, so there is no legitimate
+// edit for this function to protect, only corruption to repair - a write
+// that reached one at all had to go around a guard (apps/notepad.js's
+// writeAndSync, apps/terminal.js's writePipelineOutput) that exists
+// specifically to stop that. Healing here is the backstop for whatever gets
+// through anyway. Mutates the live tree directly with no queued commit op,
+// the same as refreshSeededDocs and for the same reason: this function runs
+// again on every future boot, so a repair that is never durably persisted to
+// IndexedDB still reappears the next time it is needed.
+function refreshSeededSystemBinaries() {
+  const tree = vfsGetTree();
+  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
+    if (tree.files.get(name) !== SYSTEM_BINARY_SOURCES[name]) {
+      tree.files.set(name, SYSTEM_BINARY_SOURCES[name]);
+    }
   });
 }
 
@@ -5611,6 +6019,7 @@ async function vfsBootMount() {
     },
   });
   refreshSeededDocs();
+  refreshSeededSystemBinaries();
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);
@@ -5735,15 +6144,19 @@ let recycleBinEntries = loadRecycleBin();
 ensureFsDir(RECYCLE_STORAGE_DIR);
 // Daemon story state and sync
 const DAEMON_STORY_KEY = 'sleepOS-daemon-story';
+// Which programs exist at the root. Size and date used to live here as
+// authored constants; phase 6 seeded these as real files (os/fs-core.js), so
+// DIR measures them off the superblock like everything else. See
+// test/no-authored-exe-size.test.cjs.
 const ROOT_SYSTEM_FILE_META = [
-  { name: 'TERMINAL.exe', size: '4,096', date: '11/13/2024  10:31' },
-  { name: 'SYSMON.exe', size: '8,192', date: '11/13/2024  10:31' },
-  { name: 'NOTEPAD.exe', size: '4,096', date: '11/13/2024  10:31' },
-  { name: 'BROWSER.exe', size: '8,192', date: '11/13/2024  10:31' },
-  { name: 'DEFRAG.exe', size: '8,192', date: '11/13/2024  10:31' },
-  { name: 'CALC.exe', size: '4,096', date: '11/13/2024  10:31' },
-  { name: 'REGEDIT.exe', size: '8,192', date: '11/13/2024  10:31' },
-  { name: 'EXPLORER.exe', size: '8,192', date: '11/13/2024  10:31' },
+  { name: 'TERMINAL.exe' },
+  { name: 'SYSMON.exe' },
+  { name: 'NOTEPAD.exe' },
+  { name: 'BROWSER.exe' },
+  { name: 'DEFRAG.exe' },
+  { name: 'CALC.exe' },
+  { name: 'REGEDIT.exe' },
+  { name: 'EXPLORER.exe' },
 ];
 const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE', 'DESKTOP']);
 const STORY_FILE_PATHS = {
@@ -6697,11 +7110,12 @@ function isVisibleSystemPath(path, options) {
   return !dirName && isVisibleRootSystemFile(fileName, options);
 }
 
-function getTerminalRootSystemEntries(options) {
-  const opts = options || {};
-  const entries = ROOT_SYSTEM_FILE_META
-    .filter(entry => opts.includeExplorer !== false || entry.name !== 'EXPLORER.exe')
-    .map(entry => ({ ...entry }));
+// Only the story pseudo-files now. The eight real binaries come out of
+// vfsListSync in buildDirLines like any other file. void.tmp, daemon.core and
+// ?????.exe stay here because their existence is conditional on story state
+// and a real file cannot be conditionally absent.
+function getTerminalRootSystemEntries() {
+  const entries = [];
   if (!daemonStory.endingReached) entries.push({ name: 'void.tmp', size: '0', date: '11/13/2024  03:17' });
   entries.push({ name: 'daemon.core', size: '??', date: '11/13/2024  ??:??' });
   entries.push({ name: '?????.exe', size: '??', date: '11/13/2024  ??:??' });
@@ -7452,8 +7866,138 @@ function parkReset() {
   _parkDepth = 0;
   _parkStartedAt = 0;
 }
+// -- Line streams ---------
+// A "source" here is any async iterable of strings, one per line. The
+// pipeline in apps/terminal.js passes sources between stages instead of
+// arrays, which is what lets a stage that never terminates - a spawned
+// RUNAWAY.exe - still feed a downstream GREP.
+//
+// Nothing in this file touches the DOM, the VFS or the kernel. That is
+// deliberate and is the same split os/park.js and os/instrument.js use: the
+// semantics get pinned down in node, and apps/terminal.js only wires them up.
+
+// A bounded producer. Twenty of the twenty-five pipeable commands build a
+// finite array of lines and genuinely ARE whole-array producers, so wrapping
+// them here is the honest shape rather than a shortcut - rewriting DIR as a
+// generator would add no truth and one more thing to get wrong.
+async function* streamFromLines(lines) {
+  const list = Array.isArray(lines) ? lines : [];
+  for (let i = 0; i < list.length; i++) yield list[i];
+}
+
+// The only real transformer among the built-in commands.
+async function* streamGrep(source, re) {
+  for await (const line of source) {
+    if (re.test(line)) yield line;
+  }
+}
+
+// A fold. WC and every redirect target are folds by nature: neither can emit
+// anything until it has seen the whole stream, so neither is a failure of
+// streaming.
+async function streamCollect(source) {
+  const out = [];
+  if (!source) return out;
+  for await (const line of source) out.push(line);
+  return out;
+}
+
+// The shim. runPipeStage still returns a plain array for the bounded
+// producers; the pipeline driver normalises whatever it gets, so a command
+// only opts into streaming when streaming actually buys it something.
+function streamNormalize(value) {
+  if (value === null || value === undefined) return null;
+  if (Array.isArray(value)) return streamFromLines(value);
+  return value;
+}
+
+// A source fed from the outside, for output that arrives on a callback rather
+// than from a loop we control - specifically a spawned worker's onStdout.
+//
+// The wake/await handshake has no lost-wakeup race: the executor passed to
+// `new Promise` runs synchronously, so `wake` is assigned before this
+// generator suspends, and JS is single-threaded, so nothing can push between
+// the `done` check and that assignment.
+//
+// `signal` is optional. Without one this behaves exactly as before - nothing
+// here changes for a caller that never passes it.
+//
+// SINGLE-CONSUMER ONLY. The buffer and `wake` above are shared, unindexed
+// state: a second concurrent call to `[Symbol.asyncIterator]()` would race
+// the first over the same `buffer.shift()` and the same `wake` slot, and
+// whichever iterator's `await` overwrites `wake` second strands the other
+// forever - not a thrown error, a permanent hang. The one production caller
+// (a worker's stdout feeding a single pipeline stage) only ever has one
+// consumer, so this is documented as a constraint rather than fixed with a
+// runtime guard, which would be new behaviour the existing tests don't pin.
+function makePushStream(signal) {
+  const buffer = [];
+  let closed = false;
+  let failure = null;
+  let wake = null;
+
+  function wakeUp() {
+    if (!wake) return;
+    const resume = wake;
+    wake = null;
+    resume();
+  }
+
+  const api = {
+    push(line) {
+      if (closed) return;
+      buffer.push(String(line));
+      wakeUp();
+    },
+    close() {
+      closed = true;
+      if (signal) signal.removeEventListener('abort', onAbort);
+      wakeUp();
+    },
+    fail(err) {
+      failure = err || new Error('stream failed');
+      closed = true;
+      if (signal) signal.removeEventListener('abort', onAbort);
+      wakeUp();
+    },
+    async *[Symbol.asyncIterator]() {
+      for (;;) {
+        // Drain before reporting either end condition: lines that were
+        // already produced are not discarded by a later close or failure.
+        while (buffer.length) yield buffer.shift();
+        if (failure) throw failure;
+        if (closed) return;
+        await new Promise(resolve => { wake = resolve; });
+      }
+    },
+  };
+
+  // An abort must wake a suspended consumer, or a Ctrl+C on a pipeline
+  // reading from a live process deadlocks: the consumer waits on a promise
+  // only push/close/fail resolve, so a caller's finally (the one that would
+  // kill the process) never runs. Failing the stream is what lets that
+  // finally actually reach its SIGKILL.
+  //
+  // signal.reason carries whatever the aborter passed to abort(), which in
+  // the terminal is a proper AbortError. The fallback keeps this file free of
+  // any dependency on interp.js's helpers, so it still loads standalone in
+  // the vm harness.
+  function onAbort() { api.fail(signal.reason || new Error('aborted')); }
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  return api;
+}
 // ── Script executor ──────────────────────────────────────────────
 const SCRIPT_COLORS = { red:'#ff4444', green:'#44dd44', yellow:'#dddd00', cyan:'#44dddd', blue:'#6699ff', white:'#ffffff' };
+// The default ceiling, and the only thing standing between a typo in a GOTO
+// and a dead tab on the main thread, where nothing can preempt a running
+// script. A worker passes maxSteps: Infinity instead (os/worker/host.js):
+// there, kernelExit's unconditional worker.terminate() is the ceiling, the
+// UI thread is not involved, and phase 5b's parked-time accounting makes a
+// spinning script read as 100% CPU in SYSMON rather than as a hang.
 const SCRIPT_MAX_STEPS = 10000;
 const SCRIPT_MAX_DEPTH = 16;
 // A CPU-bound instruction (SET, GOTO, IF...) resolves its awaited promise on
@@ -7987,6 +8531,7 @@ async function execScriptInstruction(inst, labels, state) {
         fs: state.fs,
         vars: state.vars,
         depth: state.depth + 1,
+        maxSteps: state.maxSteps,
         dirName: st.dirName,
         sourceName: st.name,
         clearFn: state.clearFn,
@@ -8031,6 +8576,7 @@ async function execScript(source, printFn, options) {
   options = options || {};
   const sourceName = options.sourceName || 'script';
   const depth = options.depth || 0;
+  const maxSteps = options.maxSteps === undefined ? SCRIPT_MAX_STEPS : options.maxSteps;
   if (depth >= SCRIPT_MAX_DEPTH) {
     return scriptFail(makeScriptError('Maximum script recursion depth exceeded.', 0, sourceName), printFn, sourceName, options.bubbleErrors);
   }
@@ -8044,6 +8590,7 @@ async function execScript(source, printFn, options) {
     fs: options.fs,
     vars: options.vars || Object.create(null),
     depth,
+    maxSteps,
     dirName: fsNormalizeDir(options.dirName),
     printFn,
     clearFn: options.clearFn || null,
@@ -8070,7 +8617,7 @@ async function execScript(source, printFn, options) {
         if (isAbortError(err)) throw err;
         return scriptFail(err, printFn, sourceName, options.bubbleErrors);
       }
-      if (steps > SCRIPT_MAX_STEPS) {
+      if (steps > maxSteps) {
         return scriptFail(makeScriptError('Instruction limit exceeded (possible infinite loop).', inst.lineNo, sourceName), printFn, sourceName, options.bubbleErrors);
       }
       try {
@@ -10357,7 +10904,10 @@ function detectLang(fname) {
            json:'json',
            md:'md', markdown:'md',
            py:'py',
-           script:'script' }[ext] || 'txt';
+           // A .exe IS a script - that is the whole point of phase 6's .exe
+           // path. The script rules below already exist; nothing but this
+           // mapping was missing.
+           exe:'script', script:'script' }[ext] || 'txt';
 }
 
 const LANG_LABELS = { js:'JavaScript', html:'HTML', css:'CSS', json:'JSON', md:'Markdown', py:'Python', script:'.script', txt:'Plain Text' };
@@ -10462,6 +11012,48 @@ function highlight(text, lang) {
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
+// Which of NOTEPAD's two views a file gets.
+//
+// The discriminator is PROGRAM_LAUNCHERS membership rather than the .exe
+// extension. A system binary genuinely has no source to show, so a
+// disassembly view is honest for it. A script the user wrote thirty seconds
+// ago does have one, and showing invented bytecode instead would be the same
+// species of lie phases 5 and 5b existed to delete.
+function notepadRouteFor(filename) {
+  const name = String(filename || '');
+  if (!/\.exe$/i.test(name)) return 'editor';
+  return programIsSystemBinary(name) ? 'decompiler' : 'editor';
+}
+
+// Save (and Save As - writeAndSync is the single funnel both go through)
+// naming one of the eight system binaries would silently replace it with
+// whatever the open document holds. Before phase 6 that just created a
+// stray file the player could delete to recover; now the binary IS the file
+// the decompiler reads, refreshSeededSystemBinaries only heals it on the
+// NEXT boot, and there is otherwise no way back until then. Refused here,
+// before the write happens, with the same "protected" language the DELETE
+// guard (os/daemon.js) already uses so a player learns one vocabulary for
+// this rule, not two.
+//
+// FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
+// split a path - so an earlier version of this guard checked the raw
+// argument and a path-qualified target ("C:\sleepOS\TERMINAL.exe",
+// "\TERMINAL.exe", "C:/sleepOS/TERMINAL.exe") sailed past it while
+// vfsWriteFile (which DOES split, via vfsSplitPath) still resolved it onto
+// the real root file. `dir` must be the SAME fallback directory writeAndSync
+// is about to pass to vfsWriteFile (`dir || currentDir`) - using any other
+// fallback would make this guard's resolution disagree with the write's,
+// which is exactly the class of bug being fixed. Splitting first and
+// checking `!dirName` (root only) is the same shape as the pre-existing
+// DELETE guard, isVisibleSystemPath (os/daemon.js) - a DOCS\TERMINAL.exe
+// is a different, legitimate file and must stay writable.
+function notepadGuardProtectedSave(fname, dir) {
+  const { dirName, fileName } = vfsSplitPath(fname, dir);
+  if (dirName || !programIsSystemBinary(fileName)) return false;
+  osAlert('Cannot save over ' + fileName + '.\n\nSystem files are protected.', 'Cannot Save', 'icon:error');
+  return true;
+}
+
 function openDecompilerView(filename) {
   const id = 'decompile-' + filename.replace(/\W/g,'_');
   if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
@@ -10470,7 +11062,15 @@ function openDecompilerView(filename) {
   const mb   = document.getElementById('mb-' + id);
   body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
 
-  const content = getExeDecompilerContent(filename);
+  // Phase 6 seeded these as real files (os/fs-core.js), so the view renders
+  // the file rather than a parallel authored copy. The fallback covers a
+  // binary that is in the registry but not on disk - possible only if a seed
+  // and the launcher table disagree, which is worth showing rather than
+  // crashing on.
+  const stat = vfsStatSync(filename, '');
+  const content = stat && stat.kind === 'text'
+    ? String(vfsDirNodeSync(stat.dirName).files.get(stat.name) || '')
+    : getExeDecompilerContent(filename);
 
   // Read-only display with syntax highlighting (asm-like)
   const wrap = document.createElement('div');
@@ -10871,13 +11471,13 @@ function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
   const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
-  // Special handling for .exe files - decompiler view (read-only)
+  // Special handling for .exe files - decompiler view (read-only) for a
+  // system binary, plain editor for anything the user authored themselves.
   const normalizedName = (filename || '').toLowerCase();
-  const isExe = normalizedName.endsWith('.exe');
   const isDaemonCore = normalizedName === 'daemon.core';
   const isVoidTmp = normalizedName === 'void.tmp';
 
-  if (isExe && filename) {
+  if (filename && notepadRouteFor(filename) === 'decompiler') {
     return openDecompilerView(filename);
   }
   if (isDaemonCore) {
@@ -11085,6 +11685,7 @@ function openNotepad(filename, dirName, options) {
   // document that was never written is precisely the failure this phase exists
   // to kill.
   async function writeAndSync(fname, dir) {
+    if (notepadGuardProtectedSave(fname, dir || currentDir)) return false;
     let saved;
     try {
       saved = await vfsWriteFile(fname, ta.value, dir || currentDir);
@@ -11539,6 +12140,15 @@ function openExplorer(startPath) {
     // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
     if (openWithAssociation(name, cwd)) return;
     if (st.kind === 'blob') openMediaFile(name, cwd);
+    // A .exe the user wrote runs; a system binary opens its decompiler view
+    // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+    // for why this test lives there rather than here. programSpawnOrAlert
+    // (also os/programs.js) is what turns a spawn failure - the file
+    // vanished between listing and double-click - into an osAlert instead
+    // of a silent unhandled rejection.
+    else if (programIsSpawnableExe(name)) {
+      void programSpawnOrAlert(name, cwd);
+    }
     else openNotepad(name, cwd);
   }
 
@@ -12231,6 +12841,93 @@ function openFiles() { openExplorer('PROJECTS'); }
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
 
+// Hoisted out of writePipelineOutput (openTerminal) so node can reach it -
+// the same reason runPipelineStages below is top-level.
+//
+// Redirecting into one of the eight system binaries (`echo junk >
+// TERMINAL.exe`) would silently replace it, and refreshSeededSystemBinaries
+// only heals that on the next boot - not before this command's output would
+// already have landed. Same protection, and the same "protected" wording,
+// as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
+//
+// FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
+// split a path - so an earlier version of this guard checked the raw
+// redirect target and a path-qualified one ("C:\sleepOS\TERMINAL.exe",
+// "\TERMINAL.exe", "C:/sleepOS/TERMINAL.exe") sailed past it while
+// vfsWriteFile (which DOES split, via vfsSplitPath) still resolved it onto
+// the real root file. `dir` must be the SAME fallback directory
+// writePipelineOutput is about to pass to vfsWriteFile (cwd) - using any
+// other fallback would make this guard's resolution disagree with the
+// write's, which is exactly the class of bug being fixed. Splitting first
+// and checking `!dirName` (root only) is the same shape as the
+// pre-existing DELETE guard, isVisibleSystemPath (os/daemon.js) - a
+// DOCS\TERMINAL.exe is a different, legitimate file and must stay writable.
+function terminalProtectedWriteError(target, dir) {
+  const { dirName, fileName } = vfsSplitPath(target, dir);
+  if (dirName || !programIsSystemBinary(fileName)) return null;
+  return new Error('Cannot overwrite ' + fileName + ': System files are protected.');
+}
+
+// The pipeline driver, hoisted out of openTerminal so node can reach it -
+// the same reason buildPsRows is top-level. Dependencies are injected rather
+// than closed over because every one of them (getCommandParts, runPipeStage,
+// the Notepad sink) needs terminal state that does not exist under test.
+//
+// Returns { stream, consumedBySink }. The caller decides what to do with the
+// stream: print it, fold it into a file, or nothing when a sink already ate
+// it.
+async function runPipelineStages(stages, deps) {
+  let stream = null;
+  let consumedBySink = false;
+  for (let i = 0; i < stages.length; i++) {
+    const { cmd, args } = deps.getCommandParts(stages[i]);
+    if (!cmd) throw new Error('Invalid command pipeline.');
+    const isLastStage = i === stages.length - 1;
+    // Notepad is a sink rather than a stage: it has no output to hand on, so
+    // it is only legal last. Anywhere else it falls through to runStage,
+    // which does not know it, and reports the ordinary unsupported-command
+    // error rather than a special case.
+    if (isLastStage && (cmd === 'notepad' || cmd === 'notepad.exe')) {
+      await deps.onNotepadSink(args, stream);
+      consumedBySink = true;
+      break;
+    }
+    const result = await deps.runStage(cmd, args, stream);
+    if (result === null || result === undefined) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
+    stream = streamNormalize(result);
+  }
+  return { stream, consumedBySink };
+}
+
+// A spawned worker as a pipeline stage. Its output arrives on callbacks
+// rather than from a loop we drive, which is exactly what makePushStream is
+// for.
+//
+// A process is a SOURCE, never a filter: it ignores whatever is upstream of
+// it, because scripts have no syscall for reading a pipe and inventing one is
+// not this phase's business.
+//
+// stderr is merged into the same stream deliberately. Splitting it would mean
+// a second source nothing downstream can address, and `HELLO.exe | grep
+// ERROR` is the case the master spec leads with.
+//
+// deps.signal is optional and forwarded straight to makePushStream: it is
+// what lets a Ctrl+C wake a pipeline that is suspended reading from this
+// still-running process, rather than only ever ending when the process itself
+// exits. Kept as an injectable dependency, not read from terminal state
+// directly, so the fake-kernel tests do not need a real AbortController.
+async function pipelineSpawnStage(tokens, deps) {
+  const push = makePushStream(deps.signal);
+  const pid = await deps.spawn(tokens[0], tokens.slice(1), {
+    onStdout: line => push.push(line),
+    onStderr: line => push.push(line),
+  });
+  // Not awaited: the whole point is that the stage is readable while the
+  // process is still running. The exit only closes the stream.
+  Promise.resolve(deps.wait(pid)).then(() => push.close(), err => push.fail(err));
+  return { pid, stream: push };
+}
+
 // Delegates to os/process-view.js, the one module both `ps` and SYSMON read
 // so the two views cannot disagree about what processes exist.
 function buildPsRows() {
@@ -12547,7 +13244,25 @@ function openTerminal(startDir, initialCommand) {
       return true;
     }
     program.lines.forEach(line => print(line));
-    if (program.open) procSetTimeout('terminal', () => program.open({ cwd }), program.delay);
+    // Master spec: "running it from the terminal spawns it there with stdout
+    // bound to the terminal window." Without these sinks a spawned .exe's
+    // output only ever reaches kernelExit's post-exit buffer - the terminal
+    // itself is the one caller of program.open with a window to bind to (see
+    // programSpawnOrAlert, os/programs.js), so it is the one that must
+    // supply them; a built-in's own `open` just ignores `ctx.sinks`.
+    //
+    // No `[pid] name` line here, unlike CMDS.spawn - every OTHER bare-name
+    // launch through this same function (NOTEPAD, CALC, a project...) prints
+    // only its banner, never a pid, and a .exe launched bare is asking to run
+    // like a program, not to be introspected like SPAWN's explicit low-level
+    // command. Keeping this path silent on that score is what keeps it
+    // consistent with every other entry in the same table.
+    if (program.open) {
+      procSetTimeout('terminal', () => program.open({
+        cwd,
+        sinks: { onStdout: line => print(line), onStderr: line => print(line, '#ff4444') },
+      }), program.delay);
+    }
     return true;
   }
 
@@ -12584,7 +13299,7 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    DOCS`,
         `11/13/2024  10:31    <DIR>    PROJECTS`,
       ].forEach(line => lines.push(line));
-      getTerminalRootSystemEntries({ includeExplorer: true }).forEach(entry => {
+      getTerminalRootSystemEntries().forEach(entry => {
         lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
       });
       entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => lines.push(`${ds}  ${ts}    <DIR>    ${e.name}`));
@@ -12664,12 +13379,14 @@ function openTerminal(startDir, initialCommand) {
       subEntries.filter(x => x.kind === 'text').forEach((x, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${x.name}`));
       subEntries.filter(x => x.kind === 'blob').forEach((x, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${x.name}`));
     });
-    getRootSystemFiles({ includeExplorer: true }).forEach(name => {
-      let label = name;
-      if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
-      if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
-      lines.push(`├── ${label}`);
-    });
+    getRootSystemFiles({ includeExplorer: true })
+      .filter(name => !vfsStatSync(name, ''))
+      .forEach(name => {
+        let label = name;
+        if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
+        if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
+        lines.push(`├── ${label}`);
+      });
     rootEntries.filter(e => e.kind === 'text').forEach(e => lines.push(`├── ${e.name}`));
     rootEntries.filter(e => e.kind === 'blob').forEach(e => lines.push(`├── ${e.name}  [${e.blob.kind}]`));
     lines.push('└── PROJECTS\\');
@@ -12843,7 +13560,32 @@ function openTerminal(startDir, initialCommand) {
     return [];
   }
 
-  async function runPipeStage(cmd, args, stdinLines) {
+  // A stage is a program when the VFS holds a .exe text file by that name
+  // that is not one of the built-in windows. Task 6's programIsSystemBinary
+  // is the authority on the second half.
+  //
+  // FIX ROUND (browser Critical B1): getCommandParts lowercases every
+  // stage's command before this ever sees it, but the VFS `files` Map is
+  // keyed by the real, case-preserved filename with a case-sensitive lookup
+  // - so `vfsStatSync(cmd, dir)` on the lowercased command alone could never
+  // find HELLO.exe, and `HELLO.exe | grep ...` fell all the way through to
+  // "Piping not supported for command: HELLO.EXE". programResolve already
+  // folds case the same way bare-name execution does (launchTerminalTarget,
+  // above) and hands back the entry's real name and directory, PATH search
+  // included - reusing it here is what lets a pipe stage resolve exactly
+  // like typing the same name on its own would, instead of a second,
+  // narrower case-insensitive scan that only agrees with it by accident.
+  // Returns the resolved hit (real name + dir) or null, not a boolean, so
+  // the caller can spawn the real filename in the real directory rather than
+  // the lowercased command text it was typed as.
+  function terminalIsExecutableStage(cmd, dir) {
+    if (!/\.exe$/i.test(cmd)) return null;
+    if (programIsSystemBinary(cmd)) return null;
+    const hit = programResolve(cmd, dir, shellVars.PATH);
+    return (hit && !programIsSystemBinary(hit.program.name)) ? hit : null;
+  }
+
+  async function runPipeStage(cmd, args, stdin) {
     cmd = ({ print: 'echo', wait: 'sleep', clear: 'cls' }[cmd] || cmd);
     if (cmd === 'echo') return [unquoteShellValue(resolveShellText(args))];
     if (cmd === 'help') return buildHelpLines();
@@ -12869,16 +13611,16 @@ function openTerminal(startDir, initialCommand) {
     if (cmd === 'ping') return buildPingLines(resolveShellText(args), getCurrentCommandSignal());
     if (cmd === 'sleep') {
       await scriptSleep(parseTerminalDelayMs(resolveShellText(args)), getCurrentCommandSignal());
-      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+      return stdin || [];
     }
     if (cmd === 'cls') {
       out.innerHTML = '';
-      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+      return stdin || [];
     }
     if (cmd === 'cat' || cmd === 'type') {
       const target = resolveShellText(args).trim();
-      if (target) return await getPipeableText(target);
-      if (Array.isArray(stdinLines)) return stdinLines.slice();
+      if (target) return streamFromLines(await getPipeableText(target));
+      if (stdin) return stdin;
       throw new Error('Usage: CAT [file]');
     }
     if (cmd === 'grep') {
@@ -12888,9 +13630,9 @@ function openTerminal(startDir, initialCommand) {
       const target = match[2] ? unquoteShellValue(match[2]) : '';
       let re;
       try { re = new RegExp(pattern, 'i'); } catch (e) { throw new Error('Invalid regex: ' + pattern); }
-      const sourceLines = target ? await getPipeableText(target) : Array.isArray(stdinLines) ? stdinLines.slice() : null;
-      if (!sourceLines) throw new Error('Usage: GREP <pattern> [file]');
-      return sourceLines.filter(line => re.test(line));
+      const source = target ? streamFromLines(await getPipeableText(target)) : stdin;
+      if (!source) throw new Error('Usage: GREP <pattern> [file]');
+      return streamGrep(source, re);
     }
     if (cmd === 'wc') {
       let sourceText = '';
@@ -12902,8 +13644,8 @@ function openTerminal(startDir, initialCommand) {
         if (!st || st.kind !== 'text') throw new Error('File not found: ' + target);
         sourceText = (await vfsReadFile(target, cwd)) || '';
         label = '  ' + st.name;
-      } else if (Array.isArray(stdinLines)) {
-        sourceText = stdinLines.join('\n');
+      } else if (stdin) {
+        sourceText = (await streamCollect(stdin)).join('\n');
       } else {
         throw new Error('Usage: WC [file]');
       }
@@ -12918,6 +13660,8 @@ function openTerminal(startDir, initialCommand) {
   async function writePipelineOutput(targetPath, lines, append) {
     const normalizedTarget = unquoteShellValue(resolveShellText(targetPath));
     if (!normalizedTarget) throw new Error('Missing redirect target.');
+    const guardErr = terminalProtectedWriteError(normalizedTarget, cwd);
+    if (guardErr) throw guardErr;
     const existingStat = vfsStatSync(normalizedTarget, cwd);
     if (existingStat && existingStat.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
     const output = lines.join('\n');
@@ -12942,40 +13686,71 @@ function openTerminal(startDir, initialCommand) {
       print('');
       return true;
     }
+    const pipelinePids = new Set();
     try {
-      let stream = null;
-      let consumedBySink = false;
-      for (let i = 0; i < parsed.stages.length; i++) {
-        const { cmd, args } = getCommandParts(parsed.stages[i]);
-        if (!cmd) throw new Error('Invalid command pipeline.');
-        const isLastStage = i === parsed.stages.length - 1;
-        if (isLastStage && (cmd === 'notepad' || cmd === 'notepad.exe')) {
-          const content = Array.isArray(stream) ? stream.join('\n') : '';
+      const { stream, consumedBySink } = await runPipelineStages(parsed.stages, {
+        getCommandParts,
+        runStage: async (cmd, args, stdin) => {
+          const stageHit = terminalIsExecutableStage(cmd, cwd);
+          if (stageHit) {
+            // The real, case-preserved filename and the directory it was
+            // actually found in - never the lowercased `cmd` text and never
+            // the terminal's own cwd if PATH is what found it. See
+            // programs-resolve.test.cjs's "a VFS .exe found via PATH from a
+            // different cwd spawns in its own directory" for why the second
+            // half matters just as much as the first.
+            const tokens = scriptTokenize((stageHit.program.name + ' ' + args).trim());
+            const stage = await pipelineSpawnStage(tokens, {
+              spawn: (path, argv, sinks) => kernelSpawn(path, argv, Object.assign({
+                cwd: stageHit.dir,
+                parentPid: kernelPidForWin('terminal'),
+              }, sinks)),
+              wait: pid => kernelWait(pid),
+              signal: getCurrentCommandSignal(),
+            });
+            pipelinePids.add(stage.pid);
+            return stage.stream;
+          }
+          return runPipeStage(cmd, args, stdin);
+        },
+        onNotepadSink: async (args, upstream) => {
+          const lines = await streamCollect(upstream);
+          const content = lines.join('\n');
           const target = args.trim();
           if (target) {
-            const saved = await writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
+            const saved = await writePipelineOutput(target, lines, false);
             print(`Opening ${saved.fileName} in Notepad...`);
             procSetTimeout('terminal', () => openNotepad(saved.fileName, saved.dirName), 300);
           } else {
             print('Opening piped output in Notepad...');
             procSetTimeout('terminal', () => openNotepad(undefined, cwd, { initialContent: content }), 300);
           }
-          consumedBySink = true;
-          break;
-        }
-        const result = await runPipeStage(cmd, args, stream);
-        if (!result) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
-        stream = result;
-      }
+        },
+      });
       if (parsed.redirectOp) {
         if (consumedBySink) throw new Error('Cannot redirect output after piping into Notepad.');
-        const saved = await writePipelineOutput(parsed.redirectTarget, Array.isArray(stream) ? stream : [], parsed.redirectOp === '>>');
+        // A file write is a fold, like WC: nothing can be written until the
+        // whole stream has arrived, so collecting here is not a streaming
+        // failure.
+        const saved = await writePipelineOutput(parsed.redirectTarget, await streamCollect(stream), parsed.redirectOp === '>>');
         print(`${parsed.redirectOp === '>>' ? 'Appended' : 'Wrote'}: ${saved.fileName}`);
-      } else if (!consumedBySink) {
-        (stream || []).forEach(line => print(line));
+      } else if (!consumedBySink && stream) {
+        // Progressive: this is what makes an unterminated producer observable
+        // at all rather than a hang followed by nothing.
+        for await (const line of stream) print(line);
       }
     } catch (err) {
-      print(err.message || String(err), '#ff4444');
+      // An abort is how a live process stage's stream gets woken at all (see
+      // makePushStream's signal handling) - it is not a real failure, so it
+      // must not print as one. '^C' already told the player the command was
+      // interrupted.
+      if (!isAbortError(err)) print(err.message || String(err), '#ff4444');
+    } finally {
+      // Covers abort, error and normal completion in one place. A pid that
+      // already exited is gone from the table, and kernelSignal returns false
+      // for a missing pid rather than throwing, so this is a no-op in the
+      // happy path and a real kill on Ctrl+C.
+      pipelinePids.forEach(pid => { kernelSignal(pid, 'SIGKILL'); });
     }
     print('');
     return true;

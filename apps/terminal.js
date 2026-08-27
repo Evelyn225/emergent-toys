@@ -1,6 +1,93 @@
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
 
+// Hoisted out of writePipelineOutput (openTerminal) so node can reach it -
+// the same reason runPipelineStages below is top-level.
+//
+// Redirecting into one of the eight system binaries (`echo junk >
+// TERMINAL.exe`) would silently replace it, and refreshSeededSystemBinaries
+// only heals that on the next boot - not before this command's output would
+// already have landed. Same protection, and the same "protected" wording,
+// as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
+//
+// FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
+// split a path - so an earlier version of this guard checked the raw
+// redirect target and a path-qualified one ("C:\sleepOS\TERMINAL.exe",
+// "\TERMINAL.exe", "C:/sleepOS/TERMINAL.exe") sailed past it while
+// vfsWriteFile (which DOES split, via vfsSplitPath) still resolved it onto
+// the real root file. `dir` must be the SAME fallback directory
+// writePipelineOutput is about to pass to vfsWriteFile (cwd) - using any
+// other fallback would make this guard's resolution disagree with the
+// write's, which is exactly the class of bug being fixed. Splitting first
+// and checking `!dirName` (root only) is the same shape as the
+// pre-existing DELETE guard, isVisibleSystemPath (os/daemon.js) - a
+// DOCS\TERMINAL.exe is a different, legitimate file and must stay writable.
+function terminalProtectedWriteError(target, dir) {
+  const { dirName, fileName } = vfsSplitPath(target, dir);
+  if (dirName || !programIsSystemBinary(fileName)) return null;
+  return new Error('Cannot overwrite ' + fileName + ': System files are protected.');
+}
+
+// The pipeline driver, hoisted out of openTerminal so node can reach it -
+// the same reason buildPsRows is top-level. Dependencies are injected rather
+// than closed over because every one of them (getCommandParts, runPipeStage,
+// the Notepad sink) needs terminal state that does not exist under test.
+//
+// Returns { stream, consumedBySink }. The caller decides what to do with the
+// stream: print it, fold it into a file, or nothing when a sink already ate
+// it.
+async function runPipelineStages(stages, deps) {
+  let stream = null;
+  let consumedBySink = false;
+  for (let i = 0; i < stages.length; i++) {
+    const { cmd, args } = deps.getCommandParts(stages[i]);
+    if (!cmd) throw new Error('Invalid command pipeline.');
+    const isLastStage = i === stages.length - 1;
+    // Notepad is a sink rather than a stage: it has no output to hand on, so
+    // it is only legal last. Anywhere else it falls through to runStage,
+    // which does not know it, and reports the ordinary unsupported-command
+    // error rather than a special case.
+    if (isLastStage && (cmd === 'notepad' || cmd === 'notepad.exe')) {
+      await deps.onNotepadSink(args, stream);
+      consumedBySink = true;
+      break;
+    }
+    const result = await deps.runStage(cmd, args, stream);
+    if (result === null || result === undefined) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
+    stream = streamNormalize(result);
+  }
+  return { stream, consumedBySink };
+}
+
+// A spawned worker as a pipeline stage. Its output arrives on callbacks
+// rather than from a loop we drive, which is exactly what makePushStream is
+// for.
+//
+// A process is a SOURCE, never a filter: it ignores whatever is upstream of
+// it, because scripts have no syscall for reading a pipe and inventing one is
+// not this phase's business.
+//
+// stderr is merged into the same stream deliberately. Splitting it would mean
+// a second source nothing downstream can address, and `HELLO.exe | grep
+// ERROR` is the case the master spec leads with.
+//
+// deps.signal is optional and forwarded straight to makePushStream: it is
+// what lets a Ctrl+C wake a pipeline that is suspended reading from this
+// still-running process, rather than only ever ending when the process itself
+// exits. Kept as an injectable dependency, not read from terminal state
+// directly, so the fake-kernel tests do not need a real AbortController.
+async function pipelineSpawnStage(tokens, deps) {
+  const push = makePushStream(deps.signal);
+  const pid = await deps.spawn(tokens[0], tokens.slice(1), {
+    onStdout: line => push.push(line),
+    onStderr: line => push.push(line),
+  });
+  // Not awaited: the whole point is that the stage is readable while the
+  // process is still running. The exit only closes the stream.
+  Promise.resolve(deps.wait(pid)).then(() => push.close(), err => push.fail(err));
+  return { pid, stream: push };
+}
+
 // Delegates to os/process-view.js, the one module both `ps` and SYSMON read
 // so the two views cannot disagree about what processes exist.
 function buildPsRows() {
@@ -317,7 +404,25 @@ function openTerminal(startDir, initialCommand) {
       return true;
     }
     program.lines.forEach(line => print(line));
-    if (program.open) procSetTimeout('terminal', () => program.open({ cwd }), program.delay);
+    // Master spec: "running it from the terminal spawns it there with stdout
+    // bound to the terminal window." Without these sinks a spawned .exe's
+    // output only ever reaches kernelExit's post-exit buffer - the terminal
+    // itself is the one caller of program.open with a window to bind to (see
+    // programSpawnOrAlert, os/programs.js), so it is the one that must
+    // supply them; a built-in's own `open` just ignores `ctx.sinks`.
+    //
+    // No `[pid] name` line here, unlike CMDS.spawn - every OTHER bare-name
+    // launch through this same function (NOTEPAD, CALC, a project...) prints
+    // only its banner, never a pid, and a .exe launched bare is asking to run
+    // like a program, not to be introspected like SPAWN's explicit low-level
+    // command. Keeping this path silent on that score is what keeps it
+    // consistent with every other entry in the same table.
+    if (program.open) {
+      procSetTimeout('terminal', () => program.open({
+        cwd,
+        sinks: { onStdout: line => print(line), onStderr: line => print(line, '#ff4444') },
+      }), program.delay);
+    }
     return true;
   }
 
@@ -354,7 +459,7 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    DOCS`,
         `11/13/2024  10:31    <DIR>    PROJECTS`,
       ].forEach(line => lines.push(line));
-      getTerminalRootSystemEntries({ includeExplorer: true }).forEach(entry => {
+      getTerminalRootSystemEntries().forEach(entry => {
         lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
       });
       entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => lines.push(`${ds}  ${ts}    <DIR>    ${e.name}`));
@@ -434,12 +539,14 @@ function openTerminal(startDir, initialCommand) {
       subEntries.filter(x => x.kind === 'text').forEach((x, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${x.name}`));
       subEntries.filter(x => x.kind === 'blob').forEach((x, i, a) => lines.push(`│   ${i === a.length - 1 ? '└' : '├'}── ${x.name}`));
     });
-    getRootSystemFiles({ includeExplorer: true }).forEach(name => {
-      let label = name;
-      if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
-      if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
-      lines.push(`├── ${label}`);
-    });
+    getRootSystemFiles({ includeExplorer: true })
+      .filter(name => !vfsStatSync(name, ''))
+      .forEach(name => {
+        let label = name;
+        if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
+        if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
+        lines.push(`├── ${label}`);
+      });
     rootEntries.filter(e => e.kind === 'text').forEach(e => lines.push(`├── ${e.name}`));
     rootEntries.filter(e => e.kind === 'blob').forEach(e => lines.push(`├── ${e.name}  [${e.blob.kind}]`));
     lines.push('└── PROJECTS\\');
@@ -613,7 +720,32 @@ function openTerminal(startDir, initialCommand) {
     return [];
   }
 
-  async function runPipeStage(cmd, args, stdinLines) {
+  // A stage is a program when the VFS holds a .exe text file by that name
+  // that is not one of the built-in windows. Task 6's programIsSystemBinary
+  // is the authority on the second half.
+  //
+  // FIX ROUND (browser Critical B1): getCommandParts lowercases every
+  // stage's command before this ever sees it, but the VFS `files` Map is
+  // keyed by the real, case-preserved filename with a case-sensitive lookup
+  // - so `vfsStatSync(cmd, dir)` on the lowercased command alone could never
+  // find HELLO.exe, and `HELLO.exe | grep ...` fell all the way through to
+  // "Piping not supported for command: HELLO.EXE". programResolve already
+  // folds case the same way bare-name execution does (launchTerminalTarget,
+  // above) and hands back the entry's real name and directory, PATH search
+  // included - reusing it here is what lets a pipe stage resolve exactly
+  // like typing the same name on its own would, instead of a second,
+  // narrower case-insensitive scan that only agrees with it by accident.
+  // Returns the resolved hit (real name + dir) or null, not a boolean, so
+  // the caller can spawn the real filename in the real directory rather than
+  // the lowercased command text it was typed as.
+  function terminalIsExecutableStage(cmd, dir) {
+    if (!/\.exe$/i.test(cmd)) return null;
+    if (programIsSystemBinary(cmd)) return null;
+    const hit = programResolve(cmd, dir, shellVars.PATH);
+    return (hit && !programIsSystemBinary(hit.program.name)) ? hit : null;
+  }
+
+  async function runPipeStage(cmd, args, stdin) {
     cmd = ({ print: 'echo', wait: 'sleep', clear: 'cls' }[cmd] || cmd);
     if (cmd === 'echo') return [unquoteShellValue(resolveShellText(args))];
     if (cmd === 'help') return buildHelpLines();
@@ -639,16 +771,16 @@ function openTerminal(startDir, initialCommand) {
     if (cmd === 'ping') return buildPingLines(resolveShellText(args), getCurrentCommandSignal());
     if (cmd === 'sleep') {
       await scriptSleep(parseTerminalDelayMs(resolveShellText(args)), getCurrentCommandSignal());
-      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+      return stdin || [];
     }
     if (cmd === 'cls') {
       out.innerHTML = '';
-      return Array.isArray(stdinLines) ? stdinLines.slice() : [];
+      return stdin || [];
     }
     if (cmd === 'cat' || cmd === 'type') {
       const target = resolveShellText(args).trim();
-      if (target) return await getPipeableText(target);
-      if (Array.isArray(stdinLines)) return stdinLines.slice();
+      if (target) return streamFromLines(await getPipeableText(target));
+      if (stdin) return stdin;
       throw new Error('Usage: CAT [file]');
     }
     if (cmd === 'grep') {
@@ -658,9 +790,9 @@ function openTerminal(startDir, initialCommand) {
       const target = match[2] ? unquoteShellValue(match[2]) : '';
       let re;
       try { re = new RegExp(pattern, 'i'); } catch (e) { throw new Error('Invalid regex: ' + pattern); }
-      const sourceLines = target ? await getPipeableText(target) : Array.isArray(stdinLines) ? stdinLines.slice() : null;
-      if (!sourceLines) throw new Error('Usage: GREP <pattern> [file]');
-      return sourceLines.filter(line => re.test(line));
+      const source = target ? streamFromLines(await getPipeableText(target)) : stdin;
+      if (!source) throw new Error('Usage: GREP <pattern> [file]');
+      return streamGrep(source, re);
     }
     if (cmd === 'wc') {
       let sourceText = '';
@@ -672,8 +804,8 @@ function openTerminal(startDir, initialCommand) {
         if (!st || st.kind !== 'text') throw new Error('File not found: ' + target);
         sourceText = (await vfsReadFile(target, cwd)) || '';
         label = '  ' + st.name;
-      } else if (Array.isArray(stdinLines)) {
-        sourceText = stdinLines.join('\n');
+      } else if (stdin) {
+        sourceText = (await streamCollect(stdin)).join('\n');
       } else {
         throw new Error('Usage: WC [file]');
       }
@@ -688,6 +820,8 @@ function openTerminal(startDir, initialCommand) {
   async function writePipelineOutput(targetPath, lines, append) {
     const normalizedTarget = unquoteShellValue(resolveShellText(targetPath));
     if (!normalizedTarget) throw new Error('Missing redirect target.');
+    const guardErr = terminalProtectedWriteError(normalizedTarget, cwd);
+    if (guardErr) throw guardErr;
     const existingStat = vfsStatSync(normalizedTarget, cwd);
     if (existingStat && existingStat.kind === 'blob') throw new Error('Cannot write text output to binary file: ' + normalizedTarget);
     const output = lines.join('\n');
@@ -712,40 +846,71 @@ function openTerminal(startDir, initialCommand) {
       print('');
       return true;
     }
+    const pipelinePids = new Set();
     try {
-      let stream = null;
-      let consumedBySink = false;
-      for (let i = 0; i < parsed.stages.length; i++) {
-        const { cmd, args } = getCommandParts(parsed.stages[i]);
-        if (!cmd) throw new Error('Invalid command pipeline.');
-        const isLastStage = i === parsed.stages.length - 1;
-        if (isLastStage && (cmd === 'notepad' || cmd === 'notepad.exe')) {
-          const content = Array.isArray(stream) ? stream.join('\n') : '';
+      const { stream, consumedBySink } = await runPipelineStages(parsed.stages, {
+        getCommandParts,
+        runStage: async (cmd, args, stdin) => {
+          const stageHit = terminalIsExecutableStage(cmd, cwd);
+          if (stageHit) {
+            // The real, case-preserved filename and the directory it was
+            // actually found in - never the lowercased `cmd` text and never
+            // the terminal's own cwd if PATH is what found it. See
+            // programs-resolve.test.cjs's "a VFS .exe found via PATH from a
+            // different cwd spawns in its own directory" for why the second
+            // half matters just as much as the first.
+            const tokens = scriptTokenize((stageHit.program.name + ' ' + args).trim());
+            const stage = await pipelineSpawnStage(tokens, {
+              spawn: (path, argv, sinks) => kernelSpawn(path, argv, Object.assign({
+                cwd: stageHit.dir,
+                parentPid: kernelPidForWin('terminal'),
+              }, sinks)),
+              wait: pid => kernelWait(pid),
+              signal: getCurrentCommandSignal(),
+            });
+            pipelinePids.add(stage.pid);
+            return stage.stream;
+          }
+          return runPipeStage(cmd, args, stdin);
+        },
+        onNotepadSink: async (args, upstream) => {
+          const lines = await streamCollect(upstream);
+          const content = lines.join('\n');
           const target = args.trim();
           if (target) {
-            const saved = await writePipelineOutput(target, Array.isArray(stream) ? stream : [], false);
+            const saved = await writePipelineOutput(target, lines, false);
             print(`Opening ${saved.fileName} in Notepad...`);
             procSetTimeout('terminal', () => openNotepad(saved.fileName, saved.dirName), 300);
           } else {
             print('Opening piped output in Notepad...');
             procSetTimeout('terminal', () => openNotepad(undefined, cwd, { initialContent: content }), 300);
           }
-          consumedBySink = true;
-          break;
-        }
-        const result = await runPipeStage(cmd, args, stream);
-        if (!result) throw new Error('Piping not supported for command: ' + cmd.toUpperCase());
-        stream = result;
-      }
+        },
+      });
       if (parsed.redirectOp) {
         if (consumedBySink) throw new Error('Cannot redirect output after piping into Notepad.');
-        const saved = await writePipelineOutput(parsed.redirectTarget, Array.isArray(stream) ? stream : [], parsed.redirectOp === '>>');
+        // A file write is a fold, like WC: nothing can be written until the
+        // whole stream has arrived, so collecting here is not a streaming
+        // failure.
+        const saved = await writePipelineOutput(parsed.redirectTarget, await streamCollect(stream), parsed.redirectOp === '>>');
         print(`${parsed.redirectOp === '>>' ? 'Appended' : 'Wrote'}: ${saved.fileName}`);
-      } else if (!consumedBySink) {
-        (stream || []).forEach(line => print(line));
+      } else if (!consumedBySink && stream) {
+        // Progressive: this is what makes an unterminated producer observable
+        // at all rather than a hang followed by nothing.
+        for await (const line of stream) print(line);
       }
     } catch (err) {
-      print(err.message || String(err), '#ff4444');
+      // An abort is how a live process stage's stream gets woken at all (see
+      // makePushStream's signal handling) - it is not a real failure, so it
+      // must not print as one. '^C' already told the player the command was
+      // interrupted.
+      if (!isAbortError(err)) print(err.message || String(err), '#ff4444');
+    } finally {
+      // Covers abort, error and normal completion in one place. A pid that
+      // already exited is gone from the table, and kernelSignal returns false
+      // for a missing pid rather than throwing, so this is a no-op in the
+      // happy path and a real kill on Ctrl+C.
+      pipelinePids.forEach(pid => { kernelSignal(pid, 'SIGKILL'); });
     }
     print('');
     return true;

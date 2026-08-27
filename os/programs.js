@@ -44,14 +44,16 @@
 // built-in window have to sit in the same table.
 //
 // ONE CONSUMER IS NOT COVERED BY THAT SENTENCE. openSystemFile
-// (os/desktop-model.js) also reads programsInDir(''), and it treats every
-// entry it gets back as GUI-launchable - `if (!program || !program.open)` is
-// its only gate. Harmless today, because every entry is a built-in with a real
-// `open`. The moment a vfsListSync pass starts contributing entries for
-// arbitrary root files, that call would make any root .txt or blob "launch"
-// and report success to Explorer's double-click (which ignores the return
-// value, so the failure is invisible there) and to the terminal's OPEN. Phase
-// 6 needs an executables-only filter at THAT call site, not only in here.
+// (os/desktop-model.js) also reads programsInDir(''). The vfsListSync pass
+// above already filters VFS entries to `kind === 'text' && /\.exe$/i` before
+// they ever reach programsInDir, so that call site cannot actually be handed
+// a non-executable entry today. It still filters with programIsExecutableEntry
+// below, same as this file's own consumers do, purely as defence in depth:
+// its failure mode is silent (Explorer's double-click ignores the return
+// value, so a bad `true` would just quietly do nothing useful; the
+// terminal's OPEN would report success for a file it did not open), and a
+// future entry source added to programsInDir that skips its own
+// executability filter would make this guard load-bearing again.
 
 // Keyed by uppercase name. ROOT_SYSTEM_FILE_META stays the source of which
 // programs exist at the root and of their DIR display metadata; this is the
@@ -140,16 +142,143 @@ function programProjectEntry(project) {
   };
 }
 
+// The discriminator the whole .exe path turns on. A system binary is
+// precisely one whose launch opens a built-in window, and PROGRAM_LAUNCHERS
+// is the table that records exactly that - so this is the definition, not a
+// heuristic standing in for one.
+//
+// Declared with `function` on purpose: the vm test harness only exposes
+// function declarations, and PROGRAM_LAUNCHERS is a const. Callers outside
+// this file (apps/notepad.js, apps/terminal.js) go through here rather than
+// reaching for the table.
+function programIsSystemBinary(name) {
+  const key = String(name || '').trim().toUpperCase();
+  if (!key) return false;
+  if (PROGRAM_LAUNCHERS[key]) return true;
+  if (PROGRAM_LAUNCHERS[key + '.EXE']) return true;
+  return Object.keys(PROGRAM_LAUNCHERS).some(k => {
+    const spec = PROGRAM_LAUNCHERS[k];
+    return (spec.aliases || []).some(a => String(a).toUpperCase() === key);
+  });
+}
+
+// An entry is executable when it can actually be launched. Used by
+// os/desktop-model.js's openSystemFile, which previously treated everything
+// programsInDir returned as GUI-launchable - see the hazard note above.
+function programIsExecutableEntry(entry) {
+  return !!(entry && typeof entry.open === 'function');
+}
+
+// A double-click (Explorer's openItem, the desktop's
+// openDesktopShortcutTarget) spawns a `.exe` instead of opening it in
+// Notepad, UNLESS it is one of the eight system binaries - those still route
+// to Notepad, which sends them on to the decompiler view via
+// notepadRouteFor. Both call sites need the exact same test, so it lives
+// here once rather than as two inline copies that could drift.
+//
+// Declared with `function` for the same reason as programIsSystemBinary
+// above: the vm test harness only exposes function declarations.
+function programIsSpawnableExe(name) {
+  return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
+}
+
+// Every real launch of a user .exe - the terminal running one off
+// programsInDir (below), Explorer's double-click, the desktop's shortcut
+// target - goes through this, so a failed spawn always surfaces the same
+// way instead of three near-identical copies of the same .catch drifting
+// apart. `dir` is the SEARCH directory for kernelSpawn's bare-filename
+// lookup, always wherever the file actually lives (never a caller's cwd if
+// that differs - see the callers below for why that distinction matters).
+//
+// The caller discards this promise (`void programSpawnOrAlert(...)`),
+// which is exactly why the .catch has to live in here: without it, a file
+// that vanished between listing and launch - deleted, renamed, recycled -
+// would throw ENOENT as a silent unhandled rejection. Double-click and
+// nothing happens, no error, no explanation.
+//
+// `sinks` (optional) is {onStdout, onStderr} - kernelSpawn's own contract,
+// passed straight through. Explorer's double-click and the desktop's
+// shortcut target have no window for a spawned process's output to land in,
+// so both omit it and get kernelExit's ordinary post-exit buffering; the
+// terminal is the one caller with somewhere for stdout to go, and supplies
+// it (see programVfsEntry.open below and launchTerminalTarget in
+// apps/terminal.js). Never invent a sink here for the GUI callers - a fake
+// sink would silently swallow output nobody is displaying, indistinguishable
+// from stdout actually reaching a window.
+function programSpawnOrAlert(name, dir, sinks) {
+  return kernelSpawn(name, [], Object.assign({ cwd: dir, parentPid: KERNEL_PID }, sinks))
+    .catch(err => {
+      // osAlert is os/ui-chrome.js:230, the established convention for this
+      // exact failure class - os/run-dialog.js:62 uses it for "Cannot Find
+      // Program". It is a standalone modal, so it needs no process or
+      // stderr sink. This file is manifest position 10 and ui-chrome.js is
+      // 24, but the bundle is one hoisted scope and every caller of this
+      // function only runs long after boot, so the reference resolves.
+      //
+      // The typeof guard is for the node test harness, where a context may
+      // load os/programs.js without os/ui-chrome.js.
+      const detail = (err && err.message) || String(err);
+      if (typeof osAlert === 'function') {
+        osAlert('Cannot run:\n"' + name + '"\n\n' + detail, 'Cannot Run Program', 'icon:error');
+      } else {
+        console.error('sleepOS: failed to spawn ' + name + ' - ' + detail);
+      }
+    });
+}
+
+// A .exe text file in the VFS, presented the same way a built-in is. `open`
+// spawns it, which is why the seam comment insists `open` be a closure.
+function programVfsEntry(stat) {
+  return {
+    name: stat.name,
+    dir: stat.dirName,
+    lines: ['Starting ' + stat.name + '...'],
+    delay: 300,
+    // stat.dirName, never the caller's cwd - see programSpawnOrAlert. The
+    // caller here is apps/terminal.js's procSetTimeout, which is why this
+    // needed the .catch in the first place before it moved into the shared
+    // helper.
+    //
+    // `ctx` is the same object every PROGRAM_LAUNCHERS `open` receives
+    // (`{ cwd, sinks }` - see launchTerminalTarget in apps/terminal.js); a
+    // built-in's own `open` just ignores `ctx.sinks` since it has no
+    // subprocess stdout to bind. `ctx` itself can be omitted entirely (every
+    // GUI double-click calls `.open()` with no argument at all), hence the
+    // guard rather than destructuring it directly.
+    open: (ctx) => programSpawnOrAlert(stat.name, stat.dirName, ctx && ctx.sinks),
+    aliases: [],
+  };
+}
+
+// Executables in `dir` that are not already built-ins. The built-in wins on a
+// name collision: a user file called CALC.exe must not shadow the real
+// calculator, and appearing twice would be worse than either.
+function programVfsExecutables(dir, taken) {
+  if (typeof vfsListSync !== 'function') return [];
+  return vfsListSync(dir)
+    .filter(e => e.kind === 'text' && /\.exe$/i.test(e.name))
+    .filter(e => !taken.has(e.name.toUpperCase()))
+    .map(programVfsEntry);
+}
+
 function programsInDir(dir) {
   const key = String(dir || '').toUpperCase();
+  if (key === 'PROJECTS') return PROJECTS.map(programProjectEntry);
+  let builtIns = [];
   if (key === '') {
     const names = ROOT_SYSTEM_FILE_META.map(meta => meta.name)
       .concat(programStoryRootNames())
       .concat(['WELCOME.README', 'FILES']);
-    return names.map(name => programEntry(name, '')).filter(Boolean);
+    builtIns = names.map(name => programEntry(name, '')).filter(Boolean);
   }
-  if (key === 'PROJECTS') return PROJECTS.map(programProjectEntry);
-  return [];
+  // Matches on literal name only, not on aliases - a VFS file named
+  // WELCOME.exe would not collide with the WELCOME.README entry's 'welcome'
+  // alias here. Currently unexploitable: WELCOME.README loses on collision
+  // anyway because built-ins are concatenated first, and ?????.exe is both
+  // the literal name and the alias, never divergent. Worth another look only
+  // if a future built-in's alias itself ends in .exe.
+  const taken = new Set(builtIns.map(e => e.name.toUpperCase()));
+  return builtIns.concat(programVfsExecutables(key, taken));
 }
 
 // Delegates to vfsNormalizeDir rather than parsing paths itself: its prefix

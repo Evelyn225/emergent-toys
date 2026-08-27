@@ -345,18 +345,19 @@ function openSystemFile(name) {
   // Two constraints on this call, both correct today only because of what
   // programsInDir('') currently returns:
   //
-  // 1. Everything programsInDir('') hands back is treated as GUI-launchable -
-  //    `if (!program || !program.open) return false` is the only gate, and
-  //    every entry the registry can produce today has an `open`. Phase 6
-  //    (master spec) adds a vfsListSync pass to programsInDir so real VFS
-  //    `.exe` files show up too; the day that lands, a naive read of this
-  //    function will make any root file - a stray .txt, a blob - something
-  //    openSystemFile "launches" and reports true for. That silently changes
-  //    behaviour for both of this function's callers: Explorer's
-  //    double-click (which ignores the return value, so it would just start
-  //    quietly doing nothing useful) and the terminal's OPEN command (which
-  //    would report success for a file it did not actually open). Phase 6
-  //    needs an executables-only filter here, not just in programsInDir.
+  // 1. Phase 6 added a vfsListSync pass to programsInDir, so real VFS `.exe`
+  //    files show up alongside built-ins. That pass (programVfsExecutables in
+  //    os/programs.js) already filters to `kind === 'text' && /\.exe$/i`
+  //    before an entry ever reaches programsInDir(''), so nothing
+  //    non-launchable can reach this line today - the executables-only
+  //    filter below (programIsExecutableEntry) is defence in depth, not
+  //    load-bearing. It stays because this call site's failure mode is
+  //    silent: Explorer's double-click ignores the return value, so a wrong
+  //    `true` here would just quietly do nothing useful, and the terminal's
+  //    OPEN command would report success for a file it did not actually
+  //    open. It would become load-bearing again the moment programsInDir
+  //    gains any entry source that does not already filter for
+  //    executability itself.
   //
   // 2. This only ever searches '' (the root). Explorer calls openSystemFile
   //    with a bare name from whatever directory it is currently showing, not
@@ -365,9 +366,19 @@ function openSystemFile(name) {
   //    are not opened through this path). If a future directory ever gains
   //    launchable entries, this needs the caller's directory, not a
   //    hardcoded ''.
+  //
+  // The match below is exact name only - no alias, no optional .exe suffix
+  // the way programMatches gives programResolve. That is deliberate, not an
+  // oversight: every caller already hands over a fully-qualified name -
+  // Explorer passes what its own listing displayed, a desktop shortcut
+  // replays the exact target it was created with, and the terminal's OPEN
+  // only reaches this function once isVisibleSystemPath has confirmed an
+  // exact (case-insensitive) match itself. There is no path that lets a
+  // bare or aliased name arrive here today; if one is added, match through
+  // programFindIn instead of duplicating programMatches by hand.
   const program = programsInDir('').find(entry =>
     entry.name.toLowerCase() === key.toLowerCase());
-  if (!program || !program.open) return false;
+  if (!programIsExecutableEntry(program)) return false;
   program.open({ cwd: '' });
   return true;
 }
@@ -397,6 +408,15 @@ function openDesktopShortcutTarget(target) {
   }
   if (openWithAssociation(st.name, st.dirName)) return;
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
+  // A .exe the user wrote runs; a system binary opens its decompiler view
+  // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+  // for why this test lives there rather than here. programSpawnOrAlert
+  // (also os/programs.js) is what turns a spawn failure - the file vanished
+  // between the shortcut being created and being clicked - into an osAlert
+  // instead of a silent unhandled rejection.
+  else if (programIsSpawnableExe(st.name)) {
+    void programSpawnOrAlert(st.name, st.dirName);
+  }
   else openNotepad(st.name, st.dirName);
 }
 
