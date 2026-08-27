@@ -175,50 +175,52 @@ test('four tiled windows make a 2x2 grid covering the desktop', () => {
   const ctx = wmCtx();
   const r = plain(ctx.wmTileRects(4, BOUNDS));
   assert.strictEqual(r.length, 4);
-  const area = r.reduce((sum, x) => sum + x.width * x.height, 0);
-  assert.strictEqual(area, BOUNDS.w * BOUNDS.h, 'tiles must exactly cover the desktop');
 
-  // The area check alone would pass a gap and an overlap of equal area
-  // undetected - exactly the shape of bug the ragged-last-row test below
-  // exists to catch. Assert actual coverage: two columns sharing an edge,
-  // two rows sharing an edge, and the grid's outer edges landing exactly on
-  // the desktop bounds.
+  // Earlier versions of this test added one targeted assertion per
+  // counterexample found (area alone missed a gap balanced by an equal-area
+  // overlap; edge-membership alone missed a duplicated cell; existence
+  // checks alone missed a duplicated cell paired with an uncovered one).
+  // Each fix closed exactly the shape it was aimed at and left the next one
+  // open. Pinning position AND size together instead leaves no room for a
+  // counterexample to exist: with two column lefts and two row tops fixed,
+  // and every tile's width/height required to equal ITS OWN column/row
+  // size, all four rectangles are uniquely determined. A gap, an overlap, a
+  // duplicate, or a mis-sized sliver all show up as a wrong width or height
+  // on some specific tile - there's no remaining degree of freedom for a
+  // wrong grid to hide in.
   const tops = [...new Set(r.map(x => x.top))].sort((a, b) => a - b);
   const lefts = [...new Set(r.map(x => x.left))].sort((a, b) => a - b);
   assert.strictEqual(tops.length, 2, 'expected exactly two distinct row tops');
   assert.strictEqual(lefts.length, 2, 'expected exactly two distinct column lefts');
   assert.strictEqual(tops[0], 0, 'the top row must start at the desktop top edge');
   assert.strictEqual(lefts[0], 0, 'the left column must start at the desktop left edge');
-  r.forEach(x => {
-    const right = x.left + x.width;
-    const bottom = x.top + x.height;
-    assert.ok(right === lefts[1] || right === BOUNDS.w,
-      'a tile\'s right edge must meet the column seam or the desktop edge, got ' + right);
-    assert.ok(bottom === tops[1] || bottom === BOUNDS.h,
-      'a tile\'s bottom edge must meet the row seam or the desktop edge, got ' + bottom);
-  });
-  // The seam and the outer edge must each actually occur, not just be
-  // allowed - otherwise every tile could land on the outer edge alone and
-  // still pass the check above.
-  assert.ok(r.some(x => x.left + x.width === lefts[1]), 'no tile meets the column seam');
-  assert.ok(r.some(x => x.left + x.width === BOUNDS.w), 'no tile reaches the right edge');
-  assert.ok(r.some(x => x.top + x.height === tops[1]), 'no tile meets the row seam');
-  assert.ok(r.some(x => x.top + x.height === BOUNDS.h), 'no tile reaches the bottom edge');
 
-  // Every check above is aggregate or existence-based, so a duplicated tile
-  // sitting on top of an already-covered cell - while some other cell is
-  // never covered at all - can satisfy every one of them: the area still
-  // sums right if the duplicate's area equals the missing cell's, the two
-  // tops/lefts still both appear, and every edge the duplicate has was
-  // already a legal value. Pin down that the four tiles are four DISTINCT
-  // cells: exactly the 2x2 cross product of lefts and tops, no repeats.
-  const pairs = r.map(x => x.left + ',' + x.top);
-  assert.strictEqual(new Set(pairs).size, 4,
-    'expected four distinct tile positions, got ' + JSON.stringify(pairs));
-  const expected = new Set();
-  lefts.forEach(l => tops.forEach(t => expected.add(l + ',' + t)));
-  assert.deepStrictEqual([...new Set(pairs)].sort(), [...expected].sort(),
-    'tile positions must be exactly the 2x2 cross product of the two lefts and two tops');
+  // Positions must be exactly the 2x2 cross product of those lefts and
+  // tops, with no repeats - a duplicated position sorts differently from
+  // four distinct ones.
+  const expected = [];
+  lefts.forEach(l => tops.forEach(t => expected.push(l + ',' + t)));
+  const actual = r.map(x => x.left + ',' + x.top);
+  assert.deepStrictEqual(actual.slice().sort(), expected.slice().sort(),
+    'tile positions must be exactly the 2x2 cross product of the two lefts and two tops, with no repeats');
+
+  // Each tile's size must exactly equal the column/row it sits in - not
+  // merely land on some legal edge value. This is what a sliver-plus-
+  // oversized-neighbor pair fails: both edges are individually legal, but
+  // neither tile's size matches the column it claims to occupy.
+  const colWidth = { [lefts[0]]: lefts[1] - lefts[0], [lefts[1]]: BOUNDS.w - lefts[1] };
+  const rowHeight = { [tops[0]]: tops[1] - tops[0], [tops[1]]: BOUNDS.h - tops[1] };
+  r.forEach(x => {
+    assert.strictEqual(x.width, colWidth[x.left],
+      'tile at left=' + x.left + ' must span its own column width, got ' + x.width);
+    assert.strictEqual(x.height, rowHeight[x.top],
+      'tile at top=' + x.top + ' must span its own row height, got ' + x.height);
+  });
+  // The area check from earlier rounds is now redundant: pinning every
+  // tile's position to the cross product AND its size to that position's
+  // column/row width and height already forces the total area to
+  // lefts-span * tops-span === BOUNDS.w * BOUNDS.h. Nothing above can pass
+  // while area is wrong.
 });
 
 // The interesting case: the last row of a 5-window grid is not full. It must
