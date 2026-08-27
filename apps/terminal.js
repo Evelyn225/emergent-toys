@@ -1059,7 +1059,7 @@ function openTerminal(startDir, initialCommand) {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: OPEN [filename]'); return; }
       const split = vfsSplitPath(raw, cwd);
-      if (isVisibleSystemPath(raw, { includeExplorer: true })) {
+      if (isVisibleSystemPath(raw, { includeExplorer: true }, cwd)) {
         print(`Opening ${split.fileName}...`);
         procSetTimeout('terminal', () => openSystemFile(split.fileName), 300);
         return;

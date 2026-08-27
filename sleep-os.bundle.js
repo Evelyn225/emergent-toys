@@ -7105,8 +7105,20 @@ function isVisibleRootSystemFile(name, options) {
   return getRootSystemFiles(options).some(item => item.toUpperCase() === target);
 }
 
-function isVisibleSystemPath(path, options) {
-  const { dirName, fileName } = fsSplitPath(path);
+// fallbackDir is optional and defaults to unset (root), matching every call
+// site that has no cwd to give - _kernelUiIsSystemPath (os/kernel.js) and the
+// interpreter's fs adapter isSystemPath (os/script/interp.js) both call this
+// with no third argument and must keep answering "is this a root system path"
+// with no notion of cwd. A caller that already resolved the SAME path with a
+// fallbackDir (deleteVirtualPath, the terminal's OPEN) must pass that same
+// fallbackDir here, or the guard disagrees with the operation it guards -
+// e.g. `DEL TERMINAL.exe` from cwd DOCS meaning DOCS\TERMINAL.exe while this
+// guard silently treated the bare name as the root binary. This is the same
+// shape as the other two phase-6 write guards, notepadGuardProtectedSave
+// (apps/notepad.js) and terminalProtectedWriteError (apps/terminal.js): split
+// with the operation's fallbackDir first, then check `!dirName` (root only).
+function isVisibleSystemPath(path, options, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
   return !dirName && isVisibleRootSystemFile(fileName, options);
 }
 
@@ -7523,7 +7535,7 @@ async function deleteVirtualPath(path, fallbackDir) {
     };
   }
 
-  if (isVisibleSystemPath(path, { includeExplorer: true })) {
+  if (isVisibleSystemPath(path, { includeExplorer: true }, fallbackDir)) {
     return {
       ok: false,
       message: `Cannot delete ${fileLabel}: Access is denied.`,
@@ -13899,7 +13911,7 @@ function openTerminal(startDir, initialCommand) {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: OPEN [filename]'); return; }
       const split = vfsSplitPath(raw, cwd);
-      if (isVisibleSystemPath(raw, { includeExplorer: true })) {
+      if (isVisibleSystemPath(raw, { includeExplorer: true }, cwd)) {
         print(`Opening ${split.fileName}...`);
         procSetTimeout('terminal', () => openSystemFile(split.fileName), 300);
         return;
