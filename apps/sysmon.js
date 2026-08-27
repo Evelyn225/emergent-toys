@@ -134,8 +134,31 @@ function openSysmon() {
       row.addEventListener('click', () => { selectedProc = p; renderProcesses(); });
       row.addEventListener('contextmenu', e => {
         e.preventDefault();
+        // Both of these are load-bearing, and each fixes a separate way this
+        // menu used to be replaced before the player ever saw it.
+        //
+        // stopPropagation: without it the event reaches the window-level
+        // handler below, which calls showCtxMenu again and swaps this row's
+        // menu for the Resources/Processes/Pause/Close one. A menu about a
+        // specific process has nothing to do with switching tabs.
+        //
+        // Selecting WITHOUT a re-render: renderProcesses() rebuilds every row,
+        // which detaches THIS one while the event is still being dispatched.
+        // A detached node reports closest('.os-window') as null, so
+        // os/desktop-icons.js's "not over a window" guard could not tell the
+        // click came from inside SYSMON and opened the desktop menu over it.
+        // Setting the class directly keeps the row attached; the next tick
+        // repaints it anyway.
+        e.stopPropagation();
         selectedProc = p;
-        renderProcesses();
+        // Same two colours renderProcesses paints a selected row with, applied
+        // in place so the highlight matches a left-click exactly.
+        [...procList.children].forEach(el => {
+          el.style.background = 'transparent';
+          el.style.color = '#000';
+        });
+        row.style.background = '#000080';
+        row.style.color = '#fff';
         showCtxMenu(e.clientX, e.clientY, [
           { label: 'End Task', action: () => procToolbar.querySelector('#sm-kill-btn').click() },
           '-',

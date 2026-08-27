@@ -131,6 +131,24 @@ function clearDesktopSel() {
   desktopSel.clear();
 }
 
+// Does the event's origin sit inside something matching `selector`?
+//
+// This is e.target.closest(selector) with one difference that matters:
+// composedPath() is captured when the event is DISPATCHED, so it still names
+// the whole ancestor chain even if a handler nearer the target detached that
+// node before this one ran. closest() on a detached node returns null, which
+// is how a right-click inside SYSMON's process list - a list that rebuilds its
+// rows in its own contextmenu handler - used to look to the desktop like a
+// click on empty desktop.
+//
+// Falls back to closest() where composedPath is unavailable, which keeps the
+// old behaviour rather than failing open.
+function ctxPathHas(e, selector) {
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : null;
+  if (!path) return !!(e.target && e.target.closest && e.target.closest(selector));
+  return path.some(node => node && node.matches && node.matches(selector));
+}
+
 function canDeleteDesktopSystemIcon(ic) {
   return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
 }
@@ -600,7 +618,15 @@ function setupIcons() {
   // Desktop background right-click / long-press
   addLongPress(document.getElementById('desktop'));
   document.getElementById('desktop').addEventListener('contextmenu', e => {
-    if (e.target.closest('.desktop-icon') || e.target.closest('.os-window')) return;
+    // composedPath(), not e.target.closest(). The path is captured when the
+    // event is dispatched, so it still names every ancestor even if a handler
+    // closer to the target removed that node from the document mid-dispatch -
+    // which is exactly what a list that re-renders on right-click does. A
+    // detached node reports closest() as null, so the old check could not tell
+    // that the click had come from inside a window and opened the desktop menu
+    // on top of the app's own. SYSMON's process list hit this; anything that
+    // rebuilds rows in a contextmenu handler would have.
+    if (ctxPathHas(e, '.desktop-icon') || ctxPathHas(e, '.os-window')) return;
     e.preventDefault();
     clearDesktopSel();
     showCtxMenu(e.clientX, e.clientY, [
