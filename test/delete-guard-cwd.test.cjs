@@ -253,6 +253,11 @@ function openCtx(overrides) {
     openSystemFile: (name) => { calls.openSystemFile.push(name); },
     openMediaFile: (raw, cwd) => { calls.openMediaFile.push([raw, cwd]); },
     openNotepad: (raw, cwd) => { calls.openNotepad.push([raw, cwd]); },
+    // OPEN now tries the registry association before falling to the
+    // blob/text branches (see apps/terminal.js) - .exe has no association,
+    // so this stub returning false leaves both tests below exercising the
+    // same openSystemFile/openNotepad fork they always did.
+    openWithAssociation: () => false,
   }, overrides));
   ctx.__evalSource(extractOpenCmdSource(TERMINAL_SRC), 'terminal-slice-open');
   return { ctx, calls };

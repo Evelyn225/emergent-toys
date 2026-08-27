@@ -489,7 +489,7 @@ function resolveFsIcon(name, kind) {
   return {
     exe:'icon:exe', script:'icon:script', txt:'icon:text', readme:'icon:text', md:'icon:text',
     json:'icon:script', js:'icon:script', ts:'icon:script', jsx:'icon:script', tsx:'icon:script',
-    html:'icon:browser', htm:'icon:browser', css:'icon:script', py:'icon:script',
+    html:'icon:browser', htm:'icon:browser', url:'icon:browser', css:'icon:script', py:'icon:script',
     tmp:'icon:void', log:'icon:text', csv:'icon:sysmon', core:'icon:daemon'
   }[ext] || 'icon:unknown';
 }

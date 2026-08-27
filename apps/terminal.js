@@ -1065,7 +1065,15 @@ function openTerminal(startDir, initialCommand) {
         return;
       }
       const st = vfsStatSync(raw, cwd);
-      if (st && st.kind === 'blob') {
+      // Registry association first, same as Explorer's openItem and the
+      // desktop's openDesktopShortcutTarget (see HKEY_CLASSES_ROOT in
+      // os/registry.js) - without this, OPEN SHORTCUT.URL always fell to the
+      // 'text' branch below and opened the shortcut in Notepad instead of
+      // navigating the browser to it, even though double-clicking the exact
+      // same file from the desktop or Explorer already worked.
+      if (st && openWithAssociation(st.name, st.dirName)) {
+        print(`Opening ${raw}...`);
+      } else if (st && st.kind === 'blob') {
         print(`Opening ${raw}...`);
         procSetTimeout('terminal', () => openMediaFile(raw, cwd), 300);
       } else if (st && st.kind === 'text') {
