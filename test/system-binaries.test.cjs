@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { makeOsContext, loadOsSources, extractFunctionSource } = require('./helpers/load-os.cjs');
+const { makeOsContext, loadOsSources, makeLocalStorageStub, makeIndexedDbStub, extractFunctionSource } = require('./helpers/load-os.cjs');
 
 function fsCtx() {
   const ctx = makeOsContext({
@@ -225,4 +225,99 @@ test('an ENOSPC on the write still leaves the in-memory content correct, and rep
   assert.strictEqual(ctx._vfsPendingOps.length, 0, 'a write that threw before queuing must not have queued anything');
   assert.strictEqual(ctx.__vfsReportedErrors.length, 1, 'the ENOSPC failure must be reported, not swallowed');
   assert.strictEqual(ctx.__vfsReportedErrors[0].code, 'ENOSPC');
+});
+
+// FIX ROUND 1: everything above drives refreshSeededSystemBinaries directly
+// against a tree that fsCtx() built by loading os/fs-core.js, which seeds
+// via the module-level `vfsSetTree(vfsSeedTree())` call - never through
+// vfsMount's `seed` option, and never against a real backend. That hid a
+// real bug: on an actual fresh install, vfsMount's `seed` callback (wired up
+// in vfsBootMount, os/fs-persist.js) fills the eight binaries into the tree
+// BEFORE refreshSeededSystemBinaries ever runs, so its content comparison
+// finds every one already matching and correctly writes nothing - the
+// content is real in the tree, but was never committed, so SYSMON's disk
+// meter and DEFRAG's map both read zero. seedFreshRootTree (os/fs-persist.js)
+// is what `seed` now calls instead of mutating root.files directly, and it
+// is the piece under test here: mounted against a real (stubbed) IndexedDB
+// backend, driven through the actual vfsMount/vfsFlush pipeline, and
+// verified against the backend's own committed state - not the live tree,
+// which is exactly what let the original bug hide from every test above.
+function mountedFreshInstall() {
+  const stub = makeIndexedDbStub();
+  const ctx = makeOsContext({
+    localStorage: makeLocalStorageStub(),
+    indexedDB: stub,
+    navigator: { storage: { estimate: async () => ({ usage: 0, quota: 5 * 1024 * 1024 }) } },
+    PROJECTS: [],
+    RECYCLE_BIN_NAME: 'Recycle Bin',
+  });
+  loadOsSources(ctx, ['os/vfs.js', 'os/fs-format.js', 'os/storage-idb.js', 'os/fs-core.js']);
+  const src = fs.readFileSync(path.join(__dirname, '..', 'os', 'fs-persist.js'), 'utf8');
+  ctx.__evalSource(extractFunctionSource(src, 'seedFreshRootTree'), 'fs-persist-slice-seed');
+  ctx.__evalSource(extractFunctionSource(src, 'refreshSeededSystemBinaries'), 'fs-persist-slice-refresh');
+  ctx.__vfsReportedErrors = [];
+  ctx.reportVfsError = err => { ctx.__vfsReportedErrors.push(err); };
+  return ctx;
+}
+
+test('a fresh mount commits the eight system binaries to real disk blocks, not just the tree', async () => {
+  const ctx = mountedFreshInstall();
+  const backend = ctx.createIdbBackend();
+  // Reproduces vfsMount's own `seed` wiring from vfsBootMount (os/fs-persist.js)
+  // exactly - the one-line "root is genuinely empty" gate, calling the real,
+  // extracted seedFreshRootTree. The gate itself is trivial and already
+  // exercised elsewhere (test/vfs-write.test.cjs's "mount runs the seed
+  // callback after hydration"); what is under test here is what
+  // seedFreshRootTree does once called.
+  await ctx.vfsMount(backend, {
+    seed: root => {
+      if (!root.dirs.size && !root.files.size) ctx.seedFreshRootTree(root);
+    },
+  });
+  // Mirrors vfsBootMount's real order: the refresh runs right after mount.
+  // It must find everything already matching (seedFreshRootTree already put
+  // the right content in the tree) and queue nothing further - proving the
+  // two functions do not double-write.
+  await ctx.refreshSeededSystemBinaries();
+  await ctx.vfsFlush();
+
+  const expected = {};
+  SYSTEM_BINARIES.forEach(name => { expected[name] = ctx.vfsGetTree().files.get(name); });
+
+  // A second backend instance over the SAME stub database is the real
+  // assertion: it proves the bytes are in the store, not just in the first
+  // backend's own memory - the same technique test/storage-idb.test.cjs's "a
+  // committed write survives a reload through a brand new backend" uses.
+  const verify = ctx.createIdbBackend();
+  const committed = await verify.load();
+  assert.ok(committed, 'load() returned null - the backend saw an empty tree, meaning nothing was actually committed');
+  SYSTEM_BINARIES.forEach(name => {
+    assert.strictEqual(committed.files[name], expected[name], name + ' was not committed to the backend');
+  });
+
+  // The superblock is what SYSMON's disk meter and DEFRAG's map actually
+  // read (apps/sysmon.js, apps/defrag.js), not the tree - so this is the
+  // number this whole fix exists to move off zero.
+  const sb = verify._superblock;
+  const used = sb.totalBlocks - ctx.fsCountFreeBlocks(sb);
+  assert.ok(used >= SYSTEM_BINARIES.length,
+    'expected at least one committed block per binary (8), used=' + used);
+});
+
+test('a fresh mount followed by the refresh queues nothing extra - seedFreshRootTree and the heal do not double-write', async () => {
+  const ctx = mountedFreshInstall();
+  const backend = ctx.createIdbBackend();
+  await ctx.vfsMount(backend, {
+    seed: root => {
+      if (!root.dirs.size && !root.files.size) ctx.seedFreshRootTree(root);
+    },
+  });
+  // seedFreshRootTree already queued the eight writes as part of vfsMount;
+  // the queue must not still be sitting there un-drained by the time the
+  // refresh runs, and the refresh must add nothing to it.
+  const afterMount = Array.from(ctx._vfsPendingOps).filter(op => op.op === 'write').length;
+  await ctx.refreshSeededSystemBinaries();
+  const afterRefresh = Array.from(ctx._vfsPendingOps).filter(op => op.op === 'write').length;
+  assert.strictEqual(afterMount, SYSTEM_BINARIES.length, 'seedFreshRootTree should have queued exactly one write per binary');
+  assert.strictEqual(afterRefresh, afterMount, 'the refresh must not queue any additional writes on top of a fresh seed');
 });
