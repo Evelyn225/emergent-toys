@@ -35,6 +35,101 @@ function clampWinGeometry(el) {
   el.style.top  = Math.max(0, Math.min(Math.max(0, dh - H), el.offsetTop))  + 'px';
 }
 
+// ── Window layout maths ──────────────────────────────────────────
+// Pure functions of numbers: no DOM, no globals, no reads of `wins`. That is
+// deliberate - os/wm.js is otherwise DOM-bound and unprovable in node, and
+// these four functions are the part where the bugs would actually live.
+
+const WM_SNAP_EDGE = 20;      // px from an edge that counts as the zone
+const WM_CASCADE_STEP = 24;   // roughly one titlebar
+
+// Which snap zone a CURSOR sits in. The cursor, not the window's edges: a wide
+// window's edge crosses a boundary long before the player's hand does, which
+// reads as snapping at random.
+//
+// There is no bottom zone. desktopBounds() already excludes the taskbar, so
+// below the desktop is outside it, not an edge.
+function wmSnapZoneAt(x, y, bounds, edge) {
+  const e = typeof edge === 'number' ? edge : WM_SNAP_EDGE;
+  if (!bounds || x < 0 || y < 0 || x > bounds.w || y > bounds.h) return null;
+  // Top wins the corners. Dragging into a corner is far more often an attempt
+  // to maximize than to half-snap, and deciding it here means the two branches
+  // cannot disagree depending on evaluation order.
+  if (y <= e) return 'top';
+  if (x <= e) return 'left';
+  if (x >= bounds.w - e) return 'right';
+  return null;
+}
+
+// The rectangle a zone produces. Left takes the floor of half the width and
+// right takes the remainder, so an odd desktop width leaves no one-pixel gap
+// down the middle.
+function wmSnapRect(zone, bounds) {
+  if (!zone || !bounds) return null;
+  const half = Math.floor(bounds.w / 2);
+  if (zone === 'left')  return { left: 0,    top: 0, width: half,             height: bounds.h };
+  if (zone === 'right') return { left: half, top: 0, width: bounds.w - half,  height: bounds.h };
+  if (zone === 'top')   return { left: 0,    top: 0, width: bounds.w,         height: bounds.h };
+  return null;
+}
+
+// Cascade: each window one step down-right of the last. The modulo keeps a
+// long run from marching off the bottom-right forever - it wraps back to the
+// top-left and starts again, which is what every OS does with enough windows.
+function wmCascadeRects(count, bounds, step) {
+  const s = typeof step === 'number' ? step : WM_CASCADE_STEP;
+  const n = Math.max(0, Math.trunc(count) || 0);
+  const width  = Math.max(WIN_MIN_W, Math.round(bounds.w * 0.6));
+  const height = Math.max(WIN_MIN_H, Math.round(bounds.h * 0.6));
+  const maxLeft = Math.max(0, bounds.w - width);
+  const maxTop  = Math.max(0, bounds.h - height);
+  // How many steps fit before a window would hang off the edge.
+  const span = Math.max(1, Math.floor(Math.min(maxLeft, maxTop) / s) + 1);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const k = i % span;
+    out.push({ left: Math.min(maxLeft, k * s), top: Math.min(maxTop, k * s), width, height });
+  }
+  return out;
+}
+
+// Tile: a grid of ceil(sqrt(n)) columns. The last cell in each row and column
+// absorbs the rounding remainder so the grid exactly covers the desktop rather
+// than leaving a ragged edge.
+//
+// A partial last row (n not a multiple of cols) has fewer cells than `cols`,
+// so its column edges are computed against ITS OWN cell count, not the grid's
+// global `cols` - otherwise those cells keep the full grid's column width and
+// the row falls short of the right edge instead of stretching to fill it.
+//
+// With enough windows a cell would be smaller than a usable window, so the
+// result is clamped to WIN_MIN_W/WIN_MIN_H and the tiles overlap. Overlapping
+// windows you can still drag beat a grid of unusable slivers.
+function wmTileRects(count, bounds) {
+  const n = Math.max(0, Math.trunc(count) || 0);
+  if (!n) return [];
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    const rowCols = Math.min(cols, n - r * cols); // cells actually in this row
+    // Cells in the final column/row take the remainder, so edges line up.
+    const x0 = Math.round(bounds.w * c / rowCols);
+    const x1 = Math.round(bounds.w * (c + 1) / rowCols);
+    const y0 = Math.round(bounds.h * r / rows);
+    const y1 = Math.round(bounds.h * (r + 1) / rows);
+    out.push({
+      left: x0,
+      top: y0,
+      width:  Math.max(WIN_MIN_W, x1 - x0),
+      height: Math.max(WIN_MIN_H, y1 - y0),
+    });
+  }
+  return out;
+}
+
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
