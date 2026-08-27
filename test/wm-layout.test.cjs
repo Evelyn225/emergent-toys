@@ -148,6 +148,15 @@ test('cascade of nothing is an empty list, not a crash', () => {
   assert.deepStrictEqual(plain(ctx.wmCascadeRects(0, BOUNDS, 24)), []);
 });
 
+// wmSnapZoneAt and wmSnapRect both guard a falsy bounds and return null.
+// wmCascadeRects and wmTileRects are the array-returning half of the same
+// four-function contract, so a falsy bounds must degrade the same way -
+// an empty array, not a thrown TypeError from dereferencing bounds.w/h.
+test('cascade with no bounds is an empty list, not a crash', () => {
+  const ctx = wmCtx();
+  assert.deepStrictEqual(plain(ctx.wmCascadeRects(3, null, 24)), []);
+});
+
 test('one tiled window fills the desktop', () => {
   const ctx = wmCtx();
   assert.deepStrictEqual(plain(ctx.wmTileRects(1, BOUNDS)),
@@ -168,6 +177,33 @@ test('four tiled windows make a 2x2 grid covering the desktop', () => {
   assert.strictEqual(r.length, 4);
   const area = r.reduce((sum, x) => sum + x.width * x.height, 0);
   assert.strictEqual(area, BOUNDS.w * BOUNDS.h, 'tiles must exactly cover the desktop');
+
+  // The area check alone would pass a gap and an overlap of equal area
+  // undetected - exactly the shape of bug the ragged-last-row test below
+  // exists to catch. Assert actual coverage: two columns sharing an edge,
+  // two rows sharing an edge, and the grid's outer edges landing exactly on
+  // the desktop bounds.
+  const tops = [...new Set(r.map(x => x.top))].sort((a, b) => a - b);
+  const lefts = [...new Set(r.map(x => x.left))].sort((a, b) => a - b);
+  assert.strictEqual(tops.length, 2, 'expected exactly two distinct row tops');
+  assert.strictEqual(lefts.length, 2, 'expected exactly two distinct column lefts');
+  assert.strictEqual(tops[0], 0, 'the top row must start at the desktop top edge');
+  assert.strictEqual(lefts[0], 0, 'the left column must start at the desktop left edge');
+  r.forEach(x => {
+    const right = x.left + x.width;
+    const bottom = x.top + x.height;
+    assert.ok(right === lefts[1] || right === BOUNDS.w,
+      'a tile\'s right edge must meet the column seam or the desktop edge, got ' + right);
+    assert.ok(bottom === tops[1] || bottom === BOUNDS.h,
+      'a tile\'s bottom edge must meet the row seam or the desktop edge, got ' + bottom);
+  });
+  // The seam and the outer edge must each actually occur, not just be
+  // allowed - otherwise every tile could land on the outer edge alone and
+  // still pass the check above.
+  assert.ok(r.some(x => x.left + x.width === lefts[1]), 'no tile meets the column seam');
+  assert.ok(r.some(x => x.left + x.width === BOUNDS.w), 'no tile reaches the right edge');
+  assert.ok(r.some(x => x.top + x.height === tops[1]), 'no tile meets the row seam');
+  assert.ok(r.some(x => x.top + x.height === BOUNDS.h), 'no tile reaches the bottom edge');
 });
 
 // The interesting case: the last row of a 5-window grid is not full. It must
@@ -200,4 +236,9 @@ test('a crowded tile clamps to the minimum window size instead of going smaller'
 test('tile of nothing is an empty list, not a crash', () => {
   const ctx = wmCtx();
   assert.deepStrictEqual(plain(ctx.wmTileRects(0, BOUNDS)), []);
+});
+
+test('tile with no bounds is an empty list, not a crash', () => {
+  const ctx = wmCtx();
+  assert.deepStrictEqual(plain(ctx.wmTileRects(4, null)), []);
 });

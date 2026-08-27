@@ -77,6 +77,7 @@ function wmSnapRect(zone, bounds) {
 // long run from marching off the bottom-right forever - it wraps back to the
 // top-left and starts again, which is what every OS does with enough windows.
 function wmCascadeRects(count, bounds, step) {
+  if (!bounds) return [];
   const s = typeof step === 'number' ? step : WM_CASCADE_STEP;
   const n = Math.max(0, Math.trunc(count) || 0);
   const width  = Math.max(WIN_MIN_W, Math.round(bounds.w * 0.6));
@@ -93,9 +94,14 @@ function wmCascadeRects(count, bounds, step) {
   return out;
 }
 
-// Tile: a grid of ceil(sqrt(n)) columns. The last cell in each row and column
-// absorbs the rounding remainder so the grid exactly covers the desktop rather
-// than leaving a ragged edge.
+// Tile: a grid of ceil(sqrt(n)) columns. Each cell's edges are computed from
+// the cumulative fraction of the row/column (c/rowCols, r/rows), not a fixed
+// per-cell size, so adjacent cells always share an edge and a row's last
+// edge lands exactly on bounds.w/bounds.h. The sub-pixel remainder from that
+// rounding falls wherever the cumulative fraction happens to round up - not
+// reliably on the last cell. For example, 7 windows on a 1000-wide desktop
+// give a top row of 3 cells at 333/334/333: the extra pixel lands on the
+// MIDDLE cell, not the last one.
 //
 // A partial last row (n not a multiple of cols) has fewer cells than `cols`,
 // so its column edges are computed against ITS OWN cell count, not the grid's
@@ -106,6 +112,7 @@ function wmCascadeRects(count, bounds, step) {
 // result is clamped to WIN_MIN_W/WIN_MIN_H and the tiles overlap. Overlapping
 // windows you can still drag beat a grid of unusable slivers.
 function wmTileRects(count, bounds) {
+  if (!bounds) return [];
   const n = Math.max(0, Math.trunc(count) || 0);
   if (!n) return [];
   const cols = Math.ceil(Math.sqrt(n));
