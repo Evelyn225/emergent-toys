@@ -204,6 +204,21 @@ test('four tiled windows make a 2x2 grid covering the desktop', () => {
   assert.ok(r.some(x => x.left + x.width === BOUNDS.w), 'no tile reaches the right edge');
   assert.ok(r.some(x => x.top + x.height === tops[1]), 'no tile meets the row seam');
   assert.ok(r.some(x => x.top + x.height === BOUNDS.h), 'no tile reaches the bottom edge');
+
+  // Every check above is aggregate or existence-based, so a duplicated tile
+  // sitting on top of an already-covered cell - while some other cell is
+  // never covered at all - can satisfy every one of them: the area still
+  // sums right if the duplicate's area equals the missing cell's, the two
+  // tops/lefts still both appear, and every edge the duplicate has was
+  // already a legal value. Pin down that the four tiles are four DISTINCT
+  // cells: exactly the 2x2 cross product of lefts and tops, no repeats.
+  const pairs = r.map(x => x.left + ',' + x.top);
+  assert.strictEqual(new Set(pairs).size, 4,
+    'expected four distinct tile positions, got ' + JSON.stringify(pairs));
+  const expected = new Set();
+  lefts.forEach(l => tops.forEach(t => expected.add(l + ',' + t)));
+  assert.deepStrictEqual([...new Set(pairs)].sort(), [...expected].sort(),
+    'tile positions must be exactly the 2x2 cross product of the two lefts and two tops');
 });
 
 // The interesting case: the last row of a 5-window grid is not full. It must
