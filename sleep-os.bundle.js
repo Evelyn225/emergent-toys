@@ -5756,16 +5756,79 @@ function refreshSeededDocs() {
 // that reached one at all had to go around a guard (apps/notepad.js's
 // writeAndSync, apps/terminal.js's writePipelineOutput) that exists
 // specifically to stop that. Healing here is the backstop for whatever gets
-// through anyway. Mutates the live tree directly with no queued commit op,
-// the same as refreshSeededDocs and for the same reason: this function runs
-// again on every future boot, so a repair that is never durably persisted to
-// IndexedDB still reappears the next time it is needed.
-function refreshSeededSystemBinaries() {
+// through anyway.
+//
+// Unlike refreshSeededDocs, the heal below goes through vfsWriteFile rather
+// than poking tree.files directly, so a repair queues a real commit op and
+// the binary ends up occupying actual disk blocks - SYSMON's disk meter and
+// DEFRAG's map both read the backend's block counts, not the tree, so a
+// binary that only exists in memory reports as zero bytes used. The
+// content comparison still runs first, and only a mismatch reaches
+// vfsWriteFile, so a normal boot where all eight already match queues
+// nothing at all - same cost as before. If the write itself throws (ENOSPC
+// via _vfsAssertRoom in os/vfs.js is the realistic case, on a full disk),
+// the catch below falls back to the old in-memory tree.files.set so the
+// binary is still correct for this session - the phase 6 guarantee that a
+// corrupted binary always heals must survive a full disk, it just will not
+// stick across a reload - and reports the failure through reportVfsError,
+// the same channel every other late VFS failure in this file uses.
+//
+// This does NOT cover a genuinely fresh install: vfsMount's `seed` callback
+// (below, in vfsBootMount) fills the eight binaries into the tree BEFORE
+// this function ever runs, so on that specific boot the comparison above
+// finds every one already matching and correctly writes nothing - correct
+// by this function's own contract, but the content was never committed
+// either, since `seed` mutates the tree directly with no queued op. That
+// case is handled by seedFreshRootTree, which the `seed` callback calls
+// instead of mutating root.files itself.
+async function refreshSeededSystemBinaries() {
   const tree = vfsGetTree();
-  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
-    if (tree.files.get(name) !== SYSTEM_BINARY_SOURCES[name]) {
-      tree.files.set(name, SYSTEM_BINARY_SOURCES[name]);
+  for (const name of Object.keys(SYSTEM_BINARY_SOURCES)) {
+    const want = SYSTEM_BINARY_SOURCES[name];
+    if (tree.files.get(name) === want) continue;
+    try {
+      await vfsWriteFile(name, want, '');
+    } catch (err) {
+      tree.files.set(name, want);
+      reportVfsError(err);
     }
+  }
+}
+
+// Populates a genuinely empty root - vfsMount's `seed` option, wired up in
+// vfsBootMount below, calls this only `if (!root.dirs.size &&
+// !root.files.size)`. Everything except the eight root-level system
+// binaries is mutated directly with no queued op, same as refreshSeededDocs
+// and for the same reason: DESKTOP and the DOCS subtree are meant to stay
+// uncommitted, regenerated from vfsSeedTree() on every boot rather than
+// restored from the backend.
+//
+// The eight binaries are different, and NOT for the reason refreshSeededDocs'
+// own comment gives about them (read-only, healed rather than authored) -
+// that reasoning covers WHY they heal, not why this function exists at all.
+// This exists because `seed` runs before the backend is attached (vfsMount
+// assigns _vfsBackend only after `seed` returns) and mutates `root` - the
+// exact same live tree refreshSeededSystemBinaries reads from - directly.
+// So on THIS boot only, refreshSeededSystemBinaries's own compare-before-write
+// finds every binary already matching what it just wrote here and correctly
+// queues nothing, leaving the content real in the tree but backed by zero
+// committed blocks: SYSMON's disk meter and DEFRAG's map read the backend's
+// allocation, not the tree, so they showed 0.00% used and an empty map on a
+// filesystem DIR already listed as full of files.
+//
+// vfsQueueDirectWrite (os/vfs.js) is the fix: the same escape hatch
+// os/daemon.js uses for its own direct-tree-mutation-with-no-op problem.
+// Passing null as the "previous value" bypasses its own unchanged-content
+// skip, which exists to stop a normal re-set of identical content from
+// queuing a redundant op - here the previous value is not identical, it is
+// altogether absent from anything committed, and null is how that gets said.
+function seedFreshRootTree(root) {
+  const seeded = vfsSeedTree();
+  seeded.dirs.forEach(d => root.dirs.add(d));
+  seeded.subdirs.forEach((v, k) => root.subdirs.set(k, v));
+  seeded.files.forEach((v, k) => {
+    root.files.set(k, v);
+    vfsQueueDirectWrite('', k, null);
   });
 }
 
@@ -6011,15 +6074,12 @@ async function vfsBootMount() {
     onError: err => { reportVfsError(err); },
     seed: root => {
       if (!root.dirs.size && !root.files.size) {
-        const seeded = vfsSeedTree();
-        seeded.dirs.forEach(d => root.dirs.add(d));
-        seeded.files.forEach((v, k) => root.files.set(k, v));
-        seeded.subdirs.forEach((v, k) => root.subdirs.set(k, v));
+        seedFreshRootTree(root);
       }
     },
   });
   refreshSeededDocs();
-  refreshSeededSystemBinaries();
+  await refreshSeededSystemBinaries();
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);
@@ -7105,8 +7165,20 @@ function isVisibleRootSystemFile(name, options) {
   return getRootSystemFiles(options).some(item => item.toUpperCase() === target);
 }
 
-function isVisibleSystemPath(path, options) {
-  const { dirName, fileName } = fsSplitPath(path);
+// fallbackDir is optional and defaults to unset (root), matching every call
+// site that has no cwd to give - _kernelUiIsSystemPath (os/kernel.js) and the
+// interpreter's fs adapter isSystemPath (os/script/interp.js) both call this
+// with no third argument and must keep answering "is this a root system path"
+// with no notion of cwd. A caller that already resolved the SAME path with a
+// fallbackDir (deleteVirtualPath, the terminal's OPEN) must pass that same
+// fallbackDir here, or the guard disagrees with the operation it guards -
+// e.g. `DEL TERMINAL.exe` from cwd DOCS meaning DOCS\TERMINAL.exe while this
+// guard silently treated the bare name as the root binary. This is the same
+// shape as the other two phase-6 write guards, notepadGuardProtectedSave
+// (apps/notepad.js) and terminalProtectedWriteError (apps/terminal.js): split
+// with the operation's fallbackDir first, then check `!dirName` (root only).
+function isVisibleSystemPath(path, options, fallbackDir) {
+  const { dirName, fileName } = fsSplitPath(path, fallbackDir);
   return !dirName && isVisibleRootSystemFile(fileName, options);
 }
 
@@ -7523,7 +7595,7 @@ async function deleteVirtualPath(path, fallbackDir) {
     };
   }
 
-  if (isVisibleSystemPath(path, { includeExplorer: true })) {
+  if (isVisibleSystemPath(path, { includeExplorer: true }, fallbackDir)) {
     return {
       ok: false,
       message: `Cannot delete ${fileLabel}: Access is denied.`,
@@ -13899,7 +13971,7 @@ function openTerminal(startDir, initialCommand) {
       const raw = (args || '').trim();
       if (!raw) { print('Usage: OPEN [filename]'); return; }
       const split = vfsSplitPath(raw, cwd);
-      if (isVisibleSystemPath(raw, { includeExplorer: true })) {
+      if (isVisibleSystemPath(raw, { includeExplorer: true }, cwd)) {
         print(`Opening ${split.fileName}...`);
         procSetTimeout('terminal', () => openSystemFile(split.fileName), 300);
         return;
