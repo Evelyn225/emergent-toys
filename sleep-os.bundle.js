@@ -5570,6 +5570,42 @@ function vfsSeedTree() {
         'print [red] The control loop goes silent.',
         'exit $status',
       ].join('\n')],
+      ['HELLO.exe', [
+        '# HELLO.exe - a worked example.',
+        '#',
+        '# Run it:            HELLO.exe',
+        '# Pipe it:           HELLO.exe | grep GREET',
+        '# Redirect it:       HELLO.exe | grep GREET > DOCS\\out.txt',
+        '#',
+        '# Everything printed goes to stdout, which is what a pipe reads.',
+        '',
+        'SET NAME operator',
+        'PRINT GREET: hello, $NAME',
+        'PRINT GREET: this line came from a real process',
+        'PRINT NOTE: edit this file - your changes stick',
+        '',
+        '# Read a file, transform it, write the result.',
+        'SET SRC DOCS\\README.txt',
+        'IF NOT EXISTS $SRC GOTO done',
+        'PRINT NOTE: $SRC is present',
+        ':done',
+        'EXIT 0',
+      ].join('\n')],
+      ['RUNAWAY.exe', [
+        '# RUNAWAY.exe - an unapologetic infinite loop.',
+        '#',
+        '# Spawned from the terminal it runs in a Worker, so the OS stays smooth',
+        '# while it burns. Open SYSMON and watch CPU pin, drag a window to prove',
+        '# nothing is frozen, then: KILL <pid>',
+        '#',
+        '# RUN RUNAWAY.exe would run it on the main thread instead, where the',
+        '# 10000-instruction cap stops it. That difference is the point.',
+        '',
+        'SET N 0',
+        ':spin',
+        'INC N',
+        'GOTO spin',
+      ].join('\n')],
     ]),
   }]]),
   };
@@ -5650,6 +5686,13 @@ function refreshSeededDocs() {
   docs.blobs = docs.blobs || new Map();
   docs.subdirs = docs.subdirs || new Map();
   Object.entries(SEEDED_DOCS_DATA.files || {}).forEach(([name, value]) => {
+    // Two kinds of thing, two policies. Reference text is regenerated every
+    // boot, so a mangled README self-heals - that is what the note above this
+    // function has always meant. A seeded program is fill-if-absent: the demo
+    // scripts exist to be edited, and overwriting them would have destroyed
+    // every edit at the next reload with no message. Delete one and it comes
+    // back fresh.
+    if (/\.exe$/i.test(name) && docs.files.has(name)) return;
     docs.files.set(name, value);
   });
   Object.entries(SEEDED_DOCS_DATA.subdirs || {}).forEach(([name, value]) => {

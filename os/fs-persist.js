@@ -50,6 +50,13 @@ function refreshSeededDocs() {
   docs.blobs = docs.blobs || new Map();
   docs.subdirs = docs.subdirs || new Map();
   Object.entries(SEEDED_DOCS_DATA.files || {}).forEach(([name, value]) => {
+    // Two kinds of thing, two policies. Reference text is regenerated every
+    // boot, so a mangled README self-heals - that is what the note above this
+    // function has always meant. A seeded program is fill-if-absent: the demo
+    // scripts exist to be edited, and overwriting them would have destroyed
+    // every edit at the next reload with no message. Delete one and it comes
+    // back fresh.
+    if (/\.exe$/i.test(name) && docs.files.has(name)) return;
     docs.files.set(name, value);
   });
   Object.entries(SEEDED_DOCS_DATA.subdirs || {}).forEach(([name, value]) => {
