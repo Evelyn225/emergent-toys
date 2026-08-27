@@ -159,6 +159,94 @@ test('a second shortcut with the same title is uniquified, not overwritten', asy
   assert.strictEqual(ctx.parseUrlShortcutTarget(secondContent), 'https://example.org/');
 });
 
+// ── returning user whose persisted root has no DESKTOP ───────────────
+// FIX ROUND 1: seedFreshRootTree (os/fs-persist.js) only installs DESKTOP
+// `if (!root.dirs.size && !root.files.size)` - a genuinely empty root - and
+// even then with no queued op, on purpose (DESKTOP is "meant to stay
+// uncommitted, regenerated ... on every boot", per that function's own
+// comment). Nothing was doing that regeneration, so any returning user whose
+// mount restores a persisted tree without DESKTOP in it - a real profile
+// team-lead measured with root dirs CACHE, MUSIC, SYS, VIDEOS, DOCS and no
+// DESKTOP - got ENOENT from vfsWriteFile forever after, on the very first
+// "Save as Shortcut". vfsBootMount now heals DESKTOP the same way it already
+// heals RECYCLE_STORAGE_DIR (os/fs-persist.js). This builds the tree the
+// mount would restore for that exact profile - no seed runs, because the
+// root is not empty - and proves the write both fails before the heal and
+// succeeds after it.
+const DAEMON_SRC = fs.readFileSync(path.join(ROOT, 'os', 'daemon.js'), 'utf8');
+const FS_PERSIST_SRC = fs.readFileSync(path.join(ROOT, 'os', 'fs-persist.js'), 'utf8');
+
+async function returningUserMissingDesktopCtx() {
+  const ctx = loadOsSources(makeOsContext({}), ['os/vfs.js', 'os/storage-mem.js', 'os/fs-core.js']);
+  ctx.__evalSource(extractFunctionSource(BROWSER_SRC, 'parseUrlShortcutTarget'), 'browser-slice-parse');
+  ctx.__evalSource(extractFunctionSource(DAEMON_SRC, 'ensureFsDir'), 'daemon-slice-ensureFsDir');
+  const backend = ctx.createMemStorage({
+    tree: {
+      dirs: ['CACHE', 'MUSIC', 'SYS', 'VIDEOS', 'DOCS'],
+      files: {},
+      subdirs: { DOCS: { dirs: [], files: {}, subdirs: {} } },
+    },
+  });
+  // No `seed` option passed - matching vfsBootMount for a non-empty root,
+  // where the seed callback's own emptiness check skips seedFreshRootTree.
+  await ctx.vfsMount(backend, {});
+  return ctx;
+}
+
+test('a persisted root missing DESKTOP has no DESKTOP before the heal runs', async () => {
+  const ctx = await returningUserMissingDesktopCtx();
+  assert.strictEqual(ctx.vfsDirExistsSync('DESKTOP'), false,
+    'the synthetic persisted tree must reproduce the reported bug precondition');
+  await assert.rejects(
+    () => ctx.vfsWriteFile('DESKTOP\\Wikipedia Random.url', '[InternetShortcut]\nURL=https://en.wikipedia.org/\n', 'DESKTOP'),
+    /no such directory/,
+    'this is the exact failure team-lead saw: ENOENT for DESKTOP, leaking as the alert text'
+  );
+});
+
+test('ensureFsDir(DESKTOP) heals a returning user, and a shortcut can then be saved and read back', async () => {
+  const ctx = await returningUserMissingDesktopCtx();
+  ctx.ensureFsDir('DESKTOP');
+  assert.strictEqual(ctx.vfsDirExistsSync('DESKTOP'), true);
+
+  const url = 'https://en.wikipedia.org/';
+  await ctx.vfsWriteFile('DESKTOP\\Wikipedia.url', '[InternetShortcut]\nURL=' + url + '\n', 'DESKTOP');
+  const content = await ctx.vfsReadFile('DESKTOP\\Wikipedia.url', 'DESKTOP');
+  assert.strictEqual(ctx.parseUrlShortcutTarget(content), url);
+});
+
+test('ensureFsDir(DESKTOP) is idempotent - a user who already has DESKTOP is untouched', async () => {
+  const ctx = loadOsSources(makeOsContext({}), ['os/vfs.js', 'os/storage-mem.js', 'os/fs-core.js']);
+  ctx.__evalSource(extractFunctionSource(DAEMON_SRC, 'ensureFsDir'), 'daemon-slice-ensureFsDir');
+  const backend = ctx.createMemStorage({
+    tree: { dirs: ['DESKTOP'], files: {}, subdirs: { DESKTOP: { dirs: [], files: { 'existing.txt': 'kept' }, subdirs: {} } } },
+  });
+  await ctx.vfsMount(backend, {});
+  ctx.ensureFsDir('DESKTOP');
+  assert.strictEqual(await ctx.vfsReadFile('DESKTOP\\existing.txt', ''), 'kept',
+    'healing an already-present DESKTOP must not disturb what is already in it');
+});
+
+// Pins WHERE the heal lives, not just that ensureFsDir works in isolation -
+// team-lead asked for the boot path specifically, since DESKTOP missing
+// breaks every write into it (uploads, New Folder, wallpaper drops), not
+// just shortcuts. A source check is what catches the fix quietly moving back
+// into saveUrlShortcut alone on a future edit.
+test("vfsBootMount heals DESKTOP the same way it heals RECYCLE_STORAGE_DIR", () => {
+  const bootBody = extractFunctionSource(FS_PERSIST_SRC, 'vfsBootMount');
+  assert.ok(/ensureFsDir\(\s*RECYCLE_STORAGE_DIR\s*\)/.test(bootBody), 'the existing RECYCLE_STORAGE_DIR heal must still be there');
+  assert.ok(/ensureFsDir\(\s*'DESKTOP'\s*\)/.test(bootBody), "vfsBootMount must call ensureFsDir('DESKTOP')");
+});
+
+// Non-vacuity: prove the source check above is not just matching on the word
+// "DESKTOP" appearing anywhere in the function.
+test('non-vacuity: the boot-path source check fails without the DESKTOP heal', () => {
+  const brokenSrc = FS_PERSIST_SRC.replace("  ensureFsDir('DESKTOP');\n", '');
+  assert.notStrictEqual(brokenSrc, FS_PERSIST_SRC, 'replacement did not match - source moved');
+  const bootBody = extractFunctionSource(brokenSrc, 'vfsBootMount');
+  assert.strictEqual(/ensureFsDir\(\s*'DESKTOP'\s*\)/.test(bootBody), false);
+});
+
 // ── registry association ─────────────────────────────────────────────
 
 function registryCtx(overrides) {

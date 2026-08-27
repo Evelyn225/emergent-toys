@@ -372,7 +372,11 @@ function openBrowser(initialUrl) {
     try {
       await vfsWriteFile(fileName, content, 'DESKTOP');
     } catch (err) {
-      osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this shortcut.' : err.message, 'Save as Shortcut', 'icon:error');
+      // err.message is an internal VfsError string ("no such directory:
+      // DESKTOP", etc.) - a player has no use for that, so every failure
+      // this cannot name a specific cause for gets one human sentence
+      // instead, matching os/run-dialog.js's "Cannot Find Program" alert.
+      osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this shortcut.' : 'Could not save this shortcut to the Desktop.', 'Save as Shortcut', 'icon:error');
       return;
     }
     if (ws) ws.textContent = 'Shortcut saved to Desktop: ' + fileName;

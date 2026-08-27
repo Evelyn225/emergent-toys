@@ -6090,6 +6090,22 @@ async function vfsBootMount() {
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);
+  // vfsSeedTree() (os/fs-core.js) adds DESKTOP to the tree it builds, but
+  // seedFreshRootTree only ever installs that tree `if (!root.dirs.size &&
+  // !root.files.size)` - a genuinely empty root - and even then does so with
+  // no queued op, on purpose (see seedFreshRootTree's own comment: DESKTOP is
+  // "meant to stay uncommitted, regenerated ... on every boot rather than
+  // restored from the backend"). Nothing was doing that regeneration: any
+  // profile that had already booted before DESKTOP existed, or any returning
+  // user whose mount restored a persisted tree in place of the seed, loads a
+  // root with no DESKTOP at all and no way to get one back - vfsWriteFile
+  // into it throws ENOENT forever after. Same shape as the RECYCLE_STORAGE_DIR
+  // heal one line up, and the fix is the same: ensureFsDir is idempotent and
+  // queues a real commit only the first time it actually creates the dir, so
+  // this costs nothing for a user who already has DESKTOP and permanently
+  // fixes anyone who does not - not just the .url shortcut writer, but every
+  // future write into DESKTOP (uploads, New Folder, wallpaper drops).
+  ensureFsDir('DESKTOP');
   void loadBlobsFromBlocks();
   // The load-time syncDaemonStory ran against the seed tree, which the mount
   // then replaced. Re-run it against the real tree so the story files and the
@@ -15694,7 +15710,11 @@ function openBrowser(initialUrl) {
     try {
       await vfsWriteFile(fileName, content, 'DESKTOP');
     } catch (err) {
-      osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this shortcut.' : err.message, 'Save as Shortcut', 'icon:error');
+      // err.message is an internal VfsError string ("no such directory:
+      // DESKTOP", etc.) - a player has no use for that, so every failure
+      // this cannot name a specific cause for gets one human sentence
+      // instead, matching os/run-dialog.js's "Cannot Find Program" alert.
+      osAlert(err.code === 'ENOSPC' ? 'Not enough space to create this shortcut.' : 'Could not save this shortcut to the Desktop.', 'Save as Shortcut', 'icon:error');
       return;
     }
     if (ws) ws.textContent = 'Shortcut saved to Desktop: ' + fileName;
