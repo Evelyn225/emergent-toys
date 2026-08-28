@@ -33,7 +33,11 @@ function wmCtx() {
     wins: {},
     zTop: 100,
     document: {
-      getElementById: () => ({ textContent: '' }),
+      // style: {} lets wmSnapPreviewHide's `el.style.display = 'none'` write
+      // land on a real object instead of throwing - needed once the ownership
+      // tests below call wmSnapPreviewRelease, which touches the DOM on the
+      // owner path.
+      getElementById: () => ({ textContent: '', style: {} }),
       addEventListener: () => {},
       removeEventListener: () => {},
     },
@@ -313,4 +317,33 @@ test('wmIsFilled is true for a maximized or snapped window, false otherwise', ()
   assert.strictEqual(ctx.wmIsFilled({ maximized: true,  snap: null }), true);
   assert.strictEqual(ctx.wmIsFilled({ maximized: false, snap: 'left' }), true);
   assert.strictEqual(ctx.wmIsFilled(null), false);
+});
+
+// ── snap preview ownership ──────────────────────────────────────────
+// The preview element is global state shared by whichever drag is running, so
+// it needs an owner. Closing a window that does NOT own the preview (an
+// unrelated window closed mid-drag by a script, SYSMON, or a process exiting)
+// must never touch a live drag's preview or its ownership - that is the exact
+// bug a bare `wmActiveDragId = null` assignment reintroduces, since it would
+// clear ownership regardless of whose id was passed in.
+
+test('with no active drag, nothing owns the preview', () => {
+  const ctx = wmCtx();
+  assert.strictEqual(ctx.wmSnapPreviewOwnedBy('anything'), false);
+});
+
+test('releasing the preview for a non-owner id leaves the real owner untouched', () => {
+  const ctx = wmCtx();
+  ctx.wmSetActiveDragId('owner-1');
+  ctx.wmSnapPreviewRelease('someone-else');
+  assert.strictEqual(ctx.wmSnapPreviewOwnedBy('owner-1'), true,
+    'releasing for a window that is not the owner must not clear the real owner');
+});
+
+test('releasing the preview for the actual owner clears ownership', () => {
+  const ctx = wmCtx();
+  ctx.wmSetActiveDragId('owner-1');
+  ctx.wmSnapPreviewRelease('owner-1');
+  assert.strictEqual(ctx.wmSnapPreviewOwnedBy('owner-1'), false,
+    'the owner releasing its own preview must actually clear ownership');
 });

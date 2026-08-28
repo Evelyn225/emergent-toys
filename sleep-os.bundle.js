@@ -9968,6 +9968,38 @@ function wmSnapPreviewHide() {
   if (el) el.style.display = 'none';
 }
 
+// The preview element is global state, shared by whichever drag is currently
+// running - so it needs an owner: the id of the one drag entitled to touch
+// it. null when no snap-eligible drag is live. Both the move side
+// (wmSnapPreviewOwnedBy, checked in onMove before repainting) and the close
+// side (wmSnapPreviewRelease, called from closeWin) route through this pair
+// rather than comparing wmActiveDragId inline at each call site - that
+// inline-comparison approach is exactly how a closed window's overlay came
+// back, and how an unrelated close made a live drag's warning vanish.
+let wmActiveDragId = null;
+
+function wmSetActiveDragId(id) {
+  wmActiveDragId = id;
+}
+
+function wmSnapPreviewOwnedBy(id) {
+  return wmActiveDragId !== null && wmActiveDragId === id;
+}
+
+// Hides the preview and releases ownership, but ONLY if `id` is the current
+// owner. Closing a window that is not the live drag must leave that drag's
+// preview and ownership completely untouched - otherwise an unrelated close
+// (a script autoclosing 'void', SYSMON killing a process, terminal `exit`)
+// could silently cancel the one warning that a window is about to resize
+// itself, or - if the closing window WAS the owner - a later zone transition
+// on that same dead drag could resurrect an overlay with nothing left to
+// explain it.
+function wmSnapPreviewRelease(id) {
+  if (!wmSnapPreviewOwnedBy(id)) return;
+  wmSnapPreviewHide();
+  wmActiveDragId = null;
+}
+
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
@@ -10150,8 +10182,10 @@ function closeWin(id) {
   w.el.remove(); delete wins[id];
   // A window can be closed by a script mid-drag, in which case the drag's own
   // mouseup cleanup never runs for it. An overlay left on screen with no window
-  // to explain it is worse than no preview at all.
-  wmSnapPreviewHide();
+  // to explain it is worse than no preview at all - but only when THIS window
+  // is the one the live drag owns. Closing an unrelated window must leave
+  // another drag's preview and ownership completely untouched.
+  wmSnapPreviewRelease(id);
   kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
 }
@@ -10179,13 +10213,22 @@ function makeDraggable(win, handle) {
     restoreFilledForDrag(id, e.clientX, e.clientY);
     startDrag(e.clientX, e.clientY);
     // Mobile windows already fill the desktop (mkWin), so there is nothing to
-    // snap and a 20px zone is barely hittable with a finger. No snap logic runs
+    // snap and a 48px zone is barely hittable with a finger. No snap logic runs
     // on that branch at all rather than shipping a control that cannot work.
     const snapEnabled = !(window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches);
     let pendingZone = null;
+    // Claim the preview before the first onMove can run. Anything that
+    // happens to this window before this drag's own onUp (most notably
+    // closeWin) goes through wmSnapPreviewRelease and can only affect the
+    // preview if it still names THIS id as the owner.
+    if (snapEnabled) wmSetActiveDragId(id);
     const onMove = (e) => {
       moveDrag(e.clientX, e.clientY);
-      if (!snapEnabled) return;
+      // Ownership can be revoked out from under a still-running drag (the
+      // window this drag belongs to was closed mid-drag) - re-check every
+      // move rather than only at mousedown, or a zone transition after that
+      // close would repaint an overlay with no window left to explain it.
+      if (!snapEnabled || !wmSnapPreviewOwnedBy(id)) return;
       const zone = wmSnapZoneAt(e.clientX, e.clientY, desktopBounds(), WM_SNAP_EDGE, WM_SNAP_EDGE_TOP);
       if (zone !== pendingZone) {
         pendingZone = zone;
@@ -10195,10 +10238,17 @@ function makeDraggable(win, handle) {
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      wmSnapPreviewHide();
+      wmSnapPreviewRelease(id);
       if (!snapEnabled || !pendingZone) return;
-      if (pendingZone === 'top') { if (!wins[id] || !wins[id].maximized) maxWin(id); }
-      else wmApplySnap(id, pendingZone);
+      if (pendingZone === 'top') {
+        // maxWin() already no-ops on a missing window through its own guard,
+        // so the only real reason to check first is to skip a window that is
+        // ALREADY maximized - maxWin() toggles, and a top-zone drag must
+        // always maximize, never un-maximize.
+        if (!(wins[id] && wins[id].maximized)) maxWin(id);
+      } else {
+        wmApplySnap(id, pendingZone);
+      }
       pendingZone = null;
     };
     document.addEventListener('mousemove', onMove);
