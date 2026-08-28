@@ -690,7 +690,14 @@ function wmInstallTaskbarMenu() {
     items.push({ label: 'Minimize All', disabled: none, action: wmMinimizeAll });
     items.push('-');
     items.push({ label: 'System Monitor', icon: 'icon:sysmon', action: () => openSysmon() });
-    showCtxMenu(e.clientX, e.clientY, items);
+    // Anchor to the bar's own top edge, not e.clientY. This menu belongs to
+    // the taskbar, not to a point on it - where inside the 28px bar the
+    // cursor happened to land must not change where the menu ends up.
+    // showCtxMenu's own overflow clamp then flips it upward off that edge,
+    // landing its bottom flush against the taskbar's top, same as every
+    // right-click on the bar produces.
+    const barTop = bar.getBoundingClientRect().top;
+    showCtxMenu(e.clientX, barTop, items);
   });
 }
 
