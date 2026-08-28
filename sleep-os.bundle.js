@@ -10213,8 +10213,8 @@ function makeDraggable(win, handle) {
     restoreFilledForDrag(id, e.clientX, e.clientY);
     startDrag(e.clientX, e.clientY);
     // Mobile windows already fill the desktop (mkWin), so there is nothing to
-    // snap and a 48px zone is barely hittable with a finger. No snap logic runs
-    // on that branch at all rather than shipping a control that cannot work.
+    // snap and no zone to arrange it into. No snap logic runs on that branch
+    // at all rather than shipping a control that cannot work.
     const snapEnabled = !(window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches);
     let pendingZone = null;
     // Claim the preview before the first onMove can run. Anything that
