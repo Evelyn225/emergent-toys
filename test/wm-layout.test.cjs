@@ -347,3 +347,33 @@ test('releasing the preview for the actual owner clears ownership', () => {
   assert.strictEqual(ctx.wmSnapPreviewOwnedBy('owner-1'), false,
     'the owner releasing its own preview must actually clear ownership');
 });
+
+// ── snap release gating (fix round 2) ───────────────────────────────
+// Ownership stops onMove from repainting a dead drag's preview, but nothing
+// stopped onUp from acting on a stale pendingZone once that same window's id
+// was reused by a brand-new, never-dragged window. onUp must consult
+// ownership - captured BEFORE release, since release always clears it - not
+// just pendingZone, before snapping anything.
+
+test('the release gate refuses to act once ownership has already been revoked', () => {
+  const ctx = wmCtx();
+  ctx.wmSetActiveDragId('owner-1');
+  // Something else revokes ownership mid-drag - e.g. closeWin on the window
+  // this drag belongs to, exactly as terminal's `exit` or SYSMON's kill do.
+  ctx.wmSnapPreviewRelease('owner-1');
+  // A NEW window can now exist under the same id, but this drag was never
+  // its drag - `owned` must have been captured before the release above, and
+  // a revoked drag must never be allowed to act regardless of what
+  // pendingZone still remembers from before the revocation.
+  const owned = ctx.wmSnapPreviewOwnedBy('owner-1');
+  assert.strictEqual(ctx.wmShouldApplySnapOnRelease(owned, true, 'left'), false,
+    'a drag whose ownership was already revoked must not be allowed to snap anything on release');
+});
+
+test('the release gate allows the action when ownership, snap-enabled, and a pending zone all hold', () => {
+  const ctx = wmCtx();
+  ctx.wmSetActiveDragId('owner-1');
+  const owned = ctx.wmSnapPreviewOwnedBy('owner-1');
+  assert.strictEqual(ctx.wmShouldApplySnapOnRelease(owned, true, 'left'), true,
+    'the normal, still-owned case must still be allowed to act');
+});

@@ -10000,6 +10000,27 @@ function wmSnapPreviewRelease(id) {
   wmActiveDragId = null;
 }
 
+// The release-time gate: whether a drag that just ended may still act on its
+// pendingZone. Pulled out of onUp into its own pure function so the ordering
+// bug it exists to prevent - reading `owned` AFTER wmSnapPreviewRelease has
+// already cleared it, or trusting pendingZone by itself - can be pinned by a
+// test without simulating a live mouse drag. `owned` MUST be the value
+// wmSnapPreviewOwnedBy(id) returned BEFORE wmSnapPreviewRelease ran: release
+// always leaves ownership cleared, so an `owned` read afterward would be
+// permanently false and useless as a gate. pendingZone alone is not a safe
+// signal either - it only records where the cursor was the last time this
+// drag was still live, not whether this drag still has the right to act.
+// Ownership can be revoked mid-drag (the window this drag belongs to gets
+// closed - terminal's own `exit`, SYSMON killing the process, the daemon
+// autoclosing 'void'), and a NEW window can then be opened that reuses the
+// same id before mouseup ever fires. That window's wins[id] exists and would
+// pass every other check, but it was never dragged - acting on the stale
+// pendingZone would snap it with no preview ever shown for it, which is the
+// exact failure the preview exists to rule out.
+function wmShouldApplySnapOnRelease(owned, snapEnabled, pendingZone) {
+  return !!(snapEnabled && owned && pendingZone);
+}
+
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
@@ -10238,8 +10259,13 @@ function makeDraggable(win, handle) {
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      // Read ownership BEFORE releasing it - wmSnapPreviewRelease clears the
+      // flag, so reading after would always see "not owned" and
+      // wmShouldApplySnapOnRelease could never fire. See that function for
+      // why pendingZone alone is not a safe signal to act on.
+      const owned = wmSnapPreviewOwnedBy(id);
       wmSnapPreviewRelease(id);
-      if (!snapEnabled || !pendingZone) return;
+      if (!wmShouldApplySnapOnRelease(owned, snapEnabled, pendingZone)) return;
       if (pendingZone === 'top') {
         // maxWin() already no-ops on a missing window through its own guard,
         // so the only real reason to check first is to skip a window that is
