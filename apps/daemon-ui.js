@@ -98,7 +98,7 @@ function resizeDaemonWindow() {
   const daemonWin = wins.daemon?.el;
   const body = document.getElementById('wb-daemon');
   if (!daemonWin || !body) return;
-  if (wins.daemon.maximized) return;
+  if (wmIsFilled(wins.daemon)) return;
   const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
   if (isMobile) return;
   const desktop = document.getElementById('desktop');
@@ -259,7 +259,7 @@ function renderVoid() {
 
 function resizeVoidWindow() {
   const voidWin = wins.void?.el;
-  if (!voidWin || wins.void.maximized) return;
+  if (!voidWin || wmIsFilled(wins.void)) return;
   const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
   if (isMobile) return;
   const desktop = document.getElementById('desktop');

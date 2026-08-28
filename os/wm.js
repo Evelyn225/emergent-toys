@@ -8,12 +8,20 @@
 // handles, unmaximize, and viewport resizes all funnel through here.
 const WIN_MIN_W = 180, WIN_MIN_H = 80;   // must match .os-window min-width/min-height
 
+// One definition of "mobile layout", because several things must agree on it:
+// the taskbar height desktopBounds() assumes, whether snapping exists at all,
+// and whether the taskbar's arrange items are offered. A second copy that
+// drifted would make the drag path compute zones against the wrong bounds.
+function isMobileLayout() {
+  return window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+}
+
 function desktopBounds() {
   const d = document.getElementById('desktop');
   // #desktop is display:none until boot finishes, so a window created during
   // startup would otherwise be clamped into a 0x0 box. Fall back to the
   // viewport minus the taskbar, matching the CSS.
-  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  const isMobile = isMobileLayout();
   const taskbarH = isMobile ? 56 : 28;
   return {
     w: d && d.offsetWidth  ? d.offsetWidth  : window.innerWidth,
@@ -59,11 +67,10 @@ const WM_CASCADE_STEP = 24;   // roughly one titlebar
 // of the desktop.
 function wmSnapZoneAt(x, y, bounds, edge, topEdge) {
   const e = typeof edge === 'number' ? edge : WM_SNAP_EDGE;
-  // topEdge falls back to `e`, not to WM_SNAP_EDGE_TOP: every existing test
-  // passes `edge` explicitly and expects the top strip to match it, so those
-  // tests keep passing unchanged and keep testing what they were written to
-  // test. Only the production call site passes both.
-  const te = typeof topEdge === 'number' ? topEdge : e;
+  // Defaults reproduce the production configuration: WM_SNAP_EDGE on the
+  // sides, WM_SNAP_EDGE_TOP (narrower) on top. A caller can still override
+  // either independently for a test.
+  const te = typeof topEdge === 'number' ? topEdge : WM_SNAP_EDGE_TOP;
   if (!bounds || x < 0 || y < 0 || x > bounds.w || y > bounds.h) return null;
   // Top wins the corners. Dragging into a corner is far more often an attempt
   // to maximize than to half-snap, and deciding it here means the two branches
@@ -269,7 +276,7 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
 
   // Default position: slightly random cascade; on mobile fill viewport (except small popups)
   const count = Object.keys(wins).length;
-  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+  const isMobile = isMobileLayout();
   const bounds = desktopBounds();
   if (isMobile && !popup) {
     x = 0; y = 0;
@@ -478,7 +485,7 @@ function makeDraggable(win, handle) {
     // Mobile windows already fill the desktop (mkWin), so there is nothing to
     // snap and no zone to arrange it into. No snap logic runs on that branch
     // at all rather than shipping a control that cannot work.
-    const snapEnabled = !(window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches);
+    const snapEnabled = !isMobileLayout();
     let pendingZone = null;
     // Claim the preview before the first onMove can run. Anything that
     // happens to this window before this drag's own onUp (most notably
@@ -515,7 +522,6 @@ function makeDraggable(win, handle) {
       } else {
         wmApplySnap(id, pendingZone);
       }
-      pendingZone = null;
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -678,7 +684,7 @@ function wmInstallTaskbarMenu() {
   if (!bar) return;
   bar.addEventListener('contextmenu', e => {
     e.preventDefault();
-    const mobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+    const mobile = isMobileLayout();
     const none = wmVisibleWinIds().length === 0;
     const items = [];
     // Arranging is meaningless when every window already fills the screen.

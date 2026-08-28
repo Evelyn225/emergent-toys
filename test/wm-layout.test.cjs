@@ -102,14 +102,6 @@ test('with no edge argument, the default side zone is 48px', () => {
   assert.strictEqual(ctx.wmSnapZoneAt(60, 300, BOUNDS), null);
 });
 
-// topEdge falls back to `edge`, not to WM_SNAP_EDGE_TOP - so omitting BOTH
-// arguments does NOT give a narrower top zone; y=40 still resolves 'top'
-// because te falls back to the 48px side default, same as e.
-test('with no edge argument at all, the top zone is NOT narrowed - it matches the side default', () => {
-  const ctx = wmCtx();
-  assert.strictEqual(ctx.wmSnapZoneAt(500, 40, BOUNDS), 'top');
-});
-
 // The narrower top zone is a property of the PRODUCTION call site passing
 // WM_SNAP_EDGE and WM_SNAP_EDGE_TOP explicitly, not of any built-in default -
 // reproduced here by passing both, exactly as makeDraggable's onMove does.
@@ -119,17 +111,12 @@ test('with edge=48 and topEdge=32 passed explicitly (as production does), the to
   assert.strictEqual(ctx.wmSnapZoneAt(500, 20, BOUNDS, 48, 32), 'top');
 });
 
-// topEdge falls back to `edge` when only `edge` is passed, so every existing
-// test above - which passes EDGE and expects the top strip to match it -
-// keeps meaning what it says.
-test('topEdge falls back to edge when only edge is passed', () => {
+test('with no edge arguments, the defaults reproduce production: 48px sides, 32px top', () => {
   const ctx = wmCtx();
-  assert.strictEqual(ctx.wmSnapZoneAt(500, 25, BOUNDS, 20), null);
-});
-
-test('an explicit topEdge is honoured', () => {
-  const ctx = wmCtx();
-  assert.strictEqual(ctx.wmSnapZoneAt(500, 25, BOUNDS, 48, 32), 'top');
+  assert.strictEqual(ctx.wmSnapZoneAt(40, 300, BOUNDS), 'left');
+  assert.strictEqual(ctx.wmSnapZoneAt(60, 300, BOUNDS), null);
+  assert.strictEqual(ctx.wmSnapZoneAt(500, 20, BOUNDS), 'top');
+  assert.strictEqual(ctx.wmSnapZoneAt(500, 40, BOUNDS), null);
 });
 
 test('the left snap rect is exactly half width and full height', () => {
@@ -236,10 +223,8 @@ test('four tiled windows make a 2x2 grid covering the desktop', () => {
   assert.strictEqual(lefts.length, 2, 'expected exactly two distinct column lefts');
   assert.strictEqual(tops[0], 0, 'the top row must start at the desktop top edge');
   assert.strictEqual(lefts[0], 0, 'the left column must start at the desktop left edge');
-  assert.ok(lefts[1] > 0 && lefts[1] < BOUNDS.w,
-    'the column seam must fall strictly inside the desktop width, got ' + lefts[1]);
-  assert.ok(tops[1] > 0 && tops[1] < BOUNDS.h,
-    'the row seam must fall strictly inside the desktop height, got ' + tops[1]);
+  assert.strictEqual(lefts[1], BOUNDS.w / 2, 'the column seam must fall at the midpoint');
+  assert.strictEqual(tops[1],  BOUNDS.h / 2, 'the row seam must fall at the midpoint');
 
   // Positions must be exactly the 2x2 cross product of those lefts and
   // tops, with no repeats - a duplicated position sorts differently from
