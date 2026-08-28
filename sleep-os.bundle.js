@@ -9901,6 +9901,31 @@ function wmTileRects(count, bounds) {
   return out;
 }
 
+// A window is "filled" when it occupies a computed rectangle rather than its
+// own remembered geometry - maximized or snapped. Both remember where they came
+// from in origStyle, and both restore the same way, which is the whole reason
+// snap is a state here rather than a one-off resize.
+function wmIsFilled(w) {
+  return !!(w && (w.maximized || w.snap));
+}
+
+// Snap a window to a zone. Captures origStyle only on the way OUT of normal, so
+// snapping left then right then left again still remembers the size the player
+// last chose for themselves rather than a half-screen.
+function wmApplySnap(id, zone) {
+  const w = wins[id]; if (!w) return;
+  const rect = wmSnapRect(zone, desktopBounds());
+  if (!rect) return;
+  if (!wmIsFilled(w)) w.origStyle = w.el.style.cssText;
+  w.el.style.left   = rect.left + 'px';
+  w.el.style.top    = rect.top + 'px';
+  w.el.style.width  = rect.width + 'px';
+  w.el.style.height = rect.height + 'px';
+  w.el.style.zIndex = ++zTop;
+  w.maximized = false;
+  w.snap = zone;
+}
+
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
@@ -9958,7 +9983,7 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
 
   document.getElementById('windows-layer').appendChild(el);
   clampWinGeometry(el);   // callers pass explicit x/y/w/h that may not fit this viewport
-  wins[id] = { el, title, icon, minimized: false, maximized: false, origStyle: null };
+  wins[id] = { el, title, icon, minimized: false, maximized: false, snap: null, origStyle: null };
 
   // Built-in apps are real processes with real lifetimes. Registering here rather
   // than in each app means an app cannot forget to appear in ps.
@@ -10019,24 +10044,32 @@ function maxWin(id) {
   if (w.maximized) {
     w.el.style.cssText = w.origStyle;
     w.maximized = false;
+    w.snap = null;
     // origStyle was captured against whatever the desktop measured at the time;
     // it can be stale by now.
     clampWinGeometry(w.el);
   } else {
-    w.origStyle = w.el.style.cssText;
+    // Only capture from a normal window: maximizing a SNAPPED one must keep the
+    // size the player chose, not overwrite it with a half-screen.
+    if (!wmIsFilled(w)) w.origStyle = w.el.style.cssText;
     fitMaximized(w);
     w.el.style.zIndex = ++zTop;
     w.maximized = true;
+    w.snap = null;
   }
 }
 
-function restoreMaximizedForDrag(id, clientX, clientY) {
+// Renamed from restoreMaximizedForDrag: it now returns a SNAPPED window to its
+// previous size too, which is the same operation. A second copy for snap is how
+// the two states would drift apart.
+function restoreFilledForDrag(id, clientX, clientY) {
   const w = wins[id];
-  if (!w || !w.maximized || !w.origStyle) return;
+  if (!w || !wmIsFilled(w) || !w.origStyle) return;
   const fullRect = w.el.getBoundingClientRect();
   const pointerRatio = fullRect.width ? Math.min(0.9, Math.max(0.1, (clientX - fullRect.left) / fullRect.width)) : 0.5;
   w.el.style.cssText = w.origStyle;
   w.maximized = false;
+  w.snap = null;
   w.el.style.zIndex = ++zTop;
   clampWinGeometry(w.el);   // the restored size may not fit the current desktop
   const { w: dw, h: dh } = desktopBounds();
@@ -10083,7 +10116,7 @@ function makeDraggable(win, handle) {
     if (e.target.tagName === 'BUTTON') return;
     e.preventDefault();
     focusWin(id);
-    restoreMaximizedForDrag(id, e.clientX, e.clientY);
+    restoreFilledForDrag(id, e.clientX, e.clientY);
     startDrag(e.clientX, e.clientY);
     const onMove = (e) => moveDrag(e.clientX, e.clientY);
     const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
@@ -10096,7 +10129,7 @@ function makeDraggable(win, handle) {
     e.preventDefault();
     focusWin(id);
     const t = e.touches[0];
-    restoreMaximizedForDrag(id, t.clientX, t.clientY);
+    restoreFilledForDrag(id, t.clientX, t.clientY);
     startDrag(t.clientX, t.clientY);
     const onMove = (e) => { e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); };
     const onEnd = () => { handle.removeEventListener('touchmove', onMove); handle.removeEventListener('touchend', onEnd); };
@@ -10182,11 +10215,22 @@ function addTbBtn(id, title, icon) {
   btn.addEventListener('click', () => {
     const w = wins[id]; if (!w) return;
     if (w.minimized) { unminWin(id); }
-    else if (w.maximized) { maxWin(id); }   // restore to pre-maximize size
+    else if (w.maximized) { maxWin(id); }
+    else if (w.snap) { wmUnsnap(id); }
     else if (w.el.classList.contains('inactive')) { focusWin(id); }
     else { minWin(id); }
   });
   document.getElementById('taskbar-programs').appendChild(btn);
+}
+
+// Return a snapped window to its remembered size in place, without the pointer
+// tracking restoreFilledForDrag does - there is no cursor to follow here.
+function wmUnsnap(id) {
+  const w = wins[id]; if (!w || !w.snap || !w.origStyle) return;
+  w.el.style.cssText = w.origStyle;
+  w.snap = null;
+  w.el.style.zIndex = ++zTop;
+  clampWinGeometry(w.el);
 }
 
 // ─────────────────────────────────────────────────────────────────

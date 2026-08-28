@@ -263,3 +263,16 @@ test('tile with no bounds is an empty list, not a crash', () => {
   const ctx = wmCtx();
   assert.deepStrictEqual(plain(ctx.wmTileRects(4, null)), []);
 });
+
+// ── snap state ───────────────────────────────────────────────────
+// A window is normal, maximized, OR snapped - never two at once. All three
+// transitions out of normal capture origStyle, and all three restore from it,
+// so there is exactly one save/restore path rather than two that can disagree.
+
+test('wmIsFilled is true for a maximized or snapped window, false otherwise', () => {
+  const ctx = wmCtx();
+  assert.strictEqual(ctx.wmIsFilled({ maximized: false, snap: null }), false);
+  assert.strictEqual(ctx.wmIsFilled({ maximized: true,  snap: null }), true);
+  assert.strictEqual(ctx.wmIsFilled({ maximized: false, snap: 'left' }), true);
+  assert.strictEqual(ctx.wmIsFilled(null), false);
+});
