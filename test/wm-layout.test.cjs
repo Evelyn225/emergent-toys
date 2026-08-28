@@ -194,6 +194,10 @@ test('four tiled windows make a 2x2 grid covering the desktop', () => {
   assert.strictEqual(lefts.length, 2, 'expected exactly two distinct column lefts');
   assert.strictEqual(tops[0], 0, 'the top row must start at the desktop top edge');
   assert.strictEqual(lefts[0], 0, 'the left column must start at the desktop left edge');
+  assert.ok(lefts[1] > 0 && lefts[1] < BOUNDS.w,
+    'the column seam must fall strictly inside the desktop width, got ' + lefts[1]);
+  assert.ok(tops[1] > 0 && tops[1] < BOUNDS.h,
+    'the row seam must fall strictly inside the desktop height, got ' + tops[1]);
 
   // Positions must be exactly the 2x2 cross product of those lefts and
   // tops, with no repeats - a duplicated position sorts differently from
