@@ -9987,36 +9987,42 @@ function wmSnapPreviewOwnedBy(id) {
 }
 
 // Hides the preview and releases ownership, but ONLY if `id` is the current
-// owner. Closing a window that is not the live drag must leave that drag's
-// preview and ownership completely untouched - otherwise an unrelated close
-// (a script autoclosing 'void', SYSMON killing a process, terminal `exit`)
+// owner - and reports whether it actually was, so a caller that needs "was
+// this drag still entitled to act?" gets the answer and the release in one
+// call. A caller that instead read ownership separately before calling this
+// would make that read-then-release ordering load-bearing - moved below the
+// release, the read would find ownership already cleared and always come
+// back false, and nothing would catch it, since no test drives a live drag
+// closure. Returning the answer here removes that hazard rather than relying
+// on call sites to get the order right.
+//
+// Closing a window that is not the live drag must leave that drag's preview
+// and ownership completely untouched - otherwise an unrelated close (a
+// script autoclosing 'void', SYSMON killing a process, terminal `exit`)
 // could silently cancel the one warning that a window is about to resize
 // itself, or - if the closing window WAS the owner - a later zone transition
 // on that same dead drag could resurrect an overlay with nothing left to
 // explain it.
 function wmSnapPreviewRelease(id) {
-  if (!wmSnapPreviewOwnedBy(id)) return;
+  if (!wmSnapPreviewOwnedBy(id)) return false;
   wmSnapPreviewHide();
   wmActiveDragId = null;
+  return true;
 }
 
 // The release-time gate: whether a drag that just ended may still act on its
-// pendingZone. Pulled out of onUp into its own pure function so the ordering
-// bug it exists to prevent - reading `owned` AFTER wmSnapPreviewRelease has
-// already cleared it, or trusting pendingZone by itself - can be pinned by a
-// test without simulating a live mouse drag. `owned` MUST be the value
-// wmSnapPreviewOwnedBy(id) returned BEFORE wmSnapPreviewRelease ran: release
-// always leaves ownership cleared, so an `owned` read afterward would be
-// permanently false and useless as a gate. pendingZone alone is not a safe
-// signal either - it only records where the cursor was the last time this
-// drag was still live, not whether this drag still has the right to act.
-// Ownership can be revoked mid-drag (the window this drag belongs to gets
-// closed - terminal's own `exit`, SYSMON killing the process, the daemon
-// autoclosing 'void'), and a NEW window can then be opened that reuses the
-// same id before mouseup ever fires. That window's wins[id] exists and would
-// pass every other check, but it was never dragged - acting on the stale
-// pendingZone would snap it with no preview ever shown for it, which is the
-// exact failure the preview exists to rule out.
+// pendingZone. `owned` is wmSnapPreviewRelease's own return value - whether
+// `id` actually held the preview at release time - not a separately read
+// flag. pendingZone alone is not a safe signal: it only records where the
+// cursor was the last time this drag was still live, not whether this drag
+// still has the right to act. Ownership can be revoked mid-drag (the window
+// this drag belongs to gets closed - terminal's own `exit`, SYSMON killing
+// the process, the daemon autoclosing 'void'), and a NEW window can then be
+// opened that reuses the same id before mouseup ever fires. That window's
+// wins[id] exists and would pass every other check, but it was never
+// dragged - acting on the stale pendingZone would snap it with no preview
+// ever shown for it, which is the exact failure the preview exists to rule
+// out.
 function wmShouldApplySnapOnRelease(owned, snapEnabled, pendingZone) {
   return !!(snapEnabled && owned && pendingZone);
 }
@@ -10259,12 +10265,10 @@ function makeDraggable(win, handle) {
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      // Read ownership BEFORE releasing it - wmSnapPreviewRelease clears the
-      // flag, so reading after would always see "not owned" and
-      // wmShouldApplySnapOnRelease could never fire. See that function for
-      // why pendingZone alone is not a safe signal to act on.
-      const owned = wmSnapPreviewOwnedBy(id);
-      wmSnapPreviewRelease(id);
+      // wmSnapPreviewRelease's return value IS "was this drag still the
+      // owner" - see that function and wmShouldApplySnapOnRelease for why
+      // pendingZone alone is not a safe signal to act on.
+      const owned = wmSnapPreviewRelease(id);
       if (!wmShouldApplySnapOnRelease(owned, snapEnabled, pendingZone)) return;
       if (pendingZone === 'top') {
         // maxWin() already no-ops on a missing window through its own guard,

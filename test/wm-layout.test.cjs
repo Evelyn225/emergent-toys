@@ -377,3 +377,22 @@ test('the release gate allows the action when ownership, snap-enabled, and a pen
   assert.strictEqual(ctx.wmShouldApplySnapOnRelease(owned, true, 'left'), true,
     'the normal, still-owned case must still be allowed to act');
 });
+
+// ── snap preview release return value (fix round 3) ──────────────────
+// wmSnapPreviewRelease now reports whether `id` actually was the owner, so
+// onUp gates on its return value directly instead of a separately read flag
+// captured before the call. That removes the read-before-release ordering as
+// a place to get this wrong - there is no longer a separate read to move
+// below the release by accident.
+
+test('wmSnapPreviewRelease returns true when releasing for the real owner', () => {
+  const ctx = wmCtx();
+  ctx.wmSetActiveDragId('owner-1');
+  assert.strictEqual(ctx.wmSnapPreviewRelease('owner-1'), true);
+});
+
+test('wmSnapPreviewRelease returns false when releasing for a non-owner', () => {
+  const ctx = wmCtx();
+  ctx.wmSetActiveDragId('owner-1');
+  assert.strictEqual(ctx.wmSnapPreviewRelease('someone-else'), false);
+});
