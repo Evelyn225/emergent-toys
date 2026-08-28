@@ -693,11 +693,11 @@ function wmInstallTaskbarMenu() {
     // Anchor to the bar's own top edge, not e.clientY. This menu belongs to
     // the taskbar, not to a point on it - where inside the 28px bar the
     // cursor happened to land must not change where the menu ends up.
-    // showCtxMenu's own overflow clamp then flips it upward off that edge,
-    // landing its bottom flush against the taskbar's top, same as every
-    // right-click on the bar produces.
+    // anchorBottom tells showCtxMenu to place the menu's bottom edge on
+    // that top edge explicitly, so it lands flush against the taskbar
+    // whether or not the menu is tall enough to trigger the overflow clamp.
     const barTop = bar.getBoundingClientRect().top;
-    showCtxMenu(e.clientX, barTop, items);
+    showCtxMenu(e.clientX, barTop, items, { anchorBottom: true });
   });
 }
 

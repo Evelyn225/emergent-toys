@@ -99,7 +99,7 @@ function addLongPress(el) {
   el.addEventListener('pointercancel', cancel, { passive: true });
 }
 
-function showCtxMenu(x, y, items) {
+function showCtxMenu(x, y, items, opts) {
   closeDropdown();
   const dd = document.createElement('div');
   dd.className = 'menu-dropdown'; dd.id = 'active-dropdown';
@@ -119,7 +119,15 @@ function showCtxMenu(x, y, items) {
   // Clamp to viewport
   const r = dd.getBoundingClientRect();
   if (r.right  > window.innerWidth)  dd.style.left = (x - r.width)  + 'px';
-  if (r.bottom > window.innerHeight) dd.style.top  = (y - r.height) + 'px';
+  if (opts && opts.anchorBottom) {
+    // Callers anchored to the bottom edge of a bar want the menu ABOVE that
+    // edge whether or not it would have overflowed the viewport. Leaving
+    // this to the overflow clamp only works while the menu is taller than
+    // the bar, which is false for the shorter mobile taskbar menu.
+    dd.style.top = Math.max(0, y - r.height) + 'px';
+  } else if (r.bottom > window.innerHeight) {
+    dd.style.top = (y - r.height) + 'px';
+  }
   setTimeout(() => {
     document.addEventListener('mousedown', closeDropdown, { once: true });
     document.addEventListener('touchstart', closeDropdown, { once: true, passive: true });
