@@ -145,6 +145,17 @@ body {
   box-shadow: 1px 1px 0 #000;
   min-width: 180px; min-height: 80px;
 }
+/* Snap preview: shown while a drag is inside an edge zone, so the window never
+   resizes itself without warning. One element, reused. */
+#snap-preview {
+  position: absolute;
+  display: none;
+  z-index: 99998;
+  pointer-events: none;
+  background: rgba(0, 0, 128, 0.25);
+  border: 2px solid #000080;
+  box-sizing: border-box;
+}
 /* ── Resize handles ──────────────────────────────────────────── */
 .win-rz { position:absolute; z-index:100; }
 .win-rz-n  { top:-3px;    left:6px;  right:6px;  height:6px;  cursor:n-resize;  }

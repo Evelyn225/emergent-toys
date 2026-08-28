@@ -9926,6 +9926,35 @@ function wmApplySnap(id, zone) {
   w.snap = zone;
 }
 
+// One preview element for the whole OS, created on first use. Not one per
+// window: a second drag would orphan the first one's overlay.
+function wmSnapPreviewEl() {
+  let el = document.getElementById('snap-preview');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'snap-preview';
+    const desk = document.getElementById('desktop');
+    (desk || document.body).appendChild(el);
+  }
+  return el;
+}
+
+function wmSnapPreviewShow(zone) {
+  const rect = wmSnapRect(zone, desktopBounds());
+  if (!rect) return wmSnapPreviewHide();
+  const el = wmSnapPreviewEl();
+  el.style.left   = rect.left + 'px';
+  el.style.top    = rect.top + 'px';
+  el.style.width  = rect.width + 'px';
+  el.style.height = rect.height + 'px';
+  el.style.display = 'block';
+}
+
+function wmSnapPreviewHide() {
+  const el = document.getElementById('snap-preview');
+  if (el) el.style.display = 'none';
+}
+
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
@@ -10027,7 +10056,7 @@ function unminWin(id) {
   // Minimized windows are skipped by the resize clamp (they have no layout box),
   // so a window minimized on a large viewport and restored on a small one gets
   // pulled back inside here.
-  if (w.maximized) fitMaximized(w); else clampWinGeometry(w.el);
+  if (w.maximized) fitMaximized(w); else if (w.snap) fitSnapped(w); else clampWinGeometry(w.el);
   focusWin(id);
 }
 
@@ -10037,6 +10066,20 @@ function fitMaximized(w) {
   w.el.style.top    = '0';
   w.el.style.width  = dw + 'px';
   w.el.style.height = dh + 'px';
+}
+
+// Re-fit a snapped window to the current desktop, mirroring fitMaximized's
+// shape. Geometry only - no zIndex, no state changes - so a reflow never
+// reorders the stack the way routing this through wmApplySnap would. Falls
+// back to a plain clamp if the window's snap value is somehow unknown, so a
+// corrupt `snap` can never leave the window unclamped.
+function fitSnapped(w) {
+  const rect = wmSnapRect(w.snap, desktopBounds());
+  if (!rect) { clampWinGeometry(w.el); return; }
+  w.el.style.left   = rect.left + 'px';
+  w.el.style.top    = rect.top + 'px';
+  w.el.style.width  = rect.width + 'px';
+  w.el.style.height = rect.height + 'px';
 }
 
 function maxWin(id) {
@@ -10092,6 +10135,10 @@ function closeWin(id) {
   }
   if (wins[id] && typeof wins[id].removeProbe === 'function') wins[id].removeProbe();
   w.el.remove(); delete wins[id];
+  // A window can be closed by a script mid-drag, in which case the drag's own
+  // mouseup cleanup never runs for it. An overlay left on screen with no window
+  // to explain it is worse than no preview at all.
+  wmSnapPreviewHide();
   kernelDeregisterSystem(id);
   const btn = document.getElementById('tbtn-' + id); if (btn) btn.remove();
 }
@@ -10118,8 +10165,29 @@ function makeDraggable(win, handle) {
     focusWin(id);
     restoreFilledForDrag(id, e.clientX, e.clientY);
     startDrag(e.clientX, e.clientY);
-    const onMove = (e) => moveDrag(e.clientX, e.clientY);
-    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    // Mobile windows already fill the desktop (mkWin), so there is nothing to
+    // snap and a 20px zone is barely hittable with a finger. No snap logic runs
+    // on that branch at all rather than shipping a control that cannot work.
+    const snapEnabled = !(window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches);
+    let pendingZone = null;
+    const onMove = (e) => {
+      moveDrag(e.clientX, e.clientY);
+      if (!snapEnabled) return;
+      const zone = wmSnapZoneAt(e.clientX, e.clientY, desktopBounds(), WM_SNAP_EDGE);
+      if (zone !== pendingZone) {
+        pendingZone = zone;
+        if (zone) wmSnapPreviewShow(zone); else wmSnapPreviewHide();
+      }
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      wmSnapPreviewHide();
+      if (!snapEnabled || !pendingZone) return;
+      if (pendingZone === 'top') { if (!wins[id] || !wins[id].maximized) maxWin(id); }
+      else wmApplySnap(id, pendingZone);
+      pendingZone = null;
+    };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
@@ -10143,7 +10211,7 @@ function makeResizable(win, id) {
   win.querySelectorAll('.win-rz').forEach(handle => {
     const a = [...handle.classList].find(c => c.startsWith('win-rz-') && c !== 'win-rz').replace('win-rz-','');
     handle.addEventListener('mousedown', e => {
-      const w = wins[id]; if (w && w.maximized) return; // don't resize while maximized
+      const w = wins[id]; if (w && wmIsFilled(w)) return; // don't resize while filled (maximized or snapped)
       e.preventDefault(); e.stopPropagation();
       focusWin(id);
       const x0 = e.clientX, y0 = e.clientY;
@@ -10181,7 +10249,7 @@ let _wmReflowPending = false;
 function reflowWindows() {
   Object.values(wins).forEach(w => {
     if (w.minimized) return;   // clamped on restore instead - see unminWin
-    if (w.maximized) fitMaximized(w); else clampWinGeometry(w.el);
+    if (w.maximized) fitMaximized(w); else if (w.snap) fitSnapped(w); else clampWinGeometry(w.el);
   });
 }
 window.addEventListener('resize', () => {
