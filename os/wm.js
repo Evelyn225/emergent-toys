@@ -630,6 +630,70 @@ function wmUnsnap(id) {
   clampWinGeometry(w.el);
 }
 
+// ── arranging ────────────────────────────────────────────────────
+
+// Only what is on screen. A minimized window stays minimized.
+function wmVisibleWinIds() {
+  return Object.keys(wins).filter(id => wins[id] && !wins[id].minimized);
+}
+
+// Both arrangers clear fill state first: a tiled window sits at a computed size,
+// so it cannot still claim to be maximized or snapped. Leaving the flag set
+// would make the next drag restore a stale geometry.
+function wmApplyRects(ids, rects) {
+  ids.forEach((id, i) => {
+    const w = wins[id]; const r = rects[i];
+    if (!w || !r) return;
+    w.maximized = false;
+    w.snap = null;
+    w.origStyle = null;
+    w.el.style.left   = r.left + 'px';
+    w.el.style.top    = r.top + 'px';
+    w.el.style.width  = r.width + 'px';
+    w.el.style.height = r.height + 'px';
+    w.el.style.zIndex = ++zTop;
+  });
+}
+
+function wmCascade() {
+  const ids = wmVisibleWinIds();
+  wmApplyRects(ids, wmCascadeRects(ids.length, desktopBounds(), WM_CASCADE_STEP));
+}
+
+function wmTile() {
+  const ids = wmVisibleWinIds();
+  wmApplyRects(ids, wmTileRects(ids.length, desktopBounds()));
+}
+
+function wmMinimizeAll() {
+  wmVisibleWinIds().forEach(id => minWin(id));
+}
+
+// The taskbar's own right-click menu. System Monitor is here because that is
+// where Task Manager has lived on this taskbar's ancestors for thirty years;
+// openSysmon is already idempotent (mkWin returns null after focusing and
+// un-minimizing the existing window), so it needs no guard.
+function wmInstallTaskbarMenu() {
+  const bar = document.getElementById('taskbar');
+  if (!bar) return;
+  bar.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const mobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
+    const none = wmVisibleWinIds().length === 0;
+    const items = [];
+    // Arranging is meaningless when every window already fills the screen.
+    if (!mobile) {
+      items.push({ label: 'Cascade Windows', disabled: none, action: wmCascade });
+      items.push({ label: 'Tile Windows',    disabled: none, action: wmTile });
+      items.push('-');
+    }
+    items.push({ label: 'Minimize All', disabled: none, action: wmMinimizeAll });
+    items.push('-');
+    items.push({ label: 'System Monitor', icon: 'icon:sysmon', action: () => openSysmon() });
+    showCtxMenu(e.clientX, e.clientY, items);
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────
 // CLOCK
 // ─────────────────────────────────────────────────────────────────

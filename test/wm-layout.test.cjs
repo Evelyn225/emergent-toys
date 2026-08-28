@@ -396,3 +396,22 @@ test('wmSnapPreviewRelease returns false when releasing for a non-owner', () => 
   ctx.wmSetActiveDragId('owner-1');
   assert.strictEqual(ctx.wmSnapPreviewRelease('someone-else'), false);
 });
+
+// ── which windows get arranged ───────────────────────────────────
+// Cascade and Tile act on what the player can SEE. Arranging windows they
+// cannot see, or silently reopening ones they deliberately minimized, is
+// surprising - and it is what Windows does.
+
+test('wmVisibleWinIds skips minimized windows', () => {
+  const ctx = wmCtx();
+  ctx.wins.a = { minimized: false, el: {} };
+  ctx.wins.b = { minimized: true,  el: {} };
+  ctx.wins.c = { minimized: false, el: {} };
+  assert.deepStrictEqual(plain(ctx.wmVisibleWinIds()).sort(), ['a', 'c']);
+});
+
+test('wmVisibleWinIds is empty when everything is minimized', () => {
+  const ctx = wmCtx();
+  ctx.wins.a = { minimized: true, el: {} };
+  assert.deepStrictEqual(plain(ctx.wmVisibleWinIds()), []);
+});
