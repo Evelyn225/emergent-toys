@@ -40,7 +40,8 @@ function clampWinGeometry(el) {
 // deliberate - os/wm.js is otherwise DOM-bound and unprovable in node, and
 // these four functions are the part where the bugs would actually live.
 
-const WM_SNAP_EDGE = 20;      // px from an edge that counts as the zone
+const WM_SNAP_EDGE = 48;      // px from the left/right edge that counts as the zone
+const WM_SNAP_EDGE_TOP = 32;  // the top zone maximizes, so it stays tighter
 const WM_CASCADE_STEP = 24;   // roughly one titlebar
 
 // Which snap zone a CURSOR sits in. The cursor, not the window's edges: a wide
@@ -49,13 +50,25 @@ const WM_CASCADE_STEP = 24;   // roughly one titlebar
 //
 // There is no bottom zone. desktopBounds() already excludes the taskbar, so
 // below the desktop is outside it, not an edge.
-function wmSnapZoneAt(x, y, bounds, edge) {
+//
+// The top zone is narrower than the side zones: the side zones only resize a
+// window, but the top zone MAXIMIZES it, and a top zone as generous as the
+// sides would maximize windows the player is merely repositioning near the
+// top of the desktop. A titlebar grabbed 30px in sits at roughly the
+// cursor's y, so 32px still requires a deliberate drag upward past the top
+// of the desktop.
+function wmSnapZoneAt(x, y, bounds, edge, topEdge) {
   const e = typeof edge === 'number' ? edge : WM_SNAP_EDGE;
+  // topEdge falls back to `e`, not to WM_SNAP_EDGE_TOP: every existing test
+  // passes `edge` explicitly and expects the top strip to match it, so those
+  // tests keep passing unchanged and keep testing what they were written to
+  // test. Only the production call site passes both.
+  const te = typeof topEdge === 'number' ? topEdge : e;
   if (!bounds || x < 0 || y < 0 || x > bounds.w || y > bounds.h) return null;
   // Top wins the corners. Dragging into a corner is far more often an attempt
   // to maximize than to half-snap, and deciding it here means the two branches
   // cannot disagree depending on evaluation order.
-  if (y <= e) return 'top';
+  if (y <= te) return 'top';
   if (x <= e) return 'left';
   if (x >= bounds.w - e) return 'right';
   return null;
@@ -409,7 +422,7 @@ function makeDraggable(win, handle) {
     const onMove = (e) => {
       moveDrag(e.clientX, e.clientY);
       if (!snapEnabled) return;
-      const zone = wmSnapZoneAt(e.clientX, e.clientY, desktopBounds(), WM_SNAP_EDGE);
+      const zone = wmSnapZoneAt(e.clientX, e.clientY, desktopBounds(), WM_SNAP_EDGE, WM_SNAP_EDGE_TOP);
       if (zone !== pendingZone) {
         pendingZone = zone;
         if (zone) wmSnapPreviewShow(zone); else wmSnapPreviewHide();

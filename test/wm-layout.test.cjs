@@ -90,6 +90,44 @@ test('a cursor outside the desktop is no zone', () => {
   assert.strictEqual(ctx.wmSnapZoneAt(1005, 300, BOUNDS, EDGE), null);
 });
 
+// The production defaults (no edge args at all): side zones are wider than
+// the top zone, since only the top zone maximizes the window.
+test('with no edge argument, the default side zone is 48px', () => {
+  const ctx = wmCtx();
+  assert.strictEqual(ctx.wmSnapZoneAt(40, 300, BOUNDS), 'left');
+  assert.strictEqual(ctx.wmSnapZoneAt(60, 300, BOUNDS), null);
+});
+
+// topEdge falls back to `edge`, not to WM_SNAP_EDGE_TOP - so omitting BOTH
+// arguments does NOT give a narrower top zone; y=40 still resolves 'top'
+// because te falls back to the 48px side default, same as e.
+test('with no edge argument at all, the top zone is NOT narrowed - it matches the side default', () => {
+  const ctx = wmCtx();
+  assert.strictEqual(ctx.wmSnapZoneAt(500, 40, BOUNDS), 'top');
+});
+
+// The narrower top zone is a property of the PRODUCTION call site passing
+// WM_SNAP_EDGE and WM_SNAP_EDGE_TOP explicitly, not of any built-in default -
+// reproduced here by passing both, exactly as makeDraggable's onMove does.
+test('with edge=48 and topEdge=32 passed explicitly (as production does), the top zone is narrower than the side zone', () => {
+  const ctx = wmCtx();
+  assert.strictEqual(ctx.wmSnapZoneAt(500, 40, BOUNDS, 48, 32), null);
+  assert.strictEqual(ctx.wmSnapZoneAt(500, 20, BOUNDS, 48, 32), 'top');
+});
+
+// topEdge falls back to `edge` when only `edge` is passed, so every existing
+// test above - which passes EDGE and expects the top strip to match it -
+// keeps meaning what it says.
+test('topEdge falls back to edge when only edge is passed', () => {
+  const ctx = wmCtx();
+  assert.strictEqual(ctx.wmSnapZoneAt(500, 25, BOUNDS, 20), null);
+});
+
+test('an explicit topEdge is honoured', () => {
+  const ctx = wmCtx();
+  assert.strictEqual(ctx.wmSnapZoneAt(500, 25, BOUNDS, 48, 32), 'top');
+});
+
 test('the left snap rect is exactly half width and full height', () => {
   const ctx = wmCtx();
   assert.deepStrictEqual(plain(ctx.wmSnapRect('left', BOUNDS)),
