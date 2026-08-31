@@ -146,11 +146,19 @@ body {
   min-width: 180px; min-height: 80px;
 }
 /* Snap preview: shown while a drag is inside an edge zone, so the window never
-   resizes itself without warning. One element, reused. */
+   resizes itself without warning. One element, reused.
+
+   It sits BELOW the windows on purpose. #desktop is position:fixed and so forms
+   a stacking context; inside it #desktop-bg and #icons-layer are z-index auto
+   while windows carry zTop, which starts at 100. A z-index of 1 therefore puts
+   the preview over the wallpaper and the desktop icons but under every window.
+   Painting it above them instead washes the window you are dragging - and every
+   other window under the zone - in translucent navy, which reads as a rendering
+   fault rather than as a hint about where the window will land. */
 #snap-preview {
   position: absolute;
   display: none;
-  z-index: 99998;
+  z-index: 1;
   pointer-events: none;
   background: rgba(0, 0, 128, 0.25);
   border: 2px solid #000080;
