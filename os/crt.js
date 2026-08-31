@@ -126,8 +126,16 @@ function crtBuildFilter() {
       '<feColorMatrix in="around" type="matrix" result="shadow" ' +
         'values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 0 1"/>' +
       '<feComposite in="glow" in2="shadow" operator="arithmetic" k1="1" k2="0" k3="0" k4="0" result="gated"/>' +
+      // Alpha passes straight through (0 0 0 1 0). Forcing it to 1 here, which
+      // is the obvious defensive thing to write, makes `warm` opaque across the
+      // WHOLE filter region - so everywhere outside the element, where there is
+      // no glow, warm is opaque black, and screening the transparent source
+      // against it paints an opaque black halo. A full-screen surface hides
+      // that because its overflow lands outside the viewport; the start menu
+      // wore a thick black outline. `gated` already carries sensible alpha from
+      // the composite above, so there is nothing to defend against.
       '<feColorMatrix in="gated" type="matrix" result="warm" ' +
-        'values="' + r + ' 0 0 0 0  0 ' + g + ' 0 0 0  0 0 ' + b + ' 0 0  0 0 0 0 1"/>' +
+        'values="' + r + ' 0 0 0 0  0 ' + g + ' 0 0 0  0 0 ' + b + ' 0 0  0 0 0 1 0"/>' +
       '<feBlend in="src" in2="warm" mode="screen"/>' +
     '</filter></svg>';
   document.body.appendChild(host);
