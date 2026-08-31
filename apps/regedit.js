@@ -134,10 +134,9 @@ function openRegedit() {
   function applyRegistryEffects(hive, keyPath, valName, newValue) {
     if (hive === 'HKEY_SLEEPBOX_MACHINE') {
       if (keyPath === 'SYSTEM\\CurrentConfig') {
-        if (valName === 'CRT_SCANLINES') {
-          osSettings.crtScanlines = !!newValue;
-          const crt = document.getElementById('crt');
-          if (crt) crt.style.display = newValue ? '' : 'none';
+        if (valName === 'CRT_EFFECT') {
+          osSettings.crtEffect = !!newValue;
+          crtApply(newValue);
         } else if (valName === 'VIDEO_DITHER') {
           osSettings.videoDither = !!newValue;
           document.querySelectorAll('.vp-dither').forEach(d => d.style.display = newValue ? '' : 'none');

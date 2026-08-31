@@ -7,8 +7,7 @@ function saveSettings() {
 }
 
 function applySettings() {
-  const crt = document.getElementById('crt');
-  if (crt) crt.style.display = osSettings.crtScanlines ? '' : 'none';
+  crtApply(osSettings.crtEffect);
   document.querySelectorAll('.vp-dither').forEach(d => d.style.display = osSettings.videoDither ? '' : 'none');
   updateClock();
   // Keep registry in sync with settings
@@ -16,7 +15,7 @@ function applySettings() {
     const cc = registryData['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
     const cu = registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'];
     if (cc) {
-      cc.CRT_SCANLINES.value = osSettings.crtScanlines ? 1 : 0;
+      cc.CRT_EFFECT.value    = osSettings.crtEffect    ? 1 : 0;
       cc.VIDEO_DITHER.value  = osSettings.videoDither  ? 1 : 0;
       cc.CLOCK_FORMAT.value  = osSettings.clock12h ? '12h' : '24h';
     }

@@ -1,8 +1,24 @@
 // ── Settings bootstrap (must be early so BIOS skip works) ────────
 const SETTINGS_KEY = 'sleepOS-settings';
 const FORCE_BOOT_SESSION_KEY = 'sleepOS-force-boot';
-const osSettings = { crtScanlines: true, videoDither: true, clock12h: false, skipBoot: false, sounds: true, soundVolume: 0.6 };
-try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
+const osSettings = { crtEffect: true, videoDither: true, clock12h: false, skipBoot: false, sounds: true, soundVolume: 0.6 };
+// The one reader for the persisted blob. bios.js loads settings a second time
+// so skipBoot is available before the boot text starts, and a raw re-parse
+// there would quietly undo the rename below - which is exactly what it did.
+function loadSavedSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    // `crtScanlines` until the CRT grew curvature and halation. Carry an
+    // explicit old "off" across rather than switching the whole tube back on
+    // for someone who had deliberately turned the scan lines off.
+    if (saved.crtEffect === undefined && typeof saved.crtScanlines === 'boolean') {
+      saved.crtEffect = saved.crtScanlines;
+    }
+    delete saved.crtScanlines;
+    Object.assign(osSettings, saved);
+  } catch(e) {}
+}
+loadSavedSettings();
 
 // ── Registry data ─────────────────────────────────────────────────
 const REG_KEY = 'sleepOS-registry';
@@ -78,7 +94,7 @@ const registryData = {
   },
   'HKEY_SLEEPBOX_MACHINE': {
     'SYSTEM\\CurrentConfig': {
-      CRT_SCANLINES:      { type:'REG_DWORD', value: 1 },
+      CRT_EFFECT:         { type:'REG_DWORD', value: 1 },
       VIDEO_DITHER:       { type:'REG_DWORD', value: 1 },
       CLOCK_FORMAT:       { type:'REG_SZ',    value: '24h' },
     },
@@ -173,6 +189,13 @@ function openWithAssociation(fileName, dirName) {
 try {
   const saved = JSON.parse(localStorage.getItem(REG_KEY) || 'null');
   if (saved) {
+    // CRT_SCANLINES became CRT_EFFECT when the toggle grew past scan lines. The
+    // loop below only copies keys the defaults already declare, so without this
+    // a saved "off" would be dropped on the floor and the tube would come back.
+    const savedConfig = saved['HKEY_SLEEPBOX_MACHINE'] && saved['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
+    if (savedConfig && savedConfig.CRT_SCANLINES && !savedConfig.CRT_EFFECT) {
+      savedConfig.CRT_EFFECT = savedConfig.CRT_SCANLINES;
+    }
     Object.keys(saved).forEach(hive => {
       if (!registryData[hive]) return;
       Object.keys(saved[hive]).forEach(path => {
@@ -225,7 +248,7 @@ function saveRegistry() {
 function applyRegistrySettings() {
   const cc = registryData['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
   const cu = registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS'];
-  osSettings.crtScanlines = !!cc.CRT_SCANLINES.value;
+  osSettings.crtEffect     = !!cc.CRT_EFFECT.value;
   osSettings.videoDither   = !!cc.VIDEO_DITHER.value;
   osSettings.clock12h      = cc.CLOCK_FORMAT.value === '12h';
   osSettings.skipBoot      = !!cu.SkipBoot.value;
@@ -477,7 +500,7 @@ function openSettings() {
   body.className = 'win-body st-panel';
 
   body.innerHTML =     `<div class="st-section">Display</div>
-     <div class="st-row"><div class="st-label">CRT scan lines</div><button class="st-toggle" data-setting="crtScanlines"></button></div>
+     <div class="st-row"><div class="st-label">CRT effect</div><button class="st-toggle" data-setting="crtEffect"></button></div>
      <div class="st-row"><div class="st-label">Video dithering</div><button class="st-toggle" data-setting="videoDither"></button></div>
      <div class="st-section">Sound</div>
      <div class="st-row"><div class="st-label">System sounds</div><button class="st-toggle" data-setting="sounds"></button></div>

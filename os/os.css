@@ -19,20 +19,32 @@
 }
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--sleep-font); }
 
-/* ── CRT overlay ──────────────────────────────────────────────── */
+/* ── CRT effect ───────────────────────────────────────────────── */
+/* Geometry and the halation filter are built in os/crt.js - see the comment
+   there for why the desktop itself is never warped. Both halves hang off
+   body.crt-on so the Settings toggle is one class rather than a list of
+   elements every caller has to keep in step. */
 #crt {
   position: fixed; inset: 0;
   pointer-events: none; z-index: 99999;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent, transparent 2px,
-    rgba(0,8,0,0.10) 2px, rgba(0,8,0,0.10) 4px
-  );
+  display: none;
 }
-#crt::after {
-  content: '';
+body.crt-on #crt { display: block; }
+/* Bowed scanlines. Outside the filtered surfaces on purpose: these sit on the
+   glass, so they must not bloom. */
+.crt-lines {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%);
+  width: 100%; height: 100%;
+  display: block;
+}
+/* Halation, per surface rather than on one wrapper, so a bright window cannot
+   glow onto the taskbar. Nothing inside any of these is position:fixed, which
+   the filter would otherwise re-anchor. */
+body.crt-on #desktop,
+body.crt-on #taskbar,
+body.crt-on #start-menu,
+body.crt-on #bios {
+  filter: url(#crt-halation);
 }
 
 /* ── Global type ─────────────────────────────────────────────── */

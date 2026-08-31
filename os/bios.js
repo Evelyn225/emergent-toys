@@ -245,8 +245,10 @@ function biosType() {
 document.addEventListener('keydown',   biosFinish, { once: true });
 document.addEventListener('click',     biosFinish, { once: true });
 document.addEventListener('touchend',  biosFinish, { once: true });
-// Load settings early so skipBoot is available
-try { Object.assign(osSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e) {}
+// Load settings early so skipBoot is available. Through the shared reader, not
+// a second raw parse: this ran after registry.js's load and re-merged the blob
+// verbatim, which put renamed-away keys straight back into osSettings.
+loadSavedSettings();
 if (osSettings.skipBoot && !forceBootSequence) {
   // Deferred by a tick so nothing here runs while the bundle is still
   // evaluating. Visually identical, and it means biosFinish cannot touch a

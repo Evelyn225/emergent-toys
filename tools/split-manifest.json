@@ -17,6 +17,7 @@
   "os/daemon.js",
   "os/process-view.js",
   "os/blob-store.js",
+  "os/crt.js",
   "os/settings.js",
   "os/park.js",
   "os/stream.js",
