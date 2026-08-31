@@ -10500,6 +10500,11 @@ function makeDraggable(win, handle) {
   }
 
   handle.addEventListener('mousedown', (e) => {
+    // Left button only, matching the rubber-band handlers in os/desktop-icons.js
+    // and apps/explorer.js. Without this a right-press on the titlebar - the
+    // natural thing to try when looking for a window menu - starts a real drag,
+    // so the smallest twitch moves the window and an edge zone snaps it.
+    if (e.button !== 0) return;
     if (e.target.tagName === 'BUTTON') return;
     e.preventDefault();
     focusWin(id);
@@ -10569,6 +10574,7 @@ function makeResizable(win, id) {
   win.querySelectorAll('.win-rz').forEach(handle => {
     const a = [...handle.classList].find(c => c.startsWith('win-rz-') && c !== 'win-rz').replace('win-rz-','');
     handle.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;   // left button only, same reason as the titlebar drag
       const w = wins[id]; if (w && wmIsFilled(w)) return; // don't resize while filled (maximized or snapped)
       e.preventDefault(); e.stopPropagation();
       focusWin(id);
@@ -17291,6 +17297,12 @@ function openRunDialog() {
     'defrag': openDefrag, 'defrag.exe': openDefrag,
     'browser': openBrowser, 'browser.exe': openBrowser,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
+    // FILES is the registry's thirteenth root entry and opens Explorer on
+    // PROJECTS. It has no ROOT_SYSTEM_FILE_META row and DIR never lists it, so
+    // the PROJECTS fallback below cannot rescue it either - without this line
+    // Run... answers "Cannot find program" for a program the desktop, the
+    // terminal's START and a script's START all launch.
+    'files': openFiles,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,
     '?????.exe': openUnknown,
