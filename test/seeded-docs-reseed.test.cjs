@@ -63,6 +63,29 @@ test('a deleted demo executable comes back fresh', () => {
   assert.ok(docsNode(ctx).files.get('HELLO.exe'), 'a deleted program is restored');
 });
 
+// "Docs heal, programs do not" is the rule this file's header states, and
+// REACTOR.script is a program: DOCS/README.txt tells the player to
+// "RUN DOCS\REACTOR.script to play a terminal game". It is authored in the
+// same script language as HELLO.exe and RUNAWAY.exe and is exactly the kind
+// of thing a player opens and tinkers with. The predicate keyed the rule off
+// `.exe` alone, so this one seeded program healed like reference text and a
+// player's edits died at the next reload with no message - the precise
+// outcome the header calls fatal.
+test('an edited demo .script survives a reseed, like the demo .exe files', () => {
+  const ctx = persistCtx();
+  docsNode(ctx).files.set('REACTOR.script', '# my own version');
+  ctx.refreshSeededDocs();
+  assert.strictEqual(docsNode(ctx).files.get('REACTOR.script'), '# my own version',
+    'an edited program must not be silently reverted, whatever extension it carries');
+});
+
+test('a deleted demo .script comes back fresh', () => {
+  const ctx = persistCtx();
+  docsNode(ctx).files.delete('REACTOR.script');
+  ctx.refreshSeededDocs();
+  assert.ok(docsNode(ctx).files.get('REACTOR.script'), 'a deleted program is restored');
+});
+
 test('both demo scripts are seeded', () => {
   const ctx = persistCtx();
   assert.ok(docsNode(ctx).files.get('HELLO.exe'), 'HELLO.exe missing');

@@ -5742,6 +5742,16 @@ function refreshSeededDocs() {
     // every edit at the next reload with no message. Delete one and it comes
     // back fresh.
     //
+    // The extension list is `.exe` AND `.script`, because "program" here means
+    // a runnable seed file, not one particular suffix. REACTOR.script is one:
+    // README.txt tells the player to "RUN DOCS\REACTOR.script to play a
+    // terminal game", and it is authored in the same script language as
+    // HELLO.exe and RUNAWAY.exe. While this matched `.exe` alone it healed
+    // like reference text, so a player who edited the one seed program they
+    // were pointed at lost the edit on the next reload with no message -
+    // exactly the outcome the paragraph above calls fatal, reached because
+    // the predicate encoded "program" as an extension rather than as a kind.
+    //
     // Deliberately a bare regex, not programIsSpawnableExe (os/programs.js),
     // even though the two agree for every name that can reach this loop
     // today (it only ever iterates SEEDED_DOCS_DATA.files' own keys - the
@@ -5759,7 +5769,7 @@ function refreshSeededDocs() {
     // discarding a player's edits - a change nobody editing os/programs.js
     // would have reason to expect. Keeping this predicate local avoids that
     // action-at-a-distance.
-    if (/\.exe$/i.test(name) && docs.files.has(name)) return;
+    if (/\.(exe|script)$/i.test(name) && docs.files.has(name)) return;
     docs.files.set(name, value);
   });
   Object.entries(SEEDED_DOCS_DATA.subdirs || {}).forEach(([name, value]) => {
