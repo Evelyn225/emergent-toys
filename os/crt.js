@@ -32,6 +32,14 @@ const CRT = {
   // edges, so it bows outward.
   warpY: 0.22,
   pitch: 3,            // scanline pitch in CSS px
+  // A flat alpha wash. Modelling the beam properly - brighter beam, fatter beam,
+  // so the gaps close up on bright content - was tried with
+  // mix-blend-mode: soft-light, whose (1 - 2*ink) * Cb * (1 - Cb) response is
+  // exactly that curve, and cut: soft-light works per channel, so on a
+  // saturated backdrop each channel gets a different factor and the lines shift
+  // hue instead of only darkening. On the teal desktop that reads as coloured
+  // banding. The correct response curve is not worth artefacts on the largest
+  // flat colour on screen.
   lineAlpha: 0.16,
 
   // ── Halation ──
@@ -200,6 +208,10 @@ function crtInit() {
   host.appendChild(crtCanvas);
   crtRebuild();
   window.addEventListener('resize', crtScheduleRebuild);
+  // Settle the toggle here rather than waiting for startDesktop's applySettings:
+  // the BIOS screen is on-screen for the whole boot and belongs behind the same
+  // glass as everything else.
+  crtApply(osSettings.crtEffect);
 }
 
 crtInit();
