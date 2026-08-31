@@ -7953,6 +7953,14 @@ const CRT = {
   strength: 1.7,
   warmth: 0.6,         // halation is warm - it is the glass, not the phosphor
   diffuse: 0.35,       // scattering in the glass: softens everything, gently
+  // Beam misconvergence, in CSS px, each way. Uniform rather than radial: real
+  // convergence error is zero at the centre of the tube and worst at the
+  // corners, but at this strength the split reads as fringing on an edge, not
+  // as displacement, and radial would mean generating a displacement map on a
+  // canvas and feeding it through feImage - rebuilt on every resize - to buy a
+  // difference nobody can pick out. Past ~0.5 the channels visibly separate on
+  // title-bar text and it stops looking like a tube.
+  aberration: 0.3,
 
   maxBackingPx: 6.5e6
 };
@@ -8013,10 +8021,28 @@ function crtBuildFilter() {
   host.id = 'crt-defs';
   host.setAttribute('aria-hidden', 'true');
   host.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+  const a = CRT.aberration;
+  // Split the beams before anything else looks at the image, so the halation
+  // downstream blooms the already-misconverged picture rather than a clean one.
+  // Every channel copy has to keep its alpha: a layer with alpha 0 and non-zero
+  // RGB is not a valid premultiplied colour and gets clamped away to nothing.
+  // Summing three of them therefore over-counts alpha, which is harmless only
+  // because every filtered surface is an opaque rectangle - revisit this if the
+  // filter is ever pointed at something with real transparency.
+  const split = a > 0
+    ? '<feColorMatrix in="pre" result="rOnly" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>' +
+      '<feColorMatrix in="pre" result="gOnly" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"/>' +
+      '<feColorMatrix in="pre" result="bOnly" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>' +
+      '<feOffset in="rOnly" dx="' + (-a) + '" dy="0" result="rShift"/>' +
+      '<feOffset in="bOnly" dx="' + a + '" dy="0" result="bShift"/>' +
+      '<feComposite in="rShift" in2="gOnly" operator="arithmetic" k2="1" k3="1" result="rg"/>' +
+      '<feComposite in="rg" in2="bShift" operator="arithmetic" k2="1" k3="1" result="src"/>'
+    : '<feOffset in="pre" dx="0" dy="0" result="src"/>';
   host.innerHTML =
     '<svg xmlns="http://www.w3.org/2000/svg">' +
     '<filter id="crt-halation" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">' +
-      '<feGaussianBlur in="SourceGraphic" stdDeviation="' + CRT.diffuse + '" result="src"/>' +
+      '<feGaussianBlur in="SourceGraphic" stdDeviation="' + CRT.diffuse + '" result="pre"/>' +
+      split +
       '<feComponentTransfer in="src" result="bright">' +
         '<feFuncR type="linear" slope="' + slope + '" intercept="' + inter + '"/>' +
         '<feFuncG type="linear" slope="' + slope + '" intercept="' + inter + '"/>' +
