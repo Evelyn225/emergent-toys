@@ -17287,6 +17287,12 @@ function openRunDialog() {
     'defrag': openDefrag, 'defrag.exe': openDefrag,
     'browser': openBrowser, 'browser.exe': openBrowser,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
+    // FILES is the registry's thirteenth root entry and opens Explorer on
+    // PROJECTS. It has no ROOT_SYSTEM_FILE_META row and DIR never lists it, so
+    // the PROJECTS fallback below cannot rescue it either - without this line
+    // Run... answers "Cannot find program" for a program the desktop, the
+    // terminal's START and a script's START all launch.
+    'files': openFiles,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,
     '?????.exe': openUnknown,
