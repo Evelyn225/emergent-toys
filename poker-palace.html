@@ -74,10 +74,12 @@
       inset: 0;
       pointer-events: none;
       z-index: 0;
-      will-change: transform;
-      background:
-        radial-gradient(circle at center, transparent 48%, rgba(0, 0, 0, 0.48) 100%),
-        radial-gradient(circle at 20% 20%, rgba(255, 191, 88, 0.08) 0 8%, rgba(255, 191, 88, 0) 25%);
+      /* Vignette only. The warm off-centre glow that used to live here painted a
+         stray pixel in Firefox on the GPU path (invisible to Chrome and to
+         headless Firefox at every DPR). It measured 13/255 at its brightest, so
+         it was not worth the artifact - the body background still carries a warm
+         top glow. */
+      background: radial-gradient(circle at center, transparent 48%, rgba(0, 0, 0, 0.48) 100%);
     }
 
     a,
