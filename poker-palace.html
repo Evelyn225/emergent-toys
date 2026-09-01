@@ -61,7 +61,11 @@
       font-family: "Pixelta", Georgia, "Times New Roman", serif;
       font-synthesis-weight: none;
       color: var(--ink);
-      background: #0d0503;
+      /* Linear only. A vertical ramp is cheap even under software rasterisation
+         (no per-pixel distance term), unlike the radial glow that used to sit on
+         top of it - and body spans the whole scrollable document, not the
+         viewport, so anything here is rasterised across the full page height. */
+      background: linear-gradient(180deg, #1c0906, #070303);
       letter-spacing: 0.03em;
       overflow-x: hidden;
     }
