@@ -234,7 +234,7 @@
   <button id="theme-toggle" aria-label="Toggle colour theme">[ dark ]</button>
   <div id="cursor-layer" aria-hidden="true"></div>
   <main class="main-inner" id="main-content">
-    <div class="main-title"><span>Eve Net</span><span class="title-cursor"></span></div>
+    <div class="main-title"><span id="main-title-text">Eve Net</span><span class="title-cursor"></span></div>
     <div class="main-tagline">generative art / interactive experiments</div>
     <div class="link-list" role="navigation" aria-label="Project navigation">
       <a href="Sands"               class="link-item">sand playground</a><span class="link-sep">/</span>
@@ -280,6 +280,27 @@
     applyTheme(dark);
     localStorage.setItem('evenet-theme', dark ? 'dark' : 'light');
   });
+
+  // ── Title typewriter ──────────────────────────────────────────
+  // The title ships in the markup so it still reads with JS off; we take that
+  // text as the source, blank it, and type it back in.
+  const titleEl     = document.getElementById('main-title-text');
+  const titleCursor = document.querySelector('.title-cursor');
+  const TITLE       = titleEl.textContent;
+
+  titleCursor.style.animation = 'none';   // hold the cursor solid while typing
+  titleEl.textContent = '';
+
+  let titleIndex = 0;
+  function typeTitle() {
+    titleEl.textContent = TITLE.slice(0, titleIndex);
+    if (titleIndex++ < TITLE.length) {
+      setTimeout(typeTitle, 90);
+    } else {
+      titleCursor.style.animation = '';   // hand blinking back to the stylesheet
+    }
+  }
+  setTimeout(typeTitle, 220);             // let the content fade land first
 
   // ── Cursor particles ──────────────────────────────────────────
   const activeParticles = [];
