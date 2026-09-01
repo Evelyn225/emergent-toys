@@ -68,9 +68,10 @@ const CRT = {
   // BYTE-IDENTICAL to one with the split disabled entirely. The old note here
   // claimed the channels come apart past ~0.5; measured against title-bar text,
   // which is the sensitive case, they do not. Fringing first reads at ~0.9,
-  // 1.2 is clearly a misconverged tube, and 1.6 starts to cost the 11px
-  // W95font its crispness - which is the real ceiling.
-  aberration: 1.2,
+  // and 1.6 starts to cost the 11px W95font its crispness - which is the real
+  // ceiling. 1 sits just above the threshold where the effect is visible at
+  // all, which is where this belongs: it should be felt, not looked at.
+  aberration: 1,
 
   maxBackingPx: 6.5e6
 };
