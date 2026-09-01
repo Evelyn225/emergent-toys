@@ -39,7 +39,7 @@ function openRunDialog() {
     // the PROJECTS fallback below cannot rescue it either - without this line
     // Run... answers "Cannot find program" for a program the desktop, the
     // terminal's START and a script's START all launch.
-    'files': openFiles,
+    'files': openFiles, 'projects': openFiles,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,
     '?????.exe': openUnknown,

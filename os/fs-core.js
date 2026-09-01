@@ -317,6 +317,7 @@ function vfsSeedTree() {
         'USER FILES:',
         '  Create with TOUCH, NOTEPAD, or ECHO >.',
         '  Upload via right-click > Upload File.',
+        '  (Long-press instead of right-click on touch.)',
         '  New items go into your current folder.',
         '',
         'SHORTCUTS:',

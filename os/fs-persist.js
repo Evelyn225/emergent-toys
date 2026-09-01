@@ -497,7 +497,22 @@ function reportVfsError(err) {
 // both. Firing on ordinary tab switches and minimises costs nothing either:
 // vfsFlush early-returns when no ops are pending, and when ops ARE pending
 // the commit was going to happen within 400ms regardless.
+// Set once a factory reset has started. It is cleared again only on the one
+// path that gives up before erasing anything (a delete blocked by another tab);
+// past that point the only way out of the state is the reload at the end of it.
+//
+// Both save-on-the-way-out handlers below have to honour it, and for the same
+// reason: a reset ends in location.replace, which fires visibilitychange and
+// then beforeunload AFTER the database has been deleted and localStorage
+// emptied. Without this, fsFlushOnHidden commits the in-memory tree straight
+// back into a freshly recreated database and fsSnapshotOnUnload writes the
+// localStorage copy back out, and the "fresh install" boots into exactly the
+// filesystem it was asked to destroy.
+var osFactoryResetInProgress = false;
+function fsBeginFactoryReset() { osFactoryResetInProgress = true; }
+
 function fsFlushOnHidden() {
+  if (osFactoryResetInProgress) return;
   if (document.visibilityState !== 'hidden') return;
   void vfsFlush();
 }
@@ -521,6 +536,7 @@ document.addEventListener('visibilitychange', fsFlushOnHidden);
 // every image and sound stripped out - and it would still not save the pending
 // IndexedDB writes. fsFlushOnHidden above is what covers those instead.
 function fsSnapshotOnUnload() {
+  if (osFactoryResetInProgress) return;
   if (fsGetActiveBackendKind() !== 'local') return;
   // vfsIsMounted() is the load-bearing half of this guard. vfsMount publishes
   // _vfsBackend only after _vfsRoot holds real data, so this is what stops us

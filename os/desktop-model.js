@@ -33,6 +33,10 @@ const RECYCLE_BIN_KEY = 'sleepOS-recycle-bin';
 
 const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: 'icon:text',     action: 'openWelcome' },
+  // The twenty-five art toys are the most interesting thing in here and were
+  // reachable only from the Start menu, while WELCOME.README had been telling
+  // players to double-click a PROJECTS icon on the desktop that did not exist.
+  { name: 'PROJECTS',       emoji: 'icon:folder',   action: 'openFiles' },
   { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
   { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
   { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },

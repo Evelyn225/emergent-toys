@@ -28,6 +28,12 @@ function applySettings() {
     saveRegistry();
   }
   applySystemAudioSettings();
+  renderTraySound();
+  // The single funnel every settings change already runs through - the Settings
+  // window, REGEDIT, and the tray mixer all end here - so it is the one place
+  // that can tell an open window its controls are stale. Any listener must only
+  // read osSettings and redraw; calling back into applySettings would recurse.
+  document.dispatchEvent(new CustomEvent('os-settings-changed'));
 }
 
 document.addEventListener('fs-changed', refreshAppearanceWindow);

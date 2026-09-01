@@ -260,6 +260,17 @@ body {
 .taskbar-btn span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .tb-icon { --os-icon-size: 16px; display: flex; align-items: center; flex-shrink: 0; }
 .tray-icon { --os-icon-size: 16px; display: flex; align-items: center; }
+/* The one tray slot that is a control rather than a status light. It keeps the
+   bare look of its neighbours - a raised bevel here would read as a taskbar
+   button that had escaped into the tray - and earns its affordance from the
+   hover tint and the pressed inset instead. */
+.tray-btn {
+  border: 1px solid transparent; background: none; padding: 0 1px;
+  cursor: default; color: inherit; font: inherit;
+}
+.tray-btn:hover { border-color: #fff #808080 #808080 #fff; }
+.tray-btn:active, .tray-btn.open { border-color: #808080 #fff #fff #808080; }
+.tray-btn:focus-visible { outline: 1px dotted #000; outline-offset: -2px; }
 #system-tray {
   height: 22px;
   border: 1px solid; border-color: #808080 #fff #fff #808080;
@@ -267,10 +278,36 @@ body {
   font-size: 11px; flex-shrink: 0;
 }
 
+/* ── Tray volume flyout ──────────────────────────────────────── */
+/* 9002 clears the 28px taskbar (9000) it hangs off and the start menu (9001),
+   which can be open behind it; the alt-tab, CAD and sleep overlays sit at
+   99990+ and are meant to cover it. */
+#tray-volume {
+  position: fixed; z-index: 9002; display: none;
+  flex-direction: column; gap: 6px;
+  padding: 8px;
+  background: #c0c0c0;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+}
+#tray-volume.open { display: flex; }
+#tray-volume-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: #808080; text-align: center;
+}
+/* Wider than the Settings copy: this one is the whole control rather than one
+   row of a panel, so the blocks get room to be aimed at individually. */
+#tray-volume .st-vol { min-width: 124px; }
+#tray-volume .st-toggle { width: 100%; }
+
 /* ── Start Menu ──────────────────────────────────────────────── */
 #start-menu {
   position: fixed; bottom: 28px; left: 0;
   width: 200px;
+  /* Capped so the menu can never run off the top of a short viewport. It grew
+     past the point where that was hypothetical: on a phone the items are 46px
+     tall and there are fourteen of them. */
+  max-height: calc(100vh - 32px);
   background: #c0c0c0;
   border: 2px solid; border-color: #fff #808080 #808080 #fff;
   z-index: 9001; display: none; flex-direction: row;
@@ -286,7 +323,9 @@ body {
   font-size: 10px; font-weight: bold; color: rgba(255,255,255,0.45);
   letter-spacing: 2px;
 }
-#sm-items { flex: 1; padding: 2px 0; }
+/* The scroller, so the sidebar stays full height beside it rather than
+   scrolling away with the items. */
+#sm-items { flex: 1; padding: 2px 0; overflow-y: auto; }
 .sm-item {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 8px 4px 4px; cursor: default; font-size: 11px;
@@ -1434,7 +1473,8 @@ body.idle-sleeping { cursor:none; }
   .sm-lbl { width: 110px; font-size: 14px; }
   .sm-val { font-size: 14px; }
 
-  #start-menu { width: 290px; }
+  /* Matches the 56px mobile taskbar this hangs off, plus the border. */
+  #start-menu { width: 290px; max-height: calc(100vh - 60px); }
   .sm-item { padding: 15px 12px 15px 8px; font-size: 16px; }
   /* 32px, not 28: a whole 1x of the source art rather than a 0.875x resample.
      At full size there is no downscale left to filter, so it goes back to

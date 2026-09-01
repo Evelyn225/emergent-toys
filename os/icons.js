@@ -49,6 +49,11 @@ const OS_ICONS = {
   star:          'star.png',
   network:       'network.png',
   standby:       'standby_icon.png',
+  // The only two icons in the set that were authored here rather than taken
+  // from the Win98 pack, because it has no speaker. Drawn on a 16px grid and
+  // emitted at 2x, so they are sharp at both slot sizes like the rest.
+  sound:         'sound.png',
+  'sound-mute':  'sound_mute.png',
   // ── Registry value types ──────────────────────────────────────
   // Real regedit draws string values with an "ab" glyph and numeric ones with
   // the binary glyph, which is why REG_DWORD gets the binary icon rather than

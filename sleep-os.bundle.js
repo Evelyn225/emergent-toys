@@ -49,6 +49,11 @@ const OS_ICONS = {
   star:          'star.png',
   network:       'network.png',
   standby:       'standby_icon.png',
+  // The only two icons in the set that were authored here rather than taken
+  // from the Win98 pack, because it has no speaker. Drawn on a 16px grid and
+  // emitted at 2x, so they are sharp at both slot sizes like the rest.
+  sound:         'sound.png',
+  'sound-mute':  'sound_mute.png',
   // ── Registry value types ──────────────────────────────────────
   // Real regedit draws string values with an "ab" glyph and numeric ones with
   // the binary glyph, which is why REG_DWORD gets the binary icon rather than
@@ -2731,6 +2736,10 @@ const RECYCLE_BIN_KEY = 'sleepOS-recycle-bin';
 
 const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: 'icon:text',     action: 'openWelcome' },
+  // The twenty-five art toys are the most interesting thing in here and were
+  // reachable only from the Start menu, while WELCOME.README had been telling
+  // players to double-click a PROJECTS icon on the desktop that did not exist.
+  { name: 'PROJECTS',       emoji: 'icon:folder',   action: 'openFiles' },
   { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
   { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
   { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },
@@ -3267,7 +3276,10 @@ const PROGRAM_LAUNCHERS = {
   // and prints a C:\sleepOS\FILES path that does not exist as a file; this
   // is the same launchable-but-not-a-file behaviour as WELCOME.README's
   // aliasing, just undeclared until now.
-  'FILES': { lines: ['Opening Files...'], open: () => openFiles() },
+  // Aliased to 'projects' because that is the name every surface a player
+  // reads uses for it - the desktop icon, the Start menu entry and
+  // WELCOME.README all say PROJECTS, and only this registry says FILES.
+  'FILES': { lines: ['Opening Files...'], open: () => openFiles(), aliases: ['projects'] },
 };
 
 // Story files exist at the root without being in ROOT_SYSTEM_FILE_META, and
@@ -4022,7 +4034,8 @@ function openSettings() {
   // 316 = 18px titlebar + 4px borders + the panel's exact content height. The
   // old 294 already left ~70px of dead space below the footer; adding the
   // Sound section without re-measuring would have kept it.
-  if (!mkWin({ id:'settings', title:'Settings', icon:'icon:settings', w:390, h:316, x:145, y:95, menubar:false, statusbar:false })) return;
+  // 372 = the same measure again after the Reset row and its section header.
+  if (!mkWin({ id:'settings', title:'Settings', icon:'icon:settings', w:390, h:372, x:145, y:95, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-settings');
   body.className = 'win-body st-panel';
 
@@ -4036,89 +4049,16 @@ function openSettings() {
      <div class="st-row"><div class="st-label">12-hour clock</div><button class="st-toggle" data-setting="clock12h"></button></div>
 
      <div class="st-row"><div class="st-label">Skip boot screen</div><button class="st-toggle" data-setting="skipBoot"></button></div>
+     <div class="st-section">Reset</div>
+     <div class="st-row"><div class="st-label">Erase all data and restart</div><button class="st-toggle" id="settings-reset">Reset...</button></div>
      <div class="st-footer">
        <button class="dlg-btn primary" id="settings-open-appearance">Open Appearance</button>
        <button class="dlg-btn" id="settings-close">Close</button>
      </div>`;
 
-  // \u2500\u2500 Volume, drawn as the media player's block meter \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  const VOL_BLOCKS = 10;
-  const volEl = document.getElementById('settings-volume');
-  let volDragging = false;
-
-  function renderVolume() {
-    const filled = osSettings.sounds ? Math.round(getSystemVolume() * VOL_BLOCKS) : 0;
-    volEl.innerHTML =
-      `<span style="color:#000080">${'&#9632;'.repeat(filled)}</span>` +
-      `<span style="color:#6a6a6a">${'&#9643;'.repeat(VOL_BLOCKS - filled)}</span>`;
-    volEl.classList.toggle('off', !osSettings.sounds);
-    volEl.setAttribute('aria-valuenow', String(Math.round(getSystemVolume() * 100)));
-  }
-
-  // Quantised to the blocks that are actually drawn: clicking a block should
-  // land on that block, not on a continuous value that rounds to its neighbour.
-  function setVolumeStep(step) {
-    const clamped = Math.max(0, Math.min(VOL_BLOCKS, step));
-    osSettings.soundVolume = clamped / VOL_BLOCKS;
-    // Dragging a muted slider upwards unmutes, the way every OS mixer does.
-    if (clamped > 0 && !osSettings.sounds) osSettings.sounds = true;
-  }
-
-  // Live during a drag, but nothing is written to disk until the pointer is
-  // released - saveSettings and saveRegistry both hit localStorage, and
-  // pointermove fires at frame rate.
-  function previewVolume(clientX) {
-    // Measured against the content box, not the border box: the blocks are
-    // drawn inside 2px of bevel and 6px of padding, and mapping the pointer
-    // across the full width would land a click a block away from the one it
-    // was aimed at near either end.
-    const r = volEl.getBoundingClientRect();
-    const cs = getComputedStyle(volEl);
-    const inset = n => parseFloat(cs.getPropertyValue(n)) || 0;
-    const left = r.left + inset('border-left-width') + inset('padding-left');
-    const width = Math.max(1, r.width - inset('border-left-width') - inset('border-right-width')
-                                      - inset('padding-left') - inset('padding-right'));
-    setVolumeStep(Math.round(((clientX - left) / width) * VOL_BLOCKS));
-    applySystemAudioSettings();
-    renderVolume();
-  }
-
-  function commitVolume() {
-    saveSettings();
-    applySettings();
-    refresh();
-    playSound('click');
-  }
-
-  // Pointer capture instead of document-level move/up listeners: those would
-  // outlive the window and stack up one pair per Settings open.
-  volEl.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    volDragging = true;
-    try { volEl.setPointerCapture(e.pointerId); } catch (err) {}
-    previewVolume(e.clientX);
-  });
-  volEl.addEventListener('pointermove', e => { if (volDragging) previewVolume(e.clientX); });
-  volEl.addEventListener('pointerup', e => {
-    if (!volDragging) return;
-    volDragging = false;
-    try { volEl.releasePointerCapture(e.pointerId); } catch (err) {}
-    commitVolume();
-  });
-  volEl.addEventListener('pointercancel', () => {
-    if (!volDragging) return;
-    volDragging = false;
-    commitVolume();
-  });
-  volEl.addEventListener('keydown', e => {
-    const dir = (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? 1
-              : (e.key === 'ArrowLeft'  || e.key === 'ArrowDown') ? -1 : 0;
-    if (!dir) return;
-    e.preventDefault();
-    setVolumeStep(Math.round(getSystemVolume() * VOL_BLOCKS) + dir);
-    commitVolume();
-  });
+  // The meter itself is mountVolumeBlocks in os/audio.js; the tray mixer draws
+  // the same control, and the pointer maths is not worth two copies of.
+  const renderVolume = mountVolumeBlocks(document.getElementById('settings-volume'));
 
   function refresh() {
     body.querySelectorAll('[data-setting]').forEach(btn => {
@@ -4145,6 +4085,13 @@ function openSettings() {
     });
   });
 
+  // Muting from the tray while this window is open has to move the toggle and
+  // the meter here too, or the two disagree about the same setting. Removed on
+  // close, because the handler closes over a body that is about to be gone.
+  document.addEventListener('os-settings-changed', refresh);
+  wins['settings']._onclose = () => document.removeEventListener('os-settings-changed', refresh);
+
+  document.getElementById('settings-reset').addEventListener('click', confirmFactoryReset);
   document.getElementById('settings-open-appearance').addEventListener('click', openAppearance);
   document.getElementById('settings-close').addEventListener('click', () => closeWin('settings'));
   refresh();
@@ -4537,6 +4484,239 @@ function initSystemAudio() {
     if (!target || target.disabled) return;
     playSound('click');
   }, true);
+  initTraySound();
+}
+
+// ── The volume block meter ────────────────────────────────────────
+// Lives here rather than in the Settings window that used to own it, because
+// there are two of these now: the Settings row and the tray flyout. The drag
+// maths is the fiddly part (see `preview` below) and two copies of it would be
+// two things to keep in step, which is how this codebase ended up with three
+// lists of the same programs once already.
+const VOL_BLOCKS = 10;
+
+// Quantised to the blocks that are actually drawn: clicking a block should
+// land on that block, not on a continuous value that rounds to its neighbour.
+function setVolumeStep(step) {
+  const clamped = Math.max(0, Math.min(VOL_BLOCKS, step));
+  osSettings.soundVolume = clamped / VOL_BLOCKS;
+  // Dragging a muted slider upwards unmutes, the way every OS mixer does.
+  if (clamped > 0 && !osSettings.sounds) osSettings.sounds = true;
+}
+
+// Returns the render function, so a caller that has its own refresh pass can
+// redraw the meter without knowing how it is drawn.
+function mountVolumeBlocks(el) {
+  if (!el) return () => {};
+  let dragging = false;
+
+  function render() {
+    const filled = systemAudioEnabled() ? Math.round(getSystemVolume() * VOL_BLOCKS) : 0;
+    el.innerHTML =
+      `<span style="color:#000080">${'&#9632;'.repeat(filled)}</span>` +
+      `<span style="color:#6a6a6a">${'&#9643;'.repeat(VOL_BLOCKS - filled)}</span>`;
+    el.classList.toggle('off', !systemAudioEnabled());
+    el.setAttribute('aria-valuenow', String(Math.round(getSystemVolume() * 100)));
+  }
+
+  // Live during a drag, but nothing is written to disk until the pointer is
+  // released - saveSettings and saveRegistry both hit localStorage, and
+  // pointermove fires at frame rate.
+  function preview(clientX) {
+    // Measured against the content box, not the border box: the blocks are
+    // drawn inside 2px of bevel and 6px of padding, and mapping the pointer
+    // across the full width would land a click a block away from the one it
+    // was aimed at near either end.
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const inset = n => parseFloat(cs.getPropertyValue(n)) || 0;
+    const left = r.left + inset('border-left-width') + inset('padding-left');
+    const width = Math.max(1, r.width - inset('border-left-width') - inset('border-right-width')
+                                      - inset('padding-left') - inset('padding-right'));
+    setVolumeStep(Math.round(((clientX - left) / width) * VOL_BLOCKS));
+    applySystemAudioSettings();
+    render();
+  }
+
+  function commit() {
+    saveSettings();
+    applySettings();
+    playSound('click');
+  }
+
+  // Pointer capture instead of document-level move/up listeners: those would
+  // outlive the window and stack up one pair per Settings open.
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragging = true;
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    preview(e.clientX);
+  });
+  el.addEventListener('pointermove', e => { if (dragging) preview(e.clientX); });
+  el.addEventListener('pointerup', e => {
+    if (!dragging) return;
+    dragging = false;
+    try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+    commit();
+  });
+  el.addEventListener('pointercancel', () => {
+    if (!dragging) return;
+    dragging = false;
+    commit();
+  });
+  el.addEventListener('keydown', e => {
+    const dir = (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? 1
+              : (e.key === 'ArrowLeft'  || e.key === 'ArrowDown') ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    setVolumeStep(Math.round(getSystemVolume() * VOL_BLOCKS) + dir);
+    commit();
+  });
+
+  render();
+  return render;
+}
+
+// ── The tray speaker ──────────────────────────────────────────────
+// The ambience starts itself at the first click of the session, and until this
+// existed the only way to stop it was Start > Settings > a toggle two levels
+// in. One click is where a mute belongs.
+let traySoundRender = null;
+
+function traySoundFlyoutEl() {
+  let el = document.getElementById('tray-volume');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'tray-volume';
+  el.innerHTML =
+    '<div id="tray-volume-label">Volume</div>' +
+    '<div class="st-vol vp-vol-blocks" id="tray-volume-blocks" role="slider" tabindex="0"' +
+    ' aria-label="System volume" aria-valuemin="0" aria-valuemax="100"></div>' +
+    '<button class="st-toggle" type="button" id="tray-volume-mute"></button>';
+  document.body.appendChild(el);
+  return el;
+}
+
+function isTraySoundFlyoutOpen() {
+  const el = document.getElementById('tray-volume');
+  return !!el && el.classList.contains('open');
+}
+
+function closeTraySoundFlyout() {
+  const el = document.getElementById('tray-volume');
+  if (el) el.classList.remove('open');
+  const btn = document.getElementById('tray-sound');
+  if (btn) btn.classList.remove('open');
+}
+
+function openTraySoundFlyout() {
+  const btn = document.getElementById('tray-sound');
+  if (!btn) return;
+  const el = traySoundFlyoutEl();
+  // A context menu open elsewhere would sit above this at its own z-index.
+  closeDropdown();
+  el.classList.add('open');
+  btn.classList.add('open');
+  renderTraySound();
+  // Measured after it is displayed - a flyout still in display:none has no box
+  // to anchor against. Right-aligned to the button and clamped to the viewport,
+  // because the tray sits hard against the right edge on a desktop and the
+  // panel is wider than the 16px icon it hangs from.
+  //
+  // Vertically it anchors to the TASKBAR's top edge, not the button's: the
+  // button sits a few pixels inside the bar, so hanging the flyout off it
+  // leaves those pixels of taskbar covered. Same reasoning as showCtxMenu's
+  // anchorBottom option, which the taskbar's own menu uses.
+  const r = btn.getBoundingClientRect();
+  const bar = document.getElementById('taskbar');
+  const barTop = bar ? bar.getBoundingClientRect().top : r.top;
+  const box = el.getBoundingClientRect();
+  el.style.left = Math.max(4, Math.min(window.innerWidth - box.width - 4,
+                                       r.right - box.width)) + 'px';
+  el.style.top = Math.max(0, barTop - box.height) + 'px';
+  // Deferred past the click that opened it, or that same click closes it.
+  setTimeout(() => {
+    document.addEventListener('pointerdown', onTraySoundOutside, true);
+  }, 0);
+}
+
+function onTraySoundOutside(e) {
+  const el = document.getElementById('tray-volume');
+  const btn = document.getElementById('tray-sound');
+  if (el && el.contains(e.target)) return;
+  if (btn && btn.contains(e.target)) return;
+  document.removeEventListener('pointerdown', onTraySoundOutside, true);
+  closeTraySoundFlyout();
+}
+
+function toggleTraySoundFlyout() {
+  if (isTraySoundFlyoutOpen()) {
+    document.removeEventListener('pointerdown', onTraySoundOutside, true);
+    closeTraySoundFlyout();
+  } else {
+    openTraySoundFlyout();
+  }
+}
+
+// Called by applySettings, so the icon follows a change made from REGEDIT or
+// the Settings window as well as one made here.
+function renderTraySound() {
+  const btn = document.getElementById('tray-sound');
+  if (btn) {
+    const on = systemAudioEnabled();
+    setIconContent(btn, on ? 'icon:sound' : 'icon:sound-mute');
+    const label = on ? 'System volume ' + Math.round(getSystemVolume() * 100) + '%' : 'Sound muted';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-pressed', on ? 'false' : 'true');
+  }
+  const mute = document.getElementById('tray-volume-mute');
+  if (mute) {
+    const muted = !systemAudioEnabled();
+    mute.textContent = muted ? 'Unmute' : 'Mute';
+    mute.classList.toggle('on', muted);
+  }
+  if (traySoundRender) traySoundRender();
+}
+
+function toggleSystemMute() {
+  osSettings.sounds = !systemAudioEnabled();
+  // Unmuting a slider someone had dragged to zero would be silent, which reads
+  // as the button not working.
+  if (osSettings.sounds && getSystemVolume() <= 0) osSettings.soundVolume = DEFAULT_SOUND_VOLUME;
+  saveSettings();
+  applySettings();
+  if (systemAudioEnabled()) playSound('click');
+}
+
+function initTraySound() {
+  const btn = document.getElementById('tray-sound');
+  if (!btn) return;
+  // Left click mutes, because that is the one thing worth a single click.
+  // Anything more deliberate than that - setting a level - is the flyout, on
+  // right-click and on long-press, where the rest of the OS puts its menus.
+  btn.addEventListener('click', () => {
+    // A long press has already opened the flyout and a button still emits its
+    // click afterwards, which would mute at the same time. Same guard the
+    // desktop icons use, and the same place it is cleared.
+    if (_longPressActive) { _longPressActive = false; return; }
+    toggleSystemMute();
+  });
+  // stopPropagation matters as much as preventDefault here: wmInstallTaskbarMenu
+  // binds contextmenu on #taskbar and this button is inside it, so without this
+  // a right-click opens the taskbar's Cascade/Tile menu ON TOP of the flyout -
+  // the flyout is there, correctly positioned, with a menu covering it.
+  btn.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleTraySoundFlyout();
+  });
+  addLongPress(btn);
+  traySoundRender = mountVolumeBlocks(traySoundFlyoutEl().querySelector('#tray-volume-blocks'));
+  document.getElementById('tray-volume-mute')
+    .addEventListener('click', () => { toggleSystemMute(); });
+  renderTraySound();
 }
 
 // The whole point of the Web Audio path: one call stops everything, including
@@ -5177,6 +5357,7 @@ function vfsSeedTree() {
         'USER FILES:',
         '  Create with TOUCH, NOTEPAD, or ECHO >.',
         '  Upload via right-click > Upload File.',
+        '  (Long-press instead of right-click on touch.)',
         '  New items go into your current folder.',
         '',
         'SHORTCUTS:',
@@ -6182,7 +6363,22 @@ function reportVfsError(err) {
 // both. Firing on ordinary tab switches and minimises costs nothing either:
 // vfsFlush early-returns when no ops are pending, and when ops ARE pending
 // the commit was going to happen within 400ms regardless.
+// Set once a factory reset has started. It is cleared again only on the one
+// path that gives up before erasing anything (a delete blocked by another tab);
+// past that point the only way out of the state is the reload at the end of it.
+//
+// Both save-on-the-way-out handlers below have to honour it, and for the same
+// reason: a reset ends in location.replace, which fires visibilitychange and
+// then beforeunload AFTER the database has been deleted and localStorage
+// emptied. Without this, fsFlushOnHidden commits the in-memory tree straight
+// back into a freshly recreated database and fsSnapshotOnUnload writes the
+// localStorage copy back out, and the "fresh install" boots into exactly the
+// filesystem it was asked to destroy.
+var osFactoryResetInProgress = false;
+function fsBeginFactoryReset() { osFactoryResetInProgress = true; }
+
 function fsFlushOnHidden() {
+  if (osFactoryResetInProgress) return;
   if (document.visibilityState !== 'hidden') return;
   void vfsFlush();
 }
@@ -6206,6 +6402,7 @@ document.addEventListener('visibilitychange', fsFlushOnHidden);
 // every image and sound stripped out - and it would still not save the pending
 // IndexedDB writes. fsFlushOnHidden above is what covers those instead.
 function fsSnapshotOnUnload() {
+  if (osFactoryResetInProgress) return;
   if (fsGetActiveBackendKind() !== 'local') return;
   // vfsIsMounted() is the load-bearing half of this guard. vfsMount publishes
   // _vfsBackend only after _vfsRoot holds real data, so this is what stops us
@@ -8160,6 +8357,12 @@ function applySettings() {
     saveRegistry();
   }
   applySystemAudioSettings();
+  renderTraySound();
+  // The single funnel every settings change already runs through - the Settings
+  // window, REGEDIT, and the tray mixer all end here - so it is the one place
+  // that can tell an open window its controls are stale. Any listener must only
+  // read osSettings and redraw; calling back into applySettings would recurse.
+  document.dispatchEvent(new CustomEvent('os-settings-changed'));
 }
 
 document.addEventListener('fs-changed', refreshAppearanceWindow);
@@ -10195,7 +10398,12 @@ function wmApplySnap(id, zone) {
   const w = wins[id]; if (!w) return;
   const rect = wmSnapRect(zone, desktopBounds());
   if (!rect) return;
-  if (!wmIsFilled(w)) w.origStyle = w.el.style.cssText;
+  // Same pairing as maxWin's: capture the normal geometry, for origStyle and
+  // for the geometry store, on the one edge where it is still readable.
+  if (!wmIsFilled(w)) {
+    w.origStyle = w.el.style.cssText;
+    wmRememberGeometry(id);
+  }
   w.el.style.left   = rect.left + 'px';
   w.el.style.top    = rect.top + 'px';
   w.el.style.width  = rect.width + 'px';
@@ -10203,6 +10411,7 @@ function wmApplySnap(id, zone) {
   w.el.style.zIndex = ++zTop;
   w.maximized = false;
   w.snap = zone;
+  wmRememberGeometry(id);
 }
 
 // One preview element for the whole OS, created on first use. Not one per
@@ -10293,6 +10502,145 @@ function wmShouldApplySnapOnRelease(owned, snapEnabled, pendingZone) {
   return !!(snapEnabled && owned && pendingZone);
 }
 
+// ── Window geometry persistence ──────────────────────────────────
+// Nothing about a window's position has ever survived a reload. That was
+// tolerable while windows only ever spawned on a cascade; it stopped being
+// tolerable once snap and tile made arranging them feel deliberate, because a
+// deliberate arrangement that evaporates reads as the OS forgetting rather than
+// as a limitation.
+//
+// This remembers geometry per window id, NOT which windows were open. Reopening
+// windows would mean serializing each app's own state - which file NOTEPAD had,
+// which directory EXPLORER was in, which page BROWSER was on - and that is a
+// different and much larger piece of work. What this does is narrower and is
+// what "it forgot where I put things" actually means: open TERMINAL again and
+// it is the size and in the place you left it.
+const WIN_GEOM_KEY = 'sleepOS-window-geometry';
+// Window ids are stable per app but per FILE for NOTEPAD ('notepad-docs_a_txt')
+// and per directory for EXPLORER, so the store would otherwise grow one entry
+// per document a player ever opened. Least-recently-arranged entries are
+// dropped past this.
+const WIN_GEOM_MAX = 40;
+
+// Loaded lazily rather than at parse time. os/wm.js already does more work at
+// parse time than it should (updateClock), and adding a storage read to that is
+// the wrong direction.
+let wmGeometry = null;
+let wmGeomSaveTimer = null;
+
+function wmGeometryStore() {
+  if (wmGeometry) return wmGeometry;
+  try {
+    const raw = JSON.parse(localStorage.getItem(WIN_GEOM_KEY) || '{}');
+    wmGeometry = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+  } catch (e) {
+    wmGeometry = {};
+  }
+  return wmGeometry;
+}
+
+function wmWriteGeometry() {
+  wmGeomSaveTimer = null;
+  const store = wmGeometryStore();
+  const ids = Object.keys(store);
+  if (ids.length > WIN_GEOM_MAX) {
+    ids.sort((a, b) => (store[b].at || 0) - (store[a].at || 0))
+       .slice(WIN_GEOM_MAX)
+       .forEach(id => { delete store[id]; });
+  }
+  try { localStorage.setItem(WIN_GEOM_KEY, JSON.stringify(store)); } catch (e) {}
+}
+
+// Debounced: a drag ends, a snap applies and the taskbar arrangers move every
+// window at once, and localStorage.setItem is synchronous.
+function wmSaveGeometrySoon() {
+  if (wmGeomSaveTimer) return;
+  wmGeomSaveTimer = setTimeout(wmWriteGeometry, 250);
+}
+
+function wmFlushGeometry() {
+  if (!wmGeomSaveTimer) return;
+  clearTimeout(wmGeomSaveTimer);
+  wmWriteGeometry();
+}
+
+// The debounce is 250ms and a page can be gone well inside that. Close a window
+// and hit reload and the arrangement is lost - which is the exact complaint
+// this feature exists to answer, so losing it on the one action most likely to
+// follow the last drag of a session would be worse than not remembering at all.
+//
+// localStorage.setItem is synchronous, so unlike the filesystem's commit there
+// really is something useful to do from beforeunload. visibilitychange is here
+// too because it is the earlier and more reliable signal on mobile, and the
+// write is idempotent, so firing on both costs nothing.
+window.addEventListener('beforeunload', wmFlushGeometry);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') wmFlushGeometry();
+});
+
+// Popups are the dialogs - osAlert, osConfirm, osPrompt, the shutdown box - and
+// their ids carry a Date.now(), so no two runs ever share one. Remembering them
+// would fill the store with entries that can never match anything again.
+//
+// Mobile is excluded at both ends rather than only on restore: mkWin forces
+// every non-popup window to fill the desktop there, so what would be saved is
+// the desktop's own rect, and carrying that back to a desktop browser would
+// hand a returning player a full-screen window they never sized.
+function wmGeomEligible(id) {
+  const w = wins[id];
+  return !!(w && !w.popup && !isMobileLayout());
+}
+
+function wmRememberGeometry(id) {
+  if (!wmGeomEligible(id)) return;
+  const w = wins[id];
+  const store = wmGeometryStore();
+  const prev = store[id] || {};
+  // Two states where the element's own rect is not the answer, and in both the
+  // answer is whatever was recorded the last time it was neither:
+  //
+  //   filled    - the rect is the desktop, not a size anyone chose. Keeping the
+  //               previous one is what makes unmaximizing after a reload land
+  //               on the player's geometry instead of the app's default.
+  //   minimized - display:none, so it has no layout box at all and every offset
+  //               reads 0. Recording that would file the window away at 0,0 at
+  //               the minimum size, which is precisely the shape of bug this
+  //               feature would be blamed for. closeWin reaches this: closing a
+  //               minimized window from its taskbar button is an ordinary
+  //               thing to do.
+  const useOwnRect = !wmIsFilled(w) && !w.minimized;
+  const rect = useOwnRect
+    ? { left: w.el.offsetLeft, top: w.el.offsetTop,
+        width: w.el.offsetWidth, height: w.el.offsetHeight }
+    : { left: prev.left, top: prev.top, width: prev.width, height: prev.height };
+  store[id] = {
+    left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+    max: !!w.maximized,
+    snap: w.snap || null,
+    at: Date.now(),
+  };
+  wmSaveGeometrySoon();
+}
+
+// Every field is re-validated on the way out. This is localStorage: another
+// tab, an older build, or a player poking at it in devtools can put anything
+// here, and a NaN width would produce a window that cannot be seen or grabbed.
+function wmStoredGeometry(id) {
+  const g = wmGeometryStore()[id];
+  if (!g || typeof g !== 'object') return null;
+  const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const width = num(g.width), height = num(g.height);
+  return {
+    left: num(g.left), top: num(g.top),
+    // A window narrower than the resize handles can reach is unrecoverable, so
+    // the stored size is held to the same floor the resizer enforces.
+    width:  width  === null ? null : Math.max(WIN_MIN_W, width),
+    height: height === null ? null : Math.max(WIN_MIN_H, height),
+    max: !!g.max,
+    snap: (g.snap === 'left' || g.snap === 'right') ? g.snap : null,
+  };
+}
+
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
@@ -10320,6 +10668,19 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       x = Math.max(4, Math.floor((bounds.w - w) / 2));
       y = Math.max(4, Math.floor((bounds.h - h) / 3));
     }
+  }
+
+  // Applied after the cascade and the caller's own x/y/w/h, and on purpose: a
+  // caller's numbers are where a window goes when nobody has moved it yet, and
+  // the player having moved it is later information than that. Each field is
+  // taken independently, because a record written before a window had ever been
+  // in normal state carries only its fill flags.
+  const savedGeom = (!isMobile && !popup) ? wmStoredGeometry(id) : null;
+  if (savedGeom) {
+    if (savedGeom.width  !== null) w = savedGeom.width;
+    if (savedGeom.height !== null) h = savedGeom.height;
+    if (savedGeom.left   !== null) x = savedGeom.left;
+    if (savedGeom.top    !== null) y = savedGeom.top;
   }
 
   const el = document.createElement('div');
@@ -10350,7 +10711,10 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
 
   document.getElementById('windows-layer').appendChild(el);
   clampWinGeometry(el);   // callers pass explicit x/y/w/h that may not fit this viewport
-  wins[id] = { el, title, icon, minimized: false, maximized: false, snap: null, origStyle: null };
+  // `popup` is carried on the record because the geometry store has to be able
+  // to tell a dialog from an app after the fact, and only mkWin's arguments
+  // knew it.
+  wins[id] = { el, title, icon, popup, minimized: false, maximized: false, snap: null, origStyle: null };
 
   // Built-in apps are real processes with real lifetimes. Registering here rather
   // than in each app means an app cannot forget to appear in ps.
@@ -10366,6 +10730,13 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   addTbBtn(id, title, icon);
   el.addEventListener('mousedown', () => focusWin(id));
   el.addEventListener('touchstart', () => focusWin(id), { passive: true });
+
+  // Fill state is restored through the same two functions the player's own
+  // clicks go through, rather than by writing the flags directly - which is
+  // what makes origStyle capture the geometry restored above, so unmaximizing
+  // returns to it.
+  if (savedGeom && savedGeom.max) maxWin(id);
+  else if (savedGeom && savedGeom.snap) wmApplySnap(id, savedGeom.snap);
 
   focusWin(id);
   return el;
@@ -10432,12 +10803,23 @@ function maxWin(id) {
   } else {
     // Only capture from a normal window: maximizing a SNAPPED one must keep the
     // size the player chose, not overwrite it with a half-screen.
-    if (!wmIsFilled(w)) w.origStyle = w.el.style.cssText;
+    //
+    // The remembered geometry is captured on the same edge and for the same
+    // reason: once fitMaximized runs, the element's rect is the desktop, and
+    // wmRememberGeometry below can only fall back to whatever was already
+    // stored. For a window maximized without ever having been dragged there is
+    // nothing stored, so its pre-maximize size would be lost across a reload
+    // even though origStyle is holding it right here.
+    if (!wmIsFilled(w)) {
+      w.origStyle = w.el.style.cssText;
+      wmRememberGeometry(id);
+    }
     fitMaximized(w);
     w.el.style.zIndex = ++zTop;
     w.maximized = true;
     w.snap = null;
   }
+  wmRememberGeometry(id);
 }
 
 // Renamed from restoreMaximizedForDrag: it now returns a SNAPPED window to its
@@ -10462,6 +10844,10 @@ function restoreFilledForDrag(id, clientX, clientY) {
 
 function closeWin(id) {
   const w = wins[id]; if (!w) return;
+  // Last chance to record, and the one that covers anything that moved a window
+  // without going through a drag, a resize or an arranger. The element is still
+  // in the document here; a line below this removes it.
+  wmRememberGeometry(id);
   if (w._interval) clearInterval(w._interval);
   // Apps that own something outside their DOM subtree - an observer, a running
   // sound, a subscription - hang a teardown here. DEFRAG.exe has set _onclose
@@ -10540,6 +10926,11 @@ function makeDraggable(win, handle) {
       // owner" - see that function and wmShouldApplySnapOnRelease for why
       // pendingZone alone is not a safe signal to act on.
       const owned = wmSnapPreviewRelease(id);
+      // Recorded before the snap decision, not after: on the path that returns
+      // early the window has just been dragged somewhere and that is the whole
+      // change to remember, and on the paths that do not, maxWin and
+      // wmApplySnap record again over the top with the fill flag set.
+      wmRememberGeometry(id);
       if (!wmShouldApplySnapOnRelease(owned, snapEnabled, pendingZone)) return;
       if (pendingZone === 'top') {
         // maxWin() already no-ops on a missing window through its own guard,
@@ -10563,7 +10954,14 @@ function makeDraggable(win, handle) {
     restoreFilledForDrag(id, t.clientX, t.clientY);
     startDrag(t.clientX, t.clientY);
     const onMove = (e) => { e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); };
-    const onEnd = () => { handle.removeEventListener('touchmove', onMove); handle.removeEventListener('touchend', onEnd); };
+    const onEnd = () => {
+      handle.removeEventListener('touchmove', onMove);
+      handle.removeEventListener('touchend', onEnd);
+      // A no-op while the mobile layout is on (wmGeomEligible refuses it), but
+      // a touch screen wide enough to run the desktop layout gets the same
+      // memory a mouse does.
+      wmRememberGeometry(id);
+    };
     handle.addEventListener('touchmove', onMove, { passive: false });
     handle.addEventListener('touchend', onEnd);
   }, { passive: false });
@@ -10597,7 +10995,11 @@ function makeResizable(win, id) {
         win.style.width = W+'px'; win.style.height = H+'px';
         win.style.left  = L+'px'; win.style.top    = T+'px';
       };
-      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        wmRememberGeometry(id);
+      };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
@@ -10663,6 +11065,7 @@ function wmUnsnap(id) {
   w.snap = null;
   w.el.style.zIndex = ++zTop;
   clampWinGeometry(w.el);
+  wmRememberGeometry(id);
 }
 
 // ── arranging ────────────────────────────────────────────────────
@@ -10687,6 +11090,7 @@ function wmApplyRects(ids, rects) {
     w.el.style.width  = r.width + 'px';
     w.el.style.height = r.height + 'px';
     w.el.style.zIndex = ++zTop;
+    wmRememberGeometry(id);
   });
 }
 
@@ -11632,24 +12036,38 @@ window.addEventListener('resize', () => {
 // ─────────────────────────────────────────────────────────────────
 
 const WELCOME_DEFAULT =
-`== sleepOS v0.9\u03b2 \u2014 WELCOME ==
+`== sleepOS v0.9\u03b2 - WELCOME ==
 
-You are running sleepOS, an experimental interactive desktop.
+You are running sleepOS, an experimental interactive
+desktop. Nothing here can break your computer.
 
-Programs:
-  PROJECTS.DIR  \u2014 interactive apps (double-click to browse)
-  NOTEPAD.exe   \u2014 text editor with syntax highlighting
-  TERMINAL.exe  \u2014 command line (type HELP for commands)
-  BROWSER.exe   \u2014 web browser
-  SYSMON.exe    \u2014 system monitor
-  DEFRAG.exe    \u2014 disk defragmenter
-  CALC.exe      \u2014 calculator
-  REGEDIT.exe   \u2014 registry editor
+Start here:
+  PROJECTS      - interactive art toys, double-click
+                  the folder on the desktop
+  TERMINAL.exe  - a real command line. Type HELP.
+
+Also installed:
+  NOTEPAD.exe   - text editor with syntax highlighting
+  BROWSER.exe   - web browser
+  SYSMON.exe    - system monitor
+  DEFRAG.exe    - disk defragmenter
+  CALC.exe      - calculator
+  REGEDIT.exe   - registry editor
 
 Files:
-  Right-click the desktop or any folder to create
-  files and folders, or upload from your machine.
-  Everything persists within your session.
+  Right-click the desktop or any folder - long-press
+  on a touch screen - to create files and folders, or
+  to upload from your machine. You can also drag files
+  onto the desktop. Everything you do is saved in this
+  browser and is still here when you come back.
+
+Sound:
+  Click the speaker in the taskbar tray to mute.
+  Right-click it for a volume slider.
+
+Starting over:
+  Start > Settings > Reset erases everything sleepOS
+  has saved and reinstalls it from scratch.
 
 Shortcuts:
   Space + Tab     switch windows
@@ -11660,7 +12078,38 @@ Known issues:
   [!] void.tmp cannot be read, deleted, or ignored
   [!] Something is watching this session`;
 
-function openWelcome() { openNotepad('WELCOME.README', '', { initialContent: WELCOME_DEFAULT }); }
+function openWelcome() {
+  openNotepad('WELCOME.README', '', { initialContent: WELCOME_DEFAULT, w: 520, h: 520 });
+}
+
+// ── First run ─────────────────────────────────────────────────────
+// The desktop is twelve icons and a taskbar, and none of it says which of them
+// is the one with twenty-five toys behind it, that the terminal is real, or
+// that void.tmp is a story rather than a bug. WELCOME.README said all of that
+// and sat there unopened, because a stranger has no reason to think a README on
+// a fake desktop is anything but set dressing.
+//
+// Its own key rather than a flag inside osSettings: a player who resets the OS
+// should see this again, and the reset erases everything under the sleepOS
+// prefix, which this is.
+const WELCOME_SEEN_KEY = 'sleepOS-welcome-seen';
+
+function shouldShowFirstRunWelcome() {
+  try { return !localStorage.getItem(WELCOME_SEEN_KEY); } catch (e) { return false; }
+}
+
+// Marked as seen when it is shown, not when it is closed. A player who reloads
+// mid-read has already met it, and reopening over their session every time
+// would make it the thing they close rather than the thing they read - it is
+// still on the desktop and in the Start menu for anyone who wants it back.
+//
+// Deliberately not gated on the story: this fires on the first boot of a fresh
+// install, which is the only boot where daemonStory is untouched anyway.
+function maybeShowFirstRunWelcome() {
+  if (!shouldShowFirstRunWelcome()) return;
+  try { localStorage.setItem(WELCOME_SEEN_KEY, '1'); } catch (e) {}
+  openWelcome();
+}
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -12291,7 +12740,13 @@ function openNotepad(filename, dirName, options) {
   // bare function references and cannot await. This mirrors what the binary
   // branch further down has always done.
   const initial = hasInitialContent ? String(options.initialContent ?? '') : '';
-  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: 'icon:notepad', w:500, h:360 })) return;
+  // Sizeable by the caller, because WELCOME.README is the one document shipped
+  // with this OS that runs longer than the default window, and it is also the
+  // first thing a new player reads. clampWinGeometry still pulls an oversized
+  // ask back inside the desktop, so a bigger number here is a preference rather
+  // than a promise.
+  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: 'icon:notepad',
+               w: options.w || 500, h: options.h || 360 })) return;
   // Untitled documents stay null so they never match a stored file.
   wins[id].notepadPath = filename ? pathKey : null;
 
@@ -16715,6 +17170,122 @@ Saving system state...                   [OK]
   setTimeout(powerOff, SHUTDOWN_MAX_HOLD_MS);
 }
 
+// ─────────────────────────────────────────────────────────────────
+// FACTORY RESET
+// ─────────────────────────────────────────────────────────────────
+// Everything sleepOS remembers is persistent and, until this existed, there was
+// no way out of it from inside the OS: a player who deleted something they
+// wanted, filled the simulated disk, or finished the daemon ending and wanted
+// to watch the boot again had to go and clear browser site data by hand.
+
+// The legacy pre-migration media database (os/fs-migrate.js) alongside the live
+// filesystem one. Migration deliberately leaves both behind for a release, so a
+// reset that only dropped the live database would leave a returning visitor's
+// images to be re-imported on the next boot.
+const RESET_IDB_NAMES = ['sleepOS-fs', 'sleepOS-media'];
+
+// Prefix scan rather than a list of the fourteen key constants. Storage keys
+// get added to this OS regularly and all of them are already namespaced; a list
+// here would be a fifteenth place to remember, and the one that fails silently.
+function sleepOsStorageKeys(store) {
+  const keys = [];
+  // Indices, then delete - removeItem during the scan reindexes the rest and
+  // skips every other key.
+  for (let i = 0; i < store.length; i++) {
+    const k = store.key(i);
+    if (k && k.startsWith('sleepOS')) keys.push(k);
+  }
+  return keys;
+}
+
+// Resolves with whether the database is really gone, rather than rejecting.
+// fsIdbDeleteDatabase is deliberately strict for migration's abort path, where
+// a blocked delete has to surface immediately; here both outcomes are reported
+// to the user instead, so this needs the answer, not an exception.
+function resetDeleteDatabase(name) {
+  return new Promise(resolve => {
+    let req;
+    try { req = indexedDB.deleteDatabase(name); } catch (e) { resolve(false); return; }
+    req.onsuccess = () => resolve(true);
+    req.onerror   = () => resolve(false);
+    // IndexedDB never settles a blocked delete on its own - it waits for every
+    // other connection, indefinitely - so this is an answer, not a failure to
+    // wait long enough.
+    req.onblocked = () => resolve(false);
+  });
+}
+
+function confirmFactoryReset() {
+  osConfirm(
+    'This erases everything sleepOS has saved in this browser:\n\n' +
+    '  your files and folders\n' +
+    '  desktop layout and wallpaper\n' +
+    '  settings and registry\n' +
+    '  story progress\n\n' +
+    'sleepOS restarts as a fresh install. This cannot be undone.',
+    'Reset sleepOS',
+    ok => { if (ok) void performFactoryReset(); },
+    'icon:warning');
+}
+
+async function performFactoryReset() {
+  // Before anything is deleted: from here on, any save-on-the-way-out would
+  // write the old session back over the wipe.
+  fsBeginFactoryReset();
+  closeStart();
+  closeDropdown();
+
+  stopSoundLoop('ambience', { fade: 0.5 });
+  const bios = document.getElementById('bios');
+  if (bios) {
+    bios.style.display = 'flex';
+    bios.style.opacity = '1';
+    bios.style.transition = 'none';
+    bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#888;white-space:pre;line-height:1.5;">
+sleepOS - Resetting...
+
+Unmounting filesystem...                 [OK]
+Erasing user data...
+  </div>`;
+  }
+  document.getElementById('desktop').style.display = 'none';
+  document.getElementById('taskbar').style.display = 'none';
+
+  // The backend's own connection blocks its own delete, so it goes first. This
+  // is the second caller of _close() and it has the same shape as migration's:
+  // the backend is never used again on this page. Optional on the method as
+  // well as the backend - only the IndexedDB backend has a connection to give
+  // up, and the localStorage and in-memory ones are reset by the key sweep
+  // below instead.
+  try { await vfsGetBackend()?._close?.(); } catch (e) {}
+
+  const deleted = await Promise.all(RESET_IDB_NAMES.map(resetDeleteDatabase));
+  if (deleted.some(ok => !ok)) {
+    // A blocked delete means another tab has sleepOS open on this origin.
+    // Reloading now would boot back into the filesystem the user just asked to
+    // destroy and report success, so the reset stops here instead and says so.
+    // Nothing has been erased yet - localStorage is untouched on this path.
+    document.getElementById('desktop').style.display = 'block';
+    document.getElementById('taskbar').style.display = 'flex';
+    if (bios) bios.style.display = 'none';
+    osFactoryResetInProgress = false;
+    osAlert('sleepOS could not erase its data because it is open in another tab.\n\n' +
+            'Close every other sleepOS tab and try again.',
+            'Reset Failed', 'icon:error');
+    return;
+  }
+
+  [localStorage, sessionStorage].forEach(store => {
+    try { sleepOsStorageKeys(store).forEach(k => store.removeItem(k)); } catch (e) {}
+  });
+
+  // Set after the wipe that would otherwise remove it. A reset earns the full
+  // boot sequence: it is the one thing the player has just asked to see again,
+  // and skipBoot is gone with the rest of the settings anyway.
+  try { sessionStorage.setItem(FORCE_BOOT_SESSION_KEY, '1'); } catch (e) {}
+  window.location.replace('sleep-os.html');
+}
+
 // window.close() only works on a tab that script opened. Every current browser
 // silently refuses it anywhere else - no exception to catch, no way to ask in
 // advance - so on a tab the user opened themselves this does nothing at all,
@@ -17302,7 +17873,7 @@ function openRunDialog() {
     // the PROJECTS fallback below cannot rescue it either - without this line
     // Run... answers "Cannot find program" for a program the desktop, the
     // terminal's START and a script's START all launch.
-    'files': openFiles,
+    'files': openFiles, 'projects': openFiles,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,
     '?????.exe': openUnknown,
@@ -17512,5 +18083,9 @@ function startDesktop() {
   // begins at the first click.
   playSound('boot');
   startSoundLoop('ambience');
+  // After setupIcons, so it opens over a desktop that is already drawn rather
+  // than appearing first and having the icons pop in behind it. No-op on every
+  // boot after the first.
+  maybeShowFirstRunWelcome();
   armIdleSleep();
 }

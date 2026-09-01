@@ -172,7 +172,12 @@ function wmApplySnap(id, zone) {
   const w = wins[id]; if (!w) return;
   const rect = wmSnapRect(zone, desktopBounds());
   if (!rect) return;
-  if (!wmIsFilled(w)) w.origStyle = w.el.style.cssText;
+  // Same pairing as maxWin's: capture the normal geometry, for origStyle and
+  // for the geometry store, on the one edge where it is still readable.
+  if (!wmIsFilled(w)) {
+    w.origStyle = w.el.style.cssText;
+    wmRememberGeometry(id);
+  }
   w.el.style.left   = rect.left + 'px';
   w.el.style.top    = rect.top + 'px';
   w.el.style.width  = rect.width + 'px';
@@ -180,6 +185,7 @@ function wmApplySnap(id, zone) {
   w.el.style.zIndex = ++zTop;
   w.maximized = false;
   w.snap = zone;
+  wmRememberGeometry(id);
 }
 
 // One preview element for the whole OS, created on first use. Not one per
@@ -270,6 +276,145 @@ function wmShouldApplySnapOnRelease(owned, snapEnabled, pendingZone) {
   return !!(snapEnabled && owned && pendingZone);
 }
 
+// ── Window geometry persistence ──────────────────────────────────
+// Nothing about a window's position has ever survived a reload. That was
+// tolerable while windows only ever spawned on a cascade; it stopped being
+// tolerable once snap and tile made arranging them feel deliberate, because a
+// deliberate arrangement that evaporates reads as the OS forgetting rather than
+// as a limitation.
+//
+// This remembers geometry per window id, NOT which windows were open. Reopening
+// windows would mean serializing each app's own state - which file NOTEPAD had,
+// which directory EXPLORER was in, which page BROWSER was on - and that is a
+// different and much larger piece of work. What this does is narrower and is
+// what "it forgot where I put things" actually means: open TERMINAL again and
+// it is the size and in the place you left it.
+const WIN_GEOM_KEY = 'sleepOS-window-geometry';
+// Window ids are stable per app but per FILE for NOTEPAD ('notepad-docs_a_txt')
+// and per directory for EXPLORER, so the store would otherwise grow one entry
+// per document a player ever opened. Least-recently-arranged entries are
+// dropped past this.
+const WIN_GEOM_MAX = 40;
+
+// Loaded lazily rather than at parse time. os/wm.js already does more work at
+// parse time than it should (updateClock), and adding a storage read to that is
+// the wrong direction.
+let wmGeometry = null;
+let wmGeomSaveTimer = null;
+
+function wmGeometryStore() {
+  if (wmGeometry) return wmGeometry;
+  try {
+    const raw = JSON.parse(localStorage.getItem(WIN_GEOM_KEY) || '{}');
+    wmGeometry = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+  } catch (e) {
+    wmGeometry = {};
+  }
+  return wmGeometry;
+}
+
+function wmWriteGeometry() {
+  wmGeomSaveTimer = null;
+  const store = wmGeometryStore();
+  const ids = Object.keys(store);
+  if (ids.length > WIN_GEOM_MAX) {
+    ids.sort((a, b) => (store[b].at || 0) - (store[a].at || 0))
+       .slice(WIN_GEOM_MAX)
+       .forEach(id => { delete store[id]; });
+  }
+  try { localStorage.setItem(WIN_GEOM_KEY, JSON.stringify(store)); } catch (e) {}
+}
+
+// Debounced: a drag ends, a snap applies and the taskbar arrangers move every
+// window at once, and localStorage.setItem is synchronous.
+function wmSaveGeometrySoon() {
+  if (wmGeomSaveTimer) return;
+  wmGeomSaveTimer = setTimeout(wmWriteGeometry, 250);
+}
+
+function wmFlushGeometry() {
+  if (!wmGeomSaveTimer) return;
+  clearTimeout(wmGeomSaveTimer);
+  wmWriteGeometry();
+}
+
+// The debounce is 250ms and a page can be gone well inside that. Close a window
+// and hit reload and the arrangement is lost - which is the exact complaint
+// this feature exists to answer, so losing it on the one action most likely to
+// follow the last drag of a session would be worse than not remembering at all.
+//
+// localStorage.setItem is synchronous, so unlike the filesystem's commit there
+// really is something useful to do from beforeunload. visibilitychange is here
+// too because it is the earlier and more reliable signal on mobile, and the
+// write is idempotent, so firing on both costs nothing.
+window.addEventListener('beforeunload', wmFlushGeometry);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') wmFlushGeometry();
+});
+
+// Popups are the dialogs - osAlert, osConfirm, osPrompt, the shutdown box - and
+// their ids carry a Date.now(), so no two runs ever share one. Remembering them
+// would fill the store with entries that can never match anything again.
+//
+// Mobile is excluded at both ends rather than only on restore: mkWin forces
+// every non-popup window to fill the desktop there, so what would be saved is
+// the desktop's own rect, and carrying that back to a desktop browser would
+// hand a returning player a full-screen window they never sized.
+function wmGeomEligible(id) {
+  const w = wins[id];
+  return !!(w && !w.popup && !isMobileLayout());
+}
+
+function wmRememberGeometry(id) {
+  if (!wmGeomEligible(id)) return;
+  const w = wins[id];
+  const store = wmGeometryStore();
+  const prev = store[id] || {};
+  // Two states where the element's own rect is not the answer, and in both the
+  // answer is whatever was recorded the last time it was neither:
+  //
+  //   filled    - the rect is the desktop, not a size anyone chose. Keeping the
+  //               previous one is what makes unmaximizing after a reload land
+  //               on the player's geometry instead of the app's default.
+  //   minimized - display:none, so it has no layout box at all and every offset
+  //               reads 0. Recording that would file the window away at 0,0 at
+  //               the minimum size, which is precisely the shape of bug this
+  //               feature would be blamed for. closeWin reaches this: closing a
+  //               minimized window from its taskbar button is an ordinary
+  //               thing to do.
+  const useOwnRect = !wmIsFilled(w) && !w.minimized;
+  const rect = useOwnRect
+    ? { left: w.el.offsetLeft, top: w.el.offsetTop,
+        width: w.el.offsetWidth, height: w.el.offsetHeight }
+    : { left: prev.left, top: prev.top, width: prev.width, height: prev.height };
+  store[id] = {
+    left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+    max: !!w.maximized,
+    snap: w.snap || null,
+    at: Date.now(),
+  };
+  wmSaveGeometrySoon();
+}
+
+// Every field is re-validated on the way out. This is localStorage: another
+// tab, an older build, or a player poking at it in devtools can put anything
+// here, and a NaN width would produce a window that cannot be seen or grabbed.
+function wmStoredGeometry(id) {
+  const g = wmGeometryStore()[id];
+  if (!g || typeof g !== 'object') return null;
+  const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const width = num(g.width), height = num(g.height);
+  return {
+    left: num(g.left), top: num(g.top),
+    // A window narrower than the resize handles can reach is unrecoverable, so
+    // the stored size is held to the same floor the resizer enforces.
+    width:  width  === null ? null : Math.max(WIN_MIN_W, width),
+    height: height === null ? null : Math.max(WIN_MIN_H, height),
+    max: !!g.max,
+    snap: (g.snap === 'left' || g.snap === 'right') ? g.snap : null,
+  };
+}
+
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
                  menubar = true, statusbar = true, popup = false }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
@@ -297,6 +442,19 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       x = Math.max(4, Math.floor((bounds.w - w) / 2));
       y = Math.max(4, Math.floor((bounds.h - h) / 3));
     }
+  }
+
+  // Applied after the cascade and the caller's own x/y/w/h, and on purpose: a
+  // caller's numbers are where a window goes when nobody has moved it yet, and
+  // the player having moved it is later information than that. Each field is
+  // taken independently, because a record written before a window had ever been
+  // in normal state carries only its fill flags.
+  const savedGeom = (!isMobile && !popup) ? wmStoredGeometry(id) : null;
+  if (savedGeom) {
+    if (savedGeom.width  !== null) w = savedGeom.width;
+    if (savedGeom.height !== null) h = savedGeom.height;
+    if (savedGeom.left   !== null) x = savedGeom.left;
+    if (savedGeom.top    !== null) y = savedGeom.top;
   }
 
   const el = document.createElement('div');
@@ -327,7 +485,10 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
 
   document.getElementById('windows-layer').appendChild(el);
   clampWinGeometry(el);   // callers pass explicit x/y/w/h that may not fit this viewport
-  wins[id] = { el, title, icon, minimized: false, maximized: false, snap: null, origStyle: null };
+  // `popup` is carried on the record because the geometry store has to be able
+  // to tell a dialog from an app after the fact, and only mkWin's arguments
+  // knew it.
+  wins[id] = { el, title, icon, popup, minimized: false, maximized: false, snap: null, origStyle: null };
 
   // Built-in apps are real processes with real lifetimes. Registering here rather
   // than in each app means an app cannot forget to appear in ps.
@@ -343,6 +504,13 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   addTbBtn(id, title, icon);
   el.addEventListener('mousedown', () => focusWin(id));
   el.addEventListener('touchstart', () => focusWin(id), { passive: true });
+
+  // Fill state is restored through the same two functions the player's own
+  // clicks go through, rather than by writing the flags directly - which is
+  // what makes origStyle capture the geometry restored above, so unmaximizing
+  // returns to it.
+  if (savedGeom && savedGeom.max) maxWin(id);
+  else if (savedGeom && savedGeom.snap) wmApplySnap(id, savedGeom.snap);
 
   focusWin(id);
   return el;
@@ -409,12 +577,23 @@ function maxWin(id) {
   } else {
     // Only capture from a normal window: maximizing a SNAPPED one must keep the
     // size the player chose, not overwrite it with a half-screen.
-    if (!wmIsFilled(w)) w.origStyle = w.el.style.cssText;
+    //
+    // The remembered geometry is captured on the same edge and for the same
+    // reason: once fitMaximized runs, the element's rect is the desktop, and
+    // wmRememberGeometry below can only fall back to whatever was already
+    // stored. For a window maximized without ever having been dragged there is
+    // nothing stored, so its pre-maximize size would be lost across a reload
+    // even though origStyle is holding it right here.
+    if (!wmIsFilled(w)) {
+      w.origStyle = w.el.style.cssText;
+      wmRememberGeometry(id);
+    }
     fitMaximized(w);
     w.el.style.zIndex = ++zTop;
     w.maximized = true;
     w.snap = null;
   }
+  wmRememberGeometry(id);
 }
 
 // Renamed from restoreMaximizedForDrag: it now returns a SNAPPED window to its
@@ -439,6 +618,10 @@ function restoreFilledForDrag(id, clientX, clientY) {
 
 function closeWin(id) {
   const w = wins[id]; if (!w) return;
+  // Last chance to record, and the one that covers anything that moved a window
+  // without going through a drag, a resize or an arranger. The element is still
+  // in the document here; a line below this removes it.
+  wmRememberGeometry(id);
   if (w._interval) clearInterval(w._interval);
   // Apps that own something outside their DOM subtree - an observer, a running
   // sound, a subscription - hang a teardown here. DEFRAG.exe has set _onclose
@@ -517,6 +700,11 @@ function makeDraggable(win, handle) {
       // owner" - see that function and wmShouldApplySnapOnRelease for why
       // pendingZone alone is not a safe signal to act on.
       const owned = wmSnapPreviewRelease(id);
+      // Recorded before the snap decision, not after: on the path that returns
+      // early the window has just been dragged somewhere and that is the whole
+      // change to remember, and on the paths that do not, maxWin and
+      // wmApplySnap record again over the top with the fill flag set.
+      wmRememberGeometry(id);
       if (!wmShouldApplySnapOnRelease(owned, snapEnabled, pendingZone)) return;
       if (pendingZone === 'top') {
         // maxWin() already no-ops on a missing window through its own guard,
@@ -540,7 +728,14 @@ function makeDraggable(win, handle) {
     restoreFilledForDrag(id, t.clientX, t.clientY);
     startDrag(t.clientX, t.clientY);
     const onMove = (e) => { e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); };
-    const onEnd = () => { handle.removeEventListener('touchmove', onMove); handle.removeEventListener('touchend', onEnd); };
+    const onEnd = () => {
+      handle.removeEventListener('touchmove', onMove);
+      handle.removeEventListener('touchend', onEnd);
+      // A no-op while the mobile layout is on (wmGeomEligible refuses it), but
+      // a touch screen wide enough to run the desktop layout gets the same
+      // memory a mouse does.
+      wmRememberGeometry(id);
+    };
     handle.addEventListener('touchmove', onMove, { passive: false });
     handle.addEventListener('touchend', onEnd);
   }, { passive: false });
@@ -574,7 +769,11 @@ function makeResizable(win, id) {
         win.style.width = W+'px'; win.style.height = H+'px';
         win.style.left  = L+'px'; win.style.top    = T+'px';
       };
-      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        wmRememberGeometry(id);
+      };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
@@ -640,6 +839,7 @@ function wmUnsnap(id) {
   w.snap = null;
   w.el.style.zIndex = ++zTop;
   clampWinGeometry(w.el);
+  wmRememberGeometry(id);
 }
 
 // ── arranging ────────────────────────────────────────────────────
@@ -664,6 +864,7 @@ function wmApplyRects(ids, rects) {
     w.el.style.width  = r.width + 'px';
     w.el.style.height = r.height + 'px';
     w.el.style.zIndex = ++zTop;
+    wmRememberGeometry(id);
   });
 }
 

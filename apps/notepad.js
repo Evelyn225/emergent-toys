@@ -1,22 +1,36 @@
 const WELCOME_DEFAULT =
-`== sleepOS v0.9\u03b2 \u2014 WELCOME ==
+`== sleepOS v0.9\u03b2 - WELCOME ==
 
-You are running sleepOS, an experimental interactive desktop.
+You are running sleepOS, an experimental interactive
+desktop. Nothing here can break your computer.
 
-Programs:
-  PROJECTS.DIR  \u2014 interactive apps (double-click to browse)
-  NOTEPAD.exe   \u2014 text editor with syntax highlighting
-  TERMINAL.exe  \u2014 command line (type HELP for commands)
-  BROWSER.exe   \u2014 web browser
-  SYSMON.exe    \u2014 system monitor
-  DEFRAG.exe    \u2014 disk defragmenter
-  CALC.exe      \u2014 calculator
-  REGEDIT.exe   \u2014 registry editor
+Start here:
+  PROJECTS      - interactive art toys, double-click
+                  the folder on the desktop
+  TERMINAL.exe  - a real command line. Type HELP.
+
+Also installed:
+  NOTEPAD.exe   - text editor with syntax highlighting
+  BROWSER.exe   - web browser
+  SYSMON.exe    - system monitor
+  DEFRAG.exe    - disk defragmenter
+  CALC.exe      - calculator
+  REGEDIT.exe   - registry editor
 
 Files:
-  Right-click the desktop or any folder to create
-  files and folders, or upload from your machine.
-  Everything persists within your session.
+  Right-click the desktop or any folder - long-press
+  on a touch screen - to create files and folders, or
+  to upload from your machine. You can also drag files
+  onto the desktop. Everything you do is saved in this
+  browser and is still here when you come back.
+
+Sound:
+  Click the speaker in the taskbar tray to mute.
+  Right-click it for a volume slider.
+
+Starting over:
+  Start > Settings > Reset erases everything sleepOS
+  has saved and reinstalls it from scratch.
 
 Shortcuts:
   Space + Tab     switch windows
@@ -27,7 +41,38 @@ Known issues:
   [!] void.tmp cannot be read, deleted, or ignored
   [!] Something is watching this session`;
 
-function openWelcome() { openNotepad('WELCOME.README', '', { initialContent: WELCOME_DEFAULT }); }
+function openWelcome() {
+  openNotepad('WELCOME.README', '', { initialContent: WELCOME_DEFAULT, w: 520, h: 520 });
+}
+
+// ── First run ─────────────────────────────────────────────────────
+// The desktop is twelve icons and a taskbar, and none of it says which of them
+// is the one with twenty-five toys behind it, that the terminal is real, or
+// that void.tmp is a story rather than a bug. WELCOME.README said all of that
+// and sat there unopened, because a stranger has no reason to think a README on
+// a fake desktop is anything but set dressing.
+//
+// Its own key rather than a flag inside osSettings: a player who resets the OS
+// should see this again, and the reset erases everything under the sleepOS
+// prefix, which this is.
+const WELCOME_SEEN_KEY = 'sleepOS-welcome-seen';
+
+function shouldShowFirstRunWelcome() {
+  try { return !localStorage.getItem(WELCOME_SEEN_KEY); } catch (e) { return false; }
+}
+
+// Marked as seen when it is shown, not when it is closed. A player who reloads
+// mid-read has already met it, and reopening over their session every time
+// would make it the thing they close rather than the thing they read - it is
+// still on the desktop and in the Start menu for anyone who wants it back.
+//
+// Deliberately not gated on the story: this fires on the first boot of a fresh
+// install, which is the only boot where daemonStory is untouched anyway.
+function maybeShowFirstRunWelcome() {
+  if (!shouldShowFirstRunWelcome()) return;
+  try { localStorage.setItem(WELCOME_SEEN_KEY, '1'); } catch (e) {}
+  openWelcome();
+}
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -658,7 +703,13 @@ function openNotepad(filename, dirName, options) {
   // bare function references and cannot await. This mirrors what the binary
   // branch further down has always done.
   const initial = hasInitialContent ? String(options.initialContent ?? '') : '';
-  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: 'icon:notepad', w:500, h:360 })) return;
+  // Sizeable by the caller, because WELCOME.README is the one document shipped
+  // with this OS that runs longer than the default window, and it is also the
+  // first thing a new player reads. clampWinGeometry still pulls an oversized
+  // ask back inside the desktop, so a bigger number here is a preference rather
+  // than a promise.
+  if (!mkWin({ id, title: displayName + ' \u2014 Notepad', icon: 'icon:notepad',
+               w: options.w || 500, h: options.h || 360 })) return;
   // Untitled documents stay null so they never match a stored file.
   wins[id].notepadPath = filename ? pathKey : null;
 

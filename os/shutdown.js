@@ -200,6 +200,122 @@ Saving system state...                   [OK]
   setTimeout(powerOff, SHUTDOWN_MAX_HOLD_MS);
 }
 
+// ─────────────────────────────────────────────────────────────────
+// FACTORY RESET
+// ─────────────────────────────────────────────────────────────────
+// Everything sleepOS remembers is persistent and, until this existed, there was
+// no way out of it from inside the OS: a player who deleted something they
+// wanted, filled the simulated disk, or finished the daemon ending and wanted
+// to watch the boot again had to go and clear browser site data by hand.
+
+// The legacy pre-migration media database (os/fs-migrate.js) alongside the live
+// filesystem one. Migration deliberately leaves both behind for a release, so a
+// reset that only dropped the live database would leave a returning visitor's
+// images to be re-imported on the next boot.
+const RESET_IDB_NAMES = ['sleepOS-fs', 'sleepOS-media'];
+
+// Prefix scan rather than a list of the fourteen key constants. Storage keys
+// get added to this OS regularly and all of them are already namespaced; a list
+// here would be a fifteenth place to remember, and the one that fails silently.
+function sleepOsStorageKeys(store) {
+  const keys = [];
+  // Indices, then delete - removeItem during the scan reindexes the rest and
+  // skips every other key.
+  for (let i = 0; i < store.length; i++) {
+    const k = store.key(i);
+    if (k && k.startsWith('sleepOS')) keys.push(k);
+  }
+  return keys;
+}
+
+// Resolves with whether the database is really gone, rather than rejecting.
+// fsIdbDeleteDatabase is deliberately strict for migration's abort path, where
+// a blocked delete has to surface immediately; here both outcomes are reported
+// to the user instead, so this needs the answer, not an exception.
+function resetDeleteDatabase(name) {
+  return new Promise(resolve => {
+    let req;
+    try { req = indexedDB.deleteDatabase(name); } catch (e) { resolve(false); return; }
+    req.onsuccess = () => resolve(true);
+    req.onerror   = () => resolve(false);
+    // IndexedDB never settles a blocked delete on its own - it waits for every
+    // other connection, indefinitely - so this is an answer, not a failure to
+    // wait long enough.
+    req.onblocked = () => resolve(false);
+  });
+}
+
+function confirmFactoryReset() {
+  osConfirm(
+    'This erases everything sleepOS has saved in this browser:\n\n' +
+    '  your files and folders\n' +
+    '  desktop layout and wallpaper\n' +
+    '  settings and registry\n' +
+    '  story progress\n\n' +
+    'sleepOS restarts as a fresh install. This cannot be undone.',
+    'Reset sleepOS',
+    ok => { if (ok) void performFactoryReset(); },
+    'icon:warning');
+}
+
+async function performFactoryReset() {
+  // Before anything is deleted: from here on, any save-on-the-way-out would
+  // write the old session back over the wipe.
+  fsBeginFactoryReset();
+  closeStart();
+  closeDropdown();
+
+  stopSoundLoop('ambience', { fade: 0.5 });
+  const bios = document.getElementById('bios');
+  if (bios) {
+    bios.style.display = 'flex';
+    bios.style.opacity = '1';
+    bios.style.transition = 'none';
+    bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#888;white-space:pre;line-height:1.5;">
+sleepOS - Resetting...
+
+Unmounting filesystem...                 [OK]
+Erasing user data...
+  </div>`;
+  }
+  document.getElementById('desktop').style.display = 'none';
+  document.getElementById('taskbar').style.display = 'none';
+
+  // The backend's own connection blocks its own delete, so it goes first. This
+  // is the second caller of _close() and it has the same shape as migration's:
+  // the backend is never used again on this page. Optional on the method as
+  // well as the backend - only the IndexedDB backend has a connection to give
+  // up, and the localStorage and in-memory ones are reset by the key sweep
+  // below instead.
+  try { await vfsGetBackend()?._close?.(); } catch (e) {}
+
+  const deleted = await Promise.all(RESET_IDB_NAMES.map(resetDeleteDatabase));
+  if (deleted.some(ok => !ok)) {
+    // A blocked delete means another tab has sleepOS open on this origin.
+    // Reloading now would boot back into the filesystem the user just asked to
+    // destroy and report success, so the reset stops here instead and says so.
+    // Nothing has been erased yet - localStorage is untouched on this path.
+    document.getElementById('desktop').style.display = 'block';
+    document.getElementById('taskbar').style.display = 'flex';
+    if (bios) bios.style.display = 'none';
+    osFactoryResetInProgress = false;
+    osAlert('sleepOS could not erase its data because it is open in another tab.\n\n' +
+            'Close every other sleepOS tab and try again.',
+            'Reset Failed', 'icon:error');
+    return;
+  }
+
+  [localStorage, sessionStorage].forEach(store => {
+    try { sleepOsStorageKeys(store).forEach(k => store.removeItem(k)); } catch (e) {}
+  });
+
+  // Set after the wipe that would otherwise remove it. A reset earns the full
+  // boot sequence: it is the one thing the player has just asked to see again,
+  // and skipBoot is gone with the rest of the settings anyway.
+  try { sessionStorage.setItem(FORCE_BOOT_SESSION_KEY, '1'); } catch (e) {}
+  window.location.replace('sleep-os.html');
+}
+
 // window.close() only works on a tab that script opened. Every current browser
 // silently refuses it anywhere else - no exception to catch, no way to ask in
 // advance - so on a tab the user opened themselves this does nothing at all,

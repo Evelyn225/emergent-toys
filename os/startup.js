@@ -16,5 +16,9 @@ function startDesktop() {
   // begins at the first click.
   playSound('boot');
   startSoundLoop('ambience');
+  // After setupIcons, so it opens over a desktop that is already drawn rather
+  // than appearing first and having the icons pop in behind it. No-op on every
+  // boot after the first.
+  maybeShowFirstRunWelcome();
   armIdleSleep();
 }

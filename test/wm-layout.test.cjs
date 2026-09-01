@@ -400,3 +400,99 @@ test('wmVisibleWinIds is empty when everything is minimized', () => {
   ctx.wins.a = { minimized: true, el: {} };
   assert.deepStrictEqual(plain(ctx.wmVisibleWinIds()), []);
 });
+
+// ── remembered window geometry ───────────────────────────────────
+// wmStoredGeometry is the boundary between localStorage and a real window's
+// style attribute, and localStorage is not a trusted input: another tab, an
+// older build, or a player in devtools can put anything under the key. A NaN
+// width or a negative height produces a window with no grabbable titlebar and
+// no resize handles, which is unrecoverable without clearing site data - the
+// exact failure this whole feature would be blamed for.
+function geomCtx(stored) {
+  const ctx = wmCtx();
+  if (stored !== undefined) {
+    ctx.localStorage.setItem('sleepOS-window-geometry', JSON.stringify(stored));
+  }
+  return ctx;
+}
+
+test('a full geometry record round-trips', () => {
+  const ctx = geomCtx({ terminal: { left: 40, top: 60, width: 800, height: 500, max: false, snap: null } });
+  assert.deepStrictEqual(plain(ctx.wmStoredGeometry('terminal')),
+    { left: 40, top: 60, width: 800, height: 500, max: false, snap: null });
+});
+
+test('an id with no record reads as null', () => {
+  const ctx = geomCtx({ terminal: { left: 1, top: 2, width: 300, height: 200 } });
+  assert.strictEqual(ctx.wmStoredGeometry('sysmon'), null);
+});
+
+// WIN_MIN_W/H are `const`, so they never become context properties (see the
+// loader's note) and cannot be read off ctx. Reading them out of the source is
+// what stops this test from asserting a stale hardcoded number if they change.
+function winMinimums() {
+  const src = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'os', 'wm.js'), 'utf8');
+  const m = src.match(/const WIN_MIN_W = (\d+), WIN_MIN_H = (\d+)/);
+  assert.ok(m, 'could not read WIN_MIN_W/WIN_MIN_H out of os/wm.js');
+  return { w: Number(m[1]), h: Number(m[2]) };
+}
+
+test('a stored size below the resize minimum is raised to it', () => {
+  // 20x10 is smaller than the eight resize handles can be aimed at, so a window
+  // restored at that size could never be made bigger again.
+  const min = winMinimums();
+  const ctx = geomCtx({ calc: { left: 10, top: 10, width: 20, height: 10 } });
+  const g = ctx.wmStoredGeometry('calc');
+  assert.strictEqual(g.width, min.w);
+  assert.strictEqual(g.height, min.h);
+});
+
+test('non-finite and non-numeric fields read as null rather than reaching a style attribute', () => {
+  const ctx = geomCtx({ calc: { left: 'x', top: null, width: 1 / 0, height: undefined } });
+  assert.deepStrictEqual(plain(ctx.wmStoredGeometry('calc')),
+    { left: null, top: null, width: null, height: null, max: false, snap: null });
+});
+
+test('only the two real snap zones survive; anything else is no snap', () => {
+  // 'top' maximizes rather than snapping, so it is never stored as a snap and
+  // must not be honoured as one - wmSnapRect('top') would fill the desktop
+  // while the window still claimed to be snapped.
+  const zones = { a: 'left', b: 'right', c: 'top', d: 'sideways', e: 42 };
+  const ctx = geomCtx(Object.fromEntries(
+    Object.entries(zones).map(([id, snap]) => [id, { left: 0, top: 0, width: 400, height: 300, snap }])));
+  assert.strictEqual(ctx.wmStoredGeometry('a').snap, 'left');
+  assert.strictEqual(ctx.wmStoredGeometry('b').snap, 'right');
+  assert.strictEqual(ctx.wmStoredGeometry('c').snap, null);
+  assert.strictEqual(ctx.wmStoredGeometry('d').snap, null);
+  assert.strictEqual(ctx.wmStoredGeometry('e').snap, null);
+});
+
+test('a store that is not an object at all is ignored rather than thrown on', () => {
+  const ctx = geomCtx([1, 2, 3]);
+  assert.strictEqual(ctx.wmStoredGeometry('terminal'), null);
+});
+
+test('unparseable JSON under the key is ignored rather than thrown on', () => {
+  const ctx = wmCtx();
+  ctx.localStorage.setItem('sleepOS-window-geometry', '{not json');
+  assert.strictEqual(ctx.wmStoredGeometry('terminal'), null);
+});
+
+// Dialogs (osAlert, osConfirm, the shutdown box) build their id from a
+// Date.now(), so no two runs ever share one. Remembering them would fill the
+// store with entries that can never match anything again.
+test('a popup window is not eligible to be remembered', () => {
+  const ctx = wmCtx();
+  // wmGeomEligible also refuses the mobile layout, where mkWin makes every
+  // window fill the desktop and there is no chosen geometry to remember. This
+  // test is about the popup half, so put the context on the desktop branch:
+  // isMobileLayout reads both of these and the shared stub has neither.
+  ctx.innerWidth = 1200;
+  ctx.matchMedia = () => ({ matches: false });
+  ctx.wins['os-alert-123'] = { popup: true, minimized: false, el: {} };
+  ctx.wins.terminal = { popup: false, minimized: false, el: {} };
+  assert.strictEqual(ctx.wmGeomEligible('os-alert-123'), false);
+  assert.strictEqual(ctx.wmGeomEligible('terminal'), true);
+  assert.strictEqual(ctx.wmGeomEligible('never-opened'), false);
+});

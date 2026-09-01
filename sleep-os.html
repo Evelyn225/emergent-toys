@@ -75,7 +75,7 @@
         <button class="cad-action" onclick="cadAction('taskmgr')">
           <span class="cad-action-icon"><img class="os-icon" src="os/icons/chart1-4.png" alt="" draggable="false"></span>
           <span class="cad-action-copy">
-            <strong>System Monitorr</strong>
+            <strong>System Monitor</strong>
             <span>Inspect active windows and process IDs before forcing changes.</span>
           </span>
         </button>
@@ -121,6 +121,9 @@
   <div id="taskbar-programs"></div>
   <div id="system-tray">
     <span class="tray-icon" title="sleepOS network active"><img class="os-icon" src="os/icons/network.png" alt="" draggable="false"></span>
+    <!-- Contents drawn by renderTraySound(); it swaps between the speaker and
+         the muted speaker, so the markup cannot name one of them here. -->
+    <button id="tray-sound" class="tray-icon tray-btn" type="button" aria-pressed="false"></button>
     <span class="tray-icon"><img class="os-icon" src="os/icons/clock.png" alt="" draggable="false"></span>
     <span id="clock">--:--</span>
   </div>
@@ -130,6 +133,10 @@
 <div id="start-menu">
   <div id="sm-sidebar"><span>sleepOS</span></div>
   <div id="sm-items">
+    <div class="sm-item" onclick="closeStart();openWelcome()">
+      <span class="sm-icon"><img class="os-icon" src="os/icons/file_lines-0.png" alt="" draggable="false"></span><span>Welcome</span>
+    </div>
+    <div class="sm-sep"></div>
     <div class="sm-item" onclick="closeStart();openNotepad()">
       <span class="sm-icon"><img class="os-icon" src="os/icons/notepad-1.png" alt="" draggable="false"></span><span>Notepad</span>
     </div>
@@ -142,8 +149,14 @@
     <div class="sm-item" onclick="closeStart();openTerminal()">
       <span class="sm-icon"><img class="os-icon" src="os/icons/console_prompt-0.png" alt="" draggable="false"></span><span>Terminal</span>
     </div>
+    <div class="sm-item" onclick="closeStart();openBrowser()">
+      <span class="sm-icon"><img class="os-icon" src="os/icons/browser.png" alt="" draggable="false"></span><span>Browser</span>
+    </div>
     <div class="sm-item" onclick="closeStart();openSysmon()">
       <span class="sm-icon"><img class="os-icon" src="os/icons/chart1-4.png" alt="" draggable="false"></span><span>System Monitor</span>
+    </div>
+    <div class="sm-item" onclick="closeStart();openDefrag()">
+      <span class="sm-icon"><img class="os-icon" src="os/icons/clean_drive.png" alt="" draggable="false"></span><span>Defragmenter</span>
     </div>
     <div class="sm-item" onclick="closeStart();openCalculator()">
       <span class="sm-icon"><img class="os-icon" src="os/icons/calculator-0.png" alt="" draggable="false"></span><span>Calculator</span>

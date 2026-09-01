@@ -495,7 +495,8 @@ function openSettings() {
   // 316 = 18px titlebar + 4px borders + the panel's exact content height. The
   // old 294 already left ~70px of dead space below the footer; adding the
   // Sound section without re-measuring would have kept it.
-  if (!mkWin({ id:'settings', title:'Settings', icon:'icon:settings', w:390, h:316, x:145, y:95, menubar:false, statusbar:false })) return;
+  // 372 = the same measure again after the Reset row and its section header.
+  if (!mkWin({ id:'settings', title:'Settings', icon:'icon:settings', w:390, h:372, x:145, y:95, menubar:false, statusbar:false })) return;
   const body = document.getElementById('wb-settings');
   body.className = 'win-body st-panel';
 
@@ -509,89 +510,16 @@ function openSettings() {
      <div class="st-row"><div class="st-label">12-hour clock</div><button class="st-toggle" data-setting="clock12h"></button></div>
 
      <div class="st-row"><div class="st-label">Skip boot screen</div><button class="st-toggle" data-setting="skipBoot"></button></div>
+     <div class="st-section">Reset</div>
+     <div class="st-row"><div class="st-label">Erase all data and restart</div><button class="st-toggle" id="settings-reset">Reset...</button></div>
      <div class="st-footer">
        <button class="dlg-btn primary" id="settings-open-appearance">Open Appearance</button>
        <button class="dlg-btn" id="settings-close">Close</button>
      </div>`;
 
-  // \u2500\u2500 Volume, drawn as the media player's block meter \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  const VOL_BLOCKS = 10;
-  const volEl = document.getElementById('settings-volume');
-  let volDragging = false;
-
-  function renderVolume() {
-    const filled = osSettings.sounds ? Math.round(getSystemVolume() * VOL_BLOCKS) : 0;
-    volEl.innerHTML =
-      `<span style="color:#000080">${'&#9632;'.repeat(filled)}</span>` +
-      `<span style="color:#6a6a6a">${'&#9643;'.repeat(VOL_BLOCKS - filled)}</span>`;
-    volEl.classList.toggle('off', !osSettings.sounds);
-    volEl.setAttribute('aria-valuenow', String(Math.round(getSystemVolume() * 100)));
-  }
-
-  // Quantised to the blocks that are actually drawn: clicking a block should
-  // land on that block, not on a continuous value that rounds to its neighbour.
-  function setVolumeStep(step) {
-    const clamped = Math.max(0, Math.min(VOL_BLOCKS, step));
-    osSettings.soundVolume = clamped / VOL_BLOCKS;
-    // Dragging a muted slider upwards unmutes, the way every OS mixer does.
-    if (clamped > 0 && !osSettings.sounds) osSettings.sounds = true;
-  }
-
-  // Live during a drag, but nothing is written to disk until the pointer is
-  // released - saveSettings and saveRegistry both hit localStorage, and
-  // pointermove fires at frame rate.
-  function previewVolume(clientX) {
-    // Measured against the content box, not the border box: the blocks are
-    // drawn inside 2px of bevel and 6px of padding, and mapping the pointer
-    // across the full width would land a click a block away from the one it
-    // was aimed at near either end.
-    const r = volEl.getBoundingClientRect();
-    const cs = getComputedStyle(volEl);
-    const inset = n => parseFloat(cs.getPropertyValue(n)) || 0;
-    const left = r.left + inset('border-left-width') + inset('padding-left');
-    const width = Math.max(1, r.width - inset('border-left-width') - inset('border-right-width')
-                                      - inset('padding-left') - inset('padding-right'));
-    setVolumeStep(Math.round(((clientX - left) / width) * VOL_BLOCKS));
-    applySystemAudioSettings();
-    renderVolume();
-  }
-
-  function commitVolume() {
-    saveSettings();
-    applySettings();
-    refresh();
-    playSound('click');
-  }
-
-  // Pointer capture instead of document-level move/up listeners: those would
-  // outlive the window and stack up one pair per Settings open.
-  volEl.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    volDragging = true;
-    try { volEl.setPointerCapture(e.pointerId); } catch (err) {}
-    previewVolume(e.clientX);
-  });
-  volEl.addEventListener('pointermove', e => { if (volDragging) previewVolume(e.clientX); });
-  volEl.addEventListener('pointerup', e => {
-    if (!volDragging) return;
-    volDragging = false;
-    try { volEl.releasePointerCapture(e.pointerId); } catch (err) {}
-    commitVolume();
-  });
-  volEl.addEventListener('pointercancel', () => {
-    if (!volDragging) return;
-    volDragging = false;
-    commitVolume();
-  });
-  volEl.addEventListener('keydown', e => {
-    const dir = (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? 1
-              : (e.key === 'ArrowLeft'  || e.key === 'ArrowDown') ? -1 : 0;
-    if (!dir) return;
-    e.preventDefault();
-    setVolumeStep(Math.round(getSystemVolume() * VOL_BLOCKS) + dir);
-    commitVolume();
-  });
+  // The meter itself is mountVolumeBlocks in os/audio.js; the tray mixer draws
+  // the same control, and the pointer maths is not worth two copies of.
+  const renderVolume = mountVolumeBlocks(document.getElementById('settings-volume'));
 
   function refresh() {
     body.querySelectorAll('[data-setting]').forEach(btn => {
@@ -618,6 +546,13 @@ function openSettings() {
     });
   });
 
+  // Muting from the tray while this window is open has to move the toggle and
+  // the meter here too, or the two disagree about the same setting. Removed on
+  // close, because the handler closes over a body that is about to be gone.
+  document.addEventListener('os-settings-changed', refresh);
+  wins['settings']._onclose = () => document.removeEventListener('os-settings-changed', refresh);
+
+  document.getElementById('settings-reset').addEventListener('click', confirmFactoryReset);
   document.getElementById('settings-open-appearance').addEventListener('click', openAppearance);
   document.getElementById('settings-close').addEventListener('click', () => closeWin('settings'));
   refresh();

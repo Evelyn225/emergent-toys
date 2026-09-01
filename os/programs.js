@@ -96,7 +96,10 @@ const PROGRAM_LAUNCHERS = {
   // and prints a C:\sleepOS\FILES path that does not exist as a file; this
   // is the same launchable-but-not-a-file behaviour as WELCOME.README's
   // aliasing, just undeclared until now.
-  'FILES': { lines: ['Opening Files...'], open: () => openFiles() },
+  // Aliased to 'projects' because that is the name every surface a player
+  // reads uses for it - the desktop icon, the Start menu entry and
+  // WELCOME.README all say PROJECTS, and only this registry says FILES.
+  'FILES': { lines: ['Opening Files...'], open: () => openFiles(), aliases: ['projects'] },
 };
 
 // Story files exist at the root without being in ROOT_SYSTEM_FILE_META, and

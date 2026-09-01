@@ -386,6 +386,239 @@ function initSystemAudio() {
     if (!target || target.disabled) return;
     playSound('click');
   }, true);
+  initTraySound();
+}
+
+// ── The volume block meter ────────────────────────────────────────
+// Lives here rather than in the Settings window that used to own it, because
+// there are two of these now: the Settings row and the tray flyout. The drag
+// maths is the fiddly part (see `preview` below) and two copies of it would be
+// two things to keep in step, which is how this codebase ended up with three
+// lists of the same programs once already.
+const VOL_BLOCKS = 10;
+
+// Quantised to the blocks that are actually drawn: clicking a block should
+// land on that block, not on a continuous value that rounds to its neighbour.
+function setVolumeStep(step) {
+  const clamped = Math.max(0, Math.min(VOL_BLOCKS, step));
+  osSettings.soundVolume = clamped / VOL_BLOCKS;
+  // Dragging a muted slider upwards unmutes, the way every OS mixer does.
+  if (clamped > 0 && !osSettings.sounds) osSettings.sounds = true;
+}
+
+// Returns the render function, so a caller that has its own refresh pass can
+// redraw the meter without knowing how it is drawn.
+function mountVolumeBlocks(el) {
+  if (!el) return () => {};
+  let dragging = false;
+
+  function render() {
+    const filled = systemAudioEnabled() ? Math.round(getSystemVolume() * VOL_BLOCKS) : 0;
+    el.innerHTML =
+      `<span style="color:#000080">${'&#9632;'.repeat(filled)}</span>` +
+      `<span style="color:#6a6a6a">${'&#9643;'.repeat(VOL_BLOCKS - filled)}</span>`;
+    el.classList.toggle('off', !systemAudioEnabled());
+    el.setAttribute('aria-valuenow', String(Math.round(getSystemVolume() * 100)));
+  }
+
+  // Live during a drag, but nothing is written to disk until the pointer is
+  // released - saveSettings and saveRegistry both hit localStorage, and
+  // pointermove fires at frame rate.
+  function preview(clientX) {
+    // Measured against the content box, not the border box: the blocks are
+    // drawn inside 2px of bevel and 6px of padding, and mapping the pointer
+    // across the full width would land a click a block away from the one it
+    // was aimed at near either end.
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const inset = n => parseFloat(cs.getPropertyValue(n)) || 0;
+    const left = r.left + inset('border-left-width') + inset('padding-left');
+    const width = Math.max(1, r.width - inset('border-left-width') - inset('border-right-width')
+                                      - inset('padding-left') - inset('padding-right'));
+    setVolumeStep(Math.round(((clientX - left) / width) * VOL_BLOCKS));
+    applySystemAudioSettings();
+    render();
+  }
+
+  function commit() {
+    saveSettings();
+    applySettings();
+    playSound('click');
+  }
+
+  // Pointer capture instead of document-level move/up listeners: those would
+  // outlive the window and stack up one pair per Settings open.
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragging = true;
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    preview(e.clientX);
+  });
+  el.addEventListener('pointermove', e => { if (dragging) preview(e.clientX); });
+  el.addEventListener('pointerup', e => {
+    if (!dragging) return;
+    dragging = false;
+    try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+    commit();
+  });
+  el.addEventListener('pointercancel', () => {
+    if (!dragging) return;
+    dragging = false;
+    commit();
+  });
+  el.addEventListener('keydown', e => {
+    const dir = (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? 1
+              : (e.key === 'ArrowLeft'  || e.key === 'ArrowDown') ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    setVolumeStep(Math.round(getSystemVolume() * VOL_BLOCKS) + dir);
+    commit();
+  });
+
+  render();
+  return render;
+}
+
+// ── The tray speaker ──────────────────────────────────────────────
+// The ambience starts itself at the first click of the session, and until this
+// existed the only way to stop it was Start > Settings > a toggle two levels
+// in. One click is where a mute belongs.
+let traySoundRender = null;
+
+function traySoundFlyoutEl() {
+  let el = document.getElementById('tray-volume');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'tray-volume';
+  el.innerHTML =
+    '<div id="tray-volume-label">Volume</div>' +
+    '<div class="st-vol vp-vol-blocks" id="tray-volume-blocks" role="slider" tabindex="0"' +
+    ' aria-label="System volume" aria-valuemin="0" aria-valuemax="100"></div>' +
+    '<button class="st-toggle" type="button" id="tray-volume-mute"></button>';
+  document.body.appendChild(el);
+  return el;
+}
+
+function isTraySoundFlyoutOpen() {
+  const el = document.getElementById('tray-volume');
+  return !!el && el.classList.contains('open');
+}
+
+function closeTraySoundFlyout() {
+  const el = document.getElementById('tray-volume');
+  if (el) el.classList.remove('open');
+  const btn = document.getElementById('tray-sound');
+  if (btn) btn.classList.remove('open');
+}
+
+function openTraySoundFlyout() {
+  const btn = document.getElementById('tray-sound');
+  if (!btn) return;
+  const el = traySoundFlyoutEl();
+  // A context menu open elsewhere would sit above this at its own z-index.
+  closeDropdown();
+  el.classList.add('open');
+  btn.classList.add('open');
+  renderTraySound();
+  // Measured after it is displayed - a flyout still in display:none has no box
+  // to anchor against. Right-aligned to the button and clamped to the viewport,
+  // because the tray sits hard against the right edge on a desktop and the
+  // panel is wider than the 16px icon it hangs from.
+  //
+  // Vertically it anchors to the TASKBAR's top edge, not the button's: the
+  // button sits a few pixels inside the bar, so hanging the flyout off it
+  // leaves those pixels of taskbar covered. Same reasoning as showCtxMenu's
+  // anchorBottom option, which the taskbar's own menu uses.
+  const r = btn.getBoundingClientRect();
+  const bar = document.getElementById('taskbar');
+  const barTop = bar ? bar.getBoundingClientRect().top : r.top;
+  const box = el.getBoundingClientRect();
+  el.style.left = Math.max(4, Math.min(window.innerWidth - box.width - 4,
+                                       r.right - box.width)) + 'px';
+  el.style.top = Math.max(0, barTop - box.height) + 'px';
+  // Deferred past the click that opened it, or that same click closes it.
+  setTimeout(() => {
+    document.addEventListener('pointerdown', onTraySoundOutside, true);
+  }, 0);
+}
+
+function onTraySoundOutside(e) {
+  const el = document.getElementById('tray-volume');
+  const btn = document.getElementById('tray-sound');
+  if (el && el.contains(e.target)) return;
+  if (btn && btn.contains(e.target)) return;
+  document.removeEventListener('pointerdown', onTraySoundOutside, true);
+  closeTraySoundFlyout();
+}
+
+function toggleTraySoundFlyout() {
+  if (isTraySoundFlyoutOpen()) {
+    document.removeEventListener('pointerdown', onTraySoundOutside, true);
+    closeTraySoundFlyout();
+  } else {
+    openTraySoundFlyout();
+  }
+}
+
+// Called by applySettings, so the icon follows a change made from REGEDIT or
+// the Settings window as well as one made here.
+function renderTraySound() {
+  const btn = document.getElementById('tray-sound');
+  if (btn) {
+    const on = systemAudioEnabled();
+    setIconContent(btn, on ? 'icon:sound' : 'icon:sound-mute');
+    const label = on ? 'System volume ' + Math.round(getSystemVolume() * 100) + '%' : 'Sound muted';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-pressed', on ? 'false' : 'true');
+  }
+  const mute = document.getElementById('tray-volume-mute');
+  if (mute) {
+    const muted = !systemAudioEnabled();
+    mute.textContent = muted ? 'Unmute' : 'Mute';
+    mute.classList.toggle('on', muted);
+  }
+  if (traySoundRender) traySoundRender();
+}
+
+function toggleSystemMute() {
+  osSettings.sounds = !systemAudioEnabled();
+  // Unmuting a slider someone had dragged to zero would be silent, which reads
+  // as the button not working.
+  if (osSettings.sounds && getSystemVolume() <= 0) osSettings.soundVolume = DEFAULT_SOUND_VOLUME;
+  saveSettings();
+  applySettings();
+  if (systemAudioEnabled()) playSound('click');
+}
+
+function initTraySound() {
+  const btn = document.getElementById('tray-sound');
+  if (!btn) return;
+  // Left click mutes, because that is the one thing worth a single click.
+  // Anything more deliberate than that - setting a level - is the flyout, on
+  // right-click and on long-press, where the rest of the OS puts its menus.
+  btn.addEventListener('click', () => {
+    // A long press has already opened the flyout and a button still emits its
+    // click afterwards, which would mute at the same time. Same guard the
+    // desktop icons use, and the same place it is cleared.
+    if (_longPressActive) { _longPressActive = false; return; }
+    toggleSystemMute();
+  });
+  // stopPropagation matters as much as preventDefault here: wmInstallTaskbarMenu
+  // binds contextmenu on #taskbar and this button is inside it, so without this
+  // a right-click opens the taskbar's Cascade/Tile menu ON TOP of the flyout -
+  // the flyout is there, correctly positioned, with a menu covering it.
+  btn.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleTraySoundFlyout();
+  });
+  addLongPress(btn);
+  traySoundRender = mountVolumeBlocks(traySoundFlyoutEl().querySelector('#tray-volume-blocks'));
+  document.getElementById('tray-volume-mute')
+    .addEventListener('click', () => { toggleSystemMute(); });
+  renderTraySound();
 }
 
 // The whole point of the Web Audio path: one call stops everything, including
