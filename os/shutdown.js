@@ -232,7 +232,7 @@ function sleepOsStorageKeys(store) {
 // fsIdbDeleteDatabase is deliberately strict for migration's abort path, where
 // a blocked delete has to surface immediately; here both outcomes are reported
 // to the user instead, so this needs the answer, not an exception.
-function resetDeleteDatabase(name) {
+function resetDeleteDatabaseOnce(name) {
   return new Promise(resolve => {
     let req;
     try { req = indexedDB.deleteDatabase(name); } catch (e) { resolve(false); return; }
@@ -243,6 +243,18 @@ function resetDeleteDatabase(name) {
     // wait long enough.
     req.onblocked = () => resolve(false);
   });
+}
+
+// One retry, because the two reasons a delete blocks are not equally permanent.
+// Another TAB holding the database is permanent and worth telling the player
+// about; a transaction of our OWN that was still finishing is over in
+// milliseconds, and reporting "open in another tab" for it is both wrong and
+// unactionable. The flush below makes that second case rare - this covers what
+// the flush cannot wait for.
+async function resetDeleteDatabase(name) {
+  if (await resetDeleteDatabaseOnce(name)) return true;
+  await new Promise(r => setTimeout(r, 250));
+  return resetDeleteDatabaseOnce(name);
 }
 
 function confirmFactoryReset() {
@@ -281,7 +293,18 @@ Erasing user data...
   document.getElementById('desktop').style.display = 'none';
   document.getElementById('taskbar').style.display = 'none';
 
-  // The backend's own connection blocks its own delete, so it goes first. This
+  // Let a commit that is already in flight finish before the database is taken
+  // away. Writes sit behind a 400ms debounce, and an in-flight one holds an
+  // IndexedDB transaction - deleteDatabase does not fail against a transaction,
+  // it fires onblocked and waits. Without this, clicking Reset within 400ms of
+  // touching a file aborted the whole reset with "sleepOS is open in another
+  // tab", which is both wrong and impossible to act on.
+  //
+  // Flushing data that is about to be deleted looks odd and is the point: the
+  // commit is what has to END, and the fastest way there is to let it.
+  try { await vfsFlush(); } catch (e) {}
+
+  // The backend's own connection blocks its own delete, so it goes next. This
   // is the second caller of _close() and it has the same shape as migration's:
   // the backend is never used again on this page. Optional on the method as
   // well as the backend - only the IndexedDB backend has a connection to give

@@ -18,11 +18,38 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
+const net = require('net');
 const { chromium } = require('playwright');
 
 const ROOT = path.join(__dirname, '..', '..', '..');
-const PORT = Number(process.env.SLEEPOS_TEST_PORT || 3199);
-const BASE = 'http://localhost:' + PORT;
+
+// Assigned per PROCESS, in startHarness, and that is the whole point: node
+// --test runs each test FILE in its own process and runs those processes in
+// PARALLEL. A fixed port meant every browser file racing to bind the same one,
+// so with more than one file in this directory the losers either failed to bind
+// or quietly drove the winner's server. It showed up as a single unrelated test
+// timing out at 30s in the combined run while passing in 1.5s on its own.
+//
+// Module state is per-process, so one variable per process needs no signature
+// change anywhere else.
+let PORT = Number(process.env.SLEEPOS_TEST_PORT || 0);
+let BASE = '';
+
+// Ask the OS for a free port, then hand it to the server. There is a small race
+// between closing this listener and the server binding, which is why an
+// explicit SLEEPOS_TEST_PORT still wins - but it beats a fixed port that is
+// GUARANTEED to collide with the file running beside it.
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.unref();
+    probe.on('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+}
 
 function waitForServer(timeoutMs = 20000) {
   const deadline = Date.now() + timeoutMs;
@@ -48,6 +75,8 @@ function waitForServer(timeoutMs = 20000) {
 // CONTEXT, which is what isolates IndexedDB - sleepOS persists its filesystem
 // there, so a shared context would let one test's writes reach the next.
 async function startHarness() {
+  if (!PORT) PORT = await freePort();
+  BASE = 'http://localhost:' + PORT;
   const server = spawn(process.execPath, ['server.cjs'], {
     cwd: ROOT,
     env: Object.assign({}, process.env, { PORT: String(PORT) }),
@@ -208,7 +237,11 @@ async function patchChangesWhen(page, point, mutate) {
 }
 
 module.exports = {
-  BASE, PORT, startHarness, openDesktop, openWindow, rebootDesktop,
+  // BASE and PORT are settled inside startHarness, so they are exposed as
+  // getters - exporting the values would capture the empty pre-start ones.
+  get BASE() { return BASE; },
+  get PORT() { return PORT; },
+  startHarness, openDesktop, openWindow, rebootDesktop,
   waitForBootedDesktop, factoryReset,
   rectOf, stateOf, previewDisplay, dragTitlebarTo, patchChangesWhen,
 };

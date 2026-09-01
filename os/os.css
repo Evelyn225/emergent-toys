@@ -1161,6 +1161,94 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 .st-vol.off { opacity: 0.45; }
 .st-footer { display: flex; gap: 6px; padding: 8px 2px 0; border-top: 1px solid #d0d0d0; margin-top: 6px; }
 
+/* ── MINESWEEPER.exe ─────────────────────────────────────────── */
+/* Every sprite comes out of one atlas (os/sprites/minesweeper.png), packed with
+   no gutters so each background-position is a flat multiple of the cell size.
+   Row 0 is the 16px tiles then the 16px numerals, row 1 (y -16) the 24px faces,
+   row 2 (y -40) the 13x23 LED digits. */
+.ms-body {
+  background: #c0c0c0;
+  /* Centres the board when the window is bigger than it - maximized, snapped,
+     or filling a phone. The board itself is always its natural size. */
+  display: flex; align-items: center; justify-content: center;
+  overflow: auto;
+}
+.ms-root { padding: 6px; flex: 0 0 auto; }
+.ms-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 5px; margin-bottom: 6px;
+  background: #c0c0c0;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+}
+.ms-leds {
+  display: flex; gap: 0;
+  border: 1px solid; border-color: #808080 #fff #fff #808080;
+  background: #000;
+}
+.ms-leds i {
+  width: 13px; height: 23px; display: block;
+  background-image: url('sprites/minesweeper.png');
+  image-rendering: pixelated;
+}
+.ms-face {
+  width: 24px; height: 24px; padding: 0; border: 0; background: none;
+  background-image: url('sprites/minesweeper.png');
+  image-rendering: pixelated;
+  cursor: default; flex-shrink: 0;
+}
+.ms-face:focus-visible { outline: 1px dotted #000; outline-offset: 1px; }
+.ms-grid {
+  display: grid;
+  grid-auto-flow: row;
+  /* msBuildGrid sets grid-template-columns to the board's real column count.
+     Deriving it here from a width cannot work: the global reset makes this a
+     border box, so the bevel would eat a column. */
+  width: max-content;
+  border: 3px solid; border-color: #808080 #fff #fff #808080;
+  /* The grid is sized in JS to cols*16, which with 16px columns is what makes
+     the rows wrap where the board says rather than where the window does. */
+  background: #c0c0c0;
+}
+.ms-cell {
+  width: 16px; height: 16px;
+  background-image: url('sprites/minesweeper.png');
+  background-position: 0 0;
+  image-rendering: pixelated;
+  /* The board is a grid of 480 identical squares at Expert; letting a drag
+     select them turns every mis-swipe into a blue smear. */
+  user-select: none; -webkit-user-drag: none;
+}
+/* Right-aligned in the menubar, which is otherwise a left-to-right run of
+   text items. One action, so an icon rather than a "Help" menu. */
+.ms-help-btn {
+  /* .win-menubar is already display:flex, so auto margin and align-self are
+     all this needs - no :has() rule to make the parent a flex container. */
+  margin-left: auto; align-self: center;
+  --os-icon-size: 16px;
+  display: flex; align-items: center;
+  padding: 1px 3px; background: none; cursor: default;
+  border: 1px solid transparent;
+}
+.ms-help-btn:hover { border-color: #fff #808080 #808080 #fff; }
+.ms-help-btn:active { border-color: #808080 #fff #fff #808080; }
+.ms-help-btn .os-icon { image-rendering: auto; }
+
+.ms-help { display: flex; flex-direction: column; background: #c0c0c0; }
+.ms-help-scroll {
+  flex: 1; overflow-y: auto; margin: 8px 8px 0;
+  padding: 10px 12px; background: #fff;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+  font-size: 11px; line-height: 1.6; color: #000;
+}
+.ms-help-scroll h3 { font-size: 11px; margin: 12px 0 4px; }
+.ms-help-scroll h3:first-child { margin-top: 0; }
+.ms-help-scroll p { margin: 0 0 8px; }
+.ms-help-scroll ul { margin: 0 0 8px; padding-left: 18px; }
+.ms-help-scroll li { margin-bottom: 4px; }
+/* The registry path is one long unbroken token; without this it pushes the
+   dialog sideways when the window is dragged narrower. */
+.ms-help-scroll code { font-family: var(--sleep-font); background: #ececec; overflow-wrap: anywhere; }
+
 /* ── Welcome text window ─────────────────────────────────────── */
 .note-body {
   background: #fff; height: 100%; overflow: auto;

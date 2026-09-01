@@ -23,6 +23,7 @@ const OS_ICONS = {
   calc:          'calculator-0.png',
   sysmon:        'chart1-4.png',
   regedit:       'regedit-0.png',
+  minesweeper:   'minesweeper.png',
   defrag:        'clean_drive.png',
   explorer:      'directory_open_file_mydocs-0.png',
   settings:      'settings.png',
@@ -77,6 +78,7 @@ const OS_ICONS = {
   // is what a bare osAlert falls back to.
   info:          'info.png',
   tip:           'tip.png',
+  help:          'help_question_mark.png',
   success:       'checkmark.png',
 };
 

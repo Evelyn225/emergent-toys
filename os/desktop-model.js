@@ -44,6 +44,7 @@ const DESKTOP_ICONS = [
   { name: 'BROWSER.exe',    emoji: 'icon:browser',  action: 'openBrowser' },
   { name: 'DEFRAG.exe',     emoji: 'icon:defrag',   action: 'openDefrag' },
   { name: 'CALC.exe',       emoji: 'icon:calc',     action: 'openCalculator' },
+  { name: 'MINESWEEPER.exe', emoji: 'icon:minesweeper', action: 'openMinesweeper' },
   { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
   { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
   { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },

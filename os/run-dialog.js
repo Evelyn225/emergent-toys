@@ -33,6 +33,8 @@ function openRunDialog() {
     'explorer': openExplorer, 'explorer.exe': openExplorer,
     'defrag': openDefrag, 'defrag.exe': openDefrag,
     'browser': openBrowser, 'browser.exe': openBrowser,
+    'minesweeper': openMinesweeper, 'minesweeper.exe': openMinesweeper,
+    'winmine': openMinesweeper, 'winmine.exe': openMinesweeper,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
     // FILES is the registry's thirteenth root entry and opens Explorer on
     // PROJECTS. It has no ROOT_SYSTEM_FILE_META row and DIR never lists it, so

@@ -309,6 +309,23 @@ test('Reset erases the session and boots a fresh install', async () => {
   });
 });
 
+// Writes sit behind a 400ms debounce, and an in-flight commit holds an
+// IndexedDB transaction that deleteDatabase does not fail against - it fires
+// onblocked and waits forever. Resetting right after touching a file used to
+// abort the whole thing with "sleepOS is open in another tab", which is both
+// wrong and unactionable. It surfaced as a 30s timeout that only appeared when
+// the browser files ran in parallel and everything got slower.
+test('resetting immediately after a write still resets', async () => {
+  await withDesktop({}, async page => {
+    await page.evaluate(() => vfsWriteFile('RACE.txt', 'written just now', ''));
+    // Deliberately NOT awaiting vfsFlush here: the commit must still be in
+    // flight when the reset starts, which is the whole point.
+    await factoryReset(page);
+    assert.strictEqual(await page.evaluate(() => vfsExistsSync('RACE.txt', '')), false,
+      'the file survived, so the reset did not actually run');
+  });
+});
+
 test('a reset brings the welcome back, because it is a fresh install', async () => {
   await withDesktop({ firstRun: true }, async page => {
     await page.evaluate(() => Object.keys(wins).forEach(w => closeWin(w)));

@@ -123,6 +123,19 @@ const registryData = {
       SoundEnabled:       { type:'REG_DWORD', value: 1 },
       SoundVolume:        { type:'REG_DWORD', value: 60 },
     },
+    // Winmine kept its scores in win.ini as a time and a name per level. The
+    // name half is dropped - sleepOS has no notion of who is playing - but the
+    // rest is here rather than in a private localStorage key on purpose: this
+    // is exactly the sort of thing the registry held, and it gives REGEDIT.exe
+    // something a player can find, read, and cheat at.
+    'SOFTWARE\\sleepOS\\Minesweeper': {
+      Difficulty:         { type:'REG_SZ',    value: 'beginner' },
+      Marks:              { type:'REG_DWORD', value: 1 },
+      // 999 is the timer's own ceiling, so it doubles as "no time set yet".
+      BeginnerTime:       { type:'REG_DWORD', value: 999 },
+      IntermediateTime:   { type:'REG_DWORD', value: 999 },
+      ExpertTime:         { type:'REG_DWORD', value: 999 },
+    },
     'SOFTWARE\\sleepOS\\Daemon': {
       STATUS:             { type:'REG_SZ',    value: 'Dormant' },
       LAST_EVENT:         { type:'REG_SZ',    value: 'none' },

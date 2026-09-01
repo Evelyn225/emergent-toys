@@ -34,6 +34,7 @@
   "apps/defrag.js",
   "apps/daemon-ui.js",
   "apps/browser.js",
+  "apps/minesweeper.js",
   "os/shutdown.js",
   "apps/regedit.js",
   "apps/calc.js",

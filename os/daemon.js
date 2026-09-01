@@ -13,6 +13,7 @@ const ROOT_SYSTEM_FILE_META = [
   { name: 'CALC.exe' },
   { name: 'REGEDIT.exe' },
   { name: 'EXPLORER.exe' },
+  { name: 'MINESWEEPER.exe' },
 ];
 const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE', 'DESKTOP']);
 const STORY_FILE_PATHS = {

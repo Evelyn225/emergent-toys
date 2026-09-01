@@ -84,6 +84,7 @@ const PROGRAM_LAUNCHERS = {
     // a deliberate story beat, not a rounding error.
     delay: 320,
   },
+  'MINESWEEPER.exe': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
   'WELCOME.README': { lines: ['Opening WELCOME.README...'], open: () => openWelcome(), aliases: ['welcome'] },
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
   // list them. Both were reachable from the old `launchers`/`SYS` maps and

@@ -41,6 +41,7 @@ function fsCtxWithRefresh() {
 const SYSTEM_BINARIES = [
   'TERMINAL.exe', 'SYSMON.exe', 'NOTEPAD.exe', 'BROWSER.exe',
   'DEFRAG.exe', 'CALC.exe', 'REGEDIT.exe', 'EXPLORER.exe',
+  'MINESWEEPER.exe',
 ];
 
 test('every system binary is seeded as a real root text file', () => {
@@ -320,4 +321,50 @@ test('a fresh mount followed by the refresh queues nothing extra - seedFreshRoot
   const afterRefresh = Array.from(ctx._vfsPendingOps).filter(op => op.op === 'write').length;
   assert.strictEqual(afterMount, SYSTEM_BINARIES.length, 'seedFreshRootTree should have queued exactly one write per binary');
   assert.strictEqual(afterRefresh, afterMount, 'the refresh must not queue any additional writes on top of a fresh seed');
+});
+
+// The list above is a third place naming the same set, and this repo has been
+// bitten by exactly that before - os/programs.js's header records three
+// hand-maintained program lists that had already drifted apart. The two tables
+// that actually matter are SYSTEM_BINARY_SOURCES (os/fs-core.js), which decides
+// what gets seeded onto the disk, and ROOT_SYSTEM_FILE_META (os/daemon.js),
+// which decides what DIR lists and what the delete guards protect. A name in
+// one and not the other is a binary that either exists but is unlisted and
+// unprotected, or is listed and protected but is not there.
+//
+// Static regex over the source, for the reason test/launcher-map-coverage
+// gives: both are `const` object/array literals that never become context
+// properties.
+function namesIn(rel, marker, pattern) {
+  const src = fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+  const start = src.indexOf(marker);
+  assert.notStrictEqual(start, -1, marker + ' not found in ' + rel);
+  const open = src.indexOf(pattern.opener, start);
+  let depth = 0, end = -1;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === pattern.opener) depth++;
+    else if (src[i] === pattern.closer) { depth--; if (depth === 0) { end = i; break; } }
+  }
+  assert.notStrictEqual(end, -1, marker + ' is not terminated in ' + rel);
+  return new Set([...src.slice(open, end).matchAll(pattern.re)].map(m => m[1]));
+}
+
+test('the seeded binaries and the root file table name exactly the same set', () => {
+  const seeded = namesIn('os/fs-core.js', 'const SYSTEM_BINARY_SOURCES',
+    { opener: '{', closer: '}', re: /^ {2}'([A-Za-z0-9_.?-]+\.exe)'\s*:/gm });
+  const listed = namesIn('os/daemon.js', 'const ROOT_SYSTEM_FILE_META',
+    { opener: '[', closer: ']', re: /name:\s*'([A-Za-z0-9_.?-]+\.exe)'/g });
+
+  assert.ok(seeded.size >= 8, 'expected SYSTEM_BINARY_SOURCES entries, found ' + seeded.size);
+  assert.deepStrictEqual([...seeded].sort(), [...listed].sort(),
+    'SYSTEM_BINARY_SOURCES (os/fs-core.js) and ROOT_SYSTEM_FILE_META (os/daemon.js) disagree. '
+    + 'A name in the first only is seeded but unlisted and unprotected; a name in the second only '
+    + 'is listed and protected but never written to disk.');
+});
+
+test('the list this file checks covers every seeded binary', () => {
+  const seeded = namesIn('os/fs-core.js', 'const SYSTEM_BINARY_SOURCES',
+    { opener: '{', closer: '}', re: /^ {2}'([A-Za-z0-9_.?-]+\.exe)'\s*:/gm });
+  assert.deepStrictEqual(SYSTEM_BINARIES.slice().sort(), [...seeded].sort(),
+    'add the new binary to SYSTEM_BINARIES at the top of this file so the assertions above cover it');
 });
