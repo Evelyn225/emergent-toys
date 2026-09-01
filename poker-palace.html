@@ -47,7 +47,20 @@
       --back-c: #57100d;
       --success: #9eff8f;
       --danger: #ff8c7a;
-      --shadow: 0 0 0 4px #160805, 0 0 0 8px #5e2a13, 0 18px 36px rgba(0, 0, 0, 0.4);
+
+      /* One border language: 4px outer frames, 2px inner boxes, three edge tones. */
+      --edge: rgba(255, 214, 133, 0.2);
+      --edge-soft: rgba(255, 214, 133, 0.1);
+      --edge-lit: #f0bf5d;
+      --fill: rgba(8, 3, 2, 0.34);
+      --fill-lit: rgba(255, 190, 74, 0.1);
+
+      --rail-track: #120705;
+      --rail-thumb: #a75f26;
+      --rail-thumb-hot: #d98a3c;
+
+      /* Single dark contact edge + cast shadow, not a stack of rings. */
+      --shadow: 0 0 0 2px #150806, 0 14px 30px rgba(0, 0, 0, 0.5);
     }
 
     * {
@@ -105,19 +118,62 @@
       background: none;
     }
 
+    html {
+      scrollbar-width: thin;
+      scrollbar-color: var(--rail-thumb) var(--rail-track);
+    }
+
+    ::-webkit-scrollbar {
+      width: 14px;
+      height: 14px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--rail-track);
+      box-shadow: inset 2px 0 0 #2d160c, inset -2px 0 0 #2d160c;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #c07636, #7b3c17);
+      border: 3px solid var(--rail-track);
+      box-shadow:
+        inset 0 2px 0 rgba(255, 224, 154, 0.38),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.4);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, var(--rail-thumb-hot), #8f4519);
+    }
+
+    ::-webkit-scrollbar-thumb:active {
+      background: linear-gradient(180deg, #efa64a, #a5511d);
+    }
+
+    ::-webkit-scrollbar-corner {
+      background: var(--rail-track);
+    }
+
+    /* Kill the default stepper arrows - they are the one part of the
+       native scrollbar that cannot be themed. */
+    ::-webkit-scrollbar-button {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+
 
     .cabinet {
       position: relative;
       z-index: 1;
       max-width: 1460px;
       margin: 0 auto;
-      padding: 30px 20px 26px;
+      padding: 24px 20px;
     }
 
     .marquee {
       position: relative;
-      padding: 22px 26px 24px;
-      margin-bottom: 20px;
+      padding: 24px;
+      margin-bottom: 18px;
       border: 4px solid #d59b41;
       background: linear-gradient(180deg, rgba(92, 29, 12, 0.95), rgba(45, 14, 7, 0.98));
       box-shadow: var(--shadow);
@@ -138,8 +194,7 @@
     .action-button,
     .store-button,
     .cash-badge,
-    .round-badge,
-    .card-name {
+    .round-badge {
       font-size: 1rem;
     }
 
@@ -166,8 +221,10 @@
 
     .marquee h1 {
       position: relative;
-      font-size: clamp(2.8rem, 8vw, 4.2rem);
-      line-height: 0.9;
+      font-size: clamp(2.2rem, 8vw, 4.2rem);
+      /* Must clear 1.0 - the display face overshoots its em box, so tighter
+         leading makes the two wrapped lines collide on narrow screens. */
+      line-height: 1.05;
       color: #fff3cf;
       text-shadow: none;
       z-index: 1;
@@ -219,7 +276,9 @@
     }
 
     .panel-title {
-      margin-bottom: 14px;
+      font-size: 1.05rem;
+      line-height: 1.15;
+      margin-bottom: 16px;
       color: #ffd36d;
       text-shadow: 0 2px 0 #6c2d12;
     }
@@ -234,8 +293,8 @@
 
     .stat-card {
       padding: 12px 10px;
-      border: 3px solid rgba(255, 208, 106, 0.18);
-      background: rgba(8, 3, 2, 0.32);
+      border: 2px solid var(--edge);
+      background: var(--fill);
     }
 
     .stat-label {
@@ -250,14 +309,14 @@
     }
 
     .cash-badge {
-      display: inline-flex;
+      display: flex;
       flex-direction: column;
       align-items: flex-start;
       gap: 4px;
-      padding: 9px 12px;
-      margin-bottom: 14px;
-      background: rgba(255, 178, 49, 0.14);
-      border: 3px solid rgba(255, 198, 87, 0.24);
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      background: var(--fill-lit);
+      border: 2px solid var(--edge);
       color: #ffe79f;
     }
 
@@ -285,16 +344,27 @@
       display: grid;
       grid-template-columns: 52px minmax(0, 1fr) 52px;
       gap: 8px;
-      align-items: center;
+      align-items: stretch;
       margin-bottom: 10px;
+    }
+
+    .bet-adjust .mini-button {
+      font-size: 1.05rem;
+    }
+
+    .raise-readout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 8px;
     }
 
     .bet-display {
       padding: 12px 10px;
       text-align: center;
       color: #fff7e2;
-      background: rgba(7, 4, 2, 0.54);
-      border: 3px solid rgba(255, 220, 139, 0.18);
+      background: var(--fill);
+      border: 2px solid var(--edge);
       font-size: 1.16rem;
     }
 
@@ -303,12 +373,21 @@
     .store-button,
     .mini-button {
       padding: 12px 10px;
-      border: 3px solid #f0bf5d;
+      border: 2px solid var(--edge-lit);
       background: linear-gradient(180deg, #b54f1d, #6a230f);
       box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2);
       color: #fff5d8;
       text-align: center;
       transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease;
+    }
+
+    .bet-chip:focus-visible,
+    .action-button:focus-visible,
+    .store-button:focus-visible,
+    .mini-button:focus-visible,
+    .card.selectable:focus-visible {
+      outline: 2px solid #ffe6a8;
+      outline-offset: 3px;
     }
 
     .bet-chip:hover,
@@ -317,6 +396,14 @@
     .mini-button:hover {
       transform: translateY(-1px);
       filter: brightness(1.08);
+    }
+
+    .bet-chip:active,
+    .action-button:active,
+    .store-button:active,
+    .mini-button:active {
+      transform: translateY(1px);
+      box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.22);
     }
 
     .bet-chip:disabled,
@@ -344,18 +431,16 @@
       margin-bottom: 14px;
     }
 
-    .action-button.secondary {
-      background: linear-gradient(180deg, #6e8b33, #324214);
-      border-color: #d8eb8c;
-      color: #f4ffd5;
-    }
-
     .mini-button {
       width: 100%;
+      background: linear-gradient(180deg, #4a2e1a, #26150b);
+      border-color: var(--edge);
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.28);
+      color: var(--ink);
+    }
+
+    #bailoutButton {
       margin-top: 12px;
-      background: linear-gradient(180deg, #2e7b87, #153e44);
-      border-color: #9ae8f4;
-      color: #d5fdff;
     }
 
     .small-note {
@@ -369,11 +454,14 @@
 
     .table-stage {
       position: relative;
-      padding: 18px;
-      border: 4px solid rgba(255, 218, 126, 0.18);
+      padding: 20px;
+      border: 4px solid #341a0d;
       background:
         radial-gradient(circle at top, rgba(255, 255, 255, 0.05), transparent 28%),
         linear-gradient(180deg, var(--felt-main), var(--felt-shadow));
+      box-shadow:
+        inset 0 0 0 2px rgba(255, 232, 165, 0.12),
+        inset 0 0 70px rgba(0, 0, 0, 0.34);
       overflow: hidden;
       min-height: 640px;
     }
@@ -402,14 +490,6 @@
         linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.12));
       background-repeat: no-repeat;
       opacity: 0.46;
-      pointer-events: none;
-    }
-
-    .table-stage::after {
-      content: "";
-      position: absolute;
-      inset: 12px;
-      border: 3px dashed rgba(255, 241, 195, 0.18);
       pointer-events: none;
     }
 
@@ -511,8 +591,7 @@
       padding: 10px 12px;
       background: var(--badge);
       color: var(--badge-text);
-      border: 3px solid rgba(255, 238, 192, 0.3);
-      box-shadow: 0 0 0 3px rgba(53, 16, 9, 0.45);
+      border: 2px solid rgba(255, 238, 192, 0.34);
     }
 
     .dealer-note {
@@ -579,6 +658,12 @@
       filter: brightness(1.08) saturate(1.08);
     }
 
+    /* Cards carrying a footer band reserve room for it, so the band can
+       never sit on top of the bottom corner index. */
+    .card.tagged {
+      padding-bottom: 34px;
+    }
+
     .card.red {
       color: #b8281d;
     }
@@ -633,6 +718,7 @@
 
     .card.back::after {
       font-size: 0.92rem;
+      overflow: hidden;
       content: "PALACE";
       letter-spacing: 0.14em;
       color: #fff6d5;
@@ -642,15 +728,15 @@
       justify-content: center;
       width: 90%;
       height: 90%;
-      border: 3px solid rgba(255, 241, 188, 0.55);
-      background: linear-gradient(180deg, rgba(26, 8, 8, 0.56), rgba(14, 5, 5, 0.72));
-      box-shadow: inset 0 0 0 2px rgba(255, 233, 170, 0.12);
+      border: 2px solid rgba(255, 241, 188, 0.45);
+      background: linear-gradient(180deg, rgba(24, 8, 8, 0.68), rgba(12, 4, 4, 0.82));
     }
 
     .card-corner {
       display: flex;
+      flex-shrink: 0;
       flex-direction: column;
-      line-height: 1;
+      line-height: 1.1;
       gap: 4px;
       font-size: 1rem;
     }
@@ -666,29 +752,30 @@
       line-height: 1;
     }
 
-    .card-name {
-      position: absolute;
-      left: 10px;
-      bottom: 10px;
-      color: rgba(34, 17, 9, 0.46);
-      font-size: 0.6rem;
-    }
-
-    .card.red .card-name {
-      color: rgba(120, 16, 10, 0.44);
-    }
-
+    /* Footer band, not a floating pill: it can never collide with the
+       bottom corner index or spill past the card silhouette. */
     .hold-tag {
       position: absolute;
-      left: 50%;
-      bottom: -11px;
-      transform: translateX(-50%);
-      padding: 4px 8px;
-      border: 3px solid #47210f;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 5px 6px;
+      border-top: 2px solid #47210f;
       background: #ffd56e;
       color: #301308;
-      font-size: 0.7rem;
+      font-size: 0.66rem;
+      line-height: 1;
+      text-align: center;
+      letter-spacing: 0.04em;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card.winner .hold-tag {
+      background: #e23a2c;
+      border-top-color: #5d0f0c;
+      color: #fff4f0;
     }
 
     .bet-adjust[hidden],
@@ -704,8 +791,8 @@
       gap: 14px;
       padding: 14px;
       margin: 10px 0 20px;
-      border: 3px solid rgba(255, 232, 165, 0.2);
-      background: rgba(7, 4, 3, 0.28);
+      border: 2px solid var(--edge);
+      background: var(--fill);
     }
 
     .round-badge {
@@ -713,9 +800,9 @@
       align-items: center;
       padding: 6px 10px;
       margin-bottom: 8px;
-      background: rgba(255, 206, 108, 0.16);
+      background: var(--fill-lit);
       color: #ffeebd;
-      border: 3px solid rgba(255, 223, 140, 0.2);
+      border: 2px solid var(--edge);
     }
 
     .round-badge.win {
@@ -748,8 +835,8 @@
       min-width: 124px;
       align-self: center;
       padding: 12px;
-      background: rgba(255, 184, 61, 0.12);
-      border: 3px solid rgba(255, 214, 120, 0.24);
+      background: var(--fill-lit);
+      border: 2px solid var(--edge);
       color: #fff1bf;
       text-align: center;
     }
@@ -857,8 +944,8 @@
     .log-entry,
     .rule-line {
       padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 3px solid rgba(255, 224, 153, 0.12);
+      background: var(--fill);
+      border: 2px solid var(--edge-soft);
       color: #f7e2b4;
       line-height: 1.45;
     }
@@ -870,20 +957,64 @@
       margin-top: 18px;
     }
 
+    /* Chrome's Fluent scrollbars ignore ::-webkit-scrollbar-button, so the
+       native rail always keeps its stepper arrows. The panel hides the native
+       scrollbar and drives a real one instead - see syncStoreRail(). */
+    .store-scroll {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 14px;
+      gap: 12px;
+      align-items: stretch;
+    }
+
     .store-sections {
-      max-height: 648px;
+      max-height: 640px;
       overflow-y: auto;
       overflow-x: hidden;
-      padding-right: 4px;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
     }
 
     .store-sections::-webkit-scrollbar {
-      width: 10px;
+      width: 0;
+      height: 0;
     }
 
-    .store-sections::-webkit-scrollbar-thumb {
-      background: rgba(255, 208, 113, 0.35);
-      border: 2px solid rgba(23, 7, 4, 0.85);
+    .store-rail {
+      position: relative;
+      background: var(--rail-track);
+      border: 2px solid #2d160c;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 160ms ease;
+    }
+
+    .store-rail.is-active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .store-rail-thumb {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      min-height: 28px;
+      background: linear-gradient(180deg, #c07636, #7b3c17);
+      box-shadow:
+        inset 0 2px 0 rgba(255, 224, 154, 0.38),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.4);
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .store-rail-thumb:hover {
+      background: linear-gradient(180deg, var(--rail-thumb-hot), #8f4519);
+    }
+
+    .store-rail.is-dragging .store-rail-thumb {
+      cursor: grabbing;
+      background: linear-gradient(180deg, #efa64a, #a5511d);
     }
 
     .store-copy {
@@ -903,7 +1034,7 @@
       font-size: 0.86rem;
       margin-top: 4px;
       padding-bottom: 6px;
-      border-bottom: 2px solid rgba(255, 214, 120, 0.18);
+      border-bottom: 2px solid var(--edge);
     }
 
     .store-item {
@@ -912,7 +1043,7 @@
       min-width: 0;
       padding: 12px;
       background: linear-gradient(180deg, rgba(14, 5, 4, 0.58), rgba(0, 0, 0, 0.14));
-      border: 3px solid rgba(255, 222, 148, 0.14);
+      border: 2px solid var(--edge-soft);
       box-shadow: inset 0 1px 0 rgba(255, 241, 205, 0.08);
     }
 
@@ -924,12 +1055,10 @@
     .item-preview {
       width: 100%;
       height: 58px;
-      border: 3px solid rgba(255, 240, 194, 0.18);
+      border: 2px solid var(--edge);
       background: #27120b;
       background-position: center;
       background-repeat: no-repeat;
-      border-radius: 2px;
-      box-shadow: inset 0 0 0 2px rgba(255, 240, 194, 0.08);
     }
 
     .item-preview.table-preview {
@@ -970,10 +1099,7 @@
     }
 
     .item-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
+      display: grid;
       gap: 10px;
     }
 
@@ -983,8 +1109,8 @@
       min-height: 30px;
       padding: 5px 8px;
       max-width: 100%;
-      background: rgba(255, 204, 97, 0.1);
-      border: 2px solid rgba(255, 213, 108, 0.14);
+      background: var(--fill-lit);
+      border: 2px solid var(--edge);
       color: #ffd56c;
       font-size: 0.78rem;
       line-height: 1.2;
@@ -992,7 +1118,7 @@
     }
 
     .store-button {
-      min-width: 120px;
+      width: 100%;
       padding-inline: 12px;
       text-align: center;
     }
@@ -1007,7 +1133,8 @@
 
     .empty-message {
       padding: 18px 14px;
-      border: 3px dashed rgba(255, 225, 155, 0.18);
+      border: 2px solid var(--edge-soft);
+      background: var(--fill);
       color: var(--muted);
       text-align: center;
       line-height: 1.45;
@@ -1029,6 +1156,14 @@
       .store-sections {
         max-height: none;
       }
+
+      .store-scroll {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .store-rail {
+        display: none;
+      }
     }
 
     @media (max-width: 820px) {
@@ -1037,7 +1172,7 @@
       }
 
       .marquee {
-        padding: 18px 18px 20px;
+        padding: 18px;
       }
 
       .cards {
@@ -1050,8 +1185,21 @@
         padding: 8px;
       }
 
+      .card.tagged {
+        padding-bottom: 28px;
+      }
+
       .card-center {
         font-size: 1.8rem;
+      }
+
+      .card.back::after {
+        font-size: 0.6rem;
+        letter-spacing: 0.06em;
+      }
+
+      .dealer-note {
+        text-align: left;
       }
 
       .showdown-bar {
@@ -1059,14 +1207,9 @@
       }
 
       .dealer-strip,
-      .hand-header,
-      .item-actions {
+      .hand-header {
         flex-direction: column;
         align-items: stretch;
-      }
-
-      .store-button {
-        width: 100%;
       }
     }
 
@@ -1080,6 +1223,10 @@
         padding: 6px;
       }
 
+      .card.tagged {
+        padding-bottom: 26px;
+      }
+
       .card-corner {
         font-size: 0.84rem;
       }
@@ -1088,8 +1235,14 @@
         font-size: 1.5rem;
       }
 
-      .card-name {
-        display: none;
+      .card.back::after {
+        font-size: 0.5rem;
+        letter-spacing: 0.02em;
+      }
+
+      .hold-tag {
+        font-size: 0.58rem;
+        padding-inline: 2px;
       }
 
       .bet-presets {
@@ -1147,7 +1300,7 @@
 
             <div id="betAdjust" class="bet-adjust" hidden>
               <button id="betDown" class="mini-button" type="button" aria-label="Decrease raise">-5</button>
-              <div class="bet-display">Tap chips or +/-</div>
+              <div id="raiseReadout" class="bet-display raise-readout">$0</div>
               <button id="betUp" class="mini-button" type="button" aria-label="Increase raise">+5</button>
             </div>
 
@@ -1229,7 +1382,12 @@
         <div class="panel-inner">
           <h2 class="panel-title">Cosmetic Store</h2>
           <p class="store-copy">Buy table skins and card backs.</p>
-          <div id="storeSections" class="store-sections"></div>
+          <div class="store-scroll">
+            <div id="storeSections" class="store-sections"></div>
+            <div id="storeRail" class="store-rail" aria-hidden="true">
+              <div id="storeRailThumb" class="store-rail-thumb"></div>
+            </div>
+          </div>
         </div>
       </aside>
     </section>
@@ -1373,6 +1531,7 @@
       deckLeft: document.getElementById("deckLeft"),
       betDisplay: document.getElementById("betDisplay"),
       betAdjust: document.getElementById("betAdjust"),
+      raiseReadout: document.getElementById("raiseReadout"),
       winsValue: document.getElementById("winsValue"),
       lossesValue: document.getElementById("lossesValue"),
       tiesValue: document.getElementById("tiesValue"),
@@ -1390,6 +1549,8 @@
       phaseCopy: document.getElementById("phaseCopy"),
       potAmount: document.getElementById("potAmount"),
       storeSections: document.getElementById("storeSections"),
+      storeRail: document.getElementById("storeRail"),
+      storeRailThumb: document.getElementById("storeRailThumb"),
       historyList: document.getElementById("historyList"),
       dealerBadge: document.getElementById("dealerBadge"),
       dealerNote: document.getElementById("dealerNote"),
@@ -1964,6 +2125,7 @@
       if (options.held) classes.push("held");
       if (options.pendingDraw) classes.push("pending-draw");
       if (options.flip) classes.push("flipping");
+      if (options.tagText) classes.push("tagged");
       if (options.winner) classes.push("winner");
       if (options.flip) styleBits.push("--flip-delay:" + (index * 45) + "ms");
 
@@ -1977,7 +2139,6 @@
         "<button type=\"button\" class=\"" + classes.join(" ") + "\" data-index=\"" + index + "\"" + styleAttr + " " + (options.selectable ? "" : "disabled ") + "aria-label=\"" + card.rank + " of " + card.suitName + "\">",
         "<span class=\"card-corner top\"><strong>" + card.rank + "</strong><span>" + card.suitGlyph + "</span></span>",
         "<span class=\"card-center\">" + card.suitGlyph + "</span>",
-        "<span class=\"card-name\">" + card.rank + " of " + card.suitName + "</span>",
         "<span class=\"card-corner bottom\"><strong>" + card.rank + "</strong><span>" + card.suitGlyph + "</span></span>",
         options.tagText ? "<span class=\"hold-tag\">" + options.tagText + "</span>" : "",
         "</button>"
@@ -2016,7 +2177,7 @@
         held: runtime.playerHolds[index],
         flip: playerFlipSet.has(index),
         winner: playerWinnerSet.has(index),
-        tagText: runtime.phase === "player" ? (runtime.playerHolds[index] ? "Held" : "Tap to hold") : (playerWinnerSet.has(index) ? "Win" : "")
+        tagText: runtime.phase === "player" ? (runtime.playerHolds[index] ? "Held" : "") : (playerWinnerSet.has(index) ? "Win" : "")
       }));
 
       els.dealerRank.textContent = runtime.phase === "player"
@@ -2048,6 +2209,7 @@
 
       els.cashBadge.textContent = formatMoney(saveData.cash);
       els.betValue.textContent = formatMoney(displayedRaise);
+      els.raiseReadout.textContent = formatMoney(runtime.raise);
       els.betDisplay.textContent = runtime.phase === "player"
         ? "Place a bet"
         : runtime.phase === "dealer"
@@ -2108,7 +2270,6 @@
             "<div class=\"item-name-row\"><strong class=\"item-name\">" + item.name + "</strong><span class=\"price-tag\">" + headerLabel + "</span></div>",
             "<div class=\"item-copy\">" + item.description + "</div>",
             "<div class=\"item-actions\">",
-            "<span class=\"price-tag\">" + (active ? "Live now" : owned ? "Ready to equip" : "Costs " + formatMoney(item.price)) + "</span>",
             "<button class=\"store-button\" type=\"button\" data-store-id=\"" + item.id + "\" data-store-action=\"" + (owned ? "equip" : "buy") + "\" " + actionDisabled + ">" + actionLabel + "</button>",
             "</div>",
             "</div>",
@@ -2117,6 +2278,37 @@
         }).join("");
         return "<section class=\"store-group\"><h3 class=\"store-group-title\">" + group.title + "</h3>" + itemsMarkup + "</section>";
       }).join("");
+
+      syncStoreRail();
+    }
+
+    function syncStoreRail() {
+      const view = els.storeSections;
+      const track = els.storeRail.clientHeight;
+      const overflow = view.scrollHeight - view.clientHeight;
+
+      if (track <= 0 || overflow <= 1) {
+        els.storeRail.classList.remove("is-active");
+        return;
+      }
+
+      els.storeRail.classList.add("is-active");
+      const height = Math.max(28, Math.round(track * (view.clientHeight / view.scrollHeight)));
+      const travel = track - height;
+      const offset = Math.round(travel * Math.min(1, Math.max(0, view.scrollTop / overflow)));
+      els.storeRailThumb.style.height = height + "px";
+      els.storeRailThumb.style.transform = "translateY(" + offset + "px)";
+    }
+
+    function scrollStoreToRailPosition(clientY, grabOffset) {
+      const view = els.storeSections;
+      const trackBox = els.storeRail.getBoundingClientRect();
+      const travel = els.storeRail.clientHeight - els.storeRailThumb.offsetHeight;
+      if (travel <= 0) {
+        return;
+      }
+      const ratio = Math.min(1, Math.max(0, (clientY - grabOffset - trackBox.top) / travel));
+      view.scrollTop = ratio * (view.scrollHeight - view.clientHeight);
     }
 
     function renderHistory() {
@@ -2171,6 +2363,56 @@
       if (button) {
         toggleHold(Number(button.getAttribute("data-index")));
       }
+    });
+
+    let railGrabOffset = null;
+
+    els.storeSections.addEventListener("scroll", syncStoreRail, { passive: true });
+    window.addEventListener("resize", syncStoreRail);
+
+    els.storeRailThumb.addEventListener("pointerdown", (event) => {
+      railGrabOffset = event.clientY - els.storeRailThumb.getBoundingClientRect().top;
+      els.storeRail.classList.add("is-dragging");
+      try {
+        els.storeRailThumb.setPointerCapture(event.pointerId);
+      } catch (error) {
+        /* no active pointer to capture - the move/up handlers still work */
+      }
+      event.preventDefault();
+    });
+
+    els.storeRailThumb.addEventListener("pointermove", (event) => {
+      if (railGrabOffset === null) {
+        return;
+      }
+      scrollStoreToRailPosition(event.clientY, railGrabOffset);
+    });
+
+    const endRailDrag = (event) => {
+      if (railGrabOffset === null) {
+        return;
+      }
+      railGrabOffset = null;
+      els.storeRail.classList.remove("is-dragging");
+      try {
+        if (els.storeRailThumb.hasPointerCapture(event.pointerId)) {
+          els.storeRailThumb.releasePointerCapture(event.pointerId);
+        }
+      } catch (error) {
+        /* capture was never taken */
+      }
+    };
+
+    els.storeRailThumb.addEventListener("pointerup", endRailDrag);
+    els.storeRailThumb.addEventListener("pointercancel", endRailDrag);
+
+    els.storeRail.addEventListener("pointerdown", (event) => {
+      if (event.target === els.storeRailThumb) {
+        return;
+      }
+      const thumbBox = els.storeRailThumb.getBoundingClientRect();
+      const page = els.storeSections.clientHeight * 0.9;
+      els.storeSections.scrollBy({ top: event.clientY < thumbBox.top ? -page : page, behavior: "smooth" });
     });
 
     els.storeSections.addEventListener("click", (event) => {
