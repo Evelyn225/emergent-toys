@@ -8218,9 +8218,16 @@ const CRT = {
   // corners, but at this strength the split reads as fringing on an edge, not
   // as displacement, and radial would mean generating a displacement map on a
   // canvas and feeding it through feImage - rebuilt on every resize - to buy a
-  // difference nobody can pick out. Past ~0.5 the channels visibly separate on
-  // title-bar text and it stops looking like a tube.
-  aberration: 0.3,
+  // difference nobody can pick out.
+  //
+  // This was 0.3, and 0.3 did nothing: at dpr 1 that is a third of a pixel on
+  // an edge `diffuse` has already softened, and a render at 0.3 came out
+  // BYTE-IDENTICAL to one with the split disabled entirely. The old note here
+  // claimed the channels come apart past ~0.5; measured against title-bar text,
+  // which is the sensitive case, they do not. Fringing first reads at ~0.9,
+  // 1.2 is clearly a misconverged tube, and 1.6 starts to cost the 11px
+  // W95font its crispness - which is the real ceiling.
+  aberration: 1.2,
 
   maxBackingPx: 6.5e6
 };
