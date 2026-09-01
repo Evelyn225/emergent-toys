@@ -26,6 +26,11 @@
       href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
   <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
   <title>Eve Net</title>
+  <script>
+    /* Set the theme before first paint so the light default never flashes dark. */
+    document.documentElement.dataset.theme =
+      localStorage.getItem('evenet-theme') === 'dark' ? 'dark' : 'light';
+  </script>
   <style id="fonts">
 @font-face {
   font-family: 'W95';
@@ -69,9 +74,12 @@
       max-width: 780px;
       width: 90%;
       z-index: 2;
-      visibility: hidden;
       opacity: 0;
-      transition: opacity 0.5s ease;
+      animation: content-in 0.5s ease 0.05s forwards;
+    }
+
+    @keyframes content-in {
+      to { opacity: 1; }
     }
 
     .main-title {
@@ -166,52 +174,6 @@
       #theme-toggle { font-size: 13px; top: 8px; right: 8px; padding: 8px 10px; }
     }
 
-    /* ─── Splash intro ─── */
-    #splash {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      background: #000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      user-select: none;
-    }
-
-    #splash-title {
-      font-family: 'W95', monospace;
-      font-weight: bold;
-      font-size: 36px;
-      color: rgba(255,255,255,0.9);
-      letter-spacing: 6px;
-      text-shadow: 0 0 18px rgba(255,255,255,0.5), 0 0 45px rgba(255,255,255,0.2);
-    }
-
-    #splash-cursor {
-      display: inline-block;
-      width: 20px;
-      height: 29px;
-      background: rgba(255,255,255,0.85);
-      vertical-align: middle;
-      position: relative;
-      top: -4px;
-      margin-left: 3px;
-      opacity: 0;
-      box-shadow: 0 0 14px rgba(255,255,255,0.5), 0 0 36px rgba(255,255,255,0.18);
-    }
-
-    #splash-hint {
-      font-family: 'W95', monospace;
-      font-size: 11px;
-      color: rgba(255,255,255,0.35);
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      opacity: 0;
-      transition: opacity 0.4s ease;
-    }
-
     /* full-viewport cursor surface - sits below all content */
     #cursor-layer {
       position: fixed;
@@ -230,12 +192,6 @@
       will-change: transform, opacity;
     }
 
-    /* slide-up exit */
-    @keyframes splash-exit {
-      from { transform: translateY(0); }
-      to   { transform: translateY(-100vh); }
-    }
-
     /* ─── Light theme overrides ─── */
     /* applyTheme sets data-theme="light" when light, "dark" when dark.
        Base CSS is dark — these rules only fire in light mode. */
@@ -243,19 +199,15 @@
       background: #f5f5f0;
       color: rgba(0,0,0,0.85);
     }
-    [data-theme="light"] #splash        { background: #f5f5f0; }
-    [data-theme="light"] #splash-title  { color: rgba(0,0,0,0.85); text-shadow: 0 0 18px rgba(0,0,0,0.18), 0 0 45px rgba(0,0,0,0.07); }
-    [data-theme="light"] #splash-cursor { background: rgba(0,0,0,0.75); box-shadow: 0 0 14px rgba(0,0,0,0.18), 0 0 36px rgba(0,0,0,0.07); }
-    [data-theme="light"] #splash-hint   { color: rgba(0,0,0,0.2); }
     [data-theme="light"] .main-title    { color: rgba(0,0,0,0.85); text-shadow: 0 0 16px rgba(0,0,0,0.18), 0 0 40px rgba(0,0,0,0.07); }
     [data-theme="light"] .title-cursor  { background: rgba(0,0,0,0.75); box-shadow: 0 0 12px rgba(0,0,0,0.18), 0 0 30px rgba(0,0,0,0.07); }
-    [data-theme="light"] .main-tagline  { color: rgba(0,0,0,0.2); }
+    [data-theme="light"] .main-tagline  { color: rgba(0,0,0,0.58); }
     [data-theme="light"] .link-item     { color: rgba(0,0,0,0.5); }
     [data-theme="light"] .link-item:hover,
     [data-theme="light"] .link-item:focus-visible { color: rgba(0,0,0,1); }
     [data-theme="light"] .link-sep      { color: rgba(0,0,0,0.1); }
-    [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.2); }
-    [data-theme="light"] #theme-toggle:hover { color: rgba(0,0,0,0.6); }
+    [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.62); }
+    [data-theme="light"] #theme-toggle:hover { color: rgba(0,0,0,0.85); }
     /* ─── Theme toggle button ─── */
     #theme-toggle {
       position: fixed;
@@ -275,21 +227,14 @@
     }
     #theme-toggle:hover { color: rgba(255,255,255,0.6); }
   </style>
-  <noscript><style>#splash { display: none; }</style></noscript>
 </head>
 
 <body>
   <!--<img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/cover_4x.png" alt="" style="display:none">-->
   <button id="theme-toggle" aria-label="Toggle colour theme">[ dark ]</button>
   <div id="cursor-layer" aria-hidden="true"></div>
-  <!-- Splash intro overlay -->
-  <div id="splash" aria-hidden="true">
-    <div id="splash-title"><span id="splash-text"></span><span id="splash-cursor"></span></div>
-    <div id="splash-hint">press any key</div>
-  </div>
-
   <main class="main-inner" id="main-content">
-    <div class="main-title"><span id="main-title-text"></span><span class="title-cursor"></span></div>
+    <div class="main-title"><span>Eve Net</span><span class="title-cursor"></span></div>
     <div class="main-tagline">generative art / interactive experiments</div>
     <div class="link-list" role="navigation" aria-label="Project navigation">
       <a href="Sands"               class="link-item">sand playground</a><span class="link-sep">/</span>
@@ -327,74 +272,14 @@
     document.getElementById('theme-toggle').textContent = dark ? '[ light ]' : '[ dark ]';
   }
 
-  // Init: localStorage → dark default
-  const savedTheme = localStorage.getItem('evenet-theme');
-  applyTheme(savedTheme !== 'light');
+  // Init: localStorage → light default (mirrors the pre-paint script in <head>)
+  applyTheme(localStorage.getItem('evenet-theme') === 'dark');
 
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const dark = !isDark();
     applyTheme(dark);
     localStorage.setItem('evenet-theme', dark ? 'dark' : 'light');
   });
-
-  // ── Splash intro ──────────────────────────────────────────────
-  const splashEl     = document.getElementById('splash');
-  const splashText   = document.getElementById('splash-text');
-  const splashCursor = document.getElementById('splash-cursor');
-  const splashHint   = document.getElementById('splash-hint');
-
-  let splashDone = false;
-  let splashAutoExit;
-
-  function exitSplash() {
-    if (splashDone) return;
-    splashDone = true;
-    clearTimeout(splashAutoExit);
-    document.removeEventListener('click', onClickSkip);
-
-
-    splashEl.style.animation = 'splash-exit 0.45s ease-in-out forwards';
-    splashEl.addEventListener('animationend', (e) => {
-      if (e.animationName !== 'splash-exit') return;
-      splashEl.style.display = 'none';
-      startPage();
-    });
-  }
-
-  function onClickSkip(e) {
-    if (e.target.closest('#theme-toggle')) return;
-    exitSplash();
-  }
-  document.addEventListener('click', onClickSkip);
-  document.addEventListener('keydown', () => exitSplash(), { once: true });
-
-  // Typewriter on splash title
-  const SPLASH_TITLE = 'Eve Net';
-  let splashIndex = 0;
-
-  function typeSplash() {
-    splashText.textContent = SPLASH_TITLE.slice(0, splashIndex);
-    splashIndex++;
-    if (splashIndex <= SPLASH_TITLE.length) {
-      setTimeout(typeSplash, 90);
-    } else {
-      splashCursor.style.opacity = '1';
-      splashCursor.style.animation = 'cursor-blink 1s steps(1) infinite';
-      splashHint.style.opacity = '1';
-      splashAutoExit = setTimeout(exitSplash, 2200);
-    }
-  }
-  typeSplash();
-
-  // ── Main page init (runs after splash exits) ──────────────────
-  function startPage() {
-
-    const mainContent = document.getElementById('main-content');
-    mainContent.style.visibility = 'visible';
-    requestAnimationFrame(() => { mainContent.style.opacity = '1'; });
-
-    document.getElementById('main-title-text').textContent = 'Eve Net';
-  }
 
   // ── Cursor particles ──────────────────────────────────────────
   const activeParticles = [];
