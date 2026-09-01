@@ -90,3 +90,55 @@ test('os/icons is deployed if it has anything in it', () => {
       `os/icons/${name} matches no vercel.json build src, so it will 404 in production`);
   }
 });
+
+// The three tests above name os/sounds and os/icons EXPLICITLY, which means
+// they only cover the directories somebody remembered to add - and this file's
+// own header says the fix is not to remember. It bit a third time anyway:
+// os/sprites/minesweeper.png was committed, referenced from os/os.css, and
+// matched no build entry, so every tile in MINESWEEPER.exe drew nothing in
+// production while all 46 browser tests passed locally.
+//
+// This is the general rule the header was reaching for. Everything under os/ is
+// either a .js source (concatenated into the committed bundles, never fetched
+// by URL) or an asset the running OS loads directly. So: every non-.js file
+// under os/ must be deployed, whatever directory it is in and whether or not
+// anyone thought to add a case here.
+function walk(dir, base, out) {
+  for (const name of fs.readdirSync(dir)) {
+    if (name.startsWith('.')) continue;
+    const abs = path.join(dir, name);
+    const rel = base ? base + '/' + name : name;
+    if (fs.statSync(abs).isDirectory()) walk(abs, rel, out);
+    else out.push(rel);
+  }
+  return out;
+}
+
+test('every non-source file under os/ is deployed', () => {
+  const files = walk(path.join(ROOT, 'os'), 'os', []);
+  assert.ok(files.length > 20, `expected to walk os/, found ${files.length} files`);
+  const missing = files
+    .filter(rel => !rel.endsWith('.js'))
+    .filter(rel => !isDeployed(rel));
+  assert.deepStrictEqual(missing, [],
+    'these are loaded by URL at runtime but match no vercel.json build src, so they will 404 in '
+    + 'production while working perfectly under server.cjs: ' + missing.join(', '));
+});
+
+// The same failure from the other end: a url() in the stylesheet pointing at a
+// file that is not there at all. Resolved relative to os/os.css, which is where
+// the browser resolves it from.
+test('every url() in os/os.css points at a file that exists and is deployed', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'os/os.css'), 'utf8');
+  const refs = [...css.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)]
+    .map(m => m[1].trim())
+    // Not every url() names a file. `url(#crt-halation)` is a same-document
+    // reference to an SVG filter, and data:/http: URLs are not ours to deploy.
+    .filter(u => !/^(data:|https?:|\/\/|#)/.test(u));
+  assert.ok(refs.length > 0, 'expected at least one local url() in os/os.css');
+  for (const ref of refs) {
+    const rel = 'os/' + ref.replace(/^\.\//, '').split('?')[0].split('#')[0];
+    assert.ok(fs.existsSync(path.join(ROOT, rel)), `os/os.css references ${ref}, which does not exist`);
+    assert.ok(isDeployed(rel), `os/os.css references ${ref} (${rel}), which matches no vercel.json build src`);
+  }
+});

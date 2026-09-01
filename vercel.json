@@ -18,6 +18,7 @@
     { "src": "os/os.css", "use": "@vercel/static" },
     { "src": "os/sounds/**", "use": "@vercel/static" },
     { "src": "os/icons/**", "use": "@vercel/static" },
+    { "src": "os/sprites/**", "use": "@vercel/static" },
     { "src": "site.webmanifest", "use": "@vercel/static" },
     { "src": "robots.txt", "use": "@vercel/static" },
     { "src": "sitemap.xml", "use": "@vercel/static" }

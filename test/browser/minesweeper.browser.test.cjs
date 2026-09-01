@@ -64,6 +64,29 @@ test('it opens on a beginner board with the mine count showing and the clock at 
   });
 });
 
+// Every other assertion in this file reads `backgroundPosition`, which is set
+// by JS and is perfectly correct whether or not the image behind it ever
+// arrived. That gap shipped: os/sprites/ matched no entry in vercel.json's
+// build ALLOWLIST, so the atlas 404'd in production and every tile drew blank
+// while all of these passed. Load the atlas as an Image and check it decoded.
+test('the sprite atlas actually loads, not just addresses correctly', async () => {
+  await withGame(async page => {
+    const result = await page.evaluate(() => {
+      const cell = document.querySelector('.ms-cell');
+      const url = getComputedStyle(cell).backgroundImage
+        .replace(/^url\(['"]?/, '').replace(/['"]?\)$/, '');
+      return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve({ url, ok: true, w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = () => resolve({ url, ok: false, w: 0, h: 0 });
+        img.src = url;
+      });
+    });
+    assert.ok(result.ok, 'the tile atlas failed to load from ' + result.url);
+    assert.strictEqual(result.w + 'x' + result.h, '256x63', 'the atlas is not the size the CSS offsets assume');
+  });
+});
+
 // The atlas is one image addressed by offset. An off-by-one in the packing or
 // the CSS would show every cell as its neighbour, which no assertion on the
 // model would notice.
@@ -293,13 +316,21 @@ test('the help button opens the rules and the sprite credits', async () => {
     assert.match(text, /Left click/, 'the rules are missing');
     assert.match(text, /Black Squirrel/, 'the necessary sprite credit is missing');
     assert.match(text, /Microsoft/, 'the sprites are Microsoft\'s and the dialog should say so');
-    // The long registry path is the one string here that can push a fixed-width
-    // dialog sideways.
-    const overflows = await page.evaluate(() => {
+    assert.doesNotMatch(text, /HKEY_|registry/i,
+      'Help is for the rules; where the scores are stored is a thing to find in REGEDIT');
+
+    // Help this short should be readable without scrolling in either direction.
+    // The window is sized to the content, so growing the text past the window
+    // hides the credits below the fold - which is exactly what happened.
+    const fit = await page.evaluate(() => {
       const el = document.querySelector('.ms-help-scroll');
-      return el.scrollWidth > el.clientWidth + 1;
+      return { downX: el.scrollWidth > el.clientWidth + 1, downY: el.scrollHeight > el.clientHeight + 1,
+               content: el.scrollHeight, visible: el.clientHeight };
     });
-    assert.strictEqual(overflows, false, 'the help text scrolls sideways');
+    assert.strictEqual(fit.downX, false, 'the help text scrolls sideways');
+    assert.strictEqual(fit.downY, false,
+      'the help no longer fits its window (' + fit.content + 'px of content in ' + fit.visible
+      + 'px): shorten the text or raise the height in msOpenHelp');
   });
 });
 

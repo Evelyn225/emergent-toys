@@ -457,48 +457,40 @@ function msBuildGrid() {
 
 function msOpenHelp() {
   const id = 'ms-help';
-  const p = { x: Math.max(20, Math.floor(window.innerWidth / 2) - 200),
-              y: Math.max(20, Math.floor(window.innerHeight / 2) - 210) };
-  if (!mkWin({ id, title: 'Minesweeper Help', icon: 'icon:help', w: 400, h: 420,
+  const p = { x: Math.max(20, Math.floor(window.innerWidth / 2) - 190),
+              y: Math.max(20, Math.floor(window.innerHeight / 2) - 195) };
+  // 390 = measured: the content is 306px tall in a 246px viewport at h:320, so
+  // the credits sat below the fold. A help dialog this short should not need
+  // scrolling to reach its last line.
+  if (!mkWin({ id, title: 'Minesweeper Help', icon: 'icon:help', w: 380, h: 390,
                x: p.x, y: p.y, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.className = 'win-body ms-help';
+  // Deliberately short. A player opening Help wants the rules, not a tour of
+  // where the scores are stored - the registry key is a thing to FIND in
+  // REGEDIT, and saying so here spoils it.
+  //
+  // The credits are the two the sprite sheet actually requires for the band
+  // used: Black Squirrel for the 31/NT4/2000+ rip, Inky for the score-display
+  // sprites. TCRF and DaSpriter121 are credited on the sheet for bands this
+  // game does not use.
   body.innerHTML = `
     <div class="ms-help-scroll">
       <h3>How to play</h3>
-      <p>The board hides mines. Uncover every square that is <b>not</b> a mine
-         and you win; uncover one that is and the game ends.</p>
+      <p>Uncover every square that is not a mine. A number says how many mines
+         touch that square.</p>
       <ul>
         <li><b>Left click</b> uncovers a square.</li>
-        <li><b>Right click</b> plants a flag on a square you believe is a mine.
-            Right click again for a question mark, and once more to clear it.
-            On a touch screen, <b>press and hold</b> instead.</li>
-        <li>A number tells you how many mines touch that square, counting all
-            eight neighbours.</li>
-        <li><b>Left click a number</b> whose mines you have all flagged and
-            every other square around it opens at once. This is how the larger
-            boards are meant to be played.</li>
+        <li><b>Right click</b> flags a mine. Again for a question mark, again
+            to clear. On touch, press and hold.</li>
+        <li><b>Left click a number</b> you have fully flagged to open the rest
+            around it.</li>
       </ul>
-      <p>The left counter shows mines remaining minus flags placed. The right
-         one counts seconds. Your first click is always safe, and always opens
-         an area rather than a bare number.</p>
-      <p>Best times are kept in the registry under
-         <code>HKEY_CURRENT_USER\\SOFTWARE\\sleepOS\\Minesweeper</code>, so
-         REGEDIT.exe can read them.</p>
-      <h3>Sprite credits</h3>
-      <p>The tiles, faces and LED digits are ripped from Microsoft's
-         <i>Winmine</i>. They are used here with the attribution the sprite
-         sheet asks for:</p>
-      <ul>
-        <li><b>Black Squirrel</b> — the original sprite rip, still the source
-            for the Winmine 3.1 / NT4 / 2000+ set used here.</li>
-        <li><b>Inky</b> — sheet reorganisation, and the minus and blank
-            sprites for the score displays.</li>
-        <li><b>TCRF</b> and <b>DaSpriter121</b> — further rips on the same
-            sheet.</li>
-      </ul>
-      <p>Minesweeper and Winmine are Microsoft's. This is a tribute, not the
-         original program.</p>
+      <p>Left counter: mines left. Right counter: seconds. Your first click is
+         always safe.</p>
+      <h3>Credits</h3>
+      <p>Sprites are Microsoft <i>Winmine</i>, ripped by <b>Black Squirrel</b>,
+         with score-display sprites by <b>Inky</b>. A tribute, not the original.</p>
     </div>
     <div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
   const ok = document.getElementById(id + '-ok');
