@@ -8226,9 +8226,9 @@ const CRT = {
   // claimed the channels come apart past ~0.5; measured against title-bar text,
   // which is the sensitive case, they do not. Fringing first reads at ~0.9,
   // and 1.6 starts to cost the 11px W95font its crispness - which is the real
-  // ceiling. 1 sits just above the threshold where the effect is visible at
-  // all, which is where this belongs: it should be felt, not looked at.
-  aberration: 1,
+  // ceiling. 0.8 sits just under where the fringing becomes something you look
+  // at rather than something you feel, which is where this belongs.
+  aberration: 0.8,
 
   maxBackingPx: 6.5e6
 };
