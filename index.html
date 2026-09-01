@@ -192,6 +192,35 @@
       will-change: transform, opacity;
     }
 
+    /* ─── Rare running cat ─── */
+    /* Wrapper carries the travel + facing; the child cycles sprite frames, so
+       the two transforms never fight over the same property. */
+    #cat-runner {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 80px;
+      height: 64px;
+      z-index: 3;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    #cat-runner > i {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: url('images/cat-run.png') 0 0 / 480px 64px no-repeat;
+      image-rendering: pixelated;
+      animation: cat-step 0.3s steps(6) infinite;
+    }
+
+    /* 6 frames across a 480px strip */
+    @keyframes cat-step {
+      from { background-position: 0 0; }
+      to   { background-position: -480px 0; }
+    }
+
     /* ─── Light theme overrides ─── */
     /* applyTheme sets data-theme="light" when light, "dark" when dark.
        Base CSS is dark — these rules only fire in light mode. */
@@ -358,6 +387,51 @@
     }
     requestAnimationFrame(tickParticles);
   })();
+
+  // ── Rare running cat ──────────────────────────────────────────
+  // Bottom row of images/catspritesx4.gif, extracted to a 6-frame strip.
+  // The sprite is drawn facing left, so a rightward run gets mirrored.
+  const CAT_W       = 80;      // frame width, matches #cat-runner
+  const CAT_SPEED   = 520;     // px/sec - tuned so the stride doesn't moonwalk
+  const CAT_MIN_GAP = 120000;  // 2 min
+  const CAT_MAX_GAP = 420000;  // 7 min
+
+  function runCat(dir) {
+    if (document.getElementById('cat-runner')) return false;  // one cat at a time
+
+    const goingRight = dir === 'right' ? true
+                     : dir === 'left'  ? false
+                     : Math.random() < 0.5;
+    const flip  = goingRight ? ' scaleX(-1)' : '';
+    const startX = goingRight ? -CAT_W : window.innerWidth;
+    const endX   = goingRight ? window.innerWidth : -CAT_W;
+
+    const cat = document.createElement('div');
+    cat.id = 'cat-runner';
+    cat.setAttribute('aria-hidden', 'true');
+    cat.appendChild(document.createElement('i'));
+    document.body.appendChild(cat);
+
+    const anim = cat.animate(
+      [{ transform: `translateX(${startX}px)` + flip },
+       { transform: `translateX(${endX}px)`   + flip }],
+      { duration: (window.innerWidth + CAT_W) / CAT_SPEED * 1000, easing: 'linear' }
+    );
+    anim.onfinish = () => cat.remove();
+    return true;
+  }
+
+  function scheduleCat() {
+    setTimeout(() => {
+      // Don't spend the surprise on a tab nobody is looking at.
+      if (!document.hidden) runCat();
+      scheduleCat();
+    }, CAT_MIN_GAP + Math.random() * (CAT_MAX_GAP - CAT_MIN_GAP));
+  }
+  scheduleCat();
+
+  window.cat = runCat;   // cat() | cat('left') | cat('right')
+  console.log('%c  /\_/\  type cat() to summon one', 'color:#8a8; font-family:monospace');
 
   // ── Keyboard nav ──────────────────────────────────────────────
   const linkNav = document.querySelector('.link-list');
