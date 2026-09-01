@@ -221,7 +221,8 @@ body {
   z-index: 13000;
   display: flex;
   align-items: center;
-  padding: 0 14px;
+  /* right padding reserves the lane for the fixed home icon (10px offset + 22px icon + 8px gap) */
+  padding: 0 40px 0 14px;
   gap: 6px;
   font-family: 'W95', monospace;
 }
@@ -233,6 +234,9 @@ body {
   text-transform: uppercase;
   user-select: none;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #barTitle::before {
@@ -245,6 +249,7 @@ body {
   align-items: center;
   gap: 6px;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* Shared button base */
@@ -264,6 +269,7 @@ body {
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+  flex-shrink: 0;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -315,29 +321,11 @@ body {
   color: rgba(255,255,255,0.9);
 }
 
-/* Home button */
+/* Home button — bare fixed pixel icon. Overrides the inline top so the 22px
+   icon sits dead centre in the 44px bar (and the 52px mobile bar below). */
 #homeButton {
-  padding: 0 8px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.1);
-  text-decoration: none;
-  transition: background 0.12s, border-color 0.12s, transform 0.25s cubic-bezier(0.68,-0.55,0.265,1.55);
-  flex-shrink: 0;
+  top: 11px !important;
   -webkit-tap-highlight-color: transparent;
-}
-
-#homeButton:hover {
-  background: rgba(255,255,255,0.05);
-  border-color: rgba(255,255,255,0.25);
-  transform: scale(1.1) rotate(4deg);
-}
-
-#homeButton:active {
-  transform: scale(0.9) rotate(-4deg);
 }
 
 /* Wave animation */
@@ -648,15 +636,16 @@ body {
 
 @media (max-width: 768px) {
   /* Top bar */
-  #topBar { height: 52px; padding: 0 10px; gap: 4px; }
+  #topBar { height: 52px; padding: 0 40px 0 10px; gap: 4px; }
   #barTitle { display: none; }
   #generatedContent { top: 52px; }
+
+  /* bar is 52px tall here — nudge the fixed home icon back to its vertical centre */
+  #homeButton { top: 15px !important; }
 
   /* Buttons — bigger tap targets */
   .bar-btn,
   #regenerateButton { height: 40px; padding: 0 13px; font-size: 12px; }
-  #homeButton { height: 40px; padding: 0 10px; }
-  #homeButton img { width: 20px; height: 20px; }
 
   /* Theme modal */
   .theme-modal { padding: 24px 20px; width: 94%; }
