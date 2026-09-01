@@ -29,75 +29,49 @@
 </a>
     <style>
         @font-face {
-            font-family: 'Pixelig Cursief';
-            src: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/Pixelig%20Cursief.ttf') format('truetype');
+            font-family: 'Pixelta';
+            src: url('Pixelta.ttf') format('truetype');
         }
 
         #controls-overlay {
             position: fixed;
-            top: 12px;
-            left: 12px;
+            top: 10px;
+            left: 10px;
             z-index: 102;
-            pointer-events: auto;
+            pointer-events: none;
             user-select: none;
-            font-family: 'Pixelig Cursief', monospace;
-            font-size: 12px;
+            font-family: 'Pixelta', monospace;
+            font-size: 16px;
+            line-height: 20px;
             color: rgba(200, 180, 120, 0.75);
-            background: rgba(12, 10, 7, 0.7);
-            padding: 9px 26px 9px 10px;
-            border-radius: 4px;
-            border: 1px solid rgba(180, 140, 60, 0.2);
-            transition: opacity 0.3s;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
         }
 
         #controls-title {
-            font-size: 13px;
-            color: #d4b660;
             display: block;
             margin-bottom: 6px;
-        }
-
-        #controls-x {
-            position: absolute;
-            top: 7px;
-            right: 9px;
-            font-size: 13px;
-            cursor: pointer;
-            color: rgba(200, 180, 120, 0.4);
-            transition: color 0.15s;
-            line-height: 1;
-        }
-
-        #controls-x:hover {
-            color: rgba(220, 80, 60, 0.9);
-        }
-
-        #controls-x:active {
-            transform: scale(0.85);
+            color: #d4b660;
         }
 
         .ctrl-row {
             display: flex;
             align-items: baseline;
-            gap: 6px;
-            margin: 3px 0;
+            gap: 10px;
         }
 
         .ctrl-key {
             color: rgba(220, 195, 110, 0.9);
             white-space: nowrap;
-            min-width: 130px;
+            min-width: 100px;
             flex-shrink: 0;
         }
 
         .ctrl-action {
-            color: rgba(180, 160, 100, 0.5);
-            font-size: 11px;
+            color: rgba(180, 160, 100, 0.6);
         }
     </style>
 
     <div id="controls-overlay">
-        <span id="controls-x" onclick="this.closest('#controls-overlay').style.opacity=0;setTimeout(()=>this.closest('#controls-overlay').style.display='none',300)">✕</span>
         <span id="controls-title">Controls</span>
         <div class="ctrl-row">
             <span class="ctrl-key">Left click</span>
