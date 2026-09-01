@@ -42,97 +42,6 @@
       pointer-events: none;
     }
 
-    .controls {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      z-index: 102;
-      background: #fff;
-      width: 230px;
-      font-family: 'DM Mono', monospace;
-      color: #000;
-    }
-
-    .ctrl-section {
-      padding: 10px 16px 10px;
-    }
-
-    .ctrl-head {
-      font-size: 8px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #aaa;
-      margin-bottom: 8px;
-    }
-
-    .ctrl-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 7px;
-    }
-
-    .ctrl-row:last-child {
-      margin-bottom: 0;
-    }
-
-    .ctrl-row>span {
-      font-size: 11px;
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
-
-    .ctrl-divider {
-      height: 1px;
-      background: #ebebeb;
-    }
-
-    .btn-group {
-      display: flex;
-    }
-
-    .btn-group button {
-      background: #fff;
-      color: #000;
-      border: 1px solid #000;
-      border-right: none;
-      padding: 3px 9px;
-      font-family: inherit;
-      font-size: 11px;
-      cursor: pointer;
-      transition: background 0.1s;
-    }
-
-    .btn-group button:last-child {
-      border-right: 1px solid #000;
-    }
-
-    .btn-group button:hover:not(.active) {
-      background: #f0f0f0;
-    }
-
-    .btn-group button.active {
-      background: #000;
-      color: #fff;
-    }
-
-    input[type="range"] {
-      -webkit-appearance: none;
-      flex: 1;
-      height: 1px;
-      background: #bbb;
-      outline: none;
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 11px;
-      height: 11px;
-      border-radius: 50%;
-      background: #000;
-      cursor: pointer;
-    }
   </style>
 </head>
 
@@ -152,46 +61,6 @@
 </a>
 
   <div id="status">AUTO</div>
-
-  <div class="controls">
-    <div class="ctrl-section">
-      <div class="ctrl-head">Dither</div>
-      <div class="ctrl-row">
-        <span>matrix</span>
-        <div class="btn-group">
-          <button id="btn2">2</button>
-          <button id="btn4">4</button>
-          <button id="btn8" class="active">8</button>
-        </div>
-      </div>
-      <div class="ctrl-row">
-        <span>bias</span>
-        <input type="range" id="biasSlider" min="-0.3" max="0.3" step="0.01" value="0.0">
-      </div>
-    </div>
-
-    <div class="ctrl-divider"></div>
-    <div class="ctrl-section">
-      <div class="ctrl-head">Render</div>
-      <div class="ctrl-row">
-        <span>deform</span>
-        <input type="range" id="deformSlider" min="0" max="0.9" step="0.02" value="0.6">
-      </div>
-      <div class="ctrl-row">
-        <span>depth</span>
-        <input type="range" id="fogSlider" min="15" max="160" step="5" value="80">
-      </div>
-    </div>
-
-    <div class="ctrl-divider"></div>
-    <div class="ctrl-section">
-      <div class="ctrl-head">Motion</div>
-      <div class="ctrl-row">
-        <span>drift</span>
-        <input type="range" id="speedSlider" min="0.01" max="0.15" step="0.005" value="0.05">
-      </div>
-    </div>
-  </div>
 
   <script type="module">
     import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js?module';
@@ -402,8 +271,8 @@ void main() {
     });
 
     // --- Shared uniforms (all materials read from same objects) -------------------
-    const uMatrixSize = { value: 8.0 };
-    const uBias = { value: 0.0 };
+    const uMatrixSize = { value: 4.0 };
+    const uBias = { value: 0.06 };
     const uFogNear = { value: 12.0 };
     const uFogFar = { value: 80.0 };
 
@@ -1673,44 +1542,13 @@ void main() {
     document.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
     document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-    // --- UI wiring ---------------------------------------------------------------
+    // --- Motion state ------------------------------------------------------------
     let driftSpeed = 0.05;
     const SIDE_YAW_LIMIT = Math.PI * 0.45 - 0.05; // allow side-looking, block turning fully backward
     const clampEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
-    const speedSlider = document.getElementById('speedSlider');
-    const minDrift = parseFloat(speedSlider.min);
-    const maxDrift = parseFloat(speedSlider.max);
-    speedSlider.addEventListener('input', () => {
-      driftSpeed = Math.min(maxDrift, Math.max(minDrift, parseFloat(speedSlider.value)));
-    });
-
-    document.getElementById('biasSlider').addEventListener('input', e => {
-      uBias.value = parseFloat(e.target.value);
-    });
-
-    document.getElementById('deformSlider').addEventListener('input', e => {
-      const v = parseFloat(e.target.value);
-      surfaceMat.uniforms.amplitude.value = v;
-      structMat.uniforms.amplitude.value = v * 0.2;
-    });
-
-    document.getElementById('fogSlider').addEventListener('input', e => {
-      const v = parseFloat(e.target.value);
-      uFogFar.value = v;
-      // Sync Three.js exponential fog so the background fade matches
-      scene.fog.density = 1.8 / v;
-      // Load/unload tiles to match the visible depth
-      syncPool(Math.max(4, Math.min(MAX_POOL, Math.ceil(v / SEG_LEN) + 2)));
-    });
-
-    function setMatrix(n) {
-      uMatrixSize.value = n;
-      [2, 4, 8].forEach(v => document.getElementById('btn' + v).classList.toggle('active', v === n));
-    }
-    document.getElementById('btn2').addEventListener('click', () => setMatrix(2));
-    document.getElementById('btn4').addEventListener('click', () => setMatrix(4));
-    document.getElementById('btn8').addEventListener('click', () => setMatrix(8));
+    const minDrift = 0.01;
+    const maxDrift = 0.15;
 
     // --- Animation loop ----------------------------------------------------------
     function animate() {
@@ -1725,7 +1563,6 @@ void main() {
         if (keys.s) driftSpeed = Math.max(driftSpeed - 0.0015, minDrift);
         if (keys.a) camera.position.x = Math.max(camera.position.x - 0.05, -2.4);
         if (keys.d) camera.position.x = Math.min(camera.position.x + 0.05, 2.4);
-        speedSlider.value = String(Math.min(maxDrift, Math.max(minDrift, driftSpeed)));
       }
 
       camera.position.z -= driftSpeed;
