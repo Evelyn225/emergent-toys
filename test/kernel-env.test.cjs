@@ -19,7 +19,7 @@ test('pid 1 is seeded with the default environment', () => {
   const env = ctx.kernelGetProcess(1).env;
   assert.strictEqual(env.COMPUTERNAME, 'SOMA-686');
   assert.strictEqual(env.USERNAME, 'VISITOR');
-  assert.strictEqual(env.PATH, 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]');
+  assert.strictEqual(env.PATH, 'C:\\sleepOS;[redacted]');
 });
 
 test('kernelDefaultEnv hands out a copy, not the shared table', () => {
@@ -51,7 +51,7 @@ test('a child mutating its environment does not reach the parent', () => {
   const child = ctx.__spawnForTest(fakeWorker(), 'job.script', parent);
   ctx.kernelGetProcess(child).env.PATH = 'C:\\nowhere';
   ctx.kernelGetProcess(child).env.NEWVAR = 'child-only';
-  assert.strictEqual(ctx.kernelGetProcess(parent).env.PATH, 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]');
+  assert.strictEqual(ctx.kernelGetProcess(parent).env.PATH, 'C:\\sleepOS;[redacted]');
   assert.strictEqual(ctx.kernelGetProcess(parent).env.NEWVAR, undefined);
 });
 
@@ -106,7 +106,7 @@ test('kernelSpawn with no parentPid gets a real environment, not {}', async () =
   const pid = await ctx.kernelSpawn('job.script', [], { cwd: '' });
   const env = ctx.kernelGetProcess(pid).env;
   assert.strictEqual(env.USERNAME, 'VISITOR');
-  assert.strictEqual(env.PATH, 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]');
+  assert.strictEqual(env.PATH, 'C:\\sleepOS;[redacted]');
 });
 
 // This is the exact regression the task exists to fix: kernelSpawn's parentPid

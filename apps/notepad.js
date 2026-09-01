@@ -5,13 +5,14 @@ You are running sleepOS, an experimental interactive
 desktop. Nothing here can break your computer.
 
 Start here:
-  PROJECTS      - interactive art toys, double-click
-                  the folder on the desktop
-  TERMINAL.exe  - a real command line. Type HELP.
+  BROWSER.exe      - its home page lists every interactive
+                     art toy. They open in this window.
+  MINESWEEPER.exe  - the real one, sprites and all
+  TERMINAL.exe     - a real command line. Type HELP.
 
 Also installed:
   NOTEPAD.exe   - text editor with syntax highlighting
-  BROWSER.exe   - web browser
+  EXPLORER.exe  - file browser
   SYSMON.exe    - system monitor
   DEFRAG.exe    - disk defragmenter
   CALC.exe      - calculator

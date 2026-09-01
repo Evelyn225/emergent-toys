@@ -77,7 +77,7 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
 // concurrent paste could resolve before every item lands, so a caller's
 // render() would draw a half-pasted directory.
 async function pasteClipboardInto(dstCwd) {
-  if (!_expClipboard || dstCwd === 'PROJECTS' || dstCwd === 'RECYCLE') return false;
+  if (!_expClipboard || dstCwd === 'RECYCLE') return false;
   if (!vfsDirExistsSync(dstCwd)) return false;
   let changed = false;
   let failMessage = null;
@@ -333,12 +333,12 @@ function vfsSeedTree() {
         '',
         'ROOT: C:\\sleepOS',
         '  DOCS\\      - documentation (this folder)',
-        '  PROJECTS\\  - interactive apps (read-only)',
         '',
         'SYSTEM FILES (read-only):',
         '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
         '  SYSMON.exe  BROWSER.exe  DEFRAG.exe',
         '  CALC.exe  REGEDIT.exe  EXPLORER.exe',
+        '  MINESWEEPER.exe',
         '  void.tmp  daemon.core  ?????.exe',
         '',
         'USER FILES:',
@@ -563,12 +563,9 @@ function vfsSeedTree() {
         '  the programs in C:\\sleepOS always run from',
         '  C:\\sleepOS even with PATH emptied. From any',
         '  other folder they need C:\\sleepOS on PATH.',
-        '',
-        '  The same rule governs PROJECTS. START <project>',
-        '  needs C:\\sleepOS\\PROJECTS on PATH, or you need',
-        '  to be standing in it. Empty your PATH and the',
-        '  projects are still there: CD PROJECTS, then',
-        '  START works again.',
+        '  Empty your PATH, CD DOCS, then try TERMINAL:',
+        '  the program is still there, it is just not',
+        '  anywhere the shell has been told to look.',
         '',
         '  The environment belongs to the terminal, and',
         '  the terminal is a process. Close it and that',

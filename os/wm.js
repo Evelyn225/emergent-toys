@@ -165,11 +165,25 @@ function wmIsFilled(w) {
   return !!(w && (w.maximized || w.snap));
 }
 
+// A window whose size belongs to the app, not the player. MINESWEEPER.exe is
+// the case this exists for: its window is a function of the board, so every
+// route that would resize it - the handles, maximize, snap, and the two
+// arrangers - produces a wrong answer rather than a preference.
+//
+// Deliberately NOT applied on mobile, where mkWin makes every non-popup window
+// fill the desktop: there the OS owns the size and the app centres itself in
+// whatever it gets, which is the same carve-out msFitWindow already makes.
+function wmIsFixedSize(id) {
+  const w = wins[id];
+  return !!(w && w.fixedSize && !isMobileLayout());
+}
+
 // Snap a window to a zone. Captures origStyle only on the way OUT of normal, so
 // snapping left then right then left again still remembers the size the player
 // last chose for themselves rather than a half-screen.
 function wmApplySnap(id, zone) {
   const w = wins[id]; if (!w) return;
+  if (wmIsFixedSize(id)) return;
   const rect = wmSnapRect(zone, desktopBounds());
   if (!rect) return;
   // Same pairing as maxWin's: capture the normal geometry, for origStyle and
@@ -416,7 +430,7 @@ function wmStoredGeometry(id) {
 }
 
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
-                 menubar = true, statusbar = true, popup = false }) {
+                 menubar = true, statusbar = true, popup = false, resizable = true }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
 
   // Default position: slightly random cascade; on mobile fill viewport (except small popups)
@@ -451,8 +465,12 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   // in normal state carries only its fill flags.
   const savedGeom = (!isMobile && !popup) ? wmStoredGeometry(id) : null;
   if (savedGeom) {
-    if (savedGeom.width  !== null) w = savedGeom.width;
-    if (savedGeom.height !== null) h = savedGeom.height;
+    // A fixed-size window takes only its position back. Its size is the app's
+    // answer, computed fresh from whatever the app is showing now - restoring
+    // the stored one would hand Minesweeper the PREVIOUS difficulty's frame
+    // and paint a wrong-sized window until msFitWindow corrected it.
+    if (resizable && savedGeom.width  !== null) w = savedGeom.width;
+    if (resizable && savedGeom.height !== null) h = savedGeom.height;
     if (savedGeom.left   !== null) x = savedGeom.left;
     if (savedGeom.top    !== null) y = savedGeom.top;
   }
@@ -462,11 +480,14 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   el.id = 'win-' + id;
   el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`;
 
+  // The handles and the maximize button are omitted rather than disabled: a
+  // grab area that refuses to grab, and a button that refuses to press, both
+  // read as breakage. Winmine's own window had neither.
   el.innerHTML = `
-    <div class="win-rz win-rz-n"></div><div class="win-rz win-rz-s"></div>
+    ${resizable ? `<div class="win-rz win-rz-n"></div><div class="win-rz win-rz-s"></div>
     <div class="win-rz win-rz-e"></div><div class="win-rz win-rz-w"></div>
     <div class="win-rz win-rz-nw"></div><div class="win-rz win-rz-ne"></div>
-    <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>
+    <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>` : ''}
     <div class="win-titlebar" id="tb-${id}">
       <div class="win-title-text">
         <span class="win-icon">${iconMarkup(icon)}</span>
@@ -474,7 +495,7 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       </div>
       <div class="win-controls">
         <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
-        <button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>
+        ${resizable ? `<button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>` : ''}
         <button class="win-btn" title="Close"    onclick="closeWin('${id}')">✕</button>
       </div>
     </div>
@@ -485,10 +506,12 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
 
   document.getElementById('windows-layer').appendChild(el);
   clampWinGeometry(el);   // callers pass explicit x/y/w/h that may not fit this viewport
-  // `popup` is carried on the record because the geometry store has to be able
-  // to tell a dialog from an app after the fact, and only mkWin's arguments
-  // knew it.
-  wins[id] = { el, title, icon, popup, minimized: false, maximized: false, snap: null, origStyle: null };
+  // Both flags are carried on the record because only mkWin's arguments knew
+  // them: `popup` so the geometry store can tell a dialog from an app after
+  // the fact, `fixedSize` for every route that would resize the window after
+  // this point - see wmIsFixedSize.
+  wins[id] = { el, title, icon, popup, fixedSize: !resizable,
+               minimized: false, maximized: false, snap: null, origStyle: null };
 
   // Built-in apps are real processes with real lifetimes. Registering here rather
   // than in each app means an app cannot forget to appear in ps.
@@ -500,7 +523,9 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   wins[id].removeProbe = instInstallProbe(el, id);
 
   makeDraggable(el, document.getElementById('tb-' + id));
-  makeResizable(el, id);
+  // A no-op without the handles above, but stated rather than left to depend
+  // on markup that a later edit could put back.
+  if (resizable) makeResizable(el, id);
   addTbBtn(id, title, icon);
   el.addEventListener('mousedown', () => focusWin(id));
   el.addEventListener('touchstart', () => focusWin(id), { passive: true });
@@ -567,6 +592,11 @@ function fitSnapped(w) {
 
 function maxWin(id) {
   const w = wins[id]; if (!w) return;
+  // The button is not rendered for a fixed-size window, so this only catches
+  // the other two routes into here: a titlebar drag into the top snap zone,
+  // and a programmatic call restoring a stored `max` flag written before the
+  // window was fixed.
+  if (wmIsFixedSize(id)) return;
   if (w.maximized) {
     w.el.style.cssText = w.origStyle;
     w.maximized = false;
@@ -673,7 +703,11 @@ function makeDraggable(win, handle) {
     // Mobile windows already fill the desktop (mkWin), so there is nothing to
     // snap and no zone to arrange it into. No snap logic runs on that branch
     // at all rather than shipping a control that cannot work.
-    const snapEnabled = !isMobileLayout();
+    //
+    // A fixed-size window is excluded for the stronger version of the same
+    // reason: wmApplySnap and maxWin both refuse it, so leaving the preview on
+    // would paint a half-screen overlay promising a snap that never lands.
+    const snapEnabled = !isMobileLayout() && !wmIsFixedSize(id);
     let pendingZone = null;
     // Claim the preview before the first onMove can run. Anything that
     // happens to this window before this drag's own onUp (most notably
@@ -852,6 +886,12 @@ function wmVisibleWinIds() {
 // Both arrangers clear fill state first: a tiled window sits at a computed size,
 // so it cannot still claim to be maximized or snapped. Leaving the flag set
 // would make the next drag restore a stale geometry.
+//
+// A fixed-size window is MOVED to its cell and keeps its own size, rather than
+// being skipped: the arrangers are about where windows sit, and dropping it out
+// entirely would leave it buried under whatever got tiled over it. It can then
+// overlap its neighbours, which is the honest outcome - the alternative is a
+// Minesweeper frame that no longer matches its board.
 function wmApplyRects(ids, rects) {
   ids.forEach((id, i) => {
     const w = wins[id]; const r = rects[i];
@@ -861,9 +901,12 @@ function wmApplyRects(ids, rects) {
     w.origStyle = null;
     w.el.style.left   = r.left + 'px';
     w.el.style.top    = r.top + 'px';
-    w.el.style.width  = r.width + 'px';
-    w.el.style.height = r.height + 'px';
+    if (!wmIsFixedSize(id)) {
+      w.el.style.width  = r.width + 'px';
+      w.el.style.height = r.height + 'px';
+    }
     w.el.style.zIndex = ++zTop;
+    clampWinGeometry(w.el);   // a kept size can push a cell's origin off the desktop
     wmRememberGeometry(id);
   });
 }

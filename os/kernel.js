@@ -67,7 +67,7 @@ const KERNEL_DEFAULT_ENV = {
   TEMPORAL_DRIFT: '+/-2.3yr',
   VOID_PRESSURE: '12',
   OBSERVER_COUNT: '[classified]',
-  PATH: 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+  PATH: 'C:\\sleepOS;[redacted]',
 };
 
 // A copy every time. Handing out the shared table would let one process's SET

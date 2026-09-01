@@ -19,24 +19,18 @@ function programs(overrides) {
       { name: 'NOTEPAD.exe', size: '4,096', date: '11/13/2024  10:31' },
       { name: 'CALC.exe', size: '4,096', date: '11/13/2024  10:31' },
     ],
-    // `emoji` is carried by the real PROJECTS entries but is never read by
-    // os/programs.js, so these are placeholders rather than the real glyphs.
-    PROJECTS: [
-      { name: 'sand playground', emoji: 'x', file: 'evenet.fun/Sands.html' },
-      { name: 'fireworks', emoji: 'x', file: 'fireworks.html' },
-    ],
     RECYCLE_BIN_NAME: 'Recycle Bin',
     daemonStory: { endingReached: false, stage: 0 },
   }, overrides || {}));
   return loadOsSources(ctx, ['os/vfs.js', 'os/programs.js']);
 }
 
-const DEFAULT_PATH = 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]';
+const DEFAULT_PATH = 'C:\\sleepOS;[redacted]';
 
 test('the current directory is searched before PATH', () => {
   const ctx = programs();
-  // PATH lists PROJECTS first, but cwd is the root, so the root wins.
-  const hit = ctx.programResolve('CALC.exe', '', 'C:\\sleepOS\\PROJECTS;C:\\sleepOS');
+  // PATH lists DOCS first, but cwd is the root, so the root wins.
+  const hit = ctx.programResolve('CALC.exe', '', 'C:\\sleepOS\\DOCS;C:\\sleepOS');
   assert.strictEqual(hit.via, 'cwd');
   assert.strictEqual(hit.dir, '');
   assert.strictEqual(hit.program.name, 'CALC.exe');
@@ -52,7 +46,7 @@ test('a root program still resolves from the root with PATH emptied', () => {
 test('a root program does not resolve from elsewhere once PATH drops the root', () => {
   const ctx = programs();
   assert.ok(ctx.programResolve('NOTEPAD.exe', 'DOCS', DEFAULT_PATH), 'default PATH lists the root');
-  assert.strictEqual(ctx.programResolve('NOTEPAD.exe', 'DOCS', 'C:\\sleepOS\\PROJECTS'), null);
+  assert.strictEqual(ctx.programResolve('NOTEPAD.exe', 'DOCS', 'C:\\sleepOS\\CACHE'), null);
 });
 
 test('.exe is appended when the literal name does not match, case-insensitively', () => {
@@ -61,16 +55,9 @@ test('.exe is appended when the literal name does not match, case-insensitively'
   assert.strictEqual(ctx.programResolve('NoTePaD.ExE', '', DEFAULT_PATH).program.name, 'NOTEPAD.exe');
 });
 
-test('PATH order decides which directory wins when cwd holds neither', () => {
-  const ctx = programs();
-  const hit = ctx.programResolve('fireworks', 'DOCS', DEFAULT_PATH);
-  assert.strictEqual(hit.via, 'path');
-  assert.strictEqual(hit.dir, 'PROJECTS');
-});
-
 test('unreal PATH entries are kept and resolve nothing', () => {
   const ctx = programs();
-  assert.deepStrictEqual(plain(ctx.programPathDirs(DEFAULT_PATH)), ['', 'PROJECTS', '[REDACTED]']);
+  assert.deepStrictEqual(plain(ctx.programPathDirs(DEFAULT_PATH)), ['', '[REDACTED]']);
   assert.strictEqual(ctx.programsInDir('[REDACTED]').length, 0);
 });
 
@@ -89,16 +76,6 @@ test('a duplicated PATH entry is searched once', () => {
   assert.deepStrictEqual(plain(ctx.programPathDirs('C:\\sleepOS;C:\\sleepOS\\;C:\\sleepOS')), ['']);
 });
 
-test('projects resolve by name, hyphenated name, file, and file minus .html', () => {
-  const ctx = programs();
-  const forms = ['sand playground', 'sand-playground', 'evenet.fun/Sands.html', 'evenet.fun/Sands'];
-  forms.forEach(form => {
-    const hit = ctx.programResolve(form, 'PROJECTS', DEFAULT_PATH);
-    assert.ok(hit, 'expected ' + form + ' to resolve');
-    assert.strictEqual(hit.program.name, 'sand playground');
-  });
-});
-
 test('void.tmp leaves the root set once the ending is reached', () => {
   const before = programs();
   assert.ok(before.programResolve('void.tmp', '', DEFAULT_PATH));
@@ -112,7 +89,7 @@ test('programFindAnywhere ignores PATH so the terminal can explain a miss', () =
   const found = ctx.programFindAnywhere('CALC.exe');
   assert.strictEqual(found.dir, '');
   assert.strictEqual(ctx.programDisplayDir(found.dir), 'C:\\sleepOS');
-  assert.strictEqual(ctx.programDisplayDir('PROJECTS'), 'C:\\sleepOS\\PROJECTS');
+  assert.strictEqual(ctx.programDisplayDir('DOCS'), 'C:\\sleepOS\\DOCS');
   assert.strictEqual(ctx.programFindAnywhere('NOSUCH.exe'), null);
 });
 
@@ -132,7 +109,7 @@ test('an unknown directory has no programs', () => {
 // context that loads just vfs.js + programs.js (as programs() does) has no
 // tree at all - vfsGetTree() returns null. Install one explicitly here
 // rather than loading os/fs-core.js, which seeds a whole filesystem (and
-// pulls in PROJECTS/RECYCLE_BIN_NAME/localStorage machinery) these tests
+// pulls in RECYCLE_BIN_NAME/localStorage machinery) these tests
 // don't want.
 function programsWithFiles(files, overrides) {
   const ctx = programs(overrides);
@@ -198,10 +175,10 @@ test('a VFS .exe found via PATH from a different cwd spawns in its own directory
     kernelSpawn: (name, argv, opts) => { spawnCalls.push({ name, opts }); return Promise.resolve('spawned'); },
     KERNEL_PID: 0,
   });
-  const hit = ctx.programResolve('HELLO.exe', 'PROJECTS', 'C:\\sleepOS\\DOCS');
+  const hit = ctx.programResolve('HELLO.exe', 'CACHE', 'C:\\sleepOS\\DOCS');
   assert.strictEqual(hit.via, 'path');
   assert.strictEqual(hit.dir, 'DOCS');
-  hit.program.open({ cwd: 'PROJECTS' });
+  hit.program.open({ cwd: 'CACHE' });
   assert.strictEqual(spawnCalls.length, 1);
   assert.strictEqual(spawnCalls[0].opts.cwd, 'DOCS', 'must spawn where the file lives, not the caller\'s cwd');
 });

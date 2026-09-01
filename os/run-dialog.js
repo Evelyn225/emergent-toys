@@ -36,12 +36,6 @@ function openRunDialog() {
     'minesweeper': openMinesweeper, 'minesweeper.exe': openMinesweeper,
     'winmine': openMinesweeper, 'winmine.exe': openMinesweeper,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
-    // FILES is the registry's thirteenth root entry and opens Explorer on
-    // PROJECTS. It has no ROOT_SYSTEM_FILE_META row and DIR never lists it, so
-    // the PROJECTS fallback below cannot rescue it either - without this line
-    // Run... answers "Cannot find program" for a program the desktop, the
-    // terminal's START and a script's START all launch.
-    'files': openFiles, 'projects': openFiles,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,
     '?????.exe': openUnknown,
@@ -53,18 +47,12 @@ function openRunDialog() {
     closeWin(id);
     const fn = RUN_MAP[v];
     if (fn) { fn(); return; }
-    // Four forms, matching what the registry's programProjectEntry (os/programs.js)
-    // and the old findTerminalProject both accept: the file name, the file name
-    // minus .html, the project name, and the project name with spaces hyphenated.
-    // That last form used to be missing here, so a Run... of "sand-playground"
-    // failed while START sand-playground (going through the registry) worked.
-    const proj = PROJECTS.find(p =>
-      p.file.toLowerCase() === v ||
-      p.file.toLowerCase().replace('.html','') === v ||
-      p.name.toLowerCase() === v ||
-      p.name.toLowerCase().replace(/ /g, '-') === v
-    );
-    if (proj) { window.open(proj.file, '_blank'); return; }
+    // The art toys used to be resolvable here in four forms, because PROJECTS
+    // was a folder you could stand in. It is not one any more: they are
+    // external links and BROWSER.exe's home page is where they live, so a
+    // project name now falls through to the same "cannot find" every other
+    // unknown name gets rather than opening a tab from a program prompt.
+    //
     // The error icon, not the Run dialog's own executable one: this is a
     // failure, and every other failure in the OS is titled and iconed as one.
     osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Cannot Find Program', 'icon:error');

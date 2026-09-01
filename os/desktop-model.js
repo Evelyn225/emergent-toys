@@ -33,10 +33,11 @@ const RECYCLE_BIN_KEY = 'sleepOS-recycle-bin';
 
 const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: 'icon:text',     action: 'openWelcome' },
-  // The twenty-five art toys are the most interesting thing in here and were
-  // reachable only from the Start menu, while WELCOME.README had been telling
-  // players to double-click a PROJECTS icon on the desktop that did not exist.
-  { name: 'PROJECTS',       emoji: 'icon:folder',   action: 'openFiles' },
+  // No PROJECTS icon. The art toys are `window.open` links that
+  // eject the visitor from the OS entirely, and the folder they sat in was a
+  // synthetic one - Explorer special-cased it, nothing on disk. BROWSER.exe's
+  // home page lists all of them and keeps the visitor inside, so it is the
+  // one place they live now.
   { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
   { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
   { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },
@@ -143,7 +144,7 @@ function moveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
 }
 function canMoveShellItemToDir(item, srcDirPath, dstDirPath) {
   const dstDir = fsNormalizeDir(dstDirPath);
-  if (!item || item._proj || item._recycle) return false;
+  if (!item || item._recycle) return false;
   if (isDesktopVirtualItem(item, srcDirPath)) return canMoveDesktopVirtualItem(item, srcDirPath, dstDir);
   if (item.sysfile || item._shortcut) return false;
   return dstDir === '' || vfsDirExistsSync(dstDir);
@@ -164,7 +165,7 @@ async function moveShellItemToDir(item, srcDirPath, dstDirPath) {
   return true;
 }
 function canRecycleShellItem(item, srcDirPath) {
-  return !!item && !item._proj && !item._recycle && !item._shortcut && !item.sysfile && !isDesktopVirtualItem(item, srcDirPath);
+  return !!item && !item._recycle && !item._shortcut && !item.sysfile && !isDesktopVirtualItem(item, srcDirPath);
 }
 async function recycleShellItem(item, srcDirPath) {
   if (!canRecycleShellItem(item, srcDirPath)) return { ok: false, message: 'Move failed.' };
@@ -367,8 +368,7 @@ function openSystemFile(name) {
   // 2. This only ever searches '' (the root). Explorer calls openSystemFile
   //    with a bare name from whatever directory it is currently showing, not
   //    necessarily the root - correct today only because programsInDir has
-  //    programs solely at the root ('' and 'PROJECTS', and PROJECTS entries
-  //    are not opened through this path). If a future directory ever gains
+  //    built-in programs solely at the root. If a future directory ever gains
   //    launchable entries, this needs the caller's directory, not a
   //    hardcoded ''.
   //

@@ -15,7 +15,7 @@ const ROOT_SYSTEM_FILE_META = [
   { name: 'EXPLORER.exe' },
   { name: 'MINESWEEPER.exe' },
 ];
-const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE', 'DESKTOP']);
+const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'SYS', 'CACHE', 'DESKTOP']);
 const STORY_FILE_PATHS = {
   notice: 'DOCS\\NOTICE_13.txt',
   incident: 'DOCS\\INCIDENT_A.txt',

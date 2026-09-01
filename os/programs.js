@@ -23,17 +23,10 @@
 // declaration is safe to call later, it is not safe to reference while this
 // file is still evaluating.
 //
-// PROJECTS and ROOT_SYSTEM_FILE_META are read inside function bodies too, but
-// not for the same reason as each other, and not for the reason once claimed
-// here. Per tools/split-manifest.json, os/desktop-model.js (PROJECTS) is
-// manifest position 6 and this file, os/programs.js, is position 7 - PROJECTS
-// loads BEFORE PROGRAM_LAUNCHERS, not after, so referencing it at evaluation
-// time would already be safe. It is read lazily inside programProjectEntry
-// anyway, purely so every registry-consuming function shares the same
-// lazy-read shape. ROOT_SYSTEM_FILE_META is the one where lazy reading is
-// load-bearing: it is `const` in os/daemon.js, manifest position 13, which
-// genuinely loads after this file, so touching it at evaluation time (rather
-// than inside programsInDir, which only runs once the OS is up) would throw
+// ROOT_SYSTEM_FILE_META is read inside a function body for a stronger reason
+// than that: it is `const` in os/daemon.js, manifest position 13, which loads
+// after this file (position 7), so touching it at evaluation time - rather
+// than inside programsInDir, which only runs once the OS is up - would throw
 // on boot.
 //
 // PHASE 6 SEAM: when executables become real VFS files (master spec phase 6),
@@ -85,22 +78,15 @@ const PROGRAM_LAUNCHERS = {
     delay: 320,
   },
   'MINESWEEPER.exe': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
-  'WELCOME.README': { lines: ['Opening WELCOME.README...'], open: () => openWelcome(), aliases: ['welcome'] },
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
-  // list them. Both were reachable from the old `launchers`/`SYS` maps and
-  // stay reachable; neither has ever been a file.
+  // list it. It was reachable from the old `launchers`/`SYS` maps and stays
+  // reachable; it has never been a file. That means `WHERE welcome` resolves
+  // and prints a C:\sleepOS path that does not exist as a file.
   //
-  // FILES specifically is programsInDir('')'s thirteenth root entry - it is
-  // appended alongside WELCOME.README in the '' branch below even though it
-  // has no ROOT_SYSTEM_FILE_META row and DIR never lists it, preserving what
-  // the old `launchers.files` entry did. That means `WHERE files` resolves
-  // and prints a C:\sleepOS\FILES path that does not exist as a file; this
-  // is the same launchable-but-not-a-file behaviour as WELCOME.README's
-  // aliasing, just undeclared until now.
-  // Aliased to 'projects' because that is the name every surface a player
-  // reads uses for it - the desktop icon, the Start menu entry and
-  // WELCOME.README all say PROJECTS, and only this registry says FILES.
-  'FILES': { lines: ['Opening Files...'], open: () => openFiles(), aliases: ['projects'] },
+  // FILES used to sit here beside it, opening EXPLORER.exe onto the synthetic
+  // PROJECTS folder. Both are gone: the art toys are external
+  // links, and BROWSER.exe's home page is now the one place that lists them.
+  'WELCOME.README': { lines: ['Opening WELCOME.README...'], open: () => openWelcome(), aliases: ['welcome'] },
 };
 
 // Story files exist at the root without being in ROOT_SYSTEM_FILE_META, and
@@ -125,24 +111,6 @@ function programEntry(name, dir) {
     open: spec.open,
     aliases: spec.aliases || [],
     selfLines: spec.selfLines || null,
-  };
-}
-
-function programProjectEntry(project) {
-  return {
-    name: project.name,
-    dir: 'PROJECTS',
-    lines: ['Launching ' + project.name + '...', 'Opening in new tab.'],
-    delay: 400,
-    open: () => window.open(project.file, '_blank'),
-    // The four forms findTerminalProject accepted before this module existed.
-    // Dropping any of them would break START commands players already type.
-    aliases: [
-      project.file,
-      project.file.replace(/\.html$/i, ''),
-      project.name.replace(/ /g, '-'),
-    ],
-    selfLines: null,
   };
 }
 
@@ -267,12 +235,11 @@ function programVfsExecutables(dir, taken) {
 
 function programsInDir(dir) {
   const key = String(dir || '').toUpperCase();
-  if (key === 'PROJECTS') return PROJECTS.map(programProjectEntry);
   let builtIns = [];
   if (key === '') {
     const names = ROOT_SYSTEM_FILE_META.map(meta => meta.name)
       .concat(programStoryRootNames())
-      .concat(['WELCOME.README', 'FILES']);
+      .concat(['WELCOME.README']);
     builtIns = names.map(name => programEntry(name, '')).filter(Boolean);
   }
   // Matches on literal name only, not on aliases - a VFS file named
@@ -287,8 +254,8 @@ function programsInDir(dir) {
 
 // Delegates to vfsNormalizeDir rather than parsing paths itself: its prefix
 // regex is anchored /^C:\\sleepOS(?:\\|$)/i, so it already maps 'C:\sleepOS'
-// to '' and 'C:\sleepOS\PROJECTS' to 'PROJECTS', and reusing it means PATH
-// cannot drift from how every other path in the VFS is read.
+// to '' and 'C:\sleepOS\DOCS' to 'DOCS', and reusing it means PATH cannot
+// drift from how every other path in the VFS is read.
 //
 // Empties are dropped BEFORE normalizing, and that ordering is load-bearing:
 // vfsNormalizeDir('') returns '', which IS the root, so a trailing semicolon
@@ -346,12 +313,8 @@ function programResolve(name, cwd, pathValue) {
 function programFindAnywhere(name) {
   const key = String(name || '').trim().toLowerCase();
   if (!key) return null;
-  const dirs = ['', 'PROJECTS'];
-  for (let i = 0; i < dirs.length; i++) {
-    const hit = programFindIn(dirs[i], key);
-    if (hit) return { program: hit, dir: dirs[i] };
-  }
-  return null;
+  const hit = programFindIn('', key);
+  return hit ? { program: hit, dir: '' } : null;
 }
 
 function programDisplayDir(dir) {

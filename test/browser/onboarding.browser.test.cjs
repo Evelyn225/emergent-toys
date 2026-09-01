@@ -52,17 +52,77 @@ test('the welcome is still reachable by hand after it has been dismissed', async
   });
 });
 
-// WELCOME.README told players to double-click PROJECTS.DIR on the desktop, and
-// there was no such icon: the twenty-five art toys were reachable only from the
-// Start menu.
-test('the desktop has a PROJECTS icon and it opens the projects folder', async () => {
+// The PROJECTS folder is gone, and it was synthetic all along - Explorer
+// special-cased the name, nothing was ever on disk. The art toys
+// are `window.open` links that eject the visitor from the OS, so they now live
+// in exactly one place: BROWSER.exe's home page, which keeps them inside it.
+//
+// This asserts the removal from every surface at once, because a launcher left
+// behind in one of the four registries is precisely the failure mode
+// test/launcher-map-coverage.test.cjs exists for.
+test('nothing offers a PROJECTS folder any more', async () => {
   await withDesktop({}, async page => {
-    const labels = await page.evaluate(() =>
-      [...document.querySelectorAll('#icons-layer .desktop-icon .di-name')].map(n => n.textContent.trim()));
-    assert.ok(labels.includes('PROJECTS'), 'desktop icons were: ' + labels.join(', '));
+    const state = await page.evaluate(() => ({
+      icons: [...document.querySelectorAll('#icons-layer .desktop-icon .di-name')].map(n => n.textContent.trim()),
+      start: [...document.querySelectorAll('#sm-items .sm-item')].map(i => i.textContent.trim()),
+      openFiles: typeof globalThis.openFiles,
+      launcher: typeof PROGRAM_LAUNCHERS.FILES,
+    }));
+    assert.ok(!state.icons.includes('PROJECTS'), 'desktop icons were: ' + state.icons.join(', '));
+    assert.ok(!state.start.includes('Projects'), 'Start menu was: ' + state.start.join(', '));
+    assert.strictEqual(state.openFiles, 'undefined', 'openFiles is still defined');
+    assert.strictEqual(state.launcher, 'undefined', 'PROGRAM_LAUNCHERS still has a FILES entry');
 
-    const id = await openWindow(page, 'openFiles');
-    assert.match(await page.evaluate(w => wins[w].title, id), /PROJECTS/i);
+    // scriptOpenSystemProgram is async, so this has to be awaited on the page
+    // side or the promise comes back as an opaque {} and the assertion below
+    // passes on nothing.
+    const viaScript = await page.evaluate(() => scriptOpenSystemProgram('files', ''));
+    assert.strictEqual(viaScript, false, "a script's START files still opens something");
+
+    // RUN_MAP is function-scoped inside openRunDialog, so this drives the real
+    // dialog rather than reading the table - which is the better test anyway.
+    for (const typed of ['projects', 'files', 'sand playground']) {
+      await page.evaluate(() => openRunDialog());
+      await page.waitForSelector('#win-run-dialog');
+      await page.fill('#run-input', typed);
+      await page.click('#win-run-dialog .dlg-btn.primary');
+      await page.waitForTimeout(250);
+      const alerted = await page.evaluate(() =>
+        Object.keys(wins).some(k => /alert|dialog/i.test(k) && !/run-dialog/.test(k)));
+      assert.ok(alerted, 'Run... of "' + typed + '" did not report an unknown program');
+      await page.evaluate(() => { Object.keys(wins).forEach(k => closeWin(k)); });
+      await page.waitForTimeout(150);
+    }
+
+    // And Explorer's own root listing, which is where the folder was drawn from
+    // a hardcoded push rather than from anything on disk.
+    const explorerId = await openWindow(page, 'openExplorer');
+    await page.waitForTimeout(300);
+    const rootNames = await page.evaluate(w =>
+      [...wins[w].el.querySelectorAll('.exp-item span,.exp-list-item span,.exp-det-item td')]
+        .map(n => n.textContent.trim()), explorerId);
+    assert.ok(!rootNames.includes('PROJECTS'),
+      'Explorer still shows a PROJECTS folder at the root: ' + rootNames.join(', '));
+    assert.ok(rootNames.includes('DOCS'), 'sanity: the root listing did not render at all');
+  });
+});
+
+// The other half of the same change: removing the folder must not have taken
+// the art toys with it.
+test('the browser home page still lists every art toy', async () => {
+  await withDesktop({}, async page => {
+    await openWindow(page, 'openBrowser');
+    await page.waitForTimeout(400);
+    const links = await page.evaluate(() => {
+      const frame = wins['browser'].el.querySelector('iframe');
+      const doc = frame.contentDocument;
+      return [...doc.querySelectorAll('a.lnk[data-nav-url]')].map(a => a.getAttribute('data-nav-title'));
+    });
+    const expected = await page.evaluate(() => PROJECTS.map(p => p.name));
+    const missing = expected.filter(n => !links.includes(n));
+    assert.deepStrictEqual(missing, [],
+      'the home page is the only route to these now, and it is missing: ' + missing.join(', '));
+    assert.ok(expected.length >= 20, 'the PROJECTS list looks truncated: ' + expected.length);
   });
 });
 
@@ -264,7 +324,7 @@ test('every app on the desktop is also in the Start menu', async () => {
       [...document.querySelectorAll('#sm-items .sm-item')].map(i => i.textContent.trim()));
     // Browser and Defrag were on the desktop and in Run... but missing here,
     // which is the one menu a non-technical visitor opens first.
-    for (const expected of ['Welcome', 'Browser', 'Defragmenter', 'System Monitor', 'Projects', 'Settings']) {
+    for (const expected of ['Welcome', 'Browser', 'Defragmenter', 'System Monitor', 'Minesweeper', 'Settings']) {
       assert.ok(items.includes(expected), 'Start menu is missing ' + expected + '; it has: ' + items.join(', '));
     }
   });

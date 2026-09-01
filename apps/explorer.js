@@ -23,7 +23,7 @@ function openExplorer(startPath) {
         cwd = '';
         render();
         addrEl.blur();
-      } else if (normalized === 'PROJECTS' || vfsDirExistsSync(normalized)) {
+      } else if (vfsDirExistsSync(normalized)) {
         cwd = normalized;
         render();
         addrEl.blur();
@@ -137,8 +137,7 @@ function openExplorer(startPath) {
   function selectionKey(item) {
     const recyclePart = item._recycle?.id ? '|recycle|' + item._recycle.id : '';
     const shortcutPart = item._shortcut?.target?.path ? '|shortcut|' + normalizeShortcutPath(item._shortcut.target.path) : '';
-    const projectPart = item._proj?.file ? '|project|' + item._proj.file : '';
-    return (item.sysfile ? '1' : '0') + '|' + item.kind + '|' + item.name + recyclePart + shortcutPart + projectPart;
+    return (item.sysfile ? '1' : '0') + '|' + item.kind + '|' + item.name + recyclePart + shortcutPart;
   }
 
   function registerSelectionNode(el, item) {
@@ -159,7 +158,7 @@ function openExplorer(startPath) {
 
   function getDeletableSelectedItems() {
     if (cwd === 'RECYCLE') return getSelectedItems().filter(item => !!item._recycle);
-    return getSelectedItems().filter(item => !item._proj && canAttemptDeleteItem(makeFsPath(item.name), cwd, item));
+    return getSelectedItems().filter(item => canAttemptDeleteItem(makeFsPath(item.name), cwd, item));
   }
 
   function makeFsPath(name) {
@@ -185,7 +184,7 @@ function openExplorer(startPath) {
       return;
     }
     if (items.length === 1) {
-      ws.textContent = items[0]._proj ? items[0].name + '  \u2014  double-click to open' : items[0].name;
+      ws.textContent = items[0].name;
       return;
     }
     ws.textContent = items.length + ' objects selected';
@@ -255,7 +254,7 @@ function openExplorer(startPath) {
   }
 
   function renameItem(item) {
-    if (!item || item.sysfile || item._proj) return;
+    if (!item || item.sysfile) return;
     osPrompt('Rename to:', item.name, 'Rename', async nextName => {
       if (!nextName || nextName === item.name) return;
       try {
@@ -326,14 +325,6 @@ function openExplorer(startPath) {
     if (kind === 'dir') {
       cwd = makeFsPath(name);
       render();
-      return;
-    }
-    if (cwd === 'PROJECTS') {
-      const project = PROJECTS.find(p => p.name === name);
-      if (project) {
-        const url = /^https?:\/\//.test(project.file) ? project.file : 'https://' + project.file;
-        window.open(url, '_blank');
-      }
       return;
     }
     if (cwd === 'DESKTOP') {
@@ -464,7 +455,7 @@ function openExplorer(startPath) {
     });
 
     // ── Drag source ──────────────────────────────────────────────
-    const canDragItem = !isRecycleEntry && !item._proj && (!sysfile || isDesktopVirtualItem(item, cwd) || !!item._shortcut);
+    const canDragItem = !isRecycleEntry && (!sysfile || isDesktopVirtualItem(item, cwd) || !!item._shortcut);
     if (canDragItem) {
       el.setAttribute('draggable', 'true');
       el.addEventListener('dragstart', e => {
@@ -584,45 +575,6 @@ function openExplorer(startPath) {
     return el;
   }
 
-  function makeProjectItem(project) {
-    const item = { name: project.name, kind: 'file', sysfile: true, _proj: project };
-    const openProject = () => window.open(/^https?:\/\//.test(project.file) ? project.file : 'https://' + project.file, '_blank');
-    let el;
-    if (viewMode === 'details') {
-      el = document.createElement('tr');
-      el.className = 'exp-det-item';
-      el.innerHTML = '<td class="exp-det-icon">' + iconMarkup(project.emoji) + '</td><td>' + escHtml(project.name) + '</td><td>HTML Application</td>';
-    } else if (viewMode === 'list') {
-      el = document.createElement('div');
-      el.className = 'exp-list-item';
-      el.innerHTML = '<span class="exp-list-icon">' + iconMarkup(project.emoji) + '</span><span>' + escHtml(project.name) + '</span>';
-    } else {
-      el = document.createElement('div');
-      el.className = 'exp-item';
-      el.innerHTML = '<div class="exp-icon">' + iconMarkup(project.emoji) + '</div><span>' + escHtml(project.name) + '</span>';
-    }
-    registerSelectionNode(el, item);
-    el.addEventListener('click', e => {
-      if (e.ctrlKey || e.metaKey) toggleSelection(item);
-      else replaceSelection(item);
-    });
-    el.addEventListener('dblclick', openProject);
-    el.addEventListener('touchend', e => { e.preventDefault(); openProject(); }, { passive: false });
-    el.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      ensureContextSelection(item);
-      showCtxMenu(e.clientX, e.clientY, [
-        { label: 'Open', action: openProject },
-        '-',
-        { label: 'Properties', action: () => osAlert('Name:\t' + project.name + '\nFile:\t' + project.file + '\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\', 'Properties', 'icon:info') },
-        '-',
-        { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || project.name) },
-      ]);
-    });
-    return el;
-  }
-
   function render() {
     pane.innerHTML = '';
     selected = null;
@@ -636,34 +588,6 @@ function openExplorer(startPath) {
     // The separator uses the same escape as line 3. It was a bare '?' here,
     // mojibake that degraded the title on the first navigation; keep it escaped.
     setWinTitle(id, 'FILE EXPLORER \u2014 ' + fullPath);
-
-    if (cwd === 'PROJECTS') {
-      const build = fn => {
-        if (viewMode === 'details') {
-          const tbl = document.createElement('table');
-          tbl.className = 'exp-det-tbl';
-          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
-          const tbody = document.createElement('tbody');
-          PROJECTS.forEach(project => tbody.appendChild(fn(project)));
-          tbl.appendChild(tbody);
-          pane.appendChild(tbl);
-        } else if (viewMode === 'list') {
-          const list = document.createElement('div');
-          list.style.cssText = 'display:flex;flex-direction:column;';
-          PROJECTS.forEach(project => list.appendChild(fn(project)));
-          pane.appendChild(list);
-        } else {
-          const grid = document.createElement('div');
-          grid.className = 'exp-grid';
-          PROJECTS.forEach(project => grid.appendChild(fn(project)));
-          pane.appendChild(grid);
-        }
-      };
-      build(makeProjectItem);
-      emptyStatusText = PROJECTS.length + ' objects';
-      updateSelectionStatus();
-      return;
-    }
 
     if (cwd === 'RECYCLE') {
       const recycleItems = recycleBinEntries.map(entry => ({
@@ -749,12 +673,11 @@ function openExplorer(startPath) {
     const items = [];
     if (!cwd) {
       items.push({ name:'DESKTOP', kind:'dir', sysfile:true });
-      items.push({ name:'PROJECTS', kind:'dir', sysfile:true });
       const rootEntries = vfsListSync('');
       ['DOCS', ...rootEntries.filter(e => e.kind === 'dir').map(e => e.name)]
         .filter((value, index, array) => array.indexOf(value) === index)
         .forEach(dirName => {
-          if (dirName !== 'PROJECTS' && dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
+          if (dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
         });
       rootEntries.filter(e => e.kind !== 'dir').forEach(entry => items.push({ name: entry.name, kind: explorerKindFor(entry), sysfile: false }));
     } else {
@@ -818,7 +741,7 @@ function openExplorer(startPath) {
     clearSelection();
   });
   pane._shellDropHandler = async payload => {
-    if (!payload || cwd === 'PROJECTS' || cwd === 'RECYCLE') return false;
+    if (!payload || cwd === 'RECYCLE') return false;
     if (isDesktopSurfaceTransferBlocked(payload, cwd)) return false;
     if (!canMoveShellPayloadToDir(payload, cwd)) return false;
     const ok = await doMovePayload(payload, cwd);
@@ -832,11 +755,8 @@ function openExplorer(startPath) {
     if (e.target.closest(ITEM_SELECTOR)) return;
     e.preventDefault();
     clearSelection();
-    const inProjects = cwd === 'PROJECTS';
     const inRecycle = cwd === 'RECYCLE';
-    showCtxMenu(e.clientX, e.clientY, inProjects ? [
-      { label: 'Refresh', action: render },
-    ] : inRecycle ? [
+    showCtxMenu(e.clientX, e.clientY, inRecycle ? [
       { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
       '-',
       { label: 'Refresh', action: render },
@@ -868,7 +788,7 @@ function openExplorer(startPath) {
   let dropOverlay = null;
   pane.addEventListener('dragenter', e => {
     if (getShellDragPayload()) return;
-    if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+    if (cwd === 'RECYCLE') return;
     if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
       if (!dropOverlay) {
@@ -889,7 +809,7 @@ function openExplorer(startPath) {
         return;
       }
     }
-    if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+    if (cwd === 'RECYCLE') return;
     if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
       e.stopPropagation();
@@ -911,7 +831,7 @@ function openExplorer(startPath) {
       return;
     }
     if (e.dataTransfer.files?.length) {
-      if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+      if (cwd === 'RECYCLE') return;
       e.preventDefault();
       e.stopPropagation();
       _uploadCwd = cwd;
@@ -924,11 +844,7 @@ function openExplorer(startPath) {
 
   mb.innerHTML = '';
   [
-    { label: 'File', items: () => cwd === 'PROJECTS' ? [
-      { label: 'Open', disabled: !selected, action: () => { if (selected?._proj) window.open(selected._proj.file, '_blank'); } },
-      '-',
-      { label: 'Close', action: () => closeWin(id) },
-    ] : cwd === 'RECYCLE' ? [
+    { label: 'File', items: () => cwd === 'RECYCLE' ? [
       { label: 'Restore', disabled: !getSelectedRecycleEntries().length, action: restoreSelectedRecycleEntries },
       { label: 'Delete Permanently', disabled: !getSelectedRecycleEntries().length, action: deleteSelected },
       '-',
@@ -957,9 +873,9 @@ function openExplorer(startPath) {
       { label: 'Close', action: () => closeWin(id) },
     ]},
     { label: 'Edit', items: () => [
-      { label: 'Cut',   disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='PROJECTS' || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut'; } },
+      { label: 'Cut',   disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut'; } },
       { label: 'Copy',  disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:false}; if(ws) ws.textContent=its.length+' item(s) copied'; } },
-      { label: 'Paste', disabled: !_expClipboard || cwd==='PROJECTS' || cwd==='RECYCLE', action: pasteClipboard },
+      { label: 'Paste', disabled: !_expClipboard || cwd==='RECYCLE', action: pasteClipboard },
       '-',
       { label: 'Select All', action: () => selectAllVisibleItems() },
       { label: 'Invert Selection', action: () => invertSelection() },
@@ -977,8 +893,8 @@ function openExplorer(startPath) {
         if (ws) ws.textContent = 'Copied';
       }},
       '-',
-      { label: 'Rename', disabled: !getSingleSelectedItem() || getSingleSelectedItem()?.sysfile || getSingleSelectedItem()?._recycle || getSingleSelectedItem()?._shortcut || cwd === 'PROJECTS' || cwd === 'RECYCLE', action: () => renameItem(getSingleSelectedItem()) },
-      { label: 'Delete', disabled: !getDeletableSelectedItems().length || cwd === 'PROJECTS', action: deleteSelected },
+      { label: 'Rename', disabled: !getSingleSelectedItem() || getSingleSelectedItem()?.sysfile || getSingleSelectedItem()?._recycle || getSingleSelectedItem()?._shortcut || cwd === 'RECYCLE', action: () => renameItem(getSingleSelectedItem()) },
+      { label: 'Delete', disabled: !getDeletableSelectedItems().length, action: deleteSelected },
     ]},
     { label: 'View', items: () => [
       { label: (viewMode === 'icons' ? '* ' : '  ') + 'Large Icons', action: () => { viewMode = 'icons'; render(); } },
@@ -1009,7 +925,7 @@ function openExplorer(startPath) {
     if (!wins[id]) return;
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    const items = getSelectedItems().filter(i => !i.sysfile && !i._proj && !i._recycle && !i._shortcut);
+    const items = getSelectedItems().filter(i => !i.sysfile && !i._recycle && !i._shortcut);
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
       e.preventDefault();
       if (cwd === 'RECYCLE') return;
@@ -1052,5 +968,4 @@ function openExplorer(startPath) {
   document.addEventListener('fs-changed', onFsChanged);
 }
 
-function openFiles() { openExplorer('PROJECTS'); }
 

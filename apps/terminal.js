@@ -457,7 +457,6 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    .`,
         `11/13/2024  10:31    <DIR>    ..`,
         `11/13/2024  10:31    <DIR>    DOCS`,
-        `11/13/2024  10:31    <DIR>    PROJECTS`,
       ].forEach(line => lines.push(line));
       getTerminalRootSystemEntries().forEach(entry => {
         lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
@@ -549,11 +548,12 @@ function openTerminal(startDir, initialCommand) {
       });
     rootEntries.filter(e => e.kind === 'text').forEach(e => lines.push(`├── ${e.name}`));
     rootEntries.filter(e => e.kind === 'blob').forEach(e => lines.push(`├── ${e.name}  [${e.blob.kind}]`));
-    lines.push('└── PROJECTS\\');
-    lines.push('    ├── sand playground');
-    lines.push('    ├── fireworks');
-    lines.push('    ├── ... (more objects)');
-    lines.push('    └── [1 object cannot be listed]');
+    // A hardcoded `└── PROJECTS\` used to close the tree, so every line above
+    // it could be a `├` unconditionally. With that gone the last line has to
+    // become the elbow itself, whatever it turns out to be - a root .exe, a
+    // player's file, or DOCS on an otherwise empty disk.
+    const last = lines.length - 1;
+    if (last > 0 && lines[last].startsWith('├')) lines[last] = '└' + lines[last].slice(1);
     return lines;
   }
 
@@ -934,7 +934,7 @@ function openTerminal(startDir, initialCommand) {
     mkdir: async (args) => {
       if (!args) { print('Usage: MKDIR [name]'); return; }
       const name = args.trim().toUpperCase();
-      if (['PROJECTS','DOCS','.','..'].includes(name)) {
+      if (['DOCS','.','..'].includes(name)) {
         print(`A subdirectory or file ${name} already exists.`); return;
       }
       let result;

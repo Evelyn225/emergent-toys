@@ -374,3 +374,156 @@ test('it is reachable from the desktop, the Start menu and Run...', async () => 
     await page.waitForSelector('#win-minesweeper', { timeout: 5000 });
   });
 });
+
+// ── the window is fixed-size ─────────────────────────────────────
+//
+// Winmine's window could not be resized or maximized, and this one must not be
+// either: the frame is the board plus its chrome, so any size the player picks
+// is a wrong one - a 752x542 window around a 486x262 board, held across the
+// session by the geometry store. Every route that could change the size is
+// checked here, because blocking four of five is the same as blocking none.
+test('the window offers no resize handles and no maximize button', async () => {
+  await withGame(async page => {
+    const chrome = await page.evaluate(() => {
+      const el = wins['minesweeper'].el;
+      return {
+        handles: el.querySelectorAll('.win-rz').length,
+        buttons: [...el.querySelectorAll('.win-btn')].map(b => b.title),
+        fixedSize: wins['minesweeper'].fixedSize,
+      };
+    });
+    assert.strictEqual(chrome.handles, 0, 'the window still has resize handles');
+    assert.deepStrictEqual(chrome.buttons, ['Minimize', 'Close'],
+      'titlebar buttons should be Minimize and Close only, got ' + chrome.buttons.join(', '));
+    assert.strictEqual(chrome.fixedSize, true);
+  });
+});
+
+test('maximize, snap and the arrangers all leave the size alone', async () => {
+  await withGame(async page => {
+    const size = () => page.evaluate(() => {
+      const r = wins['minesweeper'].el.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height) };
+    });
+    const before = await size();
+
+    await page.evaluate(() => { maxWin('minesweeper'); });
+    assert.deepStrictEqual(await size(), before, 'maxWin resized a fixed window');
+    assert.strictEqual(await page.evaluate(() => wins['minesweeper'].maximized), false);
+
+    await page.evaluate(() => { wmApplySnap('minesweeper', 'left'); });
+    assert.deepStrictEqual(await size(), before, 'wmApplySnap resized a fixed window');
+    assert.strictEqual(await page.evaluate(() => wins['minesweeper'].snap), null);
+
+    // The arrangers still MOVE it - that is deliberate - so only the size is
+    // asserted, and the position is checked to have changed so this cannot
+    // pass by the window having been skipped altogether.
+    const posBefore = await page.evaluate(() => wins['minesweeper'].el.style.left);
+    await page.evaluate(() => { openTerminal(); openNotepad(); wmTile(); });
+    await page.waitForTimeout(200);
+    assert.deepStrictEqual(await size(), before, 'wmTile resized a fixed window');
+    assert.notStrictEqual(await page.evaluate(() => wins['minesweeper'].el.style.left), posBefore,
+      'wmTile did not move the fixed window at all, so the size check proves nothing');
+
+    await page.evaluate(() => { wmCascade(); });
+    await page.waitForTimeout(200);
+    assert.deepStrictEqual(await size(), before, 'wmCascade resized a fixed window');
+  });
+});
+
+// The handles are gone, so this drags the one edge that is still live: the
+// titlebar into the top snap zone, which is how maxWin gets called without a
+// button. The preview must not appear either - it would promise a snap that
+// wmApplySnap then refuses.
+test('dragging the titlebar into a snap zone neither previews nor snaps', async () => {
+  await withGame(async page => {
+    const before = await page.evaluate(() => {
+      const r = wins['minesweeper'].el.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height) };
+    });
+    const tb = await page.evaluate(() =>
+      wins['minesweeper'].el.querySelector('.win-titlebar').getBoundingClientRect().toJSON());
+    await page.mouse.move(tb.x + 40, tb.y + tb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(4, 300, { steps: 12 });   // hard against the left edge
+    const preview = await page.evaluate(() => {
+      const p = document.getElementById('snap-preview');
+      return p ? getComputedStyle(p).display : 'absent';
+    });
+    assert.ok(preview === 'absent' || preview === 'none',
+      'the snap preview appeared for a window that cannot snap: ' + preview);
+    await page.mouse.move(400, 2, { steps: 12 });   // and into the top (maximize) zone
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const after = await page.evaluate(() => {
+      const r = wins['minesweeper'].el.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), max: wins['minesweeper'].maximized };
+    });
+    assert.strictEqual(after.max, false, 'a top-zone drag maximized a fixed window');
+    assert.deepStrictEqual({ w: after.w, h: after.h }, before);
+  });
+});
+
+// The geometry store keeps the POSITION and drops the size: reopening at a
+// different difficulty must come back board-sized, not carrying the last
+// board's frame.
+test('a reload restores where the window was, not how big it was', async () => {
+  const { context, page } = await openDesktop(harness.browser, {});
+  try {
+    await openWindow(page, 'openMinesweeper');
+    await page.waitForSelector('#ms-grid .ms-cell');
+    await page.evaluate(() => { msNewGame('expert'); });
+    await page.waitForTimeout(300);
+    await page.evaluate(() => {
+      wins['minesweeper'].el.style.left = '300px';
+      wins['minesweeper'].el.style.top = '200px';
+      wmRememberGeometry('minesweeper');
+      // Leaves the store holding an Expert frame against a game that will
+      // reopen at Beginner - which is exactly what mkWin must not apply.
+      msSetRegValue('Difficulty', 'beginner');
+      closeWin('minesweeper');
+    });
+    await page.waitForTimeout(600);
+    await rebootDesktop(page);
+    await openWindow(page, 'openMinesweeper');
+    await page.waitForSelector('#ms-grid .ms-cell');
+    await page.waitForTimeout(300);
+    const g = await page.evaluate(() => {
+      const r = wins['minesweeper'].el.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height),
+               left: Math.round(r.left), top: Math.round(r.top), level: msState.levelKey };
+    });
+    assert.strictEqual(g.level, 'beginner');
+    assert.strictEqual(g.w, 180, 'the window came back at the stored Expert width');
+    assert.strictEqual(g.h, 250, 'the window came back at the stored Expert height');
+    assert.strictEqual(g.left, 300, 'the remembered position was dropped along with the size');
+    assert.strictEqual(g.top, 200, 'the remembered position was dropped along with the size');
+  } finally {
+    await context.close();
+  }
+});
+
+// The one place a fixed size must NOT apply. On mobile mkWin fills the desktop
+// with every non-popup window and msFitWindow stands down, so the board centres
+// itself in whatever it gets - locking the size there would leave an Expert
+// board in a 502px frame on a 390px phone.
+test('on mobile the window still fills the desktop', async () => {
+  const { context, page } = await openDesktop(harness.browser, { width: 390, height: 780 });
+  try {
+    await openWindow(page, 'openMinesweeper');
+    await page.waitForSelector('#ms-grid .ms-cell');
+    await page.waitForTimeout(300);
+    const g = await page.evaluate(() => {
+      const r = wins['minesweeper'].el.getBoundingClientRect();
+      const b = desktopBounds();
+      return { mobile: isMobileLayout(), fixedNow: wmIsFixedSize('minesweeper'),
+               w: Math.round(r.width), h: Math.round(r.height), dw: b.w, dh: b.h };
+    });
+    assert.strictEqual(g.mobile, true, 'the harness did not produce a mobile layout');
+    assert.strictEqual(g.fixedNow, false, 'the fixed-size rule must stand down on mobile');
+    assert.strictEqual(g.w, g.dw, 'the window is not full width: ' + g.w + ' of ' + g.dw);
+    assert.strictEqual(g.h, g.dh, 'the window is not full height: ' + g.h + ' of ' + g.dh);
+  } finally {
+    await context.close();
+  }
+});

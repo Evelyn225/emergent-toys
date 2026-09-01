@@ -246,7 +246,7 @@ test('Tile from the taskbar menu covers the desktop exactly and skips minimized 
   await withDesktop({}, async page => {
     const a = await openWindow(page, 'openNotepad');
     const b = await openWindow(page, 'openTerminal');
-    const c = await openWindow(page, 'openFiles');
+    const c = await openWindow(page, 'openCalculator');
     await page.evaluate(w => minWin(w), b);
 
     const bar = await page.evaluate(() => document.getElementById('taskbar').getBoundingClientRect().toJSON());

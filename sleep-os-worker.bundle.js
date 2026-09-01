@@ -862,7 +862,6 @@ async function scriptOpenSystemProgram(name, cwd, arg) {
     'explorer.exe': openExplorer,
     welcome: openWelcome,
     'welcome.readme': openWelcome,
-    files: openFiles,
     minesweeper: openMinesweeper,
     'minesweeper.exe': openMinesweeper,
     calc: openCalculator,

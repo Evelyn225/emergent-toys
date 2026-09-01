@@ -7,7 +7,8 @@
 // used to be an emoji, injected straight into innerHTML.
 //
 // A token ('icon:notepad') names a PNG in os/icons/. Anything else is still
-// rendered as text, so the twenty-five PROJECTS emoji, the Start button, and
+// rendered as text, so the project emoji on BROWSER.exe's home page, the
+// Start button, and
 // any shortcut already persisted under the old scheme keep working untouched -
 // and an unmapped emoji upgrades to art the moment a key is added below.
 //

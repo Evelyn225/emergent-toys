@@ -3,9 +3,9 @@
 // ─────────────────────────────────────────────────────────────────
 // The first thing in sleepOS that is content rather than a utility. Every
 // other app here inspects something - files, processes, the registry, the
-// disk - and the 25 entries in PROJECTS are `window.open` links that take the
-// visitor OUT of the OS entirely (os/programs.js, programProjectEntry). This
-// is the only thing to actually do without leaving.
+// disk - and the art toys on BROWSER.exe's home page are links that take the
+// visitor OUT of the OS entirely. This is the only thing to actually do
+// without leaving.
 //
 // The half above openMinesweeper is pure: functions over a plain board object,
 // no DOM and no globals, so `npm test` can prove the rules in node. That is the
@@ -567,9 +567,13 @@ function openMinesweeper() {
   const level = MS_LEVELS[levelKey];
   // A first guess at the size; msFitWindow measures and corrects it once the
   // board is in the document.
+  //
+  // resizable: false because this window's size is not a preference - it is
+  // the board plus the chrome around it, and every pixel past that is grey
+  // nothing. Winmine's window could not be resized or maximized either.
   if (!mkWin({ id: MS_WIN_ID, title: 'Minesweeper', icon: 'icon:minesweeper',
                w: level.cols * 16 + 26, h: level.rows * 16 + 108,
-               menubar: true, statusbar: false })) return;
+               menubar: true, statusbar: false, resizable: false })) return;
 
   const body = document.getElementById('wb-' + MS_WIN_ID);
   body.className = 'win-body ms-body';

@@ -7,7 +7,8 @@
 // used to be an emoji, injected straight into innerHTML.
 //
 // A token ('icon:notepad') names a PNG in os/icons/. Anything else is still
-// rendered as text, so the twenty-five PROJECTS emoji, the Start button, and
+// rendered as text, so the project emoji on BROWSER.exe's home page, the
+// Start button, and
 // any shortcut already persisted under the old scheme keep working untouched -
 // and an unmapped emoji upgrades to art the moment a key is added below.
 //
@@ -2262,7 +2263,7 @@ const KERNEL_DEFAULT_ENV = {
   TEMPORAL_DRIFT: '+/-2.3yr',
   VOID_PRESSURE: '12',
   OBSERVER_COUNT: '[classified]',
-  PATH: 'C:\\sleepOS;C:\\sleepOS\\PROJECTS;[redacted]',
+  PATH: 'C:\\sleepOS;[redacted]',
 };
 
 // A copy every time. Handing out the shared table would let one process's SET
@@ -2738,10 +2739,11 @@ const RECYCLE_BIN_KEY = 'sleepOS-recycle-bin';
 
 const DESKTOP_ICONS = [
   { name: 'WELCOME.README', emoji: 'icon:text',     action: 'openWelcome' },
-  // The twenty-five art toys are the most interesting thing in here and were
-  // reachable only from the Start menu, while WELCOME.README had been telling
-  // players to double-click a PROJECTS icon on the desktop that did not exist.
-  { name: 'PROJECTS',       emoji: 'icon:folder',   action: 'openFiles' },
+  // No PROJECTS icon. The art toys are `window.open` links that
+  // eject the visitor from the OS entirely, and the folder they sat in was a
+  // synthetic one - Explorer special-cased it, nothing on disk. BROWSER.exe's
+  // home page lists all of them and keeps the visitor inside, so it is the
+  // one place they live now.
   { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
   { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
   { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },
@@ -2848,7 +2850,7 @@ function moveDesktopVirtualItem(item, srcDirPath, dstDirPath) {
 }
 function canMoveShellItemToDir(item, srcDirPath, dstDirPath) {
   const dstDir = fsNormalizeDir(dstDirPath);
-  if (!item || item._proj || item._recycle) return false;
+  if (!item || item._recycle) return false;
   if (isDesktopVirtualItem(item, srcDirPath)) return canMoveDesktopVirtualItem(item, srcDirPath, dstDir);
   if (item.sysfile || item._shortcut) return false;
   return dstDir === '' || vfsDirExistsSync(dstDir);
@@ -2869,7 +2871,7 @@ async function moveShellItemToDir(item, srcDirPath, dstDirPath) {
   return true;
 }
 function canRecycleShellItem(item, srcDirPath) {
-  return !!item && !item._proj && !item._recycle && !item._shortcut && !item.sysfile && !isDesktopVirtualItem(item, srcDirPath);
+  return !!item && !item._recycle && !item._shortcut && !item.sysfile && !isDesktopVirtualItem(item, srcDirPath);
 }
 async function recycleShellItem(item, srcDirPath) {
   if (!canRecycleShellItem(item, srcDirPath)) return { ok: false, message: 'Move failed.' };
@@ -3072,8 +3074,7 @@ function openSystemFile(name) {
   // 2. This only ever searches '' (the root). Explorer calls openSystemFile
   //    with a bare name from whatever directory it is currently showing, not
   //    necessarily the root - correct today only because programsInDir has
-  //    programs solely at the root ('' and 'PROJECTS', and PROJECTS entries
-  //    are not opened through this path). If a future directory ever gains
+  //    built-in programs solely at the root. If a future directory ever gains
   //    launchable entries, this needs the caller's directory, not a
   //    hardcoded ''.
   //
@@ -3206,17 +3207,10 @@ if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
 // declaration is safe to call later, it is not safe to reference while this
 // file is still evaluating.
 //
-// PROJECTS and ROOT_SYSTEM_FILE_META are read inside function bodies too, but
-// not for the same reason as each other, and not for the reason once claimed
-// here. Per tools/split-manifest.json, os/desktop-model.js (PROJECTS) is
-// manifest position 6 and this file, os/programs.js, is position 7 - PROJECTS
-// loads BEFORE PROGRAM_LAUNCHERS, not after, so referencing it at evaluation
-// time would already be safe. It is read lazily inside programProjectEntry
-// anyway, purely so every registry-consuming function shares the same
-// lazy-read shape. ROOT_SYSTEM_FILE_META is the one where lazy reading is
-// load-bearing: it is `const` in os/daemon.js, manifest position 13, which
-// genuinely loads after this file, so touching it at evaluation time (rather
-// than inside programsInDir, which only runs once the OS is up) would throw
+// ROOT_SYSTEM_FILE_META is read inside a function body for a stronger reason
+// than that: it is `const` in os/daemon.js, manifest position 13, which loads
+// after this file (position 7), so touching it at evaluation time - rather
+// than inside programsInDir, which only runs once the OS is up - would throw
 // on boot.
 //
 // PHASE 6 SEAM: when executables become real VFS files (master spec phase 6),
@@ -3268,22 +3262,15 @@ const PROGRAM_LAUNCHERS = {
     delay: 320,
   },
   'MINESWEEPER.exe': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
-  'WELCOME.README': { lines: ['Opening WELCOME.README...'], open: () => openWelcome(), aliases: ['welcome'] },
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
-  // list them. Both were reachable from the old `launchers`/`SYS` maps and
-  // stay reachable; neither has ever been a file.
+  // list it. It was reachable from the old `launchers`/`SYS` maps and stays
+  // reachable; it has never been a file. That means `WHERE welcome` resolves
+  // and prints a C:\sleepOS path that does not exist as a file.
   //
-  // FILES specifically is programsInDir('')'s thirteenth root entry - it is
-  // appended alongside WELCOME.README in the '' branch below even though it
-  // has no ROOT_SYSTEM_FILE_META row and DIR never lists it, preserving what
-  // the old `launchers.files` entry did. That means `WHERE files` resolves
-  // and prints a C:\sleepOS\FILES path that does not exist as a file; this
-  // is the same launchable-but-not-a-file behaviour as WELCOME.README's
-  // aliasing, just undeclared until now.
-  // Aliased to 'projects' because that is the name every surface a player
-  // reads uses for it - the desktop icon, the Start menu entry and
-  // WELCOME.README all say PROJECTS, and only this registry says FILES.
-  'FILES': { lines: ['Opening Files...'], open: () => openFiles(), aliases: ['projects'] },
+  // FILES used to sit here beside it, opening EXPLORER.exe onto the synthetic
+  // PROJECTS folder. Both are gone: the art toys are external
+  // links, and BROWSER.exe's home page is now the one place that lists them.
+  'WELCOME.README': { lines: ['Opening WELCOME.README...'], open: () => openWelcome(), aliases: ['welcome'] },
 };
 
 // Story files exist at the root without being in ROOT_SYSTEM_FILE_META, and
@@ -3308,24 +3295,6 @@ function programEntry(name, dir) {
     open: spec.open,
     aliases: spec.aliases || [],
     selfLines: spec.selfLines || null,
-  };
-}
-
-function programProjectEntry(project) {
-  return {
-    name: project.name,
-    dir: 'PROJECTS',
-    lines: ['Launching ' + project.name + '...', 'Opening in new tab.'],
-    delay: 400,
-    open: () => window.open(project.file, '_blank'),
-    // The four forms findTerminalProject accepted before this module existed.
-    // Dropping any of them would break START commands players already type.
-    aliases: [
-      project.file,
-      project.file.replace(/\.html$/i, ''),
-      project.name.replace(/ /g, '-'),
-    ],
-    selfLines: null,
   };
 }
 
@@ -3450,12 +3419,11 @@ function programVfsExecutables(dir, taken) {
 
 function programsInDir(dir) {
   const key = String(dir || '').toUpperCase();
-  if (key === 'PROJECTS') return PROJECTS.map(programProjectEntry);
   let builtIns = [];
   if (key === '') {
     const names = ROOT_SYSTEM_FILE_META.map(meta => meta.name)
       .concat(programStoryRootNames())
-      .concat(['WELCOME.README', 'FILES']);
+      .concat(['WELCOME.README']);
     builtIns = names.map(name => programEntry(name, '')).filter(Boolean);
   }
   // Matches on literal name only, not on aliases - a VFS file named
@@ -3470,8 +3438,8 @@ function programsInDir(dir) {
 
 // Delegates to vfsNormalizeDir rather than parsing paths itself: its prefix
 // regex is anchored /^C:\\sleepOS(?:\\|$)/i, so it already maps 'C:\sleepOS'
-// to '' and 'C:\sleepOS\PROJECTS' to 'PROJECTS', and reusing it means PATH
-// cannot drift from how every other path in the VFS is read.
+// to '' and 'C:\sleepOS\DOCS' to 'DOCS', and reusing it means PATH cannot
+// drift from how every other path in the VFS is read.
 //
 // Empties are dropped BEFORE normalizing, and that ordering is load-bearing:
 // vfsNormalizeDir('') returns '', which IS the root, so a trailing semicolon
@@ -3529,12 +3497,8 @@ function programResolve(name, cwd, pathValue) {
 function programFindAnywhere(name) {
   const key = String(name || '').trim().toLowerCase();
   if (!key) return null;
-  const dirs = ['', 'PROJECTS'];
-  for (let i = 0; i < dirs.length; i++) {
-    const hit = programFindIn(dirs[i], key);
-    if (hit) return { program: hit, dir: dirs[i] };
-  }
-  return null;
+  const hit = programFindIn('', key);
+  return hit ? { program: hit, dir: '' } : null;
 }
 
 function programDisplayDir(dir) {
@@ -5134,7 +5098,7 @@ async function _copyEntryInto(name, srcCwd, dstCwd, dstName, kind) {
 // concurrent paste could resolve before every item lands, so a caller's
 // render() would draw a half-pasted directory.
 async function pasteClipboardInto(dstCwd) {
-  if (!_expClipboard || dstCwd === 'PROJECTS' || dstCwd === 'RECYCLE') return false;
+  if (!_expClipboard || dstCwd === 'RECYCLE') return false;
   if (!vfsDirExistsSync(dstCwd)) return false;
   let changed = false;
   let failMessage = null;
@@ -5390,12 +5354,12 @@ function vfsSeedTree() {
         '',
         'ROOT: C:\\sleepOS',
         '  DOCS\\      - documentation (this folder)',
-        '  PROJECTS\\  - interactive apps (read-only)',
         '',
         'SYSTEM FILES (read-only):',
         '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
         '  SYSMON.exe  BROWSER.exe  DEFRAG.exe',
         '  CALC.exe  REGEDIT.exe  EXPLORER.exe',
+        '  MINESWEEPER.exe',
         '  void.tmp  daemon.core  ?????.exe',
         '',
         'USER FILES:',
@@ -5620,12 +5584,9 @@ function vfsSeedTree() {
         '  the programs in C:\\sleepOS always run from',
         '  C:\\sleepOS even with PATH emptied. From any',
         '  other folder they need C:\\sleepOS on PATH.',
-        '',
-        '  The same rule governs PROJECTS. START <project>',
-        '  needs C:\\sleepOS\\PROJECTS on PATH, or you need',
-        '  to be standing in it. Empty your PATH and the',
-        '  projects are still there: CD PROJECTS, then',
-        '  START works again.',
+        '  Empty your PATH, CD DOCS, then try TERMINAL:',
+        '  the program is still there, it is just not',
+        '  anywhere the shell has been told to look.',
         '',
         '  The environment belongs to the terminal, and',
         '  the terminal is a process. Close it and that',
@@ -6518,7 +6479,7 @@ const ROOT_SYSTEM_FILE_META = [
   { name: 'EXPLORER.exe' },
   { name: 'MINESWEEPER.exe' },
 ];
-const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'PROJECTS', 'SYS', 'CACHE', 'DESKTOP']);
+const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'SYS', 'CACHE', 'DESKTOP']);
 const STORY_FILE_PATHS = {
   notice: 'DOCS\\NOTICE_13.txt',
   incident: 'DOCS\\INCIDENT_A.txt',
@@ -9316,7 +9277,6 @@ async function scriptOpenSystemProgram(name, cwd, arg) {
     'explorer.exe': openExplorer,
     welcome: openWelcome,
     'welcome.readme': openWelcome,
-    files: openFiles,
     minesweeper: openMinesweeper,
     'minesweeper.exe': openMinesweeper,
     calc: openCalculator,
@@ -10455,11 +10415,25 @@ function wmIsFilled(w) {
   return !!(w && (w.maximized || w.snap));
 }
 
+// A window whose size belongs to the app, not the player. MINESWEEPER.exe is
+// the case this exists for: its window is a function of the board, so every
+// route that would resize it - the handles, maximize, snap, and the two
+// arrangers - produces a wrong answer rather than a preference.
+//
+// Deliberately NOT applied on mobile, where mkWin makes every non-popup window
+// fill the desktop: there the OS owns the size and the app centres itself in
+// whatever it gets, which is the same carve-out msFitWindow already makes.
+function wmIsFixedSize(id) {
+  const w = wins[id];
+  return !!(w && w.fixedSize && !isMobileLayout());
+}
+
 // Snap a window to a zone. Captures origStyle only on the way OUT of normal, so
 // snapping left then right then left again still remembers the size the player
 // last chose for themselves rather than a half-screen.
 function wmApplySnap(id, zone) {
   const w = wins[id]; if (!w) return;
+  if (wmIsFixedSize(id)) return;
   const rect = wmSnapRect(zone, desktopBounds());
   if (!rect) return;
   // Same pairing as maxWin's: capture the normal geometry, for origStyle and
@@ -10706,7 +10680,7 @@ function wmStoredGeometry(id) {
 }
 
 function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
-                 menubar = true, statusbar = true, popup = false }) {
+                 menubar = true, statusbar = true, popup = false, resizable = true }) {
   if (wins[id]) { focusWin(id); unminWin(id); return null; }
 
   // Default position: slightly random cascade; on mobile fill viewport (except small popups)
@@ -10741,8 +10715,12 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   // in normal state carries only its fill flags.
   const savedGeom = (!isMobile && !popup) ? wmStoredGeometry(id) : null;
   if (savedGeom) {
-    if (savedGeom.width  !== null) w = savedGeom.width;
-    if (savedGeom.height !== null) h = savedGeom.height;
+    // A fixed-size window takes only its position back. Its size is the app's
+    // answer, computed fresh from whatever the app is showing now - restoring
+    // the stored one would hand Minesweeper the PREVIOUS difficulty's frame
+    // and paint a wrong-sized window until msFitWindow corrected it.
+    if (resizable && savedGeom.width  !== null) w = savedGeom.width;
+    if (resizable && savedGeom.height !== null) h = savedGeom.height;
     if (savedGeom.left   !== null) x = savedGeom.left;
     if (savedGeom.top    !== null) y = savedGeom.top;
   }
@@ -10752,11 +10730,14 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   el.id = 'win-' + id;
   el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`;
 
+  // The handles and the maximize button are omitted rather than disabled: a
+  // grab area that refuses to grab, and a button that refuses to press, both
+  // read as breakage. Winmine's own window had neither.
   el.innerHTML = `
-    <div class="win-rz win-rz-n"></div><div class="win-rz win-rz-s"></div>
+    ${resizable ? `<div class="win-rz win-rz-n"></div><div class="win-rz win-rz-s"></div>
     <div class="win-rz win-rz-e"></div><div class="win-rz win-rz-w"></div>
     <div class="win-rz win-rz-nw"></div><div class="win-rz win-rz-ne"></div>
-    <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>
+    <div class="win-rz win-rz-sw"></div><div class="win-rz win-rz-se"></div>` : ''}
     <div class="win-titlebar" id="tb-${id}">
       <div class="win-title-text">
         <span class="win-icon">${iconMarkup(icon)}</span>
@@ -10764,7 +10745,7 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       </div>
       <div class="win-controls">
         <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
-        <button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>
+        ${resizable ? `<button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>` : ''}
         <button class="win-btn" title="Close"    onclick="closeWin('${id}')">✕</button>
       </div>
     </div>
@@ -10775,10 +10756,12 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
 
   document.getElementById('windows-layer').appendChild(el);
   clampWinGeometry(el);   // callers pass explicit x/y/w/h that may not fit this viewport
-  // `popup` is carried on the record because the geometry store has to be able
-  // to tell a dialog from an app after the fact, and only mkWin's arguments
-  // knew it.
-  wins[id] = { el, title, icon, popup, minimized: false, maximized: false, snap: null, origStyle: null };
+  // Both flags are carried on the record because only mkWin's arguments knew
+  // them: `popup` so the geometry store can tell a dialog from an app after
+  // the fact, `fixedSize` for every route that would resize the window after
+  // this point - see wmIsFixedSize.
+  wins[id] = { el, title, icon, popup, fixedSize: !resizable,
+               minimized: false, maximized: false, snap: null, origStyle: null };
 
   // Built-in apps are real processes with real lifetimes. Registering here rather
   // than in each app means an app cannot forget to appear in ps.
@@ -10790,7 +10773,9 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   wins[id].removeProbe = instInstallProbe(el, id);
 
   makeDraggable(el, document.getElementById('tb-' + id));
-  makeResizable(el, id);
+  // A no-op without the handles above, but stated rather than left to depend
+  // on markup that a later edit could put back.
+  if (resizable) makeResizable(el, id);
   addTbBtn(id, title, icon);
   el.addEventListener('mousedown', () => focusWin(id));
   el.addEventListener('touchstart', () => focusWin(id), { passive: true });
@@ -10857,6 +10842,11 @@ function fitSnapped(w) {
 
 function maxWin(id) {
   const w = wins[id]; if (!w) return;
+  // The button is not rendered for a fixed-size window, so this only catches
+  // the other two routes into here: a titlebar drag into the top snap zone,
+  // and a programmatic call restoring a stored `max` flag written before the
+  // window was fixed.
+  if (wmIsFixedSize(id)) return;
   if (w.maximized) {
     w.el.style.cssText = w.origStyle;
     w.maximized = false;
@@ -10963,7 +10953,11 @@ function makeDraggable(win, handle) {
     // Mobile windows already fill the desktop (mkWin), so there is nothing to
     // snap and no zone to arrange it into. No snap logic runs on that branch
     // at all rather than shipping a control that cannot work.
-    const snapEnabled = !isMobileLayout();
+    //
+    // A fixed-size window is excluded for the stronger version of the same
+    // reason: wmApplySnap and maxWin both refuse it, so leaving the preview on
+    // would paint a half-screen overlay promising a snap that never lands.
+    const snapEnabled = !isMobileLayout() && !wmIsFixedSize(id);
     let pendingZone = null;
     // Claim the preview before the first onMove can run. Anything that
     // happens to this window before this drag's own onUp (most notably
@@ -11142,6 +11136,12 @@ function wmVisibleWinIds() {
 // Both arrangers clear fill state first: a tiled window sits at a computed size,
 // so it cannot still claim to be maximized or snapped. Leaving the flag set
 // would make the next drag restore a stale geometry.
+//
+// A fixed-size window is MOVED to its cell and keeps its own size, rather than
+// being skipped: the arrangers are about where windows sit, and dropping it out
+// entirely would leave it buried under whatever got tiled over it. It can then
+// overlap its neighbours, which is the honest outcome - the alternative is a
+// Minesweeper frame that no longer matches its board.
 function wmApplyRects(ids, rects) {
   ids.forEach((id, i) => {
     const w = wins[id]; const r = rects[i];
@@ -11151,9 +11151,12 @@ function wmApplyRects(ids, rects) {
     w.origStyle = null;
     w.el.style.left   = r.left + 'px';
     w.el.style.top    = r.top + 'px';
-    w.el.style.width  = r.width + 'px';
-    w.el.style.height = r.height + 'px';
+    if (!wmIsFixedSize(id)) {
+      w.el.style.width  = r.width + 'px';
+      w.el.style.height = r.height + 'px';
+    }
     w.el.style.zIndex = ++zTop;
+    clampWinGeometry(w.el);   // a kept size can push a cell's origin off the desktop
     wmRememberGeometry(id);
   });
 }
@@ -12106,13 +12109,14 @@ You are running sleepOS, an experimental interactive
 desktop. Nothing here can break your computer.
 
 Start here:
-  PROJECTS      - interactive art toys, double-click
-                  the folder on the desktop
-  TERMINAL.exe  - a real command line. Type HELP.
+  BROWSER.exe      - its home page lists every interactive
+                     art toy. They open in this window.
+  MINESWEEPER.exe  - the real one, sprites and all
+  TERMINAL.exe     - a real command line. Type HELP.
 
 Also installed:
   NOTEPAD.exe   - text editor with syntax highlighting
-  BROWSER.exe   - web browser
+  EXPLORER.exe  - file browser
   SYSMON.exe    - system monitor
   DEFRAG.exe    - disk defragmenter
   CALC.exe      - calculator
@@ -13096,7 +13100,7 @@ function openExplorer(startPath) {
         cwd = '';
         render();
         addrEl.blur();
-      } else if (normalized === 'PROJECTS' || vfsDirExistsSync(normalized)) {
+      } else if (vfsDirExistsSync(normalized)) {
         cwd = normalized;
         render();
         addrEl.blur();
@@ -13210,8 +13214,7 @@ function openExplorer(startPath) {
   function selectionKey(item) {
     const recyclePart = item._recycle?.id ? '|recycle|' + item._recycle.id : '';
     const shortcutPart = item._shortcut?.target?.path ? '|shortcut|' + normalizeShortcutPath(item._shortcut.target.path) : '';
-    const projectPart = item._proj?.file ? '|project|' + item._proj.file : '';
-    return (item.sysfile ? '1' : '0') + '|' + item.kind + '|' + item.name + recyclePart + shortcutPart + projectPart;
+    return (item.sysfile ? '1' : '0') + '|' + item.kind + '|' + item.name + recyclePart + shortcutPart;
   }
 
   function registerSelectionNode(el, item) {
@@ -13232,7 +13235,7 @@ function openExplorer(startPath) {
 
   function getDeletableSelectedItems() {
     if (cwd === 'RECYCLE') return getSelectedItems().filter(item => !!item._recycle);
-    return getSelectedItems().filter(item => !item._proj && canAttemptDeleteItem(makeFsPath(item.name), cwd, item));
+    return getSelectedItems().filter(item => canAttemptDeleteItem(makeFsPath(item.name), cwd, item));
   }
 
   function makeFsPath(name) {
@@ -13258,7 +13261,7 @@ function openExplorer(startPath) {
       return;
     }
     if (items.length === 1) {
-      ws.textContent = items[0]._proj ? items[0].name + '  \u2014  double-click to open' : items[0].name;
+      ws.textContent = items[0].name;
       return;
     }
     ws.textContent = items.length + ' objects selected';
@@ -13328,7 +13331,7 @@ function openExplorer(startPath) {
   }
 
   function renameItem(item) {
-    if (!item || item.sysfile || item._proj) return;
+    if (!item || item.sysfile) return;
     osPrompt('Rename to:', item.name, 'Rename', async nextName => {
       if (!nextName || nextName === item.name) return;
       try {
@@ -13399,14 +13402,6 @@ function openExplorer(startPath) {
     if (kind === 'dir') {
       cwd = makeFsPath(name);
       render();
-      return;
-    }
-    if (cwd === 'PROJECTS') {
-      const project = PROJECTS.find(p => p.name === name);
-      if (project) {
-        const url = /^https?:\/\//.test(project.file) ? project.file : 'https://' + project.file;
-        window.open(url, '_blank');
-      }
       return;
     }
     if (cwd === 'DESKTOP') {
@@ -13537,7 +13532,7 @@ function openExplorer(startPath) {
     });
 
     // ── Drag source ──────────────────────────────────────────────
-    const canDragItem = !isRecycleEntry && !item._proj && (!sysfile || isDesktopVirtualItem(item, cwd) || !!item._shortcut);
+    const canDragItem = !isRecycleEntry && (!sysfile || isDesktopVirtualItem(item, cwd) || !!item._shortcut);
     if (canDragItem) {
       el.setAttribute('draggable', 'true');
       el.addEventListener('dragstart', e => {
@@ -13657,45 +13652,6 @@ function openExplorer(startPath) {
     return el;
   }
 
-  function makeProjectItem(project) {
-    const item = { name: project.name, kind: 'file', sysfile: true, _proj: project };
-    const openProject = () => window.open(/^https?:\/\//.test(project.file) ? project.file : 'https://' + project.file, '_blank');
-    let el;
-    if (viewMode === 'details') {
-      el = document.createElement('tr');
-      el.className = 'exp-det-item';
-      el.innerHTML = '<td class="exp-det-icon">' + iconMarkup(project.emoji) + '</td><td>' + escHtml(project.name) + '</td><td>HTML Application</td>';
-    } else if (viewMode === 'list') {
-      el = document.createElement('div');
-      el.className = 'exp-list-item';
-      el.innerHTML = '<span class="exp-list-icon">' + iconMarkup(project.emoji) + '</span><span>' + escHtml(project.name) + '</span>';
-    } else {
-      el = document.createElement('div');
-      el.className = 'exp-item';
-      el.innerHTML = '<div class="exp-icon">' + iconMarkup(project.emoji) + '</div><span>' + escHtml(project.name) + '</span>';
-    }
-    registerSelectionNode(el, item);
-    el.addEventListener('click', e => {
-      if (e.ctrlKey || e.metaKey) toggleSelection(item);
-      else replaceSelection(item);
-    });
-    el.addEventListener('dblclick', openProject);
-    el.addEventListener('touchend', e => { e.preventDefault(); openProject(); }, { passive: false });
-    el.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      ensureContextSelection(item);
-      showCtxMenu(e.clientX, e.clientY, [
-        { label: 'Open', action: openProject },
-        '-',
-        { label: 'Properties', action: () => osAlert('Name:\t' + project.name + '\nFile:\t' + project.file + '\nType:\tHTML Application\nLocation:\tC:\\sleepOS\\PROJECTS\\', 'Properties', 'icon:info') },
-        '-',
-        { label: 'Copy Name', action: () => navigator.clipboard?.writeText(getSelectedNamesText() || project.name) },
-      ]);
-    });
-    return el;
-  }
-
   function render() {
     pane.innerHTML = '';
     selected = null;
@@ -13709,34 +13665,6 @@ function openExplorer(startPath) {
     // The separator uses the same escape as line 3. It was a bare '?' here,
     // mojibake that degraded the title on the first navigation; keep it escaped.
     setWinTitle(id, 'FILE EXPLORER \u2014 ' + fullPath);
-
-    if (cwd === 'PROJECTS') {
-      const build = fn => {
-        if (viewMode === 'details') {
-          const tbl = document.createElement('table');
-          tbl.className = 'exp-det-tbl';
-          tbl.innerHTML = '<thead><tr><th style="width:22px"></th><th>Name</th><th>Type</th></tr></thead>';
-          const tbody = document.createElement('tbody');
-          PROJECTS.forEach(project => tbody.appendChild(fn(project)));
-          tbl.appendChild(tbody);
-          pane.appendChild(tbl);
-        } else if (viewMode === 'list') {
-          const list = document.createElement('div');
-          list.style.cssText = 'display:flex;flex-direction:column;';
-          PROJECTS.forEach(project => list.appendChild(fn(project)));
-          pane.appendChild(list);
-        } else {
-          const grid = document.createElement('div');
-          grid.className = 'exp-grid';
-          PROJECTS.forEach(project => grid.appendChild(fn(project)));
-          pane.appendChild(grid);
-        }
-      };
-      build(makeProjectItem);
-      emptyStatusText = PROJECTS.length + ' objects';
-      updateSelectionStatus();
-      return;
-    }
 
     if (cwd === 'RECYCLE') {
       const recycleItems = recycleBinEntries.map(entry => ({
@@ -13822,12 +13750,11 @@ function openExplorer(startPath) {
     const items = [];
     if (!cwd) {
       items.push({ name:'DESKTOP', kind:'dir', sysfile:true });
-      items.push({ name:'PROJECTS', kind:'dir', sysfile:true });
       const rootEntries = vfsListSync('');
       ['DOCS', ...rootEntries.filter(e => e.kind === 'dir').map(e => e.name)]
         .filter((value, index, array) => array.indexOf(value) === index)
         .forEach(dirName => {
-          if (dirName !== 'PROJECTS' && dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
+          if (dirName !== 'DESKTOP') items.push({ name:dirName, kind:'dir', sysfile:false });
         });
       rootEntries.filter(e => e.kind !== 'dir').forEach(entry => items.push({ name: entry.name, kind: explorerKindFor(entry), sysfile: false }));
     } else {
@@ -13891,7 +13818,7 @@ function openExplorer(startPath) {
     clearSelection();
   });
   pane._shellDropHandler = async payload => {
-    if (!payload || cwd === 'PROJECTS' || cwd === 'RECYCLE') return false;
+    if (!payload || cwd === 'RECYCLE') return false;
     if (isDesktopSurfaceTransferBlocked(payload, cwd)) return false;
     if (!canMoveShellPayloadToDir(payload, cwd)) return false;
     const ok = await doMovePayload(payload, cwd);
@@ -13905,11 +13832,8 @@ function openExplorer(startPath) {
     if (e.target.closest(ITEM_SELECTOR)) return;
     e.preventDefault();
     clearSelection();
-    const inProjects = cwd === 'PROJECTS';
     const inRecycle = cwd === 'RECYCLE';
-    showCtxMenu(e.clientX, e.clientY, inProjects ? [
-      { label: 'Refresh', action: render },
-    ] : inRecycle ? [
+    showCtxMenu(e.clientX, e.clientY, inRecycle ? [
       { label: 'Empty Recycle Bin', disabled: !recycleBinEntries.length, action: () => confirmEmptyRecycleBin(() => render()) },
       '-',
       { label: 'Refresh', action: render },
@@ -13941,7 +13865,7 @@ function openExplorer(startPath) {
   let dropOverlay = null;
   pane.addEventListener('dragenter', e => {
     if (getShellDragPayload()) return;
-    if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+    if (cwd === 'RECYCLE') return;
     if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
       if (!dropOverlay) {
@@ -13962,7 +13886,7 @@ function openExplorer(startPath) {
         return;
       }
     }
-    if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+    if (cwd === 'RECYCLE') return;
     if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
       e.stopPropagation();
@@ -13984,7 +13908,7 @@ function openExplorer(startPath) {
       return;
     }
     if (e.dataTransfer.files?.length) {
-      if (cwd === 'PROJECTS' || cwd === 'RECYCLE') return;
+      if (cwd === 'RECYCLE') return;
       e.preventDefault();
       e.stopPropagation();
       _uploadCwd = cwd;
@@ -13997,11 +13921,7 @@ function openExplorer(startPath) {
 
   mb.innerHTML = '';
   [
-    { label: 'File', items: () => cwd === 'PROJECTS' ? [
-      { label: 'Open', disabled: !selected, action: () => { if (selected?._proj) window.open(selected._proj.file, '_blank'); } },
-      '-',
-      { label: 'Close', action: () => closeWin(id) },
-    ] : cwd === 'RECYCLE' ? [
+    { label: 'File', items: () => cwd === 'RECYCLE' ? [
       { label: 'Restore', disabled: !getSelectedRecycleEntries().length, action: restoreSelectedRecycleEntries },
       { label: 'Delete Permanently', disabled: !getSelectedRecycleEntries().length, action: deleteSelected },
       '-',
@@ -14030,9 +13950,9 @@ function openExplorer(startPath) {
       { label: 'Close', action: () => closeWin(id) },
     ]},
     { label: 'Edit', items: () => [
-      { label: 'Cut',   disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='PROJECTS' || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut'; } },
+      { label: 'Cut',   disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:true}; if(ws) ws.textContent=its.length+' item(s) cut'; } },
       { label: 'Copy',  disabled: !getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut).length || cwd==='RECYCLE', action: () => { const its=getSelectedItems().filter(i=>!i.sysfile && !i._recycle && !i._shortcut); _expClipboard={items:its.map(i=>({name:i.name,kind:i.kind,srcCwd:cwd})),cut:false}; if(ws) ws.textContent=its.length+' item(s) copied'; } },
-      { label: 'Paste', disabled: !_expClipboard || cwd==='PROJECTS' || cwd==='RECYCLE', action: pasteClipboard },
+      { label: 'Paste', disabled: !_expClipboard || cwd==='RECYCLE', action: pasteClipboard },
       '-',
       { label: 'Select All', action: () => selectAllVisibleItems() },
       { label: 'Invert Selection', action: () => invertSelection() },
@@ -14050,8 +13970,8 @@ function openExplorer(startPath) {
         if (ws) ws.textContent = 'Copied';
       }},
       '-',
-      { label: 'Rename', disabled: !getSingleSelectedItem() || getSingleSelectedItem()?.sysfile || getSingleSelectedItem()?._recycle || getSingleSelectedItem()?._shortcut || cwd === 'PROJECTS' || cwd === 'RECYCLE', action: () => renameItem(getSingleSelectedItem()) },
-      { label: 'Delete', disabled: !getDeletableSelectedItems().length || cwd === 'PROJECTS', action: deleteSelected },
+      { label: 'Rename', disabled: !getSingleSelectedItem() || getSingleSelectedItem()?.sysfile || getSingleSelectedItem()?._recycle || getSingleSelectedItem()?._shortcut || cwd === 'RECYCLE', action: () => renameItem(getSingleSelectedItem()) },
+      { label: 'Delete', disabled: !getDeletableSelectedItems().length, action: deleteSelected },
     ]},
     { label: 'View', items: () => [
       { label: (viewMode === 'icons' ? '* ' : '  ') + 'Large Icons', action: () => { viewMode = 'icons'; render(); } },
@@ -14082,7 +14002,7 @@ function openExplorer(startPath) {
     if (!wins[id]) return;
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    const items = getSelectedItems().filter(i => !i.sysfile && !i._proj && !i._recycle && !i._shortcut);
+    const items = getSelectedItems().filter(i => !i.sysfile && !i._recycle && !i._shortcut);
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
       e.preventDefault();
       if (cwd === 'RECYCLE') return;
@@ -14125,7 +14045,6 @@ function openExplorer(startPath) {
   document.addEventListener('fs-changed', onFsChanged);
 }
 
-function openFiles() { openExplorer('PROJECTS'); }
 
 let _termNav = null; // exposes cwd navigation to callers when terminal is already open
 let _termExec = null;
@@ -14586,7 +14505,6 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    .`,
         `11/13/2024  10:31    <DIR>    ..`,
         `11/13/2024  10:31    <DIR>    DOCS`,
-        `11/13/2024  10:31    <DIR>    PROJECTS`,
       ].forEach(line => lines.push(line));
       getTerminalRootSystemEntries().forEach(entry => {
         lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
@@ -14678,11 +14596,12 @@ function openTerminal(startDir, initialCommand) {
       });
     rootEntries.filter(e => e.kind === 'text').forEach(e => lines.push(`├── ${e.name}`));
     rootEntries.filter(e => e.kind === 'blob').forEach(e => lines.push(`├── ${e.name}  [${e.blob.kind}]`));
-    lines.push('└── PROJECTS\\');
-    lines.push('    ├── sand playground');
-    lines.push('    ├── fireworks');
-    lines.push('    ├── ... (more objects)');
-    lines.push('    └── [1 object cannot be listed]');
+    // A hardcoded `└── PROJECTS\` used to close the tree, so every line above
+    // it could be a `├` unconditionally. With that gone the last line has to
+    // become the elbow itself, whatever it turns out to be - a root .exe, a
+    // player's file, or DOCS on an otherwise empty disk.
+    const last = lines.length - 1;
+    if (last > 0 && lines[last].startsWith('├')) lines[last] = '└' + lines[last].slice(1);
     return lines;
   }
 
@@ -15063,7 +14982,7 @@ function openTerminal(startDir, initialCommand) {
     mkdir: async (args) => {
       if (!args) { print('Usage: MKDIR [name]'); return; }
       const name = args.trim().toUpperCase();
-      if (['PROJECTS','DOCS','.','..'].includes(name)) {
+      if (['DOCS','.','..'].includes(name)) {
         print(`A subdirectory or file ${name} already exists.`); return;
       }
       let result;
@@ -17037,9 +16956,9 @@ function openBrowser(initialUrl) {
 // ─────────────────────────────────────────────────────────────────
 // The first thing in sleepOS that is content rather than a utility. Every
 // other app here inspects something - files, processes, the registry, the
-// disk - and the 25 entries in PROJECTS are `window.open` links that take the
-// visitor OUT of the OS entirely (os/programs.js, programProjectEntry). This
-// is the only thing to actually do without leaving.
+// disk - and the art toys on BROWSER.exe's home page are links that take the
+// visitor OUT of the OS entirely. This is the only thing to actually do
+// without leaving.
 //
 // The half above openMinesweeper is pure: functions over a plain board object,
 // no DOM and no globals, so `npm test` can prove the rules in node. That is the
@@ -17601,9 +17520,13 @@ function openMinesweeper() {
   const level = MS_LEVELS[levelKey];
   // A first guess at the size; msFitWindow measures and corrects it once the
   // board is in the document.
+  //
+  // resizable: false because this window's size is not a preference - it is
+  // the board plus the chrome around it, and every pixel past that is grey
+  // nothing. Winmine's window could not be resized or maximized either.
   if (!mkWin({ id: MS_WIN_ID, title: 'Minesweeper', icon: 'icon:minesweeper',
                w: level.cols * 16 + 26, h: level.rows * 16 + 108,
-               menubar: true, statusbar: false })) return;
+               menubar: true, statusbar: false, resizable: false })) return;
 
   const body = document.getElementById('wb-' + MS_WIN_ID);
   body.className = 'win-body ms-body';
@@ -18611,12 +18534,6 @@ function openRunDialog() {
     'minesweeper': openMinesweeper, 'minesweeper.exe': openMinesweeper,
     'winmine': openMinesweeper, 'winmine.exe': openMinesweeper,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
-    // FILES is the registry's thirteenth root entry and opens Explorer on
-    // PROJECTS. It has no ROOT_SYSTEM_FILE_META row and DIR never lists it, so
-    // the PROJECTS fallback below cannot rescue it either - without this line
-    // Run... answers "Cannot find program" for a program the desktop, the
-    // terminal's START and a script's START all launch.
-    'files': openFiles, 'projects': openFiles,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,
     '?????.exe': openUnknown,
@@ -18628,18 +18545,12 @@ function openRunDialog() {
     closeWin(id);
     const fn = RUN_MAP[v];
     if (fn) { fn(); return; }
-    // Four forms, matching what the registry's programProjectEntry (os/programs.js)
-    // and the old findTerminalProject both accept: the file name, the file name
-    // minus .html, the project name, and the project name with spaces hyphenated.
-    // That last form used to be missing here, so a Run... of "sand-playground"
-    // failed while START sand-playground (going through the registry) worked.
-    const proj = PROJECTS.find(p =>
-      p.file.toLowerCase() === v ||
-      p.file.toLowerCase().replace('.html','') === v ||
-      p.name.toLowerCase() === v ||
-      p.name.toLowerCase().replace(/ /g, '-') === v
-    );
-    if (proj) { window.open(proj.file, '_blank'); return; }
+    // The art toys used to be resolvable here in four forms, because PROJECTS
+    // was a folder you could stand in. It is not one any more: they are
+    // external links and BROWSER.exe's home page is where they live, so a
+    // project name now falls through to the same "cannot find" every other
+    // unknown name gets rather than opening a tab from a program prompt.
+    //
     // The error icon, not the Run dialog's own executable one: this is a
     // failure, and every other failure in the OS is titled and iconed as one.
     osAlert('Cannot find program:\n"' + inp.value + '"\n\nMake sure the name is correct and try again.', 'Cannot Find Program', 'icon:error');

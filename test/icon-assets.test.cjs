@@ -1,7 +1,7 @@
 'use strict';
 // Icon values travel as opaque strings ('icon:notepad'), and iconMarkup falls
 // back to rendering an unrecognised one as text. That fallback is deliberate -
-// it is what keeps the PROJECTS emoji and old persisted shortcuts working - but
+// it is what keeps the project emoji and old persisted shortcuts working - but
 // it means a typo'd key does not throw, it just prints "icon:notpad" into the
 // titlebar, and a renamed PNG just leaves a broken image. Both become build
 // failures here instead.
