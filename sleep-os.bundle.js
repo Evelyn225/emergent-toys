@@ -8284,19 +8284,28 @@ function crtBuildFilter() {
   const a = CRT.aberration;
   // Split the beams before anything else looks at the image, so the halation
   // downstream blooms the already-misconverged picture rather than a clean one.
+  //
   // Every channel copy has to keep its alpha: a layer with alpha 0 and non-zero
   // RGB is not a valid premultiplied colour and gets clamped away to nothing.
-  // Summing three of them therefore over-counts alpha, which is harmless only
-  // because every filtered surface is an opaque rectangle - revisit this if the
-  // filter is ever pointed at something with real transparency.
+  // The three are therefore recombined with feBlend mode="screen" rather than
+  // by summing them with feComposite arithmetic (k2=1 k3=1), which is what this
+  // used to do and which was the one out-of-spec thing in the whole graph.
+  //
+  // Screen is 1-(1-x)(1-y). On channels that do not overlap - and these three
+  // never do - that is arithmetic addition, so the colour is identical. The
+  // difference is alpha: screen gives 1-(1-1)(1-1) = 1, while summing gave
+  // 1+1+1 = 3. Alpha 3 is out of range in premultiplied space, and what happens
+  // next is entirely down to where and how an engine clamps it. Chromium's
+  // clamp happened to produce the intended picture; that is not something the
+  // spec promises, and a filter should not be relying on it.
   const split = a > 0
     ? '<feColorMatrix in="pre" result="rOnly" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>' +
       '<feColorMatrix in="pre" result="gOnly" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"/>' +
       '<feColorMatrix in="pre" result="bOnly" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>' +
       '<feOffset in="rOnly" dx="' + (-a) + '" dy="0" result="rShift"/>' +
       '<feOffset in="bOnly" dx="' + a + '" dy="0" result="bShift"/>' +
-      '<feComposite in="rShift" in2="gOnly" operator="arithmetic" k2="1" k3="1" result="rg"/>' +
-      '<feComposite in="rg" in2="bShift" operator="arithmetic" k2="1" k3="1" result="src"/>'
+      '<feBlend in="rShift" in2="gOnly" mode="screen" result="rg"/>' +
+      '<feBlend in="rg" in2="bShift" mode="screen" result="src"/>'
     : '<feOffset in="pre" dx="0" dy="0" result="src"/>';
   host.innerHTML =
     '<svg xmlns="http://www.w3.org/2000/svg">' +
