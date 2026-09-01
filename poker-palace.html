@@ -62,32 +62,22 @@
       font-synthesis-weight: none;
       color: var(--ink);
       background:
-        radial-gradient(circle at top, rgba(255, 182, 72, 0.18), transparent 28%),
+        radial-gradient(circle at top, rgba(255, 182, 72, 0.18), rgba(255, 182, 72, 0) 28%),
         linear-gradient(180deg, #1c0906, #070303);
       letter-spacing: 0.03em;
       overflow-x: hidden;
     }
 
-    body::before,
     body::after {
       content: "";
       position: fixed;
       inset: 0;
       pointer-events: none;
       z-index: 0;
-    }
-
-    body::before {
-      background: linear-gradient(transparent 0, rgba(255, 255, 255, 0.04) 50%, transparent 100%);
-      background-size: 100% 4px;
-      opacity: 0.22;
-      mix-blend-mode: screen;
-    }
-
-    body::after {
+      will-change: transform;
       background:
         radial-gradient(circle at center, transparent 48%, rgba(0, 0, 0, 0.48) 100%),
-        radial-gradient(circle at 20% 20%, rgba(255, 191, 88, 0.08), transparent 25%);
+        radial-gradient(circle at 20% 20%, rgba(255, 191, 88, 0.08), rgba(255, 191, 88, 0) 25%);
     }
 
     a,
@@ -245,7 +235,7 @@
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(90deg, transparent 0, rgba(255, 255, 255, 0.06) 50%, transparent 100%);
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0) 100%);
       opacity: 0.2;
       pointer-events: none;
     }
@@ -438,7 +428,7 @@
       padding: 20px;
       border: 4px solid #341a0d;
       background:
-        radial-gradient(circle at top, rgba(255, 255, 255, 0.05), transparent 28%),
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 28%),
         linear-gradient(180deg, var(--felt-main), var(--felt-shadow));
       box-shadow:
         inset 0 0 0 2px rgba(255, 232, 165, 0.12),
@@ -464,10 +454,10 @@
       position: absolute;
       inset: 0;
       background:
-        radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.08), transparent 24%),
-        radial-gradient(circle at 78% 18%, rgba(255, 227, 153, 0.05), transparent 22%),
+        radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 24%),
+        radial-gradient(circle at 78% 18%, rgba(255, 227, 153, 0.05), rgba(255, 227, 153, 0) 22%),
         radial-gradient(circle at 50% 78%, rgba(0, 0, 0, 0.12), transparent 34%),
-        linear-gradient(90deg, transparent 0%, rgba(255, 241, 195, 0.06) 26%, transparent 54%, rgba(0, 0, 0, 0.08) 78%, transparent 100%),
+        linear-gradient(90deg, rgba(255, 241, 195, 0) 0%, rgba(255, 241, 195, 0.06) 26%, rgba(255, 241, 195, 0) 54%, rgba(0, 0, 0, 0.08) 78%, rgba(0, 0, 0, 0) 100%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.12));
       background-repeat: no-repeat;
       opacity: 0.46;
@@ -505,13 +495,13 @@
     .result-fx::after {
       background:
         repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 255, 255, 0.08) 18px 22px),
-        radial-gradient(circle at center, rgba(255, 255, 255, 0.16), transparent 56%);
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 56%);
       mix-blend-mode: screen;
     }
 
     .result-fx.win {
       background:
-        radial-gradient(circle at center, rgba(255, 235, 123, 0.42), transparent 44%),
+        radial-gradient(circle at center, rgba(255, 235, 123, 0.42), rgba(255, 235, 123, 0) 44%),
         repeating-radial-gradient(circle at center, rgba(255, 208, 80, 0.22) 0 10px, transparent 10px 24px);
       animation: result-win 760ms ease;
     }
@@ -527,7 +517,7 @@
     }
 
     .result-fx.loss {
-      background: radial-gradient(circle at center, rgba(255, 77, 68, 0.26), transparent 55%);
+      background: radial-gradient(circle at center, rgba(255, 77, 68, 0.26), rgba(255, 77, 68, 0) 55%);
       animation: result-loss 520ms ease;
     }
 
@@ -542,7 +532,7 @@
     }
 
     .result-fx.push {
-      background: radial-gradient(circle at center, rgba(114, 198, 255, 0.22), transparent 50%);
+      background: radial-gradient(circle at center, rgba(114, 198, 255, 0.22), rgba(114, 198, 255, 0) 50%);
       animation: result-push 620ms ease;
     }
 
