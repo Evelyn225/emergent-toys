@@ -20,11 +20,22 @@
       --row-height: 260px;
       --kbd-height: 110px;
       --kbd-black-height: 68px;
-      --menu-accent: #ffb14a;
-      --menu-accent-strong: #ff7433;
-      --menu-text: rgba(255,236,206,0.92);
-      --menu-bg: rgba(16,9,5,0.9);
-      --menu-border: rgba(255,190,110,0.28);
+      /* Surfaces - neutral graphite */
+      --bg-base: #0c0d10;
+      --rack-face-hi: #26282d;
+      --rack-face-lo: #191b1e;
+      --rack-edge-inner: #383b41;
+      --rack-edge-outer: #52565e;
+      /* Menu chrome */
+      --menu-text: rgba(232,236,242,0.92);
+      --menu-text-dim: rgba(232,236,242,0.6);
+      --menu-bg: rgba(14,15,18,0.92);
+      --menu-bg-top: rgba(31,34,39,0.92);
+      --menu-border: rgba(255,255,255,0.13);
+      --menu-border-strong: rgba(255,255,255,0.34);
+      --menu-rule: rgba(255,255,255,0.1);
+      --menu-tile: rgba(255,255,255,0.05);
+      --menu-tile-hover: rgba(255,255,255,0.1);
       --panel-pad-x: clamp(3px, calc(var(--hp) * 0.3), 6px);
       --panel-pad-top: clamp(5px, calc(var(--hp) * 0.4), 8px);
       --panel-pad-bottom: clamp(6px, calc(var(--hp) * 0.5), 10px);
@@ -49,17 +60,9 @@
       overflow-x: hidden;
       overflow-y: hidden;
       height: 100vh;
-      background:
-        radial-gradient(ellipse at 50% 40%, rgba(60,35,10,0.5) 0%, transparent 70%),
-        repeating-linear-gradient(
-          108deg,
-          #1a0f05 0px, #221408 1px, #1c1005 2px, #2a1a0a 3px, #1a0f05 5px
-        ),
-        repeating-linear-gradient(
-          -72deg,
-          #1c1105 0px, #2a1a0a 1px, #1a0f05 3px, #221408 4px, #1c1105 6px
-        );
-      background-color: #1a0f05;
+      background-color: var(--bg-base);
+      background-image:
+        radial-gradient(ellipse 120% 70% at 50% 0%, rgba(140,160,190,0.06) 0%, transparent 62%);
       font-family: 'IBM Plex Mono', monospace;
       padding-left: 240px;
       padding-right: 14px;
@@ -72,13 +75,13 @@
       margin: 30px auto 20px;
       width: calc(var(--rack-hp) * var(--hp) + 24px);
       max-width: 99vw;
-      background: linear-gradient(180deg, #2a1a0a 0%, #1c1005 40%, #2a1a0a 100%);
+      background: linear-gradient(180deg, var(--rack-face-hi) 0%, var(--rack-face-lo) 40%, var(--rack-face-hi) 100%);
       border-radius: 10px;
       box-shadow:
-        0 0 0 4px #4a3015,
-        0 0 0 7px #6a4820,
+        0 0 0 4px var(--rack-edge-inner),
+        0 0 0 7px var(--rack-edge-outer),
         0 0 40px rgba(0,0,0,0.9),
-        inset 0 2px 4px rgba(255,200,100,0.1);
+        inset 0 2px 4px rgba(255,255,255,0.06);
       padding: 10px 12px 12px;
     }
 
@@ -446,11 +449,11 @@
       z-index: 850;
       border-radius: 14px;
       border: 1px solid var(--menu-border);
-      background: linear-gradient(180deg, rgba(38,20,10,0.92) 0%, var(--menu-bg) 100%);
+      background: linear-gradient(180deg, var(--menu-bg-top) 0%, var(--menu-bg) 100%);
       box-shadow:
         0 14px 30px rgba(0,0,0,0.45),
         inset 0 0 0 1px rgba(255,255,255,0.06),
-        inset 0 16px 24px rgba(255,165,80,0.08);
+        inset 0 16px 24px rgba(160,180,210,0.06);
       backdrop-filter: blur(5px);
       padding: 12px;
       display: grid;
@@ -458,7 +461,7 @@
       overflow: hidden;
     }
     .control-menu-head {
-      border-bottom: 1px solid rgba(255,185,120,0.14);
+      border-bottom: 1px solid var(--menu-rule);
       padding-bottom: 10px;
       display: grid;
       gap: 5px;
@@ -472,10 +475,10 @@
     #module-bay-toggle {
       width: 22px;
       height: 22px;
-      border: 1px solid rgba(255,198,130,0.35);
+      border: 1px solid var(--menu-border-strong);
       border-radius: 6px;
-      background: linear-gradient(180deg, rgba(255,182,94,0.18), rgba(35,20,10,0.88));
-      color: rgba(255,236,206,0.9);
+      background: var(--menu-tile);
+      color: var(--menu-text);
       font-family: 'IBM Plex Mono', monospace;
       font-size: 15px;
       line-height: 1;
@@ -488,8 +491,8 @@
       margin-top: 1px;
     }
     #module-bay-toggle:hover {
-      border-color: rgba(255,198,130,0.7);
-      background: linear-gradient(180deg, rgba(255,190,110,0.26), rgba(50,28,14,0.95));
+      border-color: rgba(255,255,255,0.55);
+      background: var(--menu-tile-hover);
     }
     #module-bay-toggle:active {
       transform: scale(0.96);
@@ -499,20 +502,20 @@
       font-size: 9px;
       letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: rgba(255,201,132,0.66);
+      color: var(--menu-text-dim);
     }
     .control-menu-title {
       font-family: 'Audiowide', cursive;
       font-size: 15px;
       letter-spacing: 0.04em;
       color: var(--menu-text);
-      text-shadow: 0 0 12px rgba(255,170,90,0.28);
+      text-shadow: 0 0 12px rgba(170,195,225,0.22);
     }
     #add-module-status {
       font-size: 9px;
       line-height: 1.45;
       letter-spacing: 0.03em;
-      color: rgba(240,228,208,0.64);
+      color: var(--menu-text-dim);
       min-height: 2.9em;
       transition: color 0.18s;
     }
@@ -534,10 +537,9 @@
       display: none;
     }
     #add-module-drawer button {
-      border: 1px solid rgba(255,198,130,0.2);
+      border: 1px solid var(--menu-border);
       border-radius: 8px;
-      background:
-        linear-gradient(180deg, rgba(255,192,120,0.14) 0%, rgba(31,18,10,0.84) 100%);
+      background: var(--menu-tile);
       color: var(--menu-text);
       padding: 8px 8px 9px;
       text-align: left;
@@ -550,10 +552,9 @@
     }
     #add-module-drawer button:hover {
       transform: translateY(-1px);
-      border-color: rgba(255,194,118,0.55);
+      border-color: var(--menu-border-strong);
       box-shadow: 0 5px 12px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.1);
-      background:
-        linear-gradient(180deg, rgba(255,183,94,0.22) 0%, rgba(42,23,12,0.9) 100%);
+      background: var(--menu-tile-hover);
     }
     #add-module-drawer button:active { transform: translateY(0) scale(0.98); }
     #add-module-drawer button .module-name {
@@ -563,10 +564,10 @@
     }
     #add-module-drawer button .module-hp {
       font-size: 9px;
-      color: rgba(255,226,182,0.62);
+      color: var(--menu-text-dim);
     }
     .control-menu-foot {
-      border-top: 1px solid rgba(255,185,120,0.16);
+      border-top: 1px solid var(--menu-rule);
       padding-top: 10px;
       display: grid;
       gap: 8px;
@@ -589,7 +590,7 @@
       font-size: 9px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: rgba(255,215,170,0.66);
+      color: var(--menu-text-dim);
     }
 
     /*  Clear patches button  */
