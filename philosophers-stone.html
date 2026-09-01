@@ -11,22 +11,21 @@
   <link rel="icon" type="image/png" sizes="16x16"
     href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
   <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
-  <title>Philosopher's Stone - Reaction-Diffusion</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <title>Reaction Diffusion</title>
   <style>
+    @font-face {
+      font-family: 'GrapeSoda';
+      src: url('GrapeSoda.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: block;
+    }
+
     :root {
-      --gold:       #c8963e;
-      --gold-bright: #e0b84e;
-      --gold-dim:   rgba(200, 148, 58, 0.32);
-      --gold-glow:  rgba(200, 148, 58, 0.14);
-      --rust:       rgba(160, 65, 52, 0.5);
-      --rust-border: rgba(160, 65, 52, 0.45);
-      --panel:      rgba(11, 7, 3, 0.96);
-      --text:       rgba(225, 205, 168, 0.92);
-      --text-dim:   rgba(210, 185, 145, 0.72);
-      --value:      #d4a843;
+      --c:       rgba(127, 233, 255, 0.88);
+      --c-mid:   rgba(127, 233, 255, 0.50);
+      --c-dim:   rgba(127, 233, 255, 0.30);
+      --c-faint: rgba(127, 233, 255, 0.13);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,190 +33,107 @@
     body {
       margin: 0;
       overflow: hidden;
-      background: #060402;
-      font-family: 'Cormorant Garamond', Georgia, serif;
+      background: #000;
     }
 
-    canvas { display: block; }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+    }
 
-    /* ── Controls panel ─────────────────────────── */
+    /* ── HUD ─────────────────────────────────────
+       No panel, no border, no glow. Bare pixel text
+       over the sim, like physarum. */
 
-    #controls {
+    #hud, #keys {
       position: fixed;
-      top: 12px;
-      left: 12px;
-      background: var(--panel);
-      border: 1px solid var(--gold-dim);
-      border-left: 2px solid rgba(200, 148, 58, 0.55);
-      border-radius: 1px 4px 4px 1px;
-      box-shadow:
-        0 0 48px var(--gold-glow),
-        0 8px 40px rgba(0,0,0,0.95),
-        inset 1px 0 0 rgba(200, 148, 58, 0.06);
-      padding: 14px 18px 16px 16px;
-      color: var(--text);
-      font-size: 13px;
+      left: 14px;
       z-index: 100;
-      max-width: 256px;
-      transition: width 0.2s ease, height 0.2s ease, padding 0.2s ease;
-    }
-
-    #controls.minimized {
-      width: 26px !important;
-      height: 26px !important;
-      min-width: unset !important;
-      min-height: unset !important;
-      padding: 0 !important;
-      overflow: hidden;
-      display: flex !important;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #controls.minimized #minimizeControlsBtn {
-      position: static;
-    }
-
-    #controls.minimized #controlsContent {
-      display: none !important;
-    }
-
-    /* Minimize button */
-    #minimizeControlsBtn {
-      background: none;
-      border: none;
-      color: var(--text-dim);
-      width: 18px;
-      height: 18px;
+      font-family: 'GrapeSoda', 'Courier New', monospace;
       font-size: 16px;
       line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      border-radius: 2px;
-      position: absolute;
-      top: 5px;
-      right: 6px;
-      cursor: pointer;
-      z-index: 101;
-      font-family: 'JetBrains Mono', monospace;
-      transition: color 0.15s;
+      color: var(--c);
+      text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
+      -webkit-font-smoothing: none;
+      font-smooth: never;
+      user-select: none;
     }
 
-    #minimizeControlsBtn:hover {
-      color: var(--gold);
+    #hud  { top: 14px; width: 186px; }
+    #keys { bottom: 14px; color: var(--c-mid); pointer-events: none; }
+
+    body.ui-hidden #hud,
+    body.ui-hidden #keys { display: none; }
+
+    .hud-title {
+      color: var(--c);
+      margin-bottom: 14px;
     }
 
-    /* Panel title */
-    .panel-title {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 17px;
-      font-weight: 600;
-      font-style: italic;
-      color: var(--gold-bright);
-      letter-spacing: 0.04em;
-      padding-right: 18px;
-      line-height: 1.2;
-      text-shadow: 0 0 24px rgba(200, 148, 58, 0.35);
+    .hud-title::after {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 11px;
+      margin-left: 5px;
+      vertical-align: -1px;
+      background: var(--c);
+      animation: blink 1.1s step-end infinite;
     }
 
-    .panel-glyph {
-      font-style: normal;
-      opacity: 0.7;
-      margin-right: 4px;
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0; }
     }
 
-    .panel-subtitle {
-      font-family: 'Cormorant Garamond', serif;
-      font-style: italic;
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      margin-top: 2px;
-    }
-
-    .panel-rule {
-      height: 1px;
-      background: linear-gradient(90deg, rgba(200, 148, 58, 0.45), transparent 80%);
-      margin: 10px 0 12px;
-    }
-
-    /* Control groups */
-    .control-group {
-      margin-bottom: 11px;
-    }
-
-    label {
+    .row {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      margin-bottom: 6px;
-      color: var(--text-dim);
-      font-family: 'Cormorant Garamond', serif;
-      font-style: italic;
-      font-size: 15px;
-      letter-spacing: 0.02em;
+      color: var(--c-mid);
+      margin-bottom: 7px;
     }
 
-    label .param-name {
-      flex: 1;
-    }
-
-    label .param-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-style: normal;
-      font-size: 12px;
-      color: var(--value);
-      letter-spacing: 0;
+    .row .v {
+      color: var(--c);
+      text-align: right;
       flex-shrink: 0;
-      margin-left: 8px;
+      margin-left: 10px;
     }
 
-    /* Range sliders */
+    .field + .field { margin-top: 13px; }
+
+    /* ── sliders: flat, square, pixel-sized ── */
+
     input[type="range"] {
-      width: 100%;
-      height: 3px;
       -webkit-appearance: none;
       appearance: none;
-      background: linear-gradient(90deg, rgba(200, 148, 58, 0.3), rgba(200, 148, 58, 0.1));
-      border-radius: 2px;
+      display: block;
+      width: 100%;
+      height: 2px;
+      background: var(--c-faint);
       outline: none;
-      cursor: pointer;
+      cursor: crosshair;
     }
 
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 13px;
-      height: 13px;
-      border-radius: 50%;
-      background: var(--gold);
-      cursor: pointer;
-      border: 1px solid rgba(225, 190, 100, 0.6);
-      box-shadow: 0 0 8px rgba(200, 148, 58, 0.55), 0 0 20px rgba(200, 148, 58, 0.2);
-      transition: box-shadow 0.15s, transform 0.1s;
-    }
-
-    input[type="range"]::-webkit-slider-thumb:hover {
-      box-shadow: 0 0 14px rgba(200, 148, 58, 0.85), 0 0 30px rgba(200, 148, 58, 0.3);
-      transform: scale(1.12);
-    }
-
-    input[type="range"]:active::-webkit-slider-thumb {
-      background: var(--gold-bright);
-      transform: scale(1.05);
+      width: 6px;
+      height: 12px;
+      border: 0;
+      border-radius: 0;
+      background: var(--c);
+      cursor: crosshair;
     }
 
     input[type="range"]::-moz-range-thumb {
-      width: 13px;
-      height: 13px;
-      border-radius: 50%;
-      background: var(--gold);
-      cursor: pointer;
-      border: 1px solid rgba(225, 190, 100, 0.6);
-      box-shadow: 0 0 8px rgba(200, 148, 58, 0.55);
+      width: 6px;
+      height: 12px;
+      border: 0;
+      border-radius: 0;
+      background: var(--c);
+      cursor: crosshair;
     }
 
     input[type="range"]::-moz-range-track {
@@ -225,86 +141,10 @@
       border: none;
     }
 
-    /* Reset button */
-    #resetBtn {
-      width: 100%;
-      padding: 7px 12px;
-      background: rgba(160, 65, 52, 0.1);
-      border: 1px solid var(--rust-border);
-      color: rgba(215, 170, 145, 0.82);
-      border-radius: 2px;
-      cursor: pointer;
-      font-family: 'Cormorant Garamond', serif;
-      font-style: italic;
-      font-size: 14px;
-      letter-spacing: 0.1em;
-      transition: background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s;
-      margin-top: 4px;
-    }
-
-    #resetBtn:hover {
-      background: rgba(160, 65, 52, 0.2);
-      border-color: rgba(200, 90, 70, 0.7);
-      color: rgba(235, 195, 170, 0.98);
-      box-shadow: 0 0 16px rgba(160, 65, 52, 0.2);
-    }
-
-    #resetBtn:active {
-      transform: scale(0.98);
-    }
-
-    /* ── Info panel ─────────────────────────────── */
-
-    #info {
-      position: fixed;
-      bottom: 12px;
-      left: 12px;
-      background: var(--panel);
-      border: 1px solid var(--gold-dim);
-      border-left: 2px solid rgba(200, 148, 58, 0.4);
-      border-radius: 1px 4px 4px 1px;
-      box-shadow: 0 0 32px var(--gold-glow), 0 6px 28px rgba(0,0,0,0.9);
-      padding: 12px 16px 13px 14px;
-      color: var(--text-dim);
-      font-family: 'Cormorant Garamond', serif;
-      font-style: italic;
-      font-size: 15px;
-      max-width: 290px;
-      line-height: 1.6;
-    }
-
-    #info strong, #info .info-label {
-      font-style: normal;
-      font-weight: 600;
-      color: rgba(215, 185, 130, 0.75);
-      letter-spacing: 0.04em;
-    }
-
-    /* Close button */
-    #closeInfoBtn {
-      background: none;
-      border: none;
-      color: var(--text-dim);
-      width: 18px;
-      height: 18px;
-      font-size: 15px;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      position: absolute;
-      top: 6px;
-      right: 8px;
-      cursor: pointer;
-      z-index: 101;
-      font-family: 'JetBrains Mono', monospace;
-      font-style: normal;
-      transition: color 0.15s;
-    }
-
-    #closeInfoBtn:hover {
-      color: var(--gold);
+    #keys div + div { margin-top: 7px; }
+    #keys b {
+      font-weight: normal;
+      color: var(--c);
     }
   </style>
 </head>
@@ -325,68 +165,40 @@
 
   <canvas id="canvas"></canvas>
 
-  <div id="controls">
-    <button id="minimizeControlsBtn">–</button>
-    <div id="controlsContent">
-      <div class="panel-title"><span class="panel-glyph">⚗</span>Philosopher's Stone</div>
-      <div class="panel-subtitle">reaction - diffusion</div>
-      <div class="panel-rule"></div>
+  <div id="hud">
+    <div class="hud-title">REACTION-DIFFUSION</div>
 
-      <div class="control-group">
-        <label>
-          <span class="param-name">Particle Count</span>
-          <span class="param-value"><span id="particleCount">500</span></span>
-        </label>
-        <input type="range" id="particleSlider" min="10" max="1000" value="500">
-      </div>
-      <div class="control-group">
-        <label>
-          <span class="param-name">Spawn Amount</span>
-          <span class="param-value"><span id="spawnAmountValue">5</span></span>
-        </label>
-        <input type="range" id="spawnAmountSlider" min="1" max="30" value="5">
-      </div>
-      <div class="control-group">
-        <label>
-          <span class="param-name">Particle Speed</span>
-          <span class="param-value"><span id="speedValue">1.0</span></span>
-        </label>
-        <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0">
-      </div>
-      <div class="control-group">
-        <label>
-          <span class="param-name">Diffusion Rate</span>
-          <span class="param-value"><span id="diffusionValue">0.25</span></span>
-        </label>
-        <input type="range" id="diffusionSlider" min="0.05" max="0.5" step="0.05" value="0.25">
-      </div>
-      <div class="control-group">
-        <label>
-          <span class="param-name">Reaction Rate</span>
-          <span class="param-value"><span id="reactionValue">0.10</span></span>
-        </label>
-        <input type="range" id="reactionSlider" min="0.01" max="0.9" step="0.01" value="0.1">
-      </div>
-      <div class="control-group">
-        <label>
-          <span class="param-name">Trail Decay</span>
-          <span class="param-value"><span id="decayValue">0.950</span></span>
-        </label>
-        <input type="range" id="decaySlider" min="0.85" max="0.999" step="0.001" value="0.95">
-      </div>
-      <button id="resetBtn">⟳ Reset Experiment</button>
+    <div class="field">
+      <div class="row"><span>PARTICLES</span><span class="v" id="particleCount">500</span></div>
+      <input type="range" id="particleSlider" min="10" max="1000" value="500">
+    </div>
+    <div class="field">
+      <div class="row"><span>SPAWN</span><span class="v" id="spawnAmountValue">5</span></div>
+      <input type="range" id="spawnAmountSlider" min="1" max="30" value="5">
+    </div>
+    <div class="field">
+      <div class="row"><span>SPEED</span><span class="v" id="speedValue">1.0</span></div>
+      <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0">
+    </div>
+    <div class="field">
+      <div class="row"><span>DIFFUSION</span><span class="v" id="diffusionValue">0.25</span></div>
+      <input type="range" id="diffusionSlider" min="0.05" max="0.5" step="0.05" value="0.25">
+    </div>
+    <div class="field">
+      <div class="row"><span>REACTION</span><span class="v" id="reactionValue">0.10</span></div>
+      <input type="range" id="reactionSlider" min="0.01" max="0.9" step="0.01" value="0.1">
+    </div>
+    <div class="field">
+      <div class="row"><span>DECAY</span><span class="v" id="decayValue">0.950</span></div>
+      <input type="range" id="decaySlider" min="0.85" max="0.999" step="0.001" value="0.95">
     </div>
   </div>
 
-  <div id="info">
-    <button id="closeInfoBtn">×</button>
-    <strong>Reaction Diffusion Simulation</strong><br>
-    Click and drag to add particles. Particles leave trails (Chemical B) that react with particles (Chemical A),
-    creating emergent patterns.<br><br>
-    <span class="info-label">Controls:</span><br>
-    · Click / drag to spawn particles<br>
-    · Shift+Click for anti-particles<br>
-    · Adjust parameters to explore different behaviours
+  <div id="keys">
+    <div><b>[DRAG]</b> SPAWN</div>
+    <div><b>[SHIFT+DRAG]</b> ANTI</div>
+    <div><b>[R]</b> RESET</div>
+    <div><b>[H]</b> HIDE UI</div>
   </div>
 
   <script>
@@ -430,7 +242,6 @@
         this.vy = (Math.random() - 0.5) * 4;
         this.angle = Math.random() * Math.PI * 2;
         this.isAnti = isAnti;
-        this.hue = Math.random() * 360;
         this.trailSize = isAnti ? 0.5 : 1;
       }
 
@@ -518,15 +329,12 @@
         }
       }
 
+      // Square 3px blocks in the two chemistry colours - no antialiased
+      // circles, no rainbow hues, so the particles read as part of the
+      // same pixel grid the trails are drawn on.
       draw() {
-        if (this.isAnti) {
-          ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, 0.6)`;
-        } else {
-          ctx.fillStyle = `hsla(${this.hue}, 100%, 60%, 0.7)`;
-        }
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = this.isAnti ? 'rgba(255, 120, 210, 0.85)' : 'rgba(150, 250, 255, 0.9)';
+        ctx.fillRect(Math.floor(this.x) - 1, Math.floor(this.y) - 1, 3, 3);
       }
     }
 
@@ -586,14 +394,17 @@
           const idx = x + y * gridWidth;
           const b = gridB[idx];
           let r = 0, g = 0, bl = 0;
+          // No brightness floor on either channel - a floor on the positive
+          // side used to wash the whole field green, since diffusion leaves
+          // a trace of B almost everywhere. Both ramps now fall to black.
           if (b > 0) {
-            r = Math.floor(b * 100);
-            g = Math.floor(b * 200 + 50);
+            r = Math.floor(b * 70);
+            g = Math.floor(b * 205);
             bl = Math.floor(b * 255);
           } else if (b < 0) {
             r = Math.floor(-b * 255);
-            g = Math.floor(-b * 100);
-            bl = Math.floor(-b * 200);
+            g = Math.floor(-b * 80);
+            bl = Math.floor(-b * 195);
           }
           for (let dy = 0; dy < gridResolution; dy++) {
             for (let dx = 0; dx < gridResolution; dx++) {
@@ -687,112 +498,96 @@
       spawnParticlesAt(e.clientX, e.clientY, params.spawnAmount, true);
     });
 
-    document.getElementById('particleSlider').addEventListener('input', (e) => {
-      const newCount = parseInt(e.target.value);
-      const oldCount = particles.length;
-      document.getElementById('particleCount').textContent = newCount;
+    // ── slider wiring ──────────────────────────
+    // Each track paints its own fill, so the bar doubles as a readout
+    // without any extra chrome.
+    function paintTrack(el) {
+      const min = parseFloat(el.min), max = parseFloat(el.max);
+      const pct = ((parseFloat(el.value) - min) / (max - min)) * 100;
+      el.style.background =
+        `linear-gradient(to right, var(--c-mid) 0 ${pct}%, var(--c-faint) ${pct}% 100%)`;
+    }
 
-      if (newCount > oldCount) {
-        for (let i = 0; i < newCount - oldCount; i++) {
-          particles.push(new Particle(
-            Math.random() * canvas.width,
-            Math.random() * canvas.height,
-            Math.random() < 0.25
-          ));
+    function bindSlider(id, readoutId, format, apply) {
+      const el = document.getElementById(id);
+      const out = document.getElementById(readoutId);
+      const sync = () => {
+        const v = parseFloat(el.value);
+        out.textContent = format(v);
+        apply(v);
+        paintTrack(el);
+      };
+      el.addEventListener('input', sync);
+      return sync;
+    }
+
+    bindSlider('particleSlider', 'particleCount',
+      v => String(v),
+      (v) => {
+        const newCount = Math.round(v);
+        const oldCount = particles.length;
+        if (newCount > oldCount) {
+          for (let i = 0; i < newCount - oldCount; i++) {
+            particles.push(new Particle(
+              Math.random() * canvas.width,
+              Math.random() * canvas.height,
+              Math.random() < 0.25
+            ));
+          }
+        } else if (newCount < oldCount) {
+          particles = particles.slice(0, newCount);
         }
-      } else if (newCount < oldCount) {
-        particles = particles.slice(0, newCount);
-      }
-      params.particleCount = newCount;
-    });
+        params.particleCount = newCount;
+      });
 
-    document.getElementById('speedSlider').addEventListener('input', (e) => {
-      params.speedMultiplier = parseFloat(e.target.value);
-      document.getElementById('speedValue').textContent = params.speedMultiplier.toFixed(1);
-    });
+    const syncSpawn = bindSlider('spawnAmountSlider', 'spawnAmountValue',
+      v => String(v), v => { params.spawnAmount = Math.round(v); });
 
-    document.getElementById('diffusionSlider').addEventListener('input', (e) => {
-      params.diffusionB = parseFloat(e.target.value);
-      document.getElementById('diffusionValue').textContent = params.diffusionB.toFixed(2);
-    });
+    const syncSpeed = bindSlider('speedSlider', 'speedValue',
+      v => v.toFixed(1), v => { params.speedMultiplier = v; });
 
-    document.getElementById('reactionSlider').addEventListener('input', (e) => {
-      params.reactionRate = parseFloat(e.target.value);
-      document.getElementById('reactionValue').textContent = params.reactionRate.toFixed(2);
-    });
+    const syncDiffusion = bindSlider('diffusionSlider', 'diffusionValue',
+      v => v.toFixed(2), v => { params.diffusionB = v; });
 
-    document.getElementById('decaySlider').addEventListener('input', (e) => {
-      params.decayRate = parseFloat(e.target.value);
-      document.getElementById('decayValue').textContent = params.decayRate.toFixed(3);
-    });
+    const syncReaction = bindSlider('reactionSlider', 'reactionValue',
+      v => v.toFixed(2), v => { params.reactionRate = v; });
 
-    document.getElementById('resetBtn').addEventListener('click', () => {
+    const syncDecay = bindSlider('decaySlider', 'decayValue',
+      v => v.toFixed(3), v => { params.decayRate = v; });
+
+    function resetSimulation() {
       gridA.fill(0);
       gridB.fill(0);
       particles = [];
       initializeParticles();
-    });
+    }
 
-    // Spawn Amount slider logic
-    const spawnAmountSlider = document.getElementById('spawnAmountSlider');
-    const spawnAmountValue = document.getElementById('spawnAmountValue');
-    spawnAmountSlider.addEventListener('input', (e) => {
-      params.spawnAmount = parseInt(e.target.value);
-      spawnAmountValue.textContent = params.spawnAmount;
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'r' || e.key === 'R') resetSimulation();
+      if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('ui-hidden');
     });
 
     function initializeControls() {
-      document.getElementById('particleSlider').value = 500;
-      document.getElementById('speedSlider').value = 1.0;
-      document.getElementById('diffusionSlider').value = 0.25;
-      document.getElementById('reactionSlider').value = 0.10;
-      document.getElementById('decaySlider').value = 0.950;
-      document.getElementById('spawnAmountSlider').value = 5;
-      document.getElementById('particleCount').textContent = 500;
-      document.getElementById('speedValue').textContent = (1.0).toFixed(1);
-      document.getElementById('diffusionValue').textContent = (0.25).toFixed(2);
-      document.getElementById('reactionValue').textContent = (0.10).toFixed(2);
-      document.getElementById('decayValue').textContent = (0.950).toFixed(3);
-      document.getElementById('spawnAmountValue').textContent = 5;
+      const defaults = {
+        particleSlider: 500,
+        spawnAmountSlider: 5,
+        speedSlider: 1.0,
+        diffusionSlider: 0.25,
+        reactionSlider: 0.10,
+        decaySlider: 0.950
+      };
+      for (const [id, value] of Object.entries(defaults)) {
+        document.getElementById(id).value = value;
+      }
+      // particleCount is applied by initializeParticles(), not the slider sync
       params.particleCount = 500;
-      params.speedMultiplier = 1.0;
-      params.diffusionB = 0.25;
-      params.reactionRate = 0.10;
-      params.decayRate = 0.950;
-      params.spawnAmount = 5;
+      syncSpawn(); syncSpeed(); syncDiffusion(); syncReaction(); syncDecay();
+      paintTrack(document.getElementById('particleSlider'));
+      document.getElementById('particleCount').textContent = 500;
     }
 
     initializeControls();
     initializeParticles();
-
-    // Add event listeners for close and minimize buttons after DOM is loaded
-    window.addEventListener('DOMContentLoaded', function () {
-      // Info panel close button
-      const infoPanel = document.getElementById('info');
-      const closeInfoBtn = document.getElementById('closeInfoBtn');
-      if (closeInfoBtn && infoPanel) {
-        closeInfoBtn.addEventListener('click', function () {
-          infoPanel.style.display = 'none';
-        });
-      }
-      // Controls panel minimize/maximize
-      const controlsPanel = document.getElementById('controls');
-      const controlsContent = document.getElementById('controlsContent');
-      const minimizeBtn = document.getElementById('minimizeControlsBtn');
-      let controlsMinimized = false;
-      if (minimizeBtn && controlsPanel && controlsContent) {
-        minimizeBtn.addEventListener('click', function () {
-          controlsMinimized = !controlsMinimized;
-          if (controlsMinimized) {
-            controlsPanel.classList.add('minimized');
-            minimizeBtn.textContent = '+';
-          } else {
-            controlsPanel.classList.remove('minimized');
-            minimizeBtn.textContent = '–';
-          }
-        });
-      }
-    });
 
     animate();
   </script>
