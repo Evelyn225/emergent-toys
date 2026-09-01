@@ -42,6 +42,10 @@ async function boot(backendKind) {
   // The `var` declaration this getter reads lives outside the slice, so set
   // the global directly. fsChooseBackend assigns it the same way at boot.
   ctx.fsActiveBackendKind = backendKind;
+  // Same reason: both handlers now bail out while a factory reset is wiping
+  // storage, and that flag is another top-level `var` the slice does not carry.
+  // fsBeginFactoryReset sets it the same way.
+  ctx.osFactoryResetInProgress = false;
   ctx.document.visibilityState = 'visible';
 
   const backend = ctx.createMemStorage();
@@ -115,4 +119,36 @@ test('the unload snapshot still writes under the localStorage backend', async ()
   // best save that path has. Gating the handler must not take it away.
   const saved = JSON.parse(ctx.localStorage.getItem('sleepOS-fs'));
   assert.strictEqual(saved.files['NEW.txt'], 'unsaved');
+});
+
+// ── The factory reset guard ──────────────────────────────────────
+// performFactoryReset (os/shutdown.js) deletes the database and empties
+// localStorage and then calls location.replace, which fires visibilitychange
+// and beforeunload AFTER the wipe. Both handlers above would happily write the
+// old session straight back out, and the "fresh install" would boot into the
+// filesystem the player just asked to destroy. These two are what make the
+// reset actually reset.
+test('a flush on hidden does nothing once a factory reset has started', async () => {
+  const { ctx, backend } = await boot('idb');
+  await ctx.vfsWriteFile('NOTES.txt', 'doomed', '');
+  assert.strictEqual(ctx.vfsHasPendingWrites(), true);
+
+  ctx.osFactoryResetInProgress = true;
+  ctx.document.visibilityState = 'hidden';
+  ctx.document.dispatchEvent({ type: 'visibilitychange' });
+  await settled();
+
+  assert.strictEqual(backend._snapshot, null,
+    'a commit here recreates the database the reset just deleted');
+});
+
+test('the unload snapshot does nothing once a factory reset has started', async () => {
+  const { ctx } = await boot('local');
+  await ctx.vfsWriteFile('NEW.txt', 'doomed', '');
+
+  ctx.osFactoryResetInProgress = true;
+  ctx.dispatchEvent({ type: 'beforeunload' });
+
+  assert.strictEqual(ctx.localStorage.getItem('sleepOS-fs'), null,
+    'a snapshot here writes the wiped filesystem back into localStorage');
 });
