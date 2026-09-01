@@ -137,29 +137,18 @@
       <span class="sm-icon"><img class="os-icon" src="os/icons/file_lines-0.png" alt="" draggable="false"></span><span>Welcome</span>
     </div>
     <div class="sm-sep"></div>
-    <div class="sm-item" onclick="closeStart();openNotepad()">
-      <span class="sm-icon"><img class="os-icon" src="os/icons/notepad-1.png" alt="" draggable="false"></span><span>Notepad</span>
-    </div>
+    <!-- Essentials only. This deliberately does NOT mirror the desktop: every
+         app has an icon out there, and a menu that repeats all of them is a
+         second copy of the desktop rather than a way to get anywhere. What is
+         left is the four that are awkward to reach any other way - the file
+         browser, the two system tools, and Settings - plus the four session
+         actions below. Notepad, Terminal, Browser, Defragmenter, Calculator
+         and Minesweeper are all on the desktop and in Run... -->
     <div class="sm-item" onclick="closeStart();openExplorer()">
       <span class="sm-icon"><img class="os-icon" src="os/icons/directory_open_file_mydocs-0.png" alt="" draggable="false"></span><span>File Explorer</span>
     </div>
-    <div class="sm-item" onclick="closeStart();openTerminal()">
-      <span class="sm-icon"><img class="os-icon" src="os/icons/console_prompt-0.png" alt="" draggable="false"></span><span>Terminal</span>
-    </div>
-    <div class="sm-item" onclick="closeStart();openBrowser()">
-      <span class="sm-icon"><img class="os-icon" src="os/icons/browser.png" alt="" draggable="false"></span><span>Browser</span>
-    </div>
     <div class="sm-item" onclick="closeStart();openSysmon()">
       <span class="sm-icon"><img class="os-icon" src="os/icons/chart1-4.png" alt="" draggable="false"></span><span>System Monitor</span>
-    </div>
-    <div class="sm-item" onclick="closeStart();openDefrag()">
-      <span class="sm-icon"><img class="os-icon" src="os/icons/clean_drive.png" alt="" draggable="false"></span><span>Defragmenter</span>
-    </div>
-    <div class="sm-item" onclick="closeStart();openCalculator()">
-      <span class="sm-icon"><img class="os-icon" src="os/icons/calculator-0.png" alt="" draggable="false"></span><span>Calculator</span>
-    </div>
-    <div class="sm-item" onclick="closeStart();openMinesweeper()">
-      <span class="sm-icon"><img class="os-icon" src="os/icons/minesweeper.png" alt="" draggable="false"></span><span>Minesweeper</span>
     </div>
     <div class="sm-item" onclick="closeStart();openRegedit()">
       <span class="sm-icon"><img class="os-icon" src="os/icons/regedit-0.png" alt="" draggable="false"></span><span>Registry Editor</span>

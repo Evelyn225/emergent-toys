@@ -355,15 +355,14 @@ test('MINESWEEPER.exe is a real file that DIR lists and the terminal can run', a
   });
 });
 
-test('it is reachable from the desktop, the Start menu and Run...', async () => {
+// Not the Start menu: that is now the essentials only (File Explorer, System
+// Monitor, Registry Editor, Settings plus the session actions), and a game is
+// not one of them. The desktop icon and Run... are the two routes in.
+test('it is reachable from the desktop and Run...', async () => {
   await withGame(async page => {
     const labels = await page.evaluate(() =>
       [...document.querySelectorAll('#icons-layer .desktop-icon .di-name')].map(n => n.textContent.trim()));
     assert.ok(labels.includes('MINESWEEPER.exe'), 'desktop icons: ' + labels.join(', '));
-
-    const items = await page.evaluate(() =>
-      [...document.querySelectorAll('#sm-items .sm-item')].map(i => i.textContent.trim()));
-    assert.ok(items.includes('Minesweeper'), 'Start menu: ' + items.join(', '));
 
     // Run... resolves it, and by its Winmine name too.
     await page.evaluate(() => { closeWin('minesweeper'); });

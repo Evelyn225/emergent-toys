@@ -318,14 +318,54 @@ test('closing a minimized window does not file it away at zero size', async () =
 
 // ── The Start menu ───────────────────────────────────────────────
 
-test('every app on the desktop is also in the Start menu', async () => {
+// The menu is deliberately NOT a mirror of the desktop. It briefly was, and a
+// menu that repeats every icon already on screen is a second copy of the
+// desktop rather than a way to get anywhere. Asserted as an exact list, in
+// order, because "contains" would not catch the drift this is guarding against
+// - the failure mode here is items creeping back in, not going missing.
+test('the Start menu holds the essentials and nothing else', async () => {
   await withDesktop({}, async page => {
     const items = await page.evaluate(() =>
       [...document.querySelectorAll('#sm-items .sm-item')].map(i => i.textContent.trim()));
-    // Browser and Defrag were on the desktop and in Run... but missing here,
-    // which is the one menu a non-technical visitor opens first.
-    for (const expected of ['Welcome', 'Browser', 'Defragmenter', 'System Monitor', 'Minesweeper', 'Settings']) {
-      assert.ok(items.includes(expected), 'Start menu is missing ' + expected + '; it has: ' + items.join(', '));
+    assert.deepStrictEqual(items, [
+      'Welcome',
+      'File Explorer', 'System Monitor', 'Registry Editor', 'Settings',
+      'Run...',
+      'Return to Eve Net',
+      'Shut Down...',
+    ]);
+  });
+});
+
+// The other half: trimming the menu must not have stranded anything. Every app
+// that came out of it has to still be one double-click away on the desktop, and
+// still resolvable from Run... - which is the whole reason it was safe to cut.
+test('every app dropped from the Start menu is still on the desktop and in Run...', async () => {
+  await withDesktop({}, async page => {
+    const dropped = [
+      { label: 'NOTEPAD.exe', run: 'notepad', win: /notepad/i },
+      { label: 'TERMINAL.exe', run: 'terminal', win: /terminal/i },
+      { label: 'BROWSER.exe', run: 'browser', win: /browser/i },
+      { label: 'DEFRAG.exe', run: 'defrag', win: /defrag/i },
+      { label: 'CALC.exe', run: 'calc', win: /calc/i },
+      { label: 'MINESWEEPER.exe', run: 'minesweeper', win: /minesweeper/i },
+    ];
+    const icons = await page.evaluate(() =>
+      [...document.querySelectorAll('#icons-layer .desktop-icon .di-name')].map(n => n.textContent.trim()));
+    for (const app of dropped) {
+      assert.ok(icons.includes(app.label),
+        app.label + ' left the Start menu and is not on the desktop either; icons: ' + icons.join(', '));
+    }
+    for (const app of dropped) {
+      await page.evaluate(() => { Object.keys(wins).forEach(k => closeWin(k)); });
+      await page.evaluate(() => openRunDialog());
+      await page.waitForSelector('#win-run-dialog');
+      await page.fill('#run-input', app.run);
+      await page.click('#win-run-dialog .dlg-btn.primary');
+      await page.waitForTimeout(400);
+      const opened = await page.evaluate(() => Object.keys(wins));
+      assert.ok(opened.some(k => app.win.test(k)),
+        'Run... of "' + app.run + '" opened nothing; windows: ' + opened.join(', '));
     }
   });
 });
