@@ -104,6 +104,111 @@ function buildKillDenialMessage(pid) {
   const builtIn = findBuiltInProcess(pid);
   return builtIn ? `${pid} is a system process. Use TASKKILL.` : null;
 }
+// ── Tab completion ────────────────────────────────────────────────
+// Splits an argument prefix into the directory part and the part being
+// completed. The directory half is kept VERBATIM rather than normalized:
+// it is going back into the input line, so the user's own separator and
+// casing have to survive. Only the lookup is normalized.
+function splitCompletionPrefix(prefix) {
+  const i = Math.max(prefix.lastIndexOf('\\'), prefix.lastIndexOf('/'));
+  return i < 0
+    ? { dirText: '', base: prefix }
+    : { dirText: prefix.slice(0, i + 1), base: prefix.slice(i + 1) };
+}
+
+function completionCompare(a, b) {
+  const la = String(a).toLowerCase(), lb = String(b).toLowerCase();
+  return la < lb ? -1 : la > lb ? 1 : 0;
+}
+
+// Completion for the terminal input line, cmd.exe style: the caller cycles
+// through `matches` on repeated Tab rather than being shown a list.
+//
+// Top-level and dependency-injected for the same reason runPipelineStages is:
+// node cannot reach into openTerminal's closure, and everything here is pure
+// once cwd, PATH and the two directory readers are handed in. The CYCLE
+// itself is state and deliberately does NOT live here - the keydown handler
+// owns which candidate is currently showing.
+//
+// Returns null when there is nothing to complete, so the handler can let the
+// keypress fall through untouched. Otherwise `matches` are complete
+// replacement strings (directory prefix and trailing separator included) for
+// the span `start`..`end` of `line`, which is why the caret can sit in the
+// middle of a line and only the token under it changes.
+function buildTerminalCompletion(line, caret, deps) {
+  const text = String(line == null ? '' : line);
+  const pos = Math.max(0, Math.min(Number(caret) || 0, text.length));
+  const head = text.slice(0, pos);
+
+  // The token under the caret runs back to the nearest separator. Pipes and
+  // redirects are boundaries as well as whitespace because the command parser
+  // treats them as boundaries: completing across one would offer a candidate
+  // for a token the parser does not think exists.
+  let start = pos;
+  while (start > 0 && !/[\s|<>]/.test(head[start - 1])) start--;
+  const prefix = head.slice(start);
+  const before = head.slice(0, start);
+
+  // A command sits at the head of the line or immediately after a pipe.
+  // Everything else names a file - including a redirect target, which is why
+  // `DIR > REA<Tab>` completes README.txt rather than a command.
+  const segment = before.slice(before.lastIndexOf('|') + 1);
+  const isCommand = !segment.trim();
+
+  if (isCommand) {
+    // A bare Tab on an empty command position is inert. cmd.exe would list
+    // the directory here; offering every builtin instead is noise, and
+    // offering the directory would complete a filename in a position where
+    // only a program name can run.
+    if (!prefix) return null;
+    const seen = new Set();
+    const names = [];
+    const add = raw => {
+      const name = String(raw);
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      names.push(name);
+    };
+    (deps.commandNames() || []).forEach(add);
+    // cwd first, then PATH - the same order programResolve searches, so a
+    // name that completes is a name that would actually run.
+    const seenDir = new Set();
+    [deps.cwd || ''].concat(deps.pathDirs() || []).forEach(raw => {
+      const dir = deps.normalizeDir(raw);
+      if (seenDir.has(dir)) return;
+      seenDir.add(dir);
+      (deps.programNames(dir) || []).forEach(add);
+    });
+    const lower = prefix.toLowerCase();
+    const hits = names.filter(n => n.toLowerCase().startsWith(lower)).sort(completionCompare);
+    return hits.length ? { matches: hits.map(n => n + ' '), start, end: pos } : null;
+  }
+
+  const { dirText, base } = splitCompletionPrefix(prefix);
+  const absolute = /^(?:[A-Za-z]:|[\\/])/.test(dirText);
+  const joined = !dirText ? (deps.cwd || '')
+    : absolute ? dirText
+    : (deps.cwd ? deps.cwd + '\\' + dirText : dirText);
+  const lookupDir = deps.normalizeDir(joined);
+  if (!deps.dirExists(lookupDir)) return null;
+
+  // CD is the one command whose argument cannot be a file, and completing one
+  // there would only ever produce a path that errors.
+  const cmdWord = (segment.trim().split(/\s+/)[0] || '').toLowerCase();
+  const entries = (deps.listDir(lookupDir) || [])
+    .filter(e => cmdWord !== 'cd' || e.type === 'dir');
+
+  const lower = base.toLowerCase();
+  const sep = dirText.includes('/') && !dirText.includes('\\') ? '/' : '\\';
+  const hits = entries
+    .filter(e => String(e.name).toLowerCase().startsWith(lower))
+    .sort((a, b) => completionCompare(a.name, b.name));
+  return hits.length
+    ? { matches: hits.map(e => dirText + e.name + (e.type === 'dir' ? sep : ' ')), start, end: pos }
+    : null;
+}
+
 function openTerminal(startDir, initialCommand) {
   if (!mkWin({ id:'terminal', title:'TERMINAL.exe - Command Prompt', icon:'icon:terminal', w:520, h:320, x:140, y:90, menubar:false, statusbar:false })) {
     if (startDir && _termNav) _termNav(startDir);
@@ -152,6 +257,10 @@ function openTerminal(startDir, initialCommand) {
   print('');
 
   let cmdHistory = [], histIdx = -1;
+  // The Tab cycle's position. Null whenever the input has been touched by
+  // anything other than Tab, so the next press recomputes rather than
+  // cycling through candidates for a prefix that is no longer on the line.
+  let tabCycle = null;
   let cwd = startDir ? startDir.toUpperCase() : ''; // '' = root, 'DOCS' = DOCS dir, etc.
   // The environment is the terminal PROCESS's, not the terminal WINDOW's.
   // shellVars is a live reference into the kernel process table, so SET, INC,
@@ -663,6 +772,10 @@ function openTerminal(startDir, initialCommand) {
       '  NOTEPAD [file]      - open Notepad (optionally open a file)',
       '  START [program]     - run an executable or project',
       '  EXIT                - close terminal',
+      '',
+      'Completion:',
+      '  TAB                 - complete the word at the cursor; press again to cycle',
+      '  SHIFT+TAB           - cycle backwards',
       '',
       'Pipes and redirection:',
       '  DIR | GREP txt',
@@ -1313,6 +1426,31 @@ function openTerminal(startDir, initialCommand) {
     await runTerminalCommand(raw, { recordHistory: true });
   };
 
+  // Everything buildTerminalCompletion needs, read fresh on every Tab so the
+  // completer sees the current directory and the current PATH rather than
+  // whatever they were when the window opened. programsInDir contributes each
+  // program's aliases as well as its name: `minesweeper` and `welcome` are
+  // typeable and run, so completing only the literal filenames would hide
+  // half of what works.
+  function completionDeps() {
+    return {
+      cwd,
+      commandNames: () => Object.keys(CMDS),
+      programNames: dir => {
+        const names = [];
+        programsInDir(dir).forEach(entry => {
+          names.push(entry.name);
+          (entry.aliases || []).forEach(alias => names.push(alias));
+        });
+        return names;
+      },
+      pathDirs: () => programPathDirs(shellVars.PATH),
+      listDir: dir => vfsListSync(dir),
+      dirExists: dir => vfsDirExistsSync(dir),
+      normalizeDir: vfsNormalizeDir,
+    };
+  }
+
   inp.addEventListener('keydown', async (e) => {
     if (pendingRead) {
       if (e.ctrlKey && !e.altKey && !e.metaKey && String(e.key).toLowerCase() === 'c') {
@@ -1322,7 +1460,10 @@ function openTerminal(startDir, initialCommand) {
         }
         return;
       }
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      // Tab joins the arrows here: an INPUT prompt is a line of prose, not a
+      // command line, so there is nothing to complete - and letting the
+      // keypress through would move focus out of the terminal mid-prompt.
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Tab') {
         e.preventDefault();
         e.stopImmediatePropagation();
         return;
@@ -1363,6 +1504,45 @@ function openTerminal(startDir, initialCommand) {
       e.stopImmediatePropagation();
       histIdx = Math.max(-1, histIdx - 1);
       inp.value = histIdx < 0 ? '' : cmdHistory[cmdHistory.length - 1 - histIdx];
+      return;
+    }
+
+    // cmd.exe-style completion: Tab cycles forward through the candidates in
+    // place, Shift+Tab back. No candidate list is printed - the cycle IS the
+    // list. Always swallowed, even when there is nothing to complete, because
+    // the browser default is to move focus off the input.
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (activeCommandController) return;
+      // The cycle continues only if the input still holds exactly what the
+      // last Tab put there. Any edit, click or arrow in between changes one of
+      // the two and silently drops it, which is what stops a stale candidate
+      // list from being applied to a prefix the user has since retyped.
+      const continuing = tabCycle
+        && tabCycle.applied === inp.value
+        && tabCycle.appliedCaret === inp.selectionStart;
+      if (!continuing) {
+        const found = buildTerminalCompletion(inp.value, inp.selectionStart, completionDeps());
+        tabCycle = found
+          ? { matches: found.matches, start: found.start, end: found.end, source: inp.value, index: null }
+          : null;
+      }
+      if (!tabCycle) return;
+      const count = tabCycle.matches.length;
+      tabCycle.index = tabCycle.index === null
+        ? (e.shiftKey ? count - 1 : 0)
+        : (tabCycle.index + (e.shiftKey ? -1 : 1) + count) % count;
+      // Rebuilt from `source` rather than from the current value: the previous
+      // candidate is still sitting in the input, and splicing over it would
+      // need a second span to track. The original line never moves.
+      const match = tabCycle.matches[tabCycle.index];
+      const value = tabCycle.source.slice(0, tabCycle.start) + match + tabCycle.source.slice(tabCycle.end);
+      const caret = tabCycle.start + match.length;
+      inp.value = value;
+      inp.setSelectionRange(caret, caret);
+      tabCycle.applied = value;
+      tabCycle.appliedCaret = caret;
       return;
     }
 
