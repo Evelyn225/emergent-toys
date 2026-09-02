@@ -14816,7 +14816,7 @@ function openTerminal(startDir, initialCommand) {
       '  OPEN [file]         - open a file (image/video in viewer, text in editor)',
       '  RUN <file> [args]   - execute a .script file',
       '  NOTEPAD [file]      - open Notepad (optionally open a file)',
-      '  START [program]     - run an executable or project',
+      '  START [program]     - run an executable',
       '  EXIT                - close terminal',
       '',
       'Completion:',
@@ -14835,7 +14835,6 @@ function openTerminal(startDir, initialCommand) {
       'You can also type executables directly:',
       '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
       '  welcome.readme, void.tmp, daemon.core, ?????.exe',
-      '  or any project name (try: fireworks, fluid, ...)',
       '  Programs are found in the current directory first, then along PATH.',
     ];
   }
