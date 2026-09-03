@@ -315,7 +315,7 @@ function paintFloodFill(pixels, w, h, x, y, rgba, tolerance) {
 //      expect these ops" is a real assertion; "it did not throw" is not.
 //   2. Randomness is injected through st.rng, so a splatter is reproducible.
 //   3. The options bar previews itself - each variant button runs its own
-//      generator on a 24x24 offscreen canvas, so the button art IS the
+//      generator on a 22x22 offscreen canvas, so the button art IS the
 //      behaviour and cannot go stale as variants are tuned.
 //
 // seg = { x0, y0, x1, y1, index }   index is the segment number within the

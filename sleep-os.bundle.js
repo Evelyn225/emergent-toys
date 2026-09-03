@@ -18127,7 +18127,7 @@ function paintFloodFill(pixels, w, h, x, y, rgba, tolerance) {
 //      expect these ops" is a real assertion; "it did not throw" is not.
 //   2. Randomness is injected through st.rng, so a splatter is reproducible.
 //   3. The options bar previews itself - each variant button runs its own
-//      generator on a 24x24 offscreen canvas, so the button art IS the
+//      generator on a 22x22 offscreen canvas, so the button art IS the
 //      behaviour and cannot go stale as variants are tuned.
 //
 // seg = { x0, y0, x1, y1, index }   index is the segment number within the
@@ -18589,7 +18589,7 @@ function paintSyncPalette() {
 // The options bar draws each variant by RUNNING IT. A hand-drawn icon per
 // variant would be 40-odd more pieces of art to keep in step with behaviour
 // that is still being tuned, and the first thing to go stale. This cannot: the
-// button art is the brush's actual output on a 24x24 canvas.
+// button art is the brush's actual output on a 22x22 canvas.
 function paintRenderOptionsBar() {
   const host = document.getElementById('paint-options');
   if (!host) return;

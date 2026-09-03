@@ -140,11 +140,15 @@ test('every option button previews itself by running its own generator', async (
     const inked = await page.evaluate(() => {
       paintSelectTool('pencil');
       // A preview that renders nothing is the failure mode here - a blank row of
-      // buttons looks deliberate and tells you nothing is wrong.
+      // buttons looks deliberate and tells you nothing is wrong. The preview's
+      // background is an opaque white fill, so alpha is 255 everywhere even when
+      // nothing was drawn - count pixels that differ from white instead.
       return [...document.querySelectorAll('.paint-opt canvas')].map(c => {
         const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
         let n = 0;
-        for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] !== 255 || d[i + 1] !== 255 || d[i + 2] !== 255) n++;
+        }
         return n;
       });
     });

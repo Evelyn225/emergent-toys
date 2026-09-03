@@ -380,7 +380,7 @@ function paintSyncPalette() {
 // The options bar draws each variant by RUNNING IT. A hand-drawn icon per
 // variant would be 40-odd more pieces of art to keep in step with behaviour
 // that is still being tuned, and the first thing to go stale. This cannot: the
-// button art is the brush's actual output on a 24x24 canvas.
+// button art is the brush's actual output on a 22x22 canvas.
 function paintRenderOptionsBar() {
   const host = document.getElementById('paint-options');
   if (!host) return;
