@@ -302,3 +302,96 @@ function paintFloodFill(pixels, w, h, x, y, rgba, tolerance) {
   }
   return filled;
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Brush generators
+// ─────────────────────────────────────────────────────────────────
+// THE central interface. A brush is a pure function from one stroke segment to
+// a list of plain-data draw ops. apps/paint.js holds a dumb switch that
+// executes them; nothing in this file knows a canvas exists.
+//
+// Three things fall out of that, and they are the reason for the design:
+//   1. Every brush is testable in node. "Given this segment and this seed,
+//      expect these ops" is a real assertion; "it did not throw" is not.
+//   2. Randomness is injected through st.rng, so a splatter is reproducible.
+//   3. The options bar previews itself - each variant button runs its own
+//      generator on a 24x24 offscreen canvas, so the button art IS the
+//      behaviour and cannot go stale as variants are tuned.
+//
+// seg = { x0, y0, x1, y1, index }   index is the segment number within the
+//                                   stroke, 0-based, for brushes with memory
+// st  = { color, size, rng, points, stickerIndex }
+//
+// Ops:
+//   { op:'dab',    x, y, r, color }        filled circle
+//   { op:'line',   x0,y0,x1,y1, w, color } round-capped line
+//   { op:'rect',   x, y, w, h, color }
+//   { op:'sprite', idx, x, y, size, rot }  a sticker from the atlas
+//   { op:'erase',  x, y, r }               clears to white
+const PAINT_GENERATORS = {};
+
+function paintGenerate(toolId, variantId, seg, st) {
+  const byTool = PAINT_GENERATORS[toolId];
+  if (!byTool) return [];
+  const gen = byTool[variantId];
+  if (!gen) return [];
+  const ops = gen(seg, st);
+  return Array.isArray(ops) ? ops : [];
+}
+
+// Registers one generator. Kept as a function rather than object literals so a
+// tool's variants can be declared in several places - Tasks 12-16 each add
+// their own group from their own section of this file, without editing a
+// single growing literal.
+function paintRegisterGenerator(toolId, variantId, fn) {
+  if (!PAINT_GENERATORS[toolId]) PAINT_GENERATORS[toolId] = {};
+  PAINT_GENERATORS[toolId][variantId] = fn;
+}
+
+// Segment length, needed by nearly every generator to decide how many dabs a
+// drag deserves. Zero for a click, which is the case that must still draw.
+function paintSegLen(seg) {
+  return Math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0);
+}
+
+// Walks a segment at a fixed spacing, always including both ends. The `<=` and
+// the explicit final point are what make a click (length 0) yield exactly one
+// position rather than none.
+function paintWalk(seg, spacing) {
+  const len = paintSegLen(seg);
+  const step = Math.max(0.5, spacing);
+  const out = [];
+  const n = Math.floor(len / step);
+  for (let i = 0; i <= n; i++) {
+    const t = len === 0 ? 0 : (i * step) / len;
+    out.push({ x: seg.x0 + (seg.x1 - seg.x0) * t, y: seg.y0 + (seg.y1 - seg.y0) * t });
+  }
+  const last = out[out.length - 1];
+  if (len > 0 && (last.x !== seg.x1 || last.y !== seg.y1)) out.push({ x: seg.x1, y: seg.y1 });
+  return out;
+}
+
+// ── pencil ───────────────────────────────────────────────────────
+// A line op rather than a run of dabs: one round-capped stroke is what the
+// canvas draws well, and a dab chain at these widths visibly beads.
+[['p1', 1], ['p2', 2], ['p3', 3], ['p5', 5]].forEach(([id, w]) => {
+  paintRegisterGenerator('pencil', id, (seg, st) =>
+    [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1, w, color: st.color }]);
+});
+
+paintRegisterGenerator('pencil', 'dotted', (seg, st) =>
+  paintWalk(seg, Math.max(3, st.size * 2))
+    .filter((_, i) => i % 2 === 0)
+    .map(p => ({ op: 'dab', x: p.x, y: p.y, r: Math.max(1, st.size / 2), color: st.color })));
+
+paintRegisterGenerator('pencil', 'sketchy', (seg, st) => {
+  // Three offset passes over the same segment, the way a pencil sketch is built
+  // out of repeated approximate strokes rather than one confident line.
+  const ops = [];
+  for (let k = 0; k < 3; k++) {
+    const j = () => (st.rng() - 0.5) * 4;
+    ops.push({ op: 'line', x0: seg.x0 + j(), y0: seg.y0 + j(),
+               x1: seg.x1 + j(), y1: seg.y1 + j(), w: 1, color: st.color });
+  }
+  return ops;
+});

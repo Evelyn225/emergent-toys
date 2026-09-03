@@ -14,6 +14,13 @@ function coreCtx() {
   return loadOsSources(makeOsContext({}), ['apps/paint-core.js']);
 }
 
+// Tools whose generators land in a later task. The list SHRINKS to empty as
+// the build order completes - it is a scaffold, not a permanent exemption, and
+// leaving an entry here once its task is done is a bug this comment exists to
+// make obvious.
+const NOT_YET_IMPLEMENTED = new Set(['line', 'rect', 'oval', 'fill', 'eyedropper',
+                                     'text', 'sticker', 'wacky', 'eraser', 'select']);
+
 test('the canvas is a fixed 480x360', () => {
   const ctx = coreCtx();
   assert.strictEqual(ctx.paintCanvasWidth(), 480);
@@ -262,4 +269,78 @@ test('fill covers a full 480x360 canvas without blowing the stack', () => {
   const px = new Uint8ClampedArray(w * h * 4).fill(255);
   const n = ctx.paintFloodFill(px, w, h, 0, 0, [0, 0, 0, 255], 0);
   assert.strictEqual(n, w * h);
+});
+
+// ── brush generators ─────────────────────────────────────────────
+
+function stroke(x0, y0, x1, y1, index) {
+  return { x0, y0, x1, y1, index: index || 0 };
+}
+function stateFor(ctx, over) {
+  return Object.assign({
+    color: '#ff0000',
+    size: 3,
+    rng: ctx.paintRng(42),
+    points: [],
+    stickerIndex: 0,
+  }, over || {});
+}
+
+test('a zero-length segment still emits at least one op', () => {
+  const ctx = coreCtx();
+  // A click without a drag is a real gesture, and "tapping does nothing" is the
+  // classic failure of a generator written only for the drag case.
+  ctx.paintTools().forEach(tool => {
+    if (NOT_YET_IMPLEMENTED.has(tool.id)) return;
+    ctx.paintVariantsFor(tool.id).forEach(v => {
+      const ops = ctx.paintGenerate(tool.id, v.id, stroke(100, 100, 100, 100), stateFor(ctx));
+      assert.ok(Array.isArray(ops), tool.id + '/' + v.id + ' did not return an array');
+      if (tool.id === 'select') return;   // move is handled by the UI, not by ops
+      assert.ok(ops.length >= 1, tool.id + '/' + v.id + ' emitted nothing for a click');
+    });
+  });
+});
+
+test('generators are deterministic for a seed', () => {
+  const ctx = coreCtx();
+  const a = ctx.paintGenerate('pencil', 'sketchy', stroke(10, 10, 40, 40), stateFor(ctx, { rng: ctx.paintRng(7) }));
+  const b = ctx.paintGenerate('pencil', 'sketchy', stroke(10, 10, 40, 40), stateFor(ctx, { rng: ctx.paintRng(7) }));
+  assert.deepStrictEqual(a, b, 'the same seed produced different ops');
+});
+
+test('every emitted op carries the fields its renderer reads', () => {
+  const ctx = coreCtx();
+  const KNOWN = { dab: ['x','y','r','color'], line: ['x0','y0','x1','y1','w','color'],
+                  rect: ['x','y','w','h','color'], sprite: ['idx','x','y','size','rot'],
+                  erase: ['x','y','r'] };
+  ctx.paintTools().forEach(tool => {
+    if (NOT_YET_IMPLEMENTED.has(tool.id)) return;
+    ctx.paintVariantsFor(tool.id).forEach(v => {
+      ctx.paintGenerate(tool.id, v.id, stroke(50, 50, 120, 90), stateFor(ctx)).forEach(op => {
+        const fields = KNOWN[op.op];
+        assert.ok(fields, tool.id + '/' + v.id + ' emitted an unknown op: ' + op.op);
+        fields.forEach(f => {
+          assert.ok(op[f] !== undefined, tool.id + '/' + v.id + ' ' + op.op + ' is missing ' + f);
+          if (f !== 'color') assert.ok(Number.isFinite(op[f]), tool.id + '/' + v.id + ' ' + op.op + '.' + f + ' is not finite');
+        });
+      });
+    });
+  });
+});
+
+test('a pencil segment emits a line of the variant width', () => {
+  const ctx = coreCtx();
+  const ops = ctx.paintGenerate('pencil', 'p5', stroke(10, 10, 30, 10), stateFor(ctx));
+  const line = ops.find(o => o.op === 'line');
+  assert.ok(line, 'no line op from the pencil');
+  assert.strictEqual(line.w, 5);
+  assert.strictEqual(line.color, '#ff0000');
+});
+
+test('an unknown tool or variant returns an empty list rather than throwing', () => {
+  const ctx = coreCtx();
+  // plain() strips the vm realm's Array prototype so deepStrictEqual can compare
+  // against a host [] literal - see the note on other tests in this file.
+  assert.deepStrictEqual(plain(ctx.paintGenerate('nope', 'nope', stroke(0, 0, 1, 1), stateFor(ctx))), []);
+  assert.deepStrictEqual(plain(ctx.paintGenerate('pencil', 'nope', stroke(0, 0, 1, 1), stateFor(ctx))), []);
 });
