@@ -289,6 +289,7 @@ function openPaint() {
     const k = e.key.toLowerCase();
     if (k === 'z') { e.preventDefault(); paintUndo(); }
     else if (k === 'y') { e.preventDefault(); paintRedo(); }
+    else if (k === 's') { e.preventDefault(); paintState.file ? paintSave(paintState.file, paintState.dir) : paintSaveAs(); }
   });
 
   const winEl = document.getElementById('win-' + PAINT_WIN_ID);
@@ -489,6 +490,9 @@ function paintBuildMenu(mb) {
     { label: 'File', items: () => [
       { label: 'New', action: paintNewCanvas },
       '-',
+      { label: 'Save  Ctrl+S', action: () => paintState.file ? paintSave(paintState.file, paintState.dir) : paintSaveAs() },
+      { label: 'Save As…', action: paintSaveAs },
+      '-',
       { label: 'Close', action: () => closeWin(PAINT_WIN_ID) },
     ]},
     { label: 'Edit', items: () => [
@@ -553,4 +557,69 @@ function paintOpenHelp() {
   const ok = document.getElementById(id + '-ok');
   ok.addEventListener('click', () => closeWin(id));
   procSetTimeout(id, () => ok.focus(), 40);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Saving
+// ─────────────────────────────────────────────────────────────────
+// A painting is a real PNG blob in the VFS, which is what lets it show up in
+// Explorer, open in the image viewer, and become the wallpaper. Blob bytes go
+// through the same vfsWriteBlob -> commit path as an uploaded file; nothing
+// here is a special case.
+
+function paintCanvasBlob() {
+  return new Promise(resolve => paintState.canvas.toBlob(resolve, 'image/png'));
+}
+
+// One implementation for Save and Save As, for the reason apps/notepad.js
+// states about its own pair: two near-duplicates is how a try/catch gets added
+// to one and forgotten on the other.
+//
+// The title bar and the dirty flag are updated ONLY on success. Reporting a
+// save that did not happen is precisely the failure this shape exists to kill -
+// notepad's writeAndSync was written after exactly that bug.
+async function paintWriteAndSync(fname, dir) {
+  const blob = await paintCanvasBlob();
+  if (!blob) {
+    osAlert('The canvas could not be encoded.', 'Cannot Save', 'icon:error');
+    return false;
+  }
+  const url = URL.createObjectURL(blob);
+  let saved;
+  try {
+    saved = await vfsWriteBlob(fname, { url, kind: 'image', size: blob.size, mime: 'image/png' }, dir);
+  } catch (err) {
+    // Nothing else holds this URL once the tree entry was refused, so release
+    // it rather than leaking it for the rest of the session - same shape as
+    // handleFileUpload's own catch in os/media.js.
+    URL.revokeObjectURL(url);
+    if (err.code === 'ENOSPC') {
+      osAlert('Not enough space to save this painting.\nDelete something and try again.', 'Disk Full', 'icon:error');
+    } else if (err.code === 'EACCES') {
+      osAlert('Storage is unavailable, so this painting cannot be saved.', 'Cannot Save', 'icon:error');
+    } else if (err.code === 'EEXIST') {
+      osAlert('A text file already uses that name.', 'Cannot Save', 'icon:error');
+    } else {
+      osAlert('Could not save: ' + err.message, 'Cannot Save', 'icon:error');
+    }
+    return false;
+  }
+  paintState.file = saved.fileName;
+  paintState.dir = saved.dirName;
+  paintState.dirty = false;
+  setWinTitle(PAINT_WIN_ID, saved.fileName + ' - Paint');
+  const ws = document.getElementById('ws-' + PAINT_WIN_ID);
+  if (ws) ws.textContent = 'Saved to C:\\sleepOS\\' + (saved.dirName ? saved.dirName + '\\' : '') + saved.fileName;
+  return true;
+}
+
+// Every caller is a menu action or a key handler, none of which can await.
+// paintWriteAndSync reports its own failures; this catch only stops an
+// unexpected throw from becoming an unhandled rejection.
+function paintSave(fname, dir) {
+  paintWriteAndSync(fname, dir).catch(err => reportVfsError(err));
+}
+
+function paintSaveAs() {
+  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir));
 }

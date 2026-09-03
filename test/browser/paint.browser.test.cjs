@@ -192,6 +192,12 @@ test('Ctrl+Z undoes and Ctrl+Y redoes', async () => {
   await withPaint(async page => {
     await page.evaluate(() => { paintSelectTool('pencil'); paintSelectVariant('p5'); paintSetColor('#000000'); });
     await dragCanvas(page, 100, 100, 200, 100);
+    // The window's own procSetTimeout focus lands 40ms after open. Without
+    // waiting for it, Ctrl+Z can fire before the window is focused and land on
+    // nothing - it happened to pass only because the preceding round-trips
+    // above took longer than 40ms, which is timing-incidental, not
+    // deterministic.
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'win-paint');
     await page.keyboard.press('Control+z');
     assert.deepStrictEqual(await pixelAt(page, 150, 100), [255, 255, 255, 255], 'Ctrl+Z did nothing');
     await page.keyboard.press('Control+y');
@@ -215,5 +221,59 @@ test('the menubar carries File, Edit and Goodies', async () => {
     const labels = await page.evaluate(() =>
       [...document.querySelectorAll('#mb-paint .menu-item')].map(s => s.textContent));
     assert.deepStrictEqual(labels, ['File', 'Edit', 'Goodies']);
+  });
+});
+
+test('PICTURES exists at the root', async () => {
+  await withPaint(async page => {
+    assert.ok(await page.evaluate(() => vfsDirExistsSync('PICTURES')),
+      'PAINT saves into PICTURES and the directory was never created');
+  });
+});
+
+test('saving writes a real PNG blob that the filesystem can see', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => { paintSelectTool('pencil'); paintSelectVariant('p5'); paintSetColor('#000000'); });
+    await dragCanvas(page, 40, 40, 300, 300);
+    const st = await page.evaluate(async () => {
+      await paintWriteAndSync('scribble.png', 'PICTURES');
+      const s = vfsStatSync('scribble.png', 'PICTURES');
+      return s && { kind: s.kind, blobKind: s.blob.kind, mime: s.blob.mime, size: s.blob.size };
+    });
+    assert.ok(st, 'no filesystem entry after save');
+    assert.strictEqual(st.kind, 'blob');
+    assert.strictEqual(st.blobKind, 'image');
+    assert.strictEqual(st.mime, 'image/png');
+    assert.ok(st.size > 0, 'the saved blob is empty');
+  });
+});
+
+test('a successful save renames the window and clears the dirty flag', async () => {
+  await withPaint(async page => {
+    await dragCanvas(page, 40, 40, 100, 100);
+    const after = await page.evaluate(async () => {
+      await paintWriteAndSync('titled.png', 'PICTURES');
+      return {
+        title: document.querySelector('#win-paint .win-title-text')?.textContent
+            || document.querySelector('#win-paint .win-title')?.textContent,
+        dirty: paintState.dirty, file: paintState.file, dir: paintState.dir,
+      };
+    });
+    assert.match(after.title, /titled\.png/);
+    assert.strictEqual(after.dirty, false);
+    assert.strictEqual(after.file, 'titled.png');
+    assert.strictEqual(after.dir, 'PICTURES');
+  });
+});
+
+test('a save that collides with a text file reports it and does not claim success', async () => {
+  await withPaint(async page => {
+    const r = await page.evaluate(async () => {
+      await vfsWriteFile('taken.png', 'not an image', 'PICTURES');
+      const ok = await paintWriteAndSync('taken.png', 'PICTURES');
+      return { ok, file: paintState.file };
+    });
+    assert.strictEqual(r.ok, false, 'a refused save reported success');
+    assert.strictEqual(r.file, null, 'a refused save still renamed the document');
   });
 });

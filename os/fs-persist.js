@@ -456,6 +456,13 @@ async function vfsBootMount() {
   // fixes anyone who does not - not just the .url shortcut writer, but every
   // future write into DESKTOP (uploads, New Folder, wallpaper drops).
   ensureFsDir('DESKTOP');
+  // PAINT.exe saves here. Same idempotent heal as DESKTOP and the recycle dir
+  // above, and for the same reason: seedFreshRootTree only installs its tree
+  // into a genuinely empty root, so any profile that booted before PAINT
+  // existed comes back with no PICTURES and every save into it throws ENOENT
+  // forever. ensureFsDir queues a commit only on the boot where it actually
+  // creates the directory, so this costs a returning visitor nothing.
+  ensureFsDir('PICTURES');
   void loadBlobsFromBlocks();
   // The load-time syncDaemonStory ran against the seed tree, which the mount
   // then replaced. Re-run it against the real tree so the story files and the
