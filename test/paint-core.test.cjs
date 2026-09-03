@@ -83,3 +83,58 @@ test('the rng is deterministic for a seed and differs between seeds', () => {
   assert.notDeepStrictEqual(seqA, seqC, 'different seeds produced the same sequence');
   seqA.forEach(v => assert.ok(v >= 0 && v < 1, 'rng out of range: ' + v));
 });
+
+// ── undo ring ────────────────────────────────────────────────────
+
+test('a fresh ring is empty and has nothing to undo', () => {
+  const ctx = coreCtx();
+  const r = ctx.paintUndoInit(20);
+  assert.strictEqual(r.cap, 20);
+  assert.strictEqual(r.index, -1);
+  assert.deepStrictEqual(plain(r.items), []);
+  assert.strictEqual(ctx.paintUndoUndo(r), null);
+  assert.strictEqual(ctx.paintUndoRedo(r), null);
+});
+
+test('undo walks back through pushed states and redo walks forward', () => {
+  const ctx = coreCtx();
+  const r = ctx.paintUndoInit(20);
+  ['a', 'b', 'c'].forEach(s => ctx.paintUndoPush(r, s));
+  assert.strictEqual(r.index, 2);
+  assert.strictEqual(ctx.paintUndoUndo(r), 'b');
+  assert.strictEqual(ctx.paintUndoUndo(r), 'a');
+  assert.strictEqual(ctx.paintUndoUndo(r), null, 'walked back past the first state');
+  assert.strictEqual(ctx.paintUndoRedo(r), 'b');
+  assert.strictEqual(ctx.paintUndoRedo(r), 'c');
+  assert.strictEqual(ctx.paintUndoRedo(r), null, 'walked forward past the last state');
+});
+
+test('pushing after an undo truncates the redo tail', () => {
+  const ctx = coreCtx();
+  const r = ctx.paintUndoInit(20);
+  ['a', 'b', 'c'].forEach(s => ctx.paintUndoPush(r, s));
+  ctx.paintUndoUndo(r);              // now at 'b'
+  ctx.paintUndoPush(r, 'd');
+  assert.deepStrictEqual(plain(r.items), ['a', 'b', 'd'], 'c survived a divergent push');
+  assert.strictEqual(ctx.paintUndoRedo(r), null, 'redo still offered the abandoned branch');
+});
+
+test('pushing past capacity drops the oldest state and keeps the index in range', () => {
+  const ctx = coreCtx();
+  const r = ctx.paintUndoInit(3);
+  ['a', 'b', 'c', 'd', 'e'].forEach(s => ctx.paintUndoPush(r, s));
+  assert.deepStrictEqual(plain(r.items), ['c', 'd', 'e']);
+  assert.strictEqual(r.index, 2);
+  assert.strictEqual(ctx.paintUndoUndo(r), 'd');
+  assert.strictEqual(ctx.paintUndoUndo(r), 'c');
+  assert.strictEqual(ctx.paintUndoUndo(r), null);
+});
+
+test('a capacity of one means every push replaces the only state', () => {
+  const ctx = coreCtx();
+  const r = ctx.paintUndoInit(1);
+  ctx.paintUndoPush(r, 'a');
+  ctx.paintUndoPush(r, 'b');
+  assert.deepStrictEqual(plain(r.items), ['b']);
+  assert.strictEqual(ctx.paintUndoUndo(r), null);
+});

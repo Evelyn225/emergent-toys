@@ -17971,6 +17971,45 @@ function paintRng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+// -----------------------------------------------------------------
+// Undo ring
+// -----------------------------------------------------------------
+// `index` is the position of the CURRENT state, not the next free slot, so
+// undo is a decrement and redo an increment and neither needs a special case
+// for "have we drawn anything yet". -1 means empty.
+//
+// Snapshots are opaque here: the UI pushes ImageData, the tests push strings.
+// Keeping the core ignorant of what a snapshot IS is what lets this be tested
+// in node with no canvas.
+function paintUndoInit(capacity) {
+  const cap = Math.max(1, Math.floor(Number(capacity) || 1));
+  return { cap, items: [], index: -1 };
+}
+
+function paintUndoPush(ring, snapshot) {
+  // A push after an undo abandons the redo branch. Keeping it would let redo
+  // jump to a state that never followed from what is now on the canvas.
+  if (ring.index < ring.items.length - 1) ring.items.length = ring.index + 1;
+  ring.items.push(snapshot);
+  // Drop from the front rather than refusing the push: the newest work is
+  // always worth more than the oldest undo step.
+  while (ring.items.length > ring.cap) ring.items.shift();
+  ring.index = ring.items.length - 1;
+  return ring;
+}
+
+function paintUndoUndo(ring) {
+  if (ring.index <= 0) return null;
+  ring.index--;
+  return ring.items[ring.index];
+}
+
+function paintUndoRedo(ring) {
+  if (ring.index >= ring.items.length - 1) return null;
+  ring.index++;
+  return ring.items[ring.index];
+}
 // PAINT.exe - UI half. See apps/paint-core.js for the pure half.
 function triggerGlitch(options) {
   const desktop = document.getElementById('desktop');
