@@ -140,6 +140,12 @@ test('a capacity of one means every push replaces the only state', () => {
 });
 
 // ── flood fill ───────────────────────────────────────────────────
+// Implementation note: uses scanline run-based seeding, not per-pixel seeding.
+// When processing a run [left, right] in row py, the stack seeding for rows
+// py-1 and py+1 detects runs (contiguous matching sequences) and pushes only
+// the start of each run. This bounds stack depth to O(runs per row) rather than
+// O(pixels), keeping a 480x360 fill fast. The 4-connectivity test verifies that
+// run detection respects column adjacency only (no diagonal shortcuts).
 
 // A tiny helper so the fill tests read as pictures rather than as index maths.
 // '.' is white, '#' is black, 'r' is pure red.

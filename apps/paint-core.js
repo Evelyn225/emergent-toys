@@ -235,9 +235,10 @@ function paintUndoRedo(ring) {
 // on a real drawing that reads as the fill "escaping" through a line the artist
 // can see is closed.
 //
-// SCANLINE, not per-pixel recursion. A per-pixel stack on a 480x360 canvas can
-// hold 172,800 entries; the scanline form pushes one entry per RUN, which is
-// what keeps a whole-canvas fill cheap.
+// SCANLINE RUN-BASED SEEDING, not per-pixel recursion. A per-pixel stack on a
+// 480x360 canvas can hold 172,800 entries; the scanline form detects runs in
+// neighbour rows and pushes one entry per contiguous run, which keeps stack
+// depth bounded and a whole-canvas fill fast.
 function paintFloodFill(pixels, w, h, x, y, rgba, tolerance) {
   x = Math.floor(x); y = Math.floor(y);
   if (x < 0 || y < 0 || x >= w || y >= h) return 0;
@@ -274,12 +275,30 @@ function paintFloodFill(pixels, w, h, x, y, rgba, tolerance) {
       if (!matches(idx)) continue;
       paint(idx);
       filled++;
-      // Seed the rows above and below from this run. Testing each column rather
-      // than pushing the whole run keeps the stack to one entry per contiguous
-      // neighbouring run.
-      if (py > 0 && matches(at(i, py - 1))) stack.push([i, py - 1]);
-      if (py < h - 1 && matches(at(i, py + 1))) stack.push([i, py + 1]);
     }
+
+    // Seed the rows above and below by detecting runs. For each neighbour row,
+    // scan the columns directly above/below [left, right] and detect transitions
+    // from non-matching to matching. Push only the start of each run, so the
+    // stack holds one entry per contiguous neighbouring run.
+    const seedRow = (neighborY) => {
+      if (neighborY < 0 || neighborY >= h) return;
+      let inRun = false;
+      for (let i = left; i <= right; i++) {
+        const idx = at(i, neighborY);
+        if (matches(idx)) {
+          if (!inRun) {
+            // Start of a new run in the neighbor row
+            stack.push([i, neighborY]);
+            inRun = true;
+          }
+        } else {
+          inRun = false;
+        }
+      }
+    };
+    if (py > 0) seedRow(py - 1);
+    if (py < h - 1) seedRow(py + 1);
   }
   return filled;
 }
