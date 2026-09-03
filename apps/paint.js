@@ -151,19 +151,19 @@ function paintSelectTool(toolId) {
   paintState.tool = toolId;
   paintState.variant = variants.length ? variants[0].id : null;
   paintSetRegValue('Tool', toolId);
-  if (typeof paintRenderOptionsBar === 'function') paintRenderOptionsBar();
-  if (typeof paintSyncToolButtons === 'function') paintSyncToolButtons();
+  paintRenderOptionsBar();
+  paintSyncToolButtons();
 }
 function paintSelectVariant(variantId) {
   if (!paintState) return;
   paintState.variant = variantId;
-  if (typeof paintSyncOptionButtons === 'function') paintSyncOptionButtons();
+  paintSyncOptionButtons();
 }
 function paintSetColor(hex) {
   if (!paintState) return;
   paintState.color = hex;
   paintSetRegValue('Color', hex);
-  if (typeof paintSyncPalette === 'function') paintSyncPalette();
+  paintSyncPalette();
 }
 
 // Sized off the variant id where the id encodes it - 'p5' is a 5px pencil, 'e10'
@@ -275,6 +275,10 @@ function openPaint() {
   // returns to white rather than doing nothing.
   paintUndoPush(paintState.ring, paintSnapshot());
 
+  paintRenderTools();
+  paintRenderPalette();
+  paintRenderOptionsBar();
+
   paintFitCanvas();
 
   // pointer events, not mouse events: one code path covers mouse, finger and
@@ -308,4 +312,129 @@ function openPaint() {
   ro.observe(document.getElementById('paint-stage'));
 
   wins[PAINT_WIN_ID]._onclose = () => { ro.disconnect(); paintState = null; };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Toolbox, palette, options bar
+// ─────────────────────────────────────────────────────────────────
+
+// Tool glyphs are text, not art. Eleven more 32x32 PNGs would be eleven more
+// things to keep consistent with a set drawn by hand, and at 26px in a bevelled
+// button a glyph reads fine. The OS's own icon set stays for the window and the
+// desktop, where it is doing real work.
+const PAINT_TOOL_GLYPHS = {
+  pencil: '✎', line: '╱', rect: '▭', oval: '◯',
+  fill: '◧', eyedropper: '⚗', text: 'A', sticker: '☺',
+  wacky: '❀', eraser: '◻', select: '✥',
+};
+function paintToolGlyph(toolId) { return PAINT_TOOL_GLYPHS[toolId] || '?'; }
+
+function paintRenderTools() {
+  const host = document.getElementById('paint-tools');
+  if (!host) return;
+  host.innerHTML = '';
+  paintTools().forEach(tool => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'paint-tool';
+    b.dataset.tool = tool.id;
+    b.title = tool.label;
+    b.setAttribute('aria-label', tool.label);
+    b.textContent = paintToolGlyph(tool.id);
+    b.addEventListener('click', () => paintSelectTool(tool.id));
+    host.appendChild(b);
+  });
+  paintSyncToolButtons();
+}
+
+function paintSyncToolButtons() {
+  document.querySelectorAll('.paint-tool').forEach(b => {
+    b.classList.toggle('sel', b.dataset.tool === paintState.tool);
+  });
+}
+
+function paintRenderPalette() {
+  const host = document.getElementById('paint-palette');
+  if (!host) return;
+  host.innerHTML = '';
+  paintPalette().forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'paint-swatch';
+    b.dataset.hex = c.hex;
+    b.style.background = c.hex;
+    b.title = c.id;
+    b.setAttribute('aria-label', c.id);
+    b.addEventListener('click', () => { paintSetColor(c.hex); paintSound('paint-palette'); });
+    host.appendChild(b);
+  });
+  paintSyncPalette();
+}
+
+function paintSyncPalette() {
+  document.querySelectorAll('.paint-swatch').forEach(b => {
+    b.classList.toggle('sel', b.dataset.hex === paintState.color);
+  });
+}
+
+// The options bar draws each variant by RUNNING IT. A hand-drawn icon per
+// variant would be 40-odd more pieces of art to keep in step with behaviour
+// that is still being tuned, and the first thing to go stale. This cannot: the
+// button art is the brush's actual output on a 24x24 canvas.
+function paintRenderOptionsBar() {
+  const host = document.getElementById('paint-options');
+  if (!host) return;
+  host.innerHTML = '';
+  const variants = paintVariantsFor(paintState.tool);
+  variants.forEach(v => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'paint-opt';
+    b.dataset.variant = v.id;
+    b.title = v.label;
+    b.setAttribute('aria-label', v.label);
+    b.appendChild(paintVariantPreview(paintState.tool, v.id));
+    b.addEventListener('click', () => paintSelectVariant(v.id));
+    host.appendChild(b);
+  });
+  if (typeof paintRenderStickerPager === 'function') paintRenderStickerPager(host);
+  paintSyncOptionButtons();
+}
+
+function paintSyncOptionButtons() {
+  document.querySelectorAll('.paint-opt').forEach(b => {
+    b.classList.toggle('sel', b.dataset.variant === paintState.variant);
+  });
+}
+
+// A fixed seed, so a preview is stable across rebuilds of the bar - a splatter
+// button that reshuffles every time you change tool reads as a glitch.
+const PAINT_PREVIEW_SEED = 20260902;
+
+function paintVariantPreview(toolId, variantId) {
+  const size = 22;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, size, size);
+  // A diagonal drag across the button, which is enough of a stroke for every
+  // generator to show its character.
+  const seg = { x0: 3, y0: size - 3, x1: size - 3, y1: 3, index: 0 };
+  const st = {
+    color: paintState ? paintState.color : '#000000',
+    size: paintSizeForVariant(variantId),
+    rng: paintRng(PAINT_PREVIEW_SEED),
+    points: [{ x: seg.x0, y: seg.y0 }],
+    stickerIndex: paintState ? paintState.stickerIndex : 0,
+  };
+  // An eraser previews against ink, or it previews nothing at all: white on
+  // white is an empty button.
+  if (toolId === 'eraser') {
+    g.fillStyle = paintState ? paintState.color : '#000000';
+    g.fillRect(0, 0, size, size);
+  }
+  paintExecOps(g, paintGenerate(toolId, variantId, seg, st));
+  return c;
 }

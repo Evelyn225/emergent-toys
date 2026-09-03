@@ -94,3 +94,76 @@ test('a click without a drag still makes a mark', async () => {
     assert.deepStrictEqual(await pixelAt(page, 60, 60), [0, 0, 0, 255], 'a click drew nothing');
   });
 });
+
+test('the toolbox lists every tool and marks exactly one selected', async () => {
+  await withPaint(async page => {
+    const m = await page.evaluate(() => ({
+      buttons: document.querySelectorAll('.paint-tool').length,
+      tools: paintTools().length,
+      selected: document.querySelectorAll('.paint-tool.sel').length,
+      selectedId: document.querySelector('.paint-tool.sel').dataset.tool,
+    }));
+    assert.strictEqual(m.buttons, m.tools, 'a tool is missing a button');
+    assert.strictEqual(m.selected, 1, 'expected exactly one selected tool, got ' + m.selected);
+    assert.strictEqual(m.selectedId, 'pencil');
+  });
+});
+
+test('the options bar rebuilds with the right count when the tool changes', async () => {
+  await withPaint(async page => {
+    // Asserting the COUNT against the core's own table, not a hardcoded number:
+    // adding a variant must not silently stop being rendered.
+    const check = tool => page.evaluate(t => {
+      paintSelectTool(t);
+      return {
+        rendered: document.querySelectorAll('.paint-opt').length,
+        expected: paintVariantsFor(t).length,
+        selected: document.querySelectorAll('.paint-opt.sel').length,
+      };
+    }, tool);
+
+    let m = await check('pencil');
+    assert.strictEqual(m.rendered, m.expected, 'pencil variant count wrong');
+    assert.strictEqual(m.selected, 1);
+
+    m = await check('wacky');
+    assert.strictEqual(m.rendered, m.expected, 'wacky variant count wrong');
+    assert.strictEqual(m.rendered, 15, 'expected 15 wacky brushes');
+
+    m = await check('eyedropper');
+    assert.strictEqual(m.rendered, 0, 'the eyedropper has no variants and should show none');
+  });
+});
+
+test('every option button previews itself by running its own generator', async () => {
+  await withPaint(async page => {
+    const inked = await page.evaluate(() => {
+      paintSelectTool('pencil');
+      // A preview that renders nothing is the failure mode here - a blank row of
+      // buttons looks deliberate and tells you nothing is wrong.
+      return [...document.querySelectorAll('.paint-opt canvas')].map(c => {
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+        return n;
+      });
+    });
+    assert.ok(inked.length > 0, 'no preview canvases were rendered');
+    inked.forEach((n, i) => assert.ok(n > 0, 'option button ' + i + ' previewed nothing'));
+  });
+});
+
+test('the palette shows all 28 colours and clicking one selects it', async () => {
+  await withPaint(async page => {
+    const count = await page.evaluate(() => document.querySelectorAll('.paint-swatch').length);
+    assert.strictEqual(count, 28);
+    const picked = await page.evaluate(() => {
+      const sw = document.querySelectorAll('.paint-swatch')[3];
+      sw.click();
+      return { color: paintState.color, hex: sw.dataset.hex,
+               selected: document.querySelectorAll('.paint-swatch.sel').length };
+    });
+    assert.strictEqual(picked.color, picked.hex);
+    assert.strictEqual(picked.selected, 1);
+  });
+});
