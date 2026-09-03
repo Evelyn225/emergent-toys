@@ -18488,6 +18488,22 @@ function openPaint() {
   paintRenderPalette();
   paintRenderOptionsBar();
 
+  paintBuildMenu(document.getElementById('mb-' + PAINT_WIN_ID));
+
+  document.getElementById('paint-undo-guy').textContent = '↶';
+  document.getElementById('paint-undo-guy').addEventListener('click', () => paintUndo());
+
+  document.getElementById('win-' + PAINT_WIN_ID).addEventListener('keydown', e => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z') { e.preventDefault(); paintUndo(); }
+    else if (k === 'y') { e.preventDefault(); paintRedo(); }
+  });
+
+  const winEl = document.getElementById('win-' + PAINT_WIN_ID);
+  if (!winEl.hasAttribute('tabindex')) winEl.setAttribute('tabindex', '-1');
+  procSetTimeout(PAINT_WIN_ID, () => winEl.focus(), 40);
+
   paintFitCanvas();
 
   // pointer events, not mouse events: one code path covers mouse, finger and
@@ -18646,6 +18662,106 @@ function paintVariantPreview(toolId, variantId) {
   }
   paintExecOps(g, paintGenerate(toolId, variantId, seg, st));
   return c;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Menus, keyboard, and the Undo Guy
+// ─────────────────────────────────────────────────────────────────
+
+function paintClearCanvas() {
+  const s = paintState;
+  s.ctx.fillStyle = '#ffffff';
+  s.ctx.fillRect(0, 0, s.canvas.width, s.canvas.height);
+}
+
+function paintNewCanvas() {
+  const s = paintState;
+  const go = () => {
+    paintClearCanvas();
+    s.ring = paintUndoInit(PAINT_UNDO_STEPS);
+    paintUndoPush(s.ring, paintSnapshot());
+    s.dirty = false;
+    s.file = null;
+    setWinTitle(PAINT_WIN_ID, 'untitled.png - Paint');
+    paintSound('paint-clear');
+  };
+  // Only ask when there is something to lose. A confirm on an untouched canvas
+  // is a dialog that teaches people to click through dialogs.
+  if (!s.dirty) { go(); return; }
+  osConfirm('Start a new painting? The current one has not been saved.',
+            'New Painting', ok => { if (ok) go(); }, 'icon:warning');
+}
+
+function paintBuildMenu(mb) {
+  mb.innerHTML = '';
+  const menus = [
+    { label: 'File', items: () => [
+      { label: 'New', action: paintNewCanvas },
+      '-',
+      { label: 'Close', action: () => closeWin(PAINT_WIN_ID) },
+    ]},
+    { label: 'Edit', items: () => [
+      { label: 'Undo  Ctrl+Z', action: paintUndo },
+      { label: 'Redo  Ctrl+Y', action: paintRedo },
+      '-',
+      { label: 'Clear Canvas', action: () => { paintClearCanvas(); paintCommitUndo(); paintSound('paint-clear'); } },
+    ]},
+    // Populated by Task 17. An empty Goodies menu would be a dead item, so it
+    // carries its one honest entry until then.
+    { label: 'Goodies', items: () => paintGoodiesItems() },
+  ];
+  menus.forEach(m => {
+    const span = document.createElement('span');
+    span.className = 'menu-item';
+    span.textContent = m.label;
+    // Rebuilt per open rather than captured: Task 8 adds a Save whose label
+    // depends on whether the painting has a file yet.
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, m.items()); });
+    mb.appendChild(span);
+  });
+
+  const help = document.createElement('button');
+  help.className = 'ms-help-btn';
+  help.type = 'button';
+  help.title = 'Help and credits';
+  help.setAttribute('aria-label', 'Help and credits');
+  help.innerHTML = iconMarkup('icon:help');
+  help.addEventListener('click', e => { e.stopPropagation(); paintOpenHelp(); });
+  mb.appendChild(help);
+}
+
+// Replaced wholesale by Task 17.
+function paintGoodiesItems() {
+  return [{ label: 'Nothing here yet', disabled: true, action: () => {} }];
+}
+
+function paintOpenHelp() {
+  const id = 'paint-help';
+  const p = { x: Math.max(20, Math.floor(window.innerWidth / 2) - 190),
+              y: Math.max(20, Math.floor(window.innerHeight / 2) - 195) };
+  if (!mkWin({ id, title: 'Paint Help', icon: 'icon:help', w: 380, h: 390,
+               x: p.x, y: p.y, menubar: false, statusbar: false, popup: true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.className = 'win-body ms-help';
+  body.innerHTML = `
+    <div class="ms-help-scroll">
+      <h3>How to paint</h3>
+      <p>Pick a tool down the left, pick a version of it along the bottom, pick
+         a colour, then drag on the canvas.</p>
+      <ul>
+        <li>Every button along the bottom draws itself, so what you see on the
+            button is what the tool does.</li>
+        <li><b>Ctrl+Z</b> undoes, <b>Ctrl+Y</b> redoes. Twenty steps.</li>
+        <li>The erasers are not all polite. Some of them are the point.</li>
+      </ul>
+      <h3>Credits</h3>
+      <p>The stickers are Br&oslash;derbund <i>Kid Pix</i> stamps. A tribute,
+         not the original.</p>
+    </div>
+    <div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
+  const ok = document.getElementById(id + '-ok');
+  ok.addEventListener('click', () => closeWin(id));
+  procSetTimeout(id, () => ok.focus(), 40);
 }
 function triggerGlitch(options) {
   const desktop = document.getElementById('desktop');

@@ -171,3 +171,49 @@ test('the palette shows all 28 colours and clicking one selects it', async () =>
     assert.strictEqual(picked.selected, 1);
   });
 });
+
+test('undo takes back a whole stroke, not one mouse twitch', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => { paintSelectTool('pencil'); paintSelectVariant('p5'); paintSetColor('#000000'); });
+    await dragCanvas(page, 100, 100, 200, 100);
+    assert.deepStrictEqual(await pixelAt(page, 150, 100), [0, 0, 0, 255]);
+
+    await page.click('#paint-undo-guy');
+    assert.deepStrictEqual(await pixelAt(page, 150, 100), [255, 255, 255, 255],
+      'undo did not clear the stroke');
+
+    // One undo, one stroke. A per-segment push would need eight more clicks.
+    const depth = await page.evaluate(() => paintState.ring.items.length);
+    assert.strictEqual(depth, 2, 'expected blank + one stroke in the ring, got ' + depth);
+  });
+});
+
+test('Ctrl+Z undoes and Ctrl+Y redoes', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => { paintSelectTool('pencil'); paintSelectVariant('p5'); paintSetColor('#000000'); });
+    await dragCanvas(page, 100, 100, 200, 100);
+    await page.keyboard.press('Control+z');
+    assert.deepStrictEqual(await pixelAt(page, 150, 100), [255, 255, 255, 255], 'Ctrl+Z did nothing');
+    await page.keyboard.press('Control+y');
+    assert.deepStrictEqual(await pixelAt(page, 150, 100), [0, 0, 0, 255], 'Ctrl+Y did not restore');
+  });
+});
+
+test('undo on a blank canvas is a no-op rather than an error', async () => {
+  await withPaint(async page => {
+    const before = await page.evaluate(() => paintState.ring.index);
+    await page.click('#paint-undo-guy');
+    await page.click('#paint-undo-guy');
+    const after = await page.evaluate(() => paintState.ring.index);
+    assert.strictEqual(before, 0);
+    assert.strictEqual(after, 0, 'undo walked past the initial blank state');
+  });
+});
+
+test('the menubar carries File, Edit and Goodies', async () => {
+  await withPaint(async page => {
+    const labels = await page.evaluate(() =>
+      [...document.querySelectorAll('#mb-paint .menu-item')].map(s => s.textContent));
+    assert.deepStrictEqual(labels, ['File', 'Edit', 'Goodies']);
+  });
+});
