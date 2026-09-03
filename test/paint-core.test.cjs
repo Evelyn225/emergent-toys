@@ -138,3 +138,122 @@ test('a capacity of one means every push replaces the only state', () => {
   assert.deepStrictEqual(plain(r.items), ['b']);
   assert.strictEqual(ctx.paintUndoUndo(r), null);
 });
+
+// ── flood fill ───────────────────────────────────────────────────
+
+// A tiny helper so the fill tests read as pictures rather than as index maths.
+// '.' is white, '#' is black, 'r' is pure red.
+const FILL_COLORS = { '.': [255, 255, 255, 255], '#': [0, 0, 0, 255], r: [255, 0, 0, 255] };
+function grid(rows) {
+  const h = rows.length, w = rows[0].length;
+  const px = new Uint8ClampedArray(w * h * 4);
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      const c = FILL_COLORS[ch];
+      const i = (y * w + x) * 4;
+      px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2]; px[i + 3] = c[3];
+    });
+  });
+  return { px, w, h };
+}
+function render(px, w, h) {
+  const out = [];
+  for (let y = 0; y < h; y++) {
+    let line = '';
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const key = Object.keys(FILL_COLORS).find(k => {
+        const c = FILL_COLORS[k];
+        return px[i] === c[0] && px[i + 1] === c[1] && px[i + 2] === c[2];
+      });
+      line += key || '?';
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+test('fill spreads through a connected region and stops at a colour edge', () => {
+  const ctx = coreCtx();
+  const g = grid([
+    '#####',
+    '#...#',
+    '#...#',
+    '#####',
+  ]);
+  const n = ctx.paintFloodFill(g.px, g.w, g.h, 2, 2, [255, 0, 0, 255], 0);
+  assert.strictEqual(n, 6);
+  assert.deepStrictEqual(render(g.px, g.w, g.h), [
+    '#####',
+    '#rrr#',
+    '#rrr#',
+    '#####',
+  ]);
+});
+
+test('fill is 4-connected and does not leak through a diagonal gap', () => {
+  const ctx = coreCtx();
+  // The two white regions touch only at a corner. A careless 8-connected fill
+  // floods both and the leak is invisible until someone fills a real drawing.
+  const g = grid([
+    '..##',
+    '..##',
+    '##..',
+    '##..',
+  ]);
+  const n = ctx.paintFloodFill(g.px, g.w, g.h, 0, 0, [255, 0, 0, 255], 0);
+  assert.strictEqual(n, 4, 'fill leaked diagonally into the second region');
+  assert.deepStrictEqual(render(g.px, g.w, g.h), [
+    'rr##',
+    'rr##',
+    '##..',
+    '##..',
+  ]);
+});
+
+test('fill reaches the canvas edges and corners', () => {
+  const ctx = coreCtx();
+  const g = grid([
+    '...',
+    '.#.',
+    '...',
+  ]);
+  const n = ctx.paintFloodFill(g.px, g.w, g.h, 0, 0, [255, 0, 0, 255], 0);
+  assert.strictEqual(n, 8, 'the ring around the centre pixel should all fill');
+  assert.deepStrictEqual(render(g.px, g.w, g.h), ['rrr', 'r#r', 'rrr']);
+});
+
+test('filling a pixel that is already the target colour is a no-op, not a hang', () => {
+  const ctx = coreCtx();
+  const g = grid(['rr', 'rr']);
+  const n = ctx.paintFloodFill(g.px, g.w, g.h, 0, 0, [255, 0, 0, 255], 0);
+  assert.strictEqual(n, 0, 'refilling the same colour must terminate immediately');
+  assert.deepStrictEqual(render(g.px, g.w, g.h), ['rr', 'rr']);
+});
+
+test('tolerance widens what counts as the same colour', () => {
+  const ctx = coreCtx();
+  const g = grid(['..', '..']);
+  // Nudge one pixel slightly off white.
+  g.px[4] = 250; g.px[5] = 250; g.px[6] = 250;
+  const strict = ctx.paintFloodFill(g.px.slice(), g.w, g.h, 0, 0, [255, 0, 0, 255], 0);
+  assert.strictEqual(strict, 3, 'a zero tolerance should skip the off-white pixel');
+  const loose = ctx.paintFloodFill(g.px, g.w, g.h, 0, 0, [255, 0, 0, 255], 16);
+  assert.strictEqual(loose, 4, 'a tolerance of 16 should absorb a 5-level difference');
+});
+
+test('a fill started outside the canvas does nothing', () => {
+  const ctx = coreCtx();
+  const g = grid(['..', '..']);
+  assert.strictEqual(ctx.paintFloodFill(g.px, g.w, g.h, -1, 0, [255, 0, 0, 255], 0), 0);
+  assert.strictEqual(ctx.paintFloodFill(g.px, g.w, g.h, 0, 9, [255, 0, 0, 255], 0), 0);
+  assert.deepStrictEqual(render(g.px, g.w, g.h), ['..', '..']);
+});
+
+test('fill covers a full 480x360 canvas without blowing the stack', () => {
+  const ctx = coreCtx();
+  const w = ctx.paintCanvasWidth(), h = ctx.paintCanvasHeight();
+  const px = new Uint8ClampedArray(w * h * 4).fill(255);
+  const n = ctx.paintFloodFill(px, w, h, 0, 0, [0, 0, 0, 255], 0);
+  assert.strictEqual(n, w * h);
+});

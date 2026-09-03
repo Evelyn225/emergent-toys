@@ -221,3 +221,65 @@ function paintUndoRedo(ring) {
   ring.index++;
   return ring.items[ring.index];
 }
+
+// -----------------------------------------------------------------
+// Flood fill
+// -----------------------------------------------------------------
+// Scanline fill over a raw RGBA buffer - exactly what ctx.getImageData().data
+// hands back, so the UI passes it straight through with no conversion.
+//
+// Two decisions that are easy to get wrong and invisible once they are:
+//
+// 4-CONNECTED, not 8. Two regions that touch only at a corner are two regions
+// to anyone looking at the picture. An 8-connected fill leaks between them, and
+// on a real drawing that reads as the fill "escaping" through a line the artist
+// can see is closed.
+//
+// SCANLINE, not per-pixel recursion. A per-pixel stack on a 480x360 canvas can
+// hold 172,800 entries; the scanline form pushes one entry per RUN, which is
+// what keeps a whole-canvas fill cheap.
+function paintFloodFill(pixels, w, h, x, y, rgba, tolerance) {
+  x = Math.floor(x); y = Math.floor(y);
+  if (x < 0 || y < 0 || x >= w || y >= h) return 0;
+  const tol = Math.max(0, Number(tolerance) || 0);
+  const at = (px, py) => (py * w + px) * 4;
+
+  const start = at(x, y);
+  const sr = pixels[start], sg = pixels[start + 1], sb = pixels[start + 2], sa = pixels[start + 3];
+  const [nr, ng, nb, na] = rgba;
+
+  // Without this the fill would repaint the region it is standing on, find every
+  // pixel already matching, and walk forever on a tolerance that lets the new
+  // colour match the old one.
+  if (sr === nr && sg === ng && sb === nb && sa === na) return 0;
+
+  const matches = i => Math.abs(pixels[i] - sr) <= tol
+                    && Math.abs(pixels[i + 1] - sg) <= tol
+                    && Math.abs(pixels[i + 2] - sb) <= tol
+                    && Math.abs(pixels[i + 3] - sa) <= tol;
+
+  const paint = i => { pixels[i] = nr; pixels[i + 1] = ng; pixels[i + 2] = nb; pixels[i + 3] = na; };
+
+  let filled = 0;
+  const stack = [[x, y]];
+  while (stack.length) {
+    const [px, py] = stack.pop();
+    let left = px;
+    while (left > 0 && matches(at(left - 1, py))) left--;
+    let right = px;
+    while (right < w - 1 && matches(at(right + 1, py))) right++;
+
+    for (let i = left; i <= right; i++) {
+      const idx = at(i, py);
+      if (!matches(idx)) continue;
+      paint(idx);
+      filled++;
+      // Seed the rows above and below from this run. Testing each column rather
+      // than pushing the whole run keeps the stack to one entry per contiguous
+      // neighbouring run.
+      if (py > 0 && matches(at(i, py - 1))) stack.push([i, py - 1]);
+      if (py < h - 1 && matches(at(i, py + 1))) stack.push([i, py + 1]);
+    }
+  }
+  return filled;
+}
