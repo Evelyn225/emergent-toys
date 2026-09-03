@@ -316,3 +316,68 @@ test('Save As through the real dialog lands the file in PICTURES, not the root',
     assert.strictEqual(result.atRoot, null, 'the file leaked into the filesystem root');
   });
 });
+
+test('an existing image loads onto the canvas, letterboxed on white', async () => {
+  await withPaint(async page => {
+    const r = await page.evaluate(async () => {
+      // A 4x4 all-red PNG, written the way an upload would write it.
+      const c = document.createElement('canvas');
+      c.width = 4; c.height = 4;
+      const g = c.getContext('2d');
+      g.fillStyle = '#ff0000';
+      g.fillRect(0, 0, 4, 4);
+      const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+      await vfsWriteBlob('red.png', { url: URL.createObjectURL(blob), kind: 'image', size: blob.size, mime: 'image/png' }, 'PICTURES');
+      await paintLoadImage('red.png', 'PICTURES');
+      const d = paintState.ctx.getImageData(240, 180, 1, 1).data;
+      return { centre: [d[0], d[1], d[2]], file: paintState.file, dir: paintState.dir };
+    });
+    assert.deepStrictEqual(r.centre, [255, 0, 0], 'the loaded image is not on the canvas');
+    assert.strictEqual(r.file, 'red.png');
+    assert.strictEqual(r.dir, 'PICTURES');
+  });
+});
+
+test('loading an image resets undo so you cannot undo back past it', async () => {
+  await withPaint(async page => {
+    const depth = await page.evaluate(async () => {
+      const c = document.createElement('canvas');
+      c.width = 8; c.height = 8;
+      c.getContext('2d').fillRect(0, 0, 8, 8);
+      const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+      await vfsWriteBlob('b.png', { url: URL.createObjectURL(blob), kind: 'image', size: blob.size, mime: 'image/png' }, 'PICTURES');
+      await paintLoadImage('b.png', 'PICTURES');
+      return paintState.ring.items.length;
+    });
+    assert.strictEqual(depth, 1, 'the pre-load canvas is still in the undo ring');
+  });
+});
+
+test('PAINT.exe is a registered file handler but is not the default for png', async () => {
+  await withPaint(async page => {
+    const r = await page.evaluate(() => ({
+      registered: Object.keys(FILE_HANDLERS).includes('PAINT.exe'),
+      pngDefault: getFileAssociation('x.png'),
+    }));
+    assert.ok(r.registered, 'PAINT.exe is not in FILE_HANDLERS, so REGEDIT cannot point .png at it');
+    assert.strictEqual(r.pngDefault, 'IMAGEVIEW.exe',
+      'double-clicking an image must keep opening the viewer; PAINT is opt-in');
+  });
+});
+
+test('the save dialog defaults are unchanged for notepad', async () => {
+  const { context, page } = await openDesktop(harness.browser, {});
+  try {
+    await openWindow(page, 'openNotepad');
+    const r = await page.evaluate(() => {
+      let got = null;
+      openSaveDialog('untitled.txt', (f, d) => { got = [f, d]; });
+      const win = [...document.querySelectorAll('.os-window')].find(w => w.id.startsWith('win-saveas-'));
+      return { opened: !!win, title: win && win.textContent.includes('Save As') };
+    });
+    assert.ok(r.opened, 'the generalised dialog stopped opening in save mode');
+    assert.ok(r.title, 'the save dialog lost its title');
+  } finally {
+    await context.close();
+  }
+});

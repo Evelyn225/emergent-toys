@@ -163,6 +163,7 @@ const registryData = {
 const FILE_HANDLERS = {
   'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
   'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),
+  'PAINT.exe':     (name, dir) => openPaintFile(name, dir),
   'MEDIAPLAY.exe': (name, dir) => {
     // Blob metadata only, so this stays synchronous.
     const st = vfsStatSync(name, dir);

@@ -489,9 +489,12 @@ function paintBuildMenu(mb) {
   const menus = [
     { label: 'File', items: () => [
       { label: 'New', action: paintNewCanvas },
+      { label: 'Open…', action: paintOpenDialog },
       '-',
       { label: 'Save  Ctrl+S', action: () => paintState.file ? paintSave(paintState.file, paintState.dir) : paintSaveAs() },
       { label: 'Save As…', action: paintSaveAs },
+      '-',
+      { label: 'Set as Wallpaper', action: paintSetWallpaper },
       '-',
       { label: 'Close', action: () => closeWin(PAINT_WIN_ID) },
     ]},
@@ -621,5 +624,86 @@ function paintSave(fname, dir) {
 }
 
 function paintSaveAs() {
-  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir), paintState.dir);
+  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir),
+                 { startDir: paintState.dir });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Opening
+// ─────────────────────────────────────────────────────────────────
+
+// Draws an image onto the fixed canvas, scaled down to fit and letterboxed on
+// white. Smoothing is ON for this one draw and off again straight after: a
+// photograph downscaled with nearest-neighbour is mush, while every stroke made
+// afterwards still has to land on the hard pixel grid.
+function paintDrawImageFitted(img) {
+  const s = paintState;
+  paintClearCanvas();
+  const scale = Math.min(s.canvas.width / img.width, s.canvas.height / img.height, 1);
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const x = Math.floor((s.canvas.width - w) / 2);
+  const y = Math.floor((s.canvas.height - h) / 2);
+  s.ctx.imageSmoothingEnabled = scale < 1;
+  s.ctx.drawImage(img, x, y, w, h);
+  s.ctx.imageSmoothingEnabled = false;
+}
+
+function paintLoadImage(name, dir) {
+  const st = vfsStatSync(name, dir);
+  const blob = st && st.kind === 'blob' ? st.blob : null;
+  if (!blob || blob.kind !== 'image') {
+    osAlert('That is not an image file:\n' + name, 'Cannot Open', 'icon:error');
+    return Promise.resolve(false);
+  }
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      paintDrawImageFitted(img);
+      const s = paintState;
+      s.file = st.name;
+      s.dir = st.dirName;
+      s.dirty = false;
+      // A fresh ring, not a push. Undoing back to the blank canvas you happened
+      // to have open before loading somebody's photo is not an undo of anything
+      // the painter did.
+      s.ring = paintUndoInit(PAINT_UNDO_STEPS);
+      paintUndoPush(s.ring, paintSnapshot());
+      setWinTitle(PAINT_WIN_ID, st.name + ' - Paint');
+      resolve(true);
+    };
+    img.onerror = () => {
+      osAlert('That image could not be read.', 'Cannot Open', 'icon:error');
+      resolve(false);
+    };
+    img.src = blob.url;
+  });
+}
+
+function paintOpenDialog() {
+  openSaveDialog(paintState.file || '', (fname, dir) => { paintLoadImage(fname, dir); },
+                 { mode: 'open', kinds: ['blob'], title: 'Open Picture' });
+}
+
+// Wallpaper resolves a VFS path, so there must be a real file first. Saving
+// before applying is not a shortcut - applyWallpaper has nothing to resolve
+// otherwise and would silently fall back to the colour.
+function paintSetWallpaper() {
+  const apply = () => {
+    const path = (paintState.dir ? paintState.dir + '\\' : '') + paintState.file;
+    applyWallpaper(path);
+  };
+  if (paintState.file && !paintState.dirty) { apply(); return; }
+  openSaveDialog(paintState.file || 'wallpaper.png', (fname, dir) => {
+    paintWriteAndSync(fname, dir).then(ok => { if (ok) apply(); }).catch(err => reportVfsError(err));
+  });
+}
+
+// The entry point FILE_HANDLERS and Explorer's Edit item both use: open the
+// window if it is not up, then load the file into it.
+function openPaintFile(name, dir) {
+  if (!paintState) openPaint();
+  if (!name) return;
+  // openPaint's own setup runs synchronously, so paintState is live by here.
+  paintLoadImage(name, dir);
 }

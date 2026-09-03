@@ -3669,6 +3669,7 @@ const registryData = {
 const FILE_HANDLERS = {
   'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
   'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),
+  'PAINT.exe':     (name, dir) => openPaintFile(name, dir),
   'MEDIAPLAY.exe': (name, dir) => {
     // Blob metadata only, so this stays synchronous.
     const st = vfsStatSync(name, dir);
@@ -12477,19 +12478,31 @@ function runScriptInTerminal(name, dirName, args) {
   openTerminal(dirName || '', 'RUN ' + items.join(' '));
 }
 
-// startDir seeds the dialog's starting folder (e.g. PAINT.exe opening Save As
-// on a painting whose home is PICTURES, not the root). Optional and additive -
-// every existing caller that omits it keeps opening at the root exactly as
-// before. Task 9 folds this into an options object; a third positional
-// argument here is shaped so that generalisation absorbs it rather than
-// fighting it.
-function openSaveDialog(defaultName, callback, startDir) {
-  const id = 'saveas-' + Date.now();
-  if (!mkWin({ id, title: 'Save As', icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+// One dialog for Save As and for Open. The two used to be a candidate for a
+// second near-copy of this function, which is the same trap Save and Save As
+// fell into: a fix lands in one and not the other. `options` defaults
+// reproduce the original save-only behaviour exactly, so every existing caller
+// is untouched.
+//
+//   options.mode     'save' (default) or 'open'
+//   options.kinds    which VFS entry kinds are offered - ['text'] by default,
+//                    ['blob'] for an image picker
+//   options.title    window title
+//   options.startDir seeds the dialog's starting folder (e.g. PAINT.exe
+//                     opening Save As on a painting whose home is PICTURES,
+//                     not the root). Optional - every caller that omits it
+//                     keeps opening at the root exactly as before.
+function openSaveDialog(defaultName, callback, options) {
+  options = options || {};
+  const mode = options.mode === 'open' ? 'open' : 'save';
+  const kinds = options.kinds || ['text'];
+  const id = (mode === 'open' ? 'openfile-' : 'saveas-') + Date.now();
+  const title = options.title || (mode === 'open' ? 'Open' : 'Save As');
+  if (!mkWin({ id, title, icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
 
-  let saveCwd = vfsNormalizeDir(startDir || '');
+  let saveCwd = vfsNormalizeDir(options.startDir || '');
 
   // ── "Save in:" bar ────────────────────────────────────────────
   const locRow = document.createElement('div');
@@ -12520,7 +12533,8 @@ function openSaveDialog(defaultName, callback, startDir) {
   // ── Buttons ──────────────────────────────────────────────────
   const btnRow = document.createElement('div');
   btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;flex-shrink:0;';
-  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary'; saveBtn.textContent = 'Save';
+  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary';
+  saveBtn.textContent = mode === 'open' ? 'Open' : 'Save';
   const cancelBtn = document.createElement('button'); cancelBtn.className = 'dlg-btn';        cancelBtn.textContent = 'Cancel';
   btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
   body.appendChild(btnRow);
@@ -12557,12 +12571,13 @@ function openSaveDialog(defaultName, callback, startDir) {
       fileList.appendChild(el);
     });
 
-    entries.filter(e => e.kind === 'text').forEach(({ name }) => {
+    entries.filter(e => kinds.includes(e.kind)).forEach(({ name }) => {
       // resolveFsIcon already owns the extension table; this dialog used to
       // keep a second, smaller copy of it that drifted from the real one.
       const el = makeFLItem(resolveFsIcon(name, 'file'), name);
       el.addEventListener('click', () => { nameInput.value = name; });
       el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
+      if (mode === 'open') el.addEventListener('dblclick', () => { closeWin(id); callback(name, saveCwd); });
       fileList.appendChild(el);
     });
   }
@@ -13675,6 +13690,7 @@ function openExplorer(startPath) {
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
         ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
         ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
+        ...(canSetWallpaper ? [{ label: 'Edit in Paint', action: () => openPaintFile(singleSelected.name, cwd) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {
           runScriptInTerminal(singleSelected.name, cwd);
@@ -18717,9 +18733,12 @@ function paintBuildMenu(mb) {
   const menus = [
     { label: 'File', items: () => [
       { label: 'New', action: paintNewCanvas },
+      { label: 'Open…', action: paintOpenDialog },
       '-',
       { label: 'Save  Ctrl+S', action: () => paintState.file ? paintSave(paintState.file, paintState.dir) : paintSaveAs() },
       { label: 'Save As…', action: paintSaveAs },
+      '-',
+      { label: 'Set as Wallpaper', action: paintSetWallpaper },
       '-',
       { label: 'Close', action: () => closeWin(PAINT_WIN_ID) },
     ]},
@@ -18849,7 +18868,88 @@ function paintSave(fname, dir) {
 }
 
 function paintSaveAs() {
-  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir), paintState.dir);
+  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir),
+                 { startDir: paintState.dir });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Opening
+// ─────────────────────────────────────────────────────────────────
+
+// Draws an image onto the fixed canvas, scaled down to fit and letterboxed on
+// white. Smoothing is ON for this one draw and off again straight after: a
+// photograph downscaled with nearest-neighbour is mush, while every stroke made
+// afterwards still has to land on the hard pixel grid.
+function paintDrawImageFitted(img) {
+  const s = paintState;
+  paintClearCanvas();
+  const scale = Math.min(s.canvas.width / img.width, s.canvas.height / img.height, 1);
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const x = Math.floor((s.canvas.width - w) / 2);
+  const y = Math.floor((s.canvas.height - h) / 2);
+  s.ctx.imageSmoothingEnabled = scale < 1;
+  s.ctx.drawImage(img, x, y, w, h);
+  s.ctx.imageSmoothingEnabled = false;
+}
+
+function paintLoadImage(name, dir) {
+  const st = vfsStatSync(name, dir);
+  const blob = st && st.kind === 'blob' ? st.blob : null;
+  if (!blob || blob.kind !== 'image') {
+    osAlert('That is not an image file:\n' + name, 'Cannot Open', 'icon:error');
+    return Promise.resolve(false);
+  }
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      paintDrawImageFitted(img);
+      const s = paintState;
+      s.file = st.name;
+      s.dir = st.dirName;
+      s.dirty = false;
+      // A fresh ring, not a push. Undoing back to the blank canvas you happened
+      // to have open before loading somebody's photo is not an undo of anything
+      // the painter did.
+      s.ring = paintUndoInit(PAINT_UNDO_STEPS);
+      paintUndoPush(s.ring, paintSnapshot());
+      setWinTitle(PAINT_WIN_ID, st.name + ' - Paint');
+      resolve(true);
+    };
+    img.onerror = () => {
+      osAlert('That image could not be read.', 'Cannot Open', 'icon:error');
+      resolve(false);
+    };
+    img.src = blob.url;
+  });
+}
+
+function paintOpenDialog() {
+  openSaveDialog(paintState.file || '', (fname, dir) => { paintLoadImage(fname, dir); },
+                 { mode: 'open', kinds: ['blob'], title: 'Open Picture' });
+}
+
+// Wallpaper resolves a VFS path, so there must be a real file first. Saving
+// before applying is not a shortcut - applyWallpaper has nothing to resolve
+// otherwise and would silently fall back to the colour.
+function paintSetWallpaper() {
+  const apply = () => {
+    const path = (paintState.dir ? paintState.dir + '\\' : '') + paintState.file;
+    applyWallpaper(path);
+  };
+  if (paintState.file && !paintState.dirty) { apply(); return; }
+  openSaveDialog(paintState.file || 'wallpaper.png', (fname, dir) => {
+    paintWriteAndSync(fname, dir).then(ok => { if (ok) apply(); }).catch(err => reportVfsError(err));
+  });
+}
+
+// The entry point FILE_HANDLERS and Explorer's Edit item both use: open the
+// window if it is not up, then load the file into it.
+function openPaintFile(name, dir) {
+  if (!paintState) openPaint();
+  if (!name) return;
+  // openPaint's own setup runs synchronously, so paintState is live by here.
+  paintLoadImage(name, dir);
 }
 function triggerGlitch(options) {
   const desktop = document.getElementById('desktop');
