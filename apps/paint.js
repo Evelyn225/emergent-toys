@@ -621,5 +621,5 @@ function paintSave(fname, dir) {
 }
 
 function paintSaveAs() {
-  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir));
+  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir), paintState.dir);
 }

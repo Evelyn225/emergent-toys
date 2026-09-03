@@ -12477,13 +12477,19 @@ function runScriptInTerminal(name, dirName, args) {
   openTerminal(dirName || '', 'RUN ' + items.join(' '));
 }
 
-function openSaveDialog(defaultName, callback) {
+// startDir seeds the dialog's starting folder (e.g. PAINT.exe opening Save As
+// on a painting whose home is PICTURES, not the root). Optional and additive -
+// every existing caller that omits it keeps opening at the root exactly as
+// before. Task 9 folds this into an options object; a third positional
+// argument here is shaped so that generalisation absorbs it rather than
+// fighting it.
+function openSaveDialog(defaultName, callback, startDir) {
   const id = 'saveas-' + Date.now();
   if (!mkWin({ id, title: 'Save As', icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
 
-  let saveCwd = '';
+  let saveCwd = vfsNormalizeDir(startDir || '');
 
   // ── "Save in:" bar ────────────────────────────────────────────
   const locRow = document.createElement('div');
@@ -18843,7 +18849,7 @@ function paintSave(fname, dir) {
 }
 
 function paintSaveAs() {
-  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir));
+  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir), paintState.dir);
 }
 function triggerGlitch(options) {
   const desktop = document.getElementById('desktop');

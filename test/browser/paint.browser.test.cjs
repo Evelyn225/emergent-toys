@@ -277,3 +277,42 @@ test('a save that collides with a text file reports it and does not claim succes
     assert.strictEqual(r.file, null, 'a refused save still renamed the document');
   });
 });
+
+// Drives the real Save As dialog end to end rather than calling
+// paintWriteAndSync directly - the four tests above all pass an explicit
+// 'PICTURES' and so cannot see whether the dialog itself starts out pointed
+// at PICTURES. openSaveDialog defaults to the filesystem root, and PAINT's
+// paintState.dir ('PICTURES') was not being threaded into it - a real Save As
+// silently wrote to the root.
+test('Save As through the real dialog lands the file in PICTURES, not the root', async () => {
+  await withPaint(async page => {
+    await dragCanvas(page, 40, 40, 100, 100);
+    await page.evaluate(() => paintSaveAs());
+    await page.waitForSelector('[id^="win-saveas-"]');
+
+    const savedIn = await page.evaluate(() => {
+      const dlg = document.querySelector('[id^="win-saveas-"]');
+      const locRow = dlg.querySelector('.win-body > div');
+      return locRow ? locRow.lastElementChild.textContent : null;
+    });
+    assert.strictEqual(savedIn, 'C:\\sleepOS\\PICTURES',
+      'the Save As dialog did not open in PICTURES: ' + savedIn);
+
+    await page.evaluate(() => {
+      const dlg = document.querySelector('[id^="win-saveas-"]');
+      const nameInput = dlg.querySelector('input[type="text"]');
+      nameInput.value = 'dialog-save.png';
+      const saveBtn = [...dlg.querySelectorAll('button')].find(b => b.textContent === 'Save');
+      saveBtn.click();
+    });
+    await page.waitForFunction(() => paintState.file === 'dialog-save.png');
+
+    const result = await page.evaluate(() => ({
+      inPictures: vfsStatSync('dialog-save.png', 'PICTURES'),
+      atRoot: vfsStatSync('dialog-save.png', ''),
+    }));
+    assert.ok(result.inPictures, 'the file did not land in PICTURES');
+    assert.strictEqual(result.inPictures.kind, 'blob');
+    assert.strictEqual(result.atRoot, null, 'the file leaked into the filesystem root');
+  });
+});
