@@ -25,6 +25,7 @@ const OS_ICONS = {
   sysmon:        'chart1-4.png',
   regedit:       'regedit-0.png',
   minesweeper:   'minesweeper.png',
+  paint:         'paint.png',
   defrag:        'clean_drive.png',
   explorer:      'directory_open_file_mydocs-0.png',
   settings:      'settings.png',

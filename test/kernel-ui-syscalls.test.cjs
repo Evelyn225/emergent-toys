@@ -30,6 +30,7 @@ function kernelWithPrograms(overrides) {
     openFiles: () => calls.push(['files']),
     openCalculator: () => calls.push(['calc']),
     openMinesweeper: () => calls.push(['minesweeper']),
+    openPaint: () => calls.push(['paint']),
     openRegedit: () => calls.push(['regedit']),
     openSystemFile: (name) => { calls.push(['fallback', name]); return true; },
     openMediaFile: (name, dir) => calls.push(['media', name, dir]),

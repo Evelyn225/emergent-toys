@@ -41,7 +41,7 @@ function fsCtxWithRefresh() {
 const SYSTEM_BINARIES = [
   'TERMINAL.exe', 'SYSMON.exe', 'NOTEPAD.exe', 'BROWSER.exe',
   'DEFRAG.exe', 'CALC.exe', 'REGEDIT.exe', 'EXPLORER.exe',
-  'MINESWEEPER.exe',
+  'MINESWEEPER.exe', 'PAINT.exe',
 ];
 
 test('every system binary is seeded as a real root text file', () => {

@@ -14,6 +14,7 @@ const ROOT_SYSTEM_FILE_META = [
   { name: 'REGEDIT.exe' },
   { name: 'EXPLORER.exe' },
   { name: 'MINESWEEPER.exe' },
+  { name: 'PAINT.exe' },
 ];
 const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'SYS', 'CACHE', 'DESKTOP']);
 const STORY_FILE_PATHS = {
