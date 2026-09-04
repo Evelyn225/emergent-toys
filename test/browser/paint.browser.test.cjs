@@ -637,15 +637,38 @@ test('the text tool draws typed text at the click point', async () => {
 
 test('the alphabet stamp draws one big letter per click', async () => {
   await withPaint(async page => {
-    const r = await page.evaluate(() => {
+    const { stampCount, smallCount } = await page.evaluate(() => {
       paintSelectTool('text'); paintSelectVariant('stamp'); paintSetColor('#000000');
       paintState.stampLetter = 'A';
-      paintDrawText({ x: 240, y: 180 }, 'A', 64);
-      const d = paintState.ctx.getImageData(200, 130, 90, 90).data;
-      let n = 0;
-      for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++;
-      return n;
+      // Drive the real path end to end: paintBeginStroke's text route into
+      // paintDoText's stamp branch, which is what actually reads
+      // paintState.variant and paintState.stampLetter. No osPrompt modal opens
+      // for the stamp branch, so unlike the size variants this is safe to
+      // drive as a real click rather than calling paintDrawText directly.
+      paintBeginStroke({ x: 240, y: 180 });
+      const region = () => {
+        const d = paintState.ctx.getImageData(200, 130, 90, 90).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++;
+        return n;
+      };
+      const stampCount = region();
+
+      // Undo the stamp, then draw the same letter at the smallest text size in
+      // the same spot - proving the stamp is actually BIG, not merely
+      // non-blank. paintDrawText is called directly here, bypassing
+      // paintBeginStroke, for the same reason the size-variant test does: the
+      // t8 branch of paintDoText opens an osPrompt modal this test has no
+      // business driving.
+      paintUndo();
+      paintDrawText({ x: 240, y: 180 }, 'A', paintTextSize('t8'));
+      const smallCount = region();
+
+      return { stampCount, smallCount };
     });
-    assert.ok(r > 100, 'the alphabet stamp drew nothing at stamp size');
+    assert.ok(stampCount > 100, 'the alphabet stamp drew nothing at stamp size');
+    assert.ok(smallCount > 0, 'the small comparison letter did not draw either - the harness is broken, not just the stamp');
+    assert.ok(stampCount > smallCount * 3,
+      `the alphabet stamp (${stampCount}px) is not meaningfully bigger than a small text letter (${smallCount}px)`);
   });
 });
