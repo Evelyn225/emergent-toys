@@ -18,7 +18,7 @@ function coreCtx() {
 // the build order completes - it is a scaffold, not a permanent exemption, and
 // leaving an entry here once its task is done is a bug this comment exists to
 // make obvious.
-const NOT_YET_IMPLEMENTED = new Set(['wacky', 'eraser', 'select']);
+const NOT_YET_IMPLEMENTED = new Set(['eraser', 'select']);
 
 test('the canvas is a fixed 480x360', () => {
   const ctx = coreCtx();
@@ -309,8 +309,8 @@ test('a zero-length segment still emits at least one op', () => {
 
 test('generators are deterministic for a seed', () => {
   const ctx = coreCtx();
-  const a = ctx.paintGenerate('pencil', 'sketchy', stroke(10, 10, 40, 40), stateFor(ctx, { rng: ctx.paintRng(7) }));
-  const b = ctx.paintGenerate('pencil', 'sketchy', stroke(10, 10, 40, 40), stateFor(ctx, { rng: ctx.paintRng(7) }));
+  const a = ctx.paintGenerate('wacky', 'spray', stroke(10, 10, 40, 40), stateFor(ctx, { rng: ctx.paintRng(7) }));
+  const b = ctx.paintGenerate('wacky', 'spray', stroke(10, 10, 40, 40), stateFor(ctx, { rng: ctx.paintRng(7) }));
   assert.deepStrictEqual(a, b, 'the same seed produced different ops');
 });
 
@@ -550,4 +550,81 @@ test('geometric patterns are position-dependent, not random', () => {
     const b = ctx.paintPatternAt(id, 4, 4, ctx.paintRng(99));
     assert.strictEqual(a, b, 'pattern ' + id + ' depends on the rng and will shimmer');
   });
+});
+
+// ── wacky brushes ────────────────────────────────────────────────
+
+test('all fifteen wacky brushes are registered and draw something', () => {
+  const ctx = coreCtx();
+  const variants = ctx.paintVariantsFor('wacky');
+  assert.strictEqual(variants.length, 15);
+  variants.forEach(v => {
+    const ops = ctx.paintGenerate('wacky', v.id, stroke(40, 40, 120, 90), stateFor(ctx));
+    assert.ok(ops.length > 0, 'wacky/' + v.id + ' drew nothing on a drag');
+  });
+});
+
+test('every wacky brush is deterministic for a seed', () => {
+  const ctx = coreCtx();
+  ctx.paintVariantsFor('wacky').forEach(v => {
+    const a = ctx.paintGenerate('wacky', v.id, stroke(10, 10, 80, 60), stateFor(ctx, { rng: ctx.paintRng(5) }));
+    const b = ctx.paintGenerate('wacky', v.id, stroke(10, 10, 80, 60), stateFor(ctx, { rng: ctx.paintRng(5) }));
+    assert.deepStrictEqual(a, b, 'wacky/' + v.id + ' is not reproducible from its seed');
+  });
+});
+
+test('no wacky brush throws ops off the canvas', () => {
+  const ctx = coreCtx();
+  const W = ctx.paintCanvasWidth(), H = ctx.paintCanvasHeight();
+  // Dragging near an edge is the case that catches a brush which scatters
+  // outward without clamping - kaleidoscope and splatter both can.
+  const edges = [stroke(2, 2, 8, 8), stroke(W - 3, H - 3, W - 9, H - 9), stroke(W / 2, 1, W / 2, 6)];
+  ctx.paintVariantsFor('wacky').forEach(v => {
+    edges.forEach(seg => {
+      ctx.paintGenerate('wacky', v.id, seg, stateFor(ctx)).forEach(op => {
+        const x = op.x !== undefined ? op.x : op.x0;
+        const y = op.y !== undefined ? op.y : op.y0;
+        assert.ok(x >= -64 && x <= W + 64, 'wacky/' + v.id + ' emitted x=' + x + ', far off canvas');
+        assert.ok(y >= -64 && y <= H + 64, 'wacky/' + v.id + ' emitted y=' + y + ', far off canvas');
+      });
+    });
+  });
+});
+
+test('the kaleidoscope mirrors its dabs about both axes', () => {
+  const ctx = coreCtx();
+  const W = ctx.paintCanvasWidth(), H = ctx.paintCanvasHeight();
+  const ops = ctx.paintGenerate('wacky', 'kaleido', stroke(100, 80, 100, 80), stateFor(ctx));
+  assert.strictEqual(ops.length % 4, 0, 'a four-fold mirror should emit a multiple of four');
+  const xs = ops.map(o => o.x);
+  assert.ok(xs.some(x => Math.abs(x - (W - 100)) < 1), 'no horizontal mirror');
+  const ys = ops.map(o => o.y);
+  assert.ok(ys.some(y => Math.abs(y - (H - 80)) < 1), 'no vertical mirror');
+});
+
+test('the rainbow ribbon changes colour along the stroke', () => {
+  const ctx = coreCtx();
+  const ops = ctx.paintGenerate('wacky', 'rainbow', stroke(0, 0, 200, 0), stateFor(ctx, { color: '#ff0000' }));
+  const colors = new Set(ops.map(o => o.color));
+  assert.ok(colors.size > 2, 'the rainbow brush painted in one colour');
+});
+
+test('sticker scatter only ever emits valid sticker indices', () => {
+  const ctx = coreCtx();
+  const count = ctx.paintStickerCount();
+  const ops = ctx.paintGenerate('wacky', 'scatter', stroke(20, 20, 300, 200), stateFor(ctx));
+  assert.ok(ops.length > 0);
+  ops.forEach(o => {
+    assert.strictEqual(o.op, 'sprite');
+    assert.ok(Number.isInteger(o.idx) && o.idx >= 0 && o.idx < count,
+      'scatter emitted sticker index ' + o.idx + ', outside 0..' + (count - 1));
+  });
+});
+
+test('connect the dots draws back to earlier points in the stroke', () => {
+  const ctx = coreCtx();
+  const st = stateFor(ctx, { points: [{ x: 10, y: 10 }, { x: 50, y: 50 }, { x: 90, y: 20 }] });
+  const ops = ctx.paintGenerate('wacky', 'connect', stroke(90, 20, 120, 60), st);
+  const lines = ops.filter(o => o.op === 'line');
+  assert.ok(lines.length >= 2, 'connect the dots drew no chords back to earlier points');
 });

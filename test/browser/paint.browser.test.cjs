@@ -179,7 +179,7 @@ test('the options bar rebuilds with the right count when the tool changes', asyn
 test('every option button previews itself by running its own generator', async () => {
   await withPaint(async page => {
     const inked = await page.evaluate(() => {
-      paintSelectTool('pencil');
+      paintSelectTool('wacky');
       // A preview that renders nothing is the failure mode here - a blank row of
       // buttons looks deliberate and tells you nothing is wrong. The preview's
       // background is an opaque white fill, so alpha is 255 everywhere even when

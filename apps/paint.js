@@ -93,16 +93,29 @@ function paintStickerImage() {
     // function first runs, which is necessarily before the atlas can have
     // decoded - paintDrawSticker's img.complete guard makes that first pass
     // draw nothing. Redraw the options bar once the atlas is actually ready,
-    // so those previews stop being permanently blank. Guard on paintState:
-    // it goes null when the window closes, and paintRenderOptionsBar
-    // dereferences paintState.tool without a null check of its own.
+    // so those previews stop being permanently blank. This is not just the
+    // sticker tool's problem: wacky/scatter also emits sprite ops, so any
+    // tool's bar can be showing a blank sprite preview when this fires.
+    // Redraw unconditionally rather than re-narrowing to a tool list that the
+    // next sprite-emitting brush would only have to widen again. Guard on
+    // paintState: it goes null when the window closes, and
+    // paintRenderOptionsBar dereferences paintState.tool without a null
+    // check of its own.
     paintStickerImg.onload = () => {
-      if (paintState && paintState.tool === 'sticker') paintRenderOptionsBar();
+      if (paintState) paintRenderOptionsBar();
     };
     paintStickerImg.src = 'os/sprites/paint-stickers.png';
   }
   return paintStickerImg;
 }
+// Kick the atlas request off now, at bundle load, rather than waiting for the
+// first sprite draw to construct it. apps/paint.js is bundled into the OS and
+// runs at boot regardless of whether Paint is ever opened, so this buys the
+// atlas the entire rest of boot to decode - by the time a user (or a test)
+// opens Paint and lands on the sticker or wacky tool, the very first options
+// bar render has a real chance of finding it already loaded instead of
+// racing the onload handler above.
+paintStickerImage();
 
 function paintDrawSticker(ctx, op) {
   const rect = paintStickerRect(op.idx);

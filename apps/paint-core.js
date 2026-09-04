@@ -661,3 +661,229 @@ paintVariantsFor('text').forEach(v => {
     return [{ op: 'rect', x: seg.x0, y: seg.y1, w: 3, h, color: st.color }];
   });
 });
+
+// ─────────────────────────────────────────────────────────────────
+// The wacky brush
+// ─────────────────────────────────────────────────────────────────
+// Fifteen variants, each a pure function of one segment. This is where the
+// generator design pays for itself twice over: every one of these is provable
+// in node, and every one draws its own button in the options bar for free.
+//
+// Two rules all of them follow:
+//   - read randomness ONLY from st.rng, so a stroke is reproducible
+//   - stay near the segment. A brush that scatters unboundedly paints outside
+//     the canvas at the edges, which is invisible until someone draws there.
+
+// Rotates a hex colour's hue. Used by the rainbow ribbon, and kept here rather
+// than in the UI because the ops carry finished colours - the renderer does no
+// colour maths at all.
+function paintHueShift(hex, degrees) {
+  const [r, g, b] = paintHexToRgba(hex);
+  const max = Math.max(r, g, b) / 255, min = Math.min(r, g, b) / 255;
+  const v = max, d = max - min;
+  const s = max === 0 ? 0 : d / max;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r / 255)      h = 60 * (((g - b) / 255 / d) % 6);
+    else if (max === g / 255) h = 60 * ((b - r) / 255 / d + 2);
+    else                      h = 60 * ((r - g) / 255 / d + 4);
+  }
+  h = (((h + degrees) % 360) + 360) % 360;
+  // A grey has no hue to rotate, so give the ribbon a saturated one to work
+  // with rather than emitting 30 identical greys.
+  const rgb = paintHsvToRgb(h, s < 0.05 ? 1 : s, v < 0.15 ? 1 : v);
+  return paintRgbToHex(rgb[0], rgb[1], rgb[2]);
+}
+
+paintRegisterGenerator('wacky', 'spray', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 4).forEach(p => {
+    for (let i = 0; i < 8; i++) {
+      const a = st.rng() * Math.PI * 2;
+      const d = st.rng() * 10;
+      ops.push({ op: 'dab', x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d, r: 1, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'echo', (seg, st) => {
+  // Four ghosts trailing behind the stroke's own direction, each smaller.
+  const dx = seg.x1 - seg.x0, dy = seg.y1 - seg.y0;
+  const ops = [];
+  for (let k = 0; k < 4; k++) {
+    ops.push({ op: 'dab', x: seg.x1 - dx * k * 1.6, y: seg.y1 - dy * k * 1.6,
+               r: Math.max(1, st.size * (1 - k * 0.2)), color: st.color });
+  }
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'kaleido', (seg, st) => {
+  // Four-fold: the dab plus its mirror in each axis and both. The canvas
+  // dimensions are the mirror lines, which is why this generator is the one
+  // place in the file that reads them.
+  const W = paintCanvasWidth(), H = paintCanvasHeight();
+  const ops = [];
+  paintWalk(seg, 3).forEach(p => {
+    [[p.x, p.y], [W - p.x, p.y], [p.x, H - p.y], [W - p.x, H - p.y]].forEach(([x, y]) => {
+      ops.push({ op: 'dab', x, y, r: Math.max(1, st.size), color: st.color });
+    });
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'spiral', (seg, st) => {
+  const ops = [];
+  const turns = 3, steps = 40;
+  const maxR = 6 + st.size * 3;
+  for (let i = 0; i < steps; i++) {
+    const t = i / steps;
+    const a = t * Math.PI * 2 * turns + seg.index * 0.4;
+    const r = t * maxR;
+    ops.push({ op: 'dab', x: seg.x1 + Math.cos(a) * r, y: seg.y1 + Math.sin(a) * r,
+               r: 1.5, color: st.color });
+  }
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'tree', (seg, st) => {
+  // A two-level branch off the segment's end. Not a real L-system: three
+  // recursion levels at every mouse move is a solid black blob within a second.
+  const ops = [];
+  const baseA = Math.atan2(seg.y1 - seg.y0, seg.x1 - seg.x0) - Math.PI / 2;
+  const len = 10 + st.size * 2;
+  const grow = (x, y, a, l, depth) => {
+    const nx = x + Math.cos(a) * l, ny = y + Math.sin(a) * l;
+    ops.push({ op: 'line', x0: x, y0: y, x1: nx, y1: ny, w: Math.max(1, depth), color: st.color });
+    if (depth <= 0) return;
+    grow(nx, ny, a - 0.5 - st.rng() * 0.3, l * 0.7, depth - 1);
+    grow(nx, ny, a + 0.5 + st.rng() * 0.3, l * 0.7, depth - 1);
+  };
+  grow(seg.x1, seg.y1, baseA, len, 2);
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'drips', (seg, st) => {
+  const ops = [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1,
+                 w: Math.max(2, st.size), color: st.color }];
+  // A run of paint down from the stroke, now and then.
+  if (st.rng() < 0.25) {
+    const len = 8 + st.rng() * 34;
+    ops.push({ op: 'line', x0: seg.x1, y0: seg.y1, x1: seg.x1, y1: seg.y1 + len, w: 2, color: st.color });
+    ops.push({ op: 'dab', x: seg.x1, y: seg.y1 + len, r: 2.5, color: st.color });
+  }
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'bubbles', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 9).forEach(p => {
+    const r = 2 + st.rng() * 9;
+    const a = st.rng() * Math.PI * 2;
+    const d = st.rng() * 8;
+    const cx = p.x + Math.cos(a) * d, cy = p.y + Math.sin(a) * d;
+    // A ring of small dabs, so a bubble reads as an outline rather than a blob.
+    for (let i = 0; i < 12; i++) {
+      const t = (i / 12) * Math.PI * 2;
+      ops.push({ op: 'dab', x: cx + Math.cos(t) * r, y: cy + Math.sin(t) * r, r: 1, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'rainbow', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 2).forEach((p, i) => {
+    ops.push({ op: 'dab', x: p.x, y: p.y, r: Math.max(2, st.size),
+               color: paintHueShift(st.color, (seg.index * 9 + i * 7) % 360) });
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'scatter', (seg, st) => {
+  const count = paintStickerCount();
+  return paintWalk(seg, 26).map(p => ({
+    op: 'sprite',
+    idx: Math.floor(st.rng() * count) % count,
+    x: p.x, y: p.y,
+    size: 16 + Math.floor(st.rng() * 18),
+    rot: 0,
+  }));
+});
+
+paintRegisterGenerator('wacky', 'connect', (seg, st) => {
+  const ops = [{ op: 'dab', x: seg.x1, y: seg.y1, r: 2.5, color: st.color }];
+  // Chords back to a few earlier points in the same stroke. Capped at four, or
+  // a long stroke becomes O(n^2) lines and the canvas fills with black.
+  const pts = st.points || [];
+  pts.slice(-5, -1).forEach(p => {
+    ops.push({ op: 'line', x0: seg.x1, y0: seg.y1, x1: p.x, y1: p.y, w: 1, color: st.color });
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'fuzzy', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 3).forEach(p => {
+    for (let i = 0; i < 6; i++) {
+      const a = st.rng() * Math.PI * 2;
+      const l = 3 + st.rng() * 7;
+      ops.push({ op: 'line', x0: p.x, y0: p.y,
+                 x1: p.x + Math.cos(a) * l, y1: p.y + Math.sin(a) * l, w: 1, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'stars', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 14).forEach(p => {
+    const r = 4 + st.rng() * 7;
+    const spin = st.rng() * Math.PI;
+    // Five-pointed, drawn as five spokes. Cheap and unmistakable.
+    for (let i = 0; i < 5; i++) {
+      const a = spin + (i / 5) * Math.PI * 2;
+      ops.push({ op: 'line', x0: p.x, y0: p.y,
+                 x1: p.x + Math.cos(a) * r, y1: p.y + Math.sin(a) * r, w: 2, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'splatter', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 7).forEach(p => {
+    const blobs = 3 + Math.floor(st.rng() * 4);
+    for (let i = 0; i < blobs; i++) {
+      const a = st.rng() * Math.PI * 2;
+      const d = st.rng() * 16;
+      ops.push({ op: 'dab', x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d,
+                 r: 1 + st.rng() * 4, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'beads', (seg, st) => {
+  const spacing = Math.max(6, st.size * 3);
+  return paintWalk(seg, spacing).map((p, i) => ({
+    op: 'dab', x: p.x, y: p.y,
+    r: 3 + Math.sin((seg.index + i) * 0.7) * 2,
+    color: st.color,
+  }));
+});
+
+paintRegisterGenerator('wacky', 'leaky', (seg, st) => {
+  const ops = [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1, w: 1, color: st.color }];
+  // Occasional blots, the way a bad pen lets go all at once.
+  if (st.rng() < 0.18) {
+    const r = 3 + st.rng() * 7;
+    ops.push({ op: 'dab', x: seg.x1, y: seg.y1, r, color: st.color });
+    for (let i = 0; i < 3; i++) {
+      const a = st.rng() * Math.PI * 2;
+      ops.push({ op: 'dab', x: seg.x1 + Math.cos(a) * r * 1.7,
+                 y: seg.y1 + Math.sin(a) * r * 1.7, r: 1 + st.rng() * 2, color: st.color });
+    }
+  }
+  return ops;
+});
