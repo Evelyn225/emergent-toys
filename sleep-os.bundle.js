@@ -18946,6 +18946,11 @@ function paintRenderStickerPager(host) {
 // button that reshuffles every time you change tool reads as a glitch.
 const PAINT_PREVIEW_SEED = 20260902;
 
+// Sticker preview sizes, in a 22px button. NOT the real stamp sizes (20/32/52)
+// - two of those overflow the button. These keep the same ordering so the three
+// buttons still read as small / medium / large at a glance.
+const PAINT_STICKER_PREVIEW_SIZES = { small: 11, medium: 16, large: 21 };
+
 function paintVariantPreview(toolId, variantId) {
   const size = 22;
   const c = document.createElement('canvas');
@@ -18969,6 +18974,18 @@ function paintVariantPreview(toolId, variantId) {
   if (toolId === 'eraser') {
     g.fillStyle = paintState ? paintState.color : '#000000';
     g.fillRect(0, 0, size, size);
+  }
+  // A stamp has no stroke to show, so the diagonal above is the wrong question
+  // to ask it. The sticker generator stamps at the START of that drag, which
+  // lands the sprite on (3, 19) - the bottom-left corner - and 'large' stamps
+  // at 52px, so most of it falls outside a 22px button entirely. Preview the
+  // stamp itself instead: one sprite, centred, scaled so the three sizes still
+  // read as visibly different from each other.
+  if (toolId === 'sticker') {
+    const half = size / 2;
+    paintExecOps(g, [{ op: 'sprite', idx: st.stickerIndex, x: half, y: half,
+                       size: PAINT_STICKER_PREVIEW_SIZES[variantId] || 16, rot: 0 }]);
+    return c;
   }
   paintExecOps(g, paintGenerate(toolId, variantId, seg, st));
   return c;
@@ -19064,12 +19081,8 @@ function paintOpenHelp() {
       <h3>How to paint</h3>
       <p>Pick a tool down the left, pick a version of it along the bottom, pick
          a colour, then drag on the canvas.</p>
-      <ul>
-        <li>Every button along the bottom draws itself, so what you see on the
-            button is what the tool does.</li>
-        <li><b>Ctrl+Z</b> undoes, <b>Ctrl+Y</b> redoes. Twenty steps.</li>
-        <li>The erasers are not all polite. Some of them are the point.</li>
-      </ul>
+      <p><b>Ctrl+Z</b> undoes and <b>Ctrl+Y</b> redoes, up to twenty steps back.
+         <b>Ctrl+S</b> saves into C:\sleepOS\PICTURES.</p>
       <h3>Credits</h3>
       <p>The stickers are Br&oslash;derbund <i>Kid Pix</i> stamps. A tribute,
          not the original.</p>
