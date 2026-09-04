@@ -450,6 +450,41 @@ test('a rectangle dragged up and to the left still has positive dimensions', () 
   assert.deepStrictEqual([r.x, r.y, r.w, r.h], [20, 10, 60, 50]);
 });
 
+test('a rounded rectangle covers all four corners with same-radius dabs and gapless spans', () => {
+  const ctx = coreCtx();
+  // A rounded rect is a plus-shaped pair of full-span rects (one inset in
+  // width, one inset in height) plus a corner dab at each of the four
+  // corners it leaves bare. Assert the seams line up rather than rasterising.
+  const ops = ctx.paintGenerate('rect', 'round', stroke(10, 10, 50, 50), stateFor(ctx));
+  const b = { x: 10, y: 10, w: 40, h: 40 };
+  const r = 8; // Math.min(8, b.w / 2, b.h / 2)
+
+  const dabs = ops.filter(o => o.op === 'dab');
+  assert.strictEqual(dabs.length, 4, 'a rounded rect needs one dab per corner');
+  const corners = [
+    [b.x + r, b.y + r], [b.x + b.w - r, b.y + r],
+    [b.x + r, b.y + b.h - r], [b.x + b.w - r, b.y + b.h - r],
+  ];
+  corners.forEach(([cx, cy]) => {
+    const hit = dabs.find(d => d.x === cx && d.y === cy);
+    assert.ok(hit, `missing a corner dab at (${cx},${cy})`);
+    assert.strictEqual(hit.r, r, 'corner dab radius does not match the rounding radius');
+  });
+
+  const rects = ops.filter(o => o.op === 'rect');
+  assert.strictEqual(rects.length, 2, 'a rounded rect needs exactly two spanning rects');
+  const horiz = rects.find(o => o.w === b.w - r * 2);
+  const vert = rects.find(o => o.h === b.h - r * 2);
+  assert.ok(horiz && horiz.h === b.h, 'the horizontal span does not run the full height');
+  assert.ok(vert && vert.w === b.w, 'the vertical span does not run the full width');
+  // Gapless: each span's inset edge must land exactly on the corner dabs'
+  // centre line, or a seam opens between the flat spans and the corner circles.
+  assert.strictEqual(horiz.x, b.x + r);
+  assert.strictEqual(horiz.x + horiz.w, b.x + b.w - r);
+  assert.strictEqual(vert.y, b.y + r);
+  assert.strictEqual(vert.y + vert.h, b.y + b.h - r);
+});
+
 test('an oval is drawn as dabs along an ellipse, inside the drag box', () => {
   const ctx = coreCtx();
   const ops = ctx.paintGenerate('oval', 'outline', stroke(0, 0, 100, 60), stateFor(ctx));

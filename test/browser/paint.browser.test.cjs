@@ -95,6 +95,47 @@ test('a click without a drag still makes a mark', async () => {
   });
 });
 
+// A shape drag restores the pre-drag canvas on every move and redraws the
+// whole shape from the drag origin - see paintExtendStroke. This is the one
+// thing node cannot see: real pointermoves, in real sequence, against a real
+// canvas. Node can prove the generator's geometry; only a browser can prove
+// the live preview actually erases what an earlier, bigger frame drew.
+test('a rect drag previews live and leaves no residue outside the final shape', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => { paintSelectTool('rect'); paintSelectVariant('filled'); paintSetColor('#000000'); });
+    const box = await page.evaluate(() => {
+      const r = document.getElementById('paint-canvas').getBoundingClientRect();
+      return { left: r.left, top: r.top, scale: paintState.scale };
+    });
+    const toPage = (x, y) => [box.left + x * box.scale, box.top + y * box.scale];
+
+    // Drag out to a large box first, then back in to a small one before
+    // releasing. If paintRestore ever stopped firing on each move, the ink
+    // from the large intermediate frame would survive past the smaller,
+    // final committed shape.
+    let [px, py] = toPage(50, 50);
+    await page.mouse.move(px, py);
+    await page.mouse.down();
+    [px, py] = toPage(400, 300);
+    await page.mouse.move(px, py, { steps: 4 });
+    // Mid-drag: the large box should already be previewed onto the canvas.
+    assert.deepStrictEqual(await pixelAt(page, 350, 250), [0, 0, 0, 255],
+      'the large intermediate box did not preview');
+
+    [px, py] = toPage(120, 90);
+    await page.mouse.move(px, py, { steps: 4 });
+    await page.mouse.up();
+
+    // Only covered by the large intermediate frame, and outside the final
+    // rectangle - must be back to white once the drag settles.
+    assert.deepStrictEqual(await pixelAt(page, 350, 250), [255, 255, 255, 255],
+      'ink from an intermediate preview frame survived past the final shape');
+    // The final rectangle itself must still be inked.
+    assert.deepStrictEqual(await pixelAt(page, 80, 70), [0, 0, 0, 255],
+      'the final committed rectangle did not land');
+  });
+});
+
 test('the toolbox lists every tool and marks exactly one selected', async () => {
   await withPaint(async page => {
     const m = await page.evaluate(() => ({
