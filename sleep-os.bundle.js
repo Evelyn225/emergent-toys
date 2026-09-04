@@ -18389,6 +18389,16 @@ let paintStickerImg = null;
 function paintStickerImage() {
   if (!paintStickerImg) {
     paintStickerImg = new Image();
+    // The size-variant previews are drawn onto a canvas the moment this
+    // function first runs, which is necessarily before the atlas can have
+    // decoded - paintDrawSticker's img.complete guard makes that first pass
+    // draw nothing. Redraw the options bar once the atlas is actually ready,
+    // so those previews stop being permanently blank. Guard on paintState:
+    // it goes null when the window closes, and paintRenderOptionsBar
+    // dereferences paintState.tool without a null check of its own.
+    paintStickerImg.onload = () => {
+      if (paintState && paintState.tool === 'sticker') paintRenderOptionsBar();
+    };
     paintStickerImg.src = 'os/sprites/paint-stickers.png';
   }
   return paintStickerImg;

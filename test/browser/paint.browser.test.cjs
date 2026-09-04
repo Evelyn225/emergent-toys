@@ -484,3 +484,31 @@ test('clicking the canvas with a sticker selected stamps it', async () => {
     assert.ok(inked > 0, 'the sticker stamped nothing onto the canvas');
   });
 });
+
+test('the sticker size-variant previews redraw once the atlas image finishes loading', async () => {
+  await withPaint(async page => {
+    // Selecting the tool is what first constructs and kicks off the atlas
+    // Image - the previews it renders in that same tick are necessarily drawn
+    // before the image can have decoded.
+    await page.evaluate(() => { paintSelectTool('sticker'); });
+    await page.waitForFunction(() => {
+      const img = paintStickerImage();
+      return img.complete && img.naturalWidth > 0;
+    });
+    // Counting pixels that differ from white RGB, not alpha - the preview
+    // canvas is filled opaque white first, so an alpha-only check would pass
+    // on a canvas that never got a sticker drawn onto it at all.
+    const nonWhiteCounts = await page.evaluate(() => {
+      const canvases = [...document.querySelectorAll('.paint-opt canvas')];
+      return canvases.map(c => {
+        const g = c.getContext('2d');
+        const d = g.getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] !== 255 || d[i + 1] !== 255 || d[i + 2] !== 255) n++;
+        return n;
+      });
+    });
+    assert.strictEqual(nonWhiteCounts.length, 3, 'expected small/medium/large previews');
+    nonWhiteCounts.forEach((n, i) => assert.ok(n > 0, `preview ${i} is still blank even though the atlas has loaded`));
+  });
+});
