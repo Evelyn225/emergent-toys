@@ -437,8 +437,13 @@ function openSaveDialog(defaultName, callback, options) {
       // keep a second, smaller copy of it that drifted from the real one.
       const el = makeFLItem(resolveFsIcon(name, 'file'), name);
       el.addEventListener('click', () => { nameInput.value = name; });
-      el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
-      if (mode === 'open') el.addEventListener('dblclick', () => { closeWin(id); callback(name, saveCwd); });
+      // One listener, not two: a real double-click fires every listener bound
+      // to it, so a second dblclick handler here would run the open callback
+      // twice per click. Branch on mode inside the single handler instead.
+      el.addEventListener('dblclick', () => {
+        if (mode === 'open') { closeWin(id); callback(name, saveCwd); }
+        else { nameInput.value = name; saveBtn.click(); }
+      });
       fileList.appendChild(el);
     });
   }

@@ -682,7 +682,7 @@ function paintLoadImage(name, dir) {
 
 function paintOpenDialog() {
   openSaveDialog(paintState.file || '', (fname, dir) => { paintLoadImage(fname, dir); },
-                 { mode: 'open', kinds: ['blob'], title: 'Open Picture' });
+                 { mode: 'open', kinds: ['blob'], title: 'Open Picture', startDir: paintState.dir });
 }
 
 // Wallpaper resolves a VFS path, so there must be a real file first. Saving

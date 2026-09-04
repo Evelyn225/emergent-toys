@@ -381,3 +381,45 @@ test('the save dialog defaults are unchanged for notepad', async () => {
     await context.close();
   }
 });
+
+// The Open dialog's file entries used to carry two separate dblclick
+// listeners (one shared with Save mode that fills the name box and clicks
+// Save, one added for Open mode that closes the dialog and calls back
+// directly). A real double-click fires every listener bound to the element,
+// so both ran, and the Save listener's own click on the Save button invoked
+// the callback too - two calls to paintLoadImage per double-click. Harmless
+// only because loading an image happens to be idempotent; a landmine for
+// anything added later that isn't. Exercises the real DOM dialog, not
+// paintLoadImage called directly, because that is exactly the path the bug
+// lived on and a direct call could never see it.
+test('a double-click in the Open dialog loads the image exactly once', async () => {
+  await withPaint(async page => {
+    const calls = await page.evaluate(async () => {
+      const c = document.createElement('canvas');
+      c.width = 4; c.height = 4;
+      c.getContext('2d').fillRect(0, 0, 4, 4);
+      const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+      await vfsWriteBlob('dbl.png', { url: URL.createObjectURL(blob), kind: 'image', size: blob.size, mime: 'image/png' }, 'PICTURES');
+
+      // Count calls without breaking the real load path underneath - a
+      // double-click that fires the callback twice is only meaningful if
+      // paintLoadImage itself still runs correctly each time it's counted.
+      let count = 0;
+      const real = paintLoadImage;
+      paintLoadImage = (name, dir) => { count++; return real(name, dir); };
+
+      paintOpenDialog();
+      const dlg = document.querySelector('[id^="win-openfile-"]');
+      const span = [...dlg.querySelectorAll('span')].find(s => s.textContent === 'dbl.png');
+      const entry = span.parentElement;
+      entry.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+
+      // paintLoadImage resolves via an Image() load; give it a tick.
+      await new Promise(r => setTimeout(r, 100));
+
+      paintLoadImage = real;
+      return count;
+    });
+    assert.strictEqual(calls, 1, `a single double-click invoked the open callback ${calls} times`);
+  });
+});
