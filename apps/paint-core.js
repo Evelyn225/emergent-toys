@@ -424,3 +424,25 @@ function paintStickerRect(idx) {
     sh: PAINT_STICKER_CELL,
   };
 }
+
+// ── stickers ─────────────────────────────────────────────────────
+// A click stamps once; a drag lays a trail. The spacing is the stamp size, so a
+// dragged trail reads as a row of stamps rather than a smear - which is what
+// separates a sticker tool from a very wide brush.
+[['small', 20], ['medium', 32], ['large', 52]].forEach(([id, size]) => {
+  paintRegisterGenerator('sticker', id, (seg, st) => {
+    const pts = paintWalk(seg, size);
+    // paintWalk always appends the segment's exact endpoint so a drag never
+    // stops short of where the pointer let go. That endpoint can land closer
+    // than one stamp width from the previous one, which is the smear this
+    // tool exists to avoid - so drop it when it would bunch up rather than
+    // trail. The stamp before it already overlaps the tail closely enough.
+    if (pts.length > 1) {
+      const a = pts[pts.length - 2], b = pts[pts.length - 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < size * 0.75) pts.pop();
+    }
+    return pts.map(p => ({
+      op: 'sprite', idx: st.stickerIndex, x: p.x, y: p.y, size, rot: 0,
+    }));
+  });
+});

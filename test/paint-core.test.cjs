@@ -19,7 +19,7 @@ function coreCtx() {
 // leaving an entry here once its task is done is a bug this comment exists to
 // make obvious.
 const NOT_YET_IMPLEMENTED = new Set(['line', 'rect', 'oval', 'fill', 'eyedropper',
-                                     'text', 'sticker', 'wacky', 'eraser', 'select']);
+                                     'text', 'wacky', 'eraser', 'select']);
 
 test('the canvas is a fixed 480x360', () => {
   const ctx = coreCtx();
@@ -384,4 +384,29 @@ test('sticker indices run left to right then top to bottom', () => {
   // Index 14 is the first sticker of the second row, not the second column.
   assert.deepStrictEqual(plain(ctx.paintStickerRect(14)), { sx: 0, sy: cell, sw: cell, sh: cell });
   assert.deepStrictEqual(plain(ctx.paintStickerRect(13)), { sx: 13 * cell, sy: 0, sw: cell, sh: cell });
+});
+
+test('a sticker click emits one sprite op at the click, sized by the variant', () => {
+  const ctx = coreCtx();
+  const st = stateFor(ctx, { stickerIndex: 5 });
+  const small = ctx.paintGenerate('sticker', 'small', stroke(100, 80, 100, 80), st);
+  assert.strictEqual(small.length, 1);
+  assert.strictEqual(small[0].op, 'sprite');
+  assert.strictEqual(small[0].idx, 5);
+  assert.strictEqual(small[0].x, 100);
+  assert.strictEqual(small[0].y, 80);
+
+  const large = ctx.paintGenerate('sticker', 'large', stroke(100, 80, 100, 80), stateFor(ctx, { stickerIndex: 5 }));
+  assert.ok(large[0].size > small[0].size, 'large stickers are not larger than small ones');
+});
+
+test('dragging with the sticker tool spaces stamps out rather than smearing', () => {
+  const ctx = coreCtx();
+  const ops = ctx.paintGenerate('sticker', 'medium', stroke(0, 0, 200, 0), stateFor(ctx, { stickerIndex: 1 }));
+  assert.ok(ops.length >= 2, 'a long drag should lay down more than one stamp');
+  // Neighbouring stamps must not overlap into a solid bar.
+  for (let i = 1; i < ops.length; i++) {
+    assert.ok(Math.abs(ops[i].x - ops[i - 1].x) >= ops[i].size * 0.75,
+      'stamps are too close together and will read as a smear');
+  }
 });

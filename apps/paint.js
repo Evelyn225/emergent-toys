@@ -83,9 +83,31 @@ function paintExecOps(ctx, ops) {
   });
 }
 
-// Filled in by Task 11, once the atlas exists. Declared here so the renderer's
-// sprite case is not a forward reference to nothing.
-function paintDrawSticker(ctx, op) { /* Task 11 */ }
+// One <img> for the whole atlas, loaded once and shared. drawImage takes an
+// HTMLImageElement directly, so there is no need to decode it into anything.
+let paintStickerImg = null;
+function paintStickerImage() {
+  if (!paintStickerImg) {
+    paintStickerImg = new Image();
+    paintStickerImg.src = 'os/sprites/paint-stickers.png';
+  }
+  return paintStickerImg;
+}
+
+function paintDrawSticker(ctx, op) {
+  const rect = paintStickerRect(op.idx);
+  if (!rect) return;
+  const img = paintStickerImage();
+  if (!img.complete || !img.naturalWidth) return;
+  const half = op.size / 2;
+  // Nearest-neighbour, always: these are 32px pixel-art cells and a smoothed
+  // upscale to 52px turns them to mush.
+  const prev = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh,
+                Math.round(op.x - half), Math.round(op.y - half), op.size, op.size);
+  ctx.imageSmoothingEnabled = prev;
+}
 
 // ── canvas scaling ───────────────────────────────────────────────
 // The backing store never changes size; only how many screen pixels each canvas
@@ -414,7 +436,7 @@ function paintRenderOptionsBar() {
     b.addEventListener('click', () => paintSelectVariant(v.id));
     host.appendChild(b);
   });
-  if (typeof paintRenderStickerPager === 'function') paintRenderStickerPager(host);
+  paintRenderStickerPager(host);
   paintSyncOptionButtons();
 }
 
@@ -422,6 +444,63 @@ function paintSyncOptionButtons() {
   document.querySelectorAll('.paint-opt').forEach(b => {
     b.classList.toggle('sel', b.dataset.variant === paintState.variant);
   });
+}
+
+// ── sticker picker ───────────────────────────────────────────────
+// The picker lives IN the options bar, beside the size variants, because that
+// is where the reference puts it and because a sticker's identity is a variant
+// of the sticker tool in every way that matters.
+function paintSetStickerPage(n) {
+  const pages = paintStickerPages();
+  // Wrapping rather than clamping: eight pages of stamps is a carousel, and a
+  // dead arrow at either end is a button that looks broken.
+  paintState.stickerPage = ((n % pages) + pages) % pages;
+  paintRenderOptionsBar();
+}
+
+function paintRenderStickerPager(host) {
+  if (paintState.tool !== 'sticker') return;
+  const perPage = paintStickerPerPage();
+  const base = paintState.stickerPage * perPage;
+
+  const prev = document.createElement('button');
+  prev.type = 'button';
+  prev.className = 'paint-pager paint-pager-prev';
+  prev.textContent = '◄';
+  prev.title = 'Previous page of stickers';
+  prev.setAttribute('aria-label', 'Previous page of stickers');
+  prev.addEventListener('click', () => paintSetStickerPage(paintState.stickerPage - 1));
+  host.appendChild(prev);
+
+  for (let i = 0; i < perPage; i++) {
+    const idx = base + i;
+    const rect = paintStickerRect(idx);
+    if (!rect) continue;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'paint-sticker' + (idx === paintState.stickerIndex ? ' sel' : '');
+    b.dataset.idx = String(idx);
+    b.title = 'Sticker ' + (idx + 1);
+    b.setAttribute('aria-label', 'Sticker ' + (idx + 1));
+    b.style.backgroundImage = 'url("os/sprites/paint-stickers.png")';
+    b.style.backgroundPosition = (-rect.sx) + 'px ' + (-rect.sy) + 'px';
+    b.addEventListener('click', () => {
+      paintState.stickerIndex = idx;
+      paintSound('paint-stamp');
+      document.querySelectorAll('.paint-sticker').forEach(el =>
+        el.classList.toggle('sel', Number(el.dataset.idx) === idx));
+    });
+    host.appendChild(b);
+  }
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'paint-pager paint-pager-next';
+  next.textContent = '►';
+  next.title = 'Next page of stickers';
+  next.setAttribute('aria-label', 'Next page of stickers');
+  next.addEventListener('click', () => paintSetStickerPage(paintState.stickerPage + 1));
+  host.appendChild(next);
 }
 
 // A fixed seed, so a preview is stable across rebuilds of the bar - a splatter

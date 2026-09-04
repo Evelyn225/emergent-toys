@@ -423,3 +423,64 @@ test('a double-click in the Open dialog loads the image exactly once', async () 
     assert.strictEqual(calls, 1, `a single double-click invoked the open callback ${calls} times`);
   });
 });
+
+test('the sticker pager shows one page of 14 and the arrows change it', async () => {
+  await withPaint(async page => {
+    const first = await page.evaluate(() => {
+      paintSelectTool('sticker');
+      return {
+        thumbs: document.querySelectorAll('.paint-sticker').length,
+        page: paintState.stickerPage,
+        pager: !!document.querySelector('.paint-pager'),
+      };
+    });
+    // Asserting the rendered COUNT, not a pixel width. This is the minesweeper
+    // lesson: a grid sized by CSS width laid 480 cells out 29 columns wide,
+    // every node test passed, and it looked very nearly right.
+    assert.strictEqual(first.thumbs, 14, 'expected 14 stickers on a page');
+    assert.strictEqual(first.page, 0);
+    assert.ok(first.pager, 'no page arrows');
+
+    const next = await page.evaluate(() => {
+      document.querySelector('.paint-pager-next').click();
+      return {
+        page: paintState.stickerPage,
+        firstIdx: Number(document.querySelector('.paint-sticker').dataset.idx),
+        thumbs: document.querySelectorAll('.paint-sticker').length,
+      };
+    });
+    assert.strictEqual(next.page, 1);
+    assert.strictEqual(next.firstIdx, 14, 'page 2 does not start at sticker 14');
+    assert.strictEqual(next.thumbs, 14);
+  });
+});
+
+test('the pager wraps rather than dead-ending at either edge', async () => {
+  await withPaint(async page => {
+    const r = await page.evaluate(() => {
+      paintSelectTool('sticker');
+      document.querySelector('.paint-pager-prev').click();
+      const backFromZero = paintState.stickerPage;
+      paintSetStickerPage(paintStickerPages() - 1);
+      document.querySelector('.paint-pager-next').click();
+      return { backFromZero, forwardFromLast: paintState.stickerPage };
+    });
+    assert.strictEqual(r.backFromZero, 7, 'going back from page 1 should wrap to the last page');
+    assert.strictEqual(r.forwardFromLast, 0, 'going forward from the last page should wrap to the first');
+  });
+});
+
+test('clicking the canvas with a sticker selected stamps it', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => { paintSelectTool('sticker'); paintSelectVariant('large'); });
+    await page.evaluate(() => { paintState.stickerIndex = 0; });
+    await dragCanvas(page, 240, 180, 240, 180);
+    const inked = await page.evaluate(() => {
+      const d = paintState.ctx.getImageData(220, 160, 40, 40).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] !== 255 || d[i + 1] !== 255 || d[i + 2] !== 255) n++;
+      return n;
+    });
+    assert.ok(inked > 0, 'the sticker stamped nothing onto the canvas');
+  });
+});

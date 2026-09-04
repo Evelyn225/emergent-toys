@@ -1589,6 +1589,21 @@ body.idle-sleeping { cursor:none; }
 }
 .paint-opt.sel { border-color: #808080 #fff #fff #808080; }
 .paint-opt canvas { display: block; image-rendering: pixelated; }
+/* The atlas is packed with no gutter, so a thumbnail is one 32x32 window onto
+   it and background-position is a flat multiple of 32. */
+.paint-sticker {
+  width: 32px; height: 32px; flex: 0 0 auto; padding: 0;
+  background-color: #fff; background-repeat: no-repeat;
+  image-rendering: pixelated; cursor: default;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+}
+.paint-sticker.sel { border-color: #808080 #fff #fff #808080; background-color: #d0d0ff; }
+.paint-pager {
+  width: 18px; height: 26px; flex: 0 0 auto; padding: 0;
+  background: #c0c0c0; cursor: default; font-size: 9px; line-height: 1;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+}
+.paint-pager:active { border-color: #808080 #fff #fff #808080; }
 .paint-undo-guy {
   width: 30px; flex: 0 0 auto; padding: 0;
   background: #c0c0c0; cursor: default; font-size: 15px;
