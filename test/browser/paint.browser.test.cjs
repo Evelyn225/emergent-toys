@@ -178,8 +178,16 @@ test('the options bar rebuilds with the right count when the tool changes', asyn
 
 test('every option button previews itself by running its own generator', async () => {
   await withPaint(async page => {
+    await page.evaluate(() => { paintSelectTool('wacky'); });
+    // wacky/scatter previews a sticker sprite, and that atlas image loads
+    // asynchronously - wait for it before reading pixels, or its button can
+    // still be mid-flight (and correctly blank) through no fault of the
+    // generator or the app's own onload redraw.
+    await page.waitForFunction(() => {
+      const img = paintStickerImage();
+      return img.complete && img.naturalWidth > 0;
+    });
     const inked = await page.evaluate(() => {
-      paintSelectTool('wacky');
       // A preview that renders nothing is the failure mode here - a blank row of
       // buttons looks deliberate and tells you nothing is wrong. The preview's
       // background is an opaque white fill, so alpha is 255 everywhere even when

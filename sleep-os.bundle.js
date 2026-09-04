@@ -18849,14 +18849,6 @@ function paintStickerImage() {
   }
   return paintStickerImg;
 }
-// Kick the atlas request off now, at bundle load, rather than waiting for the
-// first sprite draw to construct it. apps/paint.js is bundled into the OS and
-// runs at boot regardless of whether Paint is ever opened, so this buys the
-// atlas the entire rest of boot to decode - by the time a user (or a test)
-// opens Paint and lands on the sticker or wacky tool, the very first options
-// bar render has a real chance of finding it already loaded instead of
-// racing the onload handler above.
-paintStickerImage();
 
 function paintDrawSticker(ctx, op) {
   const rect = paintStickerRect(op.idx);
@@ -19369,6 +19361,28 @@ function paintRenderStickerPager(host) {
 // button that reshuffles every time you change tool reads as a glitch.
 const PAINT_PREVIEW_SEED = 20260902;
 
+// Derives a per-variant seed from the shared base seed. Two variants of the
+// same tool can roll the exact same stochastic branch off one shared seed -
+// wacky's drips and leaky both draw nothing but their base line under
+// PAINT_PREVIEW_SEED, since neither one's occasional extra happened to fire,
+// and the two buttons read as duplicates. Hashing the tool/variant id into the
+// seed gives every button its own deterministic-but-different roll instead.
+function paintPreviewSeed(toolId, variantId) {
+  const s = toolId + ':' + variantId;
+  let h = PAINT_PREVIEW_SEED;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  // A plain running hash lands adjacent variant ids on adjacent seeds, and
+  // paintRng's first output is continuous in its seed - two adjacent seeds
+  // roll almost the same first float, which is exactly the drips/leaky
+  // failure mode this function exists to avoid. Run the combined hash through
+  // a standard integer finalizer (avalanche) so nearby ids land on
+  // well-separated seeds instead.
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = h ^ (h >>> 16);
+  return h >>> 0;
+}
+
 // Sticker preview sizes, in a 22px button. NOT the real stamp sizes (20/32/52)
 // - two of those overflow the button. These keep the same ordering so the three
 // buttons still read as small / medium / large at a glance.
@@ -19388,8 +19402,15 @@ function paintVariantPreview(toolId, variantId) {
   const st = {
     color: paintState ? paintState.color : '#000000',
     size: paintSizeForVariant(variantId),
-    rng: paintRng(PAINT_PREVIEW_SEED),
-    points: [{ x: seg.x0, y: seg.y0 }],
+    rng: paintRng(paintPreviewSeed(toolId, variantId)),
+    // Three points along the diagonal, not just the one endpoint - wacky's
+    // connect needs at least two prior points before it draws any chords, and
+    // one point left its preview showing nothing but a lone dot.
+    points: [
+      { x: seg.x0, y: seg.y0 },
+      { x: seg.x0 + (seg.x1 - seg.x0) / 3, y: seg.y0 + (seg.y1 - seg.y0) / 3 },
+      { x: seg.x0 + (seg.x1 - seg.x0) * 2 / 3, y: seg.y0 + (seg.y1 - seg.y0) * 2 / 3 },
+    ],
     stickerIndex: paintState ? paintState.stickerIndex : 0,
   };
   // An eraser previews against ink, or it previews nothing at all: white on
