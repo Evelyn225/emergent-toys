@@ -18298,6 +18298,122 @@ function paintStickerRect(idx) {
     }));
   });
 });
+
+// ── shapes ───────────────────────────────────────────────────────
+// A shape is defined by where the drag STARTED and where it is NOW, not by the
+// segment between two mouse moves. apps/paint.js therefore feeds these
+// generators the whole drag every move and restores the canvas underneath -
+// see paintIsShapeTool.
+function paintIsShapeTool(toolId) {
+  return toolId === 'line' || toolId === 'rect' || toolId === 'oval';
+}
+
+// Normalises a drag box so a rectangle dragged up-and-left is still positive.
+// A negative width draws absolutely nothing and looks like a dead tool.
+function paintBox(seg) {
+  return {
+    x: Math.min(seg.x0, seg.x1),
+    y: Math.min(seg.y0, seg.y1),
+    w: Math.abs(seg.x1 - seg.x0),
+    h: Math.abs(seg.y1 - seg.y0),
+  };
+}
+
+[['l1', 1], ['l3', 3], ['l6', 6]].forEach(([id, w]) => {
+  paintRegisterGenerator('line', id, (seg, st) =>
+    [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1, w, color: st.color }]);
+});
+
+paintRegisterGenerator('line', 'dashed', (seg, st) =>
+  paintWalk(seg, 8).filter((_, i) => i % 2 === 0)
+    .map(p => ({ op: 'dab', x: p.x, y: p.y, r: 2, color: st.color })));
+
+paintRegisterGenerator('line', 'arrow', (seg, st) => {
+  const ops = [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1, w: 3, color: st.color }];
+  const a = Math.atan2(seg.y1 - seg.y0, seg.x1 - seg.x0);
+  const head = 12;
+  [a + Math.PI * 0.82, a - Math.PI * 0.82].forEach(ang => {
+    ops.push({ op: 'line', x0: seg.x1, y0: seg.y1,
+               x1: seg.x1 + Math.cos(ang) * head, y1: seg.y1 + Math.sin(ang) * head,
+               w: 3, color: st.color });
+  });
+  return ops;
+});
+
+paintRegisterGenerator('line', 'wiggly', (seg, st) => {
+  const len = paintSegLen(seg);
+  const a = Math.atan2(seg.y1 - seg.y0, seg.x1 - seg.x0);
+  const nx = -Math.sin(a), ny = Math.cos(a);
+  const ops = [];
+  let px = seg.x0, py = seg.y0;
+  const steps = Math.max(2, Math.round(len / 6));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const wob = Math.sin(t * Math.PI * 2 * 4) * 5;
+    const x = seg.x0 + (seg.x1 - seg.x0) * t + nx * wob;
+    const y = seg.y0 + (seg.y1 - seg.y0) * t + ny * wob;
+    ops.push({ op: 'line', x0: px, y0: py, x1: x, y1: y, w: 2, color: st.color });
+    px = x; py = y;
+  }
+  return ops;
+});
+
+paintRegisterGenerator('rect', 'filled', (seg, st) => {
+  const b = paintBox(seg);
+  return [{ op: 'rect', x: b.x, y: b.y, w: b.w, h: b.h, color: st.color }];
+});
+
+paintRegisterGenerator('rect', 'outline', (seg, st) => {
+  const b = paintBox(seg);
+  const t = 2;
+  return [
+    { op: 'rect', x: b.x, y: b.y, w: b.w, h: t, color: st.color },
+    { op: 'rect', x: b.x, y: b.y + b.h - t, w: b.w, h: t, color: st.color },
+    { op: 'rect', x: b.x, y: b.y, w: t, h: b.h, color: st.color },
+    { op: 'rect', x: b.x + b.w - t, y: b.y, w: t, h: b.h, color: st.color },
+  ];
+});
+
+paintRegisterGenerator('rect', 'round', (seg, st) => {
+  const b = paintBox(seg);
+  const r = Math.min(8, b.w / 2, b.h / 2);
+  return [
+    { op: 'rect', x: b.x + r, y: b.y, w: Math.max(0, b.w - r * 2), h: b.h, color: st.color },
+    { op: 'rect', x: b.x, y: b.y + r, w: b.w, h: Math.max(0, b.h - r * 2), color: st.color },
+    { op: 'dab', x: b.x + r, y: b.y + r, r, color: st.color },
+    { op: 'dab', x: b.x + b.w - r, y: b.y + r, r, color: st.color },
+    { op: 'dab', x: b.x + r, y: b.y + b.h - r, r, color: st.color },
+    { op: 'dab', x: b.x + b.w - r, y: b.y + b.h - r, r, color: st.color },
+  ];
+});
+
+// Dabs along the ellipse rather than a stroked path, so an oval is made of the
+// same primitive as everything else and the renderer stays a five-case switch.
+function paintEllipseDabs(seg, radius, color, fill) {
+  const b = paintBox(seg);
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const rx = b.w / 2, ry = b.h / 2;
+  const ops = [];
+  if (fill) {
+    // Horizontal spans, which is the cheapest honest fill for an ellipse.
+    for (let y = -Math.ceil(ry); y <= Math.ceil(ry); y++) {
+      const frac = 1 - (y * y) / (ry * ry || 1);
+      if (frac < 0) continue;
+      const half = rx * Math.sqrt(frac);
+      ops.push({ op: 'rect', x: cx - half, y: cy + y, w: half * 2, h: 1, color });
+    }
+    return ops;
+  }
+  const steps = Math.max(16, Math.round((rx + ry) * 1.5));
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    ops.push({ op: 'dab', x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry, r: radius, color });
+  }
+  return ops;
+}
+
+paintRegisterGenerator('oval', 'outline', (seg, st) => paintEllipseDabs(seg, 1.5, st.color, false));
+paintRegisterGenerator('oval', 'filled',  (seg, st) => paintEllipseDabs(seg, 1.5, st.color, true));
 // ─────────────────────────────────────────────────────────────────
 // PAINT.exe - UI half
 // ─────────────────────────────────────────────────────────────────
@@ -18526,12 +18642,24 @@ function paintBeginStroke(pos) {
   s.points = [{ x: pos.x, y: pos.y }];
   s.segIndex = 0;
   s.drawing = true;
+  s.origin = { x: pos.x, y: pos.y };
+  // A shape is previewed live and only committed on release, so the pixels
+  // underneath it have to survive every mouse move.
+  s.preview = paintIsShapeTool(s.tool) ? paintSnapshot() : null;
   paintDrawSegment(pos.x, pos.y, pos.x, pos.y);
 }
 
 function paintExtendStroke(pos) {
   const s = paintState;
   if (!s.drawing) return;
+  if (s.preview) {
+    // Restore, then redraw the whole shape from the drag origin. Drawing the
+    // shape incrementally would leave every intermediate rectangle on screen.
+    paintRestore(s.preview);
+    s.points = [s.origin, { x: pos.x, y: pos.y }];
+    paintDrawSegment(s.origin.x, s.origin.y, pos.x, pos.y);
+    return;
+  }
   const prev = s.points[s.points.length - 1];
   s.points.push({ x: pos.x, y: pos.y });
   s.segIndex++;
@@ -18543,6 +18671,7 @@ function paintEndStroke() {
   if (!s.drawing) return;
   s.drawing = false;
   s.dirty = true;
+  if (s.preview) { s.preview = null; paintSound('paint-shape'); }
   paintCommitUndo();
 }
 

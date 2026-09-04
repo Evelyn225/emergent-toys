@@ -226,12 +226,24 @@ function paintBeginStroke(pos) {
   s.points = [{ x: pos.x, y: pos.y }];
   s.segIndex = 0;
   s.drawing = true;
+  s.origin = { x: pos.x, y: pos.y };
+  // A shape is previewed live and only committed on release, so the pixels
+  // underneath it have to survive every mouse move.
+  s.preview = paintIsShapeTool(s.tool) ? paintSnapshot() : null;
   paintDrawSegment(pos.x, pos.y, pos.x, pos.y);
 }
 
 function paintExtendStroke(pos) {
   const s = paintState;
   if (!s.drawing) return;
+  if (s.preview) {
+    // Restore, then redraw the whole shape from the drag origin. Drawing the
+    // shape incrementally would leave every intermediate rectangle on screen.
+    paintRestore(s.preview);
+    s.points = [s.origin, { x: pos.x, y: pos.y }];
+    paintDrawSegment(s.origin.x, s.origin.y, pos.x, pos.y);
+    return;
+  }
   const prev = s.points[s.points.length - 1];
   s.points.push({ x: pos.x, y: pos.y });
   s.segIndex++;
@@ -243,6 +255,7 @@ function paintEndStroke() {
   if (!s.drawing) return;
   s.drawing = false;
   s.dirty = true;
+  if (s.preview) { s.preview = null; paintSound('paint-shape'); }
   paintCommitUndo();
 }
 

@@ -18,7 +18,7 @@ function coreCtx() {
 // the build order completes - it is a scaffold, not a permanent exemption, and
 // leaving an entry here once its task is done is a bug this comment exists to
 // make obvious.
-const NOT_YET_IMPLEMENTED = new Set(['line', 'rect', 'oval', 'fill', 'eyedropper',
+const NOT_YET_IMPLEMENTED = new Set(['fill', 'eyedropper',
                                      'text', 'wacky', 'eraser', 'select']);
 
 test('the canvas is a fixed 480x360', () => {
@@ -409,4 +409,53 @@ test('dragging with the sticker tool spaces stamps out rather than smearing', ()
     assert.ok(Math.abs(ops[i].x - ops[i - 1].x) >= ops[i].size * 0.75,
       'stamps are too close together and will read as a smear');
   }
+});
+
+// ── shapes ───────────────────────────────────────────────────────
+
+test('a line variant emits one line at the drag ends with the right width', () => {
+  const ctx = coreCtx();
+  const ops = ctx.paintGenerate('line', 'l6', stroke(10, 20, 90, 40), stateFor(ctx));
+  const line = ops.find(o => o.op === 'line');
+  assert.ok(line);
+  assert.deepStrictEqual([line.x0, line.y0, line.x1, line.y1], [10, 20, 90, 40]);
+  assert.strictEqual(line.w, 6);
+});
+
+test('an arrow line adds a head at the far end and nothing at the near end', () => {
+  const ctx = coreCtx();
+  const ops = ctx.paintGenerate('line', 'arrow', stroke(0, 0, 100, 0), stateFor(ctx));
+  assert.ok(ops.length >= 3, 'an arrow is a shaft plus two head strokes');
+  const nearEnd = ops.filter(o => o.op === 'line' && (o.x0 < 20 && o.x1 < 20));
+  assert.strictEqual(nearEnd.length, 0, 'the arrowhead is on the wrong end');
+});
+
+test('a filled rectangle covers the drag box and an outline does not fill it', () => {
+  const ctx = coreCtx();
+  const filled = ctx.paintGenerate('rect', 'filled', stroke(10, 10, 50, 30), stateFor(ctx));
+  const r = filled.find(o => o.op === 'rect');
+  assert.deepStrictEqual([r.x, r.y, r.w, r.h], [10, 10, 40, 20]);
+  const outline = ctx.paintGenerate('rect', 'outline', stroke(10, 10, 50, 30), stateFor(ctx));
+  assert.strictEqual(outline.filter(o => o.op === 'rect' && o.w > 5 && o.h > 5).length, 0,
+    'the outline variant emitted a solid block');
+  assert.ok(outline.length >= 4, 'an outline needs four sides');
+});
+
+test('a rectangle dragged up and to the left still has positive dimensions', () => {
+  const ctx = coreCtx();
+  // Dragging from bottom-right to top-left is a normal gesture, and a negative
+  // width silently draws nothing on a canvas.
+  const ops = ctx.paintGenerate('rect', 'filled', stroke(80, 60, 20, 10), stateFor(ctx));
+  const r = ops.find(o => o.op === 'rect');
+  assert.deepStrictEqual([r.x, r.y, r.w, r.h], [20, 10, 60, 50]);
+});
+
+test('an oval is drawn as dabs along an ellipse, inside the drag box', () => {
+  const ctx = coreCtx();
+  const ops = ctx.paintGenerate('oval', 'outline', stroke(0, 0, 100, 60), stateFor(ctx));
+  assert.ok(ops.length > 8, 'too few dabs to read as a curve');
+  ops.forEach(o => {
+    assert.ok(o.x >= -1 && o.x <= 101, 'oval dab escaped the drag box on x: ' + o.x);
+    assert.ok(o.y >= -1 && o.y <= 61, 'oval dab escaped the drag box on y: ' + o.y);
+  });
 });
