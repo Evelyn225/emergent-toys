@@ -618,3 +618,34 @@ test('the eyedropper switches back to the pencil so you can use what you picked'
       'staying on the eyedropper after a pick means a second click to draw');
   });
 });
+
+test('the text tool draws typed text at the click point', async () => {
+  await withPaint(async page => {
+    const inked = await page.evaluate(() => {
+      paintSelectTool('text'); paintSelectVariant('t20'); paintSetColor('#000000');
+      // Drive the drawing directly rather than through osPrompt, which is a
+      // modal this test has no business opening.
+      paintDrawText({ x: 100, y: 200 }, 'HI', 20);
+      const d = paintState.ctx.getImageData(95, 175, 90, 40).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++;
+      return n;
+    });
+    assert.ok(inked > 20, 'no text landed on the canvas');
+  });
+});
+
+test('the alphabet stamp draws one big letter per click', async () => {
+  await withPaint(async page => {
+    const r = await page.evaluate(() => {
+      paintSelectTool('text'); paintSelectVariant('stamp'); paintSetColor('#000000');
+      paintState.stampLetter = 'A';
+      paintDrawText({ x: 240, y: 180 }, 'A', 64);
+      const d = paintState.ctx.getImageData(200, 130, 90, 90).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++;
+      return n;
+    });
+    assert.ok(r > 100, 'the alphabet stamp drew nothing at stamp size');
+  });
+});

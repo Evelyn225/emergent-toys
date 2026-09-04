@@ -649,3 +649,15 @@ function paintFillPreviewOps(patternId, st) {
 ['solid', 'gradient', 'check', 'stripe', 'diag', 'dots', 'grid', 'noise', 'confetti'].forEach(id => {
   paintRegisterGenerator('fill', id, (seg, st) => paintFillPreviewOps(id, st));
 });
+
+// ── text (preview only) ───────────────────────────────────────────
+// The text tool is driven by the UI (it needs a string), but the options bar
+// previews a variant by RUNNING it, so a button with no generator is a blank
+// button. These exist purely to draw the preview: a bar whose height tracks the
+// text size, which is exactly the thing the variant chooses.
+paintVariantsFor('text').forEach(v => {
+  paintRegisterGenerator('text', v.id, (seg, st) => {
+    const h = v.id === 'stamp' ? 16 : Math.max(3, Number((/^t(\d+)$/.exec(v.id) || [])[1] || 8) * 0.7);
+    return [{ op: 'rect', x: seg.x0, y: seg.y1, w: 3, h, color: st.color }];
+  });
+});

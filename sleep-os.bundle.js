@@ -18501,6 +18501,18 @@ function paintFillPreviewOps(patternId, st) {
 ['solid', 'gradient', 'check', 'stripe', 'diag', 'dots', 'grid', 'noise', 'confetti'].forEach(id => {
   paintRegisterGenerator('fill', id, (seg, st) => paintFillPreviewOps(id, st));
 });
+
+// ── text (preview only) ───────────────────────────────────────────
+// The text tool is driven by the UI (it needs a string), but the options bar
+// previews a variant by RUNNING it, so a button with no generator is a blank
+// button. These exist purely to draw the preview: a bar whose height tracks the
+// text size, which is exactly the thing the variant chooses.
+paintVariantsFor('text').forEach(v => {
+  paintRegisterGenerator('text', v.id, (seg, st) => {
+    const h = v.id === 'stamp' ? 16 : Math.max(3, Number((/^t(\d+)$/.exec(v.id) || [])[1] || 8) * 0.7);
+    return [{ op: 'rect', x: seg.x0, y: seg.y1, w: 3, h, color: st.color }];
+  });
+});
 // ─────────────────────────────────────────────────────────────────
 // PAINT.exe - UI half
 // ─────────────────────────────────────────────────────────────────
@@ -18722,10 +18734,12 @@ function paintStrokeState() {
 
 function paintBeginStroke(pos) {
   const s = paintState;
-  // Two tools read the canvas and finish in one click, so they never enter the
-  // stroke machinery below at all.
+  // Fill and the eyedropper read the canvas and finish in one click; text
+  // needs a string rather than a drag. None of the three enter the stroke
+  // machinery below at all.
   if (s.tool === 'fill')       { paintDoFill(pos); return; }
   if (s.tool === 'eyedropper') { paintDoEyedropper(pos); return; }
+  if (s.tool === 'text')       { paintDoText(pos); return; }
   // One rng per stroke, seeded once, so a stroke is reproducible end to end
   // rather than drifting with whatever else asked for a random number.
   s.strokeSeed = (Math.random() * 0xffffffff) >>> 0;
@@ -18906,6 +18920,16 @@ function openPaint() {
   document.getElementById('paint-undo-guy').addEventListener('click', () => paintUndo());
 
   document.getElementById('win-' + PAINT_WIN_ID).addEventListener('keydown', e => {
+    // While the alphabet stamp is selected, a letter key loads the stamp. This
+    // is why the handler is on the window and not on the document - it must not
+    // eat keystrokes meant for a dialog or another app.
+    if (paintState && paintState.tool === 'text' && paintState.variant === 'stamp'
+        && !e.ctrlKey && !e.metaKey && /^[a-z0-9]$/i.test(e.key)) {
+      paintState.stampLetter = e.key.toUpperCase();
+      const ws = document.getElementById('ws-' + PAINT_WIN_ID);
+      if (ws) ws.textContent = 'Alphabet stamp: ' + paintState.stampLetter;
+      return;
+    }
     if (!e.ctrlKey && !e.metaKey) return;
     const k = e.key.toLowerCase();
     if (k === 'z') { e.preventDefault(); paintUndo(); }
@@ -19397,6 +19421,55 @@ function openPaintFile(name, dir) {
   if (!name) return;
   // openPaint's own setup runs synchronously, so paintState is live by here.
   paintLoadImage(name, dir);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Text
+// ─────────────────────────────────────────────────────────────────
+// Text does not go through paintGenerate either: it needs a string, and a
+// generator's whole contract is that it depends on nothing but the segment and
+// the state. Asking for the string is a modal, and a modal in a pure function
+// is not a pure function.
+
+function paintTextSize(variantId) {
+  const m = /^t(\d+)$/.exec(String(variantId || ''));
+  if (m) return Number(m[1]);
+  return variantId === 'stamp' ? 64 : 12;
+}
+
+// Draws a string centred on a point. w95font is the OS's own face, so text
+// painted here matches the chrome around it; the fallback keeps this working if
+// the font has not finished loading.
+function paintDrawText(pos, text, size) {
+  const s = paintState;
+  s.ctx.save();
+  s.ctx.imageSmoothingEnabled = false;
+  s.ctx.fillStyle = s.color;
+  s.ctx.font = size + 'px w95font, "Courier New", monospace';
+  s.ctx.textAlign = 'center';
+  s.ctx.textBaseline = 'middle';
+  s.ctx.fillText(text, Math.round(pos.x), Math.round(pos.y));
+  s.ctx.restore();
+  s.dirty = true;
+  paintCommitUndo();
+}
+
+function paintDoText(pos) {
+  const s = paintState;
+  const size = paintTextSize(s.variant);
+  if (s.variant === 'stamp') {
+    // The alphabet stamp is a rubber stamp, not a text box: one letter, big,
+    // per click, and the letter is whatever was typed last.
+    const ch = s.stampLetter || 'A';
+    paintDrawText(pos, ch, size);
+    paintSound('paint-stamp');
+    return;
+  }
+  osPrompt('Type some text:', '', 'Text', value => {
+    if (!value) return;
+    paintDrawText(pos, value, size);
+    paintSound('paint-text');
+  });
 }
 function triggerGlitch(options) {
   const desktop = document.getElementById('desktop');
