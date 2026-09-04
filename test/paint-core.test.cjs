@@ -344,3 +344,44 @@ test('an unknown tool or variant returns an empty list rather than throwing', ()
   assert.deepStrictEqual(plain(ctx.paintGenerate('nope', 'nope', stroke(0, 0, 1, 1), stateFor(ctx))), []);
   assert.deepStrictEqual(plain(ctx.paintGenerate('pencil', 'nope', stroke(0, 0, 1, 1), stateFor(ctx))), []);
 });
+
+// ── sticker atlas geometry ───────────────────────────────────────
+
+test('the atlas holds 112 stickers over 8 pages of 14', () => {
+  const ctx = coreCtx();
+  assert.strictEqual(ctx.paintStickerCount(), 112);
+  assert.strictEqual(ctx.paintStickerPages(), 8);
+  assert.strictEqual(ctx.paintStickerPerPage(), 14);
+  assert.strictEqual(ctx.paintStickerPages() * ctx.paintStickerPerPage(), ctx.paintStickerCount());
+});
+
+test('the first and last sticker map to in-bounds source rects', () => {
+  const ctx = coreCtx();
+  const cell = ctx.paintStickerCell();
+  // plain() strips the vm realm's Object prototype - see the note above on
+  // other tests in this file - so deepStrictEqual can compare against a host
+  // {} literal instead of reporting "same structure but not reference-equal".
+  const first = plain(ctx.paintStickerRect(0));
+  assert.deepStrictEqual(first, { sx: 0, sy: 0, sw: cell, sh: cell });
+  const last = plain(ctx.paintStickerRect(111));
+  assert.deepStrictEqual(last, { sx: 13 * cell, sy: 7 * cell, sw: cell, sh: cell });
+  // The atlas is 14 wide by 8 tall with no gutter, so the last cell must end
+  // exactly on the image edge. An off-by-one here samples a neighbour's pixels.
+  assert.strictEqual(last.sx + last.sw, 14 * cell);
+  assert.strictEqual(last.sy + last.sh, 8 * cell);
+});
+
+test('a sticker index off either end of the sheet is rejected', () => {
+  const ctx = coreCtx();
+  assert.strictEqual(ctx.paintStickerRect(112), null, 'index 112 is past the end of a 112-sticker sheet');
+  assert.strictEqual(ctx.paintStickerRect(-1), null);
+  assert.strictEqual(ctx.paintStickerRect(1.5), null);
+});
+
+test('sticker indices run left to right then top to bottom', () => {
+  const ctx = coreCtx();
+  const cell = ctx.paintStickerCell();
+  // Index 14 is the first sticker of the second row, not the second column.
+  assert.deepStrictEqual(plain(ctx.paintStickerRect(14)), { sx: 0, sy: cell, sw: cell, sh: cell });
+  assert.deepStrictEqual(plain(ctx.paintStickerRect(13)), { sx: 13 * cell, sy: 0, sw: cell, sh: cell });
+});

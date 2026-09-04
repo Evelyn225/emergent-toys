@@ -18247,6 +18247,35 @@ paintRegisterGenerator('pencil', 'sketchy', (seg, st) => {
   }
   return ops;
 });
+
+// ─────────────────────────────────────────────────────────────────
+// Sticker atlas geometry
+// ─────────────────────────────────────────────────────────────────
+// os/sprites/paint-stickers.png is a 448x256 sheet: 14 columns by 8 rows of
+// 32x32 cells with NO gutter, so every source offset is a flat multiple of the
+// cell size. The minesweeper atlas is packed the same way and for the same
+// reason - a 1px gutter turns every offset into an arithmetic trap.
+//
+// 14 and not 15: the reference sheet's fifteenth column is the page-number
+// arrow strip, which is chrome rather than a sticker.
+const PAINT_STICKER_CELL = 32;
+const PAINT_STICKER_COLS = 14;
+const PAINT_STICKER_ROWS = 8;
+
+function paintStickerCell()    { return PAINT_STICKER_CELL; }
+function paintStickerPerPage() { return PAINT_STICKER_COLS; }
+function paintStickerPages()   { return PAINT_STICKER_ROWS; }
+function paintStickerCount()   { return PAINT_STICKER_COLS * PAINT_STICKER_ROWS; }
+
+function paintStickerRect(idx) {
+  if (!Number.isInteger(idx) || idx < 0 || idx >= paintStickerCount()) return null;
+  return {
+    sx: (idx % PAINT_STICKER_COLS) * PAINT_STICKER_CELL,
+    sy: Math.floor(idx / PAINT_STICKER_COLS) * PAINT_STICKER_CELL,
+    sw: PAINT_STICKER_CELL,
+    sh: PAINT_STICKER_CELL,
+  };
+}
 // ─────────────────────────────────────────────────────────────────
 // PAINT.exe - UI half
 // ─────────────────────────────────────────────────────────────────
