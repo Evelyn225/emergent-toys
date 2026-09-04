@@ -18,7 +18,7 @@ function coreCtx() {
 // the build order completes - it is a scaffold, not a permanent exemption, and
 // leaving an entry here once its task is done is a bug this comment exists to
 // make obvious.
-const NOT_YET_IMPLEMENTED = new Set(['eraser', 'select']);
+const NOT_YET_IMPLEMENTED = new Set(['select']);
 
 test('the canvas is a fixed 480x360', () => {
   const ctx = coreCtx();
@@ -627,4 +627,53 @@ test('connect the dots draws back to earlier points in the stroke', () => {
   const ops = ctx.paintGenerate('wacky', 'connect', stroke(90, 20, 120, 60), st);
   const lines = ops.filter(o => o.op === 'line');
   assert.ok(lines.length >= 2, 'connect the dots drew no chords back to earlier points');
+});
+
+// ── erasers ──────────────────────────────────────────────────────
+
+test('plain erasers emit erase ops sized by the variant', () => {
+  const ctx = coreCtx();
+  [['e4', 4], ['e10', 10], ['e24', 24]].forEach(([id, size]) => {
+    const ops = ctx.paintGenerate('eraser', id, stroke(50, 50, 50, 50), stateFor(ctx, { size }));
+    assert.ok(ops.length >= 1, id + ' erased nothing');
+    ops.forEach(o => assert.strictEqual(o.op, 'erase', id + ' emitted a ' + o.op + ' instead of an erase'));
+    assert.ok(Math.abs(ops[0].r - size / 2) < 0.01, id + ' has the wrong radius');
+  });
+});
+
+test('the firecracker blast is deterministic and stays near its centre', () => {
+  const ctx = coreCtx();
+  const a = ctx.paintBlastPattern(240, 180, ctx.paintRng(9));
+  const b = ctx.paintBlastPattern(240, 180, ctx.paintRng(9));
+  assert.deepStrictEqual(a, b, 'the blast is not reproducible');
+  assert.ok(a.length > 10, 'a firecracker should blow more than a few holes');
+  a.forEach(h => {
+    assert.ok(Math.hypot(h.x - 240, h.y - 180) < 200, 'blast hole flew miles from the centre');
+    assert.ok(h.r > 0, 'blast hole has no radius');
+  });
+});
+
+test('the dissolve order visits every pixel exactly once', () => {
+  const ctx = coreCtx();
+  const order = ctx.paintDissolveOrder(8, 6, ctx.paintRng(4));
+  assert.strictEqual(order.length, 48);
+  assert.strictEqual(new Set(order).size, 48, 'the dissolve repeats or skips pixels');
+  order.forEach(i => assert.ok(i >= 0 && i < 48, 'dissolve index out of range: ' + i));
+});
+
+test('the dissolve is shuffled, not sequential', () => {
+  const ctx = coreCtx();
+  const order = ctx.paintDissolveOrder(20, 20, ctx.paintRng(4));
+  const sequential = order.every((v, i) => v === i);
+  assert.ok(!sequential, 'the dissolve order is just 0..n and will wipe like a bar, not dissolve');
+});
+
+test('blind rows tile the canvas height without overlapping', () => {
+  const ctx = coreCtx();
+  const rows = ctx.paintBlindRows(100, 10);
+  assert.ok(rows.length > 1);
+  rows.forEach((r, i) => {
+    assert.ok(r.y >= 0 && r.y + r.h <= 100, 'blind row ' + i + ' escapes the canvas');
+    if (i > 0) assert.ok(r.y >= rows[i - 1].y + rows[i - 1].h, 'blind rows overlap');
+  });
 });

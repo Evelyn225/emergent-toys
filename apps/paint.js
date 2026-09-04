@@ -225,11 +225,13 @@ function paintStrokeState() {
 function paintBeginStroke(pos) {
   const s = paintState;
   // Fill and the eyedropper read the canvas and finish in one click; text
-  // needs a string rather than a drag. None of the three enter the stroke
-  // machinery below at all.
+  // needs a string rather than a drag; a whole-image eraser reads the canvas
+  // and destroys it in one go. None of the four enter the stroke machinery
+  // below at all.
   if (s.tool === 'fill')       { paintDoFill(pos); return; }
   if (s.tool === 'eyedropper') { paintDoEyedropper(pos); return; }
   if (s.tool === 'text')       { paintDoText(pos); return; }
+  if (s.tool === 'eraser' && PAINT_WHOLE_ERASERS[s.variant]) { paintDoWholeEraser(pos); return; }
   // One rng per stroke, seeded once, so a stroke is reproducible end to end
   // rather than drifting with whatever else asked for a random number.
   s.strokeSeed = (Math.random() * 0xffffffff) >>> 0;
@@ -989,4 +991,103 @@ function paintDoText(pos) {
     paintDrawText(pos, value, size);
     paintSound('paint-text');
   });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Whole-image erasers
+// ─────────────────────────────────────────────────────────────────
+// Each of these is ONE undo step, however much it destroys. That is the whole
+// contract that makes them safe to be this rude.
+
+function paintEraseHoles(holes) {
+  const g = paintState.ctx;
+  g.fillStyle = '#ffffff';
+  holes.forEach(hole => {
+    g.beginPath();
+    g.arc(hole.x, hole.y, hole.r, 0, Math.PI * 2);
+    g.fill();
+  });
+}
+
+function paintApplyBlast(pos) {
+  paintEraseHoles(paintBlastPattern(pos.x, pos.y, paintRng((Math.random() * 0xffffffff) >>> 0)));
+  paintSound('paint-firecracker');
+}
+
+// Pulls every pixel toward the click point, leaving white behind. Read from a
+// snapshot and written to a fresh buffer: sampling the canvas while writing to
+// it would smear each pixel through its own already-moved neighbours.
+function paintApplyBlackhole(pos) {
+  const s = paintState;
+  const w = s.canvas.width, h = s.canvas.height;
+  const src = s.ctx.getImageData(0, 0, w, h);
+  const dst = s.ctx.createImageData(w, h);
+  dst.data.fill(255);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = x - pos.x, dy = y - pos.y;
+      const d = Math.hypot(dx, dy);
+      // Everything inside the event horizon is simply gone.
+      if (d < 26) continue;
+      const pull = Math.min(0.75, 34 / d);
+      const sx = Math.round(x + dx * pull), sy = Math.round(y + dy * pull);
+      if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
+      const si = (sy * w + sx) * 4, di = (y * w + x) * 4;
+      dst.data[di] = src.data[si]; dst.data[di + 1] = src.data[si + 1];
+      dst.data[di + 2] = src.data[si + 2]; dst.data[di + 3] = 255;
+    }
+  }
+  s.ctx.putImageData(dst, 0, 0);
+  paintSound('paint-blackhole');
+}
+
+function paintApplyDissolve() {
+  const s = paintState;
+  const w = s.canvas.width, h = s.canvas.height;
+  const id = s.ctx.getImageData(0, 0, w, h);
+  const order = paintDissolveOrder(w, h, paintRng((Math.random() * 0xffffffff) >>> 0));
+  // Sixty per cent, not all of it: a full dissolve is just Clear with extra
+  // steps, and leaving some behind is what makes it read as decay.
+  const kill = Math.floor(order.length * 0.6);
+  for (let k = 0; k < kill; k++) {
+    const i = order[k] * 4;
+    id.data[i] = 255; id.data[i + 1] = 255; id.data[i + 2] = 255; id.data[i + 3] = 255;
+  }
+  s.ctx.putImageData(id, 0, 0);
+  paintSound('paint-dissolve');
+}
+
+function paintApplyFade() {
+  const s = paintState;
+  // A single flat wash toward white, applied to the whole canvas.
+  s.ctx.save();
+  s.ctx.globalAlpha = 0.45;
+  s.ctx.fillStyle = '#ffffff';
+  s.ctx.fillRect(0, 0, s.canvas.width, s.canvas.height);
+  s.ctx.restore();
+  paintSound('paint-eraser');
+}
+
+function paintApplyBlinds() {
+  const s = paintState;
+  s.ctx.fillStyle = '#ffffff';
+  paintBlindRows(s.canvas.height, 12).forEach(r => s.ctx.fillRect(0, r.y, s.canvas.width, r.h));
+  paintSound('paint-eraser');
+}
+
+const PAINT_WHOLE_ERASERS = {
+  firecracker: paintApplyBlast,
+  blackhole:   paintApplyBlackhole,
+  dissolve:    () => paintApplyDissolve(),
+  fade:        () => paintApplyFade(),
+  blinds:      () => paintApplyBlinds(),
+};
+
+function paintDoWholeEraser(pos) {
+  const fn = PAINT_WHOLE_ERASERS[paintState.variant];
+  if (!fn) return false;
+  fn(pos);
+  paintState.dirty = true;
+  paintCommitUndo();
+  return true;
 }

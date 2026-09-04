@@ -887,3 +887,99 @@ paintRegisterGenerator('wacky', 'leaky', (seg, st) => {
   }
   return ops;
 });
+
+// ─────────────────────────────────────────────────────────────────
+// Erasers
+// ─────────────────────────────────────────────────────────────────
+// Three of them rub things out. Six of them do something TO the picture, and
+// those are the point - a paint program where the eraser might blow up your
+// drawing is the difference between KidPix and MS Paint.
+//
+// The whole-image erasers run in the UI because they read the canvas, but their
+// PATTERNS live here and are seeded, so what a firecracker does is provable in
+// node rather than something you have to squint at.
+
+[['e4', 4], ['e10', 10], ['e24', 24]].forEach(([id, size]) => {
+  paintRegisterGenerator('eraser', id, (seg) =>
+    paintWalk(seg, size / 2).map(p => ({ op: 'erase', x: p.x, y: p.y, r: size / 2 })));
+});
+
+// Drips is a stroke eraser rather than a whole-image one: it melts what it
+// touches downward, so it is a generator like the plain three.
+paintRegisterGenerator('eraser', 'melt', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 5).forEach(p => {
+    ops.push({ op: 'erase', x: p.x, y: p.y, r: 5 });
+    const run = 6 + st.rng() * 26;
+    for (let d = 0; d < run; d += 4) ops.push({ op: 'erase', x: p.x, y: p.y + d, r: 3 });
+  });
+  return ops;
+});
+
+// A firecracker: a dense core and a scatter of shrapnel holes. Deterministic
+// from the rng, so the browser test can assert on it and a replay is identical.
+function paintBlastPattern(cx, cy, rng) {
+  const holes = [{ x: cx, y: cy, r: 26 }];
+  const shards = 24;
+  for (let i = 0; i < shards; i++) {
+    const a = rng() * Math.PI * 2;
+    const d = 18 + rng() * 110;
+    holes.push({ x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, r: 3 + rng() * 16 });
+  }
+  return holes;
+}
+
+// A shuffled visit order over every pixel index. Partial Fisher-Yates over the
+// whole array - the same shape msSeed uses, and for the same reason: it is the
+// honest way to get a permutation rather than sampling with rejection.
+function paintDissolveOrder(w, h, rng) {
+  const n = w * h;
+  const order = new Array(n);
+  for (let i = 0; i < n; i++) order[i] = i;
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = order[i]; order[i] = order[j]; order[j] = t;
+  }
+  return order;
+}
+
+// Alternating bands, top to bottom. The last band is clamped rather than
+// allowed to overhang, so a height that is not a multiple of the step does not
+// erase past the canvas.
+function paintBlindRows(h, step) {
+  const rows = [];
+  for (let y = 0; y < h; y += step * 2) {
+    rows.push({ y, h: Math.min(step, h - y) });
+  }
+  return rows;
+}
+
+// The whole-image erasers are applied by the UI, but the options bar previews a
+// variant by RUNNING it. These stand-ins draw the SHAPE of what each one does
+// on a 22x22 button - a blast, a swirl, speckle, a wash, bands - so the row
+// reads at a glance instead of showing five identical blank squares.
+paintRegisterGenerator('eraser', 'firecracker', (seg, st) =>
+  paintBlastPattern(seg.x1, seg.y1, st.rng).slice(0, 8)
+    .map(h => ({ op: 'erase', x: h.x, y: h.y, r: Math.max(1, h.r / 6) })));
+
+paintRegisterGenerator('eraser', 'blackhole', (seg) => {
+  const ops = [];
+  for (let i = 0; i < 24; i++) {
+    const t = i / 24;
+    const a = t * Math.PI * 4;
+    ops.push({ op: 'erase', x: seg.x1 + Math.cos(a) * t * 9, y: seg.y1 + Math.sin(a) * t * 9, r: 1.5 });
+  }
+  return ops;
+});
+
+paintRegisterGenerator('eraser', 'dissolve', (seg, st) => {
+  const ops = [];
+  for (let i = 0; i < 40; i++) ops.push({ op: 'erase', x: st.rng() * 22, y: st.rng() * 22, r: 1 });
+  return ops;
+});
+
+paintRegisterGenerator('eraser', 'fade', () =>
+  [{ op: 'erase', x: 11, y: 11, r: 10 }]);
+
+paintRegisterGenerator('eraser', 'blinds', () =>
+  paintBlindRows(22, 3).map(r => ({ op: 'erase', x: 11, y: r.y + r.h / 2, r: r.h })));

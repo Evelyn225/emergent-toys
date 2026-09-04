@@ -701,3 +701,54 @@ test('the alphabet stamp draws one big letter per click', async () => {
       `stamping 'I' (${countI}px) and 'W' (${countW}px) produced results too close to prove stampLetter is actually read`);
   });
 });
+
+test('the firecracker punches holes and one undo puts the whole picture back', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => {
+      paintState.ctx.fillStyle = '#000000';
+      paintState.ctx.fillRect(0, 0, 480, 360);
+      paintCommitUndo();
+      paintSelectTool('eraser'); paintSelectVariant('firecracker');
+    });
+    await dragCanvas(page, 240, 180, 240, 180);
+    const holed = await page.evaluate(() => {
+      const d = paintState.ctx.getImageData(0, 0, 480, 360).data;
+      let white = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] === 255) white++;
+      return white;
+    });
+    assert.ok(holed > 100, 'the firecracker blew no holes');
+
+    await page.click('#paint-undo-guy');
+    const restored = await page.evaluate(() => {
+      const d = paintState.ctx.getImageData(0, 0, 480, 360).data;
+      let white = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] === 255) white++;
+      return white;
+    });
+    assert.strictEqual(restored, 0, 'one undo did not restore the whole picture');
+  });
+});
+
+test('every destructive eraser leaves the canvas different and undoable', async () => {
+  await withPaint(async page => {
+    for (const variant of ['blackhole', 'dissolve', 'fade', 'blinds', 'melt']) {
+      const r = await page.evaluate(async v => {
+        const g = paintState.ctx;
+        g.fillStyle = '#000000';
+        g.fillRect(0, 0, 480, 360);
+        paintCommitUndo();
+        const before = paintState.ring.items.length;
+        paintSelectTool('eraser'); paintSelectVariant(v);
+        paintBeginStroke({ x: 240, y: 180 });
+        paintEndStroke();
+        const d = g.getImageData(0, 0, 480, 360).data;
+        let changed = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] !== 0) changed++;
+        return { changed, pushed: paintState.ring.items.length - before };
+      }, variant);
+      assert.ok(r.changed > 0, variant + ' changed nothing');
+      assert.ok(r.pushed >= 1, variant + ' pushed no undo state, so it cannot be taken back');
+    }
+  });
+});
