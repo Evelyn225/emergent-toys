@@ -677,3 +677,71 @@ test('blind rows tile the canvas height without overlapping', () => {
     if (i > 0) assert.ok(r.y >= rows[i - 1].y + rows[i - 1].h, 'blind rows overlap');
   });
 });
+
+// ── goodies ──────────────────────────────────────────────────────
+
+function ramp(w, h) {
+  const px = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0, n = 0; i < px.length; i += 4, n++) {
+    px[i] = n % 256; px[i + 1] = (n * 3) % 256; px[i + 2] = (n * 7) % 256; px[i + 3] = 255;
+  }
+  return px;
+}
+
+test('flip horizontal and flip vertical are involutions', () => {
+  const ctx = coreCtx();
+  ['flipH', 'flipV'].forEach(name => {
+    const a = ramp(8, 6), b = a.slice();
+    ctx.paintGoodie(name, a, 8, 6);
+    assert.notDeepStrictEqual(Array.from(a), Array.from(b), name + ' did nothing');
+    ctx.paintGoodie(name, a, 8, 6);
+    assert.deepStrictEqual(Array.from(a), Array.from(b), name + ' applied twice is not the identity');
+  });
+});
+
+test('invert is an involution and actually inverts', () => {
+  const ctx = coreCtx();
+  const a = ramp(4, 4), b = a.slice();
+  ctx.paintGoodie('invert', a, 4, 4);
+  assert.strictEqual(a[0], 255 - b[0]);
+  assert.strictEqual(a[3], 255, 'invert must not touch alpha');
+  ctx.paintGoodie('invert', a, 4, 4);
+  assert.deepStrictEqual(Array.from(a), Array.from(b));
+});
+
+test('posterize is idempotent', () => {
+  const ctx = coreCtx();
+  const a = ramp(8, 8);
+  ctx.paintGoodie('posterize', a, 8, 8);
+  const once = a.slice();
+  ctx.paintGoodie('posterize', a, 8, 8);
+  assert.deepStrictEqual(Array.from(a), Array.from(once), 'posterize keeps changing the image');
+});
+
+test('darken and lighten move every channel the right way and clamp', () => {
+  const ctx = coreCtx();
+  const dark = new Uint8ClampedArray([10, 10, 10, 255]);
+  ctx.paintGoodie('darken', dark, 1, 1);
+  assert.ok(dark[0] >= 0 && dark[0] <= 10, 'darken went up or underflowed');
+  const light = new Uint8ClampedArray([250, 250, 250, 255]);
+  ctx.paintGoodie('lighten', light, 1, 1);
+  assert.ok(light[0] >= 250 && light[0] <= 255, 'lighten went down or overflowed');
+});
+
+test('scramble keeps every pixel, just somewhere else', () => {
+  const ctx = coreCtx();
+  const a = ramp(16, 16);
+  const beforeSum = a.reduce((s, v) => s + v, 0);
+  ctx.paintGoodie('scramble', a, 16, 16);
+  assert.strictEqual(a.reduce((s, v) => s + v, 0), beforeSum, 'scramble lost or invented pixels');
+});
+
+test('an unknown goodie is refused rather than silently doing nothing', () => {
+  const ctx = coreCtx();
+  const a = ramp(4, 4);
+  assert.strictEqual(ctx.paintGoodie('no-such-goodie', a, 4, 4), false);
+  assert.ok(ctx.paintGoodieNames().length >= 7);
+  ctx.paintGoodieNames().forEach(n => {
+    assert.strictEqual(ctx.paintGoodie(n, ramp(8, 8), 8, 8), true, n + ' is listed but not implemented');
+  });
+});

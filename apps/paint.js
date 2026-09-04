@@ -744,8 +744,8 @@ function paintBuildMenu(mb) {
       '-',
       { label: 'Clear Canvas', action: () => { paintClearCanvas(); paintCommitUndo(); paintSound('paint-clear'); } },
     ]},
-    // Populated by Task 17. An empty Goodies menu would be a dead item, so it
-    // carries its one honest entry until then.
+    // Whole-image operations - flip, invert, darken/lighten, posterize,
+    // scramble, edges. Rebuilt per open like every other menu here.
     { label: 'Goodies', items: () => paintGoodiesItems() },
   ];
   menus.forEach(m => {
@@ -768,9 +768,26 @@ function paintBuildMenu(mb) {
   mb.appendChild(help);
 }
 
-// Replaced wholesale by Task 17.
+const PAINT_GOODIE_LABELS = {
+  flipH: 'Flip Horizontal', flipV: 'Flip Vertical', invert: 'Invert Colours',
+  darken: 'Darken', lighten: 'Lighten', posterize: 'Posterize',
+  scramble: 'Scramble', edges: 'Find Edges',
+};
+
+function paintApplyGoodie(name) {
+  const s = paintState;
+  const id = s.ctx.getImageData(0, 0, s.canvas.width, s.canvas.height);
+  if (!paintGoodie(name, id.data, s.canvas.width, s.canvas.height)) return;
+  s.ctx.putImageData(id, 0, 0);
+  s.dirty = true;
+  paintCommitUndo();
+}
+
 function paintGoodiesItems() {
-  return [{ label: 'Nothing here yet', disabled: true, action: () => {} }];
+  return paintGoodieNames().map(name => ({
+    label: PAINT_GOODIE_LABELS[name] || name,
+    action: () => paintApplyGoodie(name),
+  }));
 }
 
 function paintOpenHelp() {

@@ -18835,6 +18835,104 @@ paintRegisterGenerator('eraser', 'fade', () =>
 
 paintRegisterGenerator('eraser', 'blinds', () =>
   paintBlindRows(22, 3).map(r => ({ op: 'erase', x: 11, y: r.y + r.h / 2, r: r.h })));
+
+// ─────────────────────────────────────────────────────────────────
+// Goodies - whole-image operations
+// ─────────────────────────────────────────────────────────────────
+// A menu rather than tools: these act on the whole picture at once, and a
+// column of per-stroke instruments is the wrong place for something that is not
+// a stroke.
+//
+// Every one mutates a raw RGBA buffer in place and touches no canvas, so
+// `npm test` proves each one. Several have properties worth asserting - flip
+// and invert are involutions, posterize is idempotent, scramble conserves
+// pixels - and a property is a much better test than a golden image.
+const PAINT_GOODIES = ['flipH', 'flipV', 'invert', 'darken', 'lighten', 'posterize', 'scramble', 'edges'];
+function paintGoodieNames() { return PAINT_GOODIES.slice(); }
+
+function paintGoodie(name, px, w, h) {
+  const at = (x, y) => (y * w + x) * 4;
+  const swap = (i, j) => {
+    for (let k = 0; k < 4; k++) { const t = px[i + k]; px[i + k] = px[j + k]; px[j + k] = t; }
+  };
+  switch (name) {
+    case 'flipH':
+      for (let y = 0; y < h; y++) for (let x = 0; x < w >> 1; x++) swap(at(x, y), at(w - 1 - x, y));
+      return true;
+    case 'flipV':
+      for (let y = 0; y < h >> 1; y++) for (let x = 0; x < w; x++) swap(at(x, y), at(x, h - 1 - y));
+      return true;
+    case 'invert':
+      // Alpha is deliberately untouched: inverting it would turn the picture
+      // transparent rather than negative.
+      for (let i = 0; i < px.length; i += 4) {
+        px[i] = 255 - px[i]; px[i + 1] = 255 - px[i + 1]; px[i + 2] = 255 - px[i + 2];
+      }
+      return true;
+    case 'darken':
+      for (let i = 0; i < px.length; i += 4) {
+        px[i] *= 0.8; px[i + 1] *= 0.8; px[i + 2] *= 0.8;
+      }
+      return true;
+    case 'lighten':
+      for (let i = 0; i < px.length; i += 4) {
+        px[i] += (255 - px[i]) * 0.2;
+        px[i + 1] += (255 - px[i + 1]) * 0.2;
+        px[i + 2] += (255 - px[i + 2]) * 0.2;
+      }
+      return true;
+    case 'posterize': {
+      // Snapping to fixed levels is what makes this idempotent: a value already
+      // on a level maps to itself, so applying it twice changes nothing.
+      const levels = 4;
+      const step = 255 / (levels - 1);
+      for (let i = 0; i < px.length; i += 4) {
+        for (let k = 0; k < 3; k++) px[i + k] = Math.round(Math.round(px[i + k] / step) * step);
+      }
+      return true;
+    }
+    case 'scramble': {
+      // Sixteen tiles, shuffled. A fixed permutation rather than a random one so
+      // the operation is a pure function of the image - and so the test can
+      // assert pixel conservation without threading an rng through.
+      const cols = 4, rows = 4;
+      const tw = Math.floor(w / cols), th = Math.floor(h / rows);
+      if (tw < 1 || th < 1) return true;
+      const perm = [5, 11, 2, 14, 0, 9, 7, 3, 12, 1, 15, 6, 10, 4, 13, 8];
+      const copy = px.slice();
+      for (let t = 0; t < 16; t++) {
+        const sx = (perm[t] % cols) * tw, sy = Math.floor(perm[t] / cols) * th;
+        const dx = (t % cols) * tw, dy = Math.floor(t / cols) * th;
+        for (let y = 0; y < th; y++) {
+          for (let x = 0; x < tw; x++) {
+            const si = ((sy + y) * w + (sx + x)) * 4, di = ((dy + y) * w + (dx + x)) * 4;
+            for (let k = 0; k < 4; k++) px[di + k] = copy[si + k];
+          }
+        }
+      }
+      return true;
+    }
+    case 'edges': {
+      // Difference from the pixel to the right and below, inverted, so edges
+      // come out dark on white rather than white on black.
+      const copy = px.slice();
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = at(x, y);
+          const r = at(Math.min(w - 1, x + 1), y);
+          const d = at(x, Math.min(h - 1, y + 1));
+          let g = 0;
+          for (let k = 0; k < 3; k++) g += Math.abs(copy[i + k] - copy[r + k]) + Math.abs(copy[i + k] - copy[d + k]);
+          const v = Math.max(0, 255 - g);
+          px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 255;
+        }
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+}
 // ─────────────────────────────────────────────────────────────────
 // PAINT.exe - UI half
 // ─────────────────────────────────────────────────────────────────
@@ -19581,8 +19679,8 @@ function paintBuildMenu(mb) {
       '-',
       { label: 'Clear Canvas', action: () => { paintClearCanvas(); paintCommitUndo(); paintSound('paint-clear'); } },
     ]},
-    // Populated by Task 17. An empty Goodies menu would be a dead item, so it
-    // carries its one honest entry until then.
+    // Whole-image operations - flip, invert, darken/lighten, posterize,
+    // scramble, edges. Rebuilt per open like every other menu here.
     { label: 'Goodies', items: () => paintGoodiesItems() },
   ];
   menus.forEach(m => {
@@ -19605,9 +19703,26 @@ function paintBuildMenu(mb) {
   mb.appendChild(help);
 }
 
-// Replaced wholesale by Task 17.
+const PAINT_GOODIE_LABELS = {
+  flipH: 'Flip Horizontal', flipV: 'Flip Vertical', invert: 'Invert Colours',
+  darken: 'Darken', lighten: 'Lighten', posterize: 'Posterize',
+  scramble: 'Scramble', edges: 'Find Edges',
+};
+
+function paintApplyGoodie(name) {
+  const s = paintState;
+  const id = s.ctx.getImageData(0, 0, s.canvas.width, s.canvas.height);
+  if (!paintGoodie(name, id.data, s.canvas.width, s.canvas.height)) return;
+  s.ctx.putImageData(id, 0, 0);
+  s.dirty = true;
+  paintCommitUndo();
+}
+
 function paintGoodiesItems() {
-  return [{ label: 'Nothing here yet', disabled: true, action: () => {} }];
+  return paintGoodieNames().map(name => ({
+    label: PAINT_GOODIE_LABELS[name] || name,
+    action: () => paintApplyGoodie(name),
+  }));
 }
 
 function paintOpenHelp() {
