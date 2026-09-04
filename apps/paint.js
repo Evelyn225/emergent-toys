@@ -219,6 +219,10 @@ function paintStrokeState() {
 
 function paintBeginStroke(pos) {
   const s = paintState;
+  // Two tools read the canvas and finish in one click, so they never enter the
+  // stroke machinery below at all.
+  if (s.tool === 'fill')       { paintDoFill(pos); return; }
+  if (s.tool === 'eyedropper') { paintDoEyedropper(pos); return; }
   // One rng per stroke, seeded once, so a stroke is reproducible end to end
   // rather than drifting with whatever else asked for a random number.
   s.strokeSeed = (Math.random() * 0xffffffff) >>> 0;
@@ -257,6 +261,75 @@ function paintEndStroke() {
   s.dirty = true;
   if (s.preview) { s.preview = null; paintSound('paint-shape'); }
   paintCommitUndo();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Fill and eyedropper
+// ─────────────────────────────────────────────────────────────────
+// These two READ the canvas, which is why neither goes through paintGenerate:
+// a generator is a pure function of a stroke and knows nothing about what is
+// already painted. Both complete in one click.
+
+function paintDoFill(pos) {
+  const s = paintState;
+  const x = Math.floor(pos.x), y = Math.floor(pos.y);
+  const w = s.canvas.width, h = s.canvas.height;
+  const id = s.ctx.getImageData(0, 0, w, h);
+
+  // Fill flat first, in the paint colour. The pattern is then punched back out
+  // of exactly the pixels this fill claimed - which is what keeps a patterned
+  // fill inside the same region a solid one would have found.
+  const before = id.data.slice();
+  const rgba = paintHexToRgba(s.color);
+  const n = paintFloodFill(id.data, w, h, x, y, rgba, 12);
+  if (!n) return;
+
+  if (s.variant !== 'solid') {
+    const rng = paintRng((Math.random() * 0xffffffff) >>> 0);
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const i = (py * w + px) * 4;
+        // Only pixels this fill actually changed are candidates.
+        if (id.data[i] === before[i] && id.data[i + 1] === before[i + 1] && id.data[i + 2] === before[i + 2]) continue;
+        if (s.variant === 'gradient') {
+          // Vertical ramp from the paint colour to white across the canvas.
+          const t = py / h;
+          id.data[i]     = Math.round(rgba[0] + (255 - rgba[0]) * t);
+          id.data[i + 1] = Math.round(rgba[1] + (255 - rgba[1]) * t);
+          id.data[i + 2] = Math.round(rgba[2] + (255 - rgba[2]) * t);
+          continue;
+        }
+        if (!paintPatternAt(s.variant, px, py, rng)) {
+          // Not inked: put back whatever was there before the flood.
+          id.data[i] = before[i]; id.data[i + 1] = before[i + 1];
+          id.data[i + 2] = before[i + 2]; id.data[i + 3] = before[i + 3];
+          continue;
+        }
+        const alt = paintPatternColor(s.variant, s.color, rng);
+        if (alt) {
+          const c = paintHexToRgba(alt);
+          id.data[i] = c[0]; id.data[i + 1] = c[1]; id.data[i + 2] = c[2];
+        }
+      }
+    }
+  }
+
+  s.ctx.putImageData(id, 0, 0);
+  s.dirty = true;
+  paintSound('paint-fill');
+  paintCommitUndo();
+}
+
+function paintDoEyedropper(pos) {
+  const s = paintState;
+  const x = Math.floor(pos.x), y = Math.floor(pos.y);
+  if (x < 0 || y < 0 || x >= s.canvas.width || y >= s.canvas.height) return;
+  const d = s.ctx.getImageData(x, y, 1, 1).data;
+  paintSetColor(paintRgbaToHex(d[0], d[1], d[2]));
+  paintSound('paint-eyedropper');
+  // Back to the pencil. Staying on the eyedropper means a second click before
+  // you can use the colour you just picked, which is a step nobody wants.
+  paintSelectTool('pencil');
 }
 
 function paintDrawSegment(x0, y0, x1, y1) {

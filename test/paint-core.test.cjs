@@ -18,8 +18,7 @@ function coreCtx() {
 // the build order completes - it is a scaffold, not a permanent exemption, and
 // leaving an entry here once its task is done is a bug this comment exists to
 // make obvious.
-const NOT_YET_IMPLEMENTED = new Set(['fill', 'eyedropper',
-                                     'text', 'wacky', 'eraser', 'select']);
+const NOT_YET_IMPLEMENTED = new Set(['text', 'wacky', 'eraser', 'select']);
 
 test('the canvas is a fixed 480x360', () => {
   const ctx = coreCtx();
@@ -295,7 +294,14 @@ test('a zero-length segment still emits at least one op', () => {
     ctx.paintVariantsFor(tool.id).forEach(v => {
       const ops = ctx.paintGenerate(tool.id, v.id, stroke(100, 100, 100, 100), stateFor(ctx));
       assert.ok(Array.isArray(ops), tool.id + '/' + v.id + ' did not return an array');
-      if (tool.id === 'select') return;   // move is handled by the UI, not by ops
+      // select, fill and eyedropper are exempted for different reasons. select
+      // moves pixels rather than emitting ops, so an empty list is correct.
+      // fill and eyedropper are handled by paintDoFill/paintDoEyedropper in the
+      // UI rather than through a click here, so what paintGenerate returns for
+      // them is irrelevant to real drawing - fill's registered generators
+      // exist only to paint the options-bar preview button and deliberately
+      // are NOT empty, which is exactly why this assertion does not apply.
+      if (tool.id === 'select' || tool.id === 'fill' || tool.id === 'eyedropper') return;
       assert.ok(ops.length >= 1, tool.id + '/' + v.id + ' emitted nothing for a click');
     });
   });
@@ -492,5 +498,56 @@ test('an oval is drawn as dabs along an ellipse, inside the drag box', () => {
   ops.forEach(o => {
     assert.ok(o.x >= -1 && o.x <= 101, 'oval dab escaped the drag box on x: ' + o.x);
     assert.ok(o.y >= -1 && o.y <= 61, 'oval dab escaped the drag box on y: ' + o.y);
+  });
+});
+
+// ── patterns and colour conversion ───────────────────────────────
+
+test('hex and rgba convert both ways without drift', () => {
+  const ctx = coreCtx();
+  // plain() strips the vm realm's Array prototype - see the note above on
+  // paintGenerate's empty-list assertions. Without it deepStrictEqual reports
+  // "same structure but not reference-equal" against a host-realm array
+  // literal, which is not the bug this test is trying to catch.
+  assert.deepStrictEqual(plain(ctx.paintHexToRgba('#ff8000')), [255, 128, 0, 255]);
+  assert.strictEqual(ctx.paintRgbaToHex(255, 128, 0), '#ff8000');
+  ctx.paintPalette().forEach(c => {
+    const [r, g, b] = ctx.paintHexToRgba(c.hex);
+    assert.strictEqual(ctx.paintRgbaToHex(r, g, b), c.hex, 'round trip lost ' + c.hex);
+  });
+});
+
+test('the solid pattern inks every pixel and the others do not', () => {
+  const ctx = coreCtx();
+  const rng = ctx.paintRng(1);
+  let solidOn = 0, checkOn = 0, total = 0;
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      total++;
+      if (ctx.paintPatternAt('solid', x, y, rng)) solidOn++;
+      if (ctx.paintPatternAt('check', x, y, rng)) checkOn++;
+    }
+  }
+  assert.strictEqual(solidOn, total, 'solid left gaps');
+  assert.ok(checkOn > 0 && checkOn < total, 'checks are either solid or empty: ' + checkOn);
+});
+
+test('every fill variant has a pattern function and none throws', () => {
+  const ctx = coreCtx();
+  ctx.paintVariantsFor('fill').forEach(v => {
+    const rng = ctx.paintRng(3);
+    let on = 0;
+    for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if (ctx.paintPatternAt(v.id, x, y, rng)) on++;
+    assert.ok(on > 0, 'pattern ' + v.id + ' inks nothing, so a fill with it does nothing');
+  });
+});
+
+test('geometric patterns are position-dependent, not random', () => {
+  const ctx = coreCtx();
+  // A stripe at (4,4) must read the same every time or a fill will shimmer.
+  ['check', 'stripe', 'diag', 'dots', 'grid'].forEach(id => {
+    const a = ctx.paintPatternAt(id, 4, 4, ctx.paintRng(1));
+    const b = ctx.paintPatternAt(id, 4, 4, ctx.paintRng(99));
+    assert.strictEqual(a, b, 'pattern ' + id + ' depends on the rng and will shimmer');
   });
 });

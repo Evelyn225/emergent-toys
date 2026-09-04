@@ -562,3 +562,90 @@ function paintEllipseDabs(seg, radius, color, fill) {
 
 paintRegisterGenerator('oval', 'outline', (seg, st) => paintEllipseDabs(seg, 1.5, st.color, false));
 paintRegisterGenerator('oval', 'filled',  (seg, st) => paintEllipseDabs(seg, 1.5, st.color, true));
+
+// ─────────────────────────────────────────────────────────────────
+// Fill patterns
+// ─────────────────────────────────────────────────────────────────
+// A pattern answers one question per pixel: is this position inked? The fill
+// walks its flooded region and consults this, so a patterned fill is the same
+// flood as a solid one with a mask on top.
+//
+// Every geometric pattern is a function of x and y ONLY. Reading the rng for a
+// pattern that has a fixed shape makes a fill shimmer differently each time it
+// is applied to the same region, which reads as a rendering bug.
+function paintHexToRgba(hex) {
+  const h = String(hex).replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 255];
+}
+
+function paintRgbaToHex(r, g, b) {
+  return paintRgbToHex(r, g, b);
+}
+
+function paintPatternAt(patternId, x, y, rng) {
+  switch (patternId) {
+    case 'solid':    return true;
+    case 'gradient': return true;   // handled by the caller, which knows the region's extent
+    case 'check':    return ((x >> 2) + (y >> 2)) % 2 === 0;
+    case 'stripe':   return (y >> 2) % 2 === 0;
+    case 'diag':     return ((x + y) >> 2) % 2 === 0;
+    case 'dots':     return (x % 6 < 2) && (y % 6 < 2);
+    case 'grid':     return (x % 8 === 0) || (y % 8 === 0);
+    case 'noise':    return rng() < 0.5;
+    case 'confetti': return rng() < 0.22;
+    default:         return false;
+  }
+}
+
+// Confetti and static want a colour per pixel rather than one flat colour.
+// Returns null when the pattern is monochrome, so the caller keeps its fast path.
+function paintPatternColor(patternId, baseHex, rng) {
+  if (patternId !== 'confetti') return null;
+  const pal = paintPalette();
+  return pal[Math.floor(rng() * pal.length)].hex;
+}
+
+// ── fill (preview only) ─────────────────────────────────────────
+// paintDoFill in apps/paint.js never calls paintGenerate - it reads and writes
+// real canvas pixels, which this pure file cannot do. These nine generators
+// exist for one reason only: paintRenderOptionsBar draws every variant button
+// by running paintGenerate on a 22x22 offscreen canvas (paintVariantPreview),
+// and with no generator registered that call returns [], so all nine fill
+// buttons would render as blank white squares. Same preview-only role Task 14
+// and Task 16 play for text and eraser.
+//
+// Each one inks the pattern directly across the 22x22 button so the button art
+// IS the pattern, the same "the preview is the real output" rule every other
+// tool follows here - it just is not the rule fill's ACTUAL stroke follows,
+// since fill has no stroke.
+function paintFillPreviewOps(patternId, st) {
+  const w = 22, h = 22;
+  if (patternId === 'gradient') {
+    // Same ramp paintDoFill applies: the paint colour at the top fading to
+    // white at the bottom.
+    const rgba = paintHexToRgba(st.color);
+    const ops = [];
+    for (let y = 0; y < h; y++) {
+      const t = y / (h - 1);
+      const hex = paintRgbToHex(
+        rgba[0] + (255 - rgba[0]) * t,
+        rgba[1] + (255 - rgba[1]) * t,
+        rgba[2] + (255 - rgba[2]) * t);
+      ops.push({ op: 'rect', x: 0, y, w, h: 1, color: hex });
+    }
+    return ops;
+  }
+  const ops = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!paintPatternAt(patternId, x, y, st.rng)) continue;
+      const alt = paintPatternColor(patternId, st.color, st.rng);
+      ops.push({ op: 'rect', x, y, w: 1, h: 1, color: alt || st.color });
+    }
+  }
+  return ops;
+}
+
+['solid', 'gradient', 'check', 'stripe', 'diag', 'dots', 'grid', 'noise', 'confetti'].forEach(id => {
+  paintRegisterGenerator('fill', id, (seg, st) => paintFillPreviewOps(id, st));
+});

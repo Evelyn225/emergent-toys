@@ -18414,6 +18414,93 @@ function paintEllipseDabs(seg, radius, color, fill) {
 
 paintRegisterGenerator('oval', 'outline', (seg, st) => paintEllipseDabs(seg, 1.5, st.color, false));
 paintRegisterGenerator('oval', 'filled',  (seg, st) => paintEllipseDabs(seg, 1.5, st.color, true));
+
+// ─────────────────────────────────────────────────────────────────
+// Fill patterns
+// ─────────────────────────────────────────────────────────────────
+// A pattern answers one question per pixel: is this position inked? The fill
+// walks its flooded region and consults this, so a patterned fill is the same
+// flood as a solid one with a mask on top.
+//
+// Every geometric pattern is a function of x and y ONLY. Reading the rng for a
+// pattern that has a fixed shape makes a fill shimmer differently each time it
+// is applied to the same region, which reads as a rendering bug.
+function paintHexToRgba(hex) {
+  const h = String(hex).replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 255];
+}
+
+function paintRgbaToHex(r, g, b) {
+  return paintRgbToHex(r, g, b);
+}
+
+function paintPatternAt(patternId, x, y, rng) {
+  switch (patternId) {
+    case 'solid':    return true;
+    case 'gradient': return true;   // handled by the caller, which knows the region's extent
+    case 'check':    return ((x >> 2) + (y >> 2)) % 2 === 0;
+    case 'stripe':   return (y >> 2) % 2 === 0;
+    case 'diag':     return ((x + y) >> 2) % 2 === 0;
+    case 'dots':     return (x % 6 < 2) && (y % 6 < 2);
+    case 'grid':     return (x % 8 === 0) || (y % 8 === 0);
+    case 'noise':    return rng() < 0.5;
+    case 'confetti': return rng() < 0.22;
+    default:         return false;
+  }
+}
+
+// Confetti and static want a colour per pixel rather than one flat colour.
+// Returns null when the pattern is monochrome, so the caller keeps its fast path.
+function paintPatternColor(patternId, baseHex, rng) {
+  if (patternId !== 'confetti') return null;
+  const pal = paintPalette();
+  return pal[Math.floor(rng() * pal.length)].hex;
+}
+
+// ── fill (preview only) ─────────────────────────────────────────
+// paintDoFill in apps/paint.js never calls paintGenerate - it reads and writes
+// real canvas pixels, which this pure file cannot do. These nine generators
+// exist for one reason only: paintRenderOptionsBar draws every variant button
+// by running paintGenerate on a 22x22 offscreen canvas (paintVariantPreview),
+// and with no generator registered that call returns [], so all nine fill
+// buttons would render as blank white squares. Same preview-only role Task 14
+// and Task 16 play for text and eraser.
+//
+// Each one inks the pattern directly across the 22x22 button so the button art
+// IS the pattern, the same "the preview is the real output" rule every other
+// tool follows here - it just is not the rule fill's ACTUAL stroke follows,
+// since fill has no stroke.
+function paintFillPreviewOps(patternId, st) {
+  const w = 22, h = 22;
+  if (patternId === 'gradient') {
+    // Same ramp paintDoFill applies: the paint colour at the top fading to
+    // white at the bottom.
+    const rgba = paintHexToRgba(st.color);
+    const ops = [];
+    for (let y = 0; y < h; y++) {
+      const t = y / (h - 1);
+      const hex = paintRgbToHex(
+        rgba[0] + (255 - rgba[0]) * t,
+        rgba[1] + (255 - rgba[1]) * t,
+        rgba[2] + (255 - rgba[2]) * t);
+      ops.push({ op: 'rect', x: 0, y, w, h: 1, color: hex });
+    }
+    return ops;
+  }
+  const ops = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!paintPatternAt(patternId, x, y, st.rng)) continue;
+      const alt = paintPatternColor(patternId, st.color, st.rng);
+      ops.push({ op: 'rect', x, y, w: 1, h: 1, color: alt || st.color });
+    }
+  }
+  return ops;
+}
+
+['solid', 'gradient', 'check', 'stripe', 'diag', 'dots', 'grid', 'noise', 'confetti'].forEach(id => {
+  paintRegisterGenerator('fill', id, (seg, st) => paintFillPreviewOps(id, st));
+});
 // ─────────────────────────────────────────────────────────────────
 // PAINT.exe - UI half
 // ─────────────────────────────────────────────────────────────────
@@ -18635,6 +18722,10 @@ function paintStrokeState() {
 
 function paintBeginStroke(pos) {
   const s = paintState;
+  // Two tools read the canvas and finish in one click, so they never enter the
+  // stroke machinery below at all.
+  if (s.tool === 'fill')       { paintDoFill(pos); return; }
+  if (s.tool === 'eyedropper') { paintDoEyedropper(pos); return; }
   // One rng per stroke, seeded once, so a stroke is reproducible end to end
   // rather than drifting with whatever else asked for a random number.
   s.strokeSeed = (Math.random() * 0xffffffff) >>> 0;
@@ -18673,6 +18764,75 @@ function paintEndStroke() {
   s.dirty = true;
   if (s.preview) { s.preview = null; paintSound('paint-shape'); }
   paintCommitUndo();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Fill and eyedropper
+// ─────────────────────────────────────────────────────────────────
+// These two READ the canvas, which is why neither goes through paintGenerate:
+// a generator is a pure function of a stroke and knows nothing about what is
+// already painted. Both complete in one click.
+
+function paintDoFill(pos) {
+  const s = paintState;
+  const x = Math.floor(pos.x), y = Math.floor(pos.y);
+  const w = s.canvas.width, h = s.canvas.height;
+  const id = s.ctx.getImageData(0, 0, w, h);
+
+  // Fill flat first, in the paint colour. The pattern is then punched back out
+  // of exactly the pixels this fill claimed - which is what keeps a patterned
+  // fill inside the same region a solid one would have found.
+  const before = id.data.slice();
+  const rgba = paintHexToRgba(s.color);
+  const n = paintFloodFill(id.data, w, h, x, y, rgba, 12);
+  if (!n) return;
+
+  if (s.variant !== 'solid') {
+    const rng = paintRng((Math.random() * 0xffffffff) >>> 0);
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const i = (py * w + px) * 4;
+        // Only pixels this fill actually changed are candidates.
+        if (id.data[i] === before[i] && id.data[i + 1] === before[i + 1] && id.data[i + 2] === before[i + 2]) continue;
+        if (s.variant === 'gradient') {
+          // Vertical ramp from the paint colour to white across the canvas.
+          const t = py / h;
+          id.data[i]     = Math.round(rgba[0] + (255 - rgba[0]) * t);
+          id.data[i + 1] = Math.round(rgba[1] + (255 - rgba[1]) * t);
+          id.data[i + 2] = Math.round(rgba[2] + (255 - rgba[2]) * t);
+          continue;
+        }
+        if (!paintPatternAt(s.variant, px, py, rng)) {
+          // Not inked: put back whatever was there before the flood.
+          id.data[i] = before[i]; id.data[i + 1] = before[i + 1];
+          id.data[i + 2] = before[i + 2]; id.data[i + 3] = before[i + 3];
+          continue;
+        }
+        const alt = paintPatternColor(s.variant, s.color, rng);
+        if (alt) {
+          const c = paintHexToRgba(alt);
+          id.data[i] = c[0]; id.data[i + 1] = c[1]; id.data[i + 2] = c[2];
+        }
+      }
+    }
+  }
+
+  s.ctx.putImageData(id, 0, 0);
+  s.dirty = true;
+  paintSound('paint-fill');
+  paintCommitUndo();
+}
+
+function paintDoEyedropper(pos) {
+  const s = paintState;
+  const x = Math.floor(pos.x), y = Math.floor(pos.y);
+  if (x < 0 || y < 0 || x >= s.canvas.width || y >= s.canvas.height) return;
+  const d = s.ctx.getImageData(x, y, 1, 1).data;
+  paintSetColor(paintRgbaToHex(d[0], d[1], d[2]));
+  paintSound('paint-eyedropper');
+  // Back to the pencil. Staying on the eyedropper means a second click before
+  // you can use the colour you just picked, which is a step nobody wants.
+  paintSelectTool('pencil');
 }
 
 function paintDrawSegment(x0, y0, x1, y1) {

@@ -553,3 +553,68 @@ test('the sticker size-variant previews redraw once the atlas image finishes loa
     nonWhiteCounts.forEach((n, i) => assert.ok(n > 0, `preview ${i} is still blank even though the atlas has loaded`));
   });
 });
+
+test('every fill variant previews itself instead of rendering a blank button', async () => {
+  await withPaint(async page => {
+    // Sibling to the pencil-only preview test above, added because the same
+    // "runs its own generator" contract silently fails for a tool with no
+    // generator registered at all - PAINT_GENERATORS.fill would be undefined,
+    // paintGenerate would return [], and every fill button would render as a
+    // blank white square. Counting pixels that differ from white RGB, not
+    // alpha, for the same reason as the sticker previews above.
+    const inked = await page.evaluate(() => {
+      paintSelectTool('fill');
+      return [...document.querySelectorAll('.paint-opt canvas')].map(c => {
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] !== 255 || d[i + 1] !== 255 || d[i + 2] !== 255) n++;
+        }
+        return n;
+      });
+    });
+    assert.strictEqual(inked.length, 9, 'expected nine fill variant previews');
+    inked.forEach((n, i) => assert.ok(n > 0, 'fill option button ' + i + ' previewed nothing'));
+  });
+});
+
+test('fill floods an enclosed region and stops at the outline', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => {
+      // A black box outline, drawn straight onto the context so the test is
+      // about the fill and not about the rectangle tool.
+      const g = paintState.ctx;
+      g.strokeStyle = '#000000'; g.lineWidth = 4;
+      g.strokeRect(100, 100, 200, 150);
+      paintSelectTool('fill'); paintSelectVariant('solid'); paintSetColor('#ff0000');
+    });
+    await dragCanvas(page, 200, 175, 200, 175);
+    const inside = await pixelAt(page, 200, 175);
+    const outside = await pixelAt(page, 50, 50);
+    assert.deepStrictEqual(inside, [255, 0, 0, 255], 'the fill did not land inside the box');
+    assert.deepStrictEqual(outside, [255, 255, 255, 255], 'the fill escaped the box');
+  });
+});
+
+test('the eyedropper picks the colour under the pointer', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => {
+      paintState.ctx.fillStyle = '#00ff00';
+      paintState.ctx.fillRect(50, 50, 40, 40);
+      paintSelectTool('eyedropper');
+    });
+    await dragCanvas(page, 70, 70, 70, 70);
+    const picked = await page.evaluate(() => paintState.color);
+    assert.strictEqual(picked, '#00ff00');
+  });
+});
+
+test('the eyedropper switches back to the pencil so you can use what you picked', async () => {
+  await withPaint(async page => {
+    const tool = await page.evaluate(() => { paintSelectTool('eyedropper'); return paintState.tool; });
+    assert.strictEqual(tool, 'eyedropper');
+    await dragCanvas(page, 70, 70, 70, 70);
+    assert.strictEqual(await page.evaluate(() => paintState.tool), 'pencil',
+      'staying on the eyedropper after a pick means a second click to draw');
+  });
+});
