@@ -18,7 +18,7 @@ function coreCtx() {
 // the build order completes - it is a scaffold, not a permanent exemption, and
 // leaving an entry here once its task is done is a bug this comment exists to
 // make obvious.
-const NOT_YET_IMPLEMENTED = new Set(['select']);
+const NOT_YET_IMPLEMENTED = new Set([]);
 
 test('the canvas is a fixed 480x360', () => {
   const ctx = coreCtx();

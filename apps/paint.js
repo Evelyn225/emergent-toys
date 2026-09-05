@@ -185,6 +185,9 @@ function paintRedo() {
 function paintSelectTool(toolId) {
   if (!paintState) return;
   const variants = paintVariantsFor(toolId);
+  // A marquee belongs to the move tool. Leaving it drawn under the pencil is a
+  // dashed rectangle nobody can get rid of.
+  if (paintState.sel) { if (paintState.sel.base) paintRestore(paintState.sel.base); paintState.sel = null; }
   paintState.tool = toolId;
   paintState.variant = variants.length ? variants[0].id : null;
   paintSetRegValue('Tool', toolId);
@@ -232,6 +235,7 @@ function paintBeginStroke(pos) {
   if (s.tool === 'eyedropper') { paintDoEyedropper(pos); return; }
   if (s.tool === 'text')       { paintDoText(pos); return; }
   if (s.tool === 'eraser' && PAINT_WHOLE_ERASERS[s.variant]) { paintDoWholeEraser(pos); return; }
+  if (s.tool === 'select')     { paintSelectBegin(pos); s.drawing = true; s.selecting = true; return; }
   // One rng per stroke, seeded once, so a stroke is reproducible end to end
   // rather than drifting with whatever else asked for a random number.
   s.strokeSeed = (Math.random() * 0xffffffff) >>> 0;
@@ -249,6 +253,7 @@ function paintBeginStroke(pos) {
 function paintExtendStroke(pos) {
   const s = paintState;
   if (!s.drawing) return;
+  if (s.selecting) { paintSelectDrag(pos); return; }
   if (s.preview) {
     // Restore, then redraw the whole shape from the drag origin. Drawing the
     // shape incrementally would leave every intermediate rectangle on screen.
@@ -266,6 +271,7 @@ function paintExtendStroke(pos) {
 function paintEndStroke() {
   const s = paintState;
   if (!s.drawing) return;
+  if (s.selecting) { s.selecting = false; s.drawing = false; paintSelectEnd(); return; }
   s.drawing = false;
   s.dirty = true;
   if (s.preview) { s.preview = null; paintSound('paint-shape'); }
@@ -397,6 +403,8 @@ function openPaint() {
     segIndex: 0,
     drawing: false,
     rng: paintRng(1),
+    sel: null,
+    selecting: false,
   };
   // The blank canvas is the first undo state, so undoing the very first stroke
   // returns to white rather than doing nothing.
@@ -1107,4 +1115,92 @@ function paintDoWholeEraser(pos) {
   paintState.dirty = true;
   paintCommitUndo();
   return true;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Move
+// ─────────────────────────────────────────────────────────────────
+// Two gestures, not one: the first drag MARKS a rectangle, the second MOVES it.
+// A single drag that both selects and moves cannot express "I want this exact
+// box", and every paint program that has tried it is annoying to use.
+//
+// Only the move pushes an undo state. Marking a rectangle changes no pixels, so
+// an undo step for it would be an undo that appears to do nothing.
+
+function paintSelectBegin(pos) {
+  const s = paintState;
+  const sel = s.sel;
+  // Inside an existing marquee: this drag moves it.
+  if (sel && sel.w > 0 && pos.x >= sel.x && pos.x <= sel.x + sel.w
+                       && pos.y >= sel.y && pos.y <= sel.y + sel.h) {
+    sel.phase = 'moving';
+    sel.grabX = pos.x - sel.x;
+    sel.grabY = pos.y - sel.y;
+    // The dashed marquee was drawn onto these exact pixels, so wipe it back to
+    // the clean copy first - otherwise the lift below carries the border along
+    // as part of the moved image.
+    paintRestore(sel.base);
+    // Lift the pixels, then white out where they came from, and remember the
+    // result as the base every preview frame draws onto.
+    sel.data = s.ctx.getImageData(sel.x, sel.y, sel.w, sel.h);
+    s.ctx.fillStyle = '#ffffff';
+    s.ctx.fillRect(sel.x, sel.y, sel.w, sel.h);
+    sel.base = paintSnapshot();
+    return;
+  }
+  s.sel = { phase: 'marking', x0: pos.x, y0: pos.y, x: pos.x, y: pos.y, w: 0, h: 0,
+            data: null, base: paintSnapshot() };
+}
+
+function paintSelectDrag(pos) {
+  const s = paintState;
+  const sel = s.sel;
+  if (!sel) return;
+  if (sel.phase === 'marking') {
+    sel.x = Math.min(sel.x0, pos.x);
+    sel.y = Math.min(sel.y0, pos.y);
+    sel.w = Math.abs(pos.x - sel.x0);
+    sel.h = Math.abs(pos.y - sel.y0);
+    paintDrawMarquee();
+    return;
+  }
+  // Moving: restore the vacated canvas, then draw the lifted pixels at the
+  // pointer. Compositing onto the live canvas instead would smear a trail.
+  paintRestore(sel.base);
+  sel.x = Math.round(pos.x - sel.grabX);
+  sel.y = Math.round(pos.y - sel.grabY);
+  s.ctx.putImageData(sel.data, sel.x, sel.y);
+}
+
+function paintSelectEnd() {
+  const s = paintState;
+  const sel = s.sel;
+  if (!sel) return;
+  if (sel.phase === 'marking') {
+    // A marquee is not a pixel change, so no undo state and no dirty flag. A
+    // near-zero drag is discarded outright - restore first, so whatever sliver
+    // of dashed marquee it drew does not stay baked onto the canvas.
+    if (sel.w < 2 || sel.h < 2) { paintRestore(sel.base); s.sel = null; }
+    return;
+  }
+  sel.phase = 'idle';
+  sel.data = null;
+  sel.base = null;
+  s.dirty = true;
+  paintCommitUndo();
+}
+
+// The marquee is drawn onto the canvas over a restored copy, so it never gets
+// baked in - the next restore wipes it. A separate overlay element would be
+// cleaner but would have to track the display scale, and this cannot drift.
+function paintDrawMarquee() {
+  const s = paintState;
+  const sel = s.sel;
+  paintRestore(sel.base);
+  s.ctx.save();
+  s.ctx.strokeStyle = '#000000';
+  s.ctx.lineWidth = 1;
+  s.ctx.setLineDash([4, 4]);
+  s.ctx.strokeRect(Math.round(sel.x) + 0.5, Math.round(sel.y) + 0.5, Math.round(sel.w), Math.round(sel.h));
+  s.ctx.restore();
 }

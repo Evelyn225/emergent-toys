@@ -752,3 +752,42 @@ test('every destructive eraser leaves the canvas different and undoable', async 
     }
   });
 });
+
+test('the move tool lifts a region and drops it somewhere else', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => {
+      paintState.ctx.fillStyle = '#0000ff';
+      paintState.ctx.fillRect(50, 50, 60, 60);
+      paintSelectTool('select');
+    });
+    // Mark the region.
+    await dragCanvas(page, 40, 40, 120, 120);
+    // Move it right and down.
+    await dragCanvas(page, 80, 80, 280, 240);
+
+    const moved = await pixelAt(page, 280, 240);
+    const vacated = await pixelAt(page, 80, 80);
+    assert.deepStrictEqual(moved, [0, 0, 255, 255], 'the region did not arrive at the drop point');
+    assert.deepStrictEqual(vacated, [255, 255, 255, 255], 'the region left a copy behind');
+  });
+});
+
+test('a move is one undo step', async () => {
+  await withPaint(async page => {
+    const r = await page.evaluate(() => {
+      paintState.ctx.fillStyle = '#0000ff';
+      paintState.ctx.fillRect(50, 50, 60, 60);
+      paintCommitUndo();
+      const before = paintState.ring.items.length;
+      paintSelectTool('select');
+      paintSelectBegin({ x: 40, y: 40 });
+      paintSelectDrag({ x: 120, y: 120 });
+      paintSelectEnd();
+      paintSelectBegin({ x: 80, y: 80 });
+      paintSelectDrag({ x: 280, y: 240 });
+      paintSelectEnd();
+      return paintState.ring.items.length - before;
+    });
+    assert.strictEqual(r, 1, 'a mark-then-move should push exactly one undo state, got ' + r);
+  });
+});
