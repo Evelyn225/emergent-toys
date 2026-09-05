@@ -832,6 +832,11 @@ function paintOpenHelp() {
 // here is a special case.
 
 function paintCanvasBlob() {
+  // An idle marquee is real canvas pixels. Clear it before encoding, the same
+  // way switching tools does, so a save taken between marking and moving never
+  // carries the dashed border into the file. Synchronous and flicker-free -
+  // restore-then-redraw-after would have to outlive an async toBlob callback.
+  if (paintState.sel) { if (paintState.sel.base) paintRestore(paintState.sel.base); paintState.sel = null; }
   return new Promise(resolve => paintState.canvas.toBlob(resolve, 'image/png'));
 }
 
@@ -1148,6 +1153,11 @@ function paintSelectBegin(pos) {
     sel.base = paintSnapshot();
     return;
   }
+  // Starting fresh outside any existing marquee: wipe whatever was left
+  // resting on the canvas from a previous mark first. Snapshotting before
+  // that restore would bake the old marquee into the new "clean" base, and
+  // every later restore would reproduce it.
+  if (sel && sel.base) paintRestore(sel.base);
   s.sel = { phase: 'marking', x0: pos.x, y0: pos.y, x: pos.x, y: pos.y, w: 0, h: 0,
             data: null, base: paintSnapshot() };
 }

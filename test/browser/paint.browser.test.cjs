@@ -33,6 +33,17 @@ const pixelAt = (page, x, y) => page.evaluate(([px, py]) => {
   return [d[0], d[1], d[2], d[3]];
 }, [x, y]);
 
+// A cheap whole-canvas fingerprint. Comparing this instead of transferring the
+// full pixel buffer catches ANY stray mark - including a dashed marquee, whose
+// exact pixels depend on dash phase and are not worth predicting - without
+// shipping 690KB of pixel data across the page boundary per check.
+const canvasChecksum = page => page.evaluate(() => {
+  const d = paintState.ctx.getImageData(0, 0, paintState.canvas.width, paintState.canvas.height).data;
+  let h = 0;
+  for (let i = 0; i < d.length; i++) h = (h * 31 + d[i]) >>> 0;
+  return h;
+});
+
 // Drags in CANVAS coordinates, converting through the live scale the way a real
 // pointer would arrive.
 async function dragCanvas(page, x0, y0, x1, y1) {
@@ -789,5 +800,41 @@ test('a move is one undo step', async () => {
       return paintState.ring.items.length - before;
     });
     assert.strictEqual(r, 1, 'a mark-then-move should push exactly one undo state, got ' + r);
+  });
+});
+
+test('saving an idle mark does not bake the marquee into the canvas', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => {
+      paintState.ctx.fillStyle = '#0000ff';
+      paintState.ctx.fillRect(50, 50, 60, 60);
+      paintSelectTool('select');
+    });
+    const clean = await canvasChecksum(page);
+    // Mark a region and leave it idle - no move, no tool switch.
+    await dragCanvas(page, 40, 40, 120, 120);
+    const withMarquee = await canvasChecksum(page);
+    assert.notStrictEqual(withMarquee, clean, 'the marquee should be visible while a mark sits idle');
+    // What File > Save actually calls.
+    await page.evaluate(() => paintCanvasBlob());
+    const afterSave = await canvasChecksum(page);
+    assert.strictEqual(afterSave, clean, 'the marquee survived into what a save would encode');
+  });
+});
+
+test('marking a second region outside the first does not bake the old marquee into the canvas', async () => {
+  await withPaint(async page => {
+    const clean = await canvasChecksum(page);
+    await page.evaluate(() => paintSelectTool('select'));
+    // Mark region A and leave it idle.
+    await dragCanvas(page, 20, 20, 100, 100);
+    // Mark a second, non-overlapping region B - this must not be taking a
+    // "clean" snapshot with A's marquee still on it.
+    await dragCanvas(page, 200, 200, 260, 260);
+    // Switching tools restores from whatever base marking B just captured. If
+    // that base has A's marquee baked in, this reproduces it permanently.
+    await page.evaluate(() => paintSelectTool('pencil'));
+    const after = await canvasChecksum(page);
+    assert.strictEqual(after, clean, 'the first marquee survived into the canvas after marking a second region');
   });
 });
