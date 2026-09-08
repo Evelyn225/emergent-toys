@@ -169,13 +169,36 @@ function paintUndo() {
   if (!snap) return false;
   paintRestore(snap);
   paintSound('paint-undo');
+  paintDropSelection();
   return true;
 }
 function paintRedo() {
   const snap = paintUndoRedo(paintState.ring);
   if (!snap) return false;
   paintRestore(snap);
+  paintDropSelection();
   return true;
+}
+
+// ── selection lifecycle ─────────────────────────────────────────
+// sel.base is a snapshot of the canvas taken BEFORE the marquee was drawn onto
+// it. Anything that replaces the canvas wholesale - undo, redo, Clear Canvas, a
+// fresh canvas, loading a photo, a Goodie - makes that snapshot describe pixels
+// that are gone. There are two correct responses, and conflating them is the
+// bug this pair of helpers exists to prevent:
+function paintDropSelection() {
+  // The canvas was just replaced out from under sel.base. Restoring it here
+  // would paint the OLD picture back over the NEW one - that IS the bug.
+  // Just forget the selection ever happened.
+  if (paintState) paintState.sel = null;
+}
+function paintFlattenSelection() {
+  // About to read the live canvas, or overwrite it wholesale, and the marquee
+  // must not be part of that. Restore the clean pixels first so the read never
+  // sees it, then drop - base no longer describes anything once this returns.
+  const s = paintState;
+  if (!s) return;
+  if (s.sel) { if (s.sel.base) paintRestore(s.sel.base); s.sel = null; }
 }
 
 // ── tool selection ───────────────────────────────────────────────
@@ -187,7 +210,7 @@ function paintSelectTool(toolId) {
   const variants = paintVariantsFor(toolId);
   // A marquee belongs to the move tool. Leaving it drawn under the pencil is a
   // dashed rectangle nobody can get rid of.
-  if (paintState.sel) { if (paintState.sel.base) paintRestore(paintState.sel.base); paintState.sel = null; }
+  paintFlattenSelection();
   paintState.tool = toolId;
   paintState.variant = variants.length ? variants[0].id : null;
   paintSetRegValue('Tool', toolId);
@@ -722,6 +745,7 @@ function paintNewCanvas() {
     paintUndoPush(s.ring, paintSnapshot());
     s.dirty = false;
     s.file = null;
+    paintDropSelection();
     setWinTitle(PAINT_WIN_ID, 'untitled.png - Paint');
     paintSound('paint-clear');
   };
@@ -750,7 +774,7 @@ function paintBuildMenu(mb) {
       { label: 'Undo  Ctrl+Z', action: paintUndo },
       { label: 'Redo  Ctrl+Y', action: paintRedo },
       '-',
-      { label: 'Clear Canvas', action: () => { paintClearCanvas(); paintCommitUndo(); paintSound('paint-clear'); } },
+      { label: 'Clear Canvas', action: () => { paintFlattenSelection(); paintClearCanvas(); paintCommitUndo(); paintSound('paint-clear'); } },
     ]},
     // Whole-image operations - flip, invert, darken/lighten, posterize,
     // scramble, edges. Rebuilt per open like every other menu here.
@@ -784,6 +808,10 @@ const PAINT_GOODIE_LABELS = {
 
 function paintApplyGoodie(name) {
   const s = paintState;
+  // A live marquee is real canvas pixels. Flatten before reading, or a Goodie
+  // bakes the dashed border - and whatever the selection was hovering - into
+  // the pixel buffer and the undo history right along with it.
+  paintFlattenSelection();
   const id = s.ctx.getImageData(0, 0, s.canvas.width, s.canvas.height);
   if (!paintGoodie(name, id.data, s.canvas.width, s.canvas.height)) return;
   s.ctx.putImageData(id, 0, 0);
@@ -832,11 +860,11 @@ function paintOpenHelp() {
 // here is a special case.
 
 function paintCanvasBlob() {
-  // An idle marquee is real canvas pixels. Clear it before encoding, the same
+  // An idle marquee is real canvas pixels. Flatten it before encoding, the same
   // way switching tools does, so a save taken between marking and moving never
   // carries the dashed border into the file. Synchronous and flicker-free -
   // restore-then-redraw-after would have to outlive an async toBlob callback.
-  if (paintState.sel) { if (paintState.sel.base) paintRestore(paintState.sel.base); paintState.sel = null; }
+  paintFlattenSelection();
   return new Promise(resolve => paintState.canvas.toBlob(resolve, 'image/png'));
 }
 
@@ -935,6 +963,7 @@ function paintLoadImage(name, dir) {
       // the painter did.
       s.ring = paintUndoInit(PAINT_UNDO_STEPS);
       paintUndoPush(s.ring, paintSnapshot());
+      paintDropSelection();
       setWinTitle(PAINT_WIN_ID, st.name + ' - Paint');
       resolve(true);
     };

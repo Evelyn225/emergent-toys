@@ -839,6 +839,149 @@ test('marking a second region outside the first does not bake the old marquee in
   });
 });
 
+// sel.base is a snapshot of the canvas from before a marquee was drawn onto
+// it. Every wholesale canvas replacement (undo, redo, Clear Canvas, New,
+// loading an image, a Goodie) used to leave that snapshot stale - only
+// paintSelectTool and paintCanvasBlob ever invalidated it. The three tests
+// below each prove one of those stale-selection failure modes, and the last
+// two drive the fix through the real menubar DOM rather than calling the
+// app functions directly - no browser test in this file had ever clicked an
+// actual menubar dropdown item, which is exactly why this shipped.
+
+test('saving after a Goodie encodes what is on screen, not the pre-Goodie picture', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => {
+      paintState.ctx.fillStyle = '#003366';
+      paintState.ctx.fillRect(20, 20, 100, 100);
+      paintCommitUndo();
+      paintSelectTool('select');
+    });
+    // Mark a selection over the shape and leave it idle - no move, no tool
+    // switch. sel.base is now a snapshot of the un-inverted picture.
+    await dragCanvas(page, 10, 10, 200, 200);
+
+    // Apply a Goodie through the REAL Goodies menu, not paintApplyGoodie
+    // called directly.
+    await page.evaluate(() => {
+      const goodies = [...document.querySelectorAll('#mb-paint .menu-item')]
+        .find(s => s.textContent === 'Goodies');
+      goodies.click();
+    });
+    await page.waitForSelector('.menu-dd-item');
+    await page.evaluate(() => {
+      const item = [...document.querySelectorAll('.menu-dd-item')]
+        .find(el => el.textContent === 'Invert Colours');
+      item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    });
+
+    // Pin down what the canvas shows right now, before Save gets a chance to
+    // (wrongly) revert it.
+    const onScreenAfterGoodie = await canvasChecksum(page);
+
+    // What File > Save actually calls, then decode the real bytes it wrote -
+    // not just paintState.canvas, which a buggy paintCanvasBlob also mutates
+    // in place, so checking the live canvas alone could hide the bug.
+    const savedChecksum = await page.evaluate(async () => {
+      const blob = await paintCanvasBlob();
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+      const c = document.createElement('canvas');
+      c.width = paintState.canvas.width; c.height = paintState.canvas.height;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let h = 0;
+      for (let i = 0; i < d.length; i++) h = (h * 31 + d[i]) >>> 0;
+      URL.revokeObjectURL(url);
+      return h;
+    });
+
+    assert.strictEqual(savedChecksum, onScreenAfterGoodie,
+      'the saved PNG does not match what the canvas showed after the Goodie - a stale selection made Save revert to the pre-Goodie picture');
+  });
+});
+
+test('an idle selection cannot resurrect an undone stroke on the next drag', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => { paintSelectTool('pencil'); paintSelectVariant('p5'); paintSetColor('#000000'); });
+    // Stroke A, kept.
+    await dragCanvas(page, 50, 50, 150, 50);
+    // Stroke B, about to be undone.
+    await dragCanvas(page, 50, 300, 150, 300);
+    assert.deepStrictEqual(await pixelAt(page, 100, 300), [0, 0, 0, 255], 'stroke B did not land');
+
+    // Mark a small selection somewhere that overlaps neither stroke, and
+    // leave it idle. sel.base now snapshots the canvas WITH stroke B still on
+    // it - it goes stale the moment the undo below fires.
+    await page.evaluate(() => paintSelectTool('select'));
+    await dragCanvas(page, 400, 50, 440, 90);
+
+    await page.evaluate(() => paintUndo());
+    assert.deepStrictEqual(await pixelAt(page, 100, 300), [255, 255, 255, 255],
+      'stroke B should be gone right after undo');
+
+    // A drag starting INSIDE the small marquee is exactly the "moving" branch
+    // of paintSelectBegin, which unconditionally restores sel.base before
+    // doing anything else. If sel.base is stale, that restore repaints the
+    // WHOLE canvas - including stroke B, far outside the marquee - before the
+    // move even lifts anything.
+    await dragCanvas(page, 410, 60, 430, 80);
+
+    assert.deepStrictEqual(await pixelAt(page, 100, 300), [255, 255, 255, 255],
+      'stroke B reappeared - an undo-stale sel.base was restored onto the canvas');
+  });
+});
+
+test('Clear Canvas through the real menubar leaves no way for a stale selection to bring the old picture back', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => {
+      paintState.ctx.fillStyle = '#00ff00';
+      paintState.ctx.fillRect(50, 50, 60, 60);
+      paintCommitUndo();
+      paintSelectTool('select');
+    });
+    // Mark a selection over the picture and leave it idle.
+    await dragCanvas(page, 40, 40, 120, 120);
+
+    // Drive the real Edit > Clear Canvas menu item, not paintClearCanvas
+    // called directly.
+    await page.evaluate(() => {
+      const edit = [...document.querySelectorAll('#mb-paint .menu-item')]
+        .find(s => s.textContent === 'Edit');
+      edit.click();
+    });
+    await page.waitForSelector('.menu-dd-item');
+    await page.evaluate(() => {
+      const item = [...document.querySelectorAll('.menu-dd-item')]
+        .find(el => el.textContent === 'Clear Canvas');
+      item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    });
+
+    // Checks for the old green square specifically, rather than requiring a
+    // literally all-white canvas - the fixed code's next drag legitimately
+    // draws a new dashed (black) marquee border, which is not a bug.
+    const hasGreen = () => page.evaluate(() => {
+      const d = paintState.ctx.getImageData(0, 0, paintState.canvas.width, paintState.canvas.height).data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] === 0 && d[i + 1] === 255 && d[i + 2] === 0) return true;
+      }
+      return false;
+    });
+    assert.ok(!(await hasGreen()), 'Clear Canvas did not remove the old picture');
+
+    // A drag starting inside where the marquee used to sit is the "moving"
+    // branch of paintSelectBegin. A stale sel.base restores the pre-clear
+    // picture across the whole canvas before this drag does anything else,
+    // and the subsequent lift-and-drop redeposits it elsewhere shifted by the
+    // drag delta - so the green square reappears even though it is no longer
+    // where it started.
+    await dragCanvas(page, 60, 60, 100, 100);
+    assert.ok(!(await hasGreen()),
+      'a drag after Clear Canvas revived the pre-clear picture through a stale selection');
+  });
+});
+
 test('on a phone the canvas fits the width and nothing scrolls sideways', async () => {
   await withPaint(async page => {
     const m = await page.evaluate(() => {
