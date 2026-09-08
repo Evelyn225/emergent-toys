@@ -1675,4 +1675,22 @@ body.idle-sleeping { cursor:none; }
   .exp-item .exp-icon { font-size: 32px; }
   .exp-list-item { padding: 10px 6px; font-size: 14px; }
   .exp-det-item td { padding: 8px 6px; font-size: 13px; }
+
+  /* PAINT.exe. The canvas keeps its 480x360 backing store and takes a
+     fractional scale here - below 480 CSS px there is no integer scale that
+     fits, and scrolling a painting is worse than a soft downscale. */
+  .paint-tools { grid-template-columns: repeat(2, 34px); }
+  .paint-tool { width: 34px; height: 34px; font-size: 16px; }
+  .paint-opt { width: 34px; height: 34px; }
+  .paint-sticker { width: 34px; height: 34px; background-size: 448px 256px; }
+  .paint-undo-guy { width: 38px; }
+  .paint-palette { grid-template-rows: repeat(2, 14px); grid-auto-columns: 14px; }
+  .paint-swatch { width: 14px; height: 14px; }
+  /* .paint-bottom is flex-shrink:0 on desktop (it must never lose width to
+     the canvas), which leaves its default auto min-width in force here too:
+     without overriding it, the row refuses to shrink below its children's
+     natural content width and drags the whole window into a sideways
+     scroll. .paint-options already carries its own min-width:0 and
+     overflow-x:auto to absorb the squeeze once this row can shrink at all. */
+  .paint-bottom { min-width: 0; }
 }

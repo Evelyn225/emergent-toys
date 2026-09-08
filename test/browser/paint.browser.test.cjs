@@ -838,3 +838,36 @@ test('marking a second region outside the first does not bake the old marquee in
     assert.strictEqual(after, clean, 'the first marquee survived into the canvas after marking a second region');
   });
 });
+
+test('on a phone the canvas fits the width and nothing scrolls sideways', async () => {
+  await withPaint(async page => {
+    const m = await page.evaluate(() => {
+      const root = document.querySelector('.paint-root');
+      const c = document.getElementById('paint-canvas');
+      return {
+        scale: paintState.scale,
+        canvasW: c.getBoundingClientRect().width,
+        rootW: root.clientWidth,
+        scrollW: root.scrollWidth,
+      };
+    });
+    assert.ok(m.canvasW <= m.rootW + 1, 'the canvas is wider than the window on a phone');
+    assert.ok(m.scrollW <= m.rootW + 1, 'the paint window scrolls sideways on a phone');
+  }, { width: 390, height: 780 });
+});
+
+test('the toolbox and options bar stay reachable on a phone', async () => {
+  await withPaint(async page => {
+    const m = await page.evaluate(() => {
+      const tools = [...document.querySelectorAll('.paint-tool')];
+      const bar = document.getElementById('paint-options');
+      return {
+        smallest: Math.min(...tools.map(b => b.getBoundingClientRect().width)),
+        barScrolls: bar.scrollWidth > bar.clientWidth
+                 || getComputedStyle(bar).overflowX === 'auto',
+      };
+    });
+    assert.ok(m.smallest >= 30, 'tool buttons are under 30px on touch: ' + m.smallest);
+    assert.ok(m.barScrolls, 'the options bar neither scrolls nor fits, so variants are unreachable');
+  }, { width: 390, height: 780 });
+});
