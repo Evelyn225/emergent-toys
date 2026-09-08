@@ -2712,6 +2712,8 @@ const PROJECTS = [
   { name: 'sand playground',    emoji: '⏳', file: 'evenet.fun/Sands.html' },
   { name: 'bug hotline',        emoji: '🐛', file: 'evenet.fun/critters.html' },
   { name: 'fireworks',          emoji: '🎆', file: 'evenet.fun/fireworks.html' },
+  { name: 'pixel splatter',     emoji: '🔮', file: 'evenet.fun/pixel-splatter.html' },
+  { name: 'fluid',              emoji: '💧', file: 'evenet.fun/fluid.html' },
   { name: 'web wizard casino',  emoji: '🎰', file: 'evenet.fun/webwizardcasino.html' },
   { name: 'automata garden',    emoji: '🌱', file: 'evenet.fun/automata-garden.html' },
   { name: 'erosion toy',        emoji: '🏔️',  file: 'evenet.fun/erosion.html' },
@@ -14898,7 +14900,7 @@ function openTerminal(startDir, initialCommand) {
       'You can also type executables directly:',
       '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
       '  welcome.readme, void.tmp, daemon.core, ?????.exe',
-      '  or any project name (try: fireworks, vornoi, ...)',
+      '  or any project name (try: fireworks, fluid, ...)',
       '  Programs are found in the current directory first, then along PATH.',
     ];
   }
