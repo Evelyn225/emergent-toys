@@ -26,16 +26,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://evenet.fun/pixel-splatter.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://evenet.fun/fluid.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://evenet.fun/fireworks.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

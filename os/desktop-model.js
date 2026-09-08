@@ -5,8 +5,6 @@ const PROJECTS = [
   { name: 'sand playground',    emoji: '⏳', file: 'evenet.fun/Sands.html' },
   { name: 'bug hotline',        emoji: '🐛', file: 'evenet.fun/critters.html' },
   { name: 'fireworks',          emoji: '🎆', file: 'evenet.fun/fireworks.html' },
-  { name: 'pixel splatter',     emoji: '🔮', file: 'evenet.fun/pixel-splatter.html' },
-  { name: 'fluid',              emoji: '💧', file: 'evenet.fun/fluid.html' },
   { name: 'web wizard casino',  emoji: '🎰', file: 'evenet.fun/webwizardcasino.html' },
   { name: 'automata garden',    emoji: '🌱', file: 'evenet.fun/automata-garden.html' },
   { name: 'erosion toy',        emoji: '🏔️',  file: 'evenet.fun/erosion.html' },
