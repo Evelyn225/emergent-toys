@@ -79,6 +79,21 @@ function paintExecOps(ctx, ops) {
       case 'sprite':
         paintDrawSticker(ctx, op);
         break;
+      case 'text':
+        // w95font is the OS's own face, so text painted on the canvas matches
+        // the chrome around it; the fallback keeps this working before the font
+        // has finished loading. save/restore because font, alignment and
+        // baseline are sticky context state and every other op assumes the
+        // defaults.
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = op.color;
+        ctx.font = op.size + 'px w95font, "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(op.str, Math.round(op.x), Math.round(op.y));
+        ctx.restore();
+        break;
     }
   });
 }
@@ -250,6 +265,14 @@ function paintStrokeState() {
     rng: s.rng,
     points: s.points,
     stickerIndex: s.stickerIndex,
+    // The surface a generator is drawing onto. Only kaleido cares - its mirror
+    // lines ARE the edges of the drawing surface - but it is state, not a
+    // global, because the option-bar preview draws the same generators onto a
+    // surface that is not the canvas. Reading paintCanvasWidth() directly put
+    // every mirrored dab about 450px outside a 22px button, so kaleido's
+    // preview was indistinguishable from a plain diagonal.
+    surfaceW: s.canvas.width,
+    surfaceH: s.canvas.height,
   };
 }
 
@@ -698,50 +721,143 @@ function paintPreviewSeed(toolId, variantId) {
 // buttons still read as small / medium / large at a glance.
 const PAINT_STICKER_PREVIEW_SIZES = { small: 11, medium: 16, large: 21 };
 
+// A preview button is 22px, but a generator does not confine itself to the
+// stroke it was handed: echo trails ghosts BACKWARDS along the drag, tree grows
+// a branch off the far end, spiral and leaky pile their whole event on the last
+// point. Run those in 22px and most of what makes them distinctive is drawn
+// outside the button - echo showed a single dot in a corner, tree a two-pixel
+// tick, splatter a blob wedged against the top-right edge.
+//
+// So the generator gets a canvas three times the size, with the stroke in the
+// middle of it, and the button shows a 22px window onto wherever the ink
+// actually landed. Note this crops rather than scales: a fitted scale would
+// make Fine and Fat previews identical, and telling those apart is the entire
+// job of the pencil's five buttons.
+const PAINT_PREVIEW_SIZE = 22;
+const PAINT_PREVIEW_WORK = PAINT_PREVIEW_SIZE * 3;
+// The drag itself stays the length it always was, so a brush's marks are the
+// same size in the button as they were before - only the room around them grew.
+const PAINT_PREVIEW_STROKE = 16;
+
+// Where to put the 22px window. NOT on the centre of the ink's bounding box:
+// echo trails its ghosts far enough apart that the box's centre lands in the
+// empty gap between two of them, and the button came out blank. Pick the window
+// holding the MOST ink instead, ties going to the one nearest the middle.
+//
+// Compares against the flat colour the surface was filled with, which is what
+// makes this work for the erasers too: their previews start as a solid block of
+// colour and the "ink" is the transparent holes punched out of it.
+function paintPreviewWindow(g, bg) {
+  const W = PAINT_PREVIEW_WORK, S = PAINT_PREVIEW_SIZE;
+  const d = g.getImageData(0, 0, W, W).data;
+  // Summed-area table over the ink mask, so scoring a window is four lookups
+  // instead of 484. There are 2025 candidate windows; the naive version is
+  // a million reads per button and there are up to fifteen buttons.
+  const sum = new Int32Array((W + 1) * (W + 1));
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      // A tolerance, not equality: dabs are drawn with antialiasing and their
+      // outermost pixels are a hair off the background.
+      const ink = (Math.abs(d[i] - bg[0]) > 8 || Math.abs(d[i + 1] - bg[1]) > 8
+                || Math.abs(d[i + 2] - bg[2]) > 8 || Math.abs(d[i + 3] - bg[3]) > 8) ? 1 : 0;
+      sum[(y + 1) * (W + 1) + x + 1] = ink + sum[y * (W + 1) + x + 1]
+        + sum[(y + 1) * (W + 1) + x] - sum[y * (W + 1) + x];
+    }
+  }
+  const mid = (W - S) / 2;
+  // Nothing drawn anywhere scores zero everywhere, and the tie-break puts the
+  // window in the middle - where the stroke was - rather than in a corner.
+  let best = -1, bestD = Infinity, sx = mid, sy = mid;
+  for (let y = 0; y <= W - S; y++) {
+    for (let x = 0; x <= W - S; x++) {
+      const n = sum[(y + S) * (W + 1) + x + S] - sum[y * (W + 1) + x + S]
+              - sum[(y + S) * (W + 1) + x] + sum[y * (W + 1) + x];
+      const dist = (x - mid) * (x - mid) + (y - mid) * (y - mid);
+      if (n > best || (n === best && dist < bestD)) { best = n; bestD = dist; sx = x; sy = y; }
+    }
+  }
+  return { sx, sy };
+}
+
 function paintVariantPreview(toolId, variantId) {
-  const size = 22;
+  const size = PAINT_PREVIEW_SIZE;
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, size, size);
-  // A diagonal drag across the button, which is enough of a stroke for every
-  // generator to show its character.
-  const seg = { x0: 3, y0: size - 3, x1: size - 3, y1: 3, index: 0 };
+
   const st = {
     color: paintState ? paintState.color : '#000000',
     size: paintSizeForVariant(variantId),
     rng: paintRng(paintPreviewSeed(toolId, variantId)),
-    // Three points along the diagonal, not just the one endpoint - wacky's
-    // connect needs at least two prior points before it draws any chords, and
-    // one point left its preview showing nothing but a lone dot.
-    points: [
-      { x: seg.x0, y: seg.y0 },
-      { x: seg.x0 + (seg.x1 - seg.x0) / 3, y: seg.y0 + (seg.y1 - seg.y0) / 3 },
-      { x: seg.x0 + (seg.x1 - seg.x0) * 2 / 3, y: seg.y0 + (seg.y1 - seg.y0) * 2 / 3 },
-    ],
     stickerIndex: paintState ? paintState.stickerIndex : 0,
   };
-  // An eraser previews against ink, or it previews nothing at all: white on
-  // white is an empty button.
-  if (toolId === 'eraser') {
-    g.fillStyle = paintState ? paintState.color : '#000000';
-    g.fillRect(0, 0, size, size);
-  }
-  // A stamp has no stroke to show, so the diagonal above is the wrong question
-  // to ask it. The sticker generator stamps at the START of that drag, which
-  // lands the sprite on (3, 19) - the bottom-left corner - and 'large' stamps
-  // at 52px, so most of it falls outside a 22px button entirely. Preview the
-  // stamp itself instead: one sprite, centred, scaled so the three sizes still
-  // read as visibly different from each other.
+
+  // A stamp has no stroke to show, so a drag is the wrong question to ask it.
+  // Preview the stamp itself: one sprite, centred, scaled so the three sizes
+  // still read as visibly different from each other.
   if (toolId === 'sticker') {
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, size, size);
     const half = size / 2;
     paintExecOps(g, [{ op: 'sprite', idx: st.stickerIndex, x: half, y: half,
                        size: PAINT_STICKER_PREVIEW_SIZES[variantId] || 16, rot: 0 }]);
     return c;
   }
-  paintExecOps(g, paintGenerate(toolId, variantId, seg, st));
+
+  const W = PAINT_PREVIEW_WORK;
+  const work = document.createElement('canvas');
+  work.width = W; work.height = W;
+  const wg = work.getContext('2d', { willReadFrequently: true });
+  wg.imageSmoothingEnabled = false;
+
+  // An eraser previews against ink, or it previews nothing at all: white on
+  // white is an empty button.
+  const bgHex = toolId === 'eraser' ? (paintState ? paintState.color : '#000000') : '#ffffff';
+  wg.fillStyle = bgHex;
+  wg.fillRect(0, 0, W, W);
+  // Sample the filled pixel rather than parsing bgHex: the canvas is the
+  // authority on what '#c0c0c0' actually became, and this is the value the ink
+  // hunt below compares against.
+  const bgPix = [...wg.getImageData(0, 0, 1, 1).data];
+
+  // A diagonal drag through the middle of the working surface, which is enough
+  // of a stroke for every generator to show its character.
+  //
+  // ONE segment, not a walk of several. Breaking it into three short moves is
+  // closer to what a real drag delivers, and it was tried - but every generator
+  // built on paintWalk emits at least its two endpoints per segment, so three
+  // moves triples the ink of the dense brushes. Spiral, splatter and leaky all
+  // collapsed into featureless black squares, which is a worse preview than a
+  // slightly idealised one.
+  const mid = W / 2, arm = PAINT_PREVIEW_STROKE / 2;
+  const at = t => ({ x: mid - arm + 2 * arm * t, y: mid + arm - 2 * arm * t });
+  const seg = { x0: mid - arm, y0: mid + arm, x1: mid + arm, y1: mid - arm, index: 0 };
+  st.surfaceW = W;
+  st.surfaceH = W;
+  // The trail behind the current point, not just the segment: wacky's connect
+  // draws chords back to earlier points in the same stroke and has nothing to
+  // join up without them.
+  //
+  // Bowed away from the segment rather than laid along it. A real drag wanders,
+  // and connect drawing chords between four collinear points produces four
+  // lines lying exactly on top of the segment - its button was a plain diagonal,
+  // identical to the pencil's.
+  const bow = t => {
+    const p = at(t);
+    const k = Math.sin(t * Math.PI) * 5;
+    return { x: p.x + k, y: p.y + k };  // perpendicular to an up-right diagonal
+  };
+  st.points = [bow(0), bow(1 / 3), bow(2 / 3), bow(1)];
+
+  paintExecOps(wg, paintGenerate(toolId, variantId, seg, st));
+
+  const win = paintPreviewWindow(wg, bgPix);
+  // NOT pre-filled: an eraser's holes are transparent in `work`, and source-over
+  // would let a white fill show through them as if nothing had been erased. The
+  // button's own white background is what should show there.
+  g.drawImage(work, win.sx, win.sy, size, size, 0, 0, size, size);
   return c;
 }
 
@@ -1029,31 +1145,19 @@ function openPaintFile(name, dir) {
 // the state. Asking for the string is a modal, and a modal in a pure function
 // is not a pure function.
 
-function paintTextSize(variantId) {
-  const m = /^t(\d+)$/.exec(String(variantId || ''));
-  return m ? Number(m[1]) : 12;
-}
-
-// Draws a string centred on a point. w95font is the OS's own face, so text
-// painted here matches the chrome around it; the fallback keeps this working if
-// the font has not finished loading.
+// Draws a string centred on a point, through the same text op the options bar
+// previews with - one renderer, so the letter on the button is the letter you
+// get. paintTextPointSize lives in paint-core.js beside the variant table.
 function paintDrawText(pos, text, size) {
   const s = paintState;
-  s.ctx.save();
-  s.ctx.imageSmoothingEnabled = false;
-  s.ctx.fillStyle = s.color;
-  s.ctx.font = size + 'px w95font, "Courier New", monospace';
-  s.ctx.textAlign = 'center';
-  s.ctx.textBaseline = 'middle';
-  s.ctx.fillText(text, Math.round(pos.x), Math.round(pos.y));
-  s.ctx.restore();
+  paintExecOps(s.ctx, [{ op: 'text', x: pos.x, y: pos.y, str: text, size, color: s.color }]);
   s.dirty = true;
   paintCommitUndo();
 }
 
 function paintDoText(pos) {
   const s = paintState;
-  const size = paintTextSize(s.variant);
+  const size = paintTextPointSize(s.variant);
   osPrompt('Type some text:', '', 'Text', value => {
     if (!value) return;
     paintDrawText(pos, value, size);

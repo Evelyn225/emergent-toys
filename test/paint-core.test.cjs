@@ -318,7 +318,11 @@ test('every emitted op carries the fields its renderer reads', () => {
   const ctx = coreCtx();
   const KNOWN = { dab: ['x','y','r','color'], line: ['x0','y0','x1','y1','w','color'],
                   rect: ['x','y','w','h','color'], sprite: ['idx','x','y','size','rot'],
-                  erase: ['x','y','r'] };
+                  erase: ['x','y','r'], text: ['x','y','size','str','color'] };
+  // The fields that are not numbers. Everything else must be finite, which is
+  // the assertion that actually catches a generator dividing by a zero-length
+  // segment.
+  const NOT_NUMERIC = new Set(['color', 'str']);
   ctx.paintTools().forEach(tool => {
     if (NOT_YET_IMPLEMENTED.has(tool.id)) return;
     ctx.paintVariantsFor(tool.id).forEach(v => {
@@ -327,7 +331,7 @@ test('every emitted op carries the fields its renderer reads', () => {
         assert.ok(fields, tool.id + '/' + v.id + ' emitted an unknown op: ' + op.op);
         fields.forEach(f => {
           assert.ok(op[f] !== undefined, tool.id + '/' + v.id + ' ' + op.op + ' is missing ' + f);
-          if (f !== 'color') assert.ok(Number.isFinite(op[f]), tool.id + '/' + v.id + ' ' + op.op + '.' + f + ' is not finite');
+          if (!NOT_NUMERIC.has(f)) assert.ok(Number.isFinite(op[f]), tool.id + '/' + v.id + ' ' + op.op + '.' + f + ' is not finite');
         });
       });
     });

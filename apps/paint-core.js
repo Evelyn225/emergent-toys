@@ -353,6 +353,13 @@ function paintSegLen(seg) {
   return Math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0);
 }
 
+// The middle of a segment. Where a generator that draws one self-contained
+// figure - a blast, a letter, a wash - should centre it, rather than on an
+// endpoint: an endpoint puts half the figure past where the drag stopped.
+function paintSegMid(seg) {
+  return { x: (seg.x0 + seg.x1) / 2, y: (seg.y0 + seg.y1) / 2 };
+}
+
 // Walks a segment at a fixed spacing, always including both ends. The `<=` and
 // the explicit final point are what make a click (length 0) yield exactly one
 // position rather than none.
@@ -661,14 +668,29 @@ function paintFillPreviewOps(patternId, st) {
 // ── text (preview only) ───────────────────────────────────────────
 // The text tool is driven by the UI (it needs a string), but the options bar
 // previews a variant by RUNNING it, so a button with no generator is a blank
-// button. These exist purely to draw the preview: a bar whose height tracks the
-// text size, which is exactly the thing the variant chooses.
+// button.
+//
+// These draw a letter A at the variant's own point size, using the same text op
+// the tool itself draws with. The previous version drew a plain bar whose
+// height tracked the size - three grey rectangles that told you nothing about
+// what the tool does and were not even the shape of a letter. A row of A's at
+// 8, 12 and 20px is the thing being chosen, shown directly.
 paintVariantsFor('text').forEach(v => {
   paintRegisterGenerator('text', v.id, (seg, st) => {
-    const h = Math.max(3, Number((/^t(\d+)$/.exec(v.id) || [])[1] || 8) * 0.7);
-    return [{ op: 'rect', x: seg.x0, y: seg.y1, w: 3, h, color: st.color }];
+    const m = paintSegMid(seg);
+    return [{ op: 'text', x: m.x, y: m.y, str: 'A',
+              size: paintTextPointSize(v.id), color: st.color }];
   });
 });
+
+// The point size a text variant names. The id IS the size ('t12' is 12px), so
+// this is a parse rather than a table - and the fallback matters, because an
+// unparseable id drawing 0px text would be an invisible tool rather than a
+// visibly wrong one.
+function paintTextPointSize(variantId) {
+  const m = /^t(\d+)$/.exec(String(variantId || ''));
+  return m ? Number(m[1]) : 12;
+}
 
 // ─────────────────────────────────────────────────────────────────
 // The wacky brush
@@ -716,21 +738,39 @@ paintRegisterGenerator('wacky', 'spray', (seg, st) => {
 });
 
 paintRegisterGenerator('wacky', 'echo', (seg, st) => {
-  // Four ghosts trailing behind the stroke's own direction, each smaller.
+  // Four ghosts trailing behind, each smaller, spaced a FIXED distance apart
+  // along the stroke's direction.
+  //
+  // The spacing used to be a multiple of the segment vector itself, which made
+  // the whole effect a function of how fast the mouse happened to be moving:
+  // the ghosts piled on top of each other on a slow drag and flew fifty pixels
+  // apart on a flick. It also meant the options bar, which previews a generator
+  // by handing it one long segment, could never fit more than one ghost in the
+  // button - the trail that gives the brush its name was invisible in the only
+  // place you choose it from.
   const dx = seg.x1 - seg.x0, dy = seg.y1 - seg.y0;
+  const len = Math.hypot(dx, dy);
+  // A zero-length segment is the dab at the very start of a stroke, before
+  // there is any direction to trail along. Trail left; anything is better than
+  // four dabs stacked on one pixel.
+  const ux = len ? dx / len : 1, uy = len ? dy / len : 0;
+  const gap = 3 + st.size;
   const ops = [];
   for (let k = 0; k < 4; k++) {
-    ops.push({ op: 'dab', x: seg.x1 - dx * k * 1.6, y: seg.y1 - dy * k * 1.6,
+    ops.push({ op: 'dab', x: seg.x1 - ux * gap * k, y: seg.y1 - uy * gap * k,
                r: Math.max(1, st.size * (1 - k * 0.2)), color: st.color });
   }
   return ops;
 });
 
 paintRegisterGenerator('wacky', 'kaleido', (seg, st) => {
-  // Four-fold: the dab plus its mirror in each axis and both. The canvas
-  // dimensions are the mirror lines, which is why this generator is the one
-  // place in the file that reads them.
-  const W = paintCanvasWidth(), H = paintCanvasHeight();
+  // Four-fold: the dab plus its mirror in each axis and both. The mirror lines
+  // are the edges of the surface being drawn on, which is why this generator is
+  // the one that needs to know how big that surface is. It comes off the state
+  // rather than from paintCanvasWidth() so the option-bar preview, which draws
+  // onto a small offscreen canvas, gets its mirrors inside its own button
+  // instead of ~450px outside it. The canvas is the fallback.
+  const W = st.surfaceW || paintCanvasWidth(), H = st.surfaceH || paintCanvasHeight();
   const ops = [];
   paintWalk(seg, 3).forEach(p => {
     [[p.x, p.y], [W - p.x, p.y], [p.x, H - p.y], [W - p.x, H - p.y]].forEach(([x, y]) => {
@@ -916,10 +956,14 @@ paintRegisterGenerator('wacky', 'leaky', (seg, st) => {
 // touches downward, so it is a generator like the plain three.
 paintRegisterGenerator('eraser', 'melt', (seg, st) => {
   const ops = [];
-  paintWalk(seg, 5).forEach(p => {
-    ops.push({ op: 'erase', x: p.x, y: p.y, r: 5 });
+  // The spacing has to beat the head radius or every drip merges into the one
+  // beside it and the tool is just a wide band eraser. 5px steps with a 5px
+  // radius did exactly that - the runs were there, but nothing between them
+  // survived to make them read as separate drips.
+  paintWalk(seg, 9).forEach(p => {
+    ops.push({ op: 'erase', x: p.x, y: p.y, r: 4 });
     const run = 6 + st.rng() * 26;
-    for (let d = 0; d < run; d += 4) ops.push({ op: 'erase', x: p.x, y: p.y + d, r: 3 });
+    for (let d = 0; d < run; d += 3) ops.push({ op: 'erase', x: p.x, y: p.y + d, r: 2.5 });
   });
   return ops;
 });
@@ -963,12 +1007,26 @@ function paintBlindRows(h, step) {
 }
 
 // The whole-image erasers are applied by the UI, but the options bar previews a
-// variant by RUNNING it. These stand-ins draw the SHAPE of what each one does
-// on a 22x22 button - a blast, a swirl, speckle, a wash, bands - so the row
-// reads at a glance instead of showing five identical blank squares.
-paintRegisterGenerator('eraser', 'firecracker', (seg, st) =>
-  paintBlastPattern(seg.x1, seg.y1, st.rng).slice(0, 8)
-    .map(h => ({ op: 'erase', x: h.x, y: h.y, r: Math.max(1, h.r / 6) })));
+// variant by RUNNING it. These stand-ins draw the SHAPE of what each one does -
+// a blast, a swirl, speckle, a wash, bands - so the row reads at a glance
+// instead of showing five identical blank squares.
+//
+// All five draw a button-sized patch AROUND THE SEGMENT they are handed. They
+// used to draw into a fixed (0,0)-(22,22) box, which was only ever right
+// because the preview canvas happened to be exactly that. The preview now runs
+// on a larger surface, so that a generator's overspill is measured rather than
+// silently cropped, and a hardcoded corner would put them outside the button.
+const PAINT_ERASER_PREVIEW_BOX = 22;
+
+// The real blast is canvas-sized - shrapnel flies up to 128px from the core -
+// so the preview scales the whole pattern, POSITIONS as well as radii, into the
+// box. Shrinking only the radii left the holes where they were and the button
+// showed whichever single one happened to land in frame.
+paintRegisterGenerator('eraser', 'firecracker', (seg, st) => {
+  const m = paintSegMid(seg), k = 1 / 6;
+  return paintBlastPattern(0, 0, st.rng).slice(0, 8)
+    .map(h => ({ op: 'erase', x: m.x + h.x * k, y: m.y + h.y * k, r: Math.max(1, h.r * k) }));
+});
 
 paintRegisterGenerator('eraser', 'blackhole', (seg) => {
   const ops = [];
@@ -981,16 +1039,33 @@ paintRegisterGenerator('eraser', 'blackhole', (seg) => {
 });
 
 paintRegisterGenerator('eraser', 'dissolve', (seg, st) => {
+  const m = paintSegMid(seg), b = PAINT_ERASER_PREVIEW_BOX;
   const ops = [];
-  for (let i = 0; i < 40; i++) ops.push({ op: 'erase', x: st.rng() * 22, y: st.rng() * 22, r: 1 });
+  for (let i = 0; i < 40; i++) {
+    ops.push({ op: 'erase', x: m.x - b / 2 + st.rng() * b, y: m.y - b / 2 + st.rng() * b, r: 1 });
+  }
   return ops;
 });
 
-paintRegisterGenerator('eraser', 'fade', () =>
-  [{ op: 'erase', x: 11, y: 11, r: 10 }]);
+paintRegisterGenerator('eraser', 'fade', (seg) => {
+  const m = paintSegMid(seg);
+  return [{ op: 'erase', x: m.x, y: m.y, r: 10 }];
+});
 
-paintRegisterGenerator('eraser', 'blinds', () =>
-  paintBlindRows(22, 3).map(r => ({ op: 'erase', x: 11, y: r.y + r.h / 2, r: r.h })));
+paintRegisterGenerator('eraser', 'blinds', (seg) => {
+  const m = paintSegMid(seg), b = PAINT_ERASER_PREVIEW_BOX;
+  const ops = [];
+  // Bands, not a column of dots. An erase op is a circle, so a band is a run of
+  // overlapping ones - the old version emitted one circle per row and the
+  // preview read as a dotted line rather than as venetian blinds.
+  paintBlindRows(b, 3).forEach(r => {
+    const y = m.y - b / 2 + r.y + r.h / 2;
+    for (let x = -b / 2; x <= b / 2; x += 2) {
+      ops.push({ op: 'erase', x: m.x + x, y, r: r.h / 2 + 0.5 });
+    }
+  });
+  return ops;
+});
 
 // ─────────────────────────────────────────────────────────────────
 // Goodies - whole-image operations
