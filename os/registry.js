@@ -1,7 +1,11 @@
 // ── Settings bootstrap (must be early so BIOS skip works) ────────
 const SETTINGS_KEY = 'sleepOS-settings';
 const FORCE_BOOT_SESSION_KEY = 'sleepOS-force-boot';
-const osSettings = { crtEffect: true, videoDither: true, clock12h: false, skipBoot: false, sounds: true, soundVolume: 0.6 };
+const osSettings = { crtEffect: true, videoDither: true, clock12h: false, skipBoot: false, sounds: true, soundVolume: 0.6, iconSize: 'medium' };
+const ICON_SIZES = ['small', 'medium', 'large'];
+function normalizeIconSize(value) {
+  return ICON_SIZES.includes(value) ? value : 'medium';
+}
 // The one reader for the persisted blob. bios.js loads settings a second time
 // so skipBoot is available before the boot text starts, and a raw re-parse
 // there would quietly undo the rename below - which is exactly what it did.
@@ -16,6 +20,7 @@ function loadSavedSettings() {
     }
     delete saved.crtScanlines;
     Object.assign(osSettings, saved);
+    osSettings.iconSize = normalizeIconSize(osSettings.iconSize);
   } catch(e) {}
 }
 loadSavedSettings();
@@ -97,6 +102,7 @@ const registryData = {
       CRT_EFFECT:         { type:'REG_DWORD', value: 1 },
       VIDEO_DITHER:       { type:'REG_DWORD', value: 1 },
       CLOCK_FORMAT:       { type:'REG_SZ',    value: '24h' },
+      ICON_SIZE:          { type:'REG_SZ',    value: 'medium' },
     },
     'SOUL\\Metrics': {
       SOUL_INTEGRITY:     { type:'REG_DWORD', value: 87 },
@@ -271,6 +277,7 @@ function applyRegistrySettings() {
   osSettings.crtEffect     = !!cc.CRT_EFFECT.value;
   osSettings.videoDither   = !!cc.VIDEO_DITHER.value;
   osSettings.clock12h      = cc.CLOCK_FORMAT.value === '12h';
+  osSettings.iconSize      = normalizeIconSize(cc.ICON_SIZE.value);
   osSettings.skipBoot      = !!cu.SkipBoot.value;
   osSettings.sounds        = !!cu.SoundEnabled.value;
   osSettings.soundVolume   = normalizeSoundVolumePercent(cu.SoundVolume.value) / 100;
@@ -529,6 +536,13 @@ function openSettings() {
   body.innerHTML =     `<div class="st-section">Display</div>
      <div class="st-row"><div class="st-label">CRT effect</div><button class="st-toggle" data-setting="crtEffect"></button></div>
      <div class="st-row"><div class="st-label">Video dithering</div><button class="st-toggle" data-setting="videoDither"></button></div>
+     <div class="st-row"><div class="st-label">Desktop icon size</div>
+       <div class="st-seg" role="group" aria-label="Desktop icon size">
+         <button class="st-toggle" data-icon-size="small">Small</button>
+         <button class="st-toggle" data-icon-size="medium">Medium</button>
+         <button class="st-toggle" data-icon-size="large">Large</button>
+       </div>
+     </div>
      <div class="st-section">Sound</div>
      <div class="st-row"><div class="st-label">System sounds</div><button class="st-toggle" data-setting="sounds"></button></div>
      <div class="st-row"><div class="st-label">Volume</div><div class="st-vol vp-vol-blocks" id="settings-volume" role="slider" tabindex="0" aria-label="System volume" aria-valuemin="0" aria-valuemax="100" title="System volume"></div></div>
@@ -555,6 +569,11 @@ function openSettings() {
       btn.textContent = enabled ? 'ON' : 'OFF';
       btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     });
+    body.querySelectorAll('[data-icon-size]').forEach(btn => {
+      const selected = btn.dataset.iconSize === osSettings.iconSize;
+      btn.classList.toggle('on', selected);
+      btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
     renderVolume();
   }
 
@@ -569,6 +588,16 @@ function openSettings() {
       // still off, so switching it on would otherwise be silent - the one
       // control whose effect you most want to hear.
       if (key === 'sounds' && osSettings.sounds) playSound('click');
+    });
+  });
+
+  body.querySelectorAll('[data-icon-size]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      osSettings.iconSize = normalizeIconSize(btn.dataset.iconSize);
+      saveSettings();
+      applySettings();
+      refresh();
+      if (osSettings.sounds) playSound('click');
     });
   });
 
