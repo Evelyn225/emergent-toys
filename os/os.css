@@ -1525,6 +1525,92 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 }
 body.idle-sleeping { cursor:none; }
 
+/* ── PAINT.exe ────────────────────────────────────────────────── */
+/* The backing store is a fixed 480x360; only the CSS width/height change, and
+   only ever by a whole number, so every canvas pixel stays square. The stage
+   centres whatever that comes to. */
+.paint-body { padding: 0; overflow: hidden; background: #c0c0c0; }
+.paint-root {
+  display: flex; flex-wrap: wrap;
+  width: 100%; height: 100%;
+  gap: 0;
+}
+.paint-tools {
+  display: grid; grid-template-columns: repeat(2, 26px);
+  gap: 2px; padding: 3px; align-content: start;
+  background: #c0c0c0; flex: 0 0 auto;
+  border-right: 2px solid; border-right-color: #808080;
+}
+.paint-tool {
+  width: 26px; height: 26px; padding: 0;
+  background: #c0c0c0; cursor: default;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; line-height: 1;
+}
+.paint-tool.sel { border-color: #808080 #fff #fff #808080; background: #a8a8a8; }
+.paint-tool:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
+.paint-stage {
+  flex: 1 1 auto; min-width: 0; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #808080; overflow: hidden;
+}
+#paint-canvas {
+  image-rendering: pixelated;
+  display: block;
+  box-shadow: 0 0 0 1px #000;
+  cursor: crosshair;
+}
+.paint-bottom {
+  flex: 0 0 100%;
+  display: flex; align-items: stretch; gap: 4px;
+  padding: 3px; background: #c0c0c0;
+  border-top: 2px solid; border-top-color: #fff;
+}
+.paint-palette {
+  display: grid; grid-template-rows: repeat(2, 12px);
+  grid-auto-flow: column; grid-auto-columns: 12px;
+  gap: 1px; flex: 0 0 auto; align-content: center;
+  border: 2px solid; border-color: #808080 #fff #fff #808080; padding: 2px;
+}
+.paint-swatch { width: 12px; height: 12px; padding: 0; border: 1px solid #808080; cursor: default; }
+.paint-swatch.sel { border: 2px solid #000; }
+.paint-options {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 2px;
+  overflow-x: auto; overflow-y: hidden;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+  padding: 2px; background: #c0c0c0;
+}
+.paint-opt {
+  width: 26px; height: 26px; flex: 0 0 auto; padding: 0;
+  background: #fff; cursor: default;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+}
+.paint-opt.sel { border-color: #808080 #fff #fff #808080; }
+.paint-opt canvas { display: block; image-rendering: pixelated; }
+/* The atlas is packed with no gutter, so a thumbnail is one 32x32 window onto
+   it and background-position is a flat multiple of 32. */
+.paint-sticker {
+  width: 32px; height: 32px; flex: 0 0 auto; padding: 0;
+  background-color: #fff; background-repeat: no-repeat;
+  image-rendering: pixelated; cursor: default;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+}
+.paint-sticker.sel { border-color: #808080 #fff #fff #808080; background-color: #d0d0ff; }
+.paint-pager {
+  width: 18px; height: 26px; flex: 0 0 auto; padding: 0;
+  background: #c0c0c0; cursor: default; font-size: 9px; line-height: 1;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+}
+.paint-pager:active { border-color: #808080 #fff #fff #808080; }
+.paint-undo-guy {
+  width: 30px; flex: 0 0 auto; padding: 0;
+  background: #c0c0c0; cursor: default; font-size: 15px;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+}
+.paint-undo-guy:active { border-color: #808080 #fff #fff #808080; }
+
 /* ── Mobile / touch ──────────────────────────────────────────── */
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 16px; }
@@ -1589,4 +1675,28 @@ body.idle-sleeping { cursor:none; }
   .exp-item .exp-icon { font-size: 32px; }
   .exp-list-item { padding: 10px 6px; font-size: 14px; }
   .exp-det-item td { padding: 8px 6px; font-size: 13px; }
+
+  /* PAINT.exe. The canvas keeps its 480x360 backing store and takes a
+     fractional scale here - below 480 CSS px there is no integer scale that
+     fits, and scrolling a painting is worse than a soft downscale. */
+  .paint-tools { grid-template-columns: repeat(2, 34px); }
+  .paint-tool { width: 34px; height: 34px; font-size: 16px; }
+  .paint-opt { width: 34px; height: 34px; }
+  /* background-size here is the atlas's own intrinsic size (448x256), so it
+     is a no-op - it does NOT rescale the sheet. What actually keeps a
+     neighbouring sticker from bleeding in at this larger button is
+     box-sizing: border-box (global reset) plus the 2px border: the visible
+     background window is 34 - 4 = 30px, still under the 32px cell, the same
+     margin that already protects the 32px desktop button (32 - 4 = 28px). */
+  .paint-sticker { width: 34px; height: 34px; background-size: 448px 256px; }
+  .paint-undo-guy { width: 38px; }
+  .paint-palette { grid-template-rows: repeat(2, 14px); grid-auto-columns: 14px; }
+  .paint-swatch { width: 14px; height: 14px; }
+  /* .paint-bottom is flex-shrink:0 on desktop (it must never lose width to
+     the canvas), which leaves its default auto min-width in force here too:
+     without overriding it, the row refuses to shrink below its children's
+     natural content width and drags the whole window into a sideways
+     scroll. .paint-options already carries its own min-width:0 and
+     overflow-x:auto to absorb the squeeze once this row can shrink at all. */
+  .paint-bottom { min-width: 0; }
 }

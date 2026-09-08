@@ -35,6 +35,7 @@ function openRunDialog() {
     'browser': openBrowser, 'browser.exe': openBrowser,
     'minesweeper': openMinesweeper, 'minesweeper.exe': openMinesweeper,
     'winmine': openMinesweeper, 'winmine.exe': openMinesweeper,
+    'paint': openPaint, 'paint.exe': openPaint,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,

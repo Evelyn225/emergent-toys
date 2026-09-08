@@ -315,6 +315,25 @@ const SYSTEM_BINARY_SOURCES = {
     '  CALL render_tree',
     '  JMP  edit_loop',
   ].join('\n'),
+  'PAINT.exe': [
+    '; PAINT.exe - Disassembly',
+    'section .data',
+    '  canvas_w    DW 01E0h',
+    '  canvas_h    DW 0168h',
+    '  stroke_seed DD 0FFFFFFFFh',
+    'section .text',
+    '  CALL  init_canvas',
+    '  MOV   [stroke_seed], eax',
+    '  ; every stroke gets its own seed, so nothing repeats twice',
+    'input_loop:',
+    '  CALL  wait_pointer_down',
+    '  CALL  gen_stroke_ops',
+    '  CALL  exec_ops',
+    '  CALL  wait_pointer_up',
+    '  CALL  push_undo',
+    '  JMP   input_loop',
+    '; NOTE: the canvas never resizes, only the view of it does',
+  ].join('\n'),
 };
 
 // The seeded filesystem. vfsBootMount installs this as the initial tree when

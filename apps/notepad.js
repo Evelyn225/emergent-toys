@@ -339,13 +339,31 @@ function runScriptInTerminal(name, dirName, args) {
   openTerminal(dirName || '', 'RUN ' + items.join(' '));
 }
 
-function openSaveDialog(defaultName, callback) {
-  const id = 'saveas-' + Date.now();
-  if (!mkWin({ id, title: 'Save As', icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+// One dialog for Save As and for Open. The two used to be a candidate for a
+// second near-copy of this function, which is the same trap Save and Save As
+// fell into: a fix lands in one and not the other. `options` defaults
+// reproduce the original save-only behaviour exactly, so every existing caller
+// is untouched.
+//
+//   options.mode     'save' (default) or 'open'
+//   options.kinds    which VFS entry kinds are offered - ['text'] by default,
+//                    ['blob'] for an image picker
+//   options.title    window title
+//   options.startDir seeds the dialog's starting folder (e.g. PAINT.exe
+//                     opening Save As on a painting whose home is PICTURES,
+//                     not the root). Optional - every caller that omits it
+//                     keeps opening at the root exactly as before.
+function openSaveDialog(defaultName, callback, options) {
+  options = options || {};
+  const mode = options.mode === 'open' ? 'open' : 'save';
+  const kinds = options.kinds || ['text'];
+  const id = (mode === 'open' ? 'openfile-' : 'saveas-') + Date.now();
+  const title = options.title || (mode === 'open' ? 'Open' : 'Save As');
+  if (!mkWin({ id, title, icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
 
-  let saveCwd = '';
+  let saveCwd = vfsNormalizeDir(options.startDir || '');
 
   // ── "Save in:" bar ────────────────────────────────────────────
   const locRow = document.createElement('div');
@@ -376,7 +394,8 @@ function openSaveDialog(defaultName, callback) {
   // ── Buttons ──────────────────────────────────────────────────
   const btnRow = document.createElement('div');
   btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;flex-shrink:0;';
-  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary'; saveBtn.textContent = 'Save';
+  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary';
+  saveBtn.textContent = mode === 'open' ? 'Open' : 'Save';
   const cancelBtn = document.createElement('button'); cancelBtn.className = 'dlg-btn';        cancelBtn.textContent = 'Cancel';
   btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
   body.appendChild(btnRow);
@@ -413,12 +432,18 @@ function openSaveDialog(defaultName, callback) {
       fileList.appendChild(el);
     });
 
-    entries.filter(e => e.kind === 'text').forEach(({ name }) => {
+    entries.filter(e => kinds.includes(e.kind)).forEach(({ name }) => {
       // resolveFsIcon already owns the extension table; this dialog used to
       // keep a second, smaller copy of it that drifted from the real one.
       const el = makeFLItem(resolveFsIcon(name, 'file'), name);
       el.addEventListener('click', () => { nameInput.value = name; });
-      el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
+      // One listener, not two: a real double-click fires every listener bound
+      // to it, so a second dblclick handler here would run the open callback
+      // twice per click. Branch on mode inside the single handler instead.
+      el.addEventListener('dblclick', () => {
+        if (mode === 'open') { closeWin(id); callback(name, saveCwd); }
+        else { nameInput.value = name; saveBtn.click(); }
+      });
       fileList.appendChild(el);
     });
   }

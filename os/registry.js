@@ -141,6 +141,12 @@ const registryData = {
       LAST_EVENT:         { type:'REG_SZ',    value: 'none' },
       OBSERVED:           { type:'REG_DWORD', value: 0 },
     },
+    // Same motive as Minesweeper's scores: a preference a player can find,
+    // read and meddle with in REGEDIT.exe beats a private localStorage key.
+    'SOFTWARE\\sleepOS\\Paint': {
+      Tool:               { type:'REG_SZ',    value: 'pencil' },
+      Color:              { type:'REG_SZ',    value: '#000000' },
+    },
   },
 };
 
@@ -157,6 +163,7 @@ const registryData = {
 const FILE_HANDLERS = {
   'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
   'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),
+  'PAINT.exe':     (name, dir) => openPaintFile(name, dir),
   'MEDIAPLAY.exe': (name, dir) => {
     // Blob metadata only, so this stays synchronous.
     const st = vfsStatSync(name, dir);

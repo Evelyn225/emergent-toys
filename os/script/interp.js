@@ -715,6 +715,8 @@ async function scriptOpenSystemProgram(name, cwd, arg) {
     'welcome.readme': openWelcome,
     minesweeper: openMinesweeper,
     'minesweeper.exe': openMinesweeper,
+    paint: openPaint,
+    'paint.exe': openPaint,
     calc: openCalculator,
     'calc.exe': openCalculator,
     regedit: openRegedit,

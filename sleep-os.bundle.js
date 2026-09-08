@@ -25,6 +25,7 @@ const OS_ICONS = {
   sysmon:        'chart1-4.png',
   regedit:       'regedit-0.png',
   minesweeper:   'minesweeper.png',
+  paint:         'paint.png',
   defrag:        'clean_drive.png',
   explorer:      'directory_open_file_mydocs-0.png',
   settings:      'settings.png',
@@ -2750,6 +2751,7 @@ const DESKTOP_ICONS = [
   { name: 'DEFRAG.exe',     emoji: 'icon:defrag',   action: 'openDefrag' },
   { name: 'CALC.exe',       emoji: 'icon:calc',     action: 'openCalculator' },
   { name: 'MINESWEEPER.exe', emoji: 'icon:minesweeper', action: 'openMinesweeper' },
+  { name: 'PAINT.exe',      emoji: 'icon:paint',    action: 'openPaint' },
   { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
   { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
   { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },
@@ -3260,6 +3262,7 @@ const PROGRAM_LAUNCHERS = {
     delay: 320,
   },
   'MINESWEEPER.exe': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
+  'PAINT.EXE': { lines: ['Starting PAINT.exe...'], open: () => openPaint(), aliases: ['paint'] },
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
   // list it. It was reachable from the old `launchers`/`SYS` maps and stays
   // reachable; it has never been a file. That means `WHERE welcome` resolves
@@ -3646,6 +3649,12 @@ const registryData = {
       LAST_EVENT:         { type:'REG_SZ',    value: 'none' },
       OBSERVED:           { type:'REG_DWORD', value: 0 },
     },
+    // Same motive as Minesweeper's scores: a preference a player can find,
+    // read and meddle with in REGEDIT.exe beats a private localStorage key.
+    'SOFTWARE\\sleepOS\\Paint': {
+      Tool:               { type:'REG_SZ',    value: 'pencil' },
+      Color:              { type:'REG_SZ',    value: '#000000' },
+    },
   },
 };
 
@@ -3662,6 +3671,7 @@ const registryData = {
 const FILE_HANDLERS = {
   'NOTEPAD.exe':   (name, dir) => openNotepad(name, dir),
   'IMAGEVIEW.exe': (name, dir) => openImageViewer(name, dir),
+  'PAINT.exe':     (name, dir) => openPaintFile(name, dir),
   'MEDIAPLAY.exe': (name, dir) => {
     // Blob metadata only, so this stays synchronous.
     const st = vfsStatSync(name, dir);
@@ -5334,6 +5344,25 @@ const SYSTEM_BINARY_SOURCES = {
     '  CALL render_tree',
     '  JMP  edit_loop',
   ].join('\n'),
+  'PAINT.exe': [
+    '; PAINT.exe - Disassembly',
+    'section .data',
+    '  canvas_w    DW 01E0h',
+    '  canvas_h    DW 0168h',
+    '  stroke_seed DD 0FFFFFFFFh',
+    'section .text',
+    '  CALL  init_canvas',
+    '  MOV   [stroke_seed], eax',
+    '  ; every stroke gets its own seed, so nothing repeats twice',
+    'input_loop:',
+    '  CALL  wait_pointer_down',
+    '  CALL  gen_stroke_ops',
+    '  CALL  exec_ops',
+    '  CALL  wait_pointer_up',
+    '  CALL  push_undo',
+    '  JMP   input_loop',
+    '; NOTE: the canvas never resizes, only the view of it does',
+  ].join('\n'),
 };
 
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
@@ -6325,6 +6354,13 @@ async function vfsBootMount() {
   // fixes anyone who does not - not just the .url shortcut writer, but every
   // future write into DESKTOP (uploads, New Folder, wallpaper drops).
   ensureFsDir('DESKTOP');
+  // PAINT.exe saves here. Same idempotent heal as DESKTOP and the recycle dir
+  // above, and for the same reason: seedFreshRootTree only installs its tree
+  // into a genuinely empty root, so any profile that booted before PAINT
+  // existed comes back with no PICTURES and every save into it throws ENOENT
+  // forever. ensureFsDir queues a commit only on the boot where it actually
+  // creates the directory, so this costs a returning visitor nothing.
+  ensureFsDir('PICTURES');
   void loadBlobsFromBlocks();
   // The load-time syncDaemonStory ran against the seed tree, which the mount
   // then replaced. Re-run it against the real tree so the story files and the
@@ -6476,8 +6512,9 @@ const ROOT_SYSTEM_FILE_META = [
   { name: 'REGEDIT.exe' },
   { name: 'EXPLORER.exe' },
   { name: 'MINESWEEPER.exe' },
+  { name: 'PAINT.exe' },
 ];
-const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'SYS', 'CACHE', 'DESKTOP']);
+const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'SYS', 'CACHE', 'DESKTOP', 'PICTURES']);
 const STORY_FILE_PATHS = {
   notice: 'DOCS\\NOTICE_13.txt',
   incident: 'DOCS\\INCIDENT_A.txt',
@@ -9277,6 +9314,8 @@ async function scriptOpenSystemProgram(name, cwd, arg) {
     'welcome.readme': openWelcome,
     minesweeper: openMinesweeper,
     'minesweeper.exe': openMinesweeper,
+    paint: openPaint,
+    'paint.exe': openPaint,
     calc: openCalculator,
     'calc.exe': openCalculator,
     regedit: openRegedit,
@@ -12441,13 +12480,31 @@ function runScriptInTerminal(name, dirName, args) {
   openTerminal(dirName || '', 'RUN ' + items.join(' '));
 }
 
-function openSaveDialog(defaultName, callback) {
-  const id = 'saveas-' + Date.now();
-  if (!mkWin({ id, title: 'Save As', icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+// One dialog for Save As and for Open. The two used to be a candidate for a
+// second near-copy of this function, which is the same trap Save and Save As
+// fell into: a fix lands in one and not the other. `options` defaults
+// reproduce the original save-only behaviour exactly, so every existing caller
+// is untouched.
+//
+//   options.mode     'save' (default) or 'open'
+//   options.kinds    which VFS entry kinds are offered - ['text'] by default,
+//                    ['blob'] for an image picker
+//   options.title    window title
+//   options.startDir seeds the dialog's starting folder (e.g. PAINT.exe
+//                     opening Save As on a painting whose home is PICTURES,
+//                     not the root). Optional - every caller that omits it
+//                     keeps opening at the root exactly as before.
+function openSaveDialog(defaultName, callback, options) {
+  options = options || {};
+  const mode = options.mode === 'open' ? 'open' : 'save';
+  const kinds = options.kinds || ['text'];
+  const id = (mode === 'open' ? 'openfile-' : 'saveas-') + Date.now();
+  const title = options.title || (mode === 'open' ? 'Open' : 'Save As');
+  if (!mkWin({ id, title, icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
 
-  let saveCwd = '';
+  let saveCwd = vfsNormalizeDir(options.startDir || '');
 
   // ── "Save in:" bar ────────────────────────────────────────────
   const locRow = document.createElement('div');
@@ -12478,7 +12535,8 @@ function openSaveDialog(defaultName, callback) {
   // ── Buttons ──────────────────────────────────────────────────
   const btnRow = document.createElement('div');
   btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;flex-shrink:0;';
-  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary'; saveBtn.textContent = 'Save';
+  const saveBtn   = document.createElement('button'); saveBtn.className = 'dlg-btn primary';
+  saveBtn.textContent = mode === 'open' ? 'Open' : 'Save';
   const cancelBtn = document.createElement('button'); cancelBtn.className = 'dlg-btn';        cancelBtn.textContent = 'Cancel';
   btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
   body.appendChild(btnRow);
@@ -12515,12 +12573,18 @@ function openSaveDialog(defaultName, callback) {
       fileList.appendChild(el);
     });
 
-    entries.filter(e => e.kind === 'text').forEach(({ name }) => {
+    entries.filter(e => kinds.includes(e.kind)).forEach(({ name }) => {
       // resolveFsIcon already owns the extension table; this dialog used to
       // keep a second, smaller copy of it that drifted from the real one.
       const el = makeFLItem(resolveFsIcon(name, 'file'), name);
       el.addEventListener('click', () => { nameInput.value = name; });
-      el.addEventListener('dblclick', () => { nameInput.value = name; saveBtn.click(); });
+      // One listener, not two: a real double-click fires every listener bound
+      // to it, so a second dblclick handler here would run the open callback
+      // twice per click. Branch on mode inside the single handler instead.
+      el.addEventListener('dblclick', () => {
+        if (mode === 'open') { closeWin(id); callback(name, saveCwd); }
+        else { nameInput.value = name; saveBtn.click(); }
+      });
       fileList.appendChild(el);
     });
   }
@@ -13633,6 +13697,7 @@ function openExplorer(startPath) {
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
         ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
         ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
+        ...(canSetWallpaper ? [{ label: 'Edit in Paint', action: () => openPaintFile(singleSelected.name, cwd) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {
           runScriptInTerminal(singleSelected.name, cwd);
@@ -14816,7 +14881,7 @@ function openTerminal(startDir, initialCommand) {
       '  OPEN [file]         - open a file (image/video in viewer, text in editor)',
       '  RUN <file> [args]   - execute a .script file',
       '  NOTEPAD [file]      - open Notepad (optionally open a file)',
-      '  START [program]     - run an executable',
+      '  START [program]     - run an executable or project',
       '  EXIT                - close terminal',
       '',
       'Completion:',
@@ -14835,6 +14900,7 @@ function openTerminal(startDir, initialCommand) {
       'You can also type executables directly:',
       '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
       '  welcome.readme, void.tmp, daemon.core, ?????.exe',
+      '  or any project name (try: fireworks, fluid, ...)',
       '  Programs are found in the current directory first, then along PATH.',
     ];
   }
@@ -17786,6 +17852,2334 @@ function openMinesweeper() {
   msSetFace(MS_FACE.smile);
   msFitWindow();
 }
+// -----------------------------------------------------------------
+// PAINT.exe - pure core
+// -----------------------------------------------------------------
+// No DOM, no canvas, no globals. Everything a brush does is a function from a
+// stroke segment to a list of plain-data draw ops, so `npm test` can prove it
+// in node - the same split apps/minesweeper.js and os/wm.js use, and for the
+// same reason: the interesting mistakes here are logic, and a screenshot of a
+// wacky brush cannot tell you whether it is wrong.
+//
+// Everything the tests reach is a `function` declaration on purpose.
+// test/helpers/load-os.cjs loads sources into a node:vm, where `const` and
+// `let` do NOT become context properties. Tables are therefore exposed through
+// accessor functions rather than as bare consts.
+
+// The canvas is fixed. A saved painting has to mean the same thing on every
+// machine, and a surface that resizes with the window must either crop the art
+// or throw it away. KidPix never did that either. 480x360 is 4:3 at
+// three-quarters of KidPix's 640x480, chosen so 2x (960x720) still fits a
+// maximised window on a normal laptop.
+const PAINT_W = 480;
+const PAINT_H = 360;
+
+function paintCanvasWidth()  { return PAINT_W; }
+function paintCanvasHeight() { return PAINT_H; }
+
+// Integer scaling keeps every canvas pixel square, which is the whole look.
+// The one exception is a viewport too narrow for even 1x - a phone - where the
+// alternative is scrolling a painting, and a pixelated downscale of pixel art
+// is the lesser evil.
+function paintDisplayScale(availW, availH) {
+  const fit = Math.min(availW / PAINT_W, availH / PAINT_H);
+  if (fit >= 1) return Math.floor(fit);
+  return fit > 0 ? fit : 1;
+}
+
+function paintHsvToRgb(h, s, v) {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60)       { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else              { r = c; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+
+function paintRgbToHex(r, g, b) {
+  const two = n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  return '#' + two(r) + two(g) + two(b);
+}
+
+// 28 colours, derived rather than invented so they cannot drift: black, white
+// and four greys, then two rings of eleven hues evenly spaced round the wheel -
+// one bright and saturated, one darker. Flat, high-saturation and low-count is
+// what makes a painting read as 8-bit era rather than as a modern gradient.
+function paintBuildPalette() {
+  const out = [
+    { id: 'black',  hex: '#000000' },
+    { id: 'grey1',  hex: '#404040' },
+    { id: 'grey2',  hex: '#808080' },
+    { id: 'grey3',  hex: '#c0c0c0' },
+    { id: 'grey4',  hex: '#e0e0e0' },
+    { id: 'white',  hex: '#ffffff' },
+  ];
+  for (let ring = 0; ring < 2; ring++) {
+    for (let i = 0; i < 11; i++) {
+      const rgb = paintHsvToRgb((i * 360) / 11, 1, ring === 0 ? 1 : 0.58);
+      out.push({ id: 'hue' + ring + '-' + i, hex: paintRgbToHex(rgb[0], rgb[1], rgb[2]) });
+    }
+  }
+  return out;
+}
+
+const PAINT_PALETTE = paintBuildPalette();
+function paintPalette() { return PAINT_PALETTE.slice(); }
+
+// Tool order is the left column, read top to bottom, two icons wide.
+const PAINT_TOOLS = [
+  { id: 'pencil',     label: 'Pencil' },
+  { id: 'line',       label: 'Line' },
+  { id: 'rect',       label: 'Rectangle' },
+  { id: 'oval',       label: 'Oval' },
+  { id: 'fill',       label: 'Fill' },
+  { id: 'eyedropper', label: 'Eyedropper' },
+  { id: 'text',       label: 'Text' },
+  { id: 'sticker',    label: 'Stickers' },
+  { id: 'wacky',      label: 'Wacky Brush' },
+  { id: 'eraser',     label: 'Eraser' },
+  { id: 'select',     label: 'Move' },
+];
+function paintTools() { return PAINT_TOOLS.slice(); }
+
+const PAINT_VARIANTS = {
+  pencil: [
+    { id: 'p1', label: 'Fine' },
+    { id: 'p2', label: 'Small' },
+    { id: 'p3', label: 'Medium' },
+    { id: 'p5', label: 'Fat' },
+    { id: 'dotted', label: 'Dotted' },
+    { id: 'sketchy', label: 'Sketchy' },
+  ],
+  line: [
+    { id: 'l1', label: 'Thin' },
+    { id: 'l3', label: 'Medium' },
+    { id: 'l6', label: 'Thick' },
+    { id: 'dashed', label: 'Dashed' },
+    { id: 'arrow', label: 'Arrow' },
+    { id: 'wiggly', label: 'Wiggly' },
+  ],
+  rect:   [{ id: 'outline', label: 'Outline' }, { id: 'filled', label: 'Filled' }, { id: 'round', label: 'Rounded' }],
+  oval:   [{ id: 'outline', label: 'Outline' }, { id: 'filled', label: 'Filled' }],
+  fill: [
+    { id: 'solid',    label: 'Solid' },
+    { id: 'gradient', label: 'Gradient' },
+    { id: 'check',    label: 'Checks' },
+    { id: 'stripe',   label: 'Stripes' },
+    { id: 'diag',     label: 'Diagonals' },
+    { id: 'dots',     label: 'Dots' },
+    { id: 'grid',     label: 'Grid' },
+    { id: 'noise',    label: 'Static' },
+    { id: 'confetti', label: 'Confetti' },
+  ],
+  eyedropper: [],
+  text: [
+    { id: 't8',  label: 'Small' },
+    { id: 't12', label: 'Medium' },
+    { id: 't20', label: 'Large' },
+    { id: 'stamp', label: 'Alphabet Stamp' },
+  ],
+  sticker: [
+    { id: 'small',  label: 'Small' },
+    { id: 'medium', label: 'Medium' },
+    { id: 'large',  label: 'Large' },
+  ],
+  wacky: [
+    { id: 'spray',    label: 'Spray Can' },
+    { id: 'echo',     label: 'Echo' },
+    { id: 'kaleido',  label: 'Kaleidoscope' },
+    { id: 'spiral',   label: 'Spiral' },
+    { id: 'tree',     label: 'Tree' },
+    { id: 'drips',    label: 'Drips' },
+    { id: 'bubbles',  label: 'Bubbles' },
+    { id: 'rainbow',  label: 'Rainbow Ribbon' },
+    { id: 'scatter',  label: 'Sticker Scatter' },
+    { id: 'connect',  label: 'Connect the Dots' },
+    { id: 'fuzzy',    label: 'Fuzzy' },
+    { id: 'stars',    label: 'Stars' },
+    { id: 'splatter', label: 'Splatter' },
+    { id: 'beads',    label: 'Beads' },
+    { id: 'leaky',    label: 'Leaky Pen' },
+  ],
+  eraser: [
+    { id: 'e4',          label: 'Small' },
+    { id: 'e10',         label: 'Medium' },
+    { id: 'e24',         label: 'Fat' },
+    { id: 'firecracker', label: 'Firecracker' },
+    { id: 'blackhole',   label: 'Black Hole' },
+    { id: 'melt',        label: 'Drips' },
+    { id: 'dissolve',    label: 'Dissolve' },
+    { id: 'fade',        label: 'Fade Away' },
+    { id: 'blinds',      label: 'Blinds' },
+  ],
+  select: [{ id: 'move', label: 'Move' }],
+};
+function paintVariantsFor(toolId) {
+  const v = PAINT_VARIANTS[toolId];
+  return v ? v.slice() : [];
+}
+
+// Mulberry32. Small, fast, and good enough that a splatter looks random - but
+// the point is that it is SEEDED, so every generator below is deterministic and
+// a test can assert exact output. Same motive as msSeed's injectable rng.
+function paintRng(seed) {
+  let a = (seed >>> 0) || 1;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// -----------------------------------------------------------------
+// Undo ring
+// -----------------------------------------------------------------
+// `index` is the position of the CURRENT state, not the next free slot, so
+// undo is a decrement and redo an increment and neither needs a special case
+// for "have we drawn anything yet". -1 means empty.
+//
+// Snapshots are opaque here: the UI pushes ImageData, the tests push strings.
+// Keeping the core ignorant of what a snapshot IS is what lets this be tested
+// in node with no canvas.
+function paintUndoInit(capacity) {
+  const cap = Math.max(1, Math.floor(Number(capacity) || 1));
+  return { cap, items: [], index: -1 };
+}
+
+function paintUndoPush(ring, snapshot) {
+  // A push after an undo abandons the redo branch. Keeping it would let redo
+  // jump to a state that never followed from what is now on the canvas.
+  if (ring.index < ring.items.length - 1) ring.items.length = ring.index + 1;
+  ring.items.push(snapshot);
+  // Drop from the front rather than refusing the push: the newest work is
+  // always worth more than the oldest undo step.
+  while (ring.items.length > ring.cap) ring.items.shift();
+  ring.index = ring.items.length - 1;
+  return ring;
+}
+
+function paintUndoUndo(ring) {
+  if (ring.index <= 0) return null;
+  ring.index--;
+  return ring.items[ring.index];
+}
+
+function paintUndoRedo(ring) {
+  if (ring.index >= ring.items.length - 1) return null;
+  ring.index++;
+  return ring.items[ring.index];
+}
+
+// -----------------------------------------------------------------
+// Flood fill
+// -----------------------------------------------------------------
+// Scanline fill over a raw RGBA buffer - exactly what ctx.getImageData().data
+// hands back, so the UI passes it straight through with no conversion.
+//
+// Two decisions that are easy to get wrong and invisible once they are:
+//
+// 4-CONNECTED, not 8. Two regions that touch only at a corner are two regions
+// to anyone looking at the picture. An 8-connected fill leaks between them, and
+// on a real drawing that reads as the fill "escaping" through a line the artist
+// can see is closed.
+//
+// SCANLINE RUN-BASED SEEDING, not per-pixel recursion. A per-pixel stack on a
+// 480x360 canvas can hold 172,800 entries; the scanline form detects runs in
+// neighbour rows and pushes one entry per contiguous run, which keeps stack
+// depth bounded and a whole-canvas fill fast.
+function paintFloodFill(pixels, w, h, x, y, rgba, tolerance) {
+  x = Math.floor(x); y = Math.floor(y);
+  if (x < 0 || y < 0 || x >= w || y >= h) return 0;
+  const tol = Math.max(0, Number(tolerance) || 0);
+  const at = (px, py) => (py * w + px) * 4;
+
+  const start = at(x, y);
+  const sr = pixels[start], sg = pixels[start + 1], sb = pixels[start + 2], sa = pixels[start + 3];
+  const [nr, ng, nb, na] = rgba;
+
+  // Without this the fill would repaint the region it is standing on, find every
+  // pixel already matching, and walk forever on a tolerance that lets the new
+  // colour match the old one.
+  if (sr === nr && sg === ng && sb === nb && sa === na) return 0;
+
+  const matches = i => Math.abs(pixels[i] - sr) <= tol
+                    && Math.abs(pixels[i + 1] - sg) <= tol
+                    && Math.abs(pixels[i + 2] - sb) <= tol
+                    && Math.abs(pixels[i + 3] - sa) <= tol;
+
+  const paint = i => { pixels[i] = nr; pixels[i + 1] = ng; pixels[i + 2] = nb; pixels[i + 3] = na; };
+
+  let filled = 0;
+  const stack = [[x, y]];
+  while (stack.length) {
+    const [px, py] = stack.pop();
+    let left = px;
+    while (left > 0 && matches(at(left - 1, py))) left--;
+    let right = px;
+    while (right < w - 1 && matches(at(right + 1, py))) right++;
+
+    for (let i = left; i <= right; i++) {
+      const idx = at(i, py);
+      if (!matches(idx)) continue;
+      paint(idx);
+      filled++;
+    }
+
+    // Seed the rows above and below by detecting runs. For each neighbour row,
+    // scan the columns directly above/below [left, right] and detect transitions
+    // from non-matching to matching. Push only the start of each run, so the
+    // stack holds one entry per contiguous neighbouring run.
+    const seedRow = (neighborY) => {
+      if (neighborY < 0 || neighborY >= h) return;
+      let inRun = false;
+      for (let i = left; i <= right; i++) {
+        const idx = at(i, neighborY);
+        if (matches(idx)) {
+          if (!inRun) {
+            // Start of a new run in the neighbor row
+            stack.push([i, neighborY]);
+            inRun = true;
+          }
+        } else {
+          inRun = false;
+        }
+      }
+    };
+    if (py > 0) seedRow(py - 1);
+    if (py < h - 1) seedRow(py + 1);
+  }
+  return filled;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Brush generators
+// ─────────────────────────────────────────────────────────────────
+// THE central interface. A brush is a pure function from one stroke segment to
+// a list of plain-data draw ops. apps/paint.js holds a dumb switch that
+// executes them; nothing in this file knows a canvas exists.
+//
+// Three things fall out of that, and they are the reason for the design:
+//   1. Every brush is testable in node. "Given this segment and this seed,
+//      expect these ops" is a real assertion; "it did not throw" is not.
+//   2. Randomness is injected through st.rng, so a splatter is reproducible.
+//   3. The options bar previews itself - each variant button runs its own
+//      generator on a 22x22 offscreen canvas, so the button art IS the
+//      behaviour and cannot go stale as variants are tuned.
+//
+// seg = { x0, y0, x1, y1, index }   index is the segment number within the
+//                                   stroke, 0-based, for brushes with memory
+// st  = { color, size, rng, points, stickerIndex }
+//
+// Ops:
+//   { op:'dab',    x, y, r, color }        filled circle
+//   { op:'line',   x0,y0,x1,y1, w, color } round-capped line
+//   { op:'rect',   x, y, w, h, color }
+//   { op:'sprite', idx, x, y, size, rot }  a sticker from the atlas
+//   { op:'erase',  x, y, r }               clears to white
+const PAINT_GENERATORS = {};
+
+function paintGenerate(toolId, variantId, seg, st) {
+  const byTool = PAINT_GENERATORS[toolId];
+  if (!byTool) return [];
+  const gen = byTool[variantId];
+  if (!gen) return [];
+  const ops = gen(seg, st);
+  return Array.isArray(ops) ? ops : [];
+}
+
+// Registers one generator. Kept as a function rather than object literals so a
+// tool's variants can be declared in several places - Tasks 12-16 each add
+// their own group from their own section of this file, without editing a
+// single growing literal.
+function paintRegisterGenerator(toolId, variantId, fn) {
+  if (!PAINT_GENERATORS[toolId]) PAINT_GENERATORS[toolId] = {};
+  PAINT_GENERATORS[toolId][variantId] = fn;
+}
+
+// Segment length, needed by nearly every generator to decide how many dabs a
+// drag deserves. Zero for a click, which is the case that must still draw.
+function paintSegLen(seg) {
+  return Math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0);
+}
+
+// Walks a segment at a fixed spacing, always including both ends. The `<=` and
+// the explicit final point are what make a click (length 0) yield exactly one
+// position rather than none.
+function paintWalk(seg, spacing) {
+  const len = paintSegLen(seg);
+  const step = Math.max(0.5, spacing);
+  const out = [];
+  const n = Math.floor(len / step);
+  for (let i = 0; i <= n; i++) {
+    const t = len === 0 ? 0 : (i * step) / len;
+    out.push({ x: seg.x0 + (seg.x1 - seg.x0) * t, y: seg.y0 + (seg.y1 - seg.y0) * t });
+  }
+  const last = out[out.length - 1];
+  if (len > 0 && (last.x !== seg.x1 || last.y !== seg.y1)) out.push({ x: seg.x1, y: seg.y1 });
+  return out;
+}
+
+// ── pencil ───────────────────────────────────────────────────────
+// A line op rather than a run of dabs: one round-capped stroke is what the
+// canvas draws well, and a dab chain at these widths visibly beads.
+[['p1', 1], ['p2', 2], ['p3', 3], ['p5', 5]].forEach(([id, w]) => {
+  paintRegisterGenerator('pencil', id, (seg, st) =>
+    [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1, w, color: st.color }]);
+});
+
+paintRegisterGenerator('pencil', 'dotted', (seg, st) =>
+  paintWalk(seg, Math.max(3, st.size * 2))
+    .filter((_, i) => i % 2 === 0)
+    .map(p => ({ op: 'dab', x: p.x, y: p.y, r: Math.max(1, st.size / 2), color: st.color })));
+
+paintRegisterGenerator('pencil', 'sketchy', (seg, st) => {
+  // Three offset passes over the same segment, the way a pencil sketch is built
+  // out of repeated approximate strokes rather than one confident line.
+  const ops = [];
+  for (let k = 0; k < 3; k++) {
+    const j = () => (st.rng() - 0.5) * 4;
+    ops.push({ op: 'line', x0: seg.x0 + j(), y0: seg.y0 + j(),
+               x1: seg.x1 + j(), y1: seg.y1 + j(), w: 1, color: st.color });
+  }
+  return ops;
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Sticker atlas geometry
+// ─────────────────────────────────────────────────────────────────
+// os/sprites/paint-stickers.png is a 448x256 sheet: 14 columns by 8 rows of
+// 32x32 cells with NO gutter, so every source offset is a flat multiple of the
+// cell size. The minesweeper atlas is packed the same way and for the same
+// reason - a 1px gutter turns every offset into an arithmetic trap.
+//
+// 14 and not 15: the reference sheet's fifteenth column is the page-number
+// arrow strip, which is chrome rather than a sticker.
+const PAINT_STICKER_CELL = 32;
+const PAINT_STICKER_COLS = 14;
+const PAINT_STICKER_ROWS = 8;
+
+function paintStickerCell()    { return PAINT_STICKER_CELL; }
+function paintStickerPerPage() { return PAINT_STICKER_COLS; }
+function paintStickerPages()   { return PAINT_STICKER_ROWS; }
+function paintStickerCount()   { return PAINT_STICKER_COLS * PAINT_STICKER_ROWS; }
+
+function paintStickerRect(idx) {
+  if (!Number.isInteger(idx) || idx < 0 || idx >= paintStickerCount()) return null;
+  return {
+    sx: (idx % PAINT_STICKER_COLS) * PAINT_STICKER_CELL,
+    sy: Math.floor(idx / PAINT_STICKER_COLS) * PAINT_STICKER_CELL,
+    sw: PAINT_STICKER_CELL,
+    sh: PAINT_STICKER_CELL,
+  };
+}
+
+// ── stickers ─────────────────────────────────────────────────────
+// A click stamps once; a drag lays a trail. The spacing is the stamp size, so a
+// dragged trail reads as a row of stamps rather than a smear - which is what
+// separates a sticker tool from a very wide brush.
+[['small', 20], ['medium', 32], ['large', 52]].forEach(([id, size]) => {
+  paintRegisterGenerator('sticker', id, (seg, st) => {
+    const pts = paintWalk(seg, size);
+    // paintWalk always appends the segment's exact endpoint so a drag never
+    // stops short of where the pointer let go. That endpoint can land closer
+    // than one stamp width from the previous one, which is the smear this
+    // tool exists to avoid - so drop it when it would bunch up rather than
+    // trail. The stamp before it already overlaps the tail closely enough.
+    if (pts.length > 1) {
+      const a = pts[pts.length - 2], b = pts[pts.length - 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < size * 0.75) pts.pop();
+    }
+    return pts.map(p => ({
+      op: 'sprite', idx: st.stickerIndex, x: p.x, y: p.y, size, rot: 0,
+    }));
+  });
+});
+
+// ── shapes ───────────────────────────────────────────────────────
+// A shape is defined by where the drag STARTED and where it is NOW, not by the
+// segment between two mouse moves. apps/paint.js therefore feeds these
+// generators the whole drag every move and restores the canvas underneath -
+// see paintIsShapeTool.
+function paintIsShapeTool(toolId) {
+  return toolId === 'line' || toolId === 'rect' || toolId === 'oval';
+}
+
+// Normalises a drag box so a rectangle dragged up-and-left is still positive.
+// A negative width draws absolutely nothing and looks like a dead tool.
+function paintBox(seg) {
+  return {
+    x: Math.min(seg.x0, seg.x1),
+    y: Math.min(seg.y0, seg.y1),
+    w: Math.abs(seg.x1 - seg.x0),
+    h: Math.abs(seg.y1 - seg.y0),
+  };
+}
+
+[['l1', 1], ['l3', 3], ['l6', 6]].forEach(([id, w]) => {
+  paintRegisterGenerator('line', id, (seg, st) =>
+    [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1, w, color: st.color }]);
+});
+
+paintRegisterGenerator('line', 'dashed', (seg, st) =>
+  paintWalk(seg, 8).filter((_, i) => i % 2 === 0)
+    .map(p => ({ op: 'dab', x: p.x, y: p.y, r: 2, color: st.color })));
+
+paintRegisterGenerator('line', 'arrow', (seg, st) => {
+  const ops = [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1, w: 3, color: st.color }];
+  const a = Math.atan2(seg.y1 - seg.y0, seg.x1 - seg.x0);
+  const head = 12;
+  [a + Math.PI * 0.82, a - Math.PI * 0.82].forEach(ang => {
+    ops.push({ op: 'line', x0: seg.x1, y0: seg.y1,
+               x1: seg.x1 + Math.cos(ang) * head, y1: seg.y1 + Math.sin(ang) * head,
+               w: 3, color: st.color });
+  });
+  return ops;
+});
+
+paintRegisterGenerator('line', 'wiggly', (seg, st) => {
+  const len = paintSegLen(seg);
+  const a = Math.atan2(seg.y1 - seg.y0, seg.x1 - seg.x0);
+  const nx = -Math.sin(a), ny = Math.cos(a);
+  const ops = [];
+  let px = seg.x0, py = seg.y0;
+  const steps = Math.max(2, Math.round(len / 6));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const wob = Math.sin(t * Math.PI * 2 * 4) * 5;
+    const x = seg.x0 + (seg.x1 - seg.x0) * t + nx * wob;
+    const y = seg.y0 + (seg.y1 - seg.y0) * t + ny * wob;
+    ops.push({ op: 'line', x0: px, y0: py, x1: x, y1: y, w: 2, color: st.color });
+    px = x; py = y;
+  }
+  return ops;
+});
+
+paintRegisterGenerator('rect', 'filled', (seg, st) => {
+  const b = paintBox(seg);
+  return [{ op: 'rect', x: b.x, y: b.y, w: b.w, h: b.h, color: st.color }];
+});
+
+paintRegisterGenerator('rect', 'outline', (seg, st) => {
+  const b = paintBox(seg);
+  const t = 2;
+  return [
+    { op: 'rect', x: b.x, y: b.y, w: b.w, h: t, color: st.color },
+    { op: 'rect', x: b.x, y: b.y + b.h - t, w: b.w, h: t, color: st.color },
+    { op: 'rect', x: b.x, y: b.y, w: t, h: b.h, color: st.color },
+    { op: 'rect', x: b.x + b.w - t, y: b.y, w: t, h: b.h, color: st.color },
+  ];
+});
+
+paintRegisterGenerator('rect', 'round', (seg, st) => {
+  const b = paintBox(seg);
+  const r = Math.min(8, b.w / 2, b.h / 2);
+  return [
+    { op: 'rect', x: b.x + r, y: b.y, w: Math.max(0, b.w - r * 2), h: b.h, color: st.color },
+    { op: 'rect', x: b.x, y: b.y + r, w: b.w, h: Math.max(0, b.h - r * 2), color: st.color },
+    { op: 'dab', x: b.x + r, y: b.y + r, r, color: st.color },
+    { op: 'dab', x: b.x + b.w - r, y: b.y + r, r, color: st.color },
+    { op: 'dab', x: b.x + r, y: b.y + b.h - r, r, color: st.color },
+    { op: 'dab', x: b.x + b.w - r, y: b.y + b.h - r, r, color: st.color },
+  ];
+});
+
+// Dabs along the ellipse rather than a stroked path, so an oval is made of the
+// same primitive as everything else and the renderer stays a five-case switch.
+function paintEllipseDabs(seg, radius, color, fill) {
+  const b = paintBox(seg);
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const rx = b.w / 2, ry = b.h / 2;
+  const ops = [];
+  if (fill) {
+    // Horizontal spans, which is the cheapest honest fill for an ellipse.
+    for (let y = -Math.ceil(ry); y <= Math.ceil(ry); y++) {
+      const frac = 1 - (y * y) / (ry * ry || 1);
+      if (frac < 0) continue;
+      const half = rx * Math.sqrt(frac);
+      ops.push({ op: 'rect', x: cx - half, y: cy + y, w: half * 2, h: 1, color });
+    }
+    return ops;
+  }
+  const steps = Math.max(16, Math.round((rx + ry) * 1.5));
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    ops.push({ op: 'dab', x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry, r: radius, color });
+  }
+  return ops;
+}
+
+paintRegisterGenerator('oval', 'outline', (seg, st) => paintEllipseDabs(seg, 1.5, st.color, false));
+paintRegisterGenerator('oval', 'filled',  (seg, st) => paintEllipseDabs(seg, 1.5, st.color, true));
+
+// ─────────────────────────────────────────────────────────────────
+// Fill patterns
+// ─────────────────────────────────────────────────────────────────
+// A pattern answers one question per pixel: is this position inked? The fill
+// walks its flooded region and consults this, so a patterned fill is the same
+// flood as a solid one with a mask on top.
+//
+// Every geometric pattern is a function of x and y ONLY. Reading the rng for a
+// pattern that has a fixed shape makes a fill shimmer differently each time it
+// is applied to the same region, which reads as a rendering bug.
+function paintHexToRgba(hex) {
+  const h = String(hex).replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 255];
+}
+
+function paintRgbaToHex(r, g, b) {
+  return paintRgbToHex(r, g, b);
+}
+
+function paintPatternAt(patternId, x, y, rng) {
+  switch (patternId) {
+    case 'solid':    return true;
+    case 'gradient': return true;   // handled by the caller, which knows the region's extent
+    case 'check':    return ((x >> 2) + (y >> 2)) % 2 === 0;
+    case 'stripe':   return (y >> 2) % 2 === 0;
+    case 'diag':     return ((x + y) >> 2) % 2 === 0;
+    case 'dots':     return (x % 6 < 2) && (y % 6 < 2);
+    case 'grid':     return (x % 8 === 0) || (y % 8 === 0);
+    case 'noise':    return rng() < 0.5;
+    case 'confetti': return rng() < 0.22;
+    default:         return false;
+  }
+}
+
+// Confetti and static want a colour per pixel rather than one flat colour.
+// Returns null when the pattern is monochrome, so the caller keeps its fast path.
+function paintPatternColor(patternId, baseHex, rng) {
+  if (patternId !== 'confetti') return null;
+  const pal = paintPalette();
+  return pal[Math.floor(rng() * pal.length)].hex;
+}
+
+// ── fill (preview only) ─────────────────────────────────────────
+// paintDoFill in apps/paint.js never calls paintGenerate - it reads and writes
+// real canvas pixels, which this pure file cannot do. These nine generators
+// exist for one reason only: paintRenderOptionsBar draws every variant button
+// by running paintGenerate on a 22x22 offscreen canvas (paintVariantPreview),
+// and with no generator registered that call returns [], so all nine fill
+// buttons would render as blank white squares. Same preview-only role Task 14
+// and Task 16 play for text and eraser.
+//
+// Each one inks the pattern directly across the 22x22 button so the button art
+// IS the pattern, the same "the preview is the real output" rule every other
+// tool follows here - it just is not the rule fill's ACTUAL stroke follows,
+// since fill has no stroke.
+function paintFillPreviewOps(patternId, st) {
+  const w = 22, h = 22;
+  if (patternId === 'gradient') {
+    // Same ramp paintDoFill applies: the paint colour at the top fading to
+    // white at the bottom.
+    const rgba = paintHexToRgba(st.color);
+    const ops = [];
+    for (let y = 0; y < h; y++) {
+      const t = y / (h - 1);
+      const hex = paintRgbToHex(
+        rgba[0] + (255 - rgba[0]) * t,
+        rgba[1] + (255 - rgba[1]) * t,
+        rgba[2] + (255 - rgba[2]) * t);
+      ops.push({ op: 'rect', x: 0, y, w, h: 1, color: hex });
+    }
+    return ops;
+  }
+  const ops = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!paintPatternAt(patternId, x, y, st.rng)) continue;
+      const alt = paintPatternColor(patternId, st.color, st.rng);
+      ops.push({ op: 'rect', x, y, w: 1, h: 1, color: alt || st.color });
+    }
+  }
+  return ops;
+}
+
+['solid', 'gradient', 'check', 'stripe', 'diag', 'dots', 'grid', 'noise', 'confetti'].forEach(id => {
+  paintRegisterGenerator('fill', id, (seg, st) => paintFillPreviewOps(id, st));
+});
+
+// ── text (preview only) ───────────────────────────────────────────
+// The text tool is driven by the UI (it needs a string), but the options bar
+// previews a variant by RUNNING it, so a button with no generator is a blank
+// button. These exist purely to draw the preview: a bar whose height tracks the
+// text size, which is exactly the thing the variant chooses.
+paintVariantsFor('text').forEach(v => {
+  paintRegisterGenerator('text', v.id, (seg, st) => {
+    const h = v.id === 'stamp' ? 16 : Math.max(3, Number((/^t(\d+)$/.exec(v.id) || [])[1] || 8) * 0.7);
+    return [{ op: 'rect', x: seg.x0, y: seg.y1, w: 3, h, color: st.color }];
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// The wacky brush
+// ─────────────────────────────────────────────────────────────────
+// Fifteen variants, each a pure function of one segment. This is where the
+// generator design pays for itself twice over: every one of these is provable
+// in node, and every one draws its own button in the options bar for free.
+//
+// Two rules all of them follow:
+//   - read randomness ONLY from st.rng, so a stroke is reproducible
+//   - stay near the segment. A brush that scatters unboundedly paints outside
+//     the canvas at the edges, which is invisible until someone draws there.
+
+// Rotates a hex colour's hue. Used by the rainbow ribbon, and kept here rather
+// than in the UI because the ops carry finished colours - the renderer does no
+// colour maths at all.
+function paintHueShift(hex, degrees) {
+  const [r, g, b] = paintHexToRgba(hex);
+  const max = Math.max(r, g, b) / 255, min = Math.min(r, g, b) / 255;
+  const v = max, d = max - min;
+  const s = max === 0 ? 0 : d / max;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r / 255)      h = 60 * (((g - b) / 255 / d) % 6);
+    else if (max === g / 255) h = 60 * ((b - r) / 255 / d + 2);
+    else                      h = 60 * ((r - g) / 255 / d + 4);
+  }
+  h = (((h + degrees) % 360) + 360) % 360;
+  // A grey has no hue to rotate, so give the ribbon a saturated one to work
+  // with rather than emitting 30 identical greys.
+  const rgb = paintHsvToRgb(h, s < 0.05 ? 1 : s, v < 0.15 ? 1 : v);
+  return paintRgbToHex(rgb[0], rgb[1], rgb[2]);
+}
+
+paintRegisterGenerator('wacky', 'spray', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 4).forEach(p => {
+    for (let i = 0; i < 8; i++) {
+      const a = st.rng() * Math.PI * 2;
+      const d = st.rng() * 10;
+      ops.push({ op: 'dab', x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d, r: 1, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'echo', (seg, st) => {
+  // Four ghosts trailing behind the stroke's own direction, each smaller.
+  const dx = seg.x1 - seg.x0, dy = seg.y1 - seg.y0;
+  const ops = [];
+  for (let k = 0; k < 4; k++) {
+    ops.push({ op: 'dab', x: seg.x1 - dx * k * 1.6, y: seg.y1 - dy * k * 1.6,
+               r: Math.max(1, st.size * (1 - k * 0.2)), color: st.color });
+  }
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'kaleido', (seg, st) => {
+  // Four-fold: the dab plus its mirror in each axis and both. The canvas
+  // dimensions are the mirror lines, which is why this generator is the one
+  // place in the file that reads them.
+  const W = paintCanvasWidth(), H = paintCanvasHeight();
+  const ops = [];
+  paintWalk(seg, 3).forEach(p => {
+    [[p.x, p.y], [W - p.x, p.y], [p.x, H - p.y], [W - p.x, H - p.y]].forEach(([x, y]) => {
+      ops.push({ op: 'dab', x, y, r: Math.max(1, st.size), color: st.color });
+    });
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'spiral', (seg, st) => {
+  const ops = [];
+  const turns = 3, steps = 40;
+  const maxR = 6 + st.size * 3;
+  for (let i = 0; i < steps; i++) {
+    const t = i / steps;
+    const a = t * Math.PI * 2 * turns + seg.index * 0.4;
+    const r = t * maxR;
+    ops.push({ op: 'dab', x: seg.x1 + Math.cos(a) * r, y: seg.y1 + Math.sin(a) * r,
+               r: 1.5, color: st.color });
+  }
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'tree', (seg, st) => {
+  // A two-level branch off the segment's end. Not a real L-system: three
+  // recursion levels at every mouse move is a solid black blob within a second.
+  const ops = [];
+  const baseA = Math.atan2(seg.y1 - seg.y0, seg.x1 - seg.x0) - Math.PI / 2;
+  const len = 10 + st.size * 2;
+  const grow = (x, y, a, l, depth) => {
+    const nx = x + Math.cos(a) * l, ny = y + Math.sin(a) * l;
+    ops.push({ op: 'line', x0: x, y0: y, x1: nx, y1: ny, w: Math.max(1, depth), color: st.color });
+    if (depth <= 0) return;
+    grow(nx, ny, a - 0.5 - st.rng() * 0.3, l * 0.7, depth - 1);
+    grow(nx, ny, a + 0.5 + st.rng() * 0.3, l * 0.7, depth - 1);
+  };
+  grow(seg.x1, seg.y1, baseA, len, 2);
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'drips', (seg, st) => {
+  const ops = [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1,
+                 w: Math.max(2, st.size), color: st.color }];
+  // A run of paint down from the stroke, now and then.
+  if (st.rng() < 0.25) {
+    const len = 8 + st.rng() * 34;
+    ops.push({ op: 'line', x0: seg.x1, y0: seg.y1, x1: seg.x1, y1: seg.y1 + len, w: 2, color: st.color });
+    ops.push({ op: 'dab', x: seg.x1, y: seg.y1 + len, r: 2.5, color: st.color });
+  }
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'bubbles', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 9).forEach(p => {
+    const r = 2 + st.rng() * 9;
+    const a = st.rng() * Math.PI * 2;
+    const d = st.rng() * 8;
+    const cx = p.x + Math.cos(a) * d, cy = p.y + Math.sin(a) * d;
+    // A ring of small dabs, so a bubble reads as an outline rather than a blob.
+    for (let i = 0; i < 12; i++) {
+      const t = (i / 12) * Math.PI * 2;
+      ops.push({ op: 'dab', x: cx + Math.cos(t) * r, y: cy + Math.sin(t) * r, r: 1, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'rainbow', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 2).forEach((p, i) => {
+    ops.push({ op: 'dab', x: p.x, y: p.y, r: Math.max(2, st.size),
+               color: paintHueShift(st.color, (seg.index * 9 + i * 7) % 360) });
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'scatter', (seg, st) => {
+  const count = paintStickerCount();
+  return paintWalk(seg, 26).map(p => ({
+    op: 'sprite',
+    idx: Math.floor(st.rng() * count) % count,
+    x: p.x, y: p.y,
+    size: 16 + Math.floor(st.rng() * 18),
+    rot: 0,
+  }));
+});
+
+paintRegisterGenerator('wacky', 'connect', (seg, st) => {
+  const ops = [{ op: 'dab', x: seg.x1, y: seg.y1, r: 2.5, color: st.color }];
+  // Chords back to a few earlier points in the same stroke. Capped at four, or
+  // a long stroke becomes O(n^2) lines and the canvas fills with black.
+  const pts = st.points || [];
+  pts.slice(-5, -1).forEach(p => {
+    ops.push({ op: 'line', x0: seg.x1, y0: seg.y1, x1: p.x, y1: p.y, w: 1, color: st.color });
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'fuzzy', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 3).forEach(p => {
+    for (let i = 0; i < 6; i++) {
+      const a = st.rng() * Math.PI * 2;
+      const l = 3 + st.rng() * 7;
+      ops.push({ op: 'line', x0: p.x, y0: p.y,
+                 x1: p.x + Math.cos(a) * l, y1: p.y + Math.sin(a) * l, w: 1, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'stars', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 14).forEach(p => {
+    const r = 4 + st.rng() * 7;
+    const spin = st.rng() * Math.PI;
+    // Five-pointed, drawn as five spokes. Cheap and unmistakable.
+    for (let i = 0; i < 5; i++) {
+      const a = spin + (i / 5) * Math.PI * 2;
+      ops.push({ op: 'line', x0: p.x, y0: p.y,
+                 x1: p.x + Math.cos(a) * r, y1: p.y + Math.sin(a) * r, w: 2, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'splatter', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 7).forEach(p => {
+    const blobs = 3 + Math.floor(st.rng() * 4);
+    for (let i = 0; i < blobs; i++) {
+      const a = st.rng() * Math.PI * 2;
+      const d = st.rng() * 16;
+      ops.push({ op: 'dab', x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d,
+                 r: 1 + st.rng() * 4, color: st.color });
+    }
+  });
+  return ops;
+});
+
+paintRegisterGenerator('wacky', 'beads', (seg, st) => {
+  const spacing = Math.max(6, st.size * 3);
+  return paintWalk(seg, spacing).map((p, i) => ({
+    op: 'dab', x: p.x, y: p.y,
+    r: 3 + Math.sin((seg.index + i) * 0.7) * 2,
+    color: st.color,
+  }));
+});
+
+paintRegisterGenerator('wacky', 'leaky', (seg, st) => {
+  const ops = [{ op: 'line', x0: seg.x0, y0: seg.y0, x1: seg.x1, y1: seg.y1, w: 1, color: st.color }];
+  // Occasional blots, the way a bad pen lets go all at once.
+  if (st.rng() < 0.18) {
+    const r = 3 + st.rng() * 7;
+    ops.push({ op: 'dab', x: seg.x1, y: seg.y1, r, color: st.color });
+    for (let i = 0; i < 3; i++) {
+      const a = st.rng() * Math.PI * 2;
+      ops.push({ op: 'dab', x: seg.x1 + Math.cos(a) * r * 1.7,
+                 y: seg.y1 + Math.sin(a) * r * 1.7, r: 1 + st.rng() * 2, color: st.color });
+    }
+  }
+  return ops;
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Erasers
+// ─────────────────────────────────────────────────────────────────
+// Three of them rub things out. Six of them do something TO the picture, and
+// those are the point - a paint program where the eraser might blow up your
+// drawing is the difference between KidPix and MS Paint.
+//
+// The whole-image erasers run in the UI because they read the canvas, but their
+// PATTERNS live here and are seeded, so what a firecracker does is provable in
+// node rather than something you have to squint at.
+
+[['e4', 4], ['e10', 10], ['e24', 24]].forEach(([id, size]) => {
+  paintRegisterGenerator('eraser', id, (seg) =>
+    paintWalk(seg, size / 2).map(p => ({ op: 'erase', x: p.x, y: p.y, r: size / 2 })));
+});
+
+// Drips is a stroke eraser rather than a whole-image one: it melts what it
+// touches downward, so it is a generator like the plain three.
+paintRegisterGenerator('eraser', 'melt', (seg, st) => {
+  const ops = [];
+  paintWalk(seg, 5).forEach(p => {
+    ops.push({ op: 'erase', x: p.x, y: p.y, r: 5 });
+    const run = 6 + st.rng() * 26;
+    for (let d = 0; d < run; d += 4) ops.push({ op: 'erase', x: p.x, y: p.y + d, r: 3 });
+  });
+  return ops;
+});
+
+// A firecracker: a dense core and a scatter of shrapnel holes. Deterministic
+// from the rng, so the browser test can assert on it and a replay is identical.
+function paintBlastPattern(cx, cy, rng) {
+  const holes = [{ x: cx, y: cy, r: 26 }];
+  const shards = 24;
+  for (let i = 0; i < shards; i++) {
+    const a = rng() * Math.PI * 2;
+    const d = 18 + rng() * 110;
+    holes.push({ x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, r: 3 + rng() * 16 });
+  }
+  return holes;
+}
+
+// A shuffled visit order over every pixel index. Partial Fisher-Yates over the
+// whole array - the same shape msSeed uses, and for the same reason: it is the
+// honest way to get a permutation rather than sampling with rejection.
+function paintDissolveOrder(w, h, rng) {
+  const n = w * h;
+  const order = new Array(n);
+  for (let i = 0; i < n; i++) order[i] = i;
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = order[i]; order[i] = order[j]; order[j] = t;
+  }
+  return order;
+}
+
+// Alternating bands, top to bottom. The last band is clamped rather than
+// allowed to overhang, so a height that is not a multiple of the step does not
+// erase past the canvas.
+function paintBlindRows(h, step) {
+  const rows = [];
+  for (let y = 0; y < h; y += step * 2) {
+    rows.push({ y, h: Math.min(step, h - y) });
+  }
+  return rows;
+}
+
+// The whole-image erasers are applied by the UI, but the options bar previews a
+// variant by RUNNING it. These stand-ins draw the SHAPE of what each one does
+// on a 22x22 button - a blast, a swirl, speckle, a wash, bands - so the row
+// reads at a glance instead of showing five identical blank squares.
+paintRegisterGenerator('eraser', 'firecracker', (seg, st) =>
+  paintBlastPattern(seg.x1, seg.y1, st.rng).slice(0, 8)
+    .map(h => ({ op: 'erase', x: h.x, y: h.y, r: Math.max(1, h.r / 6) })));
+
+paintRegisterGenerator('eraser', 'blackhole', (seg) => {
+  const ops = [];
+  for (let i = 0; i < 24; i++) {
+    const t = i / 24;
+    const a = t * Math.PI * 4;
+    ops.push({ op: 'erase', x: seg.x1 + Math.cos(a) * t * 9, y: seg.y1 + Math.sin(a) * t * 9, r: 1.5 });
+  }
+  return ops;
+});
+
+paintRegisterGenerator('eraser', 'dissolve', (seg, st) => {
+  const ops = [];
+  for (let i = 0; i < 40; i++) ops.push({ op: 'erase', x: st.rng() * 22, y: st.rng() * 22, r: 1 });
+  return ops;
+});
+
+paintRegisterGenerator('eraser', 'fade', () =>
+  [{ op: 'erase', x: 11, y: 11, r: 10 }]);
+
+paintRegisterGenerator('eraser', 'blinds', () =>
+  paintBlindRows(22, 3).map(r => ({ op: 'erase', x: 11, y: r.y + r.h / 2, r: r.h })));
+
+// ─────────────────────────────────────────────────────────────────
+// Goodies - whole-image operations
+// ─────────────────────────────────────────────────────────────────
+// A menu rather than tools: these act on the whole picture at once, and a
+// column of per-stroke instruments is the wrong place for something that is not
+// a stroke.
+//
+// Every one mutates a raw RGBA buffer in place and touches no canvas, so
+// `npm test` proves each one. Several have properties worth asserting - flip
+// and invert are involutions, posterize is idempotent, scramble conserves
+// pixels - and a property is a much better test than a golden image.
+const PAINT_GOODIES = ['flipH', 'flipV', 'invert', 'darken', 'lighten', 'posterize', 'scramble', 'edges'];
+function paintGoodieNames() { return PAINT_GOODIES.slice(); }
+
+function paintGoodie(name, px, w, h) {
+  const at = (x, y) => (y * w + x) * 4;
+  const swap = (i, j) => {
+    for (let k = 0; k < 4; k++) { const t = px[i + k]; px[i + k] = px[j + k]; px[j + k] = t; }
+  };
+  switch (name) {
+    case 'flipH':
+      for (let y = 0; y < h; y++) for (let x = 0; x < w >> 1; x++) swap(at(x, y), at(w - 1 - x, y));
+      return true;
+    case 'flipV':
+      for (let y = 0; y < h >> 1; y++) for (let x = 0; x < w; x++) swap(at(x, y), at(x, h - 1 - y));
+      return true;
+    case 'invert':
+      // Alpha is deliberately untouched: inverting it would turn the picture
+      // transparent rather than negative.
+      for (let i = 0; i < px.length; i += 4) {
+        px[i] = 255 - px[i]; px[i + 1] = 255 - px[i + 1]; px[i + 2] = 255 - px[i + 2];
+      }
+      return true;
+    case 'darken':
+      for (let i = 0; i < px.length; i += 4) {
+        px[i] *= 0.8; px[i + 1] *= 0.8; px[i + 2] *= 0.8;
+      }
+      return true;
+    case 'lighten':
+      for (let i = 0; i < px.length; i += 4) {
+        px[i] += (255 - px[i]) * 0.2;
+        px[i + 1] += (255 - px[i + 1]) * 0.2;
+        px[i + 2] += (255 - px[i + 2]) * 0.2;
+      }
+      return true;
+    case 'posterize': {
+      // Snapping to fixed levels is what makes this idempotent: a value already
+      // on a level maps to itself, so applying it twice changes nothing.
+      const levels = 4;
+      const step = 255 / (levels - 1);
+      for (let i = 0; i < px.length; i += 4) {
+        for (let k = 0; k < 3; k++) px[i + k] = Math.round(Math.round(px[i + k] / step) * step);
+      }
+      return true;
+    }
+    case 'scramble': {
+      // Sixteen tiles, shuffled. A fixed permutation rather than a random one so
+      // the operation is a pure function of the image - and so the test can
+      // assert pixel conservation without threading an rng through.
+      const cols = 4, rows = 4;
+      const tw = Math.floor(w / cols), th = Math.floor(h / rows);
+      if (tw < 1 || th < 1) return true;
+      const perm = [5, 11, 2, 14, 0, 9, 7, 3, 12, 1, 15, 6, 10, 4, 13, 8];
+      const copy = px.slice();
+      for (let t = 0; t < 16; t++) {
+        const sx = (perm[t] % cols) * tw, sy = Math.floor(perm[t] / cols) * th;
+        const dx = (t % cols) * tw, dy = Math.floor(t / cols) * th;
+        for (let y = 0; y < th; y++) {
+          for (let x = 0; x < tw; x++) {
+            const si = ((sy + y) * w + (sx + x)) * 4, di = ((dy + y) * w + (dx + x)) * 4;
+            for (let k = 0; k < 4; k++) px[di + k] = copy[si + k];
+          }
+        }
+      }
+      return true;
+    }
+    case 'edges': {
+      // Difference from the pixel to the right and below, inverted, so edges
+      // come out dark on white rather than white on black.
+      const copy = px.slice();
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = at(x, y);
+          const r = at(Math.min(w - 1, x + 1), y);
+          const d = at(x, Math.min(h - 1, y + 1));
+          let g = 0;
+          for (let k = 0; k < 3; k++) g += Math.abs(copy[i + k] - copy[r + k]) + Math.abs(copy[i + k] - copy[d + k]);
+          const v = Math.max(0, 255 - g);
+          px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 255;
+        }
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+// ─────────────────────────────────────────────────────────────────
+// PAINT.exe - UI half
+// ─────────────────────────────────────────────────────────────────
+// The pure half is apps/paint-core.js. Everything here touches the DOM, the
+// canvas, the filesystem or the window manager, and none of it is reachable
+// from `npm test` - which is exactly why the brushes live next door.
+//
+// The renderer below is deliberately dumb: a switch over op types with no
+// knowledge of what a brush IS. Every decision about what a stroke looks like
+// was already made by a pure function.
+
+const PAINT_WIN_ID = 'paint';
+const PAINT_REG_PATH = 'SOFTWARE\\sleepOS\\Paint';
+const PAINT_UNDO_STEPS = 20;
+const PAINT_DEFAULT_DIR = 'PICTURES';
+
+let paintState = null;
+
+// ── sound shim ───────────────────────────────────────────────────
+// PAINT ships silent. test/sound-assets.test.cjs fails the build on a
+// SOUND_FILES name with no .ogg behind it, so no name may enter that table
+// before its file exists. Every trigger is in place now, so wiring real sounds
+// later is a one-table change with no edits to any call site.
+//
+// Wanted, in rough order of how much each one carries the feel:
+//   paint-undo (the Undo Guy whoop), paint-stamp, paint-fill,
+//   paint-firecracker, paint-eraser, paint-brush, then paint-pencil,
+//   paint-shape, paint-eyedropper, paint-text, paint-blackhole,
+//   paint-dissolve, paint-clear, paint-palette.
+function paintSound(name) {
+  if (typeof SOUND_FILES === 'object' && SOUND_FILES && SOUND_FILES[name]) playSound(name);
+}
+
+// ── registry-backed preferences ──────────────────────────────────
+function paintRegValue(name, fallback) {
+  const key = registryData['HKEY_CURRENT_USER'] && registryData['HKEY_CURRENT_USER'][PAINT_REG_PATH];
+  const entry = key && key[name];
+  return entry ? entry.value : fallback;
+}
+function paintSetRegValue(name, value) {
+  const key = registryData['HKEY_CURRENT_USER'] && registryData['HKEY_CURRENT_USER'][PAINT_REG_PATH];
+  if (!key || !key[name]) return;
+  key[name].value = value;
+  saveRegistry();
+}
+
+// ── the op renderer ──────────────────────────────────────────────
+// One switch, no cleverness. If a brush looks wrong the bug is in
+// apps/paint-core.js, and a node test can find it.
+function paintExecOps(ctx, ops) {
+  ops.forEach(op => {
+    switch (op.op) {
+      case 'dab':
+        ctx.fillStyle = op.color;
+        ctx.beginPath();
+        ctx.arc(op.x, op.y, Math.max(0.5, op.r), 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'line':
+        ctx.strokeStyle = op.color;
+        ctx.lineWidth = op.w;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(op.x0, op.y0);
+        ctx.lineTo(op.x1, op.y1);
+        ctx.stroke();
+        break;
+      case 'rect':
+        ctx.fillStyle = op.color;
+        ctx.fillRect(op.x, op.y, op.w, op.h);
+        break;
+      case 'erase':
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(op.x, op.y, Math.max(0.5, op.r), 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'sprite':
+        paintDrawSticker(ctx, op);
+        break;
+    }
+  });
+}
+
+// One <img> for the whole atlas, loaded once and shared. drawImage takes an
+// HTMLImageElement directly, so there is no need to decode it into anything.
+let paintStickerImg = null;
+function paintStickerImage() {
+  if (!paintStickerImg) {
+    paintStickerImg = new Image();
+    // The size-variant previews are drawn onto a canvas the moment this
+    // function first runs, which is necessarily before the atlas can have
+    // decoded - paintDrawSticker's img.complete guard makes that first pass
+    // draw nothing. Redraw the options bar once the atlas is actually ready,
+    // so those previews stop being permanently blank. This is not just the
+    // sticker tool's problem: wacky/scatter also emits sprite ops, so any
+    // tool's bar can be showing a blank sprite preview when this fires.
+    // Redraw unconditionally rather than re-narrowing to a tool list that the
+    // next sprite-emitting brush would only have to widen again. Guard on
+    // paintState: it goes null when the window closes, and
+    // paintRenderOptionsBar dereferences paintState.tool without a null
+    // check of its own.
+    paintStickerImg.onload = () => {
+      if (paintState) paintRenderOptionsBar();
+    };
+    paintStickerImg.src = 'os/sprites/paint-stickers.png';
+  }
+  return paintStickerImg;
+}
+
+function paintDrawSticker(ctx, op) {
+  const rect = paintStickerRect(op.idx);
+  if (!rect) return;
+  const img = paintStickerImage();
+  if (!img.complete || !img.naturalWidth) return;
+  const half = op.size / 2;
+  // Nearest-neighbour, always: these are 32px pixel-art cells and a smoothed
+  // upscale to 52px turns them to mush.
+  const prev = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh,
+                Math.round(op.x - half), Math.round(op.y - half), op.size, op.size);
+  ctx.imageSmoothingEnabled = prev;
+}
+
+// ── canvas scaling ───────────────────────────────────────────────
+// The backing store never changes size; only how many screen pixels each canvas
+// pixel occupies does. paintDisplayScale keeps that a whole number wherever 1x
+// fits, which is what keeps every pixel square.
+function paintFitCanvas() {
+  const s = paintState;
+  if (!s) return;
+  const stage = document.getElementById('paint-stage');
+  if (!stage) return;
+  const scale = paintDisplayScale(stage.clientWidth, stage.clientHeight);
+  s.scale = scale;
+  s.canvas.style.width = (paintCanvasWidth() * scale) + 'px';
+  s.canvas.style.height = (paintCanvasHeight() * scale) + 'px';
+}
+
+// A pointer event's position in CANVAS pixels. Every generator works in canvas
+// space and none of them knows the display scale exists - this is the one place
+// the conversion happens.
+function paintPointerPos(e) {
+  const s = paintState;
+  const r = s.canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) / s.scale,
+    y: (e.clientY - r.top) / s.scale,
+  };
+}
+
+// ── undo ─────────────────────────────────────────────────────────
+function paintSnapshot() {
+  const s = paintState;
+  return s.ctx.getImageData(0, 0, s.canvas.width, s.canvas.height);
+}
+function paintRestore(snapshot) {
+  if (snapshot) paintState.ctx.putImageData(snapshot, 0, 0);
+}
+// Called once per completed stroke, not per segment: an undo should take back a
+// line, not one twitch of the mouse.
+function paintCommitUndo() {
+  paintUndoPush(paintState.ring, paintSnapshot());
+}
+function paintUndo() {
+  const snap = paintUndoUndo(paintState.ring);
+  if (!snap) return false;
+  paintRestore(snap);
+  paintSound('paint-undo');
+  paintDropSelection();
+  return true;
+}
+function paintRedo() {
+  const snap = paintUndoRedo(paintState.ring);
+  if (!snap) return false;
+  paintRestore(snap);
+  paintDropSelection();
+  return true;
+}
+
+// ── selection lifecycle ─────────────────────────────────────────
+// sel.base is a snapshot of the canvas taken BEFORE the marquee was drawn onto
+// it. Anything that replaces the canvas wholesale - undo, redo, Clear Canvas, a
+// fresh canvas, loading a photo, a Goodie - makes that snapshot describe pixels
+// that are gone. There are two correct responses, and conflating them is the
+// bug this pair of helpers exists to prevent:
+function paintDropSelection() {
+  // The canvas was just replaced out from under sel.base. Restoring it here
+  // would paint the OLD picture back over the NEW one - that IS the bug.
+  // Just forget the selection ever happened.
+  if (paintState) paintState.sel = null;
+}
+function paintFlattenSelection() {
+  // About to read the live canvas, or overwrite it wholesale, and the marquee
+  // must not be part of that. Restore the clean pixels first so the read never
+  // sees it, then drop - base no longer describes anything once this returns.
+  const s = paintState;
+  if (!s) return;
+  if (s.sel) { if (s.sel.base) paintRestore(s.sel.base); s.sel = null; }
+}
+
+// ── tool selection ───────────────────────────────────────────────
+// Exposed as functions rather than inline handlers so the browser tests can
+// drive the app the way a user would, without synthesising clicks on chrome
+// that Task 6 has not built yet.
+function paintSelectTool(toolId) {
+  if (!paintState) return;
+  const variants = paintVariantsFor(toolId);
+  // A marquee belongs to the move tool. Leaving it drawn under the pencil is a
+  // dashed rectangle nobody can get rid of.
+  paintFlattenSelection();
+  paintState.tool = toolId;
+  paintState.variant = variants.length ? variants[0].id : null;
+  paintSetRegValue('Tool', toolId);
+  paintRenderOptionsBar();
+  paintSyncToolButtons();
+}
+function paintSelectVariant(variantId) {
+  if (!paintState) return;
+  paintState.variant = variantId;
+  paintSyncOptionButtons();
+}
+function paintSetColor(hex) {
+  if (!paintState) return;
+  paintState.color = hex;
+  paintSetRegValue('Color', hex);
+  paintSyncPalette();
+}
+
+// Sized off the variant id where the id encodes it - 'p5' is a 5px pencil, 'e10'
+// a 10px eraser. Anything else falls back to a sane middle.
+function paintSizeForVariant(variantId) {
+  const m = /^[a-z](\d+)$/.exec(String(variantId || ''));
+  return m ? Number(m[1]) : 3;
+}
+
+// ── stroke handling ──────────────────────────────────────────────
+function paintStrokeState() {
+  const s = paintState;
+  return {
+    color: s.color,
+    size: paintSizeForVariant(s.variant),
+    rng: s.rng,
+    points: s.points,
+    stickerIndex: s.stickerIndex,
+  };
+}
+
+function paintBeginStroke(pos) {
+  const s = paintState;
+  // Fill and the eyedropper read the canvas and finish in one click; text
+  // needs a string rather than a drag; a whole-image eraser reads the canvas
+  // and destroys it in one go. None of the four enter the stroke machinery
+  // below at all.
+  if (s.tool === 'fill')       { paintDoFill(pos); return; }
+  if (s.tool === 'eyedropper') { paintDoEyedropper(pos); return; }
+  if (s.tool === 'text')       { paintDoText(pos); return; }
+  if (s.tool === 'eraser' && PAINT_WHOLE_ERASERS[s.variant]) { paintDoWholeEraser(pos); return; }
+  if (s.tool === 'select')     { paintSelectBegin(pos); s.drawing = true; s.selecting = true; return; }
+  // One rng per stroke, seeded once, so a stroke is reproducible end to end
+  // rather than drifting with whatever else asked for a random number.
+  s.strokeSeed = (Math.random() * 0xffffffff) >>> 0;
+  s.rng = paintRng(s.strokeSeed);
+  s.points = [{ x: pos.x, y: pos.y }];
+  s.segIndex = 0;
+  s.drawing = true;
+  s.origin = { x: pos.x, y: pos.y };
+  // A shape is previewed live and only committed on release, so the pixels
+  // underneath it have to survive every mouse move.
+  s.preview = paintIsShapeTool(s.tool) ? paintSnapshot() : null;
+  paintDrawSegment(pos.x, pos.y, pos.x, pos.y);
+}
+
+function paintExtendStroke(pos) {
+  const s = paintState;
+  if (!s.drawing) return;
+  if (s.selecting) { paintSelectDrag(pos); return; }
+  if (s.preview) {
+    // Restore, then redraw the whole shape from the drag origin. Drawing the
+    // shape incrementally would leave every intermediate rectangle on screen.
+    paintRestore(s.preview);
+    s.points = [s.origin, { x: pos.x, y: pos.y }];
+    paintDrawSegment(s.origin.x, s.origin.y, pos.x, pos.y);
+    return;
+  }
+  const prev = s.points[s.points.length - 1];
+  s.points.push({ x: pos.x, y: pos.y });
+  s.segIndex++;
+  paintDrawSegment(prev.x, prev.y, pos.x, pos.y);
+}
+
+function paintEndStroke() {
+  const s = paintState;
+  if (!s.drawing) return;
+  if (s.selecting) { s.selecting = false; s.drawing = false; paintSelectEnd(); return; }
+  s.drawing = false;
+  s.dirty = true;
+  if (s.preview) { s.preview = null; paintSound('paint-shape'); }
+  paintCommitUndo();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Fill and eyedropper
+// ─────────────────────────────────────────────────────────────────
+// These two READ the canvas, which is why neither goes through paintGenerate:
+// a generator is a pure function of a stroke and knows nothing about what is
+// already painted. Both complete in one click.
+
+function paintDoFill(pos) {
+  const s = paintState;
+  const x = Math.floor(pos.x), y = Math.floor(pos.y);
+  const w = s.canvas.width, h = s.canvas.height;
+  const id = s.ctx.getImageData(0, 0, w, h);
+
+  // Fill flat first, in the paint colour. The pattern is then punched back out
+  // of exactly the pixels this fill claimed - which is what keeps a patterned
+  // fill inside the same region a solid one would have found.
+  const before = id.data.slice();
+  const rgba = paintHexToRgba(s.color);
+  const n = paintFloodFill(id.data, w, h, x, y, rgba, 12);
+  if (!n) return;
+
+  if (s.variant !== 'solid') {
+    const rng = paintRng((Math.random() * 0xffffffff) >>> 0);
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const i = (py * w + px) * 4;
+        // Only pixels this fill actually changed are candidates.
+        if (id.data[i] === before[i] && id.data[i + 1] === before[i + 1] && id.data[i + 2] === before[i + 2]) continue;
+        if (s.variant === 'gradient') {
+          // Vertical ramp from the paint colour to white across the canvas.
+          const t = py / h;
+          id.data[i]     = Math.round(rgba[0] + (255 - rgba[0]) * t);
+          id.data[i + 1] = Math.round(rgba[1] + (255 - rgba[1]) * t);
+          id.data[i + 2] = Math.round(rgba[2] + (255 - rgba[2]) * t);
+          continue;
+        }
+        if (!paintPatternAt(s.variant, px, py, rng)) {
+          // Not inked: put back whatever was there before the flood.
+          id.data[i] = before[i]; id.data[i + 1] = before[i + 1];
+          id.data[i + 2] = before[i + 2]; id.data[i + 3] = before[i + 3];
+          continue;
+        }
+        const alt = paintPatternColor(s.variant, s.color, rng);
+        if (alt) {
+          const c = paintHexToRgba(alt);
+          id.data[i] = c[0]; id.data[i + 1] = c[1]; id.data[i + 2] = c[2];
+        }
+      }
+    }
+  }
+
+  s.ctx.putImageData(id, 0, 0);
+  s.dirty = true;
+  paintSound('paint-fill');
+  paintCommitUndo();
+}
+
+function paintDoEyedropper(pos) {
+  const s = paintState;
+  const x = Math.floor(pos.x), y = Math.floor(pos.y);
+  if (x < 0 || y < 0 || x >= s.canvas.width || y >= s.canvas.height) return;
+  const d = s.ctx.getImageData(x, y, 1, 1).data;
+  paintSetColor(paintRgbaToHex(d[0], d[1], d[2]));
+  paintSound('paint-eyedropper');
+  // Back to the pencil. Staying on the eyedropper means a second click before
+  // you can use the colour you just picked, which is a step nobody wants.
+  paintSelectTool('pencil');
+}
+
+function paintDrawSegment(x0, y0, x1, y1) {
+  const s = paintState;
+  const seg = { x0, y0, x1, y1, index: s.segIndex };
+  paintExecOps(s.ctx, paintGenerate(s.tool, s.variant, seg, paintStrokeState()));
+}
+
+// ── launcher ─────────────────────────────────────────────────────
+function openPaint() {
+  if (!mkWin({ id: PAINT_WIN_ID, title: 'untitled.png - Paint', icon: 'icon:paint',
+               w: 620, h: 540, menubar: true, statusbar: true })) return;
+
+  const body = document.getElementById('wb-' + PAINT_WIN_ID);
+  body.className = 'win-body paint-body';
+  body.innerHTML = `
+    <div class="paint-root">
+      <div class="paint-tools" id="paint-tools"></div>
+      <div class="paint-stage" id="paint-stage">
+        <canvas id="paint-canvas"></canvas>
+      </div>
+      <div class="paint-bottom">
+        <div class="paint-palette" id="paint-palette"></div>
+        <div class="paint-options" id="paint-options"></div>
+        <button class="paint-undo-guy" id="paint-undo-guy" type="button"
+                title="Undo" aria-label="Undo"></button>
+      </div>
+    </div>`;
+
+  const canvas = document.getElementById('paint-canvas');
+  canvas.width = paintCanvasWidth();
+  canvas.height = paintCanvasHeight();
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const storedTool = String(paintRegValue('Tool', 'pencil'));
+  const tool = paintTools().some(t => t.id === storedTool) ? storedTool : 'pencil';
+  const storedColor = String(paintRegValue('Color', '#000000'));
+  const color = paintPalette().some(c => c.hex === storedColor) ? storedColor : '#000000';
+
+  paintState = {
+    tool,
+    variant: (paintVariantsFor(tool)[0] || { id: null }).id,
+    color,
+    canvas, ctx,
+    scale: 1,
+    ring: paintUndoInit(PAINT_UNDO_STEPS),
+    dirty: false,
+    file: null,
+    dir: PAINT_DEFAULT_DIR,
+    stickerIndex: 0,
+    stickerPage: 0,
+    points: [],
+    segIndex: 0,
+    drawing: false,
+    rng: paintRng(1),
+    sel: null,
+    selecting: false,
+  };
+  // The blank canvas is the first undo state, so undoing the very first stroke
+  // returns to white rather than doing nothing.
+  paintUndoPush(paintState.ring, paintSnapshot());
+
+  paintRenderTools();
+  paintRenderPalette();
+  paintRenderOptionsBar();
+
+  paintBuildMenu(document.getElementById('mb-' + PAINT_WIN_ID));
+
+  document.getElementById('paint-undo-guy').textContent = '↶';
+  document.getElementById('paint-undo-guy').addEventListener('click', () => paintUndo());
+
+  document.getElementById('win-' + PAINT_WIN_ID).addEventListener('keydown', e => {
+    // While the alphabet stamp is selected, a letter key loads the stamp. This
+    // is why the handler is on the window and not on the document - it must not
+    // eat keystrokes meant for a dialog or another app.
+    if (paintState && paintState.tool === 'text' && paintState.variant === 'stamp'
+        && !e.ctrlKey && !e.metaKey && /^[a-z0-9]$/i.test(e.key)) {
+      paintState.stampLetter = e.key.toUpperCase();
+      const ws = document.getElementById('ws-' + PAINT_WIN_ID);
+      if (ws) ws.textContent = 'Alphabet stamp: ' + paintState.stampLetter;
+      return;
+    }
+    if (!e.ctrlKey && !e.metaKey) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z') { e.preventDefault(); paintUndo(); }
+    else if (k === 'y') { e.preventDefault(); paintRedo(); }
+    else if (k === 's') { e.preventDefault(); paintState.file ? paintSave(paintState.file, paintState.dir) : paintSaveAs(); }
+  });
+
+  const winEl = document.getElementById('win-' + PAINT_WIN_ID);
+  if (!winEl.hasAttribute('tabindex')) winEl.setAttribute('tabindex', '-1');
+  procSetTimeout(PAINT_WIN_ID, () => winEl.focus(), 40);
+
+  paintFitCanvas();
+
+  // pointer events, not mouse events: one code path covers mouse, finger and
+  // stylus, which is what makes this work on a phone at all.
+  canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    paintBeginStroke(paintPointerPos(e));
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!paintState || !paintState.drawing) return;
+    e.preventDefault();
+    paintExtendStroke(paintPointerPos(e));
+  });
+  const finish = e => {
+    if (!paintState || !paintState.drawing) return;
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    paintEndStroke();
+  };
+  canvas.addEventListener('pointerup', finish);
+  canvas.addEventListener('pointercancel', finish);
+  // Dragging off the canvas and letting go must end the stroke; without this the
+  // next hover keeps painting with no button held.
+  canvas.addEventListener('pointerleave', e => { if (paintState && paintState.drawing) finish(e); });
+
+  // Touch scrolling would otherwise fight every drag on a phone.
+  canvas.style.touchAction = 'none';
+
+  const ro = new ResizeObserver(() => paintFitCanvas());
+  ro.observe(document.getElementById('paint-stage'));
+
+  wins[PAINT_WIN_ID]._onclose = () => { ro.disconnect(); paintState = null; };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Toolbox, palette, options bar
+// ─────────────────────────────────────────────────────────────────
+
+// Tool glyphs are text, not art. Eleven more 32x32 PNGs would be eleven more
+// things to keep consistent with a set drawn by hand, and at 26px in a bevelled
+// button a glyph reads fine. The OS's own icon set stays for the window and the
+// desktop, where it is doing real work.
+const PAINT_TOOL_GLYPHS = {
+  pencil: '✎', line: '╱', rect: '▭', oval: '◯',
+  fill: '◧', eyedropper: '⚗', text: 'A', sticker: '☺',
+  wacky: '❀', eraser: '◻', select: '✥',
+};
+function paintToolGlyph(toolId) { return PAINT_TOOL_GLYPHS[toolId] || '?'; }
+
+function paintRenderTools() {
+  const host = document.getElementById('paint-tools');
+  if (!host) return;
+  host.innerHTML = '';
+  paintTools().forEach(tool => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'paint-tool';
+    b.dataset.tool = tool.id;
+    b.title = tool.label;
+    b.setAttribute('aria-label', tool.label);
+    b.textContent = paintToolGlyph(tool.id);
+    b.addEventListener('click', () => paintSelectTool(tool.id));
+    host.appendChild(b);
+  });
+  paintSyncToolButtons();
+}
+
+function paintSyncToolButtons() {
+  document.querySelectorAll('.paint-tool').forEach(b => {
+    b.classList.toggle('sel', b.dataset.tool === paintState.tool);
+  });
+}
+
+function paintRenderPalette() {
+  const host = document.getElementById('paint-palette');
+  if (!host) return;
+  host.innerHTML = '';
+  paintPalette().forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'paint-swatch';
+    b.dataset.hex = c.hex;
+    b.style.background = c.hex;
+    b.title = c.id;
+    b.setAttribute('aria-label', c.id);
+    b.addEventListener('click', () => { paintSetColor(c.hex); paintSound('paint-palette'); });
+    host.appendChild(b);
+  });
+  paintSyncPalette();
+}
+
+function paintSyncPalette() {
+  document.querySelectorAll('.paint-swatch').forEach(b => {
+    b.classList.toggle('sel', b.dataset.hex === paintState.color);
+  });
+}
+
+// The options bar draws each variant by RUNNING IT. A hand-drawn icon per
+// variant would be 40-odd more pieces of art to keep in step with behaviour
+// that is still being tuned, and the first thing to go stale. This cannot: the
+// button art is the brush's actual output on a 22x22 canvas.
+function paintRenderOptionsBar() {
+  const host = document.getElementById('paint-options');
+  if (!host) return;
+  host.innerHTML = '';
+  const variants = paintVariantsFor(paintState.tool);
+  variants.forEach(v => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'paint-opt';
+    b.dataset.variant = v.id;
+    b.title = v.label;
+    b.setAttribute('aria-label', v.label);
+    b.appendChild(paintVariantPreview(paintState.tool, v.id));
+    b.addEventListener('click', () => paintSelectVariant(v.id));
+    host.appendChild(b);
+  });
+  paintRenderStickerPager(host);
+  paintSyncOptionButtons();
+}
+
+function paintSyncOptionButtons() {
+  document.querySelectorAll('.paint-opt').forEach(b => {
+    b.classList.toggle('sel', b.dataset.variant === paintState.variant);
+  });
+}
+
+// ── sticker picker ───────────────────────────────────────────────
+// The picker lives IN the options bar, beside the size variants, because that
+// is where the reference puts it and because a sticker's identity is a variant
+// of the sticker tool in every way that matters.
+function paintSetStickerPage(n) {
+  const pages = paintStickerPages();
+  // Wrapping rather than clamping: eight pages of stamps is a carousel, and a
+  // dead arrow at either end is a button that looks broken.
+  paintState.stickerPage = ((n % pages) + pages) % pages;
+  paintRenderOptionsBar();
+}
+
+function paintRenderStickerPager(host) {
+  if (paintState.tool !== 'sticker') return;
+  const perPage = paintStickerPerPage();
+  const base = paintState.stickerPage * perPage;
+
+  const prev = document.createElement('button');
+  prev.type = 'button';
+  prev.className = 'paint-pager paint-pager-prev';
+  prev.textContent = '◄';
+  prev.title = 'Previous page of stickers';
+  prev.setAttribute('aria-label', 'Previous page of stickers');
+  prev.addEventListener('click', () => paintSetStickerPage(paintState.stickerPage - 1));
+  host.appendChild(prev);
+
+  for (let i = 0; i < perPage; i++) {
+    const idx = base + i;
+    const rect = paintStickerRect(idx);
+    if (!rect) continue;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'paint-sticker' + (idx === paintState.stickerIndex ? ' sel' : '');
+    b.dataset.idx = String(idx);
+    b.title = 'Sticker ' + (idx + 1);
+    b.setAttribute('aria-label', 'Sticker ' + (idx + 1));
+    b.style.backgroundImage = 'url("os/sprites/paint-stickers.png")';
+    b.style.backgroundPosition = (-rect.sx) + 'px ' + (-rect.sy) + 'px';
+    b.addEventListener('click', () => {
+      paintState.stickerIndex = idx;
+      paintSound('paint-stamp');
+      document.querySelectorAll('.paint-sticker').forEach(el =>
+        el.classList.toggle('sel', Number(el.dataset.idx) === idx));
+    });
+    host.appendChild(b);
+  }
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'paint-pager paint-pager-next';
+  next.textContent = '►';
+  next.title = 'Next page of stickers';
+  next.setAttribute('aria-label', 'Next page of stickers');
+  next.addEventListener('click', () => paintSetStickerPage(paintState.stickerPage + 1));
+  host.appendChild(next);
+}
+
+// A fixed seed, so a preview is stable across rebuilds of the bar - a splatter
+// button that reshuffles every time you change tool reads as a glitch.
+const PAINT_PREVIEW_SEED = 20260902;
+
+// Derives a per-variant seed from the shared base seed. Two variants of the
+// same tool can roll the exact same stochastic branch off one shared seed -
+// wacky's drips and leaky both draw nothing but their base line under
+// PAINT_PREVIEW_SEED, since neither one's occasional extra happened to fire,
+// and the two buttons read as duplicates. Hashing the tool/variant id into the
+// seed gives every button its own deterministic-but-different roll instead.
+function paintPreviewSeed(toolId, variantId) {
+  const s = toolId + ':' + variantId;
+  let h = PAINT_PREVIEW_SEED;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  // A plain running hash lands adjacent variant ids on adjacent seeds, and
+  // paintRng's first output is continuous in its seed - two adjacent seeds
+  // roll almost the same first float, which is exactly the drips/leaky
+  // failure mode this function exists to avoid. Run the combined hash through
+  // a standard integer finalizer (avalanche) so nearby ids land on
+  // well-separated seeds instead.
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = h ^ (h >>> 16);
+  return h >>> 0;
+}
+
+// Sticker preview sizes, in a 22px button. NOT the real stamp sizes (20/32/52)
+// - two of those overflow the button. These keep the same ordering so the three
+// buttons still read as small / medium / large at a glance.
+const PAINT_STICKER_PREVIEW_SIZES = { small: 11, medium: 16, large: 21 };
+
+function paintVariantPreview(toolId, variantId) {
+  const size = 22;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, size, size);
+  // A diagonal drag across the button, which is enough of a stroke for every
+  // generator to show its character.
+  const seg = { x0: 3, y0: size - 3, x1: size - 3, y1: 3, index: 0 };
+  const st = {
+    color: paintState ? paintState.color : '#000000',
+    size: paintSizeForVariant(variantId),
+    rng: paintRng(paintPreviewSeed(toolId, variantId)),
+    // Three points along the diagonal, not just the one endpoint - wacky's
+    // connect needs at least two prior points before it draws any chords, and
+    // one point left its preview showing nothing but a lone dot.
+    points: [
+      { x: seg.x0, y: seg.y0 },
+      { x: seg.x0 + (seg.x1 - seg.x0) / 3, y: seg.y0 + (seg.y1 - seg.y0) / 3 },
+      { x: seg.x0 + (seg.x1 - seg.x0) * 2 / 3, y: seg.y0 + (seg.y1 - seg.y0) * 2 / 3 },
+    ],
+    stickerIndex: paintState ? paintState.stickerIndex : 0,
+  };
+  // An eraser previews against ink, or it previews nothing at all: white on
+  // white is an empty button.
+  if (toolId === 'eraser') {
+    g.fillStyle = paintState ? paintState.color : '#000000';
+    g.fillRect(0, 0, size, size);
+  }
+  // A stamp has no stroke to show, so the diagonal above is the wrong question
+  // to ask it. The sticker generator stamps at the START of that drag, which
+  // lands the sprite on (3, 19) - the bottom-left corner - and 'large' stamps
+  // at 52px, so most of it falls outside a 22px button entirely. Preview the
+  // stamp itself instead: one sprite, centred, scaled so the three sizes still
+  // read as visibly different from each other.
+  if (toolId === 'sticker') {
+    const half = size / 2;
+    paintExecOps(g, [{ op: 'sprite', idx: st.stickerIndex, x: half, y: half,
+                       size: PAINT_STICKER_PREVIEW_SIZES[variantId] || 16, rot: 0 }]);
+    return c;
+  }
+  paintExecOps(g, paintGenerate(toolId, variantId, seg, st));
+  return c;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Menus, keyboard, and the Undo Guy
+// ─────────────────────────────────────────────────────────────────
+
+function paintClearCanvas() {
+  const s = paintState;
+  s.ctx.fillStyle = '#ffffff';
+  s.ctx.fillRect(0, 0, s.canvas.width, s.canvas.height);
+}
+
+function paintNewCanvas() {
+  const s = paintState;
+  const go = () => {
+    paintClearCanvas();
+    s.ring = paintUndoInit(PAINT_UNDO_STEPS);
+    paintUndoPush(s.ring, paintSnapshot());
+    s.dirty = false;
+    s.file = null;
+    paintDropSelection();
+    setWinTitle(PAINT_WIN_ID, 'untitled.png - Paint');
+    paintSound('paint-clear');
+  };
+  // Only ask when there is something to lose. A confirm on an untouched canvas
+  // is a dialog that teaches people to click through dialogs.
+  if (!s.dirty) { go(); return; }
+  osConfirm('Start a new painting? The current one has not been saved.',
+            'New Painting', ok => { if (ok) go(); }, 'icon:warning');
+}
+
+function paintBuildMenu(mb) {
+  mb.innerHTML = '';
+  const menus = [
+    { label: 'File', items: () => [
+      { label: 'New', action: paintNewCanvas },
+      { label: 'Open…', action: paintOpenDialog },
+      '-',
+      { label: 'Save  Ctrl+S', action: () => paintState.file ? paintSave(paintState.file, paintState.dir) : paintSaveAs() },
+      { label: 'Save As…', action: paintSaveAs },
+      '-',
+      { label: 'Set as Wallpaper', action: paintSetWallpaper },
+      '-',
+      { label: 'Close', action: () => closeWin(PAINT_WIN_ID) },
+    ]},
+    { label: 'Edit', items: () => [
+      { label: 'Undo  Ctrl+Z', action: paintUndo },
+      { label: 'Redo  Ctrl+Y', action: paintRedo },
+      '-',
+      { label: 'Clear Canvas', action: () => { paintFlattenSelection(); paintClearCanvas(); paintCommitUndo(); paintSound('paint-clear'); } },
+    ]},
+    // Whole-image operations - flip, invert, darken/lighten, posterize,
+    // scramble, edges. Rebuilt per open like every other menu here.
+    { label: 'Goodies', items: () => paintGoodiesItems() },
+  ];
+  menus.forEach(m => {
+    const span = document.createElement('span');
+    span.className = 'menu-item';
+    span.textContent = m.label;
+    // Rebuilt per open rather than captured: Task 8 adds a Save whose label
+    // depends on whether the painting has a file yet.
+    span.addEventListener('click', e => { e.stopPropagation(); showDropdown(span, m.items()); });
+    mb.appendChild(span);
+  });
+
+  const help = document.createElement('button');
+  help.className = 'ms-help-btn';
+  help.type = 'button';
+  help.title = 'Help and credits';
+  help.setAttribute('aria-label', 'Help and credits');
+  help.innerHTML = iconMarkup('icon:help');
+  help.addEventListener('click', e => { e.stopPropagation(); paintOpenHelp(); });
+  mb.appendChild(help);
+}
+
+const PAINT_GOODIE_LABELS = {
+  flipH: 'Flip Horizontal', flipV: 'Flip Vertical', invert: 'Invert Colours',
+  darken: 'Darken', lighten: 'Lighten', posterize: 'Posterize',
+  scramble: 'Scramble', edges: 'Find Edges',
+};
+
+function paintApplyGoodie(name) {
+  const s = paintState;
+  // A live marquee is real canvas pixels. Flatten before reading, or a Goodie
+  // bakes the dashed border - and whatever the selection was hovering - into
+  // the pixel buffer and the undo history right along with it.
+  paintFlattenSelection();
+  const id = s.ctx.getImageData(0, 0, s.canvas.width, s.canvas.height);
+  if (!paintGoodie(name, id.data, s.canvas.width, s.canvas.height)) return;
+  s.ctx.putImageData(id, 0, 0);
+  s.dirty = true;
+  paintCommitUndo();
+}
+
+function paintGoodiesItems() {
+  return paintGoodieNames().map(name => ({
+    label: PAINT_GOODIE_LABELS[name] || name,
+    action: () => paintApplyGoodie(name),
+  }));
+}
+
+function paintOpenHelp() {
+  const id = 'paint-help';
+  const p = { x: Math.max(20, Math.floor(window.innerWidth / 2) - 190),
+              y: Math.max(20, Math.floor(window.innerHeight / 2) - 195) };
+  if (!mkWin({ id, title: 'Paint Help', icon: 'icon:help', w: 380, h: 390,
+               x: p.x, y: p.y, menubar: false, statusbar: false, popup: true })) return;
+  const body = document.getElementById('wb-' + id);
+  body.className = 'win-body ms-help';
+  body.innerHTML = `
+    <div class="ms-help-scroll">
+      <h3>How to paint</h3>
+      <p>Pick a tool down the left, pick a version of it along the bottom, pick
+         a colour, then drag on the canvas.</p>
+      <p><b>Ctrl+Z</b> undoes and <b>Ctrl+Y</b> redoes, up to twenty steps back.
+         <b>Ctrl+S</b> saves into C:\sleepOS\PICTURES.</p>
+      <h3>Credits</h3>
+      <p>The stickers are Br&oslash;derbund <i>Kid Pix</i> stamps. A tribute,
+         not the original.</p>
+    </div>
+    <div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
+  const ok = document.getElementById(id + '-ok');
+  ok.addEventListener('click', () => closeWin(id));
+  procSetTimeout(id, () => ok.focus(), 40);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Saving
+// ─────────────────────────────────────────────────────────────────
+// A painting is a real PNG blob in the VFS, which is what lets it show up in
+// Explorer, open in the image viewer, and become the wallpaper. Blob bytes go
+// through the same vfsWriteBlob -> commit path as an uploaded file; nothing
+// here is a special case.
+
+function paintCanvasBlob() {
+  // An idle marquee is real canvas pixels. Flatten it before encoding, the same
+  // way switching tools does, so a save taken between marking and moving never
+  // carries the dashed border into the file. Synchronous and flicker-free -
+  // restore-then-redraw-after would have to outlive an async toBlob callback.
+  paintFlattenSelection();
+  return new Promise(resolve => paintState.canvas.toBlob(resolve, 'image/png'));
+}
+
+// One implementation for Save and Save As, for the reason apps/notepad.js
+// states about its own pair: two near-duplicates is how a try/catch gets added
+// to one and forgotten on the other.
+//
+// The title bar and the dirty flag are updated ONLY on success. Reporting a
+// save that did not happen is precisely the failure this shape exists to kill -
+// notepad's writeAndSync was written after exactly that bug.
+async function paintWriteAndSync(fname, dir) {
+  const blob = await paintCanvasBlob();
+  if (!blob) {
+    osAlert('The canvas could not be encoded.', 'Cannot Save', 'icon:error');
+    return false;
+  }
+  const url = URL.createObjectURL(blob);
+  let saved;
+  try {
+    saved = await vfsWriteBlob(fname, { url, kind: 'image', size: blob.size, mime: 'image/png' }, dir);
+  } catch (err) {
+    // Nothing else holds this URL once the tree entry was refused, so release
+    // it rather than leaking it for the rest of the session - same shape as
+    // handleFileUpload's own catch in os/media.js.
+    URL.revokeObjectURL(url);
+    if (err.code === 'ENOSPC') {
+      osAlert('Not enough space to save this painting.\nDelete something and try again.', 'Disk Full', 'icon:error');
+    } else if (err.code === 'EACCES') {
+      osAlert('Storage is unavailable, so this painting cannot be saved.', 'Cannot Save', 'icon:error');
+    } else if (err.code === 'EEXIST') {
+      osAlert('A text file already uses that name.', 'Cannot Save', 'icon:error');
+    } else {
+      osAlert('Could not save: ' + err.message, 'Cannot Save', 'icon:error');
+    }
+    return false;
+  }
+  paintState.file = saved.fileName;
+  paintState.dir = saved.dirName;
+  paintState.dirty = false;
+  setWinTitle(PAINT_WIN_ID, saved.fileName + ' - Paint');
+  const ws = document.getElementById('ws-' + PAINT_WIN_ID);
+  if (ws) ws.textContent = 'Saved to C:\\sleepOS\\' + (saved.dirName ? saved.dirName + '\\' : '') + saved.fileName;
+  return true;
+}
+
+// Every caller is a menu action or a key handler, none of which can await.
+// paintWriteAndSync reports its own failures; this catch only stops an
+// unexpected throw from becoming an unhandled rejection.
+function paintSave(fname, dir) {
+  paintWriteAndSync(fname, dir).catch(err => reportVfsError(err));
+}
+
+function paintSaveAs() {
+  openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir),
+                 { startDir: paintState.dir });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Opening
+// ─────────────────────────────────────────────────────────────────
+
+// Draws an image onto the fixed canvas, scaled down to fit and letterboxed on
+// white. Smoothing is ON for this one draw and off again straight after: a
+// photograph downscaled with nearest-neighbour is mush, while every stroke made
+// afterwards still has to land on the hard pixel grid.
+function paintDrawImageFitted(img) {
+  const s = paintState;
+  paintClearCanvas();
+  const scale = Math.min(s.canvas.width / img.width, s.canvas.height / img.height, 1);
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const x = Math.floor((s.canvas.width - w) / 2);
+  const y = Math.floor((s.canvas.height - h) / 2);
+  s.ctx.imageSmoothingEnabled = scale < 1;
+  s.ctx.drawImage(img, x, y, w, h);
+  s.ctx.imageSmoothingEnabled = false;
+}
+
+function paintLoadImage(name, dir) {
+  const st = vfsStatSync(name, dir);
+  const blob = st && st.kind === 'blob' ? st.blob : null;
+  if (!blob || blob.kind !== 'image') {
+    osAlert('That is not an image file:\n' + name, 'Cannot Open', 'icon:error');
+    return Promise.resolve(false);
+  }
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      paintDrawImageFitted(img);
+      const s = paintState;
+      s.file = st.name;
+      s.dir = st.dirName;
+      s.dirty = false;
+      // A fresh ring, not a push. Undoing back to the blank canvas you happened
+      // to have open before loading somebody's photo is not an undo of anything
+      // the painter did.
+      s.ring = paintUndoInit(PAINT_UNDO_STEPS);
+      paintUndoPush(s.ring, paintSnapshot());
+      paintDropSelection();
+      setWinTitle(PAINT_WIN_ID, st.name + ' - Paint');
+      resolve(true);
+    };
+    img.onerror = () => {
+      osAlert('That image could not be read.', 'Cannot Open', 'icon:error');
+      resolve(false);
+    };
+    img.src = blob.url;
+  });
+}
+
+function paintOpenDialog() {
+  openSaveDialog(paintState.file || '', (fname, dir) => { paintLoadImage(fname, dir); },
+                 { mode: 'open', kinds: ['blob'], title: 'Open Picture', startDir: paintState.dir });
+}
+
+// Wallpaper resolves a VFS path, so there must be a real file first. Saving
+// before applying is not a shortcut - applyWallpaper has nothing to resolve
+// otherwise and would silently fall back to the colour.
+function paintSetWallpaper() {
+  const apply = () => {
+    const path = (paintState.dir ? paintState.dir + '\\' : '') + paintState.file;
+    applyWallpaper(path);
+  };
+  if (paintState.file && !paintState.dirty) { apply(); return; }
+  openSaveDialog(paintState.file || 'wallpaper.png', (fname, dir) => {
+    paintWriteAndSync(fname, dir).then(ok => { if (ok) apply(); }).catch(err => reportVfsError(err));
+  });
+}
+
+// The entry point FILE_HANDLERS and Explorer's Edit item both use: open the
+// window if it is not up, then load the file into it.
+function openPaintFile(name, dir) {
+  if (!paintState) openPaint();
+  if (!name) return;
+  // openPaint's own setup runs synchronously, so paintState is live by here.
+  paintLoadImage(name, dir);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Text
+// ─────────────────────────────────────────────────────────────────
+// Text does not go through paintGenerate either: it needs a string, and a
+// generator's whole contract is that it depends on nothing but the segment and
+// the state. Asking for the string is a modal, and a modal in a pure function
+// is not a pure function.
+
+function paintTextSize(variantId) {
+  const m = /^t(\d+)$/.exec(String(variantId || ''));
+  if (m) return Number(m[1]);
+  return variantId === 'stamp' ? 64 : 12;
+}
+
+// Draws a string centred on a point. w95font is the OS's own face, so text
+// painted here matches the chrome around it; the fallback keeps this working if
+// the font has not finished loading.
+function paintDrawText(pos, text, size) {
+  const s = paintState;
+  s.ctx.save();
+  s.ctx.imageSmoothingEnabled = false;
+  s.ctx.fillStyle = s.color;
+  s.ctx.font = size + 'px w95font, "Courier New", monospace';
+  s.ctx.textAlign = 'center';
+  s.ctx.textBaseline = 'middle';
+  s.ctx.fillText(text, Math.round(pos.x), Math.round(pos.y));
+  s.ctx.restore();
+  s.dirty = true;
+  paintCommitUndo();
+}
+
+function paintDoText(pos) {
+  const s = paintState;
+  const size = paintTextSize(s.variant);
+  if (s.variant === 'stamp') {
+    // The alphabet stamp is a rubber stamp, not a text box: one letter, big,
+    // per click, and the letter is whatever was typed last.
+    const ch = s.stampLetter || 'A';
+    paintDrawText(pos, ch, size);
+    paintSound('paint-stamp');
+    return;
+  }
+  osPrompt('Type some text:', '', 'Text', value => {
+    if (!value) return;
+    paintDrawText(pos, value, size);
+    paintSound('paint-text');
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Whole-image erasers
+// ─────────────────────────────────────────────────────────────────
+// Each of these is ONE undo step, however much it destroys. That is the whole
+// contract that makes them safe to be this rude.
+
+function paintEraseHoles(holes) {
+  const g = paintState.ctx;
+  g.fillStyle = '#ffffff';
+  holes.forEach(hole => {
+    g.beginPath();
+    g.arc(hole.x, hole.y, hole.r, 0, Math.PI * 2);
+    g.fill();
+  });
+}
+
+function paintApplyBlast(pos) {
+  paintEraseHoles(paintBlastPattern(pos.x, pos.y, paintRng((Math.random() * 0xffffffff) >>> 0)));
+  paintSound('paint-firecracker');
+}
+
+// Pulls every pixel toward the click point, leaving white behind. Read from a
+// snapshot and written to a fresh buffer: sampling the canvas while writing to
+// it would smear each pixel through its own already-moved neighbours.
+function paintApplyBlackhole(pos) {
+  const s = paintState;
+  const w = s.canvas.width, h = s.canvas.height;
+  const src = s.ctx.getImageData(0, 0, w, h);
+  const dst = s.ctx.createImageData(w, h);
+  dst.data.fill(255);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = x - pos.x, dy = y - pos.y;
+      const d = Math.hypot(dx, dy);
+      // Everything inside the event horizon is simply gone.
+      if (d < 26) continue;
+      const pull = Math.min(0.75, 34 / d);
+      const sx = Math.round(x + dx * pull), sy = Math.round(y + dy * pull);
+      if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
+      const si = (sy * w + sx) * 4, di = (y * w + x) * 4;
+      dst.data[di] = src.data[si]; dst.data[di + 1] = src.data[si + 1];
+      dst.data[di + 2] = src.data[si + 2]; dst.data[di + 3] = 255;
+    }
+  }
+  s.ctx.putImageData(dst, 0, 0);
+  paintSound('paint-blackhole');
+}
+
+function paintApplyDissolve() {
+  const s = paintState;
+  const w = s.canvas.width, h = s.canvas.height;
+  const id = s.ctx.getImageData(0, 0, w, h);
+  const order = paintDissolveOrder(w, h, paintRng((Math.random() * 0xffffffff) >>> 0));
+  // Sixty per cent, not all of it: a full dissolve is just Clear with extra
+  // steps, and leaving some behind is what makes it read as decay.
+  const kill = Math.floor(order.length * 0.6);
+  for (let k = 0; k < kill; k++) {
+    const i = order[k] * 4;
+    id.data[i] = 255; id.data[i + 1] = 255; id.data[i + 2] = 255; id.data[i + 3] = 255;
+  }
+  s.ctx.putImageData(id, 0, 0);
+  paintSound('paint-dissolve');
+}
+
+function paintApplyFade() {
+  const s = paintState;
+  // A single flat wash toward white, applied to the whole canvas.
+  s.ctx.save();
+  s.ctx.globalAlpha = 0.45;
+  s.ctx.fillStyle = '#ffffff';
+  s.ctx.fillRect(0, 0, s.canvas.width, s.canvas.height);
+  s.ctx.restore();
+  paintSound('paint-eraser');
+}
+
+function paintApplyBlinds() {
+  const s = paintState;
+  s.ctx.fillStyle = '#ffffff';
+  paintBlindRows(s.canvas.height, 12).forEach(r => s.ctx.fillRect(0, r.y, s.canvas.width, r.h));
+  paintSound('paint-eraser');
+}
+
+const PAINT_WHOLE_ERASERS = {
+  firecracker: paintApplyBlast,
+  blackhole:   paintApplyBlackhole,
+  dissolve:    () => paintApplyDissolve(),
+  fade:        () => paintApplyFade(),
+  blinds:      () => paintApplyBlinds(),
+};
+
+function paintDoWholeEraser(pos) {
+  const fn = PAINT_WHOLE_ERASERS[paintState.variant];
+  if (!fn) return false;
+  fn(pos);
+  paintState.dirty = true;
+  paintCommitUndo();
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Move
+// ─────────────────────────────────────────────────────────────────
+// Two gestures, not one: the first drag MARKS a rectangle, the second MOVES it.
+// A single drag that both selects and moves cannot express "I want this exact
+// box", and every paint program that has tried it is annoying to use.
+//
+// Only the move pushes an undo state. Marking a rectangle changes no pixels, so
+// an undo step for it would be an undo that appears to do nothing.
+
+function paintSelectBegin(pos) {
+  const s = paintState;
+  const sel = s.sel;
+  // Inside an existing marquee: this drag moves it.
+  if (sel && sel.w > 0 && pos.x >= sel.x && pos.x <= sel.x + sel.w
+                       && pos.y >= sel.y && pos.y <= sel.y + sel.h) {
+    sel.phase = 'moving';
+    sel.grabX = pos.x - sel.x;
+    sel.grabY = pos.y - sel.y;
+    // The dashed marquee was drawn onto these exact pixels, so wipe it back to
+    // the clean copy first - otherwise the lift below carries the border along
+    // as part of the moved image.
+    paintRestore(sel.base);
+    // Lift the pixels, then white out where they came from, and remember the
+    // result as the base every preview frame draws onto.
+    sel.data = s.ctx.getImageData(sel.x, sel.y, sel.w, sel.h);
+    s.ctx.fillStyle = '#ffffff';
+    s.ctx.fillRect(sel.x, sel.y, sel.w, sel.h);
+    sel.base = paintSnapshot();
+    return;
+  }
+  // Starting fresh outside any existing marquee: wipe whatever was left
+  // resting on the canvas from a previous mark first. Snapshotting before
+  // that restore would bake the old marquee into the new "clean" base, and
+  // every later restore would reproduce it.
+  if (sel && sel.base) paintRestore(sel.base);
+  s.sel = { phase: 'marking', x0: pos.x, y0: pos.y, x: pos.x, y: pos.y, w: 0, h: 0,
+            data: null, base: paintSnapshot() };
+}
+
+function paintSelectDrag(pos) {
+  const s = paintState;
+  const sel = s.sel;
+  if (!sel) return;
+  if (sel.phase === 'marking') {
+    sel.x = Math.min(sel.x0, pos.x);
+    sel.y = Math.min(sel.y0, pos.y);
+    sel.w = Math.abs(pos.x - sel.x0);
+    sel.h = Math.abs(pos.y - sel.y0);
+    paintDrawMarquee();
+    return;
+  }
+  // Moving: restore the vacated canvas, then draw the lifted pixels at the
+  // pointer. Compositing onto the live canvas instead would smear a trail.
+  paintRestore(sel.base);
+  sel.x = Math.round(pos.x - sel.grabX);
+  sel.y = Math.round(pos.y - sel.grabY);
+  s.ctx.putImageData(sel.data, sel.x, sel.y);
+}
+
+function paintSelectEnd() {
+  const s = paintState;
+  const sel = s.sel;
+  if (!sel) return;
+  if (sel.phase === 'marking') {
+    // A marquee is not a pixel change, so no undo state and no dirty flag. A
+    // near-zero drag is discarded outright - restore first, so whatever sliver
+    // of dashed marquee it drew does not stay baked onto the canvas.
+    if (sel.w < 2 || sel.h < 2) { paintRestore(sel.base); s.sel = null; }
+    return;
+  }
+  sel.phase = 'idle';
+  sel.data = null;
+  sel.base = null;
+  s.dirty = true;
+  paintCommitUndo();
+}
+
+// The marquee is drawn onto the canvas over a restored copy, so it never gets
+// baked in - the next restore wipes it. A separate overlay element would be
+// cleaner but would have to track the display scale, and this cannot drift.
+function paintDrawMarquee() {
+  const s = paintState;
+  const sel = s.sel;
+  paintRestore(sel.base);
+  s.ctx.save();
+  s.ctx.strokeStyle = '#000000';
+  s.ctx.lineWidth = 1;
+  s.ctx.setLineDash([4, 4]);
+  s.ctx.strokeRect(Math.round(sel.x) + 0.5, Math.round(sel.y) + 0.5, Math.round(sel.w), Math.round(sel.h));
+  s.ctx.restore();
+}
 function triggerGlitch(options) {
   const desktop = document.getElementById('desktop');
   const windowsLayer = document.getElementById('windows-layer');
@@ -18710,6 +21104,7 @@ function openRunDialog() {
     'browser': openBrowser, 'browser.exe': openBrowser,
     'minesweeper': openMinesweeper, 'minesweeper.exe': openMinesweeper,
     'winmine': openMinesweeper, 'winmine.exe': openMinesweeper,
+    'paint': openPaint, 'paint.exe': openPaint,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
     'sysmon.exe': openSysmon,
     'void.tmp': openVoid, 'daemon.core': openDaemon,
