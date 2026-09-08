@@ -449,7 +449,7 @@ function renderAppearanceWindow() {
   renderWallpaperSection('wp-grid-system', systemWallpapers, 'System wallpaper files will appear here.');
   renderWallpaperSection('wp-grid-uploaded', otherWallpapers, 'Upload an image anywhere in File Explorer, or add more files under SYS\\WALLPAPERS.');
   const note = document.getElementById('wp-upload-note');
-  note.textContent = 'Right-click any image to set it as your wallpaper.';
+  note.textContent = 'Left-click any image to set it as your wallpaper.';
 }
 
 function refreshAppearanceWindow() {
