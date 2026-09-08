@@ -58,6 +58,7 @@ const PAL = {
   c: [0x00, 0xc0, 0xd0],
   e: [0x00, 0xa8, 0x00],
   m: [0x90, 0x50, 0x20],  // brush handle wood
+  t: [0xff, 0xc8, 0xa0],  // skin, for the Undo Guy
 };
 
 // Each entry is 16 rows of 16 characters. Read them as pictures - that is the
@@ -274,6 +275,29 @@ const ICONS = {
     '................',
   ],
 
+  // Not a tool: the Undo Guy, who is the undo BUTTON. He rides in this sheet
+  // rather than in a PNG of his own because he is drawn the same way, at the
+  // same size, and belongs to the same program - one asset, one generator.
+  // apps/paint.js reaches him by name through the same order table.
+  undo: [
+    '................',
+    '.....kkkkkk.....',
+    '....kttttttk....',
+    '...kttttttttk...',
+    '...kttttttttk...',
+    '...ktkttttktk...',
+    '...kttttttttk...',
+    '...ktkkkkkktk...',
+    '...kkkkkkkkkk...',
+    '....kttttttk....',
+    '.....kkkkkk.....',
+    '......ktk.......',
+    '..kkkkkkkkkkkk..',
+    '..krrrrrrrrrrk..',
+    '..krrrrrrrrrrk..',
+    '..kkkkkkkkkkkk..',
+  ],
+
   // Marching ants. Dashed so it cannot be confused with the Rectangle tool,
   // which is the solid one two rows above it in the same toolbox.
   select: [
@@ -297,9 +321,11 @@ const ICONS = {
 };
 
 // Cell order. apps/paint.js repeats this list; if the two ever disagree the
-// toolbox shows the wrong art, which is why both are written out by name.
+// toolbox shows the wrong art, which is why both are written out by name. The
+// eleven tools come first, in PAINT_TOOLS order, and anything that is not a
+// tool goes on the end so adding one cannot shift a tool's cell.
 const ORDER = ['pencil', 'line', 'rect', 'oval', 'fill', 'eyedropper',
-               'text', 'sticker', 'wacky', 'eraser', 'select'];
+               'text', 'sticker', 'wacky', 'eraser', 'select', 'undo'];
 
 // ── validation ───────────────────────────────────────────────────
 // Cheap, but it catches the one mistake this format invites: a row that is 15

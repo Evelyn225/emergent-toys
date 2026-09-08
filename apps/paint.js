@@ -31,6 +31,14 @@ function paintSound(name) {
   if (typeof SOUND_FILES === 'object' && SOUND_FILES && SOUND_FILES[name]) playSound(name);
 }
 
+// ── status bar ───────────────────────────────────────────────────
+// Safe to call before the window exists or after it has closed; a status line
+// is never important enough to be worth a null check at each call site.
+function paintStatus(text) {
+  const ws = document.getElementById('ws-' + PAINT_WIN_ID);
+  if (ws) ws.textContent = text;
+}
+
 // ── registry-backed preferences ──────────────────────────────────
 function paintRegValue(name, fallback) {
   const key = registryData['HKEY_CURRENT_USER'] && registryData['HKEY_CURRENT_USER'][PAINT_REG_PATH];
@@ -391,8 +399,13 @@ function paintDoEyedropper(pos) {
   const x = Math.floor(pos.x), y = Math.floor(pos.y);
   if (x < 0 || y < 0 || x >= s.canvas.width || y >= s.canvas.height) return;
   const d = s.ctx.getImageData(x, y, 1, 1).data;
-  paintSetColor(paintRgbaToHex(d[0], d[1], d[2]));
+  const hex = paintRgbaToHex(d[0], d[1], d[2]);
+  paintSetColor(hex);
   paintSound('paint-eyedropper');
+  // Say so. Picking white off blank paper changes the colour chip from white to
+  // white and switches tool - a real, correct pick that looks identical to a
+  // dead button.
+  paintStatus('Picked ' + hex + ' - back to the Pencil.');
   // Back to the pencil. Staying on the eyedropper means a second click before
   // you can use the colour you just picked, which is a step nobody wants.
   paintSelectTool('pencil');
@@ -423,6 +436,7 @@ function openPaint() {
         <canvas id="paint-canvas"></canvas>
       </div>
       <div class="paint-bottom">
+        <div class="paint-current" id="paint-current" title="Current colour"></div>
         <div class="paint-palette" id="paint-palette"></div>
         <div class="paint-options" id="paint-options"></div>
         <button class="paint-undo-guy" id="paint-undo-guy" type="button"
@@ -472,8 +486,12 @@ function openPaint() {
 
   paintBuildMenu(document.getElementById('mb-' + PAINT_WIN_ID));
 
-  document.getElementById('paint-undo-guy').textContent = '↶';
-  document.getElementById('paint-undo-guy').addEventListener('click', () => paintUndo());
+  // The Undo Guy, not an arrow glyph. He has his own cell on the tool sheet -
+  // see PAINT_TOOL_ICON_ORDER, where he sits after the eleven tools precisely so
+  // that a non-tool cell cannot shift a tool's.
+  const undoGuy = document.getElementById('paint-undo-guy');
+  undoGuy.appendChild(paintToolIcon('undo'));
+  undoGuy.addEventListener('click', () => paintUndo());
 
   // On the window rather than the document, so PAINT cannot eat Ctrl+Z from
   // another app or from a dialog.
@@ -542,8 +560,25 @@ function openPaint() {
 const PAINT_TOOL_ICON_ORDER = [
   'pencil', 'line', 'rect', 'oval', 'fill', 'eyedropper',
   'text', 'sticker', 'wacky', 'eraser', 'select',
+  // Not a tool. The Undo Guy is the undo button, and he is drawn on the same
+  // sheet. Non-tools go on the END so that adding one cannot shift a tool.
+  'undo',
 ];
 const PAINT_TOOL_ICON_PX = 16;
+
+// One cell of the sheet, as an element. Its own element rather than a
+// background on the button, so centring is the flexbox's job: the tool buttons
+// are 26px on desktop and 34px on touch, and a background-position offset would
+// have to be recomputed per breakpoint and would be wrong the moment a third
+// one appeared.
+function paintToolIcon(name) {
+  const ic = document.createElement('span');
+  ic.className = 'paint-tool-icon';
+  const cell = PAINT_TOOL_ICON_ORDER.indexOf(name);
+  // An unknown name gets a blank cell rather than somebody else's icon.
+  ic.style.backgroundPosition = cell < 0 ? '9999px 0' : (-PAINT_TOOL_ICON_PX * cell) + 'px 0';
+  return ic;
+}
 
 function paintRenderTools() {
   const host = document.getElementById('paint-tools');
@@ -556,17 +591,7 @@ function paintRenderTools() {
     b.dataset.tool = tool.id;
     b.title = tool.label;
     b.setAttribute('aria-label', tool.label);
-    // The icon is its own element rather than a background on the button, so
-    // centring is the flexbox's job. The button is 26px on desktop and 34px on
-    // touch; a background-position offset would have to be recomputed per
-    // breakpoint, and would be wrong the moment a third one appeared.
-    const ic = document.createElement('span');
-    ic.className = 'paint-tool-icon';
-    const cell = PAINT_TOOL_ICON_ORDER.indexOf(tool.id);
-    // An unknown tool gets a blank cell instead of somebody else's icon.
-    ic.style.backgroundPosition = cell < 0 ? '9999px 0'
-      : (-PAINT_TOOL_ICON_PX * cell) + 'px 0';
-    b.appendChild(ic);
+    b.appendChild(paintToolIcon(tool.id));
     b.addEventListener('click', () => paintSelectTool(tool.id));
     host.appendChild(b);
   });
@@ -601,6 +626,15 @@ function paintSyncPalette() {
   document.querySelectorAll('.paint-swatch').forEach(b => {
     b.classList.toggle('sel', b.dataset.hex === paintState.color);
   });
+  // The palette can only HIGHLIGHT a colour it contains, and a colour lifted
+  // off the picture with the eyedropper is almost never one of the 28. Without
+  // this chip, picking a colour changed nothing visible anywhere on screen,
+  // which is most of why the tool read as doing nothing at all.
+  const chip = document.getElementById('paint-current');
+  if (chip) {
+    chip.style.background = paintState.color;
+    chip.title = 'Current colour: ' + paintState.color;
+  }
 }
 
 // The options bar draws each variant by RUNNING IT. A hand-drawn icon per
@@ -1039,8 +1073,7 @@ async function paintWriteAndSync(fname, dir) {
   paintState.dir = saved.dirName;
   paintState.dirty = false;
   setWinTitle(PAINT_WIN_ID, saved.fileName + ' - Paint');
-  const ws = document.getElementById('ws-' + PAINT_WIN_ID);
-  if (ws) ws.textContent = 'Saved to C:\\sleepOS\\' + (saved.dirName ? saved.dirName + '\\' : '') + saved.fileName;
+  paintStatus('Saved to C:\\sleepOS\\' + (saved.dirName ? saved.dirName + '\\' : '') + saved.fileName);
   return true;
 }
 
