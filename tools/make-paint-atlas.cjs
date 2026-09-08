@@ -174,24 +174,92 @@ async function main() {
         const w = x1 - x0, h = y1 - y0;
         if (w <= 0 || h <= 0) { report.push('cell ' + col + ',' + row + ' collapsed'); continue; }
 
-        // Downscale to the output cell. The downscale is doing real work: an
-        // area average is itself a ringing suppressor.
+        // FIT THE ART, DO NOT JUST SQUASH THE CELL.
+        //
+        // The naive version drew the whole inter-rule region straight into
+        // 32x32, which has two visible faults. The source cells are 39.4 x
+        // 42.25 - not square - so forcing them into a square stretched every
+        // sticker horizontally by ~7%. And wherever rule detection landed a
+        // pixel or two inside the drawing, the art ran off the cell edge and
+        // read as clipped: 88 of 112 cells had ink sitting on their own border.
+        //
+        // So: key the paper white out FIRST, measure where the ink actually is,
+        // then scale that bounding box - preserving its aspect ratio - to fit a
+        // 30x30 box centred in the 32x32 cell. Every sticker then has a 1px
+        // margin it cannot spill past, sits centred, and keeps its proportions,
+        // regardless of how precisely the rules were detected.
+        const srcW = Math.round(w), srcH = Math.round(h);
+        const cut = document.createElement('canvas');
+        cut.width = srcW; cut.height = srcH;
+        const cg = cut.getContext('2d', { willReadFrequently: true });
+        cg.imageSmoothingEnabled = false;
+        cg.drawImage(src, x0, y0, w, h, 0, 0, srcW, srcH);
+
+        const cutId = cg.getImageData(0, 0, srcW, srcH);
+        const cutPx = cutId.data;
+        const rowInk = new Int32Array(srcH), colInk = new Int32Array(srcW);
+        for (let y = 0; y < srcH; y++) {
+          for (let x = 0; x < srcW; x++) {
+            const i = (y * srcW + x) * 4;
+            if (cutPx[i] >= WHITE_KEY && cutPx[i + 1] >= WHITE_KEY && cutPx[i + 2] >= WHITE_KEY) {
+              cutPx[i + 3] = 0;
+            } else {
+              rowInk[y]++; colInk[x]++;
+            }
+          }
+        }
+        cg.putImageData(cutId, 0, 0);
+
+        // Measure the box from row/column ink COUNTS, not from a raw min/max
+        // over every non-white pixel. The source is a lossy JPEG and several
+        // cells carry a single stray dark pixel up in the blank paper above the
+        // drawing - one speck fifteen rows clear of the art is enough to drag a
+        // raw bbox up with it, which then scales the real sticker down and
+        // parks it low in its cell. Requiring a couple of ink pixels before a
+        // row or column counts ignores specks while keeping genuine detail: a
+        // 1px-tall horizontal line of a drawing still scores its full length.
+        // Deliberately NOT a median/erode filter, which would delete exactly
+        // those thin lines.
+        const minInk = extent => Math.max(2, Math.round(extent / 16));
+        const rowMin = minInk(srcW), colMin = minInk(srcH);
+        let bx0 = 0, by0 = 0, bx1 = srcW - 1, by1 = srcH - 1;
+        while (by0 < srcH && rowInk[by0] < rowMin) by0++;
+        while (by1 > by0 && rowInk[by1] < rowMin) by1--;
+        while (bx0 < srcW && colInk[bx0] < colMin) bx0++;
+        while (bx1 > bx0 && colInk[bx1] < colMin) bx1--;
+        // A cell with no ink worth the name would give an inverted box; fall
+        // back to the whole crop rather than dividing by a negative.
+        if (bx1 <= bx0 || by1 <= by0) { bx0 = 0; by0 = 0; bx1 = srcW - 1; by1 = srcH - 1; }
+
+        const inkW = bx1 - bx0 + 1, inkH = by1 - by0 + 1;
+        const fit = CELL - 2;
+        const scale = Math.min(fit / inkW, fit / inkH);
+        const dw = Math.max(1, Math.round(inkW * scale));
+        const dh = Math.max(1, Math.round(inkH * scale));
+        const dx = Math.round((CELL - dw) / 2);
+        const dy = Math.round((CELL - dh) / 2);
+
         const tmp = document.createElement('canvas');
         tmp.width = CELL; tmp.height = CELL;
         const tg = tmp.getContext('2d', { willReadFrequently: true });
+        // The downscale is doing real work beyond fitting: an area average is
+        // itself a ringing suppressor on a lossy JPEG source.
         tg.imageSmoothingEnabled = true;
         tg.imageSmoothingQuality = 'high';
-        tg.drawImage(src, x0, y0, w, h, 0, 0, CELL, CELL);
+        tg.drawImage(cut, bx0, by0, inkW, inkH, dx, dy, dw, dh);
 
         const id = tg.getImageData(0, 0, CELL, CELL);
         const px = id.data;
 
-        // Key the paper white out before quantising, or white becomes one of
-        // the sixteen colours and every sticker wastes a slot on background.
+        // Re-key after the resample: interpolation against the transparent
+        // margin reintroduces near-white fringe pixels at the art's edge.
         const opaque = [];
         for (let i = 0; i < px.length; i += 4) {
-          if (px[i] >= WHITE_KEY && px[i + 1] >= WHITE_KEY && px[i + 2] >= WHITE_KEY) px[i + 3] = 0;
-          else opaque.push([px[i], px[i + 1], px[i + 2]]);
+          if (px[i + 3] < 24 || (px[i] >= WHITE_KEY && px[i + 1] >= WHITE_KEY && px[i + 2] >= WHITE_KEY)) {
+            px[i + 3] = 0;
+          } else {
+            opaque.push([px[i], px[i + 1], px[i + 2]]);
+          }
         }
 
         const palette = medianCut(opaque.slice(), Math.log2(MAX_COLORS));
@@ -260,6 +328,13 @@ async function main() {
   checkRules(pngBase64.vRules, 'vertical', pngBase64.srcWidth, 15);
   checkRules(pngBase64.hRules, 'horizontal', pngBase64.srcHeight, ROWS);
 
+  // ATLAS_DEBUG=1 prints the detected grid. Worth keeping: when a sticker comes
+  // out sliced, the first question is always whether the rules or the crop is
+  // at fault, and these numbers answer it in one run.
+  if (process.env.ATLAS_DEBUG) {
+    console.error('vRules ' + pngBase64.vRules.join(','));
+    console.error('hRules ' + pngBase64.hRules.join(','));
+  }
   pngBase64.report.forEach(line => console.warn('  warn: ' + line));
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
