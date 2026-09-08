@@ -473,7 +473,13 @@ function applyWallpaper(path, options = {}) {
   const resolved = resolveWallpaperEntry(path);
   if (resolved) {
     currentWallpaper = resolved.path;
-    bg.style.cssText = `background-color:#c0c0c0;background-image:url("${resolved.blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;`;
+    // image-rendering: pixelated is load-bearing, not cosmetic. A PAINT.exe
+    // painting is a 480x360 pixel-art image, and background-size: cover scales
+    // it up several times to fill the desktop - bilinearly, by default, which
+    // turns every hard edge to mush. Nearest-neighbour keeps it looking like
+    // the thing that was painted. Photographs uploaded as wallpaper are already
+    // downscaled to fit, where the difference is negligible.
+    bg.style.cssText = `background-color:#c0c0c0;background-image:url("${resolved.blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;image-rendering:pixelated;`;
     try { localStorage.setItem(WP_KEY, resolved.path); } catch (e) {}
     if (updateRegistry) setWallpaperRegistryValue(resolved.path);
     syncWallpaperSwatches();

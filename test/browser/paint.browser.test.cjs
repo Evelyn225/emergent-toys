@@ -654,65 +654,6 @@ test('the text tool draws typed text at the click point', async () => {
   });
 });
 
-test('the alphabet stamp draws one big letter per click', async () => {
-  await withPaint(async page => {
-    const { stampCount, smallCount, countI, countW } = await page.evaluate(() => {
-      paintSelectTool('text'); paintSelectVariant('stamp'); paintSetColor('#000000');
-      const region = () => {
-        const d = paintState.ctx.getImageData(200, 130, 90, 90).data;
-        let n = 0;
-        for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++;
-        return n;
-      };
-
-      // Size proof: drive the real path end to end - paintBeginStroke's text
-      // route into paintDoText's stamp branch, which is what actually reads
-      // paintState.variant and paintState.stampLetter. No osPrompt modal opens
-      // for the stamp branch, so unlike the size variants this is safe to
-      // drive as a real click rather than calling paintDrawText directly.
-      paintState.stampLetter = 'A';
-      paintBeginStroke({ x: 240, y: 180 });
-      const stampCount = region();
-
-      // Undo the stamp, then draw the same letter at the smallest text size in
-      // the same spot - proving the stamp is actually BIG, not merely
-      // non-blank. paintDrawText is called directly here, bypassing
-      // paintBeginStroke, for the same reason the size-variant test does: the
-      // t8 branch of paintDoText opens an osPrompt modal this test has no
-      // business driving.
-      paintUndo();
-      paintDrawText({ x: 240, y: 180 }, 'A', paintTextSize('t8'));
-      const smallCount = region();
-      paintUndo();
-
-      // Letter-identity proof: 'A' is also paintDoText's hardcoded fallback
-      // (`s.stampLetter || 'A'`), so a stamp branch that ignored
-      // paintState.stampLetter entirely would still draw 'A' and pass every
-      // assertion above unnoticed. Stamp two letters with very different ink
-      // at 64px - I and W - through the same real click path, and require the
-      // results to actually differ, which only happens if stampLetter is read.
-      paintState.stampLetter = 'I';
-      paintBeginStroke({ x: 240, y: 180 });
-      const countI = region();
-      paintUndo();
-
-      paintState.stampLetter = 'W';
-      paintBeginStroke({ x: 240, y: 180 });
-      const countW = region();
-      paintUndo();
-
-      return { stampCount, smallCount, countI, countW };
-    });
-    assert.ok(stampCount > 100, 'the alphabet stamp drew nothing at stamp size');
-    assert.ok(smallCount > 0, 'the small comparison letter did not draw either - the harness is broken, not just the stamp');
-    assert.ok(stampCount > smallCount * 3,
-      `the alphabet stamp (${stampCount}px) is not meaningfully bigger than a small text letter (${smallCount}px)`);
-    assert.ok(countI > 0 && countW > 0, 'neither stamped letter drew anything');
-    assert.ok(Math.abs(countW - countI) > 200,
-      `stamping 'I' (${countI}px) and 'W' (${countW}px) produced results too close to prove stampLetter is actually read`);
-  });
-});
-
 test('the firecracker punches holes and one undo puts the whole picture back', async () => {
   await withPaint(async page => {
     await page.evaluate(() => {

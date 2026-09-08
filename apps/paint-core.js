@@ -128,7 +128,6 @@ const PAINT_VARIANTS = {
     { id: 't8',  label: 'Small' },
     { id: 't12', label: 'Medium' },
     { id: 't20', label: 'Large' },
-    { id: 'stamp', label: 'Alphabet Stamp' },
   ],
   sticker: [
     { id: 'small',  label: 'Small' },
@@ -429,7 +428,11 @@ function paintStickerRect(idx) {
 // A click stamps once; a drag lays a trail. The spacing is the stamp size, so a
 // dragged trail reads as a row of stamps rather than a smear - which is what
 // separates a sticker tool from a very wide brush.
-[['small', 20], ['medium', 32], ['large', 52]].forEach(([id, size]) => {
+// The three sizes are INTEGER multiples of the atlas cell (32px): 1x, 2x, and
+// a half-size 16px. A non-integer scale like the old 52px doubles some source
+// pixels and not others, which is what made the large stamp look chewed up
+// rather than chunky. Nearest-neighbour only looks deliberate on whole numbers.
+[['small', 16], ['medium', 32], ['large', 64]].forEach(([id, size]) => {
   paintRegisterGenerator('sticker', id, (seg, st) => {
     const pts = paintWalk(seg, size);
     // paintWalk always appends the segment's exact endpoint so a drag never
@@ -524,7 +527,12 @@ paintRegisterGenerator('rect', 'outline', (seg, st) => {
 
 paintRegisterGenerator('rect', 'round', (seg, st) => {
   const b = paintBox(seg);
-  const r = Math.min(8, b.w / 2, b.h / 2);
+  // A QUARTER of the smaller side, not a half. At a half the corner circles
+  // meet in the middle, both spanning bars collapse to zero width, and the
+  // shape renders as a plain circle - which is exactly what the 22px preview
+  // button was showing. A quarter always leaves a visible straight edge, so a
+  // rounded rectangle reads as a rectangle at every size.
+  const r = Math.min(8, b.w / 4, b.h / 4);
   return [
     { op: 'rect', x: b.x + r, y: b.y, w: Math.max(0, b.w - r * 2), h: b.h, color: st.color },
     { op: 'rect', x: b.x, y: b.y + r, w: b.w, h: Math.max(0, b.h - r * 2), color: st.color },
@@ -657,7 +665,7 @@ function paintFillPreviewOps(patternId, st) {
 // text size, which is exactly the thing the variant chooses.
 paintVariantsFor('text').forEach(v => {
   paintRegisterGenerator('text', v.id, (seg, st) => {
-    const h = v.id === 'stamp' ? 16 : Math.max(3, Number((/^t(\d+)$/.exec(v.id) || [])[1] || 8) * 0.7);
+    const h = Math.max(3, Number((/^t(\d+)$/.exec(v.id) || [])[1] || 8) * 0.7);
     return [{ op: 'rect', x: seg.x0, y: seg.y1, w: 3, h, color: st.color }];
   });
 });

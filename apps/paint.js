@@ -227,6 +227,11 @@ function paintSetColor(hex) {
   paintState.color = hex;
   paintSetRegValue('Color', hex);
   paintSyncPalette();
+  // Every option button draws itself in the current colour, so a colour change
+  // that only repainted the palette left a row of buttons still showing the old
+  // one. Rebuilding the bar is what makes "the button shows what the tool does"
+  // true of the colour as well as the shape.
+  paintRenderOptionsBar();
 }
 
 // Sized off the variant id where the id encodes it - 'p5' is a 5px pencil, 'e10'
@@ -378,8 +383,13 @@ function paintDrawSegment(x0, y0, x1, y1) {
 
 // ── launcher ─────────────────────────────────────────────────────
 function openPaint() {
+  // Sized so the sticker row and the Undo Guy are BOTH visible without
+  // scrolling, which 620 was not: the bottom bar has to fit a 189px palette,
+  // an options bar that reaches ~620px on the sticker tool (14 thumbnails at
+  // 36px plus three size buttons and two page arrows), and a 38px undo button.
+  // That is ~860px of content, plus a 60px tool column.
   if (!mkWin({ id: PAINT_WIN_ID, title: 'untitled.png - Paint', icon: 'icon:paint',
-               w: 620, h: 540, menubar: true, statusbar: true })) return;
+               w: 900, h: 580, menubar: true, statusbar: true })) return;
 
   const body = document.getElementById('wb-' + PAINT_WIN_ID);
   body.className = 'win-body paint-body';
@@ -442,17 +452,9 @@ function openPaint() {
   document.getElementById('paint-undo-guy').textContent = '↶';
   document.getElementById('paint-undo-guy').addEventListener('click', () => paintUndo());
 
+  // On the window rather than the document, so PAINT cannot eat Ctrl+Z from
+  // another app or from a dialog.
   document.getElementById('win-' + PAINT_WIN_ID).addEventListener('keydown', e => {
-    // While the alphabet stamp is selected, a letter key loads the stamp. This
-    // is why the handler is on the window and not on the document - it must not
-    // eat keystrokes meant for a dialog or another app.
-    if (paintState && paintState.tool === 'text' && paintState.variant === 'stamp'
-        && !e.ctrlKey && !e.metaKey && /^[a-z0-9]$/i.test(e.key)) {
-      paintState.stampLetter = e.key.toUpperCase();
-      const ws = document.getElementById('ws-' + PAINT_WIN_ID);
-      if (ws) ws.textContent = 'Alphabet stamp: ' + paintState.stampLetter;
-      return;
-    }
     if (!e.ctrlKey && !e.metaKey) return;
     const k = e.key.toLowerCase();
     if (k === 'z') { e.preventDefault(); paintUndo(); }
@@ -675,7 +677,7 @@ function paintPreviewSeed(toolId, variantId) {
   return h >>> 0;
 }
 
-// Sticker preview sizes, in a 22px button. NOT the real stamp sizes (20/32/52)
+// Sticker preview sizes, in a 22px button. NOT the real stamp sizes (16/32/64)
 // - two of those overflow the button. These keep the same ordering so the three
 // buttons still read as small / medium / large at a glance.
 const PAINT_STICKER_PREVIEW_SIZES = { small: 11, medium: 16, large: 21 };
@@ -1013,8 +1015,7 @@ function openPaintFile(name, dir) {
 
 function paintTextSize(variantId) {
   const m = /^t(\d+)$/.exec(String(variantId || ''));
-  if (m) return Number(m[1]);
-  return variantId === 'stamp' ? 64 : 12;
+  return m ? Number(m[1]) : 12;
 }
 
 // Draws a string centred on a point. w95font is the OS's own face, so text
@@ -1037,14 +1038,6 @@ function paintDrawText(pos, text, size) {
 function paintDoText(pos) {
   const s = paintState;
   const size = paintTextSize(s.variant);
-  if (s.variant === 'stamp') {
-    // The alphabet stamp is a rubber stamp, not a text box: one letter, big,
-    // per click, and the letter is whatever was typed last.
-    const ch = s.stampLetter || 'A';
-    paintDrawText(pos, ch, size);
-    paintSound('paint-stamp');
-    return;
-  }
   osPrompt('Type some text:', '', 'Text', value => {
     if (!value) return;
     paintDrawText(pos, value, size);

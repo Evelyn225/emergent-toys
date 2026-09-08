@@ -2712,8 +2712,6 @@ const PROJECTS = [
   { name: 'sand playground',    emoji: '⏳', file: 'evenet.fun/Sands.html' },
   { name: 'bug hotline',        emoji: '🐛', file: 'evenet.fun/critters.html' },
   { name: 'fireworks',          emoji: '🎆', file: 'evenet.fun/fireworks.html' },
-  { name: 'pixel splatter',     emoji: '🔮', file: 'evenet.fun/pixel-splatter.html' },
-  { name: 'fluid',              emoji: '💧', file: 'evenet.fun/fluid.html' },
   { name: 'web wizard casino',  emoji: '🎰', file: 'evenet.fun/webwizardcasino.html' },
   { name: 'automata garden',    emoji: '🌱', file: 'evenet.fun/automata-garden.html' },
   { name: 'erosion toy',        emoji: '🏔️',  file: 'evenet.fun/erosion.html' },
@@ -3981,7 +3979,13 @@ function applyWallpaper(path, options = {}) {
   const resolved = resolveWallpaperEntry(path);
   if (resolved) {
     currentWallpaper = resolved.path;
-    bg.style.cssText = `background-color:#c0c0c0;background-image:url("${resolved.blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;`;
+    // image-rendering: pixelated is load-bearing, not cosmetic. A PAINT.exe
+    // painting is a 480x360 pixel-art image, and background-size: cover scales
+    // it up several times to fill the desktop - bilinearly, by default, which
+    // turns every hard edge to mush. Nearest-neighbour keeps it looking like
+    // the thing that was painted. Photographs uploaded as wallpaper are already
+    // downscaled to fit, where the difference is negligible.
+    bg.style.cssText = `background-color:#c0c0c0;background-image:url("${resolved.blob.url}");background-position:center;background-size:cover;background-repeat:no-repeat;image-rendering:pixelated;`;
     try { localStorage.setItem(WP_KEY, resolved.path); } catch (e) {}
     if (updateRegistry) setWallpaperRegistryValue(resolved.path);
     syncWallpaperSwatches();
@@ -14900,7 +14904,7 @@ function openTerminal(startDir, initialCommand) {
       'You can also type executables directly:',
       '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
       '  welcome.readme, void.tmp, daemon.core, ?????.exe',
-      '  or any project name (try: fireworks, fluid, ...)',
+      '  or any project name (try: fireworks, vornoi, ...)',
       '  Programs are found in the current directory first, then along PATH.',
     ];
   }
@@ -17982,7 +17986,6 @@ const PAINT_VARIANTS = {
     { id: 't8',  label: 'Small' },
     { id: 't12', label: 'Medium' },
     { id: 't20', label: 'Large' },
-    { id: 'stamp', label: 'Alphabet Stamp' },
   ],
   sticker: [
     { id: 'small',  label: 'Small' },
@@ -18283,7 +18286,11 @@ function paintStickerRect(idx) {
 // A click stamps once; a drag lays a trail. The spacing is the stamp size, so a
 // dragged trail reads as a row of stamps rather than a smear - which is what
 // separates a sticker tool from a very wide brush.
-[['small', 20], ['medium', 32], ['large', 52]].forEach(([id, size]) => {
+// The three sizes are INTEGER multiples of the atlas cell (32px): 1x, 2x, and
+// a half-size 16px. A non-integer scale like the old 52px doubles some source
+// pixels and not others, which is what made the large stamp look chewed up
+// rather than chunky. Nearest-neighbour only looks deliberate on whole numbers.
+[['small', 16], ['medium', 32], ['large', 64]].forEach(([id, size]) => {
   paintRegisterGenerator('sticker', id, (seg, st) => {
     const pts = paintWalk(seg, size);
     // paintWalk always appends the segment's exact endpoint so a drag never
@@ -18378,7 +18385,12 @@ paintRegisterGenerator('rect', 'outline', (seg, st) => {
 
 paintRegisterGenerator('rect', 'round', (seg, st) => {
   const b = paintBox(seg);
-  const r = Math.min(8, b.w / 2, b.h / 2);
+  // A QUARTER of the smaller side, not a half. At a half the corner circles
+  // meet in the middle, both spanning bars collapse to zero width, and the
+  // shape renders as a plain circle - which is exactly what the 22px preview
+  // button was showing. A quarter always leaves a visible straight edge, so a
+  // rounded rectangle reads as a rectangle at every size.
+  const r = Math.min(8, b.w / 4, b.h / 4);
   return [
     { op: 'rect', x: b.x + r, y: b.y, w: Math.max(0, b.w - r * 2), h: b.h, color: st.color },
     { op: 'rect', x: b.x, y: b.y + r, w: b.w, h: Math.max(0, b.h - r * 2), color: st.color },
@@ -18511,7 +18523,7 @@ function paintFillPreviewOps(patternId, st) {
 // text size, which is exactly the thing the variant chooses.
 paintVariantsFor('text').forEach(v => {
   paintRegisterGenerator('text', v.id, (seg, st) => {
-    const h = v.id === 'stamp' ? 16 : Math.max(3, Number((/^t(\d+)$/.exec(v.id) || [])[1] || 8) * 0.7);
+    const h = Math.max(3, Number((/^t(\d+)$/.exec(v.id) || [])[1] || 8) * 0.7);
     return [{ op: 'rect', x: seg.x0, y: seg.y1, w: 3, h, color: st.color }];
   });
 });
@@ -19164,6 +19176,11 @@ function paintSetColor(hex) {
   paintState.color = hex;
   paintSetRegValue('Color', hex);
   paintSyncPalette();
+  // Every option button draws itself in the current colour, so a colour change
+  // that only repainted the palette left a row of buttons still showing the old
+  // one. Rebuilding the bar is what makes "the button shows what the tool does"
+  // true of the colour as well as the shape.
+  paintRenderOptionsBar();
 }
 
 // Sized off the variant id where the id encodes it - 'p5' is a 5px pencil, 'e10'
@@ -19315,8 +19332,13 @@ function paintDrawSegment(x0, y0, x1, y1) {
 
 // ── launcher ─────────────────────────────────────────────────────
 function openPaint() {
+  // Sized so the sticker row and the Undo Guy are BOTH visible without
+  // scrolling, which 620 was not: the bottom bar has to fit a 189px palette,
+  // an options bar that reaches ~620px on the sticker tool (14 thumbnails at
+  // 36px plus three size buttons and two page arrows), and a 38px undo button.
+  // That is ~860px of content, plus a 60px tool column.
   if (!mkWin({ id: PAINT_WIN_ID, title: 'untitled.png - Paint', icon: 'icon:paint',
-               w: 620, h: 540, menubar: true, statusbar: true })) return;
+               w: 900, h: 580, menubar: true, statusbar: true })) return;
 
   const body = document.getElementById('wb-' + PAINT_WIN_ID);
   body.className = 'win-body paint-body';
@@ -19379,17 +19401,9 @@ function openPaint() {
   document.getElementById('paint-undo-guy').textContent = '↶';
   document.getElementById('paint-undo-guy').addEventListener('click', () => paintUndo());
 
+  // On the window rather than the document, so PAINT cannot eat Ctrl+Z from
+  // another app or from a dialog.
   document.getElementById('win-' + PAINT_WIN_ID).addEventListener('keydown', e => {
-    // While the alphabet stamp is selected, a letter key loads the stamp. This
-    // is why the handler is on the window and not on the document - it must not
-    // eat keystrokes meant for a dialog or another app.
-    if (paintState && paintState.tool === 'text' && paintState.variant === 'stamp'
-        && !e.ctrlKey && !e.metaKey && /^[a-z0-9]$/i.test(e.key)) {
-      paintState.stampLetter = e.key.toUpperCase();
-      const ws = document.getElementById('ws-' + PAINT_WIN_ID);
-      if (ws) ws.textContent = 'Alphabet stamp: ' + paintState.stampLetter;
-      return;
-    }
     if (!e.ctrlKey && !e.metaKey) return;
     const k = e.key.toLowerCase();
     if (k === 'z') { e.preventDefault(); paintUndo(); }
@@ -19612,7 +19626,7 @@ function paintPreviewSeed(toolId, variantId) {
   return h >>> 0;
 }
 
-// Sticker preview sizes, in a 22px button. NOT the real stamp sizes (20/32/52)
+// Sticker preview sizes, in a 22px button. NOT the real stamp sizes (16/32/64)
 // - two of those overflow the button. These keep the same ordering so the three
 // buttons still read as small / medium / large at a glance.
 const PAINT_STICKER_PREVIEW_SIZES = { small: 11, medium: 16, large: 21 };
@@ -19950,8 +19964,7 @@ function openPaintFile(name, dir) {
 
 function paintTextSize(variantId) {
   const m = /^t(\d+)$/.exec(String(variantId || ''));
-  if (m) return Number(m[1]);
-  return variantId === 'stamp' ? 64 : 12;
+  return m ? Number(m[1]) : 12;
 }
 
 // Draws a string centred on a point. w95font is the OS's own face, so text
@@ -19974,14 +19987,6 @@ function paintDrawText(pos, text, size) {
 function paintDoText(pos) {
   const s = paintState;
   const size = paintTextSize(s.variant);
-  if (s.variant === 'stamp') {
-    // The alphabet stamp is a rubber stamp, not a text box: one letter, big,
-    // per click, and the letter is whatever was typed last.
-    const ch = s.stampLetter || 'A';
-    paintDrawText(pos, ch, size);
-    paintSound('paint-stamp');
-    return;
-  }
   osPrompt('Type some text:', '', 'Text', value => {
     if (!value) return;
     paintDrawText(pos, value, size);
