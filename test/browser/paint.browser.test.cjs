@@ -863,11 +863,14 @@ test('the toolbox and options bar stay reachable on a phone', async () => {
       const bar = document.getElementById('paint-options');
       return {
         smallest: Math.min(...tools.map(b => b.getBoundingClientRect().width)),
-        barScrolls: bar.scrollWidth > bar.clientWidth
-                 || getComputedStyle(bar).overflowX === 'auto',
+        // Real overflow, not just the static declaration: .paint-options has
+        // carried overflow-x:auto unconditionally since Task 5, desktop
+        // included, so checking for that property alone would pass even if a
+        // regression removed the actual scrolling behaviour.
+        barScrolls: bar.scrollWidth > bar.clientWidth,
       };
     });
     assert.ok(m.smallest >= 30, 'tool buttons are under 30px on touch: ' + m.smallest);
-    assert.ok(m.barScrolls, 'the options bar neither scrolls nor fits, so variants are unreachable');
+    assert.ok(m.barScrolls, 'the options bar does not actually overflow, so variants are unreachable');
   }, { width: 390, height: 780 });
 });

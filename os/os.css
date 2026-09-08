@@ -1682,6 +1682,12 @@ body.idle-sleeping { cursor:none; }
   .paint-tools { grid-template-columns: repeat(2, 34px); }
   .paint-tool { width: 34px; height: 34px; font-size: 16px; }
   .paint-opt { width: 34px; height: 34px; }
+  /* background-size here is the atlas's own intrinsic size (448x256), so it
+     is a no-op - it does NOT rescale the sheet. What actually keeps a
+     neighbouring sticker from bleeding in at this larger button is
+     box-sizing: border-box (global reset) plus the 2px border: the visible
+     background window is 34 - 4 = 30px, still under the 32px cell, the same
+     margin that already protects the 32px desktop button (32 - 4 = 28px). */
   .paint-sticker { width: 34px; height: 34px; background-size: 448px 256px; }
   .paint-undo-guy { width: 38px; }
   .paint-palette { grid-template-rows: repeat(2, 14px); grid-auto-columns: 14px; }
