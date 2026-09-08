@@ -1550,6 +1550,19 @@ body.idle-sleeping { cursor:none; }
 }
 .paint-tool.sel { border-color: #808080 #fff #fff #808080; background: #a8a8a8; }
 .paint-tool:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
+/* One 16px window onto the 11-cell sheet; the sheet is authored at 16px and
+   emitted at 2x, so background-size halves it back and pixelated keeps that
+   exact at 1x and sharp at 2x. Only background-position varies, per tool. */
+.paint-tool-icon {
+  width: 16px; height: 16px; display: block; flex: 0 0 auto;
+  background-image: url('sprites/paint-tools.png');
+  background-size: 176px 16px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+/* The pressed button pushes its whole face down and right by a pixel, which is
+   how every other bevelled control in the OS reads as pressed. */
+.paint-tool.sel .paint-tool-icon { transform: translate(1px, 1px); }
 .paint-stage {
   flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; align-items: center; justify-content: center;
@@ -1680,7 +1693,11 @@ body.idle-sleeping { cursor:none; }
      fractional scale here - below 480 CSS px there is no integer scale that
      fits, and scrolling a painting is worse than a soft downscale. */
   .paint-tools { grid-template-columns: repeat(2, 34px); }
-  .paint-tool { width: 34px; height: 34px; font-size: 16px; }
+  /* The icon stays 16px. The button's content box is 30px here, so the only
+     other whole multiple of the 16px art is 32, which does not fit; a 1.5x
+     upscale would give a sprite with uneven pixel widths. A bigger tap target
+     around the same icon is the right trade. */
+  .paint-tool { width: 34px; height: 34px; }
   .paint-opt { width: 34px; height: 34px; }
   /* background-size here is the atlas's own intrinsic size (448x256), so it
      is a no-op - it does NOT rescale the sheet. What actually keeps a

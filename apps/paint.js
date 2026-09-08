@@ -505,16 +505,22 @@ function openPaint() {
 // Toolbox, palette, options bar
 // ─────────────────────────────────────────────────────────────────
 
-// Tool glyphs are text, not art. Eleven more 32x32 PNGs would be eleven more
-// things to keep consistent with a set drawn by hand, and at 26px in a bevelled
-// button a glyph reads fine. The OS's own icon set stays for the window and the
-// desktop, where it is doing real work.
-const PAINT_TOOL_GLYPHS = {
-  pencil: '✎', line: '╱', rect: '▭', oval: '◯',
-  fill: '◧', eyedropper: '⚗', text: 'A', sticker: '☺',
-  wacky: '❀', eraser: '◻', select: '✥',
-};
-function paintToolGlyph(toolId) { return PAINT_TOOL_GLYPHS[toolId] || '?'; }
+// Tool icons are pixel art, one 16px cell per tool in os/sprites/paint-tools.png,
+// drawn by tools/make-paint-tool-icons.cjs. They used to be Unicode glyphs, which
+// rendered at whatever weight and baseline the user's font stack picked and left
+// the eyedropper as an alembic - a beaker symbol nobody could connect to picking
+// a colour up off the canvas.
+//
+// The order below is the sheet's cell order. It repeats what the generator
+// writes rather than deriving itself from paintTools(), because those two lists
+// agreeing is exactly the thing that has to be checked: inserting a tool in the
+// middle of PAINT_TOOLS would otherwise shift every icon after it by one and
+// leave a plausible-looking toolbox showing the wrong art.
+const PAINT_TOOL_ICON_ORDER = [
+  'pencil', 'line', 'rect', 'oval', 'fill', 'eyedropper',
+  'text', 'sticker', 'wacky', 'eraser', 'select',
+];
+const PAINT_TOOL_ICON_PX = 16;
 
 function paintRenderTools() {
   const host = document.getElementById('paint-tools');
@@ -527,7 +533,17 @@ function paintRenderTools() {
     b.dataset.tool = tool.id;
     b.title = tool.label;
     b.setAttribute('aria-label', tool.label);
-    b.textContent = paintToolGlyph(tool.id);
+    // The icon is its own element rather than a background on the button, so
+    // centring is the flexbox's job. The button is 26px on desktop and 34px on
+    // touch; a background-position offset would have to be recomputed per
+    // breakpoint, and would be wrong the moment a third one appeared.
+    const ic = document.createElement('span');
+    ic.className = 'paint-tool-icon';
+    const cell = PAINT_TOOL_ICON_ORDER.indexOf(tool.id);
+    // An unknown tool gets a blank cell instead of somebody else's icon.
+    ic.style.backgroundPosition = cell < 0 ? '9999px 0'
+      : (-PAINT_TOOL_ICON_PX * cell) + 'px 0';
+    b.appendChild(ic);
     b.addEventListener('click', () => paintSelectTool(tool.id));
     host.appendChild(b);
   });
