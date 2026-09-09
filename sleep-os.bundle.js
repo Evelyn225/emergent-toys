@@ -6358,6 +6358,13 @@ async function vfsBootMount() {
     // rejected promise here must not surface as an unhandled rejection.
     onCommit: () => {
       void fsRefreshFragmentation();
+      // Same reasoning as fsRefreshFragmentation above: anything that reads
+      // the backend's actual block layout (DEFRAG's grid) needs the state
+      // AFTER a commit lands, not fs-changed's the-instant-it-was-queued
+      // signal - a separate event so a pre-commit listener (Explorer, the
+      // desktop, which read the live in-memory tree and are correct on
+      // fs-changed already) doesn't have to change.
+      document.dispatchEvent(new CustomEvent('fs-committed'));
     },
     onError: err => { reportVfsError(err); },
     seed: root => {
@@ -16228,6 +16235,30 @@ function openDefrag() {
   // ── Run ────────────────────────────────────────────────────────
   let running = false;
 
+  // A file written anywhere - an upload, a save, a delete - changes what the
+  // grid should show, and DEFRAG was only ever reading the disk at open time
+  // and after its own run.
+  //
+  // 'fs-committed', not 'fs-changed': the grid and the stats above both read
+  // the backend's actual block bitmap (dfReadDiskCells / fsCountFreeBlocks),
+  // which only updates when a write's debounced commit actually lands, up to
+  // 400ms after 'fs-changed' fires at queue time - see the onCommit comment
+  // in os/fs-persist.js. Refreshing on 'fs-changed' would just repaint the
+  // same pre-commit state a write already had.
+  //
+  // Skipped while running: fsRunCompaction moves blocks through
+  // backend._moveBlock directly, bypassing vfsWriteFile/vfsWriteBlob, so it
+  // never fires either event - the guard is only for the unrelated case of
+  // another window writing a file mid-run, where a stale read would fight
+  // the live move-by-move animation for one frame.
+  async function dfOnFsCommitted() {
+    if (running) return;
+    await dfReadDiskCells();
+    drawGrid();
+    dfRefreshStats();
+  }
+  document.addEventListener('fs-committed', dfOnFsCommitted);
+
   startBtn.addEventListener('click', async () => {
     if (running) return;
     running = true; startBtn.disabled = true; stopBtn.disabled = false;
@@ -16323,6 +16354,7 @@ function openDefrag() {
   const _origCloseDefrag = wins['defrag']?._onclose;
   if (wins['defrag']) wins['defrag']._onclose = () => {
     dfResizeObserver.disconnect();
+    document.removeEventListener('fs-committed', dfOnFsCommitted);
     running = false;
     // Closing the window mid-run must take the drive noise with it; the run
     // stops itself on the same condition but has no way to say so.
