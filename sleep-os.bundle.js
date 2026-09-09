@@ -20160,8 +20160,10 @@ function paintSave(fname, dir) {
 }
 
 function paintSaveAs() {
+  // kinds defaults to ['text'], so without this the dialog's own folder view
+  // never lists the images already there - including the one you just saved.
   openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir),
-                 { startDir: paintState.dir });
+                 { kinds: ['blob'], startDir: paintState.dir });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -20233,7 +20235,7 @@ function paintSetWallpaper() {
   if (paintState.file && !paintState.dirty) { apply(); return; }
   openSaveDialog(paintState.file || 'wallpaper.png', (fname, dir) => {
     paintWriteAndSync(fname, dir).then(ok => { if (ok) apply(); }).catch(err => reportVfsError(err));
-  });
+  }, { kinds: ['blob'] });
 }
 
 // The entry point FILE_HANDLERS and Explorer's Edit item both use: open the
