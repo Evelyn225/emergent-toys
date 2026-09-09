@@ -472,6 +472,7 @@ body {
 }
 .dlg-text { font-size: 11px; line-height: 1.6; flex: 1; }
 .dlg-btns { padding: 8px; display: flex; justify-content: center; gap: 8px; border-top: 1px solid #d0d0d0; }
+.shutdown-sel { width: 180px; font-size: 11px; margin-top: 2px; }
 /* A dialog window is a fixed height but its message is not, so the button row
    used to sit directly under a short body and strand itself mid-window with a
    band of dead grey beneath it - and its separator line with it. A message box
@@ -1702,6 +1703,7 @@ body.idle-sleeping { cursor:none; }
   .dlg-body { padding: 16px; }
   .dlg-text { font-size: 16px; line-height: 1.7; }
   .dlg-btn { min-width: 100px; height: 40px; font-size: 16px; }
+  .shutdown-sel { width: 100%; font-size: 16px; height: 36px; margin-top: 6px; }
 
   #cad-actions { grid-template-columns: 1fr; }
   #cad-hero { flex-direction: column; }

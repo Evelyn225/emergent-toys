@@ -106,15 +106,23 @@ Rebooting sleepOS shell...
 // ─────────────────────────────────────────────────────────────────
 function doShutdown() {
   const id = 'shutdown';
-  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'icon:standby', w:300, h:165,
-               x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
+  // 300x165 fits the desktop layout (11px text, a 23px button row) but not
+  // mobile's: .win-titlebar alone grows to 62px there and .dlg-text/.dlg-btn
+  // both scale up, so the fixed desktop box clipped the select and both
+  // buttons entirely outside the window - nothing to shut down with but the
+  // keyboard. 320x270 is sized for that bumped-up mobile content instead.
+  const mobile = isMobileLayout();
+  const w = mobile ? 320 : 300;
+  const h = mobile ? 285 : 165;
+  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'icon:standby', w, h,
+               x:Math.floor(window.innerWidth/2)-Math.floor(w/2), y:Math.floor(window.innerHeight/2)-Math.floor(h/2),
                menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-shutdown').innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">${iconMarkup('icon:standby')}</div>
       <div class="dlg-text">
         What do you want the computer to do?<br><br>
-        <select id="shutdown-sel" style="width:180px;font-size:11px;margin-top:2px;">
+        <select id="shutdown-sel" class="shutdown-sel">
           <option value="off">Shut down</option>
           <option value="restart">Restart</option>
           <option value="sleep">Sleep</option>
