@@ -472,6 +472,7 @@ body {
 }
 .dlg-text { font-size: 11px; line-height: 1.6; flex: 1; }
 .dlg-btns { padding: 8px; display: flex; justify-content: center; gap: 8px; border-top: 1px solid #d0d0d0; }
+.shutdown-sel { width: 180px; font-size: 11px; margin-top: 2px; }
 /* A dialog window is a fixed height but its message is not, so the button row
    used to sit directly under a short body and strand itself mid-window with a
    band of dead grey beneath it - and its separator line with it. A message box
@@ -479,7 +480,16 @@ body {
    Scoped by :has so it only touches windows that actually are dialogs; the Run
    dialog builds its own right-aligned row and is deliberately not caught. */
 .win-body:has(> .dlg-btns) { display: flex; flex-direction: column; }
-.win-body:has(> .dlg-btns) > .dlg-body { flex: 1; }
+/* min-height:0 overrides the flex default of min-height:auto, which sizes a
+   flex item to its content and refuses to shrink below it. Without this, a
+   message too tall for the window's fixed height did not scroll or get
+   clipped in place - it pushed .dlg-btns down and out of the window, taking
+   the OK/Cancel row past the visible box and out of pointer reach entirely
+   (the mobile dialog chrome this sizing was tuned against: a titlebar that
+   grows from ~18px to 62px and .dlg-text that jumps from 11px to 16px, both
+   only on narrow/touch viewports). overflow-y:auto scrolls the overflow
+   instead, so the button row always stays on screen and clickable. */
+.win-body:has(> .dlg-btns) > .dlg-body { flex: 1; min-height: 0; overflow-y: auto; }
 .dlg-btn {
   min-width: 75px; height: 23px; background: #c0c0c0;
   border: 2px solid; border-color: #fff #808080 #808080 #fff;
@@ -1702,6 +1712,7 @@ body.idle-sleeping { cursor:none; }
   .dlg-body { padding: 16px; }
   .dlg-text { font-size: 16px; line-height: 1.7; }
   .dlg-btn { min-width: 100px; height: 40px; font-size: 16px; }
+  .shutdown-sel { width: 100%; font-size: 16px; height: 36px; margin-top: 6px; }
 
   #cad-actions { grid-template-columns: 1fr; }
   #cad-hero { flex-direction: column; }

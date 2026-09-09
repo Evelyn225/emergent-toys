@@ -238,8 +238,14 @@ function isErrorAlert(title, icon) {
 function osAlert(msg, title, icon) {
   title = title || 'sleepOS'; icon = icon || 'icon:tip';
   const id = 'os-alert-' + Date.now();
-  const p = _osDlgPos(320, 175);
-  if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  // Mobile's titlebar and .dlg-btn/.dlg-text all grow well past what the
+  // desktop-sized 320x175 box has room for - the .dlg-body scroll fallback
+  // (os.css) covers whatever this still doesn't, but sizing for the common
+  // case means most messages never need it.
+  const mobile = isMobileLayout();
+  const w = mobile ? 340 : 320, h = mobile ? 260 : 175;
+  const p = _osDlgPos(w, h);
+  if (!mkWin({ id, title, icon, w, h, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   if (isErrorAlert(title, icon)) playSound('error');
   const b = document.getElementById('wb-' + id);
   b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
@@ -251,8 +257,11 @@ function osAlert(msg, title, icon) {
 function osConfirm(msg, title, cb, icon) {
   title = title || 'Confirm'; icon = icon || '❓';
   const id = 'os-confirm-' + Date.now();
-  const p = _osDlgPos(320, 175);
-  if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  // Same mobile sizing as osAlert - see its comment.
+  const mobile = isMobileLayout();
+  const w = mobile ? 340 : 320, h = mobile ? 260 : 175;
+  const p = _osDlgPos(w, h);
+  if (!mkWin({ id, title, icon, w, h, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   const b = document.getElementById('wb-' + id);
   b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
   const row = document.getElementById(id + '-btns');

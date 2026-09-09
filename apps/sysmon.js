@@ -183,9 +183,13 @@ function openSysmon() {
         return;
       }
       const dlgId = 'sm-killerr-' + Date.now();
-      if (mkWin({ id:dlgId, title:'Access Denied', icon:'icon:warning', w:290, h:110, popup:true, menubar:false, statusbar:false })) {
+      // Mobile's .win-titlebar alone grows to 62px, which the desktop-sized
+      // 110px box has no room left for after it - same fix as the shutdown
+      // dialog. overflow-y:auto below is the fallback for a long PID.
+      const dlgH = isMobileLayout() ? 160 : 110;
+      if (mkWin({ id:dlgId, title:'Access Denied', icon:'icon:warning', w:290, h:dlgH, popup:true, menubar:false, statusbar:false })) {
         const db = document.getElementById('wb-' + dlgId);
-        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
+        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;overflow-y:auto;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
       }
       return;
     }

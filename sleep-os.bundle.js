@@ -9515,9 +9515,13 @@ function showUploadConfirm(names, dirLabel) {
     ? `"${names[0]}" uploaded to ${dirLabel}`
     : `${names.length} files uploaded to ${dirLabel}`;
   const id = 'upload-confirm-' + Date.now();
-  if (!mkWin({ id, title: 'Upload Complete', icon: 'icon:success', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
+  // Mobile's titlebar and .dlg-btn both grow well past what the desktop-sized
+  // 140px box has room for - same fix as the shutdown dialog. overflow-y:auto
+  // below is the fallback for a long filename or dirLabel.
+  const h = isMobileLayout() ? 210 : 140;
+  if (!mkWin({ id, title: 'Upload Complete', icon: 'icon:success', w: 300, h, popup: true, menubar: false, statusbar: false })) return;
   const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:14px;font-family: var(--sleep-font);font-size:12px;';
+  body.style.cssText = 'padding:14px;font-family: var(--sleep-font);font-size:12px;overflow-y:auto;';
   body.innerHTML = `<div style="margin-bottom:12px;">${msg}</div>
     <div style="margin-bottom:8px;color:#555;">Use OPEN &lt;filename&gt; in terminal, or type the filename to view.</div>
     <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
@@ -10164,8 +10168,14 @@ function isErrorAlert(title, icon) {
 function osAlert(msg, title, icon) {
   title = title || 'sleepOS'; icon = icon || 'icon:tip';
   const id = 'os-alert-' + Date.now();
-  const p = _osDlgPos(320, 175);
-  if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  // Mobile's titlebar and .dlg-btn/.dlg-text all grow well past what the
+  // desktop-sized 320x175 box has room for - the .dlg-body scroll fallback
+  // (os.css) covers whatever this still doesn't, but sizing for the common
+  // case means most messages never need it.
+  const mobile = isMobileLayout();
+  const w = mobile ? 340 : 320, h = mobile ? 260 : 175;
+  const p = _osDlgPos(w, h);
+  if (!mkWin({ id, title, icon, w, h, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   if (isErrorAlert(title, icon)) playSound('error');
   const b = document.getElementById('wb-' + id);
   b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
@@ -10177,8 +10187,11 @@ function osAlert(msg, title, icon) {
 function osConfirm(msg, title, cb, icon) {
   title = title || 'Confirm'; icon = icon || '❓';
   const id = 'os-confirm-' + Date.now();
-  const p = _osDlgPos(320, 175);
-  if (!mkWin({ id, title, icon, w:320, h:175, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  // Same mobile sizing as osAlert - see its comment.
+  const mobile = isMobileLayout();
+  const w = mobile ? 340 : 320, h = mobile ? 260 : 175;
+  const p = _osDlgPos(w, h);
+  if (!mkWin({ id, title, icon, w, h, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   const b = document.getElementById('wb-' + id);
   b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
   const row = document.getElementById(id + '-btns');
@@ -15919,9 +15932,13 @@ function openSysmon() {
         return;
       }
       const dlgId = 'sm-killerr-' + Date.now();
-      if (mkWin({ id:dlgId, title:'Access Denied', icon:'icon:warning', w:290, h:110, popup:true, menubar:false, statusbar:false })) {
+      // Mobile's .win-titlebar alone grows to 62px, which the desktop-sized
+      // 110px box has no room left for after it - same fix as the shutdown
+      // dialog. overflow-y:auto below is the fallback for a long PID.
+      const dlgH = isMobileLayout() ? 160 : 110;
+      if (mkWin({ id:dlgId, title:'Access Denied', icon:'icon:warning', w:290, h:dlgH, popup:true, menubar:false, statusbar:false })) {
         const db = document.getElementById('wb-' + dlgId);
-        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
+        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;overflow-y:auto;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
       }
       return;
     }
@@ -16663,7 +16680,13 @@ function openVoid() {
 
 function openUnknown() {
   const wid = 'unk-warn-' + Date.now();
-  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'icon:unknown', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
+  // Mobile sizing, same reasoning as osAlert (os/ui-chrome.js): the
+  // desktop-sized 320x190 box left no room for the taller titlebar and
+  // .dlg-btn once every message here runs two lines with a <br><br> between
+  // them.
+  const mobile = isMobileLayout();
+  const w = mobile ? 340 : 320, h = mobile ? 260 : 190;
+  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'icon:unknown', w, h, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
   const ready = daemonStory.stage >= 7 && !daemonStory.endingReached && Number(getContainmentValue('MIRROR_LOCK')) === 1;
   const signed = daemonStory.quarantineSigned;
   const inertMsg = daemonStory.stage < 4
@@ -20160,8 +20183,10 @@ function paintSave(fname, dir) {
 }
 
 function paintSaveAs() {
+  // kinds defaults to ['text'], so without this the dialog's own folder view
+  // never lists the images already there - including the one you just saved.
   openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir),
-                 { startDir: paintState.dir });
+                 { kinds: ['blob'], startDir: paintState.dir });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -20233,7 +20258,7 @@ function paintSetWallpaper() {
   if (paintState.file && !paintState.dirty) { apply(); return; }
   openSaveDialog(paintState.file || 'wallpaper.png', (fname, dir) => {
     paintWriteAndSync(fname, dir).then(ok => { if (ok) apply(); }).catch(err => reportVfsError(err));
-  });
+  }, { kinds: ['blob'] });
 }
 
 // The entry point FILE_HANDLERS and Explorer's Edit item both use: open the
@@ -20572,15 +20597,23 @@ Rebooting sleepOS shell...
 // ─────────────────────────────────────────────────────────────────
 function doShutdown() {
   const id = 'shutdown';
-  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'icon:standby', w:300, h:165,
-               x:Math.floor(window.innerWidth/2)-150, y:Math.floor(window.innerHeight/2)-80,
+  // 300x165 fits the desktop layout (11px text, a 23px button row) but not
+  // mobile's: .win-titlebar alone grows to 62px there and .dlg-text/.dlg-btn
+  // both scale up, so the fixed desktop box clipped the select and both
+  // buttons entirely outside the window - nothing to shut down with but the
+  // keyboard. 320x270 is sized for that bumped-up mobile content instead.
+  const mobile = isMobileLayout();
+  const w = mobile ? 320 : 300;
+  const h = mobile ? 285 : 165;
+  if (!mkWin({ id, title:'Shut Down sleepOS', icon:'icon:standby', w, h,
+               x:Math.floor(window.innerWidth/2)-Math.floor(w/2), y:Math.floor(window.innerHeight/2)-Math.floor(h/2),
                menubar:false, statusbar:false, popup:true })) return;
   document.getElementById('wb-shutdown').innerHTML = `
     <div class="dlg-body">
       <div class="dlg-icon">${iconMarkup('icon:standby')}</div>
       <div class="dlg-text">
         What do you want the computer to do?<br><br>
-        <select id="shutdown-sel" style="width:180px;font-size:11px;margin-top:2px;">
+        <select id="shutdown-sel" class="shutdown-sel">
           <option value="off">Shut down</option>
           <option value="restart">Restart</option>
           <option value="sleep">Sleep</option>
@@ -21353,10 +21386,15 @@ function openCalculator() {
 // ─────────────────────────────────────────────────────────────────
 function openRunDialog() {
   const id = 'run-dialog';
-  const p = _osDlgPos(360, 160);
-  if (!mkWin({ id, title:'Run', icon:'icon:exe', w:360, h:160, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  // Mobile's titlebar grows to 62px and .dlg-btn to a 40px touch target, which
+  // the desktop-sized 160px box has no room for - see the shutdown dialog fix
+  // for the same bug. overflow-y:auto below is the fallback if a translation
+  // or a longer program name still doesn't fit.
+  const h = isMobileLayout() ? 210 : 160;
+  const p = _osDlgPos(360, h);
+  if (!mkWin({ id, title:'Run', icon:'icon:exe', w:360, h, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:10px;font-size:11px;';
+  body.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:10px;font-size:11px;overflow-y:auto;';
   body.innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:10px;">
       <div class="dlg-icon">${iconMarkup('icon:exe')}</div>
