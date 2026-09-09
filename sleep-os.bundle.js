@@ -10830,7 +10830,7 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       </div>
       <div class="win-controls">
         <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
-        ${resizable ? `<button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>` : ''}
+        ${resizable ? `<button class="win-btn win-max-btn" title="Maximize" onclick="maxWin('${id}')">□</button>` : ''}
         <button class="win-btn" title="Close"    onclick="closeWin('${id}')">✕</button>
       </div>
     </div>

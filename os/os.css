@@ -1661,6 +1661,13 @@ body.idle-sleeping { cursor:none; }
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 16px; }
   .win-rz { display: none; }
+  /* Every non-popup window already opens filling the desktop here (mkWin),
+     so there is no smaller "previous size" for Maximize to toggle back to -
+     the button was a press that visibly did nothing. Hidden the same way
+     the resize handles above are: a live media query, not an isMobileLayout()
+     check baked into the window at creation, so it still reacts correctly to
+     an orientation change or a live viewport resize across the breakpoint. */
+  .win-max-btn { display: none; }
 
   .desktop-icon { width: 96px; height: 96px; padding: 6px; gap: 5px; }
   /* Icons stay at their native 32px here rather than following the emoji up to
