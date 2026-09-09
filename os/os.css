@@ -1585,7 +1585,22 @@ body.idle-sleeping { cursor:none; }
    how every other bevelled control in the OS reads as pressed. */
 .paint-tool.sel .paint-tool-icon { transform: translate(1px, 1px); }
 .paint-stage {
-  flex: 1 1 auto; min-width: 0; min-height: 0;
+  /* flex-basis 0, not auto: with auto, the wrap decision is made against the
+     canvas's PRE-FIT content width (its raw 480px backing store, before
+     paintFitCanvas has anything to measure), not the space actually left
+     beside .paint-tools. On a narrow window that content width alone is
+     wider than what's left, so .paint-root (flex-wrap:wrap) wrapped the
+     stage onto its own row below the toolbox - which then gave
+     paintFitCanvas the full window width to fit *that* against, confirming
+     the same wrap it was caused by. The extra row height pushed .paint-bottom
+     (palette, current colour, brush options) below win-body's clipped
+     bottom edge - present in the DOM, invisible, unusable. A 0 basis makes
+     the wrap decision (and the shrink) run against real available space, so
+     the stage takes what's left beside the toolbox at any width down to
+     WIN_MIN_W, and paintFitCanvas's fractional-scale fallback (see
+     #paint-canvas below) is what actually handles "canvas too big for this
+     column" instead. */
+  flex: 1 1 0; min-width: 0; min-height: 0;
   display: flex; align-items: center; justify-content: center;
   background: #808080; overflow: hidden;
 }
