@@ -144,6 +144,15 @@ body {
 }
 .desktop-icon.selected .di-name { background: #000080; }
 
+/* Desktop icon size setting (Settings > Display). "medium" is the size above
+   and needs no override; small/large just scale the box, glyph, and label. */
+[data-icon-size="small"] .desktop-icon { width: 60px; height: 60px; gap: 3px; }
+[data-icon-size="small"] .di-img { --os-icon-size: 24px; font-size: 20px; height: 24px; }
+[data-icon-size="small"] .di-name { font-size: 9px; }
+[data-icon-size="large"] .desktop-icon { width: 104px; height: 104px; gap: 5px; }
+[data-icon-size="large"] .di-img { --os-icon-size: 42px; font-size: 34px; height: 42px; }
+[data-icon-size="large"] .di-name { font-size: 12px; }
+
 /* ── Windows layer ───────────────────────────────────────────── */
 #windows-layer { position: absolute; inset: 0; pointer-events: none; }
 
@@ -1147,6 +1156,8 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
 }
 .st-toggle:active { border-color: #808080 #fff #fff #808080; }
 .st-toggle.on { background: #000080; color: #fff; border-color: #808080 #fff #fff #808080; }
+.st-seg { display: flex; gap: 2px; }
+.st-seg .st-toggle { min-width: 0; padding: 0 8px; }
 /* Reuses .vp-vol-blocks; this only pins it to the .st-toggle metrics so the
    Sound rows line up with the toggle rows above and below them. */
 .st-vol {
@@ -1647,6 +1658,13 @@ body.idle-sleeping { cursor:none; }
      fractional pixels. The label carries the size increase instead. */
   .di-img { font-size: 36px; }
   .di-name { font-size: 12px; }
+
+  [data-icon-size="small"] .desktop-icon { width: 76px; height: 76px; padding: 5px; gap: 4px; }
+  [data-icon-size="small"] .di-img { font-size: 28px; }
+  [data-icon-size="small"] .di-name { font-size: 11px; }
+  [data-icon-size="large"] .desktop-icon { width: 124px; height: 124px; padding: 7px; gap: 6px; }
+  [data-icon-size="large"] .di-img { font-size: 46px; }
+  [data-icon-size="large"] .di-name { font-size: 14px; }
 
   #taskbar { height: 56px; padding: 4px; }
   #desktop { bottom: 56px; }

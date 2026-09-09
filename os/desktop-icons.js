@@ -1,8 +1,28 @@
 const _mobileGrid  = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 700;
-const ICON_CELL_W  = _mobileGrid ? 104 : 86;
-const ICON_CELL_H  = _mobileGrid ? 104 : 86;
-const ICON_BOX_W   = _mobileGrid ? 96  : 80;
-const ICON_BOX_H   = _mobileGrid ? 96  : 80;
+// Mirrors the box widths set per data-icon-size in os.css; the small gap
+// between box and cell here (6px desktop, 8px mobile) is just the margin
+// between icons and matches what the "medium" tier already used.
+const ICON_SIZE_METRICS = {
+  small:  { box: 60,  mobileBox: 76  },
+  medium: { box: 80,  mobileBox: 96  },
+  large:  { box: 104, mobileBox: 124 },
+};
+let ICON_CELL_W, ICON_CELL_H, ICON_BOX_W, ICON_BOX_H;
+function computeIconSizeMetrics() {
+  const tier = ICON_SIZE_METRICS[osSettings.iconSize] || ICON_SIZE_METRICS.medium;
+  const box  = _mobileGrid ? tier.mobileBox : tier.box;
+  const gap  = _mobileGrid ? 8 : 6;
+  ICON_BOX_W = ICON_BOX_H = box;
+  ICON_CELL_W = ICON_CELL_H = box + gap;
+}
+computeIconSizeMetrics();
+// Applies osSettings.iconSize to the CSS box/glyph/label size and to the
+// grid metrics above, then reflows already-placed icons onto the new grid.
+function applyIconSize() {
+  document.documentElement.dataset.iconSize = osSettings.iconSize;
+  computeIconSizeMetrics();
+  if (document.getElementById('icons-layer') && typeof setupIcons === 'function') setupIcons();
+}
 const ICON_PAD_X   = 6;
 const ICON_PAD_Y   = 6;
 const ICON_POS_KEY = 'sleepOS-icon-positions';

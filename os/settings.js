@@ -10,6 +10,7 @@ function applySettings() {
   crtApply(osSettings.crtEffect);
   document.querySelectorAll('.vp-dither').forEach(d => d.style.display = osSettings.videoDither ? '' : 'none');
   updateClock();
+  applyIconSize();
   // Keep registry in sync with settings
   if (typeof registryData !== 'undefined') {
     const cc = registryData['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
@@ -18,6 +19,7 @@ function applySettings() {
       cc.CRT_EFFECT.value    = osSettings.crtEffect    ? 1 : 0;
       cc.VIDEO_DITHER.value  = osSettings.videoDither  ? 1 : 0;
       cc.CLOCK_FORMAT.value  = osSettings.clock12h ? '12h' : '24h';
+      cc.ICON_SIZE.value     = osSettings.iconSize;
     }
     if (cu) {
       cu.SkipBoot.value = osSettings.skipBoot ? 1 : 0;

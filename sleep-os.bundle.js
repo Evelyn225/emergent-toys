@@ -3507,7 +3507,11 @@ function programDisplayDir(dir) {
 // ── Settings bootstrap (must be early so BIOS skip works) ────────
 const SETTINGS_KEY = 'sleepOS-settings';
 const FORCE_BOOT_SESSION_KEY = 'sleepOS-force-boot';
-const osSettings = { crtEffect: true, videoDither: true, clock12h: false, skipBoot: false, sounds: true, soundVolume: 0.6 };
+const osSettings = { crtEffect: true, videoDither: true, clock12h: false, skipBoot: false, sounds: true, soundVolume: 0.6, iconSize: 'medium' };
+const ICON_SIZES = ['small', 'medium', 'large'];
+function normalizeIconSize(value) {
+  return ICON_SIZES.includes(value) ? value : 'medium';
+}
 // The one reader for the persisted blob. bios.js loads settings a second time
 // so skipBoot is available before the boot text starts, and a raw re-parse
 // there would quietly undo the rename below - which is exactly what it did.
@@ -3522,6 +3526,7 @@ function loadSavedSettings() {
     }
     delete saved.crtScanlines;
     Object.assign(osSettings, saved);
+    osSettings.iconSize = normalizeIconSize(osSettings.iconSize);
   } catch(e) {}
 }
 loadSavedSettings();
@@ -3603,6 +3608,7 @@ const registryData = {
       CRT_EFFECT:         { type:'REG_DWORD', value: 1 },
       VIDEO_DITHER:       { type:'REG_DWORD', value: 1 },
       CLOCK_FORMAT:       { type:'REG_SZ',    value: '24h' },
+      ICON_SIZE:          { type:'REG_SZ',    value: 'medium' },
     },
     'SOUL\\Metrics': {
       SOUL_INTEGRITY:     { type:'REG_DWORD', value: 87 },
@@ -3777,6 +3783,7 @@ function applyRegistrySettings() {
   osSettings.crtEffect     = !!cc.CRT_EFFECT.value;
   osSettings.videoDither   = !!cc.VIDEO_DITHER.value;
   osSettings.clock12h      = cc.CLOCK_FORMAT.value === '12h';
+  osSettings.iconSize      = normalizeIconSize(cc.ICON_SIZE.value);
   osSettings.skipBoot      = !!cu.SkipBoot.value;
   osSettings.sounds        = !!cu.SoundEnabled.value;
   osSettings.soundVolume   = normalizeSoundVolumePercent(cu.SoundVolume.value) / 100;
@@ -3955,7 +3962,7 @@ function renderAppearanceWindow() {
   renderWallpaperSection('wp-grid-system', systemWallpapers, 'System wallpaper files will appear here.');
   renderWallpaperSection('wp-grid-uploaded', otherWallpapers, 'Upload an image anywhere in File Explorer, or add more files under SYS\\WALLPAPERS.');
   const note = document.getElementById('wp-upload-note');
-  note.textContent = 'Right-click any image to set it as your wallpaper.';
+  note.textContent = 'Left-click any image to set it as your wallpaper.';
 }
 
 function refreshAppearanceWindow() {
@@ -4035,6 +4042,13 @@ function openSettings() {
   body.innerHTML =     `<div class="st-section">Display</div>
      <div class="st-row"><div class="st-label">CRT effect</div><button class="st-toggle" data-setting="crtEffect"></button></div>
      <div class="st-row"><div class="st-label">Video dithering</div><button class="st-toggle" data-setting="videoDither"></button></div>
+     <div class="st-row"><div class="st-label">Desktop icon size</div>
+       <div class="st-seg" role="group" aria-label="Desktop icon size">
+         <button class="st-toggle" data-icon-size="small">Small</button>
+         <button class="st-toggle" data-icon-size="medium">Medium</button>
+         <button class="st-toggle" data-icon-size="large">Large</button>
+       </div>
+     </div>
      <div class="st-section">Sound</div>
      <div class="st-row"><div class="st-label">System sounds</div><button class="st-toggle" data-setting="sounds"></button></div>
      <div class="st-row"><div class="st-label">Volume</div><div class="st-vol vp-vol-blocks" id="settings-volume" role="slider" tabindex="0" aria-label="System volume" aria-valuemin="0" aria-valuemax="100" title="System volume"></div></div>
@@ -4061,6 +4075,11 @@ function openSettings() {
       btn.textContent = enabled ? 'ON' : 'OFF';
       btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     });
+    body.querySelectorAll('[data-icon-size]').forEach(btn => {
+      const selected = btn.dataset.iconSize === osSettings.iconSize;
+      btn.classList.toggle('on', selected);
+      btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
     renderVolume();
   }
 
@@ -4075,6 +4094,16 @@ function openSettings() {
       // still off, so switching it on would otherwise be silent - the one
       // control whose effect you most want to hear.
       if (key === 'sounds' && osSettings.sounds) playSound('click');
+    });
+  });
+
+  body.querySelectorAll('[data-icon-size]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      osSettings.iconSize = normalizeIconSize(btn.dataset.iconSize);
+      saveSettings();
+      applySettings();
+      refresh();
+      if (osSettings.sounds) playSound('click');
     });
   });
 
@@ -8401,6 +8430,7 @@ function applySettings() {
   crtApply(osSettings.crtEffect);
   document.querySelectorAll('.vp-dither').forEach(d => d.style.display = osSettings.videoDither ? '' : 'none');
   updateClock();
+  applyIconSize();
   // Keep registry in sync with settings
   if (typeof registryData !== 'undefined') {
     const cc = registryData['HKEY_SLEEPBOX_MACHINE']['SYSTEM\\CurrentConfig'];
@@ -8409,6 +8439,7 @@ function applySettings() {
       cc.CRT_EFFECT.value    = osSettings.crtEffect    ? 1 : 0;
       cc.VIDEO_DITHER.value  = osSettings.videoDither  ? 1 : 0;
       cc.CLOCK_FORMAT.value  = osSettings.clock12h ? '12h' : '24h';
+      cc.ICON_SIZE.value     = osSettings.iconSize;
     }
     if (cu) {
       cu.SkipBoot.value = osSettings.skipBoot ? 1 : 0;
@@ -11454,10 +11485,30 @@ function getDesktopFsIcons() {
 // DESKTOP ICON GRID
 // ─────────────────────────────────────────────────────────────────
 const _mobileGrid  = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 700;
-const ICON_CELL_W  = _mobileGrid ? 104 : 86;
-const ICON_CELL_H  = _mobileGrid ? 104 : 86;
-const ICON_BOX_W   = _mobileGrid ? 96  : 80;
-const ICON_BOX_H   = _mobileGrid ? 96  : 80;
+// Mirrors the box widths set per data-icon-size in os.css; the small gap
+// between box and cell here (6px desktop, 8px mobile) is just the margin
+// between icons and matches what the "medium" tier already used.
+const ICON_SIZE_METRICS = {
+  small:  { box: 60,  mobileBox: 76  },
+  medium: { box: 80,  mobileBox: 96  },
+  large:  { box: 104, mobileBox: 124 },
+};
+let ICON_CELL_W, ICON_CELL_H, ICON_BOX_W, ICON_BOX_H;
+function computeIconSizeMetrics() {
+  const tier = ICON_SIZE_METRICS[osSettings.iconSize] || ICON_SIZE_METRICS.medium;
+  const box  = _mobileGrid ? tier.mobileBox : tier.box;
+  const gap  = _mobileGrid ? 8 : 6;
+  ICON_BOX_W = ICON_BOX_H = box;
+  ICON_CELL_W = ICON_CELL_H = box + gap;
+}
+computeIconSizeMetrics();
+// Applies osSettings.iconSize to the CSS box/glyph/label size and to the
+// grid metrics above, then reflows already-placed icons onto the new grid.
+function applyIconSize() {
+  document.documentElement.dataset.iconSize = osSettings.iconSize;
+  computeIconSizeMetrics();
+  if (document.getElementById('icons-layer') && typeof setupIcons === 'function') setupIcons();
+}
 const ICON_PAD_X   = 6;
 const ICON_PAD_Y   = 6;
 const ICON_POS_KEY = 'sleepOS-icon-positions';
