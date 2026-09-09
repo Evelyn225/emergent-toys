@@ -1,9 +1,14 @@
 function openRunDialog() {
   const id = 'run-dialog';
-  const p = _osDlgPos(360, 160);
-  if (!mkWin({ id, title:'Run', icon:'icon:exe', w:360, h:160, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
+  // Mobile's titlebar grows to 62px and .dlg-btn to a 40px touch target, which
+  // the desktop-sized 160px box has no room for - see the shutdown dialog fix
+  // for the same bug. overflow-y:auto below is the fallback if a translation
+  // or a longer program name still doesn't fit.
+  const h = isMobileLayout() ? 210 : 160;
+  const p = _osDlgPos(360, h);
+  if (!mkWin({ id, title:'Run', icon:'icon:exe', w:360, h, x:p.x, y:p.y, menubar:false, statusbar:false, popup:true })) return;
   const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:10px;font-size:11px;';
+  body.style.cssText = 'padding:12px;display:flex;flex-direction:column;gap:10px;font-size:11px;overflow-y:auto;';
   body.innerHTML = `
     <div style="display:flex;align-items:flex-start;gap:10px;">
       <div class="dlg-icon">${iconMarkup('icon:exe')}</div>

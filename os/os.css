@@ -480,7 +480,16 @@ body {
    Scoped by :has so it only touches windows that actually are dialogs; the Run
    dialog builds its own right-aligned row and is deliberately not caught. */
 .win-body:has(> .dlg-btns) { display: flex; flex-direction: column; }
-.win-body:has(> .dlg-btns) > .dlg-body { flex: 1; }
+/* min-height:0 overrides the flex default of min-height:auto, which sizes a
+   flex item to its content and refuses to shrink below it. Without this, a
+   message too tall for the window's fixed height did not scroll or get
+   clipped in place - it pushed .dlg-btns down and out of the window, taking
+   the OK/Cancel row past the visible box and out of pointer reach entirely
+   (the mobile dialog chrome this sizing was tuned against: a titlebar that
+   grows from ~18px to 62px and .dlg-text that jumps from 11px to 16px, both
+   only on narrow/touch viewports). overflow-y:auto scrolls the overflow
+   instead, so the button row always stays on screen and clickable. */
+.win-body:has(> .dlg-btns) > .dlg-body { flex: 1; min-height: 0; overflow-y: auto; }
 .dlg-btn {
   min-width: 75px; height: 23px; background: #c0c0c0;
   border: 2px solid; border-color: #fff #808080 #808080 #fff;

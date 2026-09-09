@@ -294,7 +294,13 @@ function openVoid() {
 
 function openUnknown() {
   const wid = 'unk-warn-' + Date.now();
-  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'icon:unknown', w:320, h:190, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
+  // Mobile sizing, same reasoning as osAlert (os/ui-chrome.js): the
+  // desktop-sized 320x190 box left no room for the taller titlebar and
+  // .dlg-btn once every message here runs two lines with a <br><br> between
+  // them.
+  const mobile = isMobileLayout();
+  const w = mobile ? 340 : 320, h = mobile ? 260 : 190;
+  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'icon:unknown', w, h, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
   const ready = daemonStory.stage >= 7 && !daemonStory.endingReached && Number(getContainmentValue('MIRROR_LOCK')) === 1;
   const signed = daemonStory.quarantineSigned;
   const inertMsg = daemonStory.stage < 4

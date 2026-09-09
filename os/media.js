@@ -131,9 +131,13 @@ function showUploadConfirm(names, dirLabel) {
     ? `"${names[0]}" uploaded to ${dirLabel}`
     : `${names.length} files uploaded to ${dirLabel}`;
   const id = 'upload-confirm-' + Date.now();
-  if (!mkWin({ id, title: 'Upload Complete', icon: 'icon:success', w: 300, h: 140, popup: true, menubar: false, statusbar: false })) return;
+  // Mobile's titlebar and .dlg-btn both grow well past what the desktop-sized
+  // 140px box has room for - same fix as the shutdown dialog. overflow-y:auto
+  // below is the fallback for a long filename or dirLabel.
+  const h = isMobileLayout() ? 210 : 140;
+  if (!mkWin({ id, title: 'Upload Complete', icon: 'icon:success', w: 300, h, popup: true, menubar: false, statusbar: false })) return;
   const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:14px;font-family: var(--sleep-font);font-size:12px;';
+  body.style.cssText = 'padding:14px;font-family: var(--sleep-font);font-size:12px;overflow-y:auto;';
   body.innerHTML = `<div style="margin-bottom:12px;">${msg}</div>
     <div style="margin-bottom:8px;color:#555;">Use OPEN &lt;filename&gt; in terminal, or type the filename to view.</div>
     <div style="text-align:center;"><button class="dlg-btn" onclick="closeWin('${id}')">OK</button></div>`;
