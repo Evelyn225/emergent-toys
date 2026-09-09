@@ -486,9 +486,9 @@ function openPaint() {
 
   paintBuildMenu(document.getElementById('mb-' + PAINT_WIN_ID));
 
-  // The Undo Guy, not an arrow glyph. He has his own cell on the tool sheet -
-  // see PAINT_TOOL_ICON_ORDER, where he sits after the eleven tools precisely so
-  // that a non-tool cell cannot shift a tool's.
+  // A sprite-sheet icon, not a text glyph, so it stays pixel-crisp like every
+  // other tool - see PAINT_TOOL_ICON_ORDER, where it sits after the eleven
+  // tools precisely so that a non-tool cell cannot shift a tool's.
   const undoGuy = document.getElementById('paint-undo-guy');
   undoGuy.appendChild(paintToolIcon('undo'));
   undoGuy.addEventListener('click', () => paintUndo());
@@ -560,8 +560,8 @@ function openPaint() {
 const PAINT_TOOL_ICON_ORDER = [
   'pencil', 'line', 'rect', 'oval', 'fill', 'eyedropper',
   'text', 'sticker', 'wacky', 'eraser', 'select',
-  // Not a tool. The Undo Guy is the undo button, and he is drawn on the same
-  // sheet. Non-tools go on the END so that adding one cannot shift a tool.
+  // Not a tool. The undo button's icon is drawn on the same sheet. Non-tools
+  // go on the END so that adding one cannot shift a tool.
   'undo',
 ];
 const PAINT_TOOL_ICON_PX = 16;
