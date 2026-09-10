@@ -1767,6 +1767,18 @@ body.idle-sleeping { cursor:none; }
   .exp-list-item { padding: 10px 6px; font-size: 14px; }
   .exp-det-item td { padding: 8px 6px; font-size: 13px; }
 
+  /* Bigger touch targets don't fit the desktop's single row at 390px wide,
+     so the toolbar wraps: nav buttons on row one, the address bar + Go/Fav
+     on row two. The vsep (normally a thin divider) becomes the wrap point -
+     a full-width, zero-height spacer forces everything after it down. */
+  .browser-toolbar { flex-wrap: wrap; row-gap: 4px; }
+  .br-btn { min-width: 44px; height: 44px; font-size: 16px; }
+  .br-vsep { flex-basis: 100%; width: auto; height: 0; margin: 0; background: none; }
+  .br-addr-label { display: none; }
+  .br-addr { height: 36px; font-size: 15px; padding: 0 6px; }
+
+  .sm-tool-btn { padding: 10px 14px !important; font-size: 14px !important; }
+
   /* REGEDIT.exe. Side by side, .reg-tree's fixed 200px sidebar left so
      little of a phone's width for .reg-vals that Type truncated and Data -
      the one thing this app exists to show - was pushed off screen with no
