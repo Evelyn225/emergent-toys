@@ -1202,7 +1202,14 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
    box's layout size always matches what ms-root (transform:scale'd to fit
    it) actually paints. */
 .ms-scale-wrap { flex: 0 0 auto; }
-.ms-root { padding: 6px; }
+/* width: max-content, not the default auto, so ms-root sizes to its widest
+   child (ms-grid, itself max-content) instead of shrinking to whatever width
+   msFitWindow gave ms-scale-wrap. Without it, on a downscaled mobile Expert
+   board, ms-header (plain auto width) stretches to that smaller wrap width
+   while ms-grid (already max-content) overflows past it to its own natural
+   width - two different widths under the same transform:scale, so the header
+   comes out visibly narrower than the grid instead of matching it. */
+.ms-root { padding: 6px; width: max-content; }
 .ms-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 5px; margin-bottom: 6px;

@@ -590,6 +590,36 @@ test('an oversized board is shrunk to fit the phone, not left to overflow it', a
   }
 });
 
+// ms-header has no width of its own - it stretches to fill ms-root's content
+// box. Before ms-root got `width: max-content`, that content box was ms-grid
+// (which forces its own max-content width regardless of its parent) that had
+// shrunk ms-root down to whatever narrower width msFitWindow gave
+// ms-scale-wrap. ms-header (plain auto width) took that narrower width
+// literally while ms-grid overflowed past it to its real size, so the two
+// disagreed on width under the same transform:scale and the face/counter bar
+// came out visibly narrower than - and misaligned with - the board under it.
+test('the header bar matches the grid width on a downscaled Expert board', async () => {
+  const { context, page } = await openDesktop(harness.browser, { width: 390, height: 780 });
+  try {
+    await page.evaluate(() => { msSetRegValue('Difficulty', 'expert'); });
+    await openWindow(page, 'openMinesweeper');
+    await page.waitForSelector('#ms-grid .ms-cell');
+    await page.waitForTimeout(300);
+    const g = await page.evaluate(() => {
+      const header = document.querySelector('.ms-header').getBoundingClientRect();
+      const grid = document.querySelector('.ms-grid').getBoundingClientRect();
+      return {
+        headerW: Math.round(header.width), gridW: Math.round(grid.width),
+        headerLeft: Math.round(header.left), gridLeft: Math.round(grid.left),
+      };
+    });
+    assert.strictEqual(g.headerW, g.gridW, 'header width does not match grid width: ' + g.headerW + ' vs ' + g.gridW);
+    assert.strictEqual(g.headerLeft, g.gridLeft, 'header is not left-aligned with the grid: ' + g.headerLeft + ' vs ' + g.gridLeft);
+  } finally {
+    await context.close();
+  }
+});
+
 // Beginner and Intermediate both fit a phone at native size already (max
 // width 16*16+26=282px against a 390px viewport) - they must stay untouched
 // by the downscale path, not shrink just because the mechanism now exists.
