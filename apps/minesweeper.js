@@ -391,20 +391,42 @@ function msSecondaryAction(i) {
 // Sizes the window to the board it is actually showing.
 //
 // The chrome is MEASURED rather than assumed: the titlebar, menubar, borders
-// and body padding are all CSS and have all changed before. Skipped while the
-// window is maximized or snapped, where the player has asked for a size, and on
-// mobile, where mkWin makes every window fill the desktop anyway - the board
-// just centres itself in whatever it gets.
+// and body padding are all CSS and have all changed before - mobile's own
+// titlebar and menubar are taller than desktop's, which is exactly why this
+// runs there too now rather than trusting openMinesweeper's first guess
+// (tuned against desktop chrome) to still fit. Skipped only while the window
+// is maximized or snapped, where the player (or, on mobile, mkWin itself
+// filling the viewport for anything resizable) has asked for a size -
+// Minesweeper itself is resizable:false and so is never both.
 function msFitWindow() {
   const w = wins[MS_WIN_ID];
-  if (!w || isMobileLayout() || wmIsFilled(w)) return;
+  if (!w || wmIsFilled(w)) return;
   const body = document.getElementById('wb-' + MS_WIN_ID);
   const root = body && body.querySelector('.ms-root');
   if (!root) return;
   const chromeW = w.el.offsetWidth - body.clientWidth;
   const chromeH = w.el.offsetHeight - body.clientHeight;
-  w.el.style.width = (root.offsetWidth + chromeW) + 'px';
-  w.el.style.height = (root.offsetHeight + chromeH) + 'px';
+  const newW = root.offsetWidth + chromeW;
+  const newH = root.offsetHeight + chromeH;
+  w.el.style.width = newW + 'px';
+  w.el.style.height = newH + 'px';
+  // mkWin centred the window against openMinesweeper's first-guess size, and
+  // that guess is tuned against desktop chrome - mobile's taller titlebar and
+  // menubar mean the size above is very likely a correction, not a confirmation.
+  // Re-centre against the corrected size with the same formula mkWin used for
+  // it as a popup, or the window drifts off-centre by exactly that correction.
+  //
+  // Read the size back off the element rather than trusting newW/newH: a
+  // beginner board is narrower than .os-window's own 180px CSS min-width, so
+  // the style.width just set above can be silently overridden upward by CSS
+  // the moment it's applied - centring on the pre-clamp number left the
+  // window sitting visibly right of centre on the one board small enough to
+  // hit that floor.
+  if (isMobileLayout()) {
+    const bounds = desktopBounds();
+    w.el.style.left = Math.max(4, Math.floor((bounds.w - w.el.offsetWidth) / 2)) + 'px';
+    w.el.style.top  = Math.max(4, Math.floor((bounds.h - w.el.offsetHeight) / 3)) + 'px';
+  }
   clampWinGeometry(w.el);
   // The geometry store would otherwise keep handing back the PREVIOUS
   // difficulty's window size every time this one is reopened.
