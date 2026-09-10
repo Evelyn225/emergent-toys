@@ -346,9 +346,17 @@ function openExplorer(startPath) {
     // Registry association first; falls through to the built-in defaults when
     // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
     if (openWithAssociation(name, cwd)) return;
+    // A root system binary with no association double-clicks straight into
+    // the real app, the same as its Desktop icon does - the decompiler view
+    // is an Open With destination now, not the default. !cwd (root only)
+    // matters here: programIsSystemBinary is a name test, so a user's own
+    // DOCS\SYSMON.exe must fall through to openNotepad like any other file.
+    if (!cwd && programIsSystemBinary(name)) {
+      openSystemFile(name);
+      return;
+    }
     if (st.kind === 'blob') openMediaFile(name, cwd);
-    // A .exe the user wrote runs; a system binary opens its decompiler view
-    // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+    // A .exe the user wrote runs. See programIsSpawnableExe (os/programs.js)
     // for why this test lives there rather than here. programSpawnOrAlert
     // (also os/programs.js) is what turns a spawn failure - the file
     // vanished between listing and double-click - into an osAlert instead

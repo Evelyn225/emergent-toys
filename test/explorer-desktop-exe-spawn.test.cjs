@@ -6,9 +6,12 @@
 // so they cannot drift from each other. This file proves:
 //   1. the predicate itself is correct for a user .exe vs a system .exe vs
 //      a non-.exe;
-//   2. Explorer's double-click spawns a user .exe and does NOT spawn a
-//      system binary (which still opens through Notepad, whose own routing
-//      to the decompiler is already covered by notepad-exe-routing.test.cjs);
+//   2. Explorer's double-click spawns a user .exe via kernelSpawn, and does
+//      NOT spawn a system binary that way - a system binary with no Open
+//      With association instead launches the real app through
+//      openSystemFile (os/desktop-model.js), same as its Desktop icon would;
+//      the decompiler view is now reachable only through an explicit Open
+//      With association, covered by notepad-exe-routing.test.cjs;
 //   3. the desktop shortcut path behaves identically;
 //   4. neither consumer still carries its own inline copy of the test -
 //      a source grep, the same kind of guard this repo already uses
@@ -124,7 +127,7 @@ function makeDocStub() {
 // this is what makes an entry a "system binary" rather than a user .exe, the
 // same override pattern test/desktop-open-system-file.test.cjs uses.
 function explorerCtx(files, rootMeta, kernelSpawnImpl) {
-  const calls = { spawn: [], notepad: [], alert: [] };
+  const calls = { spawn: [], notepad: [], alert: [], systemFile: [] };
   const doc = makeDocStub();
   const ctx = makeOsContext({
     document: doc,
@@ -160,7 +163,7 @@ function explorerCtx(files, rootMeta, kernelSpawnImpl) {
     openRecycleBin: () => {},
     openTerminal: () => {},
     openDesktopShortcutTarget: () => {},
-    openSystemFile: () => false,
+    openSystemFile: name => { calls.systemFile.push(name); return true; },
     openNotepad: (...args) => { calls.notepad.push(args); },
     osAlert: (msg, title, icon) => { calls.alert.push({ msg, title, icon }); },
     // kernelSpawn must return a real Promise, never a bare value - the
@@ -218,12 +221,12 @@ test('Explorer: double-clicking a user .exe spawns it, not Notepad', () => {
   assert.deepStrictEqual(calls.notepad, []);
 });
 
-test('Explorer: double-clicking a system binary does not spawn - it goes to Notepad', () => {
+test('Explorer: double-clicking a root system binary launches the real app, not Notepad', () => {
   const { calls, body } = explorerCtx({ 'CALC.exe': 'binary bytes here' }, [{ name: 'CALC.exe' }]);
   dblclick(body, 'CALC.exe');
   assert.deepStrictEqual(calls.spawn, []);
-  assert.strictEqual(calls.notepad.length, 1);
-  assert.strictEqual(calls.notepad[0][0], 'CALC.exe');
+  assert.deepStrictEqual(calls.notepad, []);
+  assert.deepStrictEqual(calls.systemFile, ['CALC.exe']);
 });
 
 // Fix round 1: openItem's `void kernelSpawn(...)` (now `void
@@ -255,7 +258,7 @@ test('Explorer: a spawn failure alerts instead of failing silently', async () =>
 // ── Desktop ─────────────────────────────────────────────────────────────
 
 function desktopCtx(kernelSpawnImpl) {
-  const calls = { spawn: [], notepad: [], alert: [] };
+  const calls = { spawn: [], notepad: [], alert: [], calc: [] };
   const ctx = makeOsContext({
     ROOT_SYSTEM_FILE_META: [{ name: 'CALC.exe' }],
     RECYCLE_BIN_NAME: 'Recycle Bin',
@@ -266,6 +269,11 @@ function desktopCtx(kernelSpawnImpl) {
     openExplorer: () => {},
     osAlert: (msg, title, icon) => { calls.alert.push({ msg, title, icon }); },
     openNotepad: (...args) => { calls.notepad.push(args); },
+    // programsInDir('') resolves CALC.exe to PROGRAM_LAUNCHERS' real
+    // openCalculator - openSystemFile (loaded for real below, since it's
+    // what openDesktopShortcutTarget itself calls) reaches this directly,
+    // unlike explorerCtx above which can stub openSystemFile itself out.
+    openCalculator: () => { calls.calc.push('CALC.exe'); },
     kernelSpawn: kernelSpawnImpl || ((p, argv, opts) => { calls.spawn.push({ p, argv: [...argv], opts }); return Promise.resolve(1); }),
   });
   loadOsSources(ctx, ['os/vfs.js', 'os/desktop-model.js', 'os/programs.js']);
@@ -282,13 +290,13 @@ test('Desktop: a shortcut to a user .exe spawns it, not Notepad', () => {
   assert.deepStrictEqual(calls.notepad, []);
 });
 
-test('Desktop: a shortcut to a system binary does not spawn - it goes to Notepad', () => {
+test('Desktop: a shortcut to a root system binary launches the real app, not Notepad', () => {
   const { ctx, calls } = desktopCtx();
   ctx.vfsGetTree().files.set('CALC.exe', 'binary bytes here');
   ctx.openDesktopShortcutTarget({ path: 'C:\\sleepOS\\CALC.exe', name: 'CALC.exe', kind: 'file' });
   assert.deepStrictEqual(calls.spawn, []);
-  assert.strictEqual(calls.notepad.length, 1);
-  assert.strictEqual(calls.notepad[0][0], 'CALC.exe');
+  assert.deepStrictEqual(calls.notepad, []);
+  assert.deepStrictEqual(calls.calc, ['CALC.exe']);
 });
 
 // Same fix-round-1 regression as Explorer's, for the other call site: a

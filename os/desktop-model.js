@@ -410,9 +410,17 @@ function openDesktopShortcutTarget(target) {
     return;
   }
   if (openWithAssociation(st.name, st.dirName)) return;
+  // Same root-system-binary carve-out as Explorer's openItem: a shortcut to
+  // e.g. root SYSMON.exe with no Open With association launches the real
+  // app rather than its decompiler view. !st.dirName (root only) matters
+  // here for the same reason - programIsSystemBinary is a name test, and a
+  // shortcut to a user's own DOCS\SYSMON.exe must not be redirected.
+  if (!st.dirName && programIsSystemBinary(st.name)) {
+    openSystemFile(st.name);
+    return;
+  }
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
-  // A .exe the user wrote runs; a system binary opens its decompiler view
-  // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
+  // A .exe the user wrote runs. See programIsSpawnableExe (os/programs.js)
   // for why this test lives there rather than here. programSpawnOrAlert
   // (also os/programs.js) is what turns a spawn failure - the file vanished
   // between the shortcut being created and being clicked - into an osAlert
