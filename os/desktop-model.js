@@ -37,13 +37,14 @@ const DESKTOP_ICONS = [
   { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
   { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
   { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },
-  { name: 'SYSMON.exe',     emoji: 'icon:sysmon',   action: 'openSysmon' },
   { name: 'BROWSER.exe',    emoji: 'icon:browser',  action: 'openBrowser' },
   { name: 'DEFRAG.exe',     emoji: 'icon:defrag',   action: 'openDefrag' },
   { name: 'CALC.exe',       emoji: 'icon:calc',     action: 'openCalculator' },
   { name: 'MINESWEEPER.exe', emoji: 'icon:minesweeper', action: 'openMinesweeper' },
   { name: 'PAINT.exe',      emoji: 'icon:paint',    action: 'openPaint' },
-  { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
+  // SYSMON.exe and REGEDIT.exe are deliberately not desktop icons - they're
+  // the two "system tools" the Start Menu comment in sleep-os.html already
+  // calls out as living there instead (plus Run... and the Terminal).
   { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
   { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },
   // Not in the static map alone: the bin's icon depends on whether it holds
