@@ -1347,10 +1347,17 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
   padding:2px 6px; text-align:left; position:sticky; top:0;
   border-right:1px solid #808080; cursor:default; user-select:none;
 }
-.reg-val-row { cursor:default; }
+.reg-col-name { width:180px; }
+.reg-col-type { width:100px; }
+/* user-select:none so a touch hold triggers addLongPress's contextmenu
+   synthesis instead of the browser's own text-selection callout fighting it. */
+.reg-val-row { cursor:default; user-select:none; }
 .reg-val-row:hover td { background:rgba(0,0,128,0.1); }
 .reg-val-row.selected td { background:#000080; color:#fff; }
-.reg-val-row td { padding:1px 6px; border-right:1px solid #e0e0e0; }
+/* Data is free text (paths, hex, arbitrary strings) with no length limit -
+   overflow-wrap keeps a long one from ever forcing the table wider than
+   its column, which is what table-layout:fixed below actually depends on. */
+.reg-val-row td { padding:1px 6px; border-right:1px solid #e0e0e0; overflow-wrap:anywhere; }
 
 /* ── Calculator ───────────────────────────────────────────────── */
 .calc-body {
@@ -1759,6 +1766,28 @@ body.idle-sleeping { cursor:none; }
   .exp-item .exp-icon { font-size: 32px; }
   .exp-list-item { padding: 10px 6px; font-size: 14px; }
   .exp-det-item td { padding: 8px 6px; font-size: 13px; }
+
+  /* REGEDIT.exe. Side by side, .reg-tree's fixed 200px sidebar left so
+     little of a phone's width for .reg-vals that Type truncated and Data -
+     the one thing this app exists to show - was pushed off screen with no
+     visible way to reach it. Stacked instead, tree above values, each gets
+     the full width - the same master-detail-by-stacking move a narrow
+     screen always needs over a fixed side-by-side split. */
+  .reg-layout { flex-direction: column; }
+  .reg-tree {
+    width: 100%; min-width: 0; flex: 0 1 38%; min-height: 88px;
+    border-right: none; border-bottom: 2px solid; border-bottom-color: #808080;
+  }
+  .reg-vals { flex: 1 1 auto; min-height: 0; }
+  .reg-tree-item { padding: 7px 6px; font-size: 14px; }
+  .reg-vals-table { table-layout: fixed; }
+  .reg-vals-table thead th, .reg-val-row td { padding: 7px 6px; font-size: 13px; }
+  /* Auto column widths (180px/100px) would eat most of a phone's width
+     before Data gets any; table-layout:fixed only obeys widths given on the
+     FIRST row, so these have to live on the header cells, not a bare
+     .reg-col-* rule. */
+  .reg-vals-table thead th.reg-col-name { width: 34%; }
+  .reg-vals-table thead th.reg-col-type { width: 22%; }
 
   /* PAINT.exe. The canvas keeps its 480x360 backing store and takes a
      fractional scale here - below 480 CSS px there is no integer scale that

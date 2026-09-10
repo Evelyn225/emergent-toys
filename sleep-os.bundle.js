@@ -21060,7 +21060,7 @@ function openRegedit() {
     const data = registryData[hive][keyPath];
     const tbl = document.createElement('table');
     tbl.className = 'reg-vals-table';
-    tbl.innerHTML = '<thead><tr><th style="width:180px;">Name</th><th style="width:100px;">Type</th><th>Data</th></tr></thead>';
+    tbl.innerHTML = '<thead><tr><th class="reg-col-name">Name</th><th class="reg-col-type">Type</th><th>Data</th></tr></thead>';
     const tbody = document.createElement('tbody');
 
     Object.keys(data).forEach(valName => {
@@ -21074,6 +21074,13 @@ function openRegedit() {
       // readable at a glance down the column.
       const valIcon = entry.type === 'REG_SZ' ? 'icon:regedit-string' : 'icon:regedit-binary';
       tr.innerHTML = '<td class="reg-val-name">' + iconMarkup(valIcon) + escHtml(valName) + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
+      // Every window's content sits inside #desktop's own DOM subtree, and
+      // #desktop has its own addLongPress for the background's context menu
+      // (os/desktop-icons.js). A touch hold here bubbles right past this row
+      // to that listener too unless it's stopped here - both fire, and
+      // #desktop's menu wins the race, replacing Modify with the desktop's
+      // own. Desktop icons avoid this the same way: stop it at the row.
+      tr.addEventListener('pointerdown', e => e.stopPropagation());
       tr.addEventListener('dblclick', () => {
         if (locked) {
           showLockedRegValueNotice(valName);
@@ -21089,6 +21096,12 @@ function openRegedit() {
         ]);
         procSetTimeout('regedit', () => tr.classList.remove('selected'), 800);
       });
+      // dblclick has no touch equivalent, so without this a value row had no
+      // way to reach Modify on mobile at all - contextmenu above already
+      // handles a real right-click; addLongPress is what turns a touch hold
+      // into that same event, the same pairing every other right-click menu
+      // in the OS already gets.
+      addLongPress(tr);
       tbody.appendChild(tr);
     });
     tbl.appendChild(tbody);
