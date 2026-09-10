@@ -403,11 +403,44 @@ function msFitWindow() {
   if (!w || wmIsFilled(w)) return;
   const body = document.getElementById('wb-' + MS_WIN_ID);
   const root = body && body.querySelector('.ms-root');
-  if (!root) return;
+  const wrap = body && body.querySelector('.ms-scale-wrap');
+  if (!root || !wrap) return;
+  // Clear any scale a PREVIOUS fit left behind before measuring: switching
+  // difficulty (Expert back to Beginner, say) must measure this board's true
+  // natural size, not shrink again on top of the last one's.
+  wrap.style.width = ''; wrap.style.height = '';
+  root.style.transform = '';
   const chromeW = w.el.offsetWidth - body.clientWidth;
   const chromeH = w.el.offsetHeight - body.clientHeight;
-  const newW = root.offsetWidth + chromeW;
-  const newH = root.offsetHeight + chromeH;
+  const naturalW = root.offsetWidth, naturalH = root.offsetHeight;
+  // Expert (30 cols) is wider than a phone at native 16px cells, which used
+  // to just overflow .ms-body sideways - the right third of the minefield
+  // was there, but only reachable by scrolling a window that gave no hint it
+  // scrolled. Shrink ms-root to fit instead, the same fallback Paint's
+  // canvas uses for the same shape of problem: never upscale (a small board
+  // has no reason to grow past its native pixels just because there's room),
+  // only downscale, and only on mobile - a desktop window is sized to the
+  // board already, never the other way around.
+  let scale = 1;
+  if (isMobileLayout()) {
+    const bounds = desktopBounds();
+    const availW = bounds.w - chromeW - 8, availH = bounds.h - chromeH - 8;
+    scale = Math.min(1, availW / naturalW, availH / naturalH);
+    if (scale <= 0) scale = 1;
+  }
+  const boardW = Math.round(naturalW * scale), boardH = Math.round(naturalH * scale);
+  if (scale < 1) {
+    // ms-scale-wrap gets the SCALED size, so .ms-body's flex centring and
+    // overflow.auto measure the board it actually paints; ms-root gets the
+    // transform, anchored top-left so it exactly fills the box that size
+    // reserves rather than shrinking toward its own centre and leaving a gap.
+    wrap.style.width = boardW + 'px';
+    wrap.style.height = boardH + 'px';
+    root.style.transform = 'scale(' + scale + ')';
+    root.style.transformOrigin = 'top left';
+  }
+  const newW = boardW + chromeW;
+  const newH = boardH + chromeH;
   w.el.style.width = newW + 'px';
   w.el.style.height = newH + 'px';
   // mkWin centred the window against openMinesweeper's first-guess size, and
@@ -599,14 +632,22 @@ function openMinesweeper() {
 
   const body = document.getElementById('wb-' + MS_WIN_ID);
   body.className = 'win-body ms-body';
+  // ms-scale-wrap exists for msFitWindow's mobile downscale (Expert is wider
+  // than a phone). Its layout box is what .ms-body's flex centring and
+  // overflow measure against; ms-root is what actually gets transform:scale,
+  // so the two stay in agreement instead of the flex parent reserving the
+  // board's full native size for a child painted smaller than that. Inert on
+  // desktop - untouched, it just sizes to ms-root's own natural size.
   body.innerHTML = `
-    <div class="ms-root">
-      <div class="ms-header">
-        <div class="ms-leds" id="ms-mines"><i></i><i></i><i></i></div>
-        <button class="ms-face" id="ms-face" type="button" title="New game" aria-label="New game"></button>
-        <div class="ms-leds" id="ms-time"><i></i><i></i><i></i></div>
+    <div class="ms-scale-wrap">
+      <div class="ms-root">
+        <div class="ms-header">
+          <div class="ms-leds" id="ms-mines"><i></i><i></i><i></i></div>
+          <button class="ms-face" id="ms-face" type="button" title="New game" aria-label="New game"></button>
+          <div class="ms-leds" id="ms-time"><i></i><i></i><i></i></div>
+        </div>
+        <div class="ms-grid" id="ms-grid"></div>
       </div>
-      <div class="ms-grid" id="ms-grid"></div>
     </div>`;
 
   msState = {

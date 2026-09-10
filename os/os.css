@@ -1189,12 +1189,20 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
    row 2 (y -40) the 13x23 LED digits. */
 .ms-body {
   background: #c0c0c0;
-  /* Centres the board when the window is bigger than it - maximized, snapped,
-     or filling a phone. The board itself is always its natural size. */
+  /* Centres the board when the window is bigger than it - maximized or
+     snapped. The board is its natural size unless msFitWindow has shrunk
+     ms-scale-wrap to fit a phone (Expert is wider than one), in which case
+     this still centres it - just at that smaller size. */
   display: flex; align-items: center; justify-content: center;
   overflow: auto;
 }
-.ms-root { padding: 6px; flex: 0 0 auto; }
+/* The flex item .ms-body actually sizes and centres against. Left alone it
+   just wraps ms-root at that element's own natural size; msFitWindow gives
+   it explicit dimensions only when downscaling for a narrow phone, so this
+   box's layout size always matches what ms-root (transform:scale'd to fit
+   it) actually paints. */
+.ms-scale-wrap { flex: 0 0 auto; }
+.ms-root { padding: 6px; }
 .ms-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 5px; margin-bottom: 6px;

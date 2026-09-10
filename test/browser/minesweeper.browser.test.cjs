@@ -547,12 +547,15 @@ test('on mobile the window is centred at its natural size, not filling the deskt
   }
 });
 
-// A board too wide for the phone itself (Expert, ~500px) must not blow the
-// window past the viewport - clampWinGeometry (called from both mkWin and
-// msFitWindow) still has to shrink the frame, and .ms-body's own overflow:auto
-// is the fallback for reaching cells past the fold, exactly as it already is
-// for a desktop window dragged narrower than the board.
-test('an oversized board is clamped to the phone width, not left to overflow it', async () => {
+// A board too wide for the phone itself (Expert, 30 cols - ~500px at native
+// 16px cells) used to just overflow .ms-body sideways: the window was
+// clamped to the viewport width, but the grid inside it stayed full size, so
+// roughly a third of the minefield was only reachable by scrolling a window
+// that gave no visible hint it scrolled. msFitWindow now shrinks ms-root
+// (transform:scale, never upscaling) to fit instead - the same fallback
+// Paint's canvas uses for an oversized painting - so the whole board is
+// visible and playable without any scrolling.
+test('an oversized board is shrunk to fit the phone, not left to overflow it', async () => {
   const { context, page } = await openDesktop(harness.browser, { width: 390, height: 780 });
   try {
     await page.evaluate(() => { msSetRegValue('Difficulty', 'expert'); });
@@ -562,9 +565,43 @@ test('an oversized board is clamped to the phone width, not left to overflow it'
     const g = await page.evaluate(() => {
       const r = wins['minesweeper'].el.getBoundingClientRect();
       const b = desktopBounds();
-      return { w: Math.round(r.width), dw: b.w };
+      const body = document.getElementById('wb-minesweeper');
+      const root = document.querySelector('.ms-root');
+      return {
+        w: Math.round(r.width), dw: b.w,
+        bodyOverflows: body.scrollWidth > body.clientWidth || body.scrollHeight > body.clientHeight,
+        scale: root.style.transform,
+      };
     });
     assert.ok(g.w <= g.dw, 'an oversized board widened the window past the phone viewport: ' + g.w + ' > ' + g.dw);
+    assert.ok(!g.bodyOverflows, 'the board still overflows its window instead of being shrunk to fit');
+    assert.match(g.scale, /^scale\(0\.\d+\)$/, 'ms-root was not downscaled: ' + g.scale);
+
+    // Still playable at the shrunk size - a real click through the CSS
+    // transform must still resolve to the right cell, not the scale's own
+    // untransformed layout box.
+    const cell = await page.$('.ms-cell');
+    const before = await cell.evaluate(el => el.style.backgroundPosition);
+    await cell.click();
+    const after = await cell.evaluate(el => el.style.backgroundPosition);
+    assert.notStrictEqual(after, before, 'a click on the shrunk board did not reveal the cell under it');
+  } finally {
+    await context.close();
+  }
+});
+
+// Beginner and Intermediate both fit a phone at native size already (max
+// width 16*16+26=282px against a 390px viewport) - they must stay untouched
+// by the downscale path, not shrink just because the mechanism now exists.
+test('boards that already fit a phone are not shrunk', async () => {
+  const { context, page } = await openDesktop(harness.browser, { width: 390, height: 780 });
+  try {
+    await page.evaluate(() => { msSetRegValue('Difficulty', 'intermediate'); });
+    await openWindow(page, 'openMinesweeper');
+    await page.waitForSelector('#ms-grid .ms-cell');
+    await page.waitForTimeout(300);
+    const scale = await page.evaluate(() => document.querySelector('.ms-root').style.transform);
+    assert.strictEqual(scale, '', 'Intermediate was downscaled even though it already fits the phone');
   } finally {
     await context.close();
   }
