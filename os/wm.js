@@ -437,7 +437,14 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   const count = Object.keys(wins).length;
   const isMobile = isMobileLayout();
   const bounds = desktopBounds();
-  if (isMobile && !popup) {
+  // resizable:false means the window's size is the app's answer, not a
+  // preference - currently only Minesweeper, whose size is the board plus
+  // its chrome. Filling the mobile viewport gave it nothing to grow into,
+  // just grey: the board (msFitWindow, wmIsFixedSize) stays its native size
+  // regardless, so the fill left it floating, correctly centred but tiny, in
+  // a mostly-empty full-screen window. It gets the same centred, native-size
+  // treatment a popup already does instead.
+  if (isMobile && !popup && resizable) {
     x = 0; y = 0;
     w = bounds.w;
     h = bounds.h;
@@ -451,8 +458,8 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       if (x === undefined) x = 80 + step;
       if (y === undefined) y = 44 + step;
     }
-    // Center popups on mobile
-    if (isMobile && popup) {
+    // Center popups, and any other fixed-size window, on mobile.
+    if (isMobile && (popup || !resizable)) {
       x = Math.max(4, Math.floor((bounds.w - w) / 2));
       y = Math.max(4, Math.floor((bounds.h - h) / 3));
     }
@@ -495,7 +502,7 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       </div>
       <div class="win-controls">
         <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
-        ${resizable ? `<button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>` : ''}
+        ${resizable ? `<button class="win-btn win-max-btn" title="Maximize" onclick="maxWin('${id}')">□</button>` : ''}
         <button class="win-btn" title="Close"    onclick="closeWin('${id}')">✕</button>
       </div>
     </div>

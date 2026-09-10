@@ -6358,6 +6358,13 @@ async function vfsBootMount() {
     // rejected promise here must not surface as an unhandled rejection.
     onCommit: () => {
       void fsRefreshFragmentation();
+      // Same reasoning as fsRefreshFragmentation above: anything that reads
+      // the backend's actual block layout (DEFRAG's grid) needs the state
+      // AFTER a commit lands, not fs-changed's the-instant-it-was-queued
+      // signal - a separate event so a pre-commit listener (Explorer, the
+      // desktop, which read the live in-memory tree and are correct on
+      // fs-changed already) doesn't have to change.
+      document.dispatchEvent(new CustomEvent('fs-committed'));
     },
     onError: err => { reportVfsError(err); },
     seed: root => {
@@ -10772,7 +10779,14 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
   const count = Object.keys(wins).length;
   const isMobile = isMobileLayout();
   const bounds = desktopBounds();
-  if (isMobile && !popup) {
+  // resizable:false means the window's size is the app's answer, not a
+  // preference - currently only Minesweeper, whose size is the board plus
+  // its chrome. Filling the mobile viewport gave it nothing to grow into,
+  // just grey: the board (msFitWindow, wmIsFixedSize) stays its native size
+  // regardless, so the fill left it floating, correctly centred but tiny, in
+  // a mostly-empty full-screen window. It gets the same centred, native-size
+  // treatment a popup already does instead.
+  if (isMobile && !popup && resizable) {
     x = 0; y = 0;
     w = bounds.w;
     h = bounds.h;
@@ -10786,8 +10800,8 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       if (x === undefined) x = 80 + step;
       if (y === undefined) y = 44 + step;
     }
-    // Center popups on mobile
-    if (isMobile && popup) {
+    // Center popups, and any other fixed-size window, on mobile.
+    if (isMobile && (popup || !resizable)) {
       x = Math.max(4, Math.floor((bounds.w - w) / 2));
       y = Math.max(4, Math.floor((bounds.h - h) / 3));
     }
@@ -10830,7 +10844,7 @@ function mkWin({ id, title, icon = 'icon:text', x, y, w = 500, h = 380,
       </div>
       <div class="win-controls">
         <button class="win-btn" title="Minimize" onclick="minWin('${id}')">─</button>
-        ${resizable ? `<button class="win-btn" title="Maximize" onclick="maxWin('${id}')">□</button>` : ''}
+        ${resizable ? `<button class="win-btn win-max-btn" title="Maximize" onclick="maxWin('${id}')">□</button>` : ''}
         <button class="win-btn" title="Close"    onclick="closeWin('${id}')">✕</button>
       </div>
     </div>
@@ -15817,9 +15831,9 @@ function openSysmon() {
   const procToolbar = document.createElement('div');
   procToolbar.style.cssText = 'padding:3px 4px;display:flex;gap:3px;border-bottom:1px solid #808080;flex-shrink:0;';
   procToolbar.innerHTML = `
-    <button id="sm-kill-btn"    style="${btnStyle}">End Task</button>
-    <button id="sm-copypid-btn" style="${btnStyle}">Copy PID</button>
-    <button id="sm-refresh-btn" style="${btnStyle}">Refresh</button>`;
+    <button id="sm-kill-btn"    class="sm-tool-btn" style="${btnStyle}">End Task</button>
+    <button id="sm-copypid-btn" class="sm-tool-btn" style="${btnStyle}">Copy PID</button>
+    <button id="sm-refresh-btn" class="sm-tool-btn" style="${btnStyle}">Refresh</button>`;
   procPanel.appendChild(procToolbar);
   const procHeader = document.createElement('div');
   procHeader.style.cssText = 'display:flex;background:#c0c0c0;border-bottom:1px solid #808080;font-size:10px;font-weight:bold;flex-shrink:0;';
@@ -15938,7 +15952,7 @@ function openSysmon() {
       const dlgH = isMobileLayout() ? 160 : 110;
       if (mkWin({ id:dlgId, title:'Access Denied', icon:'icon:warning', w:290, h:dlgH, popup:true, menubar:false, statusbar:false })) {
         const db = document.getElementById('wb-' + dlgId);
-        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;overflow-y:auto;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
+        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;overflow-y:auto;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button class="sm-tool-btn" style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
       }
       return;
     }
@@ -16228,6 +16242,30 @@ function openDefrag() {
   // ── Run ────────────────────────────────────────────────────────
   let running = false;
 
+  // A file written anywhere - an upload, a save, a delete - changes what the
+  // grid should show, and DEFRAG was only ever reading the disk at open time
+  // and after its own run.
+  //
+  // 'fs-committed', not 'fs-changed': the grid and the stats above both read
+  // the backend's actual block bitmap (dfReadDiskCells / fsCountFreeBlocks),
+  // which only updates when a write's debounced commit actually lands, up to
+  // 400ms after 'fs-changed' fires at queue time - see the onCommit comment
+  // in os/fs-persist.js. Refreshing on 'fs-changed' would just repaint the
+  // same pre-commit state a write already had.
+  //
+  // Skipped while running: fsRunCompaction moves blocks through
+  // backend._moveBlock directly, bypassing vfsWriteFile/vfsWriteBlob, so it
+  // never fires either event - the guard is only for the unrelated case of
+  // another window writing a file mid-run, where a stale read would fight
+  // the live move-by-move animation for one frame.
+  async function dfOnFsCommitted() {
+    if (running) return;
+    await dfReadDiskCells();
+    drawGrid();
+    dfRefreshStats();
+  }
+  document.addEventListener('fs-committed', dfOnFsCommitted);
+
   startBtn.addEventListener('click', async () => {
     if (running) return;
     running = true; startBtn.disabled = true; stopBtn.disabled = false;
@@ -16323,6 +16361,7 @@ function openDefrag() {
   const _origCloseDefrag = wins['defrag']?._onclose;
   if (wins['defrag']) wins['defrag']._onclose = () => {
     dfResizeObserver.disconnect();
+    document.removeEventListener('fs-committed', dfOnFsCommitted);
     running = false;
     // Closing the window mid-run must take the drive noise with it; the run
     // stops itself on the same condition but has no way to say so.
@@ -17665,20 +17704,75 @@ function msSecondaryAction(i) {
 // Sizes the window to the board it is actually showing.
 //
 // The chrome is MEASURED rather than assumed: the titlebar, menubar, borders
-// and body padding are all CSS and have all changed before. Skipped while the
-// window is maximized or snapped, where the player has asked for a size, and on
-// mobile, where mkWin makes every window fill the desktop anyway - the board
-// just centres itself in whatever it gets.
+// and body padding are all CSS and have all changed before - mobile's own
+// titlebar and menubar are taller than desktop's, which is exactly why this
+// runs there too now rather than trusting openMinesweeper's first guess
+// (tuned against desktop chrome) to still fit. Skipped only while the window
+// is maximized or snapped, where the player (or, on mobile, mkWin itself
+// filling the viewport for anything resizable) has asked for a size -
+// Minesweeper itself is resizable:false and so is never both.
 function msFitWindow() {
   const w = wins[MS_WIN_ID];
-  if (!w || isMobileLayout() || wmIsFilled(w)) return;
+  if (!w || wmIsFilled(w)) return;
   const body = document.getElementById('wb-' + MS_WIN_ID);
   const root = body && body.querySelector('.ms-root');
-  if (!root) return;
+  const wrap = body && body.querySelector('.ms-scale-wrap');
+  if (!root || !wrap) return;
+  // Clear any scale a PREVIOUS fit left behind before measuring: switching
+  // difficulty (Expert back to Beginner, say) must measure this board's true
+  // natural size, not shrink again on top of the last one's.
+  wrap.style.width = ''; wrap.style.height = '';
+  root.style.transform = '';
   const chromeW = w.el.offsetWidth - body.clientWidth;
   const chromeH = w.el.offsetHeight - body.clientHeight;
-  w.el.style.width = (root.offsetWidth + chromeW) + 'px';
-  w.el.style.height = (root.offsetHeight + chromeH) + 'px';
+  const naturalW = root.offsetWidth, naturalH = root.offsetHeight;
+  // Expert (30 cols) is wider than a phone at native 16px cells, which used
+  // to just overflow .ms-body sideways - the right third of the minefield
+  // was there, but only reachable by scrolling a window that gave no hint it
+  // scrolled. Shrink ms-root to fit instead, the same fallback Paint's
+  // canvas uses for the same shape of problem: never upscale (a small board
+  // has no reason to grow past its native pixels just because there's room),
+  // only downscale, and only on mobile - a desktop window is sized to the
+  // board already, never the other way around.
+  let scale = 1;
+  if (isMobileLayout()) {
+    const bounds = desktopBounds();
+    const availW = bounds.w - chromeW - 8, availH = bounds.h - chromeH - 8;
+    scale = Math.min(1, availW / naturalW, availH / naturalH);
+    if (scale <= 0) scale = 1;
+  }
+  const boardW = Math.round(naturalW * scale), boardH = Math.round(naturalH * scale);
+  if (scale < 1) {
+    // ms-scale-wrap gets the SCALED size, so .ms-body's flex centring and
+    // overflow.auto measure the board it actually paints; ms-root gets the
+    // transform, anchored top-left so it exactly fills the box that size
+    // reserves rather than shrinking toward its own centre and leaving a gap.
+    wrap.style.width = boardW + 'px';
+    wrap.style.height = boardH + 'px';
+    root.style.transform = 'scale(' + scale + ')';
+    root.style.transformOrigin = 'top left';
+  }
+  const newW = boardW + chromeW;
+  const newH = boardH + chromeH;
+  w.el.style.width = newW + 'px';
+  w.el.style.height = newH + 'px';
+  // mkWin centred the window against openMinesweeper's first-guess size, and
+  // that guess is tuned against desktop chrome - mobile's taller titlebar and
+  // menubar mean the size above is very likely a correction, not a confirmation.
+  // Re-centre against the corrected size with the same formula mkWin used for
+  // it as a popup, or the window drifts off-centre by exactly that correction.
+  //
+  // Read the size back off the element rather than trusting newW/newH: a
+  // beginner board is narrower than .os-window's own 180px CSS min-width, so
+  // the style.width just set above can be silently overridden upward by CSS
+  // the moment it's applied - centring on the pre-clamp number left the
+  // window sitting visibly right of centre on the one board small enough to
+  // hit that floor.
+  if (isMobileLayout()) {
+    const bounds = desktopBounds();
+    w.el.style.left = Math.max(4, Math.floor((bounds.w - w.el.offsetWidth) / 2)) + 'px';
+    w.el.style.top  = Math.max(4, Math.floor((bounds.h - w.el.offsetHeight) / 3)) + 'px';
+  }
   clampWinGeometry(w.el);
   // The geometry store would otherwise keep handing back the PREVIOUS
   // difficulty's window size every time this one is reopened.
@@ -17851,14 +17945,22 @@ function openMinesweeper() {
 
   const body = document.getElementById('wb-' + MS_WIN_ID);
   body.className = 'win-body ms-body';
+  // ms-scale-wrap exists for msFitWindow's mobile downscale (Expert is wider
+  // than a phone). Its layout box is what .ms-body's flex centring and
+  // overflow measure against; ms-root is what actually gets transform:scale,
+  // so the two stay in agreement instead of the flex parent reserving the
+  // board's full native size for a child painted smaller than that. Inert on
+  // desktop - untouched, it just sizes to ms-root's own natural size.
   body.innerHTML = `
-    <div class="ms-root">
-      <div class="ms-header">
-        <div class="ms-leds" id="ms-mines"><i></i><i></i><i></i></div>
-        <button class="ms-face" id="ms-face" type="button" title="New game" aria-label="New game"></button>
-        <div class="ms-leds" id="ms-time"><i></i><i></i><i></i></div>
+    <div class="ms-scale-wrap">
+      <div class="ms-root">
+        <div class="ms-header">
+          <div class="ms-leds" id="ms-mines"><i></i><i></i><i></i></div>
+          <button class="ms-face" id="ms-face" type="button" title="New game" aria-label="New game"></button>
+          <div class="ms-leds" id="ms-time"><i></i><i></i><i></i></div>
+        </div>
+        <div class="ms-grid" id="ms-grid"></div>
       </div>
-      <div class="ms-grid" id="ms-grid"></div>
     </div>`;
 
   msState = {
@@ -19584,9 +19686,9 @@ function openPaint() {
 
   paintBuildMenu(document.getElementById('mb-' + PAINT_WIN_ID));
 
-  // The Undo Guy, not an arrow glyph. He has his own cell on the tool sheet -
-  // see PAINT_TOOL_ICON_ORDER, where he sits after the eleven tools precisely so
-  // that a non-tool cell cannot shift a tool's.
+  // A sprite-sheet icon, not a text glyph, so it stays pixel-crisp like every
+  // other tool - see PAINT_TOOL_ICON_ORDER, where it sits after the eleven
+  // tools precisely so that a non-tool cell cannot shift a tool's.
   const undoGuy = document.getElementById('paint-undo-guy');
   undoGuy.appendChild(paintToolIcon('undo'));
   undoGuy.addEventListener('click', () => paintUndo());
@@ -19658,8 +19760,8 @@ function openPaint() {
 const PAINT_TOOL_ICON_ORDER = [
   'pencil', 'line', 'rect', 'oval', 'fill', 'eyedropper',
   'text', 'sticker', 'wacky', 'eraser', 'select',
-  // Not a tool. The Undo Guy is the undo button, and he is drawn on the same
-  // sheet. Non-tools go on the END so that adding one cannot shift a tool.
+  // Not a tool. The undo button's icon is drawn on the same sheet. Non-tools
+  // go on the END so that adding one cannot shift a tool.
   'undo',
 ];
 const PAINT_TOOL_ICON_PX = 16;
@@ -20958,7 +21060,7 @@ function openRegedit() {
     const data = registryData[hive][keyPath];
     const tbl = document.createElement('table');
     tbl.className = 'reg-vals-table';
-    tbl.innerHTML = '<thead><tr><th style="width:180px;">Name</th><th style="width:100px;">Type</th><th>Data</th></tr></thead>';
+    tbl.innerHTML = '<thead><tr><th class="reg-col-name">Name</th><th class="reg-col-type">Type</th><th>Data</th></tr></thead>';
     const tbody = document.createElement('tbody');
 
     Object.keys(data).forEach(valName => {
@@ -20972,6 +21074,13 @@ function openRegedit() {
       // readable at a glance down the column.
       const valIcon = entry.type === 'REG_SZ' ? 'icon:regedit-string' : 'icon:regedit-binary';
       tr.innerHTML = '<td class="reg-val-name">' + iconMarkup(valIcon) + escHtml(valName) + '</td><td>' + entry.type + '</td><td>' + escHtml(String(entry.value)) + '</td>';
+      // Every window's content sits inside #desktop's own DOM subtree, and
+      // #desktop has its own addLongPress for the background's context menu
+      // (os/desktop-icons.js). A touch hold here bubbles right past this row
+      // to that listener too unless it's stopped here - both fire, and
+      // #desktop's menu wins the race, replacing Modify with the desktop's
+      // own. Desktop icons avoid this the same way: stop it at the row.
+      tr.addEventListener('pointerdown', e => e.stopPropagation());
       tr.addEventListener('dblclick', () => {
         if (locked) {
           showLockedRegValueNotice(valName);
@@ -20987,6 +21096,12 @@ function openRegedit() {
         ]);
         procSetTimeout('regedit', () => tr.classList.remove('selected'), 800);
       });
+      // dblclick has no touch equivalent, so without this a value row had no
+      // way to reach Modify on mobile at all - contextmenu above already
+      // handles a real right-click; addLongPress is what turns a touch hold
+      // into that same event, the same pairing every other right-click menu
+      // in the OS already gets.
+      addLongPress(tr);
       tbody.appendChild(tr);
     });
     tbl.appendChild(tbody);

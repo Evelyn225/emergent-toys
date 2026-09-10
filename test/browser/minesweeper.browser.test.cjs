@@ -502,11 +502,18 @@ test('a reload restores where the window was, not how big it was', async () => {
   }
 });
 
-// The one place a fixed size must NOT apply. On mobile mkWin fills the desktop
-// with every non-popup window and msFitWindow stands down, so the board centres
-// itself in whatever it gets - locking the size there would leave an Expert
-// board in a 502px frame on a 390px phone.
-test('on mobile the window still fills the desktop', async () => {
+// mkWin used to fill the desktop with every non-popup window on mobile,
+// Minesweeper included, and msFitWindow stood down there on the assumption
+// that a full-screen window needed no fitting. That left a small board
+// (correctly centred, per .ms-body's own flexbox) floating in a mostly-empty
+// full-screen frame - which reads as broken even though nothing was actually
+// misaligned. Minesweeper's size is the board's answer, not a preference (the
+// same reasoning resizable:false already states for desktop), so it now gets
+// the same centred, native-size treatment a popup does on mobile too, and
+// msFitWindow measures and corrects that size there exactly as it does on
+// desktop - mobile's own titlebar and menubar are taller, so the first guess
+// in openMinesweeper (tuned against desktop chrome) needs the same correction.
+test('on mobile the window is centred at its natural size, not filling the desktop', async () => {
   const { context, page } = await openDesktop(harness.browser, { width: 390, height: 780 });
   try {
     await openWindow(page, 'openMinesweeper');
@@ -515,13 +522,86 @@ test('on mobile the window still fills the desktop', async () => {
     const g = await page.evaluate(() => {
       const r = wins['minesweeper'].el.getBoundingClientRect();
       const b = desktopBounds();
-      return { mobile: isMobileLayout(), fixedNow: wmIsFixedSize('minesweeper'),
-               w: Math.round(r.width), h: Math.round(r.height), dw: b.w, dh: b.h };
+      const body = document.getElementById('wb-minesweeper');
+      const root = document.querySelector('.ms-root').getBoundingClientRect();
+      return {
+        mobile: isMobileLayout(), fixedNow: wmIsFixedSize('minesweeper'),
+        w: Math.round(r.width), h: Math.round(r.height), x: Math.round(r.left), y: Math.round(r.top),
+        dw: b.w, dh: b.h,
+        bodyOverflows: body.scrollHeight > body.clientHeight || body.scrollWidth > body.clientWidth,
+        boardW: Math.round(root.width), boardH: Math.round(root.height),
+      };
     });
     assert.strictEqual(g.mobile, true, 'the harness did not produce a mobile layout');
     assert.strictEqual(g.fixedNow, false, 'the fixed-size rule must stand down on mobile');
-    assert.strictEqual(g.w, g.dw, 'the window is not full width: ' + g.w + ' of ' + g.dw);
-    assert.strictEqual(g.h, g.dh, 'the window is not full height: ' + g.h + ' of ' + g.dh);
+    assert.notStrictEqual(g.w, g.dw, 'the window filled the full desktop width instead of sizing to its board');
+    assert.notStrictEqual(g.h, g.dh, 'the window filled the full desktop height instead of sizing to its board');
+    assert.ok(!g.bodyOverflows, 'the board does not fit the window msFitWindow gave it');
+    // Centred the same way a popup is: roughly mid-width, upper third vertically.
+    const expectedX = Math.max(4, Math.floor((g.dw - g.w) / 2));
+    const expectedY = Math.max(4, Math.floor((g.dh - g.h) / 3));
+    assert.ok(Math.abs(g.x - expectedX) <= 1, 'window not horizontally centred: x=' + g.x + ' expected ~' + expectedX);
+    assert.ok(Math.abs(g.y - expectedY) <= 1, 'window not vertically positioned like a popup: y=' + g.y + ' expected ~' + expectedY);
+  } finally {
+    await context.close();
+  }
+});
+
+// A board too wide for the phone itself (Expert, 30 cols - ~500px at native
+// 16px cells) used to just overflow .ms-body sideways: the window was
+// clamped to the viewport width, but the grid inside it stayed full size, so
+// roughly a third of the minefield was only reachable by scrolling a window
+// that gave no visible hint it scrolled. msFitWindow now shrinks ms-root
+// (transform:scale, never upscaling) to fit instead - the same fallback
+// Paint's canvas uses for an oversized painting - so the whole board is
+// visible and playable without any scrolling.
+test('an oversized board is shrunk to fit the phone, not left to overflow it', async () => {
+  const { context, page } = await openDesktop(harness.browser, { width: 390, height: 780 });
+  try {
+    await page.evaluate(() => { msSetRegValue('Difficulty', 'expert'); });
+    await openWindow(page, 'openMinesweeper');
+    await page.waitForSelector('#ms-grid .ms-cell');
+    await page.waitForTimeout(300);
+    const g = await page.evaluate(() => {
+      const r = wins['minesweeper'].el.getBoundingClientRect();
+      const b = desktopBounds();
+      const body = document.getElementById('wb-minesweeper');
+      const root = document.querySelector('.ms-root');
+      return {
+        w: Math.round(r.width), dw: b.w,
+        bodyOverflows: body.scrollWidth > body.clientWidth || body.scrollHeight > body.clientHeight,
+        scale: root.style.transform,
+      };
+    });
+    assert.ok(g.w <= g.dw, 'an oversized board widened the window past the phone viewport: ' + g.w + ' > ' + g.dw);
+    assert.ok(!g.bodyOverflows, 'the board still overflows its window instead of being shrunk to fit');
+    assert.match(g.scale, /^scale\(0\.\d+\)$/, 'ms-root was not downscaled: ' + g.scale);
+
+    // Still playable at the shrunk size - a real click through the CSS
+    // transform must still resolve to the right cell, not the scale's own
+    // untransformed layout box.
+    const cell = await page.$('.ms-cell');
+    const before = await cell.evaluate(el => el.style.backgroundPosition);
+    await cell.click();
+    const after = await cell.evaluate(el => el.style.backgroundPosition);
+    assert.notStrictEqual(after, before, 'a click on the shrunk board did not reveal the cell under it');
+  } finally {
+    await context.close();
+  }
+});
+
+// Beginner and Intermediate both fit a phone at native size already (max
+// width 16*16+26=282px against a 390px viewport) - they must stay untouched
+// by the downscale path, not shrink just because the mechanism now exists.
+test('boards that already fit a phone are not shrunk', async () => {
+  const { context, page } = await openDesktop(harness.browser, { width: 390, height: 780 });
+  try {
+    await page.evaluate(() => { msSetRegValue('Difficulty', 'intermediate'); });
+    await openWindow(page, 'openMinesweeper');
+    await page.waitForSelector('#ms-grid .ms-cell');
+    await page.waitForTimeout(300);
+    const scale = await page.evaluate(() => document.querySelector('.ms-root').style.transform);
+    assert.strictEqual(scale, '', 'Intermediate was downscaled even though it already fits the phone');
   } finally {
     await context.close();
   }

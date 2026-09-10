@@ -1189,12 +1189,20 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
    row 2 (y -40) the 13x23 LED digits. */
 .ms-body {
   background: #c0c0c0;
-  /* Centres the board when the window is bigger than it - maximized, snapped,
-     or filling a phone. The board itself is always its natural size. */
+  /* Centres the board when the window is bigger than it - maximized or
+     snapped. The board is its natural size unless msFitWindow has shrunk
+     ms-scale-wrap to fit a phone (Expert is wider than one), in which case
+     this still centres it - just at that smaller size. */
   display: flex; align-items: center; justify-content: center;
   overflow: auto;
 }
-.ms-root { padding: 6px; flex: 0 0 auto; }
+/* The flex item .ms-body actually sizes and centres against. Left alone it
+   just wraps ms-root at that element's own natural size; msFitWindow gives
+   it explicit dimensions only when downscaling for a narrow phone, so this
+   box's layout size always matches what ms-root (transform:scale'd to fit
+   it) actually paints. */
+.ms-scale-wrap { flex: 0 0 auto; }
+.ms-root { padding: 6px; }
 .ms-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 5px; margin-bottom: 6px;
@@ -1339,10 +1347,17 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
   padding:2px 6px; text-align:left; position:sticky; top:0;
   border-right:1px solid #808080; cursor:default; user-select:none;
 }
-.reg-val-row { cursor:default; }
+.reg-col-name { width:180px; }
+.reg-col-type { width:100px; }
+/* user-select:none so a touch hold triggers addLongPress's contextmenu
+   synthesis instead of the browser's own text-selection callout fighting it. */
+.reg-val-row { cursor:default; user-select:none; }
 .reg-val-row:hover td { background:rgba(0,0,128,0.1); }
 .reg-val-row.selected td { background:#000080; color:#fff; }
-.reg-val-row td { padding:1px 6px; border-right:1px solid #e0e0e0; }
+/* Data is free text (paths, hex, arbitrary strings) with no length limit -
+   overflow-wrap keeps a long one from ever forcing the table wider than
+   its column, which is what table-layout:fixed below actually depends on. */
+.reg-val-row td { padding:1px 6px; border-right:1px solid #e0e0e0; overflow-wrap:anywhere; }
 
 /* ── Calculator ───────────────────────────────────────────────── */
 .calc-body {
@@ -1585,7 +1600,22 @@ body.idle-sleeping { cursor:none; }
    how every other bevelled control in the OS reads as pressed. */
 .paint-tool.sel .paint-tool-icon { transform: translate(1px, 1px); }
 .paint-stage {
-  flex: 1 1 auto; min-width: 0; min-height: 0;
+  /* flex-basis 0, not auto: with auto, the wrap decision is made against the
+     canvas's PRE-FIT content width (its raw 480px backing store, before
+     paintFitCanvas has anything to measure), not the space actually left
+     beside .paint-tools. On a narrow window that content width alone is
+     wider than what's left, so .paint-root (flex-wrap:wrap) wrapped the
+     stage onto its own row below the toolbox - which then gave
+     paintFitCanvas the full window width to fit *that* against, confirming
+     the same wrap it was caused by. The extra row height pushed .paint-bottom
+     (palette, current colour, brush options) below win-body's clipped
+     bottom edge - present in the DOM, invisible, unusable. A 0 basis makes
+     the wrap decision (and the shrink) run against real available space, so
+     the stage takes what's left beside the toolbox at any width down to
+     WIN_MIN_W, and paintFitCanvas's fractional-scale fallback (see
+     #paint-canvas below) is what actually handles "canvas too big for this
+     column" instead. */
+  flex: 1 1 0; min-width: 0; min-height: 0;
   display: flex; align-items: center; justify-content: center;
   background: #808080; overflow: hidden;
 }
@@ -1661,6 +1691,13 @@ body.idle-sleeping { cursor:none; }
 @media (pointer: coarse), (max-width: 700px) {
   body { font-size: 16px; }
   .win-rz { display: none; }
+  /* Every non-popup window already opens filling the desktop here (mkWin),
+     so there is no smaller "previous size" for Maximize to toggle back to -
+     the button was a press that visibly did nothing. Hidden the same way
+     the resize handles above are: a live media query, not an isMobileLayout()
+     check baked into the window at creation, so it still reacts correctly to
+     an orientation change or a live viewport resize across the breakpoint. */
+  .win-max-btn { display: none; }
 
   .desktop-icon { width: 96px; height: 96px; padding: 6px; gap: 5px; }
   /* Icons stay at their native 32px here rather than following the emoji up to
@@ -1729,6 +1766,40 @@ body.idle-sleeping { cursor:none; }
   .exp-item .exp-icon { font-size: 32px; }
   .exp-list-item { padding: 10px 6px; font-size: 14px; }
   .exp-det-item td { padding: 8px 6px; font-size: 13px; }
+
+  /* Bigger touch targets don't fit the desktop's single row at 390px wide,
+     so the toolbar wraps: nav buttons on row one, the address bar + Go/Fav
+     on row two. The vsep (normally a thin divider) becomes the wrap point -
+     a full-width, zero-height spacer forces everything after it down. */
+  .browser-toolbar { flex-wrap: wrap; row-gap: 4px; }
+  .br-btn { min-width: 44px; height: 44px; font-size: 16px; }
+  .br-vsep { flex-basis: 100%; width: auto; height: 0; margin: 0; background: none; }
+  .br-addr-label { display: none; }
+  .br-addr { height: 36px; font-size: 15px; padding: 0 6px; }
+
+  .sm-tool-btn { padding: 10px 14px !important; font-size: 14px !important; }
+
+  /* REGEDIT.exe. Side by side, .reg-tree's fixed 200px sidebar left so
+     little of a phone's width for .reg-vals that Type truncated and Data -
+     the one thing this app exists to show - was pushed off screen with no
+     visible way to reach it. Stacked instead, tree above values, each gets
+     the full width - the same master-detail-by-stacking move a narrow
+     screen always needs over a fixed side-by-side split. */
+  .reg-layout { flex-direction: column; }
+  .reg-tree {
+    width: 100%; min-width: 0; flex: 0 1 38%; min-height: 88px;
+    border-right: none; border-bottom: 2px solid; border-bottom-color: #808080;
+  }
+  .reg-vals { flex: 1 1 auto; min-height: 0; }
+  .reg-tree-item { padding: 7px 6px; font-size: 14px; }
+  .reg-vals-table { table-layout: fixed; }
+  .reg-vals-table thead th, .reg-val-row td { padding: 7px 6px; font-size: 13px; }
+  /* Auto column widths (180px/100px) would eat most of a phone's width
+     before Data gets any; table-layout:fixed only obeys widths given on the
+     FIRST row, so these have to live on the header cells, not a bare
+     .reg-col-* rule. */
+  .reg-vals-table thead th.reg-col-name { width: 34%; }
+  .reg-vals-table thead th.reg-col-type { width: 22%; }
 
   /* PAINT.exe. The canvas keeps its 480x360 backing store and takes a
      fractional scale here - below 480 CSS px there is no integer scale that

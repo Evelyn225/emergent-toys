@@ -68,9 +68,9 @@ function openSysmon() {
   const procToolbar = document.createElement('div');
   procToolbar.style.cssText = 'padding:3px 4px;display:flex;gap:3px;border-bottom:1px solid #808080;flex-shrink:0;';
   procToolbar.innerHTML = `
-    <button id="sm-kill-btn"    style="${btnStyle}">End Task</button>
-    <button id="sm-copypid-btn" style="${btnStyle}">Copy PID</button>
-    <button id="sm-refresh-btn" style="${btnStyle}">Refresh</button>`;
+    <button id="sm-kill-btn"    class="sm-tool-btn" style="${btnStyle}">End Task</button>
+    <button id="sm-copypid-btn" class="sm-tool-btn" style="${btnStyle}">Copy PID</button>
+    <button id="sm-refresh-btn" class="sm-tool-btn" style="${btnStyle}">Refresh</button>`;
   procPanel.appendChild(procToolbar);
   const procHeader = document.createElement('div');
   procHeader.style.cssText = 'display:flex;background:#c0c0c0;border-bottom:1px solid #808080;font-size:10px;font-weight:bold;flex-shrink:0;';
@@ -189,7 +189,7 @@ function openSysmon() {
       const dlgH = isMobileLayout() ? 160 : 110;
       if (mkWin({ id:dlgId, title:'Access Denied', icon:'icon:warning', w:290, h:dlgH, popup:true, menubar:false, statusbar:false })) {
         const db = document.getElementById('wb-' + dlgId);
-        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;overflow-y:auto;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
+        if (db) { db.style.cssText = 'padding:12px 14px;font-size:11px;overflow-y:auto;'; db.innerHTML = `<p style="margin-bottom:10px;">Unable to terminate system process.<br><b>Access Denied</b> (PID: ${selectedProc.pid})</p><div style="text-align:center"><button class="sm-tool-btn" style="${btnStyle}" onclick="closeWin('${dlgId}')">OK</button></div>`; }
       }
       return;
     }

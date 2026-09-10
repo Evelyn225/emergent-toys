@@ -427,6 +427,13 @@ async function vfsBootMount() {
     // rejected promise here must not surface as an unhandled rejection.
     onCommit: () => {
       void fsRefreshFragmentation();
+      // Same reasoning as fsRefreshFragmentation above: anything that reads
+      // the backend's actual block layout (DEFRAG's grid) needs the state
+      // AFTER a commit lands, not fs-changed's the-instant-it-was-queued
+      // signal - a separate event so a pre-commit listener (Explorer, the
+      // desktop, which read the live in-memory tree and are correct on
+      // fs-changed already) doesn't have to change.
+      document.dispatchEvent(new CustomEvent('fs-committed'));
     },
     onError: err => { reportVfsError(err); },
     seed: root => {
