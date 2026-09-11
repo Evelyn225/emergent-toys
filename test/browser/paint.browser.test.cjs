@@ -377,6 +377,39 @@ test('Save As through the real dialog lands the file in PICTURES, not the root',
   });
 });
 
+// The dialog's file list is filtered by kind and defaulted to text, so Save As
+// in PICTURES used to show nothing but '..' - a folder of paintings, including
+// the one just saved, looked empty. Asserts on what the dialog actually lists,
+// not on the options passed to it, because the option being right and the
+// list being right were two separate bugs: once images were offered at all,
+// every one of them still drew the unknown-file icon, since the dialog resolved
+// icons from the file name and a blob's media kind lives on its record.
+test('Save As lists the paintings already in the folder, as images, and nothing else', async () => {
+  await withPaint(async page => {
+    await page.evaluate(async () => {
+      await paintWriteAndSync('first.png', 'PICTURES');
+      // A non-image blob in the same folder. "Blob" means any stored media, so a
+      // filter that stopped at blob would offer this in a picture dialog.
+      const blob = new Blob([new Uint8Array(16)], { type: 'audio/ogg' });
+      await vfsWriteBlob('tune.ogg', { url: URL.createObjectURL(blob), kind: 'audio', size: 16, mime: 'audio/ogg' }, 'PICTURES');
+      paintSaveAs();
+    });
+    await page.waitForSelector('[id^="win-saveas-"]');
+    const listed = await page.evaluate(() => {
+      const dlg = document.querySelector('[id^="win-saveas-"]');
+      return [...dlg.querySelectorAll('.fl-icon')].map(ic => ({
+        name: ic.nextElementSibling.textContent,
+        icon: (ic.querySelector('img') || {}).src || ic.textContent,
+      }));
+    });
+    const names = listed.map(e => e.name);
+    assert.ok(names.includes('first.png'), 'the saved painting is missing from Save As: ' + names.join(', '));
+    assert.ok(!names.includes('tune.ogg'), 'Save As offered a sound file in a picture dialog');
+    const first = listed.find(e => e.name === 'first.png');
+    assert.match(first.icon, /image\.png/, 'the painting drew the wrong icon: ' + first.icon);
+  });
+});
+
 test('an existing image loads onto the canvas, letterboxed on white', async () => {
   await withPaint(async page => {
     const r = await page.evaluate(async () => {
@@ -542,6 +575,45 @@ test('clicking the canvas with a sticker selected stamps it', async () => {
       return n;
     });
     assert.ok(inked > 0, 'the sticker stamped nothing onto the canvas');
+  });
+});
+
+// The node suite proves paintStampPoints spaces stamps given the last one; what
+// it cannot prove is that the UI actually hands the last one back in between
+// pointer moves. That handoff is where this broke: a 200px drag laid down 41
+// overlapping stamps, 5px apart, with a doubled stamp at every segment boundary.
+test('dragging a sticker lays stamps a stamp-width apart, not one per pointer move', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => {
+      paintSelectTool('sticker');
+      paintSelectVariant('medium');
+      // Count sprite ops that reach the real canvas. Wrapping the renderer is
+      // the one place that sees every stamp regardless of which stroke path
+      // produced it; counting pixels would blur overlapping stamps together.
+      window.__stamps = [];
+      const real = paintExecOps;
+      window.paintExecOps = (ctx, ops) => {
+        if (ctx === paintState.ctx) ops.forEach(o => { if (o.op === 'sprite') __stamps.push(o.x); });
+        return real(ctx, ops);
+      };
+    });
+    const box = await page.evaluate(() => {
+      const r = document.getElementById('paint-canvas').getBoundingClientRect();
+      return { left: r.left, top: r.top, scale: paintState.scale };
+    });
+    // 40 steps over 200 canvas px: 5px per pointer move, roughly what a steady
+    // hand delivers at 60Hz.
+    await page.mouse.move(box.left + 100 * box.scale, box.top + 150 * box.scale);
+    await page.mouse.down();
+    await page.mouse.move(box.left + 300 * box.scale, box.top + 150 * box.scale, { steps: 40 });
+    await page.mouse.up();
+    const xs = await page.evaluate(() => __stamps);
+    assert.ok(xs.length >= 5 && xs.length <= 8,
+      'a 200px drag with 32px stamps should lay down about six, got ' + xs.length);
+    for (let i = 1; i < xs.length; i++) {
+      assert.ok(xs[i] - xs[i - 1] >= 31,
+        'stamps ' + (i - 1) + ' and ' + i + ' landed ' + (xs[i] - xs[i - 1]).toFixed(1) + 'px apart');
+    }
   });
 });
 

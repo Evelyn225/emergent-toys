@@ -353,6 +353,39 @@ function paintSegLen(seg) {
   return Math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0);
 }
 
+// Where along a segment a stamp goes, spaced one stamp-width from the LAST
+// STAMP OF THE STROKE rather than from the start of this segment.
+//
+// That distinction is the whole function. A drag reaches a generator as dozens
+// of 5px segments, one per pointer move, and the first version spaced stamps
+// within each segment independently - so every segment stamped at its own start
+// and a 200px drag laid down 41 overlapping stamps instead of six. The unit test
+// fed it one 200px segment and passed, which is why this is threaded through
+// `last` now and why the browser suite drags for real.
+//
+// `last` is the previous stamp's position, or null/undefined at the start of a
+// stroke - in which case the stamp lands exactly where the pointer went down.
+// Walks at 1px resolution and compares straight-line distance, so a drag that
+// doubles back does not stamp on top of itself either.
+function paintStampPoints(seg, spacing, last) {
+  const out = [];
+  let prev = last || null;
+  if (!prev) {
+    prev = { x: seg.x0, y: seg.y0 };
+    out.push(prev);
+  }
+  const steps = Math.ceil(paintSegLen(seg));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const p = { x: seg.x0 + (seg.x1 - seg.x0) * t, y: seg.y0 + (seg.y1 - seg.y0) * t };
+    if (Math.hypot(p.x - prev.x, p.y - prev.y) >= spacing) {
+      out.push(p);
+      prev = p;
+    }
+  }
+  return out;
+}
+
 // The middle of a segment. Where a generator that draws one self-contained
 // figure - a blast, a letter, a wash - should centre it, rather than on an
 // endpoint: an endpoint puts half the figure past where the drag stopped.
@@ -440,21 +473,10 @@ function paintStickerRect(idx) {
 // pixels and not others, which is what made the large stamp look chewed up
 // rather than chunky. Nearest-neighbour only looks deliberate on whole numbers.
 [['small', 16], ['medium', 32], ['large', 64]].forEach(([id, size]) => {
-  paintRegisterGenerator('sticker', id, (seg, st) => {
-    const pts = paintWalk(seg, size);
-    // paintWalk always appends the segment's exact endpoint so a drag never
-    // stops short of where the pointer let go. That endpoint can land closer
-    // than one stamp width from the previous one, which is the smear this
-    // tool exists to avoid - so drop it when it would bunch up rather than
-    // trail. The stamp before it already overlaps the tail closely enough.
-    if (pts.length > 1) {
-      const a = pts[pts.length - 2], b = pts[pts.length - 1];
-      if (Math.hypot(b.x - a.x, b.y - a.y) < size * 0.75) pts.pop();
-    }
-    return pts.map(p => ({
+  paintRegisterGenerator('sticker', id, (seg, st) =>
+    paintStampPoints(seg, size, st.stampLast).map(p => ({
       op: 'sprite', idx: st.stickerIndex, x: p.x, y: p.y, size, rot: 0,
-    }));
-  });
+    })));
 });
 
 // ── shapes ───────────────────────────────────────────────────────

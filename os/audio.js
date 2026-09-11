@@ -29,6 +29,23 @@ const SOUND_FILES = {
   error:    'error.ogg',
   glitch:   'glitch.ogg',
   click:    'mouseClick.ogg',
+  // PAINT.exe. Quoted keys because the names are the file names, hyphens and
+  // all - one fewer mapping to keep straight when a file is swapped.
+  'paint-pencil':      'paint-pencil.ogg',
+  'paint-brush':       'paint-brush.ogg',
+  'paint-eraser':      'paint-eraser.ogg',
+  'paint-stamp':       'paint-stamp.ogg',
+  'paint-shape':       'paint-shape.ogg',
+  'paint-fill':        'paint-fill.ogg',
+  'paint-eyedropper':  'paint-eyedropper.ogg',
+  'paint-palette':     'paint-palette.ogg',
+  'paint-text':        'paint-text.ogg',
+  'paint-clear':       'paint-clear.ogg',
+  'paint-firecracker': 'paint-firecracker.ogg',
+  'paint-blackhole':   'paint-blackhole.ogg',
+  'paint-dissolve':    'paint-dissolve.ogg',
+  'paint-undo1':       'paint-undo1.ogg',
+  'paint-undo2':       'paint-undo2.ogg',
 };
 
 // Per-sound trim, so the mix lives in one table instead of being spread across
@@ -43,6 +60,26 @@ const SOUND_GAIN = {
   error:    0.65,
   glitch:   0.50,
   click:    0.30,
+  // PAINT.exe. Set from each file's measured RMS rather than by ear, so they
+  // start out level with each other: one-shots land between the OS click and
+  // the error chime, the two drawing loops well under both because they run
+  // for as long as the pointer moves, and the firecracker a little hot because
+  // it is meant to startle. Starting points - retune here, nowhere else.
+  'paint-pencil':      0.22,
+  'paint-brush':       0.12,
+  'paint-eraser':      0.12,
+  'paint-stamp':       0.13,
+  'paint-shape':       0.09,
+  'paint-fill':        0.22,
+  'paint-eyedropper':  0.11,
+  'paint-palette':     0.17,
+  'paint-text':        0.40,
+  'paint-clear':       0.14,
+  'paint-firecracker': 0.60,
+  'paint-blackhole':   0.12,
+  'paint-dissolve':    0.30,
+  'paint-undo1':       0.22,
+  'paint-undo2':       0.22,
 };
 
 // defrag.ogg does not loop seamlessly and a slow run can outlast its ~1 minute,

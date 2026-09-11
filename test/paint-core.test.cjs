@@ -421,6 +421,44 @@ test('dragging with the sticker tool spaces stamps out rather than smearing', ()
   }
 });
 
+// The test above feeds the generator ONE 200px segment, which is not what a
+// drag delivers: a real one arrives as a segment per pointer move, a few pixels
+// each. Spacing within each segment alone stamped at the start of every one of
+// them - a 200px drag laid down 41 overlapping stamps - and that test stayed
+// green throughout. This is the shape of input that actually broke.
+test('a drag made of many small moves still spaces stamps a stamp-width apart', () => {
+  const ctx = coreCtx();
+  const xs = [];
+  let last = null;
+  for (let x = 0; x < 200; x += 5) {
+    ctx.paintGenerate('sticker', 'medium', stroke(x, 0, x + 5, 0),
+                      stateFor(ctx, { stickerIndex: 1, stampLast: last }))
+      .forEach(op => { xs.push(op.x); last = { x: op.x, y: op.y }; });
+  }
+  assert.ok(xs.length >= 5 && xs.length <= 8,
+    'a 200px drag with 32px stamps should lay down about six, got ' + xs.length);
+  for (let i = 1; i < xs.length; i++) {
+    assert.ok(xs[i] - xs[i - 1] >= 32 - 1e-9,
+      'stamps ' + (i - 1) + ' and ' + i + ' are ' + (xs[i] - xs[i - 1]) + 'px apart - a smear');
+  }
+});
+
+test('the first stamp of a stroke lands exactly where the pointer went down', () => {
+  const ctx = coreCtx();
+  const ops = ctx.paintGenerate('sticker', 'small', stroke(40, 50, 40, 50), stateFor(ctx, { stampLast: null }));
+  assert.strictEqual(ops.length, 1);
+  assert.deepStrictEqual([ops[0].x, ops[0].y], [40, 50]);
+});
+
+test('a drag that doubles back does not stamp on top of the last stamp', () => {
+  const ctx = coreCtx();
+  // Last stamp at x=100; drag from 110 back to 90 passes within 10px of it the
+  // whole way, which is never a stamp-width.
+  const ops = ctx.paintGenerate('sticker', 'medium', stroke(110, 0, 90, 0),
+                                stateFor(ctx, { stampLast: { x: 100, y: 0 } }));
+  assert.strictEqual(ops.length, 0, 'stamped ' + ops.length + ' times within a stamp-width of the last one');
+});
+
 // ── shapes ───────────────────────────────────────────────────────
 
 test('a line variant emits one line at the drag ends with the right width', () => {
