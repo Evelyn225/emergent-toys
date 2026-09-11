@@ -3117,12 +3117,14 @@ function openDesktopShortcutTarget(target) {
   }
   if (openWithAssociation(st.name, st.dirName)) return;
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
-  // A .exe the user wrote runs; a system binary opens its decompiler view
-  // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
-  // for why this test lives there rather than here. programSpawnOrAlert
+  // A root system binary launches its program; a .exe the user wrote runs
+  // as a script. See programIsRootSystemBinary and programIsSpawnableExe
+  // (os/programs.js) for why these tests live there rather than here.
+  // programSpawnOrAlert
   // (also os/programs.js) is what turns a spawn failure - the file vanished
   // between the shortcut being created and being clicked - into an osAlert
   // instead of a silent unhandled rejection.
+  else if (programIsRootSystemBinary(st.name, st.dirName)) openSystemFile(st.name);
   else if (programIsSpawnableExe(st.name)) {
     void programSpawnOrAlert(st.name, st.dirName);
   }
@@ -3259,7 +3261,7 @@ const PROGRAM_LAUNCHERS = {
     // a deliberate story beat, not a rounding error.
     delay: 320,
   },
-  'MINESWEEPER.exe': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
+  'MINESWEEPER.EXE': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
   'PAINT.EXE': { lines: ['Starting PAINT.exe...'], open: () => openPaint(), aliases: ['paint'] },
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
   // list it. It was reachable from the old `launchers`/`SYS` maps and stays
@@ -3326,15 +3328,26 @@ function programIsExecutableEntry(entry) {
 
 // A double-click (Explorer's openItem, the desktop's
 // openDesktopShortcutTarget) spawns a `.exe` instead of opening it in
-// Notepad, UNLESS it is one of the eight system binaries - those still route
-// to Notepad, which sends them on to the decompiler view via
-// notepadRouteFor. Both call sites need the exact same test, so it lives
-// here once rather than as two inline copies that could drift.
+// Notepad, UNLESS it is one of the system binaries - those launch their
+// built-in window instead, see programIsRootSystemBinary below. Both call
+// sites need the exact same test, so it lives here once rather than as two
+// inline copies that could drift.
 //
 // Declared with `function` for the same reason as programIsSystemBinary
 // above: the vm test harness only exposes function declarations.
 function programIsSpawnableExe(name) {
   return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
+}
+
+// A system binary AT THE ROOT, which is the only place the real ones live.
+// Double-clicking one runs the program, the way Windows runs an .exe - the
+// file itself is a two-line launcher (SYSTEM_BINARY_SOURCES, os/fs-core.js)
+// with nothing in it worth reading. A same-named file anywhere else is the
+// player's own and keeps its ordinary handling. Takes the directory the
+// caller already resolved, so the answer can never disagree with the file it
+// is about to act on.
+function programIsRootSystemBinary(name, dir) {
+  return !vfsNormalizeDir(dir || '') && programIsSystemBinary(name);
 }
 
 // Every real launch of a user .exe - the terminal running one off
@@ -5292,212 +5305,39 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
-// The eight system binaries, as real files.
+// The system binaries, as real files.
 //
-// These were authored metadata rows in os/daemon.js with hardcoded sizes
-// ('4,096'), which since phase 4 has meant eight invented numbers sitting in
+// These were authored metadata rows in ROOT_SYSTEM_FILE_META with hardcoded
+// sizes ('4,096'), which since phase 4 has meant invented numbers sitting in
 // a DIR listing next to sizes measured off the superblock. Seeding them makes
-// the size measured like everything else and gives the decompiler view
-// something real to read - it stops being an overlay and becomes what it
-// claims to be.
+// the size measured like everything else.
 //
-// The listings are duplicated here rather than read from
-// getExeDecompilerContent (apps/notepad.js) because that file is manifest
-// position 27 and this one is 14: calling it at seed time would throw on
-// boot. os/fs-core.js is the source of the bytes; apps/notepad.js renders
-// whatever the file holds. Content here must stay byte-identical to
-// getExeDecompilerContent's loreMap entries - test/system-binaries.test.cjs
-// checks the shape, but nothing enforces the exact text except this comment
-// and care.
+// Each one is a two-line launcher script, not an invented disassembly.
+// Double-clicking a binary runs the built-in window (see
+// programIsRootSystemBinary, os/programs.js), so the file's content only
+// shows through CAT or Notepad. A copy of one - an Explorer paste, say - is a
+// user .exe that does exactly what the original does: `start terminal` runs
+// through the script interpreter's own START and opens the same window.
+// There is nothing here pretending to be machine code.
 //
 // Text rather than blob is forced by the data: the only blob seed path
 // (refreshSeededWallpaperLibrary) produces URL-backed entries with size 0,
 // which would put a 0 in DIR - a worse number than the fake 4,096, not a
 // better one.
+function systemBinarySource(name, program) {
+  return ['# ' + name + ' - sleepOS system program', 'start ' + program].join('\n');
+}
 const SYSTEM_BINARY_SOURCES = {
-  'TERMINAL.exe': [
-    '; TERMINAL.exe - Disassembly v1.0',
-    'section .text',
-    '  PUSH soul_daemon',
-    '  CALL obsv.sys',
-    '  MOV  eax, [STDIN_HANDLE]',
-    '  CMP  eax, 0x00000000',
-    '  JE   void_fallback',
-    '  CALL parse_command',
-    '  JMP  main_loop',
-    'void_fallback:',
-    '  MOV  [VOID_PRESSURE], 0xFF',
-    '  RET',
-    '; NOTE: 3 subroutines unresolved',
-    '; CALL 0xDEAD???? - target unknown',
-  ].join('\n'),
-  'SYSMON.exe': [
-    '; SYSMON.exe - Disassembly',
-    'section .data',
-    '  soul_integrity  DD 0x57',
-    '  daemon_count    DD 0x07',
-    '  observer_ref    DD [CLASSIFIED]',
-    'section .text',
-    '  PUSH soul_integrity',
-    '  CALL read_corpus_metrics',
-    '  MOV  eax, [soul_integrity]',
-    '  SUB  eax, 0x01',
-    '  JLE  integrity_critical',
-    '  CALL update_display',
-    '  JMP  tick_loop',
-    'integrity_critical:',
-    '  CALL emit_warning',
-    '  PUSH 0xDEAD',
-    '  RET',
-  ].join('\n'),
-  'BROWSER.exe': [
-    '; BROWSER.exe - Disassembly',
-    'section .rodata',
-    '  home_url  DB "sleep://home", 0',
-    '  err_msg   DB "site blocked by void", 0',
-    'section .text',
-    '  MOV  esi, home_url',
-    '  CALL resolve_sleep_addr',
-    '  TEST eax, eax',
-    '  JZ   frame_blocked',
-    '  CALL render_page',
-    '  JMP  event_loop',
-    'frame_blocked:',
-    '  PUSH err_msg',
-    '  CALL show_error',
-    '  ; observer may intercept traffic here',
-    '  RET',
-  ].join('\n'),
-  'DEFRAG.exe': [
-    '; DEFRAG.exe - Disassembly',
-    'section .bss',
-    '  corpus_blocks RESB 640',
-    '  void_fragment DB [CANNOT RESOLVE]',
-    'section .text',
-    '  MOV  ecx, 0x280',
-    '  LEA  edi, [corpus_blocks]',
-    '  CALL scan_fragments',
-    '  MOV  eax, [void_fragment]',
-    '  CMP  eax, 0x00',
-    '  JNE  skip_void',
-    '  ; void_fragment cannot be moved',
-    '  ; it has always been here',
-    'skip_void:',
-    '  CALL compact_corpus',
-    '  JMP  defrag_loop',
-  ].join('\n'),
-  'NOTEPAD.exe': [
-    '; NOTEPAD.exe - Disassembly',
-    'section .data',
-    '  welcome_readme DB "WELCOME.README", 0',
-    '  null_text      DD 0x00',
-    'section .text',
-    '  MOV  esi, welcome_readme',
-    '  CALL fs_open_read',
-    '  TEST eax, eax',
-    '  JZ   open_blank',
-    '  CALL load_text_buffer',
-    '  JMP  editor_loop',
-    'open_blank:',
-    '  MOV  [text_buffer], null_text',
-    '  CALL init_editor',
-    '  RET',
-  ].join('\n'),
-  'EXPLORER.exe': [
-    '; EXPLORER.exe - Disassembly',
-    'section .data',
-    '  root_path DB "C:\\sleepOS\\", 0',
-    '  sys_files DD 9',
-    'section .text',
-    '  PUSH root_path',
-    '  CALL enumerate_fs',
-    '  MOV  ecx, sys_files',
-    '  CALL add_system_entries',
-    '  ; 1 entry cannot be enumerated',
-    '  ; see: ?????.exe',
-    '  CALL render_icon_grid',
-    '  JMP  window_loop',
-  ].join('\n'),
-  'CALC.exe': [
-    '; CALC.exe - Disassembly',
-    'section .data',
-    '  display_buf DB 32 dup(0)',
-    '  soul_pi     DQ 3.14159265358979',
-    'section .text',
-    '  MOV  eax, 0x00',
-    '  MOV  [accumulator], eax',
-    '  CALL init_display',
-    '  JMP  calc_loop',
-    'calc_loop:',
-    '  CALL wait_keypress',
-    '  CALL eval_operation',
-    '  PUSH [accumulator]',
-    '  CALL update_display',
-    '  JMP  calc_loop',
-    '; NOTE: division by zero returns VOID',
-  ].join('\n'),
-  'MINESWEEPER.exe': [
-    '; MINESWEEPER.exe - Disassembly',
-    'section .data',
-    '  field_w   DW 0009h',
-    '  field_h   DW 0009h',
-    '  mine_cnt  DW 000Ah',
-    '  first_hit DD 0FFFFFFFFh',
-    'section .text',
-    '  CALL  wait_first_click',
-    '  MOV   [first_hit], eax',
-    '  ; nothing is under the board until the player commits',
-    '  MOV   ecx, [mine_cnt]',
-    'place_loop:',
-    '  CALL  rand_free_cell',
-    '  CALL  adjacent_to_first_hit',
-    '  JNZ   place_loop',
-    '  MOV   BYTE [esi+eax], 0FFh',
-    '  LOOP  place_loop',
-    '  CALL  count_adjacent',
-    'input_loop:',
-    '  CALL  wait_click',
-    '  CALL  flood_reveal',
-    '  CMP   [cells_left], 0',
-    '  JE    win',
-    '  JMP   input_loop',
-    '; NOTE: the field is decided by where you look first',
-  ].join('\n'),
-  'REGEDIT.exe': [
-    '; REGEDIT.exe - Disassembly',
-    'section .data',
-    '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
-    '  soul_key  DB "SOUL\\Metrics", 0',
-    'section .text',
-    '  PUSH hive_root',
-    '  CALL open_registry_hive',
-    '  MOV  esi, soul_key',
-    '  CALL reg_open_key',
-    '  CALL enumerate_values',
-    '  ; WARNING: OBSERVER_COUNT is classified',
-    '  ; ACCESS DENIED for key VOID\\',
-    '  CALL render_tree',
-    '  JMP  edit_loop',
-  ].join('\n'),
-  'PAINT.exe': [
-    '; PAINT.exe - Disassembly',
-    'section .data',
-    '  canvas_w    DW 01E0h',
-    '  canvas_h    DW 0168h',
-    '  stroke_seed DD 0FFFFFFFFh',
-    'section .text',
-    '  CALL  init_canvas',
-    '  MOV   [stroke_seed], eax',
-    '  ; every stroke gets its own seed, so nothing repeats twice',
-    'input_loop:',
-    '  CALL  wait_pointer_down',
-    '  CALL  gen_stroke_ops',
-    '  CALL  exec_ops',
-    '  CALL  wait_pointer_up',
-    '  CALL  push_undo',
-    '  JMP   input_loop',
-    '; NOTE: the canvas never resizes, only the view of it does',
-  ].join('\n'),
+  'TERMINAL.exe':    systemBinarySource('TERMINAL.exe', 'terminal'),
+  'SYSMON.exe':      systemBinarySource('SYSMON.exe', 'sysmon'),
+  'BROWSER.exe':     systemBinarySource('BROWSER.exe', 'browser'),
+  'DEFRAG.exe':      systemBinarySource('DEFRAG.exe', 'defrag'),
+  'NOTEPAD.exe':     systemBinarySource('NOTEPAD.exe', 'notepad'),
+  'EXPLORER.exe':    systemBinarySource('EXPLORER.exe', 'explorer'),
+  'CALC.exe':        systemBinarySource('CALC.exe', 'calc'),
+  'MINESWEEPER.exe': systemBinarySource('MINESWEEPER.exe', 'minesweeper'),
+  'REGEDIT.exe':     systemBinarySource('REGEDIT.exe', 'regedit'),
+  'PAINT.exe':       systemBinarySource('PAINT.exe', 'paint'),
 };
 
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
@@ -12047,13 +11887,10 @@ function makeDesktopIconEl(ic) {
       })});
     } else {
       items.push({ label: 'Open', action: activate });
-      // Lore / decompiler shortcuts for single icons
+      // Lore shortcuts for single icons
       const icName = ic.name || '';
       if (['daemon.core','void.tmp'].includes(icName)) {
         items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
-      }
-      if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
-        items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
       if (singleDesktopImage) {
         items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });
@@ -12523,25 +12360,12 @@ function highlight(text, lang) {
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
-// Which of NOTEPAD's two views a file gets.
-//
-// The discriminator is PROGRAM_LAUNCHERS membership rather than the .exe
-// extension. A system binary genuinely has no source to show, so a
-// disassembly view is honest for it. A script the user wrote thirty seconds
-// ago does have one, and showing invented bytecode instead would be the same
-// species of lie phases 5 and 5b existed to delete.
-function notepadRouteFor(filename) {
-  const name = String(filename || '');
-  if (!/\.exe$/i.test(name)) return 'editor';
-  return programIsSystemBinary(name) ? 'decompiler' : 'editor';
-}
-
 // Save (and Save As - writeAndSync is the single funnel both go through)
 // naming one of the eight system binaries would silently replace it with
 // whatever the open document holds. Before phase 6 that just created a
-// stray file the player could delete to recover; now the binary IS the file
-// the decompiler reads, refreshSeededSystemBinaries only heals it on the
-// NEXT boot, and there is otherwise no way back until then. Refused here,
+// stray file the player could delete to recover; now the binary IS a real
+// file on disk, refreshSeededSystemBinaries only heals it on the NEXT boot,
+// and there is otherwise no way back until then. Refused here,
 // before the write happens, with the same "protected" language the DELETE
 // guard (os/daemon.js) already uses so a player learns one vocabulary for
 // this rule, not two.
@@ -12563,67 +12387,6 @@ function notepadGuardProtectedSave(fname, dir) {
   if (dirName || !programIsSystemBinary(fileName)) return false;
   osAlert('Cannot save over ' + fileName + '.\n\nSystem files are protected.', 'Cannot Save', 'icon:error');
   return true;
-}
-
-function openDecompilerView(filename) {
-  const id = 'decompile-' + filename.replace(/\W/g,'_');
-  if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
-  const body = document.getElementById('wb-' + id);
-  const ws   = document.getElementById('ws-' + id);
-  const mb   = document.getElementById('mb-' + id);
-  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
-
-  // Phase 6 seeded these as real files (os/fs-core.js), so the view renders
-  // the file rather than a parallel authored copy. The fallback covers a
-  // binary that is in the registry but not on disk - possible only if a seed
-  // and the launcher table disagree, which is worth showing rather than
-  // crashing on.
-  const stat = vfsStatSync(filename, '');
-  const content = stat && stat.kind === 'text'
-    ? String(vfsDirNodeSync(stat.dirName).files.get(stat.name) || '')
-    : getExeDecompilerContent(filename);
-
-  // Read-only display with syntax highlighting (asm-like)
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'flex:1;overflow:auto;background:#fff;padding:8px;font-family:var(--sleep-font);font-size:11px;line-height:1.7;white-space:pre;';
-
-  // Basic asm-style syntax coloring
-  function highlightAsm(text) {
-    return text.split('\n').map(line => {
-      const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      if (esc.trimStart().startsWith(';')) return '<span style="color:#6a9955;font-style:italic;">' + esc + '</span>';
-      const opcodes = /\b(PUSH|CALL|MOV|CMP|JE|JZ|JNE|JNZ|JLE|JL|JG|JGE|JMP|TEST|SUB|ADD|AND|OR|XOR|LEA|RET|NOP|HLT)\b/g;
-      const colored = esc.replace(opcodes, m => '<span style="color:#0000cc;font-weight:bold;">' + m + '</span>');
-      return colored.replace(/\b(0x[0-9A-Fa-f]+)\b/g, '<span style="color:#098658;">$1</span>')
-                    .replace(/\b(DD|DB|DQ|DW|RESB|RESW|RESD|dup)\b/g, '<span style="color:#dd4400;">$1</span>');
-    }).join('\n');
-  }
-
-  wrap.innerHTML = highlightAsm(content);
-  body.appendChild(wrap);
-
-  if (ws) ws.textContent = filename + '  \u2014  Read-only  |  Decompiler View';
-
-  if (mb) {
-    const fileSpan = document.createElement('span');
-    fileSpan.className = 'menu-item'; fileSpan.textContent = 'File';
-    fileSpan.addEventListener('click', e => {
-      e.stopPropagation();
-      showDropdown(fileSpan, [
-        { label: 'Close', action: () => closeWin(id) },
-      ]);
-    });
-    mb.appendChild(fileSpan);
-    const viewSpan = document.createElement('span');
-    viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
-    viewSpan.addEventListener('click', e => {
-      e.stopPropagation();
-      showDropdown(viewSpan, [
-        { label: 'Copy All', action: () => navigator.clipboard?.writeText(content) },
-      ]);
-    });
-    mb.appendChild(viewSpan);
-  }
 }
 
 function openLoreNotepad(filename, content, title, icon) {
@@ -12831,176 +12594,6 @@ function openSaveDialog(defaultName, callback, options) {
   procSetTimeout(id, () => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
-// Lore-ified pseudo-bytecode for .exe decompiler view
-function getExeDecompilerContent(fname) {
-  const name = (fname || '').toLowerCase();
-  const base = fname.replace(/\.exe$/i,'').toUpperCase();
-  const loreMap = {
-    'terminal.exe': [
-      '; TERMINAL.exe - Disassembly v1.0',
-      'section .text',
-      '  PUSH soul_daemon',
-      '  CALL obsv.sys',
-      '  MOV  eax, [STDIN_HANDLE]',
-      '  CMP  eax, 0x00000000',
-      '  JE   void_fallback',
-      '  CALL parse_command',
-      '  JMP  main_loop',
-      'void_fallback:',
-      '  MOV  [VOID_PRESSURE], 0xFF',
-      '  RET',
-      '; NOTE: 3 subroutines unresolved',
-      '; CALL 0xDEAD???? - target unknown',
-    ],
-    'sysmon.exe': [
-      '; SYSMON.exe - Disassembly',
-      'section .data',
-      '  soul_integrity  DD 0x57',
-      '  daemon_count    DD 0x07',
-      '  observer_ref    DD [CLASSIFIED]',
-      'section .text',
-      '  PUSH soul_integrity',
-      '  CALL read_corpus_metrics',
-      '  MOV  eax, [soul_integrity]',
-      '  SUB  eax, 0x01',
-      '  JLE  integrity_critical',
-      '  CALL update_display',
-      '  JMP  tick_loop',
-      'integrity_critical:',
-      '  CALL emit_warning',
-      '  PUSH 0xDEAD',
-      '  RET',
-    ],
-    'browser.exe': [
-      '; BROWSER.exe - Disassembly',
-      'section .rodata',
-      '  home_url  DB "sleep://home", 0',
-      '  err_msg   DB "site blocked by void", 0',
-      'section .text',
-      '  MOV  esi, home_url',
-      '  CALL resolve_sleep_addr',
-      '  TEST eax, eax',
-      '  JZ   frame_blocked',
-      '  CALL render_page',
-      '  JMP  event_loop',
-      'frame_blocked:',
-      '  PUSH err_msg',
-      '  CALL show_error',
-      '  ; observer may intercept traffic here',
-      '  RET',
-    ],
-    'defrag.exe': [
-      '; DEFRAG.exe - Disassembly',
-      'section .bss',
-      '  corpus_blocks RESB 640',
-      '  void_fragment DB [CANNOT RESOLVE]',
-      'section .text',
-      '  MOV  ecx, 0x280',
-      '  LEA  edi, [corpus_blocks]',
-      '  CALL scan_fragments',
-      '  MOV  eax, [void_fragment]',
-      '  CMP  eax, 0x00',
-      '  JNE  skip_void',
-      '  ; void_fragment cannot be moved',
-      '  ; it has always been here',
-      'skip_void:',
-      '  CALL compact_corpus',
-      '  JMP  defrag_loop',
-    ],
-    'notepad.exe': [
-      '; NOTEPAD.exe - Disassembly',
-      'section .data',
-      '  welcome_readme DB "WELCOME.README", 0',
-      '  null_text      DD 0x00',
-      'section .text',
-      '  MOV  esi, welcome_readme',
-      '  CALL fs_open_read',
-      '  TEST eax, eax',
-      '  JZ   open_blank',
-      '  CALL load_text_buffer',
-      '  JMP  editor_loop',
-      'open_blank:',
-      '  MOV  [text_buffer], null_text',
-      '  CALL init_editor',
-      '  RET',
-    ],
-    'explorer.exe': [
-      '; EXPLORER.exe - Disassembly',
-      'section .data',
-      '  root_path DB "C:\\sleepOS\\", 0',
-      '  sys_files DD 9',
-      'section .text',
-      '  PUSH root_path',
-      '  CALL enumerate_fs',
-      '  MOV  ecx, sys_files',
-      '  CALL add_system_entries',
-      '  ; 1 entry cannot be enumerated',
-      '  ; see: ?????.exe',
-      '  CALL render_icon_grid',
-      '  JMP  window_loop',
-    ],
-    'calc.exe': [
-      '; CALC.exe - Disassembly',
-      'section .data',
-      '  display_buf DB 32 dup(0)',
-      '  soul_pi     DQ 3.14159265358979',
-      'section .text',
-      '  MOV  eax, 0x00',
-      '  MOV  [accumulator], eax',
-      '  CALL init_display',
-      '  JMP  calc_loop',
-      'calc_loop:',
-      '  CALL wait_keypress',
-      '  CALL eval_operation',
-      '  PUSH [accumulator]',
-      '  CALL update_display',
-      '  JMP  calc_loop',
-      '; NOTE: division by zero returns VOID',
-    ],
-    'regedit.exe': [
-      '; REGEDIT.exe - Disassembly',
-      'section .data',
-      '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
-      '  soul_key  DB "SOUL\\Metrics", 0',
-      'section .text',
-      '  PUSH hive_root',
-      '  CALL open_registry_hive',
-      '  MOV  esi, soul_key',
-      '  CALL reg_open_key',
-      '  CALL enumerate_values',
-      '  ; WARNING: OBSERVER_COUNT is classified',
-      '  ; ACCESS DENIED for key VOID\\',
-      '  CALL render_tree',
-      '  JMP  edit_loop',
-    ],
-  };
-  const specific = loreMap[name];
-  if (specific) return specific.join('\n');
-  return [
-    '; ' + base + ' - Disassembly',
-    '; File type: WIN32 PE (sleepOS compatible)',
-    '',
-    'section .data',
-    '  entry_point DD 0x' + Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4,'0'),
-    '  build_stamp DD 0x' + Math.floor(Math.random()*0xFFFFFFFF).toString(16).toUpperCase().padStart(8,'0'),
-    '',
-    'section .text',
-    '  PUSH soul_daemon',
-    '  CALL obsv.sys',
-    '  MOV  eax, [entry_point]',
-    '  CALL eax',
-    '  CMP  eax, 0',
-    '  JNZ  execution_error',
-    '  RET',
-    'execution_error:',
-    '  PUSH 0xDEADC0DE',
-    '  CALL void_handler',
-    '  JMP  0x0000',
-    '',
-    '; [decompiler: 1 function unresolved]',
-  ].join('\n');
-}
-
 // Lore content for daemon.core and void.tmp
 const DAEMON_CORE_CONTENT =
 `[DAEMON CORE - raw read attempt]
@@ -13046,15 +12639,10 @@ function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
   const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
-  // Special handling for .exe files - decompiler view (read-only) for a
-  // system binary, plain editor for anything the user authored themselves.
   const normalizedName = (filename || '').toLowerCase();
   const isDaemonCore = normalizedName === 'daemon.core';
   const isVoidTmp = normalizedName === 'void.tmp';
 
-  if (filename && notepadRouteFor(filename) === 'decompiler') {
-    return openDecompilerView(filename);
-  }
   if (isDaemonCore) {
     daemonActivate('raw');
     return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', 'icon:daemon');
@@ -13712,12 +13300,14 @@ function openExplorer(startPath) {
     // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
     if (openWithAssociation(name, cwd)) return;
     if (st.kind === 'blob') openMediaFile(name, cwd);
-    // A .exe the user wrote runs; a system binary opens its decompiler view
-    // through openNotepad instead. See programIsSpawnableExe (os/programs.js)
-    // for why this test lives there rather than here. programSpawnOrAlert
+    // A root system binary launches its program; a .exe the user wrote runs
+    // as a script. See programIsRootSystemBinary and programIsSpawnableExe
+    // (os/programs.js) for why these tests live there rather than here.
+    // programSpawnOrAlert
     // (also os/programs.js) is what turns a spawn failure - the file
     // vanished between listing and double-click - into an osAlert instead
     // of a silent unhandled rejection.
+    else if (programIsRootSystemBinary(st.name, st.dirName)) openSystemFile(st.name);
     else if (programIsSpawnableExe(name)) {
       void programSpawnOrAlert(name, cwd);
     }
@@ -13895,7 +13485,6 @@ function openExplorer(startPath) {
       const isScript = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.script');
       const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.kind === 'image';
       const isLoreFile = !!singleSelected && !singleSelected._recycle && ['daemon.core','void.tmp'].includes(singleSelected.name);
-      const isExeFile  = !!singleSelected && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.exe');
       if (singleSelected && !multi && (singleSelected.recycleBin || isRecycleBinItemName(singleSelected.name)) && !singleSelected._recycle) {
         showCtxMenu(e.clientX, e.clientY, [
           { label: 'Open', action: openRecycleBin },
@@ -13922,7 +13511,6 @@ function openExplorer(startPath) {
           ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(openItem) }
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
         ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
-        ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
         ...(canSetWallpaper ? [{ label: 'Edit in Paint', action: () => openPaintFile(singleSelected.name, cwd) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {

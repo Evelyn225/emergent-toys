@@ -429,13 +429,10 @@ function makeDesktopIconEl(ic) {
       })});
     } else {
       items.push({ label: 'Open', action: activate });
-      // Lore / decompiler shortcuts for single icons
+      // Lore shortcuts for single icons
       const icName = ic.name || '';
       if (['daemon.core','void.tmp'].includes(icName)) {
         items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
-      }
-      if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
-        items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
       if (singleDesktopImage) {
         items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });

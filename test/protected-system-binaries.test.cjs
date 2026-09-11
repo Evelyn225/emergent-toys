@@ -211,7 +211,7 @@ function terminalWriteCtx() {
 test('writePipelineOutput refuses a path-qualified bypass and leaves the real binary unchanged', async () => {
   const ctx = terminalWriteCtx();
   const original = ctx.vfsGetTree().files.get('TERMINAL.exe');
-  assert.strictEqual(original.length, 309, 'fixture assumption changed - update the expected length');
+  assert.strictEqual(original.length, 54, 'fixture assumption changed - update the expected length');
 
   for (const target of ['C:\\sleepOS\\TERMINAL.exe', '\\TERMINAL.exe', 'C:/sleepOS/TERMINAL.exe']) {
     await assert.rejects(

@@ -1,8 +1,6 @@
 'use strict';
-// Opening a .exe showed a fabricated disassembly for every file with that
-// extension. Harmless while those binaries had no source; a lie the moment a
-// user can author one. The discriminator is PROGRAM_LAUNCHERS membership -
-// see os/programs.js's programIsSystemBinary.
+// A .exe is a script, so NOTEPAD highlights it as one - the system binaries
+// included, since each is a two-line launcher script (os/fs-core.js).
 const test = require('node:test');
 const assert = require('node:assert');
 const { makeOsContext, loadOsSources } = require('./helpers/load-os.cjs');
@@ -37,22 +35,24 @@ test('a plain file is unaffected', () => {
   assert.strictEqual(ctx.detectLang('page.html'), 'html');
 });
 
-test('a system binary routes to the decompiler', () => {
-  const ctx = notepadCtx();
-  assert.strictEqual(ctx.notepadRouteFor('TERMINAL.exe'), 'decompiler');
-});
-
-test('a user-authored .exe routes to the editor', () => {
-  const ctx = notepadCtx();
-  assert.strictEqual(ctx.notepadRouteFor('HELLO.exe'), 'editor');
-});
-
-test('routing is case-insensitive on the system side', () => {
-  const ctx = notepadCtx();
-  assert.strictEqual(ctx.notepadRouteFor('terminal.exe'), 'decompiler');
-});
-
-test('a non-exe always routes to the editor', () => {
-  const ctx = notepadCtx();
-  assert.strictEqual(ctx.notepadRouteFor('notes.txt'), 'editor');
+// NOTEPAD used to open a system binary in a read-only "Decompiler View" of
+// invented disassembly. That view is gone: a system binary launches its
+// program when double-clicked, and its file is a two-line launcher script
+// that NOTEPAD shows like any other text. Guarded at the source level because
+// the failure mode - the view quietly coming back through a menu item - is
+// exactly the kind of thing no behavioural test here would reach.
+test('no source defines or opens a decompiler view', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { ROOT } = require('./helpers/load-os.cjs');
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'split-manifest.json'), 'utf8'));
+  const offenders = [];
+  for (const rel of manifest) {
+    fs.readFileSync(path.join(ROOT, rel), 'utf8').split(/\r?\n/).forEach((line, i) => {
+      if (/openDecompilerView|getExeDecompilerContent|notepadRouteFor|Decompiler View/.test(line)) {
+        offenders.push(rel + ':' + (i + 1) + ': ' + line.trim());
+      }
+    });
+  }
+  assert.deepStrictEqual(offenders, [], 'the decompiler is back:\n  ' + offenders.join('\n  '));
 });

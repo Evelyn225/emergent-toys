@@ -77,7 +77,7 @@ const PROGRAM_LAUNCHERS = {
     // a deliberate story beat, not a rounding error.
     delay: 320,
   },
-  'MINESWEEPER.exe': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
+  'MINESWEEPER.EXE': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
   'PAINT.EXE': { lines: ['Starting PAINT.exe...'], open: () => openPaint(), aliases: ['paint'] },
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
   // list it. It was reachable from the old `launchers`/`SYS` maps and stays
@@ -144,15 +144,26 @@ function programIsExecutableEntry(entry) {
 
 // A double-click (Explorer's openItem, the desktop's
 // openDesktopShortcutTarget) spawns a `.exe` instead of opening it in
-// Notepad, UNLESS it is one of the eight system binaries - those still route
-// to Notepad, which sends them on to the decompiler view via
-// notepadRouteFor. Both call sites need the exact same test, so it lives
-// here once rather than as two inline copies that could drift.
+// Notepad, UNLESS it is one of the system binaries - those launch their
+// built-in window instead, see programIsRootSystemBinary below. Both call
+// sites need the exact same test, so it lives here once rather than as two
+// inline copies that could drift.
 //
 // Declared with `function` for the same reason as programIsSystemBinary
 // above: the vm test harness only exposes function declarations.
 function programIsSpawnableExe(name) {
   return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
+}
+
+// A system binary AT THE ROOT, which is the only place the real ones live.
+// Double-clicking one runs the program, the way Windows runs an .exe - the
+// file itself is a two-line launcher (SYSTEM_BINARY_SOURCES, os/fs-core.js)
+// with nothing in it worth reading. A same-named file anywhere else is the
+// player's own and keeps its ordinary handling. Takes the directory the
+// caller already resolved, so the answer can never disagree with the file it
+// is about to act on.
+function programIsRootSystemBinary(name, dir) {
+  return !vfsNormalizeDir(dir || '') && programIsSystemBinary(name);
 }
 
 // Every real launch of a user .exe - the terminal running one off

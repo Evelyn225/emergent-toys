@@ -78,11 +78,30 @@ test('story pseudo-files are NOT seeded - their existence is conditional', () =>
   });
 });
 
-test('a system binary reads back the content it was seeded with', () => {
+test('a system binary reads back its launcher script, not a disassembly', () => {
   const ctx = fsCtx();
-  const tree = ctx.vfsGetTree();
-  const text = tree.files.get('TERMINAL.exe');
-  assert.ok(/section \.text/.test(text), 'expected a disassembly listing, got: ' + String(text).slice(0, 80));
+  const text = ctx.vfsGetTree().files.get('TERMINAL.exe');
+  assert.strictEqual(text, '# TERMINAL.exe - sleepOS system program\nstart terminal');
+});
+
+// A copied binary is an ordinary user .exe, so its `start <program>` line
+// runs through the script interpreter's START - scriptOpenSystemProgram's
+// map (os/script/interp.js). A launcher naming a program that map does not
+// know would fall through to openSystemFile with a bare name and open
+// nothing, so a copy of that binary would be a dud.
+test('every launcher names a program the script START can open', () => {
+  const ctx = fsCtx();
+  const interpSrc = fs.readFileSync(path.join(__dirname, '..', 'os', 'script', 'interp.js'), 'utf8');
+  const fnStart = interpSrc.indexOf('async function scriptOpenSystemProgram');
+  assert.notStrictEqual(fnStart, -1, 'scriptOpenSystemProgram not found');
+  const mapSrc = interpSrc.slice(fnStart, interpSrc.indexOf('};', fnStart));
+  const known = new Set([...mapSrc.matchAll(/^\s{4}'?([a-z.]+)'?\s*:/gm)].map(m => m[1]));
+  SYSTEM_BINARIES.forEach(name => {
+    const text = String(ctx.vfsGetTree().files.get(name) || '');
+    const m = /^start (\S+)$/m.exec(text);
+    assert.ok(m, name + ' has no start line: ' + JSON.stringify(text));
+    assert.ok(known.has(m[1]), name + ' launches "' + m[1] + '", which scriptOpenSystemProgram does not know');
+  });
 });
 
 // vfsBootMount's seed callback only fires `if (!root.dirs.size &&
