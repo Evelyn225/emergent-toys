@@ -23,8 +23,16 @@ let paintState = null;
 //   - The pencil and the wacky brush each own a loop that runs for the whole
 //     stroke but is only AUDIBLE while the pointer is moving. A held, motionless
 //     pencil scratching away is the thing that makes a drawing sound read as a
-//     recording rather than as you. Gating is done with duckSoundLoop, so the
-//     loop keeps its place and resumes mid-texture rather than restarting.
+//     recording rather than as you. The loop keeps playing while gated, so it
+//     resumes mid-texture rather than restarting.
+//
+//     The gate touches the audio engine only on its two TRANSITIONS: open on
+//     the first move after a rest, close once the pointer has rested. It used
+//     to re-issue a fade on every pointermove, 60+ times a second, each one
+//     cancelling the last and restarting from a main-thread reading of the
+//     level that lags the audio thread - so on real hardware the sound was
+//     often only heard once the pointer stopped. See gateSoundLoop. Per move
+//     now costs one timestamp; a single timer notices the rest.
 //   - The eraser is a rub, not a bed: paint-eraser.ogg is a 0.42s gesture that
 //     decays. Looped it pulses at a fixed 2.4Hz whatever your hand is doing, so
 //     it is retriggered by distance travelled instead - scrub faster, rub more.
@@ -34,10 +42,12 @@ let paintState = null;
 // and flat energy head-to-tail, so it loops plainly; paint-pencil.ogg's last
 // 50ms falls to -58dB, so it gets a crossfade to bury that dip. Retune freely.
 const PAINT_PENCIL_CROSSFADE_SEC = 0.25;
-// How long the pointer may sit still before the drawing loop goes quiet. Longer
-// than the gap between two pointermoves on a slow drag (~16ms at 60Hz, and a
-// trackpad can stall for a few frames), shorter than a deliberate pause.
-const PAINT_LOOP_IDLE_MS = 90;
+// How long the pointer may sit still before the drawing loop goes quiet. It was
+// 90ms, and metering a real drag showed the gate closing mid-stroke, 100-200ms
+// of silence at a time, whenever the main thread was briefly busy between two
+// pointermoves. Long enough to ride out those gaps, short enough that a
+// deliberate pause still goes quiet.
+const PAINT_LOOP_IDLE_MS = 150;
 const PAINT_LOOP_ATTACK_SEC = 0.025;
 const PAINT_LOOP_RELEASE_SEC = 0.08;
 // Canvas pixels of eraser travel per rub, and the floor between rubs so a fast
@@ -75,23 +85,43 @@ function paintStrokeLoopStop() {
 
 function paintStrokeSoundBegin(s) {
   s.strokeLoop = paintStrokeLoopStart(s.tool);
-  // Silent until the pointer actually moves. duckSoundLoop remembers the level
-  // on the loop entry, and the loop primes from it, so this also makes the
-  // very first stroke of a session start silent rather than at full level.
-  if (s.strokeLoop) duckSoundLoop(s.strokeLoop, 0, 0.01);
+  s.loopOpen = false;
+  // Silent until the pointer actually moves. The gate's level is remembered on
+  // the loop entry and the loop primes from it, so this also makes the very
+  // first stroke of a session start silent rather than at full level.
+  if (s.strokeLoop) gateSoundLoop(s.strokeLoop, false, 0.01);
   // Primed so the first movement rubs immediately rather than after 24px.
   s.rubTravel = PAINT_RUB_EVERY_PX;
   s.rubAt = 0;
 }
 
+// Closes the gate once the pointer has rested for PAINT_LOOP_IDLE_MS. One timer
+// per rest, not one per move: a move only stamps s.lastMoveAt, and when the
+// timer fires early - the pointer moved again meanwhile - it re-arms itself
+// for whatever is left of the window.
+function paintLoopIdleCheck(s) {
+  s.loopIdleTimer = null;
+  if (!s.strokeLoop || !s.loopOpen) return;
+  const rested = performance.now() - s.lastMoveAt;
+  if (rested < PAINT_LOOP_IDLE_MS) {
+    s.loopIdleTimer = procSetTimeout(PAINT_WIN_ID, () => paintLoopIdleCheck(s), PAINT_LOOP_IDLE_MS - rested);
+    return;
+  }
+  gateSoundLoop(s.strokeLoop, false, PAINT_LOOP_RELEASE_SEC);
+  s.loopOpen = false;
+}
+
 function paintStrokeSoundMove(s, dist) {
   if (dist <= 0) return;
   if (s.strokeLoop) {
-    duckSoundLoop(s.strokeLoop, 1, PAINT_LOOP_ATTACK_SEC);
-    clearTimeout(s.loopIdleTimer);
-    const name = s.strokeLoop;
-    s.loopIdleTimer = procSetTimeout(PAINT_WIN_ID, () => duckSoundLoop(name, 0, PAINT_LOOP_RELEASE_SEC),
-                                     PAINT_LOOP_IDLE_MS);
+    s.lastMoveAt = performance.now();
+    if (!s.loopOpen) {
+      gateSoundLoop(s.strokeLoop, true, PAINT_LOOP_ATTACK_SEC);
+      s.loopOpen = true;
+    }
+    if (!s.loopIdleTimer) {
+      s.loopIdleTimer = procSetTimeout(PAINT_WIN_ID, () => paintLoopIdleCheck(s), PAINT_LOOP_IDLE_MS);
+    }
   }
   if (s.tool === 'eraser') {
     s.rubTravel += dist;
@@ -108,7 +138,15 @@ function paintStrokeSoundEnd(s) {
   clearTimeout(s.loopIdleTimer);
   s.loopIdleTimer = null;
   s.strokeLoop = null;
+  s.loopOpen = false;
   paintStrokeLoopStop();
+}
+
+// Every Paint sound, decoded when the window opens rather than on first use -
+// see preloadSounds. Read off SOUND_FILES rather than listed here, so a sound
+// added to the table is preloaded without anyone remembering to.
+function paintPreloadSounds() {
+  preloadSounds(Object.keys(SOUND_FILES).filter(name => name.startsWith('paint-')));
 }
 
 // ── status bar ───────────────────────────────────────────────────
@@ -591,6 +629,7 @@ function openPaint() {
   paintRenderOptionsBar();
 
   paintBuildMenu(document.getElementById('mb-' + PAINT_WIN_ID));
+  paintPreloadSounds();
 
   // A sprite-sheet icon, not a text glyph, so it stays pixel-crisp like every
   // other tool - see PAINT_TOOL_ICON_ORDER, where it sits after the eleven

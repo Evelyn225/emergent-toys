@@ -4401,12 +4401,35 @@ function primeLoop(name, entry) {
     // buffer sources are scheduled against ctx.currentTime, which is frozen for
     // exactly as long as the context is suspended.
     entry.nextStart = audioCtx.currentTime + 0.02;
-    queueLoopPass(entry);
+    queueLoopPass(entry, true);
     queueLoopPass(entry);
   });
 }
 
-function queueLoopPass(entry) {
+// Equal-power crossfade curves, fade-in and fade-out: sin and cos over a
+// quarter turn, so the two passes' powers always sum to one. The two sides of a
+// seam are different stretches of the same recording - uncorrelated - and
+// uncorrelated signals add in power, so this is the curve that holds the level
+// steady through the overlap.
+//
+// It replaced exponential ramps to and from GAIN_FLOOR, which are straight
+// lines in decibels: at the middle of the overlap BOTH passes sat near -40dB,
+// so every seam was a dip. Metered on PAINT's pencil loop, that was 100-150ms
+// of near-silence once a second, for as long as you drew.
+const LOOP_FADE_STEPS = 64;
+const LOOP_FADE_IN = new Float32Array(LOOP_FADE_STEPS);
+const LOOP_FADE_OUT = new Float32Array(LOOP_FADE_STEPS);
+for (let i = 0; i < LOOP_FADE_STEPS; i++) {
+  const t = i / (LOOP_FADE_STEPS - 1);
+  LOOP_FADE_IN[i] = Math.sin(t * Math.PI / 2);
+  LOOP_FADE_OUT[i] = Math.cos(t * Math.PI / 2);
+}
+
+// `first` is the opening pass of a run. It starts at full level: there is
+// nothing before it to crossfade from, and fading it in anyway made every
+// loop start a whole crossfade late - 250ms on PAINT's pencil, longer than a
+// quick stroke, so a quick stroke made no sound at all.
+function queueLoopPass(entry, first) {
   const buffer = entry.buffer;
   if (!buffer) return;
   const fade = Math.min(entry.crossfade, buffer.duration / 3);
@@ -4419,13 +4442,13 @@ function queueLoopPass(entry) {
   src.connect(gain);
   gain.connect(entry.gain);
 
-  // Equal-gain in and out across the overlap. The pass envelope peaks at 1 and
-  // entry.gain carries the trim, so volume and ducking stay one node away from
-  // the scheduling.
-  gain.gain.setValueAtTime(GAIN_FLOOR, at);
-  gain.gain.exponentialRampToValueAtTime(1, at + fade);
-  gain.gain.setValueAtTime(1, at + buffer.duration - fade);
-  gain.gain.exponentialRampToValueAtTime(GAIN_FLOOR, at + buffer.duration);
+  // The pass envelope peaks at 1 and entry.gain carries the trim, so volume and
+  // ducking stay one node away from the scheduling. The two curves cannot
+  // overlap in time - fade is capped at a third of the buffer above - which
+  // setValueCurveAtTime requires.
+  if (first) gain.gain.setValueAtTime(1, at);
+  else gain.gain.setValueCurveAtTime(LOOP_FADE_IN, at, fade);
+  gain.gain.setValueCurveAtTime(LOOP_FADE_OUT, at + buffer.duration - fade, fade);
 
   // So stopLoopPasses can tear the pair down without closing over this scope.
   src._passGain = gain;
@@ -4476,6 +4499,44 @@ function duckSoundLoop(name, factor, seconds = 0.6) {
   entry.gain.gain.setValueAtTime(Math.max(GAIN_FLOOR, entry.gain.gain.value), now);
   entry.gain.gain.exponentialRampToValueAtTime(
     Math.max(GAIN_FLOOR, entry.volume * entry.duck), now + Math.max(0.01, seconds));
+}
+
+// Opens or closes a running loop, for a sound that should only be heard while
+// something is happening - PAINT's drawing loops, audible while the pointer
+// moves. Call it on the TRANSITIONS, open once and close once, never on every
+// event.
+//
+// Why this is not duckSoundLoop: that ramps from gain.value, a main-thread
+// reading of a parameter the audio thread owns, which can lag it by a device
+// buffer. PAINT used to call duckSoundLoop on every pointermove, and each call
+// cancelled the fade in progress and restarted it from that stale, lower
+// reading - so on a real sound card the level was pulled back towards silence
+// as fast as it rose, and the loop was only heard once the moves stopped
+// coming. setTargetAtTime needs no reading: it approaches the target from
+// whatever the audio thread has the gain at, at the moment it takes effect.
+//
+// `seconds` is roughly how long it takes to get there - three time constants,
+// about 95% of the way.
+function gateSoundLoop(name, open, seconds = 0.03) {
+  const entry = audioLoops.get(name);
+  if (!entry) return;
+  // Remembered like a duck, so a loop primed while closed starts silent.
+  entry.duck = open ? 1 : 0;
+  if (!entry.gain || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  entry.gain.gain.cancelScheduledValues(now);
+  entry.gain.gain.setTargetAtTime(Math.max(GAIN_FLOOR, entry.volume * entry.duck), now,
+                                  Math.max(0.001, seconds / 3));
+}
+
+// Decodes sounds ahead of their first use. A sound's first play otherwise waits
+// on the fetch and decode - measured at ~250ms for PAINT's pencil loop, which on
+// the first stroke read as the sound simply not playing. Never creates the
+// AudioContext: that must wait for a user gesture (see unlockSystemAudio), so
+// before one this does nothing and the sounds load on first use as before.
+function preloadSounds(names) {
+  if (!audioCtx) return;
+  names.forEach(name => { loadSound(name); });
 }
 
 // Where the master gain belongs right now. Floored rather than allowed to
@@ -19351,8 +19412,16 @@ let paintState = null;
 //   - The pencil and the wacky brush each own a loop that runs for the whole
 //     stroke but is only AUDIBLE while the pointer is moving. A held, motionless
 //     pencil scratching away is the thing that makes a drawing sound read as a
-//     recording rather than as you. Gating is done with duckSoundLoop, so the
-//     loop keeps its place and resumes mid-texture rather than restarting.
+//     recording rather than as you. The loop keeps playing while gated, so it
+//     resumes mid-texture rather than restarting.
+//
+//     The gate touches the audio engine only on its two TRANSITIONS: open on
+//     the first move after a rest, close once the pointer has rested. It used
+//     to re-issue a fade on every pointermove, 60+ times a second, each one
+//     cancelling the last and restarting from a main-thread reading of the
+//     level that lags the audio thread - so on real hardware the sound was
+//     often only heard once the pointer stopped. See gateSoundLoop. Per move
+//     now costs one timestamp; a single timer notices the rest.
 //   - The eraser is a rub, not a bed: paint-eraser.ogg is a 0.42s gesture that
 //     decays. Looped it pulses at a fixed 2.4Hz whatever your hand is doing, so
 //     it is retriggered by distance travelled instead - scrub faster, rub more.
@@ -19362,10 +19431,12 @@ let paintState = null;
 // and flat energy head-to-tail, so it loops plainly; paint-pencil.ogg's last
 // 50ms falls to -58dB, so it gets a crossfade to bury that dip. Retune freely.
 const PAINT_PENCIL_CROSSFADE_SEC = 0.25;
-// How long the pointer may sit still before the drawing loop goes quiet. Longer
-// than the gap between two pointermoves on a slow drag (~16ms at 60Hz, and a
-// trackpad can stall for a few frames), shorter than a deliberate pause.
-const PAINT_LOOP_IDLE_MS = 90;
+// How long the pointer may sit still before the drawing loop goes quiet. It was
+// 90ms, and metering a real drag showed the gate closing mid-stroke, 100-200ms
+// of silence at a time, whenever the main thread was briefly busy between two
+// pointermoves. Long enough to ride out those gaps, short enough that a
+// deliberate pause still goes quiet.
+const PAINT_LOOP_IDLE_MS = 150;
 const PAINT_LOOP_ATTACK_SEC = 0.025;
 const PAINT_LOOP_RELEASE_SEC = 0.08;
 // Canvas pixels of eraser travel per rub, and the floor between rubs so a fast
@@ -19403,23 +19474,43 @@ function paintStrokeLoopStop() {
 
 function paintStrokeSoundBegin(s) {
   s.strokeLoop = paintStrokeLoopStart(s.tool);
-  // Silent until the pointer actually moves. duckSoundLoop remembers the level
-  // on the loop entry, and the loop primes from it, so this also makes the
-  // very first stroke of a session start silent rather than at full level.
-  if (s.strokeLoop) duckSoundLoop(s.strokeLoop, 0, 0.01);
+  s.loopOpen = false;
+  // Silent until the pointer actually moves. The gate's level is remembered on
+  // the loop entry and the loop primes from it, so this also makes the very
+  // first stroke of a session start silent rather than at full level.
+  if (s.strokeLoop) gateSoundLoop(s.strokeLoop, false, 0.01);
   // Primed so the first movement rubs immediately rather than after 24px.
   s.rubTravel = PAINT_RUB_EVERY_PX;
   s.rubAt = 0;
 }
 
+// Closes the gate once the pointer has rested for PAINT_LOOP_IDLE_MS. One timer
+// per rest, not one per move: a move only stamps s.lastMoveAt, and when the
+// timer fires early - the pointer moved again meanwhile - it re-arms itself
+// for whatever is left of the window.
+function paintLoopIdleCheck(s) {
+  s.loopIdleTimer = null;
+  if (!s.strokeLoop || !s.loopOpen) return;
+  const rested = performance.now() - s.lastMoveAt;
+  if (rested < PAINT_LOOP_IDLE_MS) {
+    s.loopIdleTimer = procSetTimeout(PAINT_WIN_ID, () => paintLoopIdleCheck(s), PAINT_LOOP_IDLE_MS - rested);
+    return;
+  }
+  gateSoundLoop(s.strokeLoop, false, PAINT_LOOP_RELEASE_SEC);
+  s.loopOpen = false;
+}
+
 function paintStrokeSoundMove(s, dist) {
   if (dist <= 0) return;
   if (s.strokeLoop) {
-    duckSoundLoop(s.strokeLoop, 1, PAINT_LOOP_ATTACK_SEC);
-    clearTimeout(s.loopIdleTimer);
-    const name = s.strokeLoop;
-    s.loopIdleTimer = procSetTimeout(PAINT_WIN_ID, () => duckSoundLoop(name, 0, PAINT_LOOP_RELEASE_SEC),
-                                     PAINT_LOOP_IDLE_MS);
+    s.lastMoveAt = performance.now();
+    if (!s.loopOpen) {
+      gateSoundLoop(s.strokeLoop, true, PAINT_LOOP_ATTACK_SEC);
+      s.loopOpen = true;
+    }
+    if (!s.loopIdleTimer) {
+      s.loopIdleTimer = procSetTimeout(PAINT_WIN_ID, () => paintLoopIdleCheck(s), PAINT_LOOP_IDLE_MS);
+    }
   }
   if (s.tool === 'eraser') {
     s.rubTravel += dist;
@@ -19436,7 +19527,15 @@ function paintStrokeSoundEnd(s) {
   clearTimeout(s.loopIdleTimer);
   s.loopIdleTimer = null;
   s.strokeLoop = null;
+  s.loopOpen = false;
   paintStrokeLoopStop();
+}
+
+// Every Paint sound, decoded when the window opens rather than on first use -
+// see preloadSounds. Read off SOUND_FILES rather than listed here, so a sound
+// added to the table is preloaded without anyone remembering to.
+function paintPreloadSounds() {
+  preloadSounds(Object.keys(SOUND_FILES).filter(name => name.startsWith('paint-')));
 }
 
 // ── status bar ───────────────────────────────────────────────────
@@ -19919,6 +20018,7 @@ function openPaint() {
   paintRenderOptionsBar();
 
   paintBuildMenu(document.getElementById('mb-' + PAINT_WIN_ID));
+  paintPreloadSounds();
 
   // A sprite-sheet icon, not a text glyph, so it stays pixel-crisp like every
   // other tool - see PAINT_TOOL_ICON_ORDER, where it sits after the eleven
