@@ -143,7 +143,7 @@ function daemonVoidAction(mode) {
   daemonVoidFeedMode = mode;
   // Switching to a different probe cuts Listen's clip short rather than
   // letting it keep running under whatever the new probe shows.
-  if (mode !== 'listen') stopSound('void-listen');
+  if (mode !== 'listen') { stopSound('void-listen'); stopVoidAudioUI(); }
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
       ? 'The file is intact. What you are looking at is the aperture surface.'
@@ -161,8 +161,11 @@ function daemonVoidAction(mode) {
     ].join('\n');
   } else if (mode === 'listen') {
     // exclusive: a second Listen click restarts the clip instead of layering
-    // a second copy under the first.
-    playSound('void-listen', { exclusive: true });
+    // a second copy under the first. The flavor text is set below same as
+    // always, but startVoidAudioUI takes over the readout with a playing
+    // indicator until the clip actually finishes - see os/daemon.js.
+    stopVoidAudioUI();
+    playSound('void-listen', { exclusive: true }).then(ms => { if (ms > 0) startVoidAudioUI(ms); });
     daemonVoidFeed = daemonStory.stage >= 5
       ? "No words. Just a shift in the room tone that wasn't there before."
       : daemonStory.stage >= 4
@@ -299,8 +302,8 @@ function openVoid() {
   // it is gone or out of sight - mkWin runs this path on every open, closed
   // or not, so both hooks are (re)set here rather than only on first create.
   if (wins['void']) {
-    wins['void']._onclose = () => stopSound('void-listen');
-    wins['void']._onminimize = () => stopSound('void-listen');
+    wins['void']._onclose = () => { stopSound('void-listen'); stopVoidAudioUI(); };
+    wins['void']._onminimize = () => { stopSound('void-listen'); stopVoidAudioUI(); };
   }
   renderVoid();
 }

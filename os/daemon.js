@@ -142,6 +142,11 @@ let daemonStory = loadDaemonStory();
 let daemonVoidFeed = '';
 let daemonVoidFeedMode = '';
 let daemonPulseTimer = null;
+// The Listen probe's little player, driven by renderVoidReadout below rather
+// than by anything in os/audio.js - a wall-clock timer against the duration
+// playSound already resolves with, not the AudioContext's own clock, since
+// there's no pause here to make the two diverge.
+let daemonVoidAudioTimer = null;
 
 function daemonStageLabel(stage) {
   if (stage >= 8) return 'Contained';
@@ -1281,6 +1286,48 @@ function getVoidMeasureEntries(telemetry) {
     ['Aperture Bias', telemetry.bias],
     ['Disk Locality', 'negative'],
   ];
+}
+
+function stopVoidAudioUI() {
+  if (daemonVoidAudioTimer) { clearInterval(daemonVoidAudioTimer); daemonVoidAudioTimer = null; }
+}
+
+// Takes over void-readout with a little playing indicator for durationMs
+// (what playSound just resolved with), then hands back to renderVoidReadout's
+// ordinary text display once it's done - the same flavor text daemonVoidAction
+// already set, just shown once the clip finishes instead of immediately.
+function startVoidAudioUI(durationMs) {
+  stopVoidAudioUI();
+  const startedAt = performance.now();
+  const fmt = ms => {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  };
+  const tick = () => {
+    const out = document.getElementById('void-readout');
+    // The window closing/minimizing or a different probe firing already
+    // stops this timer through their own paths - this is only the case
+    // where the readout itself is gone without either of those running.
+    if (!out || daemonVoidFeedMode !== 'listen') { stopVoidAudioUI(); return; }
+    const elapsed = Math.min(durationMs, performance.now() - startedAt);
+    const pct = durationMs ? (elapsed / durationMs) * 100 : 100;
+    out.style.whiteSpace = 'normal';
+    out.style.padding = '10px';
+    out.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;height:100%;">
+        <span style="font-size:14px;color:#7fd37f;">${pct < 100 ? '▶' : '■'}</span>
+        <div style="flex:1;height:6px;border:1px solid #245a24;background:#010301;">
+          <div style="height:100%;width:${pct}%;background:#6ab56a;"></div>
+        </div>
+        <span style="font-size:10px;color:#8db98d;white-space:nowrap;">${fmt(elapsed)} / ${fmt(durationMs)}</span>
+      </div>`;
+    if (elapsed >= durationMs) {
+      stopVoidAudioUI();
+      renderVoidReadout(out, daemonVoidFeed, getContainmentTelemetry());
+    }
+  };
+  daemonVoidAudioTimer = setInterval(tick, 150);
+  tick();
 }
 
 function renderVoidReadout(out, content, telemetry) {
