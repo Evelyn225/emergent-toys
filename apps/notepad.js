@@ -346,9 +346,14 @@ function runScriptInTerminal(name, dirName, args) {
 // is untouched.
 //
 //   options.mode     'save' (default) or 'open'
-//   options.kinds    which VFS entry kinds are offered - ['text'] by default,
-//                    ['blob'] for an image picker
+//   options.kinds    which files are offered - ['text'] by default. 'blob' is
+//                    every stored media file; 'image', 'audio' and 'video'
+//                    narrow that to one media kind. PAINT.exe passes
+//                    ['image']: before it did, its Save As listed text files
+//                    only, so a folder full of paintings looked empty, and its
+//                    Open Picture would have offered MP3s.
 //   options.title    window title
+//   options.icon     title-bar icon - Notepad's by default
 //   options.startDir seeds the dialog's starting folder (e.g. PAINT.exe
 //                     opening Save As on a painting whose home is PICTURES,
 //                     not the root). Optional - every caller that omits it
@@ -359,11 +364,18 @@ function openSaveDialog(defaultName, callback, options) {
   const kinds = options.kinds || ['text'];
   const id = (mode === 'open' ? 'openfile-' : 'saveas-') + Date.now();
   const title = options.title || (mode === 'open' ? 'Open' : 'Save As');
-  if (!mkWin({ id, title, icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+  if (!mkWin({ id, title, icon: options.icon || 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
 
   let saveCwd = vfsNormalizeDir(options.startDir || '');
+
+  // A blob's media kind lives on its record, not in its name - which is also
+  // why the icon has to be resolved from it. Resolved by name alone, every
+  // PNG here came out as the unknown-file icon. Takes a vfsListSync entry or a
+  // vfsStatSync result; both carry the record as `blob`.
+  const mediaKind = e => (e.kind === 'blob' ? (e.blob && e.blob.kind) || 'blob' : e.kind);
+  const offered = e => kinds.includes(e.kind) || kinds.includes(mediaKind(e));
 
   // ── "Save in:" bar ────────────────────────────────────────────
   const locRow = document.createElement('div');
@@ -432,10 +444,11 @@ function openSaveDialog(defaultName, callback, options) {
       fileList.appendChild(el);
     });
 
-    entries.filter(e => kinds.includes(e.kind)).forEach(({ name }) => {
+    entries.filter(offered).forEach(e => {
+      const { name } = e;
       // resolveFsIcon already owns the extension table; this dialog used to
       // keep a second, smaller copy of it that drifted from the real one.
-      const el = makeFLItem(resolveFsIcon(name, 'file'), name);
+      const el = makeFLItem(resolveFsIcon(name, e.kind === 'blob' ? mediaKind(e) : 'file'), name);
       el.addEventListener('click', () => { nameInput.value = name; });
       // One listener, not two: a real double-click fires every listener bound
       // to it, so a second dblclick handler here would run the open callback
@@ -448,9 +461,35 @@ function openSaveDialog(defaultName, callback, options) {
     });
   }
 
+  // Saving over a file asks first, the way Windows does - with this dialog
+  // listing the folder's files, one click on a name and Save used to replace
+  // it without a word. Asks only about files this dialog OFFERS: saving a
+  // painting over a same-named text file is refused by the write itself, and
+  // "do you want to replace it?" answered Yes and then refused is worse than
+  // not asking. The lookup is the filesystem's own, so "already exists" means
+  // exactly what the save will overwrite.
+  let confirming = false;
   saveBtn.addEventListener('click', () => {
     const fname = nameInput.value.trim();
-    if (!fname) return;
+    if (!fname || confirming) return;
+    const existing = mode === 'save' ? vfsStatSync(fname, saveCwd) : null;
+    if (existing && existing.kind !== 'dir' && offered(existing)) {
+      confirming = true;
+      osConfirm(existing.name + ' already exists.\nDo you want to replace it?', title, yes => {
+        confirming = false;
+        // Closing the Save As dialog while this was up cancelled the save;
+        // a Yes to the stale question must not resurrect it.
+        if (!document.getElementById('win-' + id)) return;
+        if (!yes) {
+          // Back to the dialog with the name selected, ready to change.
+          nameInput.focus(); nameInput.select();
+          return;
+        }
+        closeWin(id);
+        callback(fname, saveCwd);
+      }, 'icon:warning', { ok: 'Yes', cancel: 'No' });
+      return;
+    }
     closeWin(id);
     callback(fname, saveCwd);
   });

@@ -421,6 +421,81 @@ test('dragging with the sticker tool spaces stamps out rather than smearing', ()
   }
 });
 
+// ── the picker strip ─────────────────────────────────────────────
+
+test('stepping a full row at a time visits every row and wraps at both ends', () => {
+  const ctx = coreCtx();
+  const seen = [0];
+  let at = 0;
+  for (let i = 0; i < 7; i++) seen.push(at = ctx.paintStickerStep(at, 14, 1));
+  assert.deepStrictEqual(seen, [0, 14, 28, 42, 56, 70, 84, 98]);
+  assert.strictEqual(ctx.paintStickerStep(98, 14, 1), 0, 'forward from the last row should wrap to the start');
+  assert.strictEqual(ctx.paintStickerStep(0, 14, -1), 98, 'back from the start should wrap to the last row');
+});
+
+// 112 is not a multiple of 9. The strip must still never show a stub: the last
+// view is the last NINE stickers, reached from wherever the previous one was.
+test('a page size that does not divide the sheet still only shows full views', () => {
+  const ctx = coreCtx();
+  const count = ctx.paintStickerCount();
+  let at = 0;
+  for (let i = 0; i < 20; i++) {
+    at = ctx.paintStickerStep(at, 9, 1);
+    assert.ok(at >= 0 && at + 9 <= count, 'a view starting at ' + at + ' runs past the end');
+  }
+  assert.strictEqual(ctx.paintStickerStep(0, 9, -1), count - 9);
+  assert.strictEqual(ctx.paintStickerStep(count - 9, 9, 1), 0);
+  assert.strictEqual(ctx.paintStickerStep(99, 9, 1), count - 9, 'the step before the end should land on the last full view');
+});
+
+// The reason the state is an offset: a resize changes the page size, and the
+// strip should stay where it was rather than jump.
+test('clamping keeps the strip where it was, pulled back only if it would run off the end', () => {
+  const ctx = coreCtx();
+  assert.strictEqual(ctx.paintStickerClampOffset(28, 6), 28, 'a narrower strip moved');
+  assert.strictEqual(ctx.paintStickerClampOffset(105, 14), 98, 'a wider strip ran past the last sticker');
+  assert.strictEqual(ctx.paintStickerClampOffset(-3, 14), 0);
+  assert.strictEqual(ctx.paintStickerClampOffset(NaN, 14), 0);
+});
+
+// The test above feeds the generator ONE 200px segment, which is not what a
+// drag delivers: a real one arrives as a segment per pointer move, a few pixels
+// each. Spacing within each segment alone stamped at the start of every one of
+// them - a 200px drag laid down 41 overlapping stamps - and that test stayed
+// green throughout. This is the shape of input that actually broke.
+test('a drag made of many small moves still spaces stamps a stamp-width apart', () => {
+  const ctx = coreCtx();
+  const xs = [];
+  let last = null;
+  for (let x = 0; x < 200; x += 5) {
+    ctx.paintGenerate('sticker', 'medium', stroke(x, 0, x + 5, 0),
+                      stateFor(ctx, { stickerIndex: 1, stampLast: last }))
+      .forEach(op => { xs.push(op.x); last = { x: op.x, y: op.y }; });
+  }
+  assert.ok(xs.length >= 5 && xs.length <= 8,
+    'a 200px drag with 32px stamps should lay down about six, got ' + xs.length);
+  for (let i = 1; i < xs.length; i++) {
+    assert.ok(xs[i] - xs[i - 1] >= 32 - 1e-9,
+      'stamps ' + (i - 1) + ' and ' + i + ' are ' + (xs[i] - xs[i - 1]) + 'px apart - a smear');
+  }
+});
+
+test('the first stamp of a stroke lands exactly where the pointer went down', () => {
+  const ctx = coreCtx();
+  const ops = ctx.paintGenerate('sticker', 'small', stroke(40, 50, 40, 50), stateFor(ctx, { stampLast: null }));
+  assert.strictEqual(ops.length, 1);
+  assert.deepStrictEqual([ops[0].x, ops[0].y], [40, 50]);
+});
+
+test('a drag that doubles back does not stamp on top of the last stamp', () => {
+  const ctx = coreCtx();
+  // Last stamp at x=100; drag from 110 back to 90 passes within 10px of it the
+  // whole way, which is never a stamp-width.
+  const ops = ctx.paintGenerate('sticker', 'medium', stroke(110, 0, 90, 0),
+                                stateFor(ctx, { stampLast: { x: 100, y: 0 } }));
+  assert.strictEqual(ops.length, 0, 'stamped ' + ops.length + ' times within a stamp-width of the last one');
+});
+
 // ── shapes ───────────────────────────────────────────────────────
 
 test('a line variant emits one line at the drag ends with the right width', () => {

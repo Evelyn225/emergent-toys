@@ -4158,6 +4158,24 @@ const SOUND_FILES = {
   error:    'error.ogg',
   glitch:   'glitch.ogg',
   click:    'mouseClick.ogg',
+  // PAINT.exe. Quoted keys because the names are the file names, hyphens and
+  // all - one fewer mapping to keep straight when a file is swapped.
+  'paint-pencil':      'paint-pencil.ogg',
+  'paint-brush':       'paint-brush.ogg',
+  'paint-eraser':      'paint-eraser.ogg',
+  'paint-stamp':       'paint-stamp.ogg',
+  'paint-shape':       'paint-shape.ogg',
+  'paint-fill':        'paint-fill.ogg',
+  'paint-eyedropper':  'paint-eyedropper.ogg',
+  'paint-palette':     'paint-palette.ogg',
+  'paint-select':      'paint-select.ogg',
+  'paint-text':        'paint-text.ogg',
+  'paint-clear':       'paint-clear.ogg',
+  'paint-firecracker': 'paint-firecracker.ogg',
+  'paint-blackhole':   'paint-blackhole.ogg',
+  'paint-dissolve':    'paint-dissolve.ogg',
+  'paint-undo1':       'paint-undo1.ogg',
+  'paint-undo2':       'paint-undo2.ogg',
 };
 
 // Per-sound trim, so the mix lives in one table instead of being spread across
@@ -4172,6 +4190,29 @@ const SOUND_GAIN = {
   error:    0.65,
   glitch:   0.50,
   click:    0.30,
+  // PAINT.exe. Set from each file's measured RMS rather than by ear, so they
+  // start out level with each other: one-shots land between the OS click and
+  // the error chime, the two drawing loops well under both because they run
+  // for as long as the pointer moves, and the firecracker a little hot because
+  // it is meant to startle. Starting points - retune here, nowhere else.
+  'paint-pencil':      0.22,
+  'paint-brush':       0.12,
+  'paint-eraser':      0.12,
+  'paint-stamp':       0.13,
+  'paint-shape':       0.09,
+  'paint-fill':        0.22,
+  'paint-eyedropper':  0.11,
+  'paint-palette':     0.17,
+  // Much hotter than the palette click in the file (-16dB vs -24dB over its
+  // audible span), so trimmed harder to land level with it and the OS click.
+  'paint-select':      0.07,
+  'paint-text':        0.40,
+  'paint-clear':       0.14,
+  'paint-firecracker': 0.60,
+  'paint-blackhole':   0.12,
+  'paint-dissolve':    0.30,
+  'paint-undo1':       0.22,
+  'paint-undo2':       0.22,
 };
 
 // defrag.ogg does not loop seamlessly and a slow run can outlast its ~1 minute,
@@ -4373,12 +4414,35 @@ function primeLoop(name, entry) {
     // buffer sources are scheduled against ctx.currentTime, which is frozen for
     // exactly as long as the context is suspended.
     entry.nextStart = audioCtx.currentTime + 0.02;
-    queueLoopPass(entry);
+    queueLoopPass(entry, true);
     queueLoopPass(entry);
   });
 }
 
-function queueLoopPass(entry) {
+// Equal-power crossfade curves, fade-in and fade-out: sin and cos over a
+// quarter turn, so the two passes' powers always sum to one. The two sides of a
+// seam are different stretches of the same recording - uncorrelated - and
+// uncorrelated signals add in power, so this is the curve that holds the level
+// steady through the overlap.
+//
+// It replaced exponential ramps to and from GAIN_FLOOR, which are straight
+// lines in decibels: at the middle of the overlap BOTH passes sat near -40dB,
+// so every seam was a dip. Metered on PAINT's pencil loop, that was 100-150ms
+// of near-silence once a second, for as long as you drew.
+const LOOP_FADE_STEPS = 64;
+const LOOP_FADE_IN = new Float32Array(LOOP_FADE_STEPS);
+const LOOP_FADE_OUT = new Float32Array(LOOP_FADE_STEPS);
+for (let i = 0; i < LOOP_FADE_STEPS; i++) {
+  const t = i / (LOOP_FADE_STEPS - 1);
+  LOOP_FADE_IN[i] = Math.sin(t * Math.PI / 2);
+  LOOP_FADE_OUT[i] = Math.cos(t * Math.PI / 2);
+}
+
+// `first` is the opening pass of a run. It starts at full level: there is
+// nothing before it to crossfade from, and fading it in anyway made every
+// loop start a whole crossfade late - 250ms on PAINT's pencil, longer than a
+// quick stroke, so a quick stroke made no sound at all.
+function queueLoopPass(entry, first) {
   const buffer = entry.buffer;
   if (!buffer) return;
   const fade = Math.min(entry.crossfade, buffer.duration / 3);
@@ -4391,13 +4455,13 @@ function queueLoopPass(entry) {
   src.connect(gain);
   gain.connect(entry.gain);
 
-  // Equal-gain in and out across the overlap. The pass envelope peaks at 1 and
-  // entry.gain carries the trim, so volume and ducking stay one node away from
-  // the scheduling.
-  gain.gain.setValueAtTime(GAIN_FLOOR, at);
-  gain.gain.exponentialRampToValueAtTime(1, at + fade);
-  gain.gain.setValueAtTime(1, at + buffer.duration - fade);
-  gain.gain.exponentialRampToValueAtTime(GAIN_FLOOR, at + buffer.duration);
+  // The pass envelope peaks at 1 and entry.gain carries the trim, so volume and
+  // ducking stay one node away from the scheduling. The two curves cannot
+  // overlap in time - fade is capped at a third of the buffer above - which
+  // setValueCurveAtTime requires.
+  if (first) gain.gain.setValueAtTime(1, at);
+  else gain.gain.setValueCurveAtTime(LOOP_FADE_IN, at, fade);
+  gain.gain.setValueCurveAtTime(LOOP_FADE_OUT, at + buffer.duration - fade, fade);
 
   // So stopLoopPasses can tear the pair down without closing over this scope.
   src._passGain = gain;
@@ -4448,6 +4512,44 @@ function duckSoundLoop(name, factor, seconds = 0.6) {
   entry.gain.gain.setValueAtTime(Math.max(GAIN_FLOOR, entry.gain.gain.value), now);
   entry.gain.gain.exponentialRampToValueAtTime(
     Math.max(GAIN_FLOOR, entry.volume * entry.duck), now + Math.max(0.01, seconds));
+}
+
+// Opens or closes a running loop, for a sound that should only be heard while
+// something is happening - PAINT's drawing loops, audible while the pointer
+// moves. Call it on the TRANSITIONS, open once and close once, never on every
+// event.
+//
+// Why this is not duckSoundLoop: that ramps from gain.value, a main-thread
+// reading of a parameter the audio thread owns, which can lag it by a device
+// buffer. PAINT used to call duckSoundLoop on every pointermove, and each call
+// cancelled the fade in progress and restarted it from that stale, lower
+// reading - so on a real sound card the level was pulled back towards silence
+// as fast as it rose, and the loop was only heard once the moves stopped
+// coming. setTargetAtTime needs no reading: it approaches the target from
+// whatever the audio thread has the gain at, at the moment it takes effect.
+//
+// `seconds` is roughly how long it takes to get there - three time constants,
+// about 95% of the way.
+function gateSoundLoop(name, open, seconds = 0.03) {
+  const entry = audioLoops.get(name);
+  if (!entry) return;
+  // Remembered like a duck, so a loop primed while closed starts silent.
+  entry.duck = open ? 1 : 0;
+  if (!entry.gain || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  entry.gain.gain.cancelScheduledValues(now);
+  entry.gain.gain.setTargetAtTime(Math.max(GAIN_FLOOR, entry.volume * entry.duck), now,
+                                  Math.max(0.001, seconds / 3));
+}
+
+// Decodes sounds ahead of their first use. A sound's first play otherwise waits
+// on the fetch and decode - measured at ~250ms for PAINT's pencil loop, which on
+// the first stroke read as the sound simply not playing. Never creates the
+// AudioContext: that must wait for a user gesture (see unlockSystemAudio), so
+// before one this does nothing and the sounds load on first use as before.
+function preloadSounds(names) {
+  if (!audioCtx) return;
+  names.forEach(name => { loadSound(name); });
 }
 
 // Where the master gain belongs right now. Floored rather than allowed to
@@ -10215,8 +10317,11 @@ function osAlert(msg, title, icon) {
   ok.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') closeWin(id); });
   setTimeout(() => ok.focus(), 40);
 }
-function osConfirm(msg, title, cb, icon) {
-  title = title || 'Confirm'; icon = icon || '❓';
+// `labels` names the two buttons, { ok, cancel } - OK/Cancel by default. A
+// yes-or-no question ("...do you want to replace it?") reads wrong answered
+// with OK, which is why Windows asks that one with Yes and No.
+function osConfirm(msg, title, cb, icon, labels) {
+  title = title || 'Confirm'; icon = icon || '❓'; labels = labels || {};
   const id = 'os-confirm-' + Date.now();
   // Same mobile sizing as osAlert - see its comment.
   const mobile = isMobileLayout();
@@ -10226,8 +10331,8 @@ function osConfirm(msg, title, cb, icon) {
   const b = document.getElementById('wb-' + id);
   b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
   const row = document.getElementById(id + '-btns');
-  const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
-  const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = 'Cancel';
+  const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = labels.ok || 'OK';
+  const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = labels.cancel || 'Cancel';
   ok.onclick  = () => { closeWin(id); cb(true);  };
   can.onclick = () => { closeWin(id); cb(false); };
   [ok, can].forEach(btn => btn.addEventListener('keydown', e => {
@@ -12601,9 +12706,14 @@ function runScriptInTerminal(name, dirName, args) {
 // is untouched.
 //
 //   options.mode     'save' (default) or 'open'
-//   options.kinds    which VFS entry kinds are offered - ['text'] by default,
-//                    ['blob'] for an image picker
+//   options.kinds    which files are offered - ['text'] by default. 'blob' is
+//                    every stored media file; 'image', 'audio' and 'video'
+//                    narrow that to one media kind. PAINT.exe passes
+//                    ['image']: before it did, its Save As listed text files
+//                    only, so a folder full of paintings looked empty, and its
+//                    Open Picture would have offered MP3s.
 //   options.title    window title
+//   options.icon     title-bar icon - Notepad's by default
 //   options.startDir seeds the dialog's starting folder (e.g. PAINT.exe
 //                     opening Save As on a painting whose home is PICTURES,
 //                     not the root). Optional - every caller that omits it
@@ -12614,11 +12724,18 @@ function openSaveDialog(defaultName, callback, options) {
   const kinds = options.kinds || ['text'];
   const id = (mode === 'open' ? 'openfile-' : 'saveas-') + Date.now();
   const title = options.title || (mode === 'open' ? 'Open' : 'Save As');
-  if (!mkWin({ id, title, icon: 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
+  if (!mkWin({ id, title, icon: options.icon || 'icon:notepad', w: 420, h: 310, menubar: false, statusbar: false, popup: true })) return;
   const body = document.getElementById('wb-' + id);
   body.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;overflow:hidden;';
 
   let saveCwd = vfsNormalizeDir(options.startDir || '');
+
+  // A blob's media kind lives on its record, not in its name - which is also
+  // why the icon has to be resolved from it. Resolved by name alone, every
+  // PNG here came out as the unknown-file icon. Takes a vfsListSync entry or a
+  // vfsStatSync result; both carry the record as `blob`.
+  const mediaKind = e => (e.kind === 'blob' ? (e.blob && e.blob.kind) || 'blob' : e.kind);
+  const offered = e => kinds.includes(e.kind) || kinds.includes(mediaKind(e));
 
   // ── "Save in:" bar ────────────────────────────────────────────
   const locRow = document.createElement('div');
@@ -12687,10 +12804,11 @@ function openSaveDialog(defaultName, callback, options) {
       fileList.appendChild(el);
     });
 
-    entries.filter(e => kinds.includes(e.kind)).forEach(({ name }) => {
+    entries.filter(offered).forEach(e => {
+      const { name } = e;
       // resolveFsIcon already owns the extension table; this dialog used to
       // keep a second, smaller copy of it that drifted from the real one.
-      const el = makeFLItem(resolveFsIcon(name, 'file'), name);
+      const el = makeFLItem(resolveFsIcon(name, e.kind === 'blob' ? mediaKind(e) : 'file'), name);
       el.addEventListener('click', () => { nameInput.value = name; });
       // One listener, not two: a real double-click fires every listener bound
       // to it, so a second dblclick handler here would run the open callback
@@ -12703,9 +12821,35 @@ function openSaveDialog(defaultName, callback, options) {
     });
   }
 
+  // Saving over a file asks first, the way Windows does - with this dialog
+  // listing the folder's files, one click on a name and Save used to replace
+  // it without a word. Asks only about files this dialog OFFERS: saving a
+  // painting over a same-named text file is refused by the write itself, and
+  // "do you want to replace it?" answered Yes and then refused is worse than
+  // not asking. The lookup is the filesystem's own, so "already exists" means
+  // exactly what the save will overwrite.
+  let confirming = false;
   saveBtn.addEventListener('click', () => {
     const fname = nameInput.value.trim();
-    if (!fname) return;
+    if (!fname || confirming) return;
+    const existing = mode === 'save' ? vfsStatSync(fname, saveCwd) : null;
+    if (existing && existing.kind !== 'dir' && offered(existing)) {
+      confirming = true;
+      osConfirm(existing.name + ' already exists.\nDo you want to replace it?', title, yes => {
+        confirming = false;
+        // Closing the Save As dialog while this was up cancelled the save;
+        // a Yes to the stale question must not resurrect it.
+        if (!document.getElementById('win-' + id)) return;
+        if (!yes) {
+          // Back to the dialog with the name selected, ready to change.
+          nameInput.focus(); nameInput.select();
+          return;
+        }
+        closeWin(id);
+        callback(fname, saveCwd);
+      }, 'icon:warning', { ok: 'Yes', cancel: 'No' });
+      return;
+    }
     closeWin(id);
     callback(fname, saveCwd);
   });
@@ -18410,6 +18554,39 @@ function paintSegLen(seg) {
   return Math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0);
 }
 
+// Where along a segment a stamp goes, spaced one stamp-width from the LAST
+// STAMP OF THE STROKE rather than from the start of this segment.
+//
+// That distinction is the whole function. A drag reaches a generator as dozens
+// of 5px segments, one per pointer move, and the first version spaced stamps
+// within each segment independently - so every segment stamped at its own start
+// and a 200px drag laid down 41 overlapping stamps instead of six. The unit test
+// fed it one 200px segment and passed, which is why this is threaded through
+// `last` now and why the browser suite drags for real.
+//
+// `last` is the previous stamp's position, or null/undefined at the start of a
+// stroke - in which case the stamp lands exactly where the pointer went down.
+// Walks at 1px resolution and compares straight-line distance, so a drag that
+// doubles back does not stamp on top of itself either.
+function paintStampPoints(seg, spacing, last) {
+  const out = [];
+  let prev = last || null;
+  if (!prev) {
+    prev = { x: seg.x0, y: seg.y0 };
+    out.push(prev);
+  }
+  const steps = Math.ceil(paintSegLen(seg));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const p = { x: seg.x0 + (seg.x1 - seg.x0) * t, y: seg.y0 + (seg.y1 - seg.y0) * t };
+    if (Math.hypot(p.x - prev.x, p.y - prev.y) >= spacing) {
+      out.push(p);
+      prev = p;
+    }
+  }
+  return out;
+}
+
 // The middle of a segment. Where a generator that draws one self-contained
 // figure - a blast, a letter, a wash - should centre it, rather than on an
 // endpoint: an endpoint puts half the figure past where the drag stopped.
@@ -18474,9 +18651,36 @@ const PAINT_STICKER_COLS = 14;
 const PAINT_STICKER_ROWS = 8;
 
 function paintStickerCell()    { return PAINT_STICKER_CELL; }
+// The MOST the picker shows at once - one row of the sheet. The picker shows
+// fewer when the window is too narrow for fourteen; see paintStickerStep.
 function paintStickerPerPage() { return PAINT_STICKER_COLS; }
 function paintStickerPages()   { return PAINT_STICKER_ROWS; }
 function paintStickerCount()   { return PAINT_STICKER_COLS * PAINT_STICKER_ROWS; }
+
+// ── the picker strip ─────────────────────────────────────────────
+// The picker is a window of `perPage` stickers starting at `offset`, and
+// perPage is however many fit - the UI measures it, and it shrinks as the
+// window does, so the arrows and the undo button never get pushed out of
+// view. That is why the state is an OFFSET and not a page number: a page
+// number means something different every time the page size changes, so a
+// resize would jump the strip to an unrelated part of the sheet. An offset
+// stays where it was.
+//
+// The strip only ever shows full views. Next from the last full view wraps to
+// the start and previous from the start wraps to the last full view, so the
+// end of the sheet is never a stub of two stickers and a lot of empty bar.
+function paintStickerClampOffset(offset, perPage) {
+  const per = Math.max(1, Math.min(perPage, paintStickerCount()));
+  return Math.max(0, Math.min(Math.floor(offset) || 0, paintStickerCount() - per));
+}
+
+function paintStickerStep(offset, perPage, dir) {
+  const per = Math.max(1, Math.min(perPage, paintStickerCount()));
+  const last = paintStickerCount() - per;
+  const at = paintStickerClampOffset(offset, per);
+  if (dir > 0) return at >= last ? 0 : Math.min(at + per, last);
+  return at <= 0 ? last : Math.max(0, at - per);
+}
 
 function paintStickerRect(idx) {
   if (!Number.isInteger(idx) || idx < 0 || idx >= paintStickerCount()) return null;
@@ -18497,21 +18701,10 @@ function paintStickerRect(idx) {
 // pixels and not others, which is what made the large stamp look chewed up
 // rather than chunky. Nearest-neighbour only looks deliberate on whole numbers.
 [['small', 16], ['medium', 32], ['large', 64]].forEach(([id, size]) => {
-  paintRegisterGenerator('sticker', id, (seg, st) => {
-    const pts = paintWalk(seg, size);
-    // paintWalk always appends the segment's exact endpoint so a drag never
-    // stops short of where the pointer let go. That endpoint can land closer
-    // than one stamp width from the previous one, which is the smear this
-    // tool exists to avoid - so drop it when it would bunch up rather than
-    // trail. The stamp before it already overlaps the tail closely enough.
-    if (pts.length > 1) {
-      const a = pts[pts.length - 2], b = pts[pts.length - 1];
-      if (Math.hypot(b.x - a.x, b.y - a.y) < size * 0.75) pts.pop();
-    }
-    return pts.map(p => ({
+  paintRegisterGenerator('sticker', id, (seg, st) =>
+    paintStampPoints(seg, size, st.stampLast).map(p => ({
       op: 'sprite', idx: st.stickerIndex, x: p.x, y: p.y, size, rot: 0,
-    }));
-  });
+    })));
 });
 
 // ── shapes ───────────────────────────────────────────────────────
@@ -19239,19 +19432,139 @@ const PAINT_DEFAULT_DIR = 'PICTURES';
 
 let paintState = null;
 
-// ── sound shim ───────────────────────────────────────────────────
-// PAINT ships silent. test/sound-assets.test.cjs fails the build on a
-// SOUND_FILES name with no .ogg behind it, so no name may enter that table
-// before its file exists. Every trigger is in place now, so wiring real sounds
-// later is a one-table change with no edits to any call site.
+// ── stroke sounds ────────────────────────────────────────────────
+// One-shots (fill, stamp, undo...) are plain playSound calls at their call
+// sites. What lives here is the sound of DRAWING, which has to follow the hand:
 //
-// Wanted, in rough order of how much each one carries the feel:
-//   paint-undo (the Undo Guy whoop), paint-stamp, paint-fill,
-//   paint-firecracker, paint-eraser, paint-brush, then paint-pencil,
-//   paint-shape, paint-eyedropper, paint-text, paint-blackhole,
-//   paint-dissolve, paint-clear, paint-palette.
-function paintSound(name) {
-  if (typeof SOUND_FILES === 'object' && SOUND_FILES && SOUND_FILES[name]) playSound(name);
+//   - The pencil and the wacky brush each own a loop that runs for the whole
+//     stroke but is only AUDIBLE while the pointer is moving. A held, motionless
+//     pencil scratching away is the thing that makes a drawing sound read as a
+//     recording rather than as you. The loop keeps playing while gated, so it
+//     resumes mid-texture rather than restarting.
+//
+//     The gate touches the audio engine only on its two TRANSITIONS: open on
+//     the first move after a rest, close once the pointer has rested. It used
+//     to re-issue a fade on every pointermove, 60+ times a second, each one
+//     cancelling the last and restarting from a main-thread reading of the
+//     level that lags the audio thread - so on real hardware the sound was
+//     often only heard once the pointer stopped. See gateSoundLoop. Per move
+//     now costs one timestamp; a single timer notices the rest.
+//   - The eraser is a rub, not a bed: paint-eraser.ogg is a 0.42s gesture that
+//     decays. Looped it pulses at a fixed 2.4Hz whatever your hand is doing, so
+//     it is retriggered by distance travelled instead - scrub faster, rub more.
+//
+// Every numeric choice below was set from measurements of the files, not by ear
+// (there is no ear in this loop): paint-brush.ogg has no silence at either end
+// and flat energy head-to-tail, so it loops plainly; paint-pencil.ogg's last
+// 50ms falls to -58dB, so it gets a crossfade to bury that dip. Retune freely.
+const PAINT_PENCIL_CROSSFADE_SEC = 0.25;
+// How long the pointer may sit still before the drawing loop goes quiet. It was
+// 90ms, and metering a real drag showed the gate closing mid-stroke, 100-200ms
+// of silence at a time, whenever the main thread was briefly busy between two
+// pointermoves. Long enough to ride out those gaps, short enough that a
+// deliberate pause still goes quiet.
+const PAINT_LOOP_IDLE_MS = 150;
+const PAINT_LOOP_ATTACK_SEC = 0.025;
+const PAINT_LOOP_RELEASE_SEC = 0.08;
+// Canvas pixels of eraser travel per rub, and the floor between rubs. The floor
+// is the clip's own audible length (348ms, measured): at 160ms two or three
+// rubs overlapped on any real scrub and smeared into one continuous noise.
+// Now each rub finishes before the next starts.
+const PAINT_RUB_EVERY_PX = 24;
+const PAINT_RUB_MIN_MS = 350;
+// The floor between two stamp sounds. A drag places a stamp every stamp-width,
+// which with 16px stamps and a quick hand is one every ~30ms - and the clip is
+// 100ms long, so one sound per stamp piled up into a buzz. Stamps still land
+// at full density; only the sound is rate-limited.
+const PAINT_STAMP_SOUND_MIN_MS = 180;
+
+// Which loop a tool draws with, or null. Literal names, written out, because
+// test/sound-assets.test.cjs finds a sound's trigger by searching for
+// the literal call with the name in quotes - a lookup table would hide both.
+function paintStrokeLoopStart(tool) {
+  if (tool === 'pencil') {
+    startSoundLoop('paint-pencil', { crossfade: PAINT_PENCIL_CROSSFADE_SEC });
+    return 'paint-pencil';
+  }
+  if (tool === 'wacky') {
+    startSoundLoop('paint-brush', { crossfade: 0 });
+    return 'paint-brush';
+  }
+  return null;
+}
+
+// Both, unconditionally. Stopping a loop that is not running is a no-op, and
+// stopping by name rather than by "whichever one this stroke started" means no
+// path - a window closed mid-stroke, a cancelled pointer - can strand one.
+function paintStrokeLoopStop() {
+  stopSoundLoop('paint-pencil', { fade: PAINT_LOOP_RELEASE_SEC });
+  stopSoundLoop('paint-brush', { fade: PAINT_LOOP_RELEASE_SEC });
+}
+
+function paintStrokeSoundBegin(s) {
+  s.strokeLoop = paintStrokeLoopStart(s.tool);
+  s.loopOpen = false;
+  // Silent until the pointer actually moves. The gate's level is remembered on
+  // the loop entry and the loop primes from it, so this also makes the very
+  // first stroke of a session start silent rather than at full level.
+  if (s.strokeLoop) gateSoundLoop(s.strokeLoop, false, 0.01);
+  // Primed so the first movement rubs immediately rather than after 24px.
+  s.rubTravel = PAINT_RUB_EVERY_PX;
+  s.rubAt = 0;
+}
+
+// Closes the gate once the pointer has rested for PAINT_LOOP_IDLE_MS. One timer
+// per rest, not one per move: a move only stamps s.lastMoveAt, and when the
+// timer fires early - the pointer moved again meanwhile - it re-arms itself
+// for whatever is left of the window.
+function paintLoopIdleCheck(s) {
+  s.loopIdleTimer = null;
+  if (!s.strokeLoop || !s.loopOpen) return;
+  const rested = performance.now() - s.lastMoveAt;
+  if (rested < PAINT_LOOP_IDLE_MS) {
+    s.loopIdleTimer = procSetTimeout(PAINT_WIN_ID, () => paintLoopIdleCheck(s), PAINT_LOOP_IDLE_MS - rested);
+    return;
+  }
+  gateSoundLoop(s.strokeLoop, false, PAINT_LOOP_RELEASE_SEC);
+  s.loopOpen = false;
+}
+
+function paintStrokeSoundMove(s, dist) {
+  if (dist <= 0) return;
+  if (s.strokeLoop) {
+    s.lastMoveAt = performance.now();
+    if (!s.loopOpen) {
+      gateSoundLoop(s.strokeLoop, true, PAINT_LOOP_ATTACK_SEC);
+      s.loopOpen = true;
+    }
+    if (!s.loopIdleTimer) {
+      s.loopIdleTimer = procSetTimeout(PAINT_WIN_ID, () => paintLoopIdleCheck(s), PAINT_LOOP_IDLE_MS);
+    }
+  }
+  if (s.tool === 'eraser') {
+    s.rubTravel += dist;
+    const now = performance.now();
+    if (s.rubTravel >= PAINT_RUB_EVERY_PX && now - s.rubAt >= PAINT_RUB_MIN_MS) {
+      playSound('paint-eraser');
+      s.rubTravel = 0;
+      s.rubAt = now;
+    }
+  }
+}
+
+function paintStrokeSoundEnd(s) {
+  clearTimeout(s.loopIdleTimer);
+  s.loopIdleTimer = null;
+  s.strokeLoop = null;
+  s.loopOpen = false;
+  paintStrokeLoopStop();
+}
+
+// Every Paint sound, decoded when the window opens rather than on first use -
+// see preloadSounds. Read off SOUND_FILES rather than listed here, so a sound
+// added to the table is preloaded without anyone remembering to.
+function paintPreloadSounds() {
+  preloadSounds(Object.keys(SOUND_FILES).filter(name => name.startsWith('paint-')));
 }
 
 // ── status bar ───────────────────────────────────────────────────
@@ -19414,7 +19727,9 @@ function paintUndo() {
   const snap = paintUndoUndo(paintState.ring);
   if (!snap) return false;
   paintRestore(snap);
-  paintSound('paint-undo');
+  // Undo has two takes. Picked at random rather than alternated: with
+  // only two, strict alternation is a pattern you hear by the third undo.
+  if (Math.random() < 0.5) playSound('paint-undo1'); else playSound('paint-undo2');
   paintDropSelection();
   return true;
 }
@@ -19496,6 +19811,9 @@ function paintStrokeState() {
     rng: s.rng,
     points: s.points,
     stickerIndex: s.stickerIndex,
+    // Where the sticker tool last stamped in this stroke - see
+    // paintStampPoints for why spacing has to survive between segments.
+    stampLast: s.stampLast,
     // The surface a generator is drawing onto. Only kaleido cares - its mirror
     // lines ARE the edges of the drawing surface - but it is state, not a
     // global, because the option-bar preview draws the same generators onto a
@@ -19526,9 +19844,12 @@ function paintBeginStroke(pos) {
   s.segIndex = 0;
   s.drawing = true;
   s.origin = { x: pos.x, y: pos.y };
+  s.stampLast = null;
+  s.stampSoundAt = 0;
   // A shape is previewed live and only committed on release, so the pixels
   // underneath it have to survive every mouse move.
   s.preview = paintIsShapeTool(s.tool) ? paintSnapshot() : null;
+  paintStrokeSoundBegin(s);
   paintDrawSegment(pos.x, pos.y, pos.x, pos.y);
 }
 
@@ -19547,6 +19868,7 @@ function paintExtendStroke(pos) {
   const prev = s.points[s.points.length - 1];
   s.points.push({ x: pos.x, y: pos.y });
   s.segIndex++;
+  paintStrokeSoundMove(s, Math.hypot(pos.x - prev.x, pos.y - prev.y));
   paintDrawSegment(prev.x, prev.y, pos.x, pos.y);
 }
 
@@ -19556,7 +19878,8 @@ function paintEndStroke() {
   if (s.selecting) { s.selecting = false; s.drawing = false; paintSelectEnd(); return; }
   s.drawing = false;
   s.dirty = true;
-  if (s.preview) { s.preview = null; paintSound('paint-shape'); }
+  paintStrokeSoundEnd(s);
+  if (s.preview) { s.preview = null; playSound('paint-shape'); }
   paintCommitUndo();
 }
 
@@ -19613,7 +19936,7 @@ function paintDoFill(pos) {
 
   s.ctx.putImageData(id, 0, 0);
   s.dirty = true;
-  paintSound('paint-fill');
+  playSound('paint-fill');
   paintCommitUndo();
 }
 
@@ -19624,7 +19947,7 @@ function paintDoEyedropper(pos) {
   const d = s.ctx.getImageData(x, y, 1, 1).data;
   const hex = paintRgbaToHex(d[0], d[1], d[2]);
   paintSetColor(hex);
-  paintSound('paint-eyedropper');
+  playSound('paint-eyedropper');
   // Say so. Picking white off blank paper changes the colour chip from white to
   // white and switches tool - a real, correct pick that looks identical to a
   // dead button.
@@ -19637,7 +19960,22 @@ function paintDoEyedropper(pos) {
 function paintDrawSegment(x0, y0, x1, y1) {
   const s = paintState;
   const seg = { x0, y0, x1, y1, index: s.segIndex };
-  paintExecOps(s.ctx, paintGenerate(s.tool, s.variant, seg, paintStrokeState()));
+  const ops = paintGenerate(s.tool, s.variant, seg, paintStrokeState());
+  paintExecOps(s.ctx, ops);
+  if (s.tool === 'sticker') {
+    // The generator is pure and cannot write back, so the stroke's memory of
+    // where it last stamped is read off the ops it returned.
+    let stamped = false;
+    ops.forEach(op => { if (op.op === 'sprite') { s.stampLast = { x: op.x, y: op.y }; stamped = true; } });
+    // Rate-limited rather than one per stamp - see PAINT_STAMP_SOUND_MIN_MS. The
+    // first stamp of a stroke always sounds: s.stampSoundAt is reset with the
+    // stroke, and 0 is always long enough ago.
+    const now = performance.now();
+    if (stamped && now - s.stampSoundAt >= PAINT_STAMP_SOUND_MIN_MS) {
+      playSound('paint-stamp');
+      s.stampSoundAt = now;
+    }
+  }
 }
 
 // ── launcher ─────────────────────────────────────────────────────
@@ -19691,7 +20029,8 @@ function openPaint() {
     file: null,
     dir: PAINT_DEFAULT_DIR,
     stickerIndex: 0,
-    stickerPage: 0,
+    stickerOffset: 0,
+    stickerFit: 0,
     points: [],
     segIndex: 0,
     drawing: false,
@@ -19708,6 +20047,7 @@ function openPaint() {
   paintRenderOptionsBar();
 
   paintBuildMenu(document.getElementById('mb-' + PAINT_WIN_ID));
+  paintPreloadSounds();
 
   // A sprite-sheet icon, not a text glyph, so it stays pixel-crisp like every
   // other tool - see PAINT_TOOL_ICON_ORDER, where it sits after the eleven
@@ -19761,8 +20101,19 @@ function openPaint() {
 
   const ro = new ResizeObserver(() => paintFitCanvas());
   ro.observe(document.getElementById('paint-stage'));
+  // The options bar's width is the space the row leaves it, independent of
+  // what is in it, so observing it cannot feed back on its own re-render.
+  const optsRo = new ResizeObserver(() => paintRefitStickers());
+  optsRo.observe(document.getElementById('paint-options'));
 
-  wins[PAINT_WIN_ID]._onclose = () => { ro.disconnect(); paintState = null; };
+  wins[PAINT_WIN_ID]._onclose = () => {
+    ro.disconnect();
+    optsRo.disconnect();
+    // A window closed with the button still down never sees a pointerup, and a
+    // drawing loop left running would scratch away over the desktop forever.
+    if (paintState) paintStrokeSoundEnd(paintState);
+    paintState = null;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -19815,7 +20166,10 @@ function paintRenderTools() {
     b.title = tool.label;
     b.setAttribute('aria-label', tool.label);
     b.appendChild(paintToolIcon(tool.id));
-    b.addEventListener('click', () => paintSelectTool(tool.id));
+    // The select sound lives on the click, not in paintSelectTool: that is also
+    // called by code - the eyedropper handing you back to the pencil, opening
+    // the window - and a UI sound nobody clicked for is noise.
+    b.addEventListener('click', () => { playSound('paint-select'); paintSelectTool(tool.id); });
     host.appendChild(b);
   });
   paintSyncToolButtons();
@@ -19839,7 +20193,7 @@ function paintRenderPalette() {
     b.style.background = c.hex;
     b.title = c.id;
     b.setAttribute('aria-label', c.id);
-    b.addEventListener('click', () => { paintSetColor(c.hex); paintSound('paint-palette'); });
+    b.addEventListener('click', () => { paintSetColor(c.hex); playSound('paint-palette'); });
     host.appendChild(b);
   });
   paintSyncPalette();
@@ -19877,7 +20231,7 @@ function paintRenderOptionsBar() {
     b.title = v.label;
     b.setAttribute('aria-label', v.label);
     b.appendChild(paintVariantPreview(paintState.tool, v.id));
-    b.addEventListener('click', () => paintSelectVariant(v.id));
+    b.addEventListener('click', () => { playSound('paint-select'); paintSelectVariant(v.id); });
     host.appendChild(b);
   });
   paintRenderStickerPager(host);
@@ -19894,29 +20248,84 @@ function paintSyncOptionButtons() {
 // The picker lives IN the options bar, beside the size variants, because that
 // is where the reference puts it and because a sticker's identity is a variant
 // of the sticker tool in every way that matters.
-function paintSetStickerPage(n) {
-  const pages = paintStickerPages();
-  // Wrapping rather than clamping: eight pages of stamps is a carousel, and a
-  // dead arrow at either end is a button that looks broken.
-  paintState.stickerPage = ((n % pages) + pages) % pages;
+function paintStepStickers(dir) {
+  paintState.stickerOffset = paintStickerStep(paintState.stickerOffset, paintStickerShown(), dir);
   paintRenderOptionsBar();
+}
+
+// How many stickers the strip shows: as many as fit, measured, up to a full
+// row of the sheet. Before the first measurement - and whenever the bar has no
+// width to measure, which is the case while the window is minimised - it is
+// the full row.
+function paintStickerShown() {
+  return paintState.stickerFit || paintStickerPerPage();
+}
+
+// How many stickers fit in the options bar beside everything else on it, from
+// the bar's real width and its children's real widths. Measured rather than
+// computed from CSS numbers because the touch layout uses different sizes, and
+// a second copy of those numbers here is a second thing to keep in step.
+//
+// Independent of how many stickers are currently rendered - the fixed items
+// and ONE sticker's width are all it reads - so re-rendering at the answer
+// gives the same answer again, and a resize can never make this oscillate.
+function paintStickerFitCount(host) {
+  const kids = [...host.children];
+  const one = kids.find(k => k.classList.contains('paint-sticker'));
+  if (!one || !host.clientWidth) return null;
+  const cs = getComputedStyle(host);
+  const inner = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const gap = parseFloat(cs.columnGap) || 0;
+  const fixed = kids.filter(k => !k.classList.contains('paint-sticker'));
+  const fixedW = fixed.reduce((w, k) => w + k.getBoundingClientRect().width + gap, 0);
+  // n stickers fit when fixed + n*(sticker+gap) - gap <= inner. The half pixel
+  // absorbs sub-pixel layout noise, which would otherwise drop the last
+  // sticker on a bar that fits it exactly.
+  const n = Math.floor((inner - fixedW + gap + 0.5) / (one.getBoundingClientRect().width + gap));
+  return Math.max(1, Math.min(paintStickerPerPage(), n));
+}
+
+// Re-measures after a resize and redraws only if the count actually changed:
+// a window drag fires this every frame, and rebuilding an unchanged bar every
+// frame would throw away the size-preview canvases for nothing.
+function paintRefitStickers() {
+  if (!paintState || paintState.tool !== 'sticker') return;
+  const host = document.getElementById('paint-options');
+  const fit = host && paintStickerFitCount(host);
+  if (fit && fit !== paintState.stickerFit) paintRenderOptionsBar();
 }
 
 function paintRenderStickerPager(host) {
   if (paintState.tool !== 'sticker') return;
-  const perPage = paintStickerPerPage();
-  const base = paintState.stickerPage * perPage;
+  paintBuildStickerStrip(host);
+  // Measure what actually fits now that the bar is laid out, and rebuild once
+  // at that count if it differs. See paintStickerFitCount for why once is
+  // always enough.
+  const fit = paintStickerFitCount(host);
+  if (fit && fit !== paintState.stickerFit) {
+    paintState.stickerFit = fit;
+    host.querySelectorAll('.paint-sticker, .paint-pager').forEach(el => el.remove());
+    paintBuildStickerStrip(host);
+  }
+}
+
+function paintBuildStickerStrip(host) {
+  const shown = paintStickerShown();
+  // Clamped on every build, not just on arrow presses: a window widened while
+  // the strip sat near the end would otherwise run past the last sticker.
+  paintState.stickerOffset = paintStickerClampOffset(paintState.stickerOffset, shown);
+  const base = paintState.stickerOffset;
 
   const prev = document.createElement('button');
   prev.type = 'button';
   prev.className = 'paint-pager paint-pager-prev';
   prev.textContent = '◄';
-  prev.title = 'Previous page of stickers';
-  prev.setAttribute('aria-label', 'Previous page of stickers');
-  prev.addEventListener('click', () => paintSetStickerPage(paintState.stickerPage - 1));
+  prev.title = 'Previous stickers';
+  prev.setAttribute('aria-label', 'Previous stickers');
+  prev.addEventListener('click', () => { playSound('paint-select'); paintStepStickers(-1); });
   host.appendChild(prev);
 
-  for (let i = 0; i < perPage; i++) {
+  for (let i = 0; i < shown; i++) {
     const idx = base + i;
     const rect = paintStickerRect(idx);
     if (!rect) continue;
@@ -19930,7 +20339,9 @@ function paintRenderStickerPager(host) {
     b.style.backgroundPosition = (-rect.sx) + 'px ' + (-rect.sy) + 'px';
     b.addEventListener('click', () => {
       paintState.stickerIndex = idx;
-      paintSound('paint-stamp');
+      // Choosing is the select click, like choosing a tool. The stamp sound
+      // belongs to putting one on the canvas - see paintDrawSegment.
+      playSound('paint-select');
       document.querySelectorAll('.paint-sticker').forEach(el =>
         el.classList.toggle('sel', Number(el.dataset.idx) === idx));
     });
@@ -19941,9 +20352,9 @@ function paintRenderStickerPager(host) {
   next.type = 'button';
   next.className = 'paint-pager paint-pager-next';
   next.textContent = '►';
-  next.title = 'Next page of stickers';
-  next.setAttribute('aria-label', 'Next page of stickers');
-  next.addEventListener('click', () => paintSetStickerPage(paintState.stickerPage + 1));
+  next.title = 'More stickers';
+  next.setAttribute('aria-label', 'More stickers');
+  next.addEventListener('click', () => { playSound('paint-select'); paintStepStickers(1); });
   host.appendChild(next);
 }
 
@@ -20138,7 +20549,7 @@ function paintNewCanvas() {
     s.file = null;
     paintDropSelection();
     setWinTitle(PAINT_WIN_ID, 'untitled.png - Paint');
-    paintSound('paint-clear');
+    playSound('paint-clear');
   };
   // Only ask when there is something to lose. A confirm on an untouched canvas
   // is a dialog that teaches people to click through dialogs.
@@ -20165,7 +20576,7 @@ function paintBuildMenu(mb) {
       { label: 'Undo  Ctrl+Z', action: paintUndo },
       { label: 'Redo  Ctrl+Y', action: paintRedo },
       '-',
-      { label: 'Clear Canvas', action: () => { paintFlattenSelection(); paintClearCanvas(); paintCommitUndo(); paintSound('paint-clear'); } },
+      { label: 'Clear Canvas', action: () => { paintFlattenSelection(); paintClearCanvas(); paintCommitUndo(); playSound('paint-clear'); } },
     ]},
     // Whole-image operations - flip, invert, darken/lighten, posterize,
     // scramble, edges. Rebuilt per open like every other menu here.
@@ -20184,8 +20595,8 @@ function paintBuildMenu(mb) {
   const help = document.createElement('button');
   help.className = 'ms-help-btn';
   help.type = 'button';
-  help.title = 'Help and credits';
-  help.setAttribute('aria-label', 'Help and credits');
+  help.title = 'Help';
+  help.setAttribute('aria-label', 'Help');
   help.innerHTML = iconMarkup('icon:help');
   help.addEventListener('click', e => { e.stopPropagation(); paintOpenHelp(); });
   mb.appendChild(help);
@@ -20232,9 +20643,6 @@ function paintOpenHelp() {
          a colour, then drag on the canvas.</p>
       <p><b>Ctrl+Z</b> undoes and <b>Ctrl+Y</b> redoes, up to twenty steps back.
          <b>Ctrl+S</b> saves into C:\sleepOS\PICTURES.</p>
-      <h3>Credits</h3>
-      <p>The stickers are Br&oslash;derbund <i>Kid Pix</i> stamps. A tribute,
-         not the original.</p>
     </div>
     <div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
   const ok = document.getElementById(id + '-ok');
@@ -20311,7 +20719,7 @@ function paintSaveAs() {
   // kinds defaults to ['text'], so without this the dialog's own folder view
   // never lists the images already there - including the one you just saved.
   openSaveDialog(paintState.file || 'untitled.png', (fname, dir) => paintSave(fname, dir),
-                 { kinds: ['blob'], startDir: paintState.dir });
+                 { startDir: paintState.dir, kinds: ['image'], icon: 'icon:paint' });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -20369,7 +20777,8 @@ function paintLoadImage(name, dir) {
 
 function paintOpenDialog() {
   openSaveDialog(paintState.file || '', (fname, dir) => { paintLoadImage(fname, dir); },
-                 { mode: 'open', kinds: ['blob'], title: 'Open Picture', startDir: paintState.dir });
+                 { mode: 'open', kinds: ['image'], title: 'Open Picture', icon: 'icon:paint',
+                   startDir: paintState.dir });
 }
 
 // Wallpaper resolves a VFS path, so there must be a real file first. Saving
@@ -20383,7 +20792,7 @@ function paintSetWallpaper() {
   if (paintState.file && !paintState.dirty) { apply(); return; }
   openSaveDialog(paintState.file || 'wallpaper.png', (fname, dir) => {
     paintWriteAndSync(fname, dir).then(ok => { if (ok) apply(); }).catch(err => reportVfsError(err));
-  }, { kinds: ['blob'] });
+  }, { startDir: paintState.dir, kinds: ['image'], icon: 'icon:paint' });
 }
 
 // The entry point FILE_HANDLERS and Explorer's Edit item both use: open the
@@ -20419,7 +20828,7 @@ function paintDoText(pos) {
   osPrompt('Type some text:', '', 'Text', value => {
     if (!value) return;
     paintDrawText(pos, value, size);
-    paintSound('paint-text');
+    playSound('paint-text');
   });
 }
 
@@ -20441,7 +20850,7 @@ function paintEraseHoles(holes) {
 
 function paintApplyBlast(pos) {
   paintEraseHoles(paintBlastPattern(pos.x, pos.y, paintRng((Math.random() * 0xffffffff) >>> 0)));
-  paintSound('paint-firecracker');
+  playSound('paint-firecracker');
 }
 
 // Pulls every pixel toward the click point, leaving white behind. Read from a
@@ -20468,7 +20877,7 @@ function paintApplyBlackhole(pos) {
     }
   }
   s.ctx.putImageData(dst, 0, 0);
-  paintSound('paint-blackhole');
+  playSound('paint-blackhole');
 }
 
 function paintApplyDissolve() {
@@ -20484,7 +20893,7 @@ function paintApplyDissolve() {
     id.data[i] = 255; id.data[i + 1] = 255; id.data[i + 2] = 255; id.data[i + 3] = 255;
   }
   s.ctx.putImageData(id, 0, 0);
-  paintSound('paint-dissolve');
+  playSound('paint-dissolve');
 }
 
 function paintApplyFade() {
@@ -20495,14 +20904,14 @@ function paintApplyFade() {
   s.ctx.fillStyle = '#ffffff';
   s.ctx.fillRect(0, 0, s.canvas.width, s.canvas.height);
   s.ctx.restore();
-  paintSound('paint-eraser');
+  playSound('paint-eraser');
 }
 
 function paintApplyBlinds() {
   const s = paintState;
   s.ctx.fillStyle = '#ffffff';
   paintBlindRows(s.canvas.height, 12).forEach(r => s.ctx.fillRect(0, r.y, s.canvas.width, r.h));
-  paintSound('paint-eraser');
+  playSound('paint-eraser');
 }
 
 const PAINT_WHOLE_ERASERS = {
