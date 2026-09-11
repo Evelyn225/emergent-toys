@@ -930,7 +930,7 @@ function buildVoidTmpRawContent() {
   } else if (daemonStory.stage >= 5) {
     lines.push(
       'The aperture is open.',
-      'Something is pressing against the reflected side of the file.',
+      "The far side answers now. It didn't before.",
     );
   } else if (daemonStory.stage >= 4) {
     lines.push(

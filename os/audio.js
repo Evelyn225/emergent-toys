@@ -29,6 +29,8 @@ const SOUND_FILES = {
   error:    'error.ogg',
   glitch:   'glitch.ogg',
   click:    'mouseClick.ogg',
+  // void.tmp's Listen probe (apps/daemon-ui.js's daemonVoidAction).
+  'void-listen': 'void.ogg',
   // PAINT.exe. Quoted keys because the names are the file names, hyphens and
   // all - one fewer mapping to keep straight when a file is swapped.
   'paint-pencil':      'paint-pencil.ogg',
@@ -61,6 +63,8 @@ const SOUND_GAIN = {
   error:    0.65,
   glitch:   0.50,
   click:    0.30,
+  // Starting point, not measured - retune here by ear once it's in.
+  'void-listen': 0.50,
   // PAINT.exe. Set from each file's measured RMS rather than by ear, so they
   // start out level with each other: one-shots land between the OS click and
   // the error chime, the two drawing loops well under both because they run

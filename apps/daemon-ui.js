@@ -146,7 +146,7 @@ function daemonVoidAction(mode) {
       ? 'The file is intact. What you are looking at is the aperture surface.'
       : daemonStory.stage >= 4
         ? 'The relay went quiet and this surface brightened at the same time.'
-        : 'Nothing stable answers yet, but the file is taking a shape.';
+        : 'Nothing stable answers yet. The read keeps drifting.';
   } else if (mode === 'measure') {
     daemonVoidFeed = [
       `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
@@ -157,10 +157,11 @@ function daemonVoidAction(mode) {
       'disk locality: negative',
     ].join('\n');
   } else if (mode === 'listen') {
+    playSound('void-listen');
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'No words. Something on the reflected side is leaning against the room tone.'
+      ? "No words. Just a shift in the room tone that wasn't there before."
       : daemonStory.stage >= 4
-        ? 'You hear the shape of a voice through the monitor gap.'
+        ? "A faint tone behind the monitor gap that wasn't there before."
         : 'Static. Then the suggestion of a room tone.';
   } else if (mode === 'trace') {
     daemonVoidFeed = daemonStory.stage >= 5
@@ -183,9 +184,9 @@ function daemonVoidAction(mode) {
     triggerGlitch({ intensity: daemonStory.stage >= 7 ? 7 : daemonStory.stage >= 5 ? 5 : 4 });
   } else if (mode === 'pulse') {
     daemonVoidFeed = daemonStory.quarantineSigned
-      ? 'The quarantine signature holds. The aperture recoils.'
+      ? 'The quarantine signature holds. Pressure drops immediately.'
       : daemonStory.stage >= 5
-        ? 'A pulse returns before the machine feels ready for it, as if the file were farther away than the disk.'
+        ? 'The pulse returns faster than disk latency should allow.'
         : 'The pulse dissipates without a readable return.';
     if (daemonStory.stage >= 5) triggerGlitch();
   }

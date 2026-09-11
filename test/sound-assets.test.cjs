@@ -15,7 +15,8 @@ const audioSrc = fs.readFileSync(path.join(ROOT, 'os/audio.js'), 'utf8');
 // Every file that plays a sound. A trigger in a file missing from this list is
 // invisible to the checks below, so a new caller of playSound belongs here.
 const TRIGGER_SOURCES = ['os/audio.js', 'os/startup.js', 'os/shutdown.js', 'os/wm.js',
-                         'os/ui-chrome.js', 'os/registry.js', 'apps/defrag.js', 'apps/paint.js'];
+                         'os/ui-chrome.js', 'os/registry.js', 'apps/defrag.js', 'apps/paint.js',
+                         'apps/daemon-ui.js'];
 
 // A key is either a bare identifier (click:) or a quoted name ('paint-fill':).
 // The quoted form exists because PAINT's sounds are named after their files,
