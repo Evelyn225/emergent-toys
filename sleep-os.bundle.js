@@ -7204,7 +7204,7 @@ function daemonLastOperatorContent() {
   } else {
     // Both done, or generic fallback
     lines.push(
-      "Daemon offline. Anchor gone. That's exactly where I was standing when I started writing this.",
+      'Daemon offline. Anchor gone. I got here too, before the end.',
       'Whatever daemon.core was holding back has a clear line now.',
       '',
       'Inspect void.tmp - carefully, not out of curiosity.',
