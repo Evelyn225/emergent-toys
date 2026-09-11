@@ -100,6 +100,95 @@ async function withMeteredPaint(fn) {
   }
 }
 
+// Records every sound Paint asks for, with a timestamp. For behaviour that is
+// about WHICH sound and WHEN it is asked for, not how it comes out - no meter
+// needed, and nothing else in the OS can leak into it.
+async function withSoundSpy(fn) {
+  const { context, page } = await openDesktop(harness.browser, { width: 1400, height: 900 });
+  try {
+    await openWindow(page, 'openPaint');
+    await page.waitForSelector('#paint-canvas');
+    await page.evaluate(() => {
+      window.__played = [];
+      const real = playSound;
+      window.playSound = (name, opts) => { __played.push([performance.now(), name]); return real(name, opts); };
+    });
+    await fn(page);
+  } finally {
+    await context.close();
+  }
+}
+
+test('clicking a tool, a variant, a sticker or an arrow plays the select sound; code does not', async () => {
+  await withSoundSpy(async page => {
+    const r = await page.evaluate(() => {
+      const heard = () => __played.map(p => p[1]);
+      const out = {};
+      // Switching tools from code - the eyedropper does this after every pick -
+      // must stay silent.
+      __played.length = 0;
+      paintSelectTool('wacky');
+      out.fromCode = heard();
+      __played.length = 0;
+      document.querySelector('.paint-tool[data-tool="pencil"]').click();
+      out.tool = heard();
+      __played.length = 0;
+      document.querySelectorAll('.paint-opt')[2].click();
+      out.variant = heard();
+      document.querySelector('.paint-tool[data-tool="sticker"]').click();
+      __played.length = 0;
+      document.querySelectorAll('.paint-sticker')[3].click();
+      out.sticker = heard();
+      __played.length = 0;
+      document.querySelector('.paint-pager-next').click();
+      out.arrow = heard();
+      __played.length = 0;
+      document.querySelector('.paint-swatch').click();
+      out.swatch = heard();
+      return out;
+    });
+    assert.deepStrictEqual(r.fromCode, [], 'a tool change made by code played a sound');
+    assert.deepStrictEqual(r.tool, ['paint-select']);
+    assert.deepStrictEqual(r.variant, ['paint-select']);
+    assert.deepStrictEqual(r.sticker, ['paint-select']);
+    assert.deepStrictEqual(r.arrow, ['paint-select']);
+    assert.deepStrictEqual(r.swatch, ['paint-palette'], 'a colour swatch should keep its own click');
+  });
+});
+
+// The rub is audible for ~350ms. At a 160ms floor two or three overlapped on
+// any real scrub and smeared into one noise.
+test('a fast eraser scrub spaces its rubs at least a clip-length apart', async () => {
+  await withSoundSpy(async page => {
+    const gaps = await page.evaluate(async () => {
+      paintSelectTool('eraser');
+      paintSelectVariant('e10');
+      const canvas = document.getElementById('paint-canvas');
+      const rect = canvas.getBoundingClientRect();
+      const fire = (type, x) => canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse', button: 0,
+        buttons: type === 'pointerup' ? 0 : 1, clientX: rect.left + x, clientY: rect.top + 150,
+      }));
+      __played.length = 0;
+      // A hard scrub: 12px per 16ms frame, back and forth, for 2 seconds.
+      let x = 100, dir = 1;
+      fire('pointerdown', x);
+      const end = performance.now() + 2000;
+      while (performance.now() < end) {
+        x += 12 * dir;
+        if (x > 380 || x < 100) dir = -dir;
+        fire('pointermove', x);
+        await new Promise(r => setTimeout(r, 16));
+      }
+      fire('pointerup', x);
+      const rubs = __played.filter(p => p[1] === 'paint-eraser').map(p => p[0]);
+      return rubs.slice(1).map((t, i) => t - rubs[i]);
+    });
+    assert.ok(gaps.length >= 3, 'a 2s scrub should rub several times, got ' + (gaps.length + 1));
+    gaps.forEach(g => assert.ok(g >= 349, 'two rubs only ' + Math.round(g) + 'ms apart'));
+  });
+});
+
 // The opening pass of a crossfaded loop used to fade in over the whole
 // crossfade - 250ms on the pencil - so a stroke shorter than that was silent.
 test('a quick pencil stroke is heard, and promptly', async () => {

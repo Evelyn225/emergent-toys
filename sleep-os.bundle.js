@@ -4159,6 +4159,7 @@ const SOUND_FILES = {
   'paint-fill':        'paint-fill.ogg',
   'paint-eyedropper':  'paint-eyedropper.ogg',
   'paint-palette':     'paint-palette.ogg',
+  'paint-select':      'paint-select.ogg',
   'paint-text':        'paint-text.ogg',
   'paint-clear':       'paint-clear.ogg',
   'paint-firecracker': 'paint-firecracker.ogg',
@@ -4193,6 +4194,9 @@ const SOUND_GAIN = {
   'paint-fill':        0.22,
   'paint-eyedropper':  0.11,
   'paint-palette':     0.17,
+  // Much hotter than the palette click in the file (-16dB vs -24dB over its
+  // audible span), so trimmed harder to land level with it and the OS click.
+  'paint-select':      0.07,
   'paint-text':        0.40,
   'paint-clear':       0.14,
   'paint-firecracker': 0.60,
@@ -19439,10 +19443,12 @@ const PAINT_PENCIL_CROSSFADE_SEC = 0.25;
 const PAINT_LOOP_IDLE_MS = 150;
 const PAINT_LOOP_ATTACK_SEC = 0.025;
 const PAINT_LOOP_RELEASE_SEC = 0.08;
-// Canvas pixels of eraser travel per rub, and the floor between rubs so a fast
-// scrub layers two or three rather than a wall of them.
+// Canvas pixels of eraser travel per rub, and the floor between rubs. The floor
+// is the clip's own audible length (348ms, measured): at 160ms two or three
+// rubs overlapped on any real scrub and smeared into one continuous noise.
+// Now each rub finishes before the next starts.
 const PAINT_RUB_EVERY_PX = 24;
-const PAINT_RUB_MIN_MS = 160;
+const PAINT_RUB_MIN_MS = 350;
 // The floor between two stamp sounds. A drag places a stamp every stamp-width,
 // which with 16px stamps and a quick hand is one every ~30ms - and the clip is
 // 100ms long, so one sound per stamp piled up into a buzz. Stamps still land
@@ -20137,7 +20143,10 @@ function paintRenderTools() {
     b.title = tool.label;
     b.setAttribute('aria-label', tool.label);
     b.appendChild(paintToolIcon(tool.id));
-    b.addEventListener('click', () => paintSelectTool(tool.id));
+    // The select sound lives on the click, not in paintSelectTool: that is also
+    // called by code - the eyedropper handing you back to the pencil, opening
+    // the window - and a UI sound nobody clicked for is noise.
+    b.addEventListener('click', () => { playSound('paint-select'); paintSelectTool(tool.id); });
     host.appendChild(b);
   });
   paintSyncToolButtons();
@@ -20199,7 +20208,7 @@ function paintRenderOptionsBar() {
     b.title = v.label;
     b.setAttribute('aria-label', v.label);
     b.appendChild(paintVariantPreview(paintState.tool, v.id));
-    b.addEventListener('click', () => paintSelectVariant(v.id));
+    b.addEventListener('click', () => { playSound('paint-select'); paintSelectVariant(v.id); });
     host.appendChild(b);
   });
   paintRenderStickerPager(host);
@@ -20290,7 +20299,7 @@ function paintBuildStickerStrip(host) {
   prev.textContent = '◄';
   prev.title = 'Previous stickers';
   prev.setAttribute('aria-label', 'Previous stickers');
-  prev.addEventListener('click', () => paintStepStickers(-1));
+  prev.addEventListener('click', () => { playSound('paint-select'); paintStepStickers(-1); });
   host.appendChild(prev);
 
   for (let i = 0; i < shown; i++) {
@@ -20307,9 +20316,9 @@ function paintBuildStickerStrip(host) {
     b.style.backgroundPosition = (-rect.sx) + 'px ' + (-rect.sy) + 'px';
     b.addEventListener('click', () => {
       paintState.stickerIndex = idx;
-      // Choosing is a click, like choosing a colour. The stamp sound belongs to
-      // putting one on the canvas - see paintDrawSegment.
-      playSound('paint-palette');
+      // Choosing is the select click, like choosing a tool. The stamp sound
+      // belongs to putting one on the canvas - see paintDrawSegment.
+      playSound('paint-select');
       document.querySelectorAll('.paint-sticker').forEach(el =>
         el.classList.toggle('sel', Number(el.dataset.idx) === idx));
     });
@@ -20322,7 +20331,7 @@ function paintBuildStickerStrip(host) {
   next.textContent = '►';
   next.title = 'More stickers';
   next.setAttribute('aria-label', 'More stickers');
-  next.addEventListener('click', () => paintStepStickers(1));
+  next.addEventListener('click', () => { playSound('paint-select'); paintStepStickers(1); });
   host.appendChild(next);
 }
 

@@ -39,6 +39,7 @@ const SOUND_FILES = {
   'paint-fill':        'paint-fill.ogg',
   'paint-eyedropper':  'paint-eyedropper.ogg',
   'paint-palette':     'paint-palette.ogg',
+  'paint-select':      'paint-select.ogg',
   'paint-text':        'paint-text.ogg',
   'paint-clear':       'paint-clear.ogg',
   'paint-firecracker': 'paint-firecracker.ogg',
@@ -73,6 +74,9 @@ const SOUND_GAIN = {
   'paint-fill':        0.22,
   'paint-eyedropper':  0.11,
   'paint-palette':     0.17,
+  // Much hotter than the palette click in the file (-16dB vs -24dB over its
+  // audible span), so trimmed harder to land level with it and the OS click.
+  'paint-select':      0.07,
   'paint-text':        0.40,
   'paint-clear':       0.14,
   'paint-firecracker': 0.60,
