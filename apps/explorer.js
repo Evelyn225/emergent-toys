@@ -348,10 +348,10 @@ function openExplorer(startPath) {
     if (openWithAssociation(name, cwd)) return;
     // A root system binary with no association double-clicks straight into
     // the real app, the same as its Desktop icon does - the decompiler view
-    // is an Open With destination now, not the default. !cwd (root only)
-    // matters here: programIsSystemBinary is a name test, so a user's own
-    // DOCS\SYSMON.exe must fall through to openNotepad like any other file.
-    if (!cwd && programIsSystemBinary(name)) {
+    // is an Open With destination now, not the default. programIsRootSystemBinary
+    // (os/programs.js) is what keeps a user's own DOCS\SYSMON.exe falling
+    // through to openNotepad like any other file instead.
+    if (programIsRootSystemBinary(name, cwd)) {
       openSystemFile(name);
       return;
     }

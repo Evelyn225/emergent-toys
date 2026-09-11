@@ -412,10 +412,10 @@ function openDesktopShortcutTarget(target) {
   if (openWithAssociation(st.name, st.dirName)) return;
   // Same root-system-binary carve-out as Explorer's openItem: a shortcut to
   // e.g. root SYSMON.exe with no Open With association launches the real
-  // app rather than its decompiler view. !st.dirName (root only) matters
-  // here for the same reason - programIsSystemBinary is a name test, and a
-  // shortcut to a user's own DOCS\SYSMON.exe must not be redirected.
-  if (!st.dirName && programIsSystemBinary(st.name)) {
+  // app rather than its decompiler view. programIsRootSystemBinary
+  // (os/programs.js) is what keeps a shortcut to a user's own
+  // DOCS\SYSMON.exe from being redirected.
+  if (programIsRootSystemBinary(st.name, st.dirName)) {
     openSystemFile(st.name);
     return;
   }

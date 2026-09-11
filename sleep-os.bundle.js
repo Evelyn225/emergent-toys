@@ -3119,10 +3119,10 @@ function openDesktopShortcutTarget(target) {
   if (openWithAssociation(st.name, st.dirName)) return;
   // Same root-system-binary carve-out as Explorer's openItem: a shortcut to
   // e.g. root SYSMON.exe with no Open With association launches the real
-  // app rather than its decompiler view. !st.dirName (root only) matters
-  // here for the same reason - programIsSystemBinary is a name test, and a
-  // shortcut to a user's own DOCS\SYSMON.exe must not be redirected.
-  if (!st.dirName && programIsSystemBinary(st.name)) {
+  // app rather than its decompiler view. programIsRootSystemBinary
+  // (os/programs.js) is what keeps a shortcut to a user's own
+  // DOCS\SYSMON.exe from being redirected.
+  if (programIsRootSystemBinary(st.name, st.dirName)) {
     openSystemFile(st.name);
     return;
   }
@@ -3335,15 +3335,27 @@ function programIsExecutableEntry(entry) {
 
 // A double-click (Explorer's openItem, the desktop's
 // openDesktopShortcutTarget) spawns a `.exe` instead of opening it in
-// Notepad, UNLESS it is one of the eight system binaries - those still route
-// to Notepad, which sends them on to the decompiler view via
-// notepadRouteFor. Both call sites need the exact same test, so it lives
-// here once rather than as two inline copies that could drift.
+// Notepad, UNLESS it is one of the system binaries - those launch their
+// built-in window instead, see programIsRootSystemBinary below. Both call
+// sites need the exact same test, so it lives here once rather than as two
+// inline copies that could drift.
 //
 // Declared with `function` for the same reason as programIsSystemBinary
 // above: the vm test harness only exposes function declarations.
 function programIsSpawnableExe(name) {
   return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
+}
+
+// A system binary name AT THE ROOT specifically - programIsSystemBinary
+// alone is name-only, so it also matches a player's own DOCS\CALC.exe, which
+// must be treated as an ordinary file. Nothing seeds a real root file for
+// these names any more (os/fs-core.js) - this is still the right test for
+// "double-clicking this should launch the built-in window instead of opening
+// Notepad", because the name stays reserved at root regardless of whether a
+// file backs it. Takes the directory the caller already resolved, so the
+// answer can never disagree with the file it is about to act on.
+function programIsRootSystemBinary(name, dir) {
+  return !vfsNormalizeDir(dir || '') && programIsSystemBinary(name);
 }
 
 // Every real launch of a user .exe - the terminal running one off
@@ -13531,10 +13543,10 @@ function openExplorer(startPath) {
     if (openWithAssociation(name, cwd)) return;
     // A root system binary with no association double-clicks straight into
     // the real app, the same as its Desktop icon does - the decompiler view
-    // is an Open With destination now, not the default. !cwd (root only)
-    // matters here: programIsSystemBinary is a name test, so a user's own
-    // DOCS\SYSMON.exe must fall through to openNotepad like any other file.
-    if (!cwd && programIsSystemBinary(name)) {
+    // is an Open With destination now, not the default. programIsRootSystemBinary
+    // (os/programs.js) is what keeps a user's own DOCS\SYSMON.exe falling
+    // through to openNotepad like any other file instead.
+    if (programIsRootSystemBinary(name, cwd)) {
       openSystemFile(name);
       return;
     }
