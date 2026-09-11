@@ -44,6 +44,11 @@ const PAINT_LOOP_RELEASE_SEC = 0.08;
 // scrub layers two or three rather than a wall of them.
 const PAINT_RUB_EVERY_PX = 24;
 const PAINT_RUB_MIN_MS = 160;
+// The floor between two stamp sounds. A drag places a stamp every stamp-width,
+// which with 16px stamps and a quick hand is one every ~30ms - and the clip is
+// 100ms long, so one sound per stamp piled up into a buzz. Stamps still land
+// at full density; only the sound is rate-limited.
+const PAINT_STAMP_SOUND_MIN_MS = 180;
 
 // Which loop a tool draws with, or null. Literal names, written out, because
 // test/sound-assets.test.cjs finds a sound's trigger by searching for
@@ -384,6 +389,7 @@ function paintBeginStroke(pos) {
   s.drawing = true;
   s.origin = { x: pos.x, y: pos.y };
   s.stampLast = null;
+  s.stampSoundAt = 0;
   // A shape is previewed live and only committed on release, so the pixels
   // underneath it have to survive every mouse move.
   s.preview = paintIsShapeTool(s.tool) ? paintSnapshot() : null;
@@ -505,10 +511,14 @@ function paintDrawSegment(x0, y0, x1, y1) {
     // where it last stamped is read off the ops it returned.
     let stamped = false;
     ops.forEach(op => { if (op.op === 'sprite') { s.stampLast = { x: op.x, y: op.y }; stamped = true; } });
-    // One stamp sound per segment that placed anything. Spacing is now a stamp
-    // width, so on any drag a person can make that is one sound per stamp; a
-    // flick fast enough to lay two in one move does not need two clunks.
-    if (stamped) playSound('paint-stamp');
+    // Rate-limited rather than one per stamp - see PAINT_STAMP_SOUND_MIN_MS. The
+    // first stamp of a stroke always sounds: s.stampSoundAt is reset with the
+    // stroke, and 0 is always long enough ago.
+    const now = performance.now();
+    if (stamped && now - s.stampSoundAt >= PAINT_STAMP_SOUND_MIN_MS) {
+      playSound('paint-stamp');
+      s.stampSoundAt = now;
+    }
   }
 }
 
@@ -563,7 +573,8 @@ function openPaint() {
     file: null,
     dir: PAINT_DEFAULT_DIR,
     stickerIndex: 0,
-    stickerPage: 0,
+    stickerOffset: 0,
+    stickerFit: 0,
     points: [],
     segIndex: 0,
     drawing: false,
@@ -633,9 +644,14 @@ function openPaint() {
 
   const ro = new ResizeObserver(() => paintFitCanvas());
   ro.observe(document.getElementById('paint-stage'));
+  // The options bar's width is the space the row leaves it, independent of
+  // what is in it, so observing it cannot feed back on its own re-render.
+  const optsRo = new ResizeObserver(() => paintRefitStickers());
+  optsRo.observe(document.getElementById('paint-options'));
 
   wins[PAINT_WIN_ID]._onclose = () => {
     ro.disconnect();
+    optsRo.disconnect();
     // A window closed with the button still down never sees a pointerup, and a
     // drawing loop left running would scratch away over the desktop forever.
     if (paintState) paintStrokeSoundEnd(paintState);
@@ -772,29 +788,84 @@ function paintSyncOptionButtons() {
 // The picker lives IN the options bar, beside the size variants, because that
 // is where the reference puts it and because a sticker's identity is a variant
 // of the sticker tool in every way that matters.
-function paintSetStickerPage(n) {
-  const pages = paintStickerPages();
-  // Wrapping rather than clamping: eight pages of stamps is a carousel, and a
-  // dead arrow at either end is a button that looks broken.
-  paintState.stickerPage = ((n % pages) + pages) % pages;
+function paintStepStickers(dir) {
+  paintState.stickerOffset = paintStickerStep(paintState.stickerOffset, paintStickerShown(), dir);
   paintRenderOptionsBar();
+}
+
+// How many stickers the strip shows: as many as fit, measured, up to a full
+// row of the sheet. Before the first measurement - and whenever the bar has no
+// width to measure, which is the case while the window is minimised - it is
+// the full row.
+function paintStickerShown() {
+  return paintState.stickerFit || paintStickerPerPage();
+}
+
+// How many stickers fit in the options bar beside everything else on it, from
+// the bar's real width and its children's real widths. Measured rather than
+// computed from CSS numbers because the touch layout uses different sizes, and
+// a second copy of those numbers here is a second thing to keep in step.
+//
+// Independent of how many stickers are currently rendered - the fixed items
+// and ONE sticker's width are all it reads - so re-rendering at the answer
+// gives the same answer again, and a resize can never make this oscillate.
+function paintStickerFitCount(host) {
+  const kids = [...host.children];
+  const one = kids.find(k => k.classList.contains('paint-sticker'));
+  if (!one || !host.clientWidth) return null;
+  const cs = getComputedStyle(host);
+  const inner = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const gap = parseFloat(cs.columnGap) || 0;
+  const fixed = kids.filter(k => !k.classList.contains('paint-sticker'));
+  const fixedW = fixed.reduce((w, k) => w + k.getBoundingClientRect().width + gap, 0);
+  // n stickers fit when fixed + n*(sticker+gap) - gap <= inner. The half pixel
+  // absorbs sub-pixel layout noise, which would otherwise drop the last
+  // sticker on a bar that fits it exactly.
+  const n = Math.floor((inner - fixedW + gap + 0.5) / (one.getBoundingClientRect().width + gap));
+  return Math.max(1, Math.min(paintStickerPerPage(), n));
+}
+
+// Re-measures after a resize and redraws only if the count actually changed:
+// a window drag fires this every frame, and rebuilding an unchanged bar every
+// frame would throw away the size-preview canvases for nothing.
+function paintRefitStickers() {
+  if (!paintState || paintState.tool !== 'sticker') return;
+  const host = document.getElementById('paint-options');
+  const fit = host && paintStickerFitCount(host);
+  if (fit && fit !== paintState.stickerFit) paintRenderOptionsBar();
 }
 
 function paintRenderStickerPager(host) {
   if (paintState.tool !== 'sticker') return;
-  const perPage = paintStickerPerPage();
-  const base = paintState.stickerPage * perPage;
+  paintBuildStickerStrip(host);
+  // Measure what actually fits now that the bar is laid out, and rebuild once
+  // at that count if it differs. See paintStickerFitCount for why once is
+  // always enough.
+  const fit = paintStickerFitCount(host);
+  if (fit && fit !== paintState.stickerFit) {
+    paintState.stickerFit = fit;
+    host.querySelectorAll('.paint-sticker, .paint-pager').forEach(el => el.remove());
+    paintBuildStickerStrip(host);
+  }
+}
+
+function paintBuildStickerStrip(host) {
+  const shown = paintStickerShown();
+  // Clamped on every build, not just on arrow presses: a window widened while
+  // the strip sat near the end would otherwise run past the last sticker.
+  paintState.stickerOffset = paintStickerClampOffset(paintState.stickerOffset, shown);
+  const base = paintState.stickerOffset;
 
   const prev = document.createElement('button');
   prev.type = 'button';
   prev.className = 'paint-pager paint-pager-prev';
   prev.textContent = '◄';
-  prev.title = 'Previous page of stickers';
-  prev.setAttribute('aria-label', 'Previous page of stickers');
-  prev.addEventListener('click', () => paintSetStickerPage(paintState.stickerPage - 1));
+  prev.title = 'Previous stickers';
+  prev.setAttribute('aria-label', 'Previous stickers');
+  prev.addEventListener('click', () => paintStepStickers(-1));
   host.appendChild(prev);
 
-  for (let i = 0; i < perPage; i++) {
+  for (let i = 0; i < shown; i++) {
     const idx = base + i;
     const rect = paintStickerRect(idx);
     if (!rect) continue;
@@ -821,9 +892,9 @@ function paintRenderStickerPager(host) {
   next.type = 'button';
   next.className = 'paint-pager paint-pager-next';
   next.textContent = '►';
-  next.title = 'Next page of stickers';
-  next.setAttribute('aria-label', 'Next page of stickers');
-  next.addEventListener('click', () => paintSetStickerPage(paintState.stickerPage + 1));
+  next.title = 'More stickers';
+  next.setAttribute('aria-label', 'More stickers');
+  next.addEventListener('click', () => paintStepStickers(1));
   host.appendChild(next);
 }
 
@@ -1064,8 +1135,8 @@ function paintBuildMenu(mb) {
   const help = document.createElement('button');
   help.className = 'ms-help-btn';
   help.type = 'button';
-  help.title = 'Help and credits';
-  help.setAttribute('aria-label', 'Help and credits');
+  help.title = 'Help';
+  help.setAttribute('aria-label', 'Help');
   help.innerHTML = iconMarkup('icon:help');
   help.addEventListener('click', e => { e.stopPropagation(); paintOpenHelp(); });
   mb.appendChild(help);
@@ -1112,9 +1183,6 @@ function paintOpenHelp() {
          a colour, then drag on the canvas.</p>
       <p><b>Ctrl+Z</b> undoes and <b>Ctrl+Y</b> redoes, up to twenty steps back.
          <b>Ctrl+S</b> saves into C:\sleepOS\PICTURES.</p>
-      <h3>Credits</h3>
-      <p>The stickers are Br&oslash;derbund <i>Kid Pix</i> stamps. A tribute,
-         not the original.</p>
     </div>
     <div class="dlg-btns"><button class="dlg-btn primary" id="${id}-ok">OK</button></div>`;
   const ok = document.getElementById(id + '-ok');

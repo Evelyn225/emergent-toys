@@ -254,8 +254,11 @@ function osAlert(msg, title, icon) {
   ok.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') closeWin(id); });
   setTimeout(() => ok.focus(), 40);
 }
-function osConfirm(msg, title, cb, icon) {
-  title = title || 'Confirm'; icon = icon || '❓';
+// `labels` names the two buttons, { ok, cancel } - OK/Cancel by default. A
+// yes-or-no question ("...do you want to replace it?") reads wrong answered
+// with OK, which is why Windows asks that one with Yes and No.
+function osConfirm(msg, title, cb, icon, labels) {
+  title = title || 'Confirm'; icon = icon || '❓'; labels = labels || {};
   const id = 'os-confirm-' + Date.now();
   // Same mobile sizing as osAlert - see its comment.
   const mobile = isMobileLayout();
@@ -265,8 +268,8 @@ function osConfirm(msg, title, cb, icon) {
   const b = document.getElementById('wb-' + id);
   b.innerHTML = `<div class="dlg-body"><div class="dlg-icon">${iconMarkup(icon)}</div><div class="dlg-text" style="white-space:pre-wrap;">${(msg+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div><div class="dlg-btns" id="${id}-btns"></div>`;
   const row = document.getElementById(id + '-btns');
-  const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = 'OK';
-  const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = 'Cancel';
+  const ok  = document.createElement('button'); ok.className  = 'dlg-btn primary'; ok.textContent = labels.ok || 'OK';
+  const can = document.createElement('button'); can.className = 'dlg-btn';         can.textContent = labels.cancel || 'Cancel';
   ok.onclick  = () => { closeWin(id); cb(true);  };
   can.onclick = () => { closeWin(id); cb(false); };
   [ok, can].forEach(btn => btn.addEventListener('keydown', e => {

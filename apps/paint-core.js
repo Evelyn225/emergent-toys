@@ -450,9 +450,36 @@ const PAINT_STICKER_COLS = 14;
 const PAINT_STICKER_ROWS = 8;
 
 function paintStickerCell()    { return PAINT_STICKER_CELL; }
+// The MOST the picker shows at once - one row of the sheet. The picker shows
+// fewer when the window is too narrow for fourteen; see paintStickerStep.
 function paintStickerPerPage() { return PAINT_STICKER_COLS; }
 function paintStickerPages()   { return PAINT_STICKER_ROWS; }
 function paintStickerCount()   { return PAINT_STICKER_COLS * PAINT_STICKER_ROWS; }
+
+// ── the picker strip ─────────────────────────────────────────────
+// The picker is a window of `perPage` stickers starting at `offset`, and
+// perPage is however many fit - the UI measures it, and it shrinks as the
+// window does, so the arrows and the undo button never get pushed out of
+// view. That is why the state is an OFFSET and not a page number: a page
+// number means something different every time the page size changes, so a
+// resize would jump the strip to an unrelated part of the sheet. An offset
+// stays where it was.
+//
+// The strip only ever shows full views. Next from the last full view wraps to
+// the start and previous from the start wraps to the last full view, so the
+// end of the sheet is never a stub of two stickers and a lot of empty bar.
+function paintStickerClampOffset(offset, perPage) {
+  const per = Math.max(1, Math.min(perPage, paintStickerCount()));
+  return Math.max(0, Math.min(Math.floor(offset) || 0, paintStickerCount() - per));
+}
+
+function paintStickerStep(offset, perPage, dir) {
+  const per = Math.max(1, Math.min(perPage, paintStickerCount()));
+  const last = paintStickerCount() - per;
+  const at = paintStickerClampOffset(offset, per);
+  if (dir > 0) return at >= last ? 0 : Math.min(at + per, last);
+  return at <= 0 ? last : Math.max(0, at - per);
+}
 
 function paintStickerRect(idx) {
   if (!Number.isInteger(idx) || idx < 0 || idx >= paintStickerCount()) return null;

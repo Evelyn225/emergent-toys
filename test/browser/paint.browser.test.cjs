@@ -410,6 +410,84 @@ test('Save As lists the paintings already in the folder, as images, and nothing 
   });
 });
 
+// With the dialog listing the folder, one click on a painting and Save replaced
+// it without a word. It asks now, the way Windows does, and the answer matters
+// in both directions: No must leave the file alone and return to the dialog,
+// Yes must actually replace it.
+test('Save As asks before replacing a painting, and No leaves the file alone', async () => {
+  await withPaint(async page => {
+    const clickIn = (prefix, label) => page.evaluate(([prefix, label]) => {
+      const dlg = document.querySelector(`[id^="${prefix}"]`);
+      [...dlg.querySelectorAll('button')].find(b => b.textContent === label).click();
+    }, [prefix, label]);
+    const urlOf = name => page.evaluate(n => (vfsStatSync(n, 'PICTURES') || {}).blob?.url || null, name);
+
+    await page.evaluate(() => paintWriteAndSync('keep.png', 'PICTURES'));
+    const original = await urlOf('keep.png');
+    await dragCanvas(page, 40, 40, 200, 120);
+
+    // paintState.file is keep.png, so Save As proposes exactly that name.
+    await page.evaluate(() => paintSaveAs());
+    await page.waitForSelector('[id^="win-saveas-"]');
+    await clickIn('win-saveas-', 'Save');
+    await page.waitForSelector('[id^="win-os-confirm-"]');
+    const prompt = await page.evaluate(() => {
+      const w = document.querySelector('[id^="win-os-confirm-"]');
+      return { text: w.querySelector('.dlg-text').textContent,
+               buttons: [...w.querySelectorAll('.dlg-btn')].map(b => b.textContent) };
+    });
+    assert.match(prompt.text, /keep\.png already exists/);
+    assert.deepStrictEqual(prompt.buttons, ['Yes', 'No']);
+
+    await clickIn('win-os-confirm-', 'No');
+    const afterNo = await page.evaluate(() => ({
+      dialogOpen: !!document.querySelector('[id^="win-saveas-"]'),
+      promptOpen: !!document.querySelector('[id^="win-os-confirm-"]'),
+    }));
+    assert.ok(afterNo.dialogOpen, 'No closed the Save As dialog instead of returning to it');
+    assert.ok(!afterNo.promptOpen);
+    assert.strictEqual(await urlOf('keep.png'), original, 'No still replaced the file');
+
+    await clickIn('win-saveas-', 'Save');
+    await page.waitForSelector('[id^="win-os-confirm-"]');
+    await clickIn('win-os-confirm-', 'Yes');
+    await page.waitForFunction(o => (vfsStatSync('keep.png', 'PICTURES') || {}).blob?.url !== o, original);
+    assert.ok(!(await page.$('[id^="win-saveas-"]')), 'Yes did not close the Save As dialog');
+  });
+});
+
+test('Save As does not ask about a new name, or once Save As itself was closed', async () => {
+  await withPaint(async page => {
+    const r = await page.evaluate(async () => {
+      await paintWriteAndSync('old.png', 'PICTURES');
+      // A new name saves straight through.
+      paintSaveAs();
+      let dlg = document.querySelector('[id^="win-saveas-"]');
+      dlg.querySelector('input[type="text"]').value = 'fresh.png';
+      [...dlg.querySelectorAll('button')].find(b => b.textContent === 'Save').click();
+      const askedForNew = !!document.querySelector('[id^="win-os-confirm-"]');
+      await new Promise(res => setTimeout(res, 300));
+      const freshSaved = !!vfsStatSync('fresh.png', 'PICTURES');
+
+      // Ask about old.png, close Save As underneath the prompt, then say Yes.
+      paintState.file = 'old.png';
+      paintState.dir = 'PICTURES';
+      const before = vfsStatSync('old.png', 'PICTURES').blob.url;
+      paintSaveAs();
+      dlg = document.querySelector('[id^="win-saveas-"]');
+      [...dlg.querySelectorAll('button')].find(b => b.textContent === 'Save').click();
+      closeWin(dlg.id.replace(/^win-/, ''));
+      const prompt = document.querySelector('[id^="win-os-confirm-"]');
+      [...prompt.querySelectorAll('button')].find(b => b.textContent === 'Yes').click();
+      await new Promise(res => setTimeout(res, 300));
+      return { askedForNew, freshSaved, staleYesSaved: vfsStatSync('old.png', 'PICTURES').blob.url !== before };
+    });
+    assert.ok(!r.askedForNew, 'asked to replace a file that does not exist');
+    assert.ok(r.freshSaved, 'the new name was not saved');
+    assert.ok(!r.staleYesSaved, 'a Yes after Save As was closed still replaced the file');
+  });
+});
+
 test('an existing image loads onto the canvas, letterboxed on white', async () => {
   await withPaint(async page => {
     const r = await page.evaluate(async () => {
@@ -517,50 +595,107 @@ test('a double-click in the Open dialog loads the image exactly once', async () 
   });
 });
 
-test('the sticker pager shows one page of 14 and the arrows change it', async () => {
+test('the sticker picker shows a full row of 14 in the default window and the arrows move it', async () => {
   await withPaint(async page => {
     const first = await page.evaluate(() => {
       paintSelectTool('sticker');
       return {
         thumbs: document.querySelectorAll('.paint-sticker').length,
-        page: paintState.stickerPage,
+        offset: paintState.stickerOffset,
         pager: !!document.querySelector('.paint-pager'),
       };
     });
     // Asserting the rendered COUNT, not a pixel width. This is the minesweeper
     // lesson: a grid sized by CSS width laid 480 cells out 29 columns wide,
     // every node test passed, and it looked very nearly right.
-    assert.strictEqual(first.thumbs, 14, 'expected 14 stickers on a page');
-    assert.strictEqual(first.page, 0);
-    assert.ok(first.pager, 'no page arrows');
+    assert.strictEqual(first.thumbs, 14, 'the default window should fit a full row of 14');
+    assert.strictEqual(first.offset, 0);
+    assert.ok(first.pager, 'no arrows');
 
     const next = await page.evaluate(() => {
       document.querySelector('.paint-pager-next').click();
       return {
-        page: paintState.stickerPage,
+        offset: paintState.stickerOffset,
         firstIdx: Number(document.querySelector('.paint-sticker').dataset.idx),
         thumbs: document.querySelectorAll('.paint-sticker').length,
       };
     });
-    assert.strictEqual(next.page, 1);
-    assert.strictEqual(next.firstIdx, 14, 'page 2 does not start at sticker 14');
+    assert.strictEqual(next.offset, 14);
+    assert.strictEqual(next.firstIdx, 14, 'the next view does not start at sticker 14');
     assert.strictEqual(next.thumbs, 14);
   });
 });
 
-test('the pager wraps rather than dead-ending at either edge', async () => {
+test('the arrows wrap rather than dead-ending at either end', async () => {
   await withPaint(async page => {
     const r = await page.evaluate(() => {
       paintSelectTool('sticker');
       document.querySelector('.paint-pager-prev').click();
-      const backFromZero = paintState.stickerPage;
-      paintSetStickerPage(paintStickerPages() - 1);
+      const backFromStart = paintState.stickerOffset;
       document.querySelector('.paint-pager-next').click();
-      return { backFromZero, forwardFromLast: paintState.stickerPage };
+      return { backFromStart, forwardFromEnd: paintState.stickerOffset };
     });
-    assert.strictEqual(r.backFromZero, 7, 'going back from page 1 should wrap to the last page');
-    assert.strictEqual(r.forwardFromLast, 0, 'going forward from the last page should wrap to the first');
+    assert.strictEqual(r.backFromStart, 98, 'back from the start should wrap to the last full row');
+    assert.strictEqual(r.forwardFromEnd, 0, 'forward from the last row should wrap to the start');
   });
+});
+
+// The reported bug: narrowing the window on the sticker tool hid the undo
+// button almost at once. The bottom row would not shrink below its content
+// (~870px), so it ran off the window's edge and the window clipped the last
+// thing on it. Now the row shrinks, the picker shows as many stickers as fit,
+// and the arrows page through the rest - so undo and both arrows must be on
+// screen, and the options bar must not be scrolling to hide them, at every
+// width down to a phone's.
+test('narrowing the window shows fewer stickers but never hides undo or the arrows', async () => {
+  await withPaint(async page => {
+    await page.evaluate(() => paintSelectTool('sticker'));
+    const counts = [];
+    for (const w of [900, 820, 700, 600, 480, 420]) {
+      const m = await page.evaluate(async w => {
+        document.getElementById('win-paint').style.width = w + 'px';
+        // Two frames: the refit runs from a ResizeObserver, which is delivered
+        // after the first frame's layout.
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const body = document.getElementById('wb-paint').getBoundingClientRect();
+        const onScreen = sel => {
+          const r = document.querySelector(sel).getBoundingClientRect();
+          return r.width > 0 && r.left >= body.left - 0.5 && r.right <= body.right + 0.5 && r.bottom <= body.bottom + 0.5;
+        };
+        const opts = document.getElementById('paint-options');
+        return {
+          undo: onScreen('#paint-undo-guy'), prev: onScreen('.paint-pager-prev'), next: onScreen('.paint-pager-next'),
+          scrolls: opts.scrollWidth > opts.clientWidth + 1,
+          stickers: document.querySelectorAll('.paint-sticker').length,
+        };
+      }, w);
+      assert.ok(m.undo, `undo is off screen in a ${w}px window`);
+      assert.ok(m.prev && m.next, `a sticker arrow is off screen in a ${w}px window`);
+      assert.ok(!m.scrolls, `the sticker bar overflows in a ${w}px window`);
+      assert.ok(m.stickers >= 1, `no stickers shown in a ${w}px window`);
+      counts.push(m.stickers);
+    }
+    assert.ok(counts[0] === 14 && counts[1] < 14, 'the picker did not shrink as the window did: ' + counts.join(','));
+  }, { width: 1400, height: 900 });
+});
+
+// Spare height used to be shared evenly between the root's wrapped lines, so a
+// phone - short canvas, lots of spare height - got a bottom bar ~120px a row,
+// with the palette box and undo button stretched to match.
+test('on a phone the bottom bar is only as tall as its controls', async () => {
+  await withPaint(async page => {
+    const m = await page.evaluate(async () => {
+      paintSelectTool('sticker');
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return {
+        bar: document.querySelector('.paint-bottom').getBoundingClientRect().height,
+        undo: document.getElementById('paint-undo-guy').getBoundingClientRect().height,
+      };
+    });
+    // Two rows of ~38px touch controls plus padding and the row gap.
+    assert.ok(m.bar <= 100, 'the bottom bar is ' + Math.round(m.bar) + 'px tall on a phone');
+    assert.ok(m.undo <= 44, 'the undo button stretched to ' + Math.round(m.undo) + 'px');
+  }, { width: 390, height: 844, isMobile: true, hasTouch: true });
 });
 
 test('clicking the canvas with a sticker selected stamps it', async () => {
@@ -1014,19 +1149,30 @@ test('on a phone the canvas fits the width and nothing scrolls sideways', async 
 
 test('the toolbox and options bar stay reachable on a phone', async () => {
   await withPaint(async page => {
-    const m = await page.evaluate(() => {
+    const m = await page.evaluate(async () => {
       const tools = [...document.querySelectorAll('.paint-tool')];
       const bar = document.getElementById('paint-options');
-      return {
-        smallest: Math.min(...tools.map(b => b.getBoundingClientRect().width)),
-        // Real overflow, not just the static declaration: .paint-options has
-        // carried overflow-x:auto unconditionally since Task 5, desktop
-        // included, so checking for that property alone would pass even if a
-        // regression removed the actual scrolling behaviour.
-        barScrolls: bar.scrollWidth > bar.clientWidth,
-      };
+      // Every variant of every tool must be reachable: fully visible in the
+      // bar, or the bar genuinely scrolls. This used to assert that the bar
+      // overflowed, because on a phone scrolling was the only way to reach
+      // the variants; since the bar got a full-width row of its own, most
+      // tools fit outright, which is the better outcome - so the property
+      // under test is reachability, not overflow.
+      const unreachable = [];
+      for (const t of paintTools().map(t => t.id)) {
+        paintSelectTool(t);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const box = bar.getBoundingClientRect();
+        const scrolls = bar.scrollWidth > bar.clientWidth + 1;
+        [...bar.querySelectorAll('.paint-opt')].forEach(b => {
+          const r = b.getBoundingClientRect();
+          const visible = r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
+          if (!visible && !scrolls) unreachable.push(t + '/' + b.dataset.variant);
+        });
+      }
+      return { smallest: Math.min(...tools.map(b => b.getBoundingClientRect().width)), unreachable };
     });
     assert.ok(m.smallest >= 30, 'tool buttons are under 30px on touch: ' + m.smallest);
-    assert.ok(m.barScrolls, 'the options bar does not actually overflow, so variants are unreachable');
+    assert.deepStrictEqual(m.unreachable, [], 'these variants are off the bar and the bar cannot scroll to them');
   }, { width: 390, height: 780 });
 });
