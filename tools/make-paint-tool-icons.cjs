@@ -279,24 +279,30 @@ const ICONS = {
   // belongs to the same program - one asset, one generator. apps/paint.js
   // reaches it by name through the same order table.
   //
-  // A plain arrow. It replaced a drawing of the Undo Guy, and was first made by
-  // editing paint-tools.png directly; it lives here now so re-running this tool
-  // reproduces it instead of quietly putting the Undo Guy back.
+  // A U-turn: the curved "go back" arrow, arrowhead pointing left. It replaced
+  // a drawing of the Undo Guy, then a straight arrow that sat a pixel left and
+  // a pixel low in its cell. This one is exactly centred - one clear column
+  // each side, two clear rows above and below - and its curve is symmetric
+  // top-to-bottom, row for row. The stroke is two pixels, like the rectangle
+  // and oval above, so it reads as part of the same set.
+  //
+  // The straight arrow was first drawn by editing paint-tools.png directly;
+  // the art lives here so re-running this tool reproduces it.
   undo: [
     '................',
     '................',
-    '................',
-    '................',
-    '.............k..',
-    '.............k..',
-    '............kk..',
-    '....k.......k...',
-    '...kk......kk...',
-    '..kkk....kkk....',
-    'kkkkkkkkkk......',
-    '..kkk...........',
-    '...kk...........',
     '....k...........',
+    '...kk...........',
+    '..kkk...........',
+    '.kkkkkkkkkkkk...',
+    '.kkkkkkkkkkkkk..',
+    '..kkk.......kkk.',
+    '...kk........kk.',
+    '....k........kk.',
+    '.............kk.',
+    '............kkk.',
+    '.....kkkkkkkkk..',
+    '.....kkkkkkkk...',
     '................',
     '................',
   ],
