@@ -5329,214 +5329,6 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
-// The eight system binaries, as real files.
-//
-// These were authored metadata rows in os/daemon.js with hardcoded sizes
-// ('4,096'), which since phase 4 has meant eight invented numbers sitting in
-// a DIR listing next to sizes measured off the superblock. Seeding them makes
-// the size measured like everything else and gives the decompiler view
-// something real to read - it stops being an overlay and becomes what it
-// claims to be.
-//
-// The listings are duplicated here rather than read from
-// getExeDecompilerContent (apps/notepad.js) because that file is manifest
-// position 27 and this one is 14: calling it at seed time would throw on
-// boot. os/fs-core.js is the source of the bytes; apps/notepad.js renders
-// whatever the file holds. Content here must stay byte-identical to
-// getExeDecompilerContent's loreMap entries - test/system-binaries.test.cjs
-// checks the shape, but nothing enforces the exact text except this comment
-// and care.
-//
-// Text rather than blob is forced by the data: the only blob seed path
-// (refreshSeededWallpaperLibrary) produces URL-backed entries with size 0,
-// which would put a 0 in DIR - a worse number than the fake 4,096, not a
-// better one.
-const SYSTEM_BINARY_SOURCES = {
-  'TERMINAL.exe': [
-    '; TERMINAL.exe - Disassembly v1.0',
-    'section .text',
-    '  PUSH soul_daemon',
-    '  CALL obsv.sys',
-    '  MOV  eax, [STDIN_HANDLE]',
-    '  CMP  eax, 0x00000000',
-    '  JE   void_fallback',
-    '  CALL parse_command',
-    '  JMP  main_loop',
-    'void_fallback:',
-    '  MOV  [VOID_PRESSURE], 0xFF',
-    '  RET',
-    '; NOTE: 3 subroutines unresolved',
-    '; CALL 0xDEAD???? - target unknown',
-  ].join('\n'),
-  'SYSMON.exe': [
-    '; SYSMON.exe - Disassembly',
-    'section .data',
-    '  soul_integrity  DD 0x57',
-    '  daemon_count    DD 0x07',
-    '  observer_ref    DD [CLASSIFIED]',
-    'section .text',
-    '  PUSH soul_integrity',
-    '  CALL read_corpus_metrics',
-    '  MOV  eax, [soul_integrity]',
-    '  SUB  eax, 0x01',
-    '  JLE  integrity_critical',
-    '  CALL update_display',
-    '  JMP  tick_loop',
-    'integrity_critical:',
-    '  CALL emit_warning',
-    '  PUSH 0xDEAD',
-    '  RET',
-  ].join('\n'),
-  'BROWSER.exe': [
-    '; BROWSER.exe - Disassembly',
-    'section .rodata',
-    '  home_url  DB "sleep://home", 0',
-    '  err_msg   DB "site blocked by void", 0',
-    'section .text',
-    '  MOV  esi, home_url',
-    '  CALL resolve_sleep_addr',
-    '  TEST eax, eax',
-    '  JZ   frame_blocked',
-    '  CALL render_page',
-    '  JMP  event_loop',
-    'frame_blocked:',
-    '  PUSH err_msg',
-    '  CALL show_error',
-    '  ; observer may intercept traffic here',
-    '  RET',
-  ].join('\n'),
-  'DEFRAG.exe': [
-    '; DEFRAG.exe - Disassembly',
-    'section .bss',
-    '  corpus_blocks RESB 640',
-    '  void_fragment DB [CANNOT RESOLVE]',
-    'section .text',
-    '  MOV  ecx, 0x280',
-    '  LEA  edi, [corpus_blocks]',
-    '  CALL scan_fragments',
-    '  MOV  eax, [void_fragment]',
-    '  CMP  eax, 0x00',
-    '  JNE  skip_void',
-    '  ; void_fragment cannot be moved',
-    '  ; it has always been here',
-    'skip_void:',
-    '  CALL compact_corpus',
-    '  JMP  defrag_loop',
-  ].join('\n'),
-  'NOTEPAD.exe': [
-    '; NOTEPAD.exe - Disassembly',
-    'section .data',
-    '  welcome_readme DB "WELCOME.README", 0',
-    '  null_text      DD 0x00',
-    'section .text',
-    '  MOV  esi, welcome_readme',
-    '  CALL fs_open_read',
-    '  TEST eax, eax',
-    '  JZ   open_blank',
-    '  CALL load_text_buffer',
-    '  JMP  editor_loop',
-    'open_blank:',
-    '  MOV  [text_buffer], null_text',
-    '  CALL init_editor',
-    '  RET',
-  ].join('\n'),
-  'EXPLORER.exe': [
-    '; EXPLORER.exe - Disassembly',
-    'section .data',
-    '  root_path DB "C:\\sleepOS\\", 0',
-    '  sys_files DD 9',
-    'section .text',
-    '  PUSH root_path',
-    '  CALL enumerate_fs',
-    '  MOV  ecx, sys_files',
-    '  CALL add_system_entries',
-    '  ; 1 entry cannot be enumerated',
-    '  ; see: ?????.exe',
-    '  CALL render_icon_grid',
-    '  JMP  window_loop',
-  ].join('\n'),
-  'CALC.exe': [
-    '; CALC.exe - Disassembly',
-    'section .data',
-    '  display_buf DB 32 dup(0)',
-    '  soul_pi     DQ 3.14159265358979',
-    'section .text',
-    '  MOV  eax, 0x00',
-    '  MOV  [accumulator], eax',
-    '  CALL init_display',
-    '  JMP  calc_loop',
-    'calc_loop:',
-    '  CALL wait_keypress',
-    '  CALL eval_operation',
-    '  PUSH [accumulator]',
-    '  CALL update_display',
-    '  JMP  calc_loop',
-    '; NOTE: division by zero returns VOID',
-  ].join('\n'),
-  'MINESWEEPER.exe': [
-    '; MINESWEEPER.exe - Disassembly',
-    'section .data',
-    '  field_w   DW 0009h',
-    '  field_h   DW 0009h',
-    '  mine_cnt  DW 000Ah',
-    '  first_hit DD 0FFFFFFFFh',
-    'section .text',
-    '  CALL  wait_first_click',
-    '  MOV   [first_hit], eax',
-    '  ; nothing is under the board until the player commits',
-    '  MOV   ecx, [mine_cnt]',
-    'place_loop:',
-    '  CALL  rand_free_cell',
-    '  CALL  adjacent_to_first_hit',
-    '  JNZ   place_loop',
-    '  MOV   BYTE [esi+eax], 0FFh',
-    '  LOOP  place_loop',
-    '  CALL  count_adjacent',
-    'input_loop:',
-    '  CALL  wait_click',
-    '  CALL  flood_reveal',
-    '  CMP   [cells_left], 0',
-    '  JE    win',
-    '  JMP   input_loop',
-    '; NOTE: the field is decided by where you look first',
-  ].join('\n'),
-  'REGEDIT.exe': [
-    '; REGEDIT.exe - Disassembly',
-    'section .data',
-    '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
-    '  soul_key  DB "SOUL\\Metrics", 0',
-    'section .text',
-    '  PUSH hive_root',
-    '  CALL open_registry_hive',
-    '  MOV  esi, soul_key',
-    '  CALL reg_open_key',
-    '  CALL enumerate_values',
-    '  ; WARNING: OBSERVER_COUNT is classified',
-    '  ; ACCESS DENIED for key VOID\\',
-    '  CALL render_tree',
-    '  JMP  edit_loop',
-  ].join('\n'),
-  'PAINT.exe': [
-    '; PAINT.exe - Disassembly',
-    'section .data',
-    '  canvas_w    DW 01E0h',
-    '  canvas_h    DW 0168h',
-    '  stroke_seed DD 0FFFFFFFFh',
-    'section .text',
-    '  CALL  init_canvas',
-    '  MOV   [stroke_seed], eax',
-    '  ; every stroke gets its own seed, so nothing repeats twice',
-    'input_loop:',
-    '  CALL  wait_pointer_down',
-    '  CALL  gen_stroke_ops',
-    '  CALL  exec_ops',
-    '  CALL  wait_pointer_up',
-    '  CALL  push_undo',
-    '  JMP   input_loop',
-    '; NOTE: the canvas never resizes, only the view of it does',
-  ].join('\n'),
-};
-
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
 // nothing is persisted, and re-applies the DOCS subtree on every boot.
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
@@ -6043,9 +5835,6 @@ function vfsSeedTree() {
     ]),
   }]]),
   };
-  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
-    seed.files.set(name, SYSTEM_BINARY_SOURCES[name]);
-  });
   seed.dirs.add('DESKTOP');
   if (!seed.subdirs.has('DESKTOP')) {
     seed.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
@@ -6163,91 +5952,24 @@ function refreshSeededDocs() {
   });
 }
 
-// The eight system binaries (SYSTEM_BINARY_SOURCES, os/fs-core.js), restored
-// on every boot for a user whose root already had content. vfsBootMount's
-// seed callback above only runs `if (!root.dirs.size && !root.files.size)` -
-// a completely empty root - so it never fires for anyone who has booted
-// sleepOS before, meaning phase 6's seeding alone dropped all eight binaries
-// out of DIR for every returning user the moment they next loaded the OS.
-//
-// This HEALS rather than fill-if-absent, the same policy refreshSeededDocs
-// already applies to README.txt and the rest of DOCS: whatever a player did
-// to the content, this restores it to SYSTEM_BINARY_SOURCES on the next boot.
-// That is deliberately NOT the DOCS-vs-programs distinction it looks like at
-// first glance - "docs heal, programs do not" was about the demo .exe/.script
-// files a player is meant to author and have survive (HELLO.exe and friends,
-// PROGRAM_LAUNCHERS has no entry for those, so programIsSystemBinary is
-// false and this function never touches them). A system binary is not one of
-// those: its NOTEPAD view is read-only by design, so there is no legitimate
-// edit for this function to protect, only corruption to repair - a write
-// that reached one at all had to go around a guard (apps/notepad.js's
-// writeAndSync, apps/terminal.js's writePipelineOutput) that exists
-// specifically to stop that. Healing here is the backstop for whatever gets
-// through anyway.
-//
-// Unlike refreshSeededDocs, the heal below goes through vfsWriteFile rather
-// than poking tree.files directly, so a repair queues a real commit op and
-// the binary ends up occupying actual disk blocks - SYSMON's disk meter and
-// DEFRAG's map both read the backend's block counts, not the tree, so a
-// binary that only exists in memory reports as zero bytes used. The
-// content comparison still runs first, and only a mismatch reaches
-// vfsWriteFile, so a normal boot where all eight already match queues
-// nothing at all - same cost as before. If the write itself throws (ENOSPC
-// via _vfsAssertRoom in os/vfs.js is the realistic case, on a full disk),
-// the catch below falls back to the old in-memory tree.files.set so the
-// binary is still correct for this session - the phase 6 guarantee that a
-// corrupted binary always heals must survive a full disk, it just will not
-// stick across a reload - and reports the failure through reportVfsError,
-// the same channel every other late VFS failure in this file uses.
-//
-// This does NOT cover a genuinely fresh install: vfsMount's `seed` callback
-// (below, in vfsBootMount) fills the eight binaries into the tree BEFORE
-// this function ever runs, so on that specific boot the comparison above
-// finds every one already matching and correctly writes nothing - correct
-// by this function's own contract, but the content was never committed
-// either, since `seed` mutates the tree directly with no queued op. That
-// case is handled by seedFreshRootTree, which the `seed` callback calls
-// instead of mutating root.files itself.
-async function refreshSeededSystemBinaries() {
-  const tree = vfsGetTree();
-  for (const name of Object.keys(SYSTEM_BINARY_SOURCES)) {
-    const want = SYSTEM_BINARY_SOURCES[name];
-    if (tree.files.get(name) === want) continue;
-    try {
-      await vfsWriteFile(name, want, '');
-    } catch (err) {
-      tree.files.set(name, want);
-      reportVfsError(err);
-    }
-  }
-}
-
 // Populates a genuinely empty root - vfsMount's `seed` option, wired up in
 // vfsBootMount below, calls this only `if (!root.dirs.size &&
-// !root.files.size)`. Everything except the eight root-level system
-// binaries is mutated directly with no queued op, same as refreshSeededDocs
-// and for the same reason: DESKTOP and the DOCS subtree are meant to stay
-// uncommitted, regenerated from vfsSeedTree() on every boot rather than
-// restored from the backend.
+// !root.files.size)`. Mutated directly with no queued op, same as
+// refreshSeededDocs and for the same reason: DESKTOP and the DOCS subtree
+// are meant to stay uncommitted, regenerated from vfsSeedTree() on every
+// boot rather than restored from the backend.
 //
-// The eight binaries are different, and NOT for the reason refreshSeededDocs'
-// own comment gives about them (read-only, healed rather than authored) -
-// that reasoning covers WHY they heal, not why this function exists at all.
-// This exists because `seed` runs before the backend is attached (vfsMount
-// assigns _vfsBackend only after `seed` returns) and mutates `root` - the
-// exact same live tree refreshSeededSystemBinaries reads from - directly.
-// So on THIS boot only, refreshSeededSystemBinaries's own compare-before-write
-// finds every binary already matching what it just wrote here and correctly
-// queues nothing, leaving the content real in the tree but backed by zero
-// committed blocks: SYSMON's disk meter and DEFRAG's map read the backend's
-// allocation, not the tree, so they showed 0.00% used and an empty map on a
-// filesystem DIR already listed as full of files.
-//
-// vfsQueueDirectWrite (os/vfs.js) is the fix: the same escape hatch
-// os/daemon.js uses for its own direct-tree-mutation-with-no-op problem.
-// Passing null as the "previous value" bypasses its own unchanged-content
-// skip, which exists to stop a normal re-set of identical content from
-// queuing a redundant op - here the previous value is not identical, it is
+// seeded.files is walked through vfsQueueDirectWrite rather than a plain
+// root.files.set, even though vfsSeedTree() currently never puts anything
+// there (root-level system binaries used to live here before they stopped
+// being seeded at all - see os/fs-core.js). Kept generic rather than
+// deleted: SYSMON's disk meter and DEFRAG's map both read the backend's
+// committed block count, not the tree, so any future top-level seed file
+// would silently report as zero bytes used without a queued op - the same
+// bug queuing one here already fixed once. Passing null as the "previous
+// value" bypasses vfsQueueDirectWrite's own unchanged-content skip, which
+// exists to stop a normal re-set of identical content from queuing a
+// redundant op - here the previous value is not identical, it is
 // altogether absent from anything committed, and null is how that gets said.
 function seedFreshRootTree(root) {
   const seeded = vfsSeedTree();
@@ -6513,7 +6235,6 @@ async function vfsBootMount() {
     },
   });
   refreshSeededDocs();
-  await refreshSeededSystemBinaries();
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);
@@ -11894,7 +11615,15 @@ function ctxPathHas(e, selector) {
 }
 
 function canDeleteDesktopSystemIcon(ic) {
-  return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
+  if (!ic || ic.custom) return false;
+  const name = String(ic.name || '').toLowerCase();
+  if (name === 'void.tmp') return !daemonStory.endingReached;
+  if (name === 'daemon.core') return false;
+  // Every other system icon (CALC.exe, NOTEPAD.exe, ...) now gets offered a
+  // Delete option too, purely so attempting it surfaces deleteVirtualPath's
+  // existing "System files are protected" guard (isVisibleSystemPath, name-
+  // based, os/daemon.js) instead of there being no option to try at all.
+  return programIsSystemBinary(ic.name);
 }
 
 function deleteDesktopSystemIcons(icons) {
@@ -12651,14 +12380,12 @@ function notepadRouteFor(filename) {
 }
 
 // Save (and Save As - writeAndSync is the single funnel both go through)
-// naming one of the eight system binaries would silently replace it with
-// whatever the open document holds. Before phase 6 that just created a
-// stray file the player could delete to recover; now the binary IS the file
-// the decompiler reads, refreshSeededSystemBinaries only heals it on the
-// NEXT boot, and there is otherwise no way back until then. Refused here,
-// before the write happens, with the same "protected" language the DELETE
-// guard (os/daemon.js) already uses so a player learns one vocabulary for
-// this rule, not two.
+// naming one of the system binaries would otherwise create a root file
+// shadowing one of them - these names stay reserved at root even though
+// nothing seeds a real file for them any more (os/fs-core.js). Refused
+// here, before the write happens, with the same "protected" language the
+// DELETE guard (os/daemon.js) already uses so a player learns one
+// vocabulary for this rule, not two.
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
 // split a path - so an earlier version of this guard checked the raw
@@ -14440,11 +14167,12 @@ let _termExec = null;
 // Hoisted out of writePipelineOutput (openTerminal) so node can reach it -
 // the same reason runPipelineStages below is top-level.
 //
-// Redirecting into one of the eight system binaries (`echo junk >
-// TERMINAL.exe`) would silently replace it, and refreshSeededSystemBinaries
-// only heals that on the next boot - not before this command's output would
-// already have landed. Same protection, and the same "protected" wording,
-// as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
+// Redirecting into one of the system binary names (`echo junk >
+// TERMINAL.exe`) would otherwise silently create a root file shadowing one
+// of them - these names stay reserved at root even though nothing seeds a
+// real file for them any more (os/fs-core.js). Same protection, and the
+// same "protected" wording, as Notepad's save guard (apps/notepad.js's
+// notepadGuardProtectedSave).
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
 // split a path - so an earlier version of this guard checked the raw

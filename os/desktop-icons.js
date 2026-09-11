@@ -170,7 +170,15 @@ function ctxPathHas(e, selector) {
 }
 
 function canDeleteDesktopSystemIcon(ic) {
-  return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
+  if (!ic || ic.custom) return false;
+  const name = String(ic.name || '').toLowerCase();
+  if (name === 'void.tmp') return !daemonStory.endingReached;
+  if (name === 'daemon.core') return false;
+  // Every other system icon (CALC.exe, NOTEPAD.exe, ...) now gets offered a
+  // Delete option too, purely so attempting it surfaces deleteVirtualPath's
+  // existing "System files are protected" guard (isVisibleSystemPath, name-
+  // based, os/daemon.js) instead of there being no option to try at all.
+  return programIsSystemBinary(ic.name);
 }
 
 function deleteDesktopSystemIcons(icons) {

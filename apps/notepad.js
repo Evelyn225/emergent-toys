@@ -209,14 +209,12 @@ function notepadRouteFor(filename) {
 }
 
 // Save (and Save As - writeAndSync is the single funnel both go through)
-// naming one of the eight system binaries would silently replace it with
-// whatever the open document holds. Before phase 6 that just created a
-// stray file the player could delete to recover; now the binary IS the file
-// the decompiler reads, refreshSeededSystemBinaries only heals it on the
-// NEXT boot, and there is otherwise no way back until then. Refused here,
-// before the write happens, with the same "protected" language the DELETE
-// guard (os/daemon.js) already uses so a player learns one vocabulary for
-// this rule, not two.
+// naming one of the system binaries would otherwise create a root file
+// shadowing one of them - these names stay reserved at root even though
+// nothing seeds a real file for them any more (os/fs-core.js). Refused
+// here, before the write happens, with the same "protected" language the
+// DELETE guard (os/daemon.js) already uses so a player learns one
+// vocabulary for this rule, not two.
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
 // split a path - so an earlier version of this guard checked the raw

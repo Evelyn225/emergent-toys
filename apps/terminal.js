@@ -4,11 +4,12 @@ let _termExec = null;
 // Hoisted out of writePipelineOutput (openTerminal) so node can reach it -
 // the same reason runPipelineStages below is top-level.
 //
-// Redirecting into one of the eight system binaries (`echo junk >
-// TERMINAL.exe`) would silently replace it, and refreshSeededSystemBinaries
-// only heals that on the next boot - not before this command's output would
-// already have landed. Same protection, and the same "protected" wording,
-// as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
+// Redirecting into one of the system binary names (`echo junk >
+// TERMINAL.exe`) would otherwise silently create a root file shadowing one
+// of them - these names stay reserved at root even though nothing seeds a
+// real file for them any more (os/fs-core.js). Same protection, and the
+// same "protected" wording, as Notepad's save guard (apps/notepad.js's
+// notepadGuardProtectedSave).
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
 // split a path - so an earlier version of this guard checked the raw

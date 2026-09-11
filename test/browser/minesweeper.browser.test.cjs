@@ -343,15 +343,23 @@ test('the help button carries the question-mark icon, not a text label', async (
 
 // ── integration with the rest of the OS ──────────────────────────
 
-test('MINESWEEPER.exe is a real file that DIR lists and the terminal can run', async () => {
+// System binaries stopped being seeded as real root files (os/fs-core.js) -
+// they're desktop-only now, plus Start Menu / Run / Terminal by name. DIR no
+// longer lists MINESWEEPER.exe, but the terminal must still resolve it by
+// exact name through the same programResolve path a real `MINESWEEPER.exe`
+// keypress goes through.
+test('MINESWEEPER.exe is no longer a real root file, but still resolves by name', async () => {
   await withGame(async page => {
-    const stat = await page.evaluate(() => {
+    const result = await page.evaluate(() => {
       const st = vfsStatSync('MINESWEEPER.exe', '');
-      return st ? { kind: st.kind, size: st.size } : null;
+      const resolved = programResolve('MINESWEEPER.exe', '', '');
+      return {
+        stat: st ? { kind: st.kind, size: st.size } : null,
+        resolvedName: resolved ? resolved.program.name : null,
+      };
     });
-    assert.ok(stat, 'MINESWEEPER.exe is not on disk beside the other system binaries');
-    assert.strictEqual(stat.kind, 'text');
-    assert.ok(stat.size > 0);
+    assert.strictEqual(result.stat, null, 'MINESWEEPER.exe should no longer be seeded as a root file');
+    assert.strictEqual(result.resolvedName, 'MINESWEEPER.exe', 'the terminal must still resolve it by exact name');
   });
 });
 
