@@ -18,9 +18,10 @@
 //     openSystemFile (os/desktop-model.js:326) resolves through
 //     programsInDir(''), which reads the registry. So a name missing from the
 //     script map still launches. That fallback is the safety net, and the
-//     second test guards the net itself rather than the map - a map-vs-registry
-//     comparison there would fail on daemon.core/void.tmp/?????.exe, which
-//     work fine, and would be a false alarm.
+//     second test guards the net itself rather than the map - a
+//     map-vs-registry comparison there would fail on names the map omits on
+//     purpose (a user's own .exe files), which work fine, and would be a
+//     false alarm.
 //
 //   - RUN_MAP has no such net. Its only fallback is a PROJECTS lookup, which
 //     matches project pages, not programs. A registry entry missing from
@@ -104,9 +105,9 @@ test('scriptOpenSystemProgram still falls back to openSystemFile, which is what 
   const fn = src.slice(src.indexOf('async function scriptOpenSystemProgram'));
   const body = fn.slice(0, fn.indexOf('\n}\n') + 1);
   assert.ok(body.length > 0, 'could not slice scriptOpenSystemProgram - extraction may be broken');
-  // Without this line, every registry program the map does not name (today
-  // daemon.core, void.tmp and ?????.exe) stops launching from a script's
-  // START/OPEN and from a worker's ui.openSystem, silently.
+  // Without this line, every program the map does not name (today a user's
+  // own .exe files) stops launching from a script's START/OPEN and from a
+  // worker's ui.openSystem, silently.
   assert.match(body, /return\s+!!openSystemFile\(\s*name\s*\)/,
     'scriptOpenSystemProgram no longer falls back to openSystemFile - the names its own map omits are '
     + 'now unreachable from a script. Either restore the fallback or add every registry program to the map.');

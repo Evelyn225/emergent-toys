@@ -12,7 +12,6 @@ function notepadCtx() {
     ROOT_SYSTEM_FILE_META: [{ name: 'TERMINAL.exe' }, { name: 'CALC.exe' }],
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
     wins: {},
     mkWin: () => false,
     document: undefined,

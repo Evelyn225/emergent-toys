@@ -4,7 +4,6 @@ function openRegedit() {
   const ws   = document.getElementById('ws-regedit');
   const mb   = document.getElementById('mb-regedit');
   body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
-  const REGEDIT_LOCKED_VALUE_NAMES = new Set(['OBSERVER_COUNT', 'ANCHOR_FILE', 'TEMPORAL_DRIFT']);
 
   const layout = document.createElement('div');
   layout.className = 'reg-layout';
@@ -21,14 +20,6 @@ function openRegedit() {
   layout.appendChild(vals);
 
   let selectedPath = null; // { hive, key }
-
-  function isLockedRegValue(hive, keyPath, valName) {
-    return REGEDIT_LOCKED_VALUE_NAMES.has(String(valName || '').toUpperCase());
-  }
-
-  function showLockedRegValueNotice(valName) {
-    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', 'icon:regedit');
-  }
 
   function buildTree() {
     tree.innerHTML = '';
@@ -81,7 +72,6 @@ function openRegedit() {
 
     Object.keys(data).forEach(valName => {
       const entry = data[valName];
-      const locked = isLockedRegValue(hive, keyPath, valName);
       const tr = document.createElement('tr');
       tr.className = 'reg-val-row';
       // Value rows used to draw the generic text-file icon whatever the type
@@ -97,18 +87,12 @@ function openRegedit() {
       // #desktop's menu wins the race, replacing Modify with the desktop's
       // own. Desktop icons avoid this the same way: stop it at the row.
       tr.addEventListener('pointerdown', e => e.stopPropagation());
-      tr.addEventListener('dblclick', () => {
-        if (locked) {
-          showLockedRegValueNotice(valName);
-          return;
-        }
-        editRegValue(hive, keyPath, valName);
-      });
+      tr.addEventListener('dblclick', () => editRegValue(hive, keyPath, valName));
       tr.addEventListener('contextmenu', e => {
         e.preventDefault();
         tr.classList.add('selected');
         showCtxMenu(e.clientX, e.clientY, [
-          { label: 'Modify', disabled: locked, action: () => editRegValue(hive, keyPath, valName) },
+          { label: 'Modify', action: () => editRegValue(hive, keyPath, valName) },
         ]);
         procSetTimeout('regedit', () => tr.classList.remove('selected'), 800);
       });
@@ -125,10 +109,6 @@ function openRegedit() {
   }
 
   function editRegValue(hive, keyPath, valName) {
-    if (isLockedRegValue(hive, keyPath, valName)) {
-      showLockedRegValueNotice(valName);
-      return;
-    }
     const entry = registryData[hive][keyPath][valName];
     const currentVal = String(entry.value);
     osPrompt('Edit value for: ' + valName, currentVal, 'Edit Registry Value', newVal => {
@@ -158,56 +138,6 @@ function openRegedit() {
           updateClock();
         }
         saveSettings();
-      } else if (keyPath === 'SOUL\\Metrics') {
-        if (valName === 'SOUL_INTEGRITY') {
-          const bar = document.getElementById('bar-soul');
-          const val = document.getElementById('val-soul');
-          const v = Math.max(0, Math.min(99, parseInt(newValue) || 0));
-          if (bar) bar.style.width = v + '%';
-          if (val) val.textContent = v + '%';
-        } else if (valName === 'DAEMON_COUNT') {
-          const count = parseInt(newValue) || 0;
-          if (count !== 7) triggerGlitch({ intensity: Math.abs(count - 7) > 3 ? 6 : 3 });
-          updateDaemonStory(story => {
-            story.lastEventText = count > 7 ? 'daemon count elevated - ' + count : count < 7 ? 'daemon count reduced - ' + count : 'daemon count nominal';
-          }, { forceSync: true });
-          if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
-        } else if (valName === 'TEMPORAL_DRIFT') {
-          triggerGlitch({ intensity: 3 });
-          updateDaemonStory(story => { story.lastEventText = 'temporal drift set: ' + String(newValue); }, { forceSync: true });
-          if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
-        }
-      } else if (keyPath === 'VOID') {
-        if (valName === 'VOID_PRESSURE_BASE') {
-          const base = Math.max(0, Math.min(99, parseInt(newValue) || 0));
-          triggerGlitch({ intensity: base > 50 ? 7 : base > 25 ? 5 : 2 });
-          if (typeof renderVoid === 'function' && document.getElementById('wb-void')) renderVoid();
-        } else if (valName === 'OBSERVER_COUNT') {
-          const val = String(newValue).trim();
-          if (val !== '[classified]' && val !== '') {
-            triggerGlitch({ intensity: 8 });
-            updateDaemonStory(story => { story.lastEventText = 'observer count declassified: ' + val; }, { forceSync: true });
-          }
-        }
-      } else if (keyPath === 'Containment') {
-        if (valName === 'RESPAWN_LOCK') {
-          updateDaemonStory(story => {
-            if (story.openedDaemon && !story.daemonStopped) {
-              story.lastEventText = Number(newValue) === 0 ? 'respawn lock cleared' : 'respawn lock raised';
-            }
-          }, { forceSync: true });
-        } else if (valName === 'MIRROR_LOCK') {
-          updateDaemonStory(story => {
-            if (Number(newValue) === 0) {
-              if (story.stage >= 4) story.lastEventText = story.anchorDeleted ? 'mirror lattice lowered' : 'mirror lock lowered';
-            } else if (story.anchorDeleted && story.stage >= 6) {
-              story.mirrorLockRestored = true;
-              story.lastEventText = 'mirror lattice restored';
-            } else if (story.anchorDeleted) {
-              story.lastEventText = 'mirror lock raised';
-            }
-          }, { forceSync: true, glitch: Number(newValue) === 0 && daemonStory.stage >= 5 });
-        }
       }
     } else if (hive === 'HKEY_CURRENT_USER') {
       if (keyPath === 'Desktop' && valName === 'Wallpaper') {
@@ -266,8 +196,7 @@ function openRegedit() {
       { label: 'Modify', disabled: !selectedPath, action: () => {
         if (!selectedPath) return;
         const keys = Object.keys(registryData[selectedPath.hive][selectedPath.key]);
-        const editableKey = keys.find(valName => !isLockedRegValue(selectedPath.hive, selectedPath.key, valName));
-        if (editableKey) editRegValue(selectedPath.hive, selectedPath.key, editableKey);
+        if (keys.length) editRegValue(selectedPath.hive, selectedPath.key, keys[0]);
       }},
     ]},
     { label: 'Help', items: [

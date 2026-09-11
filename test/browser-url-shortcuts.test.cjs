@@ -173,13 +173,13 @@ test('a second shortcut with the same title is uniquified, not overwritten', asy
 // mount would restore for that exact profile - no seed runs, because the
 // root is not empty - and proves the write both fails before the heal and
 // succeeds after it.
-const DAEMON_SRC = fs.readFileSync(path.join(ROOT, 'os', 'daemon.js'), 'utf8');
+const FS_OPS_SRC = fs.readFileSync(path.join(ROOT, 'os', 'fs-ops.js'), 'utf8');
 const FS_PERSIST_SRC = fs.readFileSync(path.join(ROOT, 'os', 'fs-persist.js'), 'utf8');
 
 async function returningUserMissingDesktopCtx() {
   const ctx = loadOsSources(makeOsContext({}), ['os/vfs.js', 'os/storage-mem.js', 'os/fs-core.js']);
   ctx.__evalSource(extractFunctionSource(BROWSER_SRC, 'parseUrlShortcutTarget'), 'browser-slice-parse');
-  ctx.__evalSource(extractFunctionSource(DAEMON_SRC, 'ensureFsDir'), 'daemon-slice-ensureFsDir');
+  ctx.__evalSource(extractFunctionSource(FS_OPS_SRC, 'ensureFsDir'), 'fs-ops-slice-ensureFsDir');
   const backend = ctx.createMemStorage({
     tree: {
       dirs: ['CACHE', 'MUSIC', 'SYS', 'VIDEOS', 'DOCS'],
@@ -217,7 +217,7 @@ test('ensureFsDir(DESKTOP) heals a returning user, and a shortcut can then be sa
 
 test('ensureFsDir(DESKTOP) is idempotent - a user who already has DESKTOP is untouched', async () => {
   const ctx = loadOsSources(makeOsContext({}), ['os/vfs.js', 'os/storage-mem.js', 'os/fs-core.js']);
-  ctx.__evalSource(extractFunctionSource(DAEMON_SRC, 'ensureFsDir'), 'daemon-slice-ensureFsDir');
+  ctx.__evalSource(extractFunctionSource(FS_OPS_SRC, 'ensureFsDir'), 'fs-ops-slice-ensureFsDir');
   const backend = ctx.createMemStorage({
     tree: { dirs: ['DESKTOP'], files: {}, subdirs: { DESKTOP: { dirs: [], files: { 'existing.txt': 'kept' }, subdirs: {} } } },
   });

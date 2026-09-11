@@ -6,7 +6,7 @@
 // real mouse does, and that is exactly where this project's expensive defects
 // have lived: a snap preview painted OVER the window it was previewing, a
 // taskbar menu that covered the bar it belonged to, a resize guard that let a
-// story render shrink a snapped window, a titlebar that dragged on the right
+// re-render shrink a snapped window, a titlebar that dragged on the right
 // mouse button. Every one of those passed a fully green node suite.
 //
 // So this harness starts the real server, drives real Chromium, and asserts on
@@ -104,7 +104,7 @@ async function startHarness() {
 // binds `document.addEventListener('keydown', biosFinish, { once: true })` so a
 // player can skip the boot text, and skipping it is what almost every real
 // visitor does. Measured on a fresh context: letting the BIOS run to the end
-// takes 38.6s, pressing a key takes 613ms. Without this every test in the file
+// takes about 19s, pressing a key takes 613ms. Without this every test in the file
 // would spend most of its life watching boot text scroll, and a 30s wait would
 // time out - which is exactly how this harness failed on its first run.
 //
@@ -146,7 +146,7 @@ async function openDesktop(browser, { width = 1280, height = 800, firstRun = fal
 }
 
 // Skip the BIOS and wait for a booted desktop. Letting the boot text run to the
-// end takes 38.6s; the keypress is the product's own skip affordance (os/bios.js
+// end takes about 19s; the keypress is the product's own skip affordance (os/bios.js
 // binds keydown to biosFinish) and takes about 600ms.
 async function waitForBootedDesktop(page) {
   await page.keyboard.press('Enter');

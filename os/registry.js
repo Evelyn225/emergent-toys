@@ -104,20 +104,6 @@ const registryData = {
       CLOCK_FORMAT:       { type:'REG_SZ',    value: '24h' },
       ICON_SIZE:          { type:'REG_SZ',    value: 'medium' },
     },
-    'SOUL\\Metrics': {
-      SOUL_INTEGRITY:     { type:'REG_DWORD', value: 87 },
-      DAEMON_COUNT:       { type:'REG_DWORD', value: 7  },
-      TEMPORAL_DRIFT:     { type:'REG_SZ',    value: '+/-2.3yr' },
-    },
-    'VOID': {
-      VOID_PRESSURE_BASE: { type:'REG_DWORD', value: 12 },
-      OBSERVER_COUNT:     { type:'REG_SZ',    value: '[classified]' },
-    },
-    'Containment': {
-      RESPAWN_LOCK:       { type:'REG_DWORD', value: 1 },
-      MIRROR_LOCK:        { type:'REG_DWORD', value: 1 },
-      ANCHOR_FILE:        { type:'REG_SZ',    value: 'SYS\\anchor.seed' },
-    },
   },
   'HKEY_CURRENT_USER': {
     'Desktop': {
@@ -141,11 +127,6 @@ const registryData = {
       BeginnerTime:       { type:'REG_DWORD', value: 999 },
       IntermediateTime:   { type:'REG_DWORD', value: 999 },
       ExpertTime:         { type:'REG_DWORD', value: 999 },
-    },
-    'SOFTWARE\\sleepOS\\Daemon': {
-      STATUS:             { type:'REG_SZ',    value: 'Dormant' },
-      LAST_EVENT:         { type:'REG_SZ',    value: 'none' },
-      OBSERVED:           { type:'REG_DWORD', value: 0 },
     },
     // Same motive as Minesweeper's scores: a preference a player can find,
     // read and meddle with in REGEDIT.exe beats a private localStorage key.

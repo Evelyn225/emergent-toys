@@ -13,7 +13,7 @@ const mediaSrc = fs.readFileSync(path.join(ROOT, 'os/media.js'), 'utf8');
 // siblings pull in window management, dialogs, and the terminal. This
 // extracts just handleFileUpload (plus the two small local kind/mime
 // helpers it calls) and runs it against hand-mocked globals - the same
-// source-slice pattern test/daemon-corruption.test.cjs uses for os/daemon.js.
+// source-slice pattern test/delete-guard-cwd.test.cjs uses for os/fs-ops.js.
 //
 // Tasks 9e/9f deleted saveBlobEntry and the mirrors it wrote to (the only
 // thing that used to give a blob upload a synchronous-ish "did this actually

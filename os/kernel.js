@@ -39,14 +39,12 @@ function kernelRecordMetrics(pid, msg) {
 
 const KERNEL_PID = 1;
 
-// Pids 2 through 1333 (and the generated 500 + i*13 series) belong to the daemon
-// story's fictional process list in os/daemon.js - soul_svc.exe, mirror_watch.exe,
-// and the rest, including pid 512, which is scripted dialogue ("It restarts pid
-// 512. It is not pid 512."). Those are narrative constants and must never move.
-// Real allocation used to land in 2000-7999 for the same reason, back when
-// pidFromId hashed window ids into that range; this restores that floor so a
-// real window can never again collide with a scripted pid. Lowering this number
-// does not just look untidy - it breaks a story beat.
+// Pids below this belong to the system's built-in process list in
+// os/fs-ops.js (System, csrss.exe, svchost.exe and the rest). Real allocation
+// used to land in 2000-7999 back when pidFromId hashed window ids into that
+// range; this keeps that floor so a real window can never collide with a
+// built-in pid, which would make `ps` list two processes under one number and
+// TASKKILL refuse a window it should have closed.
 const KERNEL_FIRST_USER_PID = 2000;
 
 // The machine's identity, and the root of the environment tree. This used to
@@ -61,13 +59,7 @@ const KERNEL_DEFAULT_ENV = {
   COMPUTERNAME: 'SOMA-686',
   USERNAME: 'VISITOR',
   OS: 'sleepOS 0.9b2',
-  SOUL_INTEGRITY: '87',
-  DAEMON_COUNT: '7',
-  DAEMON_KNOWN: '4',
-  TEMPORAL_DRIFT: '+/-2.3yr',
-  VOID_PRESSURE: '12',
-  OBSERVER_COUNT: '[classified]',
-  PATH: 'C:\\sleepOS;[redacted]',
+  PATH: 'C:\\sleepOS',
 };
 
 // A copy every time. Handing out the shared table would let one process's SET
@@ -255,7 +247,7 @@ function _kernelFsImpl() {
     async stat(path, cwd) { return vfsStatSync(path, cwd); },
     async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
     // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
-    // story's undeletable files, and a worker must not be able to bypass either.
+    // protected system files, and a worker must not be able to bypass either.
     // deleteVirtualPath never throws - a denied or refused delete is a normal
     // outcome it reports as a result object ({ok:false, message, details}),
     // not an exceptional one. Do NOT inspect that .ok here and throw a coded

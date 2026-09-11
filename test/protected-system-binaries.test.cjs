@@ -5,7 +5,7 @@
 // redirect (writePipelineOutput) - with no recovery until the next boot's
 // healing (refreshSeededSystemBinaries, see test/system-binaries.test.cjs).
 // Both are refused here, before the write happens, using the same
-// "protected" wording the DELETE guard (os/daemon.js) already established.
+// "protected" wording the DELETE guard (os/fs-ops.js) already established.
 //
 // FIX ROUND 2: round 1's guards checked the RAW target string against
 // programIsSystemBinary, a NAME predicate that never splits a path. A
@@ -15,7 +15,7 @@
 // file, so every guard test below that used only a bare filename passed
 // while the real save/redirect path stayed corruptible. Both guards now
 // split with vfsSplitPath first (same shape as the pre-existing DELETE
-// guard, isVisibleSystemPath in os/daemon.js) and block only when the
+// guard, isVisibleSystemPath in os/fs-ops.js) and block only when the
 // resolved location is root. The path-form cases below, plus the
 // writePipelineOutput integration test at the bottom, are what would have
 // caught round 1's gap - a guard-function test that only ever sees bare
@@ -31,7 +31,6 @@ function notepadCtx(alertCalls) {
     ROOT_SYSTEM_FILE_META: [{ name: 'TERMINAL.exe' }, { name: 'CALC.exe' }],
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
     wins: {},
     mkWin: () => false,
     document: undefined,
@@ -45,7 +44,6 @@ function terminalCtx() {
     ROOT_SYSTEM_FILE_META: [{ name: 'TERMINAL.exe' }, { name: 'CALC.exe' }],
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
   });
   return loadOsSources(ctx, ['os/vfs.js', 'os/programs.js', 'apps/terminal.js']);
 }
@@ -191,7 +189,6 @@ function terminalWriteCtx() {
     ROOT_SYSTEM_FILE_META: [{ name: 'TERMINAL.exe' }],
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
     cwd: '',
     // Plain pass-throughs: writePipelineOutput's two nested sibling helpers
     // (unquoteShellValue, resolveShellText) only matter for shell quoting
@@ -211,7 +208,7 @@ function terminalWriteCtx() {
 test('writePipelineOutput refuses a path-qualified bypass and leaves the real binary unchanged', async () => {
   const ctx = terminalWriteCtx();
   const original = ctx.vfsGetTree().files.get('TERMINAL.exe');
-  assert.strictEqual(original.length, 309, 'fixture assumption changed - update the expected length');
+  assert.strictEqual(original.length, 286, 'fixture assumption changed - update the expected length');
 
   for (const target of ['C:\\sleepOS\\TERMINAL.exe', '\\TERMINAL.exe', 'C:/sleepOS/TERMINAL.exe']) {
     await assert.rejects(

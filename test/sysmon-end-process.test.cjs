@@ -15,22 +15,22 @@ function router(calls, wins) {
 test('a window-backed row is closed through the window manager', () => {
   const calls = [];
   const ctx = router(calls, { terminal: { title: 'TERMINAL.exe' } });
-  assert.strictEqual(ctx.endProcessAction({ pid: 2000, winId: 'terminal', isStory: false }), 'closed');
+  assert.strictEqual(ctx.endProcessAction({ pid: 2000, winId: 'terminal', isBuiltin: false }), 'closed');
   assert.deepStrictEqual(calls, [['closeWin', 'terminal']]);
 });
 
 test('a spawned process is signalled, not closed', () => {
   const calls = [];
   const ctx = router(calls);
-  assert.strictEqual(ctx.endProcessAction({ pid: 2001, winId: null, isStory: false }), 'signalled');
+  assert.strictEqual(ctx.endProcessAction({ pid: 2001, winId: null, isBuiltin: false }), 'signalled');
   assert.deepStrictEqual(calls, [['kernelSignal', 2001, 'SIGTERM']]);
 });
 
-test('a story process is routed back to SYSMON - neither closeWin nor kernelSignal runs', () => {
+test('a built-in process is refused as protected - neither closeWin nor kernelSignal runs', () => {
   const calls = [];
   const ctx = router(calls);
-  assert.strictEqual(ctx.endProcessAction({ pid: 512, winId: null, isStory: true }), 'story');
-  assert.deepStrictEqual(calls, [], 'SYSMON owns what happens next for a story row, including the pid-512 branch and the Access Denied dialog');
+  assert.strictEqual(ctx.endProcessAction({ pid: 116, winId: null, isBuiltin: true }), 'protected');
+  assert.deepStrictEqual(calls, [], 'a built-in has no window and no kernel entry to act on; SYSMON shows Access Denied');
 });
 
 // The kernel itself (pid 1) is a system-kind process with no winId.
@@ -43,7 +43,7 @@ test('kernelSignal refusing (the kernel process) is reported as refused, not sil
   const calls = [];
   const ctx = router(calls);
   ctx.kernelSignal = (pid, sig) => { calls.push(['kernelSignal', pid, sig]); return false; };
-  assert.strictEqual(ctx.endProcessAction({ pid: 1, winId: null, isStory: false }), 'refused');
+  assert.strictEqual(ctx.endProcessAction({ pid: 1, winId: null, isBuiltin: false }), 'refused');
   assert.deepStrictEqual(calls, [['kernelSignal', 1, 'SIGTERM']]);
 });
 
@@ -55,6 +55,6 @@ test('a process signalled after it already exited is reported as refused, same a
   const calls = [];
   const ctx = router(calls);
   ctx.kernelSignal = (pid, sig) => { calls.push(['kernelSignal', pid, sig]); return false; };
-  assert.strictEqual(ctx.endProcessAction({ pid: 4321, winId: null, isStory: false }), 'refused');
+  assert.strictEqual(ctx.endProcessAction({ pid: 4321, winId: null, isBuiltin: false }), 'refused');
   assert.deepStrictEqual(calls, [['kernelSignal', 4321, 'SIGTERM']]);
 });

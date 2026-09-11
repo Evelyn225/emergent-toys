@@ -131,7 +131,6 @@ function explorerCtx(files, rootMeta, kernelSpawnImpl) {
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
     ROOT_SYSTEM_FILE_META: rootMeta || [],
-    daemonStory: { endingReached: false, stage: 0 },
     KERNEL_PID: 1,
     wins: {},
     mkWin: () => true,
@@ -196,10 +195,14 @@ test('programIsSpawnableExe: a system binary is not spawnable, by exact name or 
   const ctx = loadOsSources(makeOsContext({ ROOT_SYSTEM_FILE_META: [{ name: 'CALC.exe' }] }), ['os/programs.js']);
   assert.strictEqual(ctx.programIsSpawnableExe('CALC.exe'), false);
   assert.strictEqual(ctx.programIsSpawnableExe('calc.exe'), false);
-  // '?????.exe' has no ROOT_SYSTEM_FILE_META entry - it is a PROGRAM_LAUNCHERS
-  // key with an alias instead. programIsSystemBinary's alias branch is what
-  // this exercises.
-  assert.strictEqual(ctx.programIsSpawnableExe('?????.exe'), false);
+  // PAINT.exe has no entry in this test's ROOT_SYSTEM_FILE_META - only its
+  // PROGRAM_LAUNCHERS key makes it a system binary, which is the table
+  // programIsSystemBinary is defined against.
+  assert.strictEqual(ctx.programIsSpawnableExe('PAINT.exe'), false);
+  // Keys are matched uppercased, so a launcher key written in any other case
+  // is silently not a system binary at all - MINESWEEPER.exe was, and its
+  // seeded disassembly then ran as a user script.
+  assert.strictEqual(ctx.programIsSpawnableExe('MINESWEEPER.exe'), false);
 });
 
 test('programIsSpawnableExe: a non-.exe is never spawnable', () => {
@@ -259,7 +262,6 @@ function desktopCtx(kernelSpawnImpl) {
   const ctx = makeOsContext({
     ROOT_SYSTEM_FILE_META: [{ name: 'CALC.exe' }],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
     KERNEL_PID: 1,
     openWithAssociation: () => false,
     openMediaFile: () => {},

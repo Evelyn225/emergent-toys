@@ -169,28 +169,6 @@ function ctxPathHas(e, selector) {
   return path.some(node => node && node.matches && node.matches(selector));
 }
 
-function canDeleteDesktopSystemIcon(ic) {
-  return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
-}
-
-function deleteDesktopSystemIcons(icons) {
-  const targets = (icons || []).filter(canDeleteDesktopSystemIcon);
-  if (!targets.length) return;
-  const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected items?';
-  osConfirm(prompt, 'Delete', async ok => {
-    if (!ok) return;
-    const blocked = [];
-    let changed = false;
-    for (const target of targets) {
-      const result = await deleteVirtualPath(target.name);
-      if (result.ok && result.deleted) changed = true;
-      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-    }
-    if (blocked.length) osAlert(blocked[0], 'Delete', 'icon:warning');
-    if (changed) clearDesktopSel();
-  }, 'icon:recycle-full');
-}
-
 function canDeleteDesktopFsEntry(ic) {
   return !!ic?.desktopEntry && !!ic?.target?.path;
 }
@@ -225,11 +203,10 @@ async function recycleDesktopItemAtPath(path) {
 function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
-  const displayName = ic.name === '?????.exe' ? getExeDisplayName() : ic.name;
   // The bin is the one desktop icon whose art depends on live state, so it is
   // resolved per render instead of read off the static DESKTOP_ICONS entry.
   const icon = isRecycleBinItemName(ic.name) ? resolveFsIcon(ic.name) : ic.emoji;
-  div.innerHTML = '<div class="di-img">' + iconMarkup(icon) + '</div><div class="di-name">' + escHtml(iconLabel(displayName)) + '</div>';
+  div.innerHTML = '<div class="di-img">' + iconMarkup(icon) + '</div><div class="di-name">' + escHtml(iconLabel(ic.name)) + '</div>';
   div._ic = ic;
   function activate() {
     if (ic.action) window[ic.action]?.();
@@ -417,7 +394,6 @@ function makeDesktopIconEl(ic) {
     const selDivs = [...desktopSel];
     const selIcs  = selDivs.map(d => d._ic);
     const multi   = selDivs.length > 1;
-    const canDeleteSystemFiles = selIcs.some(canDeleteDesktopSystemIcon);
     const canDeleteDesktopFiles = selIcs.some(canDeleteDesktopFsEntry);
     const singleDesktopImage = !multi && selIcs[0]?.desktopEntry && selIcs[0]?.kind === 'image' ? selIcs[0] : null;
     const items   = [];
@@ -429,21 +405,14 @@ function makeDesktopIconEl(ic) {
       })});
     } else {
       items.push({ label: 'Open', action: activate });
-      // Lore / decompiler shortcuts for single icons
+      // Decompiler shortcut for single icons
       const icName = ic.name || '';
-      if (['daemon.core','void.tmp'].includes(icName)) {
-        items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
-      }
       if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
         items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
       if (singleDesktopImage) {
         items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });
       }
-    }
-    if (canDeleteSystemFiles) {
-      items.push('-');
-      items.push({ label: multi ? 'Delete Deletable Items' : 'Delete', action: () => deleteDesktopSystemIcons(selIcs) });
     }
     if (canDeleteDesktopFiles) {
       items.push('-');

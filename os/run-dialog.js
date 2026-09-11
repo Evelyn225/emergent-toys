@@ -43,8 +43,6 @@ function openRunDialog() {
     'paint': openPaint, 'paint.exe': openPaint,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
     'sysmon.exe': openSysmon,
-    'void.tmp': openVoid, 'daemon.core': openDaemon,
-    '?????.exe': openUnknown,
   };
 
   ok.addEventListener('click', () => {

@@ -146,7 +146,7 @@ test('rename and move emit ops carrying the destination', async () => {
   assert.strictEqual(mv.newName, 'B.txt');
 });
 
-// ── Task 3.5: the two direct-tree mutators in os/daemon.js ───────
+// ── Task 3.5: the direct-tree mutators (ensureFsDir, seedFreshRootTree) ───
 
 test('a direct mkdir queues an op carrying its path', async () => {
   const backend = recordingBackend({ needsSnapshot: false });
@@ -162,14 +162,14 @@ test('a direct mkdir queues an op carrying its path', async () => {
 test('a direct write queues an op a backend can resolve to content', async () => {
   const backend = recordingBackend({ needsSnapshot: false });
   const ctx = await mounted(backend);
-  // Mutate the tree directly, exactly as os/daemon.js ensureStoryTextFile does.
-  ctx.vfsGetTree().files.set('NOTICE.txt', 'the story text');
+  // Mutate the tree directly, exactly as os/fs-persist.js seedFreshRootTree does.
+  ctx.vfsGetTree().files.set('NOTICE.txt', 'seeded text');
   ctx.vfsQueueDirectWrite('', 'NOTICE.txt', null);
   await ctx.vfsFlush();
   const entry = backend.commits[0].entries['write:/NOTICE.txt'];
   assert.ok(entry, 'a direct write must emit an op readEntry can resolve');
   assert.strictEqual(entry.kind, 'file');
-  assert.strictEqual(entry.text, 'the story text');
+  assert.strictEqual(entry.text, 'seeded text');
 });
 
 test('a direct write of unchanged content queues nothing', async () => {
@@ -179,7 +179,7 @@ test('a direct write of unchanged content queues nothing', async () => {
   ctx.vfsQueueDirectWrite('', 'SAME.txt', 'identical');
   await ctx.vfsFlush();
   assert.strictEqual(backend.commits.length, 0,
-    'story beats re-set identical content constantly; queuing a commit each time is write amplification');
+    're-setting identical content must not queue a commit; doing so on every boot is write amplification');
 });
 
 test('no op the VFS emits is missing a path', async () => {

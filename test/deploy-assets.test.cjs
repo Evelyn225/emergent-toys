@@ -71,7 +71,8 @@ test('every sound os/audio.js fetches is deployed', () => {
   assert.ok(dirMatch, "const SOUND_DIR = '...' not found in os/audio.js");
   const dir = dirMatch[1];
 
-  const files = [...audioSrc.matchAll(/^\s{2}[a-z][a-z0-9_]*:\s*'([^']+\.ogg)'/gm)].map(m => m[1]);
+  // Bare keys for the OS sounds, quoted ones for PAINT.exe's hyphenated names.
+  const files = [...audioSrc.matchAll(/^\s{2}(?:[a-z][a-z0-9_]*|'[a-z0-9-]+'):\s*'([^']+\.ogg)'/gm)].map(m => m[1]);
   assert.ok(files.length >= 7, `expected the SOUND_FILES table, found ${files.length} entries`);
   for (const file of files) {
     assert.ok(isDeployed(dir + file),

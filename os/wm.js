@@ -280,7 +280,7 @@ function wmSnapPreviewRelease(id) {
 // cursor was the last time this drag was still live, not whether this drag
 // still has the right to act. Ownership can be revoked mid-drag (the window
 // this drag belongs to gets closed - terminal's own `exit`, SYSMON killing
-// the process, the daemon autoclosing 'void'), and a NEW window can then be
+// the process), and a NEW window can then be
 // opened that reuses the same id before mouseup ever fires. That window's
 // wins[id] exists and would pass every other check, but it was never
 // dragged - acting on the stale pendingZone would snap it with no preview
@@ -1131,7 +1131,7 @@ function resolveFsIcon(name, kind) {
     exe:'icon:exe', script:'icon:script', txt:'icon:text', readme:'icon:text', md:'icon:text',
     json:'icon:script', js:'icon:script', ts:'icon:script', jsx:'icon:script', tsx:'icon:script',
     html:'icon:browser', htm:'icon:browser', url:'icon:browser', css:'icon:script', py:'icon:script',
-    tmp:'icon:void', log:'icon:text', csv:'icon:sysmon', core:'icon:daemon'
+    log:'icon:text', csv:'icon:sysmon'
   }[ext] || 'icon:unknown';
 }
 

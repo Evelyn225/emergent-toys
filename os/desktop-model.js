@@ -44,15 +44,10 @@ const DESKTOP_ICONS = [
   { name: 'MINESWEEPER.exe', emoji: 'icon:minesweeper', action: 'openMinesweeper' },
   { name: 'PAINT.exe',      emoji: 'icon:paint',    action: 'openPaint' },
   { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
-  { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
-  { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },
   // Not in the static map alone: the bin's icon depends on whether it holds
   // anything, so resolveFsIcon picks between empty and full at render time.
   { name: RECYCLE_BIN_NAME, emoji: 'icon:recycle-empty', action: 'openRecycleBin', recycleBin: true },
 ];
-function getExeDisplayName() {
-  return daemonStory.quarantineSigned ? 'quarantine.exe' : '?????.exe';
-}
 
 const DESKTOP_ICON_DIRS_KEY = 'sleepOS-desktop-icon-dirs';
 function normalizeDesktopContainerDir(dirPath) {
@@ -94,7 +89,6 @@ function setDesktopSystemIconDir(name, dirPath) {
 function getDesktopSystemIconsForDir(dirPath) {
   const normalized = normalizeDesktopContainerDir(dirPath);
   return DESKTOP_ICONS.filter(icon => {
-    if (icon.name === 'void.tmp' && daemonStory.endingReached) return false;
     if (icon.recycleBin) return normalized === 'DESKTOP';
     return getDesktopSystemIconDir(icon.name) === normalized;
   });
@@ -258,8 +252,12 @@ function normalizeDesktopShortcut(entry) {
   const kind = target.kind === 'dir' ? 'dir' : 'file';
   const path = normalizeShortcutPath(target.path);
   const name = String(entry.name || target.name || path.split('\\').pop() || '').trim();
-  const emoji = String(entry.emoji || '').trim();
+  let emoji = String(entry.emoji || '').trim();
   if (!name || !emoji) return null;
+  // A persisted shortcut can outlive the icon it was saved with, and
+  // iconMarkup prints an unregistered token as raw text. Fall back to the
+  // unknown-file art rather than a label reading "icon:something".
+  if (emoji.startsWith(OS_ICON_TOKEN) && !isOsIcon(emoji)) emoji = 'icon:unknown';
   if (!path && !target.sysfile) return null;
   const dirPath = normalizeDesktopContainerDir(entry.dirPath || 'DESKTOP');
   return {
@@ -329,10 +327,6 @@ loadDesktopShortcuts();
 function openSystemFile(name) {
   const key = String(name || '').trim();
   if (!key) return false;
-  if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
-    osAlert('void.tmp is no longer present.', 'void.tmp', 'icon:void');
-    return true;
-  }
   // The Recycle Bin is a desktop object rather than a program, so it stays
   // here rather than going in the registry - it has no directory, cannot be
   // typed at the terminal, and must never resolve on PATH.

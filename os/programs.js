@@ -18,14 +18,14 @@
 // follow-up work, not done here.
 //
 // Every `open` is an arrow rather than a direct function reference. The
-// launchers it names (openNotepad, openDaemon, openVoid) are declared in files
+// launchers it names (openNotepad, openTerminal, openMinesweeper) are declared in files
 // that come LATER in tools/split-manifest.json, and while a hoisted function
 // declaration is safe to call later, it is not safe to reference while this
 // file is still evaluating.
 //
 // ROOT_SYSTEM_FILE_META is read inside a function body for a stronger reason
-// than that: it is `const` in os/daemon.js, manifest position 13, which loads
-// after this file (position 7), so touching it at evaluation time - rather
+// than that: it is `const` in os/fs-ops.js, manifest position 16, which loads
+// after this file (position 10), so touching it at evaluation time - rather
 // than inside programsInDir, which only runs once the OS is up - would throw
 // on boot.
 //
@@ -67,17 +67,7 @@ const PROGRAM_LAUNCHERS = {
   'DEFRAG.EXE':   { lines: ['Starting DEFRAG.exe...'],    open: () => openDefrag() },
   'CALC.EXE':     { lines: ['Starting CALC.exe...'],      open: () => openCalculator() },
   'REGEDIT.EXE':  { lines: ['Starting REGEDIT.exe...'],   open: () => openRegedit() },
-  'VOID.TMP':     { lines: ['Opening void.tmp...'],       open: () => openVoid() },
-  '?????.EXE':    { lines: ['Executing ?????.exe...'],    open: () => openUnknown(), aliases: ['?????'] },
-  'DAEMON.CORE':  {
-    lines: ['Opening daemon.core...'],
-    open: () => openDaemon(),
-    // The daemon gets a longer beat before its window appears. This was the
-    // only entry in the old `launchers` map with a delay of its own and it is
-    // a deliberate story beat, not a rounding error.
-    delay: 320,
-  },
-  'MINESWEEPER.exe': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
+  'MINESWEEPER.EXE': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
   'PAINT.EXE': { lines: ['Starting PAINT.exe...'], open: () => openPaint(), aliases: ['paint'] },
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
   // list it. It was reachable from the old `launchers`/`SYS` maps and stays
@@ -89,17 +79,6 @@ const PROGRAM_LAUNCHERS = {
   // links, and BROWSER.exe's home page is now the one place that lists them.
   'WELCOME.README': { lines: ['Opening WELCOME.README...'], open: () => openWelcome(), aliases: ['welcome'] },
 };
-
-// Story files exist at the root without being in ROOT_SYSTEM_FILE_META, and
-// their visibility depends on story state, so the list is rebuilt per call
-// rather than captured. Same reason isSystemPath is a live syscall instead of
-// a spawn-time snapshot.
-function programStoryRootNames() {
-  const names = [];
-  if (!daemonStory.endingReached) names.push('void.tmp');
-  names.push('daemon.core', '?????.exe');
-  return names;
-}
 
 function programEntry(name, dir) {
   const spec = PROGRAM_LAUNCHERS[String(name).toUpperCase()];
@@ -239,15 +218,13 @@ function programsInDir(dir) {
   let builtIns = [];
   if (key === '') {
     const names = ROOT_SYSTEM_FILE_META.map(meta => meta.name)
-      .concat(programStoryRootNames())
       .concat(['WELCOME.README']);
     builtIns = names.map(name => programEntry(name, '')).filter(Boolean);
   }
   // Matches on literal name only, not on aliases - a VFS file named
   // WELCOME.exe would not collide with the WELCOME.README entry's 'welcome'
   // alias here. Currently unexploitable: WELCOME.README loses on collision
-  // anyway because built-ins are concatenated first, and ?????.exe is both
-  // the literal name and the alias, never divergent. Worth another look only
+  // anyway because built-ins are concatenated first. Worth another look only
   // if a future built-in's alias itself ends in .exe.
   const taken = new Set(builtIns.map(e => e.name.toUpperCase()));
   return builtIns.concat(programVfsExecutables(key, taken));
@@ -288,9 +265,9 @@ function programFindIn(dir, key) {
 }
 
 // cmd.exe order: the current directory first, then PATH. Not a fidelity
-// flourish - it is what keeps a cleared PATH from putting daemon.core and
-// ?????.exe permanently out of reach in a persisted filesystem, since both
-// live at the root and the root is where a player stands.
+// flourish - it is what keeps a cleared PATH from putting the root programs
+// permanently out of reach in a persisted filesystem, since they live at the
+// root and the root is where a player stands.
 function programResolve(name, cwd, pathValue) {
   const key = String(name || '').trim().toLowerCase();
   if (!key) return null;

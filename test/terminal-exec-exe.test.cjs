@@ -12,7 +12,6 @@ function ctxWith(files, spawnSpy) {
     ROOT_SYSTEM_FILE_META: [{ name: 'CALC.exe' }],
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
     KERNEL_PID: 1,
     kernelSpawn: spawnSpy,
   });

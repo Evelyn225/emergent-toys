@@ -4,7 +4,7 @@
 // out entirely rather than exercising the real function, and nothing else in
 // test/ ever requires os/desktop-model.js. That means the registry lookup
 // itself (programsInDir('').find(...), the .open guard, the Recycle Bin
-// branch, the void.tmp early return) had never run under test, before or
+// branch) had never run under test, before or
 // after the refactor that replaced the old hardcoded SYS map with it.
 //
 // This loads the real os/vfs.js, os/desktop-model.js and os/programs.js -
@@ -15,11 +15,11 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { makeOsContext, loadOsSources } = require('./helpers/load-os.cjs');
 
-// ROOT_SYSTEM_FILE_META normally lives in os/daemon.js (manifest position
-// 13, well after both os/desktop-model.js at position 6 and os/programs.js
-// at position 7), so it has to arrive as a context override rather than be
+// ROOT_SYSTEM_FILE_META normally lives in os/fs-ops.js (manifest position
+// 16, well after both os/desktop-model.js at position 9 and os/programs.js
+// at position 10), so it has to arrive as a context override rather than be
 // loaded for real - the same approach test/programs-resolve.test.cjs uses.
-// Values are copied from os/daemon.js's real table so the registry under
+// Values are copied from os/fs-ops.js's real table so the registry under
 // test has the same eight root programs it does in production.
 const ROOT_SYSTEM_FILE_META = [
   { name: 'TERMINAL.exe', size: '4,096', date: '11/13/2024  10:31' },
@@ -34,7 +34,7 @@ const ROOT_SYSTEM_FILE_META = [
 
 // Loads a fresh context per call (mirroring programs()'s pattern in
 // test/programs-resolve.test.cjs) so no state - localStorage, the calls
-// array, daemonStory - leaks between tests.
+// array - leaks between tests.
 //
 // openRecycleBin is NOT on this override list even though it is one of the
 // things openSystemFile can trigger. os/desktop-model.js declares
@@ -53,7 +53,6 @@ function desktop(overrides) {
   }
   const ctx = makeOsContext(Object.assign({
     ROOT_SYSTEM_FILE_META,
-    daemonStory: { endingReached: false, quarantineSigned: false, stage: 0 },
     openNotepad: spy('notepad'),
     openTerminal: spy('terminal'),
     openSysmon: spy('sysmon'),
@@ -63,9 +62,6 @@ function desktop(overrides) {
     openRegedit: spy('regedit'),
     openExplorer: spy('explorer'),
     openWelcome: spy('welcome'),
-    openVoid: spy('void'),
-    openDaemon: spy('daemon'),
-    openUnknown: spy('unknown'),
     openFiles: spy('files'),
     osAlert: spy('alert'),
   }, overrides || {}));
@@ -124,16 +120,15 @@ test('the Recycle Bin name opens the bin and returns true, despite not being in 
   assert.deepStrictEqual(calls, [['explorer', 'RECYCLE']]);
 });
 
-test('void.tmp after the ending alerts instead of opening, and does not call openVoid', () => {
-  const { ctx, calls } = desktop({ daemonStory: { endingReached: true, quarantineSigned: false, stage: 9 } });
-  assert.strictEqual(ctx.openSystemFile('void.tmp'), true);
-  assert.deepStrictEqual(calls, [['alert', 'void.tmp is no longer present.', 'void.tmp', 'icon:void']]);
-});
-
-test('void.tmp before the ending opens normally through the registry', () => {
-  const { ctx, calls } = desktop({ daemonStory: { endingReached: false, quarantineSigned: false, stage: 0 } });
-  assert.strictEqual(ctx.openSystemFile('void.tmp'), true);
-  assert.deepStrictEqual(calls, [['void']]);
+// The containment story's pseudo-files are gone. A desktop shortcut saved
+// while they existed still names them, and must come back as a plain miss -
+// which the caller reports as "Shortcut target not found" - not a launch.
+test('the retired story names are not programs any more', () => {
+  const { ctx, calls } = desktop();
+  for (const name of ['void.tmp', 'daemon.core', '?????.exe']) {
+    assert.strictEqual(ctx.openSystemFile(name), false, name);
+  }
+  assert.deepStrictEqual(calls, []);
 });
 
 test('matching on name is case-insensitive', () => {

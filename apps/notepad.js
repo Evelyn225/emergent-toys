@@ -36,22 +36,18 @@ Starting over:
 Shortcuts:
   Space + Tab     switch windows
   Ctrl + Alt + Q  session controls
-  Esc             close menus and overlays
-
-Known issues:
-  [!] void.tmp cannot be read, deleted, or ignored
-  [!] Something is watching this session`;
+  Esc             close menus and overlays`;
 
 function openWelcome() {
   openNotepad('WELCOME.README', '', { initialContent: WELCOME_DEFAULT, w: 520, h: 520 });
 }
 
 // ── First run ─────────────────────────────────────────────────────
-// The desktop is twelve icons and a taskbar, and none of it says which of them
-// is the one with twenty-five toys behind it, that the terminal is real, or
-// that void.tmp is a story rather than a bug. WELCOME.README said all of that
-// and sat there unopened, because a stranger has no reason to think a README on
-// a fake desktop is anything but set dressing.
+// The desktop is a dozen icons and a taskbar, and none of it says which of
+// them is the one with twenty-five toys behind it, or that the terminal is
+// real. WELCOME.README said all of that and sat there unopened, because a
+// stranger has no reason to think a README on a fake desktop is anything but
+// set dressing.
 //
 // Its own key rather than a flag inside osSettings: a player who resets the OS
 // should see this again, and the reset erases everything under the sleepOS
@@ -66,9 +62,6 @@ function shouldShowFirstRunWelcome() {
 // mid-read has already met it, and reopening over their session every time
 // would make it the thing they close rather than the thing they read - it is
 // still on the desktop and in the Start menu for anyone who wants it back.
-//
-// Deliberately not gated on the story: this fires on the first boot of a fresh
-// install, which is the only boot where daemonStory is untouched anyway.
 function maybeShowFirstRunWelcome() {
   if (!shouldShowFirstRunWelcome()) return;
   try { localStorage.setItem(WELCOME_SEEN_KEY, '1'); } catch (e) {}
@@ -215,7 +208,7 @@ function notepadRouteFor(filename) {
 // the decompiler reads, refreshSeededSystemBinaries only heals it on the
 // NEXT boot, and there is otherwise no way back until then. Refused here,
 // before the write happens, with the same "protected" language the DELETE
-// guard (os/daemon.js) already uses so a player learns one vocabulary for
+// guard (os/fs-ops.js) already uses so a player learns one vocabulary for
 // this rule, not two.
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
@@ -228,7 +221,7 @@ function notepadRouteFor(filename) {
 // fallback would make this guard's resolution disagree with the write's,
 // which is exactly the class of bug being fixed. Splitting first and
 // checking `!dirName` (root only) is the same shape as the pre-existing
-// DELETE guard, isVisibleSystemPath (os/daemon.js) - a DOCS\TERMINAL.exe
+// DELETE guard, isVisibleSystemPath (os/fs-ops.js) - a DOCS\TERMINAL.exe
 // is a different, legitimate file and must stay writable.
 function notepadGuardProtectedSave(fname, dir) {
   const { dirName, fileName } = vfsSplitPath(fname, dir);
@@ -296,17 +289,6 @@ function openDecompilerView(filename) {
     });
     mb.appendChild(viewSpan);
   }
-}
-
-function openLoreNotepad(filename, content, title, icon) {
-  const id = 'lore-' + (filename || '').replace(/\W/g,'_');
-  if (!mkWin({ id, title: title + ' \u2014 Notepad', icon: icon || 'icon:notepad', w:440, h:320, menubar:false, statusbar:false })) return;
-  const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:0;overflow:hidden;';
-  const pre = document.createElement('pre');
-  pre.style.cssText = 'background:#fff;padding:8px;margin:0;height:100%;overflow:auto;font-family:var(--sleep-font);font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-word;';
-  pre.textContent = content;
-  body.appendChild(pre);
 }
 
 function runScriptInPopup(name, source, dirName) {
@@ -503,151 +485,15 @@ function openSaveDialog(defaultName, callback, options) {
   procSetTimeout(id, () => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
-// Lore-ified pseudo-bytecode for .exe decompiler view
+// The listing for a binary that is registered but not on disk. The seeded
+// table in os/fs-core.js is the one copy of the real listings - loaded long
+// before this runs - so a registered binary gets its own text back; anything
+// else gets a generic stub rather than a second authored copy to drift from.
 function getExeDecompilerContent(fname) {
-  const name = (fname || '').toLowerCase();
-  const base = fname.replace(/\.exe$/i,'').toUpperCase();
-  const loreMap = {
-    'terminal.exe': [
-      '; TERMINAL.exe - Disassembly v1.0',
-      'section .text',
-      '  PUSH soul_daemon',
-      '  CALL obsv.sys',
-      '  MOV  eax, [STDIN_HANDLE]',
-      '  CMP  eax, 0x00000000',
-      '  JE   void_fallback',
-      '  CALL parse_command',
-      '  JMP  main_loop',
-      'void_fallback:',
-      '  MOV  [VOID_PRESSURE], 0xFF',
-      '  RET',
-      '; NOTE: 3 subroutines unresolved',
-      '; CALL 0xDEAD???? - target unknown',
-    ],
-    'sysmon.exe': [
-      '; SYSMON.exe - Disassembly',
-      'section .data',
-      '  soul_integrity  DD 0x57',
-      '  daemon_count    DD 0x07',
-      '  observer_ref    DD [CLASSIFIED]',
-      'section .text',
-      '  PUSH soul_integrity',
-      '  CALL read_corpus_metrics',
-      '  MOV  eax, [soul_integrity]',
-      '  SUB  eax, 0x01',
-      '  JLE  integrity_critical',
-      '  CALL update_display',
-      '  JMP  tick_loop',
-      'integrity_critical:',
-      '  CALL emit_warning',
-      '  PUSH 0xDEAD',
-      '  RET',
-    ],
-    'browser.exe': [
-      '; BROWSER.exe - Disassembly',
-      'section .rodata',
-      '  home_url  DB "sleep://home", 0',
-      '  err_msg   DB "site blocked by void", 0',
-      'section .text',
-      '  MOV  esi, home_url',
-      '  CALL resolve_sleep_addr',
-      '  TEST eax, eax',
-      '  JZ   frame_blocked',
-      '  CALL render_page',
-      '  JMP  event_loop',
-      'frame_blocked:',
-      '  PUSH err_msg',
-      '  CALL show_error',
-      '  ; observer may intercept traffic here',
-      '  RET',
-    ],
-    'defrag.exe': [
-      '; DEFRAG.exe - Disassembly',
-      'section .bss',
-      '  corpus_blocks RESB 640',
-      '  void_fragment DB [CANNOT RESOLVE]',
-      'section .text',
-      '  MOV  ecx, 0x280',
-      '  LEA  edi, [corpus_blocks]',
-      '  CALL scan_fragments',
-      '  MOV  eax, [void_fragment]',
-      '  CMP  eax, 0x00',
-      '  JNE  skip_void',
-      '  ; void_fragment cannot be moved',
-      '  ; it has always been here',
-      'skip_void:',
-      '  CALL compact_corpus',
-      '  JMP  defrag_loop',
-    ],
-    'notepad.exe': [
-      '; NOTEPAD.exe - Disassembly',
-      'section .data',
-      '  welcome_readme DB "WELCOME.README", 0',
-      '  null_text      DD 0x00',
-      'section .text',
-      '  MOV  esi, welcome_readme',
-      '  CALL fs_open_read',
-      '  TEST eax, eax',
-      '  JZ   open_blank',
-      '  CALL load_text_buffer',
-      '  JMP  editor_loop',
-      'open_blank:',
-      '  MOV  [text_buffer], null_text',
-      '  CALL init_editor',
-      '  RET',
-    ],
-    'explorer.exe': [
-      '; EXPLORER.exe - Disassembly',
-      'section .data',
-      '  root_path DB "C:\\sleepOS\\", 0',
-      '  sys_files DD 9',
-      'section .text',
-      '  PUSH root_path',
-      '  CALL enumerate_fs',
-      '  MOV  ecx, sys_files',
-      '  CALL add_system_entries',
-      '  ; 1 entry cannot be enumerated',
-      '  ; see: ?????.exe',
-      '  CALL render_icon_grid',
-      '  JMP  window_loop',
-    ],
-    'calc.exe': [
-      '; CALC.exe - Disassembly',
-      'section .data',
-      '  display_buf DB 32 dup(0)',
-      '  soul_pi     DQ 3.14159265358979',
-      'section .text',
-      '  MOV  eax, 0x00',
-      '  MOV  [accumulator], eax',
-      '  CALL init_display',
-      '  JMP  calc_loop',
-      'calc_loop:',
-      '  CALL wait_keypress',
-      '  CALL eval_operation',
-      '  PUSH [accumulator]',
-      '  CALL update_display',
-      '  JMP  calc_loop',
-      '; NOTE: division by zero returns VOID',
-    ],
-    'regedit.exe': [
-      '; REGEDIT.exe - Disassembly',
-      'section .data',
-      '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
-      '  soul_key  DB "SOUL\\Metrics", 0',
-      'section .text',
-      '  PUSH hive_root',
-      '  CALL open_registry_hive',
-      '  MOV  esi, soul_key',
-      '  CALL reg_open_key',
-      '  CALL enumerate_values',
-      '  ; WARNING: OBSERVER_COUNT is classified',
-      '  ; ACCESS DENIED for key VOID\\',
-      '  CALL render_tree',
-      '  JMP  edit_loop',
-    ],
-  };
-  const specific = loreMap[name];
-  if (specific) return specific.join('\n');
+  const wanted = String(fname || '').toLowerCase();
+  const known = Object.keys(SYSTEM_BINARY_SOURCES).find(name => name.toLowerCase() === wanted);
+  if (known) return SYSTEM_BINARY_SOURCES[known];
+  const base = String(fname || '').replace(/\.exe$/i, '').toUpperCase();
   return [
     '; ' + base + ' - Disassembly',
     '; File type: WIN32 PE (sleepOS compatible)',
@@ -657,52 +503,17 @@ function getExeDecompilerContent(fname) {
     '  build_stamp DD 0x' + Math.floor(Math.random()*0xFFFFFFFF).toString(16).toUpperCase().padStart(8,'0'),
     '',
     'section .text',
-    '  PUSH soul_daemon',
-    '  CALL obsv.sys',
+    '  CALL init_runtime',
     '  MOV  eax, [entry_point]',
     '  CALL eax',
     '  CMP  eax, 0',
     '  JNZ  execution_error',
     '  RET',
     'execution_error:',
-    '  PUSH 0xDEADC0DE',
-    '  CALL void_handler',
-    '  JMP  0x0000',
-    '',
-    '; [decompiler: 1 function unresolved]',
+    '  PUSH eax',
+    '  CALL report_error',
+    '  RET',
   ].join('\n');
-}
-
-// Lore content for daemon.core and void.tmp
-const DAEMON_CORE_CONTENT =
-`[DAEMON CORE - raw read attempt]
-
-This file is being written.
-It is always being written.
-
-Fragment recovered at offset 0x0000:
-  owner    : SYSTEM\\???
-  type     : persistent observer
-  priority : ABOVE_KERNEL
-  started  : before system boot
-  status   : ACTIVE
-
-Fragment recovered at offset 0x00FF:
-  watching : all active processes
-  watching : all inactive processes
-  watching : this file
-
-Fragment recovered at offset 0x01FE:
-  [UNREADABLE - data still being written]
-  [UNREADABLE - data still being written]
-  [UNREADABLE - data still being written]
-
-Do not attempt to modify this file.
-You cannot. It is already modified.
-`;
-
-function getVoidTmpContent() {
-  return buildVoidTmpRawContent();
 }
 
 // The live Notepad window editing `pathKey`, or null. Reads `wins` directly so
@@ -717,34 +528,14 @@ function findNotepadWindowFor(pathKey) {
 function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
-  const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
   // Special handling for .exe files - decompiler view (read-only) for a
   // system binary, plain editor for anything the user authored themselves.
-  const normalizedName = (filename || '').toLowerCase();
-  const isDaemonCore = normalizedName === 'daemon.core';
-  const isVoidTmp = normalizedName === 'void.tmp';
-
   if (filename && notepadRouteFor(filename) === 'decompiler') {
     return openDecompilerView(filename);
   }
-  if (isDaemonCore) {
-    daemonActivate('raw');
-    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', 'icon:daemon');
-  }
-  if (isVoidTmp) {
-    daemonRecordInvestigation('void');
-    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', 'icon:void');
-  }
 
-  // vfsStatSync is metadata only, so the story checks and the window can all be
-  // decided synchronously. Note the `type === 'file'` test: fsGetEntry returned
-  // null for a directory, while vfsStatSync returns a stat for one, so without
-  // it a directory whose uppercased name collides with a story path would fire
-  // the investigation beat.
+  // vfsStatSync is metadata only, so the window can be decided synchronously.
   const st = filename ? vfsStatSync(filename, dirName) : null;
-  const isFile = !!st && st.type === 'file';
-  if (isFile && fullPathUpper === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
-  if (isFile && fullPathUpper === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
   const { dirName: initialDir, fileName } = splitInfo;
   const pathKey = filename ? ((initialDir ? initialDir + '\\' : '') + fileName) : String(++_notepadCount);
   // Which file a window is editing lives on the window record, not in its id.

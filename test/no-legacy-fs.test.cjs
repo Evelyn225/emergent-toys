@@ -35,8 +35,7 @@ const RETIRED = ['fsGetEntry', 'fsWriteTextFile', 'fsWriteBlobFile', 'fsCreateDi
   'targetLevel',
   // Phase 5: DEFRAG drives fsRunCompaction directly now. This was its old
   // entry point and became unreachable the moment compaction became real -
-  // everything it did except applyDaemonVisualState (obsolete since phase 4
-  // gave the daemon its own corruption dial) is in fsRunCompaction's finally.
+  // everything it did is in fsRunCompaction's finally.
   'optimizeDriveFragmentation'];
 
 test('no source reaches the filesystem outside the VFS', () => {
@@ -55,11 +54,6 @@ test('no source reaches the filesystem outside the VFS', () => {
   assert.deepStrictEqual(offenders, [], 'legacy filesystem access:\n  ' + offenders.join('\n  '));
 });
 
-// os/daemon.js is not loadable in the vm harness, so its two direct-tree
-// mutators cannot be covered by a behavioural test. Guard them at the source
-// level instead: a pathless op is invisible to a backend that commits from ops
-// alone, and the failure mode is silent - the story files simply stop
-// persisting, with no error anywhere.
 // The RETIRED list above catches a dead identifier coming back. It cannot
 // catch the other half of the same bug, which is what actually shipped: the
 // identifier went away and the UI simply hardcoded the number it used to
@@ -74,8 +68,8 @@ test('DEFRAG.exe does not paint a hardcoded drive statistic', () => {
   src.split(/\r?\n/).forEach((line, i) => {
     if (/^\s*(\/\/|\*)/.test(line)) return;
     // Only lines that write one of the two drive stats. The progress bar
-    // (pbFill/pbLabel) is deliberately not matched - its 98% is a story beat
-    // about a file that will not move, not a measurement of anything.
+    // (pbFill/pbLabel) is deliberately not matched - it reports how far the
+    // run has got, and its 100% at the end is a fact, not a disk statistic.
     if (!/df-frag|df-pct|Fragmentation:|% optimized/.test(line)) return;
     if (/\d+ ?%/.test(line)) offenders.push('apps/defrag.js:' + (i + 1) + ': ' + line.trim());
   });
@@ -108,6 +102,11 @@ test('DEFRAG.exe builds its grid from the disk, not from random numbers', () => 
     'the grid must be 128x32, one cell per block on a 4096-block drive');
 });
 
+// The direct-tree mutators (ensureFsDir, seedFreshRootTree) are covered
+// behaviourally in test/vfs-ops.test.cjs. This guards the marker they used to
+// emit at the source level as well: a pathless op is invisible to a backend
+// that commits from ops alone, and the failure mode is silent - the files
+// simply stop persisting, with no error anywhere.
 test('no source reintroduces the retired legacy-write pathless-op marker', () => {
   const offenders = [];
   for (const rel of readManifest()) {

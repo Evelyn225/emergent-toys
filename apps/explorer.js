@@ -529,7 +529,6 @@ function openExplorer(startPath) {
       const mutableSelected = allSelected.filter(i => !i.sysfile && !i._recycle && !i._shortcut);
       const isScript = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.script');
       const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.kind === 'image';
-      const isLoreFile = !!singleSelected && !singleSelected._recycle && ['daemon.core','void.tmp'].includes(singleSelected.name);
       const isExeFile  = !!singleSelected && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.exe');
       if (singleSelected && !multi && (singleSelected.recycleBin || isRecycleBinItemName(singleSelected.name)) && !singleSelected._recycle) {
         showCtxMenu(e.clientX, e.clientY, [
@@ -556,7 +555,6 @@ function openExplorer(startPath) {
         multi
           ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(openItem) }
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
-        ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
         ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
         ...(canSetWallpaper ? [{ label: 'Edit in Paint', action: () => openPaintFile(singleSelected.name, cwd) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),

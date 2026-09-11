@@ -4,7 +4,6 @@ function startDesktop() {
   const savedWp = getInitialWallpaperPath();
   if (savedWp) applyWallpaper(savedWp, { deferMissing: !isSystemWallpaperPath(savedWp) });
   applySettings();
-  applyDaemonVisualState();
   setupIcons();
   wmInstallTaskbarMenu();
   initSystemAudio();

@@ -493,9 +493,9 @@ function plain(value) {
 // string, for a test that needs to eval a single function in a vm context
 // without loading (and running the side effects of) the whole file it lives
 // in. test/fs-boot-backend.test.cjs uses this to reach fsChooseBackend
-// without dragging in os/fs-persist.js's loadFS() call at parse time;
-// test/daemon-corruption.test.cjs uses it as a plain source-level guard
-// because os/daemon.js cannot be loaded in this harness at all.
+// without dragging in os/fs-persist.js's loadFS() call at parse time, and
+// test/delete-guard-cwd.test.cjs uses it to test the DELETE guard without
+// the rest of os/fs-ops.js.
 //
 // Finds the function by name (with or without a leading `async`) and then
 // walks brace depth from its opening `{` to find the matching closing one,

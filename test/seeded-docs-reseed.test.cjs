@@ -13,7 +13,7 @@ const path = require('path');
 const { makeOsContext, loadOsSources, makeLocalStorageStub, extractFunctionSource, ROOT } = require('./helpers/load-os.cjs');
 
 // os/fs-persist.js cannot be loaded whole in this harness - it runs
-// ensureFsDir(RECYCLE_STORAGE_DIR) at parse time, which drags in os/daemon.js
+// ensureFsDir(RECYCLE_STORAGE_DIR) at parse time, which drags in os/fs-ops.js
 // and the rest of the desktop (see test/fs-run-compaction.test.cjs and
 // test/fs-unload-flush.test.cjs, which hit the same wall). refreshSeededDocs
 // only needs _serDir, _desDir and the SEEDED_DOCS_DATA snapshot they build,

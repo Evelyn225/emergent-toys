@@ -20,12 +20,11 @@ function programs(overrides) {
       { name: 'CALC.exe', size: '4,096', date: '11/13/2024  10:31' },
     ],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
   }, overrides || {}));
   return loadOsSources(ctx, ['os/vfs.js', 'os/programs.js']);
 }
 
-const DEFAULT_PATH = 'C:\\sleepOS;[redacted]';
+const DEFAULT_PATH = 'C:\\sleepOS';
 
 test('the current directory is searched before PATH', () => {
   const ctx = programs();
@@ -38,8 +37,8 @@ test('the current directory is searched before PATH', () => {
 
 test('a root program still resolves from the root with PATH emptied', () => {
   const ctx = programs();
-  const hit = ctx.programResolve('?????.exe', '', '');
-  assert.ok(hit, 'story programs must stay reachable from their own directory');
+  const hit = ctx.programResolve('CALC.exe', '', '');
+  assert.ok(hit, 'root programs must stay reachable from their own directory');
   assert.strictEqual(hit.via, 'cwd');
 });
 
@@ -57,8 +56,8 @@ test('.exe is appended when the literal name does not match, case-insensitively'
 
 test('unreal PATH entries are kept and resolve nothing', () => {
   const ctx = programs();
-  assert.deepStrictEqual(plain(ctx.programPathDirs(DEFAULT_PATH)), ['', '[REDACTED]']);
-  assert.strictEqual(ctx.programsInDir('[REDACTED]').length, 0);
+  assert.deepStrictEqual(plain(ctx.programPathDirs('C:\\sleepOS;C:\\sleepOS\\NOWHERE')), ['', 'NOWHERE']);
+  assert.strictEqual(ctx.programsInDir('NOWHERE').length, 0);
 });
 
 test('an empty PATH segment does not silently splice in the root', () => {
@@ -76,12 +75,22 @@ test('a duplicated PATH entry is searched once', () => {
   assert.deepStrictEqual(plain(ctx.programPathDirs('C:\\sleepOS;C:\\sleepOS\\;C:\\sleepOS')), ['']);
 });
 
-test('void.tmp leaves the root set once the ending is reached', () => {
-  const before = programs();
-  assert.ok(before.programResolve('void.tmp', '', DEFAULT_PATH));
-  const after = programs({ daemonStory: { endingReached: true, stage: 9 } });
-  assert.strictEqual(after.programResolve('void.tmp', '', DEFAULT_PATH), null);
-  assert.ok(after.programResolve('daemon.core', '', DEFAULT_PATH), 'daemon.core survives the ending');
+test('the retired story names resolve to nothing', () => {
+  const ctx = programs();
+  for (const name of ['void.tmp', 'daemon.core', '?????.exe', '?????']) {
+    assert.strictEqual(ctx.programResolve(name, '', DEFAULT_PATH), null, name);
+  }
+});
+
+// programEntry and programIsSystemBinary both look a launcher up by its
+// UPPERCASED name, so a key written any other way is not a program at all -
+// it drops out of programsInDir and its seeded file then runs as a user
+// script. MINESWEEPER.exe shipped that way.
+test('every PROGRAM_LAUNCHERS key is uppercase', () => {
+  const ctx = programs();
+  ctx.__evalSource('globalThis.__launcherKeys = Object.keys(PROGRAM_LAUNCHERS);');
+  const bad = plain(ctx.__launcherKeys).filter(key => key !== key.toUpperCase());
+  assert.deepStrictEqual(bad, []);
 });
 
 test('programFindAnywhere ignores PATH so the terminal can explain a miss', () => {

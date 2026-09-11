@@ -1,106 +1,3 @@
-function triggerGlitch(options) {
-  const desktop = document.getElementById('desktop');
-  const windowsLayer = document.getElementById('windows-layer');
-  const taskbar = document.getElementById('taskbar');
-  const glitch = document.getElementById('glitch');
-  const intensity = Number(options?.intensity) || 0;
-  const subtle = !!options?.subtle;
-  // Tracks the visual scaling below, so a subtle background flicker does not
-  // arrive at the same volume as a full-intensity tear.
-  playSound('glitch', {
-    volume: subtle ? 0.4 : intensity >= 7 ? 1 : intensity >= 5 ? 0.78 : 0.58,
-  });
-  pulseDaemonWindows(intensity, { subtle });
-  const targets = [desktop, windowsLayer, taskbar].filter(Boolean);
-  const glitchClass = subtle ? 'glitching-soft' : 'glitching';
-  targets.forEach(el => el.classList.add(glitchClass));
-  setTimeout(() => targets.forEach(el => {
-    el.classList.remove('glitching');
-    el.classList.remove('glitching-soft');
-  }), subtle ? 420 : intensity >= 7 ? 900 : intensity >= 5 ? 760 : 650);
-
-  if (glitch) {
-    glitch.style.display = 'block';
-    glitch.style.background = intensity >= 7
-      ? 'linear-gradient(90deg, rgba(255,0,120,0.14), transparent 22%, rgba(80,255,255,0.18) 58%, transparent 78%), repeating-linear-gradient(180deg, rgba(255,255,255,0.04) 0 2px, transparent 2px 6px)'
-      : intensity >= 5
-        ? 'linear-gradient(90deg, rgba(255,0,80,0.09), transparent 28%, rgba(90,255,240,0.12) 64%, transparent 82%), repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 8px)'
-        : 'linear-gradient(90deg, rgba(255,255,255,0.06), transparent 50%, rgba(120,255,255,0.06)), repeating-linear-gradient(180deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 10px)';
-    glitch.style.opacity = subtle
-      ? intensity >= 7 ? '0.54' : intensity >= 5 ? '0.38' : '0.24'
-      : intensity >= 7 ? '0.9' : intensity >= 5 ? '0.65' : '0.42';
-    glitch.style.transform = subtle
-      ? intensity >= 7 ? 'translateX(-2px)' : intensity >= 5 ? 'translateX(1px)' : 'translateX(0)'
-      : intensity >= 7 ? 'translateX(-6px)' : intensity >= 5 ? 'translateX(4px)' : 'translateX(0)';
-    setTimeout(() => {
-      glitch.style.display = 'none';
-      glitch.style.opacity = '';
-      glitch.style.transform = '';
-      glitch.style.background = '';
-    }, subtle ? 110 : intensity >= 7 ? 180 : 130);
-  }
-
-  // Brief scanline intensify
-  const crt = document.getElementById('crt');
-  crt.style.opacity = subtle
-    ? intensity >= 7 ? '1.55' : intensity >= 5 ? '1.35' : '1.22'
-    : intensity >= 7 ? '2.45' : intensity >= 5 ? '2.2' : '2';
-  setTimeout(() => { crt.style.opacity = '1'; }, subtle ? 150 : intensity >= 7 ? 260 : 180);
-}
-
-let endingRebootActive = false;
-const ENDING_REBOOT_ANIM_MS = 2350;
-const ENDING_REBOOT_TEXT_HOLD_MS = 2400;
-function playContainmentEndingReboot() {
-  if (endingRebootActive) return;
-  endingRebootActive = true;
-  closeStart();
-  closeDropdown();
-  closeCad();
-  if (altTabActive) closeAltTab();
-
-  stopSoundLoop('ambience', { fade: 0.7 });
-  playSound('shutdown');
-
-  const overlay = document.getElementById('ending-reboot');
-  if (overlay) {
-    overlay.classList.add('active');
-    overlay.setAttribute('aria-hidden', 'false');
-  }
-  document.body.classList.add('final-rebooting');
-
-  setTimeout(() => {
-    const desktop = document.getElementById('desktop');
-    const taskbar = document.getElementById('taskbar');
-    const daemonFx = document.getElementById('daemon-fx');
-    const bios = document.getElementById('bios');
-
-    if (overlay) {
-      overlay.classList.remove('active');
-      overlay.setAttribute('aria-hidden', 'true');
-    }
-    if (desktop) desktop.style.display = 'none';
-    if (taskbar) taskbar.style.display = 'none';
-    if (daemonFx) daemonFx.style.display = 'none';
-    document.body.classList.remove('final-rebooting');
-
-    if (bios) {
-      bios.style.display = 'flex';
-      bios.style.opacity = '1';
-      bios.style.transition = 'none';
-      bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#858585;white-space:pre;line-height:1.55;">
-Containment complete.
-Draining chroma channels...               [SEALED]
-Archiving daemon.core...                 [OK]
-Rebooting sleepOS shell...
-      </div>`;
-    }
-
-    try { sessionStorage.setItem(FORCE_BOOT_SESSION_KEY, '1'); } catch (e) {}
-    setTimeout(() => { window.location.replace('sleep-os.html'); }, ENDING_REBOOT_TEXT_HOLD_MS);
-  }, ENDING_REBOOT_ANIM_MS);
-}
-
 // ─────────────────────────────────────────────────────────────────
 // SHUTDOWN
 // ─────────────────────────────────────────────────────────────────
@@ -167,12 +64,9 @@ function confirmShutdown() {
   bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#888;white-space:pre;line-height:1.5;">
 sleepOS - ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
 
-Stopping soul_daemon.exe...              [OK]
-Stopping dream_fragment.exe...           [OK]
-Stopping unknown (PID 0333)...           [TIMEOUT]
-Stopping unknown (PID 0334)...           [TIMEOUT]
-Stopping unknown (PID 0335)...           [TIMEOUT]
-Flushing corpus cache...                 [OK]
+Stopping services...                     [OK]
+Closing open windows...                  [OK]
+Flushing disk cache...                   [OK]
 Unloading kernel modules...              [OK]
 Saving system state...                   [OK]
   </div>`;
@@ -213,8 +107,8 @@ Saving system state...                   [OK]
 // ─────────────────────────────────────────────────────────────────
 // Everything sleepOS remembers is persistent and, until this existed, there was
 // no way out of it from inside the OS: a player who deleted something they
-// wanted, filled the simulated disk, or finished the daemon ending and wanted
-// to watch the boot again had to go and clear browser site data by hand.
+// wanted, filled the simulated disk, or just wanted to watch the first boot
+// again had to go and clear browser site data by hand.
 
 // The legacy pre-migration media database (os/fs-migrate.js) alongside the live
 // filesystem one. Migration deliberately leaves both behind for a release, so a
@@ -270,8 +164,7 @@ function confirmFactoryReset() {
     'This erases everything sleepOS has saved in this browser:\n\n' +
     '  your files and folders\n' +
     '  desktop layout and wallpaper\n' +
-    '  settings and registry\n' +
-    '  story progress\n\n' +
+    '  settings and registry\n\n' +
     'sleepOS restarts as a fresh install. This cannot be undone.',
     'Reset sleepOS',
     ok => { if (ok) void performFactoryReset(); },

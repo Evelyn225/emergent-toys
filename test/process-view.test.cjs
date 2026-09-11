@@ -4,8 +4,8 @@ const assert = require('node:assert');
 const { makeOsContext, loadOsSources, plain } = require('./helpers/load-os.cjs');
 
 // process-view.js reads three globals. Stubbing them here rather than loading
-// os/kernel.js and os/daemon.js keeps this test about the merge itself, and
-// lets a story list be posed at an exact daemon stage without driving the story.
+// os/kernel.js and os/fs-ops.js keeps this test about the merge itself, and
+// lets the built-in list be posed exactly rather than read off the real table.
 function view(overrides) {
   const ctx = makeOsContext(Object.assign({
     wins: {},
@@ -36,17 +36,17 @@ test('a spawned process carries null cpu and mem, not invented numbers', () => {
   const row = ctx.buildProcessRows()[0];
   assert.strictEqual(row.cpu, null);
   assert.strictEqual(row.mem, null);
-  assert.strictEqual(row.isStory, false);
+  assert.strictEqual(row.isBuiltin, false);
 });
 
-test('story rows get kind and state synthesized and are flagged isStory', () => {
+test('built-in rows get kind and state synthesized and are flagged isBuiltin', () => {
   const ctx = view({
-    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', protected: true }],
+    getBuiltInProcesses: () => [{ pid: 116, name: 'services.exe', protected: true }],
   });
   const rows = plain(ctx.buildProcessRows());
   assert.deepStrictEqual(rows, [{
-    pid: 512, name: 'soul_svc.exe', kind: 'system', state: 'running',
-    cpu: null, mem: null, memUnit: null, winId: null, isStory: true,
+    pid: 116, name: 'services.exe', kind: 'system', state: 'running',
+    cpu: null, mem: null, memUnit: null, winId: null, isBuiltin: true,
   }]);
 });
 
@@ -65,13 +65,13 @@ test('a window process name is derived live, so a retitle is reflected', () => {
 
 test('the derivation splits on both separators sleepOS actually uses', () => {
   const ctx = view({});
-  // Em dash: explorer and notepad. Hyphen: terminal, sysmon, defrag, browser,
-  // daemon. Neither: calculator, regedit, dialogs.
+  // Em dash: explorer and notepad. Hyphen: terminal, sysmon, defrag, browser.
+  // Neither: calculator, regedit, dialogs.
   assert.strictEqual(ctx.processDisplayName('README.txt \u2014 Notepad', 'notepad'), 'README.txt');
   assert.strictEqual(ctx.processDisplayName('FILE EXPLORER \u2014 C:\\sleepOS', 'explorer'), 'FILE EXPLORER.exe');
   assert.strictEqual(ctx.processDisplayName('TERMINAL.exe - Command Prompt', 'terminal'), 'TERMINAL.exe');
   assert.strictEqual(ctx.processDisplayName('SYSMON.exe - System Monitor', 'sysmon'), 'SYSMON.exe');
-  assert.strictEqual(ctx.processDisplayName('daemon.core - Containment', 'daemon'), 'daemon.core');
+  assert.strictEqual(ctx.processDisplayName('DEFRAG.exe - Disk Defragmenter', 'defrag'), 'DEFRAG.exe');
   assert.strictEqual(ctx.processDisplayName('Calculator', 'calc'), 'Calculator.exe');
   assert.strictEqual(ctx.processDisplayName('', 'orphan'), 'orphan.exe');
 });
@@ -83,14 +83,14 @@ test('a kernel process with no window keeps its stored name', () => {
   assert.strictEqual(ctx.buildProcessRows()[0].name, 'job.script');
 });
 
-test('the story toggle filters story rows and leaves real ones', () => {
+test('the system-process toggle filters built-in rows and leaves real ones', () => {
   const ctx = view({
     kernelListProcesses: () => [{ pid: 2001, name: 'job.script', kind: 'user', state: 'running', winId: null }],
-    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', protected: true }],
+    getBuiltInProcesses: () => [{ pid: 116, name: 'services.exe', protected: true }],
   });
   const rows = ctx.buildProcessRows();
-  assert.deepStrictEqual(rows.filter(r => !r.isStory).map(r => r.pid), [2001]);
-  assert.deepStrictEqual(rows.map(r => r.pid), [512, 2001]);
+  assert.deepStrictEqual(rows.filter(r => !r.isBuiltin).map(r => r.pid), [2001]);
+  assert.deepStrictEqual(rows.map(r => r.pid), [116, 2001]);
 });
 
 test('pid 1 is present, which is why SYSMON used to be missing it', () => {
@@ -103,17 +103,18 @@ test('pid 1 is present, which is why SYSMON used to be missing it', () => {
 });
 
 // After this phase a dash has one precise meaning: no measurable execution
-// context. A story process genuinely has none - no window, no interpreter -
-// so it reports null rather than the 7.4 / 31.2 it used to invent.
-test('a story row carries no fabricated cpu or mem', () => {
+// context. A built-in process genuinely has none - no window, no
+// interpreter - so it reports null rather than the 7.4 / 31.2 it used to
+// invent.
+test('a built-in row carries no fabricated cpu or mem', () => {
   const ctx = view({
-    getBuiltInProcesses: () => [{ pid: 512, name: 'soul_svc.exe', protected: true }],
+    getBuiltInProcesses: () => [{ pid: 116, name: 'services.exe', protected: true }],
   });
-  const row = plain(ctx.buildProcessRows()).find(r => r.pid === 512);
+  const row = plain(ctx.buildProcessRows()).find(r => r.pid === 116);
   assert.strictEqual(row.cpu, null);
   assert.strictEqual(row.mem, null);
   assert.strictEqual(row.memUnit, null);
-  assert.strictEqual(row.isStory, true);
+  assert.strictEqual(row.isBuiltin, true);
 });
 
 test('a measured worker row carries its figures and byte unit', () => {

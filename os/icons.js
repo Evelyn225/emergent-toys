@@ -29,8 +29,6 @@ const OS_ICONS = {
   defrag:        'clean_drive.png',
   explorer:      'directory_open_file_mydocs-0.png',
   settings:      'settings.png',
-  daemon:        'daemon_eye.png',
-  void:          'void.png',
   // ── Filesystem ────────────────────────────────────────────────
   folder:        'directory_closed-0.png',
   'folder-open': 'directory_open_file_mydocs-0.png',

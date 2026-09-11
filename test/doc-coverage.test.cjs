@@ -16,10 +16,8 @@ const terminalSrc = fs.readFileSync(path.join(ROOT, 'apps/terminal.js'), 'utf8')
 // Both sets are empty on purpose, and that was verified rather than assumed:
 // the only gaps at the time of writing were SPAWN, KILL, DIR and RM, all
 // genuine omissions rather than secrets. The guard inspects `CMDS.<name>`
-// assignments, and sleepOS's hidden story commands are not dispatched that
-// way, so it cannot demand that a story beat be spoiled. A future hidden
-// command added AS a CMDS entry would need an entry here, with a one-line
-// reason.
+// assignments. A future hidden command added AS a CMDS entry would need an
+// entry here, with a one-line reason.
 const UNDOCUMENTED_SCRIPT_COMMANDS = new Set([]);
 const UNDOCUMENTED_TERMINAL_COMMANDS = new Set([]);
 

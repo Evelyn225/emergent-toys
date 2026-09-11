@@ -695,7 +695,7 @@ async function scriptOpenUiTarget(path, cwd) {
 // the main thread, where the globals it references are legitimately in
 // scope (a worker reaches it only via the ui.openSystem syscall, answered
 // here). `openSystemFile` stays as the fallback for names the map does not
-// recognize (WELCOME.README, void.tmp, daemon.core, etc.).
+// recognize (user .exe files and anything else programsInDir lists).
 async function scriptOpenSystemProgram(name, cwd, arg) {
   const lower = String(name || '').toLowerCase();
   const map = {
@@ -738,7 +738,7 @@ function makeVfsScriptFs() {
     async writeFile(path, text, cwd) { return await vfsWriteFile(path, text, cwd); },
     async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
     // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
-    // story's undeletable files. Deleting straight from the VFS would bypass both.
+    // protected system files. Deleting straight from the VFS would bypass both.
     async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
     async openUi(path, cwd) { return scriptOpenUiTarget(path, cwd); },
     async openSystem(name, cwd, arg) { return scriptOpenSystemProgram(name, cwd, arg); },

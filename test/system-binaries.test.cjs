@@ -71,10 +71,18 @@ test('sizes are measured, not the old authored constants', () => {
   assert.ok(sizes.some(s => s !== 4096 && s !== 8192), 'sizes look authored: ' + JSON.stringify(sizes));
 });
 
-test('story pseudo-files are NOT seeded - their existence is conditional', () => {
+// The listings used to double as story set dressing - soul_daemon pushed on
+// the stack, a void_fragment DEFRAG could not move, a pointer at ?????.exe.
+// The story is gone and so is every reference to it.
+test('the seeded listings carry none of the retired story vocabulary', () => {
   const ctx = fsCtx();
+  const lore = /soul|daemon|void|observer|corpus|\?\?\?\?\?|classified|obsv/i;
+  SYSTEM_BINARIES.forEach(name => {
+    const text = String(ctx.vfsGetTree().files.get(name) || '');
+    assert.ok(!lore.test(text), name + ' still references the story: ' + (text.match(lore) || [])[0]);
+  });
   ['void.tmp', 'daemon.core', '?????.exe'].forEach(name => {
-    assert.strictEqual(ctx.vfsStatSync(name, ''), null, name + ' must stay registry-only');
+    assert.strictEqual(ctx.vfsStatSync(name, ''), null, name + ' must not exist');
   });
 });
 
@@ -327,7 +335,7 @@ test('a fresh mount followed by the refresh queues nothing extra - seedFreshRoot
 // bitten by exactly that before - os/programs.js's header records three
 // hand-maintained program lists that had already drifted apart. The two tables
 // that actually matter are SYSTEM_BINARY_SOURCES (os/fs-core.js), which decides
-// what gets seeded onto the disk, and ROOT_SYSTEM_FILE_META (os/daemon.js),
+// what gets seeded onto the disk, and ROOT_SYSTEM_FILE_META (os/fs-ops.js),
 // which decides what DIR lists and what the delete guards protect. A name in
 // one and not the other is a binary that either exists but is unlisted and
 // unprotected, or is listed and protected but is not there.
@@ -352,12 +360,12 @@ function namesIn(rel, marker, pattern) {
 test('the seeded binaries and the root file table name exactly the same set', () => {
   const seeded = namesIn('os/fs-core.js', 'const SYSTEM_BINARY_SOURCES',
     { opener: '{', closer: '}', re: /^ {2}'([A-Za-z0-9_.?-]+\.exe)'\s*:/gm });
-  const listed = namesIn('os/daemon.js', 'const ROOT_SYSTEM_FILE_META',
+  const listed = namesIn('os/fs-ops.js', 'const ROOT_SYSTEM_FILE_META',
     { opener: '[', closer: ']', re: /name:\s*'([A-Za-z0-9_.?-]+\.exe)'/g });
 
   assert.ok(seeded.size >= 8, 'expected SYSTEM_BINARY_SOURCES entries, found ' + seeded.size);
   assert.deepStrictEqual([...seeded].sort(), [...listed].sort(),
-    'SYSTEM_BINARY_SOURCES (os/fs-core.js) and ROOT_SYSTEM_FILE_META (os/daemon.js) disagree. '
+    'SYSTEM_BINARY_SOURCES (os/fs-core.js) and ROOT_SYSTEM_FILE_META (os/fs-ops.js) disagree. '
     + 'A name in the first only is seeded but unlisted and unprotected; a name in the second only '
     + 'is listed and protected but never written to disk.');
 });

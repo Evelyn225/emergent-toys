@@ -1,6 +1,6 @@
 'use strict';
-// isVisibleSystemPath (os/daemon.js) used to split its path with NO
-// fallbackDir, while two callers - deleteVirtualPath (os/daemon.js) and the
+// isVisibleSystemPath (os/fs-ops.js) used to split its path with NO
+// fallbackDir, while two callers - deleteVirtualPath (os/fs-ops.js) and the
 // terminal's OPEN command (apps/terminal.js) - split that SAME path WITH a
 // fallbackDir one or two lines earlier. From cwd DOCS, `DEL TERMINAL.exe`
 // means DOCS\TERMINAL.exe (an ordinary player-authored file, now that
@@ -22,14 +22,13 @@
 // that now pass fallbackDir through.
 //
 // isVisibleSystemPath, getRootSystemFiles, isVisibleRootSystemFile and
-// deleteVirtualPath are extracted verbatim out of os/daemon.js with
+// deleteVirtualPath are extracted verbatim out of os/fs-ops.js with
 // extractFunctionSource - the same trick test/protected-system-binaries.
 // test.cjs uses for terminalProtectedWriteError/writePipelineOutput - so
 // this drives the REAL, unmodified guard and delete logic, not a
-// reimplementation that could silently drift from it. os/daemon.js cannot
-// be loaded whole in this harness (see test/daemon-corruption.test.cjs's
-// header comment - it drags in the whole story and the DOM it renders
-// into), so extraction is the only way to reach it under test.
+// reimplementation that could silently drift from it. Extraction also keeps
+// the rest of os/fs-ops.js - the recycle bin, the wallpaper bindings - out of
+// a test that is only about the guard.
 //
 // The terminal's OPEN command is an anonymous arrow function assigned to an
 // object property (`open: (args) => {...}`), which extractFunctionSource's
@@ -41,7 +40,7 @@ const fs = require('fs');
 const path = require('path');
 const { makeOsContext, loadOsSources, extractFunctionSource } = require('./helpers/load-os.cjs');
 
-const DAEMON_SRC = fs.readFileSync(path.join(__dirname, '..', 'os', 'daemon.js'), 'utf8');
+const FS_OPS_SRC = fs.readFileSync(path.join(__dirname, '..', 'os', 'fs-ops.js'), 'utf8');
 const TERMINAL_SRC = fs.readFileSync(path.join(__dirname, '..', 'apps', 'terminal.js'), 'utf8');
 
 const ROOT_SYSTEM_FILE_META = [
@@ -50,17 +49,6 @@ const ROOT_SYSTEM_FILE_META = [
 ];
 
 const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'SYS', 'CACHE', 'DESKTOP']);
-const STORY_FILE_PATHS = {
-  notice: 'DOCS\\NOTICE_13.txt',
-  incident: 'DOCS\\INCIDENT_A.txt',
-  lostContact: 'DOCS\\LOST_CONTACT.txt',
-  lastOperator: 'DOCS\\LAST_OPERATOR.txt',
-  mirrorProtocol: 'DOCS\\MIRROR_PROTOCOL.txt',
-  watchPid: 'SYS\\watch.pid',
-  anchorSeed: 'SYS\\anchor.seed',
-  quarantineSig: 'SYS\\quarantine.sig',
-  mirrorDat: 'CACHE\\mirror.dat',
-};
 
 // Same brace-matching approach as extractFunctionSource, but for a
 // `key: (params) => { ... }` object-literal method instead of a `function
@@ -89,12 +77,11 @@ function extractOpenCmdSource(src) {
 function guardCtx(overrides) {
   const ctx = makeOsContext(Object.assign({
     ROOT_SYSTEM_FILE_META,
-    daemonStory: { endingReached: false },
   }, overrides));
   loadOsSources(ctx, ['os/vfs.js']);
-  ctx.__evalSource(extractFunctionSource(DAEMON_SRC, 'getRootSystemFiles'), 'daemon-slice-getRootSystemFiles');
-  ctx.__evalSource(extractFunctionSource(DAEMON_SRC, 'isVisibleRootSystemFile'), 'daemon-slice-isVisibleRootSystemFile');
-  ctx.__evalSource(extractFunctionSource(DAEMON_SRC, 'isVisibleSystemPath'), 'daemon-slice-isVisibleSystemPath');
+  ctx.__evalSource(extractFunctionSource(FS_OPS_SRC, 'getRootSystemFiles'), 'fs-ops-slice-getRootSystemFiles');
+  ctx.__evalSource(extractFunctionSource(FS_OPS_SRC, 'isVisibleRootSystemFile'), 'fs-ops-slice-isVisibleRootSystemFile');
+  ctx.__evalSource(extractFunctionSource(FS_OPS_SRC, 'isVisibleSystemPath'), 'fs-ops-slice-isVisibleSystemPath');
   // fsSplitPath (os/fs-core.js) is a one-line wrapper around vfsSplitPath -
   // real behavior, without dragging in the rest of os/fs-core.js.
   ctx.__evalSource('globalThis.fsSplitPath = vfsSplitPath;');
@@ -141,29 +128,25 @@ test('C:\\sleepOS\\TERMINAL.exe is still denied', () => {
   assert.strictEqual(ctx.isVisibleSystemPath('C:\\sleepOS\\TERMINAL.exe', { includeExplorer: true }, ''), true);
 });
 
-test('the story pseudo-files stay protected at the root, with or without a fallbackDir', () => {
-  const ctx = guardCtx({ daemonStory: { endingReached: false } });
-  for (const name of ['void.tmp', 'daemon.core', '?????.exe']) {
-    assert.strictEqual(ctx.isVisibleSystemPath(name, {}), true, name + ' (no fallbackDir)');
-    assert.strictEqual(ctx.isVisibleSystemPath(name, {}, 'DOCS'), false,
-      name + ' inside DOCS is a different, legitimate file');
+test('only the real system binaries are system paths - nothing else at the root is', () => {
+  const ctx = guardCtx();
+  for (const name of ['void.tmp', 'daemon.core', '?????.exe', 'notes.txt']) {
+    assert.strictEqual(ctx.isVisibleSystemPath(name, {}), false, name + ' is not a system file');
   }
 });
 
 // ── deleteVirtualPath, the real DEL guard ───────────────────────────────
 
 function deleteCtx(overrides) {
-  const calls = { recycle: [], sync: 0 };
+  const calls = { recycle: [] };
   const ctx = guardCtx(Object.assign({
     ROOT_PROTECTED_DIRS,
-    STORY_FILE_PATHS,
     recycleVirtualPath: async (p, dir) => {
       calls.recycle.push([p, dir]);
       return { ok: true, deleted: true, details: ['Deleted: ' + p] };
     },
-    syncDaemonStory: () => { calls.sync++; },
   }, overrides));
-  ctx.__evalSource(extractFunctionSource(DAEMON_SRC, 'deleteVirtualPath'), 'daemon-slice-deleteVirtualPath');
+  ctx.__evalSource(extractFunctionSource(FS_OPS_SRC, 'deleteVirtualPath'), 'fs-ops-slice-deleteVirtualPath');
   return { ctx, calls };
 }
 
@@ -203,40 +186,17 @@ test('an explicit C:\\sleepOS\\TERMINAL.exe is still denied', async () => {
   assert.deepStrictEqual(calls.recycle, []);
 });
 
-test('the story pseudo-files are still protected at the true root', async () => {
-  const { ctx, calls } = deleteCtx({ daemonStory: { endingReached: false } });
-  const daemonCore = await ctx.deleteVirtualPath('daemon.core', '');
-  assert.strictEqual(daemonCore.ok, false);
-  assert.match(daemonCore.message, /Access denied/);
+test('a protected root directory is denied at the root, and only at the root', async () => {
+  const { ctx, calls } = deleteCtx();
+  const docs = await ctx.deleteVirtualPath('DOCS', '');
+  assert.strictEqual(docs.ok, false);
+  assert.match(docs.message, /Access is denied/);
+  assert.deepStrictEqual(calls.recycle, [], 'the guard must have refused before reaching recycleVirtualPath');
 
-  const launcher = await ctx.deleteVirtualPath('?????.exe', '');
-  assert.strictEqual(launcher.ok, false);
-  assert.match(launcher.message, /refuses deletion/);
-
-  assert.deepStrictEqual(calls.recycle, []);
-});
-
-// void.tmp, daemon.core and ?????.exe are STORY PSEUDO-FILES: they are not
-// real VFS entries anywhere, even at root (getTerminalRootSystemEntries
-// fabricates them for DIR; they have no backing vfsStatSync result). The
-// only thing that makes deleteVirtualPath treat a target as one of them is
-// its upperPath matching the bare name with an EMPTY dirName - exactly the
-// same root-only scoping isVisibleSystemPath now applies. A bare
-// "daemon.core" typed from cwd DOCS resolves, like DOCS\TERMINAL.exe, to a
-// different path (DOCS\daemon.core) - which is not a protected pseudo-file,
-// it is whatever ordinary file (if any) the player put there - so it must
-// fall through the pseudo-file branches into the same guard/delete path an
-// ordinary file takes, not be silently treated as the protected root file.
-test('a bare pseudo-file name from cwd DOCS is scoped to DOCS, same as TERMINAL.exe', async () => {
-  const { ctx, calls } = deleteCtx({ daemonStory: { endingReached: false } });
-  const daemonCore = await ctx.deleteVirtualPath('daemon.core', 'DOCS');
-  assert.notStrictEqual(daemonCore.message, 'Access denied.',
-    'must not be treated as the root daemon.core pseudo-file');
-  const launcher = await ctx.deleteVirtualPath('?????.exe', 'DOCS');
-  assert.notStrictEqual(launcher.message, 'The launcher refuses deletion.',
-    'must not be treated as the root ?????.exe pseudo-file');
-  assert.deepStrictEqual(calls.recycle, [['daemon.core', 'DOCS'], ['?????.exe', 'DOCS']],
-    'both must reach the ordinary delete path with the same path/fallbackDir the guard checked');
+  // PICTURES\DOCS is an ordinary folder a player made, not the root DOCS.
+  const nested = await ctx.deleteVirtualPath('DOCS', 'PICTURES');
+  assert.strictEqual(nested.ok, true);
+  assert.deepStrictEqual(calls.recycle, [['DOCS', 'PICTURES']]);
 });
 
 // ── the terminal's OPEN command ──────────────────────────────────────────

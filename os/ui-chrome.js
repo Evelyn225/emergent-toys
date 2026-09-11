@@ -137,8 +137,8 @@ function showCtxMenu(x, y, items, opts) {
 // ── System toast ──────────────────────────────────────────────────
 // A disk-full notice is useless if anything can cover it, so the toast sits at
 // 99993: above every window, the 28px taskbar (9000), the start menu (9001)
-// and the alt-tab / CAD / sleep overlays (99990-99992), and below the
-// daemon-fx, glitch, CRT and context-menu layers. A low z-index fails twice
+// and the alt-tab / CAD / sleep overlays (99990-99992), and below the CRT
+// and context-menu layers. A low z-index fails twice
 // over - the bar renders underneath the taskbar it is anchored to, and zTop
 // starts at 100 and increments on every window FOCUS, not just creation, so
 // windows climb past a three-digit value during an ordinary session.
@@ -225,9 +225,9 @@ function _osDlgPos(w, h) {
 // or an old persisted shortcut would still carry.
 //
 // Deliberately NOT matched against the message body, only the title and icon.
-// The body is where the tempting words are, and also where they lie: Help
-// Topics for DEFRAG.exe contains "some system files cannot be moved", which a
-// body scan would hear as an error.
+// The body is where the tempting words are, and also where they lie: a help
+// text that explains what a program "cannot" do is advice, not a failure, and
+// a body scan would hear it as an error.
 const ALERT_ERROR_ICONS = new Set(['icon:error', 'icon:warning', 'X', '⚠', '⚠️', '❌', '\u{1F6AB}', '⛔', '\u{1F4A5}']);
 const ALERT_ERROR_TITLE = /\b(error|fail(ed|ure|s)?|denied|invalid|refused|corrupt|unavailable|not found|no such|cannot|can't)\b/i;
 function isErrorAlert(title, icon) {

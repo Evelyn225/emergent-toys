@@ -11,7 +11,7 @@ const path = require('path');
 const { ROOT } = require('./helpers/load-os.cjs');
 
 test('ROOT_SYSTEM_FILE_META carries no size or date literals', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'os', 'daemon.js'), 'utf8');
+  const src = fs.readFileSync(path.join(ROOT, 'os', 'fs-ops.js'), 'utf8');
   const match = /const ROOT_SYSTEM_FILE_META = \[([\s\S]*?)\];/.exec(src);
   assert.ok(match, 'ROOT_SYSTEM_FILE_META not found - if it was renamed, update this guard');
   const table = match[1];

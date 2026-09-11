@@ -192,7 +192,7 @@ for (const [label, viewport] of [['desktop', { width: 1280, height: 800 }], ['mo
 // unminWin, reflowWindows and makeResizable all special-cased `maximized` and
 // ignored `snap`, so a snapped window could be resized by its own handles while
 // still claiming to be snapped, and kept a stale half-width across a viewport
-// change. apps/daemon-ui.js had the same gap and was found last.
+// change.
 test('a snapped window refuses its resize handles and re-fits when the viewport changes', async () => {
   await withDesktop({}, async page => {
     const id = await openWindow(page, 'openNotepad');

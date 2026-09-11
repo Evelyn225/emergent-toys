@@ -20,7 +20,7 @@ let _termExec = null;
 // other fallback would make this guard's resolution disagree with the
 // write's, which is exactly the class of bug being fixed. Splitting first
 // and checking `!dirName` (root only) is the same shape as the
-// pre-existing DELETE guard, isVisibleSystemPath (os/daemon.js) - a
+// pre-existing DELETE guard, isVisibleSystemPath (os/fs-ops.js) - a
 // DOCS\TERMINAL.exe is a different, legitimate file and must stay writable.
 function terminalProtectedWriteError(target, dir) {
   const { dirName, fileName } = vfsSplitPath(target, dir);
@@ -95,11 +95,11 @@ function buildPsRows() {
 }
 
 // Shared by CMDS.kill so it cannot disagree with `ps`/`taskkill` about which
-// pids belong to the daemon story: findBuiltInProcess is the same lookup
-// taskkill already uses, so both commands agree on what counts as a story
-// process by construction, not by a second hand-maintained list. Returns the
-// message to print and stop, or null if pid is not a story process and
-// CMDS.kill should proceed to the real kernel table.
+// pids are built-in system processes: findBuiltInProcess is the same lookup
+// taskkill already uses, so both commands agree on what counts as a built-in
+// by construction, not by a second hand-maintained list. Returns the message
+// to print and stop, or null if pid is not a built-in and CMDS.kill should
+// proceed to the real kernel table.
 function buildKillDenialMessage(pid) {
   const builtIn = findBuiltInProcess(pid);
   return builtIn ? `${pid} is a system process. Use TASKKILL.` : null;
@@ -490,19 +490,11 @@ function openTerminal(startDir, initialCommand) {
   // Resolution goes through os/programs.js, which searches the current
   // directory first and then each PATH entry. The `launchers` map that used to
   // live here was one of three lists of the same programs; it is gone, and the
-  // launch banners and the daemon's 320ms beat moved into the registry with
-  // the programs they belong to.
+  // launch banners and delays moved into the registry with the programs they
+  // belong to.
   function launchTerminalTarget(rawTarget) {
     const key = resolveShellText(rawTarget).trim();
     if (!key) return false;
-    // Checked before resolution so the message is about the story, not about
-    // PATH. void.tmp is already absent from the root set after the ending, so
-    // without this the player would get "not recognized" for a file the story
-    // says was removed.
-    if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
-      print('void.tmp is no longer present.');
-      return true;
-    }
     const hit = programResolve(key, cwd, shellVars.PATH);
     if (!hit) return false;
     const program = hit.program;
@@ -555,8 +547,8 @@ function openTerminal(startDir, initialCommand) {
     const ds = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()}`;
     const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const lines = [
-      'Volume in drive C is CORPUS',
-      'Volume Serial Number is DEAD-C0DE',
+      'Volume in drive C is SLEEPOS',
+      'Volume Serial Number is 0903-B2E1',
       '',
       `Directory of ${path}`,
       '',
@@ -567,9 +559,6 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    ..`,
         `11/13/2024  10:31    <DIR>    DOCS`,
       ].forEach(line => lines.push(line));
-      getTerminalRootSystemEntries().forEach(entry => {
-        lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
-      });
       entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => lines.push(`${ds}  ${ts}    <DIR>    ${e.name}`));
       entries.filter(e => e.kind === 'text').forEach(e => lines.push(`${ds}  ${ts}  ${String(e.size).padStart(7)}    ${e.name}`));
       entries.filter(e => e.kind === 'blob').forEach(e => lines.push(`${ds}  ${ts}  ${fmtSize(e.size).padStart(7)}    ${e.name}  [${e.blob.kind}]`));
@@ -594,16 +583,15 @@ function openTerminal(startDir, initialCommand) {
   function buildVerLines() {
     return [
       'sleepOS Version 0.9β (Build 2024.11.13-EXPERIMENTAL)',
-      'Soul Architecture: SOMA-686  /  Corpus Mode: ACTIVE',
+      'Machine: SOMA-686',
     ];
   }
 
   function buildWhoLines() {
     return [
-      'Current user : VISITOR\\UNKNOWN',
-      'Domain       : sleepOS.CORPUS',
+      'Current user : VISITOR',
+      'Domain       : SLEEPOS',
       'Session ID   : 0x' + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6, '0'),
-      'Observers    : unknown (cannot enumerate)',
     ];
   }
 
@@ -611,7 +599,6 @@ function openTerminal(startDir, initialCommand) {
     const now = new Date();
     return [
       'System date: ' + now.toDateString(),
-      'NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.',
     ];
   }
 
@@ -620,17 +607,11 @@ function openTerminal(startDir, initialCommand) {
       'sleepOS IP Configuration',
       '',
       'Adapter: SOMA-686 NIC',
-      '  Connection-specific DNS  : corpus.internal',
-      '  IPv4 Address             : 0.0.0.0',
-      '  Subnet Mask              : 255.255.255.???',
-      '  Default Gateway          : [unreachable]',
-      '  DNS Servers              : unknown (responding)',
-      '',
-      'Adapter: VOID Interface',
-      '  Status                   : Connected',
-      '  Address                  : [cannot be expressed]',
-      '  Packets in               : ∞',
-      '  Packets out              : 0',
+      '  Connection-specific DNS  : sleepos.local',
+      '  IPv4 Address             : 192.168.1.13',
+      '  Subnet Mask              : 255.255.255.0',
+      '  Default Gateway          : 192.168.1.1',
+      '  DNS Servers              : 192.168.1.1',
     ];
   }
 
@@ -649,12 +630,7 @@ function openTerminal(startDir, initialCommand) {
     });
     getRootSystemFiles({ includeExplorer: true })
       .filter(name => !vfsStatSync(name, ''))
-      .forEach(name => {
-        let label = name;
-        if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
-        if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
-        lines.push(`├── ${label}`);
-      });
+      .forEach(name => lines.push(`├── ${name}`));
     rootEntries.filter(e => e.kind === 'text').forEach(e => lines.push(`├── ${e.name}`));
     rootEntries.filter(e => e.kind === 'blob').forEach(e => lines.push(`├── ${e.name}  [${e.blob.kind}]`));
     // A hardcoded `└── PROJECTS\` used to close the tree, so every line above
@@ -666,21 +642,67 @@ function openTerminal(startDir, initialCommand) {
     return lines;
   }
 
+  // COPY and MOVE, cmd.exe style: a destination that is an existing directory
+  // keeps the source's name, anything else names the new entry inside the
+  // directory it points into. An existing entry is never overwritten - the
+  // player gets told instead, which is what Explorer's paste would never do
+  // either. The actual work goes through the same helpers Explorer uses
+  // (_copyEntryInto for a paste, moveFsItemByPath for a drag), so a terminal
+  // copy and an Explorer copy cannot disagree about what a copy is.
+  async function copyOrMoveEntry(args, isMove) {
+    const verb = isMove ? 'MOVE' : 'COPY';
+    const parts = (args || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) { print(`Usage: ${verb} [source] [destination]`); return; }
+    const [srcRaw, dstRaw] = parts;
+    const src = vfsStatSync(srcRaw, cwd);
+    if (!src) { print('File not found: ' + srcRaw, '#ff4444'); return; }
+    if (isMove && (!canAttemptDeleteItem(srcRaw, cwd) || isVisibleSystemPath(srcRaw, { includeExplorer: true }, cwd))) {
+      print(`Cannot move ${src.name}: Access is denied.`, '#ff4444');
+      return;
+    }
+    const dstStat = vfsStatSync(dstRaw, cwd);
+    let dstDir, dstName;
+    if (dstStat && dstStat.kind === 'dir') {
+      dstDir = dstStat.dirName ? dstStat.dirName + '\\' + dstStat.name : dstStat.name;
+      dstName = src.name;
+    } else {
+      const split = vfsSplitPath(dstRaw, cwd);
+      dstDir = split.dirName;
+      dstName = split.fileName;
+    }
+    if (!dstName || !vfsDirExistsSync(dstDir)) {
+      print('The system cannot find the path specified: ' + dstRaw, '#ff4444');
+      return;
+    }
+    if (vfsExistsSync(dstName, dstDir)) {
+      print(`A file named ${dstName} already exists in ${programDisplayDir(dstDir)}.`, '#ff4444');
+      return;
+    }
+    const srcPath = src.dirName ? src.dirName + '\\' + src.name : src.name;
+    const dstNorm = vfsNormalizeDir(dstDir);
+    if (src.kind === 'dir' && (dstNorm === srcPath || dstNorm.startsWith(srcPath + '\\'))) {
+      print(`Cannot ${verb.toLowerCase()} a folder into itself.`, '#ff4444');
+      return;
+    }
+    try {
+      if (isMove) {
+        const moved = await moveFsItemByPath(srcRaw, cwd, dstDir, { newName: dstName });
+        if (!moved) { print('Move failed.', '#ff4444'); return; }
+        print('        1 file(s) moved.');
+      } else {
+        await _copyEntryInto(src.name, src.dirName, dstDir, dstName, src.kind);
+        print('        1 file(s) copied.');
+      }
+    } catch (err) {
+      print(err.code === 'ENOSPC' ? 'Disk full. Nothing was written.'
+          : err.code === 'EACCES' ? 'Storage is unavailable. Nothing was written.'
+          : `${verb} failed: ` + err.message, '#ff4444');
+    }
+  }
+
   async function getPipeableText(path) {
-    const { dirName, fileName } = vfsSplitPath(path, cwd);
-    const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
-    if (upperPath === 'DAEMON.CORE') {
-      daemonActivate('raw');
-      return buildDaemonCoreRawContent().split('\n');
-    }
-    if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
-      daemonRecordInvestigation('void');
-      return getVoidTmpContent().split('\n');
-    }
     const st = vfsStatSync(path, cwd);
     if (!st || st.type !== 'file') throw new Error('File not found: ' + path);
-    if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
-    if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
     if (st.kind === 'blob') {
       return [
         `Binary file: ${st.name} (${st.blob.kind}, ${fmtSize(st.blob.size)})`,
@@ -788,7 +810,7 @@ function openTerminal(startDir, initialCommand) {
       '',
       'You can also type executables directly:',
       '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
-      '  welcome.readme, void.tmp, daemon.core, ?????.exe',
+      '  welcome.readme, minesweeper.exe, paint.exe',
       '  or any project name (try: fireworks, vornoi, ...)',
       '  Programs are found in the current directory first, then along PATH.',
     ];
@@ -1085,33 +1107,13 @@ function openTerminal(startDir, initialCommand) {
       (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
     },
     rm: (args) => CMDS.del(args),
-    copy: (args) => {
-      const parts = (args || '').trim().split(/\s+/);
-      if (parts.length < 2) { print('Usage: COPY [source] [destination]'); return; }
-      print(`Copying '${parts[0]}' to '${parts[1]}'...`);
-      procSetTimeout('terminal', () => {
-        print('1 file(s) copied.');
-        print(`WARNING: The copy is not identical to the original.`);
-        print('This is considered normal.');
-      }, 700);
-    },
-    move: (args) => {
-      if (!args) { print('Usage: MOVE [source] [destination]'); return; }
-      print('Move failed.', '#ff4444');
-      print('Files in sleepOS cannot be moved.');
-      print('They are already where they need to be.');
-    },
+    copy: (args) => copyOrMoveEntry(args, false),
+    move: (args) => copyOrMoveEntry(args, true),
     mv: (args) => CMDS.move(args),
     taskkill: (args) => {
       const pidStr = (args || '').replace(/\D/g,'');
       if (!pidStr) { print('Usage: TASKKILL <pid>'); return; }
       const pid = parseInt(pidStr, 10);
-      if (pid === 512) {
-        const result = killSoulDaemonProcess();
-        print(result.message, result.ok ? undefined : '#ff4444');
-        (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
-        return;
-      }
       const builtIn = findBuiltInProcess(pid);
       if (builtIn) {
         print(`Terminating ${builtIn.name} (PID ${pid})...`);
@@ -1137,25 +1139,11 @@ function openTerminal(startDir, initialCommand) {
     cat: async (args) => {
       const raw = (args||'').trim();
       if (!raw) { print('Usage: CAT <file>'); return; }
-      const { dirName, fileName } = vfsSplitPath(raw, cwd);
-      const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
-      if (upperPath === 'DAEMON.CORE') {
-        daemonActivate('raw');
-        buildDaemonCoreRawContent().split('\n').forEach(line => print(line));
-        return;
-      }
-      if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
-        daemonRecordInvestigation('void');
-        getVoidTmpContent().split('\n').forEach(line => print(line));
-        return;
-      }
       const st = vfsStatSync(raw, cwd);
       if (!st || st.type !== 'file') {
         print('File not found: ' + raw);
         return;
       }
-      if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
-      if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
       if (st.kind === 'blob') {
         print(`Binary file: ${st.name} (${st.blob.kind}, ${fmtSize(st.blob.size)})`);
         print(`Use OPEN ${st.name} to view it.`);

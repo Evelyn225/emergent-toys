@@ -187,7 +187,7 @@ test('a blob list entry survives structured cloning across the syscall reply', a
   assert.deepStrictEqual(reply.value[0].blob, blobEntry.blob);
 });
 
-// _kernelUiIsSystemPath calls isVisibleSystemPath (os/daemon.js), which this
+// _kernelUiIsSystemPath calls isVisibleSystemPath (os/fs-ops.js), which this
 // kernel-only context never loads - so it is stubbed here, the same way the
 // interpreter's own tests stub fsNormalizeDir/fsSplitPath. test/kernel-ui-
 // syscalls.test.cjs exercises ui.open/ui.openSystem/ui.isSystemPath against
@@ -209,8 +209,8 @@ test('ui.isSystemPath forwards the path and includeExplorer:true to isVisibleSys
   ctx.kernelSetFs({});
   const w = fakeWorker();
   const pid = ctx.__spawnForTest(w, 'job.script');
-  await ctx.kernelHandleSyscall(pid, { type: 'syscall', seq: 1, name: 'ui.isSystemPath', args: ['void.tmp'] });
-  assert.deepStrictEqual(plain(calls), [['void.tmp', { includeExplorer: true }]]);
+  await ctx.kernelHandleSyscall(pid, { type: 'syscall', seq: 1, name: 'ui.isSystemPath', args: ['TERMINAL.exe'] });
+  assert.deepStrictEqual(plain(calls), [['TERMINAL.exe', { includeExplorer: true }]]);
   const reply = plain(w.posted)[0];
   assert.strictEqual(reply.value, true);
 });

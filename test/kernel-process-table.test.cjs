@@ -137,22 +137,27 @@ test('listProcesses is sorted by pid and labels both kinds', () => {
   assert.deepStrictEqual(new Set(list.map(p => p.kind)), new Set(['system', 'user']));
 });
 
-// os/daemon.js hardcodes a fictional process list (BUILTIN_PROCESS_SEED and the
-// generated 500 + i*13 series) that never exceeds pid 1333, including pid 512,
-// which is scripted dialogue and cannot move. Real allocation must stay clear of
-// that whole range - see the KERNEL_FIRST_USER_PID comment in os/kernel.js.
-// kernel.js is loaded in isolation here (no os/daemon.js), so the ceiling is
-// asserted as the constant the story actually uses rather than loaded live.
-const DAEMON_STORY_PID_CEILING = 1333;
+// os/fs-ops.js hardcodes the system's built-in process list
+// (BUILTIN_PROCESS_SEED), and `ps`/SYSMON merge it with the kernel table by
+// pid. Real allocation must stay clear of every built-in pid - see the
+// KERNEL_FIRST_USER_PID comment in os/kernel.js. The ceiling is read off the
+// real table rather than restated here, so adding a built-in above the floor
+// fails this test instead of silently colliding.
+function builtInPidCeiling() {
+  const ctx = loadOsSources(makeOsContext({}), ['os/fs-ops.js']);
+  return Math.max(...ctx.getBuiltInProcesses().map(p => p.pid));
+}
 
-test('pid 1 is reserved for the kernel and real allocation starts at 2000, clear of the daemon story', () => {
+test('pid 1 is reserved for the kernel and real allocation starts at 2000, clear of the built-ins', () => {
   const ctx = kernel();
   assert.strictEqual(ctx.kernelGetProcess(1).name, 'kernel');
   const first = ctx.kernelRegisterSystem('win-a', 'NOTEPAD');
   assert.ok(first >= 2000, `first real pid ${first} must be >= 2000`);
 });
 
-test('no allocated pid ever lands in the daemon story range', () => {
+test('no allocated pid ever lands in the built-in range', () => {
+  const ceiling = builtInPidCeiling();
+  assert.ok(ceiling < 2000, `built-in pid ${ceiling} is at or above the allocation floor`);
   const ctx = kernel();
   const allocated = [
     ctx.kernelRegisterSystem('win-a', 'NOTEPAD'),
@@ -162,7 +167,7 @@ test('no allocated pid ever lands in the daemon story range', () => {
   ctx.kernelDeregisterSystem('win-a');
   allocated.push(ctx.kernelRegisterSystem('win-c', 'CALC'));
   allocated.forEach(pid => {
-    assert.ok(pid > DAEMON_STORY_PID_CEILING, `pid ${pid} collides with the daemon story range (<= ${DAEMON_STORY_PID_CEILING})`);
+    assert.ok(pid > ceiling, `pid ${pid} collides with the built-in range (<= ${ceiling})`);
   });
 });
 
@@ -193,7 +198,7 @@ function kernelWithSpawn(files) {
 test('kernelSpawn allocates a real pid, registers a running user process, and posts init to the worker', async () => {
   const { ctx, posts } = kernelWithSpawn({ 'job.script': 'PRINT hi' });
   const pid = await ctx.kernelSpawn('job.script', ['a', 'b'], { cwd: 'DOCS' });
-  assert.ok(pid >= 2000, 'a spawned process is a real pid, not a story one');
+  assert.ok(pid >= 2000, 'a spawned process is a real pid, not a built-in one');
   const proc = ctx.kernelGetProcess(pid);
   assert.strictEqual(proc.kind, 'user');
   assert.strictEqual(proc.state, 'running');

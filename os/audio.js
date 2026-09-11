@@ -10,8 +10,8 @@
 //     bookkeeping about what was mid-playback and no restart glitch on the way
 //     back. Scheduled times are expressed against ctx.currentTime, which stops
 //     advancing while suspended, so a loop resumes exactly where it froze.
-//   - Overlapping one-shots (a click during a glitch, two clicks in 40ms) come
-//     free. HTMLAudioElement restarts the single element instead, so the usual
+//   - Overlapping one-shots (a click over the error chime, two clicks in
+//     40ms) come free. HTMLAudioElement restarts the single element instead, so the usual
 //     workaround is cloneNode per shot.
 //
 // The context cannot exist before a user gesture: browsers create it suspended
@@ -27,7 +27,6 @@ const SOUND_FILES = {
   shutdown: 'ShutdownJingle.ogg',
   defrag:   'defrag.ogg',
   error:    'error.ogg',
-  glitch:   'glitch.ogg',
   click:    'mouseClick.ogg',
   // PAINT.exe. Quoted keys because the names are the file names, hyphens and
   // all - one fewer mapping to keep straight when a file is swapped.
@@ -59,7 +58,6 @@ const SOUND_GAIN = {
   shutdown: 0.75,
   defrag:   0.40,
   error:    0.65,
-  glitch:   0.50,
   click:    0.30,
   // PAINT.exe. Set from each file's measured RMS rather than by ear, so they
   // start out level with each other: one-shots land between the OS click and
@@ -182,7 +180,7 @@ function loadSound(name) {
 }
 
 // Fire-and-forget one-shot. `volume` is a multiplier on the sound's entry in
-// SOUND_GAIN, for callers that vary intensity (see triggerGlitch).
+// SOUND_GAIN, for callers that vary intensity.
 //
 // Returns a promise resolving to how many milliseconds the sound will play for,
 // or 0 if it did not play at all - for callers that need to sequence something

@@ -261,14 +261,7 @@ function openDefrag() {
       const pctOf = (lvl) => Math.round((lvl || 0) * 100) + '%';
       fileLabel.textContent = 'Defragmentation complete. ' + result.moved + ' blocks moved. ' +
         'Fragmentation ' + pctOf(result.fragBefore) + ' -> ' + pctOf(result.fragAfter) + '.';
-      // The story entity has no inode and no blocks, so DEFRAG genuinely never
-      // examined it. Say that, rather than claiming a move that was never
-      // attempted, and only while it actually exists.
-      if (ws) {
-        ws.textContent = (typeof daemonStory === 'object' && daemonStory && !daemonStory.endingReached)
-          ? 'Complete - 1 file could not be read: C:\\VOID\\[FILE NAME UNREADABLE]'
-          : 'Complete';
-      }
+      if (ws) ws.textContent = 'Complete';
     }
   });
 
@@ -328,14 +321,14 @@ function openDefrag() {
       // being cleaned. The tick stays in the label: the gutter is the icon's
       // now, so it can no longer double as the selected-drive marker.
       { label: 'C:\\ (' + dfDriveText().capacity + ')  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
-      { label: 'D:\\ - [NOT FOUND]', icon: 'icon:disk', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', 'icon:warning') },
+      { label: 'D:\\ - [NOT FOUND]', icon: 'icon:disk', action: () => osAlert('Drive D:\\ is not available.', 'Drive Not Found', 'icon:warning') },
       '-',
       { label: 'Exit', action: () => closeWin('defrag') },
     ]},
     { label: 'Help', items: [
-      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe - Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nLower fragmentation reduces late-stage application distortion.\n\nNote: some system files cannot be moved.', 'Help Topics', 'icon:tip') },
+      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe - Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nDEFRAG needs at least one free block to work in. Stop ends the run cleanly between block moves.', 'Help Topics', 'icon:tip') },
       '-',
-      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe - Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\nA small amount of the drive always remains unmovable.', 'About DEFRAG.exe', 'icon:defrag') },
+      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe - Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.', 'About DEFRAG.exe', 'icon:defrag') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');

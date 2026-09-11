@@ -48,7 +48,6 @@ function stageCtx(files) {
     ROOT_SYSTEM_FILE_META: [{ name: 'CALC.exe' }],
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
     // terminalIsExecutableStage's only other free variable besides the
     // loaded programs.js functions - the terminal process's own PATH.
     shellVars: { PATH: 'C:\\sleepOS' },
@@ -106,7 +105,6 @@ function launchCtx(files, kernelSpawnImpl) {
     ROOT_SYSTEM_FILE_META: [{ name: 'CALC.exe' }],
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
     KERNEL_PID: 1,
     cwd: '',
     shellVars: { PATH: 'C:\\sleepOS' },
@@ -160,7 +158,6 @@ test('B2: a built-in program is unaffected - it still opens with just {cwd}, sin
     ROOT_SYSTEM_FILE_META: [{ name: 'CALC.exe' }],
     PROJECTS: [],
     RECYCLE_BIN_NAME: 'Recycle Bin',
-    daemonStory: { endingReached: false, stage: 0 },
     cwd: '',
     shellVars: { PATH: 'C:\\sleepOS' },
     resolveShellText: t => String(t == null ? '' : t),

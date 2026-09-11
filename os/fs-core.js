@@ -128,23 +128,17 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
-// The eight system binaries, as real files.
+// The system binaries, as real files.
 //
-// These were authored metadata rows in os/daemon.js with hardcoded sizes
-// ('4,096'), which since phase 4 has meant eight invented numbers sitting in
-// a DIR listing next to sizes measured off the superblock. Seeding them makes
-// the size measured like everything else and gives the decompiler view
-// something real to read - it stops being an overlay and becomes what it
-// claims to be.
+// These were authored metadata rows in os/fs-ops.js with hardcoded sizes
+// ('4,096'), which since phase 4 has meant invented numbers sitting in a DIR
+// listing next to sizes measured off the superblock. Seeding them makes the
+// size measured like everything else and gives the decompiler view something
+// real to read - it stops being an overlay and becomes what it claims to be.
 //
-// The listings are duplicated here rather than read from
-// getExeDecompilerContent (apps/notepad.js) because that file is manifest
-// position 27 and this one is 14: calling it at seed time would throw on
-// boot. os/fs-core.js is the source of the bytes; apps/notepad.js renders
-// whatever the file holds. Content here must stay byte-identical to
-// getExeDecompilerContent's loreMap entries - test/system-binaries.test.cjs
-// checks the shape, but nothing enforces the exact text except this comment
-// and care.
+// This table is the only copy of the listings. apps/notepad.js's decompiler
+// renders whatever the file on disk holds, and falls back to this table (not
+// to a second authored copy) for a binary that is registered but missing.
 //
 // Text rather than blob is forced by the data: the only blob seed path
 // (refreshSeededWallpaperLibrary) produces URL-backed entries with size 0,
@@ -154,43 +148,42 @@ const SYSTEM_BINARY_SOURCES = {
   'TERMINAL.exe': [
     '; TERMINAL.exe - Disassembly v1.0',
     'section .text',
-    '  PUSH soul_daemon',
-    '  CALL obsv.sys',
+    '  CALL init_console',
     '  MOV  eax, [STDIN_HANDLE]',
     '  CMP  eax, 0x00000000',
-    '  JE   void_fallback',
+    '  JE   no_input',
+    'main_loop:',
+    '  CALL read_line',
     '  CALL parse_command',
+    '  CALL run_pipeline',
     '  JMP  main_loop',
-    'void_fallback:',
-    '  MOV  [VOID_PRESSURE], 0xFF',
+    'no_input:',
+    '  PUSH 0x01',
     '  RET',
-    '; NOTE: 3 subroutines unresolved',
-    '; CALL 0xDEAD???? - target unknown',
+    '; NOTE: pipes are streams, not buffers',
   ].join('\n'),
   'SYSMON.exe': [
     '; SYSMON.exe - Disassembly',
     'section .data',
-    '  soul_integrity  DD 0x57',
-    '  daemon_count    DD 0x07',
-    '  observer_ref    DD [CLASSIFIED]',
+    '  sample_ms   DD 0x3E8',
+    '  proc_count  DD 0x00',
     'section .text',
-    '  PUSH soul_integrity',
-    '  CALL read_corpus_metrics',
-    '  MOV  eax, [soul_integrity]',
-    '  SUB  eax, 0x01',
-    '  JLE  integrity_critical',
+    'tick_loop:',
+    '  CALL read_process_table',
+    '  MOV  [proc_count], eax',
+    '  CALL sample_cpu',
+    '  CALL sample_disk',
     '  CALL update_display',
+    '  PUSH [sample_ms]',
+    '  CALL sleep',
     '  JMP  tick_loop',
-    'integrity_critical:',
-    '  CALL emit_warning',
-    '  PUSH 0xDEAD',
-    '  RET',
+    '; NOTE: a dash means nothing was measured',
   ].join('\n'),
   'BROWSER.exe': [
     '; BROWSER.exe - Disassembly',
     'section .rodata',
     '  home_url  DB "sleep://home", 0',
-    '  err_msg   DB "site blocked by void", 0',
+    '  err_msg   DB "this page refused to load in a frame", 0',
     'section .text',
     '  MOV  esi, home_url',
     '  CALL resolve_sleep_addr',
@@ -201,26 +194,26 @@ const SYSTEM_BINARY_SOURCES = {
     'frame_blocked:',
     '  PUSH err_msg',
     '  CALL show_error',
-    '  ; observer may intercept traffic here',
     '  RET',
   ].join('\n'),
   'DEFRAG.exe': [
     '; DEFRAG.exe - Disassembly',
     'section .bss',
-    '  corpus_blocks RESB 640',
-    '  void_fragment DB [CANNOT RESOLVE]',
+    '  block_map  RESB 4096',
     'section .text',
-    '  MOV  ecx, 0x280',
-    '  LEA  edi, [corpus_blocks]',
-    '  CALL scan_fragments',
-    '  MOV  eax, [void_fragment]',
-    '  CMP  eax, 0x00',
-    '  JNE  skip_void',
-    '  ; void_fragment cannot be moved',
-    '  ; it has always been here',
-    'skip_void:',
-    '  CALL compact_corpus',
-    '  JMP  defrag_loop',
+    '  MOV  ecx, 0x1000',
+    '  LEA  edi, [block_map]',
+    '  CALL read_free_bitmap',
+    '  CALL plan_compaction',
+    '  TEST eax, eax',
+    '  JZ   done',
+    'move_loop:',
+    '  CALL move_one_block',
+    '  CALL check_stop',
+    '  JNZ  done',
+    '  LOOP move_loop',
+    'done:',
+    '  RET',
   ].join('\n'),
   'NOTEPAD.exe': [
     '; NOTEPAD.exe - Disassembly',
@@ -242,15 +235,14 @@ const SYSTEM_BINARY_SOURCES = {
   'EXPLORER.exe': [
     '; EXPLORER.exe - Disassembly',
     'section .data',
-    '  root_path DB "C:\\sleepOS\\", 0',
-    '  sys_files DD 9',
+    '  root_path DB "C:\sleepOS\\", 0',
+    '  sys_files DD 10',
     'section .text',
     '  PUSH root_path',
     '  CALL enumerate_fs',
     '  MOV  ecx, sys_files',
     '  CALL add_system_entries',
-    '  ; 1 entry cannot be enumerated',
-    '  ; see: ?????.exe',
+    '  CALL sort_entries',
     '  CALL render_icon_grid',
     '  JMP  window_loop',
   ].join('\n'),
@@ -258,7 +250,7 @@ const SYSTEM_BINARY_SOURCES = {
     '; CALC.exe - Disassembly',
     'section .data',
     '  display_buf DB 32 dup(0)',
-    '  soul_pi     DQ 3.14159265358979',
+    '  pi_const    DQ 3.14159265358979',
     'section .text',
     '  MOV  eax, 0x00',
     '  MOV  [accumulator], eax',
@@ -270,7 +262,7 @@ const SYSTEM_BINARY_SOURCES = {
     '  PUSH [accumulator]',
     '  CALL update_display',
     '  JMP  calc_loop',
-    '; NOTE: division by zero returns VOID',
+    '; NOTE: division by zero shows an error, not a number',
   ].join('\n'),
   'MINESWEEPER.exe': [
     '; MINESWEEPER.exe - Disassembly',
@@ -303,17 +295,16 @@ const SYSTEM_BINARY_SOURCES = {
     '; REGEDIT.exe - Disassembly',
     'section .data',
     '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
-    '  soul_key  DB "SOUL\\Metrics", 0',
+    '  cfg_key   DB "SYSTEM\CurrentConfig", 0',
     'section .text',
     '  PUSH hive_root',
     '  CALL open_registry_hive',
-    '  MOV  esi, soul_key',
+    '  MOV  esi, cfg_key',
     '  CALL reg_open_key',
     '  CALL enumerate_values',
-    '  ; WARNING: OBSERVER_COUNT is classified',
-    '  ; ACCESS DENIED for key VOID\\',
     '  CALL render_tree',
     '  JMP  edit_loop',
+    '; NOTE: edits apply live - there is no Save',
   ].join('\n'),
   'PAINT.exe': [
     '; PAINT.exe - Disassembly',
@@ -357,8 +348,7 @@ function vfsSeedTree() {
         '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
         '  SYSMON.exe  BROWSER.exe  DEFRAG.exe',
         '  CALC.exe  REGEDIT.exe  EXPLORER.exe',
-        '  MINESWEEPER.exe',
-        '  void.tmp  daemon.core  ?????.exe',
+        '  MINESWEEPER.exe  PAINT.exe',
         '',
         'USER FILES:',
         '  Create with TOUCH, NOTEPAD, or ECHO >.',
@@ -546,7 +536,7 @@ function vfsSeedTree() {
         '  DEL, RM <file>       delete file/directory',
         '  CAT, TYPE <file>     read file contents',
         '  COPY <src> <dst>     copy a file',
-        '  MOVE, MV <src> <dst>  always fails - files are already home',
+        '  MOVE, MV <src> <dst>  move or rename a file',
         '  TREE                 show directory tree',
         '  OPEN <file>          open in viewer/editor',
         '',

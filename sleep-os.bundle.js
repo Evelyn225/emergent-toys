@@ -29,8 +29,6 @@ const OS_ICONS = {
   defrag:        'clean_drive.png',
   explorer:      'directory_open_file_mydocs-0.png',
   settings:      'settings.png',
-  daemon:        'daemon_eye.png',
-  void:          'void.png',
   // ── Filesystem ────────────────────────────────────────────────
   folder:        'directory_closed-0.png',
   'folder-open': 'directory_open_file_mydocs-0.png',
@@ -420,11 +418,11 @@ function _vfsQueue(op, deltaBytes) {
   _vfsFlushTimer = setTimeout(() => { void vfsFlush(); }, VFS_FLUSH_DELAY_MS);
 }
 
-// The escape hatch for the two remaining direct-tree mutators in os/daemon.js
-// (ensureFsDir, ensureStoryTextFile). Both must stay synchronous - module-level
-// callers depend on ensureFsDir during bundle evaluation, and
-// syncDaemonStoryFiles is synchronous - so neither can go through the async
-// vfsMkdir/vfsWriteFile. What they emitted before was a pathless
+// The escape hatch for the direct-tree mutators: ensureFsDir (os/fs-ops.js)
+// and seedFreshRootTree (os/fs-persist.js). Both must stay synchronous -
+// module-level callers depend on ensureFsDir during bundle evaluation, and
+// the seed runs inside vfsMount before a backend is attached - so neither can
+// go through the async vfsMkdir/vfsWriteFile. What they emitted before was a pathless
 // `legacy-write` marker, or for a write into an existing directory, nothing at
 // all: both were invisible to a backend that commits from ops alone, and both
 // only worked because every backend took a whole-tree snapshot that happened to
@@ -438,16 +436,16 @@ function vfsQueueDirectMkdir(dirName, name) {
 
 // `prevValue` is what the caller overwrote, needed only for the byte delta.
 // Deliberately does NOT call _vfsAssertRoom: these callers are synchronous
-// story-beat code with no path to handle an ENOSPC throw, and adding one would
-// turn a full disk into a thrown error in the middle of a narrative beat. The
-// bytes are still counted so the quota guard on normal writes stays honest.
+// boot-time code with no path to handle an ENOSPC throw, and adding one would
+// turn a full disk into a thrown error in the middle of mounting. The bytes
+// are still counted so the quota guard on normal writes stays honest.
 function vfsQueueDirectWrite(dirName, name, prevValue) {
   const dir = vfsDirNodeSync(dirName);
   if (!dir || !dir.files || !dir.files.has(name)) return;
   const nextValue = dir.files.get(name);
-  // Identical content is not a change. syncDaemonStoryFiles re-sets the same
-  // text from dozens of story beats and from boot; emitting an op for each
-  // would commit constantly and write the same blocks over and over.
+  // Identical content is not a change. A caller that re-sets the same text on
+  // every boot would otherwise commit constantly and write the same blocks
+  // over and over.
   if (prevValue !== null && prevValue !== undefined && prevValue === nextValue) return;
   _vfsQueue({ op: 'write', dirName, name },
             _vfsTextCost(name, nextValue)
@@ -2236,14 +2234,12 @@ function kernelRecordMetrics(pid, msg) {
 
 const KERNEL_PID = 1;
 
-// Pids 2 through 1333 (and the generated 500 + i*13 series) belong to the daemon
-// story's fictional process list in os/daemon.js - soul_svc.exe, mirror_watch.exe,
-// and the rest, including pid 512, which is scripted dialogue ("It restarts pid
-// 512. It is not pid 512."). Those are narrative constants and must never move.
-// Real allocation used to land in 2000-7999 for the same reason, back when
-// pidFromId hashed window ids into that range; this restores that floor so a
-// real window can never again collide with a scripted pid. Lowering this number
-// does not just look untidy - it breaks a story beat.
+// Pids below this belong to the system's built-in process list in
+// os/fs-ops.js (System, csrss.exe, svchost.exe and the rest). Real allocation
+// used to land in 2000-7999 back when pidFromId hashed window ids into that
+// range; this keeps that floor so a real window can never collide with a
+// built-in pid, which would make `ps` list two processes under one number and
+// TASKKILL refuse a window it should have closed.
 const KERNEL_FIRST_USER_PID = 2000;
 
 // The machine's identity, and the root of the environment tree. This used to
@@ -2258,13 +2254,7 @@ const KERNEL_DEFAULT_ENV = {
   COMPUTERNAME: 'SOMA-686',
   USERNAME: 'VISITOR',
   OS: 'sleepOS 0.9b2',
-  SOUL_INTEGRITY: '87',
-  DAEMON_COUNT: '7',
-  DAEMON_KNOWN: '4',
-  TEMPORAL_DRIFT: '+/-2.3yr',
-  VOID_PRESSURE: '12',
-  OBSERVER_COUNT: '[classified]',
-  PATH: 'C:\\sleepOS;[redacted]',
+  PATH: 'C:\\sleepOS',
 };
 
 // A copy every time. Handing out the shared table would let one process's SET
@@ -2452,7 +2442,7 @@ function _kernelFsImpl() {
     async stat(path, cwd) { return vfsStatSync(path, cwd); },
     async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
     // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
-    // story's undeletable files, and a worker must not be able to bypass either.
+    // protected system files, and a worker must not be able to bypass either.
     // deleteVirtualPath never throws - a denied or refused delete is a normal
     // outcome it reports as a result object ({ok:false, message, details}),
     // not an exceptional one. Do NOT inspect that .ok here and throw a coded
@@ -2751,15 +2741,10 @@ const DESKTOP_ICONS = [
   { name: 'MINESWEEPER.exe', emoji: 'icon:minesweeper', action: 'openMinesweeper' },
   { name: 'PAINT.exe',      emoji: 'icon:paint',    action: 'openPaint' },
   { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
-  { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
-  { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },
   // Not in the static map alone: the bin's icon depends on whether it holds
   // anything, so resolveFsIcon picks between empty and full at render time.
   { name: RECYCLE_BIN_NAME, emoji: 'icon:recycle-empty', action: 'openRecycleBin', recycleBin: true },
 ];
-function getExeDisplayName() {
-  return daemonStory.quarantineSigned ? 'quarantine.exe' : '?????.exe';
-}
 
 const DESKTOP_ICON_DIRS_KEY = 'sleepOS-desktop-icon-dirs';
 function normalizeDesktopContainerDir(dirPath) {
@@ -2801,7 +2786,6 @@ function setDesktopSystemIconDir(name, dirPath) {
 function getDesktopSystemIconsForDir(dirPath) {
   const normalized = normalizeDesktopContainerDir(dirPath);
   return DESKTOP_ICONS.filter(icon => {
-    if (icon.name === 'void.tmp' && daemonStory.endingReached) return false;
     if (icon.recycleBin) return normalized === 'DESKTOP';
     return getDesktopSystemIconDir(icon.name) === normalized;
   });
@@ -2965,8 +2949,12 @@ function normalizeDesktopShortcut(entry) {
   const kind = target.kind === 'dir' ? 'dir' : 'file';
   const path = normalizeShortcutPath(target.path);
   const name = String(entry.name || target.name || path.split('\\').pop() || '').trim();
-  const emoji = String(entry.emoji || '').trim();
+  let emoji = String(entry.emoji || '').trim();
   if (!name || !emoji) return null;
+  // A persisted shortcut can outlive the icon it was saved with, and
+  // iconMarkup prints an unregistered token as raw text. Fall back to the
+  // unknown-file art rather than a label reading "icon:something".
+  if (emoji.startsWith(OS_ICON_TOKEN) && !isOsIcon(emoji)) emoji = 'icon:unknown';
   if (!path && !target.sysfile) return null;
   const dirPath = normalizeDesktopContainerDir(entry.dirPath || 'DESKTOP');
   return {
@@ -3036,10 +3024,6 @@ loadDesktopShortcuts();
 function openSystemFile(name) {
   const key = String(name || '').trim();
   if (!key) return false;
-  if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
-    osAlert('void.tmp is no longer present.', 'void.tmp', 'icon:void');
-    return true;
-  }
   // The Recycle Bin is a desktop object rather than a program, so it stays
   // here rather than going in the registry - it has no directory, cannot be
   // typed at the terminal, and must never resolve on PATH.
@@ -3200,14 +3184,14 @@ if (localStorage.getItem('sleepOS-favorites-seeded') !== '1') {
 // follow-up work, not done here.
 //
 // Every `open` is an arrow rather than a direct function reference. The
-// launchers it names (openNotepad, openDaemon, openVoid) are declared in files
+// launchers it names (openNotepad, openTerminal, openMinesweeper) are declared in files
 // that come LATER in tools/split-manifest.json, and while a hoisted function
 // declaration is safe to call later, it is not safe to reference while this
 // file is still evaluating.
 //
 // ROOT_SYSTEM_FILE_META is read inside a function body for a stronger reason
-// than that: it is `const` in os/daemon.js, manifest position 13, which loads
-// after this file (position 7), so touching it at evaluation time - rather
+// than that: it is `const` in os/fs-ops.js, manifest position 16, which loads
+// after this file (position 10), so touching it at evaluation time - rather
 // than inside programsInDir, which only runs once the OS is up - would throw
 // on boot.
 //
@@ -3249,17 +3233,7 @@ const PROGRAM_LAUNCHERS = {
   'DEFRAG.EXE':   { lines: ['Starting DEFRAG.exe...'],    open: () => openDefrag() },
   'CALC.EXE':     { lines: ['Starting CALC.exe...'],      open: () => openCalculator() },
   'REGEDIT.EXE':  { lines: ['Starting REGEDIT.exe...'],   open: () => openRegedit() },
-  'VOID.TMP':     { lines: ['Opening void.tmp...'],       open: () => openVoid() },
-  '?????.EXE':    { lines: ['Executing ?????.exe...'],    open: () => openUnknown(), aliases: ['?????'] },
-  'DAEMON.CORE':  {
-    lines: ['Opening daemon.core...'],
-    open: () => openDaemon(),
-    // The daemon gets a longer beat before its window appears. This was the
-    // only entry in the old `launchers` map with a delay of its own and it is
-    // a deliberate story beat, not a rounding error.
-    delay: 320,
-  },
-  'MINESWEEPER.exe': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
+  'MINESWEEPER.EXE': { lines: ['Starting Minesweeper...'], open: () => openMinesweeper(), aliases: ['minesweeper', 'winmine'] },
   'PAINT.EXE': { lines: ['Starting PAINT.exe...'], open: () => openPaint(), aliases: ['paint'] },
   // Launchable but deliberately not in ROOT_SYSTEM_FILE_META, so DIR does not
   // list it. It was reachable from the old `launchers`/`SYS` maps and stays
@@ -3271,17 +3245,6 @@ const PROGRAM_LAUNCHERS = {
   // links, and BROWSER.exe's home page is now the one place that lists them.
   'WELCOME.README': { lines: ['Opening WELCOME.README...'], open: () => openWelcome(), aliases: ['welcome'] },
 };
-
-// Story files exist at the root without being in ROOT_SYSTEM_FILE_META, and
-// their visibility depends on story state, so the list is rebuilt per call
-// rather than captured. Same reason isSystemPath is a live syscall instead of
-// a spawn-time snapshot.
-function programStoryRootNames() {
-  const names = [];
-  if (!daemonStory.endingReached) names.push('void.tmp');
-  names.push('daemon.core', '?????.exe');
-  return names;
-}
 
 function programEntry(name, dir) {
   const spec = PROGRAM_LAUNCHERS[String(name).toUpperCase()];
@@ -3421,15 +3384,13 @@ function programsInDir(dir) {
   let builtIns = [];
   if (key === '') {
     const names = ROOT_SYSTEM_FILE_META.map(meta => meta.name)
-      .concat(programStoryRootNames())
       .concat(['WELCOME.README']);
     builtIns = names.map(name => programEntry(name, '')).filter(Boolean);
   }
   // Matches on literal name only, not on aliases - a VFS file named
   // WELCOME.exe would not collide with the WELCOME.README entry's 'welcome'
   // alias here. Currently unexploitable: WELCOME.README loses on collision
-  // anyway because built-ins are concatenated first, and ?????.exe is both
-  // the literal name and the alias, never divergent. Worth another look only
+  // anyway because built-ins are concatenated first. Worth another look only
   // if a future built-in's alias itself ends in .exe.
   const taken = new Set(builtIns.map(e => e.name.toUpperCase()));
   return builtIns.concat(programVfsExecutables(key, taken));
@@ -3470,9 +3431,9 @@ function programFindIn(dir, key) {
 }
 
 // cmd.exe order: the current directory first, then PATH. Not a fidelity
-// flourish - it is what keeps a cleared PATH from putting daemon.core and
-// ?????.exe permanently out of reach in a persisted filesystem, since both
-// live at the root and the root is where a player stands.
+// flourish - it is what keeps a cleared PATH from putting the root programs
+// permanently out of reach in a persisted filesystem, since they live at the
+// root and the root is where a player stands.
 function programResolve(name, cwd, pathValue) {
   const key = String(name || '').trim().toLowerCase();
   if (!key) return null;
@@ -3610,20 +3571,6 @@ const registryData = {
       CLOCK_FORMAT:       { type:'REG_SZ',    value: '24h' },
       ICON_SIZE:          { type:'REG_SZ',    value: 'medium' },
     },
-    'SOUL\\Metrics': {
-      SOUL_INTEGRITY:     { type:'REG_DWORD', value: 87 },
-      DAEMON_COUNT:       { type:'REG_DWORD', value: 7  },
-      TEMPORAL_DRIFT:     { type:'REG_SZ',    value: '+/-2.3yr' },
-    },
-    'VOID': {
-      VOID_PRESSURE_BASE: { type:'REG_DWORD', value: 12 },
-      OBSERVER_COUNT:     { type:'REG_SZ',    value: '[classified]' },
-    },
-    'Containment': {
-      RESPAWN_LOCK:       { type:'REG_DWORD', value: 1 },
-      MIRROR_LOCK:        { type:'REG_DWORD', value: 1 },
-      ANCHOR_FILE:        { type:'REG_SZ',    value: 'SYS\\anchor.seed' },
-    },
   },
   'HKEY_CURRENT_USER': {
     'Desktop': {
@@ -3647,11 +3594,6 @@ const registryData = {
       BeginnerTime:       { type:'REG_DWORD', value: 999 },
       IntermediateTime:   { type:'REG_DWORD', value: 999 },
       ExpertTime:         { type:'REG_DWORD', value: 999 },
-    },
-    'SOFTWARE\\sleepOS\\Daemon': {
-      STATUS:             { type:'REG_SZ',    value: 'Dormant' },
-      LAST_EVENT:         { type:'REG_SZ',    value: 'none' },
-      OBSERVED:           { type:'REG_DWORD', value: 0 },
     },
     // Same motive as Minesweeper's scores: a preference a player can find,
     // read and meddle with in REGEDIT.exe beats a private localStorage key.
@@ -4130,8 +4072,8 @@ function openSettings() {
 //     bookkeeping about what was mid-playback and no restart glitch on the way
 //     back. Scheduled times are expressed against ctx.currentTime, which stops
 //     advancing while suspended, so a loop resumes exactly where it froze.
-//   - Overlapping one-shots (a click during a glitch, two clicks in 40ms) come
-//     free. HTMLAudioElement restarts the single element instead, so the usual
+//   - Overlapping one-shots (a click over the error chime, two clicks in
+//     40ms) come free. HTMLAudioElement restarts the single element instead, so the usual
 //     workaround is cloneNode per shot.
 //
 // The context cannot exist before a user gesture: browsers create it suspended
@@ -4147,7 +4089,6 @@ const SOUND_FILES = {
   shutdown: 'ShutdownJingle.ogg',
   defrag:   'defrag.ogg',
   error:    'error.ogg',
-  glitch:   'glitch.ogg',
   click:    'mouseClick.ogg',
   // PAINT.exe. Quoted keys because the names are the file names, hyphens and
   // all - one fewer mapping to keep straight when a file is swapped.
@@ -4179,7 +4120,6 @@ const SOUND_GAIN = {
   shutdown: 0.75,
   defrag:   0.40,
   error:    0.65,
-  glitch:   0.50,
   click:    0.30,
   // PAINT.exe. Set from each file's measured RMS rather than by ear, so they
   // start out level with each other: one-shots land between the OS click and
@@ -4302,7 +4242,7 @@ function loadSound(name) {
 }
 
 // Fire-and-forget one-shot. `volume` is a multiplier on the sound's entry in
-// SOUND_GAIN, for callers that vary intensity (see triggerGlitch).
+// SOUND_GAIN, for callers that vary intensity.
 //
 // Returns a promise resolving to how many milliseconds the sound will play for,
 // or 0 if it did not play at all - for callers that need to sequence something
@@ -4898,183 +4838,34 @@ document.addEventListener('visibilitychange', () => {
 ['pointerdown', 'keydown', 'touchstart'].forEach(type => {
   document.addEventListener(type, unlockSystemAudio, { capture: true, passive: true });
 });
-function getBootRegistryNumber(keyPath, valueName, fallback, min = 0, max = 999) {
-  const parsed = Number(registryData['HKEY_SLEEPBOX_MACHINE']?.[keyPath]?.[valueName]?.value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(min, Math.min(max, parsed));
-}
-function getBootRegistryText(keyPath, valueName, fallback) {
-  const raw = registryData['HKEY_SLEEPBOX_MACHINE']?.[keyPath]?.[valueName]?.value;
-  const text = String(raw == null ? '' : raw).trim();
-  return text || fallback;
-}
-function getBiosSoulIntegrityStatus(value) {
-  if (value >= 92) return 'STABLE';
-  if (value >= 70) return 'DEGRADED';
-  if (value >= 45) return 'UNSTABLE';
-  return 'CRITICAL';
-}
-function formatBiosMetric(label, value, suffix = '') {
-  return `  ${String(label).padEnd(18, ' ')}: ${value}${suffix ? '  ' + suffix : ''}`;
-}
-function getBiosStorySnapshot() {
-  const fallback = {
-    stage: 0,
-    phaseLabel: 'Dormant',
-    coProcessorLine: 'Co-processor: present (unresponsive)',
-    segmentLine: '  Segment C: WARN - residual data found',
-    usbLine: '  USB: 1 device attached (unrecognized)',
-    relayState: 'Nominal',
-    containmentState: 'Baseline',
-    profileState: 'none',
-    bootLine: 'Loading sleepOS v0.903b2...',
-  };
-  let saved = null;
-  try {
-    saved = JSON.parse(localStorage.getItem('sleepOS-daemon-story') || 'null');
-  } catch (e) {}
-  const story = saved && typeof saved === 'object' ? saved : {};
-  const bool = key => !!story[key];
-  const voidActions = Array.isArray(story.voidActions)
-    ? story.voidActions
-        .map(action => String(action || '').toLowerCase().trim())
-        .filter(Boolean)
-    : [];
-  const analyticalCount = voidActions.filter(action => action !== 'observe').length;
-  let stage = Math.max(0, Math.min(8, Math.trunc(Number(story.stage) || 0)));
-
-  if (bool('openedDaemon')) stage = Math.max(stage, 1);
-  if (bool('falseContainmentSeen')) stage = Math.max(stage, 2);
-  if (bool('respawnDisabledKill')) stage = Math.max(stage, 3);
-  if (bool('daemonStopped') || bool('wrongVictory')) stage = Math.max(stage, 4);
-  if (bool('anchorDeleted')) stage = Math.max(stage, 5);
-  if (bool('anchorDeleted') && bool('voidObserved') && (analyticalCount > 0 || bool('mirrorInspected') || bool('protocolInspected'))) {
-    stage = Math.max(stage, 6);
-  }
-  if (bool('mirrorLockRestored') || bool('quarantineSigned')) stage = Math.max(stage, 7);
-  if (bool('endingReached')) stage = Math.max(stage, 8);
-
-  if (stage >= 8) {
-    return {
-      stage,
-      phaseLabel: 'Contained',
-      coProcessorLine: 'Co-processor: present (archived)',
-      segmentLine: '  Segment C: OK - archive checksum sealed',
-      usbLine: '  USB: 0 external devices required',
-      relayState: 'Archived',
-      containmentState: 'Sealed',
-      profileState: 'sealed',
-      bootLine: 'Loading archival shell...',
-    };
-  }
-  if (stage >= 7) {
-    return {
-      stage,
-      phaseLabel: 'Seal Ready',
-      coProcessorLine: 'Co-processor: present (quarantine primed)',
-      segmentLine: '  Segment C: OK - quarantine lattice primed',
-      usbLine: '  USB: 1 device attached (quarantine signer)',
-      relayState: 'Bypassed',
-      containmentState: 'Armed',
-      profileState: bool('quarantineSigned') ? 'bound' : 'ready',
-      bootLine: 'Loading seal-ready shell...',
-    };
-  }
-  if (stage >= 6) {
-    return {
-      stage,
-      phaseLabel: 'Profiled',
-      coProcessorLine: 'Co-processor: present (replying in-band)',
-      segmentLine: '  Segment C: WARN - seal lattice charging',
-      usbLine: '  USB: 1 device attached (void instrument)',
-      relayState: 'Bypassed',
-      containmentState: 'Profiling',
-      profileState: analyticalCount >= 3 ? 'deep' : 'active',
-      bootLine: 'Loading analysis shell...',
-    };
-  }
-  if (stage >= 5) {
-    return {
-      stage,
-      phaseLabel: 'Contact',
-      coProcessorLine: 'Co-processor: present (replying in-band)',
-      segmentLine: '  Segment C: FAIL - anchor bleedthrough',
-      usbLine: '  USB: 1 device attached (mirror echo)',
-      relayState: 'Compromised',
-      containmentState: 'Open',
-      profileState: 'contact',
-      bootLine: 'Loading degraded shell...',
-    };
-  }
-  if (stage >= 4) {
-    return {
-      stage,
-      phaseLabel: 'Containment Lost',
-      coProcessorLine: 'Co-processor: present (unstable handshake)',
-      segmentLine: '  Segment C: FAIL - daemon relay bleedthrough',
-      usbLine: '  USB: 1 device attached (relay ghost)',
-      relayState: 'Degraded',
-      containmentState: 'Fractured',
-      profileState: 'surface',
-      bootLine: 'Loading recovery shell...',
-    };
-  }
-  if (stage >= 1) {
-    return {
-      stage,
-      phaseLabel: 'Observed',
-      coProcessorLine: 'Co-processor: present (listening)',
-      segmentLine: '  Segment C: WARN - foreign pattern repeating',
-      usbLine: '  USB: 1 device attached (observer channel)',
-      relayState: 'Listening',
-      containmentState: 'Passive',
-      profileState: voidActions.length ? 'surface' : 'noise',
-      bootLine: 'Loading sleepOS v0.903b2...',
-    };
-  }
-  return fallback;
+function formatBiosMetric(label, value) {
+  return `  ${String(label).padEnd(18, ' ')}: ${value}`;
 }
 function buildBiosLines() {
-  const soulIntegrity = Math.trunc(getBootRegistryNumber('SOUL\\Metrics', 'SOUL_INTEGRITY', 87, 0, 100));
-  const daemonCount = Math.trunc(getBootRegistryNumber('SOUL\\Metrics', 'DAEMON_COUNT', 7, 0, 99));
-  const temporalDrift = getBootRegistryText('SOUL\\Metrics', 'TEMPORAL_DRIFT', '+/-2.3yr');
-  const observerCount = getBootRegistryText('VOID', 'OBSERVER_COUNT', '[classified]');
-  const voidPressureBase = Math.trunc(getBootRegistryNumber('VOID', 'VOID_PRESSURE_BASE', 12, 0, 99));
-  const unknownDaemons = Math.max(0, daemonCount - 4);
-  const memoryCoherence = Math.max(0, Math.min(99.9, soulIntegrity + 0.3 - Math.max(0, voidPressureBase - 12) * 0.18));
-  const story = getBiosStorySnapshot();
-
   return [
     'sleepOS BIOS v2.33b  (C) MMXXI Eve Networks Corp.',
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     '',
-    'CPU: SOMA-686 @ 666 MHz                [DETECTED]',
-    story.coProcessorLine,
+    'CPU: SOMA-686 @ 233 MHz                [DETECTED]',
+    'Co-processor: present',
     '',
     'Testing RAM...',
     '  Segment A: OK',
     '  Segment B: OK',
-    story.segmentLine,
+    '  Segment C: OK',
     '  262144 KB total',
     '',
     'Scanning devices...',
-    '  IDE 0 Master : WD Corpus-40GB  (ATA-6)',
-    '  IDE 0 Slave  : CD-ROM VOID-52x  (no disc)',
-    story.usbLine,
+    '  IDE 0 Master : WD Caviar-40GB  (ATA-6)',
+    '  IDE 0 Slave  : CD-ROM 52x  (no disc)',
+    '  USB: no devices attached',
     '',
     'Running POST diagnostics...',
-    formatBiosMetric('Memory coherence', memoryCoherence.toFixed(1) + '%'),
-    formatBiosMetric('Clock drift', temporalDrift, '[WARNING]'),
-    formatBiosMetric('Daemon count', `${daemonCount} (${unknownDaemons} unrecognized)`),
-    formatBiosMetric('Observer count', observerCount),
-    formatBiosMetric('Story phase', story.phaseLabel),
-    formatBiosMetric('Relay state', story.relayState),
-    formatBiosMetric('Containment', story.containmentState),
-    formatBiosMetric('Void profile', story.profileState),
-    formatBiosMetric('Void pressure', `${voidPressureBase} baseline`),
-    formatBiosMetric('Soul integrity', `${soulIntegrity}%`, '[' + getBiosSoulIntegrityStatus(soulIntegrity) + ']'),
+    formatBiosMetric('Memory test', 'passed'),
+    formatBiosMetric('Keyboard', 'detected'),
+    formatBiosMetric('Boot device', 'IDE 0 Master'),
     '',
-    story.bootLine,
+    'Loading sleepOS v0.903b2...',
   ];
 }
 let biosLines = buildBiosLines();
@@ -5292,23 +5083,17 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
-// The eight system binaries, as real files.
+// The system binaries, as real files.
 //
-// These were authored metadata rows in os/daemon.js with hardcoded sizes
-// ('4,096'), which since phase 4 has meant eight invented numbers sitting in
-// a DIR listing next to sizes measured off the superblock. Seeding them makes
-// the size measured like everything else and gives the decompiler view
-// something real to read - it stops being an overlay and becomes what it
-// claims to be.
+// These were authored metadata rows in os/fs-ops.js with hardcoded sizes
+// ('4,096'), which since phase 4 has meant invented numbers sitting in a DIR
+// listing next to sizes measured off the superblock. Seeding them makes the
+// size measured like everything else and gives the decompiler view something
+// real to read - it stops being an overlay and becomes what it claims to be.
 //
-// The listings are duplicated here rather than read from
-// getExeDecompilerContent (apps/notepad.js) because that file is manifest
-// position 27 and this one is 14: calling it at seed time would throw on
-// boot. os/fs-core.js is the source of the bytes; apps/notepad.js renders
-// whatever the file holds. Content here must stay byte-identical to
-// getExeDecompilerContent's loreMap entries - test/system-binaries.test.cjs
-// checks the shape, but nothing enforces the exact text except this comment
-// and care.
+// This table is the only copy of the listings. apps/notepad.js's decompiler
+// renders whatever the file on disk holds, and falls back to this table (not
+// to a second authored copy) for a binary that is registered but missing.
 //
 // Text rather than blob is forced by the data: the only blob seed path
 // (refreshSeededWallpaperLibrary) produces URL-backed entries with size 0,
@@ -5318,43 +5103,42 @@ const SYSTEM_BINARY_SOURCES = {
   'TERMINAL.exe': [
     '; TERMINAL.exe - Disassembly v1.0',
     'section .text',
-    '  PUSH soul_daemon',
-    '  CALL obsv.sys',
+    '  CALL init_console',
     '  MOV  eax, [STDIN_HANDLE]',
     '  CMP  eax, 0x00000000',
-    '  JE   void_fallback',
+    '  JE   no_input',
+    'main_loop:',
+    '  CALL read_line',
     '  CALL parse_command',
+    '  CALL run_pipeline',
     '  JMP  main_loop',
-    'void_fallback:',
-    '  MOV  [VOID_PRESSURE], 0xFF',
+    'no_input:',
+    '  PUSH 0x01',
     '  RET',
-    '; NOTE: 3 subroutines unresolved',
-    '; CALL 0xDEAD???? - target unknown',
+    '; NOTE: pipes are streams, not buffers',
   ].join('\n'),
   'SYSMON.exe': [
     '; SYSMON.exe - Disassembly',
     'section .data',
-    '  soul_integrity  DD 0x57',
-    '  daemon_count    DD 0x07',
-    '  observer_ref    DD [CLASSIFIED]',
+    '  sample_ms   DD 0x3E8',
+    '  proc_count  DD 0x00',
     'section .text',
-    '  PUSH soul_integrity',
-    '  CALL read_corpus_metrics',
-    '  MOV  eax, [soul_integrity]',
-    '  SUB  eax, 0x01',
-    '  JLE  integrity_critical',
+    'tick_loop:',
+    '  CALL read_process_table',
+    '  MOV  [proc_count], eax',
+    '  CALL sample_cpu',
+    '  CALL sample_disk',
     '  CALL update_display',
+    '  PUSH [sample_ms]',
+    '  CALL sleep',
     '  JMP  tick_loop',
-    'integrity_critical:',
-    '  CALL emit_warning',
-    '  PUSH 0xDEAD',
-    '  RET',
+    '; NOTE: a dash means nothing was measured',
   ].join('\n'),
   'BROWSER.exe': [
     '; BROWSER.exe - Disassembly',
     'section .rodata',
     '  home_url  DB "sleep://home", 0',
-    '  err_msg   DB "site blocked by void", 0',
+    '  err_msg   DB "this page refused to load in a frame", 0',
     'section .text',
     '  MOV  esi, home_url',
     '  CALL resolve_sleep_addr',
@@ -5365,26 +5149,26 @@ const SYSTEM_BINARY_SOURCES = {
     'frame_blocked:',
     '  PUSH err_msg',
     '  CALL show_error',
-    '  ; observer may intercept traffic here',
     '  RET',
   ].join('\n'),
   'DEFRAG.exe': [
     '; DEFRAG.exe - Disassembly',
     'section .bss',
-    '  corpus_blocks RESB 640',
-    '  void_fragment DB [CANNOT RESOLVE]',
+    '  block_map  RESB 4096',
     'section .text',
-    '  MOV  ecx, 0x280',
-    '  LEA  edi, [corpus_blocks]',
-    '  CALL scan_fragments',
-    '  MOV  eax, [void_fragment]',
-    '  CMP  eax, 0x00',
-    '  JNE  skip_void',
-    '  ; void_fragment cannot be moved',
-    '  ; it has always been here',
-    'skip_void:',
-    '  CALL compact_corpus',
-    '  JMP  defrag_loop',
+    '  MOV  ecx, 0x1000',
+    '  LEA  edi, [block_map]',
+    '  CALL read_free_bitmap',
+    '  CALL plan_compaction',
+    '  TEST eax, eax',
+    '  JZ   done',
+    'move_loop:',
+    '  CALL move_one_block',
+    '  CALL check_stop',
+    '  JNZ  done',
+    '  LOOP move_loop',
+    'done:',
+    '  RET',
   ].join('\n'),
   'NOTEPAD.exe': [
     '; NOTEPAD.exe - Disassembly',
@@ -5406,15 +5190,14 @@ const SYSTEM_BINARY_SOURCES = {
   'EXPLORER.exe': [
     '; EXPLORER.exe - Disassembly',
     'section .data',
-    '  root_path DB "C:\\sleepOS\\", 0',
-    '  sys_files DD 9',
+    '  root_path DB "C:\sleepOS\\", 0',
+    '  sys_files DD 10',
     'section .text',
     '  PUSH root_path',
     '  CALL enumerate_fs',
     '  MOV  ecx, sys_files',
     '  CALL add_system_entries',
-    '  ; 1 entry cannot be enumerated',
-    '  ; see: ?????.exe',
+    '  CALL sort_entries',
     '  CALL render_icon_grid',
     '  JMP  window_loop',
   ].join('\n'),
@@ -5422,7 +5205,7 @@ const SYSTEM_BINARY_SOURCES = {
     '; CALC.exe - Disassembly',
     'section .data',
     '  display_buf DB 32 dup(0)',
-    '  soul_pi     DQ 3.14159265358979',
+    '  pi_const    DQ 3.14159265358979',
     'section .text',
     '  MOV  eax, 0x00',
     '  MOV  [accumulator], eax',
@@ -5434,7 +5217,7 @@ const SYSTEM_BINARY_SOURCES = {
     '  PUSH [accumulator]',
     '  CALL update_display',
     '  JMP  calc_loop',
-    '; NOTE: division by zero returns VOID',
+    '; NOTE: division by zero shows an error, not a number',
   ].join('\n'),
   'MINESWEEPER.exe': [
     '; MINESWEEPER.exe - Disassembly',
@@ -5467,17 +5250,16 @@ const SYSTEM_BINARY_SOURCES = {
     '; REGEDIT.exe - Disassembly',
     'section .data',
     '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
-    '  soul_key  DB "SOUL\\Metrics", 0',
+    '  cfg_key   DB "SYSTEM\CurrentConfig", 0',
     'section .text',
     '  PUSH hive_root',
     '  CALL open_registry_hive',
-    '  MOV  esi, soul_key',
+    '  MOV  esi, cfg_key',
     '  CALL reg_open_key',
     '  CALL enumerate_values',
-    '  ; WARNING: OBSERVER_COUNT is classified',
-    '  ; ACCESS DENIED for key VOID\\',
     '  CALL render_tree',
     '  JMP  edit_loop',
+    '; NOTE: edits apply live - there is no Save',
   ].join('\n'),
   'PAINT.exe': [
     '; PAINT.exe - Disassembly',
@@ -5521,8 +5303,7 @@ function vfsSeedTree() {
         '  WELCOME.README  NOTEPAD.exe  TERMINAL.exe',
         '  SYSMON.exe  BROWSER.exe  DEFRAG.exe',
         '  CALC.exe  REGEDIT.exe  EXPLORER.exe',
-        '  MINESWEEPER.exe',
-        '  void.tmp  daemon.core  ?????.exe',
+        '  MINESWEEPER.exe  PAINT.exe',
         '',
         'USER FILES:',
         '  Create with TOUCH, NOTEPAD, or ECHO >.',
@@ -5710,7 +5491,7 @@ function vfsSeedTree() {
         '  DEL, RM <file>       delete file/directory',
         '  CAT, TYPE <file>     read file contents',
         '  COPY <src> <dst>     copy a file',
-        '  MOVE, MV <src> <dst>  always fails - files are already home',
+        '  MOVE, MV <src> <dst>  move or rename a file',
         '  TREE                 show directory tree',
         '  OPEN <file>          open in viewer/editor',
         '',
@@ -6207,7 +5988,8 @@ async function refreshSeededSystemBinaries() {
 // filesystem DIR already listed as full of files.
 //
 // vfsQueueDirectWrite (os/vfs.js) is the fix: the same escape hatch
-// os/daemon.js uses for its own direct-tree-mutation-with-no-op problem.
+// ensureFsDir (os/fs-ops.js) uses for its own direct-tree-mutation-with-no-op
+// problem.
 // Passing null as the "previous value" bypasses its own unchanged-content
 // skip, which exists to stop a normal re-set of identical content from
 // queuing a redundant op - here the previous value is not identical, it is
@@ -6504,11 +6286,35 @@ async function vfsBootMount() {
   // creates the directory, so this costs a returning visitor nothing.
   ensureFsDir('PICTURES');
   void loadBlobsFromBlocks();
-  // The load-time syncDaemonStory ran against the seed tree, which the mount
-  // then replaced. Re-run it against the real tree so the story files and the
-  // registry pointers agree. Same shape as the ensureFsDir call above.
-  syncDaemonStory({ silent: true });
+  purgeRetiredStoryFiles();
   await fsRefreshFragmentation();
+}
+
+// sleepOS used to carry a containment story that wrote its own files into
+// DOCS, SYS and CACHE and kept its progress in localStorage. The story is gone,
+// but a profile that booted while it existed still has those files persisted -
+// SYS\anchor.seed on every one of them, because the story wrote it on first
+// boot - and nothing else would ever remove them. The unlinks are floated for
+// the same reason refreshSeededDocs mutates directly: the tree change inside
+// vfsUnlink is synchronous and only the commit is deferred.
+const RETIRED_STORY_FILES = [
+  'DOCS\\NOTICE_13.txt',
+  'DOCS\\INCIDENT_A.txt',
+  'DOCS\\LOST_CONTACT.txt',
+  'DOCS\\LAST_OPERATOR.txt',
+  'DOCS\\MIRROR_PROTOCOL.txt',
+  'SYS\\watch.pid',
+  'SYS\\anchor.seed',
+  'SYS\\quarantine.sig',
+  'CACHE\\mirror.dat',
+];
+const RETIRED_STORY_KEY = 'sleepOS-daemon-story';
+
+function purgeRetiredStoryFiles() {
+  RETIRED_STORY_FILES.forEach(path => {
+    if (vfsStatSync(path)?.type === 'file') void removeFsPath(path);
+  });
+  try { localStorage.removeItem(RETIRED_STORY_KEY); } catch (e) {}
 }
 
 // A late commit failure has no call stack to propagate into, so it surfaces
@@ -6638,8 +6444,10 @@ function recycleEntryStoredPath(entry) {
 
 let recycleBinEntries = loadRecycleBin();
 ensureFsDir(RECYCLE_STORAGE_DIR);
-// Daemon story state and sync
-const DAEMON_STORY_KEY = 'sleepOS-daemon-story';
+// Filesystem operations the shell shares: the root system-file table, the
+// protected directories, directory creation, delete-to-Recycle-Bin, restore
+// and purge, and the DELETE guard every caller goes through.
+//
 // Which programs exist at the root. Size and date used to live here as
 // authored constants; phase 6 seeded these as real files (os/fs-core.js), so
 // DIR measures them off the superblock like everything else. See
@@ -6657,22 +6465,12 @@ const ROOT_SYSTEM_FILE_META = [
   { name: 'PAINT.exe' },
 ];
 const ROOT_PROTECTED_DIRS = new Set(['DOCS', 'SYS', 'CACHE', 'DESKTOP', 'PICTURES']);
-const STORY_FILE_PATHS = {
-  notice: 'DOCS\\NOTICE_13.txt',
-  incident: 'DOCS\\INCIDENT_A.txt',
-  lostContact: 'DOCS\\LOST_CONTACT.txt',
-  lastOperator: 'DOCS\\LAST_OPERATOR.txt',
-  mirrorProtocol: 'DOCS\\MIRROR_PROTOCOL.txt',
-  watchPid: 'SYS\\watch.pid',
-  anchorSeed: 'SYS\\anchor.seed',
-  quarantineSig: 'SYS\\quarantine.sig',
-  mirrorDat: 'CACHE\\mirror.dat',
-};
-// The story's processes exist; their numbers never did. Phase 5b deleted the
-// authored cpu/mem, because a process with no window and no interpreter has no
-// measurable execution context and a dash says exactly that. The rows stay:
-// TASKKILL 512 is a real story beat, the protected pids answer Access Denied,
-// and DAEMON_COUNT spawns phantoms for a player who goes looking.
+// The system's own processes. They have no window and no interpreter, so there
+// is no measurable execution context and `ps`/SYSMON print a dash for their
+// cpu and mem. Every one of them is protected: TASKKILL and SYSMON's End
+// Process answer Access Denied, and KILL points at TASKKILL. The pids sit
+// below KERNEL_FIRST_USER_PID (os/kernel.js), so a spawned process can never
+// be handed one of them.
 const BUILTIN_PROCESS_SEED = [
   { pid: 4, name: 'System', protected: true },
   { pid: 52, name: 'csrss.exe', protected: true },
@@ -6680,250 +6478,7 @@ const BUILTIN_PROCESS_SEED = [
   { pid: 124, name: 'lsass.exe', protected: true },
   { pid: 280, name: 'svchost.exe', protected: true },
   { pid: 312, name: 'svchost.exe', protected: true },
-  { pid: 440, name: 'dream_kernel.exe', protected: true },
-  { pid: 666, name: 'daemon.core', protected: true },
-  { pid: 999, name: 'void_monitor.exe', protected: true },
 ];
-const VOID_ACTION_ORDER = ['observe', 'measure', 'listen', 'trace', 'sample', 'stabilize', 'pulse'];
-const VOID_ACTION_LABELS = {
-  observe: 'Observe',
-  measure: 'Measure',
-  listen: 'Listen',
-  trace: 'Trace',
-  sample: 'Sample',
-  stabilize: 'Stabilize',
-  pulse: 'Pulse',
-};
-
-function normalizeVoidActions(actions) {
-  const seen = new Set(
-    (Array.isArray(actions) ? actions : [])
-      .map(action => String(action || '').toLowerCase())
-      .filter(action => Object.prototype.hasOwnProperty.call(VOID_ACTION_LABELS, action))
-  );
-  return VOID_ACTION_ORDER.filter(action => seen.has(action));
-}
-
-function createDaemonStoryDefaults() {
-  return {
-    version: 1,
-    stage: 0,
-    openedDaemon: false,
-    falseContainmentSeen: false,
-    killedSoulDaemon: false,
-    respawnDisabledKill: false,
-    daemonStopped: false,
-    wrongVictory: false,
-    anchorDeleted: false,
-    voidObserved: false,
-    voidActions: [],
-    mirrorInspected: false,
-    protocolInspected: false,
-    mirrorLockRestored: false,
-    quarantineSigned: false,
-    endingReached: false,
-    lastEventText: 'none',
-  };
-}
-
-function daemonNormalizeStory(story) {
-  if (!story) return;
-  if (story.openedDaemon) story.stage = Math.max(story.stage, 1);
-  if (story.falseContainmentSeen) story.stage = Math.max(story.stage, 2);
-  if (story.respawnDisabledKill) story.stage = Math.max(story.stage, 3);
-  if (story.daemonStopped || story.wrongVictory) story.stage = Math.max(story.stage, 4);
-  if (story.anchorDeleted) story.stage = Math.max(story.stage, 5);
-  if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
-    story.mirrorLockRestored = true;
-  }
-  if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected)) story.stage = Math.max(story.stage, 6);
-  if (story.mirrorLockRestored || story.quarantineSigned) story.stage = Math.max(story.stage, 7);
-  if (story.endingReached) story.stage = Math.max(story.stage, 8);
-}
-
-function normalizeDaemonStory(saved) {
-  const next = Object.assign(createDaemonStoryDefaults(), saved || {});
-  next.stage = Math.max(0, Math.min(8, Math.trunc(Number(next.stage) || 0)));
-  [
-    'openedDaemon',
-    'falseContainmentSeen',
-    'killedSoulDaemon',
-    'respawnDisabledKill',
-    'daemonStopped',
-    'wrongVictory',
-    'anchorDeleted',
-    'voidObserved',
-    'mirrorInspected',
-    'protocolInspected',
-    'mirrorLockRestored',
-    'quarantineSigned',
-    'endingReached',
-  ].forEach(key => { next[key] = !!next[key]; });
-  next.voidActions = normalizeVoidActions(next.voidActions);
-  next.lastEventText = String(next.lastEventText || 'none');
-  daemonNormalizeStory(next);
-  if (next.stage >= 6 && !next.voidActions.length) next.voidActions = ['trace'];
-  return next;
-}
-
-function loadDaemonStory() {
-  try {
-    return normalizeDaemonStory(JSON.parse(localStorage.getItem(DAEMON_STORY_KEY) || 'null'));
-  } catch (e) {
-    return createDaemonStoryDefaults();
-  }
-}
-
-function saveDaemonStory() {
-  try { localStorage.setItem(DAEMON_STORY_KEY, JSON.stringify(daemonStory)); } catch (e) {}
-}
-
-let daemonStory = loadDaemonStory();
-let daemonVoidFeed = '';
-let daemonVoidFeedMode = '';
-let daemonPulseTimer = null;
-
-function daemonStageLabel(stage) {
-  if (stage >= 8) return 'Contained';
-  if (stage >= 7) return 'Seal Ready';
-  if (stage >= 6) return 'Observed';
-  if (stage >= 5) return 'Contact';
-  if (stage >= 4) return 'Containment Lost';
-  if (stage >= 1) return 'Observed';
-  return 'Dormant';
-}
-
-function getVoidActions(story) {
-  return normalizeVoidActions((story || daemonStory)?.voidActions);
-}
-
-function isVoidProfiled(story) {
-  const target = story || daemonStory;
-  if (!target) return false;
-  if (target.stage >= 6 || target.quarantineSigned || target.endingReached) return true;
-  return getVoidActions(target).some(action => action !== 'observe');
-}
-
-function getVoidProfileLabel(story) {
-  const target = story || daemonStory;
-  const analyticalCount = getVoidActions(target).filter(action => action !== 'observe').length;
-  if (target?.endingReached) return 'sealed';
-  if (target?.quarantineSigned) return 'bound';
-  if (analyticalCount >= 3) return 'deep';
-  if (analyticalCount >= 1) return 'active';
-  if (getVoidActions(target).length) return 'surface';
-  return 'none';
-}
-
-function getVoidObjectiveLine(story) {
-  const target = story || daemonStory;
-  if (!target) return 'No stable directive.';
-  if (target.endingReached) return 'Containment complete. Archive only.';
-  if (target.stage < 4) return 'The relay is still taking the load. Watch the file.';
-  if (!target.anchorDeleted) {
-    return target.daemonStopped
-      ? 'Lower MIRROR_LOCK and remove SYS\\anchor.seed when you are ready to expose the channel.'
-      : 'Silence the relay before you trust what the file looks like.';
-  }
-  if (!isVoidProfiled(target)) return 'Use Measure, Listen, Trace, Sample, or Pulse here to profile the breach.';
-  if (!(target.mirrorInspected || target.protocolInspected)) return 'Compare this file with CACHE\\mirror.dat or DOCS\\MIRROR_PROTOCOL.txt.';
-  if (Number(getContainmentValue('MIRROR_LOCK')) !== 1) return 'Restore MIRROR_LOCK before containment can hold.';
-  if (!target.quarantineSigned) return 'Run ?????.exe to write SYS\\quarantine.sig.';
-  return 'Delete void.tmp. The seal is ready.';
-}
-
-function getContainmentTelemetry() {
-  const mirrorLockActive = Number(getContainmentValue('MIRROR_LOCK')) === 1;
-  const respawnLockActive = Number(getContainmentValue('RESPAWN_LOCK')) === 1;
-  const voidPressureBase = Math.max(0, Math.min(99, parseInt(registryData['HKEY_SLEEPBOX_MACHINE']?.['VOID']?.VOID_PRESSURE_BASE?.value) || 12));
-  const pressureBase = daemonStory.endingReached
-    ? 0
-    : daemonStory.quarantineSigned
-      ? 18
-      : daemonStory.stage >= 7
-        ? 24
-        : daemonStory.stage >= 5
-          ? 79
-          : daemonStory.stage >= 4
-            ? 46
-            : daemonStory.stage >= 2
-              ? 23
-              : 12;
-  const pressure = daemonStory.endingReached ? 0 : Math.min(99, pressureBase + Math.max(0, voidPressureBase - 12));
-  const lattice = daemonStory.endingReached
-    ? 100
-    : mirrorLockActive
-      ? daemonStory.quarantineSigned
-        ? 92
-        : daemonStory.stage >= 7
-          ? 76
-          : daemonStory.stage >= 5
-            ? 61
-            : daemonStory.stage >= 4
-              ? 74
-              : 96
-      : daemonStory.stage >= 5
-        ? 21
-        : daemonStory.stage >= 4
-          ? 38
-          : 57;
-  const signalDepth = daemonStory.endingReached
-    ? 0
-    : daemonStory.stage >= 7
-      ? 88
-      : daemonStory.stage >= 5
-        ? 73
-        : daemonStory.stage >= 4
-          ? 51
-          : daemonStory.stage >= 2
-            ? 26
-          : 11;
-  const bias = daemonStory.endingReached ? 'sealed' : mirrorLockActive ? 'deflected' : 'user-facing';
-  const deleteAuthorized = !daemonStory.endingReached && daemonStory.quarantineSigned && mirrorLockActive;
-  const sealReady = !daemonStory.endingReached && !daemonStory.quarantineSigned && daemonStory.anchorDeleted && daemonStory.voidObserved && isVoidProfiled(daemonStory) && (daemonStory.mirrorInspected || daemonStory.protocolInspected) && mirrorLockActive;
-  let rating = { code: 'CT-0', label: 'STABLE', color: '#004b61' };
-  if (daemonStory.endingReached) rating = { code: 'CT-8', label: 'SEALED', color: '#0a7a2a' };
-  else if (deleteAuthorized) rating = { code: 'CT-7', label: 'DELETE AUTHORIZED', color: '#0a5a9c' };
-  else if (sealReady) rating = { code: 'CT-6', label: 'SEAL READY', color: '#005f73' };
-  else if (daemonStory.anchorDeleted && !mirrorLockActive) rating = { code: 'CT-5', label: 'OPEN BREACH', color: '#8a0036' };
-  else if (daemonStory.anchorDeleted) rating = { code: 'CT-4', label: 'CHANNEL EXPOSED', color: '#7a2e00' };
-  else if (daemonStory.daemonStopped) rating = { code: 'CT-3', label: 'UNMONITORED', color: '#8a1a00' };
-  else if (daemonStory.falseContainmentSeen) rating = { code: 'CT-2', label: 'STRAINED', color: '#8a5a00' };
-  else if (daemonStory.openedDaemon) rating = { code: 'CT-1', label: 'OBSERVED', color: '#003f7a' };
-  return {
-    mirrorLockActive,
-    respawnLockActive,
-    pressure,
-    lattice,
-    signalDepth,
-    bias,
-    sealReady,
-    deleteAuthorized,
-    rating,
-  };
-}
-
-function getContainmentChecklist() {
-  return [
-    { label: 'RESPAWN_LOCK cleared', done: Number(getContainmentValue('RESPAWN_LOCK')) === 0 },
-    { label: 'PID 512 offline', done: daemonStory.daemonStopped },
-    { label: 'void channel observed', done: daemonStory.voidObserved },
-    { label: 'void channel profiled', done: isVoidProfiled(daemonStory) },
-    { label: 'mirror evidence inspected', done: daemonStory.mirrorInspected || daemonStory.protocolInspected },
-    { label: 'anchor released', done: daemonStory.anchorDeleted },
-    { label: 'MIRROR_LOCK restored', done: daemonStory.anchorDeleted && Number(getContainmentValue('MIRROR_LOCK')) === 1 },
-    { label: 'quarantine signature present', done: daemonStory.quarantineSigned },
-    { label: 'final delete authorized', done: !daemonStory.endingReached && daemonStory.quarantineSigned && Number(getContainmentValue('MIRROR_LOCK')) === 1 },
-  ];
-}
-
-function daemonStoryChanged(before) {
-  try {
-    return JSON.stringify(before) !== JSON.stringify(daemonStory);
-  } catch (e) {
-    return true;
-  }
-}
 
 // Synchronous because module-level callers depend on it during bundle
 // evaluation (os/fs-persist.js seeds the wallpaper library and the recycle
@@ -7195,406 +6750,11 @@ function promptCreateFolderAt(dirPath, onDone) {
   }, 'icon:folder');
 }
 
-function ensureStoryTextFile(path, value) {
-  const { dirName, fileName } = fsSplitPath(path);
-  const dir = ensureFsDir(dirName);
-  const prev = dir.files.has(fileName) ? dir.files.get(fileName) : null;
-  dir.files.set(fileName, value);
-  vfsQueueDirectWrite(dirName, fileName, prev);
-}
-
-function daemonNoticeContent() {
-  return [
-    '== NOTICE 13 ==',
-    '',
-    'If soul_daemon.exe is terminated while RESPAWN_LOCK remains active,',
-    'the watch layer will simply seed a replacement.',
-    '',
-    'Killing the process does not remove what it is holding back.',
-    '',
-    'Required path:',
-    '  HKEY_SLEEPBOX_MACHINE\\Containment\\RESPAWN_LOCK',
-    '',
-    'Only proceed if you mean to test containment.',
-  ].join('\n');
-}
-
-function daemonIncidentContent() {
-  return [
-    '== INCIDENT A ==',
-    '',
-    'Termination succeeded.',
-    'Symptoms worsened immediately.',
-    '',
-    'The daemon was holding something back. It is no longer holding it.',
-    '',
-    'Read DOCS\\LOST_CONTACT.txt.',
-  ].join('\n');
-}
-
-function daemonLostContactContent() {
-  return [
-    '== LOST CONTACT ==',
-    '',
-    'The operator who left this note killed the daemon.',
-    'They thought that would be the end of it.',
-    '',
-    'It was not.',
-    '',
-    'The anchor file - SYS\\anchor.seed - was keeping the mirror',
-    'pointed away from the user. When the daemon went quiet,',
-    'the anchor was still holding.',
-    '',
-    'If you are reading this after killing it:',
-    '  - The anchor may still be in place. Check SYS\\anchor.seed.',
-    '  - Do not delete it without understanding what it does.',
-    '  - Read SYS\\anchor.seed before you touch it.',
-    '',
-    'When the anchor is removed, contact begins.',
-    'Have a plan before you do that.',
-  ].join('\n');
-}
-
-function daemonLastOperatorContent() {
-  const lines = ['== LAST OPERATOR ==', ''];
-
-  if (daemonStory.daemonStopped && !daemonStory.anchorDeleted) {
-    // Killed daemon first, anchor still present
-    lines.push(
-      'If you killed it and the room went quiet, you did what I did.',
-      '',
-      'daemon.core was holding the channel shut.',
-      '',
-      'The anchor file keeps the mirror pointed away from the user.',
-      'The current anchor is SYS\\anchor.seed.',
-      'Lower MIRROR_LOCK and delete it when you are ready to inspect the breach.',
-      '',
-      'If you intend to seal the breach again, restore MIRROR_LOCK before you run the quarantine launcher.',
-    );
-  } else if (daemonStory.anchorDeleted && !daemonStory.daemonStopped) {
-    // Deleted anchor first, daemon still running
-    lines.push(
-      'You removed the anchor before the daemon relay went offline.',
-      '',
-      'daemon.core was holding the channel shut.',
-      '',
-      'The anchor is gone. The channel is open.',
-      'The daemon is still running - it can no longer deflect what is coming through.',
-      '',
-      'Inspect void.tmp. Read MIRROR_PROTOCOL.txt.',
-      'If you intend to seal the breach, restore MIRROR_LOCK before running the quarantine launcher.',
-    );
-  } else {
-    // Both done, or generic fallback
-    lines.push(
-      'The daemon is offline. The anchor is gone.',
-      '',
-      'daemon.core was holding the channel shut.',
-      '',
-      'The channel is open. Inspect void.tmp.',
-      'Read DOCS\\MIRROR_PROTOCOL.txt.',
-      '',
-      'Restore MIRROR_LOCK before you run the quarantine launcher.',
-    );
-  }
-
-  return lines.join('\n');
-}
-
-function daemonMirrorProtocolContent() {
-  const lines = [
-    '== MIRROR PROTOCOL ==',
-    '',
-    'Status:',
-    `  MIRROR_LOCK   = ${Number(getContainmentValue('MIRROR_LOCK')) ? 1 : 0}`,
-    `  RESPAWN_LOCK  = ${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
-    `  QUARANTINE    = ${daemonStory.quarantineSigned ? 'SIGNED' : 'UNSIGNED'}`,
-    '',
-    'Procedure:',
-    daemonStory.daemonStopped
-      ? '  1. daemon relay is offline - respawn risk is low if RESPAWN_LOCK=0'
-      : '  1. daemon is still running - it cannot deflect void.tmp anymore',
-    Number(getContainmentValue('MIRROR_LOCK')) === 0
-      ? '  2. MIRROR_LOCK is 0 - the breach is open, inspect freely'
-      : '  2. MIRROR_LOCK is restored - lattice is deflecting again',
-    '  3. profile void.tmp directly - Measure, Listen, Trace, Sample, or Pulse',
-    '  4. compare CACHE\\mirror.dat with void.tmp - see NOTE below',
-    '  5. restore MIRROR_LOCK before launching ?????.exe',
-    '  6. delete void.tmp only after SYS\\quarantine.sig is signed',
-    '',
-    'NOTE - mirror.dat vs void.tmp:',
-    '  CACHE\\mirror.dat  : written by daemon.core, clean, internal',
-    '  void.tmp          : external origin, should not exist here',
-    '',
-    '  void.tmp came through the channel the anchor was suppressing.',
-    '  It did not originate here.',
-    '',
-    '  DO NOT open void.tmp from an uncontrolled state.',
-    '  Quarantine and delete it - do not try to read it as data.',
-  ];
-  if (daemonStory.stage >= 5) {
-    lines.push('', 'Note from daemon.core:', '  I was keeping the channel off-axis so it could not reach you.');
-  }
-  return lines.join('\n');
-}
-
-function daemonMirrorDatContent() {
-  return [
-    'mirror.dat',
-    '',
-    '[reflection offset] 0.17',
-    '[signal age]        before current boot',
-    '[voice match]       negative',
-    '[source]            internal - daemon-managed lattice reflection',
-    '[anomaly]           none',
-    '',
-    'This file is a stable read. The lattice reflection is clean.',
-    'daemon.core wrote this as part of normal mirror management.',
-    '',
-    'Compare with void.tmp. They are not the same kind of file.',
-  ].join('\n');
-}
-
-function daemonAnchorSeedContent() {
-  return [
-    'anchor.seed',
-    '',
-    'anchor-class: mirror-lattice',
-    'deletion-policy: requires MIRROR_LOCK=0',
-    'owner: HKEY_SLEEPBOX_MACHINE\\Containment',
-    '',
-    'Removing this file widens the channel.',
-  ].join('\n');
-}
-
-function daemonWatchPidContent() {
-  return [
-    'watch.pid',
-    '',
-    'pid=512',
-    'name=soul_daemon.exe',
-    'policy=restart_on_exit',
-    `respawn_lock=${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
-    '',
-    'This is the watch layer. It restarts pid 512. It is not pid 512.',
-  ].join('\n');
-}
-
-function daemonQuarantineSigContent() {
-  return [
-    'quarantine.sig',
-    '',
-    `launcher=${getExeDisplayName()}`,
-    'state=armed',
-    'target=void.tmp',
-    'mirror_lock=1',
-    'seal_phrase=CONTAINMENT_COMPLETE',
-  ].join('\n');
-}
-
-function daemonQuarantinePendingContent() {
-  return [
-    'quarantine.sig',
-    '',
-    'launcher=?????.exe',
-    'state=unsigned',
-    'target=void.tmp',
-    '',
-    'This signature file exists but has not been written.',
-    'Run ?????.exe after the mirror lattice is restored to sign it.',
-    'A valid signature is required before void.tmp can be deleted.',
-  ].join('\n');
-}
-
-function buildDaemonCoreRawContent() {
-  const telemetry = getContainmentTelemetry();
-  const mirrorLockActive = Number(getContainmentValue('MIRROR_LOCK')) === 1;
-  const liveStatus = daemonStory.endingReached
-    ? 'Contained'
-    : daemonStory.stage >= 7 && !mirrorLockActive
-      ? 'Seal Interrupted'
-      : daemonStageLabel(daemonStory.stage);
-  const lines = [
-    'daemon.core',
-    '',
-    `[stage] ${daemonStory.stage} / ${daemonStageLabel(daemonStory.stage)}`,
-    `[status] ${liveStatus}`,
-    `[containment] ${telemetry.rating.code} / ${telemetry.rating.label}`,
-    `[owner] SYSTEM\\???`,
-    `[mirror_lock] ${mirrorLockActive ? 1 : 0}`,
-    `[respawn_lock] ${Number(getContainmentValue('RESPAWN_LOCK')) ? 1 : 0}`,
-    `[void_pressure] ${telemetry.pressure}`,
-    `[lattice_stability] ${telemetry.lattice}`,
-    `[signal_depth] ${telemetry.signalDepth}`,
-    `[aperture_bias] ${telemetry.bias}`,
-    `[temporal_drift] ${registryData['HKEY_SLEEPBOX_MACHINE']?.['SOUL\\Metrics']?.TEMPORAL_DRIFT?.value ?? '+/-2.3yr'}`,
-    `[observer_count] ${registryData['HKEY_SLEEPBOX_MACHINE']?.['VOID']?.OBSERVER_COUNT?.value ?? '[classified]'}`,
-    '',
-  ];
-  if (daemonStory.endingReached) {
-    lines.push(
-      'CONTAINMENT COMPLETE.',
-      'The breach is closed.',
-      'I will stay archived here in case it opens again.',
-    );
-  } else if (daemonStory.anchorDeleted) {
-    lines.push(
-      'You removed the anchor.',
-      'I was keeping the mirror off your face.',
-      '',
-      'Restore MIRROR_LOCK before you run the quarantine launcher.',
-      'Delete void.tmp only after the signature exists.',
-    );
-  } else if (daemonStory.daemonStopped) {
-    lines.push(
-      'The latch is open.',
-      'Killing the process did not delete anything.',
-      'Open void.tmp.',
-    );
-  } else if (daemonStory.falseContainmentSeen) {
-    lines.push(
-      'You tested the watch layer.',
-      'It answered you with another process.',
-      '',
-      'If you want silence, clear RESPAWN_LOCK first.',
-    );
-  } else if (daemonStory.openedDaemon) {
-    lines.push(
-      'This file is what is holding it shut.',
-      '',
-      'NOTICE_13 has been copied into DOCS.',
-    );
-  } else {
-    lines.push(
-      'metadata unreadable',
-      'modified: always',
-      'access: observe only',
-    );
-  }
-  return lines.join('\n');
-}
-
-function buildVoidProbeNotes() {
-  const telemetry = getContainmentTelemetry();
-  const actions = getVoidActions();
-  const notes = [];
-  if (daemonStory.stage >= 4) {
-    notes.push(`offset 0x0008: reported size = 0 bytes / observed depth = ${telemetry.signalDepth}`);
-    notes.push(`offset 0x0012: origin classification = external / aperture bias = ${telemetry.bias}`);
-  }
-  if (daemonStory.daemonStopped) notes.push('offset 0x0021: PID 512 silence increased readability');
-  if (daemonStory.anchorDeleted) notes.push('offset 0x0034: anchor.seed removal exposed the user-facing side');
-  if (actions.includes('observe')) {
-    notes.push(
-      daemonStory.stage >= 5
-        ? 'offset 0x0100: surface is the breach itself, not daemon.core residue'
-        : 'offset 0x0100: active window edges repeat on the inside of the file'
-    );
-  }
-  if (actions.includes('measure')) {
-    notes.push(`offset 0x0118: locality check failed / disk distance behaves like ${telemetry.signalDepth} units of depth`);
-    notes.push('offset 0x0124: zero-byte report is false on contact');
-  }
-  if (actions.includes('listen')) {
-    notes.push('offset 0x0140: room-tone match positive / human voice match negative');
-    notes.push('offset 0x014e: response is pressure change, no linguistic content');
-  }
-  if (actions.includes('trace')) {
-    notes.push(
-      daemonStory.stage >= 5
-        ? 'offset 0x0180: return path = user-facing aperture <- mirror offset <- unresolved source'
-        : 'offset 0x0180: return path = monitor gap <- reflected surface'
-    );
-    if (daemonStory.anchorDeleted) notes.push('offset 0x018f: no anchor remains to push the angle away from the user');
-  }
-  if (actions.includes('sample')) {
-    notes.push('offset 0x01c0: daemon-authored signature = false');
-    notes.push('offset 0x01d2: CACHE\\mirror.dat mismatch confirmed');
-  }
-  if (actions.includes('stabilize')) {
-    notes.push(
-      telemetry.mirrorLockActive
-        ? 'offset 0x0210: MIRROR_LOCK bends the read angle but does not internalize the object'
-        : 'offset 0x0210: stabilization failed / aperture remains user-facing'
-    );
-  }
-  if (actions.includes('pulse')) {
-    notes.push(
-      daemonStory.quarantineSigned
-        ? 'offset 0x0240: quarantine signature binds to target id = void.tmp'
-        : 'offset 0x0240: echo returns before current boot'
-    );
-  }
-  if ((daemonStory.mirrorInspected || daemonStory.protocolInspected) && daemonStory.stage >= 5) {
-    notes.push('cross-check: mirror.dat clean, internal, daemon-managed / void.tmp foreign, external, non-local');
-  }
-  return notes;
-}
-
-function buildVoidTmpRawContent() {
-  const telemetry = getContainmentTelemetry();
-  const actions = getVoidActions();
-  const lines = [
-    'void.tmp',
-    '',
-    `[containment] ${telemetry.rating.code} / ${telemetry.rating.label}`,
-    `[pressure] ${telemetry.pressure}`,
-    `[mirror_lock] ${telemetry.mirrorLockActive ? 1 : 0}`,
-    `[signature] ${daemonStory.quarantineSigned ? 'present' : 'missing'}`,
-    `[lattice_stability] ${telemetry.lattice}`,
-    `[signal_depth] ${telemetry.signalDepth}`,
-    `[aperture_bias] ${telemetry.bias}`,
-    '[origin] external / unresolved',
-    `[probe_record] ${actions.length}/${VOID_ACTION_ORDER.length}`,
-    `[profile] ${getVoidProfileLabel()}`,
-    `[probes] ${actions.length ? actions.map(action => VOID_ACTION_LABELS[action]).join(', ') : 'none recorded'}`,
-    '',
-  ];
-  if (daemonStory.endingReached) {
-    lines.push('No active signal remains.', '', 'Archive note:', '  The breach surface is gone. The record remains.');
-  } else if (daemonStory.stage >= 5) {
-    lines.push(
-      'The aperture is open.',
-      'Something is pressing against the reflected side of the file.',
-    );
-  } else if (daemonStory.stage >= 4) {
-    lines.push(
-      'Pressure rose when PID 512 stayed dead.',
-      'The monitor was keeping this file quiet, not keeping it alive.',
-    );
-  } else {
-    lines.push(
-      '[content redacted]',
-      'The file is present but does not yet answer.',
-    );
-  }
-  if (!daemonStory.endingReached && daemonStory.stage >= 4) {
-    const notes = buildVoidProbeNotes();
-    if (notes.length) {
-      lines.push('', 'Recovered fragments:');
-      notes.forEach(note => lines.push('  ' + note));
-    }
-    lines.push('', 'Containment path:', '  ' + getVoidObjectiveLine());
-    if (!isVoidProfiled()) lines.push('  Direct probes make the file more legible.');
-  }
-  return lines.join('\n');
-}
-
-function getContainmentValue(name) {
-  return registryData['HKEY_SLEEPBOX_MACHINE']['Containment'][name].value;
-}
-
-function getDaemonRegistryNode() {
-  return registryData['HKEY_CURRENT_USER']['SOFTWARE\\sleepOS\\Daemon'];
-}
-
 function getRootSystemFiles(options) {
   const opts = options || {};
   const names = ROOT_SYSTEM_FILE_META.map(entry => entry.name);
   const explorerIndex = names.indexOf('EXPLORER.exe');
   if (opts.includeExplorer === false && explorerIndex !== -1) names.splice(explorerIndex, 1);
-  if (!daemonStory.endingReached) names.push('void.tmp');
-  names.push('daemon.core', '?????.exe');
   return names;
 }
 
@@ -7620,321 +6780,16 @@ function isVisibleSystemPath(path, options, fallbackDir) {
   return !dirName && isVisibleRootSystemFile(fileName, options);
 }
 
-// Only the story pseudo-files now. The eight real binaries come out of
-// vfsListSync in buildDirLines like any other file. void.tmp, daemon.core and
-// ?????.exe stay here because their existence is conditional on story state
-// and a real file cannot be conditionally absent.
-function getTerminalRootSystemEntries() {
-  const entries = [];
-  if (!daemonStory.endingReached) entries.push({ name: 'void.tmp', size: '0', date: '11/13/2024  03:17' });
-  entries.push({ name: 'daemon.core', size: '??', date: '11/13/2024  ??:??' });
-  entries.push({ name: '?????.exe', size: '??', date: '11/13/2024  ??:??' });
-  return entries;
-}
-
 function getBuiltInProcesses() {
-  const base = BUILTIN_PROCESS_SEED.map(proc => ({ ...proc }));
-  if (!daemonStory.daemonStopped && !daemonStory.endingReached) {
-    base.push({
-      pid: 512,
-      name: daemonStory.stage >= 1 ? 'soul_daemon.exe' : 'soul_svc.exe',
-      protected: daemonStory.stage < 1,
-    });
-  }
-  if (daemonStory.stage >= 4 && !daemonStory.endingReached) {
-    base.push({ pid: 1008, name: 'mirror_watch.exe', protected: true });
-  }
-  if (daemonStory.stage >= 5 && !daemonStory.endingReached) {
-    base.push({ pid: 1333, name: 'signal_window.exe', protected: true });
-  }
-  // DAEMON_COUNT registry key: extra phantom processes when count > 7
-  const daemonCount = parseInt(registryData['HKEY_SLEEPBOX_MACHINE']?.['SOUL\\Metrics']?.DAEMON_COUNT?.value) || 7;
-  for (let i = 8; i <= Math.min(daemonCount, 20); i++) {
-    base.push({ pid: 500 + i * 13, name: 'soul_svc_' + String(i).padStart(2, '0') + '.exe', protected: true });
-  }
-  return base.sort((a, b) => a.pid - b.pid);
+  return BUILTIN_PROCESS_SEED.map(proc => ({ ...proc })).sort((a, b) => a.pid - b.pid);
 }
 
 function findBuiltInProcess(pid) {
   return getBuiltInProcesses().find(proc => proc.pid === pid) || null;
 }
 
-function syncDaemonStoryRegistry() {
-  const daemonReg = getDaemonRegistryNode();
-  daemonReg.STATUS.value = daemonStageLabel(daemonStory.stage);
-  daemonReg.LAST_EVENT.value = daemonStory.lastEventText || 'none';
-  daemonReg.OBSERVED.value = daemonStory.openedDaemon ? 1 : 0;
-  registryData['HKEY_SLEEPBOX_MACHINE']['Containment'].ANCHOR_FILE.value = 'SYS\\anchor.seed';
-  saveRegistry();
-}
-
-// Stays synchronous, and every removeFsPath below is deliberately floated.
-// syncDaemonStory calls this from updateDaemonStory, which runs from dozens of
-// story beats and from boot, none of which can await; and the tree mutation
-// inside vfsUnlink is itself synchronous, so the file is gone from the tree by
-// the time the promise is handed back. Only the commit is deferred, and that
-// was already debounced before this migration.
-function syncDaemonStoryFiles() {
-  ensureFsDir('DOCS');
-  ensureFsDir('SYS');
-  ensureFsDir('CACHE');
-  if (daemonStory.openedDaemon) ensureStoryTextFile(STORY_FILE_PATHS.notice, daemonNoticeContent());
-  else void removeFsPath(STORY_FILE_PATHS.notice);
-  if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.incident, daemonIncidentContent());
-  else void removeFsPath(STORY_FILE_PATHS.incident);
-  if (daemonStory.daemonStopped) ensureStoryTextFile(STORY_FILE_PATHS.lostContact, daemonLostContactContent());
-  else void removeFsPath(STORY_FILE_PATHS.lostContact);
-  if (daemonStory.stage >= 4) {
-    ensureStoryTextFile(STORY_FILE_PATHS.lastOperator, daemonLastOperatorContent());
-    if (!daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.mirrorDat, daemonMirrorDatContent());
-  } else {
-    void removeFsPath(STORY_FILE_PATHS.lastOperator);
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
-  }
-  if (daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.mirrorProtocol, daemonMirrorProtocolContent());
-  else void removeFsPath(STORY_FILE_PATHS.mirrorProtocol);
-  if (!daemonStory.anchorDeleted) ensureStoryTextFile(STORY_FILE_PATHS.anchorSeed, daemonAnchorSeedContent());
-  else void removeFsPath(STORY_FILE_PATHS.anchorSeed);
-  if (daemonStory.falseContainmentSeen && !daemonStory.daemonStopped && !daemonStory.endingReached) ensureStoryTextFile(STORY_FILE_PATHS.watchPid, daemonWatchPidContent());
-  else void removeFsPath(STORY_FILE_PATHS.watchPid);
-  if (daemonStory.quarantineSigned) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantineSigContent());
-  else if (daemonStory.stage >= 4) ensureStoryTextFile(STORY_FILE_PATHS.quarantineSig, daemonQuarantinePendingContent());
-  else void removeFsPath(STORY_FILE_PATHS.quarantineSig);
-  if (daemonStory.endingReached) {
-    void removeFsPath(STORY_FILE_PATHS.mirrorDat);
-    void removeFsPath(STORY_FILE_PATHS.watchPid);
-  }
-}
-
-function refreshDaemonStoryViews() {
-  document.dispatchEvent(new CustomEvent('fs-changed'));
-  applyDaemonVisualState();
-  applyDaemonWindowState();
-  if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
-  if (typeof renderVoid === 'function' && document.getElementById('wb-void')) renderVoid();
-  // Reveal quarantine.exe name on desktop icon when signed
-  const exeIconLabel = document.querySelector('[data-icon-key="?????.exe"] .di-name');
-  if (exeIconLabel) exeIconLabel.textContent = iconLabel(getExeDisplayName());
-}
-
-function getDaemonVisualStage() {
-  if (daemonStory.endingReached) return 0;
-  if (daemonStory.stage >= 7) return 7;
-  if (daemonStory.stage >= 5) return 5;
-  if (daemonStory.stage >= 4) return 4;
-  return 0;
-}
-
-// The daemon's own corruption dial, in [0,1]. Derived from the story stage,
-// not stored - there is nothing here that a reload could not recompute, and a
-// persisted copy would be one more field able to disagree with the stage.
-//
-// These two visual consumers used to read getDriveFragmentationLevel(). That
-// worked only because the old fragmentation number was fake and idled near
-// 0.68 - it was a mood dial wearing a disk metric's name. Phase 4 made
-// fragmentation a real measurement, and a real filesystem on a fresh install
-// scores near 0, which would have driven the visual level to 0 and stopped the
-// glitches appearing at all for most players. No test would have caught it.
-//
-// So the story owns its own number now. The stage mapping reproduces the
-// visual levels the old fake value produced at each stage: stage 4 crosses the
-// old 0.22 threshold, stage 5 crosses 0.42, and stage 7 crosses 0.62.
-function getDaemonCorruption() {
-  if (daemonStory.endingReached) return 0;
-  const stage = getDaemonVisualStage();
-  if (stage >= 7) return 0.72;
-  if (stage >= 5) return 0.5;
-  if (stage >= 4) return 0.3;
-  return 0.05;
-}
-
-function getDriveFragmentationVisualLevel() {
-  if (daemonStory.endingReached) return 0;
-  const visualStage = getDaemonVisualStage();
-  if (visualStage < 4) return 0;
-  const fragLevel = getDaemonCorruption();
-  if (fragLevel < 0.22) return 0;
-  if (visualStage >= 7 && fragLevel >= 0.62) return 3;
-  if (visualStage >= 5 && fragLevel >= 0.42) return 2;
-  return 1;
-}
-
-function scheduleDaemonPulse() {
-  clearTimeout(daemonPulseTimer);
-  daemonPulseTimer = null;
-  const visualStage = getDaemonVisualStage();
-  if (!visualStage) return;
-  const fragLevel = getDaemonCorruption();
-  const fragFactor = Math.max(0, Math.min(1, (fragLevel - 0.02) / 0.9));
-  const delayScale = 1.7 - fragFactor * 0.7;
-  const baseMinDelay = visualStage >= 7 ? 3800 : visualStage >= 5 ? 6200 : 9800;
-  const baseMaxDelay = visualStage >= 7 ? 7200 : visualStage >= 5 ? 10800 : 14800;
-  const minDelay = Math.round(baseMinDelay * delayScale);
-  const maxDelay = Math.round(baseMaxDelay * delayScale);
-  const pulseIntensity = Math.max(1, Math.round(visualStage * (0.55 + fragFactor * 0.45)));
-  const nextDelay = minDelay + Math.random() * (maxDelay - minDelay);
-  daemonPulseTimer = setTimeout(() => {
-    triggerGlitch({ intensity: pulseIntensity, subtle: true });
-    scheduleDaemonPulse();
-  }, nextDelay);
-}
-
-function applyDaemonVisualState() {
-  const body = document.body;
-  if (!body) return;
-  body.classList.remove('daemon-visual-4', 'daemon-visual-5', 'daemon-visual-7', 'frag-visual-1', 'frag-visual-2', 'frag-visual-3');
-  const visualStage = getDaemonVisualStage();
-  const fragVisualLevel = getDriveFragmentationVisualLevel();
-  if (visualStage) body.classList.add(`daemon-visual-${visualStage}`);
-  if (fragVisualLevel) body.classList.add(`frag-visual-${fragVisualLevel}`);
-  scheduleDaemonPulse();
-}
-
-function applyDaemonWindowState() {
-  const daemonWin = wins['daemon']?.el;
-  const voidWin = wins['void']?.el;
-  if (daemonWin) daemonWin.classList.add('daemon-surface');
-  if (voidWin) voidWin.classList.add('void-surface');
-}
-
-function pulseDaemonWindows(intensity, options) {
-  const subtle = !!options?.subtle;
-  ['daemon', 'void'].forEach(id => {
-    const el = wins[id]?.el;
-    if (!el) return;
-    const x = subtle
-      ? (Math.random() < 0.5 ? -0.75 : 0.75)
-      : intensity >= 7
-        ? (Math.random() < 0.5 ? -2 : 2)
-        : (Math.random() < 0.5 ? -1 : 1);
-    const y = subtle
-      ? 0
-      : intensity >= 7
-        ? (Math.random() < 0.5 ? -1 : 1)
-        : 0;
-    el.style.setProperty('--pulse-x', x + 'px');
-    el.style.setProperty('--pulse-y', y + 'px');
-    el.classList.add('window-afterimage');
-    setTimeout(() => {
-      const current = wins[id]?.el;
-      if (!current || current !== el) return;
-      el.classList.remove('window-afterimage');
-      el.style.removeProperty('--pulse-x');
-      el.style.removeProperty('--pulse-y');
-    }, subtle ? 150 : intensity >= 7 ? 260 : 180);
-  });
-}
-
-function syncDaemonStory(options) {
-  const opts = options || {};
-  daemonNormalizeStory(daemonStory);
-  saveDaemonStory();
-  syncDaemonStoryRegistry();
-  syncDaemonStoryFiles();
-  if (!opts.silent) refreshDaemonStoryViews();
-}
-
-function updateDaemonStory(mutator, options) {
-  const before = normalizeDaemonStory(daemonStory);
-  mutator(daemonStory);
-  daemonNormalizeStory(daemonStory);
-  if (!daemonStoryChanged(before) && !options?.forceSync) return false;
-  syncDaemonStory(options);
-  if (options?.glitch) triggerGlitch();
-  if (options?.notice) {
-    const info = typeof options.notice === 'string'
-      ? { message: options.notice, title: 'Containment Notice', icon: 'icon:daemon' }
-      : options.notice;
-    osAlert(info.message, info.title || 'Containment Notice', info.icon || 'icon:daemon');
-  }
-  return true;
-}
-
-function daemonActivate(trigger) {
-  return updateDaemonStory(story => {
-    if (!story.openedDaemon) {
-      story.openedDaemon = true;
-      story.lastEventText = 'daemon.core observed';
-    } else if (trigger === 'raw' && story.lastEventText === 'none') {
-      story.lastEventText = 'daemon.core observed';
-    }
-  }, { forceSync: true });
-}
-
-function daemonRecordInvestigation(kind) {
-  return updateDaemonStory(story => {
-    if (kind === 'void') story.voidObserved = true;
-    if (kind === 'mirror') story.mirrorInspected = true;
-    if (kind === 'protocol') story.protocolInspected = true;
-    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
-      story.mirrorLockRestored = true;
-      story.lastEventText = 'mirror lattice restored';
-      return;
-    }
-    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
-      story.lastEventText = 'void channel profiled';
-    }
-  });
-}
-
-function daemonRecordVoidAction(mode) {
-  return updateDaemonStory(story => {
-    story.voidObserved = true;
-    story.voidActions = normalizeVoidActions([...(Array.isArray(story.voidActions) ? story.voidActions : []), mode]);
-    if (mode === 'observe') {
-      if (story.lastEventText === 'none') story.lastEventText = 'void surface observed';
-    } else if (story.stage < 6 || story.lastEventText === 'none') {
-      story.lastEventText = `void probe recorded: ${mode}`;
-    }
-    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && Number(getContainmentValue('MIRROR_LOCK')) === 1) {
-      story.mirrorLockRestored = true;
-      story.lastEventText = 'mirror lattice restored';
-      return;
-    }
-    if (story.anchorDeleted && story.voidObserved && isVoidProfiled(story) && (story.mirrorInspected || story.protocolInspected) && story.stage < 6) {
-      story.lastEventText = 'void channel profiled';
-    }
-  }, { forceSync: true });
-}
-
-function getVoidMeasureEntries(telemetry) {
-  return [
-    ['Containment', `${telemetry.rating.code} / ${telemetry.rating.label}`],
-    ['Void Pressure', String(telemetry.pressure)],
-    ['Lattice Stability', String(telemetry.lattice)],
-    ['Signal Depth', String(telemetry.signalDepth)],
-    ['Aperture Bias', telemetry.bias],
-    ['Disk Locality', 'negative'],
-  ];
-}
-
-function renderVoidReadout(out, content, telemetry) {
-  if (!out) return;
-  if (daemonVoidFeedMode === 'measure') {
-    const cards = getVoidMeasureEntries(telemetry).map(([label, value]) => `
-      <div style="border:1px solid #123512;background:#061006;padding:6px;min-width:0;">
-        <div style="color:#8db98d;text-transform:uppercase;font-size:9px;letter-spacing:0.03em;margin-bottom:3px;">${escHtml(label)}</div>
-        <div style="color:#b8efb8;font-size:11px;line-height:1.35;word-break:break-word;">${escHtml(value)}</div>
-      </div>
-    `).join('');
-    out.style.whiteSpace = 'normal';
-    out.style.padding = '8px';
-    out.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-content:start;">${cards}</div>`;
-    return;
-  }
-  out.style.whiteSpace = 'pre-wrap';
-  out.style.padding = '10px';
-  out.textContent = content;
-}
-
-function canDeleteAnchorSeed() {
-  return Number(getContainmentValue('MIRROR_LOCK')) === 0;
-}
-
 function canAttemptDeleteItem(path, fallbackDir, meta) {
   const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
-  if (upperPath === 'VOID.TMP') return true;
   if (!dirName && ROOT_PROTECTED_DIRS.has(String(fileName || '').toUpperCase())) return false;
   if (meta?.sysfile) return false;
   return true;
@@ -7942,94 +6797,14 @@ function canAttemptDeleteItem(path, fallbackDir, meta) {
 
 async function deleteVirtualPath(path, fallbackDir) {
   const { dirName, fileName } = fsSplitPath(path, fallbackDir);
-  const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
   const fileLabel = fileName || path;
   if (!fileName) return { ok: false, message: 'Usage: DEL <file>' };
-
-  if (upperPath === 'VOID.TMP') {
-    if (daemonStory.endingReached) return { ok: false, message: 'File not found: void.tmp' };
-    if (!daemonStory.quarantineSigned) {
-      return {
-        ok: false,
-        message: 'void.tmp refuses to go quietly.',
-        details: ['A quarantine signature is required before deletion will hold.'],
-      };
-    }
-    if (Number(getContainmentValue('MIRROR_LOCK')) !== 1) {
-      return {
-        ok: false,
-        message: 'void.tmp remains unstable.',
-        details: ['Restore HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 1 before the final delete.'],
-      };
-    }
-    updateDaemonStory(story => {
-      story.endingReached = true;
-      story.lastEventText = 'containment complete';
-    });
-    if (wins['void']) closeWin('void');
-    if (typeof setupIcons === 'function') setupIcons();
-    setTimeout(playContainmentEndingReboot, 140);
-    return {
-      ok: true,
-      deleted: true,
-      details: ['Deleted: void.tmp', 'SYS\\quarantine.sig holds.', 'Containment complete.'],
-    };
-  }
-
-  if (upperPath === 'DAEMON.CORE') {
-    return {
-      ok: false,
-      message: 'Access denied.',
-      details: ['daemon.core is not removable.', 'It remains in archive even when it is no longer active.'],
-    };
-  }
-
-  if (upperPath === '?????.EXE') {
-    return {
-      ok: false,
-      message: 'The launcher refuses deletion.',
-      details: ['If you need it quiet, leave it unopened.'],
-    };
-  }
 
   if (!dirName && ROOT_PROTECTED_DIRS.has(String(fileName || '').toUpperCase())) {
     return {
       ok: false,
       message: `Cannot delete ${fileLabel}: Access is denied.`,
       details: ['Core directories are protected.'],
-    };
-  }
-
-  if (upperPath === STORY_FILE_PATHS.anchorSeed.toUpperCase()) {
-    if (!canDeleteAnchorSeed()) {
-      return {
-        ok: false,
-        message: 'anchor.seed will not release.',
-        details: ['Lower HKEY_SLEEPBOX_MACHINE\\Containment\\MIRROR_LOCK to 0 first.'],
-      };
-    }
-    // Must be awaited. `if (!promise)` is always false, which would kill this
-    // not-found branch outright and fire the story beat below unconditionally.
-    if (!await removeFsPath(STORY_FILE_PATHS.anchorSeed)) {
-      return { ok: false, message: 'File not found: ' + fileLabel };
-    }
-    updateDaemonStory(story => {
-      story.anchorDeleted = true;
-      story.lastEventText = 'anchor released';
-      daemonVoidFeed = 'The aperture widens. Something on the reflected side notices the room.';
-      daemonVoidFeedMode = '';
-    }, {
-      glitch: true,
-      notice: {
-        title: 'Anchor Lost',
-        icon: 'icon:void',
-        message: 'The mirror anchor is gone.\n\nKeep daemon.core and void.tmp isolated from your active work while you inspect the breach.',
-      },
-    });
-    return {
-      ok: true,
-      deleted: true,
-      details: ['Deleted: anchor.seed', 'Mirror anchor released.', 'The channel is no longer deflected.'],
     };
   }
 
@@ -8041,94 +6816,8 @@ async function deleteVirtualPath(path, fallbackDir) {
     };
   }
 
-  const deleted = await recycleVirtualPath(path, fallbackDir);
-  if (!deleted.ok) return deleted;
-  syncDaemonStory({ silent: false });
-  return deleted;
+  return await recycleVirtualPath(path, fallbackDir);
 }
-
-// Testing helper: prime the endgame state, then run the real final delete.
-async function forceDeleteVoidTmp() {
-  if (daemonStory.endingReached) {
-    return { ok: false, message: 'void.tmp is no longer present.' };
-  }
-  const containment = registryData['HKEY_SLEEPBOX_MACHINE']?.['Containment'];
-  if (containment?.MIRROR_LOCK) containment.MIRROR_LOCK.value = 1;
-  saveRegistry();
-  updateDaemonStory(story => {
-    story.openedDaemon = true;
-    story.falseContainmentSeen = true;
-    story.daemonStopped = true;
-    story.anchorDeleted = true;
-    story.voidObserved = true;
-    story.voidActions = VOID_ACTION_ORDER.slice();
-    story.mirrorInspected = true;
-    story.protocolInspected = true;
-    story.mirrorLockRestored = true;
-    story.quarantineSigned = true;
-    story.lastEventText = 'debug skip armed';
-  }, { forceSync: true });
-  return await deleteVirtualPath('void.tmp');
-}
-window.forceDeleteVoidTmp = forceDeleteVoidTmp;
-
-function killSoulDaemonProcess() {
-  if (daemonStory.stage < 1) {
-    return {
-      ok: false,
-      message: 'ERROR: Access is denied. (PID 512)',
-      details: ['soul_svc.exe is still registered as a protected service.'],
-    };
-  }
-  if (daemonStory.daemonStopped || daemonStory.endingReached) {
-    return { ok: false, message: 'ERROR: The process with PID 512 was not found.' };
-  }
-  if (Number(getContainmentValue('RESPAWN_LOCK')) !== 0) {
-    updateDaemonStory(story => {
-      story.killedSoulDaemon = true;
-      story.falseContainmentSeen = true;
-      story.lastEventText = 'respawn loop observed';
-    }, { glitch: true });
-    return {
-      ok: false,
-      respawned: true,
-      message: 'soul_daemon.exe terminated.',
-      details: [
-        'watch.pid restored the process before the table settled.',
-        'RESPAWN_LOCK is still active.',
-      ],
-    };
-  }
-  updateDaemonStory(story => {
-    story.killedSoulDaemon = true;
-    story.falseContainmentSeen = true;
-    story.respawnDisabledKill = true;
-    story.daemonStopped = true;
-    story.wrongVictory = true;
-    story.lastEventText = 'daemon relay offline';
-    daemonVoidFeed = 'The monitor goes missing. The pressure does not.';
-    daemonVoidFeedMode = '';
-  }, {
-    glitch: true,
-    notice: {
-      title: 'Monitor Link Lost',
-      icon: 'icon:warning',
-      message: 'PID 512 stayed dead.\n\nvoid.tmp and CACHE\\mirror.dat should now be treated as active evidence.',
-    },
-  });
-  return {
-    ok: true,
-    stopped: true,
-    message: 'SUCCESS: soul_daemon.exe terminated.',
-    details: [
-      'The process does not respawn.',
-      'Void pressure begins to climb in its absence.',
-    ],
-  };
-}
-
-syncDaemonStory({ silent: true });
-
 // The one place that answers "what processes exist" - and, since this phase,
 // the one place that decides what happens when a process row's End Task /
 // TASKKILL-equivalent action is triggered. Both `ps` (apps/terminal.js) and
@@ -8143,22 +6832,20 @@ syncDaemonStory({ silent: true });
 // person adding a UI action for a process row belongs here too, for the
 // same reason - not back in apps/sysmon.js's untestable closure.
 //
-// The daemon story's processes are MERGED here rather than registered into the
-// kernel table, because getBuiltInProcesses() is a live projection of story
-// state: pid 512 disappears when the daemon is stopped, mirror_watch.exe
-// appears at stage 4, and the soul_svc_NN phantoms are generated from a
-// registry key the player can edit. Registering them would put narrative state
-// inside the kernel and turn a pure function into a cache needing invalidation
-// on every story beat.
+// The system's built-in processes (getBuiltInProcesses, os/fs-ops.js) are
+// MERGED here rather than registered into the kernel table. They have no
+// window, no interpreter and no lifecycle, so there is nothing for the kernel
+// to track about them; registering them would only be a second copy of a
+// constant table.
 //
 // The naive concatenate-then-sort in buildProcessRows below is safe only
 // because the two pid ranges never collide: real allocation starts at
-// KERNEL_FIRST_USER_PID = 2000 (os/kernel.js), while the daemon story's pids
-// stay at or below 1333 (os/kernel.js, os/daemon.js). Neither range may move
-// without checking the other.
+// KERNEL_FIRST_USER_PID = 2000 (os/kernel.js), while the built-in pids stay
+// well below it (os/fs-ops.js). Neither range may move without checking the
+// other.
 function processDisplayName(title, fallbackId) {
   // Window titles use two separators: an em dash (notepad, explorer) and a
-  // plain hyphen (terminal, sysmon, defrag, browser, daemon). Splitting on
+  // plain hyphen (terminal, sysmon, defrag, browser). Splitting on
   // only the em dash is why `ps` used to report the process name of the
   // terminal as "TERMINAL.exe - Command Prompt".
   const raw = String(title || fallbackId || '').split(/\s\u2014|\s-\s/)[0].trim();
@@ -8189,26 +6876,24 @@ function buildProcessRows() {
     mem: _pvMetrics(proc.pid).mem,
     memUnit: _pvMetrics(proc.pid).memUnit,
     winId: proc.winId || null,
-    isStory: false,
+    isBuiltin: false,
   }));
   // getBuiltInProcesses returns { pid, name, protected } and carries no kind,
   // state, cpu, or mem, so they are synthesized to match what ps already
-  // prints. A story process has no window and no interpreter - no measurable
-  // execution context - so it reports null, not an invented number.
+  // prints. A built-in process has no window and no interpreter - no
+  // measurable execution context - so it reports null, not an invented number.
   getBuiltInProcesses().forEach(p => rows.push({
     pid: p.pid, name: p.name, kind: 'system', state: 'running',
-    cpu: null, mem: null, memUnit: null, winId: null, isStory: true,
+    cpu: null, mem: null, memUnit: null, winId: null, isBuiltin: true,
   }));
   return rows.sort((a, b) => a.pid - b.pid);
 }
 
 // SYSMON's End Process used to call closeWin(row.winId) for everything. A
 // spawned process has no winId, so that was a button that silently did
-// nothing. A story row is not routed to a refusal here: SYSMON's own story
-// branch has two distinct outcomes (the pid-512 branch mutates story state,
-// every other story pid shows Access Denied), so this router hands story
-// rows straight back and touches neither the kernel nor the window manager.
-// Returns what it did so the caller can decide what to show.
+// nothing. A built-in row is refused outright as 'protected': every built-in
+// is a protected system process, and it touches neither the kernel nor the
+// window manager. Returns what it did so the caller can decide what to show.
 //
 // kernelSignal's return value is not discarded: it is false for the kernel
 // itself (pid 1, a system-kind process with no winId - os/kernel.js refuses
@@ -8222,7 +6907,7 @@ function buildProcessRows() {
 // of the same operation, which is the one thing this whole module exists to
 // prevent.
 function endProcessAction(row) {
-  if (row.isStory) return 'story';
+  if (row.isBuiltin) return 'protected';
   if (row.winId && wins[row.winId]) { closeWin(row.winId); return 'closed'; }
   return kernelSignal(row.pid, 'SIGTERM') ? 'signalled' : 'refused';
 }
@@ -9438,7 +8123,7 @@ async function scriptOpenUiTarget(path, cwd) {
 // the main thread, where the globals it references are legitimately in
 // scope (a worker reaches it only via the ui.openSystem syscall, answered
 // here). `openSystemFile` stays as the fallback for names the map does not
-// recognize (WELCOME.README, void.tmp, daemon.core, etc.).
+// recognize (user .exe files and anything else programsInDir lists).
 async function scriptOpenSystemProgram(name, cwd, arg) {
   const lower = String(name || '').toLowerCase();
   const map = {
@@ -9481,7 +8166,7 @@ function makeVfsScriptFs() {
     async writeFile(path, text, cwd) { return await vfsWriteFile(path, text, cwd); },
     async mkdir(path, cwd) { return await vfsMkdir(path, cwd); },
     // deleteVirtualPath, not vfsUnlink: it enforces the Recycle Bin and the
-    // story's undeletable files. Deleting straight from the VFS would bypass both.
+    // protected system files. Deleting straight from the VFS would bypass both.
     async unlink(path, cwd) { return await deleteVirtualPath(path, cwd); },
     async openUi(path, cwd) { return scriptOpenUiTarget(path, cwd); },
     async openSystem(name, cwd, arg) { return scriptOpenSystemProgram(name, cwd, arg); },
@@ -10176,8 +8861,8 @@ function showCtxMenu(x, y, items, opts) {
 // ── System toast ──────────────────────────────────────────────────
 // A disk-full notice is useless if anything can cover it, so the toast sits at
 // 99993: above every window, the 28px taskbar (9000), the start menu (9001)
-// and the alt-tab / CAD / sleep overlays (99990-99992), and below the
-// daemon-fx, glitch, CRT and context-menu layers. A low z-index fails twice
+// and the alt-tab / CAD / sleep overlays (99990-99992), and below the CRT
+// and context-menu layers. A low z-index fails twice
 // over - the bar renders underneath the taskbar it is anchored to, and zTop
 // starts at 100 and increments on every window FOCUS, not just creation, so
 // windows climb past a three-digit value during an ordinary session.
@@ -10264,9 +8949,9 @@ function _osDlgPos(w, h) {
 // or an old persisted shortcut would still carry.
 //
 // Deliberately NOT matched against the message body, only the title and icon.
-// The body is where the tempting words are, and also where they lie: Help
-// Topics for DEFRAG.exe contains "some system files cannot be moved", which a
-// body scan would hear as an error.
+// The body is where the tempting words are, and also where they lie: a help
+// text that explains what a program "cannot" do is advice, not a failure, and
+// a body scan would hear it as an error.
 const ALERT_ERROR_ICONS = new Set(['icon:error', 'icon:warning', 'X', '⚠', '⚠️', '❌', '\u{1F6AB}', '⛔', '\u{1F4A5}']);
 const ALERT_ERROR_TITLE = /\b(error|fail(ed|ure|s)?|denied|invalid|refused|corrupt|unavailable|not found|no such|cannot|can't)\b/i;
 function isErrorAlert(title, icon) {
@@ -10727,7 +9412,7 @@ function wmSnapPreviewRelease(id) {
 // cursor was the last time this drag was still live, not whether this drag
 // still has the right to act. Ownership can be revoked mid-drag (the window
 // this drag belongs to gets closed - terminal's own `exit`, SYSMON killing
-// the process, the daemon autoclosing 'void'), and a NEW window can then be
+// the process), and a NEW window can then be
 // opened that reuses the same id before mouseup ever fires. That window's
 // wins[id] exists and would pass every other check, but it was never
 // dragged - acting on the stale pendingZone would snap it with no preview
@@ -11578,7 +10263,7 @@ function resolveFsIcon(name, kind) {
     exe:'icon:exe', script:'icon:script', txt:'icon:text', readme:'icon:text', md:'icon:text',
     json:'icon:script', js:'icon:script', ts:'icon:script', jsx:'icon:script', tsx:'icon:script',
     html:'icon:browser', htm:'icon:browser', url:'icon:browser', css:'icon:script', py:'icon:script',
-    tmp:'icon:void', log:'icon:text', csv:'icon:sysmon', core:'icon:daemon'
+    log:'icon:text', csv:'icon:sysmon'
   }[ext] || 'icon:unknown';
 }
 
@@ -11787,28 +10472,6 @@ function ctxPathHas(e, selector) {
   return path.some(node => node && node.matches && node.matches(selector));
 }
 
-function canDeleteDesktopSystemIcon(ic) {
-  return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
-}
-
-function deleteDesktopSystemIcons(icons) {
-  const targets = (icons || []).filter(canDeleteDesktopSystemIcon);
-  if (!targets.length) return;
-  const prompt = targets.length === 1 ? 'Delete "' + targets[0].name + '"?' : 'Delete ' + targets.length + ' selected items?';
-  osConfirm(prompt, 'Delete', async ok => {
-    if (!ok) return;
-    const blocked = [];
-    let changed = false;
-    for (const target of targets) {
-      const result = await deleteVirtualPath(target.name);
-      if (result.ok && result.deleted) changed = true;
-      else if (!result.ok) blocked.push([result.message, ...(result.details || [])].filter(Boolean).join('\n'));
-    }
-    if (blocked.length) osAlert(blocked[0], 'Delete', 'icon:warning');
-    if (changed) clearDesktopSel();
-  }, 'icon:recycle-full');
-}
-
 function canDeleteDesktopFsEntry(ic) {
   return !!ic?.desktopEntry && !!ic?.target?.path;
 }
@@ -11843,11 +10506,10 @@ async function recycleDesktopItemAtPath(path) {
 function makeDesktopIconEl(ic) {
   const div = document.createElement('div');
   div.className = 'desktop-icon';
-  const displayName = ic.name === '?????.exe' ? getExeDisplayName() : ic.name;
   // The bin is the one desktop icon whose art depends on live state, so it is
   // resolved per render instead of read off the static DESKTOP_ICONS entry.
   const icon = isRecycleBinItemName(ic.name) ? resolveFsIcon(ic.name) : ic.emoji;
-  div.innerHTML = '<div class="di-img">' + iconMarkup(icon) + '</div><div class="di-name">' + escHtml(iconLabel(displayName)) + '</div>';
+  div.innerHTML = '<div class="di-img">' + iconMarkup(icon) + '</div><div class="di-name">' + escHtml(iconLabel(ic.name)) + '</div>';
   div._ic = ic;
   function activate() {
     if (ic.action) window[ic.action]?.();
@@ -12035,7 +10697,6 @@ function makeDesktopIconEl(ic) {
     const selDivs = [...desktopSel];
     const selIcs  = selDivs.map(d => d._ic);
     const multi   = selDivs.length > 1;
-    const canDeleteSystemFiles = selIcs.some(canDeleteDesktopSystemIcon);
     const canDeleteDesktopFiles = selIcs.some(canDeleteDesktopFsEntry);
     const singleDesktopImage = !multi && selIcs[0]?.desktopEntry && selIcs[0]?.kind === 'image' ? selIcs[0] : null;
     const items   = [];
@@ -12047,21 +10708,14 @@ function makeDesktopIconEl(ic) {
       })});
     } else {
       items.push({ label: 'Open', action: activate });
-      // Lore / decompiler shortcuts for single icons
+      // Decompiler shortcut for single icons
       const icName = ic.name || '';
-      if (['daemon.core','void.tmp'].includes(icName)) {
-        items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
-      }
       if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
         items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
       if (singleDesktopImage) {
         items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });
       }
-    }
-    if (canDeleteSystemFiles) {
-      items.push('-');
-      items.push({ label: multi ? 'Delete Deletable Items' : 'Delete', action: () => deleteDesktopSystemIcons(selIcs) });
     }
     if (canDeleteDesktopFiles) {
       items.push('-');
@@ -12364,22 +11018,18 @@ Starting over:
 Shortcuts:
   Space + Tab     switch windows
   Ctrl + Alt + Q  session controls
-  Esc             close menus and overlays
-
-Known issues:
-  [!] void.tmp cannot be read, deleted, or ignored
-  [!] Something is watching this session`;
+  Esc             close menus and overlays`;
 
 function openWelcome() {
   openNotepad('WELCOME.README', '', { initialContent: WELCOME_DEFAULT, w: 520, h: 520 });
 }
 
 // ── First run ─────────────────────────────────────────────────────
-// The desktop is twelve icons and a taskbar, and none of it says which of them
-// is the one with twenty-five toys behind it, that the terminal is real, or
-// that void.tmp is a story rather than a bug. WELCOME.README said all of that
-// and sat there unopened, because a stranger has no reason to think a README on
-// a fake desktop is anything but set dressing.
+// The desktop is a dozen icons and a taskbar, and none of it says which of
+// them is the one with twenty-five toys behind it, or that the terminal is
+// real. WELCOME.README said all of that and sat there unopened, because a
+// stranger has no reason to think a README on a fake desktop is anything but
+// set dressing.
 //
 // Its own key rather than a flag inside osSettings: a player who resets the OS
 // should see this again, and the reset erases everything under the sleepOS
@@ -12394,9 +11044,6 @@ function shouldShowFirstRunWelcome() {
 // mid-read has already met it, and reopening over their session every time
 // would make it the thing they close rather than the thing they read - it is
 // still on the desktop and in the Start menu for anyone who wants it back.
-//
-// Deliberately not gated on the story: this fires on the first boot of a fresh
-// install, which is the only boot where daemonStory is untouched anyway.
 function maybeShowFirstRunWelcome() {
   if (!shouldShowFirstRunWelcome()) return;
   try { localStorage.setItem(WELCOME_SEEN_KEY, '1'); } catch (e) {}
@@ -12543,7 +11190,7 @@ function notepadRouteFor(filename) {
 // the decompiler reads, refreshSeededSystemBinaries only heals it on the
 // NEXT boot, and there is otherwise no way back until then. Refused here,
 // before the write happens, with the same "protected" language the DELETE
-// guard (os/daemon.js) already uses so a player learns one vocabulary for
+// guard (os/fs-ops.js) already uses so a player learns one vocabulary for
 // this rule, not two.
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
@@ -12556,7 +11203,7 @@ function notepadRouteFor(filename) {
 // fallback would make this guard's resolution disagree with the write's,
 // which is exactly the class of bug being fixed. Splitting first and
 // checking `!dirName` (root only) is the same shape as the pre-existing
-// DELETE guard, isVisibleSystemPath (os/daemon.js) - a DOCS\TERMINAL.exe
+// DELETE guard, isVisibleSystemPath (os/fs-ops.js) - a DOCS\TERMINAL.exe
 // is a different, legitimate file and must stay writable.
 function notepadGuardProtectedSave(fname, dir) {
   const { dirName, fileName } = vfsSplitPath(fname, dir);
@@ -12624,17 +11271,6 @@ function openDecompilerView(filename) {
     });
     mb.appendChild(viewSpan);
   }
-}
-
-function openLoreNotepad(filename, content, title, icon) {
-  const id = 'lore-' + (filename || '').replace(/\W/g,'_');
-  if (!mkWin({ id, title: title + ' \u2014 Notepad', icon: icon || 'icon:notepad', w:440, h:320, menubar:false, statusbar:false })) return;
-  const body = document.getElementById('wb-' + id);
-  body.style.cssText = 'padding:0;overflow:hidden;';
-  const pre = document.createElement('pre');
-  pre.style.cssText = 'background:#fff;padding:8px;margin:0;height:100%;overflow:auto;font-family:var(--sleep-font);font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-word;';
-  pre.textContent = content;
-  body.appendChild(pre);
 }
 
 function runScriptInPopup(name, source, dirName) {
@@ -12831,151 +11467,15 @@ function openSaveDialog(defaultName, callback, options) {
   procSetTimeout(id, () => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
-// Lore-ified pseudo-bytecode for .exe decompiler view
+// The listing for a binary that is registered but not on disk. The seeded
+// table in os/fs-core.js is the one copy of the real listings - loaded long
+// before this runs - so a registered binary gets its own text back; anything
+// else gets a generic stub rather than a second authored copy to drift from.
 function getExeDecompilerContent(fname) {
-  const name = (fname || '').toLowerCase();
-  const base = fname.replace(/\.exe$/i,'').toUpperCase();
-  const loreMap = {
-    'terminal.exe': [
-      '; TERMINAL.exe - Disassembly v1.0',
-      'section .text',
-      '  PUSH soul_daemon',
-      '  CALL obsv.sys',
-      '  MOV  eax, [STDIN_HANDLE]',
-      '  CMP  eax, 0x00000000',
-      '  JE   void_fallback',
-      '  CALL parse_command',
-      '  JMP  main_loop',
-      'void_fallback:',
-      '  MOV  [VOID_PRESSURE], 0xFF',
-      '  RET',
-      '; NOTE: 3 subroutines unresolved',
-      '; CALL 0xDEAD???? - target unknown',
-    ],
-    'sysmon.exe': [
-      '; SYSMON.exe - Disassembly',
-      'section .data',
-      '  soul_integrity  DD 0x57',
-      '  daemon_count    DD 0x07',
-      '  observer_ref    DD [CLASSIFIED]',
-      'section .text',
-      '  PUSH soul_integrity',
-      '  CALL read_corpus_metrics',
-      '  MOV  eax, [soul_integrity]',
-      '  SUB  eax, 0x01',
-      '  JLE  integrity_critical',
-      '  CALL update_display',
-      '  JMP  tick_loop',
-      'integrity_critical:',
-      '  CALL emit_warning',
-      '  PUSH 0xDEAD',
-      '  RET',
-    ],
-    'browser.exe': [
-      '; BROWSER.exe - Disassembly',
-      'section .rodata',
-      '  home_url  DB "sleep://home", 0',
-      '  err_msg   DB "site blocked by void", 0',
-      'section .text',
-      '  MOV  esi, home_url',
-      '  CALL resolve_sleep_addr',
-      '  TEST eax, eax',
-      '  JZ   frame_blocked',
-      '  CALL render_page',
-      '  JMP  event_loop',
-      'frame_blocked:',
-      '  PUSH err_msg',
-      '  CALL show_error',
-      '  ; observer may intercept traffic here',
-      '  RET',
-    ],
-    'defrag.exe': [
-      '; DEFRAG.exe - Disassembly',
-      'section .bss',
-      '  corpus_blocks RESB 640',
-      '  void_fragment DB [CANNOT RESOLVE]',
-      'section .text',
-      '  MOV  ecx, 0x280',
-      '  LEA  edi, [corpus_blocks]',
-      '  CALL scan_fragments',
-      '  MOV  eax, [void_fragment]',
-      '  CMP  eax, 0x00',
-      '  JNE  skip_void',
-      '  ; void_fragment cannot be moved',
-      '  ; it has always been here',
-      'skip_void:',
-      '  CALL compact_corpus',
-      '  JMP  defrag_loop',
-    ],
-    'notepad.exe': [
-      '; NOTEPAD.exe - Disassembly',
-      'section .data',
-      '  welcome_readme DB "WELCOME.README", 0',
-      '  null_text      DD 0x00',
-      'section .text',
-      '  MOV  esi, welcome_readme',
-      '  CALL fs_open_read',
-      '  TEST eax, eax',
-      '  JZ   open_blank',
-      '  CALL load_text_buffer',
-      '  JMP  editor_loop',
-      'open_blank:',
-      '  MOV  [text_buffer], null_text',
-      '  CALL init_editor',
-      '  RET',
-    ],
-    'explorer.exe': [
-      '; EXPLORER.exe - Disassembly',
-      'section .data',
-      '  root_path DB "C:\\sleepOS\\", 0',
-      '  sys_files DD 9',
-      'section .text',
-      '  PUSH root_path',
-      '  CALL enumerate_fs',
-      '  MOV  ecx, sys_files',
-      '  CALL add_system_entries',
-      '  ; 1 entry cannot be enumerated',
-      '  ; see: ?????.exe',
-      '  CALL render_icon_grid',
-      '  JMP  window_loop',
-    ],
-    'calc.exe': [
-      '; CALC.exe - Disassembly',
-      'section .data',
-      '  display_buf DB 32 dup(0)',
-      '  soul_pi     DQ 3.14159265358979',
-      'section .text',
-      '  MOV  eax, 0x00',
-      '  MOV  [accumulator], eax',
-      '  CALL init_display',
-      '  JMP  calc_loop',
-      'calc_loop:',
-      '  CALL wait_keypress',
-      '  CALL eval_operation',
-      '  PUSH [accumulator]',
-      '  CALL update_display',
-      '  JMP  calc_loop',
-      '; NOTE: division by zero returns VOID',
-    ],
-    'regedit.exe': [
-      '; REGEDIT.exe - Disassembly',
-      'section .data',
-      '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
-      '  soul_key  DB "SOUL\\Metrics", 0',
-      'section .text',
-      '  PUSH hive_root',
-      '  CALL open_registry_hive',
-      '  MOV  esi, soul_key',
-      '  CALL reg_open_key',
-      '  CALL enumerate_values',
-      '  ; WARNING: OBSERVER_COUNT is classified',
-      '  ; ACCESS DENIED for key VOID\\',
-      '  CALL render_tree',
-      '  JMP  edit_loop',
-    ],
-  };
-  const specific = loreMap[name];
-  if (specific) return specific.join('\n');
+  const wanted = String(fname || '').toLowerCase();
+  const known = Object.keys(SYSTEM_BINARY_SOURCES).find(name => name.toLowerCase() === wanted);
+  if (known) return SYSTEM_BINARY_SOURCES[known];
+  const base = String(fname || '').replace(/\.exe$/i, '').toUpperCase();
   return [
     '; ' + base + ' - Disassembly',
     '; File type: WIN32 PE (sleepOS compatible)',
@@ -12985,52 +11485,17 @@ function getExeDecompilerContent(fname) {
     '  build_stamp DD 0x' + Math.floor(Math.random()*0xFFFFFFFF).toString(16).toUpperCase().padStart(8,'0'),
     '',
     'section .text',
-    '  PUSH soul_daemon',
-    '  CALL obsv.sys',
+    '  CALL init_runtime',
     '  MOV  eax, [entry_point]',
     '  CALL eax',
     '  CMP  eax, 0',
     '  JNZ  execution_error',
     '  RET',
     'execution_error:',
-    '  PUSH 0xDEADC0DE',
-    '  CALL void_handler',
-    '  JMP  0x0000',
-    '',
-    '; [decompiler: 1 function unresolved]',
+    '  PUSH eax',
+    '  CALL report_error',
+    '  RET',
   ].join('\n');
-}
-
-// Lore content for daemon.core and void.tmp
-const DAEMON_CORE_CONTENT =
-`[DAEMON CORE - raw read attempt]
-
-This file is being written.
-It is always being written.
-
-Fragment recovered at offset 0x0000:
-  owner    : SYSTEM\\???
-  type     : persistent observer
-  priority : ABOVE_KERNEL
-  started  : before system boot
-  status   : ACTIVE
-
-Fragment recovered at offset 0x00FF:
-  watching : all active processes
-  watching : all inactive processes
-  watching : this file
-
-Fragment recovered at offset 0x01FE:
-  [UNREADABLE - data still being written]
-  [UNREADABLE - data still being written]
-  [UNREADABLE - data still being written]
-
-Do not attempt to modify this file.
-You cannot. It is already modified.
-`;
-
-function getVoidTmpContent() {
-  return buildVoidTmpRawContent();
 }
 
 // The live Notepad window editing `pathKey`, or null. Reads `wins` directly so
@@ -13045,34 +11510,14 @@ function findNotepadWindowFor(pathKey) {
 function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
-  const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
   // Special handling for .exe files - decompiler view (read-only) for a
   // system binary, plain editor for anything the user authored themselves.
-  const normalizedName = (filename || '').toLowerCase();
-  const isDaemonCore = normalizedName === 'daemon.core';
-  const isVoidTmp = normalizedName === 'void.tmp';
-
   if (filename && notepadRouteFor(filename) === 'decompiler') {
     return openDecompilerView(filename);
   }
-  if (isDaemonCore) {
-    daemonActivate('raw');
-    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', 'icon:daemon');
-  }
-  if (isVoidTmp) {
-    daemonRecordInvestigation('void');
-    return openLoreNotepad(filename, getVoidTmpContent(), 'void.tmp - [OBSERVATION]', 'icon:void');
-  }
 
-  // vfsStatSync is metadata only, so the story checks and the window can all be
-  // decided synchronously. Note the `type === 'file'` test: fsGetEntry returned
-  // null for a directory, while vfsStatSync returns a stat for one, so without
-  // it a directory whose uppercased name collides with a story path would fire
-  // the investigation beat.
+  // vfsStatSync is metadata only, so the window can be decided synchronously.
   const st = filename ? vfsStatSync(filename, dirName) : null;
-  const isFile = !!st && st.type === 'file';
-  if (isFile && fullPathUpper === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
-  if (isFile && fullPathUpper === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
   const { dirName: initialDir, fileName } = splitInfo;
   const pathKey = filename ? ((initialDir ? initialDir + '\\' : '') + fileName) : String(++_notepadCount);
   // Which file a window is editing lives on the window record, not in its id.
@@ -13894,7 +12339,6 @@ function openExplorer(startPath) {
       const mutableSelected = allSelected.filter(i => !i.sysfile && !i._recycle && !i._shortcut);
       const isScript = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.script');
       const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.kind === 'image';
-      const isLoreFile = !!singleSelected && !singleSelected._recycle && ['daemon.core','void.tmp'].includes(singleSelected.name);
       const isExeFile  = !!singleSelected && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.exe');
       if (singleSelected && !multi && (singleSelected.recycleBin || isRecycleBinItemName(singleSelected.name)) && !singleSelected._recycle) {
         showCtxMenu(e.clientX, e.clientY, [
@@ -13921,7 +12365,6 @@ function openExplorer(startPath) {
         multi
           ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(openItem) }
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
-        ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
         ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
         ...(canSetWallpaper ? [{ label: 'Edit in Paint', action: () => openPaintFile(singleSelected.name, cwd) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
@@ -14357,7 +12800,7 @@ let _termExec = null;
 // other fallback would make this guard's resolution disagree with the
 // write's, which is exactly the class of bug being fixed. Splitting first
 // and checking `!dirName` (root only) is the same shape as the
-// pre-existing DELETE guard, isVisibleSystemPath (os/daemon.js) - a
+// pre-existing DELETE guard, isVisibleSystemPath (os/fs-ops.js) - a
 // DOCS\TERMINAL.exe is a different, legitimate file and must stay writable.
 function terminalProtectedWriteError(target, dir) {
   const { dirName, fileName } = vfsSplitPath(target, dir);
@@ -14432,11 +12875,11 @@ function buildPsRows() {
 }
 
 // Shared by CMDS.kill so it cannot disagree with `ps`/`taskkill` about which
-// pids belong to the daemon story: findBuiltInProcess is the same lookup
-// taskkill already uses, so both commands agree on what counts as a story
-// process by construction, not by a second hand-maintained list. Returns the
-// message to print and stop, or null if pid is not a story process and
-// CMDS.kill should proceed to the real kernel table.
+// pids are built-in system processes: findBuiltInProcess is the same lookup
+// taskkill already uses, so both commands agree on what counts as a built-in
+// by construction, not by a second hand-maintained list. Returns the message
+// to print and stop, or null if pid is not a built-in and CMDS.kill should
+// proceed to the real kernel table.
 function buildKillDenialMessage(pid) {
   const builtIn = findBuiltInProcess(pid);
   return builtIn ? `${pid} is a system process. Use TASKKILL.` : null;
@@ -14827,19 +13270,11 @@ function openTerminal(startDir, initialCommand) {
   // Resolution goes through os/programs.js, which searches the current
   // directory first and then each PATH entry. The `launchers` map that used to
   // live here was one of three lists of the same programs; it is gone, and the
-  // launch banners and the daemon's 320ms beat moved into the registry with
-  // the programs they belong to.
+  // launch banners and delays moved into the registry with the programs they
+  // belong to.
   function launchTerminalTarget(rawTarget) {
     const key = resolveShellText(rawTarget).trim();
     if (!key) return false;
-    // Checked before resolution so the message is about the story, not about
-    // PATH. void.tmp is already absent from the root set after the ending, so
-    // without this the player would get "not recognized" for a file the story
-    // says was removed.
-    if (key.toLowerCase() === 'void.tmp' && daemonStory.endingReached) {
-      print('void.tmp is no longer present.');
-      return true;
-    }
     const hit = programResolve(key, cwd, shellVars.PATH);
     if (!hit) return false;
     const program = hit.program;
@@ -14892,8 +13327,8 @@ function openTerminal(startDir, initialCommand) {
     const ds = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()}`;
     const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const lines = [
-      'Volume in drive C is CORPUS',
-      'Volume Serial Number is DEAD-C0DE',
+      'Volume in drive C is SLEEPOS',
+      'Volume Serial Number is 0903-B2E1',
       '',
       `Directory of ${path}`,
       '',
@@ -14904,9 +13339,6 @@ function openTerminal(startDir, initialCommand) {
         `11/13/2024  10:31    <DIR>    ..`,
         `11/13/2024  10:31    <DIR>    DOCS`,
       ].forEach(line => lines.push(line));
-      getTerminalRootSystemEntries().forEach(entry => {
-        lines.push(`${entry.date}  ${String(entry.size).padStart(7)}    ${entry.name}`);
-      });
       entries.filter(e => e.type === 'dir' && e.name !== 'DOCS').forEach(e => lines.push(`${ds}  ${ts}    <DIR>    ${e.name}`));
       entries.filter(e => e.kind === 'text').forEach(e => lines.push(`${ds}  ${ts}  ${String(e.size).padStart(7)}    ${e.name}`));
       entries.filter(e => e.kind === 'blob').forEach(e => lines.push(`${ds}  ${ts}  ${fmtSize(e.size).padStart(7)}    ${e.name}  [${e.blob.kind}]`));
@@ -14931,16 +13363,15 @@ function openTerminal(startDir, initialCommand) {
   function buildVerLines() {
     return [
       'sleepOS Version 0.9β (Build 2024.11.13-EXPERIMENTAL)',
-      'Soul Architecture: SOMA-686  /  Corpus Mode: ACTIVE',
+      'Machine: SOMA-686',
     ];
   }
 
   function buildWhoLines() {
     return [
-      'Current user : VISITOR\\UNKNOWN',
-      'Domain       : sleepOS.CORPUS',
+      'Current user : VISITOR',
+      'Domain       : SLEEPOS',
       'Session ID   : 0x' + Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6, '0'),
-      'Observers    : unknown (cannot enumerate)',
     ];
   }
 
@@ -14948,7 +13379,6 @@ function openTerminal(startDir, initialCommand) {
     const now = new Date();
     return [
       'System date: ' + now.toDateString(),
-      'NOTE: Clock drift detected. True date: +/- 2.3 years from displayed.',
     ];
   }
 
@@ -14957,17 +13387,11 @@ function openTerminal(startDir, initialCommand) {
       'sleepOS IP Configuration',
       '',
       'Adapter: SOMA-686 NIC',
-      '  Connection-specific DNS  : corpus.internal',
-      '  IPv4 Address             : 0.0.0.0',
-      '  Subnet Mask              : 255.255.255.???',
-      '  Default Gateway          : [unreachable]',
-      '  DNS Servers              : unknown (responding)',
-      '',
-      'Adapter: VOID Interface',
-      '  Status                   : Connected',
-      '  Address                  : [cannot be expressed]',
-      '  Packets in               : ∞',
-      '  Packets out              : 0',
+      '  Connection-specific DNS  : sleepos.local',
+      '  IPv4 Address             : 192.168.1.13',
+      '  Subnet Mask              : 255.255.255.0',
+      '  Default Gateway          : 192.168.1.1',
+      '  DNS Servers              : 192.168.1.1',
     ];
   }
 
@@ -14986,12 +13410,7 @@ function openTerminal(startDir, initialCommand) {
     });
     getRootSystemFiles({ includeExplorer: true })
       .filter(name => !vfsStatSync(name, ''))
-      .forEach(name => {
-        let label = name;
-        if (name === 'daemon.core') label = daemonStory.endingReached ? 'daemon.core              [ARCHIVED]' : 'daemon.core              [CONTAINMENT]';
-        if (name === '?????.exe') label = daemonStory.stage >= 7 ? getExeDisplayName() + '                [QUARANTINE LAUNCHER]' : '?????.exe                [DO NOT EXECUTE]';
-        lines.push(`├── ${label}`);
-      });
+      .forEach(name => lines.push(`├── ${name}`));
     rootEntries.filter(e => e.kind === 'text').forEach(e => lines.push(`├── ${e.name}`));
     rootEntries.filter(e => e.kind === 'blob').forEach(e => lines.push(`├── ${e.name}  [${e.blob.kind}]`));
     // A hardcoded `└── PROJECTS\` used to close the tree, so every line above
@@ -15003,21 +13422,67 @@ function openTerminal(startDir, initialCommand) {
     return lines;
   }
 
+  // COPY and MOVE, cmd.exe style: a destination that is an existing directory
+  // keeps the source's name, anything else names the new entry inside the
+  // directory it points into. An existing entry is never overwritten - the
+  // player gets told instead, which is what Explorer's paste would never do
+  // either. The actual work goes through the same helpers Explorer uses
+  // (_copyEntryInto for a paste, moveFsItemByPath for a drag), so a terminal
+  // copy and an Explorer copy cannot disagree about what a copy is.
+  async function copyOrMoveEntry(args, isMove) {
+    const verb = isMove ? 'MOVE' : 'COPY';
+    const parts = (args || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) { print(`Usage: ${verb} [source] [destination]`); return; }
+    const [srcRaw, dstRaw] = parts;
+    const src = vfsStatSync(srcRaw, cwd);
+    if (!src) { print('File not found: ' + srcRaw, '#ff4444'); return; }
+    if (isMove && (!canAttemptDeleteItem(srcRaw, cwd) || isVisibleSystemPath(srcRaw, { includeExplorer: true }, cwd))) {
+      print(`Cannot move ${src.name}: Access is denied.`, '#ff4444');
+      return;
+    }
+    const dstStat = vfsStatSync(dstRaw, cwd);
+    let dstDir, dstName;
+    if (dstStat && dstStat.kind === 'dir') {
+      dstDir = dstStat.dirName ? dstStat.dirName + '\\' + dstStat.name : dstStat.name;
+      dstName = src.name;
+    } else {
+      const split = vfsSplitPath(dstRaw, cwd);
+      dstDir = split.dirName;
+      dstName = split.fileName;
+    }
+    if (!dstName || !vfsDirExistsSync(dstDir)) {
+      print('The system cannot find the path specified: ' + dstRaw, '#ff4444');
+      return;
+    }
+    if (vfsExistsSync(dstName, dstDir)) {
+      print(`A file named ${dstName} already exists in ${programDisplayDir(dstDir)}.`, '#ff4444');
+      return;
+    }
+    const srcPath = src.dirName ? src.dirName + '\\' + src.name : src.name;
+    const dstNorm = vfsNormalizeDir(dstDir);
+    if (src.kind === 'dir' && (dstNorm === srcPath || dstNorm.startsWith(srcPath + '\\'))) {
+      print(`Cannot ${verb.toLowerCase()} a folder into itself.`, '#ff4444');
+      return;
+    }
+    try {
+      if (isMove) {
+        const moved = await moveFsItemByPath(srcRaw, cwd, dstDir, { newName: dstName });
+        if (!moved) { print('Move failed.', '#ff4444'); return; }
+        print('        1 file(s) moved.');
+      } else {
+        await _copyEntryInto(src.name, src.dirName, dstDir, dstName, src.kind);
+        print('        1 file(s) copied.');
+      }
+    } catch (err) {
+      print(err.code === 'ENOSPC' ? 'Disk full. Nothing was written.'
+          : err.code === 'EACCES' ? 'Storage is unavailable. Nothing was written.'
+          : `${verb} failed: ` + err.message, '#ff4444');
+    }
+  }
+
   async function getPipeableText(path) {
-    const { dirName, fileName } = vfsSplitPath(path, cwd);
-    const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
-    if (upperPath === 'DAEMON.CORE') {
-      daemonActivate('raw');
-      return buildDaemonCoreRawContent().split('\n');
-    }
-    if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
-      daemonRecordInvestigation('void');
-      return getVoidTmpContent().split('\n');
-    }
     const st = vfsStatSync(path, cwd);
     if (!st || st.type !== 'file') throw new Error('File not found: ' + path);
-    if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
-    if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
     if (st.kind === 'blob') {
       return [
         `Binary file: ${st.name} (${st.blob.kind}, ${fmtSize(st.blob.size)})`,
@@ -15125,7 +13590,7 @@ function openTerminal(startDir, initialCommand) {
       '',
       'You can also type executables directly:',
       '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
-      '  welcome.readme, void.tmp, daemon.core, ?????.exe',
+      '  welcome.readme, minesweeper.exe, paint.exe',
       '  or any project name (try: fireworks, vornoi, ...)',
       '  Programs are found in the current directory first, then along PATH.',
     ];
@@ -15422,33 +13887,13 @@ function openTerminal(startDir, initialCommand) {
       (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
     },
     rm: (args) => CMDS.del(args),
-    copy: (args) => {
-      const parts = (args || '').trim().split(/\s+/);
-      if (parts.length < 2) { print('Usage: COPY [source] [destination]'); return; }
-      print(`Copying '${parts[0]}' to '${parts[1]}'...`);
-      procSetTimeout('terminal', () => {
-        print('1 file(s) copied.');
-        print(`WARNING: The copy is not identical to the original.`);
-        print('This is considered normal.');
-      }, 700);
-    },
-    move: (args) => {
-      if (!args) { print('Usage: MOVE [source] [destination]'); return; }
-      print('Move failed.', '#ff4444');
-      print('Files in sleepOS cannot be moved.');
-      print('They are already where they need to be.');
-    },
+    copy: (args) => copyOrMoveEntry(args, false),
+    move: (args) => copyOrMoveEntry(args, true),
     mv: (args) => CMDS.move(args),
     taskkill: (args) => {
       const pidStr = (args || '').replace(/\D/g,'');
       if (!pidStr) { print('Usage: TASKKILL <pid>'); return; }
       const pid = parseInt(pidStr, 10);
-      if (pid === 512) {
-        const result = killSoulDaemonProcess();
-        print(result.message, result.ok ? undefined : '#ff4444');
-        (result.details || []).forEach(line => print(line, result.ok ? undefined : '#dddd00'));
-        return;
-      }
       const builtIn = findBuiltInProcess(pid);
       if (builtIn) {
         print(`Terminating ${builtIn.name} (PID ${pid})...`);
@@ -15474,25 +13919,11 @@ function openTerminal(startDir, initialCommand) {
     cat: async (args) => {
       const raw = (args||'').trim();
       if (!raw) { print('Usage: CAT <file>'); return; }
-      const { dirName, fileName } = vfsSplitPath(raw, cwd);
-      const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
-      if (upperPath === 'DAEMON.CORE') {
-        daemonActivate('raw');
-        buildDaemonCoreRawContent().split('\n').forEach(line => print(line));
-        return;
-      }
-      if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
-        daemonRecordInvestigation('void');
-        getVoidTmpContent().split('\n').forEach(line => print(line));
-        return;
-      }
       const st = vfsStatSync(raw, cwd);
       if (!st || st.type !== 'file') {
         print('File not found: ' + raw);
         return;
       }
-      if (upperPath === STORY_FILE_PATHS.mirrorProtocol.toUpperCase()) daemonRecordInvestigation('protocol');
-      if (upperPath === STORY_FILE_PATHS.mirrorDat.toUpperCase()) daemonRecordInvestigation('mirror');
       if (st.kind === 'blob') {
         print(`Binary file: ${st.name} (${st.blob.kind}, ${fmtSize(st.blob.size)})`);
         print(`Use OPEN ${st.name} to view it.`);
@@ -15993,12 +14424,12 @@ function openSysmon() {
   content.appendChild(procPanel);
 
   function getProcessList() {
-    // Phase 5b deleted the story rows' authored cpu/mem, so there is nothing
-    // left to jitter: a story process has no window and no interpreter, so it
-    // has no measurable execution context and reports null like any other
+    // Phase 5b deleted the built-in rows' authored cpu/mem, so there is nothing
+    // left to jitter: a built-in process has no window and no interpreter, so
+    // it has no measurable execution context and reports null like any other
     // unmeasured row. Real (kernel-table) rows carry their measured cpu/mem
     // straight through from buildProcessRows.
-    return buildProcessRows().filter(p => showSysProcs || !p.isStory);
+    return buildProcessRows().filter(p => showSysProcs || !p.isBuiltin);
   }
 
   function renderProcesses() {
@@ -16081,14 +14512,7 @@ function openSysmon() {
   procToolbar.querySelector('#sm-kill-btn').addEventListener('click', () => {
     if (!selectedProc) return;
     const action = endProcessAction(selectedProc);
-    if (action === 'story') {
-      if (selectedProc.pid === 512) {
-        const result = killSoulDaemonProcess();
-        selectedProc = null;
-        renderProcesses();
-        osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), result.ok ? 'Process Update' : 'Access Denied', 'icon:warning');
-        return;
-      }
+    if (action === 'protected') {
       const dlgId = 'sm-killerr-' + Date.now();
       // Mobile's .win-titlebar alone grows to 62px, which the desktop-sized
       // 110px box has no room left for after it - same fix as the shutdown
@@ -16481,14 +14905,7 @@ function openDefrag() {
       const pctOf = (lvl) => Math.round((lvl || 0) * 100) + '%';
       fileLabel.textContent = 'Defragmentation complete. ' + result.moved + ' blocks moved. ' +
         'Fragmentation ' + pctOf(result.fragBefore) + ' -> ' + pctOf(result.fragAfter) + '.';
-      // The story entity has no inode and no blocks, so DEFRAG genuinely never
-      // examined it. Say that, rather than claiming a move that was never
-      // attempted, and only while it actually exists.
-      if (ws) {
-        ws.textContent = (typeof daemonStory === 'object' && daemonStory && !daemonStory.endingReached)
-          ? 'Complete - 1 file could not be read: C:\\VOID\\[FILE NAME UNREADABLE]'
-          : 'Complete';
-      }
+      if (ws) ws.textContent = 'Complete';
     }
   });
 
@@ -16548,14 +14965,14 @@ function openDefrag() {
       // being cleaned. The tick stays in the label: the gutter is the icon's
       // now, so it can no longer double as the selected-drive marker.
       { label: 'C:\\ (' + dfDriveText().capacity + ')  ✓', icon: 'icon:disk', action: () => { if (ws) ws.textContent = 'Drive C:\\ selected'; } },
-      { label: 'D:\\ - [NOT FOUND]', icon: 'icon:disk', action: () => osAlert('Drive D:\\ is not available.\n\nIt may have never existed.', 'Drive Not Found', 'icon:warning') },
+      { label: 'D:\\ - [NOT FOUND]', icon: 'icon:disk', action: () => osAlert('Drive D:\\ is not available.', 'Drive Not Found', 'icon:warning') },
       '-',
       { label: 'Exit', action: () => closeWin('defrag') },
     ]},
     { label: 'Help', items: [
-      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe - Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nLower fragmentation reduces late-stage application distortion.\n\nNote: some system files cannot be moved.', 'Help Topics', 'icon:tip') },
+      { label: 'Help Topics', action: () => osAlert('DEFRAG.exe - Help\n\nClick Start to defragment drive C:\\.\n\nRepeated file edits, uploads, and deletes increase fragmentation over time.\n\nDEFRAG needs at least one free block to work in. Stop ends the run cleanly between block moves.', 'Help Topics', 'icon:tip') },
       '-',
-      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe - Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.\n\nA small amount of the drive always remains unmovable.', 'About DEFRAG.exe', 'icon:defrag') },
+      { label: 'About DEFRAG.exe', action: () => osAlert('DEFRAG.exe - Disk Defragmenter\nsleepOS v1.0\n\nConsolidates fragmented files\nand free space on your hard disk.', 'About DEFRAG.exe', 'icon:defrag') },
     ]},
   ].forEach(({ label, items }) => {
     const span = document.createElement('span');
@@ -16565,366 +14982,6 @@ function openDefrag() {
   });
 
   procSetTimeout('defrag', drawGrid, 80);
-}
-
-// ─────────────────────────────────────────────────────────────────
-// BROWSER
-// ─────────────────────────────────────────────────────────────────
-function renderDaemonPanel() {
-  const body = document.getElementById('wb-daemon');
-  if (!body) return;
-  applyDaemonWindowState();
-  setWinTitle('daemon', daemonStory.endingReached ? 'daemon.core - Archive' : 'daemon.core - Containment');
-  const telemetry = getContainmentTelemetry();
-  const mirrorLockActive = telemetry.mirrorLockActive;
-  const checklist = getContainmentChecklist();
-  const status = daemonStory.endingReached
-    ? 'Contained'
-    : daemonStory.stage >= 7 && !mirrorLockActive
-      ? 'Seal Interrupted'
-      : daemonStageLabel(daemonStory.stage);
-  const statusColor = daemonStory.endingReached
-    ? '#006400'
-    : daemonStory.stage >= 7 && !mirrorLockActive
-      ? '#aa5500'
-      : daemonStory.stage >= 5
-        ? '#800080'
-        : daemonStory.stage >= 4
-          ? '#aa0000'
-          : '#000080';
-  const notes = [];
-  if (daemonStory.endingReached) {
-    notes.push('Containment complete. Nothing further to do here.');
-  } else if (daemonStory.stage >= 7 && !mirrorLockActive) {
-    notes.push('The seal lattice was ready, then the mirror lock dropped again.');
-    notes.push('Restore MIRROR_LOCK to 1 before you run ?????.exe or delete void.tmp.');
-  } else if (daemonStory.stage >= 7) {
-    notes.push('The seal lattice is ready. Run ?????.exe to write SYS\\quarantine.sig, then delete void.tmp.');
-  } else if (daemonStory.stage >= 5) {
-    notes.push('You removed the anchor. The mirror is no longer deflected away from the user.');
-    notes.push('Inspect void.tmp and CACHE\\mirror.dat. Read DOCS\\MIRROR_PROTOCOL.txt for the procedure. Restore MIRROR_LOCK when done.');
-  } else if (daemonStory.stage >= 4) {
-    notes.push('PID 512 stayed dead. Conditions got worse, not better.');
-    notes.push('Lower MIRROR_LOCK in the registry, then delete SYS\\anchor.seed to open the channel. Inspect CACHE\\mirror.dat first.');
-  } else if (daemonStory.stage >= 2) {
-    notes.push('The watch layer answered your kill attempt. RESPAWN_LOCK must be cleared before PID 512 will stay down.');
-  } else {
-    notes.push('Open the raw read, then check DOCS for the first containment note.');
-  }
-  const gauge = value => `<div style="height:6px;border:1px solid #8f8f8f;background:#dadada;"><div style="height:100%;width:${Math.max(0, Math.min(100, value))}%;background:#000080;"></div></div>`;
-  body.innerHTML = `
-    <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:11px;line-height:1.5;">
-      <div style="display:flex;gap:12px;align-items:flex-start;">
-        <div class="daemon-eye-large">${iconMarkup('icon:daemon')}</div>
-        <div style="flex:1;">
-          <div><b>File:</b> daemon.core</div>
-          <div><b>Status:</b> <span style="color:${statusColor};font-weight:bold">${status}</span></div>
-          <div><b>Containment:</b> <span style="color:${telemetry.rating.color};font-weight:bold">${telemetry.rating.code} / ${telemetry.rating.label}</span></div>
-          <div><b>Observed:</b> ${daemonStory.openedDaemon ? 'yes' : 'no'}</div>
-          <div><b>Last Event:</b> ${escHtml(daemonStory.lastEventText || 'none')}</div>
-          <div><b>Mirror Lock:</b> ${telemetry.mirrorLockActive ? '1' : '0'}</div>
-          <div><b>Respawn Lock:</b> ${telemetry.respawnLockActive ? '1' : '0'}</div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
-          <div><b>Void Pressure</b> ${telemetry.pressure}</div>
-          ${gauge(telemetry.pressure)}
-        </div>
-        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
-          <div><b>Lattice Stability</b> ${telemetry.lattice}</div>
-          ${gauge(telemetry.lattice)}
-        </div>
-        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
-          <div><b>Signal Depth</b> ${telemetry.signalDepth}</div>
-          ${gauge(telemetry.signalDepth)}
-        </div>
-        <div style="border:1px solid #b0b0b0;background:#efefef;padding:6px;">
-          <div><b>Aperture Bias</b></div>
-          <div style="margin-top:4px;color:${telemetry.bias === 'user-facing' ? '#8a0036' : telemetry.bias === 'sealed' ? '#0a7a2a' : '#005f73'};font-weight:bold;text-transform:uppercase;">${telemetry.bias}</div>
-        </div>
-      </div>
-      <div style="border:1px solid #b0b0b0;background:#fff;padding:8px;min-height:78px;">
-        ${notes.map(line => `<div>${escHtml(line)}</div>`).join('')}
-      </div>
-      ${daemonStory.stage >= 4 ? `
-        <div style="border:1px solid #b0b0b0;background:#f7f7f7;padding:8px;">
-          <div style="font-weight:bold;margin-bottom:4px;">Containment Checklist</div>
-          ${checklist.map(item => `<div style="display:flex;align-items:center;gap:6px;color:${item.done ? '#0a662f' : '#555'};"><span style="font-weight:bold;width:12px;">${item.done ? '■' : '□'}</span><span>${escHtml(item.label)}</span></div>`).join('')}
-        </div>` : ''}
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        <button class="dlg-btn" onclick="openNotepad('daemon.core')">Raw Read</button>
-        ${daemonStory.stage >= 4 && !daemonStory.endingReached ? `<button class="dlg-btn" onclick="openVoid()">Open void.tmp</button>` : ''}
-      </div>
-      <div style="text-align:right;">
-        <button class="dlg-btn primary" onclick="closeWin('daemon')">Close</button>
-      </div>
-    </div>`;
-  resizeDaemonWindow();
-}
-
-function resizeDaemonWindow() {
-  const daemonWin = wins.daemon?.el;
-  const body = document.getElementById('wb-daemon');
-  if (!daemonWin || !body) return;
-  if (wmIsFilled(wins.daemon)) return;
-  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
-  if (isMobile) return;
-  const desktop = document.getElementById('desktop');
-  if (!desktop) return;
-  const stage = daemonStory.stage || 0;
-  const targetWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
-  const minHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
-  const maxWidth = Math.max(360, desktop.clientWidth - 24);
-  const maxHeight = Math.max(320, desktop.clientHeight - 24);
-  // Grow by however much the content actually overflows, and no more.
-  //
-  // This previously measured body.scrollHeight and added a padding constant,
-  // then took Math.max against the window's current height. Because the body
-  // grows with the window, every render computed a target taller than the last,
-  // so the panel crept ~46px per Raw Read with no upper bound. Keying off the
-  // overflow makes it idempotent: once the content fits, overflow is 0 and
-  // repeated renders leave the size alone.
-  const overflow = Math.max(0, Math.ceil(body.scrollHeight - body.clientHeight));
-  const nextWidth = Math.min(maxWidth, Math.max(daemonWin.offsetWidth, targetWidth));
-  const nextHeight = Math.min(maxHeight, Math.max(daemonWin.offsetHeight + overflow, minHeight));
-  daemonWin.style.width = nextWidth + 'px';
-  daemonWin.style.height = nextHeight + 'px';
-  const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
-  const maxTop = Math.max(0, desktop.clientHeight - nextHeight);
-  const currentLeft = parseFloat(daemonWin.style.left) || 0;
-  const currentTop = parseFloat(daemonWin.style.top) || 0;
-  daemonWin.style.left = Math.max(0, Math.min(maxLeft, currentLeft)) + 'px';
-  daemonWin.style.top = Math.max(0, Math.min(maxTop, currentTop)) + 'px';
-}
-
-function openDaemon() {
-  daemonActivate('panel');
-  const stage = daemonStory.stage || 0;
-  const initialWidth = stage >= 7 ? 470 : stage >= 3 ? 450 : 430;
-  const initialHeight = stage >= 7 ? 500 : stage >= 3 ? 470 : 430;
-  if (!mkWin({ id:'daemon', title:'daemon.core - Containment', icon:'icon:daemon', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-daemon')) return;
-  renderDaemonPanel();
-}
-
-function daemonVoidAction(mode) {
-  const telemetry = getContainmentTelemetry();
-  daemonVoidFeedMode = mode;
-  if (mode === 'observe') {
-    daemonVoidFeed = daemonStory.stage >= 5
-      ? 'The file is intact. What you are looking at is the aperture surface.'
-      : daemonStory.stage >= 4
-        ? 'The relay went quiet and this surface brightened at the same time.'
-        : 'Nothing stable answers yet, but the file is taking a shape.';
-  } else if (mode === 'measure') {
-    daemonVoidFeed = [
-      `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
-      `void pressure: ${telemetry.pressure}`,
-      `lattice stability: ${telemetry.lattice}`,
-      `signal depth: ${telemetry.signalDepth}`,
-      `aperture bias: ${telemetry.bias}`,
-      'disk locality: negative',
-    ].join('\n');
-  } else if (mode === 'listen') {
-    daemonVoidFeed = daemonStory.stage >= 5
-      ? 'No words. Something on the reflected side is leaning against the room tone.'
-      : daemonStory.stage >= 4
-        ? 'You hear the shape of a voice through the monitor gap.'
-        : 'Static. Then the suggestion of a room tone.';
-  } else if (mode === 'trace') {
-    daemonVoidFeed = daemonStory.stage >= 5
-      ? 'trace path:\n  user-facing aperture <- mirror offset <- unresolved source\n  return latency remains non-local'
-      : daemonStory.stage >= 4
-        ? 'trace path:\n  monitor gap -> pressure rise -> reflected surface'
-        : 'No stable trace path yet.';
-  } else if (mode === 'sample') {
-    daemonVoidFeed = daemonStory.stage >= 5
-      ? 'sample:\n  carrier mismatch: confirmed\n  human voice match: negative\n  daemon-authored signature: false'
-      : daemonStory.stage >= 4
-        ? 'sample:\n  carrier unstable\n  monitor loss amplified the return path'
-        : 'Sampling window too narrow.';
-  } else if (mode === 'stabilize') {
-    daemonVoidFeed = telemetry.mirrorLockActive
-      ? daemonStory.quarantineSigned
-        ? 'stabilize:\n  seal lattice catches for 0.8s\n  pressure drops in stepped increments'
-        : 'stabilize:\n  mirror lock absorbs part of the return\n  pressure hesitates, then climbs again'
-      : 'stabilize refused:\n  MIRROR_LOCK=0\n  aperture remains user-facing';
-    triggerGlitch({ intensity: daemonStory.stage >= 7 ? 7 : daemonStory.stage >= 5 ? 5 : 4 });
-  } else if (mode === 'pulse') {
-    daemonVoidFeed = daemonStory.quarantineSigned
-      ? 'The quarantine signature holds. The aperture recoils.'
-      : daemonStory.stage >= 5
-        ? 'A pulse returns before the machine feels ready for it, as if the file were farther away than the disk.'
-        : 'The pulse dissipates without a readable return.';
-    if (daemonStory.stage >= 5) triggerGlitch();
-  }
-  daemonRecordVoidAction(mode);
-  const out = document.getElementById('void-readout');
-  if (out) renderVoidReadout(out, daemonVoidFeed, telemetry);
-}
-
-function renderVoid() {
-  const body = document.getElementById('wb-void');
-  if (!body) return;
-  applyDaemonWindowState();
-  setWinTitle('void', daemonStory.endingReached ? 'void.tmp - Sealed' : 'void.tmp');
-  body.style.cssText = 'background:#000;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:10px;';
-  const telemetry = getContainmentTelemetry();
-  const actions = getVoidActions();
-  const pressure = telemetry.pressure;
-  const summary = daemonStory.endingReached
-    ? 'No active signal remains.'
-    : daemonStory.stage >= 5
-      ? `This file is the breach surface.\nUse the probes here to profile it.\n${getVoidObjectiveLine()}`
-      : daemonStory.stage >= 4
-        ? `Pressure rose after the daemon relay went quiet.\nUse Measure, Listen, or Trace to make the change legible.\n${getVoidObjectiveLine()}`
-        : 'No stable observation channel yet.';
-  const readout = daemonVoidFeed || summary;
-  body.innerHTML = `
-    <div style="border:1px solid #123512;background:#030703;color:#7fd37f;padding:8px;font-size:11px;line-height:1.5;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <div>
-        <div><b>CONTAINMENT:</b> ${telemetry.rating.code}</div>
-        <div style="color:${telemetry.rating.color};font-weight:bold;">${telemetry.rating.label}</div>
-      </div>
-      <div>
-        <div><b>BIAS:</b> ${telemetry.bias.toUpperCase()}</div>
-        <div><b>QUARANTINE:</b> ${daemonStory.quarantineSigned ? 'present' : 'missing'}</div>
-      </div>
-      <div>
-        <div><b>VOID PRESSURE:</b> ${pressure}</div>
-        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, pressure))}%;background:#6ab56a;"></div></div>
-      </div>
-      <div>
-        <div><b>LATTICE:</b> ${telemetry.lattice}</div>
-        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, telemetry.lattice))}%;background:#7fd37f;"></div></div>
-      </div>
-      <div>
-        <div><b>SIGNAL DEPTH:</b> ${telemetry.signalDepth}</div>
-        <div style="height:6px;border:1px solid #245a24;background:#010301;margin-top:3px;"><div style="height:100%;width:${Math.max(0, Math.min(100, telemetry.signalDepth))}%;background:#9ee29e;"></div></div>
-      </div>
-      <div>
-        <div><b>MIRROR LOCK:</b> ${telemetry.mirrorLockActive ? '1' : '0'}</div>
-        <div><b>DELETE AUTH:</b> ${telemetry.deleteAuthorized ? 'yes' : 'no'}</div>
-      </div>
-      <div>
-        <div><b>PROBES:</b> ${actions.length}/${VOID_ACTION_ORDER.length}</div>
-        <div><b>PROFILE:</b> ${getVoidProfileLabel().toUpperCase()}</div>
-      </div>
-    </div>
-    <div id="void-readout" style="flex:1;min-height:0;overflow:auto;border:1px solid #123512;background:#020402;color:#6ab56a;padding:10px;font-size:11px;line-height:1.7;white-space:pre-wrap;">${escHtml(readout)}</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;">
-      <button class="dlg-btn" onclick="daemonVoidAction('observe')">Observe</button>
-      <button class="dlg-btn" onclick="daemonVoidAction('measure')">Measure</button>
-      <button class="dlg-btn" onclick="daemonVoidAction('listen')">Listen</button>
-      <button class="dlg-btn" onclick="daemonVoidAction('trace')">Trace</button>
-      <button class="dlg-btn" onclick="daemonVoidAction('sample')">Sample</button>
-      <button class="dlg-btn" onclick="daemonVoidAction('stabilize')">Stabilize</button>
-      <button class="dlg-btn" onclick="daemonVoidAction('pulse')">Pulse</button>
-      <button class="dlg-btn primary" onclick="closeWin('void')">Close</button>
-    </div>`;
-  renderVoidReadout(document.getElementById('void-readout'), readout, telemetry);
-  resizeVoidWindow();
-}
-
-function resizeVoidWindow() {
-  const voidWin = wins.void?.el;
-  if (!voidWin || wmIsFilled(wins.void)) return;
-  const isMobile = window.innerWidth <= 700 || window.matchMedia('(pointer: coarse)').matches;
-  if (isMobile) return;
-  const desktop = document.getElementById('desktop');
-  if (!desktop) return;
-  const targetWidth = daemonStory.stage >= 5 ? 560 : 540;
-  const targetHeight = daemonStory.stage >= 5 ? 520 : 500;
-  const maxWidth = Math.max(380, desktop.clientWidth - 24);
-  const maxHeight = Math.max(360, desktop.clientHeight - 24);
-  const nextWidth = Math.min(maxWidth, Math.max(voidWin.offsetWidth, targetWidth));
-  const nextHeight = Math.min(maxHeight, Math.max(voidWin.offsetHeight, targetHeight));
-  voidWin.style.width = nextWidth + 'px';
-  voidWin.style.height = nextHeight + 'px';
-  const maxLeft = Math.max(0, desktop.clientWidth - nextWidth);
-  const maxTop = Math.max(0, desktop.clientHeight - nextHeight);
-  const currentLeft = parseFloat(voidWin.style.left) || 0;
-  const currentTop = parseFloat(voidWin.style.top) || 0;
-  voidWin.style.left = Math.max(0, Math.min(maxLeft, currentLeft)) + 'px';
-  voidWin.style.top = Math.max(0, Math.min(maxTop, currentTop)) + 'px';
-}
-
-function openVoid() {
-  if (daemonStory.endingReached) {
-    osAlert('void.tmp is no longer present.', 'void.tmp', 'icon:void');
-    return;
-  }
-  daemonRecordInvestigation('void');
-  const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
-  const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
-  if (!mkWin({ id:'void', title:'void.tmp', icon:'icon:void', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
-  renderVoid();
-}
-
-function openUnknown() {
-  const wid = 'unk-warn-' + Date.now();
-  // Mobile sizing, same reasoning as osAlert (os/ui-chrome.js): the
-  // desktop-sized 320x190 box left no room for the taller titlebar and
-  // .dlg-btn once every message here runs two lines with a <br><br> between
-  // them.
-  const mobile = isMobileLayout();
-  const w = mobile ? 340 : 320, h = mobile ? 260 : 190;
-  if (!mkWin({ id:wid, title:getExeDisplayName(), icon:'icon:unknown', w, h, x:220, y:130, menubar:false, statusbar:false, popup:true })) return;
-  const ready = daemonStory.stage >= 7 && !daemonStory.endingReached && Number(getContainmentValue('MIRROR_LOCK')) === 1;
-  const signed = daemonStory.quarantineSigned;
-  const inertMsg = daemonStory.stage < 4
-    ? 'The launcher does not respond.<br><br>There is nothing here for it to do yet.'
-    : daemonStory.stage < 6
-    ? 'The launcher is inert.<br><br>The investigation is incomplete. Find the channel.'
-    : 'The launcher is waiting.<br><br>MIRROR_LOCK must be restored before it will sign anything.';
-  document.getElementById('wb-' + wid).innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon">${iconMarkup('icon:unknown')}</div>
-      <div class="dlg-text">
-        ${signed
-          ? 'SYS\\quarantine.sig is already present.<br><br>The launcher is waiting for the final delete.'
-          : ready
-          ? 'The quarantine launcher is armed.<br><br>Running <b>?????.exe</b> will write <b>SYS\\quarantine.sig</b>.'
-          : inertMsg}
-      </div>
-    </div>
-    <div class="dlg-btns">
-      <button class="dlg-btn primary" onclick="closeWin('${wid}');runUnknown()">${signed ? 'Check Status' : ready ? 'Generate Signature' : 'Run Anyway'}</button>
-      <button class="dlg-btn" onclick="closeWin('${wid}')">Cancel</button>
-    </div>`;
-}
-
-function runUnknown() {
-  let message = '';
-  if (daemonStory.endingReached) {
-    message = 'The quarantine launcher has been archived.\nThere is nothing left to sign.';
-  } else if (daemonStory.stage < 4) {
-    message = '?????.exe does not execute.\n\nThere is nothing for it to do yet.';
-  } else if (daemonStory.stage < 6) {
-    message = '?????.exe does not execute.\n\nThe investigation is incomplete. Find and inspect the channel before you use this.';
-  } else if (daemonStory.stage < 7 || Number(getContainmentValue('MIRROR_LOCK')) !== 1) {
-    message = '?????.exe does not execute.\n\nRestore MIRROR_LOCK to 1 first. The launcher will not sign an open lattice.';
-  } else if (!daemonStory.quarantineSigned) {
-    updateDaemonStory(story => {
-      story.quarantineSigned = true;
-      story.lastEventText = 'quarantine signature written';
-      daemonVoidFeed = 'A signature passes through the aperture and the pressure drops.';
-      daemonVoidFeedMode = '';
-    }, {
-      glitch: true,
-    });
-    message = 'quarantine.sig written.\n\nDelete void.tmp to complete containment.';
-  } else {
-    message = 'SYS\\quarantine.sig is already present.\n\nThe launcher has nothing else to do.';
-  }
-  const rid = 'unk-result-' + Date.now();
-  if (!mkWin({ id:rid, title:'?????.exe', icon:'icon:unknown', w:360, h:220, x:180, y:110, menubar:false, statusbar:false })) return;
-  document.getElementById('wb-' + rid).innerHTML = `
-    <div class="dlg-body">
-      <div class="dlg-icon">${iconMarkup('icon:unknown')}</div>
-      <div class="dlg-text" style="white-space:pre-line;">${escHtml(message)}</div>
-    </div>
-    <div class="dlg-btns"><button class="dlg-btn primary" onclick="closeWin('${rid}')">OK</button></div>`;
 }
 
 // Set while a browser window is open, to that window's own `navigate`
@@ -21000,109 +19057,6 @@ function paintDrawMarquee() {
   s.ctx.strokeRect(Math.round(sel.x) + 0.5, Math.round(sel.y) + 0.5, Math.round(sel.w), Math.round(sel.h));
   s.ctx.restore();
 }
-function triggerGlitch(options) {
-  const desktop = document.getElementById('desktop');
-  const windowsLayer = document.getElementById('windows-layer');
-  const taskbar = document.getElementById('taskbar');
-  const glitch = document.getElementById('glitch');
-  const intensity = Number(options?.intensity) || 0;
-  const subtle = !!options?.subtle;
-  // Tracks the visual scaling below, so a subtle background flicker does not
-  // arrive at the same volume as a full-intensity tear.
-  playSound('glitch', {
-    volume: subtle ? 0.4 : intensity >= 7 ? 1 : intensity >= 5 ? 0.78 : 0.58,
-  });
-  pulseDaemonWindows(intensity, { subtle });
-  const targets = [desktop, windowsLayer, taskbar].filter(Boolean);
-  const glitchClass = subtle ? 'glitching-soft' : 'glitching';
-  targets.forEach(el => el.classList.add(glitchClass));
-  setTimeout(() => targets.forEach(el => {
-    el.classList.remove('glitching');
-    el.classList.remove('glitching-soft');
-  }), subtle ? 420 : intensity >= 7 ? 900 : intensity >= 5 ? 760 : 650);
-
-  if (glitch) {
-    glitch.style.display = 'block';
-    glitch.style.background = intensity >= 7
-      ? 'linear-gradient(90deg, rgba(255,0,120,0.14), transparent 22%, rgba(80,255,255,0.18) 58%, transparent 78%), repeating-linear-gradient(180deg, rgba(255,255,255,0.04) 0 2px, transparent 2px 6px)'
-      : intensity >= 5
-        ? 'linear-gradient(90deg, rgba(255,0,80,0.09), transparent 28%, rgba(90,255,240,0.12) 64%, transparent 82%), repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 8px)'
-        : 'linear-gradient(90deg, rgba(255,255,255,0.06), transparent 50%, rgba(120,255,255,0.06)), repeating-linear-gradient(180deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 10px)';
-    glitch.style.opacity = subtle
-      ? intensity >= 7 ? '0.54' : intensity >= 5 ? '0.38' : '0.24'
-      : intensity >= 7 ? '0.9' : intensity >= 5 ? '0.65' : '0.42';
-    glitch.style.transform = subtle
-      ? intensity >= 7 ? 'translateX(-2px)' : intensity >= 5 ? 'translateX(1px)' : 'translateX(0)'
-      : intensity >= 7 ? 'translateX(-6px)' : intensity >= 5 ? 'translateX(4px)' : 'translateX(0)';
-    setTimeout(() => {
-      glitch.style.display = 'none';
-      glitch.style.opacity = '';
-      glitch.style.transform = '';
-      glitch.style.background = '';
-    }, subtle ? 110 : intensity >= 7 ? 180 : 130);
-  }
-
-  // Brief scanline intensify
-  const crt = document.getElementById('crt');
-  crt.style.opacity = subtle
-    ? intensity >= 7 ? '1.55' : intensity >= 5 ? '1.35' : '1.22'
-    : intensity >= 7 ? '2.45' : intensity >= 5 ? '2.2' : '2';
-  setTimeout(() => { crt.style.opacity = '1'; }, subtle ? 150 : intensity >= 7 ? 260 : 180);
-}
-
-let endingRebootActive = false;
-const ENDING_REBOOT_ANIM_MS = 2350;
-const ENDING_REBOOT_TEXT_HOLD_MS = 2400;
-function playContainmentEndingReboot() {
-  if (endingRebootActive) return;
-  endingRebootActive = true;
-  closeStart();
-  closeDropdown();
-  closeCad();
-  if (altTabActive) closeAltTab();
-
-  stopSoundLoop('ambience', { fade: 0.7 });
-  playSound('shutdown');
-
-  const overlay = document.getElementById('ending-reboot');
-  if (overlay) {
-    overlay.classList.add('active');
-    overlay.setAttribute('aria-hidden', 'false');
-  }
-  document.body.classList.add('final-rebooting');
-
-  setTimeout(() => {
-    const desktop = document.getElementById('desktop');
-    const taskbar = document.getElementById('taskbar');
-    const daemonFx = document.getElementById('daemon-fx');
-    const bios = document.getElementById('bios');
-
-    if (overlay) {
-      overlay.classList.remove('active');
-      overlay.setAttribute('aria-hidden', 'true');
-    }
-    if (desktop) desktop.style.display = 'none';
-    if (taskbar) taskbar.style.display = 'none';
-    if (daemonFx) daemonFx.style.display = 'none';
-    document.body.classList.remove('final-rebooting');
-
-    if (bios) {
-      bios.style.display = 'flex';
-      bios.style.opacity = '1';
-      bios.style.transition = 'none';
-      bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#858585;white-space:pre;line-height:1.55;">
-Containment complete.
-Draining chroma channels...               [SEALED]
-Archiving daemon.core...                 [OK]
-Rebooting sleepOS shell...
-      </div>`;
-    }
-
-    try { sessionStorage.setItem(FORCE_BOOT_SESSION_KEY, '1'); } catch (e) {}
-    setTimeout(() => { window.location.replace('sleep-os.html'); }, ENDING_REBOOT_TEXT_HOLD_MS);
-  }, ENDING_REBOOT_ANIM_MS);
-}
-
 // ─────────────────────────────────────────────────────────────────
 // SHUTDOWN
 // ─────────────────────────────────────────────────────────────────
@@ -21169,12 +19123,9 @@ function confirmShutdown() {
   bios.innerHTML = `<div id="bios-text" style="font-family: var(--sleep-font);font-size:18px;color:#888;white-space:pre;line-height:1.5;">
 sleepOS - ${val === 'restart' ? 'Restarting' : 'Shutting Down'}...
 
-Stopping soul_daemon.exe...              [OK]
-Stopping dream_fragment.exe...           [OK]
-Stopping unknown (PID 0333)...           [TIMEOUT]
-Stopping unknown (PID 0334)...           [TIMEOUT]
-Stopping unknown (PID 0335)...           [TIMEOUT]
-Flushing corpus cache...                 [OK]
+Stopping services...                     [OK]
+Closing open windows...                  [OK]
+Flushing disk cache...                   [OK]
 Unloading kernel modules...              [OK]
 Saving system state...                   [OK]
   </div>`;
@@ -21215,8 +19166,8 @@ Saving system state...                   [OK]
 // ─────────────────────────────────────────────────────────────────
 // Everything sleepOS remembers is persistent and, until this existed, there was
 // no way out of it from inside the OS: a player who deleted something they
-// wanted, filled the simulated disk, or finished the daemon ending and wanted
-// to watch the boot again had to go and clear browser site data by hand.
+// wanted, filled the simulated disk, or just wanted to watch the first boot
+// again had to go and clear browser site data by hand.
 
 // The legacy pre-migration media database (os/fs-migrate.js) alongside the live
 // filesystem one. Migration deliberately leaves both behind for a release, so a
@@ -21272,8 +19223,7 @@ function confirmFactoryReset() {
     'This erases everything sleepOS has saved in this browser:\n\n' +
     '  your files and folders\n' +
     '  desktop layout and wallpaper\n' +
-    '  settings and registry\n' +
-    '  story progress\n\n' +
+    '  settings and registry\n\n' +
     'sleepOS restarts as a fresh install. This cannot be undone.',
     'Reset sleepOS',
     ok => { if (ok) void performFactoryReset(); },
@@ -21397,7 +19347,6 @@ function openRegedit() {
   const ws   = document.getElementById('ws-regedit');
   const mb   = document.getElementById('mb-regedit');
   body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
-  const REGEDIT_LOCKED_VALUE_NAMES = new Set(['OBSERVER_COUNT', 'ANCHOR_FILE', 'TEMPORAL_DRIFT']);
 
   const layout = document.createElement('div');
   layout.className = 'reg-layout';
@@ -21414,14 +19363,6 @@ function openRegedit() {
   layout.appendChild(vals);
 
   let selectedPath = null; // { hive, key }
-
-  function isLockedRegValue(hive, keyPath, valName) {
-    return REGEDIT_LOCKED_VALUE_NAMES.has(String(valName || '').toUpperCase());
-  }
-
-  function showLockedRegValueNotice(valName) {
-    osAlert('The registry value "' + valName + '" is protected and cannot be modified.', 'Registry Editor', 'icon:regedit');
-  }
 
   function buildTree() {
     tree.innerHTML = '';
@@ -21474,7 +19415,6 @@ function openRegedit() {
 
     Object.keys(data).forEach(valName => {
       const entry = data[valName];
-      const locked = isLockedRegValue(hive, keyPath, valName);
       const tr = document.createElement('tr');
       tr.className = 'reg-val-row';
       // Value rows used to draw the generic text-file icon whatever the type
@@ -21490,18 +19430,12 @@ function openRegedit() {
       // #desktop's menu wins the race, replacing Modify with the desktop's
       // own. Desktop icons avoid this the same way: stop it at the row.
       tr.addEventListener('pointerdown', e => e.stopPropagation());
-      tr.addEventListener('dblclick', () => {
-        if (locked) {
-          showLockedRegValueNotice(valName);
-          return;
-        }
-        editRegValue(hive, keyPath, valName);
-      });
+      tr.addEventListener('dblclick', () => editRegValue(hive, keyPath, valName));
       tr.addEventListener('contextmenu', e => {
         e.preventDefault();
         tr.classList.add('selected');
         showCtxMenu(e.clientX, e.clientY, [
-          { label: 'Modify', disabled: locked, action: () => editRegValue(hive, keyPath, valName) },
+          { label: 'Modify', action: () => editRegValue(hive, keyPath, valName) },
         ]);
         procSetTimeout('regedit', () => tr.classList.remove('selected'), 800);
       });
@@ -21518,10 +19452,6 @@ function openRegedit() {
   }
 
   function editRegValue(hive, keyPath, valName) {
-    if (isLockedRegValue(hive, keyPath, valName)) {
-      showLockedRegValueNotice(valName);
-      return;
-    }
     const entry = registryData[hive][keyPath][valName];
     const currentVal = String(entry.value);
     osPrompt('Edit value for: ' + valName, currentVal, 'Edit Registry Value', newVal => {
@@ -21551,56 +19481,6 @@ function openRegedit() {
           updateClock();
         }
         saveSettings();
-      } else if (keyPath === 'SOUL\\Metrics') {
-        if (valName === 'SOUL_INTEGRITY') {
-          const bar = document.getElementById('bar-soul');
-          const val = document.getElementById('val-soul');
-          const v = Math.max(0, Math.min(99, parseInt(newValue) || 0));
-          if (bar) bar.style.width = v + '%';
-          if (val) val.textContent = v + '%';
-        } else if (valName === 'DAEMON_COUNT') {
-          const count = parseInt(newValue) || 0;
-          if (count !== 7) triggerGlitch({ intensity: Math.abs(count - 7) > 3 ? 6 : 3 });
-          updateDaemonStory(story => {
-            story.lastEventText = count > 7 ? 'daemon count elevated - ' + count : count < 7 ? 'daemon count reduced - ' + count : 'daemon count nominal';
-          }, { forceSync: true });
-          if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
-        } else if (valName === 'TEMPORAL_DRIFT') {
-          triggerGlitch({ intensity: 3 });
-          updateDaemonStory(story => { story.lastEventText = 'temporal drift set: ' + String(newValue); }, { forceSync: true });
-          if (typeof renderDaemonPanel === 'function' && document.getElementById('wb-daemon')) renderDaemonPanel();
-        }
-      } else if (keyPath === 'VOID') {
-        if (valName === 'VOID_PRESSURE_BASE') {
-          const base = Math.max(0, Math.min(99, parseInt(newValue) || 0));
-          triggerGlitch({ intensity: base > 50 ? 7 : base > 25 ? 5 : 2 });
-          if (typeof renderVoid === 'function' && document.getElementById('wb-void')) renderVoid();
-        } else if (valName === 'OBSERVER_COUNT') {
-          const val = String(newValue).trim();
-          if (val !== '[classified]' && val !== '') {
-            triggerGlitch({ intensity: 8 });
-            updateDaemonStory(story => { story.lastEventText = 'observer count declassified: ' + val; }, { forceSync: true });
-          }
-        }
-      } else if (keyPath === 'Containment') {
-        if (valName === 'RESPAWN_LOCK') {
-          updateDaemonStory(story => {
-            if (story.openedDaemon && !story.daemonStopped) {
-              story.lastEventText = Number(newValue) === 0 ? 'respawn lock cleared' : 'respawn lock raised';
-            }
-          }, { forceSync: true });
-        } else if (valName === 'MIRROR_LOCK') {
-          updateDaemonStory(story => {
-            if (Number(newValue) === 0) {
-              if (story.stage >= 4) story.lastEventText = story.anchorDeleted ? 'mirror lattice lowered' : 'mirror lock lowered';
-            } else if (story.anchorDeleted && story.stage >= 6) {
-              story.mirrorLockRestored = true;
-              story.lastEventText = 'mirror lattice restored';
-            } else if (story.anchorDeleted) {
-              story.lastEventText = 'mirror lock raised';
-            }
-          }, { forceSync: true, glitch: Number(newValue) === 0 && daemonStory.stage >= 5 });
-        }
       }
     } else if (hive === 'HKEY_CURRENT_USER') {
       if (keyPath === 'Desktop' && valName === 'Wallpaper') {
@@ -21659,8 +19539,7 @@ function openRegedit() {
       { label: 'Modify', disabled: !selectedPath, action: () => {
         if (!selectedPath) return;
         const keys = Object.keys(registryData[selectedPath.hive][selectedPath.key]);
-        const editableKey = keys.find(valName => !isLockedRegValue(selectedPath.hive, selectedPath.key, valName));
-        if (editableKey) editRegValue(selectedPath.hive, selectedPath.key, editableKey);
+        if (keys.length) editRegValue(selectedPath.hive, selectedPath.key, keys[0]);
       }},
     ]},
     { label: 'Help', items: [
@@ -21953,8 +19832,6 @@ function openRunDialog() {
     'paint': openPaint, 'paint.exe': openPaint,
     'welcome': openWelcome, 'welcome.readme': openWelcome,
     'sysmon.exe': openSysmon,
-    'void.tmp': openVoid, 'daemon.core': openDaemon,
-    '?????.exe': openUnknown,
   };
 
   ok.addEventListener('click', () => {
@@ -22143,7 +20020,6 @@ function startDesktop() {
   const savedWp = getInitialWallpaperPath();
   if (savedWp) applyWallpaper(savedWp, { deferMissing: !isSystemWallpaperPath(savedWp) });
   applySettings();
-  applyDaemonVisualState();
   setupIcons();
   wmInstallTaskbarMenu();
   initSystemAudio();

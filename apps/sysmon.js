@@ -86,12 +86,12 @@ function openSysmon() {
   content.appendChild(procPanel);
 
   function getProcessList() {
-    // Phase 5b deleted the story rows' authored cpu/mem, so there is nothing
-    // left to jitter: a story process has no window and no interpreter, so it
-    // has no measurable execution context and reports null like any other
+    // Phase 5b deleted the built-in rows' authored cpu/mem, so there is nothing
+    // left to jitter: a built-in process has no window and no interpreter, so
+    // it has no measurable execution context and reports null like any other
     // unmeasured row. Real (kernel-table) rows carry their measured cpu/mem
     // straight through from buildProcessRows.
-    return buildProcessRows().filter(p => showSysProcs || !p.isStory);
+    return buildProcessRows().filter(p => showSysProcs || !p.isBuiltin);
   }
 
   function renderProcesses() {
@@ -174,14 +174,7 @@ function openSysmon() {
   procToolbar.querySelector('#sm-kill-btn').addEventListener('click', () => {
     if (!selectedProc) return;
     const action = endProcessAction(selectedProc);
-    if (action === 'story') {
-      if (selectedProc.pid === 512) {
-        const result = killSoulDaemonProcess();
-        selectedProc = null;
-        renderProcesses();
-        osAlert([result.message, ...(result.details || [])].filter(Boolean).join('\n'), result.ok ? 'Process Update' : 'Access Denied', 'icon:warning');
-        return;
-      }
+    if (action === 'protected') {
       const dlgId = 'sm-killerr-' + Date.now();
       // Mobile's .win-titlebar alone grows to 62px, which the desktop-sized
       // 110px box has no room left for after it - same fix as the shutdown

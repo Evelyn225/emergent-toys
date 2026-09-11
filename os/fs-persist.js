@@ -174,7 +174,8 @@ async function refreshSeededSystemBinaries() {
 // filesystem DIR already listed as full of files.
 //
 // vfsQueueDirectWrite (os/vfs.js) is the fix: the same escape hatch
-// os/daemon.js uses for its own direct-tree-mutation-with-no-op problem.
+// ensureFsDir (os/fs-ops.js) uses for its own direct-tree-mutation-with-no-op
+// problem.
 // Passing null as the "previous value" bypasses its own unchanged-content
 // skip, which exists to stop a normal re-set of identical content from
 // queuing a redundant op - here the previous value is not identical, it is
@@ -471,11 +472,35 @@ async function vfsBootMount() {
   // creates the directory, so this costs a returning visitor nothing.
   ensureFsDir('PICTURES');
   void loadBlobsFromBlocks();
-  // The load-time syncDaemonStory ran against the seed tree, which the mount
-  // then replaced. Re-run it against the real tree so the story files and the
-  // registry pointers agree. Same shape as the ensureFsDir call above.
-  syncDaemonStory({ silent: true });
+  purgeRetiredStoryFiles();
   await fsRefreshFragmentation();
+}
+
+// sleepOS used to carry a containment story that wrote its own files into
+// DOCS, SYS and CACHE and kept its progress in localStorage. The story is gone,
+// but a profile that booted while it existed still has those files persisted -
+// SYS\anchor.seed on every one of them, because the story wrote it on first
+// boot - and nothing else would ever remove them. The unlinks are floated for
+// the same reason refreshSeededDocs mutates directly: the tree change inside
+// vfsUnlink is synchronous and only the commit is deferred.
+const RETIRED_STORY_FILES = [
+  'DOCS\\NOTICE_13.txt',
+  'DOCS\\INCIDENT_A.txt',
+  'DOCS\\LOST_CONTACT.txt',
+  'DOCS\\LAST_OPERATOR.txt',
+  'DOCS\\MIRROR_PROTOCOL.txt',
+  'SYS\\watch.pid',
+  'SYS\\anchor.seed',
+  'SYS\\quarantine.sig',
+  'CACHE\\mirror.dat',
+];
+const RETIRED_STORY_KEY = 'sleepOS-daemon-story';
+
+function purgeRetiredStoryFiles() {
+  RETIRED_STORY_FILES.forEach(path => {
+    if (vfsStatSync(path)?.type === 'file') void removeFsPath(path);
+  });
+  try { localStorage.removeItem(RETIRED_STORY_KEY); } catch (e) {}
 }
 
 // A late commit failure has no call stack to propagate into, so it surfaces

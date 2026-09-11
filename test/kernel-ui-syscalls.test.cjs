@@ -58,8 +58,8 @@ test('ui.openSystem falls back to openSystemFile for a name the map does not rec
   const { ctx, calls } = kernelWithPrograms();
   const w = fakeWorker();
   const pid = ctx.__spawnForTest(w, 'job.script');
-  await ctx.kernelHandleSyscall(pid, { type: 'syscall', seq: 1, name: 'ui.openSystem', args: ['void.tmp'] });
-  assert.deepStrictEqual(plain(calls), [['fallback', 'void.tmp']]);
+  await ctx.kernelHandleSyscall(pid, { type: 'syscall', seq: 1, name: 'ui.openSystem', args: ['HELLO.exe'] });
+  assert.deepStrictEqual(plain(calls), [['fallback', 'HELLO.exe']]);
 });
 
 test('ui.openSystem falls back to proc.cwd when no directory argument is supplied', async () => {
@@ -98,7 +98,7 @@ test('ui.isSystemPath forwards to the real isVisibleSystemPath with includeExplo
   const { ctx, calls } = kernelWithPrograms({ isSystemPath: true });
   const w = fakeWorker();
   const pid = ctx.__spawnForTest(w, 'job.script');
-  await ctx.kernelHandleSyscall(pid, { type: 'syscall', seq: 1, name: 'ui.isSystemPath', args: ['void.tmp'] });
-  assert.deepStrictEqual(plain(calls), [['isSystemPath', 'void.tmp', { includeExplorer: true }]]);
+  await ctx.kernelHandleSyscall(pid, { type: 'syscall', seq: 1, name: 'ui.isSystemPath', args: ['TERMINAL.exe'] });
+  assert.deepStrictEqual(plain(calls), [['isSystemPath', 'TERMINAL.exe', { includeExplorer: true }]]);
   assert.strictEqual(plain(w.posted)[0].value, true);
 });
