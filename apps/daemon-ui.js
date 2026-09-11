@@ -141,6 +141,9 @@ function openDaemon() {
 function daemonVoidAction(mode) {
   const telemetry = getContainmentTelemetry();
   daemonVoidFeedMode = mode;
+  // Switching to a different probe cuts Listen's clip short rather than
+  // letting it keep running under whatever the new probe shows.
+  if (mode !== 'listen') stopSound('void-listen');
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
       ? 'The file is intact. What you are looking at is the aperture surface.'
@@ -157,7 +160,9 @@ function daemonVoidAction(mode) {
       'disk locality: negative',
     ].join('\n');
   } else if (mode === 'listen') {
-    playSound('void-listen');
+    // exclusive: a second Listen click restarts the clip instead of layering
+    // a second copy under the first.
+    playSound('void-listen', { exclusive: true });
     daemonVoidFeed = daemonStory.stage >= 5
       ? "No words. Just a shift in the room tone that wasn't there before."
       : daemonStory.stage >= 4
@@ -290,6 +295,13 @@ function openVoid() {
   const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
   const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
   if (!mkWin({ id:'void', title:'void.tmp', icon:'icon:void', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  // Listen's clip (~68s) must not keep playing once the window that started
+  // it is gone or out of sight - mkWin runs this path on every open, closed
+  // or not, so both hooks are (re)set here rather than only on first create.
+  if (wins['void']) {
+    wins['void']._onclose = () => stopSound('void-listen');
+    wins['void']._onminimize = () => stopSound('void-listen');
+  }
   renderVoid();
 }
 

@@ -4314,6 +4314,15 @@ function loadSound(name) {
   return load;
 }
 
+// Most one-shots (a click, an error chime) are short and cheap to let
+// overlap - see the file header. A long one-shot a caller needs to cut off
+// early (void.tmp's Listen probe, ~68s) is the exception, and it opts in
+// per call with { exclusive: true } rather than changing playSound's default
+// for everyone. Keyed by sound name, so at most one exclusive instance of a
+// given sound plays at once; a second exclusive() call for the same name
+// stops the first instead of layering under it.
+const audioExclusiveSources = new Map();
+
 // Fire-and-forget one-shot. `volume` is a multiplier on the sound's entry in
 // SOUND_GAIN, for callers that vary intensity (see triggerGlitch).
 //
@@ -4327,6 +4336,7 @@ function loadSound(name) {
 // so a caller awaiting the end could wait forever. Resolving with the duration
 // up front lets the caller decide its own deadline against the wall clock.
 function playSound(name, options = {}) {
+  if (options.exclusive) stopSound(name);
   if (!audioUnlocked || !systemAudioEnabled() || document.hidden) return Promise.resolve(0);
   const scale = Number.isFinite(Number(options.volume)) ? Number(options.volume) : 1;
   return loadSound(name).then(buffer => {
@@ -4340,10 +4350,24 @@ function playSound(name, options = {}) {
     gain.gain.value = Math.max(0, (SOUND_GAIN[name] ?? 0.5) * scale);
     src.connect(gain);
     gain.connect(audioMaster);
-    src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
+    src.onended = () => {
+      try { src.disconnect(); gain.disconnect(); } catch (e) {}
+      if (audioExclusiveSources.get(name) === src) audioExclusiveSources.delete(name);
+    };
+    if (options.exclusive) audioExclusiveSources.set(name, src);
     src.start();
     return Math.round(buffer.duration * 1000);
   });
+}
+
+// Cuts an exclusive one-shot short. A no-op for a sound that was never
+// started with { exclusive: true }, or has already finished - callers are
+// not expected to track whether one is actually playing before calling this.
+function stopSound(name) {
+  const src = audioExclusiveSources.get(name);
+  if (!src) return;
+  audioExclusiveSources.delete(name);
+  try { src.stop(); } catch (e) {}
 }
 
 // Idempotent: calling this on an already-running loop does nothing, so a
@@ -11038,6 +11062,13 @@ function minWin(id) {
   w.minimized = true; w.el.style.display = 'none';
   const btn = document.getElementById('tbtn-' + id);
   if (btn) btn.classList.remove('focused');
+  // Same shape as closeWin's _onclose: something a window owns that must not
+  // keep running once the window is off screen - a sound, most likely -
+  // hangs a teardown here. Unlike _onclose this fires on every minimize, so
+  // it must be safe to call repeatedly (stopSound already is).
+  if (typeof w._onminimize === 'function') {
+    try { w._onminimize(); } catch (e) {}
+  }
 }
 
 function unminWin(id) {
@@ -16737,6 +16768,9 @@ function openDaemon() {
 function daemonVoidAction(mode) {
   const telemetry = getContainmentTelemetry();
   daemonVoidFeedMode = mode;
+  // Switching to a different probe cuts Listen's clip short rather than
+  // letting it keep running under whatever the new probe shows.
+  if (mode !== 'listen') stopSound('void-listen');
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
       ? 'The file is intact. What you are looking at is the aperture surface.'
@@ -16753,7 +16787,9 @@ function daemonVoidAction(mode) {
       'disk locality: negative',
     ].join('\n');
   } else if (mode === 'listen') {
-    playSound('void-listen');
+    // exclusive: a second Listen click restarts the clip instead of layering
+    // a second copy under the first.
+    playSound('void-listen', { exclusive: true });
     daemonVoidFeed = daemonStory.stage >= 5
       ? "No words. Just a shift in the room tone that wasn't there before."
       : daemonStory.stage >= 4
@@ -16886,6 +16922,13 @@ function openVoid() {
   const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
   const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
   if (!mkWin({ id:'void', title:'void.tmp', icon:'icon:void', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  // Listen's clip (~68s) must not keep playing once the window that started
+  // it is gone or out of sight - mkWin runs this path on every open, closed
+  // or not, so both hooks are (re)set here rather than only on first create.
+  if (wins['void']) {
+    wins['void']._onclose = () => stopSound('void-listen');
+    wins['void']._onminimize = () => stopSound('void-listen');
+  }
   renderVoid();
 }
 
