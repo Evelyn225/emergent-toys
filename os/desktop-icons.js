@@ -434,7 +434,15 @@ function makeDesktopIconEl(ic) {
       if (['daemon.core','void.tmp'].includes(icName)) {
         items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
       }
-      if (icName.toLowerCase().endsWith('.exe') && !['NOTEPAD.exe','TERMINAL.exe','SYSMON.exe','BROWSER.exe','DEFRAG.exe','CALC.exe','REGEDIT.exe','EXPLORER.exe'].includes(icName)) {
+      // programIsSystemBinary (os/programs.js), not a hand-maintained name
+      // list - that list went stale the moment MINESWEEPER.exe and PAINT.exe
+      // were added as desktop icons without being added to it, exposing this
+      // decompiler shortcut on two apps whose real disassembly is already
+      // reachable through their root file (see explorer-desktop-exe-spawn
+      // fallback). Every .exe on the desktop today is a known system binary,
+      // so this option currently never fires - it stays live for whatever
+      // genuinely unknown .exe a future shortcut or upload puts here.
+      if (icName.toLowerCase().endsWith('.exe') && !programIsSystemBinary(icName)) {
         items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
       if (singleDesktopImage) {
