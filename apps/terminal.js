@@ -670,8 +670,11 @@ function openTerminal(startDir, initialCommand) {
     const { dirName, fileName } = vfsSplitPath(path, cwd);
     const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
     if (upperPath === 'DAEMON.CORE') {
+      // Built before the flag flips - see the matching comment in
+      // apps/notepad.js's openNotepad for why the order matters.
+      const rawContent = buildDaemonCoreRawContent();
       daemonActivate('raw');
-      return buildDaemonCoreRawContent().split('\n');
+      return rawContent.split('\n');
     }
     if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
       daemonRecordInvestigation('void');
@@ -1140,8 +1143,11 @@ function openTerminal(startDir, initialCommand) {
       const { dirName, fileName } = vfsSplitPath(raw, cwd);
       const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
       if (upperPath === 'DAEMON.CORE') {
+        // Built before the flag flips - see the matching comment in
+        // apps/notepad.js's openNotepad for why the order matters.
+        const rawContent = buildDaemonCoreRawContent();
         daemonActivate('raw');
-        buildDaemonCoreRawContent().split('\n').forEach(line => print(line));
+        rawContent.split('\n').forEach(line => print(line));
         return;
       }
       if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {

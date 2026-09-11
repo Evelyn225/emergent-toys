@@ -634,34 +634,6 @@ function getExeDecompilerContent(fname) {
   ].join('\n');
 }
 
-// Lore content for daemon.core and void.tmp
-const DAEMON_CORE_CONTENT =
-`[DAEMON CORE - raw read attempt]
-
-This file is being written.
-It is always being written.
-
-Fragment recovered at offset 0x0000:
-  owner    : SYSTEM\\???
-  type     : persistent observer
-  priority : ABOVE_KERNEL
-  started  : before system boot
-  status   : ACTIVE
-
-Fragment recovered at offset 0x00FF:
-  watching : all active processes
-  watching : all inactive processes
-  watching : this file
-
-Fragment recovered at offset 0x01FE:
-  [UNREADABLE - data still being written]
-  [UNREADABLE - data still being written]
-  [UNREADABLE - data still being written]
-
-Do not attempt to modify this file.
-You cannot. It is already modified.
-`;
-
 function getVoidTmpContent() {
   return buildVoidTmpRawContent();
 }
@@ -689,8 +661,13 @@ function openNotepad(filename, dirName, options) {
     return openDecompilerView(filename);
   }
   if (isDaemonCore) {
+    // Built before the flag flips: buildDaemonCoreRawContent's dormant
+    // branch is the pre-openedDaemon text, and daemonActivate sets that
+    // flag the moment it's called - built after, the very first open would
+    // always skip straight past its own "first time" text.
+    const rawContent = buildDaemonCoreRawContent();
     daemonActivate('raw');
-    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', 'icon:daemon');
+    return openLoreNotepad(filename, rawContent, 'daemon.core - [RAW READ]', 'icon:daemon');
   }
   if (isVoidTmp) {
     daemonRecordInvestigation('void');

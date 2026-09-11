@@ -146,7 +146,7 @@ let daemonPulseTimer = null;
 function daemonStageLabel(stage) {
   if (stage >= 8) return 'Contained';
   if (stage >= 7) return 'Seal Ready';
-  if (stage >= 6) return 'Observed';
+  if (stage >= 6) return 'Profiled';
   if (stage >= 5) return 'Contact';
   if (stage >= 4) return 'Containment Lost';
   if (stage >= 1) return 'Observed';
@@ -615,50 +615,59 @@ function daemonLostContactContent() {
   ].join('\n');
 }
 
+// Signed and dated the same way in every variant below on purpose: three
+// branches on the player's own flags used to read as three different
+// people, because nothing about the text was fixed - it was the player's
+// own state reflected back with a found-document coat of paint. Giving it
+// one name, one recurring physical detail (the mug, verbatim, every time)
+// and a consistent first-person voice is what makes it read as one person's
+// notes discovered out of order, not a hint system that happens to use "I".
 function daemonLastOperatorContent() {
-  const lines = ['== LAST OPERATOR ==', ''];
+  const SIGNOFF = [
+    '',
+    "I left a coffee mug on this desk when my shift ended. Nobody's moved it since.",
+    "That's how I know no one else has been in this room.",
+    '',
+    '- R.O.',
+  ];
+  const lines = ['== LAST OPERATOR ==', '', 'Left by R. Okonkwo (Operator Badge 6E2). Found on this machine, not filed anywhere else.', ''];
 
   if (daemonStory.daemonStopped && !daemonStory.anchorDeleted) {
     // Killed daemon first, anchor still present
     lines.push(
-      'If you killed it and the room went quiet, you did what I did.',
+      'If you killed it and the room went quiet after, you did exactly what I did.',
+      "daemon.core was holding the channel shut. I didn't know that going in.",
       '',
-      'daemon.core was holding the channel shut.',
+      'The anchor is still where I left it: SYS\\anchor.seed.',
+      "Lower MIRROR_LOCK before you touch it. Don't go in blind - I did, once.",
       '',
-      'The anchor file keeps the mirror pointed away from the user.',
-      'The current anchor is SYS\\anchor.seed.',
-      'Lower MIRROR_LOCK and delete it when you are ready to inspect the breach.',
-      '',
-      'If you intend to seal the breach again, restore MIRROR_LOCK before you run the quarantine launcher.',
+      'If you mean to seal this again afterward, restore MIRROR_LOCK before you run the quarantine launcher.',
     );
   } else if (daemonStory.anchorDeleted && !daemonStory.daemonStopped) {
     // Deleted anchor first, daemon still running
     lines.push(
-      'You removed the anchor before the daemon relay went offline.',
+      "You went for the anchor before you touched the daemon. I didn't do it in that order.",
+      'daemon.core is still trying to hold the channel shut - it just has nothing left to hold it with.',
       '',
-      'daemon.core was holding the channel shut.',
+      "Watch void.tmp. It knows it isn't being deflected anymore, even if the daemon doesn't.",
+      'Read DOCS\\MIRROR_PROTOCOL.txt. I wrote half of it for whoever ended up standing where you are.',
       '',
-      'The anchor is gone. The channel is open.',
-      'The daemon is still running - it can no longer deflect what is coming through.',
-      '',
-      'Inspect void.tmp. Read MIRROR_PROTOCOL.txt.',
-      'If you intend to seal the breach, restore MIRROR_LOCK before running the quarantine launcher.',
+      'If you intend to seal this, restore MIRROR_LOCK before you run the quarantine launcher.',
     );
   } else {
     // Both done, or generic fallback
     lines.push(
-      'The daemon is offline. The anchor is gone.',
+      "Daemon offline. Anchor gone. That's exactly where I was standing when I started writing this.",
+      'Whatever daemon.core was holding back has a clear line now.',
       '',
-      'daemon.core was holding the channel shut.',
+      'Inspect void.tmp - carefully, not out of curiosity.',
+      "Read DOCS\\MIRROR_PROTOCOL.txt if you haven't. I wrote half of it for whoever came after me.",
       '',
-      'The channel is open. Inspect void.tmp.',
-      'Read DOCS\\MIRROR_PROTOCOL.txt.',
-      '',
-      'Restore MIRROR_LOCK before you run the quarantine launcher.',
+      "Restore MIRROR_LOCK before you run the quarantine launcher. That part isn't optional.",
     );
   }
 
-  return lines.join('\n');
+  return lines.concat(SIGNOFF).join('\n');
 }
 
 function daemonMirrorProtocolContent() {
@@ -826,9 +835,15 @@ function buildDaemonCoreRawContent() {
     );
   } else {
     lines.push(
-      'metadata unreadable',
-      'modified: always',
-      'access: observe only',
+      'This file is being written.',
+      'It is always being written.',
+      '',
+      'Fragment recovered at offset 0x00FF:',
+      '  watching : all active processes',
+      '  watching : all inactive processes',
+      '  watching : this file',
+      '',
+      'You cannot modify this file. It is already modified.',
     );
   }
   return lines.join('\n');
