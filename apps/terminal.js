@@ -4,11 +4,12 @@ let _termExec = null;
 // Hoisted out of writePipelineOutput (openTerminal) so node can reach it -
 // the same reason runPipelineStages below is top-level.
 //
-// Redirecting into one of the eight system binaries (`echo junk >
-// TERMINAL.exe`) would silently replace it, and refreshSeededSystemBinaries
-// only heals that on the next boot - not before this command's output would
-// already have landed. Same protection, and the same "protected" wording,
-// as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
+// Redirecting into one of the system binary names (`echo junk >
+// TERMINAL.exe`) would otherwise silently create a root file shadowing one
+// of them - these names stay reserved at root even though nothing seeds a
+// real file for them any more (os/fs-core.js). Same protection, and the
+// same "protected" wording, as Notepad's save guard (apps/notepad.js's
+// notepadGuardProtectedSave).
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
 // split a path - so an earlier version of this guard checked the raw
@@ -670,8 +671,11 @@ function openTerminal(startDir, initialCommand) {
     const { dirName, fileName } = vfsSplitPath(path, cwd);
     const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
     if (upperPath === 'DAEMON.CORE') {
+      // Built before the flag flips - see the matching comment in
+      // apps/notepad.js's openNotepad for why the order matters.
+      const rawContent = buildDaemonCoreRawContent();
       daemonActivate('raw');
-      return buildDaemonCoreRawContent().split('\n');
+      return rawContent.split('\n');
     }
     if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
       daemonRecordInvestigation('void');
@@ -1140,8 +1144,11 @@ function openTerminal(startDir, initialCommand) {
       const { dirName, fileName } = vfsSplitPath(raw, cwd);
       const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
       if (upperPath === 'DAEMON.CORE') {
+        // Built before the flag flips - see the matching comment in
+        // apps/notepad.js's openNotepad for why the order matters.
+        const rawContent = buildDaemonCoreRawContent();
         daemonActivate('raw');
-        buildDaemonCoreRawContent().split('\n').forEach(line => print(line));
+        rawContent.split('\n').forEach(line => print(line));
         return;
       }
       if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {

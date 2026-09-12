@@ -141,12 +141,15 @@ function openDaemon() {
 function daemonVoidAction(mode) {
   const telemetry = getContainmentTelemetry();
   daemonVoidFeedMode = mode;
+  // Switching to a different probe cuts Listen's clip short rather than
+  // letting it keep running under whatever the new probe shows.
+  if (mode !== 'listen') { stopSound('void-listen'); stopVoidAudioUI(); }
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
       ? 'The file is intact. What you are looking at is the aperture surface.'
       : daemonStory.stage >= 4
         ? 'The relay went quiet and this surface brightened at the same time.'
-        : 'Nothing stable answers yet, but the file is taking a shape.';
+        : 'Nothing stable answers yet. The read keeps drifting.';
   } else if (mode === 'measure') {
     daemonVoidFeed = [
       `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
@@ -157,10 +160,16 @@ function daemonVoidAction(mode) {
       'disk locality: negative',
     ].join('\n');
   } else if (mode === 'listen') {
+    // exclusive: a second Listen click restarts the clip instead of layering
+    // a second copy under the first. The flavor text is set below same as
+    // always, but startVoidAudioUI takes over the readout with a playing
+    // indicator until the clip actually finishes - see os/daemon.js.
+    stopVoidAudioUI();
+    playSound('void-listen', { exclusive: true }).then(ms => { if (ms > 0) startVoidAudioUI(ms); });
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'No words. Something on the reflected side is leaning against the room tone.'
+      ? "No words. Just a shift in the room tone that wasn't there before."
       : daemonStory.stage >= 4
-        ? 'You hear the shape of a voice through the monitor gap.'
+        ? "A faint tone behind the monitor gap that wasn't there before."
         : 'Static. Then the suggestion of a room tone.';
   } else if (mode === 'trace') {
     daemonVoidFeed = daemonStory.stage >= 5
@@ -183,9 +192,9 @@ function daemonVoidAction(mode) {
     triggerGlitch({ intensity: daemonStory.stage >= 7 ? 7 : daemonStory.stage >= 5 ? 5 : 4 });
   } else if (mode === 'pulse') {
     daemonVoidFeed = daemonStory.quarantineSigned
-      ? 'The quarantine signature holds. The aperture recoils.'
+      ? 'The quarantine signature holds. Pressure drops immediately.'
       : daemonStory.stage >= 5
-        ? 'A pulse returns before the machine feels ready for it, as if the file were farther away than the disk.'
+        ? 'The pulse returns faster than disk latency should allow.'
         : 'The pulse dissipates without a readable return.';
     if (daemonStory.stage >= 5) triggerGlitch();
   }
@@ -289,6 +298,13 @@ function openVoid() {
   const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
   const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
   if (!mkWin({ id:'void', title:'void.tmp', icon:'icon:void', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  // Listen's clip (~68s) must not keep playing once the window that started
+  // it is gone or out of sight - mkWin runs this path on every open, closed
+  // or not, so both hooks are (re)set here rather than only on first create.
+  if (wins['void']) {
+    wins['void']._onclose = () => { stopSound('void-listen'); stopVoidAudioUI(); };
+    wins['void']._onminimize = () => { stopSound('void-listen'); stopVoidAudioUI(); };
+  }
   renderVoid();
 }
 

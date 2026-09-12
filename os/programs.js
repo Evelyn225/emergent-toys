@@ -155,13 +155,14 @@ function programIsSpawnableExe(name) {
   return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
 }
 
-// A system binary AT THE ROOT, which is the only place the real ones live.
-// Double-clicking one runs the program, the way Windows runs an .exe - the
-// file itself is a two-line launcher (SYSTEM_BINARY_SOURCES, os/fs-core.js)
-// with nothing in it worth reading. A same-named file anywhere else is the
-// player's own and keeps its ordinary handling. Takes the directory the
-// caller already resolved, so the answer can never disagree with the file it
-// is about to act on.
+// A system binary name AT THE ROOT specifically - programIsSystemBinary
+// alone is name-only, so it also matches a player's own DOCS\CALC.exe, which
+// must be treated as an ordinary file. Nothing seeds a real root file for
+// these names any more (os/fs-core.js) - this is still the right test for
+// "double-clicking this should launch the built-in window instead of opening
+// Notepad", because the name stays reserved at root regardless of whether a
+// file backs it. Takes the directory the caller already resolved, so the
+// answer can never disagree with the file it is about to act on.
 function programIsRootSystemBinary(name, dir) {
   return !vfsNormalizeDir(dir || '') && programIsSystemBinary(name);
 }

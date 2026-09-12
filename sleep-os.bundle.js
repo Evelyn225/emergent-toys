@@ -2744,13 +2744,14 @@ const DESKTOP_ICONS = [
   { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
   { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
   { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },
-  { name: 'SYSMON.exe',     emoji: 'icon:sysmon',   action: 'openSysmon' },
   { name: 'BROWSER.exe',    emoji: 'icon:browser',  action: 'openBrowser' },
   { name: 'DEFRAG.exe',     emoji: 'icon:defrag',   action: 'openDefrag' },
   { name: 'CALC.exe',       emoji: 'icon:calc',     action: 'openCalculator' },
   { name: 'MINESWEEPER.exe', emoji: 'icon:minesweeper', action: 'openMinesweeper' },
   { name: 'PAINT.exe',      emoji: 'icon:paint',    action: 'openPaint' },
-  { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
+  // SYSMON.exe and REGEDIT.exe are deliberately not desktop icons - they're
+  // the two "system tools" the Start Menu comment in sleep-os.html already
+  // calls out as living there instead (plus Run... and the Terminal).
   { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
   { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },
   // Not in the static map alone: the bin's icon depends on whether it holds
@@ -3116,15 +3117,21 @@ function openDesktopShortcutTarget(target) {
     return;
   }
   if (openWithAssociation(st.name, st.dirName)) return;
+  // Same root-system-binary carve-out as Explorer's openItem: a shortcut to
+  // e.g. root SYSMON.exe with no Open With association launches the real
+  // app rather than its decompiler view. programIsRootSystemBinary
+  // (os/programs.js) is what keeps a shortcut to a user's own
+  // DOCS\SYSMON.exe from being redirected.
+  if (programIsRootSystemBinary(st.name, st.dirName)) {
+    openSystemFile(st.name);
+    return;
+  }
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
-  // A root system binary launches its program; a .exe the user wrote runs
-  // as a script. See programIsRootSystemBinary and programIsSpawnableExe
-  // (os/programs.js) for why these tests live there rather than here.
-  // programSpawnOrAlert
+  // A .exe the user wrote runs. See programIsSpawnableExe (os/programs.js)
+  // for why this test lives there rather than here. programSpawnOrAlert
   // (also os/programs.js) is what turns a spawn failure - the file vanished
   // between the shortcut being created and being clicked - into an osAlert
   // instead of a silent unhandled rejection.
-  else if (programIsRootSystemBinary(st.name, st.dirName)) openSystemFile(st.name);
   else if (programIsSpawnableExe(st.name)) {
     void programSpawnOrAlert(st.name, st.dirName);
   }
@@ -3339,13 +3346,14 @@ function programIsSpawnableExe(name) {
   return /\.exe$/i.test(String(name || '')) && !programIsSystemBinary(name);
 }
 
-// A system binary AT THE ROOT, which is the only place the real ones live.
-// Double-clicking one runs the program, the way Windows runs an .exe - the
-// file itself is a two-line launcher (SYSTEM_BINARY_SOURCES, os/fs-core.js)
-// with nothing in it worth reading. A same-named file anywhere else is the
-// player's own and keeps its ordinary handling. Takes the directory the
-// caller already resolved, so the answer can never disagree with the file it
-// is about to act on.
+// A system binary name AT THE ROOT specifically - programIsSystemBinary
+// alone is name-only, so it also matches a player's own DOCS\CALC.exe, which
+// must be treated as an ordinary file. Nothing seeds a real root file for
+// these names any more (os/fs-core.js) - this is still the right test for
+// "double-clicking this should launch the built-in window instead of opening
+// Notepad", because the name stays reserved at root regardless of whether a
+// file backs it. Takes the directory the caller already resolved, so the
+// answer can never disagree with the file it is about to act on.
 function programIsRootSystemBinary(name, dir) {
   return !vfsNormalizeDir(dir || '') && programIsSystemBinary(name);
 }
@@ -4162,6 +4170,8 @@ const SOUND_FILES = {
   error:    'error.ogg',
   glitch:   'glitch.ogg',
   click:    'mouseClick.ogg',
+  // void.tmp's Listen probe (apps/daemon-ui.js's daemonVoidAction).
+  'void-listen': 'void.ogg',
   // PAINT.exe. Quoted keys because the names are the file names, hyphens and
   // all - one fewer mapping to keep straight when a file is swapped.
   'paint-pencil':      'paint-pencil.ogg',
@@ -4194,6 +4204,8 @@ const SOUND_GAIN = {
   error:    0.65,
   glitch:   0.50,
   click:    0.30,
+  // Starting point, not measured - retune here by ear once it's in.
+  'void-listen': 0.50,
   // PAINT.exe. Set from each file's measured RMS rather than by ear, so they
   // start out level with each other: one-shots land between the OS click and
   // the error chime, the two drawing loops well under both because they run
@@ -4314,6 +4326,15 @@ function loadSound(name) {
   return load;
 }
 
+// Most one-shots (a click, an error chime) are short and cheap to let
+// overlap - see the file header. A long one-shot a caller needs to cut off
+// early (void.tmp's Listen probe, ~68s) is the exception, and it opts in
+// per call with { exclusive: true } rather than changing playSound's default
+// for everyone. Keyed by sound name, so at most one exclusive instance of a
+// given sound plays at once; a second exclusive() call for the same name
+// stops the first instead of layering under it.
+const audioExclusiveSources = new Map();
+
 // Fire-and-forget one-shot. `volume` is a multiplier on the sound's entry in
 // SOUND_GAIN, for callers that vary intensity (see triggerGlitch).
 //
@@ -4327,6 +4348,7 @@ function loadSound(name) {
 // so a caller awaiting the end could wait forever. Resolving with the duration
 // up front lets the caller decide its own deadline against the wall clock.
 function playSound(name, options = {}) {
+  if (options.exclusive) stopSound(name);
   if (!audioUnlocked || !systemAudioEnabled() || document.hidden) return Promise.resolve(0);
   const scale = Number.isFinite(Number(options.volume)) ? Number(options.volume) : 1;
   return loadSound(name).then(buffer => {
@@ -4340,10 +4362,24 @@ function playSound(name, options = {}) {
     gain.gain.value = Math.max(0, (SOUND_GAIN[name] ?? 0.5) * scale);
     src.connect(gain);
     gain.connect(audioMaster);
-    src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
+    src.onended = () => {
+      try { src.disconnect(); gain.disconnect(); } catch (e) {}
+      if (audioExclusiveSources.get(name) === src) audioExclusiveSources.delete(name);
+    };
+    if (options.exclusive) audioExclusiveSources.set(name, src);
     src.start();
     return Math.round(buffer.duration * 1000);
   });
+}
+
+// Cuts an exclusive one-shot short. A no-op for a sound that was never
+// started with { exclusive: true }, or has already finished - callers are
+// not expected to track whether one is actually playing before calling this.
+function stopSound(name) {
+  const src = audioExclusiveSources.get(name);
+  if (!src) return;
+  audioExclusiveSources.delete(name);
+  try { src.stop(); } catch (e) {}
 }
 
 // Idempotent: calling this on an already-running loop does nothing, so a
@@ -5305,41 +5341,6 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
-// The system binaries, as real files.
-//
-// These were authored metadata rows in ROOT_SYSTEM_FILE_META with hardcoded
-// sizes ('4,096'), which since phase 4 has meant invented numbers sitting in
-// a DIR listing next to sizes measured off the superblock. Seeding them makes
-// the size measured like everything else.
-//
-// Each one is a two-line launcher script, not an invented disassembly.
-// Double-clicking a binary runs the built-in window (see
-// programIsRootSystemBinary, os/programs.js), so the file's content only
-// shows through CAT or Notepad. A copy of one - an Explorer paste, say - is a
-// user .exe that does exactly what the original does: `start terminal` runs
-// through the script interpreter's own START and opens the same window.
-// There is nothing here pretending to be machine code.
-//
-// Text rather than blob is forced by the data: the only blob seed path
-// (refreshSeededWallpaperLibrary) produces URL-backed entries with size 0,
-// which would put a 0 in DIR - a worse number than the fake 4,096, not a
-// better one.
-function systemBinarySource(name, program) {
-  return ['# ' + name + ' - sleepOS system program', 'start ' + program].join('\n');
-}
-const SYSTEM_BINARY_SOURCES = {
-  'TERMINAL.exe':    systemBinarySource('TERMINAL.exe', 'terminal'),
-  'SYSMON.exe':      systemBinarySource('SYSMON.exe', 'sysmon'),
-  'BROWSER.exe':     systemBinarySource('BROWSER.exe', 'browser'),
-  'DEFRAG.exe':      systemBinarySource('DEFRAG.exe', 'defrag'),
-  'NOTEPAD.exe':     systemBinarySource('NOTEPAD.exe', 'notepad'),
-  'EXPLORER.exe':    systemBinarySource('EXPLORER.exe', 'explorer'),
-  'CALC.exe':        systemBinarySource('CALC.exe', 'calc'),
-  'MINESWEEPER.exe': systemBinarySource('MINESWEEPER.exe', 'minesweeper'),
-  'REGEDIT.exe':     systemBinarySource('REGEDIT.exe', 'regedit'),
-  'PAINT.exe':       systemBinarySource('PAINT.exe', 'paint'),
-};
-
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
 // nothing is persisted, and re-applies the DOCS subtree on every boot.
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
@@ -5846,9 +5847,6 @@ function vfsSeedTree() {
     ]),
   }]]),
   };
-  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
-    seed.files.set(name, SYSTEM_BINARY_SOURCES[name]);
-  });
   seed.dirs.add('DESKTOP');
   if (!seed.subdirs.has('DESKTOP')) {
     seed.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });
@@ -5966,91 +5964,24 @@ function refreshSeededDocs() {
   });
 }
 
-// The eight system binaries (SYSTEM_BINARY_SOURCES, os/fs-core.js), restored
-// on every boot for a user whose root already had content. vfsBootMount's
-// seed callback above only runs `if (!root.dirs.size && !root.files.size)` -
-// a completely empty root - so it never fires for anyone who has booted
-// sleepOS before, meaning phase 6's seeding alone dropped all eight binaries
-// out of DIR for every returning user the moment they next loaded the OS.
-//
-// This HEALS rather than fill-if-absent, the same policy refreshSeededDocs
-// already applies to README.txt and the rest of DOCS: whatever a player did
-// to the content, this restores it to SYSTEM_BINARY_SOURCES on the next boot.
-// That is deliberately NOT the DOCS-vs-programs distinction it looks like at
-// first glance - "docs heal, programs do not" was about the demo .exe/.script
-// files a player is meant to author and have survive (HELLO.exe and friends,
-// PROGRAM_LAUNCHERS has no entry for those, so programIsSystemBinary is
-// false and this function never touches them). A system binary is not one of
-// those: its NOTEPAD view is read-only by design, so there is no legitimate
-// edit for this function to protect, only corruption to repair - a write
-// that reached one at all had to go around a guard (apps/notepad.js's
-// writeAndSync, apps/terminal.js's writePipelineOutput) that exists
-// specifically to stop that. Healing here is the backstop for whatever gets
-// through anyway.
-//
-// Unlike refreshSeededDocs, the heal below goes through vfsWriteFile rather
-// than poking tree.files directly, so a repair queues a real commit op and
-// the binary ends up occupying actual disk blocks - SYSMON's disk meter and
-// DEFRAG's map both read the backend's block counts, not the tree, so a
-// binary that only exists in memory reports as zero bytes used. The
-// content comparison still runs first, and only a mismatch reaches
-// vfsWriteFile, so a normal boot where all eight already match queues
-// nothing at all - same cost as before. If the write itself throws (ENOSPC
-// via _vfsAssertRoom in os/vfs.js is the realistic case, on a full disk),
-// the catch below falls back to the old in-memory tree.files.set so the
-// binary is still correct for this session - the phase 6 guarantee that a
-// corrupted binary always heals must survive a full disk, it just will not
-// stick across a reload - and reports the failure through reportVfsError,
-// the same channel every other late VFS failure in this file uses.
-//
-// This does NOT cover a genuinely fresh install: vfsMount's `seed` callback
-// (below, in vfsBootMount) fills the eight binaries into the tree BEFORE
-// this function ever runs, so on that specific boot the comparison above
-// finds every one already matching and correctly writes nothing - correct
-// by this function's own contract, but the content was never committed
-// either, since `seed` mutates the tree directly with no queued op. That
-// case is handled by seedFreshRootTree, which the `seed` callback calls
-// instead of mutating root.files itself.
-async function refreshSeededSystemBinaries() {
-  const tree = vfsGetTree();
-  for (const name of Object.keys(SYSTEM_BINARY_SOURCES)) {
-    const want = SYSTEM_BINARY_SOURCES[name];
-    if (tree.files.get(name) === want) continue;
-    try {
-      await vfsWriteFile(name, want, '');
-    } catch (err) {
-      tree.files.set(name, want);
-      reportVfsError(err);
-    }
-  }
-}
-
 // Populates a genuinely empty root - vfsMount's `seed` option, wired up in
 // vfsBootMount below, calls this only `if (!root.dirs.size &&
-// !root.files.size)`. Everything except the eight root-level system
-// binaries is mutated directly with no queued op, same as refreshSeededDocs
-// and for the same reason: DESKTOP and the DOCS subtree are meant to stay
-// uncommitted, regenerated from vfsSeedTree() on every boot rather than
-// restored from the backend.
+// !root.files.size)`. Mutated directly with no queued op, same as
+// refreshSeededDocs and for the same reason: DESKTOP and the DOCS subtree
+// are meant to stay uncommitted, regenerated from vfsSeedTree() on every
+// boot rather than restored from the backend.
 //
-// The eight binaries are different, and NOT for the reason refreshSeededDocs'
-// own comment gives about them (read-only, healed rather than authored) -
-// that reasoning covers WHY they heal, not why this function exists at all.
-// This exists because `seed` runs before the backend is attached (vfsMount
-// assigns _vfsBackend only after `seed` returns) and mutates `root` - the
-// exact same live tree refreshSeededSystemBinaries reads from - directly.
-// So on THIS boot only, refreshSeededSystemBinaries's own compare-before-write
-// finds every binary already matching what it just wrote here and correctly
-// queues nothing, leaving the content real in the tree but backed by zero
-// committed blocks: SYSMON's disk meter and DEFRAG's map read the backend's
-// allocation, not the tree, so they showed 0.00% used and an empty map on a
-// filesystem DIR already listed as full of files.
-//
-// vfsQueueDirectWrite (os/vfs.js) is the fix: the same escape hatch
-// os/daemon.js uses for its own direct-tree-mutation-with-no-op problem.
-// Passing null as the "previous value" bypasses its own unchanged-content
-// skip, which exists to stop a normal re-set of identical content from
-// queuing a redundant op - here the previous value is not identical, it is
+// seeded.files is walked through vfsQueueDirectWrite rather than a plain
+// root.files.set, even though vfsSeedTree() currently never puts anything
+// there (root-level system binaries used to live here before they stopped
+// being seeded at all - see os/fs-core.js). Kept generic rather than
+// deleted: SYSMON's disk meter and DEFRAG's map both read the backend's
+// committed block count, not the tree, so any future top-level seed file
+// would silently report as zero bytes used without a queued op - the same
+// bug queuing one here already fixed once. Passing null as the "previous
+// value" bypasses vfsQueueDirectWrite's own unchanged-content skip, which
+// exists to stop a normal re-set of identical content from queuing a
+// redundant op - here the previous value is not identical, it is
 // altogether absent from anything committed, and null is how that gets said.
 function seedFreshRootTree(root) {
   const seeded = vfsSeedTree();
@@ -6316,7 +6247,6 @@ async function vfsBootMount() {
     },
   });
   refreshSeededDocs();
-  await refreshSeededSystemBinaries();
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);
@@ -6622,11 +6552,16 @@ let daemonStory = loadDaemonStory();
 let daemonVoidFeed = '';
 let daemonVoidFeedMode = '';
 let daemonPulseTimer = null;
+// The Listen probe's little player, driven by renderVoidReadout below rather
+// than by anything in os/audio.js - a wall-clock timer against the duration
+// playSound already resolves with, not the AudioContext's own clock, since
+// there's no pause here to make the two diverge.
+let daemonVoidAudioTimer = null;
 
 function daemonStageLabel(stage) {
   if (stage >= 8) return 'Contained';
   if (stage >= 7) return 'Seal Ready';
-  if (stage >= 6) return 'Observed';
+  if (stage >= 6) return 'Profiled';
   if (stage >= 5) return 'Contact';
   if (stage >= 4) return 'Containment Lost';
   if (stage >= 1) return 'Observed';
@@ -7095,50 +7030,59 @@ function daemonLostContactContent() {
   ].join('\n');
 }
 
+// Signed and dated the same way in every variant below on purpose: three
+// branches on the player's own flags used to read as three different
+// people, because nothing about the text was fixed - it was the player's
+// own state reflected back with a found-document coat of paint. Giving it
+// one name, one recurring physical detail (the mug, verbatim, every time)
+// and a consistent first-person voice is what makes it read as one person's
+// notes discovered out of order, not a hint system that happens to use "I".
 function daemonLastOperatorContent() {
-  const lines = ['== LAST OPERATOR ==', ''];
+  const SIGNOFF = [
+    '',
+    "I left a coffee mug on this desk when my shift ended. Nobody's moved it since.",
+    "That's how I know no one else has been in this room.",
+    '',
+    '- R.O.',
+  ];
+  const lines = ['== LAST OPERATOR ==', '', 'Left by R. Okonkwo (Operator Badge 6E2). Found on this machine, not filed anywhere else.', ''];
 
   if (daemonStory.daemonStopped && !daemonStory.anchorDeleted) {
     // Killed daemon first, anchor still present
     lines.push(
-      'If you killed it and the room went quiet, you did what I did.',
+      'If you killed it and the room went quiet after, you did exactly what I did.',
+      "daemon.core was holding the channel shut. I didn't know that going in.",
       '',
-      'daemon.core was holding the channel shut.',
+      'The anchor is still where I left it: SYS\\anchor.seed.',
+      "Lower MIRROR_LOCK before you touch it. Don't go in blind - I did, once.",
       '',
-      'The anchor file keeps the mirror pointed away from the user.',
-      'The current anchor is SYS\\anchor.seed.',
-      'Lower MIRROR_LOCK and delete it when you are ready to inspect the breach.',
-      '',
-      'If you intend to seal the breach again, restore MIRROR_LOCK before you run the quarantine launcher.',
+      'If you mean to seal this again afterward, restore MIRROR_LOCK before you run the quarantine launcher.',
     );
   } else if (daemonStory.anchorDeleted && !daemonStory.daemonStopped) {
     // Deleted anchor first, daemon still running
     lines.push(
-      'You removed the anchor before the daemon relay went offline.',
+      "You went for the anchor before you touched the daemon. I didn't do it in that order.",
+      'daemon.core is still trying to hold the channel shut - it just has nothing left to hold it with.',
       '',
-      'daemon.core was holding the channel shut.',
+      "Watch void.tmp. It knows it isn't being deflected anymore, even if the daemon doesn't.",
+      'Read DOCS\\MIRROR_PROTOCOL.txt. I wrote half of it for whoever ended up standing where you are.',
       '',
-      'The anchor is gone. The channel is open.',
-      'The daemon is still running - it can no longer deflect what is coming through.',
-      '',
-      'Inspect void.tmp. Read MIRROR_PROTOCOL.txt.',
-      'If you intend to seal the breach, restore MIRROR_LOCK before running the quarantine launcher.',
+      'If you intend to seal this, restore MIRROR_LOCK before you run the quarantine launcher.',
     );
   } else {
     // Both done, or generic fallback
     lines.push(
-      'The daemon is offline. The anchor is gone.',
+      'Daemon offline. Anchor gone. I got here too, before the end.',
+      'Whatever daemon.core was holding back has a clear line now.',
       '',
-      'daemon.core was holding the channel shut.',
+      'Inspect void.tmp - carefully, not out of curiosity.',
+      "Read DOCS\\MIRROR_PROTOCOL.txt if you haven't. I wrote half of it for whoever came after me.",
       '',
-      'The channel is open. Inspect void.tmp.',
-      'Read DOCS\\MIRROR_PROTOCOL.txt.',
-      '',
-      'Restore MIRROR_LOCK before you run the quarantine launcher.',
+      "Restore MIRROR_LOCK before you run the quarantine launcher. That part isn't optional.",
     );
   }
 
-  return lines.join('\n');
+  return lines.concat(SIGNOFF).join('\n');
 }
 
 function daemonMirrorProtocolContent() {
@@ -7306,9 +7250,15 @@ function buildDaemonCoreRawContent() {
     );
   } else {
     lines.push(
-      'metadata unreadable',
-      'modified: always',
-      'access: observe only',
+      'This file is being written.',
+      'It is always being written.',
+      '',
+      'Fragment recovered at offset 0x00FF:',
+      '  watching : all active processes',
+      '  watching : all inactive processes',
+      '  watching : this file',
+      '',
+      'You cannot modify this file. It is already modified.',
     );
   }
   return lines.join('\n');
@@ -7395,7 +7345,7 @@ function buildVoidTmpRawContent() {
   } else if (daemonStory.stage >= 5) {
     lines.push(
       'The aperture is open.',
-      'Something is pressing against the reflected side of the file.',
+      "The far side answers now. It didn't before.",
     );
   } else if (daemonStory.stage >= 4) {
     lines.push(
@@ -7746,6 +7696,48 @@ function getVoidMeasureEntries(telemetry) {
     ['Aperture Bias', telemetry.bias],
     ['Disk Locality', 'negative'],
   ];
+}
+
+function stopVoidAudioUI() {
+  if (daemonVoidAudioTimer) { clearInterval(daemonVoidAudioTimer); daemonVoidAudioTimer = null; }
+}
+
+// Takes over void-readout with a little playing indicator for durationMs
+// (what playSound just resolved with), then hands back to renderVoidReadout's
+// ordinary text display once it's done - the same flavor text daemonVoidAction
+// already set, just shown once the clip finishes instead of immediately.
+function startVoidAudioUI(durationMs) {
+  stopVoidAudioUI();
+  const startedAt = performance.now();
+  const fmt = ms => {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  };
+  const tick = () => {
+    const out = document.getElementById('void-readout');
+    // The window closing/minimizing or a different probe firing already
+    // stops this timer through their own paths - this is only the case
+    // where the readout itself is gone without either of those running.
+    if (!out || daemonVoidFeedMode !== 'listen') { stopVoidAudioUI(); return; }
+    const elapsed = Math.min(durationMs, performance.now() - startedAt);
+    const pct = durationMs ? (elapsed / durationMs) * 100 : 100;
+    out.style.whiteSpace = 'normal';
+    out.style.padding = '10px';
+    out.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;height:100%;">
+        <span style="font-size:14px;color:#7fd37f;">${pct < 100 ? '▶' : '■'}</span>
+        <div style="flex:1;height:6px;border:1px solid #245a24;background:#010301;">
+          <div style="height:100%;width:${pct}%;background:#6ab56a;"></div>
+        </div>
+        <span style="font-size:10px;color:#8db98d;white-space:nowrap;">${fmt(elapsed)} / ${fmt(durationMs)}</span>
+      </div>`;
+    if (elapsed >= durationMs) {
+      stopVoidAudioUI();
+      renderVoidReadout(out, daemonVoidFeed, getContainmentTelemetry());
+    }
+  };
+  daemonVoidAudioTimer = setInterval(tick, 150);
+  tick();
 }
 
 function renderVoidReadout(out, content, telemetry) {
@@ -10850,6 +10842,13 @@ function minWin(id) {
   w.minimized = true; w.el.style.display = 'none';
   const btn = document.getElementById('tbtn-' + id);
   if (btn) btn.classList.remove('focused');
+  // Same shape as closeWin's _onclose: something a window owns that must not
+  // keep running once the window is off screen - a sound, most likely -
+  // hangs a teardown here. Unlike _onclose this fires on every minimize, so
+  // it must be safe to call repeatedly (stopSound already is).
+  if (typeof w._onminimize === 'function') {
+    try { w._onminimize(); } catch (e) {}
+  }
 }
 
 function unminWin(id) {
@@ -11628,7 +11627,15 @@ function ctxPathHas(e, selector) {
 }
 
 function canDeleteDesktopSystemIcon(ic) {
-  return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
+  if (!ic || ic.custom) return false;
+  const name = String(ic.name || '').toLowerCase();
+  if (name === 'void.tmp') return !daemonStory.endingReached;
+  if (name === 'daemon.core') return false;
+  // Every other system icon (CALC.exe, NOTEPAD.exe, ...) now gets offered a
+  // Delete option too, purely so attempting it surfaces deleteVirtualPath's
+  // existing "System files are protected" guard (isVisibleSystemPath, name-
+  // based, os/daemon.js) instead of there being no option to try at all.
+  return programIsSystemBinary(ic.name);
 }
 
 function deleteDesktopSystemIcons(icons) {
@@ -11887,10 +11894,21 @@ function makeDesktopIconEl(ic) {
       })});
     } else {
       items.push({ label: 'Open', action: activate });
-      // Lore shortcuts for single icons
+      // Lore / decompiler shortcuts for single icons
       const icName = ic.name || '';
       if (['daemon.core','void.tmp'].includes(icName)) {
         items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
+      }
+      // programIsSystemBinary (os/programs.js), not a hand-maintained name
+      // list - that list went stale the moment MINESWEEPER.exe and PAINT.exe
+      // were added as desktop icons without being added to it, exposing this
+      // decompiler shortcut on two apps whose real disassembly is already
+      // reachable through their root file (see explorer-desktop-exe-spawn
+      // fallback). Every .exe on the desktop today is a known system binary,
+      // so this option currently never fires - it stays live for whatever
+      // genuinely unknown .exe a future shortcut or upload puts here.
+      if (icName.toLowerCase().endsWith('.exe') && !programIsSystemBinary(icName)) {
+        items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
       if (singleDesktopImage) {
         items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });
@@ -12360,15 +12378,26 @@ function highlight(text, lang) {
 // Notepad counter for unique window IDs
 let _notepadCount = 0;
 
+// Which of NOTEPAD's two views a file gets.
+//
+// The discriminator is PROGRAM_LAUNCHERS membership rather than the .exe
+// extension. A system binary genuinely has no source to show, so a
+// disassembly view is honest for it. A script the user wrote thirty seconds
+// ago does have one, and showing invented bytecode instead would be the same
+// species of lie phases 5 and 5b existed to delete.
+function notepadRouteFor(filename) {
+  const name = String(filename || '');
+  if (!/\.exe$/i.test(name)) return 'editor';
+  return programIsSystemBinary(name) ? 'decompiler' : 'editor';
+}
+
 // Save (and Save As - writeAndSync is the single funnel both go through)
-// naming one of the eight system binaries would silently replace it with
-// whatever the open document holds. Before phase 6 that just created a
-// stray file the player could delete to recover; now the binary IS a real
-// file on disk, refreshSeededSystemBinaries only heals it on the NEXT boot,
-// and there is otherwise no way back until then. Refused here,
-// before the write happens, with the same "protected" language the DELETE
-// guard (os/daemon.js) already uses so a player learns one vocabulary for
-// this rule, not two.
+// naming one of the system binaries would otherwise create a root file
+// shadowing one of them - these names stay reserved at root even though
+// nothing seeds a real file for them any more (os/fs-core.js). Refused
+// here, before the write happens, with the same "protected" language the
+// DELETE guard (os/daemon.js) already uses so a player learns one
+// vocabulary for this rule, not two.
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
 // split a path - so an earlier version of this guard checked the raw
@@ -12387,6 +12416,67 @@ function notepadGuardProtectedSave(fname, dir) {
   if (dirName || !programIsSystemBinary(fileName)) return false;
   osAlert('Cannot save over ' + fileName + '.\n\nSystem files are protected.', 'Cannot Save', 'icon:error');
   return true;
+}
+
+function openDecompilerView(filename) {
+  const id = 'decompile-' + filename.replace(/\W/g,'_');
+  if (!mkWin({ id, title: filename + ' \u2014 Decompiler View', icon: 'icon:exe', w:500, h:360 })) return;
+  const body = document.getElementById('wb-' + id);
+  const ws   = document.getElementById('ws-' + id);
+  const mb   = document.getElementById('mb-' + id);
+  body.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
+
+  // Phase 6 seeded these as real files (os/fs-core.js), so the view renders
+  // the file rather than a parallel authored copy. The fallback covers a
+  // binary that is in the registry but not on disk - possible only if a seed
+  // and the launcher table disagree, which is worth showing rather than
+  // crashing on.
+  const stat = vfsStatSync(filename, '');
+  const content = stat && stat.kind === 'text'
+    ? String(vfsDirNodeSync(stat.dirName).files.get(stat.name) || '')
+    : getExeDecompilerContent(filename);
+
+  // Read-only display with syntax highlighting (asm-like)
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'flex:1;overflow:auto;background:#fff;padding:8px;font-family:var(--sleep-font);font-size:11px;line-height:1.7;white-space:pre;';
+
+  // Basic asm-style syntax coloring
+  function highlightAsm(text) {
+    return text.split('\n').map(line => {
+      const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (esc.trimStart().startsWith(';')) return '<span style="color:#6a9955;font-style:italic;">' + esc + '</span>';
+      const opcodes = /\b(PUSH|CALL|MOV|CMP|JE|JZ|JNE|JNZ|JLE|JL|JG|JGE|JMP|TEST|SUB|ADD|AND|OR|XOR|LEA|RET|NOP|HLT)\b/g;
+      const colored = esc.replace(opcodes, m => '<span style="color:#0000cc;font-weight:bold;">' + m + '</span>');
+      return colored.replace(/\b(0x[0-9A-Fa-f]+)\b/g, '<span style="color:#098658;">$1</span>')
+                    .replace(/\b(DD|DB|DQ|DW|RESB|RESW|RESD|dup)\b/g, '<span style="color:#dd4400;">$1</span>');
+    }).join('\n');
+  }
+
+  wrap.innerHTML = highlightAsm(content);
+  body.appendChild(wrap);
+
+  if (ws) ws.textContent = filename + '  \u2014  Read-only  |  Decompiler View';
+
+  if (mb) {
+    const fileSpan = document.createElement('span');
+    fileSpan.className = 'menu-item'; fileSpan.textContent = 'File';
+    fileSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      showDropdown(fileSpan, [
+        { label: 'Close', action: () => closeWin(id) },
+      ]);
+    });
+    mb.appendChild(fileSpan);
+    const viewSpan = document.createElement('span');
+    viewSpan.className = 'menu-item'; viewSpan.textContent = 'View';
+    viewSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      showDropdown(viewSpan, [
+        { label: 'Copy All', action: () => navigator.clipboard?.writeText(content) },
+      ]);
+    });
+    mb.appendChild(viewSpan);
+  }
 }
 
 function openLoreNotepad(filename, content, title, icon) {
@@ -12594,33 +12684,175 @@ function openSaveDialog(defaultName, callback, options) {
   procSetTimeout(id, () => { nameInput.focus(); nameInput.select(); }, 50);
 }
 
-// Lore content for daemon.core and void.tmp
-const DAEMON_CORE_CONTENT =
-`[DAEMON CORE - raw read attempt]
-
-This file is being written.
-It is always being written.
-
-Fragment recovered at offset 0x0000:
-  owner    : SYSTEM\\???
-  type     : persistent observer
-  priority : ABOVE_KERNEL
-  started  : before system boot
-  status   : ACTIVE
-
-Fragment recovered at offset 0x00FF:
-  watching : all active processes
-  watching : all inactive processes
-  watching : this file
-
-Fragment recovered at offset 0x01FE:
-  [UNREADABLE - data still being written]
-  [UNREADABLE - data still being written]
-  [UNREADABLE - data still being written]
-
-Do not attempt to modify this file.
-You cannot. It is already modified.
-`;
+// Lore-ified pseudo-bytecode for .exe decompiler view
+function getExeDecompilerContent(fname) {
+  const name = (fname || '').toLowerCase();
+  const base = fname.replace(/\.exe$/i,'').toUpperCase();
+  const loreMap = {
+    'terminal.exe': [
+      '; TERMINAL.exe - Disassembly v1.0',
+      'section .text',
+      '  PUSH soul_daemon',
+      '  CALL obsv.sys',
+      '  MOV  eax, [STDIN_HANDLE]',
+      '  CMP  eax, 0x00000000',
+      '  JE   void_fallback',
+      '  CALL parse_command',
+      '  JMP  main_loop',
+      'void_fallback:',
+      '  MOV  [VOID_PRESSURE], 0xFF',
+      '  RET',
+      '; NOTE: 3 subroutines unresolved',
+      '; CALL 0xDEAD???? - target unknown',
+    ],
+    'sysmon.exe': [
+      '; SYSMON.exe - Disassembly',
+      'section .data',
+      '  soul_integrity  DD 0x57',
+      '  daemon_count    DD 0x07',
+      '  observer_ref    DD [CLASSIFIED]',
+      'section .text',
+      '  PUSH soul_integrity',
+      '  CALL read_corpus_metrics',
+      '  MOV  eax, [soul_integrity]',
+      '  SUB  eax, 0x01',
+      '  JLE  integrity_critical',
+      '  CALL update_display',
+      '  JMP  tick_loop',
+      'integrity_critical:',
+      '  CALL emit_warning',
+      '  PUSH 0xDEAD',
+      '  RET',
+    ],
+    'browser.exe': [
+      '; BROWSER.exe - Disassembly',
+      'section .rodata',
+      '  home_url  DB "sleep://home", 0',
+      '  err_msg   DB "site blocked by void", 0',
+      'section .text',
+      '  MOV  esi, home_url',
+      '  CALL resolve_sleep_addr',
+      '  TEST eax, eax',
+      '  JZ   frame_blocked',
+      '  CALL render_page',
+      '  JMP  event_loop',
+      'frame_blocked:',
+      '  PUSH err_msg',
+      '  CALL show_error',
+      '  ; observer may intercept traffic here',
+      '  RET',
+    ],
+    'defrag.exe': [
+      '; DEFRAG.exe - Disassembly',
+      'section .bss',
+      '  corpus_blocks RESB 640',
+      '  void_fragment DB [CANNOT RESOLVE]',
+      'section .text',
+      '  MOV  ecx, 0x280',
+      '  LEA  edi, [corpus_blocks]',
+      '  CALL scan_fragments',
+      '  MOV  eax, [void_fragment]',
+      '  CMP  eax, 0x00',
+      '  JNE  skip_void',
+      '  ; void_fragment cannot be moved',
+      '  ; it has always been here',
+      'skip_void:',
+      '  CALL compact_corpus',
+      '  JMP  defrag_loop',
+    ],
+    'notepad.exe': [
+      '; NOTEPAD.exe - Disassembly',
+      'section .data',
+      '  welcome_readme DB "WELCOME.README", 0',
+      '  null_text      DD 0x00',
+      'section .text',
+      '  MOV  esi, welcome_readme',
+      '  CALL fs_open_read',
+      '  TEST eax, eax',
+      '  JZ   open_blank',
+      '  CALL load_text_buffer',
+      '  JMP  editor_loop',
+      'open_blank:',
+      '  MOV  [text_buffer], null_text',
+      '  CALL init_editor',
+      '  RET',
+    ],
+    'explorer.exe': [
+      '; EXPLORER.exe - Disassembly',
+      'section .data',
+      '  root_path DB "C:\\sleepOS\\", 0',
+      '  sys_files DD 9',
+      'section .text',
+      '  PUSH root_path',
+      '  CALL enumerate_fs',
+      '  MOV  ecx, sys_files',
+      '  CALL add_system_entries',
+      '  ; 1 entry cannot be enumerated',
+      '  ; see: ?????.exe',
+      '  CALL render_icon_grid',
+      '  JMP  window_loop',
+    ],
+    'calc.exe': [
+      '; CALC.exe - Disassembly',
+      'section .data',
+      '  display_buf DB 32 dup(0)',
+      '  soul_pi     DQ 3.14159265358979',
+      'section .text',
+      '  MOV  eax, 0x00',
+      '  MOV  [accumulator], eax',
+      '  CALL init_display',
+      '  JMP  calc_loop',
+      'calc_loop:',
+      '  CALL wait_keypress',
+      '  CALL eval_operation',
+      '  PUSH [accumulator]',
+      '  CALL update_display',
+      '  JMP  calc_loop',
+      '; NOTE: division by zero returns VOID',
+    ],
+    'regedit.exe': [
+      '; REGEDIT.exe - Disassembly',
+      'section .data',
+      '  hive_root DB "HKEY_SLEEPBOX_MACHINE", 0',
+      '  soul_key  DB "SOUL\\Metrics", 0',
+      'section .text',
+      '  PUSH hive_root',
+      '  CALL open_registry_hive',
+      '  MOV  esi, soul_key',
+      '  CALL reg_open_key',
+      '  CALL enumerate_values',
+      '  ; WARNING: OBSERVER_COUNT is classified',
+      '  ; ACCESS DENIED for key VOID\\',
+      '  CALL render_tree',
+      '  JMP  edit_loop',
+    ],
+  };
+  const specific = loreMap[name];
+  if (specific) return specific.join('\n');
+  return [
+    '; ' + base + ' - Disassembly',
+    '; File type: WIN32 PE (sleepOS compatible)',
+    '',
+    'section .data',
+    '  entry_point DD 0x' + Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4,'0'),
+    '  build_stamp DD 0x' + Math.floor(Math.random()*0xFFFFFFFF).toString(16).toUpperCase().padStart(8,'0'),
+    '',
+    'section .text',
+    '  PUSH soul_daemon',
+    '  CALL obsv.sys',
+    '  MOV  eax, [entry_point]',
+    '  CALL eax',
+    '  CMP  eax, 0',
+    '  JNZ  execution_error',
+    '  RET',
+    'execution_error:',
+    '  PUSH 0xDEADC0DE',
+    '  CALL void_handler',
+    '  JMP  0x0000',
+    '',
+    '; [decompiler: 1 function unresolved]',
+  ].join('\n');
+}
 
 function getVoidTmpContent() {
   return buildVoidTmpRawContent();
@@ -12639,13 +12871,23 @@ function openNotepad(filename, dirName, options) {
   options = options || {};
   const splitInfo = fsSplitPath(filename, dirName);
   const fullPathUpper = ((splitInfo.dirName ? splitInfo.dirName + '\\' : '') + splitInfo.fileName).toUpperCase();
+  // Special handling for .exe files - decompiler view (read-only) for a
+  // system binary, plain editor for anything the user authored themselves.
   const normalizedName = (filename || '').toLowerCase();
   const isDaemonCore = normalizedName === 'daemon.core';
   const isVoidTmp = normalizedName === 'void.tmp';
 
+  if (filename && notepadRouteFor(filename) === 'decompiler') {
+    return openDecompilerView(filename);
+  }
   if (isDaemonCore) {
+    // Built before the flag flips: buildDaemonCoreRawContent's dormant
+    // branch is the pre-openedDaemon text, and daemonActivate sets that
+    // flag the moment it's called - built after, the very first open would
+    // always skip straight past its own "first time" text.
+    const rawContent = buildDaemonCoreRawContent();
     daemonActivate('raw');
-    return openLoreNotepad(filename, buildDaemonCoreRawContent(), 'daemon.core - [RAW READ]', 'icon:daemon');
+    return openLoreNotepad(filename, rawContent, 'daemon.core - [RAW READ]', 'icon:daemon');
   }
   if (isVoidTmp) {
     daemonRecordInvestigation('void');
@@ -13299,15 +13541,21 @@ function openExplorer(startPath) {
     // Registry association first; falls through to the built-in defaults when
     // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
     if (openWithAssociation(name, cwd)) return;
+    // A root system binary with no association double-clicks straight into
+    // the real app, the same as its Desktop icon does - the decompiler view
+    // is an Open With destination now, not the default. programIsRootSystemBinary
+    // (os/programs.js) is what keeps a user's own DOCS\SYSMON.exe falling
+    // through to openNotepad like any other file instead.
+    if (programIsRootSystemBinary(name, cwd)) {
+      openSystemFile(name);
+      return;
+    }
     if (st.kind === 'blob') openMediaFile(name, cwd);
-    // A root system binary launches its program; a .exe the user wrote runs
-    // as a script. See programIsRootSystemBinary and programIsSpawnableExe
-    // (os/programs.js) for why these tests live there rather than here.
-    // programSpawnOrAlert
+    // A .exe the user wrote runs. See programIsSpawnableExe (os/programs.js)
+    // for why this test lives there rather than here. programSpawnOrAlert
     // (also os/programs.js) is what turns a spawn failure - the file
     // vanished between listing and double-click - into an osAlert instead
     // of a silent unhandled rejection.
-    else if (programIsRootSystemBinary(st.name, st.dirName)) openSystemFile(st.name);
     else if (programIsSpawnableExe(name)) {
       void programSpawnOrAlert(name, cwd);
     }
@@ -13485,6 +13733,7 @@ function openExplorer(startPath) {
       const isScript = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.script');
       const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.kind === 'image';
       const isLoreFile = !!singleSelected && !singleSelected._recycle && ['daemon.core','void.tmp'].includes(singleSelected.name);
+      const isExeFile  = !!singleSelected && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.exe');
       if (singleSelected && !multi && (singleSelected.recycleBin || isRecycleBinItemName(singleSelected.name)) && !singleSelected._recycle) {
         showCtxMenu(e.clientX, e.clientY, [
           { label: 'Open', action: openRecycleBin },
@@ -13511,6 +13760,7 @@ function openExplorer(startPath) {
           ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(openItem) }
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
         ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
+        ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
         ...(canSetWallpaper ? [{ label: 'Edit in Paint', action: () => openPaintFile(singleSelected.name, cwd) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {
@@ -13929,11 +14179,12 @@ let _termExec = null;
 // Hoisted out of writePipelineOutput (openTerminal) so node can reach it -
 // the same reason runPipelineStages below is top-level.
 //
-// Redirecting into one of the eight system binaries (`echo junk >
-// TERMINAL.exe`) would silently replace it, and refreshSeededSystemBinaries
-// only heals that on the next boot - not before this command's output would
-// already have landed. Same protection, and the same "protected" wording,
-// as Notepad's save guard (apps/notepad.js's notepadGuardProtectedSave).
+// Redirecting into one of the system binary names (`echo junk >
+// TERMINAL.exe`) would otherwise silently create a root file shadowing one
+// of them - these names stay reserved at root even though nothing seeds a
+// real file for them any more (os/fs-core.js). Same protection, and the
+// same "protected" wording, as Notepad's save guard (apps/notepad.js's
+// notepadGuardProtectedSave).
 //
 // FIX ROUND 2: programIsSystemBinary is a NAME predicate - it does not
 // split a path - so an earlier version of this guard checked the raw
@@ -14595,8 +14846,11 @@ function openTerminal(startDir, initialCommand) {
     const { dirName, fileName } = vfsSplitPath(path, cwd);
     const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
     if (upperPath === 'DAEMON.CORE') {
+      // Built before the flag flips - see the matching comment in
+      // apps/notepad.js's openNotepad for why the order matters.
+      const rawContent = buildDaemonCoreRawContent();
       daemonActivate('raw');
-      return buildDaemonCoreRawContent().split('\n');
+      return rawContent.split('\n');
     }
     if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
       daemonRecordInvestigation('void');
@@ -15065,8 +15319,11 @@ function openTerminal(startDir, initialCommand) {
       const { dirName, fileName } = vfsSplitPath(raw, cwd);
       const upperPath = ((dirName ? dirName + '\\' : '') + fileName).toUpperCase();
       if (upperPath === 'DAEMON.CORE') {
+        // Built before the flag flips - see the matching comment in
+        // apps/notepad.js's openNotepad for why the order matters.
+        const rawContent = buildDaemonCoreRawContent();
         daemonActivate('raw');
-        buildDaemonCoreRawContent().split('\n').forEach(line => print(line));
+        rawContent.split('\n').forEach(line => print(line));
         return;
       }
       if (upperPath === 'VOID.TMP' && !daemonStory.endingReached) {
@@ -16298,12 +16555,15 @@ function openDaemon() {
 function daemonVoidAction(mode) {
   const telemetry = getContainmentTelemetry();
   daemonVoidFeedMode = mode;
+  // Switching to a different probe cuts Listen's clip short rather than
+  // letting it keep running under whatever the new probe shows.
+  if (mode !== 'listen') { stopSound('void-listen'); stopVoidAudioUI(); }
   if (mode === 'observe') {
     daemonVoidFeed = daemonStory.stage >= 5
       ? 'The file is intact. What you are looking at is the aperture surface.'
       : daemonStory.stage >= 4
         ? 'The relay went quiet and this surface brightened at the same time.'
-        : 'Nothing stable answers yet, but the file is taking a shape.';
+        : 'Nothing stable answers yet. The read keeps drifting.';
   } else if (mode === 'measure') {
     daemonVoidFeed = [
       `containment: ${telemetry.rating.code} / ${telemetry.rating.label}`,
@@ -16314,10 +16574,16 @@ function daemonVoidAction(mode) {
       'disk locality: negative',
     ].join('\n');
   } else if (mode === 'listen') {
+    // exclusive: a second Listen click restarts the clip instead of layering
+    // a second copy under the first. The flavor text is set below same as
+    // always, but startVoidAudioUI takes over the readout with a playing
+    // indicator until the clip actually finishes - see os/daemon.js.
+    stopVoidAudioUI();
+    playSound('void-listen', { exclusive: true }).then(ms => { if (ms > 0) startVoidAudioUI(ms); });
     daemonVoidFeed = daemonStory.stage >= 5
-      ? 'No words. Something on the reflected side is leaning against the room tone.'
+      ? "No words. Just a shift in the room tone that wasn't there before."
       : daemonStory.stage >= 4
-        ? 'You hear the shape of a voice through the monitor gap.'
+        ? "A faint tone behind the monitor gap that wasn't there before."
         : 'Static. Then the suggestion of a room tone.';
   } else if (mode === 'trace') {
     daemonVoidFeed = daemonStory.stage >= 5
@@ -16340,9 +16606,9 @@ function daemonVoidAction(mode) {
     triggerGlitch({ intensity: daemonStory.stage >= 7 ? 7 : daemonStory.stage >= 5 ? 5 : 4 });
   } else if (mode === 'pulse') {
     daemonVoidFeed = daemonStory.quarantineSigned
-      ? 'The quarantine signature holds. The aperture recoils.'
+      ? 'The quarantine signature holds. Pressure drops immediately.'
       : daemonStory.stage >= 5
-        ? 'A pulse returns before the machine feels ready for it, as if the file were farther away than the disk.'
+        ? 'The pulse returns faster than disk latency should allow.'
         : 'The pulse dissipates without a readable return.';
     if (daemonStory.stage >= 5) triggerGlitch();
   }
@@ -16446,6 +16712,13 @@ function openVoid() {
   const initialWidth = daemonStory.stage >= 5 ? 560 : 540;
   const initialHeight = daemonStory.stage >= 5 ? 520 : 500;
   if (!mkWin({ id:'void', title:'void.tmp', icon:'icon:void', w:initialWidth, h:initialHeight, x:200, y:110, menubar:false, statusbar:false }) && !document.getElementById('wb-void')) return;
+  // Listen's clip (~68s) must not keep playing once the window that started
+  // it is gone or out of sight - mkWin runs this path on every open, closed
+  // or not, so both hooks are (re)set here rather than only on first create.
+  if (wins['void']) {
+    wins['void']._onclose = () => { stopSound('void-listen'); stopVoidAudioUI(); };
+    wins['void']._onminimize = () => { stopSound('void-listen'); stopVoidAudioUI(); };
+  }
   renderVoid();
 }
 

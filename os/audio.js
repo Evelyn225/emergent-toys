@@ -29,6 +29,8 @@ const SOUND_FILES = {
   error:    'error.ogg',
   glitch:   'glitch.ogg',
   click:    'mouseClick.ogg',
+  // void.tmp's Listen probe (apps/daemon-ui.js's daemonVoidAction).
+  'void-listen': 'void.ogg',
   // PAINT.exe. Quoted keys because the names are the file names, hyphens and
   // all - one fewer mapping to keep straight when a file is swapped.
   'paint-pencil':      'paint-pencil.ogg',
@@ -61,6 +63,8 @@ const SOUND_GAIN = {
   error:    0.65,
   glitch:   0.50,
   click:    0.30,
+  // Starting point, not measured - retune here by ear once it's in.
+  'void-listen': 0.50,
   // PAINT.exe. Set from each file's measured RMS rather than by ear, so they
   // start out level with each other: one-shots land between the OS click and
   // the error chime, the two drawing loops well under both because they run
@@ -181,6 +185,15 @@ function loadSound(name) {
   return load;
 }
 
+// Most one-shots (a click, an error chime) are short and cheap to let
+// overlap - see the file header. A long one-shot a caller needs to cut off
+// early (void.tmp's Listen probe, ~68s) is the exception, and it opts in
+// per call with { exclusive: true } rather than changing playSound's default
+// for everyone. Keyed by sound name, so at most one exclusive instance of a
+// given sound plays at once; a second exclusive() call for the same name
+// stops the first instead of layering under it.
+const audioExclusiveSources = new Map();
+
 // Fire-and-forget one-shot. `volume` is a multiplier on the sound's entry in
 // SOUND_GAIN, for callers that vary intensity (see triggerGlitch).
 //
@@ -194,6 +207,7 @@ function loadSound(name) {
 // so a caller awaiting the end could wait forever. Resolving with the duration
 // up front lets the caller decide its own deadline against the wall clock.
 function playSound(name, options = {}) {
+  if (options.exclusive) stopSound(name);
   if (!audioUnlocked || !systemAudioEnabled() || document.hidden) return Promise.resolve(0);
   const scale = Number.isFinite(Number(options.volume)) ? Number(options.volume) : 1;
   return loadSound(name).then(buffer => {
@@ -207,10 +221,24 @@ function playSound(name, options = {}) {
     gain.gain.value = Math.max(0, (SOUND_GAIN[name] ?? 0.5) * scale);
     src.connect(gain);
     gain.connect(audioMaster);
-    src.onended = () => { try { src.disconnect(); gain.disconnect(); } catch (e) {} };
+    src.onended = () => {
+      try { src.disconnect(); gain.disconnect(); } catch (e) {}
+      if (audioExclusiveSources.get(name) === src) audioExclusiveSources.delete(name);
+    };
+    if (options.exclusive) audioExclusiveSources.set(name, src);
     src.start();
     return Math.round(buffer.duration * 1000);
   });
+}
+
+// Cuts an exclusive one-shot short. A no-op for a sound that was never
+// started with { exclusive: true }, or has already finished - callers are
+// not expected to track whether one is actually playing before calling this.
+function stopSound(name) {
+  const src = audioExclusiveSources.get(name);
+  if (!src) return;
+  audioExclusiveSources.delete(name);
+  try { src.stop(); } catch (e) {}
 }
 
 // Idempotent: calling this on an already-running loop does nothing, so a

@@ -563,6 +563,13 @@ function minWin(id) {
   w.minimized = true; w.el.style.display = 'none';
   const btn = document.getElementById('tbtn-' + id);
   if (btn) btn.classList.remove('focused');
+  // Same shape as closeWin's _onclose: something a window owns that must not
+  // keep running once the window is off screen - a sound, most likely -
+  // hangs a teardown here. Unlike _onclose this fires on every minimize, so
+  // it must be safe to call repeatedly (stopSound already is).
+  if (typeof w._onminimize === 'function') {
+    try { w._onminimize(); } catch (e) {}
+  }
 }
 
 function unminWin(id) {

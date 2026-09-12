@@ -343,15 +343,23 @@ test('the help button carries the question-mark icon, not a text label', async (
 
 // ── integration with the rest of the OS ──────────────────────────
 
-test('MINESWEEPER.exe is a real file that DIR lists and the terminal can run', async () => {
+// System binaries stopped being seeded as real root files (os/fs-core.js) -
+// they're desktop-only now, plus Start Menu / Run / Terminal by name. DIR no
+// longer lists MINESWEEPER.exe, but the terminal must still resolve it by
+// exact name through the same programResolve path a real `MINESWEEPER.exe`
+// keypress goes through.
+test('MINESWEEPER.exe is no longer a real root file, but still resolves by name', async () => {
   await withGame(async page => {
-    const stat = await page.evaluate(() => {
+    const result = await page.evaluate(() => {
       const st = vfsStatSync('MINESWEEPER.exe', '');
-      return st ? { kind: st.kind, size: st.size } : null;
+      const resolved = programResolve('MINESWEEPER.exe', '', '');
+      return {
+        stat: st ? { kind: st.kind, size: st.size } : null,
+        resolvedName: resolved ? resolved.program.name : null,
+      };
     });
-    assert.ok(stat, 'MINESWEEPER.exe is not on disk beside the other system binaries');
-    assert.strictEqual(stat.kind, 'text');
-    assert.ok(stat.size > 0);
+    assert.strictEqual(result.stat, null, 'MINESWEEPER.exe should no longer be seeded as a root file');
+    assert.strictEqual(result.resolvedName, 'MINESWEEPER.exe', 'the terminal must still resolve it by exact name');
   });
 });
 
@@ -585,6 +593,36 @@ test('an oversized board is shrunk to fit the phone, not left to overflow it', a
     await cell.click();
     const after = await cell.evaluate(el => el.style.backgroundPosition);
     assert.notStrictEqual(after, before, 'a click on the shrunk board did not reveal the cell under it');
+  } finally {
+    await context.close();
+  }
+});
+
+// ms-header has no width of its own - it stretches to fill ms-root's content
+// box. Before ms-root got `width: max-content`, that content box was ms-grid
+// (which forces its own max-content width regardless of its parent) that had
+// shrunk ms-root down to whatever narrower width msFitWindow gave
+// ms-scale-wrap. ms-header (plain auto width) took that narrower width
+// literally while ms-grid overflowed past it to its real size, so the two
+// disagreed on width under the same transform:scale and the face/counter bar
+// came out visibly narrower than - and misaligned with - the board under it.
+test('the header bar matches the grid width on a downscaled Expert board', async () => {
+  const { context, page } = await openDesktop(harness.browser, { width: 390, height: 780 });
+  try {
+    await page.evaluate(() => { msSetRegValue('Difficulty', 'expert'); });
+    await openWindow(page, 'openMinesweeper');
+    await page.waitForSelector('#ms-grid .ms-cell');
+    await page.waitForTimeout(300);
+    const g = await page.evaluate(() => {
+      const header = document.querySelector('.ms-header').getBoundingClientRect();
+      const grid = document.querySelector('.ms-grid').getBoundingClientRect();
+      return {
+        headerW: Math.round(header.width), gridW: Math.round(grid.width),
+        headerLeft: Math.round(header.left), gridLeft: Math.round(grid.left),
+      };
+    });
+    assert.strictEqual(g.headerW, g.gridW, 'header width does not match grid width: ' + g.headerW + ' vs ' + g.gridW);
+    assert.strictEqual(g.headerLeft, g.gridLeft, 'header is not left-aligned with the grid: ' + g.headerLeft + ' vs ' + g.gridLeft);
   } finally {
     await context.close();
   }

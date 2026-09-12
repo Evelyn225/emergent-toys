@@ -37,13 +37,14 @@ const DESKTOP_ICONS = [
   { name: 'NOTEPAD.exe',    emoji: 'icon:notepad',  action: 'openNotepad' },
   { name: 'EXPLORER.exe',   emoji: 'icon:explorer', action: 'openExplorer' },
   { name: 'TERMINAL.exe',   emoji: 'icon:terminal', action: 'openTerminal' },
-  { name: 'SYSMON.exe',     emoji: 'icon:sysmon',   action: 'openSysmon' },
   { name: 'BROWSER.exe',    emoji: 'icon:browser',  action: 'openBrowser' },
   { name: 'DEFRAG.exe',     emoji: 'icon:defrag',   action: 'openDefrag' },
   { name: 'CALC.exe',       emoji: 'icon:calc',     action: 'openCalculator' },
   { name: 'MINESWEEPER.exe', emoji: 'icon:minesweeper', action: 'openMinesweeper' },
   { name: 'PAINT.exe',      emoji: 'icon:paint',    action: 'openPaint' },
-  { name: 'REGEDIT.exe',    emoji: 'icon:regedit',  action: 'openRegedit' },
+  // SYSMON.exe and REGEDIT.exe are deliberately not desktop icons - they're
+  // the two "system tools" the Start Menu comment in sleep-os.html already
+  // calls out as living there instead (plus Run... and the Terminal).
   { name: 'daemon.core',    emoji: 'icon:daemon',   action: 'openDaemon' },
   { name: 'void.tmp',       emoji: 'icon:void',     action: 'openVoid' },
   // Not in the static map alone: the bin's icon depends on whether it holds
@@ -409,15 +410,21 @@ function openDesktopShortcutTarget(target) {
     return;
   }
   if (openWithAssociation(st.name, st.dirName)) return;
+  // Same root-system-binary carve-out as Explorer's openItem: a shortcut to
+  // e.g. root SYSMON.exe with no Open With association launches the real
+  // app rather than its decompiler view. programIsRootSystemBinary
+  // (os/programs.js) is what keeps a shortcut to a user's own
+  // DOCS\SYSMON.exe from being redirected.
+  if (programIsRootSystemBinary(st.name, st.dirName)) {
+    openSystemFile(st.name);
+    return;
+  }
   if (st.kind === 'blob') openMediaFile(st.name, st.dirName);
-  // A root system binary launches its program; a .exe the user wrote runs
-  // as a script. See programIsRootSystemBinary and programIsSpawnableExe
-  // (os/programs.js) for why these tests live there rather than here.
-  // programSpawnOrAlert
+  // A .exe the user wrote runs. See programIsSpawnableExe (os/programs.js)
+  // for why this test lives there rather than here. programSpawnOrAlert
   // (also os/programs.js) is what turns a spawn failure - the file vanished
   // between the shortcut being created and being clicked - into an osAlert
   // instead of a silent unhandled rejection.
-  else if (programIsRootSystemBinary(st.name, st.dirName)) openSystemFile(st.name);
   else if (programIsSpawnableExe(st.name)) {
     void programSpawnOrAlert(st.name, st.dirName);
   }
