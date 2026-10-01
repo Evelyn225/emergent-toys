@@ -2729,6 +2729,7 @@ const PROJECTS = [
   { name: 'magnetic pendulum',  emoji: '🧲', file: 'evenet.fun/magnetic-pendulum.html' },
   { name: 'physarum',           emoji: '🍄', file: 'evenet.fun/physarum.html' },
   { name: 'dla crystal',        emoji: '❄️', file: 'evenet.fun/dla-crystal.html' },
+  { name: 'ascii city',         emoji: '🏙️', file: 'evenet.fun/ascii-city.html' },
 ];
 const RECYCLE_BIN_NAME = 'RECYCLE BIN';
 const RECYCLE_STORAGE_DIR = 'CACHE\\RECYCLE_BIN';

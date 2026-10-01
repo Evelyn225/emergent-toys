@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16"
+    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+  <title>ASCII City</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #000; }
+    canvas { display: block; position: fixed; inset: 0; z-index: 1; }
+  </style>
+</head>
+<body>
+<a href="index.html"
+  style="position: fixed; top: 10px; right: 10px; z-index: 1000;
+         line-height: 0; text-decoration: none;
+         transition: transform 0.2s cubic-bezier(0.68,-0.55,0.265,1.55);"
+  onmouseover="this.style.transform='scale(1.2)'"
+  onmouseout="this.style.transform='scale(1)'"
+  onmousedown="this.style.transform='scale(0.95)'"
+  onmouseup="this.style.transform='scale(1.2)'">
+  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+       alt="home" style="width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; display: block;">
+</a>
+<canvas id="c"></canvas>
+<script>
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+// City: 1 unit ~ 10m, eye ~1.7m. Interiors: 1 unit = 1m.
+const FS = 12, MAXD = 40, FOV = 1.1, RAMP = '.:-=+*#%@', NONE = 255;
+
+const hash = (a, b, c = 0) => {
+  let h = (a * 374761393 + b * 668265263 + c * 1442695041) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+const fract = v => v - Math.floor(v), mod = (v, m) => ((v % m) + m) % m, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function noise(x, y, s) { // smooth value noise
+  const xi = Math.floor(x), yi = Math.floor(y), u = x - xi, v = y - yi, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+  const h = (a, b) => hash(a, b, s);
+  return (h(xi, yi) * (1 - su) + h(xi + 1, yi) * su) * (1 - sv) + (h(xi, yi + 1) * (1 - su) + h(xi + 1, yi + 1) * su) * sv;
+}
+const pick = a => a[Math.random() * a.length | 0];
+const NB = 16, N = NB * 8; // the city is NB x NB blocks of 8x8 cells, repeating forever
+const rel = v => mod(v + N / 2, N) - N / 2; // nearest copy in the repeating world
+
+// ---- colors: palette index = base*16 + brightness(0..15); NONE = no background
+const BASES = [[200,200,230],[255,210,90],[230,50,50],[60,110,255],[240,240,240],[255,200,0],[60,200,90],
+               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30]];
+const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE] = BASES.keys();
+const PAL = [], PALRGB = [];
+for (const [r, gg, b] of BASES) for (let i = 0; i < 16; i++) {
+  const f = 0.1 + i / 15 * 0.9, c = [r * f | 0, gg * f | 0, b * f | 0];
+  PALRGB.push(c); PAL.push(`rgb(${c})`);
+}
+const C = (b, l) => b << 4 | clamp(l | 0, 0, 15);
+const NEON = [MAG, CYAN, RED, GREEN], ITEM_COL = [RED, YEL, GREEN, BLUE, MAG, ORANGE, CYAN, WHITE];
+
+// ---- shops
+const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
+  'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
+  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO'];
+const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
+const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR: 'il!Y', PHARMACY: '+=o', PHONES: '[]#',
+  HARDWARE: 'T7/', FLORIST: '*@&', 'PET SHOP': '~>o', ARCADE: '[]#', TATTOO: '*%', LAUNDRY: 'O@' };
+const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, sorry.', 'Nice weather, huh?', 'We close at 2am.'];
+// storefront kinds: lit display, closed shutter, neon interior, produce stand out front, apartment lobby door
+const SHOP_LIT = 0, SHOP_SHUT = 1, SHOP_NEON = 2, SHOP_PRODUCE = 3, SHOP_APTS = 4;
+const shopOf = seed => {
+  let kind = (seed * 7919 | 0) % 4;
+  if (kind === SHOP_SHUT && fract(seed * 331) < 0.5) kind = SHOP_APTS;
+  const words = kind === SHOP_PRODUCE ? PRODUCE : WORDS;
+  const word = kind === SHOP_APTS ? 'No.' + (100 + (seed * 900 | 0)) : words[(seed * 104729 | 0) % words.length];
+  return { kind, word, neon: kind === SHOP_APTS ? WHITE : NEON[(seed * 1000 | 0) % 4], signed: seed > 0.25 || kind === SHOP_APTS, glyphs: GLYPHS[word] || 'o#=@' };
+};
+
+// ---- map: N x N tile, repeats forever. 8x8 blocks: 2-wide streets, 2x2 lots of 3x3 buildings.
+// Some blocks are left open: parks, plazas, and one 2x2-block waterfront per tile (rarer than parks).
+const baseKind = (bx, by) => {
+  const h = hash(bx & (NB - 1), by & (NB - 1), 7);
+  // per 256-block city: ~5 parks, 4 landmarks, 3 construction sites, ~9 plazas (plus the one waterfront)
+  return h < 0.01 ? 'park' : h < 0.042 ? 'landmark' : h < 0.06 ? 'construction' : h < 0.085 ? 'plaza' : '';
+};
+const WATER = (() => {
+  let best = [3, 3], bh = 2;
+  for (let bx = 0; bx < NB - 1; bx++) for (let by = 0; by < NB - 1; by++) {
+    if (baseKind(bx, by) || baseKind(bx + 1, by) || baseKind(bx, by + 1) || baseKind(bx + 1, by + 1)) continue;
+    const h = hash(bx, by, 81); if (h < bh) { bh = h; best = [bx, by]; }
+  }
+  return best;
+})();
+const blockKind = (bx, by) => { bx &= NB - 1; by &= NB - 1; return (bx - WATER[0]) >>> 0 < 2 && (by - WATER[1]) >>> 0 < 2 ? 'water' : baseKind(bx, by); };
+const map = new Uint8Array(N * N), STY = new Uint8Array(N * N), SEED = new Float32Array(N * N), SHOP = [];
+// landmarks: each landmark block gets the next type in turn, so you see a mix
+// STY 3 clock tower, 4 cathedral, 5 video-screen tower, 6 construction frame (radio mast is a sprite on a plaza)
+const LANDMARK_TYPES = ['clock', 'cathedral', 'screens', 'radio'], landmarkOf = new Map();
+for (let bx = 0, n = 0; bx < NB; bx++) for (let by = 0; by < NB; by++)
+  if (blockKind(bx, by) === 'landmark') landmarkOf.set(bx * NB + by, LANDMARK_TYPES[n++ % 4]);
+function setCells(bx, by, x0, y0, x1, y1, h, sty) { // block-local cell rectangle [x0..x1] x [y0..y1]
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = (by * 8 + y) * N + bx * 8 + x; map[i] = h; STY[i] = sty; }
+}
+for (let bx = 0; bx < NB; bx++) for (let by = 0; by < NB; by++) {
+  const kind = blockKind(bx, by), lm = landmarkOf.get(bx * NB + by);
+  if (lm === 'clock') setCells(bx, by, 4, 4, 5, 5, 12, 3);
+  if (lm === 'cathedral') { setCells(bx, by, 3, 4, 6, 7, 3, 4); setCells(bx, by, 3, 3, 3, 3, 8, 4); setCells(bx, by, 6, 3, 6, 3, 8, 4); }
+  if (lm === 'screens') setCells(bx, by, 3, 3, 6, 6, 6, 5);
+  if (kind === 'construction') setCells(bx, by, 2, 2, 4, 4, 3 + (hash(bx, by, 96) * 3 | 0), 6);
+}
+for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+  if (x % 8 < 2 || y % 8 < 2) continue;
+  const bx = x >> 3, by = y >> 3;
+  if (blockKind(bx, by)) continue;
+  const lot = [bx * 2 + ((x % 8 - 2) / 3 | 0), by * 2 + ((y % 8 - 2) / 3 | 0)], i = y * N + x;
+  map[i] = 1 + (hash(...lot) ** 2 * 8 | 0); // height 1..8 (10-80m)
+  const s = hash(...lot, 11) * 4 | 0;
+  STY[i] = s === 3 ? 7 : s; // 0 office, 1 glass, 2 brick, 7 tenement (3-6 are taken by landmarks)
+  SEED[i] = hash(...lot, 5);
+  SHOP[i] = shopOf(SEED[i]);
+}
+const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
+// open water inside the waterfront blocks (the boardwalk ring around it is walkable)
+const isWater = (wx, wy) => {
+  const lx = mod(wx, 8), ly = mod(wy, 8);
+  return lx > 2.35 && lx < 7.65 && ly > 2.35 && ly < 7.65 && blockKind(Math.floor(wx / 8), Math.floor(wy / 8)) === 'water';
+};
+
+// ---- ascii sprites
+const pad = a => { const w = Math.max(...a.map(l => l.length)); return a.map(l => l.padEnd(w)); };
+const MIR = { '/': '\\', '\\': '/', '(': ')', ')': '(', '[': ']', ']': '[' };
+const mirror = a => a.map(l => [...l].reverse().map(c => MIR[c] || c).join(''));
+const ART = {
+  carSide: pad(['    _________', ' __/##|###|##\\___', '|]   __     __  O|', "'--(@@)---(@@)--'"]),
+  carFront: pad(['  _______', ' /#######\\', '|O|=====|O|', "'(@)---(@)'"]),
+  carBack: pad(['  _______', ' /#######\\', '|]|_____|[|', "'(@)---(@)'"]),
+  walkA: pad([' _ ', '(_)', '/|\\', ' | ', '/ \\']),
+  walkB: pad([' _ ', '(_)', '/|\\', ' | ', ' | ']),
+  lamp: pad(['.-=-.', "'---'", '  |', '  |', '  |', '  |', '  |', '  |', ' _|_']),
+  signal: pad(['.-.', '(O)', "'-'", ' |', ' |', ' |', ' |', '_|_']),
+  tree: pad(['   ,@@%,', ' ,@%@@@%@,', '@@%@@%@@@%@', '%@@@%@@%@@@', " '@%@@@%@'", "   '\\|/'", '    |', '    |']),
+  bench: pad([' _____', '|_____|', "'     '"]),
+  antenna: pad([' *', ' |', '-+-', ' |', ' |', '-+-', ' |', ' |']),
+  tank: pad(['  ___', ".'   '.", '|=====|', '|=====|', "'.___.'", ' /| |\\', '/ | | \\']),
+  counter: pad([' .------------------------.', ' |  [$]            .---.  |', ' |                 |===|  |', ' |________________________|']),
+  keeper: pad(['  ___', ' (o o)', '  \\-/', ' /|#|\\', '/ |#| \\', '  |_|', '  / \\', ' /   \\']),
+  sitter: pad(['  ___', ' (o o)', '  \\-/', ' /|#|\\', " '---'"]),
+  sitterBack: pad(['  ___', ' (   )', '  | |', ' /|#|\\', " '---'"]), // seen from behind
+  sail: pad(['    |\\', '    | \\', '    |  \\', '    |___\\', ' ___|_____', ' \\_______/']),
+  tug: pad(['    _|_', ' __|o_o|__', ' \\_o__o__/']),
+  stool: pad([' ___', '(___)', '  |', '  |', ' _|_']),
+  barTop: pad([' __________________________________', '|  o   o    [$]    o    o     o   o |', '|==================================|', '|                                  |', '|__________________________________|']),
+  table: pad([' _________', '|_________|', '    | |', '   _|_|_']),
+  jukebox: pad([' .-----.', '/ ((o)) \\', '|=======|', '|:::::::|', '|=======|', "'-------'"]),
+  cart: pad([' _____', '|@@@@@|', '|_____|', ' o   o']),
+  seats: pad(['[_][_][_][_][_][_][_][_][_][_]', ' |  |  |  |  |  |  |  |  |  |']),
+  desk: pad([' ______________', '| [=]   BELL o |', '|______________|', '|              |', '|______________|']),
+  plant: pad(['  \\|/', ' -@@@-', '  /|\\', ' [___]']),
+  pole: pad(['|', '|', '|', '|', '|', '|']),
+  longSeat: pad([' ____________', '|____________|', "'            '"]),
+  train: pad([' ____________________________________________________',
+              '|  ____   ____  |    |  ____   ____  |    |  ____   _|',
+              '| |####| |####| |    | |####| |####| |    | |####| |#|',
+              '| |####| |####| |    | |####| |####| |    | |####| |#|',
+              '|               |    |               |    |          |',
+              '|===============|====|===============|====|==========|',
+              "'-(O)-----(O)---'----'-(O)-----(O)---'----'-(O)------'"]),
+};
+Object.assign(ART, {
+  spire: pad(['   +', '   ^', '  /|\\', '  |+|', ' /|||\\', ' |||||', '/|||||\\']),
+  radio: pad(['    *', '    |', '   /|\\', '   |X|', '   |X|', '  /|X|\\', '  |XXX|', '  |XXX|', ' /|XXX|\\', ' |XXXXX|', ' |XXXXX|', '/XXXXXXX\\']),
+  crane: pad(['          __________________________________',
+              ' ___     |\\  /\\  /\\  /\\  /\\  /\\  /\\  /\\  /|',
+              '|###|====| \\/  \\/  \\/  \\/  \\/  \\/  \\/  \\/ |',
+              " '-'     |_|--------------------------------'",
+              '         |X|                    |', '         |X|                    |', '         |X|                   [=]',
+              '         |X|', '         |X|', '         |X|', '         |X|', '         |X|', '         |X|', '         |X|',
+              '         |X|', '         |X|', '        _|X|_']),
+  fence: pad(['|==|==|==|==|', '|  |  |  |  |']),
+  treadmill: pad(['  ____', ' |[::]|', ' |    |', '/______\\']),
+  rack: pad(['|=O====O=|', '|=O====O=|', '|=O====O=|', '|_________|']),
+  barberChair: pad(['  ___', ' |   |', ' |___|', '  /|\\', ' /_|_\\']),
+  barberPole: pad(['(=)', '|/|', '|/|', '|/|', '|/|', '(=)']),
+  bankCounter: pad(['.________.________.________.', '|  |  |  |  |  |  |  |  |  |', '|__|__|__|__|__|__|__|__|__|', '|                          |', '|__________________________|']),
+  stage: pad(['.______________.', '|______________|']),
+  speaker: pad(['.---.', '|(O)|', '|(o)|', "'---'"]),
+  singer: pad([' _  o', '(_)/', '/|', ' |', '/ \\']),
+  cage: pad(['.----.', '|####|', '|#oo#|', "'----'"]),
+  dog: pad(['  /^ ^\\', ' / 0 0 \\', ' V\\ Y /V', '  / - \\', ' |    \\', ' || (__V']),
+  bouquet: pad([' *@*@*', '  \\|/', '  [_]']),
+});
+ART.carSideL = mirror(ART.carSide);
+ART.taxiSide = pad(['   _[TAXI]__', ...ART.carSide.slice(1)]);
+ART.taxiSideL = mirror(ART.taxiSide).map(l => l.replace('[IXAT]', '[TAXI]'));
+ART.taxiFront = pad(['  _[TAXI]_', ...ART.carFront.slice(1)]);
+ART.taxiBack = pad(['  _[TAXI]_', ...ART.carBack.slice(1)]);
+// arcade cabinets: 4 frames of flickering screen
+ART.cab = [0, 1, 2, 3].map(f => { const s = k => [0, 1, 2].map(j => '*@#+o~%'[hash(f, k * 3 + j, 61) * 7 | 0]).join('');
+  return pad([' _____', '|.---.|', `||${s(0)}||`, `||${s(1)}||`, "|'---'|", '| o o |', '|_____|']); });
+const billboard = t => pad(['+' + '-'.repeat(t.length + 2) + '+', '| ' + t + ' |', '+' + '-'.repeat(t.length + 2) + '+',
+                            '  |' + ' '.repeat(t.length - 2) + '|', '  |' + ' '.repeat(t.length - 2) + '|']);
+const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9', 'BUY GOLD', 'SLEEP MORE', 'ROBO TAXI', 'SHOES 50% OFF', 'VOTE NOBODY'];
+
+// lamps stand at the curb edge of the sidewalk (sidewalk is 0..0.3), two per block side
+const CURB = 0.25, LAMP_AT = [3.5, 6.5];
+const lamps = [];
+for (let i = 0; i < NB; i++) for (const o of [CURB, 2 - CURB]) for (let j = 0; j < NB; j++) for (const s of LAMP_AT)
+  lamps.push([i * 8 + o, j * 8 + s], [j * 8 + s, i * 8 + o]);
+// light pool on the ground, matches lamp positions above
+function glow(wx, wy) {
+  const lx = mod(wx, 8), ly = mod(wy, 8);
+  const toCurb = v => Math.min(Math.abs(v - CURB), Math.abs(v - 2 + CURB), Math.abs(v - 8 - CURB));
+  const toLamp = v => Math.min(...LAMP_AT.map(s => Math.abs(v - s)));
+  const ex = toCurb(lx), ay = toLamp(ly), ey = toCurb(ly), ax = toLamp(lx);
+  return Math.max(0, 1 - Math.sqrt(Math.min(ex * ex + ay * ay, ey * ey + ax * ax)) / 0.45);
+}
+
+// parks: grass, a cross of dirt paths through the middle (block coords 2..8, center 5), a pond, trees, benches
+const POND = [3.5, 3.5, 0.85]; // block-local x, y, base radius
+// a lumpy, slightly oval pond outline (different per park); `pad` grows it, for shores and keeping trees out
+function inPond(lx, ly, bx, by, pad = 0) {
+  const ex = (lx - POND[0]) / 1.15, ey = ly - POND[1], ang = Math.atan2(ey, ex);
+  const edge = POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
+  return Math.hypot(ex, ey) < edge + pad;
+}
+const BENCH = [[0.35, -2], [0.35, 2], [-2, 0.35], [2, -0.35]]; // relative to block center
+const parkTrees = [], benches = [], parks = [];
+for (let bx = 0; bx < NB; bx++) for (let by = 0; by < NB; by++) {
+  const kind = blockKind(bx, by);
+  if (kind === 'water') for (const [x, y] of [[5, 2.15], [5, 7.85], [2.15, 5], [7.85, 5]]) benches.push([bx * 8 + x, by * 8 + y]); // boardwalk
+  if (kind !== 'park') continue;
+  parks.push([bx, by]);
+  for (let k = 0; k < 40; k++) {
+    const x = 2.3 + hash(bx, by, k * 2) * 5.4, y = 2.3 + hash(bx, by, k * 2 + 1) * 5.4;
+    if (Math.abs(x - 5) < 0.5 || Math.abs(y - 5) < 0.5 || inPond(x, y, bx, by, 0.4)) continue;
+    parkTrees.push([bx * 8 + x, by * 8 + y]);
+  }
+  for (const [x, y] of BENCH) benches.push([bx * 8 + 5 + x, by * 8 + 5 + y]);
+}
+// boats circling inside each water block
+const boats = [];
+for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++)
+  boats.push({ cx: (WATER[0] + i) * 8 + 5, cy: (WATER[1] + j) * 8 + 5, r: 1.2 + hash(i, j, 92) * 0.8, sp: 0.04 + hash(i, j, 93) * 0.05,
+               ph: hash(i, j, 94) * 6.28, sail: (i + j) % 2 === 0 });
+
+// landmark and construction-site props
+const extras = [];
+for (let bx = 0; bx < NB; bx++) for (let by = 0; by < NB; by++) {
+  const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bx * NB + by);
+  if (lm === 'cathedral') for (const x of [3.5, 6.5])
+    extras.push({ x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
+  if (lm === 'radio')
+    extras.push({ x: X + 5, y: Y + 5, z: 0, w: 2.2, h: 16, art: ART.radio, col: (c, row, L) => c === '*' ? C(RED, fract(T * 0.7) < 0.5 ? 15 : 3) : C(row & 2 ? RED : WHITE, L) });
+  if (blockKind(bx, by) === 'construction') {
+    extras.push({ x: X + 7, y: Y + 6.2, z: 0, w: 6.5, h: 9, art: ART.crane, col: (c, row, L) => C(c === '#' || c === '=' && row > 3 ? GRAY : YEL, L) });
+    for (const s of [3.5, 5, 6.5]) for (const [x, y] of [[s, 2.1], [s, 7.9], [2.1, s], [7.9, s]])
+      extras.push({ x: X + x, y: Y + y, z: 0, w: 1.4, h: 0.22, art: ART.fence, col: (c, row, L) => C(c === '=' ? ORANGE : GRAY, L) });
+  }
+}
+
+// street food: a rare cart at the curb, a few kinds. Two art frames each so the steam/umbrella shimmer.
+const VENDOR_TYPES = [
+  { name: 'HOT DOGS', item: 'a hot dog', price: 3, color: RED, w: 0.32, art: [
+    ['  ~  ~', ' .-~~~~-.', '/HOT DOGS\\', "'---||---'", ' [=====]|', ' |o o o||', " '-O---O'"],
+    [' ~  ~', ' .-~~~~-.', '/HOT DOGS\\', "'---||---'", ' [=====]|', ' |o o o||', " '-O---O'"]] },
+  { name: 'TACOS', item: 'two tacos', price: 5, color: ORANGE, w: 0.5, art: [
+    ['   ~   ~', ' ___________', '|  TACOS  |\\', '|[##] [##]| |', '|_________|_|', ' (O)     (O)'],
+    ['  ~   ~', ' ___________', '|  TACOS  |\\', '|[##] [##]| |', '|_________|_|', ' (O)     (O)']] },
+  { name: 'ICE CREAM', item: 'a double scoop', price: 4, color: MAG, w: 0.3, art: [
+    ['  .-~~-.', ' / ICE  \\', "'---||---'", ' |*@*@*|', ' |_____|', '  O   O'],
+    ['  .-~~-.', ' /CREAM \\', "'---||---'", ' |@*@*@|', ' |_____|', '  O   O']] },
+  { name: 'COFFEE', item: 'a coffee', price: 2, color: BRICK, w: 0.26, art: [
+    ['   ~', '  ______', ' |COFFEE|', ' |[] ~~ |', ' |______|', '  O    O'],
+    ['    ~', '  ______', ' |COFFEE|', ' |[] ~~ |', ' |______|', '  O    O']] },
+  { name: 'NOODLES', item: 'a bowl of noodles', price: 6, color: YEL, w: 0.4, art: [
+    ['  ~  ~  ~', ' /\\/\\/\\/\\/\\', '| NOODLES  |', '|~~  ##  ~~|', '|__________|'],
+    ['   ~  ~  ~', ' /\\/\\/\\/\\/\\', '| NOODLES  |', '|~~  ##  ~~|', '|__________|']] },
+].map(v => ({ ...v, art: v.art.map(pad) }));
+const vendors = [];
+for (let bx = 0; bx < NB; bx++) for (let by = 0; by < NB; by++) {
+  if (blockKind(bx, by)) continue;
+  // block sides: south, north, west, east sidewalks, between the lamps and clear of the subway entrances
+  // [x, y, vendor offset toward the building]
+  [[4.4, 1.78, 0, 0.12], [4.4, 8.22, 0, -0.12], [1.78, 4.4, 0.12, 0], [8.22, 4.4, -0.12, 0]].forEach(([x, y, ox, oy], side) => {
+    if (hash(bx, by, 200 + side) < 0.016) // ~16 carts per city; kinds dealt out in turn so every kind shows up
+      vendors.push({ x: bx * 8 + x, y: by * 8 + y, ox, oy, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
+  });
+}
+
+// subway: stations, each with a sidewalk entrance at the middle of a block's south side
+const STATION_NAMES = ['CANAL ST', '42ND ST', 'PARK AVE', 'HARBOR', 'OLD TOWN', 'MIDTOWN', 'UNION SQ', 'DOCKS', 'CHINATOWN', 'UPTOWN'];
+const stations = [];
+{
+  const cand = [];
+  for (let bx = 0; bx < NB; bx++) for (let by = 0; by < NB; by++) if (!blockKind(bx, by)) cand.push([hash(bx, by, 71), bx, by]);
+  cand.sort((p, q) => p[0] - q[0]);
+  cand.slice(0, STATION_NAMES.length).forEach(([, bx, by], n) => {
+    const name = STATION_NAMES[n];
+    stations.push({ name, x: bx * 8 + 5, y: by * 8 + 1.84,
+      art: pad([' .----[M]----.', ' | ' + name.padEnd(9) + '|', " '-----------'", '      | |', ' |===========|', ' |  _______  |', ' |_|_|_|_|_|_|']) });
+  });
+}
+
+// rooftop clutter: one item on some lots, placed inside the lot so it sits on the roof
+const roofs = [];
+for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+  if (blockKind(bx, by)) continue;
+  for (let ly = 0; ly < 2; ly++) for (let lx = 0; lx < 2; lx++) {
+    const lot = [bx * 2 + lx, by * 2 + ly], r = hash(...lot, 13), h = map[idx(bx * 8 + 2 + lx * 3, by * 8 + 2 + ly * 3)];
+    const x = bx * 8 + 2 + lx * 3 + 0.6 + hash(...lot, 14) * 1.8, y = by * 8 + 2 + ly * 3 + 0.6 + hash(...lot, 15) * 1.8;
+    if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, w: 0.1, h: 1, art: ART.antenna, kind: 'antenna' });
+    else if (r < 0.35) roofs.push({ x, y, z: h, w: 0.3, h: 0.4, art: ART.tank, kind: 'tank' });
+    else if (r < 0.55) {
+      const art = billboard(ADS[hash(...lot, 16) * ADS.length | 0]);
+      roofs.push({ x, y, z: h, w: art[0].length * 0.06, h: 0.35, art, kind: 'board', neon: NEON[hash(...lot, 17) * 4 | 0] });
+    }
+  }
+}
+
+// ---- traffic lights. 24s cycle: vertical green 0-10, yellow 10-11, all red 11-12, horizontal green 12-22, yellow, all red.
+const CYCLE = 24;
+const phase = (bx, by, t) => mod(t + hash(mod(bx, N), mod(by, N), 9) * CYCLE, CYCLE);
+const light = (bx, by, vert, t) => { const p = phase(bx, by, t) - (vert ? 0 : 12); return p >= 0 && p < 10 ? 'G' : p >= 10 && p < 11 ? 'Y' : 'R'; };
+// pedestrians walking parallel to an axis may start crossing during the first 4s of its green
+const walkSig = (bx, by, vert, t) => { const p = phase(bx, by, t) - (vert ? 0 : 12); return p >= 0 && p < 4; };
+const lights = []; // [x, y, vert, bx, by] pole on the right-hand corner facing incoming traffic
+for (let i = 0; i < NB; i++) for (let j = 0; j < NB; j++) {
+  const bx = i * 8, by = j * 8;
+  lights.push([bx + 2 - CURB, by - 0.25, true, bx, by], [bx + CURB, by + 2.25, true, bx, by],
+              [bx - 0.25, by + CURB, false, bx, by], [bx + 2.25, by + 2 - CURB, false, bx, by]);
+}
+
+// ---- pedestrians: walk a graph of sidewalk corners (offsets 0.12 / 1.88 from each street base).
+// Short legs (1.76) cross a street and wait for the walk signal; long legs (6.24) run along a block,
+// sometimes detouring through a park (bench rest) or into a shop (hidden for a while).
+const people = [];
+function spawnPerson() {
+  const vert = Math.random() < 0.5, line = (Math.random() * NB | 0) * 8 + pick([0.12, 1.88]);
+  const k = Math.random() * NB | 0, along = k * 8 + 2 + Math.random() * 6, dir = pick([-1, 1]), end = dir > 0 ? k * 8 + 8.12 : k * 8 + 1.88;
+  people.push({ x: vert ? line : along, y: vert ? along : line, path: [vert ? { x: line, y: end } : { x: end, y: line }],
+                last: vert ? [0, dir] : [dir, 0], wait: 0, hidden: false, sp: 0.1 + Math.random() * 0.06,
+                shirt: pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]), pants: pick([BLUE, GRAY]), ph: Math.random() * 9 });
+}
+for (let n = 0; n < 300; n++) spawnPerson();
+
+function planPerson(p) {
+  const lx = mod(p.x, 8), ly = mod(p.y, 8), bx = p.x - lx, by = p.y - ly, opts = [];
+  for (const [mx, my] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (mx === -p.last[0] && my === -p.last[1]) continue;
+    const lo = mx ? lx < 1 : ly < 1, crossing = lo ? (mx || my) > 0 : (mx || my) < 0;
+    opts.push({ mx, my, crossing, w: crossing ? 1 : 1.5 });
+  }
+  let r = Math.random() * opts.reduce((s, o) => s + o.w, 0), o = opts[0];
+  for (const q of opts) { r -= q.w; if (r <= 0) { o = q; break; } }
+  p.last = [o.mx, o.my];
+  if (o.crossing) {
+    p.path.push({ x: p.x + o.mx * 1.76, y: p.y + o.my * 1.76, fast: true, gate: t => walkSig(bx, by, o.my !== 0, t) });
+    return;
+  }
+  const nrm = o.mx ? [0, ly > 1 ? 1 : -1] : [lx > 1 ? 1 : -1, 0]; // toward the block we're walking beside
+  const cx = p.x + o.mx * 3.12 + nrm[0] * 3.12, cy = p.y + o.my * 3.12 + nrm[1] * 3.12; // block center
+  const kind = blockKind(Math.floor(mod(cx, N) / 8), Math.floor(mod(cy, N) / 8));
+  if (kind === 'park' && Math.random() < 0.6) {
+    const [bx_, by_] = pick(BENCH), [sx, sy] = pick([[1, 0], [-1, 0], [0, 1], [0, -1]]), side = pick([-1, 1]);
+    const exit = { x: cx + sx * 3.12, y: cy + sy * 3.12 };
+    p.path.push({ x: p.x + o.mx * 3.12, y: p.y + o.my * 3.12 }, { x: cx, y: cy },
+                { x: cx + bx_, y: cy + by_, stay: 6 + Math.random() * 12 }, { x: cx, y: cy }, exit,
+                { x: exit.x + sy * side * 3.12, y: exit.y + sx * side * 3.12 });
+    p.last = [sy * side, sx * side];
+    return;
+  }
+  if (!kind && Math.random() < 0.3) {
+    const s = 1 + Math.random() * 4.2, pt = { x: p.x + o.mx * s, y: p.y + o.my * s };
+    const k = idx(Math.floor(pt.x + nrm[0] * 0.2), Math.floor(pt.y + nrm[1] * 0.2));
+    if (SHOP[k] && SHOP[k].kind !== SHOP_SHUT)
+      p.path.push(pt, { x: pt.x + nrm[0] * 0.1, y: pt.y + nrm[1] * 0.1, stay: 6 + Math.random() * 18, hide: true }, { ...pt });
+  }
+  p.path.push({ x: p.x + o.mx * 6.24, y: p.y + o.my * 6.24 });
+}
+
+function stepPeople(dt, t) {
+  for (const p of people) {
+    if (p.wait > 0) { p.wait -= dt; if (p.wait <= 0) p.hidden = false; continue; }
+    if (!p.path.length) planPerson(p);
+    const w = p.path[0];
+    if (w.gate && !w.go) { if (!w.gate(t)) continue; w.go = true; }
+    const ex = rel(w.x - p.x), ey = rel(w.y - p.y), dist = Math.hypot(ex, ey), step = p.sp * (w.fast ? 2.2 : 1) * dt;
+    if (dist <= step) {
+      p.x = mod(w.x, N); p.y = mod(w.y, N); p.path.shift();
+      if (w.stay) { p.wait = w.stay; p.hidden = !!w.hide; }
+    } else { p.x = mod(p.x + ex / dist * step, N); p.y = mod(p.y + ey / dist * step, N); p.ph += dt * 4; }
+  }
+}
+
+// ---- cars. Lanes: right-hand traffic, lane = street base + 1 +/- 0.4.
+// Choose straight/right/left for the next intersection (taxis with a fare steer toward it). B = the intersection's
+// base coordinate along our heading, `left` = distance to where we turn (or, going straight, where we leave it).
+function plan(c) {
+  const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy, m = mod(along, 8);
+  c.B = dir > 0 ? along - m + 8 : m >= 2 ? along - m : along - m - 8;
+  const opts = [[c.hx, c.hy], [c.hy, -c.hx], [-c.hy, c.hx]]; // straight, right, left
+  if (c.dest) { // score each choice from the intersection itself, not from where we are now
+    const ex = rel(c.dest[0] - (vert ? c.x : c.B + 1)), ey = rel(c.dest[1] - (vert ? c.B + 1 : c.y));
+    c.nh = opts.reduce((b, o) => o[0] * ex + o[1] * ey > b[0] * ex + b[1] * ey ? o : b);
+  } else { const r = Math.random(); c.nh = opts[r < 0.6 ? 0 : r < 0.8 ? 1 : 2]; }
+  const P = c.nh === opts[0] ? (dir > 0 ? c.B + 2 : c.B)
+          : vert ? c.B + 1 - 0.4 * c.nh[0] : c.B + 1 + 0.4 * c.nh[1]; // the new lane's coordinate
+  c.left = mod((P - along) * dir, N);
+}
+
+const cars = [];
+while (cars.length < 160) {
+  const vert = Math.random() < 0.5, dir = pick([-1, 1]);
+  const lane = (Math.random() * NB | 0) * 8 + 1 + (vert ? 0.4 : -0.4) * dir;
+  const along = (Math.random() * NB | 0) * 8 + 2.5 + Math.random() * 4.5;
+  const x = vert ? lane : along, y = vert ? along : lane;
+  if (cars.some(o => Math.hypot(rel(o.x - x), rel(o.y - y)) < 1)) continue;
+  const c = { id: cars.length, x, y, hx: vert ? 0 : dir, hy: vert ? dir : 0, v: 0, brake: false,
+              cruise: 1 + Math.random() * 0.5, body: pick([RED, BLUE, WHITE, TAXI, TAXI, GREEN, GRAY]) };
+  plan(c); cars.push(c);
+}
+
+// distance ahead of car c to point (x,y) if it's inside c's path (half-width `band`), else Infinity
+function ahead(c, x, y, band) {
+  const rx = rel(x - c.x), ry = rel(y - c.y), al = rx * c.hx + ry * c.hy;
+  return al > 0 && al < 2 && Math.abs(rx * c.hy - ry * c.hx) < band ? al : Infinity;
+}
+
+// ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
+function stepTraffic(dt, t) {
+  stepPeople(dt, t);
+  const obs = []; // [x, y, band, stopping gap]
+  if (mode === 'walk') obs.push([px, py, 0.2, 0.4]);
+  for (const m of people) if (!m.hidden) obs.push([m.x, m.y, 0.12, 0.35]);
+  // a car crossing our path sideways is long (0.45), one in line with us is narrow (0.2)
+  const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
+  const carGap = (c, o) => ahead(c, o.x, o.y, 0.12 + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
+  for (const c of cars) {
+    c.blk = null; let best = Infinity;
+    if (c.player) continue;
+    for (const o of cars) if (o !== c) { const g = carGap(c, o); if (g < best) { best = g; c.blk = o; } }
+  }
+  for (const c of cars) {
+    if (c.player) continue; // driven by you
+    let room_ = Infinity;
+    // both stopped, each waiting on the other: lower id goes
+    const stuck = o => o.blk === c && c.blk === o && c.v < 0.05 && o.v < 0.05 && c.id < o.id;
+    for (const o of cars) if (o !== c && !stuck(o)) room_ = Math.min(room_, carGap(c, o));
+    for (const [x, y, band, gap] of obs) room_ = Math.min(room_, ahead(c, x, y, band) - gap);
+
+    const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
+    const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
+    if (line < 3) {
+      const s = light(vert ? c.x - mod(c.x, 8) : c.B, vert ? c.B : c.y - mod(c.y, 8), vert, t);
+      if (s === 'R' || s === 'Y' && line > 0.5) room_ = Math.min(room_, line - 0.25);
+    }
+    // don't turn into a lane if a car is sitting right where we'd land
+    if (c.left < 0.6 && (c.nh[0] !== c.hx || c.nh[1] !== c.hy)) {
+      const lx = c.x + c.hx * c.left + c.nh[0] * 0.3, ly = c.y + c.hy * c.left + c.nh[1] * 0.3;
+      if (cars.some(o => o !== c && Math.hypot(rel(o.x - lx), rel(o.y - ly)) < 0.45)) room_ = Math.min(room_, c.left - 0.05);
+    }
+    // left turn: yield to oncoming traffic that's moving and near
+    if (c.left < 2 && c.nh[0] === -c.hy && c.nh[1] === c.hx &&
+        cars.some(o => o.v > 0.1 && o.hx === -c.hx && o.hy === -c.hy && ahead(c, o.x, o.y, 1.2) < 2.5))
+      room_ = Math.min(room_, c.left - 0.6);
+    // taxi business: pull up for a hail, wait for a destination, stop on arrival
+    if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
+    if (c.rider && !c.dest) room_ = 0;
+    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < 1.2) { room_ = 0; c.arrived = true; }
+
+    const target = Math.min(Math.max(0, room_ * 2.5), c.cruise);
+    c.brake = target < c.v;
+    c.v = Math.min(target, c.v + 0.8 * dt);
+    const d = c.v * dt, step = Math.min(d, c.left);
+    if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
+    c.left -= step;
+    if (c.rider) c.fare += step;
+    if (c.left <= 0) { [c.hx, c.hy] = c.nh; plan(c); }
+  }
+}
+
+// run selfTest() in the console: 3 simulated minutes, reports collisions / stuck cars
+function selfTest() {
+  let crashes = 0, turns = 0, worst = 0;
+  const still = new Map();
+  for (let k = 0, t = 0; k < 9000; k++, t += 0.02) {
+    const before = cars.map(c => c.hx + ',' + c.hy);
+    stepTraffic(0.02, t);
+    cars.forEach((c, i) => {
+      if (before[i] !== c.hx + ',' + c.hy) turns++;
+      const s = c.v < 0.01 ? (still.get(c) || 0) + 0.02 : 0; still.set(c, s); worst = Math.max(worst, s);
+    });
+    for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++)
+      if (Math.hypot(rel(cars[i].x - cars[j].x), rel(cars[i].y - cars[j].y)) < 0.3) crashes++;
+  }
+  console.log(`selftest: crash-frames=${crashes} turns=${turns} longest stop=${worst.toFixed(1)}s`);
+  return { crashes, turns, worst };
+}
+
+// ---- game state
+let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
+let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0;
+let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0;
+let day, night, dusk, amb, vis, lampsOn, overcast, litT;
+let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
+let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
+const say = (s, t = 3) => { msgText = s; msgT = t; };
+
+function env(dt) {
+  tod = mod(tod + dt * (K.KeyT ? 2 : 0.05), 24); // 20s per game hour; hold T to fast-forward
+  if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog']); wTimer = 60 + Math.random() * 90; }
+  rain += clamp((weather === 'rain') - rain, -dt / 6, dt / 6);
+  fogAmt += clamp((weather === 'fog') - fogAmt, -dt / 6, dt / 6);
+  wet = clamp(wet + (rain > 0.3 ? dt / 10 : -dt / 60), 0, 1); // streets stay wet for a while after rain
+  const sunEl = Math.sin((tod - 6) / 12 * Math.PI);
+  day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
+  overcast = Math.max(rain, fogAmt);
+  amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast);
+  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain);
+  lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
+  litT = 0.62 + 0.33 * day; // fewer lit windows by day
+  if (mode === 'room') { amb = room.def.light; vis = 40; }
+}
+
+// ---- screen
+let cols, rows, cw, CH, COL, BG, ZB, FL, FOGS, BASE;
+function resize() {
+  cv.width = innerWidth; cv.height = innerHeight;
+  g.font = FS + 'px monospace'; g.textBaseline = 'top';
+  cw = g.measureText('M').width;
+  cols = Math.floor(innerWidth / cw); rows = Math.floor(innerHeight / FS);
+  const n = cols * rows;
+  CH = new Array(n); COL = new Uint8Array(n); BG = new Uint8Array(n); ZB = new Float32Array(n); FL = new Uint8Array(n); FOGS = new Uint8Array(n);
+  BASE = new Int32Array(cols);
+}
+addEventListener('resize', resize); resize();
+
+let tf, projX, projY, hor, dx, dy, eye, lookHit;
+const set = (i, c, col) => { CH[i] = c; COL[i] = col; };
+const putText = (r, c, s, col) => { for (let k = 0; k < s.length; k++) if (r >= 0 && r < rows && c + k >= 0 && c + k < cols) set(r * cols + c + k, s[k], col); };
+const bgAt = (base, lvl) => lvl < 1 ? NONE : C(base, lvl);
+// Is this cell the one that gets the letter? `off` = distance from the letter's centre, `step` = size of one cell there.
+// Half-open [-0.5, 0.5) so exactly one row/column wins. The small offset breaks exact ties: text at eye height sits precisely
+// between two rows, and float rounding could otherwise let both rows through and duplicate the line.
+const oneCell = (off, step) => { const k = off / step + 0.0137; return k >= -0.5 && k < 0.5; };
+// text painted on a wall: centered on wall coordinate u0 at height z0, one cell per letter however close you are.
+// Returns false when (u, z) is outside the text, so the caller draws the wall there instead.
+function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE) {
+  if (Math.abs(z - z0) > bandH / 2) return false;
+  const q = (u - u0) / cwid + text.length / 2, p = Math.floor(q);
+  if (p < 0 || p >= text.length) return false;
+  const centered = (uStep >= cwid || oneCell((fract(q) - 0.5) * cwid, uStep)) && oneCell(z - z0, d / projY);
+  set(i, centered ? text[p] : ' ', col); BG[i] = bgc;
+  return true;
+}
+
+// fog: at draw time every cell's text and background colors are mixed toward the fog color by distance.
+// 8 blend levels, with a Bayer dither between neighbouring levels so the gradient stays smooth.
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+const fogCache = new Map();
+let fogRGB = [0, 0, 0], fogKey = -1;
+// Also always: distance haze, so far scenery fades into a sky-tinted color instead of ending in black at the draw distance.
+function fogSteps() {
+  const foggy = fogAmt > 0.3, k = Math.round(day * 16) * 2 + foggy;
+  if (k !== fogKey) { // fog is grey; clear-weather haze is a little bluer
+    fogKey = k; fogCache.clear(); const v = 22 + day * 150;
+    fogRGB = foggy ? [v, v + 4, v + 12] : [v * 0.7, v * 0.85, Math.min(255, v * 1.15)];
+  }
+  for (let r = 0; r < rows; r++) for (let x = 0; x < cols; x++) {
+    const i = r * cols + x, z = ZB[i];
+    if (z === Infinity) { FOGS[i] = fogAmt > 0.03 ? clamp(Math.floor(fogAmt * 8), 0, 8) : 0; continue; } // open sky: only real fog
+    const haze = clamp((z / vis - 0.5) / 0.5, 0, 1);
+    const f = fogAmt > 0.03 ? Math.max(haze, fogAmt * clamp((z / vis - 0.15) / 0.85 * (0.85 + 0.3 * noise(x * 0.03 + T * 0.1, r * 0.06, 51)), 0, 1)) : haze;
+    FOGS[i] = clamp(Math.floor(f * 8 + BAYER[(r & 3) * 4 + (x & 3)]), 0, 8);
+  }
+}
+function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the way to the fog color
+  const key = idx * 9 + s;
+  let v = fogCache.get(key);
+  if (v === undefined) {
+    const [r, gg, b] = idx === NONE ? [0, 0, 0] : PALRGB[idx], k = s / 8;
+    v = `rgb(${r + (fogRGB[0] - r) * k | 0},${gg + (fogRGB[1] - gg) * k | 0},${b + (fogRGB[2] - b) * k | 0})`;
+    fogCache.set(key, v);
+  }
+  return v;
+}
+
+// ===== city world =====
+const sk0 = seed => seed * 1e4 | 0;
+// uStep = how far u moves between this screen column and the next
+function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
+  if (sty >= 3 && sty !== 7) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc);
+  const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14;
+  BG[i] = bgAt(sty === 2 ? BRICK : sty === 1 ? BLUE : GRAY, day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
+  if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
+  if (z < 0.4) { // ground floor shop
+    if (z > 0.33) {
+      const w = sh.word, m = w.length + 3, p = mod(Math.floor(u * 10), m);
+      // up close a letter spans many cells: draw it once, in the middle cell of its span
+      const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.365, d / projY);
+      const lvl = sh.kind === SHOP_SHUT ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed shops: sign off
+      if (sh.signed && p < w.length) return set(i, centered ? w[p] : ' ', C(sh.neon, lvl));
+      return set(i, '-', C(GRAY, L));
+    }
+    if (sh.kind === SHOP_APTS) { // brick front with a lit doorway every 5m
+      const fd = fract(u * 2);
+      if (fd > 0.4 && fd < 0.6 && z < 0.26) return fd < 0.42 || fd > 0.58 ? set(i, '|', C(GRAY, L)) : set(i, z > 0.2 ? '=' : '#', C(BRICK, L * 0.7));
+      if (fd > 0.47 && fd < 0.53 && z > 0.27 && z < 0.31) return set(i, '*', C(WARM, Math.max(L, night * 15)));
+      return set(i, fract(u * 12 + (Math.floor(z * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+    }
+    const fs = fract(u * 2);
+    if (fs < 0.08) return set(i, '|', C(GRAY, L));
+    if (sh.kind === SHOP_SHUT) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // roll-down shutter
+    if (z > 0.28) return set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning
+    if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
+      return set(i, 'o@*o'[hash(Math.floor(u * 20), 1, sk) * 4 | 0], C(ITEM_COL[hash(Math.floor(u * 20), 2, sk) * 4 | 0], L));
+    const on = hash(Math.floor(u * 2), 3, sk) > 0.25;
+    if (sh.kind === SHOP_NEON) return set(i, on ? (fract(z * 30) < 0.5 ? ':' : '.') : '.', C(on ? sh.neon : GRAY, on ? Math.max(L, glowL) : L * 0.3));
+    return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+  }
+  const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  if (sty === 0) { // office
+    const fu = fract(u * 4);
+    if (fu > 0.15 && fu < 0.85 && fz > 0.25 && fz < 0.85)
+      return hash(Math.floor(u * 4), fl, sk) > litT ? set(i, '#', C(YEL, Math.max(L * 0.7, glowL))) : set(i, '.', C(day > 0.5 ? CYAN : GRAY, L * 0.35));
+    return set(i, RAMP[fog * (side ? 0.6 : 1) * 8.99 | 0], C(GRAY, L));
+  }
+  if (sty === 1) { // glass tower
+    const fu = fract(u * 8);
+    if (fu < 0.1) return set(i, '|', C(GRAY, L));
+    if (fz < 0.12) return set(i, '-', C(GRAY, L));
+    if (hash(Math.floor(u * 8), fl, sk) > litT + 0.15) return set(i, '+', C(CYAN, Math.max(L, glowL)));
+    if (fract((u * 0.7 + zz) * 2) < 0.06) return set(i, '/', C(CYAN, L * 0.6));
+    return set(i, ' ', 0);
+  }
+  if (sty === 7) { // tenement: cream plaster, two windows a bay, black fire escapes zig-zagging up the front
+    BG[i] = bgAt(WARM, day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1));
+    const fe = fract(u / 3);
+    if (fe > 0.35 && fe < 0.65) {
+      if (fz < 0.06) return set(i, '=', C(GRAY, L * 1.2)); // landing
+      if (fz < 0.3 && (fe < 0.37 || fe > 0.63)) return set(i, '|', C(GRAY, L)); // railing posts
+      const t = (fe - 0.35) / 0.3, up = fl & 1 ? t : 1 - t; // the ladder runs the other way on each floor
+      if (Math.abs(fz - up) < 0.07) return set(i, fl & 1 ? '/' : '\\', C(GRAY, L));
+    }
+    const wu = fract(u * 4);
+    if (wu > 0.2 && wu < 0.8 && fz > 0.3 && fz < 0.85)
+      return hash(Math.floor(u * 4), fl, sk) > litT - 0.05 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+    if (fz < 0.08) return set(i, '_', C(WARM, L * 0.6)); // floor line
+    return set(i, ' ', 0);
+  }
+  // brick
+  const fu = fract(u * 3);
+  if (fu > 0.3 && fu < 0.7 && fz > 0.25 && fz < 0.75)
+    return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? set(i, '#', C(ORANGE, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+  if (fu > 0.25 && fu < 0.75 && fz > 0.18 && fz <= 0.25) return set(i, '=', C(GRAY, L));
+  if (d > 8) return set(i, RAMP[fog * (side ? 0.6 : 1) * 8.99 | 0], C(BRICK, L));
+  return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+}
+
+// wc = world coordinate along the wall; lu = position across the face from the block's middle, left-to-right on screen
+const TICKER = ADS.join('   *   ') + '   *   ';
+function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc) {
+  const L = fog * amb * (side ? 10 : 15), lu = (mod(wc, 8) - 5) * (Math.abs(u - wc) < 1e-6 ? 1 : -1);
+  if (sty === 3) { // clock tower: stone, with a clock face showing the game time on every side
+    BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
+    const dz = z - (h - 1.4), rr = Math.hypot(lu, dz);
+    if (rr < 0.75) {
+      if (rr > 0.66) return set(i, 'O', C(GRAY, L * 1.2));
+      const ang = Math.atan2(lu, dz); // clockwise from 12
+      const onHand = (A, len) => rr < len && Math.abs(mod(ang - A + Math.PI, 2 * Math.PI) - Math.PI) * Math.max(rr, 0.06) < 0.05;
+      BG[i] = C(WHITE, Math.max(8 * amb, night * 11)); // the face glows at night
+      if (onHand(mod(tod, 12) / 12 * 2 * Math.PI, 0.38) || onHand(fract(tod) * 2 * Math.PI, 0.6)) return set(i, '#', C(GRAY, 1));
+      return set(i, Math.abs(rr - 0.57) < 0.05 && fract(ang / (Math.PI / 6) + 0.1) < 0.2 ? '+' : ' ', C(GRAY, 3));
+    }
+    if (z > h - 0.25) return set(i, '^', C(GRAY, L));
+    return set(i, fract(z * 4) < 0.15 ? '=' : fract(u * 3 + (Math.floor(z * 4) & 1) * 0.5) < 0.1 ? '|' : ' ', C(GRAY, L));
+  }
+  if (sty === 4) { // cathedral: stone with tall pointed stained-glass windows
+    BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
+    const fu = fract(u * 1.5), wcen = Math.abs(fu - 0.5), top = (h > 4 ? h - 1.5 : 2.3) - wcen * 1.2;
+    if (wcen < 0.2 && z > 0.6 && z < top) {
+      if (wcen > 0.16) return set(i, '|', C(GRAY, L));
+      const glass = [MAG, BLUE, YEL, RED, CYAN][hash(Math.floor(u * 1.5), Math.floor(z * 6), 41) * 5 | 0];
+      return set(i, '#', C(glass, Math.max(L * 0.6, night * fog * 13)));
+    }
+    if (z > h - 0.08) return set(i, '^', C(GRAY, L));
+    return set(i, fract(z * 5) < 0.12 ? '-' : fract(u * 4 + (Math.floor(z * 5) & 1) * 0.5) < 0.1 ? '|' : '.', C(GRAY, L * 0.8));
+  }
+  if (sty === 5) { // tower wrapped in giant video screens, with a scrolling news ticker
+    if (z < 0.5 || z > h - 0.3) { BG[i] = bgAt(GRAY, day * 2 * fog); return set(i, '=', C(GRAY, L)); }
+    if (z > 1.1 && z < 1.5) { // ticker: one cell per letter, scrolling left
+      const q = (u + T * 1.2) / 0.3, p = mod(Math.floor(q), TICKER.length);
+      BG[i] = C(GRAY, 1);
+      return set(i, (uStep >= 0.3 || oneCell((fract(q) - 0.5) * 0.3, uStep)) && oneCell(z - 1.3, d / projY) ? TICKER[p] : ' ', C(YEL, 15));
+    }
+    const k = (Math.floor(T / 7) + (side ? 1 : 0)) & 3, v = noise(u * 0.5 + T * 0.4, z * 0.7 - T * 0.25, 111 + k);
+    BG[i] = C(NEON[(k + (v * 3 | 0)) & 3], 3 + v * 9); // screens glow regardless of daylight
+    return set(i, v > 0.7 ? '*' : ' ', C(WHITE, 15));
+  }
+  // 6: construction: a steel skeleton with open floors
+  BG[i] = NONE;
+  const fl = fract(z * 3), fu = fract(u * 2);
+  if (fl < 0.1) return set(i, '=', C(ORANGE, L));
+  if (fu < 0.08) return set(i, '|', C(ORANGE, L));
+  if (Math.abs(fract(u * 2 + z * 3) - 0.5) < 0.05 && (Math.floor(z * 3) & 1)) return set(i, '/', C(ORANGE, L * 0.7));
+  set(i, ' ', 0);
+}
+
+// the top of a building, seen from above (you're on a roof): gravel with a parapet where the roof ends
+function roofTop(i, wx, wy, h, d) {
+  const L = Math.max(0, 1 - d / vis) * amb * 10, mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
+  const edge = lx < 0.05 && map[idx(mx - 1, my)] !== h || lx > 0.95 && map[idx(mx + 1, my)] !== h ||
+               ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
+  BG[i] = bgAt(GRAY, day * 2.5);
+  if (edge) return set(i, '#', C(GRAY, L * 1.3));
+  set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
+}
+
+function floorCell(i, r, x, rx, ry) {
+  const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5), L = f * 6 * (0.6 + amb) * (1 - wet * 0.25);
+  ZB[i] = d; FL[i] = 1;
+  const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), inV = lx < 2, inH = ly < 2;
+  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
+  if (!inV && !inH) { // open block: only parks, plazas and the waterfront are visible here
+    const kind = blockKind(Math.floor(wx / 8), Math.floor(wy / 8));
+    if (kind === 'water') {
+      soft = true;
+      if (lx < 2.35 || lx > 7.65 || ly < 2.35 || ly > 7.65) { // boardwalk planks
+        ch = fract((lx < 2.35 || lx > 7.65 ? wy : wx) * 6) < 0.15 ? '|' : '='; base = BRICK; k = 1.3;
+      } else { // open water: drifting waves; reflect() mirrors the skyline into it
+        const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91);
+        set(i, n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', C(n > 0.62 ? CYAN : BLUE, L * 1.5));
+        BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
+        return;
+      }
+    } else if (kind === 'construction') { // churned-up dirt with tyre tracks
+      soft = true; base = BRICK; k = 1.1;
+      ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
+    } else if (kind === 'park') {
+      soft = true;
+      const bx = Math.floor(wx / 8) & (NB - 1), by = Math.floor(wy / 8) & (NB - 1);
+      if (inPond(lx, ly, bx, by)) { const n = noise(wx * 4 + T * 0.3, wy * 4, 92); ch = n > 0.6 ? '~' : n > 0.45 ? '-' : ' '; base = BLUE; k = 1.4; }
+      else if (inPond(lx, ly, bx, by, 0.15)) { ch = (r + x) % 3 ? '|' : ','; base = GREEN; k = 0.9; } // reeds round the edge
+      else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
+      else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
+    } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
+  } else if (inV && inH) { // crosswalks
+    if ((ly < 0.3 || ly > 1.7) && fract(lx * 4) < 0.5 || (lx < 0.3 || lx > 1.7) && fract(ly * 4) < 0.5) { ch = '='; base = WHITE; }
+  } else {
+    const e = inV ? lx : ly, along = inV ? wy : wx;
+    if (e < 0.3 || e > 1.7) { ch = ','; k = 1.3; } // sidewalk
+    else if (Math.abs(e - 1) < 0.04 && fract(along * 2) < 0.5) { ch = '='; base = YEL; k = 1.5; }
+  }
+  let col = C(base, L * k);
+  BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f, d);
+  if (!soft && wet > 0.05 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
+  const gl = glow(wx, wy) * lampsOn;
+  if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; }
+  set(i, ch, col);
+}
+
+function skyCell(i, r, x, rx, ry) {
+  ZB[i] = Infinity; FL[i] = 0;
+  const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
+  BG[i] = rain > 0.5 ? C(GRAY, 1 + day * 6) : fogAmt > 0.5 ? bgAt(GRAY, day * 4)
+        : dusk > 0.3 && up < 0.3 ? bgAt(up < 0.1 ? ORANGE : MAG, dusk * (up < 0.1 ? 8 : 4) * (1 - overcast), 0)
+        : day > 0.15 ? bgAt(up < 0.08 ? CYAN : BLUE, day * (9 - Math.min(4, up * 8)), 0)
+        : up < 0.05 ? C(ORANGE, 1) : up < 0.35 ? C(BLUE, 1) : C(BLUE, 0); // night: navy, city glow at the horizon
+  // clouds are soft background fills, lit white by day, faintly grey by moonlight
+  const n = noise(az * 9 + T * 0.02, up * 16, 31) * 0.7 + noise(az * 23, up * 40, 32) * 0.3, cover = 0.62 - overcast * 0.3;
+  if (up > 0.02 && n > cover) {
+    const k = (n - cover) / (1 - cover);
+    BG[i] = day > 0.3 ? C(WHITE, (6 + k * 8) * day) : C(GRAY, 1 + k * 2);
+    return set(i, ' ', 0);
+  }
+  // stars: one cell each (indexed per screen column, but fixed to the world), twinkling
+  const s = hash(Math.floor(az * projX), r - hor, 3);
+  if (night > 0.5 && overcast < 0.4 && s > 0.988) {
+    const tw = 0.6 + 0.4 * Math.sin(T * 3 + s * 1e4);
+    return set(i, s > 0.998 ? '*' : s > 0.994 ? '+' : '.', C([WHITE, WHITE, CYAN, YEL][s * 1e5 & 3], (s > 0.994 ? 13 : 7) * night * tw));
+  }
+  set(i, ' ', 0);
+}
+
+// filled disc with a soft halo, drawn only on open sky
+function disc(az, el, body, halo, rad, craters) {
+  if (el < -0.05 || el > 1.4 || overcast > 0.6) return;
+  const ra = mod(az - a + Math.PI, 2 * Math.PI) - Math.PI;
+  if (Math.abs(ra) > FOV) return;
+  const c0 = cols / 2 + Math.tan(ra) * projX, r0 = hor - Math.tan(el) * projY, R = rad * 2.2;
+  for (let r = Math.floor(r0 - R); r <= r0 + R; r++) for (let c = Math.floor(c0 - R * 2); c <= c0 + R * 2; c++) {
+    if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+    const i = r * cols + c, q = Math.hypot((c - c0) * cw / FS, r - r0);
+    if (ZB[i] !== Infinity || q > R) continue;
+    if (q <= rad) { BG[i] = body; set(i, craters && hash(c - (c0 | 0), r - (r0 | 0), 8) > 0.75 ? 'o' : ' ', C(GRAY, 9)); }
+    else if (BG[i] === NONE || (BG[i] & 15) < (halo & 15)) BG[i] = halo;
+  }
+}
+function sunMoon() { // sun rises in +x, sets in -x
+  const sunEl = Math.sin((tod - 6) / 12 * Math.PI), az = (tod - 6) / 12 * Math.PI;
+  disc(az, Math.asin(sunEl), C(YEL, 15), C(YEL, 11), 1.8, false);
+  disc(az + Math.PI, Math.asin(-sunEl), C(WHITE, 13), C(BLUE, 2), 1.4, true);
+}
+
+// puddles (FL 2) and open water (FL 3) mirror whatever is above them, about the base of the nearest wall in that column
+function reflect() {
+  for (let x = 0; x < cols; x++) {
+    const b = BASE[x];
+    for (let r = Math.max(b, hor + 1); r < rows; r++) {
+      const i = r * cols + x, f = FL[i];
+      if (f < 2) continue;
+      const s = 2 * b - r - 1 + (f === 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
+      if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ') { CH[i] = CH[j]; COL[i] = (COL[j] & 0xf0) | ((COL[j] & 15) * 0.55 | 0); }
+      else if (f === 2) set(i, '~', C(BLUE, 3 + day * 3));
+    }
+  }
+}
+
+const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
+function rainFx(dt) {
+  const n = drops.length * rain | 0;
+  for (let k = 0; k < n; k++) {
+    const d = drops[k];
+    if ((d[1] += d[2] * dt * 1.8) > 1) { d[1] -= 1; d[0] = Math.random(); }
+    const i = (d[1] * rows | 0) * cols + (d[0] * cols | 0);
+    set(i, k & 1 ? '|' : '!', C(k % 3 ? BLUE : WHITE, 5 + day * 5)); FOGS[i] = 0; // drops are right in front of you
+  }
+}
+
+function citySprites() {
+  const R = (x, y) => [rel(x - px), rel(y - py)];
+  for (const [lx, ly] of lamps)
+    drawArt(...R(lx, ly), 0, 0.1, 0.55, ART.lamp, (c, row, L) => row < 2 && lampsOn > 0.3 ? C(WARM, 15) : C(GRAY, L));
+  for (const [tx, ty] of parkTrees)
+    drawArt(...R(tx, ty), 0, 0.45, 0.6, ART.tree, (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L));
+  for (const [bx, by] of benches) drawArt(...R(bx, by), 0, 0.15, 0.05, ART.bench, (c, row, L) => C(BRICK, L));
+  for (const b of boats) {
+    const t = T * b.sp + b.ph;
+    drawArt(...R(b.cx + Math.cos(t) * b.r, b.cy + Math.sin(t) * b.r), 0, b.sail ? 0.6 : 0.7, b.sail ? 0.9 : 0.45, b.sail ? ART.sail : ART.tug,
+      (c, row, L) => b.sail ? C(row < 4 ? WHITE : BRICK, L) : c === 'o' ? C(YEL, Math.max(L, night * 15)) : C(row === 0 ? GRAY : RED, L));
+  }
+  for (const o of extras) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col);
+  for (const v of vendors) {
+    const t = v.type, frame = t.art[(T * 2 | 0) & 1];
+    drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>
+      c === '~' ? C(WHITE, L * 0.6) : row < 3 && /[A-Z]/.test(c) ? C(WHITE, Math.max(L, night * 15)) :
+      row < 3 ? C(t.color, Math.max(L, night * 12)) : c === 'O' ? C(GRAY, L * 0.5) : C(t.color, L));
+    drawArt(...R(v.x + v.ox, v.y + v.oy), 0, 0.06, 0.18, ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? v.shirt : GRAY, L));
+  }
+  for (const s of stations)
+    drawArt(...R(s.x, s.y), 0, 0.55, 0.45, s.art, (c, row, L) => row === 0 ? C(GREEN, c === 'M' ? 15 : L) : row === 1 ? C(WHITE, Math.max(L, 12)) : C(GRAY, L));
+  for (const o of roofs) {
+    const blink = fract(T * 0.8 + o.x) < 0.5;
+    drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, (c, row, L) =>
+      o.kind === 'antenna' ? (c === '*' ? C(RED, blink ? 15 : 3) : C(GRAY, L)) :
+      o.kind === 'tank' ? C(c === '=' ? GRAY : BRICK, L) :
+      row === 1 && c !== '|' ? C(o.neon, Math.max(L, night * 15)) : C(GRAY, L));
+  }
+  const LC = { G: GREEN, Y: YEL, R: RED };
+  for (const [lx, ly, vert, bx, by] of lights) {
+    const col = C(LC[light(bx, by, vert, T)], 15);
+    drawArt(...R(lx, ly), 0, 0.05, 0.4, ART.signal, (c, row, L) => c === 'O' ? col : C(GRAY, L));
+  }
+  for (const m of cars) {
+    if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
+    const [vx, vy] = R(m.x, m.y), hx = m.hx, hy = m.hy, taxi = m.body === TAXI;
+    const dot = (hx * vx + hy * vy) / Math.hypot(vx, vy);
+    let art = taxi ? ART.taxiBack : ART.carBack, w = 0.2;
+    if (dot < -0.75) art = taxi ? ART.taxiFront : ART.carFront;
+    else if (dot <= 0.75) {
+      const right = hx * -vy + hy * vx > 0;
+      art = taxi ? (right ? ART.taxiSide : ART.taxiSideL) : right ? ART.carSide : ART.carSideL;
+      w = 0.2 + 0.25 * Math.sqrt(1 - dot * dot);
+    }
+    const lights_ = night > 0.4 || overcast > 0.5 ? 15 : 9;
+    drawArt(vx, vy, 0, w, 0.15, art, (c, row, L) =>
+      row === 0 && taxi && c !== '_' ? C(c === '[' || c === ']' ? GRAY : YEL, 15) :
+      c === 'O' ? C(WHITE, lights_) : c === ']' || c === '[' ? C(RED, m.brake || m.v < 0.05 ? 15 : 8) :
+      c === '#' ? C(CYAN, L * 0.5) : c === '@' ? C(GRAY, L * 0.4) : C(m.body, L));
+  }
+  for (const m of people) if (!m.hidden)
+    drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
+            (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+}
+
+const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites };
+
+// ===== interiors (1 unit = 1m) =====
+// Grid: '#' wall 3m, 'S' shelf island 2.2m, 'D' way out, 'E' elevator to the roof, '.' floor.
+// Every room type reuses the same renderer; a type supplies its grid, lighting, floor/ceiling style, wall art and props.
+function boxRoom(w, h, extra = {}, door = true) { // walls all round, double door in the middle of the near wall
+  const rows_ = [];
+  for (let y = 0; y < h; y++) {
+    let s = '';
+    for (let x = 0; x < w; x++) s += extra[x + ',' + y] ||
+      (x === 0 || y === 0 || x === w - 1 || y === h - 1 ? (door && y === h - 1 && (x === (w >> 1) - 1 || x === w >> 1) ? 'D' : '#') : '.');
+    rows_.push(s);
+  }
+  return rows_;
+}
+const STATION_GRID = boxRoom(30, 9, { '1,0': 'D', '2,0': 'D', '5,3': '#', '10,3': '#', '15,3': '#', '20,3': '#', '25,3': '#' }, false);
+const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
+const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
+                    ['SLICE 3', 'WHOLE 18', 'KNOTS 4', 'SODA 2'], ['LATTE 4', 'DONUT 2', 'BAGEL 3', 'TEA 2'],
+                    ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3']];
+const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
+                   CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
+                   BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
+const LYRICS = ['OH BABY BABY', 'I WILL SURVIVE', 'DONT STOP BELIEVING', 'SWEET CAROLINE', 'LIVIN ON A PRAYER', 'TAKE ON ME'];
+for (const w in MENUS) ROOM_FOR[w] = 'diner';
+
+const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
+// props
+const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
+const standing = (x, y, shirt) => SP(x, y, 0.55, 1.75, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? shirt : GRAY, L));
+const sitting = (x, y, shirt, z = 0.45, back = false) =>
+  SP(x, y, 0.55, 1.2, back ? ART.sitterBack : ART.sitter, (c, row, L) => C(row < 3 ? (back && row ? BRICK : SKIN) : shirt, L), z);
+const wood = (c, row, L) => C(c === '$' ? GREEN : BRICK, L);
+const shirt = () => pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL, CYAN]);
+const chance = p => Math.random() < p;
+
+const ROOM_DEFS = {
+  store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
+    light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, 1.05],
+    props: r => [SP(5, 1.7, 3.2, 1.05, ART.counter, wood), standing(5, 1.05, r.neon)] },
+  bar: { grid: boxRoom(12, 8), light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, 1.1],
+    props: r => {
+      const p = [SP(6, 1.8, 8, 1.1, ART.barTop, wood), standing(6, 1.1, r.neon),
+                 SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14))];
+      for (let x = 3; x <= 9; x += 1.5) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(0.45)) p.push(sitting(x, 2.7, shirt(), 0.45, true)); }
+      return p;
+    } },
+  diner: { grid: boxRoom(12, 8), light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.1], wall: dinerWall,
+    props: r => {
+      const p = [SP(6, 1.75, 4, 1.05, ART.counter, wood), standing(6, 1.1, WHITE)];
+      for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
+        p.push(SP(x, y, 1.4, 0.8, ART.table, wood));
+        for (const s of [-0.95, 0.95]) { p.push(SP(x + s, y, 0.4, 0.75, ART.stool, wood)); if (chance(0.4)) p.push(sitting(x + s, y - 0.02, shirt())); }
+      }
+      return p;
+    } },
+  arcade: { grid: boxRoom(12, 9), light: 0.5, floor: 'carpet', ceil: 'dark', sign: true, wall: arcadeWall,
+    props: r => {
+      const p = [];
+      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[3.5, 5, 7, 8.5], 5.2]]) for (const x of xs) {
+        const k = Math.random() * 4 | 0, body = pick([MAG, BLUE, RED, GREEN]);
+        p.push(SP(x, y, 0.8, 1.8, () => ART.cab[(T * 6 + k | 0) & 3], (c, row, L) => row === 2 || row === 3 ? C(NEON[(row + k) & 3], 15) : C(body, L * 1.5)));
+        if (chance(0.35)) p.push(standing(x, y + 0.7, shirt()));
+      }
+      return p;
+    } },
+  laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
+    props: r => [SP(5, 3.6, 2, 0.5, ART.bench, wood), sitting(5, 3.58, shirt(), 0.3), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L))] },
+  cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,
+    props: r => {
+      const p = [];
+      for (const y of [5, 6.5, 8, 9.5]) {
+        p.push(SP(7, y, 9, 0.9, ART.seats, (c, row, L) => C(RED, L * 2)));
+        for (let k = 0; k < 2; k++) if (chance(0.7)) p.push(sitting(3 + Math.random() * 8, y + 0.05, shirt(), 0.35, true));
+      }
+      return p;
+    } },
+  hotel: { grid: boxRoom(12, 8, { '5,0': 'E', '6,0': 'E' }), light: 0.9, floor: 'wood', ceil: 'pendant', sign: true, signAt: 2.6, wall: hotelWall,
+    keeper: [3.2, 2.0], ex: 6,
+    props: r => [SP(3.2, 2.6, 2.6, 1.1, ART.desk, wood), standing(3.2, 2.0, r.neon), SP(1.4, 1.4, 0.7, 1.3, ART.plant, plantCol),
+                 SP(10.6, 1.4, 0.7, 1.3, ART.plant, plantCol), SP(10.6, 6, 0.7, 1.3, ART.plant, plantCol), standing(8, 4, shirt())] },
+  apts: { grid: boxRoom(8, 7, { '3,0': 'E', '4,0': 'E' }), light: 0.7, floor: 'tile', ceil: 'pendant', wall: aptsWall, ex: 4,
+    props: r => [SP(6.6, 5.4, 0.7, 1.3, ART.plant, plantCol), ...(chance(0.6) ? [standing(2.2, 4.4, shirt())] : [])] },
+  gym: { grid: boxRoom(12, 9), light: 1, floor: 'rubber', ceil: 'strip', sign: true, wall: gymWall,
+    props: r => {
+      const p = [SP(3, 6.5, 1.8, 1, ART.rack, (c, row, L) => C(c === 'O' ? GRAY : BRICK, L * 1.3)), SP(9, 6.5, 1.8, 1, ART.rack, (c, row, L) => C(c === 'O' ? GRAY : BRICK, L * 1.3))];
+      for (const x of [2.5, 5, 7.5, 9.5]) {
+        p.push(SP(x, 2.6, 0.9, 1.3, ART.treadmill, (c, row, L) => C(GRAY, L * 1.2)));
+        if (chance(0.7)) { const k = Math.random() * 2, s = shirt(); // running in place
+          p.push(SP(x, 2.55, 0.5, 1.75, () => (T * 7 + k | 0) % 2 ? ART.walkA : ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? s : GRAY, L), 0.2)); }
+      }
+      return p;
+    } },
+  barber: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: barberWall, keeper: [3.6, 1.9],
+    props: r => {
+      const p = [standing(3.6, 1.9, WHITE),
+                 SP(1.2, 5.5, 0.25, 1.6, ART.barberPole, (c, row, L) => c === '/' ? C([RED, WHITE, BLUE][(row + (T * 3 | 0)) % 3], 14) : C(GRAY, L))];
+      for (const x of [2.5, 5, 7.5]) {
+        p.push(SP(x, 1.8, 0.7, 1.2, ART.barberChair, (c, row, L) => C(row < 3 ? RED : GRAY, L)));
+        if (chance(0.6)) p.push(sitting(x, 1.85, shirt(), 0.45, true));
+      }
+      return p;
+    } },
+  bank: { grid: boxRoom(14, 9), light: 1, floor: 'marble', ceil: 'pendant', sign: true, wall: bankWall, keeper: [7, 1.5],
+    props: r => [SP(7, 2.4, 9, 1.8, ART.bankCounter, (c, row, L) => C(row < 3 ? GRAY : BRICK, L * 1.2)),
+                 standing(3.5, 1.5, BLUE), standing(7, 1.5, BLUE), standing(10.5, 1.5, BLUE), standing(12.3, 6, GRAY)] },
+  karaoke: { grid: boxRoom(12, 9), light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
+    props: r => {
+      const p = [SP(6, 2.3, 4, 0.3, ART.stage, (c, row, L) => C(BRICK, L * 2)),
+                 SP(6, 2.25, 0.6, 1.75, ART.singer, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? r.neon : GRAY, 14), 0.3),
+                 SP(3.5, 2.3, 0.6, 0.9, ART.speaker, (c, row, L) => C(GRAY, L * 2)), SP(8.5, 2.3, 0.6, 0.9, ART.speaker, (c, row, L) => C(GRAY, L * 2))];
+      for (let k = 0; k < 6; k++) if (chance(0.7)) p.push(sitting(2.5 + Math.random() * 7, 4.5 + Math.random() * 2.5, shirt(), 0.35, true));
+      return p;
+    } },
+  petshop: { grid: boxRoom(10, 8), light: 0.8, floor: 'tile', ceil: 'strip', sign: true, wall: petWall, keeper: [5, 1.05],
+    props: r => [SP(5, 1.7, 3.2, 1.05, ART.counter, wood), standing(5, 1.05, r.neon),
+                 SP(2.2, 4, 0.8, 0.8, ART.cage, (c, row, L) => C(c === 'o' ? YEL : GRAY, L)), SP(7.8, 4, 0.8, 0.8, ART.cage, (c, row, L) => C(c === 'o' ? YEL : GRAY, L)),
+                 SP(4.2, 5.3, 0.6, 0.6, ART.dog, (c, row, L) => C(BRICK, L * 1.3))] },
+  florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, 1.05],
+    props: r => {
+      const p = [SP(5, 1.7, 3.2, 1.05, ART.counter, wood), standing(5, 1.05, r.neon)];
+      for (let k = 0; k < 7; k++) {
+        const x = 1.5 + Math.random() * 7, y = 2.8 + Math.random() * 2.6, bloom = ITEM_COL[k & 7];
+        p.push(chance(0.5) ? SP(x, y, 0.7, 1.3, ART.plant, plantCol) : SP(x, y, 0.6, 0.8, ART.bouquet, (c, row, L) => C(row === 0 ? bloom : row === 1 ? GREEN : BRICK, L * 1.3)));
+      }
+      return p;
+    } },
+  station: { grid: STATION_GRID, light: 1, floor: 'station', ceil: 'strip', wall: stationWall, block: (x, y) => y > 5.2,
+    props: r => {
+      const p = [];
+      for (const x of [7.5, 12.5, 17.5, 22.5]) p.push(SP(x, 1.5, 1.6, 0.5, ART.bench, wood));
+      for (let k = 0; k < 4; k++) p.push(standing(3 + Math.random() * 24, 3 + Math.random() * 1.6, shirt()));
+      return p;
+    } },
+  train: { grid: boxRoom(22, 5, {}, false), light: 1, floor: 'train', ceil: 'strip', wall: trainWall,
+    props: r => {
+      const p = [];
+      for (const x of [3, 8, 13, 18]) for (const y of [1.3, 3.7]) {
+        p.push(SP(x, y, 3.6, 0.55, ART.longSeat, (c, row, L) => C(row === 1 ? BLUE : GRAY, L)));
+        if (chance(0.35)) p.push(sitting(x - 1 + Math.random() * 2, y + (y < 2 ? 0.03 : -0.03), shirt(), 0.3));
+      }
+      for (const x of [5.5, 10.5, 15.5]) p.push(SP(x, 2.5, 0.1, 3, ART.pole, (c, row, L) => C(WHITE, L)));
+      return p;
+    } },
+};
+const plantCol = (c, row, L) => C(row === 3 ? BRICK : GREEN, L);
+
+function makeRoom(kind, extra = {}) {
+  const def = ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
+  r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
+  r.props = def.props(r);
+  return r;
+}
+
+// subway trains: arrive (6s), stand with doors open (12s), leave (6s), then the tunnel is empty until the next one
+const TRAIN_CYCLE = 45;
+function trainX(r) {
+  const p = mod(T - r.t0, TRAIN_CYCLE);
+  if (p < 6) return -30 + 45 * (1 - (1 - p / 6) ** 2);
+  if (p < 18) return 15;
+  if (p < 24) return 15 + 60 * ((p - 18) / 6) ** 2;
+  return null;
+}
+const trainStopped = r => { const p = mod(T - r.t0, TRAIN_CYCLE); return p >= 6 && p < 18; };
+
+function dinerWall(i, u, uStep, z, d, mx, my, L) {
+  if (my !== 0) return false;
+  if (z > 1.0 && z < 1.6 && Math.abs(u - room.W / 2) < 1.8) { // kitchen pass-through, with a hot glow
+    set(i, hash(Math.floor(u * 8), Math.floor(z * 8 + T * 3), 5) > 0.8 ? '~' : '.', C(ORANGE, 10)); BG[i] = C(ORANGE, 2); return true;
+  }
+  if (wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.35, 0.3, C(room.neon, 15))) return true;
+  for (const [u0, s] of [[2.6, 0], [room.W - 2.6, 1]]) if (Math.abs(u - u0) < 1.3 && z > 1.45 && z < 2.35) { // menu boards
+    BG[i] = C(GRAY, 1);
+    if (wallText(i, u, uStep, z, d, room.menu[s * 2], u0, 2.1, 0.17, 0.25, C(WHITE, 14), C(GRAY, 1))) return true;
+    if (wallText(i, u, uStep, z, d, room.menu[s * 2 + 1], u0, 1.7, 0.17, 0.25, C(WHITE, 14), C(GRAY, 1))) return true;
+    set(i, ' ', 0); return true;
+  }
+  return false;
+}
+function arcadeWall(i, u, uStep, z, d, mx, my, L) { // dark walls with a neon zigzag
+  const zig = Math.abs(fract(u * 0.8) - 0.5) * 0.6 + 1.5;
+  if (Math.abs(z - zig) < 0.05) { set(i, '~', C(NEON[Math.floor(u) & 3], 15)); return true; }
+  set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 7 ? ' ' : '.', C(MAG, 3)); return true;
+}
+function laundryWall(i, u, uStep, z, d, mx, my, L) { // a row of washing machines with spinning drums
+  if (z >= 1.9 || !(my === 0 || mx === 0 || mx === room.W - 1)) return false;
+  const n = Math.floor(u / 0.75), fu = fract(u / 0.75), du = (fu - 0.5) * 0.75, dz = z - 0.85, rr = Math.hypot(du, dz);
+  if (fu < 0.05 || z < 0.1) { set(i, '|', C(GRAY, L)); return true; }
+  if (rr < 0.2) { const ang = mod(Math.atan2(dz, du) + T * 6 * (n & 1 ? 1 : -1), 6.283); set(i, '@o.'[ang / 2.1 | 0], C(ITEM_COL[n & 7], L)); return true; }
+  if (rr < 0.26) { set(i, 'O', C(GRAY, L * 1.2)); return true; }
+  if (z > 1.55) { set(i, fract(u * 4) < 0.3 ? 'o' : '=', C(CYAN, L)); return true; }
+  set(i, '#', C(WHITE, L * 0.5)); return true;
+}
+function cinemaWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === 0 && z > 0.7 && z < 2.7 && Math.abs(u - room.W / 2) < 5.2) { // the movie
+    const v = noise(u * 0.9 + T * 0.6, z * 2.2 - T * 0.3, 101) * 0.7 + noise(u * 3 - T, z * 6, 102) * 0.3, hue = [CYAN, ORANGE, MAG, GREEN][Math.floor(T / 8) & 3];
+    set(i, ' .:-=+*#'[v * 8 | 0], C(hue, 6 + v * 9)); BG[i] = C(hue, 1 + v * 3); return true;
+  }
+  set(i, fract(u * 3) < 0.3 ? '|' : ' ', C(RED, L * 0.8)); BG[i] = C(RED, 1); return true; // curtains
+}
+function hotelWall(i, u, uStep, z, d, mx, my, L) {
+  if (z < 1.1) { set(i, fract(u * 2) < 0.06 ? '|' : '=', C(BRICK, L)); return true; }
+  if (z < 1.15) { set(i, '-', C(YEL, L)); return true; }
+  set(i, (Math.floor(u * 4) + Math.floor(z * 4)) & 1 ? '%' : ' ', C(WARM, L * 0.35)); return true;
+}
+function aptsWall(i, u, uStep, z, d, mx, my, L) { // mailboxes on the left wall
+  if (mx !== 0 || z < 0.9 || z > 1.8) return false;
+  set(i, fract(u / 0.3) < 0.12 || fract(z / 0.25) < 0.15 ? '+' : '#', C(GRAY, L * (fract(u / 0.3) < 0.12 ? 1 : 0.6))); return true;
+}
+function gymWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === 0) return wallText(i, u, uStep, z, d, 'NO PAIN NO GAIN', room.W / 2, 1.6, 0.3, 0.3, C(ORANGE, 15));
+  if (z > 0.3 && z < 2.2) { // mirrors down the side walls
+    if (fract(u / 1.5) < 0.04) { set(i, '|', C(GRAY, L)); return true; }
+    set(i, (Math.floor(u * 6) + Math.floor(z * 6)) % 5 ? ' ' : '/', C(CYAN, L * 0.5)); BG[i] = C(CYAN, 1); return true;
+  }
+  return false;
+}
+function barberWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === 0 && z > 0.9 && z < 2.0) { // a mirror behind each chair
+    if (fract(u / 2.5) < 0.05 || z < 0.95 || z > 1.95) { set(i, '=', C(GRAY, L)); return true; }
+    set(i, fract(u * 3 + z) < 0.08 ? '/' : ' ', C(CYAN, L * 0.6)); BG[i] = C(CYAN, 1); return true;
+  }
+  if (room.word === 'TATTOO' && my !== 0 && z > 0.9 && z < 2.4) { // flash art sheets covering the walls
+    if (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) { set(i, '+', C(GRAY, L * 0.5)); return true; }
+    const h = hash(Math.floor(u * 3), Math.floor(z * 3), 31) * 0.999;
+    set(i, '*@%&#'[h * 5 | 0], C(ITEM_COL[h * 80 & 7], L)); return true;
+  }
+  return false;
+}
+function bankWall(i, u, uStep, z, d, mx, my, L) {
+  if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall
+    const du = u - room.H / 2, dz = z - 1.3, rr = Math.hypot(du, dz);
+    if (rr < 1.1) {
+      BG[i] = C(GRAY, 3);
+      if (rr > 1.0) { set(i, 'O', C(GRAY, 15)); return true; }
+      if (rr < 0.2) { set(i, '@', C(YEL, 14)); return true; }
+      const spoke = Math.abs(fract(Math.atan2(dz, du) / (Math.PI / 4)) - 0.5) > 0.42 && rr < 0.85;
+      set(i, spoke ? '=' : '#', C(GRAY, spoke ? 14 : L * 0.7)); return true;
+    }
+  }
+  if (my === 0) return false; // back wall: the sign
+  set(i, noise(u * 2, z * 2, 7) > 0.62 ? '~' : ' ', C(GRAY, L * 0.6)); BG[i] = C(WHITE, 3); return true; // marble
+}
+function karaokeWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === 0 && z > 1.1 && z < 2.7 && Math.abs(u - room.W / 2) < 3) { // lyrics screen: the sung part lights up
+    BG[i] = C(BLUE, 2);
+    const line = LYRICS[Math.floor(T / 5) % LYRICS.length], sung = fract(T / 5) * 1.3 * line.length;
+    const q = (u - room.W / 2) / 0.28 + line.length / 2, p = Math.floor(q);
+    if (Math.abs(z - 1.9) < 0.15 && p >= 0 && p < line.length) {
+      const on = (uStep >= 0.28 || oneCell((fract(q) - 0.5) * 0.28, uStep)) && oneCell(z - 1.9, d / projY);
+      set(i, on ? line[p] : ' ', C(p < sung ? MAG : WHITE, 15)); return true;
+    }
+    set(i, ' ', 0); return true;
+  }
+  set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 9 ? ' ' : '*', C(NEON[(Math.floor(u) + (T * 2 | 0)) & 3], 8)); return true; // glitter
+}
+function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
+  if (z < 0.78) { set(i, '#', C(BRICK, L * 0.6)); return true; }
+  if (z > 1.92) return false;
+  if (z < 0.82 || z > 1.88 || fract(u / 1.6) < 0.03) { set(i, '=', C(GRAY, L)); return true; }
+  BG[i] = C(BLUE, 3);
+  const lane = Math.floor(z * 7), dir = lane & 1 ? 1 : -1, s = fract(u * 0.7 - T * 0.25 * dir + hash(lane, mx + my, 3));
+  if (s < 0.09) { set(i, (dir > 0 ? '><>' : '<><')[s / 0.03 | 0], C([ORANGE, YEL, RED, CYAN][lane & 3], 15)); return true; }
+  if (hash(Math.floor(u * 10), Math.floor(z * 10 - T * 2), 5) > 0.97) { set(i, 'o', C(WHITE, 8)); return true; } // bubbles
+  set(i, ' ', 0); return true;
+}
+function floristWall(i, u, uStep, z, d, mx, my, L) { // vines and blooms on the side walls
+  if (my === 0 || z > 2.3) return false;
+  const h = hash(Math.floor(u * 5), Math.floor(z * 5), 17);
+  set(i, h > 0.85 ? '*' : h > 0.5 ? '~' : ' ', C(h > 0.85 ? ITEM_COL[h * 100 & 7] : GREEN, L)); return true;
+}
+function stationWall(i, u, uStep, z, d, mx, my, L) {
+  const far = my === room.H - 1; // the tunnel wall across the tracks
+  const u0 = Math.floor((u - 2) / 8) * 8 + 6;
+  if (z > 1.55 && z < 1.95 && (my === 0 || far)) { // name band, repeated along the platform
+    if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.25, 0.35, C(WHITE, 15), C(GREEN, 4))) return true;
+    set(i, ' ', 0); BG[i] = C(GREEN, 4); return true;
+  }
+  if (far) {
+    if (z > 2.25 && z < 2.4 && fract(u / 4) < 0.05) { set(i, 'o', C(WARM, 15)); return true; }
+    set(i, hash(Math.floor(u * 4), Math.floor(z * 4), 7) > 0.85 ? ':' : '.', C(GRAY, L * 0.3)); BG[i] = C(GRAY, 1); return true;
+  }
+  const grout = fract(u / 0.3) < 0.1 || fract(z / 0.3) < 0.1; // white tiles everywhere else
+  set(i, grout ? '+' : ' ', C(GRAY, L * 0.5)); BG[i] = C(WHITE, 4 * L / 14); return true;
+}
+function trainWall(i, u, uStep, z, d, mx, my, L) {
+  if (my !== 0 && my !== room.H - 1) return false;
+  if (z > 1.05 && z < 1.95) { // windows: tunnel lights streaking past
+    if (fract(u / 1.8) < 0.06) { set(i, '|', C(GRAY, L)); return true; }
+    const s = fract(u * 1.2 + room.track * 4), s2 = fract(u * 0.5 + room.track * 1.5 + 0.3); // near and far tunnel lights
+    set(i, s < 0.06 ? '=' : s2 < 0.04 ? '-' : ' ', C(YEL, s < 0.06 ? 13 : 7)); BG[i] = C(GRAY, 1); return true;
+  }
+  if (z > 2.05 && z < 2.4) { // ads above the windows
+    const k = Math.floor(u / 6), ad = ADS[mod(k, ADS.length)];
+    if (wallText(i, u, uStep, z, d, ad, k * 6 + 3, 2.22, 0.15, 0.3, C(NEON[mod(k, 4)], 14))) return true;
+    set(i, '-', C(GRAY, L * 0.5)); return true;
+  }
+  return false;
+}
+
+function roomWall(i, u, uStep, z, h, d, side, mx, my, fog) {
+  const R = room, D = R.def, c = roomAt(mx, my), L = fog * (side ? 10 : 14) * D.light;
+  BG[i] = NONE;
+  if (c === 'D') { // the way out: glass doors, or stairs up from the subway
+    if (R.kind === 'station') {
+      if (z > 2.3) return wallText(i, u, uStep, z, d, 'EXIT', 2, 2.55, 0.25, 0.4, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
+      set(i, fract(z / 0.25) < 0.2 ? '_' : ' ', C(GRAY, L)); BG[i] = C(GRAY, 1 + (z * 2 | 0)); return;
+    }
+    if (z > 2.3) return set(i, '=', C(GRAY, L));
+    return fract(u) < 0.08 ? set(i, '|', C(GRAY, L)) : set(i, ':', C(day > 0.3 ? CYAN : WARM, 6 + day * 6));
+  }
+  if (c === 'E') { // elevator
+    if (z > 2.25) return wallText(i, u, uStep, z, d, 'ROOF ^', D.ex, 2.5, 0.18, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
+    BG[i] = C(GRAY, 2);
+    return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
+  }
+  if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
+  if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
+  if (c === 'S' || D.shelves && my === 0 && z < 2) { // shelves: islands, and along the back wall
+    if (z < 0.15) return set(i, '_', C(GRAY, L * 0.6));
+    if (fract(z / 0.45) < 0.14) return set(i, '=', C(WHITE, L * 0.7));
+    const glyphs = D.glyphs || R.glyphs || 'o#=@';
+    const hh = hash(Math.floor(u * 7), Math.floor(z / 0.45), mx * 31 + my), fu = fract(u * 7), fz = fract(z / 0.45);
+    if (hh < 0.2 || fu < 0.2 || fu > 0.8 || fz > 0.7) return set(i, ' ', 0); // gaps between products
+    return set(i, glyphs[hh * 97 % glyphs.length | 0], C(ITEM_COL[hh * 13 % ITEM_COL.length | 0], D.neon ? 14 : L));
+  }
+  if (D.neon && z > 2.75 && z < 2.85) return set(i, '=', C(R.neon, 15));
+  if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6)); // wainscot
+  if (z < 0.95) return set(i, '=', C(GRAY, L));
+  if (D.posters && hash(Math.floor(u / 1.2), Math.floor(z), mx + my * 10) > 0.8 && fract(u / 1.2) > 0.15 && fract(u / 1.2) < 0.85 && fract(z) > 0.2 && fract(z) < 0.8)
+    return set(i, '%', C(ITEM_COL[hash(Math.floor(u / 1.2), 5) * 8 | 0], L));
+  set(i, '.', C(GRAY, L * 0.3));
+}
+function roomFloor(i, r, x, rx, ry) {
+  const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
+  ZB[i] = d; FL[i] = 1;
+  switch (room.def.floor) {
+    case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
+    case 'carpet': { const h = hash(Math.floor(wx * 3), Math.floor(wy * 3), 77); return set(i, h > 0.85 ? '*' : h > 0.7 ? '+' : h > 0.55 ? '.' : ' ', C(NEON[h * 40 & 3], L * 2.5)); }
+    case 'train': return set(i, fract(wx * 4) < 0.2 ? '|' : ' ', C(GRAY, L));
+    case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
+    case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
+    case 'station':
+      if (wy > 5.3) { // track bed: rails, sleepers, gravel
+        if (Math.abs(wy - 6.3) < 0.05 || Math.abs(wy - 7.5) < 0.05) return set(i, '=', C(GRAY, L * 1.8));
+        if (wy > 6.3 && wy < 7.5 && fract(wx / 0.6) < 0.25) return set(i, '#', C(BRICK, L));
+        return set(i, (r + x) % 3 ? ' ' : '.', C(GRAY, L * 0.5));
+      }
+      if (wy > 5.0) return set(i, '=', C(YEL, L * 2)); // mind the gap
+    // fall through: platform tiles
+    default: {
+      const edge = fract(wx) < 0.06 || fract(wy) < 0.06;
+      set(i, edge ? '+' : (Math.floor(wx) + Math.floor(wy)) & 1 ? '.' : ' ', C(edge ? GRAY : WHITE, L));
+    }
+  }
+}
+function roomCeil(i, r, x, rx, ry) {
+  const d = (3 - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
+  ZB[i] = d; FL[i] = 0;
+  const st = room.def.ceil;
+  if (st === 'pendant') { // warm hanging lamps on a 2m grid
+    const on = Math.hypot(fract(wx / 2) - 0.5, fract(wy / 2) - 0.5) < 0.07;
+    return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
+  }
+  if (st === 'disco') { // spots of coloured light sweeping across the ceiling
+    const on = hash(Math.floor(wx * 3), Math.floor(wy * 3), 9) > 0.88;
+    return set(i, on ? '*' : ' ', C(NEON[(Math.floor(wx * 3 + wy * 2 + T * 3)) & 3], 15));
+  }
+  if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
+  const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6; // fluorescent tubes
+  set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
+}
+function roomSprites() {
+  for (const s of room.props) drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col);
+  if (room.kind === 'station') {
+    const tx = trainX(room);
+    if (tx !== null) drawArt(tx - px, 6.9 - py, 0, 26, 3, ART.train, (c, row, L) =>
+      c === '#' ? C(CYAN, 14) : c === '=' ? C(ORANGE, Math.max(L, 10)) : c === 'O' ? C(GRAY, 6) : C(WHITE, Math.max(L, 9)));
+  }
+}
+const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : 3; },
+                wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
+
+const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
+// billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
+function drawArt(rx_, ry_, z, w, h, art, colFn) {
+  const depth = dx * rx_ + dy * ry_;
+  if (depth < 0.05 || depth > vis) return;
+  const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc;
+  const left = cx - w * sc / 2, right = cx + w * sc / 2;
+  const top = hor - (z + h - eye) * projY / depth, bot = hor - (z - eye) * projY / depth;
+  const c0 = Math.max(0, Math.floor(left)), c1 = Math.min(cols, Math.ceil(right));
+  const r0 = Math.max(0, Math.floor(top)), r1 = Math.min(rows, Math.ceil(bot));
+  const L = (1 - depth / vis) * 15 * amb, AR = art.length, AC = art[0].length;
+  const cellW = (right - left) / AC, cellH = (bot - top) / AR, stretched = cellW > 1.5 || cellH > 1.5;
+  for (let r = r0; r < r1; r++) {
+    const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
+    for (let c = c0; c < c1; c++) {
+      const i = r * cols + c;
+      if (depth >= ZB[i]) continue;
+      const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
+      if (ch === ' ') continue;
+      // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
+      // cell of its stretched span instead of smearing into "HHHOOOTTT"
+      if (stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1])) &&
+          (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
+        set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
+      }
+      set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0;
+    }
+  }
+}
+
+function render(dt) {
+  const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
+  eye = mode === 'room' ? 1.7 : mode === 'roof' ? roofH + 0.17 : mode === 'walk' ? 0.17 : chaseOn ? 0.28 : 0.12;
+  tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
+  hor = (rows >> 1) + pitch * rows | 0;
+  dx = Math.cos(a); dy = Math.sin(a);
+  lookHit = null;
+  for (let x = 0; x < cols; x++) {
+    const cx = 2 * x / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
+    const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
+    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; (r < hor ? W.sky : W.floor)(i, r, x, rx, ry); }
+    // DDA through the grid, front to back; `clip` = lowest row not yet covered
+    let mx = Math.floor(px), my = Math.floor(py), clip = rows, first = true, dPrev = 0, hCur = W.cell(mx, my);
+    BASE[x] = clamp(hor, 0, rows);
+    const ddx = Math.abs(1 / rx), ddy = Math.abs(1 / ry), sx = rx < 0 ? -1 : 1, sy = ry < 0 ? -1 : 1;
+    let sdx = (rx < 0 ? px - mx : mx + 1 - px) * ddx, sdy = (ry < 0 ? py - my : my + 1 - py) * ddy;
+    while (clip > 0) {
+      let d, side;
+      if (sdx < sdy) { d = sdx; sdx += ddx; mx += sx; side = 0; } else { d = sdy; sdy += ddy; my += sy; side = 1; }
+      // the cell we just crossed spans dPrev..d; when we're above it (on a roof), draw its top
+      if (hCur > 0 && hCur < eye && W.roof) {
+        const k = (eye - hCur) * projY, rIn = dPrev > 0 ? Math.ceil(hor + k / dPrev) : rows, rOut = Math.max(0, Math.ceil(hor + k / Math.min(d, vis)));
+        for (let r = rOut; r < Math.min(clip, rIn); r++) {
+          const i = r * cols + x, dr = k / (r - hor + 0.5);
+          W.roof(i, px + rx * dr, py + ry * dr, hCur, dr); ZB[i] = dr; FL[i] = 0;
+        }
+        clip = Math.min(clip, rOut);
+      }
+      if (d > vis) break;
+      const h = W.cell(mx, my); hCur = h; dPrev = d;
+      if (!h) continue;
+      if (first) { first = false; BASE[x] = Math.min(rows, Math.ceil(hor + eye * projY / d)); if (x === cols >> 1) lookHit = { d, mx, my }; }
+      const top = Math.max(0, Math.ceil(hor - (h - eye) * projY / d));
+      const bot = Math.min(clip, Math.ceil(hor + eye * projY / d));
+      // u runs left-to-right on screen for whichever face we see, so signs read correctly
+      const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
+      const uStep = side ? Math.abs(rx2 * (ry * d / ry2) - rx * d) : Math.abs(ry2 * (rx * d / rx2) - ry * d);
+      for (let r = top; r < bot; r++) {
+        const i = r * cols + x;
+        W.wall(i, u, uStep, eye + (hor - r - 0.5) * d / projY, h, d, side, mx, my, 1 - d / vis, side ? px + rx * d : py + ry * d);
+        ZB[i] = d; FL[i] = 0;
+      }
+      clip = Math.min(clip, top);
+    }
+  }
+  if (city) sunMoon();
+  W.sprites();
+  if (city) { reflect(); fogSteps(); rainFx(dt); } else FOGS.fill(0);
+  if (mode === 'drive' || mode === 'taxi') dash();
+
+  g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+  for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length
+    const j = r * cols + x0, b = BG[j], s = FOGS[j]; let x1 = x0 + 1;
+    while (x1 < cols && BG[r * cols + x1] === b && FOGS[r * cols + x1] === s) x1++;
+    if (s || b !== NONE) { g.fillStyle = s ? fogged(b, s) : PAL[b]; g.fillRect(x0 * cw, r * FS, (x1 - x0) * cw + 0.5, FS); }
+    x0 = x1;
+  }
+  // text: one fillText per run of same-coloured characters on a row (gaps of spaces are allowed inside a run);
+  // the font is monospace so a run lines up with the grid, and it's far fewer canvas calls than one per cell
+  const blank = j => CH[j] === ' ' || FOGS[j] === 8; // fully fogged text is invisible
+  for (let r = 0; r < rows; r++) for (let x = 0; x < cols;) {
+    const i = r * cols + x;
+    if (blank(i)) { x++; continue; }
+    const key = COL[i] * 9 + FOGS[i];
+    let s = CH[i], x1 = x + 1, end = x1;
+    for (; x1 < cols; x1++) {
+      const j = r * cols + x1;
+      if (blank(j)) { s += ' '; continue; }
+      if (COL[j] * 9 + FOGS[j] !== key) break;
+      s += CH[j]; end = x1 + 1;
+    }
+    g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]];
+    g.fillText(s.slice(0, end - x), x * cw, r * FS);
+    x = end;
+  }
+  hud();
+}
+
+function dash() {
+  const c = me;
+  FOGS.fill(0, (rows - 4) * cols); // the dashboard is never in the fog
+  if (!chaseOn) { // hood and dashboard only from the driver's seat
+    for (let r = rows - 4; r < rows; r++) for (let x = 0; x < cols; x++) {
+      const i = r * cols + x;
+      set(i, r === rows - 4 ? '_' : ' ', C(c.body, 6)); BG[i] = r === rows - 4 ? NONE : C(GRAY, 1);
+    }
+    if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => putText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
+  }
+  if (mode === 'drive') {
+    putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
+  } else {
+    putText(rows - 3, 3, `TAXI   fare $${(3 + c.fare * 0.6).toFixed(2)}`, C(TAXI, 15));
+    putText(rows - 2, 3, c.dest ? `to: ${c.destName}` : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront', C(WHITE, 12));
+  }
+}
+
+const nearestCar = r => {
+  let best = null, bd = r;
+  for (const c of cars) { if (c.player || c.rider) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  return best;
+};
+const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
+const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
+const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
+const canBoard = () => room.kind === 'station' && trainStopped(room) && py > 4.2 && Math.abs(px - 15) < 13;
+function promptText() {
+  if (mode === 'room') {
+    if (room.kind === 'train') return room.dest == null
+      ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
+      : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
+    if (nearElevator()) return 'E: elevator to the roof';
+    if (canBoard()) return 'E: board the train';
+    const k = room.def.keeper;
+    if (k && Math.hypot(px - k[0], py - k[1]) < 2) return `"${room.line}"`;
+    return room.kind === 'station' ? 'E: leave (or take the EXIT stairs)' : 'E: leave';
+  }
+  if (mode === 'roof') return 'E: take the stairs down';
+  if (mode === 'drive') return 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
+  if (mode === 'taxi') return 'mouse: look around | V: camera | E: get out';
+  const c = nearestCar(0.5);
+  if (c && c.v < 0.6) return c.body === TAXI ? 'E: get in the taxi' : 'E: take this car';
+  const st = nearStation();
+  if (st) return `E: go down to ${st.name} station`;
+  const ven = nearVendor();
+  if (ven) return `E: buy ${ven.type.item} ($${ven.type.price})`;
+  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
+    const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.kind === SHOP_SHUT) return 'Closed.';
+    if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
+    return `E: enter ${sh.signed ? sh.word : 'shop'}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : ''}`;
+  }
+  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 5)) return 'H: hail the taxi';
+  return '';
+}
+// north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
+let showMap = false;
+const MAP_R = 20, MAP_PX = 5; // cells shown each side of you, pixels per cell (1 cell = 10m)
+function minimap() {
+  if (!showMap || mode === 'room') return;
+  const size = (MAP_R * 2 + 1) * MAP_PX, x0 = cv.width - size - 8, y0 = 42; // below the home button
+  const ox = Math.floor(px), oy = Math.floor(py), sx = (wx, wy) => [x0 + (rel(wx - px) + MAP_R + 0.5) * MAP_PX, y0 + (rel(wy - py) + MAP_R + 0.5) * MAP_PX];
+  g.fillStyle = 'rgba(0,0,0,0.75)'; g.fillRect(x0 - 3, y0 - 3, size + 6, size + 6);
+  g.save(); g.beginPath(); g.rect(x0, y0, size, size); g.clip();
+  const fx = (MAP_R + 0.5 - fract(px)) * MAP_PX, fy = (MAP_R + 0.5 - fract(py)) * MAP_PX; // scroll smoothly by sub-cell
+  for (let j = -MAP_R - 1; j <= MAP_R + 1; j++) for (let i = -MAP_R - 1; i <= MAP_R + 1; i++) {
+    const mx = ox + i, my = oy + j, h = map[idx(mx, my)];
+    const kind = !h && mod(mx, 8) >= 2 && mod(my, 8) >= 2 ? blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8)) : '';
+    g.fillStyle = h ? `rgb(${60 + h * 14},${60 + h * 14},${75 + h * 14})` : kind === 'park' ? '#1f5a2a' : kind === 'plaza' ? '#3a3a40'
+                : kind === 'water' ? '#1d3f7a' : kind === 'construction' ? '#4a3a28' : kind ? '#3a3a40' : '#16161c';
+    g.fillRect(x0 + fx + i * MAP_PX, y0 + fy + j * MAP_PX, MAP_PX, MAP_PX);
+  }
+  g.restore();
+  const dot = (wx, wy, col, r) => {
+    const [x, y] = sx(wx, wy);
+    if (x < x0 || y < y0 || x > x0 + size || y > y0 + size) return;
+    g.fillStyle = col; g.fillRect(x - r / 2, y - r / 2, r, r);
+  };
+  for (const p of people) if (!p.hidden) dot(p.x, p.y, '#b9a', 1.5);
+  for (const c of cars) if (c !== me) dot(c.x, c.y, PAL[C(c.body, 14)], 3);
+  for (const s of stations) dot(s.x, s.y, '#3f3', 5);
+  for (const v of vendors) dot(v.x, v.y, '#fa3', 4);
+  if (me && me.dest) dot(me.dest[0], me.dest[1], '#f4f', 5);
+  // you: an arrow pointing where you face (map y runs down = +y in the world, so world angles draw as-is)
+  const [cx, cy] = sx(px, py), ang = me ? Math.atan2(me.hy, me.hx) : a;
+  g.fillStyle = '#ff5'; g.beginPath();
+  g.moveTo(cx + Math.cos(ang) * 6, cy + Math.sin(ang) * 6);
+  g.lineTo(cx + Math.cos(ang + 2.5) * 4, cy + Math.sin(ang + 2.5) * 4);
+  g.lineTo(cx + Math.cos(ang - 2.5) * 4, cy + Math.sin(ang - 2.5) * 4);
+  g.fill();
+  g.fillStyle = '#bbb'; g.fillText('N', x0 + size / 2 - 3, y0 + 1);
+}
+
+function hud() {
+  minimap();
+  const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
+  const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}`,
+                 'WASD move | mouse or arrows look | R/F up/down | shift run | E use | H hail taxi | hold T: time | Y: weather | M: map'];
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
+  g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
+  const p = promptText(), y = (mode === 'drive' || mode === 'taxi' ? rows - 6 : rows - 3) * FS;
+  for (const [s, yy, col] of [[p, y, '#ff8'], [msgT > 0 ? msgText : '', FS * 4, '#fff']]) {
+    if (!s) continue;
+    const w = g.measureText(s).width;
+    g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect((cv.width - w) / 2 - 6, yy - 3, w + 12, FS + 6);
+    g.fillStyle = col; g.fillText(s, (cv.width - w) / 2, yy);
+  }
+}
+
+// ---- actions
+function curbOf(c) { // sidewalk spot on the car's right, next to its lane
+  const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
+  return vert ? [mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir, N), c.y] : [c.x, mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir, N)];
+}
+function toLane(c) { // snap a car onto the nearest lane in the direction it points and hand it back to the AI
+  const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
+  if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
+  else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
+  plan(c);
+}
+function leaveCar() {
+  const c = me;
+  [px, py] = curbOf(c);
+  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); a += Math.PI / 2; }
+  else { say(`Fare: $${(3 + c.fare * 0.6).toFixed(2)}. Thanks!`); c.rider = c.dest = c.arrived = false; plan(c); }
+  me = null; mode = 'walk';
+}
+function setDest(n) {
+  const c = me, nearest = pts => pts.reduce((b, p) => Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y)) < Math.hypot(rel(b[0] - c.x), rel(b[1] - c.y)) ? p : b);
+  if (n === 1) { c.dest = nearest(parks.map(([bx, by]) => [bx * 8 + 1, by * 8 + 5])); c.destName = 'the park'; }
+  else if (n === 4) { c.dest = [WATER[0] * 8 + 1, WATER[1] * 8 + 5]; c.destName = 'the waterfront'; }
+  else {
+    let p; do p = [(Math.random() * NB | 0) * 8 + 1, (Math.random() * NB | 0) * 8 + 5]; while (n === 2 && Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y)) < 18);
+    c.dest = p; c.destName = n === 2 ? 'across town' : 'somewhere';
+  }
+  plan(c);
+}
+function enterRoom(kind, extra, spawn) { room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0; }
+function interact() {
+  if (mode === 'room') {
+    if (room.kind === 'train') return;
+    if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
+      const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
+      roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
+      return say(`Roof, ${roofH * 10}m up`);
+    }
+    if (canBoard()) {
+      const from = room.st;
+      return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
+    }
+    return leaveRoom();
+  }
+  if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
+  if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
+  if (mode === 'taxi') return leaveCar();
+  const c = nearestCar(0.5);
+  if (c && c.v < 0.6) {
+    me = c;
+    if (c.body === TAXI) { mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0; }
+    else { mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); }
+    px = c.x; py = c.y;
+    return;
+  }
+  const ven = nearVendor();
+  if (ven) return say(pick([`You buy ${ven.type.item}. Delicious.`, `${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)}, $${ven.type.price}. Worth it.`, `"Enjoy!" says the ${ven.type.name.toLowerCase()} vendor.`]));
+  const st = nearStation();
+  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [2, 1.7, Math.PI / 2]);
+  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
+    const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.kind === SHOP_SHUT) return say('Closed.');
+    const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
+    const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
+    enterRoom(kind, r, [0, 0, -Math.PI / 2]);
+    px = room.W / 2; py = room.H - 1.6;
+  }
+}
+function leaveRoom() {
+  if (room.kind === 'station') { const s = stations[room.st]; px = s.x; py = s.y - 0.12; a = -Math.PI / 2; }
+  else { [px, py, a] = room.ret; a += Math.PI; }
+  room = null; mode = 'walk';
+}
+function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
+  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [15, 3.6, -Math.PI / 2]); // back from the edge, so E means leave
+  say(`${stations[n].name}`);
+}
+function hail() {
+  if (mode !== 'walk') return;
+  let best = null, bd = 5;
+  for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
+}
+
+const K = {};
+onkeydown = e => {
+  K[e.code] = 1;
+  if (e.repeat) return;
+  if (e.code === 'KeyE') interact();
+  if (e.code === 'KeyH') hail();
+  if (e.code === 'KeyV' && me) third = !third;
+  if (e.code === 'KeyM') showMap = !showMap;
+  if (e.code === 'KeyY') { weather = { clear: 'rain', rain: 'fog', fog: 'clear' }[weather]; wTimer = 150; say(`Weather: ${weather}`); }
+  const n = /^Digit([1-5])$/.exec(e.code);
+  if (n && mode === 'taxi' && !me.dest && +n[1] <= 4) setDest(+n[1]);
+  if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
+};
+onkeyup = e => K[e.code] = 0;
+cv.onclick = () => cv.requestPointerLock();
+const clampPitch = () => pitch = clamp(pitch, -1.2, 1.6);
+onmousemove = e => {
+  if (!document.pointerLockElement) return;
+  if (mode === 'taxi') look += e.movementX * 0.003; else if (mode !== 'drive') a += e.movementX * 0.003;
+  pitch -= e.movementY * 0.002; clampPitch();
+};
+
+const free = (x, y) => {
+  if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y));
+  if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
+};
+function move(fx, fy) {
+  const m = mode === 'room' ? 0.25 : 0.05;
+  if (mode === 'room' && roomAt(Math.floor(px + fx * 3), Math.floor(py + fy * 3)) === 'D') return leaveRoom();
+  if (free(px + fx + Math.sign(fx) * m, py)) px += fx;
+  if (free(px, py + fy + Math.sign(fy) * m)) py += fy;
+}
+function drive(dt) {
+  const c = me, f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  if (f > 0) c.v += (c.v < 0 ? 2.5 : 1) * dt; else if (f < 0) c.v -= (c.v > 0 ? 2.5 : 0.8) * dt; else c.v *= 1 - 0.7 * dt;
+  c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? 3.2 : 2.2);
+  a += s * dt * 1.8 * clamp(c.v / 0.5, -1, 1);
+  const hx = Math.cos(a), hy = Math.sin(a), nx = c.x + hx * c.v * dt, ny = c.y + hy * c.v * dt;
+  const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
+  const hit = !free(fx, fy) || cars.some(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3)
+           || people.some(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
+  if (hit) { if (Math.abs(c.v) > 0.8) say('*CRUNCH*', 1); c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
+  c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
+}
+
+let t0 = performance.now();
+function loop(t) {
+  const dt = Math.min(0.05, (t - t0) / 1000); t0 = t; T += dt; msgT -= dt;
+  env(dt);
+  pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
+  if (mode === 'walk' || mode === 'room' || mode === 'roof') {
+    a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
+    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt; // sprint 29 km/h, cars top out at 79
+    const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+    const cx = Math.cos(a), cy = Math.sin(a);
+    move((cx * f - cy * s) * sp, (cy * f + cx * s) * sp);
+  } else if (mode === 'drive') drive(dt);
+  stepTraffic(dt, T);
+  if (mode === 'taxi') {
+    px = me.x; py = me.y;
+    const target = Math.atan2(me.hy, me.hx) + look; // camera eases round corners
+    a += (mod(target - a + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
+    if (me.arrived && me.v < 0.02) leaveCar();
+  }
+  if (mode === 'room' && room.kind === 'train' && room.dest != null) { // the ride: speed up, cruise, slow down, arrive
+    room.rideT -= dt;
+    room.track += dt * 2.5 * clamp(room.rideT / 2, 0, 1) * clamp((9 - room.rideT) / 2, 0, 1);
+    if (room.rideT <= 0) arriveAt(room.dest);
+  }
+  chaseOn = !!me && third;
+  if (chaseOn) { // render from behind the car, then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
+    px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+  } else { camYaw = a; render(dt); }
+  requestAnimationFrame(loop);
+}
+// third person: behind and above the car, easing round corners; pulled in if a wall is in the way
+function chaseCam(dt) {
+  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx);
+  camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 5);
+  const bx = Math.cos(camYaw), by = Math.sin(camYaw);
+  let back = 1.1;
+  while (back > 0.15 && !free(me.x - bx * back, me.y - by * back)) back -= 0.05;
+  return [me.x - bx * back, me.y - by * back, camYaw];
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
