@@ -170,7 +170,15 @@ function ctxPathHas(e, selector) {
 }
 
 function canDeleteDesktopSystemIcon(ic) {
-  return !!ic && !ic.custom && String(ic.name || '').toLowerCase() === 'void.tmp' && !daemonStory.endingReached;
+  if (!ic || ic.custom) return false;
+  const name = String(ic.name || '').toLowerCase();
+  if (name === 'void.tmp') return !daemonStory.endingReached;
+  if (name === 'daemon.core') return false;
+  // Every other system icon (CALC.exe, NOTEPAD.exe, ...) now gets offered a
+  // Delete option too, purely so attempting it surfaces deleteVirtualPath's
+  // existing "System files are protected" guard (isVisibleSystemPath, name-
+  // based, os/daemon.js) instead of there being no option to try at all.
+  return programIsSystemBinary(ic.name);
 }
 
 function deleteDesktopSystemIcons(icons) {
@@ -429,10 +437,21 @@ function makeDesktopIconEl(ic) {
       })});
     } else {
       items.push({ label: 'Open', action: activate });
-      // Lore shortcuts for single icons
+      // Lore / decompiler shortcuts for single icons
       const icName = ic.name || '';
       if (['daemon.core','void.tmp'].includes(icName)) {
         items.push({ label: 'Open in Notepad', action: () => openNotepad(icName) });
+      }
+      // programIsSystemBinary (os/programs.js), not a hand-maintained name
+      // list - that list went stale the moment MINESWEEPER.exe and PAINT.exe
+      // were added as desktop icons without being added to it, exposing this
+      // decompiler shortcut on two apps whose real disassembly is already
+      // reachable through their root file (see explorer-desktop-exe-spawn
+      // fallback). Every .exe on the desktop today is a known system binary,
+      // so this option currently never fires - it stays live for whatever
+      // genuinely unknown .exe a future shortcut or upload puts here.
+      if (icName.toLowerCase().endsWith('.exe') && !programIsSystemBinary(icName)) {
+        items.push({ label: 'Open in Decompiler', action: () => openDecompilerView(icName) });
       }
       if (singleDesktopImage) {
         items.push({ label: 'Set as Wallpaper', action: () => applyWallpaper(singleDesktopImage.target.path) });

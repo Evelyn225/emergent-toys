@@ -93,91 +93,24 @@ function refreshSeededDocs() {
   });
 }
 
-// The eight system binaries (SYSTEM_BINARY_SOURCES, os/fs-core.js), restored
-// on every boot for a user whose root already had content. vfsBootMount's
-// seed callback above only runs `if (!root.dirs.size && !root.files.size)` -
-// a completely empty root - so it never fires for anyone who has booted
-// sleepOS before, meaning phase 6's seeding alone dropped all eight binaries
-// out of DIR for every returning user the moment they next loaded the OS.
-//
-// This HEALS rather than fill-if-absent, the same policy refreshSeededDocs
-// already applies to README.txt and the rest of DOCS: whatever a player did
-// to the content, this restores it to SYSTEM_BINARY_SOURCES on the next boot.
-// That is deliberately NOT the DOCS-vs-programs distinction it looks like at
-// first glance - "docs heal, programs do not" was about the demo .exe/.script
-// files a player is meant to author and have survive (HELLO.exe and friends,
-// PROGRAM_LAUNCHERS has no entry for those, so programIsSystemBinary is
-// false and this function never touches them). A system binary is not one of
-// those: its NOTEPAD view is read-only by design, so there is no legitimate
-// edit for this function to protect, only corruption to repair - a write
-// that reached one at all had to go around a guard (apps/notepad.js's
-// writeAndSync, apps/terminal.js's writePipelineOutput) that exists
-// specifically to stop that. Healing here is the backstop for whatever gets
-// through anyway.
-//
-// Unlike refreshSeededDocs, the heal below goes through vfsWriteFile rather
-// than poking tree.files directly, so a repair queues a real commit op and
-// the binary ends up occupying actual disk blocks - SYSMON's disk meter and
-// DEFRAG's map both read the backend's block counts, not the tree, so a
-// binary that only exists in memory reports as zero bytes used. The
-// content comparison still runs first, and only a mismatch reaches
-// vfsWriteFile, so a normal boot where all eight already match queues
-// nothing at all - same cost as before. If the write itself throws (ENOSPC
-// via _vfsAssertRoom in os/vfs.js is the realistic case, on a full disk),
-// the catch below falls back to the old in-memory tree.files.set so the
-// binary is still correct for this session - the phase 6 guarantee that a
-// corrupted binary always heals must survive a full disk, it just will not
-// stick across a reload - and reports the failure through reportVfsError,
-// the same channel every other late VFS failure in this file uses.
-//
-// This does NOT cover a genuinely fresh install: vfsMount's `seed` callback
-// (below, in vfsBootMount) fills the eight binaries into the tree BEFORE
-// this function ever runs, so on that specific boot the comparison above
-// finds every one already matching and correctly writes nothing - correct
-// by this function's own contract, but the content was never committed
-// either, since `seed` mutates the tree directly with no queued op. That
-// case is handled by seedFreshRootTree, which the `seed` callback calls
-// instead of mutating root.files itself.
-async function refreshSeededSystemBinaries() {
-  const tree = vfsGetTree();
-  for (const name of Object.keys(SYSTEM_BINARY_SOURCES)) {
-    const want = SYSTEM_BINARY_SOURCES[name];
-    if (tree.files.get(name) === want) continue;
-    try {
-      await vfsWriteFile(name, want, '');
-    } catch (err) {
-      tree.files.set(name, want);
-      reportVfsError(err);
-    }
-  }
-}
-
 // Populates a genuinely empty root - vfsMount's `seed` option, wired up in
 // vfsBootMount below, calls this only `if (!root.dirs.size &&
-// !root.files.size)`. Everything except the eight root-level system
-// binaries is mutated directly with no queued op, same as refreshSeededDocs
-// and for the same reason: DESKTOP and the DOCS subtree are meant to stay
-// uncommitted, regenerated from vfsSeedTree() on every boot rather than
-// restored from the backend.
+// !root.files.size)`. Mutated directly with no queued op, same as
+// refreshSeededDocs and for the same reason: DESKTOP and the DOCS subtree
+// are meant to stay uncommitted, regenerated from vfsSeedTree() on every
+// boot rather than restored from the backend.
 //
-// The eight binaries are different, and NOT for the reason refreshSeededDocs'
-// own comment gives about them (read-only, healed rather than authored) -
-// that reasoning covers WHY they heal, not why this function exists at all.
-// This exists because `seed` runs before the backend is attached (vfsMount
-// assigns _vfsBackend only after `seed` returns) and mutates `root` - the
-// exact same live tree refreshSeededSystemBinaries reads from - directly.
-// So on THIS boot only, refreshSeededSystemBinaries's own compare-before-write
-// finds every binary already matching what it just wrote here and correctly
-// queues nothing, leaving the content real in the tree but backed by zero
-// committed blocks: SYSMON's disk meter and DEFRAG's map read the backend's
-// allocation, not the tree, so they showed 0.00% used and an empty map on a
-// filesystem DIR already listed as full of files.
-//
-// vfsQueueDirectWrite (os/vfs.js) is the fix: the same escape hatch
-// os/daemon.js uses for its own direct-tree-mutation-with-no-op problem.
-// Passing null as the "previous value" bypasses its own unchanged-content
-// skip, which exists to stop a normal re-set of identical content from
-// queuing a redundant op - here the previous value is not identical, it is
+// seeded.files is walked through vfsQueueDirectWrite rather than a plain
+// root.files.set, even though vfsSeedTree() currently never puts anything
+// there (root-level system binaries used to live here before they stopped
+// being seeded at all - see os/fs-core.js). Kept generic rather than
+// deleted: SYSMON's disk meter and DEFRAG's map both read the backend's
+// committed block count, not the tree, so any future top-level seed file
+// would silently report as zero bytes used without a queued op - the same
+// bug queuing one here already fixed once. Passing null as the "previous
+// value" bypasses vfsQueueDirectWrite's own unchanged-content skip, which
+// exists to stop a normal re-set of identical content from queuing a
+// redundant op - here the previous value is not identical, it is
 // altogether absent from anything committed, and null is how that gets said.
 function seedFreshRootTree(root) {
   const seeded = vfsSeedTree();
@@ -443,7 +376,6 @@ async function vfsBootMount() {
     },
   });
   refreshSeededDocs();
-  await refreshSeededSystemBinaries();
   refreshSeededWallpaperLibrary();
   refreshSeededHomeMedia();
   ensureFsDir(RECYCLE_STORAGE_DIR);

@@ -1211,7 +1211,14 @@ body.frag-visual-3 .os-window:not(.daemon-surface):not(.void-surface) .win-title
    box's layout size always matches what ms-root (transform:scale'd to fit
    it) actually paints. */
 .ms-scale-wrap { flex: 0 0 auto; }
-.ms-root { padding: 6px; }
+/* width: max-content, not the default auto, so ms-root sizes to its widest
+   child (ms-grid, itself max-content) instead of shrinking to whatever width
+   msFitWindow gave ms-scale-wrap. Without it, on a downscaled mobile Expert
+   board, ms-header (plain auto width) stretches to that smaller wrap width
+   while ms-grid (already max-content) overflows past it to its own natural
+   width - two different widths under the same transform:scale, so the header
+   comes out visibly narrower than the grid instead of matching it. */
+.ms-root { padding: 6px; width: max-content; }
 .ms-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 5px; margin-bottom: 6px;
@@ -1812,16 +1819,6 @@ body.idle-sleeping { cursor:none; }
   .exp-item .exp-icon { font-size: 32px; }
   .exp-list-item { padding: 10px 6px; font-size: 14px; }
   .exp-det-item td { padding: 8px 6px; font-size: 13px; }
-
-  /* Bigger touch targets don't fit the desktop's single row at 390px wide,
-     so the toolbar wraps: nav buttons on row one, the address bar + Go/Fav
-     on row two. The vsep (normally a thin divider) becomes the wrap point -
-     a full-width, zero-height spacer forces everything after it down. */
-  .browser-toolbar { flex-wrap: wrap; row-gap: 4px; }
-  .br-btn { min-width: 44px; height: 44px; font-size: 16px; }
-  .br-vsep { flex-basis: 100%; width: auto; height: 0; margin: 0; background: none; }
-  .br-addr-label { display: none; }
-  .br-addr { height: 36px; font-size: 15px; padding: 0 6px; }
 
   .sm-tool-btn { padding: 10px 14px !important; font-size: 14px !important; }
 

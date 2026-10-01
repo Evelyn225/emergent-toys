@@ -128,41 +128,6 @@ function nextExplorerWinId() {
   return 'explorer-' + _explorerWinSeq;
 }
 
-// The system binaries, as real files.
-//
-// These were authored metadata rows in ROOT_SYSTEM_FILE_META with hardcoded
-// sizes ('4,096'), which since phase 4 has meant invented numbers sitting in
-// a DIR listing next to sizes measured off the superblock. Seeding them makes
-// the size measured like everything else.
-//
-// Each one is a two-line launcher script, not an invented disassembly.
-// Double-clicking a binary runs the built-in window (see
-// programIsRootSystemBinary, os/programs.js), so the file's content only
-// shows through CAT or Notepad. A copy of one - an Explorer paste, say - is a
-// user .exe that does exactly what the original does: `start terminal` runs
-// through the script interpreter's own START and opens the same window.
-// There is nothing here pretending to be machine code.
-//
-// Text rather than blob is forced by the data: the only blob seed path
-// (refreshSeededWallpaperLibrary) produces URL-backed entries with size 0,
-// which would put a 0 in DIR - a worse number than the fake 4,096, not a
-// better one.
-function systemBinarySource(name, program) {
-  return ['# ' + name + ' - sleepOS system program', 'start ' + program].join('\n');
-}
-const SYSTEM_BINARY_SOURCES = {
-  'TERMINAL.exe':    systemBinarySource('TERMINAL.exe', 'terminal'),
-  'SYSMON.exe':      systemBinarySource('SYSMON.exe', 'sysmon'),
-  'BROWSER.exe':     systemBinarySource('BROWSER.exe', 'browser'),
-  'DEFRAG.exe':      systemBinarySource('DEFRAG.exe', 'defrag'),
-  'NOTEPAD.exe':     systemBinarySource('NOTEPAD.exe', 'notepad'),
-  'EXPLORER.exe':    systemBinarySource('EXPLORER.exe', 'explorer'),
-  'CALC.exe':        systemBinarySource('CALC.exe', 'calc'),
-  'MINESWEEPER.exe': systemBinarySource('MINESWEEPER.exe', 'minesweeper'),
-  'REGEDIT.exe':     systemBinarySource('REGEDIT.exe', 'regedit'),
-  'PAINT.exe':       systemBinarySource('PAINT.exe', 'paint'),
-};
-
 // The seeded filesystem. vfsBootMount installs this as the initial tree when
 // nothing is persisted, and re-applies the DOCS subtree on every boot.
 // subdirs: Map<dirName, { files: Map, blobs: Map, dirs: Set }>
@@ -669,9 +634,6 @@ function vfsSeedTree() {
     ]),
   }]]),
   };
-  Object.keys(SYSTEM_BINARY_SOURCES).forEach(name => {
-    seed.files.set(name, SYSTEM_BINARY_SOURCES[name]);
-  });
   seed.dirs.add('DESKTOP');
   if (!seed.subdirs.has('DESKTOP')) {
     seed.subdirs.set('DESKTOP', { dirs: new Set(), files: new Map(), blobs: new Map(), subdirs: new Map() });

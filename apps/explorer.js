@@ -346,15 +346,21 @@ function openExplorer(startPath) {
     // Registry association first; falls through to the built-in defaults when
     // the extension is unassociated. See HKEY_CLASSES_ROOT in os/registry.js.
     if (openWithAssociation(name, cwd)) return;
+    // A root system binary with no association double-clicks straight into
+    // the real app, the same as its Desktop icon does - the decompiler view
+    // is an Open With destination now, not the default. programIsRootSystemBinary
+    // (os/programs.js) is what keeps a user's own DOCS\SYSMON.exe falling
+    // through to openNotepad like any other file instead.
+    if (programIsRootSystemBinary(name, cwd)) {
+      openSystemFile(name);
+      return;
+    }
     if (st.kind === 'blob') openMediaFile(name, cwd);
-    // A root system binary launches its program; a .exe the user wrote runs
-    // as a script. See programIsRootSystemBinary and programIsSpawnableExe
-    // (os/programs.js) for why these tests live there rather than here.
-    // programSpawnOrAlert
+    // A .exe the user wrote runs. See programIsSpawnableExe (os/programs.js)
+    // for why this test lives there rather than here. programSpawnOrAlert
     // (also os/programs.js) is what turns a spawn failure - the file
     // vanished between listing and double-click - into an osAlert instead
     // of a silent unhandled rejection.
-    else if (programIsRootSystemBinary(st.name, st.dirName)) openSystemFile(st.name);
     else if (programIsSpawnableExe(name)) {
       void programSpawnOrAlert(name, cwd);
     }
@@ -532,6 +538,7 @@ function openExplorer(startPath) {
       const isScript = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.script');
       const canSetWallpaper = !!singleSelected && !singleSelected.sysfile && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.kind === 'image';
       const isLoreFile = !!singleSelected && !singleSelected._recycle && ['daemon.core','void.tmp'].includes(singleSelected.name);
+      const isExeFile  = !!singleSelected && !singleSelected._recycle && !singleSelected._shortcut && singleSelected.name.toLowerCase().endsWith('.exe');
       if (singleSelected && !multi && (singleSelected.recycleBin || isRecycleBinItemName(singleSelected.name)) && !singleSelected._recycle) {
         showCtxMenu(e.clientX, e.clientY, [
           { label: 'Open', action: openRecycleBin },
@@ -558,6 +565,7 @@ function openExplorer(startPath) {
           ? { label: 'Open All (' + allSelected.length + ')', action: () => allSelected.forEach(openItem) }
           : { label: kind === 'dir' ? 'Open Folder' : 'Open', action: () => openItem(item) },
         ...(isLoreFile ? [{ label: 'Open in Notepad', action: () => openNotepad(singleSelected.name) }] : []),
+        ...(isExeFile  ? [{ label: 'Open in Decompiler', action: () => openDecompilerView(singleSelected.name) }] : []),
         ...(canSetWallpaper ? [{ label: 'Edit in Paint', action: () => openPaintFile(singleSelected.name, cwd) }] : []),
         ...(canSetWallpaper ? [{ label: 'Set as Wallpaper', action: () => applyWallpaper(makeFsPath(singleSelected.name)) }] : []),
         ...(isScript ? [{ label: 'Run Script', action: () => {

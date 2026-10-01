@@ -1,11 +1,12 @@
 'use strict';
 // FIX ROUND 1 for Task 9 (see task-9-report.md): making the eight system
-// binaries real VFS files gave a write two unguarded paths straight into
-// them - Notepad's Save/Save As (writeAndSync) and the terminal's `>` / `>>`
-// redirect (writePipelineOutput) - with no recovery until the next boot's
-// healing (refreshSeededSystemBinaries, see test/system-binaries.test.cjs).
-// Both are refused here, before the write happens, using the same
-// "protected" wording the DELETE guard (os/daemon.js) already established.
+// binaries real VFS files (since reverted - they're desktop-only now, see
+// os/fs-core.js) gave a write two unguarded paths straight into them -
+// Notepad's Save/Save As (writeAndSync) and the terminal's `>` / `>>`
+// redirect (writePipelineOutput). Both are refused here, before the write
+// happens, using the same "protected" wording the DELETE guard
+// (os/daemon.js) already established - and both still refuse by name alone,
+// independent of whether a real file backs the name at all.
 //
 // FIX ROUND 2: round 1's guards checked the RAW target string against
 // programIsSystemBinary, a NAME predicate that never splits a path. A
@@ -208,10 +209,13 @@ function terminalWriteCtx() {
   return ctx;
 }
 
-test('writePipelineOutput refuses a path-qualified bypass and leaves the real binary unchanged', async () => {
+test('writePipelineOutput refuses a path-qualified bypass even with nothing seeded there', async () => {
   const ctx = terminalWriteCtx();
-  const original = ctx.vfsGetTree().files.get('TERMINAL.exe');
-  assert.strictEqual(original.length, 54, 'fixture assumption changed - update the expected length');
+  // Nothing seeds a root TERMINAL.exe any more (os/fs-core.js), so the guard
+  // has to refuse purely on the name - there is no existing content for it
+  // to be protecting.
+  assert.strictEqual(ctx.vfsGetTree().files.get('TERMINAL.exe'), undefined,
+    'fixture assumption changed - TERMINAL.exe is seeded again somewhere');
 
   for (const target of ['C:\\sleepOS\\TERMINAL.exe', '\\TERMINAL.exe', 'C:/sleepOS/TERMINAL.exe']) {
     await assert.rejects(
@@ -219,8 +223,8 @@ test('writePipelineOutput refuses a path-qualified bypass and leaves the real bi
       /protected/i,
       target + ' did not throw',
     );
-    assert.strictEqual(ctx.vfsGetTree().files.get('TERMINAL.exe'), original,
-      target + ' changed the real TERMINAL.exe content');
+    assert.strictEqual(ctx.vfsGetTree().files.get('TERMINAL.exe'), undefined,
+      target + ' created a root file the guard should have refused instead');
   }
 });
 
