@@ -123,7 +123,7 @@ function env(dt) {
   vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain);
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
-  if (mode === 'room') { amb = room.def.light + flash() * 0.1; vis = 40; } // a flicker through the windows
+  if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
 }
 
 // ---- ascii sprites
@@ -910,7 +910,7 @@ const SIM_R = 56, simulated = (x, y) => Math.abs(rel(x - px)) < SIM_R && Math.ab
 // state: 'out' (on a call) -> 'scene' -> 'back'. ev marks the vehicle; code(c) = running lights and siren.
 const EV_BODY = { amb: WHITE, fire: RED, police: BLUE };
 const RETURN_CODE = false; // real crews drive back quietly; true runs lights and siren home too
-const code = c => c.state === 'out' || RETURN_CODE && c.state === 'back';
+const code = c => c.state === 'out' || RETURN_CODE && c.state === 'back' || c.pursuit; // (a patrol car chasing you, too)
 const lightsOn_ = c => code(c) || c.state === 'scene'; // the light bar turning
 const BASE_R = 50; // a station further away than this (500m) doesn't send the call; one comes in from off-screen
 let evTimer = 45;
@@ -971,7 +971,7 @@ function stepTraffic(dt, t, everywhere = false) {
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
   const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;
@@ -1021,7 +1021,8 @@ function stepTraffic(dt, t, everywhere = false) {
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
     if (c.rider && !c.dest) room_ = 0;
-    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
+    if (c.pursuit && mode === 'walk' && Math.hypot(rel(px - c.x), rel(py - c.y)) < 1.2) room_ = 0; // pulled up next to you
+    if (c.dest && !c.pursuit && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
       if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction
       else { room_ = 0; c.arrived = true; }
     }
@@ -2070,6 +2071,96 @@ GAMES.stock = (rnd = Math.random, word = '') => {
   return g;
 };
 
+// ---- crimes. Each ends with g.success true or false; the caller (crime-ui.js) decides what that means.
+// pickpocketing: a marker sweeps across a bar; stop it in the green three times running, the zone shrinking each time
+GAMES.pickpocket = (rnd = Math.random) => {
+  const W = 30, H = 7, g = { id: 'pickpocket', title: 'PICKPOCKET', W, H, score: 0, over: false, success: false, crime: true };
+  let pos = 0, dir = 1, speed = 16, zone = [11, 17];
+  const newZone = () => { const w = [6, 4, 3][g.score] || 3, a_ = 2 + rnd() * (W - 4 - w) | 0; zone = [a_, a_ + w]; };
+  newZone();
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    pos += dir * speed * dt;
+    if (pos < 0 || pos > W - 1) { dir = -dir; pos = clamp(pos, 0, W - 1); }
+    if (k.actP) {
+      if (pos >= zone[0] && pos <= zone[1] + 1) { g.score++; ev.push('eat'); speed *= 1.25; if (g.score >= 3) { g.over = g.success = true; ev.push('clear'); } else newZone(); }
+      else { g.over = true; ev.push('die'); } // they felt that
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) put(x, 3, x >= zone[0] && x <= zone[1] ? '=' : '-', x >= zone[0] && x <= zone[1] ? C(GREEN, 14) : C(GRAY, 7), x >= zone[0] && x <= zone[1] ? C(GREEN, 3) : NONE);
+    put(Math.round(pos), 2, 'v', C(YEL, 15)); put(Math.round(pos), 4, '^', C(YEL, 15));
+    text(0, 0, `fingers in the pocket: ${'*'.repeat(g.score)}${'.'.repeat(3 - g.score)}`, C(WHITE, 13));
+  };
+  g.status = () => 'SPACE when the marker is in the green   miss once and they notice';
+  g.reward = () => 0;
+  return g;
+};
+// shoplifting: hold SPACE to slip something into your coat, but only while the clerk's looking away; they glance
+// round now and then, with a moment's warning (they start to turn). Caught holding it and they call the cops.
+GAMES.shoplift = (rnd = Math.random) => {
+  const W = 30, H = 10, g = { id: 'shoplift', title: 'FIVE FINGER DISCOUNT', W, H, score: 0, over: false, success: false, crime: true };
+  let state = 'away', left = 0.8 + rnd() * 0.8, grab = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if ((left -= dt) <= 0) {
+      if (state === 'away') { state = 'turning'; left = 0.6; ev.push('bump'); }
+      else if (state === 'turning') { state = 'looking'; left = 1.2 + rnd() * 1.5; }
+      else { state = 'away'; left = 1.5 + rnd() * 2.5; }
+    }
+    if (k.act) {
+      if (state === 'looking') { g.over = true; ev.push('die'); return ev; } // seen
+      grab += dt / 2.6; // longer than they ever look away: you'll have to let go at least once
+      if (grab >= 1) { g.over = g.success = true; ev.push('clear'); }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    const face = state === 'looking' ? ['  ____  ', ' (O  O) ', '  \__/  ', '   ||   '] : state === 'turning' ? ['  ____  ', ' (  o o)', '   \_/  ', '   ||   '] : ['  ____  ', ' (     )', '  (___) ', '   ||   '];
+    face.forEach((l, r) => text(11, 1 + r, l, state === 'looking' ? C(RED, 15) : state === 'turning' ? C(YEL, 15) : C(WHITE, 12)));
+    text(2, 6, state === 'looking' ? 'THE CLERK IS WATCHING YOU' : state === 'turning' ? 'they\'re turning round...' : 'the clerk\'s looking away', state === 'looking' ? C(RED, 15) : C(GRAY, 11));
+    for (let x = 0; x < W; x++) put(x, 8, x / W < grab ? '#' : '.', x / W < grab ? C(GREEN, 14) : C(GRAY, 6));
+  };
+  g.status = () => 'HOLD SPACE to pocket it while they look away   let go when they turn';
+  g.reward = () => 0;
+  return g;
+};
+// lockpicking: four pins, each sprung down. Hold UP to push the current one up and SPACE to set it while it's at
+// the shear line; push it past the top and the pick slips. Three slips (or the clock) and the lock jams.
+GAMES.lockpick = (rnd = Math.random) => {
+  const W = 26, H = 14, PINS = 4, g = { id: 'lockpick', title: 'LOCKPICK', W, H, score: 0, over: false, success: false, crime: true };
+  const shear = Array.from({ length: PINS }, () => 0.5 + rnd() * 0.3), h = Array(PINS).fill(0);
+  let cur = 0, slips = 0, t = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    h[cur] = k.up ? h[cur] + dt * 0.9 : Math.max(0, h[cur] - dt * 0.6); // pushed up, or springing back
+    if (h[cur] > 1) { slips++; h[cur] = 0; ev.push('wrong'); if (slips >= 3) { g.over = true; ev.push('die'); return ev; } }
+    if (k.actP) {
+      if (Math.abs(h[cur] - shear[cur]) < 0.07) { cur++; g.score++; ev.push('place'); if (cur >= PINS) { g.over = g.success = true; ev.push('clear'); } }
+      else { slips++; h[cur] = 0; ev.push('wrong'); if (slips >= 3) { g.over = true; ev.push('die'); } }
+    }
+    if (t > 40 && !g.over) { g.over = true; ev.push('die'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let p = 0; p < PINS; p++) {
+      const x = 4 + p * 5, top = 2, bot = 11, sy = Math.round(bot - shear[p] * (bot - top)), py = Math.round(bot - (p < cur ? shear[p] : h[p]) * (bot - top));
+      for (let y = top; y <= bot; y++) put(x, y, y === sy ? '=' : '|', y === sy ? C(YEL, 13) : C(GRAY, 6));
+      put(x, py, p < cur ? '#' : p === cur ? '@' : 'o', p < cur ? C(GREEN, 15) : p === cur ? C(WHITE, 15) : C(GRAY, 10), p === cur ? C(GRAY, 4) : NONE);
+    }
+    text(0, 13, `slips ${'x'.repeat(slips)}${'.'.repeat(3 - slips)}   ${Math.max(0, 40 - t) | 0}s`, C(slips ? RED : GRAY, 12));
+  };
+  g.status = () => 'HOLD UP to push the pin, SPACE to set it on the line';
+  g.reward = () => 0;
+  g.state = () => ({ h, shear, cur, slips });
+  return g;
+};
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
@@ -2085,6 +2176,178 @@ function taxiPay(dist, took, harsh, crashed, route = dist) {
   const tip = crashed ? 0 : Math.round(fare * (0.05 + 0.25 * speed + 0.2 * smooth) * 100) / 100;
   const stars = crashed ? 1 : 1 + Math.round(4 * (speed + smooth) / 2);
   return { fare, tip, stars, speed, smooth };
+}
+// ---- crime and the police. Pure (no DOM), so the node tests can run it; crime-ui.js draws it and asks what you do
+// when they catch you.
+//
+// A crime only counts if somebody sees it. A cop who sees it (in their line of sight, within COP_SIGHT) puts you
+// straight on the wanted list; a passer-by who sees it calls it in a few seconds later, and then only if there's a
+// police unit within DISPATCH_R to send. Wanted is 1-3 stars: more stars, more units after you. They chase where
+// they last saw you; stay out of every cop's sight for ESCAPE_T seconds and they give up. Caught: a fine, or jail.
+//
+// Police: patrol cars cruising in the traffic (cars with patrol: true; in pursuit they run lights and siren and steer
+// for you), and officers on foot walking beats round the police stations (footCops), who chase you on foot.
+const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
+const ESCAPE_T = [0, 10, 16, 24];            // seconds out of sight to lose them, by stars
+const UNITS = [0, 2, 3, 5];                  // patrol cars after you, by stars
+const FINE = [0, 60, 150, 300];              // what they'll take instead of a cell
+const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
+                 crash: { stars: 1, name: 'reckless driving' }, redlight: { stars: 1, name: 'running a red light' },
+                 pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
+                 burglary: { stars: 2, name: 'breaking and entering' } };
+const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
+const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
+const jammed = new Map(); // shop -> T until its lock can be tried again
+
+// can you see (bx, by) from (ax, ay)? Nothing built in the way (cells taller than eye height block it)
+function lineOfSight(ax, ay, bx, by) {
+  const dx = rel(bx - ax), dy = rel(by - ay), n = Math.ceil(Math.hypot(dx, dy) * 3);
+  for (let k = 1; k < n; k++) if (map[idx(Math.floor(ax + dx * k / n), Math.floor(ay + dy * k / n))] > 0.15) return false;
+  return true;
+}
+const near = (ax, ay, bx, by) => Math.hypot(rel(ax - bx), rel(ay - by));
+// where the police think you are: out on the street, or (indoors) the door you went in by
+const crimePos = () => mode === 'room' && room && room.ret ? [room.ret[0], room.ret[1]] : [px, py];
+
+// ---- the police on foot: three on the beat round each police station, corner to corner along the sidewalks. A
+// corner is an intersection (ix, iy) and which of its four corners (qx, qy).
+const footCops = [];
+const cornerXY = c => [c.ix * 8 + (c.qx ? 1.88 : 0.12), c.iy * 8 + (c.qy ? 1.88 : 0.12)];
+function stepCorner(c, dir) { // the corner one step along the sidewalk in dir (0 E, 1 S, 2 W, 3 N), or null if there's no sidewalk
+  let { ix, iy, qx, qy } = c;
+  if (dir === 0) { if (!qx) qx = 1; else { if (!hseg(ix, iy)) return null; ix++; qx = 0; } }
+  else if (dir === 2) { if (qx) qx = 0; else { if (!hseg(ix - 1, iy)) return null; ix--; qx = 1; } }
+  else if (dir === 1) { if (!qy) qy = 1; else { if (!vseg(ix, iy)) return null; iy++; qy = 0; } }
+  else { if (qy) qy = 0; else { if (!vseg(ix, iy - 1)) return null; iy--; qy = 1; } }
+  return degree(ix & (NB - 1), iy & (NB - 1)) ? { ix, iy, qx, qy } : null;
+}
+for (const b of SERVICES) if (b.kind === 'police') for (let k = 0; k < 3; k++) {
+  const corner = { ix: b.bx + (k === 1 ? 1 : 0), iy: b.by, qx: k & 1, qy: 1 };
+  const [x, y] = cornerXY(corner);
+  footCops.push({ x, y, corner, dir: k % 2 ? 2 : 0, goal: null, chase: false, ph: Math.random() * 9, base: b });
+}
+function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn (never straight back)
+  if (!c.goal) {
+    const opts = [0, 1, 2, 3].filter(d => d !== (c.dir + 2) % 4).map(d => [d, stepCorner(c.corner, d)]).filter(o => o[1]);
+    const [d, next] = opts.length ? pick(opts) : [(c.dir + 2) % 4, stepCorner(c.corner, (c.dir + 2) % 4)];
+    if (!next) return;
+    c.dir = d; c.goal = next;
+  }
+  const [gx, gy] = cornerXY(c.goal), dx = rel(gx - c.x), dy = rel(gy - c.y), d = Math.hypot(dx, dy), s = 0.42 * dt;
+  if (d <= s) { c.x = mod(gx, N); c.y = mod(gy, N); c.corner = c.goal; c.goal = null; }
+  else { c.x = mod(c.x + dx / d * s, N); c.y = mod(c.y + dy / d * s, N); c.ph += dt * 4; }
+}
+function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls
+  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = 0.78 * dt;
+  const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
+  if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
+  if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
+  c.ph += dt * 7;
+}
+function backToBeat(c) { // the chase is off: pick up the beat from the nearest corner
+  const ix = Math.round((c.x - 1) / 8), iy = Math.round((c.y - 1) / 8);
+  c.corner = { ix, iy, qx: mod(c.x, 8) > 1 ? 1 : 0, qy: mod(c.y, 8) > 1 ? 1 : 0 }; c.goal = c.corner; c.chase = false;
+}
+
+// ---- the patrol cars: a couple of dozen of the city's cars are police, cruising like the rest
+const PATROLS = 24;
+for (let n = 0; n < PATROLS; n++) {
+  const c = cars.find(o => !o.patrol && !o.ev && o.body !== TAXI && Math.random() < 0.1);
+  if (c) Object.assign(c, { kind: 'police', body: BLUE, patrol: true });
+}
+
+// ---- a crime, here and now: who saw it, and what follows
+// returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
+function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
+  const copSees = cars.some(c => c.patrol && near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y))
+    || footCops.some(c => near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y));
+  if (copSees) { addWanted(kind, x, y, true); return 'cop'; }
+  const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift';
+  if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, or a clerk, always calls it in)
+  return '';
+}
+// a red light only counts with a cop right there
+function redLightCrime(x, y) {
+  const cop = cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < 2.5) || footCops.some(c => near(c.x, c.y, x, y) < 2.5);
+  if (cop) addWanted('redlight', x, y, true);
+  return cop;
+}
+function addWanted(kind, x, y, seen) {
+  wanted.stars = Math.min(3, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
+  wanted.crime = CRIMES[kind].name; wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
+  callUnits();
+}
+// enough patrol cars on the case for the stars: the nearest free ones first, then more from a few blocks off
+function callUnits() {
+  const on = cars.filter(c => c.pursuit).length, need = UNITS[wanted.stars] - on;
+  const free = cars.filter(c => c.patrol && !c.pursuit && !c.player).sort((a_, b) => near(a_.x, a_.y, wanted.lastX, wanted.lastY) - near(b.x, b.y, wanted.lastX, wanted.lastY));
+  for (let k = 0; k < need; k++) {
+    let c = free[k];
+    if (!c || near(c.x, c.y, wanted.lastX, wanted.lastY) > DISPATCH_R) { // nobody close: one drives in
+      const p = randomLane(30, wanted.lastX, wanted.lastY);
+      c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
+    }
+    Object.assign(c, { pursuit: true, cruise: 2.0, dest: [wanted.lastX, wanted.lastY] });
+  }
+}
+function clearWanted() {
+  wanted.stars = 0; wanted.seen = false; wanted.hideT = 0; wanted.bustT = 0; wanted.busted = false;
+  for (const c of cars) if (c.pursuit) { c.pursuit = false; c.dest = null; c.cruise = 1 + Math.random() * 0.5; c.dropped = false; }
+  for (const c of footCops) if (c.chase) backToBeat(c);
+  reports.length = 0;
+}
+// is a cop near enough a police unit to be sent to (x, y)?
+const policeNear = (x, y) => cars.some(c => c.patrol && near(c.x, c.y, x, y) < DISPATCH_R) || footCops.some(c => near(c.x, c.y, x, y) < DISPATCH_R);
+
+// ---- every frame
+function stepCrime(dt) {
+  for (let k = reports.length - 1; k >= 0; k--) { // calls coming in
+    const r = reports[k];
+    if (T < r.t) continue;
+    reports.splice(k, 1);
+    if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
+  }
+  for (const c of footCops) if (!c.chase) patrolStep(c, dt);
+  if (!wanted.stars) return;
+  const [wx, wy] = crimePos(), inside = mode === 'room';
+  const sees = c => !inside && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
+  wanted.seen = cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
+  if (wanted.seen) { wanted.lastX = wx; wanted.lastY = wy; wanted.hideT = 0; }
+  else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
+  for (const c of cars) if (c.pursuit) c.dest = [wanted.lastX, wanted.lastY]; // steering for you, or where you were
+  const onFoot = mode === 'walk';
+  for (const c of footCops) { // officers within a few blocks join the chase on foot
+    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) c.chase = true;
+    if (c.chase) chaseStep(c, wanted.lastX, wanted.lastY, dt);
+  }
+  if (onFoot) for (const c of cars) if (c.pursuit && !c.dropped && near(c.x, c.y, px, py) < 1.4) { // pulls up, an officer jumps out
+    c.dropped = true;
+    footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true });
+  }
+  // caught: a hand on your shoulder, or boxed in and stopped
+  const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22);
+  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.0) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
+  wanted.bustT = boxed ? wanted.bustT + dt : 0;
+  if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
+  return wanted.seen ? 'seen' : 'hiding';
+}
+// after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
+function tidyPolice() {
+  for (let k = cars.length - 1; k >= 0; k--) { const c = cars[k]; if (c.extra && !c.pursuit && near(c.x, c.y, px, py) > 30) cars.splice(k, 1); }
+  for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && near(c.x, c.y, px, py) > 25) footCops.splice(k, 1); }
+}
+// what being caught costs. Paying it settles everything, and the car goes back
+const fineFor = stars => FINE[stars];
+function payFine() {
+  const f = fineFor(wanted.stars);
+  if (!pay(f)) return false;
+  clearWanted(); return true;
+}
+// jail: everything you're carrying is taken (not your money), and you do your time
+const JAIL_T = 60;
+function goToJail() {
+  inv.length = 0; held = -1; fx.skating = false; fx.boombox = false;
+  clearWanted();
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
@@ -2779,7 +3042,7 @@ function citySprites() {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
     const [vx, vy] = R(m.ex, m.ey), hx = m.hx, hy = m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    if (m.ev && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
+    if ((m.ev || m.patrol) && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
     drawVehicle(m, vx, vy, hx, hy);
   }
   for (const b of SERVICES) if (!b.out) { // parked out front of its station, ready to go
@@ -2792,6 +3055,12 @@ function citySprites() {
     if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
   }
   drawBall();
+  for (const c of footCops) { // police on foot: navy cap, uniform, running when they're after you
+    const [vx, vy] = R(c.x, c.y);
+    if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
+    drawArt(vx, vy, 0, 0.06, 0.18, (c.ph | 0) % 2 ? ART.walkA : ART.walkB, (ch, row, L) => C(row === 1 ? SKIN : BLUE, row === 0 ? L * 0.7 : row > 2 ? L * 0.6 : L));
+    if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
+  }
   for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down
   if (job && job.ride) { // the fare's stop: a big marker hanging over the street
     const [vx, vy] = R(job.ride.dest[0], job.ride.dest[1]);
@@ -2875,7 +3144,7 @@ function drawVehicle(m, vx, vy, hx, hy) {
   if (m.kind === 'taxi') drawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
-  if (m.ev) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
+  if (m.ev || m.patrol) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
     const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
@@ -3515,6 +3784,10 @@ const ROOM_DEFS = {
                     '#.LL.LL.LL.L.#', '#............#', '#............#', '######DD######'],
     light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: storageWall, keeper: [11.5, 7.15],
     props: r => [BX(11.5, 7.75, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 0.99, top: '=' })), standing(11.5, 7.15, ORANGE)] },
+  // a holding cell: concrete, a bunk, a steel toilet, bars across the front (no door: the guard lets you out)
+  jail: { grid: boxRoom(6, 5, {}, false), light: 0.55, floor: 'concrete', ceil: 'strip', wall: jailWall,
+    props: r => [BX(1.7, 1.5, 0.9, 0.4, 0.4, 0.55, solid(GRAY, { top: '=' })), BX(1.7, 1.5, 0.85, 0.35, 0, 0.4, solid(GRAY, { panel: 0.5 })),
+                 BX(4.5, 1.4, 0.25, 0.25, 0, 0.45, solid(WHITE, { top: 'o' }))] },
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -3650,6 +3923,12 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
   if (Math.abs(z - 0.95) < 0.04) return set(i, '=', C(GRAY, L * 1.1)), true; // the handrail
   if (Math.abs(z - 0.55) < 0.05) { BG[i] = C(GREEN, 5); return set(i, ' ', 0), true; } // the guide stripe
   return set(i, fract(u * 3.3) < 0.06 || fract(z * 3.3) < 0.06 ? '+' : ' ', C(GREEN, L * 0.35)), true; // tiles
+}
+// cell walls: bars across the front, tally marks scratched by the bunk, bare concrete
+function jailWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === room.H - 1) { BG[i] = C(GRAY, 1); return set(i, fract(u * 5) < 0.22 ? '|' : z > 2.3 || z < 0.1 ? '=' : ' ', C(GRAY, L * 1.3)), true; }
+  if (my === 0 && z > 1 && z < 1.4 && u > 1 && u < 2.8) return set(i, fract(u * 9) < 0.35 ? '|' : z > 1.3 && fract(u * 1.8) < 0.5 ? '/' : ' ', C(WHITE, L * 0.8)), true;
+  BG[i] = C(GRAY, 2 + L * 0.1); return set(i, (Math.floor(u * 2) + Math.floor(z * 3)) % 7 ? ' ' : '.', C(GRAY, L * 0.5)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall
@@ -4095,7 +4374,10 @@ const nearExit = () => {
 };
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
+  const cp = crimePrompt();
+  if (cp) return cp;
   if (mode === 'room') {
+    if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go` : 'E: the guard lets you out';
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
@@ -4181,7 +4463,8 @@ function minimap() {
     g.fillStyle = col; g.fillText(ch, p[0] + (ch.length < 2 ? cw_ / 2 : 0), p[1]);
   };
   for (const pp of people) if (!pp.hidden) { const p = inMap(pp.x, pp.y); if (p) { g.fillStyle = '#b9a'; g.fillRect(p[0] + cw_ * 0.8, p[1] + fs * 0.4, 2, 2); } }
-  for (const c of cars) if (c !== me) mark(c.x, c.y, 'o', PAL[C(c.body, 13)]);
+  for (const c of cars) if (c !== me) mark(c.x, c.y, c.pursuit ? 'P' : 'o', c.pursuit ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : PAL[C(c.body, 13)]);
+  for (const c of footCops) mark(c.x, c.y, 'p', c.chase ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : '#69f');
   for (const s of stations) mark(s.x, s.y, 'S', '#4f4');
   for (const s of EL_STATIONS) mark(s.x, EL_Y + 1, 'E', '#f84');
   for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
@@ -4202,6 +4485,7 @@ const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'C
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
 function hud() {
   drawHeldBig();
+  wantedHud();
   if (job && mode === 'drive') jobArrow();
   minimap();
   hotbar();
@@ -4313,6 +4597,8 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
+    if (room.kind === 'jail') return T < room.until ? say(`Locked in. ${Math.ceil(room.until - T)}s to go.`) : (say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom());
+    if (room.burgled && nearKeeper()) return emptyTill();
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
       roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
@@ -4353,7 +4639,11 @@ function interact() {
       if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
     }
-    else { mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); }
+    else { // a stolen car: if anyone saw, the police hear about it
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
+      const w = crime('steal', c.x, c.y);
+      say(w === 'cop' ? 'A cop saw that.' : w ? 'The driver runs off shouting...' : 'You hot-wire it.', 3);
+    }
     px = c.x; py = c.y;
     return;
   }
@@ -4858,7 +5148,7 @@ function buildPause() {
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
-        <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span>
+        <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
         <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
@@ -5326,7 +5616,10 @@ function gameKey(e) {
     else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
     return true;
   }
-  if (e.code === 'Escape' || e.code === 'KeyE') { finishGame(true); game = null; return true; } // walk away: a shift pays for what you did, a game its tickets
+  if (e.code === 'Escape' || e.code === 'KeyE') { // walk away: a shift pays for what you did, a game its tickets; a crime you just don't do
+    if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
+    finishGame(true); game = null; return true;
+  }
   if (k) game.pressed[k + 'P'] = 1;
   return true;
 }
@@ -5335,13 +5628,14 @@ function finishGame(quit) {
   g.over = true;
   if (game.paid) return;
   game.paid = true;
+  if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
   const r = g.reward();
   if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : 'No tickets this time.', 3); }
   else { if (r > 0) earn(r); say(quit ? `You clock off early. You earned ${fmt$(r)} (less for the hours you didn't work).` : `Shift's over. You earned ${fmt$(r)}.`, 4); }
 }
 function stepGame(dt) {
   const g = game.g;
-  if (g.over) { if (!game.paid) finishGame(false); return; }
+  if (g.over) { if (!game.paid) finishGame(false); if (game && game.closeT && T > game.closeT) game = null; return; }
   const keys = { ...game.pressed };
   for (const code in GAME_KEYS) if (K[code]) keys[GAME_KEYS[code]] = 1;
   game.pressed = {};
@@ -5368,7 +5662,7 @@ function drawGame() {
   FOGS.fill(0); FOGB.fill(0);
   const s = clamp(Math.floor(Math.min((rows - 9) / g.H, (cols - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
   const gw = g.W * bw, gh = g.H * bh, x0 = (cols - gw) >> 1, y0 = Math.max(4, (rows - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : g.id === 'serve' ? ORANGE : CYAN;
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
@@ -5386,9 +5680,9 @@ function drawGame() {
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
   const st = g.status();
   putText(y0 + gh + 2, x0 + ((gw - st.length) >> 1), st, C(WHITE, 12));
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}   E / ESC leave` : `${fmt$(money)}   E / ESC clock off`;
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}   E / ESC leave` : game.kind === 'crime' ? 'E / ESC back off' : `${fmt$(money)}   E / ESC clock off`;
   putText(Math.min(rows - 1, y0 + gh + 3), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
-  if (g.over) { // the results card
+  if (g.over && game.kind !== 'crime') { // the results card
     const r = g.reward(), lines = game.kind === 'arcade'
       ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, '', `SPACE play again (${fmt$(CREDIT)})   E leave`]
       : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, '', 'E or SPACE to finish'];
@@ -5423,6 +5717,164 @@ function prizeKey(e) {
   else if (n && PRIZES[n[1] - 1]) { say(claimPrize(PRIZES[n[1] - 1][0])[1], 3); openPrizes(); }
   return true;
 }
+// ===== crime on screen and at the keys: the wanted stars, getting busted (a fine, or jail), and the crimes you do on
+// purpose: G picks a pocket (on the street, from behind) or shoplifts (in a shop with someone behind the counter),
+// L picks the lock of a shop that's shut for the night. The rules are in crime.js, the minigames in minigames.js.
+
+// ---- the stars, top middle: red and blue while they can see you, grey while you're hiding (and how long to go)
+function wantedHud() {
+  const pend = reports.length && !wanted.stars;
+  if (!wanted.stars && !pend) return;
+  const s = Math.max(16, Math.round(cv.height / 34)), y = 44;
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
+  const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, x = cv.width / 2 - line.length * w / 2;
+  const flash = fract(T * 2.5) < 0.5 ? RED : BLUE;
+  artText([line], x, y, s, (c, r, k) => pend ? C(GRAY, 12) : k < 6 ? C(WHITE, 14) : c === '*' ? (wanted.seen ? C(flash, 15) : C(GRAY, 12)) : C(GRAY, 7));
+  if (!pend && !wanted.seen) {
+    const left = Math.max(0, ESCAPE_T[wanted.stars] - wanted.hideT), sub = `out of sight: losing them in ${Math.ceil(left)}s`;
+    g.font = FS + 'px monospace';
+    const sw = g.measureText(sub).width;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(cv.width / 2 - sw / 2 - 6, y + s + 4, sw + 12, FS + 6);
+    g.fillStyle = PAL[C(GRAY, 13)]; g.fillText(sub, cv.width / 2 - sw / 2, y + s + 7);
+  }
+  g.font = FS + 'px monospace';
+}
+
+// ---- busted: pay the fine, or go to jail
+let bustedEl = null, finePaid = 0;
+function openBusted() {
+  if (bustedEl && bustedEl.style.display === 'flex') return;
+  bustedEl = bustedEl || panel('busted');
+  const f = fineFor(wanted.stars), can = money >= f;
+  showPanel(bustedEl, `<h1>Busted</h1><p class="sub">${wanted.crime || 'trouble'} &middot; ${'*'.repeat(wanted.stars)}</p>
+    <button class="item" data-fine ${can ? '' : 'disabled'}><span class="k">1</span><span>Pay the fine</span><span class="lead"></span><span class="v">${fmt$(f)}</span></button>
+    <button class="item" data-jail><span class="k">2</span><span>Go to jail</span><span class="lead"></span><span class="v">${JAIL_T}s, lose what you carry</span></button>
+    <p class="hint">${can ? '' : "You can't cover the fine. "}1 / 2 choose</p>`);
+  bustedEl.onclick = e => { if (e.target.closest('[data-fine]')) bustedChoice('fine'); else if (e.target.closest('[data-jail]')) bustedChoice('jail'); };
+}
+function bustedKey(e) { // nothing else while they've got you: not even Esc
+  if (!bustedEl || bustedEl.style.display !== 'flex') return false;
+  if (!e.repeat && e.code === 'Digit1') bustedChoice('fine');
+  if (!e.repeat && e.code === 'Digit2') bustedChoice('jail');
+  return true;
+}
+function outOfCar() { // they take you out of whatever you were driving
+  if (!me) return;
+  const c = me;
+  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; }
+  else { c.rider = c.dest = c.arrived = false; plan(c); }
+  me = null; mode = 'walk';
+}
+function bustedChoice(how) {
+  const f = fineFor(wanted.stars);
+  if (how === 'fine' && !payFine()) return;
+  hidePanel(bustedEl); endTaxiShift(); outOfCar();
+  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."`, 4);
+  const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
+  goToJail();
+  enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [2.5, 2.4, Math.PI / 2]);
+  say('The cell door slams. Everything you were carrying is in an evidence bag.', 5);
+}
+
+// ---- the crime minigames: they take the screen like the arcade, then hand back success, failure or 'abort'
+function startCrime(id, done) { startGame(id, 'crime'); game.onDone = done; }
+
+// pickpocketing: someone on the sidewalk, close, and you're behind them
+function pickTarget() {
+  if (mode !== 'walk') return null;
+  for (const p of people) {
+    if (p.hidden || p.follow || p.hailing) continue;
+    const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
+    if (d > 0.3) continue;
+    const [lx, ly] = p.last || [0, 0];
+    if (lx * ex + ly * ey < 0 || !(lx || ly)) return p; // behind them (or they're standing still)
+  }
+  return null;
+}
+const LIFTS = ['cigarettes', 'candy', 'newspaper', 'apple', 'yoyo', 'chips'];
+function pickpocket(p) {
+  p.talk = 1e9; // they stand there, none the wiser (yet)
+  startCrime('pickpocket', ok => {
+    p.talk = 0;
+    if (ok === 'abort') return;
+    if (ok) {
+      if (Math.random() < 0.25 && inv.length < INV_SIZE) { const id = pick(LIFTS); inv.push({ id, uses: ITEMS[id].uses || 0 }); return say(`You lift ${aOrSome(ITEMS[id].name)}. They walk on.`, 3); }
+      const c = Math.round((2 + Math.random() * 20) * 4) / 4; earn(c); return say(`You lift ${fmt$(c)} from their pocket. They walk on.`, 3);
+    }
+    p.talk = 3; say(pick(['"HEY! THIEF!"', '"Get your hand out of my pocket!"', '"Somebody call the cops!"']), 3);
+    crime('pickpocket', p.x, p.y);
+  });
+}
+// shoplifting: in a shop with its clerk at the counter and something on sale
+const canShoplift = () => mode === 'room' && !room.burgled && room.def.keeper && stockFor(room.kind, room.word).length && !room.caught;
+function shoplift() {
+  startCrime('shoplift', ok => {
+    if (ok === 'abort') return;
+    if (ok) {
+      if (inv.length >= INV_SIZE) return say("You've nowhere to put it.");
+      const id = pick(stockFor(room.kind, room.word)); inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+      return say(`You slip ${aOrSome(ITEMS[id].name)} into your coat.`, 3);
+    }
+    room.caught = true; say('"HEY! Put that back! I\'m calling the police."', 4);
+    crime('shoplift');
+  });
+}
+// lockpicking: a shop that's shut, at night (not an apartment door, a vacant unit or a police station)
+const nightTime = () => tod >= 21 || tod < 5;
+function lockTarget() {
+  if (mode !== 'walk' || !lookHit || lookHit.d > 0.35) return null;
+  const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+  return sh && !sh.base && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT && !openAt(sh, tod) ? sh : null;
+}
+function pickLock(sh) {
+  if (!nightTime()) return say('Not in broad daylight.');
+  if ((jammed.get(sh) || 0) > T) return say("The lock's jammed. Give it a few hours.");
+  const cell = [lookHit.mx, lookHit.my], ret = [px, py, a];
+  startCrime('lockpick', ok => {
+    if (ok === 'abort') return;
+    if (!ok) { jammed.set(sh, T + 120); return say('The pick snaps in the lock. It\'s jammed now.', 3); }
+    if (crime('burglary') !== 'cop') { /* (somebody may have seen you go in: crime() queues their call) */ }
+    const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
+    enterRoom(kind, { ...sh, cell, ret, line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]);
+    px = room.W / 2; py = room.H - 1.6;
+    room.props = room.props.filter(p => p.art !== ART.keeper && p.art !== ART.sitter && p.art !== ART.sitterBack); // nobody here
+    if (Math.random() < 0.35) { reports.push({ t: T + 12, x: ret[0], y: ret[1], kind: 'burglary' }); say('The lock gives. A little red light blinks by the door...', 4); }
+    else say('The lock gives. Inside, it\'s dark and quiet.', 3);
+  });
+}
+// in a shop you've broken into: E at the counter empties the till, G takes something off the shelves
+function emptyTill() {
+  if (room.tillTaken) return say('The till\'s empty.');
+  room.tillTaken = true; const c = Math.round((10 + Math.random() * 35) * 4) / 4; earn(c);
+  return say(`You empty the till: ${fmt$(c)}.`, 3);
+}
+function grabStock() {
+  const stock = stockFor(room.kind, room.word);
+  if (!stock.length) return say('Nothing worth taking.');
+  if (room.loot >= 4) return say("You've cleaned the place out.");
+  if (inv.length >= INV_SIZE) return say('Your hands are full.');
+  const id = pick(stock); inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1; room.loot++;
+  say(`You take ${aOrSome(ITEMS[id].name)}.`, 2);
+}
+// G and L
+function crimeKey(code) {
+  if (code === 'KeyG') {
+    if (mode === 'room' && room.burgled) return grabStock();
+    if (canShoplift()) return shoplift();
+    const p = pickTarget();
+    if (p) return pickpocket(p);
+  }
+  if (code === 'KeyL') { const sh = lockTarget(); if (sh) return pickLock(sh); }
+}
+// what G / L would do here, for the prompt line
+function crimePrompt() {
+  if (mode === 'room' && room.burgled) return 'G: take something   E (at the counter): the till';
+  if (pickTarget()) return 'G: pick their pocket';
+  const sh = lockTarget();
+  if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.signed ? sh.word : 'Shop'}: closed   L: pick the lock`;
+  return '';
+}
 // closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
 // free, like any other page, and a click takes it back
 function relock(e) {
@@ -5431,6 +5883,7 @@ function relock(e) {
   if (p && p.catch) p.catch(() => {}); // refused: a click will do it
 }
 onkeydown = e => {
+  if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
@@ -5450,6 +5903,7 @@ onkeydown = e => {
     const slot = /^Digit([1-8])$/.exec(e.code);
     if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) holdSlot(slot[1] - 1); // again: put it away
     if (e.code === 'Digit0' || e.code === 'Backquote') held = -1; // empty your hands
+    if (e.code === 'KeyG' || e.code === 'KeyL') crimeKey(e.code); // pickpocket / shoplift / lockpick
     if (e.code === 'KeyB' && heldItem() && heldItem().id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
   }
   if (e.code === 'KeyH') hail();
@@ -5497,15 +5951,23 @@ function drive(dt) {
   a += s * dt * 1.8 * clamp(c.v / 0.5, -1, 1);
   const hx = Math.cos(a), hy = Math.sin(a), nx = c.x + hx * c.v * dt, ny = c.y + hy * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
-  const hit = !free(fx, fy) || cars.some(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3)
-           || people.some(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
+  const hitCar = cars.find(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3);
+  const hitPerson = people.find(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15) || footCops.find(p => Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
+  const hit = !free(fx, fy) || hitCar || hitPerson;
   if (hit) { // a real crash only above CRASH_V; anything slower is a bump
     const sp = Math.abs(c.v);
-    if (sp > CRASH_V) { say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); }
+    if (hitPerson && sp > 0.4) { hitPerson.talk = 3; say(pick(['"Watch it!"', '"Are you CRAZY?"', '"Hey! You hit me!"']), 2); crime('hit', c.x, c.y); } // you hit someone
+    if (sp > CRASH_V) { say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); if (hitCar && !hitCar.player) crime('crash', c.x, c.y); }
     else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
     c.v = 0;
   } else { c.x = mod(nx, N); c.y = mod(ny, N); }
   c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
+  const road = ROAD[idx(Math.floor(c.x), Math.floor(c.y))]; // into a junction on red, right in front of a cop
+  if (road === 3 && c.lastRoad && c.lastRoad !== 3 && Math.abs(c.v) > 0.4) {
+    const ix = Math.floor(c.x / 8) * 8, iy = Math.floor(c.y / 8) * 8;
+    if (signalled(ix, iy) && light(ix, iy, Math.abs(hy) > Math.abs(hx), T) === 'R' && redLightCrime(c.x, c.y)) say('A siren whoops behind you.', 2);
+  }
+  c.lastRoad = road;
   c.off = 0; c.ex = c.x; c.ey = c.y; // where it's drawn and where traffic sees it: right here
 }
 
@@ -5535,6 +5997,10 @@ function loop(t) {
   stepTraffic(dt, T);
   stepTask(dt);
   stepTaxiJob(dt);
+  const law = stepCrime(dt);
+  if (law === 'busted') openBusted();
+  else if (law === 'lost') say('You lost them.', 3);
+  if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   if (mode === 'taxi') {
     px = me.x; py = me.y;

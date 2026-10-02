@@ -218,7 +218,8 @@ test('emergency services: police and fire stations and hospitals, each its own b
 
 test('a call-out: the nearest station sends its vehicle with lights and siren, it waits at the scene, drives home quietly, parks', () => {
   const { ev: e2 } = loadCity(2);
-  e2("var b_ = SERVICES.find(s => s.kind === 'fire'); px = b_.x - 3; py = b_.y + 0.3; mode = 'walk'; evTimer = 1e9; spawnEmergency('fire')");
+  // (up on a roof, so you're not standing in the road in its way)
+  e2("var b_ = SERVICES.find(s => s.kind === 'fire'); px = b_.x - 3; py = b_.y + 0.3; mode = 'roof'; evTimer = 1e9; spawnEmergency('fire')");
   const seen = new Set();
   for (let k = 0; k < 6000 && seen.size < 5; k++) {
     seen.add(e2(`stepTraffic(0.05, T += 0.05); (c => !c ? 'none' : c.state + (code(c) ? '+code' : ''))(cars.find(c => c.ev && c.base === b_))`));

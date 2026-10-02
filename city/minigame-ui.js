@@ -21,7 +21,10 @@ function gameKey(e) {
     else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
     return true;
   }
-  if (e.code === 'Escape' || e.code === 'KeyE') { finishGame(true); game = null; return true; } // walk away: a shift pays for what you did, a game its tickets
+  if (e.code === 'Escape' || e.code === 'KeyE') { // walk away: a shift pays for what you did, a game its tickets; a crime you just don't do
+    if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
+    finishGame(true); game = null; return true;
+  }
   if (k) game.pressed[k + 'P'] = 1;
   return true;
 }
@@ -30,13 +33,14 @@ function finishGame(quit) {
   g.over = true;
   if (game.paid) return;
   game.paid = true;
+  if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
   const r = g.reward();
   if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : 'No tickets this time.', 3); }
   else { if (r > 0) earn(r); say(quit ? `You clock off early. You earned ${fmt$(r)} (less for the hours you didn't work).` : `Shift's over. You earned ${fmt$(r)}.`, 4); }
 }
 function stepGame(dt) {
   const g = game.g;
-  if (g.over) { if (!game.paid) finishGame(false); return; }
+  if (g.over) { if (!game.paid) finishGame(false); if (game && game.closeT && T > game.closeT) game = null; return; }
   const keys = { ...game.pressed };
   for (const code in GAME_KEYS) if (K[code]) keys[GAME_KEYS[code]] = 1;
   game.pressed = {};
@@ -63,7 +67,7 @@ function drawGame() {
   FOGS.fill(0); FOGB.fill(0);
   const s = clamp(Math.floor(Math.min((rows - 9) / g.H, (cols - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
   const gw = g.W * bw, gh = g.H * bh, x0 = (cols - gw) >> 1, y0 = Math.max(4, (rows - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : g.id === 'serve' ? ORANGE : CYAN;
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
@@ -81,9 +85,9 @@ function drawGame() {
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
   const st = g.status();
   putText(y0 + gh + 2, x0 + ((gw - st.length) >> 1), st, C(WHITE, 12));
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}   E / ESC leave` : `${fmt$(money)}   E / ESC clock off`;
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}   E / ESC leave` : game.kind === 'crime' ? 'E / ESC back off' : `${fmt$(money)}   E / ESC clock off`;
   putText(Math.min(rows - 1, y0 + gh + 3), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
-  if (g.over) { // the results card
+  if (g.over && game.kind !== 'crime') { // the results card
     const r = g.reward(), lines = game.kind === 'arcade'
       ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, '', `SPACE play again (${fmt$(CREDIT)})   E leave`]
       : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, '', 'E or SPACE to finish'];

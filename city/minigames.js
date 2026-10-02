@@ -291,6 +291,96 @@ GAMES.stock = (rnd = Math.random, word = '') => {
   return g;
 };
 
+// ---- crimes. Each ends with g.success true or false; the caller (crime-ui.js) decides what that means.
+// pickpocketing: a marker sweeps across a bar; stop it in the green three times running, the zone shrinking each time
+GAMES.pickpocket = (rnd = Math.random) => {
+  const W = 30, H = 7, g = { id: 'pickpocket', title: 'PICKPOCKET', W, H, score: 0, over: false, success: false, crime: true };
+  let pos = 0, dir = 1, speed = 16, zone = [11, 17];
+  const newZone = () => { const w = [6, 4, 3][g.score] || 3, a_ = 2 + rnd() * (W - 4 - w) | 0; zone = [a_, a_ + w]; };
+  newZone();
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    pos += dir * speed * dt;
+    if (pos < 0 || pos > W - 1) { dir = -dir; pos = clamp(pos, 0, W - 1); }
+    if (k.actP) {
+      if (pos >= zone[0] && pos <= zone[1] + 1) { g.score++; ev.push('eat'); speed *= 1.25; if (g.score >= 3) { g.over = g.success = true; ev.push('clear'); } else newZone(); }
+      else { g.over = true; ev.push('die'); } // they felt that
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) put(x, 3, x >= zone[0] && x <= zone[1] ? '=' : '-', x >= zone[0] && x <= zone[1] ? C(GREEN, 14) : C(GRAY, 7), x >= zone[0] && x <= zone[1] ? C(GREEN, 3) : NONE);
+    put(Math.round(pos), 2, 'v', C(YEL, 15)); put(Math.round(pos), 4, '^', C(YEL, 15));
+    text(0, 0, `fingers in the pocket: ${'*'.repeat(g.score)}${'.'.repeat(3 - g.score)}`, C(WHITE, 13));
+  };
+  g.status = () => 'SPACE when the marker is in the green   miss once and they notice';
+  g.reward = () => 0;
+  return g;
+};
+// shoplifting: hold SPACE to slip something into your coat, but only while the clerk's looking away; they glance
+// round now and then, with a moment's warning (they start to turn). Caught holding it and they call the cops.
+GAMES.shoplift = (rnd = Math.random) => {
+  const W = 30, H = 10, g = { id: 'shoplift', title: 'FIVE FINGER DISCOUNT', W, H, score: 0, over: false, success: false, crime: true };
+  let state = 'away', left = 0.8 + rnd() * 0.8, grab = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if ((left -= dt) <= 0) {
+      if (state === 'away') { state = 'turning'; left = 0.6; ev.push('bump'); }
+      else if (state === 'turning') { state = 'looking'; left = 1.2 + rnd() * 1.5; }
+      else { state = 'away'; left = 1.5 + rnd() * 2.5; }
+    }
+    if (k.act) {
+      if (state === 'looking') { g.over = true; ev.push('die'); return ev; } // seen
+      grab += dt / 2.6; // longer than they ever look away: you'll have to let go at least once
+      if (grab >= 1) { g.over = g.success = true; ev.push('clear'); }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    const face = state === 'looking' ? ['  ____  ', ' (O  O) ', '  \__/  ', '   ||   '] : state === 'turning' ? ['  ____  ', ' (  o o)', '   \_/  ', '   ||   '] : ['  ____  ', ' (     )', '  (___) ', '   ||   '];
+    face.forEach((l, r) => text(11, 1 + r, l, state === 'looking' ? C(RED, 15) : state === 'turning' ? C(YEL, 15) : C(WHITE, 12)));
+    text(2, 6, state === 'looking' ? 'THE CLERK IS WATCHING YOU' : state === 'turning' ? 'they\'re turning round...' : 'the clerk\'s looking away', state === 'looking' ? C(RED, 15) : C(GRAY, 11));
+    for (let x = 0; x < W; x++) put(x, 8, x / W < grab ? '#' : '.', x / W < grab ? C(GREEN, 14) : C(GRAY, 6));
+  };
+  g.status = () => 'HOLD SPACE to pocket it while they look away   let go when they turn';
+  g.reward = () => 0;
+  return g;
+};
+// lockpicking: four pins, each sprung down. Hold UP to push the current one up and SPACE to set it while it's at
+// the shear line; push it past the top and the pick slips. Three slips (or the clock) and the lock jams.
+GAMES.lockpick = (rnd = Math.random) => {
+  const W = 26, H = 14, PINS = 4, g = { id: 'lockpick', title: 'LOCKPICK', W, H, score: 0, over: false, success: false, crime: true };
+  const shear = Array.from({ length: PINS }, () => 0.5 + rnd() * 0.3), h = Array(PINS).fill(0);
+  let cur = 0, slips = 0, t = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    h[cur] = k.up ? h[cur] + dt * 0.9 : Math.max(0, h[cur] - dt * 0.6); // pushed up, or springing back
+    if (h[cur] > 1) { slips++; h[cur] = 0; ev.push('wrong'); if (slips >= 3) { g.over = true; ev.push('die'); return ev; } }
+    if (k.actP) {
+      if (Math.abs(h[cur] - shear[cur]) < 0.07) { cur++; g.score++; ev.push('place'); if (cur >= PINS) { g.over = g.success = true; ev.push('clear'); } }
+      else { slips++; h[cur] = 0; ev.push('wrong'); if (slips >= 3) { g.over = true; ev.push('die'); } }
+    }
+    if (t > 40 && !g.over) { g.over = true; ev.push('die'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let p = 0; p < PINS; p++) {
+      const x = 4 + p * 5, top = 2, bot = 11, sy = Math.round(bot - shear[p] * (bot - top)), py = Math.round(bot - (p < cur ? shear[p] : h[p]) * (bot - top));
+      for (let y = top; y <= bot; y++) put(x, y, y === sy ? '=' : '|', y === sy ? C(YEL, 13) : C(GRAY, 6));
+      put(x, py, p < cur ? '#' : p === cur ? '@' : 'o', p < cur ? C(GREEN, 15) : p === cur ? C(WHITE, 15) : C(GRAY, 10), p === cur ? C(GRAY, 4) : NONE);
+    }
+    text(0, 13, `slips ${'x'.repeat(slips)}${'.'.repeat(3 - slips)}   ${Math.max(0, 40 - t) | 0}s`, C(slips ? RED : GRAY, 12));
+  };
+  g.status = () => 'HOLD UP to push the pin, SPACE to set it on the line';
+  g.reward = () => 0;
+  g.state = () => ({ h, shear, cur, slips });
+  return g;
+};
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
