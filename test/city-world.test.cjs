@@ -271,3 +271,21 @@ test('construction hoarding, yard fences and shipping containers are solid boxes
       Math.abs(rel(a_.y - b.y)) < (a_.c ? a_.hw : a_.hl) + (b.c ? b.hw : b.hl)) n++; return n; })()`), 0);
   assert.strictEqual(ev('solids.some(s => ROAD[idx(Math.floor(s.x), Math.floor(s.y))])'), false, 'none of it out on the street');
 });
+
+test('a taxi tipped to step on it runs the red light; an ordinary one stops at it', () => {
+  const run = rush => {
+    const { ev: e } = loadCity(4);
+    return e(`(() => {
+      const L = lights.find(l => l.vert && l.y === l.by - 0.25), c = cars.find(c => c.body === TAXI && !c.ev);
+      let t = 0; while (!['R'].includes(light(L.bx, L.by, true, t)) || light(L.bx, L.by, true, t + 4) !== 'R') t += 0.5; // red for a while yet
+      for (const o of cars) if (o !== c) { o.x = mod(L.bx + 40, N); o.ex = o.x; }
+      for (const p of people) { p.x = mod(L.bx + 40, N); }
+      Object.assign(c, { x: L.bx + 1.4, y: mod(L.by - 2.5, N), hx: 0, hy: 1, v: 0.6, off: 0, rider: true, dest: [L.bx + 1.4, mod(L.by + 30, N)], rush: ${rush} });
+      plan(c);
+      for (let k = 0; k < 60; k++) { stepTraffic(0.05, t, true); t += 0.05; }
+      return rel(c.y - L.by);
+    })()`);
+  };
+  assert.ok(run(false) < 0, 'waits before the junction');
+  assert.ok(run(true) > 0, 'straight through it');
+});

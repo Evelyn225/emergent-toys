@@ -15,7 +15,7 @@ function dash() {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
     putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}` : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
+    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
   }
 }
 

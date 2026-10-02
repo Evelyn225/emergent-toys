@@ -3,6 +3,15 @@ function curbOf(c) { // sidewalk spot on the car's right, next to its lane
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   return vert ? [mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir, N), c.y] : [c.x, mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir, N)];
 }
+// in a taxi: slip the driver a twenty to step on it (faster, and red lights don't count)
+const TIP = 20;
+function tipDriver() {
+  if (me.rush) return say('"I\'m going as fast as I can, pal!"');
+  if (!me.dest) return say('"Where to first?"');
+  if (!pay(TIP)) return say(`You don't have ${fmt$(TIP)} to spare.`);
+  me.rush = true;
+  say(pick(['"Hold on to something."', '"You got it, boss." The meter ticks faster than ever.', '"Lights? What lights?"']), 3);
+}
 // a car you get out of stays where it is: pulled in to the kerb if it's on a street, nobody drives it away
 function parkCar(c) {
   const r = ROAD[idx(Math.floor(c.x), Math.floor(c.y))];
@@ -29,7 +38,7 @@ function leaveCar() {
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
     else { const all = money; pay(all); say(`Fare's ${fmt$(fare)}. You've only got ${fmt$(all)}. The driver takes it, muttering.`, 4); }
-    c.rider = c.dest = c.arrived = false; plan(c);
+    c.rider = c.dest = c.arrived = c.rush = false; plan(c);
   }
   me = null; mode = 'walk';
 }

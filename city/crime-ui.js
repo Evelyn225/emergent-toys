@@ -46,7 +46,7 @@ function outOfCar() { // they take you out of whatever you were driving
   if (!me) return;
   const c = me;
   if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); }
-  else { c.rider = c.dest = c.arrived = false; plan(c); }
+  else { c.rider = c.dest = c.arrived = c.rush = false; plan(c); }
   me = null; mode = 'walk';
 }
 function bustedChoice(how) {

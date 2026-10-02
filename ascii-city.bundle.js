@@ -997,7 +997,7 @@ function stepTraffic(dt, t, everywhere = false) {
     const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
     const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
     const nx = vert ? c.x - mod(c.x, 8) : c.B, ny = vert ? c.B : c.y - mod(c.y, 8); // the next intersection
-    if (line < 3 && !code(c)) {
+    if (line < 3 && !code(c) && !c.rush) {
       const s = light(nx, ny, vert, t);
       // an emergency vehicle about to cross in front: hold back as if the light were red
       const siren = evs.some(e => e.nodeX === nx && e.nodeY === ny && (e.hx === 0) !== vert);
@@ -1035,9 +1035,9 @@ function stepTraffic(dt, t, everywhere = false) {
       else { room_ = 0; c.arrived = true; }
     }
 
-    const target = Math.min(Math.max(0, room_ * 2.5), c.cruise);
+    const target = Math.min(Math.max(0, room_ * 2.5), c.cruise * (c.rush ? 1.8 : 1));
     c.brake = target < c.v;
-    c.v = Math.min(target, c.v + (code(c) ? 1.4 : 0.8) * dt);
+    c.v = Math.min(target, c.v + (code(c) || c.rush ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
     if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
     c.left -= step;
@@ -3372,6 +3372,18 @@ function drawStationEntrance(s, vx, vy) {
     const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
     return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
   });
+  // and a tall lit blade on a post at the way in, SUBWAY down both faces and a green lamp on top: seen from down the block
+  const tx = vx - hl - 0.02, ty = vy + hw + 0.025, Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
+  drawBox(boxAt(tx, ty, 1, 0, 0.005, 0.005, 0, Z0), iron);
+  drawBox(boxAt(tx, ty, 0, 1, 0.022, 0.006, Z0, Z1), (i, t, L) => {
+    BG[i] = C(GREEN, 5 + night * 4);
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '|', C(GREEN, lit)), true; // its edges (3 / 4: the broad faces)
+    // one letter per cell: in the middle row of its span and the middle column across the blade
+    const q = (Z1 - HIT.w) / (Z1 - Z0) * word.length, k = Math.floor(q), cellV = t / projY / ((Z1 - Z0) / word.length), cellU = t / projX / 0.044;
+    const mid = (cellV > 0.6 || Math.abs(fract(q) - 0.5) < cellV / 2) && (cellU > 0.6 || Math.abs(HIT.u) / 0.044 < cellU / 2);
+    return set(i, k >= 0 && k < word.length && mid ? word[k] : ' ', C(WHITE, 15)), true;
+  });
+  drawBox(boxAt(tx, ty, 1, 0, 0.012, 0.012, Z1, Z1 + 0.024), (i, t, L) => { BG[i] = C(GREEN, 7 + night * 7); return set(i, 'O', C(WHITE, 15)), true; });
 }
 
 // chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
@@ -4358,7 +4370,7 @@ function dash() {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
     putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}` : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
+    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
   }
 }
 
@@ -4550,6 +4562,15 @@ function curbOf(c) { // sidewalk spot on the car's right, next to its lane
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   return vert ? [mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir, N), c.y] : [c.x, mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir, N)];
 }
+// in a taxi: slip the driver a twenty to step on it (faster, and red lights don't count)
+const TIP = 20;
+function tipDriver() {
+  if (me.rush) return say('"I\'m going as fast as I can, pal!"');
+  if (!me.dest) return say('"Where to first?"');
+  if (!pay(TIP)) return say(`You don't have ${fmt$(TIP)} to spare.`);
+  me.rush = true;
+  say(pick(['"Hold on to something."', '"You got it, boss." The meter ticks faster than ever.', '"Lights? What lights?"']), 3);
+}
 // a car you get out of stays where it is: pulled in to the kerb if it's on a street, nobody drives it away
 function parkCar(c) {
   const r = ROAD[idx(Math.floor(c.x), Math.floor(c.y))];
@@ -4576,7 +4597,7 @@ function leaveCar() {
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
     else { const all = money; pay(all); say(`Fare's ${fmt$(fare)}. You've only got ${fmt$(all)}. The driver takes it, muttering.`, 4); }
-    c.rider = c.dest = c.arrived = false; plan(c);
+    c.rider = c.dest = c.arrived = c.rush = false; plan(c);
   }
   me = null; mode = 'walk';
 }
@@ -5829,7 +5850,7 @@ function outOfCar() { // they take you out of whatever you were driving
   if (!me) return;
   const c = me;
   if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); }
-  else { c.rider = c.dest = c.arrived = false; plan(c); }
+  else { c.rider = c.dest = c.arrived = c.rush = false; plan(c); }
   me = null; mode = 'walk';
 }
 function bustedChoice(how) {
@@ -5973,6 +5994,7 @@ onkeydown = e => {
     if (e.code === 'KeyB' && heldItem() && heldItem().id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
   }
   if (e.code === 'KeyH') hail();
+  if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;

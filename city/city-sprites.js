@@ -392,6 +392,18 @@ function drawStationEntrance(s, vx, vy) {
     const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
     return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
   });
+  // and a tall lit blade on a post at the way in, SUBWAY down both faces and a green lamp on top: seen from down the block
+  const tx = vx - hl - 0.02, ty = vy + hw + 0.025, Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
+  drawBox(boxAt(tx, ty, 1, 0, 0.005, 0.005, 0, Z0), iron);
+  drawBox(boxAt(tx, ty, 0, 1, 0.022, 0.006, Z0, Z1), (i, t, L) => {
+    BG[i] = C(GREEN, 5 + night * 4);
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '|', C(GREEN, lit)), true; // its edges (3 / 4: the broad faces)
+    // one letter per cell: in the middle row of its span and the middle column across the blade
+    const q = (Z1 - HIT.w) / (Z1 - Z0) * word.length, k = Math.floor(q), cellV = t / projY / ((Z1 - Z0) / word.length), cellU = t / projX / 0.044;
+    const mid = (cellV > 0.6 || Math.abs(fract(q) - 0.5) < cellV / 2) && (cellU > 0.6 || Math.abs(HIT.u) / 0.044 < cellU / 2);
+    return set(i, k >= 0 && k < word.length && mid ? word[k] : ' ', C(WHITE, 15)), true;
+  });
+  drawBox(boxAt(tx, ty, 1, 0, 0.012, 0.012, Z1, Z1 + 0.024), (i, t, L) => { BG[i] = C(GREEN, 7 + night * 7); return set(i, 'O', C(WHITE, 15)), true; });
 }
 
 // chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,

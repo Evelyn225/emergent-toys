@@ -193,7 +193,7 @@ function stepTraffic(dt, t, everywhere = false) {
     const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
     const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
     const nx = vert ? c.x - mod(c.x, 8) : c.B, ny = vert ? c.B : c.y - mod(c.y, 8); // the next intersection
-    if (line < 3 && !code(c)) {
+    if (line < 3 && !code(c) && !c.rush) {
       const s = light(nx, ny, vert, t);
       // an emergency vehicle about to cross in front: hold back as if the light were red
       const siren = evs.some(e => e.nodeX === nx && e.nodeY === ny && (e.hx === 0) !== vert);
@@ -231,9 +231,9 @@ function stepTraffic(dt, t, everywhere = false) {
       else { room_ = 0; c.arrived = true; }
     }
 
-    const target = Math.min(Math.max(0, room_ * 2.5), c.cruise);
+    const target = Math.min(Math.max(0, room_ * 2.5), c.cruise * (c.rush ? 1.8 : 1));
     c.brake = target < c.v;
-    c.v = Math.min(target, c.v + (code(c) ? 1.4 : 0.8) * dt);
+    c.v = Math.min(target, c.v + (code(c) || c.rush ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
     if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
     c.left -= step;
