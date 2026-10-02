@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { chromium } = require('playwright');
+const { chromium, devices } = require('playwright');
 
 const PAGE = pathToFileURL(path.join(__dirname, '..', '..', 'ascii-city.html')).href;
 
@@ -227,3 +227,33 @@ test('stealing a car drags the driver out onto the sidewalk; the car stays where
   await page.waitForTimeout(1500);
   assert.deepStrictEqual(await page.evaluate(() => [parked.x, parked.y, parked.parked]), [...at, true], 'nobody drives it away');
 }));
+
+test('on a phone: the stick walks, a drag looks round, the buttons work the menus', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ ...devices['iPhone 13 landscape'] }), page = await ctx.newPage();
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('touch')).display), 'block');
+    const cdp = await ctx.newCDPSession(page), at = (x, y) => [{ x, y, id: 1 }];
+    const p0 = await page.evaluate(() => [px, py]);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(120, 300) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(120, 250) });
+    await page.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert.ok(await page.evaluate(([x, y]) => Math.hypot(px - x, py - y), p0) > 0.1, 'walked');
+    assert.strictEqual(await page.evaluate(() => K.KeyW), 0, 'and stopped on letting go');
+    const a0 = await page.evaluate(() => a);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(600, 200) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(660, 200) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert.ok(await page.evaluate(() => a) > a0, 'looked right');
+    await page.tap('#touch [data-key="KeyI"]');
+    assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the bag');
+    await page.tap('#touch [data-key="KeyE"]');
+    assert.strictEqual(await page.evaluate(() => panelOpen()), false, 'E closes it');
+    await page.tap('#touch [data-key="Escape"]');
+    assert.strictEqual(await page.evaluate(() => paused), true);
+    await page.tap('#pause [data-act="resume"]');
+    assert.strictEqual(await page.evaluate(() => paused), false);
+  } finally { await browser.close(); }
+});

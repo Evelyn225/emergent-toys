@@ -83,7 +83,7 @@ function openPause() {
 function closePause(lock) {
   if (!paused) return;
   paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
-  if (lock) cv.requestPointerLock(); // resuming with the mouse: take it straight back
+  if (lock) lockMouse(); // resuming with the mouse: take it straight back
 }
 const togglePause = () => paused ? closePause(false) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
