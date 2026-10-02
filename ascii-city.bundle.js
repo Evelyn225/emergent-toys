@@ -757,8 +757,8 @@ const stations = [], STATION_AT = new Map(); // block -> its station
     if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
   cand.sort((p, q) => p[0] - q[0]);
   for (const [, bx, by] of cand) {
-    if (stations.length >= 14) break;
-    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 6)) continue;
+    if (stations.length >= 20) break;
+    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 5)) continue;
     let name = ST_NAMES[by];
     if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
     stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });
@@ -2793,7 +2793,8 @@ function floorCell(i, r, x, rx, ry) {
     } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;
-    set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(GRAY, L * (1 - deep * 0.85) * 1.5)); BG[i] = C(GRAY, 1 + (1 - deep) * 2);
+    set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(deep > 0.5 ? YEL : GRAY, deep > 0.5 ? 8 + night * 5 : L * (1 - deep * 0.85) * 1.5)); // the station's light, coming up the stairs
+    BG[i] = deep > 0.5 ? C(YEL, 2 + (deep - 0.5) * 6 + night * 3) : C(GRAY, 1 + (1 - deep) * 2);
     return;
   } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain sidewalk where none does
     const n = ly < 0.3 ? vseg(bx, by - 1) : ly > 1.7 ? vseg(bx, by) : -1, w = lx < 0.3 ? hseg(bx - 1, by) : lx > 1.7 ? hseg(bx, by) : -1;
@@ -3471,8 +3472,12 @@ function drawStationEntrance(s, vx, vy) {
     const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
     return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
   });
-  // and a tall lit blade on a post at the way in, SUBWAY down both faces and a green lamp on top: seen from down the block
-  const tx = vx - hl - 0.02, ty = vy + hw + 0.025, Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
+  // and a tall lit blade on a post at two corners, SUBWAY down both faces and a green lamp on top: seen from down the
+  // block either way
+  for (const e of [-1, 1]) subwayBlade(vx + e * (hl + 0.02), vy - e * (hw + 0.025), iron);
+}
+function subwayBlade(tx, ty, iron) {
+  const Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
   drawBox(boxAt(tx, ty, 1, 0, 0.005, 0.005, 0, Z0), iron);
   drawBox(boxAt(tx, ty, 0, 1, 0.022, 0.006, Z0, Z1), (i, t, L) => {
     BG[i] = C(GREEN, 5 + night * 4);

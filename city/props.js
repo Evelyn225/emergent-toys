@@ -231,8 +231,8 @@ const stations = [], STATION_AT = new Map(); // block -> its station
     if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
   cand.sort((p, q) => p[0] - q[0]);
   for (const [, bx, by] of cand) {
-    if (stations.length >= 14) break;
-    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 6)) continue;
+    if (stations.length >= 20) break;
+    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 5)) continue;
     let name = ST_NAMES[by];
     if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
     stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });

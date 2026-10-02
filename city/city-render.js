@@ -349,7 +349,8 @@ function floorCell(i, r, x, rx, ry) {
     } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;
-    set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(GRAY, L * (1 - deep * 0.85) * 1.5)); BG[i] = C(GRAY, 1 + (1 - deep) * 2);
+    set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(deep > 0.5 ? YEL : GRAY, deep > 0.5 ? 8 + night * 5 : L * (1 - deep * 0.85) * 1.5)); // the station's light, coming up the stairs
+    BG[i] = deep > 0.5 ? C(YEL, 2 + (deep - 0.5) * 6 + night * 3) : C(GRAY, 1 + (1 - deep) * 2);
     return;
   } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain sidewalk where none does
     const n = ly < 0.3 ? vseg(bx, by - 1) : ly > 1.7 ? vseg(bx, by) : -1, w = lx < 0.3 ? hseg(bx - 1, by) : lx > 1.7 ? hseg(bx, by) : -1;

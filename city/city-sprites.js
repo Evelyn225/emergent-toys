@@ -452,8 +452,12 @@ function drawStationEntrance(s, vx, vy) {
     const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
     return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
   });
-  // and a tall lit blade on a post at the way in, SUBWAY down both faces and a green lamp on top: seen from down the block
-  const tx = vx - hl - 0.02, ty = vy + hw + 0.025, Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
+  // and a tall lit blade on a post at two corners, SUBWAY down both faces and a green lamp on top: seen from down the
+  // block either way
+  for (const e of [-1, 1]) subwayBlade(vx + e * (hl + 0.02), vy - e * (hw + 0.025), iron);
+}
+function subwayBlade(tx, ty, iron) {
+  const Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
   drawBox(boxAt(tx, ty, 1, 0, 0.005, 0.005, 0, Z0), iron);
   drawBox(boxAt(tx, ty, 0, 1, 0.022, 0.006, Z0, Z1), (i, t, L) => {
     BG[i] = C(GREEN, 5 + night * 4);
