@@ -57,7 +57,7 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
 // ---- game state
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
 let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0;
-let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0;
+let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0;
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
@@ -88,23 +88,36 @@ const ROOM_RATE = word => word === 'MOTEL' ? 20 : 40;
 const checkInOpen = t => t >= 18 || t < 5;
 function earn(amount) { money = Math.round((money + amount) * 100) / 100; if (onMoney) onMoney(amount); }
 
+// thunderstorms: lightning every few seconds. bolt = the latest strike {t: when, az: which way, d: how far (cells),
+// seed: its zigzag}; flash() is how bright it is lighting the city right now (a double flicker, then a fade)
+let bolt = null;
+function flash() {
+  if (!bolt) return 0;
+  const s = T - bolt.t, near = clamp(1.3 - bolt.d / 80, 0.35, 1);
+  const f = s < 0 ? 0 : s < 0.07 ? 1 : s < 0.13 ? 0.15 : s < 0.2 ? 0.75 : Math.exp(-(s - 0.2) * 7) * 0.6;
+  return f * near;
+}
+const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'clear' }; // the Y key's cycle
+
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
   const lapse = K.KeyT ? 40 : 1; // 20s per game hour; hold T to fast-forward (clouds race along too)
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
-  if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog']); wTimer = 60 + Math.random() * 90; }
-  rain += clamp((weather === 'rain') - rain, -dt / 6, dt / 6);
+  if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog', 'storm']); wTimer = 60 + Math.random() * 90; }
+  rain += clamp((weather === 'rain' || weather === 'storm') - rain, -dt / 6, dt / 6);
+  storm += clamp((weather === 'storm') - storm, -dt / 8, dt / 8);
+  if (storm > 0.6 && Math.random() < dt / 6) bolt = { t: T, az: Math.random() * Math.PI * 2, d: 12 + Math.random() * 70, seed: Math.random() * 1e4 | 0 };
   fogAmt += clamp((weather === 'fog') - fogAmt, -dt / 6, dt / 6);
   wet = clamp(wet + (rain > 0.3 ? dt / 10 : -dt / 60), 0, 1); // streets stay wet for a while after rain
   const sunEl = Math.sin((tod - 6) / 12 * Math.PI);
   day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
   overcast = Math.max(rain, fogAmt);
-  amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast);
+  amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast) * (1 - 0.3 * storm) + flash() * 0.9;
   vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain);
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
-  if (mode === 'room') { amb = room.def.light; vis = 40; }
+  if (mode === 'room') { amb = room.def.light + flash() * 0.1; vis = 40; } // a flicker through the windows
 }
 
 // ---- ascii sprites
@@ -369,17 +382,30 @@ const TAU = Math.PI * 2;
 const wave = (x, k) => 0.8 * Math.sin(TAU * x / N * 3 + k) + 0.5 * Math.sin(TAU * x / N * 11 + 2 * k) + 0.3 * Math.sin(TAU * x / N * 23 + 3 * k);
 const shoreS = x => SHORE_S * 8 + 4.6 + wave(x, 1); // land is north of this line in the south waterfront
 const shoreN = x => SHORE_N * 8 + 3.4 + wave(x, 4); // and south of this one in the north waterfront
+// lighthouse island: a small rocky island out in the bay off the foot of Broadway, its lighthouse on the far side,
+// reached by a long footbridge from the waterfront promenade. The coast wobbles (isleR), so it isn't a circle.
+const ISLE_BX = 16, ISLE = { x: ISLE_BX * 8 + 5, y: SHORE_S * 8 + 33, r: 5 };
+const LIGHTHOUSE = { x: ISLE.x + 1.2, y: ISLE.y + 2.2, r: 0.26 };
+const FOOTBRIDGE = { x: ISLE.x, hw: 0.16, y0: SHORE_S * 8 + 2.6, y1: ISLE.y - 2.5 }; // a deck 3m wide, running south
+const isleR = th => ISLE.r * (1 + 0.16 * Math.sin(3 * th + 1) + 0.08 * Math.sin(5 * th + 2) + 0.05 * Math.sin(9 * th));
+function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cells; negative out at sea
+  const ex = rel(x - ISLE.x), ey = rel(y - ISLE.y);
+  if (Math.abs(ex) > ISLE.r * 1.5 || Math.abs(ey) > ISLE.r * 1.5) return -ISLE.r;
+  return isleR(Math.atan2(ey, ex)) - Math.hypot(ex, ey);
+}
+const onIsland = (x, y) => isleEdge(x, y) > 0;
+const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
 // piers: walkable decks out over the water [x0, y0, x1, y1]; wider docks along the industrial shore
 const PIERS = [];
 for (let bx = 0; bx < NB; bx++) {
-  if (BRIDGE_X.includes(bx)) continue;
+  if (BRIDGE_X.includes(bx) || bx === ISLE_BX) continue;
   const dock = districtOf(bx, SHORE_S - 1) === 'industrial';
   if (dock && hash(bx, 4, 43) < 0.5) PIERS.push([bx * 8 + 3.6, SHORE_S * 8 + 3, bx * 8 + 6.4, SHORE_S * 8 + 11]);
   else if (hash(bx, 5, 43) < 0.35) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
-const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0);
-const seaAt = (wx, wy) => { const y = mod(wy, N); return y > shoreS(wx) || y < shoreN(wx); };
+const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
+const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy); };
 // open water you can't walk or drive on (park ponds are separate, see inPond)
 const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.floor(wy))]) && !onPier(wx, wy);
 
@@ -439,6 +465,44 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { // a crossing 
   if (!degree(bx, by) && map[from] && !blockKind(bx - 1, by - 1) && map[idx(bx * 8, by * 8 + 2)] !== undefined) copyCell(from, idx(bx * 8, by * 8));
 }
 
+// ---- emergency services: police stations, fire stations and hospitals, where the emergency vehicles live (see
+// stepEmergency). Each takes the lot on the north-west corner of a built-up block, fronting the street along the
+// block's north side, its vehicle parked at the kerb out front: x, y = that parking spot (lane = the lane beside it).
+// They're their own buildings, not the district's: STY 11 police (grey stone, 4-5 floors), 12 fire station (red
+// brick, 2-3 floors, a hose tower at the back), 13 hospital (a white tower with a helipad, sh.pad = its middle).
+const SERVICE_BUILD = { police: { sty: 11, h: 1.5 }, fire: { sty: 12, h: 1.05 }, amb: { sty: 13, h: 3.6 } };
+const BASE_KINDS = { police: { word: 'POLICE', neon: BLUE, n: 4, title: 'Police station' },
+                     fire: { word: 'FIRE DEPT', neon: RED, n: 3, title: 'Fire station' },
+                     amb: { word: 'HOSPITAL', neon: WHITE, n: 3, title: 'Hospital' } };
+const SERVICES = [];
+{
+  const cand = [];
+  for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++)
+    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW && SHOP[idx(bx * 8 + 3, by * 8 + 2)]) cand.push([hash(bx, by, 81), bx, by]);
+  cand.sort((p, q) => p[0] - q[0]);
+  const gap = (b, bx, by) => Math.hypot(relB(b.bx - bx), b.by - by);
+  for (const kind in BASE_KINDS) {
+    const K_ = BASE_KINDS[kind];
+    for (const [, bx, by] of cand) {
+      if (SERVICES.filter(b => b.kind === kind).length >= K_.n) break;
+      if (SERVICES.some(b => gap(b, bx, by) < (b.kind === kind ? 8 : 3))) continue;
+      const sh = SHOP[idx(bx * 8 + 3, by * 8 + 2)]; // the lot's shop, shared by all its cells (lanes included)
+      const lot = [];
+      for (let y = by * 8; y < by * 8 + 8; y++) for (let x = bx * 8; x < bx * 8 + 8; x++) if (SHOP[idx(x, y)] === sh) lot.push([x, y]);
+      if (kind !== 'amb' && lot.length > 12) continue; // a whole block is too big for a police or fire station
+      Object.assign(sh, { kind: SHOP_LIT, word: K_.word, neon: K_.neon, signed: true, base: kind, hours: [0, 24] });
+      const B_ = SERVICE_BUILD[kind];
+      for (const [x, y] of lot) { map[idx(x, y)] = B_.h; STY[idx(x, y)] = B_.sty; }
+      if (kind === 'fire') { // the hose tower, at the back corner of the lot
+        const [tx, ty] = lot.reduce((b, c) => c[1] - c[0] * 0.1 > b[1] - b[0] * 0.1 ? c : b);
+        map[idx(tx, ty)] = 2.1;
+      }
+      if (kind === 'amb') sh.pad = [lot.reduce((s, c) => s + c[0], 0) / lot.length + 0.5, lot.reduce((s, c) => s + c[1], 0) / lot.length + 0.5];
+      SERVICES.push({ kind, bx, by, x: bx * 8 + 3.4, y: by * 8 + 1.74, lane: by * 8 + 1.4, out: false });
+    }
+  }
+}
+
 // ---- street names, for talk, directions and the HUD
 const ord = n => n + ((n % 100 / 10 | 0) === 1 ? 'TH' : [, 'ST', 'ND', 'RD'][n % 10] || 'TH');
 const ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',
@@ -473,6 +537,9 @@ function alongStreets(s, o, fn) {
 const CURB = 0.25, REACH = 0.24, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
 const lamps = [];
 for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x, y, ax, ay) => lamps.push({ x, y, ax, ay }));
+// the footbridge out to the lighthouse: a lamp every 30m, alternating sides, reaching over the deck
+const FB_LAMP = 3;
+for (let y = FOOTBRIDGE.y0 + 1.5, k = 0; y < FOOTBRIDGE.y1; y += FB_LAMP, k++) { const s = k & 1 ? 1 : -1; lamps.push({ x: FOOTBRIDGE.x + s * FOOTBRIDGE.hw, y, ax: -s, ay: 0 }); }
 const lampsB = bucketed(lamps);
 // light pool on the ground, under the lamp heads of whichever streets exist here
 function glow(wx, wy) {
@@ -512,7 +579,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   }
   if (kind === 'waterfront') for (let k = 0; k < 4; k++) { // promenade: trees and benches facing the water
     const x = bx * 8 + 1 + k * 2, south = by === SHORE_S, y = south ? by * 8 + 2.35 : by * 8 + 7.6;
-    if (onBridge(bx, by) && k === 0) continue;
+    if (onBridge(bx, by) && k === 0 || south && Math.abs(x - FOOTBRIDGE.x) < 1.5) continue; // (keep the way onto the footbridge clear)
     if (k & 1) benches.push({ x, y, fx: 0, fy: south ? 1 : -1 }); else trees.push({ x, y, s: 0.8 }); // facing the water
   }
 }
@@ -522,14 +589,57 @@ alongStreets(5, CURB, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) === 'brownstones') trees.push({ x, y, s: 0.75 });
 });
 alongStreets(5, 2 - CURB, (x, y, ax, ay, bx, by) => { if (districtOf(bx, by) === 'brownstones') trees.push({ x, y, s: 0.75 }); });
+// the island: benches looking out to sea either side of the lighthouse
+benches.push({ x: ISLE.x - 2.2, y: ISLE.y + 0.8, fx: -1, fy: 0 }, { x: ISLE.x + 2.6, y: ISLE.y - 0.6, fx: 1, fy: 0 });
 const treesB = bucketed(trees), benchesB = bucketed(benches);
 
-// boats out on the sea: sailboats tacking back and forth, tugs and ferries crossing east-west
+// boats out on the sea, each on a route: a racetrack loop (out along one lane, a U-turn, back along the lane beside
+// it) on a stretch of open water clear of the bridges, the footbridge, the island and the piers. The road bridges span
+// the whole strait at deck level, so they split the bay into basins no boat leaves. Sailboats tack round a short loop
+// of their own; tugs and ferries run the length of theirs.
+const BOAT_R = 0.6, BOAT_HL = { sail: 0.3, tug: 0.35, ferry: 0.8 }; // U-turn radius (legs 2R apart); half lengths
+function blockedOn(y0, y1) { // x intervals [a, b] that the band y0..y1 of sea is closed across
+  const out = BRIDGE_X.map(bx => [bx * 8 - 0.4, bx * 8 + 2.4]);
+  if (y1 > FOOTBRIDGE.y0 && y0 < FOOTBRIDGE.y1) out.push([FOOTBRIDGE.x - 0.6, FOOTBRIDGE.x + 0.6]);
+  const ir = ISLE.r * 1.35 + 0.6; // past the widest the coast goes, and its surf
+  if (y1 > ISLE.y - ir && y0 < ISLE.y + ir) out.push([ISLE.x - ir, ISLE.x + ir]);
+  for (const [x0, py0, x1, py1] of PIERS) if (y1 > py0 - 0.4 && y0 < py1 + 0.4) out.push([x0 - 0.4, x1 + 0.4]);
+  return out;
+}
+function freeSpan(x, y0, y1) { // the open stretch [a, b] of that band (b > a, may run past N) that x is in, or null
+  const o = BRIDGE_X[0] * 8 - 0.4; // measure from a bridge: it closes every band, so nothing wraps round past it
+  const bl = blockedOn(y0, y1).map(([a, b]) => [mod(a - o, N), mod(a - o, N) + b - a]).sort((p, q) => p[0] - q[0]);
+  const merged = [];
+  for (const [a, b] of bl) { const m = merged[merged.length - 1]; if (m && a <= m[1]) m[1] = Math.max(m[1], b); else merged.push([a, b]); }
+  const t = mod(x - o, N);
+  for (let k = 0; k < merged.length; k++) {
+    const a = merged[k][1], b = k + 1 < merged.length ? merged[k + 1][0] : N;
+    if (t >= a && t < b) return [a + o, b + o];
+  }
+  return null;
+}
+// where boat b is at time t: x, y and which way it's heading along x (+1 east, -1 west, between on the turns)
+function boatAt(b, t) {
+  const R_ = BOAT_R, Ls = b.b - b.a, P = 2 * Ls + 2 * Math.PI * R_, s = mod(b.ph * P + t * b.sp, P);
+  if (s < Ls) return { x: b.a + s, y: b.y, dir: 1 };
+  if (s < Ls + Math.PI * R_) { const th = (s - Ls) / R_; return { x: b.b + Math.sin(th) * R_, y: b.y + R_ - Math.cos(th) * R_, dir: Math.cos(th) }; }
+  if (s < 2 * Ls + Math.PI * R_) return { x: b.b - (s - Ls - Math.PI * R_), y: b.y + 2 * R_, dir: -1 };
+  const th = (s - 2 * Ls - Math.PI * R_) / R_;
+  return { x: b.a - Math.sin(th) * R_, y: b.y + R_ + Math.cos(th) * R_, dir: -Math.cos(th) };
+}
 const boats = [];
 for (let k = 0; k < 28; k++) {
-  const y = SHORE_S * 8 + 10 + hash(k, 1, 92) * (N - SHORE_S * 8 - 18), kind = ['sail', 'sail', 'tug', 'ferry'][k & 3];
-  boats.push({ x0: hash(k, 2, 92) * N, y, sp: (kind === 'sail' ? 0.06 : 0.12) * (k & 4 ? 1 : -1) * (0.7 + hash(k, 3, 92) * 0.6),
-               ph: hash(k, 4, 92) * 6.28, kind });
+  const kind = ['sail', 'sail', 'tug', 'ferry'][k & 3], hl = BOAT_HL[kind];
+  for (let tries = 0; tries < 30; tries++) {
+    const y = SHORE_S * 8 + 9 + hash(k, 1 + tries * 7, 92) * (N - SHORE_S * 8 - 16 - 2 * BOAT_R), x = hash(k, 2 + tries * 7, 92) * N;
+    const span = freeSpan(x, y - 0.3, y + 2 * BOAT_R + 0.3);
+    if (!span) continue;
+    let a = span[0] + hl + BOAT_R, b = span[1] - hl - BOAT_R; // the straight legs: the turns and the hull stay inside
+    if (b - a < 3) continue;
+    if (kind === 'sail') { const L = Math.min(b - a, 4 + hash(k, 5, 92) * 8), c = a + hash(k, 6, 92) * (b - a - L); a = c; b = c + L; }
+    boats.push({ kind, a, b, y, sp: (kind === 'sail' ? 0.06 : 0.12) * (0.7 + hash(k, 3, 92) * 0.6), ph: hash(k, 4, 92) });
+    break;
+  }
 }
 
 // landmark, construction-site and industrial props
@@ -729,10 +839,12 @@ function addCar(props) {
   c.ex = c.x; c.ey = c.y; plan(c); cars.push(c);
   return c;
 }
-// a random lane position on an existing street segment
-function randomLane() {
+// a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y)
+function randomLane(near = 0, x = 0, y = 0) {
   for (;;) {
-    const bx = Math.random() * NB | 0, by = Math.random() * NB | 0, vert = Math.random() < 0.5, dir = pick([-1, 1]);
+    const bx = near ? Math.floor((x + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
+    const by = near ? Math.floor((y + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
+    const vert = Math.random() < 0.5, dir = pick([-1, 1]);
     if (!(vert ? vseg(bx, by) : hseg(bx, by))) continue;
     const along = (vert ? by : bx) * 8 + 2.5 + Math.random() * 4.5, lane = (vert ? bx : by) * 8 + 1 + (vert ? 0.4 : -0.4) * dir;
     return { x: vert ? lane : along, y: vert ? along : lane, hx: vert ? 0 : dir, hy: vert ? dir : 0 };
@@ -770,27 +882,62 @@ const nearPeople = [];
 // only the neighbourhood round you is simulated; everything further away waits, unseen, where it is
 const SIM_R = 56, simulated = (x, y) => Math.abs(rel(x - px)) < SIM_R && Math.abs(rel(y - py)) < SIM_R;
 
-// ---- emergency vehicles: now and then an ambulance, fire engine or police car tears through the neighbourhood
-// round you, lights going, ignoring red lights. Cars ahead of it in its lane pull over; cross traffic waits.
+// ---- emergency vehicles: now and then an ambulance, fire engine or police car is called out to somewhere in the
+// neighbourhood round you. It leaves from the nearest station or hospital of its kind (or, if there's none near,
+// comes in from a few blocks off), lights and siren going, ignoring red lights; cars ahead of it pull over and cross
+// traffic waits. At the scene it pulls in to the kerb, lights still turning, for a while; then it drives back to
+// base like any other car and parks out front again.
+// state: 'out' (on a call) -> 'scene' -> 'back'. ev marks the vehicle; code(c) = running lights and siren.
 const EV_BODY = { amb: WHITE, fire: RED, police: BLUE };
+const RETURN_CODE = false; // real crews drive back quietly; true runs lights and siren home too
+const code = c => c.state === 'out' || RETURN_CODE && c.state === 'back';
+const lightsOn_ = c => code(c) || c.state === 'scene'; // the light bar turning
+const BASE_R = 50; // a station further away than this (500m) doesn't send the call; one comes in from off-screen
 let evTimer = 45;
-function spawnEmergency() {
-  for (let tries = 0; tries < 200; tries++) {
-    const p = randomLane(), d = Math.hypot(rel(p.x - px), rel(p.y - py));
+const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!free || !b.out))
+  .reduce((best, b) => { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); return d < best[1] ? [b, d] : best; }, [null, Infinity]);
+function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police'])) {
+  let scene = null; // somewhere on a street a few blocks from you, so you'll see it go by or pull up
+  for (let tries = 0; tries < 200 && !scene; tries++) {
+    const p = randomLane(12, px, py), d = Math.hypot(rel(p.x - px), rel(p.y - py));
+    if (d > 3 && d < 10) scene = [p.x, p.y];
+  }
+  if (!scene) return null;
+  const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T };
+  if (base && bd < BASE_R) { // out of the station, westbound from the kerb
+    base.out = true;
+    return addCar({ ...props, x: base.x, y: base.lane, hx: -1, hy: 0, base });
+  }
+  for (let tries = 0; tries < 200; tries++) { // no station near: it comes in from a few blocks away
+    const p = randomLane(32, px, py), d = Math.hypot(rel(p.x - px), rel(p.y - py));
     if (d < 16 || d > 30 || cars.some(o => Math.hypot(rel(o.x - p.x), rel(o.y - p.y)) < 1.2)) continue;
-    const kind = pick(['amb', 'amb', 'fire', 'police']);
-    // head for a street just past you, so it comes by
-    const dest = [mod(px + rel(px - p.x) * 0.8, N), mod(py + rel(py - p.y) * 0.8, N)];
-    return addCar({ ...p, kind, body: EV_BODY[kind], ev: true, cruise: 2.1, dest, born: T });
+    return addCar({ ...props, ...p, base: nearestBase(kind, false)[0] });
   }
   return null;
 }
+// the call's progress: at the scene, waiting there, heading home, home
+function evArrive(c) {
+  if (c.state === 'out') { c.state = 'scene'; c.until = T + 20 + Math.random() * 25; c.dest = null; return; }
+  if (c.state === 'back') c.home = true; // (taken off the road in stepEmergency, not mid-loop)
+}
+function endCall(c) { // parked at its station again (or just gone, if it came from off-screen)
+  const k = cars.indexOf(c);
+  if (k >= 0) cars.splice(k, 1);
+  if (c.base) c.base.out = false;
+}
 function stepEmergency(dt) {
-  for (let k = cars.length - 1; k >= 0; k--) { // done: off they go, out of sight
-    const c = cars[k];
-    if (c.ev && T - c.born > 40 && Math.hypot(rel(c.x - px), rel(c.y - py)) > 30) cars.splice(k, 1);
+  for (const c of cars.slice()) {
+    if (!c.ev) continue;
+    if (c.home) { endCall(c); continue; }
+    const far = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (c.state === 'scene' && T > c.until) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
+    // out of the neighbourhood that's simulated, it can't get anywhere (the traffic there is frozen): it's home
+    if (far > SIM_R * 0.8 && (c.state === 'back' || T - c.born > 90)) endCall(c);
+    else if (c.state === 'back' && !c.base && far > 30) endCall(c);
   }
-  if (!cars.some(c => c.ev) && (evTimer -= dt) < 0) { spawnEmergency(); evTimer = 60 + Math.random() * 90; }
+  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev).length < 3 && (evTimer -= dt) < 0) {
+    spawnEmergency(); evTimer = 60 + Math.random() * 90;
+  }
 }
 
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
@@ -802,9 +949,9 @@ function stepTraffic(dt, t, everywhere = false) {
   // (which runs off-centre) the band is wider: it waits for the car in front to get properly out of the way, and
   // cars coming up behind it see it even though it isn't square in their lane
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
-  const band = (c, o) => c.ev || o.ev ? 0.3 : 0.12;
+  const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(c => c.ev), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;
@@ -822,13 +969,13 @@ function stepTraffic(dt, t, everywhere = false) {
     const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
     const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
     const nx = vert ? c.x - mod(c.x, 8) : c.B, ny = vert ? c.B : c.y - mod(c.y, 8); // the next intersection
-    if (line < 3 && !c.ev) {
+    if (line < 3 && !code(c)) {
       const s = light(nx, ny, vert, t);
       // an emergency vehicle about to cross in front: hold back as if the light were red
       const siren = evs.some(e => e.nodeX === nx && e.nodeY === ny && (e.hx === 0) !== vert);
       if (s === 'R' || s === 'Y' && line > 0.5 || siren) room_ = Math.min(room_, line - 0.25);
     }
-    if (c.ev) { c.nodeX = nx; c.nodeY = ny; }
+    if (code(c)) { c.nodeX = nx; c.nodeY = ny; }
     // don't turn into a lane if a car is sitting right where we'd land
     if (c.left < 0.6 && (c.nh[0] !== c.hx || c.nh[1] !== c.hy)) {
       const lx = c.x + c.hx * c.left + c.nh[0] * 0.3, ly = c.y + c.hy * c.left + c.nh[1] * 0.3;
@@ -846,20 +993,22 @@ function stepTraffic(dt, t, everywhere = false) {
     // pull in only where the kerb is free: not mid-junction, and not on top of a car that's already pulled in there
     const kerbTaken = c.off < 0.1 && c.near.some(o => o !== c && o.off > 0.1 && o.hx === c.hx && o.hy === c.hy &&
       Math.abs(rel(o.x - c.x) * c.hx + rel(o.y - c.y) * c.hy) < 0.55 && Math.abs(rel(o.x - c.x) * c.hy - rel(o.y - c.y) * c.hx) < 0.3);
-    const pull = !c.ev && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
-    const offTarget = c.ev ? -0.2 : pull ? 0.32 : 0;
+    const pull = !code(c) && c.state !== 'scene' && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
+    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : 0; // at the scene: pulled in to the kerb
     c.off += clamp(offTarget - c.off, -0.6 * dt, 0.6 * dt);
-    if (pull || Math.abs(c.off - offTarget) > 0.02 && !c.ev) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c)) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    if (c.state === 'scene') room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
     if (c.rider && !c.dest) room_ = 0;
-    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < 1.2) {
-      if (c.ev) c.dest = null; else { room_ = 0; c.arrived = true; }
+    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
+      if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction
+      else { room_ = 0; c.arrived = true; }
     }
 
     const target = Math.min(Math.max(0, room_ * 2.5), c.cruise);
     c.brake = target < c.v;
-    c.v = Math.min(target, c.v + (c.ev ? 1.4 : 0.8) * dt);
+    c.v = Math.min(target, c.v + (code(c) ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
     if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
     c.left -= step;
@@ -1169,7 +1318,7 @@ function talkLine(p) {
   if (h >= 23 || h < 4) lines.push('Bit late to be out wandering, no?', "Last call's at three, you know.", p.role === 'owl' ? 'The night is young!' : 'Should be in bed.');
   if (st && Math.hypot(rel(st.x - p.x), rel(st.y - p.y)) < 40) lines.push(`The ${st.name} train is late again.`, `Is ${st.name} station still closed for repairs?`);
   if (Math.abs(rel(p.y - (EL_ROW * 8 + 1))) < 12) lines.push('That el train shakes my whole apartment.', 'You get used to the trains. Mostly.');
-  if (cars.some(c => c.ev && Math.hypot(rel(c.x - p.x), rel(c.y - p.y)) < 25)) lines.push("Another siren. Hope everyone's okay.", 'Something going on round the corner?');
+  if (cars.some(c => code(c) && Math.hypot(rel(c.x - p.x), rel(c.y - p.y)) < 25)) lines.push("Another siren. Hope everyone's okay.", 'Something going on round the corner?');
   lines.push('Hey.', 'Can I help you?', 'Nice evening for it.'.replace('evening', h < 12 ? 'morning' : h < 18 ? 'day' : 'evening'));
   return pick(lines);
 }
@@ -1345,7 +1494,7 @@ function audioMix(s) {
   out.night = far * (0.5 + 0.5 * d.city) * s.night * (1 - 0.35 * s.rain); // the city at night: a distant hum, the odd car
   out.rain = s.rain;
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
-  out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog;
+  out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.boombox) out.bossa = 0.7; // your boombox
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
@@ -1618,7 +1767,7 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 // ===== city world =====
 const sk0 = seed => seed * 1e4 | 0;
 // background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse)
-const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED];
+const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE];
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -1635,6 +1784,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       if (sh.signed && p < w.length) return set(i, centered ? w[p] : ' ', C(sh.neon, lvl));
       return set(i, '-', C(GRAY, L));
     }
+    if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
     if (sty === 8) { // warehouse: big roll-up doors
       const fd = fract(u * 0.8);
       if (fd > 0.12 && fd < 0.88 && z < 0.3) return set(i, fract(z * 40) < 0.5 ? '=' : '-', C(open ? ORANGE : GRAY, L * 0.7));
@@ -1665,6 +1815,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  if (sty >= 11) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
     const top = h - z < 0.3, fw = fract(u * 2);
     if (top && fw > 0.08 && fw < 0.92 && z < h - 0.08) return set(i, '#', hash(Math.floor(u * 2), 7, sk) > 0.7 ? C(YEL, Math.max(L * 0.5, glowL * 0.8)) : C(GRAY, L * 0.4));
@@ -1730,6 +1881,72 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
 }
 
+// the ground floor of a police station (lit windows, a blue lamp either side of the door), a fire station (tall red
+// engine-bay doors) or a hospital (wide lit glass doors between two red crosses)
+function serviceFront(i, u, z, base, L, lit) {
+  if (base === 'fire') {
+    const fd = fract(u * 0.7);
+    if (fd < 0.08 || z > 0.3) return set(i, fd < 0.08 ? '|' : '-', C(GRAY, L));
+    if (z > 0.2 && z < 0.25 && fract(fd * 5) > 0.25) return set(i, '#', C(WARM, lit * 0.8)); // a row of windows in each door
+    BG[i] = C(RED, 1 + L * 0.12);
+    return set(i, fract(z * 30) < 0.5 ? '=' : '-', C(RED, L * 1.1));
+  }
+  if (base === 'police') {
+    const fd = fract(u * 1.5);
+    if ((Math.abs(fd - 0.3) < 0.035 || Math.abs(fd - 0.7) < 0.035) && z > 0.24 && z < 0.29) { // the blue lamps
+      BG[i] = C(BLUE, 3 + night * 6); return set(i, '*', C(WHITE, Math.max(L, night * 15)));
+    }
+    if (fd > 0.36 && fd < 0.64 && z < 0.24) return set(i, fd < 0.38 || fd > 0.62 ? '|' : z > 0.2 ? '=' : '#', C(GRAY, L * 0.8)); // the doors
+    if (z > 0.08 && z < 0.22 && (fd < 0.26 || fd > 0.74)) return set(i, ':', C(CYAN, lit * 0.75));
+    return set(i, '_', C(GRAY, L));
+  }
+  const fd = fract(u * 1.2); // hospital
+  if (z > 0.2 && z < 0.3 && (Math.abs(fd - 0.15) < 0.05 || Math.abs(fd - 0.85) < 0.05)) {
+    const arm = Math.abs(z - 0.25) < 0.018 || Math.abs(fd - (fd < 0.5 ? 0.15 : 0.85)) < 0.017;
+    BG[i] = arm ? C(RED, 6 + night * 8) : bgAt(WHITE, 3 + night * 3); return set(i, ' ', 0);
+  }
+  if (fd > 0.3 && fd < 0.7 && z < 0.26) { BG[i] = C(CYAN, 1 + night * 3); return set(i, Math.abs(fd - 0.5) < 0.012 ? '|' : z > 0.24 ? '=' : ':', C(WHITE, lit)); }
+  return set(i, fract(u * 12) < 0.12 ? '|' : '.', C(WHITE, L * 0.55));
+}
+
+// the floors above: police (dressed grey stone, a blue band over the entrance, square windows lit a cool white),
+// fire station (red brick, tall round-headed windows, the hose tower's slit windows), hospital (white panels, long
+// ribbon windows, a big red cross up by the roof on every face)
+function serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL) {
+  if (sty === 11) {
+    if (zz < 0.06) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, '=', C(BLUE, Math.max(L, night * 10))); }
+    const fu = fract(u * 3);
+    if (fu > 0.3 && fu < 0.7 && fz > 0.3 && fz < 0.8)
+      return hash(Math.floor(u * 3), fl, sk) > litT - 0.2 ? set(i, '#', C(CYAN, Math.max(L * 0.6, glowL * 0.8))) : set(i, '.', C(GRAY, L * 0.3));
+    return set(i, (Math.floor(u * 6) + Math.floor(zz * 9)) % 3 ? ' ' : '_', C(GRAY, L * 0.7)); // stone courses
+  }
+  if (sty === 12) {
+    if (h > 1.5) { // the hose tower: a slit window each floor, louvres at the top
+      if (z > h - 0.25) return set(i, fract(z * 25) < 0.5 ? '=' : '-', C(GRAY, L * 0.8));
+      if (Math.abs(fract(u) - 0.5) < 0.05 && fz > 0.3 && fz < 0.8) return set(i, '#', C(WARM, Math.max(L * 0.4, glowL * 0.6)));
+      return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+    }
+    const fu = fract(u * 2.5), arch = fz > 0.72 && fz < 0.82 && Math.abs(fu - 0.5) < 0.2 - (fz - 0.72) * 1.4;
+    if (fu > 0.3 && fu < 0.7 && fz > 0.2 && fz < 0.75 || arch)
+      return hash(Math.floor(u * 2.5), fl, sk) > litT - 0.15 ? set(i, arch ? '^' : '#', C(WARM, Math.max(L, glowL))) : set(i, arch ? '^' : '.', C(GRAY, L * 0.35));
+    if (fz < 0.06) return set(i, '=', C(WHITE, L * 0.7)); // a stone string course each floor
+    return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+  }
+  // hospital
+  const cu = fract(u) - 0.5, cz = z - (h - 0.32);
+  if (Math.abs(cz) < 0.2 && Math.abs(cu) < 0.2) { // the cross
+    const arm = Math.abs(cz) < 0.065 || Math.abs(cu) < 0.065;
+    BG[i] = arm ? C(RED, 7 + night * 7) : bgAt(WHITE, 4 + night * 2); return set(i, ' ', 0);
+  }
+  if (fz > 0.3 && fz < 0.75) { // ribbon windows, mullions every few metres
+    if (fract(u * 5) < 0.06) return set(i, '|', C(WHITE, L * 0.8));
+    if (hash(Math.floor(u * 5), fl, sk) > litT - 0.35) { BG[i] = C(CYAN, 1 + night * 2.5); return set(i, '-', C(WHITE, Math.max(L * 0.8, glowL))); } // wards lit all night
+    return set(i, ' ', 0);
+  }
+  BG[i] = bgAt(WHITE, day * 4 + 1 + night * 1.5);
+  return set(i, fz < 0.08 ? '_' : ' ', C(GRAY, L * 0.6));
+}
+
 // wc = world coordinate along the wall; lu = position across the face from the block's middle, left-to-right on screen
 const TICKER = ADS.join('   *   ') + '   *   ';
 function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc) {
@@ -1786,6 +2003,13 @@ function roofTop(i, wx, wy, h, d) {
                ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
   BG[i] = bgAt(GRAY, day * 2.5);
   if (edge) return set(i, '#', C(GRAY, L * 1.3));
+  const sh = SHOP[idx(mx, my)];
+  if (sh && sh.pad && STY[idx(mx, my)] === 13) { // the hospital's helipad: a yellow ring round a big H
+    const ex = wx - sh.pad[0], ey = wy - sh.pad[1], rr = Math.hypot(ex, ey);
+    if (Math.abs(rr - 1.05) < 0.07) return set(i, '#', C(YEL, Math.max(L * 1.4, night * 12)));
+    const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
+    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); return set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); }
+  }
   set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
 }
 
@@ -1807,13 +2031,28 @@ function floorCell(i, r, x, rx, ry) {
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
-    if (onPier(wx, wy)) { // planks running out to sea
+    if (onFootbridge(wx, wy)) { // the footbridge: boards across it, lamplight pooling under each lamp after dark
+      soft = true; base = BRICK; k = 1.3;
+      const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw;
+      ch = e > 0.88 ? '|' : fract(wy * 5) < 0.2 ? '=' : '-';
+      const pool = lampsOn * Math.max(0, 1 - Math.abs(fract((mod(wy, N) - FOOTBRIDGE.y0 - 1.5) / FB_LAMP + 0.5) - 0.5) * FB_LAMP / 0.5);
+      if (pool > 0) { base = WARM; k = 1.3 + pool * 1.6; }
+    } else if (onIsland(wx, wy)) { // the island: rocks round the shore, a gravel path out to the lighthouse, rough grass
+      soft = true;
+      const e = isleEdge(wx, wy), path = Math.abs(rel(wx - FOOTBRIDGE.x - (rel(wy - FOOTBRIDGE.y1) / (LIGHTHOUSE.y - FOOTBRIDGE.y1)) * (LIGHTHOUSE.x - FOOTBRIDGE.x)));
+      const onPath = path < 0.13 && rel(wy - FOOTBRIDGE.y1) > -0.5 && rel(wy - LIGHTHOUSE.y) < 0;
+      if (e < 0.45) { ch = hash(Math.floor(wx * 9), Math.floor(wy * 9), 34) > 0.45 ? '%' : 'o'; base = GRAY; k = 1.25; }
+      else if (onPath) { ch = (r * 5 + x) % 3 ? ':' : '.'; base = WARM; k = 1; }
+      else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.1; }
+    } else if (onPier(wx, wy)) { // planks running out to sea
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
     } else if (seaAt(wx, wy)) { // open water: drifting waves; reflect() mirrors the skyline into it
-      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91);
-      set(i, n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', C(n > 0.62 ? CYAN : BLUE, L * 1.5));
+      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = isleEdge(wx, wy) > -0.3; // white water round the island
+      set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
+      const lb = beamOnWater(wx, wy); // the lighthouse beam sweeping over it
+      if (lb > 0.05) { BG[i] = C(WARM, 1 + lb * 7); if (CH[i] === ' ') CH[i] = '-'; COL[i] = C(YEL, 6 + lb * 9); FL[i] = 0; }
       return;
     } else if (kind === 'waterfront') {
       soft = true;
@@ -1864,6 +2103,19 @@ function floorCell(i, r, x, rx, ry) {
     if (s > 0 && on >= 0) BG[i] = C(on, 1 + s * 3.5);
   }
   set(i, ch, col);
+}
+
+// the lighthouse: its lamp turns once every BEAM_P seconds, two beams back to back, lit from dusk to dawn (and in fog)
+const BEAM_P = 9, LH_H = 2.45, BEAM_LEN = 28;
+const beamLit = () => clamp((night - 0.25) * 2.5 + fogAmt * 0.8 + storm * 0.5, 0, 1);
+const beamAng = () => T / BEAM_P * Math.PI * 2;
+const beamOff = ang => Math.abs(mod(ang - beamAng() + Math.PI / 2, Math.PI) - Math.PI / 2); // angle to the nearer beam
+function beamOnWater(wx, wy) { // how brightly the beam lights the sea at (wx, wy), 0..1
+  const lit = beamLit();
+  if (!lit) return 0;
+  const ex = rel(wx - LIGHTHOUSE.x), ey = rel(wy - LIGHTHOUSE.y), D = Math.hypot(ex, ey);
+  if (D > BEAM_LEN || D < 1) return 0;
+  return clamp(1 - beamOff(Math.atan2(ey, ex)) / 0.06, 0, 1) * (1 - D / BEAM_LEN) * lit;
 }
 
 // the el deck: its underside (girders and cross ties) seen from the street, and its top (two tracks, and the
@@ -1939,6 +2191,34 @@ function disc(az, el, body, halo, rad, craters) {
     if (q <= rad) { BG[i] = body; set(i, craters && hash(c - (c0 | 0), r - (r0 | 0), 8) > 0.75 ? 'o' : ' ', C(GRAY, 9)); }
     else if (BG[i] === NONE || (BG[i] & 15) < (halo & 15)) BG[i] = halo;
   }
+}
+// lightning: while a strike flickers the whole sky lights up (clouds most) and the bolt itself forks down to the
+// horizon in its direction, in front of anything further off than the strike
+function lightning() {
+  const fl = flash();
+  if (fl < 0.03) return;
+  for (let i = 0; i < rows * cols; i++) if (ZB[i] === Infinity) {
+    const cloud = BG[i] !== NONE && (BG[i] >> 4 === WHITE || BG[i] >> 4 === GRAY) && (BG[i] & 15) > 1;
+    BG[i] = C(cloud ? WHITE : GRAY, (cloud ? 5 : 2) + fl * (cloud ? 10 : 6));
+  }
+  const s = T - bolt.t, ra = mod(bolt.az - a + Math.PI, Math.PI * 2) - Math.PI;
+  if (s > 0.22 || s > 0.07 && s < 0.13 || Math.abs(ra) > FOV * 0.7) return; // only while it's flickering, and in view
+  const top = Math.max(0, Math.floor(hor - Math.min(3, 30 / bolt.d) * projY)), bot = Math.min(rows - 1, Math.ceil(hor + eye * projY / bolt.d));
+  const fork = top + Math.floor((bot - top) * (0.3 + hash(bolt.seed, 2, 7) * 0.3));
+  const branch = (c0, r0, r1, k) => {
+    let c = c0;
+    for (let r = r0; r <= r1; r++) {
+      const step = Math.round((hash(r, bolt.seed + k, 5) - 0.5 + (k ? 0.35 * Math.sign(k) : 0)) * 2.4);
+      c += step;
+      const x = Math.round(c);
+      if (x < 0 || x >= cols) return;
+      const i = r * cols + x;
+      if (ZB[i] < bolt.d) continue; // behind something nearer than the strike
+      set(i, step > 0 ? '\\' : step < 0 ? '/' : '|', C(WHITE, 15)); BG[i] = C(CYAN, 5 + fl * 6); FOGS[i] = 0;
+      if (r === fork && !k) branch(c, r + 1, Math.min(bot, r + (bot - top) * 0.35), hash(bolt.seed, 3, 7) < 0.5 ? -1 : 1);
+    }
+  };
+  branch(cols / 2 + Math.tan(ra) * projX, top, bot, 0);
 }
 function sunMoon() { // sun rises in +x, sets in -x
   const sunEl = Math.sin((tod - 6) / 12 * Math.PI), az = (tod - 6) / 12 * Math.PI;
@@ -2034,6 +2314,7 @@ const across = (ax, ay, vx, vy) => { const n = Math.hypot(vx, vy) || 1; return (
 const FERRY = pad(['   _|_ _|_', ' _|o_o_o_o|___', '|o o o o o o o|', '\\_____________/']);
 const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
 const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
+const SAIL_R = mirror(ART.sail);
 const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
 // the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
@@ -2044,10 +2325,11 @@ function citySprites() {
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   for (const b of boats) {
-    const x = b.x0 + T * b.sp, y = b.y + Math.sin(T * 0.05 + b.ph) * 2, [vx, vy] = R(x, y);
+    const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
+    const toRight = across(p.dir, 0, vx, vy) > 0; // which way it's going across the screen: the sail fills the other way
     const lit = (c, L) => C(YEL, Math.max(L, night * 15));
-    if (b.kind === 'sail') drawArt(vx, vy, 0, 0.6, 0.9, ART.sail, (c, row, L) => C(row < 4 ? WHITE : BRICK, L));
+    if (b.kind === 'sail') drawArt(vx, vy, 0, 0.6, 0.9, toRight ? SAIL_R : ART.sail, (c, row, L) => C(row < 4 ? WHITE : BRICK, L));
     else if (b.kind === 'tug') drawArt(vx, vy, 0, 0.7, 0.45, ART.tug, (c, row, L) => c === 'o' ? lit(c, L) : C(row === 0 ? GRAY : RED, L));
     else drawArt(vx, vy, 0, 1.6, 0.6, FERRY, (c, row, L) => c === 'o' ? lit(c, L) : C(row < 2 ? WHITE : row === 2 ? BLUE : GRAY, L));
   }
@@ -2089,6 +2371,7 @@ function citySprites() {
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
+  islandSprites();
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   const LC = { G: GREEN, Y: YEL, R: RED };
@@ -2103,8 +2386,12 @@ function citySprites() {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
     const [vx, vy] = R(m.ex, m.ey), hx = m.hx, hy = m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    if (m.ev && Math.hypot(vx, vy) < vis) siren = m;
+    if (m.ev && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
     drawVehicle(m, vx, vy, hx, hy);
+  }
+  for (const b of SERVICES) if (!b.out) { // parked out front of its station, ready to go
+    const [vx, vy] = R(b.x, b.y);
+    if (Math.hypot(vx, vy) < vis) drawVehicle(b.parked || (b.parked = { kind: b.kind, body: EV_BODY[b.kind], ev: true, state: 'home', v: 0 }), vx, vy, -1, 0);
   }
   for (const m of people) if (!m.hidden)
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
@@ -2189,11 +2476,117 @@ function drawVehicle(m, vx, vy, hx, hy) {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
   if (m.ev) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
-    const side = HIT.v > 0 ? RED : BLUE, on = strobe() === side; // the light bar: red on one side, blue the other
+    const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
   if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
     BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
+  });
+}
+
+// ---- lighthouse island
+// the lighthouse, drawn as a billboard (it's round, so it looks the same from every side): a tapering tower in red
+// and white bands with a door and slit windows, a railed gallery, the glazed lantern room with the lamp, a red dome.
+// flare = how squarely a beam is pointing at you (the lamp blazes)
+function lighthouseCell(i, u, z, du, dz, L, flare) {
+  const au = Math.abs(u), lit = beamLit();
+  if (z < 2.2) {
+    const R = 0.24 - z * 0.035;
+    if (au > Math.max(R, du / 2)) return false;
+    const n = au / R, shade = 1 - 0.55 * n * n;
+    if (z < 0.22 && au < 0.055) { BG[i] = C(GRAY, 1); return set(i, z > 0.19 ? '=' : '#', C(BRICK, L * 0.6)), true; } // the door
+    if (au < Math.max(0.022, du / 2) && [0.75, 1.25, 1.75].some(w => Math.abs(z - w) < 0.06)) { BG[i] = C(GRAY, 1); return set(i, '#', C(WARM, Math.max(L * 0.3, lit * 9))), true; }
+    BG[i] = C(Math.floor(z / 0.44) & 1 ? RED : WHITE, (1.5 + L * 0.5) * shade);
+    return set(i, n > 0.85 ? '|' : ' ', C(GRAY, L * 0.5)), true;
+  }
+  if (z < 2.27) { if (au > 0.3) return false; BG[i] = C(GRAY, 2 + L * 0.2); return set(i, '=', C(WHITE, L)), true; } // the gallery
+  if (z < 2.34 && au > 0.15) { // its railing
+    if (au > 0.3) return false;
+    return fract(u * 25) < 0.35 || z > 2.32 ? (set(i, z > 2.32 ? '-' : '|', C(WHITE, L * 0.9)), true) : false;
+  }
+  if (z < 2.62) { // the lantern room
+    if (au > Math.max(0.15, du / 2)) return false;
+    if (lit && au < 0.075 && Math.abs(z - LH_H) < 0.07) { BG[i] = C(YEL, 8 + flare * 7); return set(i, '@', C(WHITE, 15)), true; }
+    BG[i] = C(CYAN, 1 + lit * 3); return set(i, fract(u * 14) < 0.2 ? '|' : ' ', C(GRAY, L * 0.8)), true;
+  }
+  const domeR = 0.17 * Math.sqrt(Math.max(0, 1 - ((z - 2.62) / 0.17) ** 2));
+  if (z < 2.79 && au < Math.max(domeR, du / 2)) { BG[i] = C(RED, 2 + L * 0.35); return set(i, ' ', 0), true; }
+  if (z < 2.88 && au < Math.max(0.01, du / 2)) return set(i, '|', C(GRAY, L)), true; // the vent and lightning rod
+  return false;
+}
+// the beams: from the lamp out across the bay, a thin shaft of pale light drawn in characters that follow its slope
+// on screen (- / \ |), brightest by the lamp and fading out over the water, stronger in rain and fog. Each sample
+// along a beam covers the cells it spans (a little wider close up), in front of whatever is behind it.
+// Returns how squarely a beam is pointing at you (the lamp flares).
+function drawBeams(lx, ly) {
+  const lit = beamLit();
+  if (!lit) return 0;
+  const haze = 0.55 + 0.45 * Math.max(fogAmt, rain), camAng = Math.atan2(-ly, -lx);
+  const flare = clamp(1 - beamOff(camAng) / 0.3, 0, 1) * lit;
+  for (const side of [0, Math.PI]) {
+    const ang = beamAng() + side, cx = Math.cos(ang), cy = Math.sin(ang);
+    let prev = null;
+    for (let s = 0.3; s < BEAM_LEN; s += 0.12 + s * 0.02) {
+      const vx = lx + cx * s, vy = ly + cy * s, depth = dx * vx + dy * vy;
+      if (depth < 0.3 || depth > vis + 10) { prev = null; continue; }
+      const sc = projX / depth, col = cols / 2 + (-dy * vx + dx * vy) * sc, row = hor - (LH_H - s * 0.012 - eye) * projY / depth;
+      const slope = prev ? (row - prev[1]) / ((col - prev[0]) || 1e-6) * (FS / cw) : 0; // in screen units
+      const ch = !prev ? '-' : Math.abs(slope) < 0.35 ? '-' : Math.abs(slope) > 2.5 ? '|' : slope < 0 ? '/' : '\\';
+      prev = [col, row];
+      const w = 0.025 + s * 0.008, rc = Math.min(2, w * sc), rr = Math.min(1, w * projY / depth);
+      const I = lit * haze * (1 - s / BEAM_LEN) ** 1.2;
+      for (let r = Math.max(0, Math.round(row - rr)); r <= Math.min(rows - 1, Math.round(row + rr)); r++)
+        for (let c = Math.max(0, Math.round(col - rc)); c <= Math.min(cols - 1, Math.round(col + rc)); c++) {
+          const i = r * cols + c;
+          if (ZB[i] < depth) continue;
+          const core = Math.abs(r - row) < 0.6 && Math.abs(c - col) < 0.6;
+          set(i, core ? (I > 0.5 ? '=' : ch) : ch, C(YEL, 3 + I * (core ? 12 : 7)));
+          if (core && s < 3) BG[i] = C(YEL, 2 + I * 4); // the glow right by the lamp
+          FOGS[i] = 0;
+        }
+    }
+  }
+  return flare;
+}
+function islandSprites() {
+  const [lx, ly] = R(LIGHTHOUSE.x, LIGHTHOUSE.y), D = Math.hypot(lx, ly);
+  if (D > vis + BEAM_LEN) return;
+  drawFootbridge();
+  const flare = drawBeams(lx, ly);
+  drawShape(lx, ly, 0, 0.32, 2.9, (i, u, z, du, dz, L) => lighthouseCell(i, u, z, du, dz, L, flare));
+  if (flare > 0.05) { // the lamp, blazing straight at you
+    const depth = dx * lx + dy * ly;
+    if (depth > 0.3) {
+      const sc = projX / depth, col = cols / 2 + (-dy * lx + dx * ly) * sc, row = hor - (LH_H - eye) * projY / depth, R_ = 1 + flare * 5;
+      for (let r = Math.floor(row - R_ / 2); r <= row + R_ / 2; r++) for (let c = Math.floor(col - R_); c <= col + R_; c++) {
+        if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+        const i = r * cols + c, q = Math.hypot((c - col) / R_, (r - row) / (R_ / 2));
+        if (q < 1 && ZB[i] >= depth - 0.5) BG[i] = C(YEL, 6 + flare * 9 * (1 - q));
+      }
+    }
+  }
+}
+// the footbridge's handrails (posts and a top rail, see-through between) in 2-cell lengths, and a gateway at the
+// shore end with the island's name across it
+const FB_SIGN = 'LIGHTHOUSE';
+function drawFootbridge() {
+  const rail = (i, t, L) => HIT.w > 0.088 || HIT.face === 5 ? (set(i, '=', C(GRAY, L * 1.1)), true)
+                          : fract(HIT.u * 5) < 0.2 ? (set(i, '|', C(GRAY, L * 0.9)), true) : false;
+  for (let y = FOOTBRIDGE.y0; y < FOOTBRIDGE.y1; y += 2) {
+    const len = Math.min(2, FOOTBRIDGE.y1 - y), [vx, vy] = R(FOOTBRIDGE.x, y + len / 2);
+    if (Math.hypot(vx, vy) > vis + 1) continue;
+    for (const s of [-1, 1]) drawBox(boxAt(vx + s * (FOOTBRIDGE.hw - 0.006), vy, 0, 1, len / 2, 0.006, 0, 0.1), rail);
+  }
+  const [gx, gy] = R(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.15), hw = FOOTBRIDGE.hw + 0.02;
+  if (Math.hypot(gx, gy) > vis) return;
+  const iron = (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.1); return set(i, '|', C(GRAY, L)), true; };
+  for (const s of [-1, 1]) drawBox(boxAt(gx + s * hw, gy, 1, 0, 0.012, 0.012, 0, 0.36), iron);
+  drawBox(boxAt(gx, gy, 1, 0, hw + 0.012, 0.008, 0.3, 0.355), (i, t, L) => { // the sign, readable from both ends
+    BG[i] = C(GRAY, 2 + night * 2);
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
+    const n = FB_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.012) + 1) / 2 * n - 1, k = Math.floor(q), cellU = t / projX / (2 * hw) * n;
+    const on = k >= 0 && k < FB_SIGN.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.3275) <= t / projY / 2 + 1e-4;
+    return set(i, on ? FB_SIGN[k] : ' ', C(WHITE, Math.max(L * 1.2, night * 14))), true;
   });
 }
 
@@ -3114,7 +3507,7 @@ function render(dt) {
     // sky / floor only where no wall or roof landed: shading them first and painting over was most of the cell work
     for (let r = 0; r < rows; r++) { const i = r * cols + x; if (ZB[i] < 0) (r < hor ? W.sky : W.floor)(i, r, x, rx, ry); }
   }
-  if (city) sunMoon();
+  if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   W.sprites();
   if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
@@ -3248,6 +3641,7 @@ function promptText() {
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return 'Closed.';
     if (!openAt(sh, tod)) return `${sh.signed ? sh.word : 'Shop'}: closed, opens at ${sh.hours[0]}:00`;
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
@@ -3305,7 +3699,8 @@ function hud() {
   minimap();
   hotbar();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const where = mode === 'room' ? '' : [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
+  const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
                  settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
@@ -3457,6 +3852,7 @@ function interact() {
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.base) return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say('Closed.');
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
@@ -3659,14 +4055,14 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
+  for (const c of cars) if (code(c) && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
     o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, sfxBus); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
     const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
-    if (!cars.includes(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
+    if (!cars.includes(c) || !code(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
     v.g.gain.setTargetAtTime(0.16 * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
@@ -3674,6 +4070,19 @@ function tickSirens(indoors) {
     v.p.pan.setTargetAtTime(clamp((rx * right[0] + ry * right[1]) / d, -1, 1) * 0.8, now, 0.1);
   }
 }
+
+// ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
+function sfxThunder(d, indoors) {
+  const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
+  s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.6 + near * 0.3;
+  const lp = filt('lowpass', indoors ? 260 : 400 + near * 2600), g = actx.createGain(), k = (indoors ? 0.35 : 1) * near;
+  lp.frequency.setValueAtTime(lp.frequency.value, at); lp.frequency.exponentialRampToValueAtTime(140, at + 2.5);
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(0.8 * k, at + (near > 0.7 ? 0.015 : 0.3)); // crack, or a far-off roll
+  g.gain.exponentialRampToValueAtTime(0.25 * k, at + 0.7); g.gain.linearRampToValueAtTime(0.35 * k, at + 1.5);
+  g.gain.exponentialRampToValueAtTime(0.0005, at + 4 + d / 30);
+  chain(s, lp, g, sfxBus); s.start(at, Math.random() * 1.5); s.stop(at + 5 + d / 30);
+}
+let heardBolt = null;
 
 // ---- per frame
 let stepAcc = 0, lastPos = null, clackT = 0;
@@ -3686,7 +4095,7 @@ function audioTick(dt) {
   const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
@@ -3700,6 +4109,7 @@ function audioTick(dt) {
     if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
   }
   tickSirens(indoors);
+  if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && lastPos && lastPos[2] === mode) {
@@ -4159,7 +4569,7 @@ onkeydown = e => {
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY') { weather = { clear: 'rain', rain: 'fog', fog: 'clear' }[weather]; wTimer = 150; say(`Weather: ${weather}`); }
+  if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-5])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -4180,7 +4590,8 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02));
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) &&
+    Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;

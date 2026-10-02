@@ -18,6 +18,9 @@ function alongStreets(s, o, fn) {
 const CURB = 0.25, REACH = 0.24, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
 const lamps = [];
 for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x, y, ax, ay) => lamps.push({ x, y, ax, ay }));
+// the footbridge out to the lighthouse: a lamp every 30m, alternating sides, reaching over the deck
+const FB_LAMP = 3;
+for (let y = FOOTBRIDGE.y0 + 1.5, k = 0; y < FOOTBRIDGE.y1; y += FB_LAMP, k++) { const s = k & 1 ? 1 : -1; lamps.push({ x: FOOTBRIDGE.x + s * FOOTBRIDGE.hw, y, ax: -s, ay: 0 }); }
 const lampsB = bucketed(lamps);
 // light pool on the ground, under the lamp heads of whichever streets exist here
 function glow(wx, wy) {
@@ -57,7 +60,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   }
   if (kind === 'waterfront') for (let k = 0; k < 4; k++) { // promenade: trees and benches facing the water
     const x = bx * 8 + 1 + k * 2, south = by === SHORE_S, y = south ? by * 8 + 2.35 : by * 8 + 7.6;
-    if (onBridge(bx, by) && k === 0) continue;
+    if (onBridge(bx, by) && k === 0 || south && Math.abs(x - FOOTBRIDGE.x) < 1.5) continue; // (keep the way onto the footbridge clear)
     if (k & 1) benches.push({ x, y, fx: 0, fy: south ? 1 : -1 }); else trees.push({ x, y, s: 0.8 }); // facing the water
   }
 }
@@ -67,14 +70,57 @@ alongStreets(5, CURB, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) === 'brownstones') trees.push({ x, y, s: 0.75 });
 });
 alongStreets(5, 2 - CURB, (x, y, ax, ay, bx, by) => { if (districtOf(bx, by) === 'brownstones') trees.push({ x, y, s: 0.75 }); });
+// the island: benches looking out to sea either side of the lighthouse
+benches.push({ x: ISLE.x - 2.2, y: ISLE.y + 0.8, fx: -1, fy: 0 }, { x: ISLE.x + 2.6, y: ISLE.y - 0.6, fx: 1, fy: 0 });
 const treesB = bucketed(trees), benchesB = bucketed(benches);
 
-// boats out on the sea: sailboats tacking back and forth, tugs and ferries crossing east-west
+// boats out on the sea, each on a route: a racetrack loop (out along one lane, a U-turn, back along the lane beside
+// it) on a stretch of open water clear of the bridges, the footbridge, the island and the piers. The road bridges span
+// the whole strait at deck level, so they split the bay into basins no boat leaves. Sailboats tack round a short loop
+// of their own; tugs and ferries run the length of theirs.
+const BOAT_R = 0.6, BOAT_HL = { sail: 0.3, tug: 0.35, ferry: 0.8 }; // U-turn radius (legs 2R apart); half lengths
+function blockedOn(y0, y1) { // x intervals [a, b] that the band y0..y1 of sea is closed across
+  const out = BRIDGE_X.map(bx => [bx * 8 - 0.4, bx * 8 + 2.4]);
+  if (y1 > FOOTBRIDGE.y0 && y0 < FOOTBRIDGE.y1) out.push([FOOTBRIDGE.x - 0.6, FOOTBRIDGE.x + 0.6]);
+  const ir = ISLE.r * 1.35 + 0.6; // past the widest the coast goes, and its surf
+  if (y1 > ISLE.y - ir && y0 < ISLE.y + ir) out.push([ISLE.x - ir, ISLE.x + ir]);
+  for (const [x0, py0, x1, py1] of PIERS) if (y1 > py0 - 0.4 && y0 < py1 + 0.4) out.push([x0 - 0.4, x1 + 0.4]);
+  return out;
+}
+function freeSpan(x, y0, y1) { // the open stretch [a, b] of that band (b > a, may run past N) that x is in, or null
+  const o = BRIDGE_X[0] * 8 - 0.4; // measure from a bridge: it closes every band, so nothing wraps round past it
+  const bl = blockedOn(y0, y1).map(([a, b]) => [mod(a - o, N), mod(a - o, N) + b - a]).sort((p, q) => p[0] - q[0]);
+  const merged = [];
+  for (const [a, b] of bl) { const m = merged[merged.length - 1]; if (m && a <= m[1]) m[1] = Math.max(m[1], b); else merged.push([a, b]); }
+  const t = mod(x - o, N);
+  for (let k = 0; k < merged.length; k++) {
+    const a = merged[k][1], b = k + 1 < merged.length ? merged[k + 1][0] : N;
+    if (t >= a && t < b) return [a + o, b + o];
+  }
+  return null;
+}
+// where boat b is at time t: x, y and which way it's heading along x (+1 east, -1 west, between on the turns)
+function boatAt(b, t) {
+  const R_ = BOAT_R, Ls = b.b - b.a, P = 2 * Ls + 2 * Math.PI * R_, s = mod(b.ph * P + t * b.sp, P);
+  if (s < Ls) return { x: b.a + s, y: b.y, dir: 1 };
+  if (s < Ls + Math.PI * R_) { const th = (s - Ls) / R_; return { x: b.b + Math.sin(th) * R_, y: b.y + R_ - Math.cos(th) * R_, dir: Math.cos(th) }; }
+  if (s < 2 * Ls + Math.PI * R_) return { x: b.b - (s - Ls - Math.PI * R_), y: b.y + 2 * R_, dir: -1 };
+  const th = (s - 2 * Ls - Math.PI * R_) / R_;
+  return { x: b.a - Math.sin(th) * R_, y: b.y + R_ + Math.cos(th) * R_, dir: -Math.cos(th) };
+}
 const boats = [];
 for (let k = 0; k < 28; k++) {
-  const y = SHORE_S * 8 + 10 + hash(k, 1, 92) * (N - SHORE_S * 8 - 18), kind = ['sail', 'sail', 'tug', 'ferry'][k & 3];
-  boats.push({ x0: hash(k, 2, 92) * N, y, sp: (kind === 'sail' ? 0.06 : 0.12) * (k & 4 ? 1 : -1) * (0.7 + hash(k, 3, 92) * 0.6),
-               ph: hash(k, 4, 92) * 6.28, kind });
+  const kind = ['sail', 'sail', 'tug', 'ferry'][k & 3], hl = BOAT_HL[kind];
+  for (let tries = 0; tries < 30; tries++) {
+    const y = SHORE_S * 8 + 9 + hash(k, 1 + tries * 7, 92) * (N - SHORE_S * 8 - 16 - 2 * BOAT_R), x = hash(k, 2 + tries * 7, 92) * N;
+    const span = freeSpan(x, y - 0.3, y + 2 * BOAT_R + 0.3);
+    if (!span) continue;
+    let a = span[0] + hl + BOAT_R, b = span[1] - hl - BOAT_R; // the straight legs: the turns and the hull stay inside
+    if (b - a < 3) continue;
+    if (kind === 'sail') { const L = Math.min(b - a, 4 + hash(k, 5, 92) * 8), c = a + hash(k, 6, 92) * (b - a - L); a = c; b = c + L; }
+    boats.push({ kind, a, b, y, sp: (kind === 'sail' ? 0.06 : 0.12) * (0.7 + hash(k, 3, 92) * 0.6), ph: hash(k, 4, 92) });
+    break;
+  }
 }
 
 // landmark, construction-site and industrial props

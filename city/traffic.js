@@ -55,10 +55,12 @@ function addCar(props) {
   c.ex = c.x; c.ey = c.y; plan(c); cars.push(c);
   return c;
 }
-// a random lane position on an existing street segment
-function randomLane() {
+// a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y)
+function randomLane(near = 0, x = 0, y = 0) {
   for (;;) {
-    const bx = Math.random() * NB | 0, by = Math.random() * NB | 0, vert = Math.random() < 0.5, dir = pick([-1, 1]);
+    const bx = near ? Math.floor((x + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
+    const by = near ? Math.floor((y + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
+    const vert = Math.random() < 0.5, dir = pick([-1, 1]);
     if (!(vert ? vseg(bx, by) : hseg(bx, by))) continue;
     const along = (vert ? by : bx) * 8 + 2.5 + Math.random() * 4.5, lane = (vert ? bx : by) * 8 + 1 + (vert ? 0.4 : -0.4) * dir;
     return { x: vert ? lane : along, y: vert ? along : lane, hx: vert ? 0 : dir, hy: vert ? dir : 0 };
@@ -96,27 +98,62 @@ const nearPeople = [];
 // only the neighbourhood round you is simulated; everything further away waits, unseen, where it is
 const SIM_R = 56, simulated = (x, y) => Math.abs(rel(x - px)) < SIM_R && Math.abs(rel(y - py)) < SIM_R;
 
-// ---- emergency vehicles: now and then an ambulance, fire engine or police car tears through the neighbourhood
-// round you, lights going, ignoring red lights. Cars ahead of it in its lane pull over; cross traffic waits.
+// ---- emergency vehicles: now and then an ambulance, fire engine or police car is called out to somewhere in the
+// neighbourhood round you. It leaves from the nearest station or hospital of its kind (or, if there's none near,
+// comes in from a few blocks off), lights and siren going, ignoring red lights; cars ahead of it pull over and cross
+// traffic waits. At the scene it pulls in to the kerb, lights still turning, for a while; then it drives back to
+// base like any other car and parks out front again.
+// state: 'out' (on a call) -> 'scene' -> 'back'. ev marks the vehicle; code(c) = running lights and siren.
 const EV_BODY = { amb: WHITE, fire: RED, police: BLUE };
+const RETURN_CODE = false; // real crews drive back quietly; true runs lights and siren home too
+const code = c => c.state === 'out' || RETURN_CODE && c.state === 'back';
+const lightsOn_ = c => code(c) || c.state === 'scene'; // the light bar turning
+const BASE_R = 50; // a station further away than this (500m) doesn't send the call; one comes in from off-screen
 let evTimer = 45;
-function spawnEmergency() {
-  for (let tries = 0; tries < 200; tries++) {
-    const p = randomLane(), d = Math.hypot(rel(p.x - px), rel(p.y - py));
+const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!free || !b.out))
+  .reduce((best, b) => { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); return d < best[1] ? [b, d] : best; }, [null, Infinity]);
+function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police'])) {
+  let scene = null; // somewhere on a street a few blocks from you, so you'll see it go by or pull up
+  for (let tries = 0; tries < 200 && !scene; tries++) {
+    const p = randomLane(12, px, py), d = Math.hypot(rel(p.x - px), rel(p.y - py));
+    if (d > 3 && d < 10) scene = [p.x, p.y];
+  }
+  if (!scene) return null;
+  const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T };
+  if (base && bd < BASE_R) { // out of the station, westbound from the kerb
+    base.out = true;
+    return addCar({ ...props, x: base.x, y: base.lane, hx: -1, hy: 0, base });
+  }
+  for (let tries = 0; tries < 200; tries++) { // no station near: it comes in from a few blocks away
+    const p = randomLane(32, px, py), d = Math.hypot(rel(p.x - px), rel(p.y - py));
     if (d < 16 || d > 30 || cars.some(o => Math.hypot(rel(o.x - p.x), rel(o.y - p.y)) < 1.2)) continue;
-    const kind = pick(['amb', 'amb', 'fire', 'police']);
-    // head for a street just past you, so it comes by
-    const dest = [mod(px + rel(px - p.x) * 0.8, N), mod(py + rel(py - p.y) * 0.8, N)];
-    return addCar({ ...p, kind, body: EV_BODY[kind], ev: true, cruise: 2.1, dest, born: T });
+    return addCar({ ...props, ...p, base: nearestBase(kind, false)[0] });
   }
   return null;
 }
+// the call's progress: at the scene, waiting there, heading home, home
+function evArrive(c) {
+  if (c.state === 'out') { c.state = 'scene'; c.until = T + 20 + Math.random() * 25; c.dest = null; return; }
+  if (c.state === 'back') c.home = true; // (taken off the road in stepEmergency, not mid-loop)
+}
+function endCall(c) { // parked at its station again (or just gone, if it came from off-screen)
+  const k = cars.indexOf(c);
+  if (k >= 0) cars.splice(k, 1);
+  if (c.base) c.base.out = false;
+}
 function stepEmergency(dt) {
-  for (let k = cars.length - 1; k >= 0; k--) { // done: off they go, out of sight
-    const c = cars[k];
-    if (c.ev && T - c.born > 40 && Math.hypot(rel(c.x - px), rel(c.y - py)) > 30) cars.splice(k, 1);
+  for (const c of cars.slice()) {
+    if (!c.ev) continue;
+    if (c.home) { endCall(c); continue; }
+    const far = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (c.state === 'scene' && T > c.until) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
+    // out of the neighbourhood that's simulated, it can't get anywhere (the traffic there is frozen): it's home
+    if (far > SIM_R * 0.8 && (c.state === 'back' || T - c.born > 90)) endCall(c);
+    else if (c.state === 'back' && !c.base && far > 30) endCall(c);
   }
-  if (!cars.some(c => c.ev) && (evTimer -= dt) < 0) { spawnEmergency(); evTimer = 60 + Math.random() * 90; }
+  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev).length < 3 && (evTimer -= dt) < 0) {
+    spawnEmergency(); evTimer = 60 + Math.random() * 90;
+  }
 }
 
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
@@ -128,9 +165,9 @@ function stepTraffic(dt, t, everywhere = false) {
   // (which runs off-centre) the band is wider: it waits for the car in front to get properly out of the way, and
   // cars coming up behind it see it even though it isn't square in their lane
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
-  const band = (c, o) => c.ev || o.ev ? 0.3 : 0.12;
+  const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(c => c.ev), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;
@@ -148,13 +185,13 @@ function stepTraffic(dt, t, everywhere = false) {
     const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
     const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
     const nx = vert ? c.x - mod(c.x, 8) : c.B, ny = vert ? c.B : c.y - mod(c.y, 8); // the next intersection
-    if (line < 3 && !c.ev) {
+    if (line < 3 && !code(c)) {
       const s = light(nx, ny, vert, t);
       // an emergency vehicle about to cross in front: hold back as if the light were red
       const siren = evs.some(e => e.nodeX === nx && e.nodeY === ny && (e.hx === 0) !== vert);
       if (s === 'R' || s === 'Y' && line > 0.5 || siren) room_ = Math.min(room_, line - 0.25);
     }
-    if (c.ev) { c.nodeX = nx; c.nodeY = ny; }
+    if (code(c)) { c.nodeX = nx; c.nodeY = ny; }
     // don't turn into a lane if a car is sitting right where we'd land
     if (c.left < 0.6 && (c.nh[0] !== c.hx || c.nh[1] !== c.hy)) {
       const lx = c.x + c.hx * c.left + c.nh[0] * 0.3, ly = c.y + c.hy * c.left + c.nh[1] * 0.3;
@@ -172,20 +209,22 @@ function stepTraffic(dt, t, everywhere = false) {
     // pull in only where the kerb is free: not mid-junction, and not on top of a car that's already pulled in there
     const kerbTaken = c.off < 0.1 && c.near.some(o => o !== c && o.off > 0.1 && o.hx === c.hx && o.hy === c.hy &&
       Math.abs(rel(o.x - c.x) * c.hx + rel(o.y - c.y) * c.hy) < 0.55 && Math.abs(rel(o.x - c.x) * c.hy - rel(o.y - c.y) * c.hx) < 0.3);
-    const pull = !c.ev && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
-    const offTarget = c.ev ? -0.2 : pull ? 0.32 : 0;
+    const pull = !code(c) && c.state !== 'scene' && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
+    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : 0; // at the scene: pulled in to the kerb
     c.off += clamp(offTarget - c.off, -0.6 * dt, 0.6 * dt);
-    if (pull || Math.abs(c.off - offTarget) > 0.02 && !c.ev) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c)) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    if (c.state === 'scene') room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
     if (c.rider && !c.dest) room_ = 0;
-    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < 1.2) {
-      if (c.ev) c.dest = null; else { room_ = 0; c.arrived = true; }
+    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
+      if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction
+      else { room_ = 0; c.arrived = true; }
     }
 
     const target = Math.min(Math.max(0, room_ * 2.5), c.cruise);
     c.brake = target < c.v;
-    c.v = Math.min(target, c.v + (c.ev ? 1.4 : 0.8) * dt);
+    c.v = Math.min(target, c.v + (code(c) ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
     if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
     c.left -= step;

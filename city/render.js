@@ -165,7 +165,7 @@ function render(dt) {
     // sky / floor only where no wall or roof landed: shading them first and painting over was most of the cell work
     for (let r = 0; r < rows; r++) { const i = r * cols + x; if (ZB[i] < 0) (r < hor ? W.sky : W.floor)(i, r, x, rx, ry); }
   }
-  if (city) sunMoon();
+  if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   W.sprites();
   if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }

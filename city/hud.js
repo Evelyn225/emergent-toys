@@ -95,6 +95,7 @@ function promptText() {
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return 'Closed.';
     if (!openAt(sh, tod)) return `${sh.signed ? sh.word : 'Shop'}: closed, opens at ${sh.hours[0]}:00`;
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
@@ -152,7 +153,8 @@ function hud() {
   minimap();
   hotbar();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const where = mode === 'room' ? '' : [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
+  const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
                  settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
