@@ -16,8 +16,11 @@ test('snake: it eats, grows, speeds up, and dies at the wall', () => {
   // steer straight at the apple: pick the axis that's off and press that way when needed
   ev("g.step(0, {}); var food = () => { let f; g.draw((x, y, ch) => { if (ch === '@') f = [x, y]; }); return f; }");
   const ate = ev(`(() => { let n = 0; for (let k = 0; k < 4000 && !g.over && n < 3; k++) {
-    const [hx, hy] = g.body()[0], [fx, fy] = food(), keys = {};
-    if (fx > hx) keys.rightP = 1; else if (fx < hx) keys.leftP = 1; else if (fy > hy) keys.downP = 1; else keys.upP = 1;
+    const [[hx, hy], [nx, ny]] = g.body(), [fx, fy] = food(), keys = {}, dx = hx - nx, dy = hy - ny; // (never straight back into itself)
+    let want = fx > hx ? 'right' : fx < hx ? 'left' : fy > hy ? 'down' : 'up';
+    const back = { right: dx < 0, left: dx > 0, down: dy < 0, up: dy > 0 }[want];
+    if (back) want = dx ? (fy > hy ? 'down' : 'up') : (fx > hx ? 'right' : 'left');
+    keys[want + 'P'] = 1;
     n += g.step(1 / 60, keys).filter(e => e === 'eat').length; } return n; })()`);
   assert.ok(ate >= 1, 'it can eat');
   assert.strictEqual(ev('g.body().length'), 3 + ev('g.score'), 'grows by one per apple');

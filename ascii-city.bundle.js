@@ -218,22 +218,24 @@ const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9'
 // ---- shops
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
-  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE'];
+  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE',
+  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO'];
 const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
   chinatown: ['DUMPLINGS','NOODLES','TEA HOUSE','HERBS','KARAOKE','BAKERY','DIM SUM','JADE','RAMEN','PHO','MAHJONG'],
-  downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS'],
-  industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7'],
-  brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE'],
+  downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS','JUICE','BURGERS'],
+  industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7','CHICKEN','TOBACCO'],
+  brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE','BAGELS','THRIFT','ICE CREAM','TOYS'],
 };
 const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR: 'il!Y', PHARMACY: '+=o', PHONES: '[]#',
   HARDWARE: 'T7/', FLORIST: '*@&', 'PET SHOP': '~>o', ARCADE: '[]#', TATTOO: '*%', LAUNDRY: 'O@', HERBS: '%&*', JADE: 'o@*',
-  'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o' };
+  'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o', TOYS: 'o*@&', THRIFT: '|]&', TOBACCO: 'i=' };
 const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, sorry.', 'Nice weather, huh?', 'Take your time.'];
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
 const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
+  BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
   NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24], STORAGE: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];
@@ -433,11 +435,11 @@ const LOTS = {
 };
 // per district: lot layout (by block hash), height (by lot hash) and facade style
 const BUILD = {
-  downtown: { lots: h => h < 0.25 ? LOTS.whole : LOTS.grid, height: (h, w) => 5 + Math.floor(h ** 1.4 * (w ? 13 : 10)), sty: s => s < 0.55 ? 1 : 0 },
-  midtown: { lots: () => LOTS.grid, height: h => 1 + Math.floor(h ** 2 * 8), sty: s => [0, 1, 2, 7][s * 4 | 0] },
+  downtown: { lots: h => h < 0.25 ? LOTS.whole : LOTS.grid, height: (h, w) => 5 + Math.floor(h ** 1.4 * (w ? 13 : 10)), sty: s => s < 0.45 ? 1 : s < 0.8 ? 0 : 14 },
+  midtown: { lots: () => LOTS.grid, height: h => 1 + Math.floor(h ** 2 * 8), sty: s => [0, 1, 2, 7, 14, 15, 16, 2][s * 8 | 0] },
   chinatown: { lots: () => LOTS.rows, height: h => 2 + Math.floor(h * 3.5), sty: s => s < 0.75 ? 10 : 7 },
-  industrial: { lots: h => h < 0.5 ? LOTS.whole : LOTS.halves, height: h => 1 + Math.round(h * 2) / 2, sty: s => s < 0.85 ? 8 : 2 },
-  brownstones: { lots: () => LOTS.rows, height: h => 1.3 + Math.round(h * 5) / 10, sty: s => s < 0.8 ? 9 : 2 },
+  industrial: { lots: h => h < 0.5 ? LOTS.whole : LOTS.halves, height: h => 1 + Math.round(h * 2) / 2, sty: s => s < 0.75 ? 8 : s < 0.9 ? 15 : 2 },
+  brownstones: { lots: () => LOTS.rows, height: h => 1.3 + Math.round(h * 5) / 10, sty: s => s < 0.75 ? 9 : s < 0.9 ? 16 : 2 },
 };
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const kind = blockKind(bx, by), lm = landmarkOf.get(bi(bx, by));
@@ -1561,6 +1563,7 @@ const ITEMS = {
   slice: { name: 'pizza slice', price: 4, kind: 'food', uses: 3 }, burger: { name: 'burger', price: 8, kind: 'food', uses: 4 },
   kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
   dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
+  fries: { name: 'fries', price: 3, kind: 'food', uses: 3 }, chicken: { name: 'fried chicken', price: 9, kind: 'food', uses: 4 },
   pho: { name: 'pho', price: 11, kind: 'food', uses: 5 }, banhmi: { name: 'banh mi', price: 7, kind: 'food', uses: 4 },
   padthai: { name: 'pad thai', price: 11, kind: 'food', uses: 5 }, greencurry: { name: 'green curry', price: 12, kind: 'food', uses: 5 },
   mangorice: { name: 'mango sticky rice', price: 6, kind: 'food', uses: 3 },
@@ -1571,6 +1574,7 @@ const ITEMS = {
   water: { name: 'water', price: 1, kind: 'drink', uses: 3 }, energy: { name: 'energy drink', price: 4, kind: 'drink', uses: 3, caffeine: 90 },
   beer: { name: 'beer', price: 6, kind: 'drink', uses: 4, booze: 0.25 }, whiskey: { name: 'whiskey', price: 9, kind: 'drink', uses: 2, booze: 0.4 },
   cocktail: { name: 'cocktail', price: 12, kind: 'drink', uses: 3, booze: 0.3 },
+  milkshake: { name: 'milkshake', price: 5, kind: 'drink', uses: 4 }, smoothie: { name: 'smoothie', price: 6, kind: 'drink', uses: 4 },
   thaitea: { name: 'Thai iced tea', price: 4, kind: 'drink', uses: 4, caffeine: 30 },
   herbaltea: { name: 'herbal tea', price: 3, kind: 'drink', uses: 3, sober: 0.35 }, // clears your head a bit
   // smoke
@@ -1607,6 +1611,9 @@ const STOCK_WORD = {
   PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
   RAMEN: ['ramen', 'tea'], NOODLES: ['ramen', 'dumplings', 'tea'], PHO: ['pho', 'banhmi', 'tea'], DUMPLINGS: ['dumplings', 'tea'],
   'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['tea', 'dumplings'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
+  BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
+  'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
+  THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'newspaper', 'candy'],
   'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
@@ -2015,6 +2022,9 @@ GAMES.serve = (rnd = Math.random) => {
 // its own shelf. 60 seconds. Pays for every box shelved right, less for the ones put in the wrong place.
 const STOCK_THEMES = {
   DEFAULT: [['CANS', 'c', RED], ['CEREAL', '#', YEL], ['BOTTLES', 'i', CYAN], ['SOAP', 'o', MAG]],
+  TOYS: [['YO-YOS', 'o', RED], ['DUCKS', '@', YEL], ['BALLS', 'O', WHITE], ['KITES', '&', CYAN]],
+  THRIFT: [['COATS', '#', BRICK], ['SHOES', 'b', GRAY], ['LAMPS', 'T', YEL], ['RECORDS', 'o', MAG]],
+  TOBACCO: [['CIGARS', '=', BRICK], ['PAPERS', '#', WHITE], ['LIGHTERS', 'i', RED], ['PIPES', 'J', WARM]],
   RECORDS: [['VINYL', 'o', MAG], ['CDS', '@', CYAN], ['TAPES', '=', YEL], ['POSTERS', '#', RED]],
   BOOKS: [['FICTION', '|', BLUE], ['COMICS', '%', RED], ['COOKBOOKS', '#', YEL], ['MAPS', '=', GREEN]],
   PHARMACY: [['PILLS', 'o', WHITE], ['BANDAGES', '+', RED], ['SHAMPOO', 'i', CYAN], ['VITAMINS', ':', ORANGE]],
@@ -2434,8 +2444,9 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 
 // ===== city world =====
 const sk0 = seed => seed * 1e4 | 0;
-// background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse)
-const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE];
+// background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse,
+// 14 art deco, 15 parking garage, 16 balcony apartments)
+const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE];
 const ARCADE_SIGN = new Set(['ARCADE', 'VIDEO']);
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
@@ -2489,7 +2500,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
-  if (sty >= 11) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
+  if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
     const top = h - z < 0.3, fw = fract(u * 2);
     if (top && fw > 0.08 && fw < 0.92 && z < h - 0.08) return set(i, '#', hash(Math.floor(u * 2), 7, sk) > 0.7 ? C(YEL, Math.max(L * 0.5, glowL * 0.8)) : C(GRAY, L * 0.4));
@@ -2515,6 +2526,36 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     const wu = fract(u * 3);
     if (wu > 0.2 && wu < 0.8 && fz > 0.25 && fz < 0.8)
       return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+    return set(i, ' ', 0);
+  }
+  if (sty === 14) { // art deco: limestone piers running the full height, gold chevrons round the crown, spandrels between floors
+    const fu = fract(u * 4), crown = h - z < 0.32;
+    if (fu < 0.16) return set(i, '|', C(WHITE, L * 0.9)); // the piers
+    if (crown) return set(i, (Math.floor(u * 16) + Math.floor(z * 24)) & 1 ? '^' : 'v', C(YEL, Math.max(L, night * fog * 11)));
+    if (fz < 0.2) return set(i, fract(u * 16) < 0.5 ? '=' : '#', C(WARM, L * 0.55)); // spandrel panel
+    return hash(Math.floor(u * 4), fl, sk) > litT ? set(i, '#', C(YEL, Math.max(L * 0.8, glowL))) : set(i, ':', C(day > 0.5 ? CYAN : GRAY, L * 0.4));
+  }
+  if (sty === 15) { // parking garage: open concrete decks, cars nose-out behind the parapet, sodium lamps at night
+    const fu = fract(u * 2);
+    if (fu < 0.06) return set(i, '|', C(GRAY, L)); // columns
+    if (fz < 0.22) return set(i, '=', C(GRAY, L * 1.1)); // the deck edge and parapet
+    if (fz > 0.85 && Math.abs(fract(u * 4) - 0.5) < 0.08) return set(i, 'o', C(ORANGE, Math.max(L * 0.6, night * fog * 14)));
+    const bay = Math.floor(u * 3), car = hash(bay, fl, sk + 9);
+    if (car > 0.4 && fz < 0.55 && Math.abs(fract(u * 3) - 0.5) < 0.32) {
+      if (fz > 0.45) return set(i, '_', C(GRAY, L * 0.7)); // the roofline
+      return set(i, Math.abs(fract(u * 3) - 0.5) > 0.24 && fz < 0.33 ? 'o' : '#', C(ITEM_COL[car * 97 & 7], L * 0.8));
+    }
+    BG[i] = C(GRAY, 1); return set(i, ' ', 0); // dark inside
+  }
+  if (sty === 16) { // modern apartments: a balcony a bay, glass rails, sliding doors, the odd plant
+    const fu = fract(u * 2), bay = Math.floor(u * 2);
+    if (fu < 0.05) return set(i, '|', C(WHITE, L * 0.8));
+    if (fz < 0.08) return set(i, '=', C(WHITE, L * 1.1)); // the balcony slab
+    if (fz < 0.36) { // the glass rail, a plant behind it now and then
+      if (hash(bay, fl, sk + 4) > 0.75 && Math.abs(fu - 0.75) < 0.1) return set(i, '%', C(GREEN, L));
+      return set(i, fz > 0.32 ? '-' : ':', C(CYAN, L * (fz > 0.32 ? 0.9 : 0.4)));
+    }
+    if (fu > 0.15 && fu < 0.85 && fz < 0.88) return hash(bay, fl, sk) > litT - 0.05 ? set(i, fu < 0.5 ? '#' : '|', C(WARM, Math.max(L, glowL))) : set(i, fu < 0.5 ? ':' : '|', C(CYAN, L * 0.5));
     return set(i, ' ', 0);
   }
   if (sty === 0) { // office
@@ -3531,17 +3572,18 @@ const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
     return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
   }, 1, 0), walk: true }; // long axis across the stairwell (x): wall to wall, dy deep
 });
-const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 6, DUMPLINGS: 0, THAI: 7, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
+const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 6, DUMPLINGS: 0, THAI: 7, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4, BURGERS: 5, CHICKEN: 8 };
 const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
                     ['SLICE 3', 'WHOLE 18', 'KNOTS 4', 'SODA 2'], ['LATTE 4', 'DONUT 2', 'BAGEL 3', 'TEA 2'],
                     ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3'],
-                    ['PHO 11', 'BANH MI 7', 'ROLLS 5', 'TEA 2'], ['PAD THAI 11', 'CURRY 12', 'MANGO 6', 'THAI TEA 4']];
+                    ['PHO 11', 'BANH MI 7', 'ROLLS 5', 'TEA 2'], ['PAD THAI 11', 'CURRY 12', 'MANGO 6', 'THAI TEA 4'],
+                    ['CHICKEN 9', 'WINGS 7', 'FRIES 3', 'SODA 2']];
 const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
                    CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
 const LYRICS = ['SWEET CAROLINE', 'BAH BAH BAH', 'SO GOOD SO GOOD SO GOOD', 'SWEET CAROLINE']; // what the karaoke bar's playing (audio/ascii-city/karaoke.mp3)
 for (const w in MENUS) ROOM_FOR[w] = 'diner';
-for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'BAKERY']) ROOM_FOR[w] = 'cafe';
+for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'JUICE', 'ICE CREAM', 'BAGELS']) ROOM_FOR[w] = 'cafe';
 for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
 for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
@@ -5351,6 +5393,10 @@ const HAND = {
     (c, r) => c === '#' || c === '~' ? C(ORANGE, 13) : C(WHITE, 11)],
   cocktail: (it, f) => [filled(['   o   /', '\\-------/', ' \\     /', '  \\   /', '   \\ /', '    |', '  __|__'], [[2, 2, 6], [3, 3, 5]], f, '%', '~'),
     (c, r) => c === 'o' ? C(RED, 15) : c === '%' || c === '~' ? C(MAG, 14) : C(WHITE, 12)],
+  milkshake: (it, f) => [filled(['     /', '    /', '  @@/@@', ' |    |', ' |    |', ' |    |', '  \\__/'], [[3, 2, 5], [4, 2, 5], [5, 2, 5]], f, '%', '%'),
+    (c, r) => c === '/' && r < 3 ? C(RED, 13) : c === '@' ? C(WHITE, 15) : c === '%' ? C(MAG, 13) : C(WHITE, 11)],
+  smoothie: (it, f) => [filled(['    |', '  .-|-.', ' |     |', ' |     |', ' |     |', '  \\___/'], [[2, 2, 6], [3, 2, 6], [4, 2, 6]], f, '%', '~'),
+    (c, r) => r < 2 && c === '|' ? C(GREEN, 14) : c === '%' || c === '~' ? C(ORANGE, 14) : C(WHITE, 11)],
   thaitea: (it, f) => [filled(['    ||', '  __||__', ' |      |', ' |      |', ' |      |', '  \\____/'], [[2, 2, 7], [3, 2, 7], [4, 2, 7]], f, ':', '~'),
     (c, r) => r < 2 && c === '|' ? C(WHITE, 13) : c === ':' ? C(ORANGE, 13) : c === '~' ? C(WARM, 15) : C(WHITE, 11)],
   herbaltea: (it, f) => [filled(['  ~ ~', ' .------.', ' |      |o', ' |      |', "  `----'"], [[2, 2, 7], [3, 2, 7]], f, ':', '~'),
@@ -5375,6 +5421,10 @@ const HAND = {
     (c, r) => r === 0 ? C(GREEN, 14) : c === '%' || c === '~' ? C(GREEN, 12) : C(WHITE, 13)],
   mangorice: (it, f) => [bitten(['  .-~~~~-.', ' (@@@@@@@@)', ' (::::::::)', "(==========)"], f, 'top'),
     (c, r) => c === '@' || c === '~' && r === 0 ? C(YEL, 15) : c === ':' ? C(WHITE, 15) : c === '=' ? C(GREEN, 12) : C(YEL, 12)],
+  fries: (it, f) => [bitten(['  | |||| |', '  ||||||||', ' \\========/', '  | FRIES|', '  |______|'], f, 'top'),
+    (c, r) => r < 2 ? C(YEL, 15) : /[A-Z]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
+  chicken: (it, f) => [bitten([' (@) (@)(@)', '.----------.', '| CHICKEN  |', '|==========|', " \\________/"], f, 'top'),
+    (c, r) => c === '@' || c === '(' || c === ')' ? C(ORANGE, 14) : /[A-Z]/.test(c) ? C(WHITE, 15) : r === 3 ? C(RED, 13) : C(WHITE, 12)],
   croissant: (it, f) => [bitten(['    _..--.._', '  .(\\  \\/  /).', ' (__\\__/\\__/__)'], f), (c, r) => C(ORANGE, 13)],
   donut: (it, f) => [bitten(['   .-~~~-.', '  /  .-.  \\', ' |  (   )  |', '  \\  `-`  /', "   `-...-'"], f), (c, r) => r < 2 || c === '~' ? C(MAG, 14) : C(WARM, 12)],
   bagel: (it, f) => [bitten(['   .-----.', '  /  .-.  \\', ' |  (   )  |', '  \\  `-`  /', "   `-----'"], f), (c, r) => C(WARM, 12)],
