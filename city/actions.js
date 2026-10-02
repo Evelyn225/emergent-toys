@@ -11,6 +11,7 @@ function toLane(c) { // snap a car onto the nearest lane in the direction it poi
 }
 function leaveCar() {
   const c = me;
+  endTaxiShift();
   [px, py] = curbOf(c);
   if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; a += Math.PI / 2; }
   else { // settle up: all of it if you can, everything you've got if you can't
@@ -92,6 +93,12 @@ function interact() {
       const from = room.st;
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
+    if (room.kind === 'arcade') {
+      const cab = nearCabinet();
+      if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
+      if (nearKeeper()) return openPrizes();
+    }
+    if (room.kind === 'storage' && nearKeeper()) return openStorage();
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
@@ -102,6 +109,8 @@ function interact() {
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
+  const vm = nearMachine(); // before the cars: you're looking right at it
+  if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -125,9 +134,10 @@ function interact() {
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
-  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11, 4.8, 0]); // at the foot of the stairs
+  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.base) return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say('Closed.');
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
@@ -159,17 +169,17 @@ function stepSleep(dt) {
 }
 function leaveRoom() {
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
-  if (room.kind === 'station') { const s = stations[room.st]; px = s.x; py = s.y - 0.12; a = -Math.PI / 2; }
+  if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
 }
 function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
-  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, 3.6, -Math.PI / 2]); // back from the edge, so E means leave
+  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, ST_TRACK - 2.4, -Math.PI / 2]); // back from the edge, facing the stairs
   say(`${stations[n].name}`);
 }
 function hail() {
   if (mode !== 'walk') return;
-  let best = null, bd = 5;
+  let best = null, bd = 3;
   for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }

@@ -165,14 +165,19 @@ function render(dt) {
     // sky / floor only where no wall or roof landed: shading them first and painting over was most of the cell work
     for (let r = 0; r < rows; r++) { const i = r * cols + x; if (ZB[i] < 0) (r < hor ? W.sky : W.floor)(i, r, x, rx, ry); }
   }
-  if (city) sunMoon();
+  if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   W.sprites();
   if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
   drawHeld(dt); // what's in your hand (or mouth, or under your feet)
-
+  present();
+  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
+  hud();
+}
+// paint the character grid (CH / COL / BG, with fog) onto the canvas: the world's frame, or a minigame's
+function present() {
   g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
   for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length
     const j = r * cols + x0, b = BG[j], s = FOGB[j]; let x1 = x0 + 1;
@@ -198,7 +203,5 @@ function render(dt) {
     g.fillText(s.slice(0, end - x), x * cw, r * FS);
     x = end;
   }
-  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
-  hud();
 }
 

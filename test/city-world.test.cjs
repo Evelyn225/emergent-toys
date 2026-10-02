@@ -188,3 +188,74 @@ test('talk: directions and lines', () => {
   const t = j('(() => { const p = people.find(p => !p.hidden); tod = 14; for (let k = 0; k < 20 && !task; k++) startTask(p); return task && task.kind; })()');
   assert.ok(['escort', 'fetch', 'dog'].includes(t));
 });
+
+test('chinatown lantern strings are tied to a building on both sides of the street', () => {
+  assert.ok(ev('lanterns.length') > 20);
+  assert.strictEqual(ev('lanterns.filter(l => !map[idx(l.x - l.ax * 1.2, l.y - l.ay * 1.2)] || !map[idx(l.x + l.ax * 1.2, l.y + l.ay * 1.2)]).length'), 0);
+});
+
+test('lighthouse island: dry land out in the bay, a footbridge you can walk the whole way, the lighthouse on it', () => {
+  assert.strictEqual(ev('seaAt(ISLE.x, ISLE.y)'), false);
+  assert.strictEqual(ev('seaAt(ISLE.x + ISLE.r * 2, ISLE.y)'), true, 'water round it');
+  assert.strictEqual(ev('onIsland(LIGHTHOUSE.x, LIGHTHOUSE.y) && isleEdge(LIGHTHOUSE.x, LIGHTHOUSE.y) > LIGHTHOUSE.r'), true);
+  // from the promenade, down the middle of the bridge, onto the island: never water
+  assert.strictEqual(ev('(() => { for (let y = FOOTBRIDGE.y0 - 0.5; y < ISLE.y; y += 0.05) if (isWater(FOOTBRIDGE.x, y)) return y; return -1; })()'), -1);
+  assert.strictEqual(ev('isWater(FOOTBRIDGE.x + FOOTBRIDGE.hw + 0.05, (FOOTBRIDGE.y0 + FOOTBRIDGE.y1) / 2)'), true, 'step off the side and you are in the bay');
+  assert.ok(ev('FOOTBRIDGE.y0 < shoreS(FOOTBRIDGE.x) && FOOTBRIDGE.y1 - shoreS(FOOTBRIDGE.x) > 20'), 'a long bridge from the shore');
+});
+
+test('emergency services: police and fire stations and hospitals, each its own building with its vehicle out front', () => {
+  const kinds = j('SERVICES.reduce((o, b) => (o[b.kind] = (o[b.kind] || 0) + 1, o), {})');
+  assert.deepStrictEqual(kinds, { police: 4, fire: 3, amb: 3 });
+  const bad = j(`SERVICES.filter(b => {
+    const sh = SHOP[idx(b.bx * 8 + 3, b.by * 8 + 2)], sty = { police: 11, fire: 12, amb: 13 }[b.kind];
+    return sh.base !== b.kind || STY[idx(b.bx * 8 + 3, b.by * 8 + 2)] !== sty || ROAD[idx(Math.floor(b.x), Math.floor(b.y))] !== 2
+      || ROAD[idx(Math.floor(b.x), Math.floor(b.lane))] !== 2;
+  }).map(b => b.kind + '@' + b.bx + ',' + b.by)`);
+  assert.deepStrictEqual(bad, [], 'its own style, signed, parked on the street in front');
+  assert.ok(ev("SERVICES.filter(b => b.kind === 'amb').every(b => SHOP[idx(b.bx * 8 + 3, b.by * 8 + 2)].pad)"), 'hospitals have a helipad');
+});
+
+test('a call-out: the nearest station sends its vehicle with lights and siren, it waits at the scene, drives home quietly, parks', () => {
+  const { ev: e2 } = loadCity(2);
+  e2("var b_ = SERVICES.find(s => s.kind === 'fire'); px = b_.x - 3; py = b_.y + 0.3; mode = 'walk'; evTimer = 1e9; spawnEmergency('fire')");
+  const seen = new Set();
+  for (let k = 0; k < 6000 && seen.size < 5; k++) {
+    seen.add(e2(`stepTraffic(0.05, T += 0.05); (c => !c ? 'none' : c.state + (code(c) ? '+code' : ''))(cars.find(c => c.ev && c.base === b_))`));
+    if (seen.has('out+code')) seen.add(e2('b_.out') ? 'base empty' : 'base full');
+  }
+  for (const s of ['out+code', 'scene', 'back', 'base empty']) assert.ok(seen.has(s), `saw ${s} (${[...seen]})`);
+  assert.ok(!seen.has('back+code'), 'no siren on the way home');
+  for (let k = 0; k < 6000 && e2('b_.out'); k++) e2('stepTraffic(0.05, T += 0.05)');
+  assert.strictEqual(e2('b_.out || cars.some(c => c.base === b_)'), false, 'parked back at the station');
+});
+
+test('thunderstorms: rain, wind and lightning every few seconds', () => {
+  const { ev: e3 } = loadCity(3);
+  e3("weather = 'storm'; wTimer = 1e9; var strikes = 0, last = null");
+  for (let k = 0; k < 1200; k++) e3('env(0.05); T += 0.05; if (bolt !== last) { strikes++; last = bolt; }');
+  assert.ok(e3('rain') > 0.99 && e3('storm') > 0.99);
+  const n = e3('strikes');
+  assert.ok(n >= 3 && n <= 25, `${n} strikes in a minute`);
+  assert.strictEqual(e3('bolt.t = T - 0.03; bolt.d = 10; flash()'), 1, 'a close strike lights everything');
+  assert.ok(e3('bolt.t = T - 3; flash()') < 0.01, 'and is gone a few seconds later');
+});
+
+test('boats keep to open water: every point of every route clears the bridges, footbridge, island and piers', () => {
+  assert.strictEqual(ev('boats.length'), 28, 'every boat found a route');
+  const bad = j(`boats.flatMap((b, k) => {
+    const hits = [], P = 2 * (b.b - b.a) + 2 * Math.PI * BOAT_R, hl = BOAT_HL[b.kind];
+    for (let s = 0; s < P; s += 0.1) {
+      const p = boatAt(b, s / b.sp - b.ph * P / b.sp);
+      for (const dx_ of [-hl, 0, hl]) { // the hull's ends too
+        const x = p.x + dx_, y = p.y;
+        const why = !seaAt(x, y) ? 'land' : onPier(x, y) ? 'pier' : BRIDGE_X.some(bx => mod(x - bx * 8, N) < 2) ? 'bridge'
+          : Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw + 0.1 && y < FOOTBRIDGE.y1 ? 'footbridge' : isleEdge(x, y) > -0.3 ? 'island' : '';
+        if (why) { hits.push(k + ' ' + b.kind + ' ' + why); return hits; }
+      }
+    }
+    return hits;
+  })`);
+  assert.deepStrictEqual(bad, []);
+  assert.ok(ev("boats.filter(b => b.kind !== 'sail').every(b => b.b - b.a > 20)"), 'tugs and ferries run a good way');
+});

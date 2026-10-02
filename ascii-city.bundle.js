@@ -57,7 +57,7 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
 // ---- game state
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
 let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0;
-let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0;
+let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0;
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
@@ -88,23 +88,36 @@ const ROOM_RATE = word => word === 'MOTEL' ? 20 : 40;
 const checkInOpen = t => t >= 18 || t < 5;
 function earn(amount) { money = Math.round((money + amount) * 100) / 100; if (onMoney) onMoney(amount); }
 
+// thunderstorms: lightning every few seconds. bolt = the latest strike {t: when, az: which way, d: how far (cells),
+// seed: its zigzag}; flash() is how bright it is lighting the city right now (a double flicker, then a fade)
+let bolt = null;
+function flash() {
+  if (!bolt) return 0;
+  const s = T - bolt.t, near = clamp(1.3 - bolt.d / 80, 0.35, 1);
+  const f = s < 0 ? 0 : s < 0.07 ? 1 : s < 0.13 ? 0.15 : s < 0.2 ? 0.75 : Math.exp(-(s - 0.2) * 7) * 0.6;
+  return f * near;
+}
+const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'clear' }; // the Y key's cycle
+
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
   const lapse = K.KeyT ? 40 : 1; // 20s per game hour; hold T to fast-forward (clouds race along too)
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
-  if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog']); wTimer = 60 + Math.random() * 90; }
-  rain += clamp((weather === 'rain') - rain, -dt / 6, dt / 6);
+  if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog', 'storm']); wTimer = 60 + Math.random() * 90; }
+  rain += clamp((weather === 'rain' || weather === 'storm') - rain, -dt / 6, dt / 6);
+  storm += clamp((weather === 'storm') - storm, -dt / 8, dt / 8);
+  if (storm > 0.6 && Math.random() < dt / 6) bolt = { t: T, az: Math.random() * Math.PI * 2, d: 12 + Math.random() * 70, seed: Math.random() * 1e4 | 0 };
   fogAmt += clamp((weather === 'fog') - fogAmt, -dt / 6, dt / 6);
   wet = clamp(wet + (rain > 0.3 ? dt / 10 : -dt / 60), 0, 1); // streets stay wet for a while after rain
   const sunEl = Math.sin((tod - 6) / 12 * Math.PI);
   day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
   overcast = Math.max(rain, fogAmt);
-  amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast);
+  amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast) * (1 - 0.3 * storm) + flash() * 0.9;
   vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain);
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
-  if (mode === 'room') { amb = room.def.light; vis = 40; }
+  if (mode === 'room') { amb = room.def.light + flash() * 0.1; vis = 40; } // a flicker through the windows
 }
 
 // ---- ascii sprites
@@ -200,7 +213,7 @@ const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9'
 // ---- shops
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
-  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE'];
+  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE'];
 const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
@@ -217,7 +230,7 @@ const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, so
 const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
-  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24] };
+  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24], STORAGE: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -369,17 +382,30 @@ const TAU = Math.PI * 2;
 const wave = (x, k) => 0.8 * Math.sin(TAU * x / N * 3 + k) + 0.5 * Math.sin(TAU * x / N * 11 + 2 * k) + 0.3 * Math.sin(TAU * x / N * 23 + 3 * k);
 const shoreS = x => SHORE_S * 8 + 4.6 + wave(x, 1); // land is north of this line in the south waterfront
 const shoreN = x => SHORE_N * 8 + 3.4 + wave(x, 4); // and south of this one in the north waterfront
+// lighthouse island: a small rocky island out in the bay off the foot of Broadway, its lighthouse on the far side,
+// reached by a long footbridge from the waterfront promenade. The coast wobbles (isleR), so it isn't a circle.
+const ISLE_BX = 16, ISLE = { x: ISLE_BX * 8 + 5, y: SHORE_S * 8 + 33, r: 5 };
+const LIGHTHOUSE = { x: ISLE.x + 1.2, y: ISLE.y + 2.2, r: 0.26 };
+const FOOTBRIDGE = { x: ISLE.x, hw: 0.16, y0: SHORE_S * 8 + 2.6, y1: ISLE.y - 2.5 }; // a deck 3m wide, running south
+const isleR = th => ISLE.r * (1 + 0.16 * Math.sin(3 * th + 1) + 0.08 * Math.sin(5 * th + 2) + 0.05 * Math.sin(9 * th));
+function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cells; negative out at sea
+  const ex = rel(x - ISLE.x), ey = rel(y - ISLE.y);
+  if (Math.abs(ex) > ISLE.r * 1.5 || Math.abs(ey) > ISLE.r * 1.5) return -ISLE.r;
+  return isleR(Math.atan2(ey, ex)) - Math.hypot(ex, ey);
+}
+const onIsland = (x, y) => isleEdge(x, y) > 0;
+const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
 // piers: walkable decks out over the water [x0, y0, x1, y1]; wider docks along the industrial shore
 const PIERS = [];
 for (let bx = 0; bx < NB; bx++) {
-  if (BRIDGE_X.includes(bx)) continue;
+  if (BRIDGE_X.includes(bx) || bx === ISLE_BX) continue;
   const dock = districtOf(bx, SHORE_S - 1) === 'industrial';
   if (dock && hash(bx, 4, 43) < 0.5) PIERS.push([bx * 8 + 3.6, SHORE_S * 8 + 3, bx * 8 + 6.4, SHORE_S * 8 + 11]);
   else if (hash(bx, 5, 43) < 0.35) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
-const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0);
-const seaAt = (wx, wy) => { const y = mod(wy, N); return y > shoreS(wx) || y < shoreN(wx); };
+const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
+const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy); };
 // open water you can't walk or drive on (park ponds are separate, see inPond)
 const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.floor(wy))]) && !onPier(wx, wy);
 
@@ -439,6 +465,44 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { // a crossing 
   if (!degree(bx, by) && map[from] && !blockKind(bx - 1, by - 1) && map[idx(bx * 8, by * 8 + 2)] !== undefined) copyCell(from, idx(bx * 8, by * 8));
 }
 
+// ---- emergency services: police stations, fire stations and hospitals, where the emergency vehicles live (see
+// stepEmergency). Each takes the lot on the north-west corner of a built-up block, fronting the street along the
+// block's north side, its vehicle parked at the kerb out front: x, y = that parking spot (lane = the lane beside it).
+// They're their own buildings, not the district's: STY 11 police (grey stone, 4-5 floors), 12 fire station (red
+// brick, 2-3 floors, a hose tower at the back), 13 hospital (a white tower with a helipad, sh.pad = its middle).
+const SERVICE_BUILD = { police: { sty: 11, h: 1.5 }, fire: { sty: 12, h: 1.05 }, amb: { sty: 13, h: 3.6 } };
+const BASE_KINDS = { police: { word: 'POLICE', neon: BLUE, n: 4, title: 'Police station' },
+                     fire: { word: 'FIRE DEPT', neon: RED, n: 3, title: 'Fire station' },
+                     amb: { word: 'HOSPITAL', neon: WHITE, n: 3, title: 'Hospital' } };
+const SERVICES = [];
+{
+  const cand = [];
+  for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++)
+    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW && SHOP[idx(bx * 8 + 3, by * 8 + 2)]) cand.push([hash(bx, by, 81), bx, by]);
+  cand.sort((p, q) => p[0] - q[0]);
+  const gap = (b, bx, by) => Math.hypot(relB(b.bx - bx), b.by - by);
+  for (const kind in BASE_KINDS) {
+    const K_ = BASE_KINDS[kind];
+    for (const [, bx, by] of cand) {
+      if (SERVICES.filter(b => b.kind === kind).length >= K_.n) break;
+      if (SERVICES.some(b => gap(b, bx, by) < (b.kind === kind ? 8 : 3))) continue;
+      const sh = SHOP[idx(bx * 8 + 3, by * 8 + 2)]; // the lot's shop, shared by all its cells (lanes included)
+      const lot = [];
+      for (let y = by * 8; y < by * 8 + 8; y++) for (let x = bx * 8; x < bx * 8 + 8; x++) if (SHOP[idx(x, y)] === sh) lot.push([x, y]);
+      if (kind !== 'amb' && lot.length > 12) continue; // a whole block is too big for a police or fire station
+      Object.assign(sh, { kind: SHOP_LIT, word: K_.word, neon: K_.neon, signed: true, base: kind, hours: [0, 24] });
+      const B_ = SERVICE_BUILD[kind];
+      for (const [x, y] of lot) { map[idx(x, y)] = B_.h; STY[idx(x, y)] = B_.sty; }
+      if (kind === 'fire') { // the hose tower, at the back corner of the lot
+        const [tx, ty] = lot.reduce((b, c) => c[1] - c[0] * 0.1 > b[1] - b[0] * 0.1 ? c : b);
+        map[idx(tx, ty)] = 2.1;
+      }
+      if (kind === 'amb') sh.pad = [lot.reduce((s, c) => s + c[0], 0) / lot.length + 0.5, lot.reduce((s, c) => s + c[1], 0) / lot.length + 0.5];
+      SERVICES.push({ kind, bx, by, x: bx * 8 + 3.4, y: by * 8 + 1.74, lane: by * 8 + 1.4, out: false });
+    }
+  }
+}
+
 // ---- street names, for talk, directions and the HUD
 const ord = n => n + ((n % 100 / 10 | 0) === 1 ? 'TH' : [, 'ST', 'ND', 'RD'][n % 10] || 'TH');
 const ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',
@@ -473,6 +537,9 @@ function alongStreets(s, o, fn) {
 const CURB = 0.25, REACH = 0.24, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
 const lamps = [];
 for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x, y, ax, ay) => lamps.push({ x, y, ax, ay }));
+// the footbridge out to the lighthouse: a lamp every 30m, alternating sides, reaching over the deck
+const FB_LAMP = 3;
+for (let y = FOOTBRIDGE.y0 + 1.5, k = 0; y < FOOTBRIDGE.y1; y += FB_LAMP, k++) { const s = k & 1 ? 1 : -1; lamps.push({ x: FOOTBRIDGE.x + s * FOOTBRIDGE.hw, y, ax: -s, ay: 0 }); }
 const lampsB = bucketed(lamps);
 // light pool on the ground, under the lamp heads of whichever streets exist here
 function glow(wx, wy) {
@@ -512,7 +579,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   }
   if (kind === 'waterfront') for (let k = 0; k < 4; k++) { // promenade: trees and benches facing the water
     const x = bx * 8 + 1 + k * 2, south = by === SHORE_S, y = south ? by * 8 + 2.35 : by * 8 + 7.6;
-    if (onBridge(bx, by) && k === 0) continue;
+    if (onBridge(bx, by) && k === 0 || south && Math.abs(x - FOOTBRIDGE.x) < 1.5) continue; // (keep the way onto the footbridge clear)
     if (k & 1) benches.push({ x, y, fx: 0, fy: south ? 1 : -1 }); else trees.push({ x, y, s: 0.8 }); // facing the water
   }
 }
@@ -522,14 +589,57 @@ alongStreets(5, CURB, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) === 'brownstones') trees.push({ x, y, s: 0.75 });
 });
 alongStreets(5, 2 - CURB, (x, y, ax, ay, bx, by) => { if (districtOf(bx, by) === 'brownstones') trees.push({ x, y, s: 0.75 }); });
+// the island: benches looking out to sea either side of the lighthouse
+benches.push({ x: ISLE.x - 2.2, y: ISLE.y + 0.8, fx: -1, fy: 0 }, { x: ISLE.x + 2.6, y: ISLE.y - 0.6, fx: 1, fy: 0 });
 const treesB = bucketed(trees), benchesB = bucketed(benches);
 
-// boats out on the sea: sailboats tacking back and forth, tugs and ferries crossing east-west
+// boats out on the sea, each on a route: a racetrack loop (out along one lane, a U-turn, back along the lane beside
+// it) on a stretch of open water clear of the bridges, the footbridge, the island and the piers. The road bridges span
+// the whole strait at deck level, so they split the bay into basins no boat leaves. Sailboats tack round a short loop
+// of their own; tugs and ferries run the length of theirs.
+const BOAT_R = 0.6, BOAT_HL = { sail: 0.3, tug: 0.35, ferry: 0.8 }; // U-turn radius (legs 2R apart); half lengths
+function blockedOn(y0, y1) { // x intervals [a, b] that the band y0..y1 of sea is closed across
+  const out = BRIDGE_X.map(bx => [bx * 8 - 0.4, bx * 8 + 2.4]);
+  if (y1 > FOOTBRIDGE.y0 && y0 < FOOTBRIDGE.y1) out.push([FOOTBRIDGE.x - 0.6, FOOTBRIDGE.x + 0.6]);
+  const ir = ISLE.r * 1.35 + 0.6; // past the widest the coast goes, and its surf
+  if (y1 > ISLE.y - ir && y0 < ISLE.y + ir) out.push([ISLE.x - ir, ISLE.x + ir]);
+  for (const [x0, py0, x1, py1] of PIERS) if (y1 > py0 - 0.4 && y0 < py1 + 0.4) out.push([x0 - 0.4, x1 + 0.4]);
+  return out;
+}
+function freeSpan(x, y0, y1) { // the open stretch [a, b] of that band (b > a, may run past N) that x is in, or null
+  const o = BRIDGE_X[0] * 8 - 0.4; // measure from a bridge: it closes every band, so nothing wraps round past it
+  const bl = blockedOn(y0, y1).map(([a, b]) => [mod(a - o, N), mod(a - o, N) + b - a]).sort((p, q) => p[0] - q[0]);
+  const merged = [];
+  for (const [a, b] of bl) { const m = merged[merged.length - 1]; if (m && a <= m[1]) m[1] = Math.max(m[1], b); else merged.push([a, b]); }
+  const t = mod(x - o, N);
+  for (let k = 0; k < merged.length; k++) {
+    const a = merged[k][1], b = k + 1 < merged.length ? merged[k + 1][0] : N;
+    if (t >= a && t < b) return [a + o, b + o];
+  }
+  return null;
+}
+// where boat b is at time t: x, y and which way it's heading along x (+1 east, -1 west, between on the turns)
+function boatAt(b, t) {
+  const R_ = BOAT_R, Ls = b.b - b.a, P = 2 * Ls + 2 * Math.PI * R_, s = mod(b.ph * P + t * b.sp, P);
+  if (s < Ls) return { x: b.a + s, y: b.y, dir: 1 };
+  if (s < Ls + Math.PI * R_) { const th = (s - Ls) / R_; return { x: b.b + Math.sin(th) * R_, y: b.y + R_ - Math.cos(th) * R_, dir: Math.cos(th) }; }
+  if (s < 2 * Ls + Math.PI * R_) return { x: b.b - (s - Ls - Math.PI * R_), y: b.y + 2 * R_, dir: -1 };
+  const th = (s - 2 * Ls - Math.PI * R_) / R_;
+  return { x: b.a - Math.sin(th) * R_, y: b.y + R_ + Math.cos(th) * R_, dir: -Math.cos(th) };
+}
 const boats = [];
 for (let k = 0; k < 28; k++) {
-  const y = SHORE_S * 8 + 10 + hash(k, 1, 92) * (N - SHORE_S * 8 - 18), kind = ['sail', 'sail', 'tug', 'ferry'][k & 3];
-  boats.push({ x0: hash(k, 2, 92) * N, y, sp: (kind === 'sail' ? 0.06 : 0.12) * (k & 4 ? 1 : -1) * (0.7 + hash(k, 3, 92) * 0.6),
-               ph: hash(k, 4, 92) * 6.28, kind });
+  const kind = ['sail', 'sail', 'tug', 'ferry'][k & 3], hl = BOAT_HL[kind];
+  for (let tries = 0; tries < 30; tries++) {
+    const y = SHORE_S * 8 + 9 + hash(k, 1 + tries * 7, 92) * (N - SHORE_S * 8 - 16 - 2 * BOAT_R), x = hash(k, 2 + tries * 7, 92) * N;
+    const span = freeSpan(x, y - 0.3, y + 2 * BOAT_R + 0.3);
+    if (!span) continue;
+    let a = span[0] + hl + BOAT_R, b = span[1] - hl - BOAT_R; // the straight legs: the turns and the hull stay inside
+    if (b - a < 3) continue;
+    if (kind === 'sail') { const L = Math.min(b - a, 4 + hash(k, 5, 92) * 8), c = a + hash(k, 6, 92) * (b - a - L); a = c; b = c + L; }
+    boats.push({ kind, a, b, y, sp: (kind === 'sail' ? 0.06 : 0.12) * (0.7 + hash(k, 3, 92) * 0.6), ph: hash(k, 4, 92) });
+    break;
+  }
 }
 
 // landmark, construction-site and industrial props
@@ -563,11 +673,14 @@ for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && hash(x0, y0, 55) < 0.7)
 const extrasB = bucketed(extras);
 
 // chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
-const lanterns = [];
+// strung wall to wall, so only where there's a building on both sides of the street to tie it to
+const LANTERN_SPAN = 0.95, lanterns = [];
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   const side = o === 'h' ? districtOf(bx, by) === 'chinatown' || districtOf(bx, by - 1) === 'chinatown'
                          : districtOf(bx, by) === 'chinatown' || districtOf(bx - 1, by) === 'chinatown';
-  if (side) lanterns.push({ x, y, ax: Math.abs(ax), ay: Math.abs(ay) });
+  ax = Math.abs(ax); ay = Math.abs(ay);
+  const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
+  if (side && walls) lanterns.push({ x, y, ax, ay });
 });
 const lanternsB = bucketed(lanterns);
 
@@ -614,8 +727,10 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
 
-// subway: stations with a sidewalk entrance on a block's north side, spread out across town
-const stations = [];
+// subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
+// hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point
+const SUBWAY_HOLE = [0.14, 0.065];
+const stations = [], STATION_AT = new Map(); // block -> its station
 {
   const cand = [];
   for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
@@ -626,12 +741,28 @@ const stations = [];
     if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 6)) continue;
     let name = ST_NAMES[by];
     if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
-    const w = Math.max(11, name.length + 2), a = (w - 3) >> 1;
-    const art = pad([' .' + '-'.repeat(a) + '[M]' + '-'.repeat(w - 3 - a) + '.', ' |' + (' ' + name).padEnd(w) + '|', " '" + '-'.repeat(w) + "'",
-                     ' '.repeat(w >> 1) + '| |', ' |' + '='.repeat(w) + '|', ' |  ' + '_'.repeat(w - 4) + '  |', ' |' + '_|'.repeat(w >> 1).padEnd(w, '_') + '|']);
-    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84, art, w: art[0].length * 0.04 });
+    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });
+    STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
   }
 }
+
+// vending machines: on the sidewalk against a building, at the edge of a frontage (beside a shopfront, not across it),
+// clear of subway entrances, facing the street. {x, y, kind, c, s: the box's axis along the street, fs: which side of it (+-1) is the front}
+const VENDING = { DRINKS: { title: 'DRINK MACHINE', stock: ['soda', 'water', 'energy'] },
+                  SNACKS: { title: 'SNACK MACHINE', stock: ['chips', 'candy'] },
+                  CIGARETTES: { title: 'CIGARETTE MACHINE', stock: ['cigarettes'] } };
+const VM_HL = 0.045, VM_HW = 0.035, VM_H = 0.19, machines = [];
+for (const s of [2.12, 4.88, 6.12]) for (const o of [VM_HW + 0.005, 2 - VM_HW - 0.005]) alongStreets(s, o, (x, y, ax, ay, bx, by, ori) => {
+  const r = hash(bx * 3 + s, by * 5 + o, ori === 'h' ? 210 : 211);
+  if (r > (districtOf(bx, by) === 'industrial' ? 0.03 : 0.07)) return;
+  const wall = idx(x - ax * 0.1, y - ay * 0.1); // the cell behind it
+  if (!map[wall] || stations.some(t => Math.hypot(rel(t.x - x), t.y - y) < 0.7)) return;
+  const c = Math.abs(ay), sn = Math.abs(ax);
+  machines.push({ x, y, kind: Object.keys(VENDING)[Math.floor(r / 0.07 * 3) % 3], c, s: sn, fs: Math.sign(-sn * ax + c * ay) });
+});
+const machinesB = bucketed(machines);
+const machineAt = (x, y, pad) => machinesB[bi(Math.floor(x / 8), Math.floor(y / 8))].some(m =>
+  Math.abs((x - m.x) * m.c + (y - m.y) * m.s) < VM_HL + pad && Math.abs(-(x - m.x) * m.s + (y - m.y) * m.c) < VM_HW + pad);
 
 // rooftop clutter: one item on some lots, placed inside the lot so it sits on the roof
 const roofs = [];
@@ -708,10 +839,12 @@ function addCar(props) {
   c.ex = c.x; c.ey = c.y; plan(c); cars.push(c);
   return c;
 }
-// a random lane position on an existing street segment
-function randomLane() {
+// a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y)
+function randomLane(near = 0, x = 0, y = 0) {
   for (;;) {
-    const bx = Math.random() * NB | 0, by = Math.random() * NB | 0, vert = Math.random() < 0.5, dir = pick([-1, 1]);
+    const bx = near ? Math.floor((x + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
+    const by = near ? Math.floor((y + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
+    const vert = Math.random() < 0.5, dir = pick([-1, 1]);
     if (!(vert ? vseg(bx, by) : hseg(bx, by))) continue;
     const along = (vert ? by : bx) * 8 + 2.5 + Math.random() * 4.5, lane = (vert ? bx : by) * 8 + 1 + (vert ? 0.4 : -0.4) * dir;
     return { x: vert ? lane : along, y: vert ? along : lane, hx: vert ? 0 : dir, hy: vert ? dir : 0 };
@@ -749,27 +882,62 @@ const nearPeople = [];
 // only the neighbourhood round you is simulated; everything further away waits, unseen, where it is
 const SIM_R = 56, simulated = (x, y) => Math.abs(rel(x - px)) < SIM_R && Math.abs(rel(y - py)) < SIM_R;
 
-// ---- emergency vehicles: now and then an ambulance, fire engine or police car tears through the neighbourhood
-// round you, lights going, ignoring red lights. Cars ahead of it in its lane pull over; cross traffic waits.
+// ---- emergency vehicles: now and then an ambulance, fire engine or police car is called out to somewhere in the
+// neighbourhood round you. It leaves from the nearest station or hospital of its kind (or, if there's none near,
+// comes in from a few blocks off), lights and siren going, ignoring red lights; cars ahead of it pull over and cross
+// traffic waits. At the scene it pulls in to the kerb, lights still turning, for a while; then it drives back to
+// base like any other car and parks out front again.
+// state: 'out' (on a call) -> 'scene' -> 'back'. ev marks the vehicle; code(c) = running lights and siren.
 const EV_BODY = { amb: WHITE, fire: RED, police: BLUE };
+const RETURN_CODE = false; // real crews drive back quietly; true runs lights and siren home too
+const code = c => c.state === 'out' || RETURN_CODE && c.state === 'back';
+const lightsOn_ = c => code(c) || c.state === 'scene'; // the light bar turning
+const BASE_R = 50; // a station further away than this (500m) doesn't send the call; one comes in from off-screen
 let evTimer = 45;
-function spawnEmergency() {
-  for (let tries = 0; tries < 200; tries++) {
-    const p = randomLane(), d = Math.hypot(rel(p.x - px), rel(p.y - py));
+const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!free || !b.out))
+  .reduce((best, b) => { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); return d < best[1] ? [b, d] : best; }, [null, Infinity]);
+function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police'])) {
+  let scene = null; // somewhere on a street a few blocks from you, so you'll see it go by or pull up
+  for (let tries = 0; tries < 200 && !scene; tries++) {
+    const p = randomLane(12, px, py), d = Math.hypot(rel(p.x - px), rel(p.y - py));
+    if (d > 3 && d < 10) scene = [p.x, p.y];
+  }
+  if (!scene) return null;
+  const [base, bd] = nearestBase(kind, true), props = { kind, body: EV_BODY[kind], ev: true, state: 'out', cruise: 2.1, dest: scene, born: T };
+  if (base && bd < BASE_R) { // out of the station, westbound from the kerb
+    base.out = true;
+    return addCar({ ...props, x: base.x, y: base.lane, hx: -1, hy: 0, base });
+  }
+  for (let tries = 0; tries < 200; tries++) { // no station near: it comes in from a few blocks away
+    const p = randomLane(32, px, py), d = Math.hypot(rel(p.x - px), rel(p.y - py));
     if (d < 16 || d > 30 || cars.some(o => Math.hypot(rel(o.x - p.x), rel(o.y - p.y)) < 1.2)) continue;
-    const kind = pick(['amb', 'amb', 'fire', 'police']);
-    // head for a street just past you, so it comes by
-    const dest = [mod(px + rel(px - p.x) * 0.8, N), mod(py + rel(py - p.y) * 0.8, N)];
-    return addCar({ ...p, kind, body: EV_BODY[kind], ev: true, cruise: 2.1, dest, born: T });
+    return addCar({ ...props, ...p, base: nearestBase(kind, false)[0] });
   }
   return null;
 }
+// the call's progress: at the scene, waiting there, heading home, home
+function evArrive(c) {
+  if (c.state === 'out') { c.state = 'scene'; c.until = T + 20 + Math.random() * 25; c.dest = null; return; }
+  if (c.state === 'back') c.home = true; // (taken off the road in stepEmergency, not mid-loop)
+}
+function endCall(c) { // parked at its station again (or just gone, if it came from off-screen)
+  const k = cars.indexOf(c);
+  if (k >= 0) cars.splice(k, 1);
+  if (c.base) c.base.out = false;
+}
 function stepEmergency(dt) {
-  for (let k = cars.length - 1; k >= 0; k--) { // done: off they go, out of sight
-    const c = cars[k];
-    if (c.ev && T - c.born > 40 && Math.hypot(rel(c.x - px), rel(c.y - py)) > 30) cars.splice(k, 1);
+  for (const c of cars.slice()) {
+    if (!c.ev) continue;
+    if (c.home) { endCall(c); continue; }
+    const far = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (c.state === 'scene' && T > c.until) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
+    // out of the neighbourhood that's simulated, it can't get anywhere (the traffic there is frozen): it's home
+    if (far > SIM_R * 0.8 && (c.state === 'back' || T - c.born > 90)) endCall(c);
+    else if (c.state === 'back' && !c.base && far > 30) endCall(c);
   }
-  if (!cars.some(c => c.ev) && (evTimer -= dt) < 0) { spawnEmergency(); evTimer = 60 + Math.random() * 90; }
+  if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev).length < 3 && (evTimer -= dt) < 0) {
+    spawnEmergency(); evTimer = 60 + Math.random() * 90;
+  }
 }
 
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
@@ -781,10 +949,9 @@ function stepTraffic(dt, t, everywhere = false) {
   // (which runs off-centre) the band is wider: it waits for the car in front to get properly out of the way, and
   // cars coming up behind it see it even though it isn't square in their lane
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
-  // (and nobody but the emergency vehicle squeezes past a car that has pulled over)
-  const band = (c, o) => c.ev || o.ev ? 0.3 : o.off > 0.1 ? 0.45 : 0.12;
+  const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(c => c.ev), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;
@@ -802,13 +969,13 @@ function stepTraffic(dt, t, everywhere = false) {
     const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
     const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
     const nx = vert ? c.x - mod(c.x, 8) : c.B, ny = vert ? c.B : c.y - mod(c.y, 8); // the next intersection
-    if (line < 3 && !c.ev) {
+    if (line < 3 && !code(c)) {
       const s = light(nx, ny, vert, t);
       // an emergency vehicle about to cross in front: hold back as if the light were red
       const siren = evs.some(e => e.nodeX === nx && e.nodeY === ny && (e.hx === 0) !== vert);
       if (s === 'R' || s === 'Y' && line > 0.5 || siren) room_ = Math.min(room_, line - 0.25);
     }
-    if (c.ev) { c.nodeX = nx; c.nodeY = ny; }
+    if (code(c)) { c.nodeX = nx; c.nodeY = ny; }
     // don't turn into a lane if a car is sitting right where we'd land
     if (c.left < 0.6 && (c.nh[0] !== c.hx || c.nh[1] !== c.hy)) {
       const lx = c.x + c.hx * c.left + c.nh[0] * 0.3, ly = c.y + c.hy * c.left + c.nh[1] * 0.3;
@@ -823,20 +990,25 @@ function stepTraffic(dt, t, everywhere = false) {
       const rx = rel(c.x - e.x), ry = rel(c.y - e.y), al = rx * c.hx + ry * c.hy;
       return e.hx === c.hx && e.hy === c.hy && Math.abs(rx * c.hy - ry * c.hx) < 0.3 && al > 0 && al < 5;
     };
-    const pull = !c.ev && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && evs.some(behind); // not mid-junction
-    const offTarget = c.ev ? -0.2 : pull ? 0.32 : 0;
+    // pull in only where the kerb is free: not mid-junction, and not on top of a car that's already pulled in there
+    const kerbTaken = c.off < 0.1 && c.near.some(o => o !== c && o.off > 0.1 && o.hx === c.hx && o.hy === c.hy &&
+      Math.abs(rel(o.x - c.x) * c.hx + rel(o.y - c.y) * c.hy) < 0.55 && Math.abs(rel(o.x - c.x) * c.hy - rel(o.y - c.y) * c.hx) < 0.3);
+    const pull = !code(c) && c.state !== 'scene' && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
+    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : 0; // at the scene: pulled in to the kerb
     c.off += clamp(offTarget - c.off, -0.6 * dt, 0.6 * dt);
-    if (pull || Math.abs(c.off - offTarget) > 0.02 && !c.ev) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c)) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    if (c.state === 'scene') room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
     if (c.rider && !c.dest) room_ = 0;
-    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < 1.2) {
-      if (c.ev) c.dest = null; else { room_ = 0; c.arrived = true; }
+    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
+      if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction
+      else { room_ = 0; c.arrived = true; }
     }
 
     const target = Math.min(Math.max(0, room_ * 2.5), c.cruise);
     c.brake = target < c.v;
-    c.v = Math.min(target, c.v + (c.ev ? 1.4 : 0.8) * dt);
+    c.v = Math.min(target, c.v + (code(c) ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
     if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
     c.left -= step;
@@ -1146,7 +1318,7 @@ function talkLine(p) {
   if (h >= 23 || h < 4) lines.push('Bit late to be out wandering, no?', "Last call's at three, you know.", p.role === 'owl' ? 'The night is young!' : 'Should be in bed.');
   if (st && Math.hypot(rel(st.x - p.x), rel(st.y - p.y)) < 40) lines.push(`The ${st.name} train is late again.`, `Is ${st.name} station still closed for repairs?`);
   if (Math.abs(rel(p.y - (EL_ROW * 8 + 1))) < 12) lines.push('That el train shakes my whole apartment.', 'You get used to the trains. Mostly.');
-  if (cars.some(c => c.ev && Math.hypot(rel(c.x - p.x), rel(c.y - p.y)) < 25)) lines.push("Another siren. Hope everyone's okay.", 'Something going on round the corner?');
+  if (cars.some(c => code(c) && Math.hypot(rel(c.x - p.x), rel(c.y - p.y)) < 25)) lines.push("Another siren. Hope everyone's okay.", 'Something going on round the corner?');
   lines.push('Hey.', 'Can I help you?', 'Nice evening for it.'.replace('evening', h < 12 ? 'morning' : h < 18 ? 'day' : 'evening'));
   return pick(lines);
 }
@@ -1322,7 +1494,7 @@ function audioMix(s) {
   out.night = far * (0.5 + 0.5 * d.city) * s.night * (1 - 0.35 * s.rain); // the city at night: a distant hum, the odd car
   out.rain = s.rain;
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
-  out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog;
+  out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.boombox) out.bossa = 0.7; // your boombox
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
@@ -1356,7 +1528,7 @@ const ITEMS = {
   icecream: { name: 'ice cream', price: 4, kind: 'food', uses: 4 }, noodlebox: { name: 'noodles', price: 6, kind: 'food', uses: 4 },
   croissant: { name: 'croissant', price: 3, kind: 'food', uses: 3 }, donut: { name: 'donut', price: 2, kind: 'food', uses: 2 },
   bagel: { name: 'bagel', price: 3, kind: 'food', uses: 3 }, sandwich: { name: 'sandwich', price: 7, kind: 'food', uses: 4 },
-  chips: { name: 'chips', price: 2, kind: 'food', uses: 4 }, apple: { name: 'apple', price: 1, kind: 'food', uses: 3 },
+  chips: { name: 'chips', price: 2, kind: 'food', uses: 4 }, candy: { name: 'candy bar', price: 2, kind: 'food', uses: 2 }, apple: { name: 'apple', price: 1, kind: 'food', uses: 3 },
   slice: { name: 'pizza slice', price: 4, kind: 'food', uses: 3 }, burger: { name: 'burger', price: 8, kind: 'food', uses: 4 },
   kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
   dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
@@ -1373,7 +1545,21 @@ const ITEMS = {
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
+  // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
+  yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
+  duck: { name: 'rubber duck', price: 3, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
 };
+// the arcade's prize counter: what tickets buy
+let tickets = 0;
+const PRIZES = [['candy', 8], ['duck', 20], ['yoyo', 30], ['sparklers', 35], ['harmonica', 60], ['ball', 90], ['skateboard', 300]];
+function claimPrize(id) {
+  const p = PRIZES.find(q => q[0] === id);
+  if (!p) return [false, 'Not a prize.'];
+  if (tickets < p[1]) return [false, `That's ${p[1]} tickets. You have ${tickets}.`];
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  tickets -= p[1]; inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+  return [true, `You trade ${p[1]} tickets for ${aOrSome(ITEMS[id].name)}.`];
+}
 // what each kind of place sells: by shop word first, then by room kind
 const STOCK_WORD = {
   '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
@@ -1398,7 +1584,7 @@ const VENDOR_STOCK = { 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 
 const INV_SIZE = 8;
 const inv = []; // { id, uses }
 let held = 0; // which slot is in your hand
-const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false };
+const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, yoyo: 0, spark: 0 };
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
@@ -1410,6 +1596,36 @@ function buy(id) { // false + why, if you can't
 }
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
+// your storage unit: one unit, the same at every STORAGE place in town
+const STORE_SIZE = 30, stored = [];
+function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
+  const was = held, it = inv[k];
+  held = k; removeHeld();
+  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  return it;
+}
+function storeSlot(k) { // carried slot k -> the unit
+  if (!inv[k]) return [false, 'Nothing there.'];
+  if (stored.length >= STORE_SIZE) return [false, 'Your unit is full.'];
+  const it = takeSlot(k); stored.push(it);
+  return [true, `You put the ${ITEMS[it.id].name} in your unit.`];
+}
+// pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
+const SELL_RATE = { PAWN: 0.4 };
+const sellPrice = (it, rate) => ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+function sellSlot(k, rate) {
+  if (!inv[k]) return [false, 'Nothing there.'];
+  const p = sellPrice(inv[k], rate), name = ITEMS[inv[k].id].name;
+  if (!p) return [false, `"We don't take ${name}."`];
+  takeSlot(k); earn(p);
+  return [true, `You sell the ${name} for ${fmt$(p)}.`];
+}
+function retrieveSlot(k) { // the unit's item k -> your hands
+  if (!stored[k]) return [false, 'Nothing there.'];
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  const it = stored.splice(k, 1)[0]; inv.push(it);
+  return [true, `You take the ${ITEMS[it.id].name} out of your unit.`];
+}
 function removeHeld() {
   const it = inv[held];
   if (it && it.id === 'skateboard') fx.skating = false;
@@ -1450,6 +1666,20 @@ function useHeld(near) {
     case 'book': return [pick(BOOK_LINES), 'page'];
     case 'newspaper': return [`Headline: ${pick(near.headlines)}`, 'page'];
     case 'vinyl': return ['You admire the sleeve. Shame you don\'t have a record player.', null];
+    case 'yoyo': fx.yoyo = 1.4; return [pick(['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.']), 'whirr'];
+    case 'harmonica':
+      if (near.person) { // a little busking: they stop to listen, and might drop you something
+        near.person.talk = 4;
+        if (Math.random() < 0.5) { const c = Math.round((0.25 + Math.random() * 1.5) * 4) / 4; earn(c); return [`You play the blues. They listen, and drop you ${fmt$(c)}.`, 'harmonica']; }
+        return ['You play the blues. They listen, nod, and move on.', 'harmonica'];
+      }
+      return ['You play a few bars of the blues.', 'harmonica'];
+    case 'duck': return [near.water ? 'You float the duck on the water a while, then fish it back out.' : 'Squeak.', 'squeak'];
+    case 'sparklers':
+      if (fx.spark > 0) return ['It\'s still fizzing.', null];
+      it.uses--; fx.spark = 25;
+      if (it.uses <= 0) removeHeld();
+      return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
     case 'flowers':
       if (near.person) { removeHeld(); near.person.talk = 4; return [`"For me? Oh!" ${pick(['They light up.', 'They blush.', 'They smell them and grin.'])}`, 'chime']; }
       return ['You sniff the flowers. Lovely.', null];
@@ -1460,6 +1690,7 @@ function dropHeld() { const it = heldItem(); if (!it) return null; removeHeld();
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
+  fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
   return stepBall(dt);
 }
@@ -1491,6 +1722,246 @@ function stepBall(dt) {
 function pickUpBall() {
   if (!ball || Math.hypot(rel(ball.x - px), rel(ball.y - py)) > 0.3 || inv.length >= INV_SIZE) return false;
   ball = null; inv.push({ id: 'ball', uses: 0 }); held = inv.length - 1; return true;
+}
+// ---- minigames: the arcade cabinets (snake, breakout, street crosser) and the work shifts (waiting tables,
+// stocking shelves), plus what a taxi fare pays. Pure: each game is a small state machine on its own W x H grid,
+// stepped with the keys held and pressed this frame; minigame-ui.js draws it into the character grid and plays its
+// sounds. The node tests play them too.
+//
+// make(rnd) -> game: { id, title, W, H, score, over, step(dt, keys) -> events[], draw(put), status() -> string,
+//                     reward() -> tickets (arcade) or dollars (shifts) }
+// keys: left / right / up / down / act held, and leftP / rightP / upP / downP / actP pressed this frame.
+// put(x, y, ch, col, bg?) paints one game cell; text(x, y, s, col) writes a label at a cell, at normal size.
+const GAMES = {};
+
+// snake: eat the apples, don't hit the walls or yourself; it speeds up as it grows
+GAMES.snake = (rnd = Math.random) => {
+  const W = 28, H = 16, g = { id: 'snake', title: 'SNAKE', W, H, score: 0, over: false };
+  let body = [[8, 8], [7, 8], [6, 8]], dir = [1, 0], next = [1, 0], food = null, acc = 0;
+  const place = () => { do food = [rnd() * W | 0, rnd() * H | 0]; while (body.some(b => b[0] === food[0] && b[1] === food[1])); };
+  place();
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    for (const [key, d] of [['leftP', [-1, 0]], ['rightP', [1, 0]], ['upP', [0, -1]], ['downP', [0, 1]]])
+      if (k[key] && (d[0] !== -dir[0] || d[1] !== -dir[1])) next = d; // no turning back on yourself
+    acc += dt;
+    const period = Math.max(0.055, 0.14 - g.score * 0.004);
+    while (acc >= period) {
+      acc -= period; dir = next;
+      const h = [body[0][0] + dir[0], body[0][1] + dir[1]], eats = h[0] === food[0] && h[1] === food[1];
+      const hitSelf = body.some((b, i) => (eats || i < body.length - 1) && b[0] === h[0] && b[1] === h[1]);
+      if (h[0] < 0 || h[1] < 0 || h[0] >= W || h[1] >= H || hitSelf) { g.over = true; ev.push('die'); break; }
+      body.unshift(h);
+      if (eats) { g.score++; ev.push('eat'); place(); } else body.pop();
+    }
+    return ev;
+  };
+  g.draw = put => {
+    put(food[0], food[1], '@', C(RED, 15), C(RED, 4));
+    body.forEach((b, i) => put(b[0], b[1], i ? 'o' : 'O', C(GREEN, i ? 12 : 15), C(GREEN, i ? 4 : 7)));
+  };
+  g.status = () => `APPLES ${g.score}`;
+  g.reward = () => g.score * 2;
+  g.body = () => body;
+  return g;
+};
+
+// breakout: knock out the bricks with the ball, keep it off the floor with the paddle; three balls
+GAMES.breakout = (rnd = Math.random) => {
+  const W = 30, H = 20, PW = 5, g = { id: 'breakout', title: 'BREAKOUT', W, H, score: 0, over: false };
+  let paddle = W / 2, ball = null, lives = 3, speed = 13, bricks;
+  const fill = () => { bricks = []; for (let r = 0; r < 5; r++) for (let c = 0; c < 10; c++) bricks.push({ r, c, on: true }); };
+  const stick = () => { ball = { x: paddle, y: H - 2, vx: 0, vy: 0, stuck: true }; };
+  fill(); stick();
+  const brickAt = (x, y) => bricks.find(b => b.on && y >= 2 + b.r && y < 3 + b.r && x >= b.c * 3 && x < b.c * 3 + 3);
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    paddle = clamp(paddle + ((k.right ? 1 : 0) - (k.left ? 1 : 0)) * 24 * dt, PW / 2, W - PW / 2);
+    if (ball.stuck) {
+      ball.x = paddle;
+      if (k.actP || k.upP) { const a_ = -Math.PI / 2 + (rnd() - 0.5) * 0.8; ball.vx = Math.cos(a_) * speed; ball.vy = Math.sin(a_) * speed; ball.stuck = false; ev.push('launch'); }
+      return ev;
+    }
+    const n = Math.ceil(dt * speed * 4); // small steps so it never skips through a brick
+    for (let s = 0; s < n; s++) {
+      const h = dt / n, px_ = ball.x, py_ = ball.y;
+      ball.x += ball.vx * h; ball.y += ball.vy * h;
+      if (ball.x < 0 || ball.x >= W) { ball.vx = -ball.vx; ball.x = clamp(ball.x, 0, W - 1e-3); ev.push('wall'); }
+      if (ball.y < 0) { ball.vy = Math.abs(ball.vy); ball.y = 0; ev.push('wall'); }
+      const b = brickAt(ball.x, ball.y);
+      if (b) { // knock it out; bounce off whichever side we came in through
+        b.on = false; g.score++; ev.push('brick');
+        if (Math.floor(py_) !== Math.floor(ball.y)) ball.vy = -ball.vy; else ball.vx = -ball.vx;
+        ball.x = px_; ball.y = py_;
+        if (!bricks.some(o => o.on)) { fill(); speed *= 1.12; stick(); ev.push('clear'); return ev; }
+      }
+      if (ball.vy > 0 && ball.y >= H - 1 && ball.y < H && Math.abs(ball.x - paddle) <= PW / 2 + 0.5) { // off the paddle: where it hits steers it
+        const off = clamp((ball.x - paddle) / (PW / 2 + 0.5), -1, 1), a_ = -Math.PI / 2 + off * 1.05;
+        ball.vx = Math.cos(a_) * speed; ball.vy = Math.sin(a_) * speed; ball.y = H - 1 - 1e-3; ev.push('paddle');
+      }
+      if (ball.y >= H + 0.5) { lives--; ev.push('miss'); if (!lives) { g.over = true; ev.push('die'); } else stick(); return ev; }
+    }
+    return ev;
+  };
+  g.draw = put => {
+    const BCOL = [RED, ORANGE, YEL, GREEN, CYAN];
+    for (const b of bricks) if (b.on) for (let k = 0; k < 2; k++) put(b.c * 3 + k, 2 + b.r, '#', C(BCOL[b.r], 15), C(BCOL[b.r], 4)); // and a gap
+    for (let x = Math.round(paddle - PW / 2); x < Math.round(paddle + PW / 2); x++) put(x, H - 1, '=', C(WHITE, 15), C(GRAY, 5));
+    put(Math.floor(ball.x), Math.floor(ball.y), 'o', C(WHITE, 15));
+  };
+  g.status = () => `BRICKS ${g.score}   BALLS ${'o'.repeat(lives)}${ball.stuck ? '   SPACE to launch' : ''}`;
+  g.reward = () => Math.floor(g.score / 2);
+  g.state = () => ({ ball, paddle, lives, bricks });
+  return g;
+};
+
+// street crosser: get across two carriageways of traffic to the far sidewalk, one hop at a time; faster each crossing
+GAMES.crosser = (rnd = Math.random) => {
+  const W = 25, H = 13, g = { id: 'crosser', title: 'STREET CROSSER', W, H, score: 0, over: false };
+  let you = [12, 12], lives = 3, splat = 0, lanes;
+  const make = () => {
+    lanes = [];
+    for (let y = 1; y < H - 1; y++) { // row 6 is the median, 0 and 12 the sidewalks
+      if (y === 6) continue;
+      const dir = y < 6 ? -1 : 1, len = 2 + (rnd() * 3 | 0), gap = len + 3 + (rnd() * 5 | 0);
+      lanes.push({ y, dir, len, gap, sp: (2 + rnd() * 3) * (1 + g.score * 0.12), off: rnd() * gap, col: [RED, BLUE, TAXI, WHITE, GREEN][rnd() * 5 | 0] });
+    }
+  };
+  make();
+  const carOn = (l, x) => mod(x - l.off * l.dir, l.gap) < l.len; // is column x under a car in lane l
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    for (const l of lanes) l.off = mod(l.off + l.sp * dt, l.gap);
+    if (splat > 0) { splat -= dt; if (splat <= 0) you = [12, 12]; return ev; }
+    const mv = k.leftP ? [-1, 0] : k.rightP ? [1, 0] : k.upP ? [0, -1] : k.downP ? [0, 1] : null;
+    if (mv) { you = [clamp(you[0] + mv[0], 0, W - 1), clamp(you[1] + mv[1], 0, H - 1)]; ev.push('hop'); }
+    const l = lanes.find(o => o.y === you[1]);
+    if (l && carOn(l, you[0])) { lives--; splat = 0.8; ev.push('miss'); if (!lives) { g.over = true; ev.push('die'); } return ev; }
+    if (you[1] === 0) { g.score++; ev.push('score'); you = [12, 12]; make(); }
+    return ev;
+  };
+  g.draw = put => {
+    for (let x = 0; x < W; x++) { put(x, 0, ',', C(GRAY, 6), C(GRAY, 2)); put(x, 6, ',', C(GRAY, 6), C(GRAY, 2)); put(x, H - 1, ',', C(GRAY, 6), C(GRAY, 2)); }
+    for (const l of lanes) for (let x = 0; x < W; x++) {
+      if (carOn(l, x)) { const head = l.dir > 0 ? !carOn(l, x + 1) : !carOn(l, x - 1); put(x, l.y, head ? 'o' : '#', C(l.col, 15), C(l.col, 4)); }
+      else if (x % 4 === 0 && l.y !== 5 && l.y !== 11) put(x, l.y, '-', C(YEL, 5));
+    }
+    put(you[0], you[1], splat > 0 ? '*' : '@', splat > 0 ? C(RED, 15) : C(WHITE, 15));
+  };
+  g.status = () => `CROSSINGS ${g.score}   LIVES ${'@'.repeat(lives)}`;
+  g.reward = () => g.score * 3;
+  g.lanes = () => lanes; g.you = () => you;
+  return g;
+};
+
+// waiting tables (a shift at a diner, cafe or noodle bar): customers come down the four counters toward you; slide
+// each a plate before they reach the end. A plate with nobody to catch it breaks; a customer who gets to you walks
+// out. 75 seconds, or five mistakes. Pays per customer served.
+GAMES.serve = (rnd = Math.random) => {
+  const W = 34, H = 12, LANES = [1, 4, 7, 10], g = { id: 'serve', title: 'LUNCH RUSH', W, H, score: 0, over: false, shift: true };
+  let lane = 0, cust = [], plates = [], misses = 0, t = 0, spawn = 1;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (k.upP) lane = Math.max(0, lane - 1);
+    if (k.downP) lane = Math.min(3, lane + 1);
+    if (k.actP) { plates.push({ lane, x: 2 }); ev.push('slide'); }
+    if ((spawn -= dt) <= 0) { cust.push({ lane: rnd() * 4 | 0, x: W - 1, sp: 1.1 + rnd() * 0.8 + t * 0.02 }); spawn = Math.max(0.7, 2.2 - t * 0.022) * (0.7 + rnd() * 0.6); }
+    for (const c of cust) c.x -= c.sp * dt;
+    for (const p of plates) {
+      p.x += 14 * dt;
+      const c = cust.filter(o => o.lane === p.lane && o.x <= p.x + 0.5).sort((a_, b) => a_.x - b.x)[0];
+      if (c) { cust.splice(cust.indexOf(c), 1); p.done = true; g.score++; ev.push('serve'); }
+      else if (p.x >= W - 1) { p.done = true; misses++; ev.push('break'); }
+    }
+    plates = plates.filter(p => !p.done);
+    for (const c of cust) if (c.x <= 2) { c.gone = true; misses++; ev.push('angry'); }
+    cust = cust.filter(c => !c.gone);
+    if (misses >= 5 || t >= 75) { g.over = true; ev.push('end'); }
+    return ev;
+  };
+  g.draw = put => {
+    LANES.forEach((y, k) => {
+      for (let x = 1; x < W; x++) put(x, y + 1, '=', C(BRICK, 9), C(BRICK, 2)); // the counter
+      put(0, y, k === lane ? '@' : ' ', C(WHITE, 15)); put(0, y + 1, k === lane ? 'A' : '|', C(k === lane ? WHITE : GRAY, k === lane ? 13 : 5));
+    });
+    for (const c of cust) put(Math.round(c.x), LANES[c.lane], 'o', C(YEL, 15), C(MAG, 3));
+    for (const p of plates) put(Math.round(p.x), LANES[p.lane], '_', C(WHITE, 15), C(GRAY, 4));
+  };
+  g.status = () => `SERVED ${g.score}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN counter, SPACE slide a plate`;
+  g.reward = () => Math.max(0, Math.round((4 + g.score * 1.2 - misses * 0.8) * 100) / 100);
+  g.misses = () => misses; g.cust = () => cust; g.lane = () => lane; g.plates = () => plates;
+  return g;
+};
+
+// stocking shelves (a shift at a store): each shelf holds one kind of thing; shoppers keep taking them. Put each box
+// that comes off the truck in an empty slot on its own shelf. 60 seconds. Pays for every box shelved right, less
+// for the ones put in the wrong place.
+const STOCK_KINDS = [['CANS', 'c', RED], ['CEREAL', '#', YEL], ['BOTTLES', 'i', CYAN], ['SOAP', 'o', MAG]];
+GAMES.stock = (rnd = Math.random) => {
+  const W = 34, H = 13, SLOTS = 10, g = { id: 'stock', title: 'RESTOCK', W, H, score: 0, over: false, shift: true };
+  const shelf = STOCK_KINDS.map(() => Array.from({ length: SLOTS }, () => rnd() < 0.6));
+  let cur = [0, 0], box = rnd() * 4 | 0, wrong = 0, t = 0, take = 0.8;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (k.leftP) cur[1] = Math.max(0, cur[1] - 1);
+    if (k.rightP) cur[1] = Math.min(SLOTS - 1, cur[1] + 1);
+    if (k.upP) cur[0] = Math.max(0, cur[0] - 1);
+    if (k.downP) cur[0] = Math.min(3, cur[0] + 1);
+    if (k.actP) {
+      if (shelf[cur[0]][cur[1]]) ev.push('bump'); // already full
+      else if (cur[0] === box) { shelf[cur[0]][cur[1]] = true; g.score++; box = rnd() * 4 | 0; ev.push('place'); }
+      else { wrong++; box = rnd() * 4 | 0; ev.push('wrong'); }
+    }
+    if ((take -= dt) <= 0) { // a shopper takes something
+      const full = [];
+      shelf.forEach((r, i) => r.forEach((f, j) => f && full.push([i, j])));
+      if (full.length) { const [i, j] = full[rnd() * full.length | 0]; shelf[i][j] = false; }
+      take = 0.6 + rnd() * 0.9;
+    }
+    if (t >= 60) { g.over = true; ev.push('end'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    STOCK_KINDS.forEach(([name, ch, col], i) => {
+      const y = 1 + i * 3;
+      text(1, y, name, C(col, 13));
+      for (let j = 0; j < SLOTS; j++) {
+        const x = 10 + j * 2, here = cur[0] === i && cur[1] === j;
+        put(x, y, shelf[i][j] ? ch : '.', shelf[i][j] ? C(col, 15) : C(GRAY, 6), here ? C(WHITE, 6) : shelf[i][j] ? C(col, 3) : NONE);
+        put(x, y + 1, '=', C(GRAY, 8)); put(x + 1, y + 1, '=', C(GRAY, 8));
+      }
+    });
+    const [name, ch, col] = STOCK_KINDS[box];
+    put(10, H - 1, ch, C(col, 15), C(col, 4)); text(13, H - 1, `the box in your arms: ${name}`, C(col, 15));
+  };
+  g.status = () => `SHELVED ${g.score}   WRONG ${wrong}   ${Math.max(0, 60 - t) | 0}s   ARROWS move, SPACE shelve the box`;
+  g.reward = () => Math.max(0, Math.round((3 + g.score * 0.7 - wrong * 0.6) * 100) / 100);
+  g.shelf = () => shelf; g.box = () => box; g.cur = () => cur; g.wrong = () => wrong;
+  return g;
+};
+
+// which shift each room offers
+const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock' };
+// the cabinets in an arcade, in order, cycle through these; a credit is a dollar
+const ARCADE_GAMES = ['snake', 'breakout', 'crosser'], CREDIT = 1;
+
+// ---- driving a taxi: what a trip pays. The meter (taxiFare) by distance, and a tip for getting there quickly and
+// smoothly; any crash on the way and there's no tip. took = seconds, harsh = seconds of hard braking or swerving.
+// route = how far it is by the streets (defaults to dist); the clock is judged on that, not the meter, so a detour
+// pays more on the meter but costs you the tip
+function taxiPay(dist, took, harsh, crashed, route = dist) {
+  const fare = Math.round(taxiFare(dist) * 100) / 100, expected = 6 + route / 1.4;
+  const speed = clamp(expected / Math.max(took, 1), 0, 1), smooth = clamp(1 - harsh / 6, 0, 1);
+  const tip = crashed ? 0 : Math.round(fare * (0.05 + 0.25 * speed + 0.2 * smooth) * 100) / 100;
+  const stars = crashed ? 1 : 1 + Math.round(4 * (speed + smooth) / 2);
+  return { fare, tip, stars, speed, smooth };
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
@@ -1565,7 +2036,7 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 // ===== city world =====
 const sk0 = seed => seed * 1e4 | 0;
 // background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse)
-const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED];
+const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE];
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -1582,6 +2053,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       if (sh.signed && p < w.length) return set(i, centered ? w[p] : ' ', C(sh.neon, lvl));
       return set(i, '-', C(GRAY, L));
     }
+    if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
     if (sty === 8) { // warehouse: big roll-up doors
       const fd = fract(u * 0.8);
       if (fd > 0.12 && fd < 0.88 && z < 0.3) return set(i, fract(z * 40) < 0.5 ? '=' : '-', C(open ? ORANGE : GRAY, L * 0.7));
@@ -1612,6 +2084,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  if (sty >= 11) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
     const top = h - z < 0.3, fw = fract(u * 2);
     if (top && fw > 0.08 && fw < 0.92 && z < h - 0.08) return set(i, '#', hash(Math.floor(u * 2), 7, sk) > 0.7 ? C(YEL, Math.max(L * 0.5, glowL * 0.8)) : C(GRAY, L * 0.4));
@@ -1677,6 +2150,72 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
 }
 
+// the ground floor of a police station (lit windows, a blue lamp either side of the door), a fire station (tall red
+// engine-bay doors) or a hospital (wide lit glass doors between two red crosses)
+function serviceFront(i, u, z, base, L, lit) {
+  if (base === 'fire') {
+    const fd = fract(u * 0.7);
+    if (fd < 0.08 || z > 0.3) return set(i, fd < 0.08 ? '|' : '-', C(GRAY, L));
+    if (z > 0.2 && z < 0.25 && fract(fd * 5) > 0.25) return set(i, '#', C(WARM, lit * 0.8)); // a row of windows in each door
+    BG[i] = C(RED, 1 + L * 0.12);
+    return set(i, fract(z * 30) < 0.5 ? '=' : '-', C(RED, L * 1.1));
+  }
+  if (base === 'police') {
+    const fd = fract(u * 1.5);
+    if ((Math.abs(fd - 0.3) < 0.035 || Math.abs(fd - 0.7) < 0.035) && z > 0.24 && z < 0.29) { // the blue lamps
+      BG[i] = C(BLUE, 3 + night * 6); return set(i, '*', C(WHITE, Math.max(L, night * 15)));
+    }
+    if (fd > 0.36 && fd < 0.64 && z < 0.24) return set(i, fd < 0.38 || fd > 0.62 ? '|' : z > 0.2 ? '=' : '#', C(GRAY, L * 0.8)); // the doors
+    if (z > 0.08 && z < 0.22 && (fd < 0.26 || fd > 0.74)) return set(i, ':', C(CYAN, lit * 0.75));
+    return set(i, '_', C(GRAY, L));
+  }
+  const fd = fract(u * 1.2); // hospital
+  if (z > 0.2 && z < 0.3 && (Math.abs(fd - 0.15) < 0.05 || Math.abs(fd - 0.85) < 0.05)) {
+    const arm = Math.abs(z - 0.25) < 0.018 || Math.abs(fd - (fd < 0.5 ? 0.15 : 0.85)) < 0.017;
+    BG[i] = arm ? C(RED, 6 + night * 8) : bgAt(WHITE, 3 + night * 3); return set(i, ' ', 0);
+  }
+  if (fd > 0.3 && fd < 0.7 && z < 0.26) { BG[i] = C(CYAN, 1 + night * 3); return set(i, Math.abs(fd - 0.5) < 0.012 ? '|' : z > 0.24 ? '=' : ':', C(WHITE, lit)); }
+  return set(i, fract(u * 12) < 0.12 ? '|' : '.', C(WHITE, L * 0.55));
+}
+
+// the floors above: police (dressed grey stone, a blue band over the entrance, square windows lit a cool white),
+// fire station (red brick, tall round-headed windows, the hose tower's slit windows), hospital (white panels, long
+// ribbon windows, a big red cross up by the roof on every face)
+function serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL) {
+  if (sty === 11) {
+    if (zz < 0.06) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, '=', C(BLUE, Math.max(L, night * 10))); }
+    const fu = fract(u * 3);
+    if (fu > 0.3 && fu < 0.7 && fz > 0.3 && fz < 0.8)
+      return hash(Math.floor(u * 3), fl, sk) > litT - 0.2 ? set(i, '#', C(CYAN, Math.max(L * 0.6, glowL * 0.8))) : set(i, '.', C(GRAY, L * 0.3));
+    return set(i, (Math.floor(u * 6) + Math.floor(zz * 9)) % 3 ? ' ' : '_', C(GRAY, L * 0.7)); // stone courses
+  }
+  if (sty === 12) {
+    if (h > 1.5) { // the hose tower: a slit window each floor, louvres at the top
+      if (z > h - 0.25) return set(i, fract(z * 25) < 0.5 ? '=' : '-', C(GRAY, L * 0.8));
+      if (Math.abs(fract(u) - 0.5) < 0.05 && fz > 0.3 && fz < 0.8) return set(i, '#', C(WARM, Math.max(L * 0.4, glowL * 0.6)));
+      return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+    }
+    const fu = fract(u * 2.5), arch = fz > 0.72 && fz < 0.82 && Math.abs(fu - 0.5) < 0.2 - (fz - 0.72) * 1.4;
+    if (fu > 0.3 && fu < 0.7 && fz > 0.2 && fz < 0.75 || arch)
+      return hash(Math.floor(u * 2.5), fl, sk) > litT - 0.15 ? set(i, arch ? '^' : '#', C(WARM, Math.max(L, glowL))) : set(i, arch ? '^' : '.', C(GRAY, L * 0.35));
+    if (fz < 0.06) return set(i, '=', C(WHITE, L * 0.7)); // a stone string course each floor
+    return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+  }
+  // hospital
+  const cu = fract(u) - 0.5, cz = z - (h - 0.32);
+  if (Math.abs(cz) < 0.2 && Math.abs(cu) < 0.2) { // the cross
+    const arm = Math.abs(cz) < 0.065 || Math.abs(cu) < 0.065;
+    BG[i] = arm ? C(RED, 7 + night * 7) : bgAt(WHITE, 4 + night * 2); return set(i, ' ', 0);
+  }
+  if (fz > 0.3 && fz < 0.75) { // ribbon windows, mullions every few metres
+    if (fract(u * 5) < 0.06) return set(i, '|', C(WHITE, L * 0.8));
+    if (hash(Math.floor(u * 5), fl, sk) > litT - 0.35) { BG[i] = C(CYAN, 1 + night * 2.5); return set(i, '-', C(WHITE, Math.max(L * 0.8, glowL))); } // wards lit all night
+    return set(i, ' ', 0);
+  }
+  BG[i] = bgAt(WHITE, day * 4 + 1 + night * 1.5);
+  return set(i, fz < 0.08 ? '_' : ' ', C(GRAY, L * 0.6));
+}
+
 // wc = world coordinate along the wall; lu = position across the face from the block's middle, left-to-right on screen
 const TICKER = ADS.join('   *   ') + '   *   ';
 function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc) {
@@ -1733,9 +2272,24 @@ function roofTop(i, wx, wy, h, d) {
                ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
   BG[i] = bgAt(GRAY, day * 2.5);
   if (edge) return set(i, '#', C(GRAY, L * 1.3));
+  const sh = SHOP[idx(mx, my)];
+  if (sh && sh.pad && STY[idx(mx, my)] === 13) { // the hospital's helipad: a yellow ring round a big H
+    const ex = wx - sh.pad[0], ey = wy - sh.pad[1], rr = Math.hypot(ex, ey);
+    if (Math.abs(rr - 1.05) < 0.07) return set(i, '#', C(YEL, Math.max(L * 1.4, night * 12)));
+    const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
+    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); return set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); }
+  }
   set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
 }
 
+// how far down a subway entrance's stairs (wx, wy) is (0 at the top step, 1 at the bottom), or -1 if it isn't in one
+function subwayHole(wx, wy, bx, by) {
+  const s = STATION_AT.get(bi(bx, by));
+  if (!s) return -1;
+  const u = rel(wx - s.x), v = rel(wy - s.y);
+  return Math.abs(u) < SUBWAY_HOLE[0] && Math.abs(v) < SUBWAY_HOLE[1] ? (u + SUBWAY_HOLE[0]) / (2 * SUBWAY_HOLE[0]) : -1;
+}
+let stHole = -1;
 function floorCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
@@ -1746,13 +2300,28 @@ function floorCell(i, r, x, rx, ry) {
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
-    if (onPier(wx, wy)) { // planks running out to sea
+    if (onFootbridge(wx, wy)) { // the footbridge: boards across it, lamplight pooling under each lamp after dark
+      soft = true; base = BRICK; k = 1.3;
+      const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw;
+      ch = e > 0.88 ? '|' : fract(wy * 5) < 0.2 ? '=' : '-';
+      const pool = lampsOn * Math.max(0, 1 - Math.abs(fract((mod(wy, N) - FOOTBRIDGE.y0 - 1.5) / FB_LAMP + 0.5) - 0.5) * FB_LAMP / 0.5);
+      if (pool > 0) { base = WARM; k = 1.3 + pool * 1.6; }
+    } else if (onIsland(wx, wy)) { // the island: rocks round the shore, a gravel path out to the lighthouse, rough grass
+      soft = true;
+      const e = isleEdge(wx, wy), path = Math.abs(rel(wx - FOOTBRIDGE.x - (rel(wy - FOOTBRIDGE.y1) / (LIGHTHOUSE.y - FOOTBRIDGE.y1)) * (LIGHTHOUSE.x - FOOTBRIDGE.x)));
+      const onPath = path < 0.13 && rel(wy - FOOTBRIDGE.y1) > -0.5 && rel(wy - LIGHTHOUSE.y) < 0;
+      if (e < 0.45) { ch = hash(Math.floor(wx * 9), Math.floor(wy * 9), 34) > 0.45 ? '%' : 'o'; base = GRAY; k = 1.25; }
+      else if (onPath) { ch = (r * 5 + x) % 3 ? ':' : '.'; base = WARM; k = 1; }
+      else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.1; }
+    } else if (onPier(wx, wy)) { // planks running out to sea
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
     } else if (seaAt(wx, wy)) { // open water: drifting waves; reflect() mirrors the skyline into it
-      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91);
-      set(i, n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', C(n > 0.62 ? CYAN : BLUE, L * 1.5));
+      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = isleEdge(wx, wy) > -0.3; // white water round the island
+      set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
+      const lb = beamOnWater(wx, wy); // the lighthouse beam sweeping over it
+      if (lb > 0.05) { BG[i] = C(WARM, 1 + lb * 7); if (CH[i] === ' ') CH[i] = '-'; COL[i] = C(YEL, 6 + lb * 9); FL[i] = 0; }
       return;
     } else if (kind === 'waterfront') {
       soft = true;
@@ -1776,6 +2345,10 @@ function floorCell(i, r, x, rx, ry) {
       else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
     } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
+  } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
+    const deep = stHole;
+    set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(GRAY, L * (1 - deep * 0.85) * 1.5)); BG[i] = C(GRAY, 1 + (1 - deep) * 2);
+    return;
   } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain sidewalk where none does
     const n = ly < 0.3 ? vseg(bx, by - 1) : ly > 1.7 ? vseg(bx, by) : -1, w = lx < 0.3 ? hseg(bx - 1, by) : lx > 1.7 ? hseg(bx, by) : -1;
     if (n === 0 || w === 0) { ch = ','; k = 1.3; }
@@ -1795,9 +2368,23 @@ function floorCell(i, r, x, rx, ry) {
   }
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
-    if (s > 0) BG[i] = C(fract(T * 2.5) < 0.5 ? RED : BLUE, 1 + s * 3.5);
+    const on = strobe();
+    if (s > 0 && on >= 0) BG[i] = C(on, 1 + s * 3.5);
   }
   set(i, ch, col);
+}
+
+// the lighthouse: its lamp turns once every BEAM_P seconds, two beams back to back, lit from dusk to dawn (and in fog)
+const BEAM_P = 9, LH_H = 2.45, BEAM_LEN = 28;
+const beamLit = () => clamp((night - 0.25) * 2.5 + fogAmt * 0.8 + storm * 0.5, 0, 1);
+const beamAng = () => T / BEAM_P * Math.PI * 2;
+const beamOff = ang => Math.abs(mod(ang - beamAng() + Math.PI / 2, Math.PI) - Math.PI / 2); // angle to the nearer beam
+function beamOnWater(wx, wy) { // how brightly the beam lights the sea at (wx, wy), 0..1
+  const lit = beamLit();
+  if (!lit) return 0;
+  const ex = rel(wx - LIGHTHOUSE.x), ey = rel(wy - LIGHTHOUSE.y), D = Math.hypot(ex, ey);
+  if (D > BEAM_LEN || D < 1) return 0;
+  return clamp(1 - beamOff(Math.atan2(ey, ex)) / 0.06, 0, 1) * (1 - D / BEAM_LEN) * lit;
 }
 
 // the el deck: its underside (girders and cross ties) seen from the street, and its top (two tracks, and the
@@ -1873,6 +2460,34 @@ function disc(az, el, body, halo, rad, craters) {
     if (q <= rad) { BG[i] = body; set(i, craters && hash(c - (c0 | 0), r - (r0 | 0), 8) > 0.75 ? 'o' : ' ', C(GRAY, 9)); }
     else if (BG[i] === NONE || (BG[i] & 15) < (halo & 15)) BG[i] = halo;
   }
+}
+// lightning: while a strike flickers the whole sky lights up (clouds most) and the bolt itself forks down to the
+// horizon in its direction, in front of anything further off than the strike
+function lightning() {
+  const fl = flash();
+  if (fl < 0.03) return;
+  for (let i = 0; i < rows * cols; i++) if (ZB[i] === Infinity) {
+    const cloud = BG[i] !== NONE && (BG[i] >> 4 === WHITE || BG[i] >> 4 === GRAY) && (BG[i] & 15) > 1;
+    BG[i] = C(cloud ? WHITE : GRAY, (cloud ? 5 : 2) + fl * (cloud ? 10 : 6));
+  }
+  const s = T - bolt.t, ra = mod(bolt.az - a + Math.PI, Math.PI * 2) - Math.PI;
+  if (s > 0.22 || s > 0.07 && s < 0.13 || Math.abs(ra) > FOV * 0.7) return; // only while it's flickering, and in view
+  const top = Math.max(0, Math.floor(hor - Math.min(3, 30 / bolt.d) * projY)), bot = Math.min(rows - 1, Math.ceil(hor + eye * projY / bolt.d));
+  const fork = top + Math.floor((bot - top) * (0.3 + hash(bolt.seed, 2, 7) * 0.3));
+  const branch = (c0, r0, r1, k) => {
+    let c = c0;
+    for (let r = r0; r <= r1; r++) {
+      const step = Math.round((hash(r, bolt.seed + k, 5) - 0.5 + (k ? 0.35 * Math.sign(k) : 0)) * 2.4);
+      c += step;
+      const x = Math.round(c);
+      if (x < 0 || x >= cols) return;
+      const i = r * cols + x;
+      if (ZB[i] < bolt.d) continue; // behind something nearer than the strike
+      set(i, step > 0 ? '\\' : step < 0 ? '/' : '|', C(WHITE, 15)); BG[i] = C(CYAN, 5 + fl * 6); FOGS[i] = 0;
+      if (r === fork && !k) branch(c, r + 1, Math.min(bot, r + (bot - top) * 0.35), hash(bolt.seed, 3, 7) < 0.5 ? -1 : 1);
+    }
+  };
+  branch(cols / 2 + Math.tan(ra) * projX, top, bot, 0);
 }
 function sunMoon() { // sun rises in +x, sets in -x
   const sunEl = Math.sin((tod - 6) / 12 * Math.PI), az = (tod - 6) / 12 * Math.PI;
@@ -1968,18 +2583,22 @@ const across = (ax, ay, vx, vy) => { const n = Math.hypot(vx, vy) || 1; return (
 const FERRY = pad(['   _|_ _|_', ' _|o_o_o_o|___', '|o o o o o o o|', '\\_____________/']);
 const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
 const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
+const SAIL_R = mirror(ART.sail);
 const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
+// the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
+function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 || p === 2 ? RED : p === 5 || p === 7 ? BLUE : -1; }
 
 function citySprites() {
   forNear(treesB, t => drawArt(...R(t.x, t.y), 0, 0.45 * t.s, 0.6 * t.s, ART.tree,
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   for (const b of boats) {
-    const x = b.x0 + T * b.sp, y = b.y + Math.sin(T * 0.05 + b.ph) * 2, [vx, vy] = R(x, y);
+    const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
+    const toRight = across(p.dir, 0, vx, vy) > 0; // which way it's going across the screen: the sail fills the other way
     const lit = (c, L) => C(YEL, Math.max(L, night * 15));
-    if (b.kind === 'sail') drawArt(vx, vy, 0, 0.6, 0.9, ART.sail, (c, row, L) => C(row < 4 ? WHITE : BRICK, L));
+    if (b.kind === 'sail') drawArt(vx, vy, 0, 0.6, 0.9, toRight ? SAIL_R : ART.sail, (c, row, L) => C(row < 4 ? WHITE : BRICK, L));
     else if (b.kind === 'tug') drawArt(vx, vy, 0, 0.7, 0.45, ART.tug, (c, row, L) => c === 'o' ? lit(c, L) : C(row === 0 ? GRAY : RED, L));
     else drawArt(vx, vy, 0, 1.6, 0.6, FERRY, (c, row, L) => c === 'o' ? lit(c, L) : C(row < 2 ? WHITE : row === 2 ? BLUE : GRAY, L));
   }
@@ -1991,8 +2610,7 @@ function citySprites() {
       row < 3 ? C(t.color, Math.max(L, night * 12)) : c === 'O' ? C(GRAY, L * 0.5) : C(t.color, L));
     drawArt(...R(v.x + v.ox, v.y + v.oy), 0, 0.06, 0.18, ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? v.shirt : GRAY, L));
   }
-  for (const s of stations)
-    drawArt(...R(s.x, s.y), 0, s.w, 0.45, s.art, (c, row, L) => row === 0 ? C(GREEN, c === 'M' ? 15 : L) : row === 1 ? C(WHITE, Math.max(L, 12)) : C(GRAY, L));
+  for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
   forNear(roofsB, o => {
     const blink = fract(T * 0.8 + o.x) < 0.5;
     drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, (c, row, L) =>
@@ -2022,6 +2640,8 @@ function citySprites() {
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
+  islandSprites();
+  forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   const LC = { G: GREEN, Y: YEL, R: RED };
   forNear(lightsB, s => {
@@ -2035,12 +2655,18 @@ function citySprites() {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
     const [vx, vy] = R(m.ex, m.ey), hx = m.hx, hy = m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    if (m.ev && Math.hypot(vx, vy) < vis) siren = m;
+    if (m.ev && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
     drawVehicle(m, vx, vy, hx, hy);
   }
-  for (const m of people) if (!m.hidden)
+  for (const b of SERVICES) if (!b.out) { // parked out front of its station, ready to go
+    const [vx, vy] = R(b.x, b.y);
+    if (Math.hypot(vx, vy) < vis) drawVehicle(b.parked || (b.parked = { kind: b.kind, body: EV_BODY[b.kind], ev: true, state: 'home', v: 0 }), vx, vy, -1, 0);
+  }
+  for (const m of people) if (!m.hidden) {
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+    if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
+  }
   drawBall();
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
 }
@@ -2088,7 +2714,7 @@ const VEHICLES = {
 const shadeFace = f => f === 5 ? 1 : f === 1 || f === 2 ? 0.85 : 0.7; // a little light from above, a little less on the sides
 function drawVehicle(m, vx, vy, hx, hy) {
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
-  const braking = m.brake || m.v < 0.05, body = m.body, flash = fract(T * 2.5) < 0.5;
+  const braking = m.brake || m.v < 0.05, body = m.body;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
@@ -2121,10 +2747,149 @@ function drawVehicle(m, vx, vy, hx, hy) {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
   if (m.ev) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
-    BG[i] = C((HIT.v > 0) === flash ? RED : BLUE, 15); return set(i, '*', C(WHITE, 15)), true; // the light bar
+    const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
+    BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
   if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
     BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
+  });
+}
+
+// ---- lighthouse island
+// the lighthouse, drawn as a billboard (it's round, so it looks the same from every side): a tapering tower in red
+// and white bands with a door and slit windows, a railed gallery, the glazed lantern room with the lamp, a red dome.
+// flare = how squarely a beam is pointing at you (the lamp blazes)
+function lighthouseCell(i, u, z, du, dz, L, flare) {
+  const au = Math.abs(u), lit = beamLit();
+  if (z < 2.2) {
+    const R = 0.24 - z * 0.035;
+    if (au > Math.max(R, du / 2)) return false;
+    const n = au / R, shade = 1 - 0.55 * n * n;
+    if (z < 0.22 && au < 0.055) { BG[i] = C(GRAY, 1); return set(i, z > 0.19 ? '=' : '#', C(BRICK, L * 0.6)), true; } // the door
+    if (au < Math.max(0.022, du / 2) && [0.75, 1.25, 1.75].some(w => Math.abs(z - w) < 0.06)) { BG[i] = C(GRAY, 1); return set(i, '#', C(WARM, Math.max(L * 0.3, lit * 9))), true; }
+    BG[i] = C(Math.floor(z / 0.44) & 1 ? RED : WHITE, (1.5 + L * 0.5) * shade);
+    return set(i, n > 0.85 ? '|' : ' ', C(GRAY, L * 0.5)), true;
+  }
+  if (z < 2.27) { if (au > 0.3) return false; BG[i] = C(GRAY, 2 + L * 0.2); return set(i, '=', C(WHITE, L)), true; } // the gallery
+  if (z < 2.34 && au > 0.15) { // its railing
+    if (au > 0.3) return false;
+    return fract(u * 25) < 0.35 || z > 2.32 ? (set(i, z > 2.32 ? '-' : '|', C(WHITE, L * 0.9)), true) : false;
+  }
+  if (z < 2.62) { // the lantern room
+    if (au > Math.max(0.15, du / 2)) return false;
+    if (lit && au < 0.075 && Math.abs(z - LH_H) < 0.07) { BG[i] = C(YEL, 8 + flare * 7); return set(i, '@', C(WHITE, 15)), true; }
+    BG[i] = C(CYAN, 1 + lit * 3); return set(i, fract(u * 14) < 0.2 ? '|' : ' ', C(GRAY, L * 0.8)), true;
+  }
+  const domeR = 0.17 * Math.sqrt(Math.max(0, 1 - ((z - 2.62) / 0.17) ** 2));
+  if (z < 2.79 && au < Math.max(domeR, du / 2)) { BG[i] = C(RED, 2 + L * 0.35); return set(i, ' ', 0), true; }
+  if (z < 2.88 && au < Math.max(0.01, du / 2)) return set(i, '|', C(GRAY, L)), true; // the vent and lightning rod
+  return false;
+}
+// the beams: from the lamp out across the bay, a thin shaft of pale light drawn in characters that follow its slope
+// on screen (- / \ |), brightest by the lamp and fading out over the water, stronger in rain and fog. Each sample
+// along a beam covers the cells it spans (a little wider close up), in front of whatever is behind it.
+// Returns how squarely a beam is pointing at you (the lamp flares).
+function drawBeams(lx, ly) {
+  const lit = beamLit();
+  if (!lit) return 0;
+  const haze = 0.55 + 0.45 * Math.max(fogAmt, rain), camAng = Math.atan2(-ly, -lx);
+  const flare = clamp(1 - beamOff(camAng) / 0.3, 0, 1) * lit;
+  for (const side of [0, Math.PI]) {
+    const ang = beamAng() + side, cx = Math.cos(ang), cy = Math.sin(ang);
+    let prev = null;
+    for (let s = 0.3; s < BEAM_LEN; s += 0.12 + s * 0.02) {
+      const vx = lx + cx * s, vy = ly + cy * s, depth = dx * vx + dy * vy;
+      if (depth < 0.3 || depth > vis + 10) { prev = null; continue; }
+      const sc = projX / depth, col = cols / 2 + (-dy * vx + dx * vy) * sc, row = hor - (LH_H - s * 0.012 - eye) * projY / depth;
+      const slope = prev ? (row - prev[1]) / ((col - prev[0]) || 1e-6) * (FS / cw) : 0; // in screen units
+      const ch = !prev ? '-' : Math.abs(slope) < 0.35 ? '-' : Math.abs(slope) > 2.5 ? '|' : slope < 0 ? '/' : '\\';
+      prev = [col, row];
+      const w = 0.025 + s * 0.008, rc = Math.min(2, w * sc), rr = Math.min(1, w * projY / depth);
+      const I = lit * haze * (1 - s / BEAM_LEN) ** 1.2;
+      for (let r = Math.max(0, Math.round(row - rr)); r <= Math.min(rows - 1, Math.round(row + rr)); r++)
+        for (let c = Math.max(0, Math.round(col - rc)); c <= Math.min(cols - 1, Math.round(col + rc)); c++) {
+          const i = r * cols + c;
+          if (ZB[i] < depth) continue;
+          const core = Math.abs(r - row) < 0.6 && Math.abs(c - col) < 0.6;
+          set(i, core ? (I > 0.5 ? '=' : ch) : ch, C(YEL, 3 + I * (core ? 12 : 7)));
+          if (core && s < 3) BG[i] = C(YEL, 2 + I * 4); // the glow right by the lamp
+          FOGS[i] = 0;
+        }
+    }
+  }
+  return flare;
+}
+function islandSprites() {
+  const [lx, ly] = R(LIGHTHOUSE.x, LIGHTHOUSE.y), D = Math.hypot(lx, ly);
+  if (D > vis + BEAM_LEN) return;
+  drawFootbridge();
+  const flare = drawBeams(lx, ly);
+  drawShape(lx, ly, 0, 0.32, 2.9, (i, u, z, du, dz, L) => lighthouseCell(i, u, z, du, dz, L, flare));
+  if (flare > 0.05) { // the lamp, blazing straight at you
+    const depth = dx * lx + dy * ly;
+    if (depth > 0.3) {
+      const sc = projX / depth, col = cols / 2 + (-dy * lx + dx * ly) * sc, row = hor - (LH_H - eye) * projY / depth, R_ = 1 + flare * 5;
+      for (let r = Math.floor(row - R_ / 2); r <= row + R_ / 2; r++) for (let c = Math.floor(col - R_); c <= col + R_; c++) {
+        if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+        const i = r * cols + c, q = Math.hypot((c - col) / R_, (r - row) / (R_ / 2));
+        if (q < 1 && ZB[i] >= depth - 0.5) BG[i] = C(YEL, 6 + flare * 9 * (1 - q));
+      }
+    }
+  }
+}
+// the footbridge's handrails (posts and a top rail, see-through between) in 2-cell lengths, and a gateway at the
+// shore end with the island's name across it
+const FB_SIGN = 'LIGHTHOUSE';
+function drawFootbridge() {
+  const rail = (i, t, L) => HIT.w > 0.088 || HIT.face === 5 ? (set(i, '=', C(GRAY, L * 1.1)), true)
+                          : fract(HIT.u * 5) < 0.2 ? (set(i, '|', C(GRAY, L * 0.9)), true) : false;
+  for (let y = FOOTBRIDGE.y0; y < FOOTBRIDGE.y1; y += 2) {
+    const len = Math.min(2, FOOTBRIDGE.y1 - y), [vx, vy] = R(FOOTBRIDGE.x, y + len / 2);
+    if (Math.hypot(vx, vy) > vis + 1) continue;
+    for (const s of [-1, 1]) drawBox(boxAt(vx + s * (FOOTBRIDGE.hw - 0.006), vy, 0, 1, len / 2, 0.006, 0, 0.1), rail);
+  }
+  const [gx, gy] = R(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.15), hw = FOOTBRIDGE.hw + 0.02;
+  if (Math.hypot(gx, gy) > vis) return;
+  const iron = (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.1); return set(i, '|', C(GRAY, L)), true; };
+  for (const s of [-1, 1]) drawBox(boxAt(gx + s * hw, gy, 1, 0, 0.012, 0.012, 0, 0.36), iron);
+  drawBox(boxAt(gx, gy, 1, 0, hw + 0.012, 0.008, 0.3, 0.355), (i, t, L) => { // the sign, readable from both ends
+    BG[i] = C(GRAY, 2 + night * 2);
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
+    const n = FB_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.012) + 1) / 2 * n - 1, k = Math.floor(q), cellU = t / projX / (2 * hw) * n;
+    const on = k >= 0 && k < FB_SIGN.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.3275) <= t / projY / 2 + 1e-4;
+    return set(i, on ? FB_SIGN[k] : ' ', C(WHITE, Math.max(L * 1.2, night * 14))), true;
+  });
+}
+
+// a vending machine: a lit header, a glass front with shelves of goods, a keypad and coin slot down the right,
+// the flap you reach into at the bottom. Glows after dark.
+const VM_COL = { DRINKS: RED, SNACKS: BLUE, CIGARETTES: GRAY };
+const VM_GOODS = { DRINKS: ['o', [RED, BLUE, GREEN, YEL, WHITE]], SNACKS: ['#', [YEL, ORANGE, RED, GREEN, MAG]], CIGARETTES: ['=', [WHITE, RED, YEL, WHITE, CYAN]] };
+function drawVending(m, vx, vy) {
+  const body = VM_COL[m.kind], glow = Math.max(night, overcast * 0.6), [g_, cols_] = VM_GOODS[m.kind];
+  drawBox(boxAt(vx, vy, m.c, m.s, VM_HL, VM_HW, 0, VM_H), (i, t, L) => {
+    const f = HIT.face, front = (f === 3 || f === 4) && Math.sign(HIT.v) === m.fs;
+    if (!front) { BG[i] = C(body, (1.5 + L * 0.35) * shadeFace(f)); return set(i, f === 5 ? ' ' : HIT.w < 0.01 ? '_' : ' ', C(GRAY, L * 0.4)), true; }
+    const q = (HIT.u * m.fs / VM_HL + 1) / 2, z = HIT.w / VM_H; // across the front 0..1 (left to right), up it 0..1
+    if (z > 0.85) { // the lit header, with what it sells across it
+      BG[i] = C(body, 5 + glow * 7);
+      const name = m.kind, n = name.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * VM_HL) * n;
+      const letter = Math.abs(z - 0.925) < t / projY / VM_H / 2 && k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
+      return set(i, letter ? name[k] : ' ', C(WHITE, 15)), true;
+    }
+    if (q > 0.72) { // the control column: keypad, coin slot
+      BG[i] = C(GRAY, 2 + L * 0.1);
+      return set(i, z > 0.55 && z < 0.72 ? ':' : z > 0.44 && z < 0.5 ? '-' : ' ', z > 0.5 ? C(WHITE, Math.max(L, glow * 11)) : C(YEL, 12)), true;
+    }
+    if (z < 0.17) { BG[i] = C(GRAY, 1); return set(i, z > 0.05 && z < 0.12 ? '_' : ' ', C(GRAY, L * 0.5)), true; } // the flap
+    if (z < 0.22) { BG[i] = C(body, 1.5 + L * 0.35); return set(i, ' ', 0), true; }
+    // the window: four shelves of goods behind glass
+    const sz = (z - 0.22) / 0.63 * 4, row = Math.floor(sz), sq = q / 0.72 * 5, k = Math.floor(sq);
+    BG[i] = C(CYAN, 1 + glow * 2.5);
+    if (fract(sz) < 0.12) return set(i, '_', C(GRAY, Math.max(L * 0.7, glow * 8))), true; // the shelf
+    const item = fract(sq) > 0.18 && fract(sq) < 0.82 && fract(sz) < 0.8; // each thing on it, glass between
+    if (item) BG[i] = C(cols_[(k + row * 2) % 5], 2 + glow * 3);
+    return set(i, item ? g_ : ' ', C(cols_[(k + row * 2) % 5], Math.max(L, glow * 13))), true;
   });
 }
 
@@ -2138,19 +2903,43 @@ function drawBench(vx, vy, fx, fy, s) {
   });
 }
 
+// a subway entrance in 3D: railings round a stairwell cut into the sidewalk (its treads are drawn by floorCell,
+// see SUBWAY_HOLE), green globe lamps at the open end, and the station's name on a sign over the far railing
+function drawStationEntrance(s, vx, vy) {
+  const [hl, hw] = SUBWAY_HOLE, iron = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 5 ? '=' : '|', C(GREEN, L * 0.7)), true; };
+  for (const side of [-1, 1]) drawBox(boxAt(vx, vy + side * hw, 1, 0, hl, 0.004, 0, 0.09), iron); // the long sides
+  drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.004, 0, 0.09), iron); // the far end
+  for (const side of [-1, 1]) { // the lamps either side of the way in
+    drawBox(boxAt(vx - hl, vy + side * hw, 1, 0, 0.005, 0.005, 0, 0.13), iron);
+    drawBox(boxAt(vx - hl, vy + side * hw, 1, 0, 0.014, 0.014, 0.13, 0.158), (i, t, L) => { BG[i] = C(GREEN, 6 + night * 7); return set(i, 'o', C(WHITE, 15)), true; });
+  }
+  const name = s.name; // the sign: one letter per cell across its face, so it never smears
+  drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.006, 0.09, 0.125), (i, t, L) => {
+    BG[i] = C(GREEN, 4 + night * 3);
+    if (HIT.face !== 1 && HIT.face !== 2) return set(i, ' ', 0), true;
+    const q = (HIT.u / hw * (HIT.face === 1 ? 1 : -1) + 1) / 2 * (name.length + 2) - 1, k = Math.floor(q);
+    const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
+    return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
+  });
+}
+
 // chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
 // glowing after dark. Real 3D, so it stays put across the street as you walk round it.
-const LANTERN_SPAN = 0.95, sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
+const sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
 function drawLanternString(vx, vy, ax, ay) {
-  const segs = 8, cord = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
+  // the cord is thinner than a character cell past a few metres, so it grows to stay one cell thick (a grey dashed
+  // line) instead of breaking up into the odd cell the rays happen to hit
+  const d = Math.hypot(vx, vy), th = Math.max(0.004, 0.55 * d / projY), tw = Math.max(0.004, 0.55 * d / projX), far = th > 0.01;
+  const segs = 8, cord = (i, t, L) => { if (!far) BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
   for (let k = 0; k < segs; k++) {
     const t0 = -1 + 2 * k / segs, t1 = t0 + 2 / segs, tm = (t0 + t1) / 2, z = (sagZ(t0) + sagZ(t1)) / 2;
-    drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, 0.004, z - 0.004, z + 0.004), cord);
+    drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, tw, z - th, z + th), cord);
   }
   const lit = Math.max(night, overcast * 0.6);
   for (const t of [-0.66, -0.33, 0, 0.33, 0.66]) {
     const z = sagZ(t), gold = t === 0;
-    drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, 0.018, 0.018, z - 0.05, z - 0.006), (i, tt, L) => {
+    const lw = Math.max(0.018, tw); // at a distance a lantern stays at least a cell wide too
+    drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, lw, lw, z - 0.05, z - 0.006), (i, tt, L) => {
       const cap = HIT.w > z - 0.014 || HIT.w < z - 0.042;
       BG[i] = cap ? C(GRAY, 2) : C(gold ? YEL : RED, 3 + lit * 9 + L * 0.2);
       return set(i, cap ? '=' : lit > 0.3 ? 'o' : ' ', C(YEL, 15)), true;
@@ -2227,19 +3016,29 @@ function boxRoom(w, h, extra = {}, door = true) { // walls all round, double doo
   }
   return rows_;
 }
-// A subway station: the platform (x 9..36, y 1..5) with the track (y 6..7) running on into a tunnel at either end,
-// pillars down the middle, and stairs up to the street at x 10..11 (the 'D' at the top).
-const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 12, y0: 1, y1: 4.4, rise: 2.4 };
-const STATION_GRID = Array.from({ length: 9 }, (_, y) => Array.from({ length: STATION_W }, (_, x) =>
-  x === 0 || x === STATION_W - 1 || y === 8 ? '#' : y === 0 ? (x === 10 || x === 11 ? 'D' : '#')
-  : y === 6 || y === 7 ? '.' : x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 3 ? '#' : '.') : '#').join(''));
+// A subway station, 4.5m high. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
+// either end and pillars down the middle. Behind its back wall (row 6) a 3m-wide stairwell (x 10..12) climbs away
+// from the platform, set into the rock, up to the street (the 'D' at the top, row 0).
+const STATION_W = 46, STATION_H = 4.5, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const ST_TRACK = 12; // the first track row; the platform edge is just before it
+const STATION_GRID = Array.from({ length: 15 }, (_, y) => Array.from({ length: STATION_W }, (_, x) => {
+  const well = x >= 10 && x <= 12;
+  if (x === 0 || x === STATION_W - 1 || y === 14) return '#';
+  if (y === 0) return well ? 'D' : '#';
+  if (y <= 6) return well ? '.' : '#'; // the stairwell, through the back wall
+  if (y >= ST_TRACK) return '.'; // the track, platform to tunnels
+  return x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 9 ? '#' : '.') : '#';
+}).join(''));
 // how high the stairs have lifted you at (x, y)
 const stairRise = (x, y) => { const s = room && room.def.stairs; return s && x >= s.x0 && x < s.x1 && y < s.y1 ? s.rise * clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1) : 0; };
 // the steps themselves, as boxes, each a little higher toward the top; walkable (the stairs lift you, see stairRise)
 const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
   const dy = (s.y1 - s.y0) / 10, top = (k + 1) * s.rise / 10;
-  return { ...BX((s.x0 + s.x1) / 2, s.y1 - (k + 0.5) * dy, (s.x1 - s.x0) / 2, dy / 2, 0, top, (i, t, L) => {
-    BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (HIT.v < -dy / 2 + 0.06 ? '=' : ' ') : '_', C(YEL, L * 0.8)), true;
+  return { ...BX((s.x0 + s.x1) / 2, s.y1 - (k + 0.5) * dy, (s.x1 - s.x0) / 2, dy / 2, 0, top, (i, t, L) => { // wall to wall
+    // treads (yellow nosing at the front edge) and risers
+    BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face));
+    if (HIT.face === 5) return set(i, HIT.v > dy / 2 - 0.06 ? '=' : ' ', C(YEL, L * 0.8)), true;
+    return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
   }, 0, 1), walk: true };
 });
 const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
@@ -2256,6 +3055,7 @@ for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
 for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
 for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
+ROOM_FOR.STORAGE = 'storage';
 
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
 // props
@@ -2300,6 +3100,18 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   }
   BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 3 + day * 8) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
   set(i, night > 0.5 && hash(Math.floor(du * 20), Math.floor(z * 20), 73) > 0.96 ? '.' : ' ', C(WHITE, 12)); return true;
+}
+function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
+  if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
+  const bay = fract(u / 1.2);
+  if (bay < 0.05 || bay > 0.95 || z < 0.05) { set(i, '|', C(GRAY, L)); BG[i] = C(GRAY, 1); return true; }
+  if (z > 2.1) { // the unit number plate
+    const n = String(100 + (hash(Math.floor(u / 1.2), mx * 31 + my, 5) * 800 | 0));
+    if (wallText(i, u, uStep, z, d, n, Math.floor(u / 1.2) * 1.2 + 0.6, 2.25, 0.12, 0.18, C(WHITE, 13), C(GRAY, 2))) return true;
+    set(i, ' ', 0); BG[i] = C(GRAY, 2); return true;
+  }
+  BG[i] = C(ORANGE, 2 + L * 0.15);
+  set(i, z < 0.18 && Math.abs(bay - 0.5) < 0.08 ? '_' : fract(z * 12) < 0.5 ? '=' : '-', C(ORANGE, L * 0.9)); return true;
 }
 function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind the counter, warm brick elsewhere
   if (my === 0 && Math.abs(u - room.W / 2) < 2 && z > 1.4 && z < 2.5) {
@@ -2375,13 +3187,16 @@ const ROOM_DEFS = {
       }
       return p;
     } },
-  arcade: { grid: boxRoom(12, 9), light: 0.5, floor: 'carpet', ceil: 'dark', sign: true, wall: arcadeWall,
+  // the arcade: two rows of cabinets (each plays one of ARCADE_GAMES, see minigame-ui.js), and a prize counter by
+  // the door where the clerk swaps tickets for prizes. Somebody's playing some of the machines.
+  arcade: { grid: boxRoom(12, 9), light: 0.5, floor: 'carpet', ceil: 'dark', sign: true, wall: arcadeWall, keeper: [10.2, 6.15],
     props: r => {
-      const p = [];
-      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[3.5, 5, 7, 8.5], 5.2]]) for (const x of xs) {
-        const k = Math.random() * 4 | 0, body = pick([MAG, BLUE, RED, GREEN]);
-        p.push(cabinet(x, y, k, body));
-        if (chance(0.35)) p.push(standing(x, y + 0.7, shirt()));
+      const p = [...counterBox(10.2, 6.8, 0.85), standing(10.2, 6.15, MAG)];
+      let n = 0;
+      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[2.5, 4, 5.5, 7], 5.2]]) for (const x of xs) {
+        const k = n % 4, body = [MAG, BLUE, RED, GREEN][(n * 3 + 1) % 4], busy = chance(0.3);
+        p.push({ ...cabinet(x, y, k, body), game: ARCADE_GAMES[n++ % ARCADE_GAMES.length], cx: x, cy: y, busy });
+        if (busy) p.push(standing(x, y + 0.7, shirt()));
       }
       return p;
     } },
@@ -2447,11 +3262,11 @@ const ROOM_DEFS = {
       }
       return p;
     } },
-  station: { grid: STATION_GRID, light: 1, floor: 'station', ceil: 'strip', wall: stationWall, block: (x, y) => y > 5.2, stairs: STATION_STAIRS,
+  station: { grid: STATION_GRID, light: 1, floor: 'station', ceil: 'strip', wall: stationWall, block: (x, y) => y > ST_TRACK - 0.8, stairs: STATION_STAIRS, height: STATION_H,
     props: r => {
       const p = [...stairSteps(STATION_STAIRS)];
-      for (const x of [15.5, 20.5, 25.5, 30.5]) p.push(BENCHP(x, 1.5, 0, 1));
-      for (let k = 0; k < 4; k++) p.push(standing(14 + Math.random() * 20, 3 + Math.random() * 1.6, shirt()));
+      for (const x of [15.5, 20.5, 25.5, 30.5]) p.push(BENCHP(x, 7.5, 0, 1)); // against the back wall
+      for (let k = 0; k < 4; k++) p.push(standing(14 + Math.random() * 20, 9 + Math.random() * 1.6, shirt()));
       return p;
     } },
   train: { grid: boxRoom(22, 5, {}, false), light: 1, floor: 'train', ceil: 'strip', wall: trainWall,
@@ -2511,6 +3326,11 @@ const ROOM_DEFS = {
       }
       return p;
     } },
+  // self storage: corridors of orange roll-up doors ('L', 2.6m locker blocks), an attendant by the door
+  storage: { grid: ['##############', '#............#', '#.LL.LL.LL.L.#', '#.LL.LL.LL.L.#', '#............#', '#.LL.LL.LL.L.#',
+                    '#.LL.LL.LL.L.#', '#............#', '#............#', '######DD######'],
+    light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: storageWall, keeper: [11.5, 7.15],
+    props: r => [BX(11.5, 7.75, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 0.99, top: '=' })), standing(11.5, 7.15, ORANGE)] },
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -2676,7 +3496,7 @@ function stationWall(i, u, uStep, z, d, mx, my, L) {
   }
   const far = my === room.H - 1; // the tunnel wall across the tracks
   const u0 = Math.floor((u - 2) / 8) * 8 + 6;
-  if (z > 1.55 && z < 1.95 && (my === 0 || far)) { // name band, repeated along the platform
+  if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) { // name band, repeated along the platform
     if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.25, 0.35, C(WHITE, 15), C(GREEN, 4))) return true;
     set(i, ' ', 0); BG[i] = C(GREEN, 4); return true;
   }
@@ -2707,7 +3527,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog) {
   BG[i] = NONE;
   if (c === 'D') { // the way out: glass doors, or stairs up from the subway
     if (R.kind === 'station') {
-      if (z > 2.3 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11, 2.6 + STATION_STAIRS.rise, 0.25, 0.4, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
+      if (z > 1.6 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, 1.8 + STATION_STAIRS.rise, 0.25, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
     }
     if (z > 2.3) return set(i, '=', C(GRAY, L));
@@ -2746,12 +3566,12 @@ function roomFloor(i, r, x, rx, ry) {
     case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
-      if (wy > 5.3) { // track bed: rails, sleepers, gravel
-        if (Math.abs(wy - 6.3) < 0.05 || Math.abs(wy - 7.5) < 0.05) return set(i, '=', C(GRAY, L * 1.8));
-        if (wy > 6.3 && wy < 7.5 && fract(wx / 0.6) < 0.25) return set(i, '#', C(BRICK, L));
+      if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
+        if (Math.abs(wy - ST_TRACK - 0.3) < 0.05 || Math.abs(wy - ST_TRACK - 1.5) < 0.05) return set(i, '=', C(GRAY, L * 1.8));
+        if (wy > ST_TRACK + 0.3 && wy < ST_TRACK + 1.5 && fract(wx / 0.6) < 0.25) return set(i, '#', C(BRICK, L));
         return set(i, (r + x) % 3 ? ' ' : '.', C(GRAY, L * 0.5));
       }
-      if (wy > 5.0) return set(i, '=', C(YEL, L * 2)); // mind the gap
+      if (wy > ST_TRACK - 1) return set(i, '=', C(YEL, L * 2)); // mind the gap
     // fall through: platform tiles
     default: {
       const edge = fract(wx) < 0.06 || fract(wy) < 0.06;
@@ -2760,7 +3580,7 @@ function roomFloor(i, r, x, rx, ry) {
   }
 }
 function roomCeil(i, r, x, rx, ry) {
-  const d = (3 - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
+  const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
   ZB[i] = d; FL[i] = 0;
   const st = room.def.ceil;
   if (st === 'pendant') { // warm hanging lamps on a 2m grid
@@ -2788,10 +3608,10 @@ function roomSprites() {
   }
   if (room.kind === 'station') {
     const tx = trainX(room);
-    if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, 6.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
+    if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
   }
 }
-const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : 3; },
+const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
@@ -2961,14 +3781,19 @@ function render(dt) {
     // sky / floor only where no wall or roof landed: shading them first and painting over was most of the cell work
     for (let r = 0; r < rows; r++) { const i = r * cols + x; if (ZB[i] < 0) (r < hor ? W.sky : W.floor)(i, r, x, rx, ry); }
   }
-  if (city) sunMoon();
+  if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   W.sprites();
   if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
   drawHeld(dt); // what's in your hand (or mouth, or under your feet)
-
+  present();
+  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
+  hud();
+}
+// paint the character grid (CH / COL / BG, with fog) onto the canvas: the world's frame, or a minigame's
+function present() {
   g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
   for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length
     const j = r * cols + x0, b = BG[j], s = FOGB[j]; let x1 = x0 + 1;
@@ -2994,8 +3819,6 @@ function render(dt) {
     g.fillText(s.slice(0, end - x), x * cw, r * FS);
     x = end;
   }
-  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
-  hud();
 }
 
 function dash() {
@@ -3008,7 +3831,10 @@ function dash() {
     }
     if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => putText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
   }
-  if (mode === 'drive') {
+  if (mode === 'drive' && job) { // on a taxi shift
+    putText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
+    putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
+  } else if (mode === 'drive') {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
     putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
@@ -3043,9 +3869,14 @@ const nearPerson = () => {
   return best;
 };
 const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
+// a vending machine you're facing, within arm's reach (3m of its middle)
+const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Math.floor(py / 8))].find(m => {
+  const ex = m.x - px, ey = m.y - py, d = Math.hypot(ex, ey);
+  return d < 0.3 && (d < 0.12 || (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.5);
+}) : null;
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
-const canBoard = () => room.kind === 'station' && trainStopped(room) && py > 4.2 && Math.abs(px - 23) < 13;
+const canBoard = () => room.kind === 'station' && trainStopped(room) && py > ST_TRACK - 1.8 && Math.abs(px - 23) < 13;
 // near a way out: a door, or the foot of the station stairs
 const nearExit = () => {
   const s = room.def.stairs;
@@ -3062,6 +3893,12 @@ function promptText() {
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (nearElevator()) return 'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
+    if (room.kind === 'arcade') {
+      const cab = nearCabinet();
+      if (cab) return cab.busy ? 'Somebody\'s playing this one' : `E: play ${GAMES[cab.game]().title} (${fmt$(CREDIT)} a credit)`;
+      if (nearKeeper()) return `E: prize counter (${tickets} tickets)`;
+    }
+    if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
     if (nearKeeper()) return `"${room.line}"`;
@@ -3078,7 +3915,9 @@ function promptText() {
   if (mode === 'drive') return 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
   if (mode === 'taxi') return 'mouse: look around | V: camera | E: get out';
   const c = nearestCar(0.5);
-  if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi' : 'E: take this car';
+  const vm = nearMachine();
+  if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
+  if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : 'E: take this car';
   const who = nearPerson();
   if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
@@ -3091,12 +3930,13 @@ function promptText() {
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return 'Closed.';
     if (!openAt(sh, tod)) return `${sh.signed ? sh.word : 'Shop'}: closed, opens at ${sh.hours[0]}:00`;
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
     return `E: enter ${sh.signed ? sh.word : 'shop'}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : ''}`;
   }
-  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 5)) return 'H: hail the taxi';
+  if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return '';
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
@@ -3131,6 +3971,8 @@ function minimap() {
   for (const s of EL_STATIONS) dot(s.x, EL_Y + 1, '#f84', 5);
   const tt = taskTarget();
   if (tt) dot(tt.x, tt.y, '#4ff', 6);
+  const jt = jobTarget();
+  if (jt && fract(T * 2) < 0.7) dot(jt.x, jt.y, '#ff0', 7);
   // you: an arrow pointing where you face (map y runs down = +y in the world, so world angles draw as-is)
   const [cx, cy] = sx(px, py), ang = me ? Math.atan2(me.hy, me.hx) : a;
   g.fillStyle = '#ff5'; g.beginPath();
@@ -3144,10 +3986,12 @@ function minimap() {
 const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks',
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
 function hud() {
+  drawHeldBig();
   minimap();
   hotbar();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const where = mode === 'room' ? '' : [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
+  const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
                  settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
@@ -3179,6 +4023,7 @@ function toLane(c) { // snap a car onto the nearest lane in the direction it poi
 }
 function leaveCar() {
   const c = me;
+  endTaxiShift();
   [px, py] = curbOf(c);
   if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; a += Math.PI / 2; }
   else { // settle up: all of it if you can, everything you've got if you can't
@@ -3260,6 +4105,12 @@ function interact() {
       const from = room.st;
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
+    if (room.kind === 'arcade') {
+      const cab = nearCabinet();
+      if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
+      if (nearKeeper()) return openPrizes();
+    }
+    if (room.kind === 'storage' && nearKeeper()) return openStorage();
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
@@ -3270,6 +4121,8 @@ function interact() {
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
+  const vm = nearMachine(); // before the cars: you're looking right at it
+  if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -3293,9 +4146,10 @@ function interact() {
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
-  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11, 4.8, 0]); // at the foot of the stairs
+  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.base) return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say('Closed.');
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
@@ -3327,21 +4181,104 @@ function stepSleep(dt) {
 }
 function leaveRoom() {
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
-  if (room.kind === 'station') { const s = stations[room.st]; px = s.x; py = s.y - 0.12; a = -Math.PI / 2; }
+  if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
 }
 function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
-  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, 3.6, -Math.PI / 2]); // back from the edge, so E means leave
+  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, ST_TRACK - 2.4, -Math.PI / 2]); // back from the edge, facing the stairs
   say(`${stations[n].name}`);
 }
 function hail() {
   if (mode !== 'walk') return;
-  let best = null, bd = 5;
+  let best = null, bd = 3;
   for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }
 
+// ===== the taxi job: J at an idle taxi and you drive it yourself. Now and then someone on the sidewalk nearby flags
+// you down (marked on the map, and with a ! over their head); pull up beside them and stop to pick them up, drive
+// them where they're going (the dash says which way and how far, the map marks it), and stop there to let them out.
+// Each trip pays the meter plus a tip for getting there quickly and smoothly (taxiPay); hit anything on the way and
+// there's no tip. E (stopped) ends the shift.
+let job = null; // { trips, earned, next: seconds till someone hails, hail: the person waving, ride: the trip under way }
+
+function startTaxiShift(c) {
+  me = c; mode = 'drive'; c.player = true; c.v = 0; c.hail = false; a = Math.atan2(c.hy, c.hx); px = c.x; py = c.y;
+  job = { trips: 0, earned: 0, next: 3, hail: null, ride: null };
+  say('You take the taxi out, light on. Watch for people waving you down.', 4);
+}
+function endTaxiShift() { // leaving the car
+  if (!job) return;
+  if (job.ride) { dropOff(job.ride.p); say('Your fare climbs out mid-trip, unimpressed. No pay for that one.', 4); }
+  else say(`Shift over: ${job.trips} trip${job.trips === 1 ? '' : 's'}, ${fmt$(job.earned)}.`, 4);
+  if (job.hail) { job.hail.hailing = false; job.hail.talk = 0; }
+  job = null;
+}
+// somewhere on a street 12-40 cells away, for a trip
+function tripDest(c) {
+  for (let k = 0; k < 300; k++) {
+    const bx = (Math.floor(c.x / 8) + (Math.random() * 11 | 0) - 5) & (NB - 1), by = clamp(Math.floor(c.y / 8) + (Math.random() * 11 | 0) - 5, 1, SHORE_S - 1);
+    const p = vseg(bx, by) ? [bx * 8 + 1, by * 8 + 5] : hseg(bx, by) ? [bx * 8 + 5, by * 8 + 1] : null;
+    const d = p && Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y));
+    if (p && d > 12 && d < 40) return p;
+  }
+  return [mod(c.x + 16, N), c.y];
+}
+function pickUp(p) {
+  p.hailing = false; p.hidden = true; p.talk = 1e9; // in the back seat: stepPeople leaves them be
+  const dest = tripDest(me), route = Math.abs(rel(dest[0] - me.x)) + Math.abs(rel(dest[1] - me.y)); // blocks, not as the crow flies
+  job.ride = { p, dest, route, took: 0, odo: 0, harsh: 0, crashed: false, v0: me.v, name: streetName(dest[0], dest[1]) || 'just up here' };
+  job.hail = null;
+  say(`"${job.ride.name}, please."`, 4);
+}
+function dropOff(p) { // out onto the sidewalk on the passenger side, and off they walk
+  const [x, y] = curbOf(me);
+  Object.assign(p, { x, y, hidden: false, inside: null, path: [], wait: 0, talk: 0, hailing: false });
+  snapToCorner(p);
+}
+function taxiCrash() {
+  if (job && job.ride && !job.ride.crashed) { job.ride.crashed = true; say('Your fare yelps. There goes the tip.', 3); }
+}
+function stepTaxiJob(dt) {
+  if (!job || mode !== 'drive' || !me) return;
+  const c = me;
+  if (job.ride) {
+    const r = job.ride, acc = (c.v - r.v0) / Math.max(dt, 1e-3);
+    r.v0 = c.v; r.took += dt; r.odo += Math.abs(c.v) * dt; r.p.x = c.x; r.p.y = c.y;
+    const swerve = (K.KeyA || K.KeyD || K.ArrowLeft || K.ArrowRight) && Math.abs(c.v) > 1.9;
+    if (Math.abs(acc) > 1.6 || swerve) r.harsh += dt; // slamming the brakes, flooring it, flinging it round corners
+    if (Math.hypot(rel(r.dest[0] - c.x), rel(r.dest[1] - c.y)) < 1.1 && Math.abs(c.v) < 0.2) {
+      const p = taxiPay(r.odo, r.took, r.harsh, r.crashed, r.route), paid = Math.round((p.fare + p.tip) * 100) / 100;
+      earn(paid); job.trips++; job.earned += paid;
+      dropOff(r.p); job.ride = null; job.next = 4 + Math.random() * 8;
+      say(`${'*'.repeat(p.stars)}${'.'.repeat(5 - p.stars)}  Fare ${fmt$(p.fare)}${p.tip ? `, tip ${fmt$(p.tip)}` : r.crashed ? ', no tip: you hit something' : ', no tip'}.`, 5);
+    }
+    return;
+  }
+  if (job.hail) {
+    const p = job.hail, d = Math.hypot(rel(p.x - c.x), rel(p.y - c.y));
+    if (p.hidden || d > 45) { p.hailing = false; p.talk = 0; job.hail = null; job.next = 3; return; } // gave up on you
+    p.talk = 5; // still standing there waving
+    if (d < 0.8 && Math.abs(c.v) < 0.25) pickUp(p);
+    return;
+  }
+  if ((job.next -= dt) > 0) return;
+  const near = people.filter(p => { if (p.hidden || p.follow || p.talk > 0) return false; const d = Math.hypot(rel(p.x - c.x), rel(p.y - c.y)); return d > 4 && d < 16; });
+  if (!near.length) { job.next = 2; return; }
+  job.hail = pick(near); job.hail.hailing = true; job.hail.talk = 5;
+  say("Someone's waving you down. (on the map)", 3);
+}
+// where to go next, for the dash and the map
+const jobTarget = () => job && (job.ride ? { x: job.ride.dest[0], y: job.ride.dest[1], what: `to ${job.ride.name}` } : job.hail ? { x: job.hail.x, y: job.hail.y, what: 'pick up' } : null);
+function jobLine() {
+  const t = jobTarget();
+  if (!t) return 'Cruising for fares...';
+  const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey) * 10;
+  const ang = mod(Math.atan2(ey, ex) - Math.atan2(me.hy, me.hx) + Math.PI, Math.PI * 2) - Math.PI; // + = to the right
+  const way = Math.abs(ang) < 0.4 ? 'ahead' : Math.abs(ang) > 2.7 ? 'behind you' : (Math.abs(ang) < 1.2 ? 'ahead, ' : Math.abs(ang) > 1.9 ? 'behind, ' : '') + (ang > 0 ? 'right' : 'left');
+  return `${t.what}: ${d < 60 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
+}
 // ===== audio: recorded beds and synthesised layers, glided toward audioMix()'s targets every frame, plus one-shots
 // (footsteps, sirens, the till, the shop bell, train clatter). Starts on the first key press or click (browsers
 // won't play sound before one). N toggles sound.
@@ -3488,6 +4425,16 @@ function sfxTill() { // cha-ching: the drawer, then the bell
   tone(at + 0.08, 2093, 0.7, 0.12); tone(at + 0.08, 2637, 0.7, 0.1); tone(at + 0.11, 3136, 0.5, 0.06);
 }
 function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); tone(at + 0.07, 4150, 0.18, 0.06); }
+// short recorded one-shots (eating, drinking): fetched and decoded once, played through the effects bus
+const CLIPS = {};
+function playClip(name, gain) {
+  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
+  CLIPS[name].then(buf => {
+    if (!buf) return;
+    const s = actx.createBufferSource(), g_ = actx.createGain();
+    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; chain(s, g_, sfxBus); s.start();
+  });
+}
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
 
 // ---- sirens: one voice per emergency vehicle in earshot, with its own pattern, Doppler and panning
@@ -3498,14 +4445,14 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
+  for (const c of cars) if (code(c) && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
     o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, sfxBus); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
     const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
-    if (!cars.includes(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
+    if (!cars.includes(c) || !code(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
     v.g.gain.setTargetAtTime(0.16 * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
@@ -3513,6 +4460,19 @@ function tickSirens(indoors) {
     v.p.pan.setTargetAtTime(clamp((rx * right[0] + ry * right[1]) / d, -1, 1) * 0.8, now, 0.1);
   }
 }
+
+// ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
+function sfxThunder(d, indoors) {
+  const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
+  s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.6 + near * 0.3;
+  const lp = filt('lowpass', indoors ? 260 : 400 + near * 2600), g = actx.createGain(), k = (indoors ? 0.35 : 1) * near;
+  lp.frequency.setValueAtTime(lp.frequency.value, at); lp.frequency.exponentialRampToValueAtTime(140, at + 2.5);
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(0.8 * k, at + (near > 0.7 ? 0.015 : 0.3)); // crack, or a far-off roll
+  g.gain.exponentialRampToValueAtTime(0.25 * k, at + 0.7); g.gain.linearRampToValueAtTime(0.35 * k, at + 1.5);
+  g.gain.exponentialRampToValueAtTime(0.0005, at + 4 + d / 30);
+  chain(s, lp, g, sfxBus); s.start(at, Math.random() * 1.5); s.stop(at + 5 + d / 30);
+}
+let heardBolt = null;
 
 // ---- per frame
 let stepAcc = 0, lastPos = null, clackT = 0;
@@ -3525,7 +4485,7 @@ function audioTick(dt) {
   const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
@@ -3539,6 +4499,7 @@ function audioTick(dt) {
     if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
   }
   tickSirens(indoors);
+  if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && lastPos && lastPos[2] === mode) {
@@ -3547,6 +4508,64 @@ function audioTick(dt) {
     if (stepAcc >= 1) { stepAcc = 0; sfxStep(surfaceAt(mode, room, px, py), run); }
   }
   lastPos = [px, py, mode];
+}
+// ===== the look shared by every menu (pause, shops, carrying, storage): W95 text on near-black, no boxes, a caret
+// for the row you're on, sliders drawn as an ASCII density ramp. Injected once, used through the .menu class.
+const MENU_FONT = 'https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/';
+const MENU_CSS = `
+  @font-face { font-family: 'W95'; src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff'),
+    url('${MENU_FONT}w95font.woff2') format('woff2'); }
+  .menu { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.72);
+          font: 16px/1.4 'W95', monospace; color: rgba(255, 255, 255, 0.6); }
+  .menu .panel { width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box;
+                 padding: 26px 30px; background: rgba(6, 6, 8, 0.94); scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent; }
+  .menu h1 { margin: 0 0 2px; font: inherit; font-size: 32px; line-height: 1.1; color: #fff; letter-spacing: 1px; }
+  .menu .sub { margin: 0 0 14px; color: rgba(255, 255, 255, 0.38); }
+  .menu h2 { display: flex; align-items: center; gap: 10px; margin: 20px 0 6px; font: inherit; color: rgba(255, 255, 255, 0.32); }
+  .menu h2::after { content: ''; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.1); }
+  .menu .hint { margin: 18px 0 0; color: rgba(255, 255, 255, 0.3); }
+  .menu button, .menu a { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-decoration: none; }
+  .menu .item { position: relative; display: flex; align-items: baseline; gap: 10px; width: 100%; box-sizing: border-box; padding: 2px 0 2px 18px; text-align: left; }
+  .menu .item::before { content: '>'; position: absolute; left: 2px; opacity: 0; color: #fff; }
+  .menu .item:hover, .menu .item:focus-visible { color: #fff; outline: none; }
+  .menu .item:hover::before, .menu .item:focus-visible::before { opacity: 1; }
+  .menu .item[disabled] { opacity: 0.3; cursor: default; }
+  .menu .item[disabled]::before { opacity: 0; }
+  .menu .k { min-width: 1.4em; text-align: right; color: rgba(255, 255, 255, 0.3); }
+  .menu .lead { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; color: rgba(255, 255, 255, 0.14); }
+  .menu .lead::before { content: '${'. '.repeat(60)}'; }
+  .menu .v { color: rgba(255, 255, 255, 0.85); }
+  .menu .row { display: grid; grid-template-columns: 8.5em 1fr 3.4em; align-items: baseline; gap: 12px; margin: 3px 0; padding-left: 18px; }
+  .menu .row:hover > span:first-child, .menu .row:focus-within > span:first-child { color: #fff; }
+  .menu .row > span:last-child { text-align: right; color: rgba(255, 255, 255, 0.85); }
+  .menu .slider { position: relative; font: 15px/1 monospace; letter-spacing: 0; white-space: pre; }
+  .menu .slider input { position: absolute; inset: -4px 0; width: 100%; height: calc(100% + 8px); margin: 0; opacity: 0; cursor: pointer; }
+  .menu .slider:focus-within .bar, .menu .slider:hover .bar { filter: brightness(1.5); }
+  .menu .opts { display: flex; gap: 14px; }
+  .menu .opt { color: rgba(255, 255, 255, 0.35); }
+  .menu .opt::before { content: '['; visibility: hidden; } .menu .opt::after { content: ']'; visibility: hidden; }
+  .menu .opt.on { color: #fff; } .menu .opt.on::before, .menu .opt.on::after { visibility: visible; }
+  .menu .opt:hover, .menu .opt:focus-visible, .menu .tog:hover, .menu .tog:focus-visible { color: #fff; outline: none; }
+  .menu .tog { justify-self: start; font: 14px/1 monospace; color: rgba(255, 255, 255, 0.6); }
+  .menu .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 1px 12px; padding-left: 18px; color: rgba(255, 255, 255, 0.38); }
+  .menu .keys b { font-weight: normal; color: rgba(255, 255, 255, 0.85); }`;
+let menuStyled = false;
+function menuEl(id, z, html) { // a hidden full-screen menu layer; the stylesheet goes in with the first one
+  if (!menuStyled) { const s = document.createElement('style'); s.textContent = MENU_CSS; document.head.appendChild(s); menuStyled = true; }
+  const el = document.createElement('div');
+  el.id = id; el.className = 'menu'; el.style.zIndex = z; el.innerHTML = html;
+  document.body.appendChild(el);
+  return el;
+}
+// a slider's bar: solid blocks up to the value, brightening from dim grey to white along the bar, then a faint
+// shaded track for the rest
+const BAR_N = 26;
+function asciiBar(f) {
+  const n = Math.round(clamp(f, 0, 1) * BAR_N);
+  let s = '';
+  for (let i = 0; i < BAR_N; i++) s += i < n ? `<span style="color:rgba(255,255,255,${(0.3 + 0.7 * i / (BAR_N - 1)).toFixed(2)})">█</span>`
+                                              : '<span style="color:rgba(255,255,255,0.14)">░</span>';
+  return s;
 }
 // ===== pause menu: Esc or P (or the mouse lock being released). Freezes the game, fades the sound, and holds the
 // settings, which apply as you change them and are kept in localStorage.
@@ -3560,72 +4579,60 @@ function applySettings() {
 }
 
 function buildPause() {
-  const el = document.createElement('div');
-  el.id = 'pause';
-  el.innerHTML = `
-    <style>
-      #pause { position: fixed; inset: 0; z-index: 500; display: none; align-items: center; justify-content: center;
-               background: rgba(0, 0, 0, 0.6); font: 13px/1.5 monospace; color: rgba(255, 255, 255, 0.85); }
-      #pause .panel { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box;
-                      padding: 20px 22px; background: rgba(10, 6, 10, 0.94); border: 1px solid rgba(255, 255, 255, 0.15); }
-      #pause h1 { margin: 0 0 14px; font-size: 18px; font-weight: normal; letter-spacing: 4px; color: #fff; }
-      #pause h2 { margin: 18px 0 8px; font-size: 11px; font-weight: normal; letter-spacing: 2px; color: rgba(255, 255, 255, 0.5); }
-      #pause .row { display: grid; grid-template-columns: 9em 1fr 3.5em; align-items: center; gap: 10px; margin: 6px 0; }
-      #pause .row span:last-child { text-align: right; color: rgba(255, 255, 255, 0.6); }
-      #pause input[type=range] { width: 100%; accent-color: #ffb84d; }
-      #pause input[type=checkbox] { justify-self: start; width: 16px; height: 16px; margin: 0; accent-color: #ffb84d; }
-      #pause button, #pause a.btn { display: block; width: 100%; box-sizing: border-box; margin: 6px 0; padding: 8px 10px; text-align: left;
-               font: inherit; color: #fff; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.15); cursor: pointer; text-decoration: none; }
-      #pause button:hover, #pause a.btn:hover, #pause button:focus-visible { background: rgba(255, 184, 77, 0.18); border-color: rgba(255, 184, 77, 0.6); outline: none; }
-      #pause .seg { display: flex; gap: 6px; }
-      #pause .seg button { margin: 0; text-align: center; padding: 4px 0; }
-      #pause .seg button.on { background: rgba(255, 184, 77, 0.25); border-color: rgba(255, 184, 77, 0.7); }
-      #pause .keys { display: grid; grid-template-columns: 8em 1fr; gap: 2px 10px; color: rgba(255, 255, 255, 0.7); }
-      #pause .keys b { font-weight: normal; color: #fff; }
-    </style>
-    <div class="panel" role="dialog" aria-label="Paused">
-      <h1>PAUSED</h1>
-      <button data-act="resume">Resume</button>
-      <h2>SOUND</h2>
-      ${['master', 'music', 'ambience', 'effects'].map(k => `<label class="row"><span>${k[0].toUpperCase() + k.slice(1)}</span>
-        <input type="range" min="0" max="1" step="0.05" data-set="${k}"><span data-show="${k}"></span></label>`).join('')}
-      <h2>VIEW</h2>
-      <label class="row"><span>Field of view</span><input type="range" min="50" max="100" step="1" data-set="fov"><span data-show="fov"></span></label>
-      <div class="row"><span>Detail</span><div class="seg">${Object.keys(DETAIL).map(d => `<button data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
-      <label class="row"><span>Help line</span><input type="checkbox" data-set="help"><span></span></label>
-      <h2>MOUSE</h2>
-      <label class="row"><span>Sensitivity</span><input type="range" min="0.25" max="3" step="0.05" data-set="sensitivity"><span data-show="sensitivity"></span></label>
-      <label class="row"><span>Invert Y</span><input type="checkbox" data-set="invertY"><span></span></label>
-      <h2>CONTROLS</h2>
+  const slider = (k, label, min, max, step) => `<label class="row"><span>${label}</span><span class="slider"><span class="bar" data-bar="${k}"></span><input type="range" min="${min}" max="${max}" step="${step}" data-set="${k}" aria-label="${label}"></span><span data-show="${k}"></span></label>`;
+  const toggle = (k, label) => `<div class="row"><span>${label}</span><button class="tog" data-toggle="${k}"></button><span></span></div>`;
+  const el = menuEl('pause', 500, `
+    <div class="panel" role="dialog" aria-label="Paused" style="width: min(520px, calc(100vw - 32px))">
+      <h1>Paused</h1>
+      <p class="sub">ASCII City</p>
+      <button class="item" data-act="resume">Resume</button>
+      <h2>sound</h2>
+      ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
+      <h2>view</h2>
+      ${slider('fov', 'Field of view', 50, 100, 1)}
+      <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
+      ${toggle('help', 'Help line')}
+      <h2>mouse</h2>
+      ${slider('sensitivity', 'Sensitivity', 0.25, 3, 0.05)}
+      ${toggle('invertY', 'Invert Y')}
+      <h2>controls</h2>
       <div class="keys">
-        <b>WASD</b><span>move (in a car: drive)</span><b>mouse / arrows</b><span>look (click to lock the mouse)</span>
-        <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy, get in / out</span><b>H</b><span>hail a taxi</span>
-        <b>V</b><span>car camera</span><b>M</b><span>map</span><b>1-5</b><span>taxi / train destination</span>
-        <b>hold T</b><span>fast-forward time</span><b>Y</b><span>weather</span><b>N</b><span>sound on / off</span><b>Esc / P</b><span>pause</span>
+        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
+        <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
+        <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
+        <b>M</b><span>map</span><b>1-5</b><span>taxi / train stop</span>
+        <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
+        <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
+        <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
+        <b>Esc</b><span>pause</span>
       </div>
       <h2></h2>
-      <a class="btn" href="index.html">Quit to Eve Net</a>
-    </div>`;
-  document.body.appendChild(el);
+      <a class="item" href="index.html">Quit to Eve Net</a>
+    </div>`);
+  const RANGE = { fov: [50, 100], sensitivity: [0.25, 3] };
   const show = () => {
-    for (const inp of el.querySelectorAll('[data-set]')) inp.type === 'checkbox' ? inp.checked = settings[inp.dataset.set] : inp.value = settings[inp.dataset.set];
+    for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
       s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : Math.round(v * 100) + '%';
     }
+    for (const b of el.querySelectorAll('[data-bar]')) { const [lo, hi] = RANGE[b.dataset.bar] || [0, 1]; b.innerHTML = asciiBar((settings[b.dataset.bar] - lo) / (hi - lo)); }
+    for (const b of el.querySelectorAll('[data-toggle]')) b.textContent = settings[b.dataset.toggle] ? '[x] on' : '[ ] off';
     for (const b of el.querySelectorAll('[data-detail]')) b.classList.toggle('on', b.dataset.detail === settings.detail);
   };
   el.addEventListener('input', e => {
     const k = e.target.dataset.set;
     if (!k) return;
-    settings[k] = e.target.type === 'checkbox' ? e.target.checked : +e.target.value;
+    settings[k] = +e.target.value;
     saveSettings(); applySettings(); show();
   });
   el.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'resume') closePause(true);
-    if (b.dataset.detail) { settings.detail = b.dataset.detail; saveSettings(); applySettings(); show(); }
+    if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
+    if (b.dataset.detail) settings.detail = b.dataset.detail;
+    if (b.dataset.toggle || b.dataset.detail) { saveSettings(); applySettings(); show(); }
   });
   el.show = show;
   return el;
@@ -3671,6 +4678,11 @@ const HAND = {
   donut: [['  .---.', ' ( (o) )', "  '---'"], (c, r) => c === 'o' ? C(GRAY, 3) : C(MAG, 13)],
   bagel: [['  .---.', ' ( (_) )', "  '---'"], (c, r) => C(WARM, 12)],
   sandwich: [[' _________', '/%%%%%%%%%\\', '|=========|', '\\_________/'], (c, r) => r === 1 ? C(GREEN, 12) : r === 2 ? C(RED, 12) : C(WARM, 12)],
+  candy: [['  ______', ' (CANDY )', "  '----'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(MAG, 12)],
+  yoyo: [[' | ', ' | ', '(@)'], (c, r) => r < 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
+  harmonica: [[' ________', '[::::::::]', " '------'"], (c, r) => c === ':' ? C(GRAY, 6) : C(GRAY, 13)],
+  duck: [['   __', ' <(o )___', '  ( ._> /', "   `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : C(YEL, 15)],
+  sparklers: [['|', '|', '|', '|'], (c, r) => C(GRAY, 11)],
   chips: [[' .------.', ' | CHIPS|', ' |  ()  |', " '------'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(YEL, 13)],
   apple: [['   ,', ' .-|-.', '(     )', " '---'"], (c, r) => r === 0 || c === '|' ? C(GREEN, 12) : C(RED, 13)],
   slice: [['\\%%%%%%/', ' \\%o%%/', '  \\%%/', '   \\/'], (c, r) => c === 'o' ? C(RED, 13) : C(YEL, 13)],
@@ -3682,13 +4694,11 @@ const HAND = {
   newspaper: [[' ________', '|NEWS ==|', '|=== ===|', '|=== ===|'], (c, r) => C(WHITE, 13)],
   vinyl: [[' _______', '|  ___  |', '| ( o ) |', '|_______|'], (c, r) => c === 'o' ? C(RED, 13) : C(MAG, 12)],
   flowers: [[' *@*@*', '  \\|/', '   |', '  [_]'], (c, r) => r === 0 ? C(ITEM_COL[(c.charCodeAt(0) + r) & 7], 14) : c === '[' || c === ']' || c === '_' ? C(BRICK, 12) : C(GREEN, 12)],
-  umbrella: [['   |', '   |', '   J'], (c, r) => C(GRAY, 12)],
   ball: [['  ____', ' / \\/ \\', '|  /\\  |', ' \\_\\/_/'], (c, r) => C(WHITE, 13)],
   boombox: [[' _[====]_', '|O |==| O|', '|_|____|_|'], (c, r) => c === 'O' ? C(GRAY, 9) : c === '=' ? C(CYAN, 13) : C(GRAY, 13)],
   skateboard: [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)],
   cigarettes: [[' _____', '|=====|', '|SMOKE|', '|_____|'], (c, r) => /[A-Z]/.test(c) ? C(RED, 13) : C(WHITE, 13)],
 };
-const HAND_FIST = ['  ____', ' (    \\', '(______)']; // the hand holding it
 let smokePuffs = []; // [x, y, life] in screen cells
 const putCell = (r, c, ch, col, bg = NONE) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ' && bg === NONE) return; const i = r * cols + c; set(i, ch, col); BG[i] = bg; FOGS[i] = FOGB[i] = 0; };
 // draw ascii art solid: the gaps inside each line are filled, so the street doesn't show through the cup
@@ -3702,19 +4712,6 @@ function drawHeld(dt) {
   if (fx.skating && mode === 'walk') { // the board under your feet
     putArt(HAND.skateboard[0], rows - 3, (cols >> 1) - 8, HAND.skateboard[1], C(GRAY, 1));
   }
-  const it = heldItem();
-  if (it && !(fx.skating && it.id === 'skateboard')) {
-    const [art, col] = HAND[it.id] || HAND.book, c0 = Math.floor(cols * 0.72), r0 = rows - art.length - 3 + bob;
-    putArt(art, r0, c0, col, C(GRAY, 1));
-    putArt(HAND_FIST, rows - 3 + bob, c0, () => C(SKIN, 12), C(SKIN, 4));
-    if (it.id === 'umbrella' && rain > 0.2) { // the canopy overhead
-      for (let c = 0; c < cols; c++) {
-        const edge = Math.round(4 + Math.abs(c - cols / 2) / cols * 6);
-        for (let r = 0; r < edge; r++) { const i = r * cols + c; set(i, r === edge - 1 ? (c % 9 === 0 ? 'Y' : '-') : ' ', C(BLUE, 6)); BG[i] = C(BLUE, 2); FOGS[i] = FOGB[i] = 0; }
-        if (c % 9 === 0 && Math.random() < 0.3) putCell(edge + (T * 6 + c | 0) % 3, c, '.', C(BLUE, 8)); // drips off the edge
-      }
-    }
-  }
   if (fx.smoke > 0) { // a cigarette in your mouth, tip glowing; drags puff smoke
     const c0 = (cols >> 1) - 2, r0 = rows - 2, tip = fract(T * 2) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5;
     for (let k = 0; k < 6; k++) putCell(r0 - (k >> 1), c0 + k, k < 1 ? '_' : '/', C(WHITE, 14), C(GRAY, 2));
@@ -3725,6 +4722,119 @@ function drawHeld(dt) {
   for (const p of smokePuffs) { p[1] -= dt * 4; p[0] += Math.sin(T * 3 + p[1]) * dt * 3; putCell(Math.round(p[1]), Math.round(p[0]), p[2] > 0.6 ? '~' : '.', C(GRAY, 4 + p[2] * 8)); }
 }
 
+// ---- what's in your hand, drawn big over the finished frame: ASCII at ~2x the map's character size, every line
+// solid-backed so nothing shows through, the hand gripping the bottom of whatever it holds
+function bigArt(lines, x, y, size, colFn, bgFn) {
+  const w = g.measureText('M').width;
+  lines.forEach((l, r) => {
+    const a0 = l.search(/\S/), a1 = l.length - [...l].reverse().join('').search(/\S/);
+    if (a0 < 0) return;
+    if (bgFn && l.replace(/ /g, '').length > 2) for (let k = a0; k < a1; k++) { const b = bgFn(l[k], r, k); if (b !== NONE) { g.fillStyle = PAL[b]; g.fillRect(x + k * w, y + r * size, w + 0.5, size); } }
+    for (let k = a0; k < a1; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r)]; g.fillText(l[k], x + k * w, y + r * size); }
+  });
+  return w;
+}
+// the hand, in ASCII at the held item's size: four fingers curled round the front of whatever it holds (stacked
+// bands, a knuckle crease in each), the thumb hooked over the top on the left, the wrist running off the screen.
+// Solid skin behind every row so nothing shows through; outlines and creases a darker brown.
+let HAND_ART = [
+  '  _',
+  ' / )-----.',
+  '( (__:___ )',
+  ' (___:___ )',
+  ' (___:___ )',
+  '  (__:__ /',
+  '   |     |',
+  '   |     |',
+  '   |     |'];
+const HAND_EDGE = new Set(['(', ')', '/', '\\', '|', '_', '-', '.', ':']);
+function drawHand(cx, top, size) {
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width, artW = Math.max(...HAND_ART.map(l => l.length));
+  bigArt(HAND_ART, cx - artW * w / 2, top, size, (c, r) => HAND_EDGE.has(c) ? C(BRICK, c === ':' ? 6 : 8) : C(SKIN, 12),
+         (c, r) => r === 0 ? NONE : C(SKIN, r > 5 ? 6 : 8));
+}
+function drawHeldBig() {
+  const it = heldItem();
+  if (!it || !(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') || fx.skating && it.id === 'skateboard') return;
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), size = Math.round(u * 1.5); // scaled to the screen, not the detail setting
+  const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
+  const hx = Math.round(cv.width * 0.7), hy = Math.round(cv.height - 5.4 * size + bob); // the top of the hand (its thumb)
+  const open = it.id === 'umbrella' && rain > 0.2;
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width;
+  if (open) { // the umbrella, open overhead, seen from underneath: ribs fan out from the hub at the top of the screen
+    // to a scalloped rim that hangs lowest straight ahead; the shaft runs from your fist up to the hub
+    const W = cv.width, H = cv.height, gx = hx + 2.6 * u, hub = [W * 0.56, H * 0.05 + bob * 0.5], ribs = 10, tips = [];
+    for (let k = 0; k <= ribs; k++) { const t = k / ribs * 2 - 1; tips.push([W * (0.5 + t * 0.62), H * (0.36 - t * t * 0.5) + bob * 0.5]); }
+    g.fillStyle = PAL[C(BLUE, 3)]; g.fillRect(0, 0, W, hub[1]); // above the hub the canopy runs on over your head
+    const line = Math.max(1.5, u * 0.09);
+    for (let k = 0; k < ribs; k++) { // the panels: alternating tones, each edge scalloped up toward the hub
+      const [x0, y0] = tips[k], [x1, y1] = tips[k + 1], mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      g.beginPath(); g.moveTo(hub[0], hub[1]); g.lineTo(x0, y0);
+      g.quadraticCurveTo(mx + (hub[0] - mx) * 0.12, my + (hub[1] - my) * 0.22, x1, y1); g.closePath();
+      g.fillStyle = PAL[C(BLUE, k & 1 ? 5 : 3)]; g.fill();
+    }
+    g.strokeStyle = PAL[C(GRAY, 7)]; g.lineWidth = line;
+    for (const [x, y] of tips) { g.beginPath(); g.moveTo(hub[0], hub[1]); g.lineTo(x, y); g.stroke(); } // the ribs
+    g.fillStyle = PAL[C(GRAY, 11)];
+    tips.forEach(([x, y], k) => {
+      g.beginPath(); g.arc(x, y, u * 0.16, 0, Math.PI * 2); g.fill(); // the rib tips
+      const d = fract(T * 1.3 + k * 0.37); // a drip falling off each tip
+      g.fillStyle = PAL[C(BLUE, 10)]; g.fillRect(x - 1, y + u * 0.3 + d * H * 0.25, 2, u * 0.35); g.fillStyle = PAL[C(GRAY, 11)];
+    });
+    g.lineCap = 'round'; // the shaft: dark edge, light core, from your fist up to the hub
+    g.strokeStyle = PAL[C(GRAY, 3)]; g.lineWidth = u * 0.42; g.beginPath(); g.moveTo(gx, hy + u); g.lineTo(hub[0], hub[1]); g.stroke();
+    g.strokeStyle = '#cfcfd8'; g.lineWidth = u * 0.24; g.stroke();
+    g.lineCap = 'butt';
+    g.fillStyle = PAL[C(GRAY, 12)]; g.beginPath(); g.arc(hub[0], hub[1], u * 0.4, 0, Math.PI * 2); g.fill(); // the hub
+  } else if (it.id === 'umbrella') { // furled: the shaft up out of your fist into the wrapped canopy, strap, tip
+    g.save(); g.translate(hx + 2.6 * u, hy + u); g.rotate(-0.1); // leaning a touch to the left; up is -y
+    g.lineCap = 'round';
+    g.strokeStyle = PAL[C(GRAY, 3)]; g.lineWidth = u * 0.42; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -13 * u); g.stroke();
+    g.strokeStyle = '#cfcfd8'; g.lineWidth = u * 0.24; g.stroke(); // the shaft (its tip pokes out the top)
+    g.beginPath(); g.moveTo(-0.3 * u, -3 * u); // the wrapped canopy: bunched at the bottom, swelling, tapering to the tip
+    g.bezierCurveTo(-1.6 * u, -4.2 * u, -1.1 * u, -8 * u, -0.12 * u, -12.3 * u); g.lineTo(0.12 * u, -12.3 * u);
+    g.bezierCurveTo(1.1 * u, -8 * u, 1.6 * u, -4.2 * u, 0.3 * u, -3 * u); g.closePath();
+    g.fillStyle = PAL[C(BLUE, 6)]; g.fill(); g.strokeStyle = PAL[C(BLUE, 2)]; g.lineWidth = Math.max(1.5, u * 0.08); g.stroke();
+    g.strokeStyle = PAL[C(BLUE, 9)]; g.lineWidth = Math.max(1, u * 0.06);
+    for (const k of [-0.5, 0.15, 0.7]) { g.beginPath(); g.moveTo(k * 0.5 * u, -3.3 * u); g.quadraticCurveTo(k * 1.4 * u, -6.5 * u, 0, -12 * u); g.stroke(); } // the folds
+    g.fillStyle = PAL[C(GRAY, 12)]; g.fillRect(-1.15 * u, -5.6 * u, 2.3 * u, 0.4 * u); // the strap
+    g.lineCap = 'butt'; g.restore();
+  } else {
+    const [art, col] = HAND[it.id] || HAND.book, artW = Math.max(...art.map(l => l.length)), top = hy - (art.length - 1.6) * size;
+    // centred over the fingers, the bottom of it tucked behind them
+    if (!(it.id === 'yoyo' && fx.yoyo > 0)) bigArt(art, hx + 2.6 * u - artW * w / 2, top, size, col, () => C(GRAY, 1));
+    if (it.id === 'sparklers' && fx.spark > 0) drawSparks(hx + 2.6 * u, top - size * 0.5, size);
+  }
+  drawHand(hx + 2.6 * u, hy, size);
+  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(hx + 2.6 * u, hy + size, size);
+  g.font = FS + 'px monospace';
+}
+// a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
+// drawn in characters that follow its slope
+function drawYoyo(x, y, size) {
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width, th = (1 - fx.yoyo / 1.4) * Math.PI * 2, R = 2.4;
+  const yx = x + Math.sin(th) * R * w * 1.7, yy = y - (1 - Math.cos(th)) * R * size;
+  const n = Math.ceil(Math.hypot((yx - x) / w, (yy - y) / size)), dxs = (yx - x) / w, dys = (yy - y) / size;
+  const ch = Math.abs(dys) > Math.abs(dxs) * 2 ? '|' : Math.abs(dxs) > Math.abs(dys) * 2 ? '-' : dxs * dys < 0 ? '/' : '\\';
+  g.fillStyle = PAL[C(WHITE, 11)];
+  for (let k = 1; k < n; k++) g.fillText(ch, x + (yx - x) * k / n - w / 2, y + (yy - y) * k / n - size / 2);
+  bigArt(['(' + '@*o*'[(T * 16 | 0) & 3] + ')'], yx - 1.5 * w, yy - size / 2, size, c => c === '(' || c === ')' ? C(RED, 14) : C(WHITE, 15), () => C(RED, 4));
+}
+// a lit sparkler: a fizzing ball at the tip, sparks spitting out every which way (fx.spark counts down), in ASCII
+function drawSparks(x, y, size) {
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width;
+  for (let k = 0; k < 14; k++) {
+    const a_ = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 2.6;
+    g.fillStyle = PAL[C(Math.random() < 0.5 ? YEL : WHITE, 9 + Math.random() * 6)];
+    g.fillText(r < 1.4 ? '*' : Math.random() < 0.5 ? '+' : '.', x - w / 2 + Math.cos(a_) * r * w * 1.6, y + Math.sin(a_) * r * size * 0.9);
+  }
+  g.fillStyle = PAL[C(WHITE, 15)]; g.fillText('@', x - w / 2, y);
+}
+
 // ---- the hotbar and the effects you're under, bottom left
 function hotbar() {
   if (mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze) return;
@@ -3732,47 +4842,36 @@ function hotbar() {
   const y = cv.height - FS * 2 - 10;
   inv.forEach((it, k) => {
     const s = `${k + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
-    g.fillStyle = k === held ? 'rgba(255,184,77,0.35)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
-    g.fillStyle = k === held ? '#fff' : '#bbb'; g.fillText(s, x + 6, y + 4);
+    g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
+    g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
-  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = '#ffb84d'; g.fillText(s, 12, y - FS - 7); }
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
+  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
 // ---- shop menu and inventory: small panels over a frozen game, keyboard or mouse
 let shopEl = null, invEl = null, shopCtx = null;
-function panel(id) {
-  const el = document.createElement('div');
-  el.id = id;
-  el.innerHTML = `<style>
-    #${id} { position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); font: 13px/1.5 monospace; color: rgba(255,255,255,0.85); }
-    #${id} .panel { width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; padding: 18px 20px; background: rgba(10,6,10,0.94); border: 1px solid rgba(255,255,255,0.15); }
-    #${id} h1 { margin: 0 0 4px; font-size: 16px; font-weight: normal; letter-spacing: 3px; color: #fff; }
-    #${id} .sub { margin: 0 0 12px; color: rgba(255,255,255,0.5); }
-    #${id} button { display: grid; grid-template-columns: 1.6em 1fr auto; gap: 8px; width: 100%; box-sizing: border-box; margin: 5px 0; padding: 7px 10px; text-align: left; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); cursor: pointer; }
-    #${id} button:hover, #${id} button:focus-visible { background: rgba(255,184,77,0.18); border-color: rgba(255,184,77,0.6); outline: none; }
-    #${id} button[disabled] { opacity: 0.4; cursor: default; }
-    #${id} .k { color: rgba(255,184,77,0.9); }
-    #${id} .hint { margin: 12px 0 0; color: rgba(255,255,255,0.45); }
-  </style><div class="panel"></div>`;
-  document.body.appendChild(el);
-  return el;
-}
+const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
   el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
   for (const k in K) K[k] = 0;
   if (document.pointerLockElement) document.exitPointerLock();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => shopEl && shopEl.style.display === 'flex' || invEl && invEl.style.display === 'flex';
+const panelOpen = () => [shopEl, invEl, storeEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span>${fmt$(it.price)}</span></button>`; }).join('');
-  showPanel(shopEl, `<h1>${title}</h1><p class="sub">You have ${fmt$(money)} &middot; ${inv.length}/${INV_SIZE} carried</p>${rows_}<p class="hint">1-${stock.length} or click to buy &middot; E / Esc to close</p>`);
-  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'); if (b) shopBuy(b.dataset.buy); };
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate);
+    return `<button class="item" data-sell="${k}" ${p ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+  const work = shiftHere();
+  const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${work === 'serve' ? 'Wait tables for a shift' : 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
+  showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
+    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
+  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
 }
 function shopBuy(id) {
   const [ok, line] = buy(id);
@@ -3780,19 +4879,55 @@ function shopBuy(id) {
   if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor)) say(`${line} That's the one they wanted.`, 4);
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
 }
+function shopSell(k) {
+  say(sellSlot(k, SELL_RATE[shopCtx.title])[1], 3);
+  openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor);
+}
 const closeShop = () => hidePanel(shopEl);
+// work going here? (a room's counter, not a street cart; one shift a visit)
+const shiftHere = () => mode === 'room' && !shopCtx.vendor && !room.worked && SHIFT_FOR[room.kind] || null;
+function startShift() {
+  const id = shiftHere();
+  if (!id) return;
+  room.worked = true; closeShop(); startGame(id, 'shift');
+}
 function openInventory() {
   invEl = invEl || panel('inventory');
-  const rows_ = inv.length ? inv.map((it, k) => `<button data-slot="${k}"><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' (in hand)' : ''}</span><span>${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub">Nothing. Shops sell things.</p>';
-  showPanel(invEl, `<h1>CARRYING</h1><p class="sub">${fmt$(money)} &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">click or 1-${INV_SIZE}: hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  const rows_ = inv.length ? inv.map((it, k) => `<button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">1-${INV_SIZE} hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { held = +b.dataset.slot; openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
+// your storage unit: click a carried thing to put it in, a stored thing to take it out
+let storeEl = null;
+function openStorage() {
+  storeEl = storeEl || panel('storage');
+  const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
+  const carried = inv.length ? inv.map((it, k) => `<button class="item" data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
+  const unit = stored.length ? stored.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
+  showPanel(storeEl, `<h1>Storage unit</h1><p class="sub">The same unit at every storage place in town</p>
+    <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
+    <h2>in the unit ${stored.length}/${STORE_SIZE}</h2>${unit}
+    <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
+  storeEl.onclick = e => {
+    const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
+    if (s) say(storeSlot(+s.dataset.store)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take)[1], 2); else return;
+    openStorage();
+  };
+}
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if (storeEl && storeEl.style.display === 'flex') {
+    const n = /^Digit([1-9])$/.exec(e.code);
+    if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
+    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1) : storeSlot(n[1] - 1))[1], 2); openStorage(); }
+    return true;
+  }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
   if (e.code === 'Escape' || e.code === 'KeyE' && shop || e.code === 'KeyI' && !shop) { shop ? closeShop() : closeInventory(); return true; }
+  if (shop && e.code === 'KeyJ' && shiftHere()) { startShift(); return true; }
+  if (shop && n && e.shiftKey && SELL_RATE[shopCtx.title]) { shopSell(n[1] - 1); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
   if (!shop && n && inv[n[1] - 1]) { held = n[1] - 1; openInventory(); return true; }
   if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
@@ -3805,14 +4940,15 @@ const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'M
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters'];
 function useHeldItem() {
-  const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES() });
+  const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
+    water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
   say(line, 3);
   if (actx && sound) sfxUse(sound);
 }
 function sfxUse(s) {
   const at = actx.currentTime;
-  if (s === 'bite') { burst(at, 0.06, [filt('bandpass', 2200, 1.2)], 0.12); burst(at + 0.09, 0.05, [filt('bandpass', 1800, 1.2)], 0.09); }
-  if (s === 'sip') burst(at, 0.25, [filt('lowpass', 900), filt('highpass', 300)], 0.07);
+  if (s === 'bite') playClip('eat', 0.5);
+  if (s === 'sip') playClip('drink', 0.6);
   if (s === 'light') { tone(at, 2600, 0.03, 0.08, 'square'); burst(at + 0.04, 0.4, [filt('lowpass', 1500)], 0.1); }
   if (s === 'drag') { burst(at, 0.4, [filt('bandpass', 3500, 0.8)], 0.03); burst(at + 0.6, 0.9, [filt('lowpass', 900)], 0.06); }
   if (s === 'kick') { tone(at, 110, 0.12, 0.2); burst(at, 0.05, [filt('bandpass', 900, 1)], 0.15); }
@@ -3820,6 +4956,11 @@ function sfxUse(s) {
   if (s === 'board') { tone(at, 180, 0.08, 0.12); burst(at, 0.1, [filt('bandpass', 1200, 1)], 0.1); }
   if (s === 'click') tone(at, 1800, 0.03, 0.08, 'square');
   if (s === 'chime') sfxDoor();
+  if (s === 'whirr') { burst(at, 0.5, [filt('bandpass', 700, 3)], 0.05); burst(at + 0.55, 0.4, [filt('bandpass', 900, 3)], 0.04); }
+  if (s === 'squeak') { const o = actx.createOscillator(), gn = actx.createGain(); o.frequency.setValueAtTime(1300, at); o.frequency.exponentialRampToValueAtTime(2100, at + 0.12);
+    gn.gain.setValueAtTime(0, at); gn.gain.linearRampToValueAtTime(0.06, at + 0.02); gn.gain.exponentialRampToValueAtTime(0.0005, at + 0.2); chain(o, gn, sfxBus); o.start(at); o.stop(at + 0.25); }
+  if (s === 'harmonica') [392, 466, 523, 587, 523, 466, 392].forEach((f, k) => { // a blues lick, reedy
+    tone(at + k * 0.2, f, 0.24, 0.035, 'sawtooth'); tone(at + k * 0.2, f * 2, 0.24, 0.015, 'square'); });
 }
 // the ball, out in the world
 function drawBall() {
@@ -3827,8 +4968,137 @@ function drawBall() {
   const [vx, vy] = R(ball.x, ball.y);
   drawArt(vx, vy, ball.z, 0.035, 0.035, ['O'], (c, row, L) => C(WHITE, Math.max(L, 6)));
 }
+// ===== playing a minigame (minigames.js): an arcade cabinet or a work shift takes over the screen. The game's grid is
+// drawn into the same character grid as the world, scaled up into blocks, inside a cabinet-style frame, with its
+// score below. The world keeps ticking along behind. Arcade games cost a credit and pay tickets; shifts pay money.
+let game = null; // { g, kind: 'arcade' | 'shift', paid, pressed: {} }
+
+const GAME_KEYS = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up',
+                    ArrowDown: 'down', KeyS: 'down', Space: 'act', Enter: 'act' };
+function startGame(id, kind) {
+  for (const k in K) K[k] = 0;
+  game = { g: GAMES[id](), kind, paid: false, pressed: {} };
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+// keys while a game's up; true if handled (every key is, while playing)
+function gameKey(e) {
+  if (!game) return false;
+  const k = GAME_KEYS[e.code];
+  if (k) K[e.code] = 1; // held, for the paddle (keyup clears it as usual)
+  if (e.repeat) return true;
+  if (game.g.over) { // the results screen: go again, or walk away
+    if ((k === 'act') && game.kind === 'arcade') { if (pay(CREDIT)) { const id = game.g.id; startGame(id, 'arcade'); } else say(`A credit's ${fmt$(CREDIT)}. You're out of cash.`); }
+    else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
+    return true;
+  }
+  if (e.code === 'Escape') { finishGame(true); return true; } // quit: a shift pays for what you did, a game keeps its score
+  if (k) game.pressed[k + 'P'] = 1;
+  return true;
+}
+function finishGame(quit) {
+  const g = game.g;
+  g.over = true;
+  if (game.paid) return;
+  game.paid = true;
+  const r = g.reward();
+  if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : 'No tickets this time.', 3); }
+  else { if (r > 0) earn(r); say(`Shift's over${quit ? ' (you clocked off early)' : ''}. You earned ${fmt$(r)}.`, 4); }
+}
+function stepGame(dt) {
+  const g = game.g;
+  if (g.over) { if (!game.paid) finishGame(false); return; }
+  const keys = { ...game.pressed };
+  for (const code in GAME_KEYS) if (K[code]) keys[GAME_KEYS[code]] = 1;
+  game.pressed = {};
+  const ev = g.step(dt, keys);
+  if (actx) for (const e of new Set(ev)) sfxGame(e);
+  if (g.over) finishGame(false);
+}
+// blips and buzzes
+function sfxGame(e) {
+  const at = actx.currentTime, sq = (f, len, gain = 0.05) => tone(at, f, len, gain, 'square');
+  if (e === 'eat' || e === 'place' || e === 'serve') { sq(880, 0.06); tone(at + 0.06, 1320, 0.08, 0.05, 'square'); }
+  else if (e === 'brick') sq(660 + Math.random() * 200, 0.05);
+  else if (e === 'paddle' || e === 'wall' || e === 'hop' || e === 'slide' || e === 'launch') sq(e === 'paddle' ? 440 : e === 'hop' ? 520 : 330, 0.03, 0.035);
+  else if (e === 'score' || e === 'clear') [523, 659, 784, 1047].forEach((f, k) => tone(at + k * 0.08, f, 0.1, 0.05, 'square'));
+  else if (e === 'miss' || e === 'die' || e === 'break' || e === 'angry' || e === 'wrong') { tone(at, 160, 0.25, 0.08, 'sawtooth'); tone(at + 0.12, 110, 0.3, 0.07, 'sawtooth'); }
+  else if (e === 'bump') sq(200, 0.04, 0.03);
+  else if (e === 'end') [784, 659, 523].forEach((f, k) => tone(at + k * 0.1, f, 0.12, 0.05, 'square'));
+}
+
+// the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
+function drawGame() {
+  const g = game.g, n = rows * cols;
+  for (let i = 0; i < n; i++) { CH[i] = ' '; COL[i] = 0; BG[i] = C(GRAY, 0); }
+  FOGS.fill(0); FOGB.fill(0);
+  const s = clamp(Math.floor(Math.min((rows - 9) / g.H, (cols - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
+  const gw = g.W * bw, gh = g.H * bh, x0 = (cols - gw) >> 1, y0 = Math.max(4, (rows - gh) >> 1);
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : g.id === 'serve' ? ORANGE : CYAN;
+  for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
+    if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
+    const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
+    if (edgeY || edgeX) { set(i, edgeY && edgeX ? '+' : edgeY ? '=' : '|', C(frame, 12)); BG[i] = C(frame, 2); }
+    else if (y < y0 || y >= y0 + gh || x < x0 || x >= x0 + gw) BG[i] = C(frame, 1);
+    else BG[i] = C(GRAY, 0);
+  }
+  putText(y0 - 3, x0 + ((gw - g.title.length * 2) >> 1), g.title.split('').join(' '), C(frame, 15));
+  g.draw((x, y, ch, col, bg) => { // one game cell: a block of characters
+    if (x < 0 || y < 0 || x >= g.W || y >= g.H) return;
+    for (let r = 0; r < bh; r++) for (let c = 0; c < bw; c++) {
+      const i = (y0 + y * bh + r) * cols + x0 + x * bw + c;
+      set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
+    }
+  }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
+  const st = g.status();
+  putText(y0 + gh + 2, x0 + ((gw - st.length) >> 1), st, C(WHITE, 12));
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}   ESC quit` : `${fmt$(money)}   ESC clock off`;
+  putText(Math.min(rows - 1, y0 + gh + 3), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
+  if (g.over) { // the results card
+    const r = g.reward(), lines = game.kind === 'arcade'
+      ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, '', `SPACE play again (${fmt$(CREDIT)})   E leave`]
+      : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, '', 'E or SPACE to finish'];
+    const w = Math.max(...lines.map(l => l.length)) + 6, h = lines.length + 2, cx = (cols - w) >> 1, cy = (rows - h) >> 1;
+    for (let y = cy; y < cy + h; y++) for (let x = cx; x < cx + w; x++) {
+      const i = y * cols + x; set(i, ' ', 0); BG[i] = C(GRAY, 1);
+      if (y === cy || y === cy + h - 1) set(i, '-', C(frame, 10));
+    }
+    lines.forEach((l, k) => putText(cy + 1 + k, cx + ((w - l.length) >> 1), l, C(k === 2 ? YEL : WHITE, k === 0 ? 15 : 12)));
+  }
+  present();
+}
+
+// ---- in the arcade: the cabinets (each plays one of ARCADE_GAMES), and the prize counter
+const nearCabinet = () => mode === 'room' && room.kind === 'arcade' &&
+  room.props.find(s => s.game && Math.abs(px - s.cx) < 0.55 && py > s.cy + 0.3 && py < s.cy + 1.5) || null;
+function playCabinet(cab) {
+  if (!pay(CREDIT)) return say(`A credit's ${fmt$(CREDIT)}. You're out of cash.`);
+  startGame(cab.game, 'arcade');
+}
+let prizeEl = null;
+function openPrizes() {
+  prizeEl = prizeEl || panel('prizes');
+  const rows_ = PRIZES.map(([id, cost], k) => `<button class="item" data-prize="${id}" ${tickets < cost ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${ITEMS[id].name}</span><span class="lead"></span><span class="v">${cost} tix</span></button>`).join('');
+  showPanel(prizeEl, `<h1>Prize counter</h1><p class="sub">You have ${tickets} tickets &middot; carrying ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">1-${PRIZES.length} trade &middot; E / Esc close</p>`);
+  prizeEl.onclick = e => { const b = e.target.closest('[data-prize]'); if (b) { say(claimPrize(b.dataset.prize)[1], 3); openPrizes(); } };
+}
+function prizeKey(e) {
+  if (!prizeEl || prizeEl.style.display !== 'flex') return false;
+  const n = /^Digit([1-9])$/.exec(e.code);
+  if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(prizeEl);
+  else if (n && PRIZES[n[1] - 1]) { say(claimPrize(PRIZES[n[1] - 1][0])[1], 3); openPrizes(); }
+  return true;
+}
+// closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
+// free, like any other page, and a click takes it back
+function relock(e) {
+  if (e.code === 'Escape' || paused || document.pointerLockElement) return;
+  const p = cv.requestPointerLock();
+  if (p && p.catch) p.catch(() => {}); // refused: a click will do it
+}
 onkeydown = e => {
-  if (!e.repeat && panelKey(e)) return; // a shop or the inventory is open
+  if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
+  if (!e.repeat && prizeKey(e)) return relock(e);
+  if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
   if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
   if (paused) return;
   K[e.code] = 1;
@@ -3845,9 +5115,10 @@ onkeydown = e => {
     if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) held = slot[1] - 1;
   }
   if (e.code === 'KeyH') hail();
+  if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY') { weather = { clear: 'rain', rain: 'fog', fog: 'clear' }[weather]; wTimer = 150; say(`Weather: ${weather}`); }
+  if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-5])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -3868,7 +5139,8 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) &&
+    Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;
@@ -3887,7 +5159,7 @@ function drive(dt) {
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   const hit = !free(fx, fy) || cars.some(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3)
            || people.some(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
-  if (hit) { if (Math.abs(c.v) > 0.8) say('*CRUNCH*', 1); c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
+  if (hit) { if (Math.abs(c.v) > 0.8) { say('*CRUNCH*', 1); taxiCrash(); } c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
   c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
   c.off = 0; c.ex = c.x; c.ey = c.y; // where it's drawn and where traffic sees it: right here
 }
@@ -3897,6 +5169,10 @@ function loop(t) {
   if (paused) { t0 = t; requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   const dt = Math.min(0.05, (t - t0) / 1000); t0 = t; T += dt; msgT -= dt;
   env(dt);
+  if (game) { // a cabinet or a shift has the screen; the world carries on behind it
+    stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);
+    requestAnimationFrame(loop); return;
+  }
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
@@ -3912,6 +5188,7 @@ function loop(t) {
   }
   stepTraffic(dt, T);
   stepTask(dt);
+  stepTaxiJob(dt);
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   if (mode === 'taxi') {
     px = me.x; py = me.y;

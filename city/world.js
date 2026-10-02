@@ -1,7 +1,7 @@
 // ---- shops
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
-  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE'];
+  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE'];
 const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
@@ -18,7 +18,7 @@ const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, so
 const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
-  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24] };
+  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24], STORAGE: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -170,17 +170,30 @@ const TAU = Math.PI * 2;
 const wave = (x, k) => 0.8 * Math.sin(TAU * x / N * 3 + k) + 0.5 * Math.sin(TAU * x / N * 11 + 2 * k) + 0.3 * Math.sin(TAU * x / N * 23 + 3 * k);
 const shoreS = x => SHORE_S * 8 + 4.6 + wave(x, 1); // land is north of this line in the south waterfront
 const shoreN = x => SHORE_N * 8 + 3.4 + wave(x, 4); // and south of this one in the north waterfront
+// lighthouse island: a small rocky island out in the bay off the foot of Broadway, its lighthouse on the far side,
+// reached by a long footbridge from the waterfront promenade. The coast wobbles (isleR), so it isn't a circle.
+const ISLE_BX = 16, ISLE = { x: ISLE_BX * 8 + 5, y: SHORE_S * 8 + 33, r: 5 };
+const LIGHTHOUSE = { x: ISLE.x + 1.2, y: ISLE.y + 2.2, r: 0.26 };
+const FOOTBRIDGE = { x: ISLE.x, hw: 0.16, y0: SHORE_S * 8 + 2.6, y1: ISLE.y - 2.5 }; // a deck 3m wide, running south
+const isleR = th => ISLE.r * (1 + 0.16 * Math.sin(3 * th + 1) + 0.08 * Math.sin(5 * th + 2) + 0.05 * Math.sin(9 * th));
+function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cells; negative out at sea
+  const ex = rel(x - ISLE.x), ey = rel(y - ISLE.y);
+  if (Math.abs(ex) > ISLE.r * 1.5 || Math.abs(ey) > ISLE.r * 1.5) return -ISLE.r;
+  return isleR(Math.atan2(ey, ex)) - Math.hypot(ex, ey);
+}
+const onIsland = (x, y) => isleEdge(x, y) > 0;
+const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
 // piers: walkable decks out over the water [x0, y0, x1, y1]; wider docks along the industrial shore
 const PIERS = [];
 for (let bx = 0; bx < NB; bx++) {
-  if (BRIDGE_X.includes(bx)) continue;
+  if (BRIDGE_X.includes(bx) || bx === ISLE_BX) continue;
   const dock = districtOf(bx, SHORE_S - 1) === 'industrial';
   if (dock && hash(bx, 4, 43) < 0.5) PIERS.push([bx * 8 + 3.6, SHORE_S * 8 + 3, bx * 8 + 6.4, SHORE_S * 8 + 11]);
   else if (hash(bx, 5, 43) < 0.35) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
-const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0);
-const seaAt = (wx, wy) => { const y = mod(wy, N); return y > shoreS(wx) || y < shoreN(wx); };
+const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
+const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy); };
 // open water you can't walk or drive on (park ponds are separate, see inPond)
 const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.floor(wy))]) && !onPier(wx, wy);
 
@@ -238,6 +251,44 @@ for (const [bx, by, o] of removed) {
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { // a crossing nothing uses any more: its corner fills in too
   const from = idx(bx * 8 - 1, by * 8 - 1);
   if (!degree(bx, by) && map[from] && !blockKind(bx - 1, by - 1) && map[idx(bx * 8, by * 8 + 2)] !== undefined) copyCell(from, idx(bx * 8, by * 8));
+}
+
+// ---- emergency services: police stations, fire stations and hospitals, where the emergency vehicles live (see
+// stepEmergency). Each takes the lot on the north-west corner of a built-up block, fronting the street along the
+// block's north side, its vehicle parked at the kerb out front: x, y = that parking spot (lane = the lane beside it).
+// They're their own buildings, not the district's: STY 11 police (grey stone, 4-5 floors), 12 fire station (red
+// brick, 2-3 floors, a hose tower at the back), 13 hospital (a white tower with a helipad, sh.pad = its middle).
+const SERVICE_BUILD = { police: { sty: 11, h: 1.5 }, fire: { sty: 12, h: 1.05 }, amb: { sty: 13, h: 3.6 } };
+const BASE_KINDS = { police: { word: 'POLICE', neon: BLUE, n: 4, title: 'Police station' },
+                     fire: { word: 'FIRE DEPT', neon: RED, n: 3, title: 'Fire station' },
+                     amb: { word: 'HOSPITAL', neon: WHITE, n: 3, title: 'Hospital' } };
+const SERVICES = [];
+{
+  const cand = [];
+  for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++)
+    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW && SHOP[idx(bx * 8 + 3, by * 8 + 2)]) cand.push([hash(bx, by, 81), bx, by]);
+  cand.sort((p, q) => p[0] - q[0]);
+  const gap = (b, bx, by) => Math.hypot(relB(b.bx - bx), b.by - by);
+  for (const kind in BASE_KINDS) {
+    const K_ = BASE_KINDS[kind];
+    for (const [, bx, by] of cand) {
+      if (SERVICES.filter(b => b.kind === kind).length >= K_.n) break;
+      if (SERVICES.some(b => gap(b, bx, by) < (b.kind === kind ? 8 : 3))) continue;
+      const sh = SHOP[idx(bx * 8 + 3, by * 8 + 2)]; // the lot's shop, shared by all its cells (lanes included)
+      const lot = [];
+      for (let y = by * 8; y < by * 8 + 8; y++) for (let x = bx * 8; x < bx * 8 + 8; x++) if (SHOP[idx(x, y)] === sh) lot.push([x, y]);
+      if (kind !== 'amb' && lot.length > 12) continue; // a whole block is too big for a police or fire station
+      Object.assign(sh, { kind: SHOP_LIT, word: K_.word, neon: K_.neon, signed: true, base: kind, hours: [0, 24] });
+      const B_ = SERVICE_BUILD[kind];
+      for (const [x, y] of lot) { map[idx(x, y)] = B_.h; STY[idx(x, y)] = B_.sty; }
+      if (kind === 'fire') { // the hose tower, at the back corner of the lot
+        const [tx, ty] = lot.reduce((b, c) => c[1] - c[0] * 0.1 > b[1] - b[0] * 0.1 ? c : b);
+        map[idx(tx, ty)] = 2.1;
+      }
+      if (kind === 'amb') sh.pad = [lot.reduce((s, c) => s + c[0], 0) / lot.length + 0.5, lot.reduce((s, c) => s + c[1], 0) / lot.length + 0.5];
+      SERVICES.push({ kind, bx, by, x: bx * 8 + 3.4, y: by * 8 + 1.74, lane: by * 8 + 1.4, out: false });
+    }
+  }
 }
 
 // ---- street names, for talk, directions and the HUD

@@ -52,7 +52,7 @@ function audioMix(s) {
   out.night = far * (0.5 + 0.5 * d.city) * s.night * (1 - 0.35 * s.rain); // the city at night: a distant hum, the odd car
   out.rain = s.rain;
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
-  out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog;
+  out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.boombox) out.bossa = 0.7; // your boombox
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt

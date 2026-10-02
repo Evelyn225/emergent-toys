@@ -1,5 +1,14 @@
+// closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
+// free, like any other page, and a click takes it back
+function relock(e) {
+  if (e.code === 'Escape' || paused || document.pointerLockElement) return;
+  const p = cv.requestPointerLock();
+  if (p && p.catch) p.catch(() => {}); // refused: a click will do it
+}
 onkeydown = e => {
-  if (!e.repeat && panelKey(e)) return; // a shop or the inventory is open
+  if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
+  if (!e.repeat && prizeKey(e)) return relock(e);
+  if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
   if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
   if (paused) return;
   K[e.code] = 1;
@@ -16,9 +25,10 @@ onkeydown = e => {
     if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) held = slot[1] - 1;
   }
   if (e.code === 'KeyH') hail();
+  if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY') { weather = { clear: 'rain', rain: 'fog', fog: 'clear' }[weather]; wTimer = 150; say(`Weather: ${weather}`); }
+  if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-5])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -39,7 +49,8 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) &&
+    Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;
@@ -58,7 +69,7 @@ function drive(dt) {
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   const hit = !free(fx, fy) || cars.some(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3)
            || people.some(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
-  if (hit) { if (Math.abs(c.v) > 0.8) say('*CRUNCH*', 1); c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
+  if (hit) { if (Math.abs(c.v) > 0.8) { say('*CRUNCH*', 1); taxiCrash(); } c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
   c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
   c.off = 0; c.ex = c.x; c.ey = c.y; // where it's drawn and where traffic sees it: right here
 }
@@ -68,6 +79,10 @@ function loop(t) {
   if (paused) { t0 = t; requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   const dt = Math.min(0.05, (t - t0) / 1000); t0 = t; T += dt; msgT -= dt;
   env(dt);
+  if (game) { // a cabinet or a shift has the screen; the world carries on behind it
+    stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);
+    requestAnimationFrame(loop); return;
+  }
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
@@ -83,6 +98,7 @@ function loop(t) {
   }
   stepTraffic(dt, T);
   stepTask(dt);
+  stepTaxiJob(dt);
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   if (mode === 'taxi') {
     px = me.x; py = me.y;

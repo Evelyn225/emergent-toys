@@ -127,9 +127,79 @@ test('shops: E at the counter opens the menu, number keys buy; E only leaves at 
     await page.keyboard.press('KeyE');
     assert.strictEqual(await page.evaluate(() => mode), 'walk');
     await page.waitForTimeout(200);
-    assert.ok(await page.evaluate(() => { let n = 0; for (let i = (rows - 10) * cols; i < rows * cols; i++) if (CH[i] === '|' && COL[i] >> 4 === WHITE) n++; return n; }) > 0, 'the cup is in your hand');
+    assert.ok(await page.evaluate(() => { // the hand is drawn on the canvas over the frame: count its skin-tone pixels
+      const [sr, sg, sb] = PALRGB[C(SKIN, 8)], d = g.getImageData(cv.width * 0.6, cv.height * 0.7, cv.width * 0.3, cv.height * 0.3).data; let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - sr) < 4 && Math.abs(d[i + 1] - sg) < 4 && Math.abs(d[i + 2] - sb) < 4) n++;
+      return n; }) > 500, 'the cup is in your hand');
     assert.deepStrictEqual(errors, []);
   } finally {
     await browser.close();
   }
 });
+
+// open the page, run fn(page), fail on any page error
+async function withPage(fn) {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(PAGE);
+    await page.waitForTimeout(300);
+    await fn(page);
+    assert.deepStrictEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
+}
+
+test('the arcade: a credit plays a cabinet, the game takes the screen, tickets buy prizes at the counter', () => withPage(async page => {
+  await page.evaluate(() => enterRoom('arcade', { word: 'ARCADE', neon: MAG, ret: [px, py, a], line: 'Hi' }, [6, 7.6, -Math.PI / 2]));
+  const cab = await page.evaluate(() => { const c = room.props.find(s => s.game && !s.busy); px = c.cx; py = c.cy + 0.8; return c.game; });
+  assert.ok(cab, 'a free cabinet');
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, money]), [cab, 99]);
+  for (let k = 0; k < 6; k++) { await page.keyboard.press('ArrowUp'); await page.keyboard.press('Space'); await page.waitForTimeout(50); }
+  await page.keyboard.press('Escape'); // quit: game over, results up
+  assert.strictEqual(await page.evaluate(() => game.g.over && game.paid), true);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game), null, 'back in the arcade');
+  await page.evaluate(() => { tickets = 25; px = room.def.keeper[0]; py = room.def.keeper[1] + 1.4; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('prizes')).display), 'flex');
+  await page.keyboard.press('Digit2'); // the rubber duck, 20 tickets
+  assert.deepStrictEqual(await page.evaluate(() => [tickets, heldItem().id]), [5, 'duck']);
+}));
+
+test('a work shift from the counter pays for how you did', () => withPage(async page => {
+  await page.evaluate(() => { enterRoom('diner', { word: 'DINER', neon: RED, ret: [px, py, a], line: 'Hi!' }, [6, 3, -Math.PI / 2]); px = 6; py = 2.4; });
+  await page.keyboard.press('KeyE');
+  await page.keyboard.press('KeyJ');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'serve');
+  await page.evaluate(() => { game.g.score = 10; });
+  await page.keyboard.press('Escape'); // clock off early: still paid for those ten
+  assert.ok(await page.evaluate(() => money) > 100);
+  await page.keyboard.press('Space');
+  assert.deepStrictEqual(await page.evaluate(() => [game, room.worked, mode]), [null, true, 'room']);
+}));
+
+test('the taxi job: J drives a taxi; a fare hails, gets in, and pays at their stop', () => withPage(async page => {
+  await page.evaluate(() => { const c = cars.find(c => c.body === TAXI && !c.rider && !c.ev); c.v = 0; px = c.x + c.hy * 0.3; py = c.y - c.hx * 0.3; });
+  await page.keyboard.press('KeyJ');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, !!job]), ['drive', true]);
+  await page.evaluate(() => { const p = people.find(p => !p.hidden); p.x = me.x; p.y = me.y; job.hail = p; p.hailing = true; me.v = 0; });
+  await page.waitForTimeout(200);
+  assert.ok(await page.evaluate(() => job.ride && job.ride.p.hidden), 'picked up');
+  await page.evaluate(() => { me.x = job.ride.dest[0]; me.y = job.ride.dest[1]; me.v = 0; job.ride.odo = 20; job.ride.took = 30; });
+  await page.waitForTimeout(200);
+  assert.deepStrictEqual(await page.evaluate(() => [job.trips, job.ride, money > 100]), [1, null, true]);
+  await page.keyboard.press('KeyE'); // stopped: end the shift
+  assert.deepStrictEqual(await page.evaluate(() => [mode, job]), ['walk', null]);
+}));
+
+test('vending machines sell from arm\'s reach, at an angle, even with a car at the kerb', () => withPage(async page => {
+  await page.evaluate(() => { const m = machines[0], fx = -m.s * m.fs, fy = m.c * m.fs; px = m.x + fx * 0.25 + m.c * 0.08; py = m.y + fy * 0.25 + m.s * 0.08; a = Math.atan2(m.y - py, m.x - px) + 0.3; });
+  await page.keyboard.press('KeyE');
+  await page.keyboard.press('Digit1');
+  assert.strictEqual(await page.evaluate(() => inv.length), 1);
+}));

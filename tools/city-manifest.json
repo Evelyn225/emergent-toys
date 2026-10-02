@@ -10,7 +10,8 @@
     "city/talk.js",
     "city/elevated.js",
     "city/audio-mix.js",
-    "city/goods.js"
+    "city/goods.js",
+    "city/minigames.js"
   ],
   "dom": [
     "city/screen.js",
@@ -20,9 +21,12 @@
     "city/render.js",
     "city/hud.js",
     "city/actions.js",
+    "city/taxi-job.js",
     "city/audio.js",
+    "city/menu.js",
     "city/pause.js",
     "city/goods-ui.js",
+    "city/minigame-ui.js",
     "city/main.js"
   ]
 }

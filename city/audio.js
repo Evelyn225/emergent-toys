@@ -144,6 +144,16 @@ function sfxTill() { // cha-ching: the drawer, then the bell
   tone(at + 0.08, 2093, 0.7, 0.12); tone(at + 0.08, 2637, 0.7, 0.1); tone(at + 0.11, 3136, 0.5, 0.06);
 }
 function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); tone(at + 0.07, 4150, 0.18, 0.06); }
+// short recorded one-shots (eating, drinking): fetched and decoded once, played through the effects bus
+const CLIPS = {};
+function playClip(name, gain) {
+  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
+  CLIPS[name].then(buf => {
+    if (!buf) return;
+    const s = actx.createBufferSource(), g_ = actx.createGain();
+    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; chain(s, g_, sfxBus); s.start();
+  });
+}
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
 
 // ---- sirens: one voice per emergency vehicle in earshot, with its own pattern, Doppler and panning
@@ -154,14 +164,14 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
+  for (const c of cars) if (code(c) && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
     o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, sfxBus); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
     const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
-    if (!cars.includes(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
+    if (!cars.includes(c) || !code(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
     v.g.gain.setTargetAtTime(0.16 * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
@@ -169,6 +179,19 @@ function tickSirens(indoors) {
     v.p.pan.setTargetAtTime(clamp((rx * right[0] + ry * right[1]) / d, -1, 1) * 0.8, now, 0.1);
   }
 }
+
+// ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
+function sfxThunder(d, indoors) {
+  const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
+  s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.6 + near * 0.3;
+  const lp = filt('lowpass', indoors ? 260 : 400 + near * 2600), g = actx.createGain(), k = (indoors ? 0.35 : 1) * near;
+  lp.frequency.setValueAtTime(lp.frequency.value, at); lp.frequency.exponentialRampToValueAtTime(140, at + 2.5);
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(0.8 * k, at + (near > 0.7 ? 0.015 : 0.3)); // crack, or a far-off roll
+  g.gain.exponentialRampToValueAtTime(0.25 * k, at + 0.7); g.gain.linearRampToValueAtTime(0.35 * k, at + 1.5);
+  g.gain.exponentialRampToValueAtTime(0.0005, at + 4 + d / 30);
+  chain(s, lp, g, sfxBus); s.start(at, Math.random() * 1.5); s.stop(at + 5 + d / 30);
+}
+let heardBolt = null;
 
 // ---- per frame
 let stepAcc = 0, lastPos = null, clackT = 0;
@@ -181,7 +204,7 @@ function audioTick(dt) {
   const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
@@ -195,6 +218,7 @@ function audioTick(dt) {
     if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
   }
   tickSirens(indoors);
+  if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && lastPos && lastPos[2] === mode) {

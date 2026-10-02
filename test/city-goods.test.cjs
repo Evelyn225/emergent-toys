@@ -8,7 +8,7 @@ const fresh = () => { const { ev } = loadCity(); return { ev, j: e => JSON.parse
 
 test('every shop and cart sells things that exist', () => {
   const { j } = fresh();
-  const bad = j(`[...Object.values(STOCK_WORD), ...Object.values(STOCK_ROOM), ...Object.values(VENDOR_STOCK)].flat().filter(id => !ITEMS[id])`);
+  const bad = j(`[...Object.values(STOCK_WORD), ...Object.values(STOCK_ROOM), ...Object.values(VENDOR_STOCK), ...Object.values(VENDING).map(v => v.stock)].flat().filter(id => !ITEMS[id])`);
   assert.deepStrictEqual(bad, []);
   assert.deepStrictEqual(j("stockFor('store', 'LIQUOR')"), ['beer', 'whiskey', 'cigarettes', 'chips']);
   assert.deepStrictEqual(j("stockFor('bar', 'BAR')"), ['beer', 'whiskey', 'cocktail'], 'a bar with no word list of its own');
@@ -70,4 +70,46 @@ test('the skateboard only rolls outside; the ball rolls, stops, and comes back',
   ev('px = ball.x; py = ball.y');
   assert.strictEqual(ev('pickUpBall()'), true);
   assert.strictEqual(ev("inv.some(i => i.id === 'ball')"), true);
+});
+
+test('storage: put things in your unit and take them out again; one unit, limited room', () => {
+  const { ev, j } = fresh();
+  ev("money = 500; buy('skateboard'); buy('beer'); buy('book'); held = 1");
+  assert.deepStrictEqual(j('storeSlot(0)'), [true, 'You put the skateboard in your unit.']);
+  assert.deepStrictEqual(j('inv.map(i => i.id)'), ['beer', 'book']);
+  assert.strictEqual(ev('ITEMS[heldItem().id].name'), 'beer', 'still holding the same thing');
+  assert.deepStrictEqual(j('stored.map(i => i.id)'), ['skateboard']);
+  ev('inv[0].uses = 2; storeSlot(0)');
+  assert.strictEqual(ev("stored.find(i => i.id === 'beer').uses"), 2, 'a half-drunk beer stays half drunk');
+  assert.deepStrictEqual(j('retrieveSlot(0)'), [true, 'You take the skateboard out of your unit.']);
+  assert.deepStrictEqual(j('storeSlot(5)'), [false, 'Nothing there.']);
+  for (let k = 0; k < 7; k++) ev("buy('water')");
+  assert.deepStrictEqual(j('retrieveSlot(0)'), [false, 'Your hands are full.']);
+  assert.deepStrictEqual(j("stockFor('storage', 'STORAGE')"), [], 'storage sells nothing: it keeps your things');
+});
+
+test('pawn shops buy your gear back for 40%, but not food; you keep holding what you held', () => {
+  const { ev, j } = fresh();
+  ev("money = 200; buy('skateboard'); buy('sandwich'); buy('newspaper'); held = 1");
+  assert.deepStrictEqual(j('sellSlot(0, SELL_RATE.PAWN)'), [true, 'You sell the skateboard for $24.00.']);
+  assert.strictEqual(ev('money'), 200 - 60 - 7 - 1 + 24);
+  assert.strictEqual(ev('ITEMS[heldItem().id].name'), 'sandwich', 'still holding the sandwich');
+  assert.deepStrictEqual(j('sellSlot(0, SELL_RATE.PAWN)'), [false, `"We don't take sandwich."`]);
+  assert.strictEqual(ev("sellPrice({ id: 'newspaper' }, SELL_RATE.PAWN)"), 0.5, 'rounded to the quarter');
+  assert.deepStrictEqual(j('sellSlot(4, SELL_RATE.PAWN)'), [false, 'Nothing there.']);
+  assert.strictEqual(ev('SELL_RATE.BODEGA'), undefined, 'only pawn shops buy');
+});
+
+test('vending machines: drinks, snacks and cigarettes on the sidewalk, backed by a wall, facing the street, solid', () => {
+  const { ev, j } = fresh();
+  const kinds = j('machines.reduce((o, m) => (o[m.kind] = (o[m.kind] || 0) + 1, o), {})');
+  for (const k of ['DRINKS', 'SNACKS', 'CIGARETTES']) assert.ok(kinds[k] > 30, `plenty of ${k} machines (${kinds[k]})`);
+  const bad = j(`machines.filter(m => {
+    const fx = -m.s * m.fs, fy = m.c * m.fs; // the way it faces
+    return map[idx(m.x, m.y)] || !map[idx(m.x - fx * 0.1, m.y - fy * 0.1)] || map[idx(m.x + fx * 0.3, m.y + fy * 0.3)]
+      || !machineAt(m.x, m.y, 0) || machineAt(m.x + fx * 0.2, m.y + fy * 0.2, 0.02)
+      || stations.some(t => Math.hypot(rel(t.x - m.x), t.y - m.y) < 0.7);
+  }).length`);
+  assert.strictEqual(bad, 0, 'on open ground, a wall behind, the street in front, clear of subway stairs');
+  assert.deepStrictEqual(j('VENDING.CIGARETTES.stock'), ['cigarettes']);
 });
