@@ -34,7 +34,7 @@ const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
     BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face));
     if (HIT.face === 5) return set(i, HIT.v > dy / 2 - 0.06 ? '=' : ' ', C(YEL, L * 0.8)), true;
     return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
-  }, 0, 1), walk: true };
+  }, 1, 0), walk: true }; // long axis across the stairwell (x): wall to wall, dy deep
 });
 const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
 const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
@@ -43,13 +43,14 @@ const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRI
 const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
                    CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
-const LYRICS = ['OH BABY BABY', 'I WILL SURVIVE', 'DONT STOP BELIEVING', 'SWEET CAROLINE', 'LIVIN ON A PRAYER', 'TAKE ON ME'];
+const LYRICS = ['SWEET CAROLINE', 'BAH BAH BAH', 'SO GOOD SO GOOD SO GOOD', 'SWEET CAROLINE']; // what the karaoke bar's playing (audio/ascii-city/karaoke.mp3)
 for (const w in MENUS) ROOM_FOR[w] = 'diner';
 for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'BAKERY']) ROOM_FOR[w] = 'cafe';
 for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
 for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
 for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
+ROOM_FOR.HOSPITAL = 'hospital';
 ROOM_FOR.STORAGE = 'storage';
 
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
@@ -188,7 +189,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [...counterBox(10.2, 6.8, 0.85), standing(10.2, 6.15, MAG)];
       let n = 0;
-      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[2.5, 4, 5.5, 7], 5.2]]) for (const x of xs) {
+      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[2.2, 3.7, 8.3, 9.8], 5.2]]) for (const x of xs) { // an aisle in from the door
         const k = n % 4, body = [MAG, BLUE, RED, GREEN][(n * 3 + 1) % 4], busy = chance(0.3);
         p.push({ ...cabinet(x, y, k, body), game: ARCADE_GAMES[n++ % ARCADE_GAMES.length], cx: x, cy: y, busy });
         if (busy) p.push(standing(x, y + 0.7, shirt()));
@@ -196,13 +197,13 @@ const ROOM_DEFS = {
       return p;
     } },
   laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
-    props: r => [BENCHP(5, 3.6, 0, -1), sitting(5, 3.58, shirt(), 0.45), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L))] },
+    props: r => [BENCHP(2.8, 3.6, 0, -1), sitting(2.8, 3.58, shirt(), 0.45), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L))] },
   cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,
     props: r => {
       const p = [];
-      for (const y of [5, 6.5, 8, 9.5]) {
-        p.push(BX(7, y, 4.5, 0.25, 0, 0.45, solid(RED, { top: '=', bright: 2 })), BX(7, y + 0.3, 4.5, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
-        for (let k = 0; k < 2; k++) if (chance(0.7)) p.push(sitting(3 + Math.random() * 8, y + 0.05, shirt(), 0.35, true));
+      for (const y of [5, 6.5, 8, 9.5]) for (const cx of [4.2, 9.8]) { // two blocks of seats, an aisle up the middle from the door
+        p.push(BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
+        if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.35, true));
       }
       return p;
     } },
@@ -230,6 +231,28 @@ const ROOM_DEFS = {
         p.push(SP(x, 1.8, 0.7, 1.2, ART.barberChair, (c, row, L) => C(row < 3 ? RED : GRAY, L)));
         if (chance(0.6)) p.push(sitting(x, 1.85, shirt(), 0.45, true));
       }
+      return p;
+    } },
+  // the hospital's emergency waiting room: a triage desk with a nurse, rows of seats with people waiting, two
+  // curtained bays with beds along the right-hand wall, EMERGENCY over everything. (The nurse is where healing would
+  // go, if you could get hurt.)
+  hospital: { grid: boxRoom(14, 10), light: 1, floor: 'tile', ceil: 'strip', wall: hospitalWall, keeper: [6, 1.9],
+    props: r => {
+      const p = [...counterBox(6, 2.6, 2, 1.1), standing(6, 1.9, CYAN), standing(4.7, 1.6, WHITE)]; // the nurse, a doctor behind
+      for (const [x, y] of [[3, 5.6], [8.4, 5.6], [3, 7.2], [8.4, 7.2]]) { // the waiting room seats, facing the desk
+        p.push(BENCHP(x, y, 0, -1));
+        if (chance(0.55)) p.push(sitting(x - 0.4, y + 0.02, shirt()));
+        if (chance(0.4)) p.push(sitting(x + 0.45, y + 0.02, shirt()));
+      }
+      for (const y of [2.2, 4.4]) { // the bays: a bed with white sheets and a pillow, a curtain either side
+        p.push(BX(11.6, y, 0.95, 0.42, 0.45, 0.62, (i, t, L) => { const f = HIT.face; BG[i] = C(WHITE, (2 + L * 0.3) * shadeFace(f));
+          return set(i, f === 5 ? (HIT.u > 0.6 ? '@' : '~') : f === 1 || f === 2 ? '#' : '_', C(f === 5 ? WHITE : GRAY, L)), true; }));
+        p.push(BX(11.6, y, 0.85, 0.32, 0, 0.45, solid(GRAY, { panel: 0.4 })));
+        for (const cy of [y - 0.95, y + 0.95]) p.push(BX(12.35, cy, 0.5, 0.02, 0.2, 1.95, (i, t, L) => { // a curtain, drawn back to the wall
+          BG[i] = C(CYAN, 1.5 + L * 0.12); return set(i, HIT.w > 1.86 ? 'o' : fract(HIT.u * 5) < 0.5 ? '|' : ' ', C(CYAN, L * 0.7)), true; }));
+      }
+      if (chance(0.6)) p.push(sitting(11.3, 4.4, shirt(), 0.62)); // someone waiting to be seen
+      p.push(BX(1.5, 8.4, 0.3, 0.3, 0, 1.4, solid(BLUE, { top: 'o', trim: 1.35 }))); // a water cooler by the door
       return p;
     } },
   bank: { grid: boxRoom(14, 9), light: 1, floor: 'marble', ceil: 'pendant', sign: true, wall: bankWall, keeper: [7, 1.5],
@@ -283,7 +306,7 @@ const ROOM_DEFS = {
           if ((f === 4 || f === 3) && HIT.w > 0.3 && HIT.w < 0.95) return set(i, fract(HIT.w * 4) < 0.4 ? '@o*o'[hash(Math.floor(HIT.u * 8), Math.floor(HIT.w * 4), 9) * 4 | 0] : '_', C(fract(HIT.w * 4) < 0.4 ? ORANGE : GRAY, 13)), true;
           return set(i, f === 5 ? '=' : ' ', C(GRAY, L)), true;
         })];
-      for (const [x, y] of [[2.2, 4.4], [5, 5.2], [7.8, 4.4], [2.5, 6.4], [7.5, 6.4]]) {
+      for (const [x, y] of [[2.2, 4.4], [5, 3.4], [7.8, 4.4], [2.2, 6.4], [7.8, 6.4]]) { // a clear way in down the middle
         p.push(...tableBox(x, y, 0.4, 0.4));
         if (chance(0.55)) p.push(sitting(x + 0.6, y + 0.02, shirt()));
         if (chance(0.3)) p.push(sitting(x - 0.6, y + 0.02, shirt()));
@@ -326,6 +349,10 @@ const ROOM_DEFS = {
                     '#.LL.LL.LL.L.#', '#............#', '#............#', '######DD######'],
     light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: storageWall, keeper: [11.5, 7.15],
     props: r => [BX(11.5, 7.75, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 0.99, top: '=' })), standing(11.5, 7.15, ORANGE)] },
+  // a holding cell: concrete, a bunk, a steel toilet, bars across the front (no door: the guard lets you out)
+  jail: { grid: boxRoom(6, 5, {}, false), light: 0.55, floor: 'concrete', ceil: 'strip', wall: jailWall,
+    props: r => [BX(1.7, 1.5, 0.9, 0.4, 0.4, 0.55, solid(GRAY, { top: '=' })), BX(1.7, 1.5, 0.85, 0.35, 0, 0.4, solid(GRAY, { panel: 0.5 })),
+                 BX(4.5, 1.4, 0.25, 0.25, 0, 0.45, solid(WHITE, { top: 'o' }))] },
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -439,6 +466,34 @@ function barberWall(i, u, uStep, z, d, mx, my, L) {
     set(i, '*@%&#'[h * 5 | 0], C(ITEM_COL[h * 80 & 7], L)); return true;
   }
   return false;
+}
+// hospital walls: pale green tile with a handrail and a green guide stripe, EMERGENCY in red over the desk, a big
+// red cross beside it, and STAFF ONLY swing doors (round windows) in the back corner
+function hospitalWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === 0) {
+    if (wallText(i, u, uStep, z, d, 'EMERGENCY', 6, 2.55, 0.28, 0.32, C(RED, 15))) return true;
+    const cu = u - 12.55, cz = z - 2.45;
+    if (Math.abs(cu) < 0.35 && Math.abs(cz) < 0.35 && (Math.abs(cu) < 0.11 || Math.abs(cz) < 0.11)) { BG[i] = C(RED, 9); return set(i, ' ', 0), true; }
+    if (u > 1.1 && u < 3.1 && z > 2.05 && z < 2.35) { // STAFF ONLY over the swing doors
+      BG[i] = C(BLUE, 4); return wallText(i, u, uStep, z, d, 'STAFF ONLY', 2.1, 2.2, 0.17, 0.2, C(WHITE, 15)) || (set(i, ' ', 0), true);
+    }
+    if (u > 1.2 && u < 3 && z < 2.02) { // the swing doors, a round window in each
+      const fu = (u - 1.2) / 1.8, win = Math.hypot((fract(fu * 2) - 0.5) * 1.8, (z - 1.5) / 0.22) < 0.5;
+      if (Math.abs(fu - 0.5) < 0.02) return set(i, '|', C(GRAY, L)), true;
+      if (win) { BG[i] = C(CYAN, 3); return set(i, ' ', 0), true; }
+      BG[i] = C(GRAY, 4); return set(i, fract(u * 4) < 0.1 ? '|' : ' ', C(GRAY, L * 0.7)), true;
+    }
+  }
+  BG[i] = C(GREEN, 2 + L * 0.08);
+  if (Math.abs(z - 0.95) < 0.04) return set(i, '=', C(GRAY, L * 1.1)), true; // the handrail
+  if (Math.abs(z - 0.55) < 0.05) { BG[i] = C(GREEN, 5); return set(i, ' ', 0), true; } // the guide stripe
+  return set(i, fract(u * 3.3) < 0.06 || fract(z * 3.3) < 0.06 ? '+' : ' ', C(GREEN, L * 0.35)), true; // tiles
+}
+// cell walls: bars across the front, tally marks scratched by the bunk, bare concrete
+function jailWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === room.H - 1) { BG[i] = C(GRAY, 1); return set(i, fract(u * 5) < 0.22 ? '|' : z > 2.3 || z < 0.1 ? '=' : ' ', C(GRAY, L * 1.3)), true; }
+  if (my === 0 && z > 1 && z < 1.4 && u > 1 && u < 2.8) return set(i, fract(u * 9) < 0.35 ? '|' : z > 1.3 && fract(u * 1.8) < 0.5 ? '/' : ' ', C(WHITE, L * 0.8)), true;
+  BG[i] = C(GRAY, 2 + L * 0.1); return set(i, (Math.floor(u * 2) + Math.floor(z * 3)) % 7 ? ' ' : '.', C(GRAY, L * 0.5)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall
@@ -601,6 +656,8 @@ function roomSprites() {
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
     drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col);
   }
+  const at = placeKey();
+  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
   if (room.kind === 'station') {
     const tx = trainX(room);
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));

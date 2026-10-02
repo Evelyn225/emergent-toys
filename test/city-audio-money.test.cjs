@@ -102,5 +102,5 @@ test('ray vs box: which face, how far, and misses', () => {
 
 test('settings have defaults without storage', () => {
   assert.strictEqual(ev('settings.detail'), 'medium');
-  assert.strictEqual(ev('settings.fov'), 63);
+  assert.strictEqual(ev('settings.fov'), 90);
 });

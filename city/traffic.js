@@ -106,7 +106,7 @@ const SIM_R = 56, simulated = (x, y) => Math.abs(rel(x - px)) < SIM_R && Math.ab
 // state: 'out' (on a call) -> 'scene' -> 'back'. ev marks the vehicle; code(c) = running lights and siren.
 const EV_BODY = { amb: WHITE, fire: RED, police: BLUE };
 const RETURN_CODE = false; // real crews drive back quietly; true runs lights and siren home too
-const code = c => c.state === 'out' || RETURN_CODE && c.state === 'back';
+const code = c => c.state === 'out' || RETURN_CODE && c.state === 'back' || c.pursuit; // (a patrol car chasing you, too)
 const lightsOn_ = c => code(c) || c.state === 'scene'; // the light bar turning
 const BASE_R = 50; // a station further away than this (500m) doesn't send the call; one comes in from off-screen
 let evTimer = 45;
@@ -167,7 +167,7 @@ function stepTraffic(dt, t, everywhere = false) {
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
   const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;
@@ -217,7 +217,8 @@ function stepTraffic(dt, t, everywhere = false) {
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
     if (c.rider && !c.dest) room_ = 0;
-    if (c.dest && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
+    if (c.pursuit && mode === 'walk' && Math.hypot(rel(px - c.x), rel(py - c.y)) < 1.2) room_ = 0; // pulled up next to you
+    if (c.dest && !c.pursuit && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
       if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction
       else { room_ = 0; c.arrived = true; }
     }

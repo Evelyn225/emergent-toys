@@ -68,6 +68,7 @@ function citySprites() {
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
   islandSprites();
+  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   const LC = { G: GREEN, Y: YEL, R: RED };
@@ -82,7 +83,7 @@ function citySprites() {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
     const [vx, vy] = R(m.ex, m.ey), hx = m.hx, hy = m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    if (m.ev && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
+    if ((m.ev || m.patrol) && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
     drawVehicle(m, vx, vy, hx, hy);
   }
   for (const b of SERVICES) if (!b.out) { // parked out front of its station, ready to go
@@ -95,6 +96,17 @@ function citySprites() {
     if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
   }
   drawBall();
+  for (const c of footCops) { // police on foot: navy cap, uniform, running when they're after you
+    const [vx, vy] = R(c.x, c.y);
+    if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
+    drawArt(vx, vy, 0, 0.06, 0.18, (c.ph | 0) % 2 ? ART.walkA : ART.walkB, (ch, row, L) => C(row === 1 ? SKIN : BLUE, row === 0 ? L * 0.7 : row > 2 ? L * 0.6 : L));
+    if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
+  }
+  for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down
+  if (job && job.ride) { // the fare's stop: a big marker hanging over the street
+    const [vx, vy] = R(job.ride.dest[0], job.ride.dest[1]);
+    drawArt(vx, vy, 0.25, 0.12, 0.18, ['\\ /', ' V '], () => C(YEL, fract(T * 2) < 0.7 ? 15 : 9));
+  }
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
 }
 
@@ -173,7 +185,7 @@ function drawVehicle(m, vx, vy, hx, hy) {
   if (m.kind === 'taxi') drawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
-  if (m.ev) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
+  if (m.ev || m.patrol) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
     const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
@@ -181,6 +193,38 @@ function drawVehicle(m, vx, vy, hx, hy) {
     BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
   });
 }
+
+// fences and shipping containers (solids, see props.js): how each kind's faces look
+const CONTAINER_COL = [RED, BLUE, ORANGE, GREEN, GRAY, CYAN];
+const SOLID_SHADE = {
+  // construction hoarding: an orange-and-white striped top rail on posts, see-through between
+  hoarding: () => (i, t, L) => {
+    const w = HIT.w, u = HIT.u, f = HIT.face;
+    if (w > 0.18 || f === 5) { BG[i] = C(fract(u * 4) < 0.5 ? ORANGE : WHITE, 3 + L * 0.3); return set(i, '=', C(GRAY, L * 0.4)), true; }
+    if (Math.abs(fract(u * 2.2) - 0.5) > 0.42 || f === 1 || f === 2) return set(i, '|', C(GRAY, L)), true; // posts
+    if (w < 0.03) return set(i, '_', C(ORANGE, L * 0.7)), true; // a kick board
+    return false;
+  },
+  // chain-link: a top rail and posts, the mesh a lattice of x's you can see through
+  chain: () => (i, t, L) => {
+    const w = HIT.w, u = HIT.u;
+    if (w > 0.185 || HIT.face === 5) return set(i, '-', C(GRAY, L)), true;
+    if (Math.abs(fract(u * 0.8) - 0.5) > 0.47) return set(i, '|', C(GRAY, L * 1.1)), true;
+    return fract(u * 14 + w * 14) < 0.22 || fract(u * 14 - w * 14) < 0.22 ? (set(i, 'x', C(GRAY, L * 0.7)), true) : false;
+  },
+  // a 40ft container: corrugated sides, doors with locking bars on the ends, a colour per box
+  container: o => {
+    const col = CONTAINER_COL[o.k % CONTAINER_COL.length];
+    return (i, t, L) => {
+      const f = HIT.face, k = shadeFace(f);
+      BG[i] = C(col, (1.5 + L * 0.4) * k);
+      if (f === 5) return set(i, fract(HIT.u * 8) < 0.15 ? '=' : ' ', C(col, L * 0.5)), true;
+      if (HIT.w - o.z0 > 0.235 || HIT.w - o.z0 < 0.012) return set(i, '_', C(GRAY, L * 0.6)), true; // the frame
+      if (f === 1 || f === 2) return set(i, Math.abs(HIT.v) < 0.006 ? '|' : fract(HIT.v * 40) < 0.2 ? '|' : ' ', C(GRAY, L * 0.8)), true; // doors and bars
+      return set(i, fract(HIT.u * 30) < 0.5 ? '|' : ' ', C(col, L * 0.75)), true; // corrugation
+    };
+  },
+};
 
 // ---- lighthouse island
 // the lighthouse, drawn as a billboard (it's round, so it looks the same from every side): a tapering tower in red

@@ -125,3 +125,40 @@ test('taxi pay: the meter plus a tip for quick and smooth; a crash loses the tip
   assert.strictEqual(crash.tip, 0); assert.strictEqual(crash.fare, good.fare, 'still pays the meter');
   assert.strictEqual(good.stars, 5); assert.strictEqual(crash.stars, 1);
 });
+
+test('pong: a player who follows the ball beats the machine; one who stands still loses', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.pong()');
+  play(ev, 300, `t => { const s = g.state(); return { up: s.ball.y < s.you - 0.4, down: s.ball.y > s.you + 0.4 }; }`);
+  assert.ok(ev('g.over'));
+  assert.strictEqual(ev('g.score'), 7, 'won');
+  assert.strictEqual(ev('g.reward()'), 24);
+  ev('var g = GAMES.pong()');
+  play(ev, 300, `() => ({ up: 1 })`);
+  assert.ok(ev('g.over') && ev('g.state().them') === 7, 'lost');
+  assert.ok(ev('g.reward()') < 24);
+});
+
+test('shifts: a box always has somewhere to go; clocking off early pays less than staying', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.stock()');
+  // shelve box after box (shoppers emptying shelves as you go): every box handed to you has a gap waiting for it
+  for (let k = 0; k < 120; k++) {
+    assert.ok(ev('(() => { const s = g.shelf(); return g.box() < 0 ? !s.some(r => r.includes(false)) : s[g.box()].includes(false); })()'), 'the box fits somewhere (or there is none, with every shelf full)');
+    ev('{ const j = g.box() < 0 ? -1 : g.shelf()[g.box()].indexOf(false); if (j >= 0) { while (g.cur()[0] < g.box()) g.step(0, { downP: 1 }); while (g.cur()[0] > g.box()) g.step(0, { upP: 1 }); while (g.cur()[1] < j) g.step(0, { rightP: 1 }); while (g.cur()[1] > j) g.step(0, { leftP: 1 }); g.step(0, { actP: 1 }); } g.step(0.3, {}); }');
+  }
+  // the same work done, clocked off at 15s vs worked to the end
+  ev('var a_ = GAMES.serve(); a_.step(15, {}); var early = a_.reward()');
+  ev('var b_ = GAMES.serve(); b_.step(15, {}); b_.step(15, {}); b_.step(15, {}); b_.step(15, {}); b_.step(15, {}); var full = b_.reward()');
+  assert.ok(ev('early') < ev('full') || ev('b_.misses()') > 0, `early ${ev('early')} vs full ${ev('full')}`);
+  assert.ok(ev('GAMES.serve().reward()') === 0, 'no time worked, no base pay');
+});
+
+test('the shelves you stock are what the shop sells', () => {
+  const { ev, j } = fresh();
+  assert.deepStrictEqual(j("stockKinds('RECORDS').map(k => k[0])"), ['VINYL', 'CDS', 'TAPES', 'POSTERS']);
+  assert.deepStrictEqual(j("stockKinds('BODEGA').map(k => k[0])"), ['CANS', 'CEREAL', 'BOTTLES', 'SOAP'], 'a corner shop gets the general stuff');
+  assert.strictEqual(ev("Object.values(STOCK_THEMES).every(t => t.length === 4)"), true);
+  ev("var g = GAMES.stock(undefined, 'RECORDS'), labels = []; g.draw(() => {}, (x, y, s) => labels.push(s))");
+  assert.ok(ev("labels.includes('VINYL') && !labels.includes('CANS')"));
+});

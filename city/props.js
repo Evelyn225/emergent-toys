@@ -123,8 +123,10 @@ for (let k = 0; k < 28; k++) {
   }
 }
 
-// landmark, construction-site and industrial props
-const extras = [], cranes = [], stacks = [];
+// landmark, construction-site and industrial props. Fences and shipping containers are real boxes (solids): drawn
+// with drawBox and solid to walk or drive into. {x, y, c, s: long axis, hl, hw, z0, z1, kind, k: a per-thing seed}
+const extras = [], cranes = [], stacks = [], solids = [];
+const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k });
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
   if (lm === 'cathedral') for (const x of [3.5, 6.5])
@@ -133,16 +135,19 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     extras.push({ x: X + 5, y: Y + 5, z: 0, w: 2.2, h: 16, art: ART.radio, col: (c, row, L) => c === '*' ? C(RED, fract(T * 0.7) < 0.5 ? 15 : 3) : C(row & 2 ? RED : WHITE, L) });
   if (kind === 'construction') {
     cranes.push({ x: X + 7, y: Y + 6.2, H: 7 + hash(bx, by, 98) * 2, slew: hash(bx, by, 99) * 6.28 });
-    for (const s of [3.5, 5, 6.5]) for (const [x, y] of [[s, 2.1], [s, 7.9], [2.1, s], [7.9, s]])
-      extras.push({ x: X + x, y: Y + y, z: 0, w: 1.4, h: 0.22, art: ART.fence, col: (c, row, L) => C(c === '=' ? ORANGE : GRAY, L) });
+    // the hoarding round the site: three panels a side, open at the corners
+    for (const s of [3.5, 5, 6.5]) for (const [x, y, ax] of [[s, 2.1, 1], [s, 7.9, 1], [2.1, s, 0], [7.9, s, 0]])
+      solidBox(X + x, Y + y, ax, 0.7, 0.012, 0, 0.22, 'hoarding', bx * 7 + by);
   }
-  if (kind === 'yard') { // container stacks and a chain-link fence
+  if (kind === 'yard') { // container stacks on a loose grid (so they never overlap), a chain-link fence with gates
     for (let k = 0; k < 6; k++) {
-      const x = X + 2.6 + hash(bx, by, k * 3 + 40) * 4.8, y = Y + 2.6 + hash(bx, by, k * 3 + 41) * 4.8, n = 1 + (hash(bx, by, k * 3 + 42) * 3 | 0);
-      extras.push({ x, y, z: 0, w: 1.2, h: 0.26 * n, art: ART.containers[n - 1], col: (c, row, L) => C([RED, BLUE, ORANGE, GREEN, GRAY][(row + k) % 5], L * (c === '|' ? 0.6 : 1)) });
+      if (hash(bx, by, k * 3 + 43) < 0.2) continue; // an empty bay
+      const col = k & 1, row = k >> 1, x = X + 3.2 + col * 2.6 + (hash(bx, by, k * 3 + 40) - 0.5) * 0.4, y = Y + 3 + row * 1.9 + (hash(bx, by, k * 3 + 41) - 0.5) * 0.3;
+      const n = 1 + (hash(bx, by, k * 3 + 42) * 3 | 0), alongX = hash(bx, by, k * 3 + 44) > 0.25;
+      for (let lv = 0; lv < n; lv++) solidBox(x, y, alongX, 0.6, 0.125, lv * 0.26, lv * 0.26 + 0.25, 'container', bx * 31 + by * 7 + k * 3 + lv);
     }
-    for (const s of [3.5, 6.5]) for (const [x, y] of [[s, 2.1], [s, 7.9], [2.1, s], [7.9, s]])
-      extras.push({ x: X + x, y: Y + y, z: 0, w: 2.5, h: 0.2, art: ART.chain, col: (c, row, L) => C(GRAY, L * 0.8) });
+    for (const s of [3.5, 6.5]) for (const [x, y, ax] of [[s, 2.1, 1], [s, 7.9, 1], [2.1, s, 0], [7.9, s, 0]])
+      solidBox(X + x, Y + y, ax, 1.2, 0.01, 0, 0.2, 'chain', 0);
   }
   if (districtOf(bx, by) === 'industrial' && !kind && hash(bx, by, 51) < 0.45) { // a smokestack on the warehouse roof
     const x = X + 3 + hash(bx, by, 52) * 4, y = Y + 3 + hash(bx, by, 53) * 4;
@@ -151,7 +156,16 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
 }
 // dockside cranes on the industrial piers
 for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
-const extrasB = bucketed(extras);
+const extrasB = bucketed(extras), solidsB = bucketed(solids);
+// is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
+function solidAt(x, y, pad) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
+    if (o.z0 > 0) continue;
+    const qx = rel(x - o.x), qy = rel(y - o.y);
+    if (Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
+  }
+  return false;
+}
 
 // chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
 // strung wall to wall, so only where there's a building on both sides of the street to tie it to

@@ -84,6 +84,8 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
+    if (room.kind === 'jail') return T < room.until ? say(`Locked in. ${Math.ceil(room.until - T)}s to go.`) : (say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom());
+    if (room.burgled && nearKeeper()) return emptyTill();
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
       roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
@@ -93,6 +95,8 @@ function interact() {
       const from = room.st;
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
+    const dr = droppedHere(); // something you put down here earlier
+    if (dr) return say(pickUpDropped(dr)[1]);
     if (room.kind === 'arcade') {
       const cab = nearCabinet();
       if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
@@ -100,15 +104,19 @@ function interact() {
     }
     if (room.kind === 'storage' && nearKeeper()) return openStorage();
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
+    if (room.kind === 'hospital' && nearKeeper()) return say(`"${pick(NURSE_LINES)}"`, 3); // (healing would go here)
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
   }
+  if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
+  const dr = droppedHere();
+  if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const c = nearestCar(0.5);
@@ -118,7 +126,11 @@ function interact() {
       if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
     }
-    else { mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); }
+    else { // a stolen car: if anyone saw, the police hear about it
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
+      const w = crime('steal', c.x, c.y);
+      say(w === 'cop' ? 'A cop saw that.' : w ? 'The driver runs off shouting...' : 'You hot-wire it.', 3);
+    }
     px = c.x; py = c.y;
     return;
   }
@@ -137,7 +149,7 @@ function interact() {
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
-    if (sh.base) return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
+    if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say('Closed.');
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
@@ -148,6 +160,8 @@ function interact() {
 }
 // the hotel: a night's sleep, from 6pm. Fade out, wake at 7:00 in a room upstairs to a clear morning,
 // with everyone outside already where their morning routine puts them
+const NURSE_LINES = ['Take a seat, someone will call your name.', 'Fill this in and bring it back up.', 'Are you hurt? No? Then you\'re in luck.',
+  'The doctor will see you when she can.', 'Busy night. Busy every night.'];
 function bookRoom() {
   const rate = ROOM_RATE(room.word);
   if (!checkInOpen(tod)) return say('"Sorry, check-in begins at 6pm."', 4);

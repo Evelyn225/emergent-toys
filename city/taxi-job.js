@@ -3,6 +3,7 @@
 // them where they're going (the dash says which way and how far, the map marks it), and stop there to let them out.
 // Each trip pays the meter plus a tip for getting there quickly and smoothly (taxiPay); hit anything on the way and
 // there's no tip. E (stopped) ends the shift.
+const DROP_R = 2, STOP_V = 5 / 36; // drop-off: within 20m, rolling at 5 km/h or less (1 unit/s = 36 km/h)
 let job = null; // { trips, earned, next: seconds till someone hails, hail: the person waving, ride: the trip under way }
 
 function startTaxiShift(c) {
@@ -50,7 +51,7 @@ function stepTaxiJob(dt) {
     r.v0 = c.v; r.took += dt; r.odo += Math.abs(c.v) * dt; r.p.x = c.x; r.p.y = c.y;
     const swerve = (K.KeyA || K.KeyD || K.ArrowLeft || K.ArrowRight) && Math.abs(c.v) > 1.9;
     if (Math.abs(acc) > 1.6 || swerve) r.harsh += dt; // slamming the brakes, flooring it, flinging it round corners
-    if (Math.hypot(rel(r.dest[0] - c.x), rel(r.dest[1] - c.y)) < 1.1 && Math.abs(c.v) < 0.2) {
+    if (Math.hypot(rel(r.dest[0] - c.x), rel(r.dest[1] - c.y)) < DROP_R && Math.abs(c.v) < STOP_V) { // pulled up near enough
       const p = taxiPay(r.odo, r.took, r.harsh, r.crashed, r.route), paid = Math.round((p.fare + p.tip) * 100) / 100;
       earn(paid); job.trips++; job.earned += paid;
       dropOff(r.p); job.ride = null; job.next = 4 + Math.random() * 8;
@@ -62,7 +63,7 @@ function stepTaxiJob(dt) {
     const p = job.hail, d = Math.hypot(rel(p.x - c.x), rel(p.y - c.y));
     if (p.hidden || d > 45) { p.hailing = false; p.talk = 0; job.hail = null; job.next = 3; return; } // gave up on you
     p.talk = 5; // still standing there waving
-    if (d < 0.8 && Math.abs(c.v) < 0.25) pickUp(p);
+    if (d < 1.2 && Math.abs(c.v) < STOP_V) pickUp(p);
     return;
   }
   if ((job.next -= dt) > 0) return;
@@ -79,5 +80,31 @@ function jobLine() {
   const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey) * 10;
   const ang = mod(Math.atan2(ey, ex) - Math.atan2(me.hy, me.hx) + Math.PI, Math.PI * 2) - Math.PI; // + = to the right
   const way = Math.abs(ang) < 0.4 ? 'ahead' : Math.abs(ang) > 2.7 ? 'behind you' : (Math.abs(ang) < 1.2 ? 'ahead, ' : Math.abs(ang) > 1.9 ? 'behind, ' : '') + (ang > 0 ? 'right' : 'left');
-  return `${t.what}: ${d < 60 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
+  return `${t.what}: ${d < DROP_R * 10 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
+}
+// the arrow at the top of the screen, in characters: a shaft and a two-stroke head drawn at whatever angle the fare
+// (or their stop) is from where the car's pointing, how far, and what to do there. Close enough: a blinking [ STOP ].
+function jobArrow() {
+  const t = jobTarget();
+  if (!t || !me) return;
+  const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey);
+  const ang = mod(Math.atan2(ey, ex) - (chaseOn ? camYaw : a) + Math.PI, Math.PI * 2) - Math.PI; // 0 = dead ahead, + = right
+  const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.95), x = cv.width / 2, y = 70 + s * 3.2; // below the message line
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, col = PAL[C(YEL, 15)];
+  if (d < DROP_R) {
+    if (fract(T * 2) < 0.7) artText(['[ STOP ]'], x - 4 * w, y - s / 2, s, () => C(YEL, 15));
+  } else {
+    const L = s * 2.6, ux = Math.sin(ang), uy = -Math.cos(ang), tip = [x + ux * L, y + uy * L];
+    charLine(x - ux * L, y - uy * L, tip[0], tip[1], w, s, col); // the shaft
+    for (const side of [-1, 1]) { // the head: two strokes back from the tip
+      const h = ang + Math.PI + side * 0.55;
+      charLine(tip[0], tip[1], tip[0] + Math.sin(h) * L * 0.5, tip[1] - Math.cos(h) * L * 0.5, w, s, col);
+    }
+  }
+  const label = d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
+  g.font = FS + 'px monospace';
+  const lw = g.measureText(label).width;
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - lw / 2 - 6, y + s * 3.1, lw + 12, FS + 6);
+  g.fillStyle = col; g.fillText(label, x - lw / 2, y + s * 3.1 + 3);
 }

@@ -113,3 +113,43 @@ test('vending machines: drinks, snacks and cigarettes on the sidewalk, backed by
   assert.strictEqual(bad, 0, 'on open ground, a wall behind, the street in front, clear of subway stairs');
   assert.deepStrictEqual(j('VENDING.CIGARETTES.stock'), ['cigarettes']);
 });
+
+test('things you put down stay where they are, as they were, till you pick them up', () => {
+  const { ev, j } = fresh();
+  ev("money = 100; buy('burger'); inv[0].uses = 2; buy('coffee'); held = 0");
+  assert.strictEqual(ev("dropHeldAt(10, 20, '')"), 'burger');
+  ev("held = 0; dropHeldAt(3, 4, 'room:5,5')");
+  assert.deepStrictEqual(j('inv'), []);
+  assert.strictEqual(ev("droppedNear(10.1, 20, 'room:5,5', 0.2)"), null, 'the room and the street are different places');
+  assert.strictEqual(ev("droppedNear(3.5, 4, 'room:5,5', 1).id"), 'coffee');
+  assert.deepStrictEqual(j("pickUpDropped(droppedNear(10.1, 20, '', 0.2))"), [true, 'You pick up the burger.']);
+  assert.deepStrictEqual(j('inv'), [{ id: 'burger', uses: 2 }], 'still half eaten');
+  assert.strictEqual(ev('dropped.length'), 1);
+  ev("for (let k = 0; k < 7; k++) buy('water')");
+  assert.deepStrictEqual(j("pickUpDropped(dropped[0])"), [false, 'Your hands are full.']);
+});
+
+test('you can hold nothing: pick the same slot again, and nothing is in your hand', () => {
+  const { ev } = fresh();
+  ev("money = 50; buy('coffee'); buy('book')");
+  assert.strictEqual(ev('held'), 1);
+  ev('holdSlot(1)');
+  assert.strictEqual(ev('heldItem()'), null, 'put away');
+  assert.strictEqual(ev("useHeld({})[0]"), 'Your hands are empty.');
+  ev('storeSlot(0)');
+  assert.strictEqual(ev('held'), -1, 'stays empty-handed when something else is put away');
+  ev('holdSlot(0)');
+  assert.strictEqual(ev('heldItem().id'), 'book');
+});
+
+test('the boombox: a random tape when you switch it on, B steps through them in order', () => {
+  const { ev } = fresh();
+  ev("money = 100; buy('boombox')");
+  ev('useHeld({})');
+  assert.strictEqual(ev('fx.boombox && BOOMBOX_SONGS.includes(fx.song)'), true);
+  const seen = new Set();
+  for (let k = 0; k < 4; k++) seen.add(ev('nextSong()'));
+  assert.strictEqual(seen.size, 4, 'every tape comes round');
+  const before = ev('fx.song'); ev('nextSong(); nextSong(); nextSong(); nextSong()');
+  assert.strictEqual(ev('fx.song'), before, 'once round and you are back where you started');
+});

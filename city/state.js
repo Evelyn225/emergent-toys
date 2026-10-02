@@ -10,8 +10,14 @@ let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in p
 let paused = false;
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 63, detail: 'medium', help: true };
-function loadSettings() { try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch (e) { /* private window etc: defaults */ } }
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+    if (!saved.v && saved.fov === 63) delete saved.fov; // the old default: move up to the new one
+    Object.assign(settings, saved, { v: 2 });
+  } catch (e) { /* private window etc: defaults */ }
+}
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* not saved, still applied */ } }
 loadSettings();
 const say = (s, t = 3) => { msgText = s; msgT = t; };
@@ -61,6 +67,6 @@ function env(dt) {
   vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain);
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
-  if (mode === 'room') { amb = room.def.light + flash() * 0.1; vis = 40; } // a flicker through the windows
+  if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
 }
 

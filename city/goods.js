@@ -10,12 +10,14 @@ const ITEMS = {
   slice: { name: 'pizza slice', price: 4, kind: 'food', uses: 3 }, burger: { name: 'burger', price: 8, kind: 'food', uses: 4 },
   kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
   dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
+  ginseng: { name: 'ginseng root', price: 6, kind: 'food', uses: 2, caffeine: 70 }, // a bitter chew, and a kick like coffee
   // drink
   coffee: { name: 'coffee', price: 3, kind: 'drink', uses: 4, caffeine: 60 }, latte: { name: 'latte', price: 5, kind: 'drink', uses: 4, caffeine: 50 },
   tea: { name: 'tea', price: 2, kind: 'drink', uses: 3, caffeine: 25 }, soda: { name: 'soda', price: 2, kind: 'drink', uses: 3 },
   water: { name: 'water', price: 1, kind: 'drink', uses: 3 }, energy: { name: 'energy drink', price: 4, kind: 'drink', uses: 3, caffeine: 90 },
   beer: { name: 'beer', price: 6, kind: 'drink', uses: 4, booze: 0.25 }, whiskey: { name: 'whiskey', price: 9, kind: 'drink', uses: 2, booze: 0.4 },
   cocktail: { name: 'cocktail', price: 12, kind: 'drink', uses: 3, booze: 0.3 },
+  herbaltea: { name: 'herbal tea', price: 3, kind: 'drink', uses: 3, sober: 0.35 }, // clears your head a bit
   // smoke
   cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 },
   // gear
@@ -50,7 +52,7 @@ const STOCK_WORD = {
   PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
   RAMEN: ['ramen', 'tea'], NOODLES: ['ramen', 'dumplings', 'tea'], PHO: ['ramen', 'tea'], DUMPLINGS: ['dumplings', 'tea'],
   'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['tea', 'dumplings'], THAI: ['ramen', 'soda'],
-  'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'],
+  'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
@@ -61,8 +63,14 @@ const VENDOR_STOCK = { 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 
 // ---- what you carry: 8 slots, one held. Effects wear off with time.
 const INV_SIZE = 8;
 const inv = []; // { id, uses }
-let held = 0; // which slot is in your hand
-const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, yoyo: 0, spark: 0 };
+let held = 0; // which slot is in your hand; -1 = nothing, hands empty
+// take slot k in hand, or (if it's already there) put it away and hold nothing
+const holdSlot = k => { held = held === k ? -1 : k; };
+const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
+// the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
+const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
+// B with the boombox playing: on to the next tape, in order
+function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
@@ -79,7 +87,7 @@ const STORE_SIZE = 30, stored = [];
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
-  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  held = was < 0 ? -1 : clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1)); // (empty hands stay empty)
   return it;
 }
 function storeSlot(k) { // carried slot k -> the unit
@@ -121,6 +129,7 @@ function useHeld(near) {
     it.uses--;
     if (d.caffeine) fx.caffeine = Math.min(180, fx.caffeine + d.caffeine / d.uses);
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
+    if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
     const done = it.uses <= 0;
     if (done) removeHeld();
     return [done ? (d.kind === 'food' ? `You finish the ${d.name}.` : `You finish the ${d.name}.`) : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`,
@@ -136,7 +145,10 @@ function useHeld(near) {
     case 'skateboard':
       if (near.indoors) return ['Not in here.', null];
       fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
-    case 'boombox': fx.boombox = !fx.boombox; return [fx.boombox ? 'You hit play.' : 'You stop the tape.', 'click'];
+    case 'boombox': // a different tape each time you switch it on
+      fx.boombox = !fx.boombox;
+      if (fx.boombox) fx.song = pick(BOOMBOX_SONGS.filter(s => s !== fx.song));
+      return [fx.boombox ? `You hit play. ${SONG_NAMES[fx.song]}.` : 'You stop the tape.', 'click'];
     case 'ball':
       if (near.indoors) return ['Not in here.', null];
       kickBall(near.x, near.y, near.a); removeHeld(); return ['You punt the ball down the street.', 'kick'];
@@ -164,7 +176,27 @@ function useHeld(near) {
   }
   return ['Nothing happens.', null];
 }
-function dropHeld() { const it = heldItem(); if (!it) return null; removeHeld(); return ITEMS[it.id].name; }
+// things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
+// somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
+// Half-eaten stays half-eaten.
+const dropped = []; // { id, uses, x, y, at, z }
+function dropHeldAt(x, y, at, z = 0) {
+  const it = heldItem();
+  if (!it) return null;
+  removeHeld(); dropped.push({ id: it.id, uses: it.uses, x, y, at, z });
+  return ITEMS[it.id].name;
+}
+// the nearest thing lying within r of (x, y) in the same place, if any
+function droppedNear(x, y, at, r, z = 0) {
+  let best = null, bd = r;
+  for (const d of dropped) if (d.at === at && Math.abs((d.z || 0) - z) < 0.05) { const e = at ? Math.hypot(d.x - x, d.y - y) : Math.hypot(rel(d.x - x), rel(d.y - y)); if (e < bd) { bd = e; best = d; } }
+  return best;
+}
+function pickUpDropped(d) {
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  dropped.splice(dropped.indexOf(d), 1); inv.push({ id: d.id, uses: d.uses }); held = inv.length - 1;
+  return [true, `You pick up the ${ITEMS[d.id].name}.`];
+}
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);

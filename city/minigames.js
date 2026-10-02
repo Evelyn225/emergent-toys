@@ -132,6 +132,53 @@ GAMES.crosser = (rnd = Math.random) => {
   return g;
 };
 
+// pong: you on the left, the machine on the right (a little slow to react, so it can be beaten); first to 7. The
+// ball speeds up every rally hit and leaves your paddle at an angle set by where it hit.
+GAMES.pong = (rnd = Math.random) => {
+  const W = 32, H = 18, PH = 4, WIN = 7, g = { id: 'pong', title: 'PONG', W, H, score: 0, over: false };
+  let you = H / 2, cpu = H / 2, them = 0, ball, wait = 1;
+  const serve = dir => { const a_ = (rnd() - 0.5) * 0.9; ball = { x: W / 2, y: H / 2, vx: Math.cos(a_) * 11 * dir, vy: Math.sin(a_) * 11 }; wait = 0.8; };
+  serve(rnd() < 0.5 ? 1 : -1);
+  const bounce = (py, dir) => { // off a paddle at py: faster, and angled by where on the paddle it hit
+    const off = clamp((ball.y - py) / (PH / 2 + 0.5), -1, 1), sp = Math.min(26, Math.hypot(ball.vx, ball.vy) * 1.1), a_ = off * 1.0;
+    ball.vx = Math.cos(a_) * sp * dir; ball.vy = Math.sin(a_) * sp;
+  };
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    you = clamp(you + ((k.down ? 1 : 0) - (k.up ? 1 : 0)) * 16 * dt, PH / 2, H - PH / 2);
+    // the machine: chases the ball when it's coming (a little slow, and misjudging it by a wobbling bit), drifts home when not
+    const aim = ball.vx > 0 ? ball.y + Math.sin(ball.x * 0.7 + them) * 1.6 : H / 2;
+    cpu = clamp(cpu + clamp(aim - cpu, -5.5 * dt, 5.5 * dt), PH / 2, H - PH / 2);
+    if (wait > 0) { wait -= dt; return ev; }
+    const n = Math.ceil(dt * 40);
+    for (let s = 0; s < n; s++) {
+      const h = dt / n;
+      ball.x += ball.vx * h; ball.y += ball.vy * h;
+      if (ball.y < 0 || ball.y > H - 1e-3) { ball.vy = -ball.vy; ball.y = clamp(ball.y, 0, H - 1e-3); ev.push('wall'); }
+      if (ball.vx < 0 && ball.x < 1.5 && ball.x > 0.5 && Math.abs(ball.y - you) <= PH / 2 + 0.5) { bounce(you, 1); ball.x = 1.5; ev.push('paddle'); }
+      if (ball.vx > 0 && ball.x > W - 1.5 && ball.x < W - 0.5 && Math.abs(ball.y - cpu) <= PH / 2 + 0.5) { bounce(cpu, -1); ball.x = W - 1.5; ev.push('paddle'); }
+      if (ball.x < 0 || ball.x > W) {
+        if (ball.x > W) { g.score++; ev.push('score'); } else { them++; ev.push('miss'); }
+        if (g.score >= WIN || them >= WIN) { g.over = true; ev.push(g.score >= WIN ? 'clear' : 'die'); }
+        else serve(ball.x > W ? -1 : 1);
+        return ev;
+      }
+    }
+    return ev;
+  };
+  g.draw = put => {
+    for (let y = 0; y < H; y += 2) put(W / 2, y, ':', C(GRAY, 7)); // the net
+    for (let y = Math.round(you - PH / 2); y < Math.round(you + PH / 2); y++) put(0, y, '#', C(WHITE, 15), C(GRAY, 5));
+    for (let y = Math.round(cpu - PH / 2); y < Math.round(cpu + PH / 2); y++) put(W - 1, y, '#', C(RED, 14), C(RED, 4));
+    if (wait <= 0 || fract(wait * 4) < 0.5) put(Math.floor(ball.x), Math.floor(ball.y), 'o', C(WHITE, 15));
+  };
+  g.status = () => `YOU ${g.score} - ${them} CPU   first to ${WIN}   UP/DOWN move`;
+  g.reward = () => g.score * 2 + (g.score >= WIN ? 10 : 0);
+  g.state = () => ({ you, cpu, ball, them });
+  return g;
+};
+
 // waiting tables (a shift at a diner, cafe or noodle bar): customers come down the four counters toward you; slide
 // each a plate before they reach the end. A plate with nobody to catch it breaks; a customer who gets to you walks
 // out. 75 seconds, or five mistakes. Pays per customer served.
@@ -168,19 +215,38 @@ GAMES.serve = (rnd = Math.random) => {
     for (const p of plates) put(Math.round(p.x), LANES[p.lane], '_', C(WHITE, 15), C(GRAY, 4));
   };
   g.status = () => `SERVED ${g.score}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN counter, SPACE slide a plate`;
-  g.reward = () => Math.max(0, Math.round((4 + g.score * 1.2 - misses * 0.8) * 100) / 100);
+  g.reward = () => Math.max(0, Math.round((4 * Math.min(1, t / 75) + g.score * 1.2 - misses * 0.8) * 100) / 100); // the base pay is for the hours worked
   g.misses = () => misses; g.cust = () => cust; g.lane = () => lane; g.plates = () => plates;
   return g;
 };
 
-// stocking shelves (a shift at a store): each shelf holds one kind of thing; shoppers keep taking them. Put each box
-// that comes off the truck in an empty slot on its own shelf. 60 seconds. Pays for every box shelved right, less
-// for the ones put in the wrong place.
-const STOCK_KINDS = [['CANS', 'c', RED], ['CEREAL', '#', YEL], ['BOTTLES', 'i', CYAN], ['SOAP', 'o', MAG]];
-GAMES.stock = (rnd = Math.random) => {
+// stocking shelves (a shift at a store): each shelf holds one kind of thing, and what they are depends on the shop
+// (STOCK_THEMES, by its sign); shoppers keep taking them. Put each box that comes off the truck in an empty slot on
+// its own shelf. 60 seconds. Pays for every box shelved right, less for the ones put in the wrong place.
+const STOCK_THEMES = {
+  DEFAULT: [['CANS', 'c', RED], ['CEREAL', '#', YEL], ['BOTTLES', 'i', CYAN], ['SOAP', 'o', MAG]],
+  RECORDS: [['VINYL', 'o', MAG], ['CDS', '@', CYAN], ['TAPES', '=', YEL], ['POSTERS', '#', RED]],
+  BOOKS: [['FICTION', '|', BLUE], ['COMICS', '%', RED], ['COOKBOOKS', '#', YEL], ['MAPS', '=', GREEN]],
+  PHARMACY: [['PILLS', 'o', WHITE], ['BANDAGES', '+', RED], ['SHAMPOO', 'i', CYAN], ['VITAMINS', ':', ORANGE]],
+  HARDWARE: [['NAILS', ':', GRAY], ['TOOLS', 'T', RED], ['PAINT', 'U', BLUE], ['ROPE', '@', BRICK]],
+  LIQUOR: [['WINE', 'i', RED], ['BEER', '#', YEL], ['SPIRITS', 'I', ORANGE], ['MIXERS', 'o', CYAN]],
+  PHONES: [['PHONES', '#', GRAY], ['CASES', '[', MAG], ['CHARGERS', '~', WHITE], ['CABLES', '=', CYAN]],
+  SPORTS: [['BALLS', 'o', ORANGE], ['SHOES', 'U', WHITE], ['BATS', '/', BRICK], ['JERSEYS', '#', BLUE]],
+  SKATE: [['DECKS', '=', RED], ['WHEELS', 'o', YEL], ['TEES', '#', CYAN], ['STICKERS', '*', MAG]],
+  GROCERY: [['FRUIT', 'o', RED], ['VEG', '%', GREEN], ['BREAD', '#', WARM], ['MILK', 'i', WHITE]],
+  HERBS: [['ROOTS', '%', WARM], ['TEAS', '#', GREEN], ['JARS', 'U', ORANGE], ['DRIED', ':', YEL]],
+  JADE: [['BANGLES', 'o', GREEN], ['FIGURES', '&', CYAN], ['BEADS', ':', RED], ['CHARMS', '*', YEL]],
+  PAWN: [['WATCHES', 'o', YEL], ['GUITARS', '%', BRICK], ['CAMERAS', '#', GRAY], ['JEWELLERY', '*', CYAN]],
+};
+STOCK_THEMES.MARKET = STOCK_THEMES.FRUIT = STOCK_THEMES.GROCERY;
+const stockKinds = word => STOCK_THEMES[word] || STOCK_THEMES.DEFAULT;
+GAMES.stock = (rnd = Math.random, word = '') => {
+  const STOCK_KINDS = stockKinds(word);
   const W = 34, H = 13, SLOTS = 10, g = { id: 'stock', title: 'RESTOCK', W, H, score: 0, over: false, shift: true };
   const shelf = STOCK_KINDS.map(() => Array.from({ length: SLOTS }, () => rnd() < 0.6));
-  let cur = [0, 0], box = rnd() * 4 | 0, wrong = 0, t = 0, take = 0.8;
+  // the next box off the truck: always for a shelf with a gap on it; none (-1) while every shelf is full
+  const nextBox = () => { const open = [0, 1, 2, 3].filter(i => shelf[i].includes(false)); return open.length ? open[rnd() * open.length | 0] : -1; };
+  let cur = [0, 0], box = nextBox(), wrong = 0, t = 0, take = 0.8;
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
@@ -189,10 +255,11 @@ GAMES.stock = (rnd = Math.random) => {
     if (k.rightP) cur[1] = Math.min(SLOTS - 1, cur[1] + 1);
     if (k.upP) cur[0] = Math.max(0, cur[0] - 1);
     if (k.downP) cur[0] = Math.min(3, cur[0] + 1);
-    if (k.actP) {
+    if (box < 0 || !shelf[box].includes(false)) box = nextBox(); // nothing to shelve, or its shelf filled: a box that fits
+    if (k.actP && box >= 0) {
       if (shelf[cur[0]][cur[1]]) ev.push('bump'); // already full
-      else if (cur[0] === box) { shelf[cur[0]][cur[1]] = true; g.score++; box = rnd() * 4 | 0; ev.push('place'); }
-      else { wrong++; box = rnd() * 4 | 0; ev.push('wrong'); }
+      else if (cur[0] === box) { shelf[cur[0]][cur[1]] = true; g.score++; box = nextBox(); ev.push('place'); }
+      else { wrong++; box = nextBox(); ev.push('wrong'); }
     }
     if ((take -= dt) <= 0) { // a shopper takes something
       const full = [];
@@ -200,6 +267,7 @@ GAMES.stock = (rnd = Math.random) => {
       if (full.length) { const [i, j] = full[rnd() * full.length | 0]; shelf[i][j] = false; }
       take = 0.6 + rnd() * 0.9;
     }
+    if (box < 0 || !shelf[box].includes(false)) box = nextBox(); // (again, now the shoppers have been)
     if (t >= 60) { g.over = true; ev.push('end'); }
     return ev;
   };
@@ -213,19 +281,110 @@ GAMES.stock = (rnd = Math.random) => {
         put(x, y + 1, '=', C(GRAY, 8)); put(x + 1, y + 1, '=', C(GRAY, 8));
       }
     });
+    if (box < 0) { text(10, H - 1, 'shelves full: waiting for the next box off the truck...', C(GRAY, 10)); return; }
     const [name, ch, col] = STOCK_KINDS[box];
     put(10, H - 1, ch, C(col, 15), C(col, 4)); text(13, H - 1, `the box in your arms: ${name}`, C(col, 15));
   };
   g.status = () => `SHELVED ${g.score}   WRONG ${wrong}   ${Math.max(0, 60 - t) | 0}s   ARROWS move, SPACE shelve the box`;
-  g.reward = () => Math.max(0, Math.round((3 + g.score * 0.7 - wrong * 0.6) * 100) / 100);
+  g.reward = () => Math.max(0, Math.round((3 * Math.min(1, t / 60) + g.score * 0.7 - wrong * 0.6) * 100) / 100); // the base pay is for the hours worked
   g.shelf = () => shelf; g.box = () => box; g.cur = () => cur; g.wrong = () => wrong;
+  return g;
+};
+
+// ---- crimes. Each ends with g.success true or false; the caller (crime-ui.js) decides what that means.
+// pickpocketing: a marker sweeps across a bar; stop it in the green three times running, the zone shrinking each time
+GAMES.pickpocket = (rnd = Math.random) => {
+  const W = 30, H = 7, g = { id: 'pickpocket', title: 'PICKPOCKET', W, H, score: 0, over: false, success: false, crime: true };
+  let pos = 0, dir = 1, speed = 16, zone = [11, 17];
+  const newZone = () => { const w = [6, 4, 3][g.score] || 3, a_ = 2 + rnd() * (W - 4 - w) | 0; zone = [a_, a_ + w]; };
+  newZone();
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    pos += dir * speed * dt;
+    if (pos < 0 || pos > W - 1) { dir = -dir; pos = clamp(pos, 0, W - 1); }
+    if (k.actP) {
+      if (pos >= zone[0] && pos <= zone[1] + 1) { g.score++; ev.push('eat'); speed *= 1.25; if (g.score >= 3) { g.over = g.success = true; ev.push('clear'); } else newZone(); }
+      else { g.over = true; ev.push('die'); } // they felt that
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) put(x, 3, x >= zone[0] && x <= zone[1] ? '=' : '-', x >= zone[0] && x <= zone[1] ? C(GREEN, 14) : C(GRAY, 7), x >= zone[0] && x <= zone[1] ? C(GREEN, 3) : NONE);
+    put(Math.round(pos), 2, 'v', C(YEL, 15)); put(Math.round(pos), 4, '^', C(YEL, 15));
+    text(0, 0, `fingers in the pocket: ${'*'.repeat(g.score)}${'.'.repeat(3 - g.score)}`, C(WHITE, 13));
+  };
+  g.status = () => 'SPACE when the marker is in the green   miss once and they notice';
+  g.reward = () => 0;
+  return g;
+};
+// shoplifting: hold SPACE to slip something into your coat, but only while the clerk's looking away; they glance
+// round now and then, with a moment's warning (they start to turn). Caught holding it and they call the cops.
+GAMES.shoplift = (rnd = Math.random) => {
+  const W = 30, H = 10, g = { id: 'shoplift', title: 'FIVE FINGER DISCOUNT', W, H, score: 0, over: false, success: false, crime: true };
+  let state = 'away', left = 0.8 + rnd() * 0.8, grab = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if ((left -= dt) <= 0) {
+      if (state === 'away') { state = 'turning'; left = 0.6; ev.push('bump'); }
+      else if (state === 'turning') { state = 'looking'; left = 1.2 + rnd() * 1.5; }
+      else { state = 'away'; left = 1.5 + rnd() * 2.5; }
+    }
+    if (k.act) {
+      if (state === 'looking') { g.over = true; ev.push('die'); return ev; } // seen
+      grab += dt / 2.6; // longer than they ever look away: you'll have to let go at least once
+      if (grab >= 1) { g.over = g.success = true; ev.push('clear'); }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    const face = state === 'looking' ? ['  ____  ', ' (O  O) ', '  \__/  ', '   ||   '] : state === 'turning' ? ['  ____  ', ' (  o o)', '   \_/  ', '   ||   '] : ['  ____  ', ' (     )', '  (___) ', '   ||   '];
+    face.forEach((l, r) => text(11, 1 + r, l, state === 'looking' ? C(RED, 15) : state === 'turning' ? C(YEL, 15) : C(WHITE, 12)));
+    text(2, 6, state === 'looking' ? 'THE CLERK IS WATCHING YOU' : state === 'turning' ? 'they\'re turning round...' : 'the clerk\'s looking away', state === 'looking' ? C(RED, 15) : C(GRAY, 11));
+    for (let x = 0; x < W; x++) put(x, 8, x / W < grab ? '#' : '.', x / W < grab ? C(GREEN, 14) : C(GRAY, 6));
+  };
+  g.status = () => 'HOLD SPACE to pocket it while they look away   let go when they turn';
+  g.reward = () => 0;
+  return g;
+};
+// lockpicking: four pins, each sprung down. Hold UP to push the current one up and SPACE to set it while it's at
+// the shear line; push it past the top and the pick slips. Three slips (or the clock) and the lock jams.
+GAMES.lockpick = (rnd = Math.random) => {
+  const W = 26, H = 14, PINS = 4, g = { id: 'lockpick', title: 'LOCKPICK', W, H, score: 0, over: false, success: false, crime: true };
+  const shear = Array.from({ length: PINS }, () => 0.5 + rnd() * 0.3), h = Array(PINS).fill(0);
+  let cur = 0, slips = 0, t = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    h[cur] = k.up ? h[cur] + dt * 0.9 : Math.max(0, h[cur] - dt * 0.6); // pushed up, or springing back
+    if (h[cur] > 1) { slips++; h[cur] = 0; ev.push('wrong'); if (slips >= 3) { g.over = true; ev.push('die'); return ev; } }
+    if (k.actP) {
+      if (Math.abs(h[cur] - shear[cur]) < 0.07) { cur++; g.score++; ev.push('place'); if (cur >= PINS) { g.over = g.success = true; ev.push('clear'); } }
+      else { slips++; h[cur] = 0; ev.push('wrong'); if (slips >= 3) { g.over = true; ev.push('die'); } }
+    }
+    if (t > 40 && !g.over) { g.over = true; ev.push('die'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let p = 0; p < PINS; p++) {
+      const x = 4 + p * 5, top = 2, bot = 11, sy = Math.round(bot - shear[p] * (bot - top)), py = Math.round(bot - (p < cur ? shear[p] : h[p]) * (bot - top));
+      for (let y = top; y <= bot; y++) put(x, y, y === sy ? '=' : '|', y === sy ? C(YEL, 13) : C(GRAY, 6));
+      put(x, py, p < cur ? '#' : p === cur ? '@' : 'o', p < cur ? C(GREEN, 15) : p === cur ? C(WHITE, 15) : C(GRAY, 10), p === cur ? C(GRAY, 4) : NONE);
+    }
+    text(0, 13, `slips ${'x'.repeat(slips)}${'.'.repeat(3 - slips)}   ${Math.max(0, 40 - t) | 0}s`, C(slips ? RED : GRAY, 12));
+  };
+  g.status = () => 'HOLD UP to push the pin, SPACE to set it on the line';
+  g.reward = () => 0;
+  g.state = () => ({ h, shear, cur, slips });
   return g;
 };
 
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
-const ARCADE_GAMES = ['snake', 'breakout', 'crosser'], CREDIT = 1;
+const ARCADE_GAMES = ['snake', 'breakout', 'crosser', 'pong'], CREDIT = 1;
 
 // ---- driving a taxi: what a trip pays. The meter (taxiFare) by distance, and a tip for getting there quickly and
 // smoothly; any crash on the way and there's no tip. took = seconds, harsh = seconds of hard braking or swerving.

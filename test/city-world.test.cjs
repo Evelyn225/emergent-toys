@@ -218,7 +218,8 @@ test('emergency services: police and fire stations and hospitals, each its own b
 
 test('a call-out: the nearest station sends its vehicle with lights and siren, it waits at the scene, drives home quietly, parks', () => {
   const { ev: e2 } = loadCity(2);
-  e2("var b_ = SERVICES.find(s => s.kind === 'fire'); px = b_.x - 3; py = b_.y + 0.3; mode = 'walk'; evTimer = 1e9; spawnEmergency('fire')");
+  // (up on a roof, so you're not standing in the road in its way)
+  e2("var b_ = SERVICES.find(s => s.kind === 'fire'); px = b_.x - 3; py = b_.y + 0.3; mode = 'roof'; evTimer = 1e9; spawnEmergency('fire')");
   const seen = new Set();
   for (let k = 0; k < 6000 && seen.size < 5; k++) {
     seen.add(e2(`stepTraffic(0.05, T += 0.05); (c => !c ? 'none' : c.state + (code(c) ? '+code' : ''))(cars.find(c => c.ev && c.base === b_))`));
@@ -258,4 +259,15 @@ test('boats keep to open water: every point of every route clears the bridges, f
   })`);
   assert.deepStrictEqual(bad, []);
   assert.ok(ev("boats.filter(b => b.kind !== 'sail').every(b => b.b - b.a > 20)"), 'tugs and ferries run a good way');
+});
+
+test('construction hoarding, yard fences and shipping containers are solid boxes', () => {
+  const kinds = j('solids.reduce((o, s) => (o[s.kind] = (o[s.kind] || 0) + 1, o), {})');
+  for (const k of ['hoarding', 'chain', 'container']) assert.ok(kinds[k] > 20, `${k}: ${kinds[k]}`);
+  assert.strictEqual(ev("solids.filter(s => s.z0 === 0).every(s => solidAt(s.x, s.y, 0))"), true, 'you can\'t stand in one');
+  // containers in a yard never overlap at ground level
+  assert.strictEqual(ev(`(() => { const g = solids.filter(s => s.kind === 'container' && s.z0 === 0); let n = 0;
+    for (const a_ of g) for (const b of g) if (a_ !== b && Math.abs(rel(a_.x - b.x)) < (a_.c ? a_.hl : a_.hw) + (b.c ? b.hl : b.hw) &&
+      Math.abs(rel(a_.y - b.y)) < (a_.c ? a_.hw : a_.hl) + (b.c ? b.hw : b.hl)) n++; return n; })()`), 0);
+  assert.strictEqual(ev('solids.some(s => ROAD[idx(Math.floor(s.x), Math.floor(s.y))])'), false, 'none of it out on the street');
 });
