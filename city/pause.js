@@ -86,5 +86,6 @@ function closePause(lock) {
 }
 const togglePause = () => paused ? closePause(false) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
-document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep) openPause(); });
+// (not when a cabinet or a shift has the screen: that lets go of the mouse itself)
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep && !game) openPause(); });
 applySettings();

@@ -21,7 +21,7 @@ function gameKey(e) {
     else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
     return true;
   }
-  if (e.code === 'Escape') { finishGame(true); return true; } // quit: a shift pays for what you did, a game keeps its score
+  if (e.code === 'Escape' || e.code === 'KeyE') { finishGame(true); game = null; return true; } // walk away: a shift pays for what you did, a game its tickets
   if (k) game.pressed[k + 'P'] = 1;
   return true;
 }
@@ -81,7 +81,7 @@ function drawGame() {
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
   const st = g.status();
   putText(y0 + gh + 2, x0 + ((gw - st.length) >> 1), st, C(WHITE, 12));
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}   ESC quit` : `${fmt$(money)}   ESC clock off`;
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}   E / ESC leave` : `${fmt$(money)}   E / ESC clock off`;
   putText(Math.min(rows - 1, y0 + gh + 3), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over) { // the results card
     const r = g.reward(), lines = game.kind === 'arcade'

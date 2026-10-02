@@ -160,10 +160,8 @@ test('the arcade: a credit plays a cabinet, the game takes the screen, tickets b
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, money]), [cab, 99]);
   for (let k = 0; k < 6; k++) { await page.keyboard.press('ArrowUp'); await page.keyboard.press('Space'); await page.waitForTimeout(50); }
-  await page.keyboard.press('Escape'); // quit: game over, results up
-  assert.strictEqual(await page.evaluate(() => game.g.over && game.paid), true);
-  await page.keyboard.press('KeyE');
-  assert.strictEqual(await page.evaluate(() => game), null, 'back in the arcade');
+  await page.keyboard.press('KeyE'); // walk away from the cabinet
+  assert.deepStrictEqual(await page.evaluate(() => [game, paused]), [null, false], 'back in the arcade, no pause menu');
   await page.evaluate(() => { tickets = 25; px = room.def.keeper[0]; py = room.def.keeper[1] + 1.4; });
   await page.keyboard.press('KeyE');
   assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('prizes')).display), 'flex');
@@ -179,8 +177,7 @@ test('a work shift from the counter pays for how you did', () => withPage(async 
   await page.evaluate(() => { game.g.score = 10; });
   await page.keyboard.press('Escape'); // clock off early: still paid for those ten
   assert.ok(await page.evaluate(() => money) > 100);
-  await page.keyboard.press('Space');
-  assert.deepStrictEqual(await page.evaluate(() => [game, room.worked, mode]), [null, true, 'room']);
+  assert.deepStrictEqual(await page.evaluate(() => [game, room.worked, mode, paused]), [null, true, 'room', false]);
 }));
 
 test('the taxi job: J drives a taxi; a fare hails, gets in, and pays at their stop', () => withPage(async page => {
