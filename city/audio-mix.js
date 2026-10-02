@@ -2,7 +2,7 @@
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, rain) and synthesised ones (waves,
+// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, rain) and synthesised ones (waves,
 // wind, rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -30,13 +30,14 @@ function seaDist(x, y) {
 }
 
 function audioMix(s) {
-  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
     out.restaurant = rest * (k === 'bar' || k === 'karaoke' ? s.barCrowd : 1);
     out.bossa = cafe ? 0.8 : bossa;
     out.coffee = cafe ? 0 : coffee;
+    if (k === 'karaoke') out.karaoke = 0.9; // somebody's always singing Sweet Caroline
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.25 * s.rain;
     if (k === 'station') out.tunnel = 0.7;

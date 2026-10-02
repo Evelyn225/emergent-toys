@@ -7,12 +7,12 @@
 // pauses where it is and picks up from there when it's needed again.
 const AUDIO_DIR = 'audio/ascii-city/';
 const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
-                    rain: 'rain.mp3' };
+                    rain: 'rain.mp3', karaoke: 'karaoke.mp3' };
 // overall level of each layer at full mix
-const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
-                rain: 0.5, board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
+const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3, karaoke: 0.35,
+                rain: 0.28, board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { board: 0.4, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null, musicBus, ambBus, sfxBus; // the three volume settings' buses
 const beds = {}, synth = {};
@@ -30,7 +30,7 @@ function audioStart() {
   applyVolumes();
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
-  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' ? musicBus : ambBus);
+  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' ? musicBus : ambBus);
   makeSynths();
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
 }
@@ -90,9 +90,15 @@ const filt = (type, freq, q = 0.7) => { const f = actx.createBiquadFilter(); f.t
 const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k].connect(nodes[k + 1]); return nodes[nodes.length - 1]; };
 function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
 function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambBus); return g; }
+// a short recorded loop, decoded once and played round and round into `dest` (whose gain the mix drives)
+function loopClip(name, dest) {
+  fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).then(buf => {
+    const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(dest); s.start();
+  }).catch(() => {}); // (no file, or opened from disk: silent)
+}
 function makeSynths() {
   // a skateboard: the low roar of wheels on the street
-  synth.board = layer(); chain(noiseSrc(0.6), filt('lowpass', 350), filt('highpass', 60), synth.board);
+  synth.board = layer(); loopClip('skateboard', synth.board); // wheels on the street: a recorded roll, looped
   // waves: low surf that swells and draws back
   synth.waves = layer(); const swell = actx.createGain(); swell.gain.value = 0.55; lfo(swell.gain, 0.08, 0.45);
   chain(noiseSrc(0.7), filt('lowpass', 550), swell, synth.waves);
@@ -183,9 +189,9 @@ function tickSirens(indoors) {
 // ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
 function sfxThunder(d, indoors) {
   const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
-  s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.6 + near * 0.3;
-  const lp = filt('lowpass', indoors ? 260 : 400 + near * 2600), g = actx.createGain(), k = (indoors ? 0.35 : 1) * near;
-  lp.frequency.setValueAtTime(lp.frequency.value, at); lp.frequency.exponentialRampToValueAtTime(140, at + 2.5);
+  s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.3 + near * 0.15; // slowed right down: a low growl
+  const lp = filt('lowpass', indoors ? 180 : 220 + near * 900), g = actx.createGain(), k = (indoors ? 0.4 : 1.1) * near;
+  lp.frequency.setValueAtTime(lp.frequency.value, at); lp.frequency.exponentialRampToValueAtTime(70, at + 3);
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(0.8 * k, at + (near > 0.7 ? 0.015 : 0.3)); // crack, or a far-off roll
   g.gain.exponentialRampToValueAtTime(0.25 * k, at + 0.7); g.gain.linearRampToValueAtTime(0.35 * k, at + 1.5);
   g.gain.exponentialRampToValueAtTime(0.0005, at + 4 + d / 30);

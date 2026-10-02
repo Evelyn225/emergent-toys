@@ -128,9 +128,9 @@ test('shops: E at the counter opens the menu, number keys buy; E only leaves at 
     assert.strictEqual(await page.evaluate(() => mode), 'walk');
     await page.waitForTimeout(200);
     assert.ok(await page.evaluate(() => { // the hand is drawn on the canvas over the frame: count its skin-tone pixels
-      const [sr, sg, sb] = PALRGB[C(SKIN, 8)], d = g.getImageData(cv.width * 0.6, cv.height * 0.7, cv.width * 0.3, cv.height * 0.3).data; let n = 0;
-      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - sr) < 4 && Math.abs(d[i + 1] - sg) < 4 && Math.abs(d[i + 2] - sb) < 4) n++;
-      return n; }) > 500, 'the cup is in your hand');
+      const skin = [PALRGB[C(SKIN, 10)], PALRGB[C(SKIN, 13)]], d = g.getImageData(cv.width * 0.5, cv.height * 0.6, cv.width * 0.45, cv.height * 0.4).data; let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (skin.some(([sr, sg, sb]) => Math.abs(d[i] - sr) < 6 && Math.abs(d[i + 1] - sg) < 6 && Math.abs(d[i + 2] - sb) < 6)) n++;
+      return n; }) > 200, 'the cup is in your hand');
     assert.deepStrictEqual(errors, []);
   } finally {
     await browser.close();

@@ -164,7 +164,27 @@ function useHeld(near) {
   }
   return ['Nothing happens.', null];
 }
-function dropHeld() { const it = heldItem(); if (!it) return null; removeHeld(); return ITEMS[it.id].name; }
+// things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
+// somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
+// Half-eaten stays half-eaten.
+const dropped = []; // { id, uses, x, y, at, z }
+function dropHeldAt(x, y, at, z = 0) {
+  const it = heldItem();
+  if (!it) return null;
+  removeHeld(); dropped.push({ id: it.id, uses: it.uses, x, y, at, z });
+  return ITEMS[it.id].name;
+}
+// the nearest thing lying within r of (x, y) in the same place, if any
+function droppedNear(x, y, at, r, z = 0) {
+  let best = null, bd = r;
+  for (const d of dropped) if (d.at === at && Math.abs((d.z || 0) - z) < 0.05) { const e = at ? Math.hypot(d.x - x, d.y - y) : Math.hypot(rel(d.x - x), rel(d.y - y)); if (e < bd) { bd = e; best = d; } }
+  return best;
+}
+function pickUpDropped(d) {
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  dropped.splice(dropped.indexOf(d), 1); inv.push({ id: d.id, uses: d.uses }); held = inv.length - 1;
+  return [true, `You pick up the ${ITEMS[d.id].name}.`];
+}
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);

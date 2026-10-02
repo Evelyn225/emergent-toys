@@ -10,6 +10,7 @@ onkeydown = e => {
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
   if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
+  if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
   if (paused) return;
   K[e.code] = 1;
   if (e.repeat) return;
@@ -20,7 +21,7 @@ onkeydown = e => {
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
     if (e.code === 'KeyI') openInventory();
-    if (e.code === 'KeyX') { const d = dropHeld(); if (d) say(`You leave the ${d} behind.`); }
+    if (e.code === 'KeyX') dropHere();
     const slot = /^Digit([1-8])$/.exec(e.code);
     if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) held = slot[1] - 1;
   }
@@ -49,7 +50,7 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -90,7 +91,8 @@ function loop(t) {
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
-    move((cx * f - cy * s) * sp, (cy * f + cx * s) * sp);
+    const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
+    move((cx * f - cy * (s + lurch)) * sp, (cy * f + cx * (s + lurch)) * sp);
   } else if (mode === 'drive') drive(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
@@ -115,12 +117,19 @@ function loop(t) {
   if (chaseOn) { // render from behind the car, then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
-  } else { // a drink or two and the world sways a little
-    camYaw = a; const wob = fx.booze, sa = Math.sin(T * 0.9) * 0.04 * wob, sp_ = Math.sin(T * 1.3) * 0.02 * wob;
+  } else { // a drink or two and the world sways; more and you're seeing double
+    camYaw = a; const wob = Math.min(1.3, fx.booze);
+    const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
     a += sa; pitch += sp_; render(dt); a -= sa; pitch -= sp_;
+    if (wob > 0.08) drunkVision(wob);
   }
   audioTick(dt);
   requestAnimationFrame(loop);
+}
+// double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had
+function drunkVision(wob) {
+  const k = Math.min(1, wob), ox = Math.sin(T * 0.7) * 18 * k + 4 * k, oy = Math.cos(T * 0.53) * 6 * k;
+  g.save(); g.globalAlpha = 0.18 + 0.22 * k; g.drawImage(cv, ox, oy); g.restore();
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {

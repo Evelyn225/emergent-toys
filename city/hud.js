@@ -68,6 +68,8 @@ function promptText() {
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
+    const drIn = droppedHere();
+    if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
     if (nearElevator()) return 'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
     if (room.kind === 'arcade') {
@@ -82,7 +84,7 @@ function promptText() {
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }
-  if (mode === 'roof') return 'E: take the stairs down';
+  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : 'E: take the stairs down'; }
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
@@ -92,6 +94,8 @@ function promptText() {
   if (mode === 'drive') return 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
   if (mode === 'taxi') return 'mouse: look around | V: camera | E: get out';
   const c = nearestCar(0.5);
+  const dr = droppedHere();
+  if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : 'E: take this car';
@@ -118,52 +122,55 @@ function promptText() {
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
 let showMap = false;
-const MAP_R = 20, MAP_PX = 5; // cells shown each side of you, pixels per cell (1 cell = 10m)
+// the minimap (M): solid tiles so the street grid reads at a glance, in an ASCII frame with character markers to match
+// the rest of the HUD. MAP_R cells each side of you; a tile is two characters wide and one tall, so it's square.
+const MAP_R = 14;
 const MAP_COL = { park: '#1f5a2a', sea: '#1d3f7a', construction: '#4a3a28', yard: '#3a3428', waterfront: '#4a4636' };
+function mapTile(mx, my) {
+  const k = idx(mx, my), h = map[k], wx = mx + 0.5, wy = my + 0.5;
+  if (h) { const v = Math.min(h, 12) * 12; return `rgb(${60 + v},${60 + v},${75 + v})`; } // taller is lighter
+  if (Math.abs(rel(wx - FOOTBRIDGE.x)) < 0.6 && onFootbridge(FOOTBRIDGE.x, wy) || onPier(wx, wy)) return '#5a4030'; // (the bridge is thinner than a tile)
+  if (onIsland(wx, wy)) return '#2a5a30';
+  if (ROAD[k]) return underEl(wy) ? '#3a2420' : '#16161c';
+  if (seaAt(wx, wy)) return MAP_COL.sea;
+  return MAP_COL[blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8))] || '#2a2a30';
+}
 function minimap() {
   if (!showMap || mode === 'room') return;
-  const size = (MAP_R * 2 + 1) * MAP_PX, x0 = cv.width - size - 8, y0 = 42; // below the home button
-  const ox = Math.floor(px), oy = Math.floor(py), sx = (wx, wy) => [x0 + (rel(wx - px) + MAP_R + 0.5) * MAP_PX, y0 + (rel(wy - py) + MAP_R + 0.5) * MAP_PX];
-  g.fillStyle = 'rgba(0,0,0,0.75)'; g.fillRect(x0 - 3, y0 - 3, size + 6, size + 6);
-  g.save(); g.beginPath(); g.rect(x0, y0, size, size); g.clip();
-  const fx = (MAP_R + 0.5 - fract(px)) * MAP_PX, fy = (MAP_R + 0.5 - fract(py)) * MAP_PX; // scroll smoothly by sub-cell
-  for (let j = -MAP_R - 1; j <= MAP_R + 1; j++) for (let i = -MAP_R - 1; i <= MAP_R + 1; i++) {
-    const mx = ox + i, my = oy + j, k = idx(mx, my), h = map[k], road = ROAD[k];
-    const kind = h || road ? '' : seaAt(mx + 0.5, my + 0.5) && !onPier(mx + 0.5, my + 0.5) ? 'sea' : blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8));
-    g.fillStyle = h ? `rgb(${60 + Math.min(h, 12) * 12},${60 + Math.min(h, 12) * 12},${75 + Math.min(h, 12) * 12})`
-                : road ? (underEl(my + 0.5) ? '#3a2420' : '#16161c') : MAP_COL[kind] || '#3a3a40';
-    g.fillRect(x0 + fx + i * MAP_PX, y0 + fy + j * MAP_PX, MAP_PX, MAP_PX);
-  }
-  g.restore();
-  const dot = (wx, wy, col, r) => {
-    const [x, y] = sx(wx, wy);
-    if (x < x0 || y < y0 || x > x0 + size || y > y0 + size) return;
-    g.fillStyle = col; g.fillRect(x - r / 2, y - r / 2, r, r);
+  const fs = Math.max(10, Math.round(cv.height / 66)); g.font = fs + 'px monospace';
+  const cw_ = g.measureText('M').width, n = MAP_R * 2 + 1, W = n * 2 * cw_, H = n * fs, x0 = Math.round(cv.width - W - 14), y0 = 44;
+  g.fillStyle = 'rgba(0,0,0,0.82)'; g.fillRect(x0 - cw_ * 1.5, y0 - fs * 1.2, W + cw_ * 3, H + fs * 2.4);
+  const ox = Math.floor(px), oy = Math.floor(py), tw = 2 * cw_;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { g.fillStyle = mapTile(ox + i - MAP_R, oy + j - MAP_R); g.fillRect(x0 + i * tw, y0 + j * fs, tw + 0.5, fs + 0.5); }
+  const inMap = (wx, wy) => { const i = Math.floor(rel(wx - px)) + MAP_R, j = Math.floor(rel(wy - py)) + MAP_R; return i >= 0 && j >= 0 && i < n && j < n ? [x0 + i * tw, y0 + j * fs] : null; };
+  const mark = (wx, wy, ch, col) => { // a character on a dark chip, so it reads over any tile
+    const p = inMap(wx, wy); if (!p) return;
+    g.fillStyle = 'rgba(0,0,0,0.85)'; g.fillRect(p[0], p[1], tw, fs);
+    g.fillStyle = col; g.fillText(ch, p[0] + (ch.length < 2 ? cw_ / 2 : 0), p[1]);
   };
-  for (const p of people) if (!p.hidden) dot(p.x, p.y, '#b9a', 1.5);
-  for (const c of cars) if (c !== me) dot(c.x, c.y, PAL[C(c.body, 14)], 3);
-  for (const s of stations) dot(s.x, s.y, '#3f3', 5);
-  for (const v of vendors) dot(v.x, v.y, '#fa3', 4);
-  if (me && me.dest) dot(me.dest[0], me.dest[1], '#f4f', 5);
-  for (const s of EL_STATIONS) dot(s.x, EL_Y + 1, '#f84', 5);
-  const tt = taskTarget();
-  if (tt) dot(tt.x, tt.y, '#4ff', 6);
-  const jt = jobTarget();
-  if (jt && fract(T * 2) < 0.7) dot(jt.x, jt.y, '#ff0', 7);
-  // you: an arrow pointing where you face (map y runs down = +y in the world, so world angles draw as-is)
-  const [cx, cy] = sx(px, py), ang = me ? Math.atan2(me.hy, me.hx) : a;
-  g.fillStyle = '#ff5'; g.beginPath();
-  g.moveTo(cx + Math.cos(ang) * 6, cy + Math.sin(ang) * 6);
-  g.lineTo(cx + Math.cos(ang + 2.5) * 4, cy + Math.sin(ang + 2.5) * 4);
-  g.lineTo(cx + Math.cos(ang - 2.5) * 4, cy + Math.sin(ang - 2.5) * 4);
-  g.fill();
-  g.fillStyle = '#bbb'; g.fillText('N', x0 + size / 2 - 3, y0 + 1);
+  for (const pp of people) if (!pp.hidden) { const p = inMap(pp.x, pp.y); if (p) { g.fillStyle = '#b9a'; g.fillRect(p[0] + cw_ * 0.8, p[1] + fs * 0.4, 2, 2); } }
+  for (const c of cars) if (c !== me) mark(c.x, c.y, 'o', PAL[C(c.body, 13)]);
+  for (const s of stations) mark(s.x, s.y, 'S', '#4f4');
+  for (const s of EL_STATIONS) mark(s.x, EL_Y + 1, 'E', '#f84');
+  for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
+  const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
+  const jt = jobTarget(); if (jt && fract(T * 2) < 0.7) mark(jt.x, jt.y, '!', '#ff0');
+  if (me && me.dest) mark(me.dest[0], me.dest[1], 'X', '#f4f');
+  const ang = me ? Math.atan2(me.hy, me.hx) : a; // you, and which way you're facing
+  mark(px, py, '@' + ['>', 'v', '<', '^'][mod(Math.round(ang / (Math.PI / 2)), 4)], '#ff5');
+  g.fillStyle = PAL[C(GRAY, 9)]; // the frame
+  const edge = '+' + '-'.repeat(n * 2 + 1) + '+';
+  g.fillText(edge, x0 - cw_ * 1.5, y0 - fs * 1.2); g.fillText(edge, x0 - cw_ * 1.5, y0 + H + fs * 0.2);
+  for (let j = 0; j < n; j++) { g.fillText('|', x0 - cw_ * 1.5, y0 + j * fs); g.fillText('|', x0 + W + cw_ * 0.5, y0 + j * fs); }
+  g.fillStyle = PAL[C(WHITE, 15)]; g.fillText('N', x0 + W / 2 - cw_ / 2, y0 - fs * 1.2);
+  g.font = FS + 'px monospace';
 }
 
 const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks',
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
 function hud() {
   drawHeldBig();
+  if (job && mode === 'drive') jobArrow();
   minimap();
   hotbar();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
@@ -186,4 +193,5 @@ function hud() {
     g.fillStyle = col; g.fillText(s, (cv.width - w) / 2, yy);
   }
 }
+
 

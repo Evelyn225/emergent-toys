@@ -34,7 +34,7 @@ const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
     BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face));
     if (HIT.face === 5) return set(i, HIT.v > dy / 2 - 0.06 ? '=' : ' ', C(YEL, L * 0.8)), true;
     return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
-  }, 0, 1), walk: true };
+  }, 1, 0), walk: true }; // long axis across the stairwell (x): wall to wall, dy deep
 });
 const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
 const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
@@ -43,7 +43,7 @@ const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRI
 const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
                    CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
-const LYRICS = ['OH BABY BABY', 'I WILL SURVIVE', 'DONT STOP BELIEVING', 'SWEET CAROLINE', 'LIVIN ON A PRAYER', 'TAKE ON ME'];
+const LYRICS = ['SWEET CAROLINE', 'BAH BAH BAH', 'SO GOOD SO GOOD SO GOOD', 'SWEET CAROLINE']; // what the karaoke bar's playing (audio/ascii-city/karaoke.mp3)
 for (const w in MENUS) ROOM_FOR[w] = 'diner';
 for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'BAKERY']) ROOM_FOR[w] = 'cafe';
 for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
@@ -601,6 +601,8 @@ function roomSprites() {
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
     drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col);
   }
+  const at = placeKey();
+  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
   if (room.kind === 'station') {
     const tx = trainX(room);
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));

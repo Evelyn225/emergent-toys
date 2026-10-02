@@ -113,3 +113,18 @@ test('vending machines: drinks, snacks and cigarettes on the sidewalk, backed by
   assert.strictEqual(bad, 0, 'on open ground, a wall behind, the street in front, clear of subway stairs');
   assert.deepStrictEqual(j('VENDING.CIGARETTES.stock'), ['cigarettes']);
 });
+
+test('things you put down stay where they are, as they were, till you pick them up', () => {
+  const { ev, j } = fresh();
+  ev("money = 100; buy('burger'); inv[0].uses = 2; buy('coffee'); held = 0");
+  assert.strictEqual(ev("dropHeldAt(10, 20, '')"), 'burger');
+  ev("held = 0; dropHeldAt(3, 4, 'room:5,5')");
+  assert.deepStrictEqual(j('inv'), []);
+  assert.strictEqual(ev("droppedNear(10.1, 20, 'room:5,5', 0.2)"), null, 'the room and the street are different places');
+  assert.strictEqual(ev("droppedNear(3.5, 4, 'room:5,5', 1).id"), 'coffee');
+  assert.deepStrictEqual(j("pickUpDropped(droppedNear(10.1, 20, '', 0.2))"), [true, 'You pick up the burger.']);
+  assert.deepStrictEqual(j('inv'), [{ id: 'burger', uses: 2 }], 'still half eaten');
+  assert.strictEqual(ev('dropped.length'), 1);
+  ev("for (let k = 0; k < 7; k++) buy('water')");
+  assert.deepStrictEqual(j("pickUpDropped(dropped[0])"), [false, 'Your hands are full.']);
+});

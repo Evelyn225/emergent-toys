@@ -66,8 +66,14 @@ let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in p
 let paused = false;
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 63, detail: 'medium', help: true };
-function loadSettings() { try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch (e) { /* private window etc: defaults */ } }
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+    if (!saved.v && saved.fov === 63) delete saved.fov; // the old default: move up to the new one
+    Object.assign(settings, saved, { v: 2 });
+  } catch (e) { /* private window etc: defaults */ }
+}
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* not saved, still applied */ } }
 loadSettings();
 const say = (s, t = 3) => { msgText = s; msgT = t; };
@@ -642,8 +648,10 @@ for (let k = 0; k < 28; k++) {
   }
 }
 
-// landmark, construction-site and industrial props
-const extras = [], cranes = [], stacks = [];
+// landmark, construction-site and industrial props. Fences and shipping containers are real boxes (solids): drawn
+// with drawBox and solid to walk or drive into. {x, y, c, s: long axis, hl, hw, z0, z1, kind, k: a per-thing seed}
+const extras = [], cranes = [], stacks = [], solids = [];
+const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k });
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
   if (lm === 'cathedral') for (const x of [3.5, 6.5])
@@ -652,16 +660,19 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     extras.push({ x: X + 5, y: Y + 5, z: 0, w: 2.2, h: 16, art: ART.radio, col: (c, row, L) => c === '*' ? C(RED, fract(T * 0.7) < 0.5 ? 15 : 3) : C(row & 2 ? RED : WHITE, L) });
   if (kind === 'construction') {
     cranes.push({ x: X + 7, y: Y + 6.2, H: 7 + hash(bx, by, 98) * 2, slew: hash(bx, by, 99) * 6.28 });
-    for (const s of [3.5, 5, 6.5]) for (const [x, y] of [[s, 2.1], [s, 7.9], [2.1, s], [7.9, s]])
-      extras.push({ x: X + x, y: Y + y, z: 0, w: 1.4, h: 0.22, art: ART.fence, col: (c, row, L) => C(c === '=' ? ORANGE : GRAY, L) });
+    // the hoarding round the site: three panels a side, open at the corners
+    for (const s of [3.5, 5, 6.5]) for (const [x, y, ax] of [[s, 2.1, 1], [s, 7.9, 1], [2.1, s, 0], [7.9, s, 0]])
+      solidBox(X + x, Y + y, ax, 0.7, 0.012, 0, 0.22, 'hoarding', bx * 7 + by);
   }
-  if (kind === 'yard') { // container stacks and a chain-link fence
+  if (kind === 'yard') { // container stacks on a loose grid (so they never overlap), a chain-link fence with gates
     for (let k = 0; k < 6; k++) {
-      const x = X + 2.6 + hash(bx, by, k * 3 + 40) * 4.8, y = Y + 2.6 + hash(bx, by, k * 3 + 41) * 4.8, n = 1 + (hash(bx, by, k * 3 + 42) * 3 | 0);
-      extras.push({ x, y, z: 0, w: 1.2, h: 0.26 * n, art: ART.containers[n - 1], col: (c, row, L) => C([RED, BLUE, ORANGE, GREEN, GRAY][(row + k) % 5], L * (c === '|' ? 0.6 : 1)) });
+      if (hash(bx, by, k * 3 + 43) < 0.2) continue; // an empty bay
+      const col = k & 1, row = k >> 1, x = X + 3.2 + col * 2.6 + (hash(bx, by, k * 3 + 40) - 0.5) * 0.4, y = Y + 3 + row * 1.9 + (hash(bx, by, k * 3 + 41) - 0.5) * 0.3;
+      const n = 1 + (hash(bx, by, k * 3 + 42) * 3 | 0), alongX = hash(bx, by, k * 3 + 44) > 0.25;
+      for (let lv = 0; lv < n; lv++) solidBox(x, y, alongX, 0.6, 0.125, lv * 0.26, lv * 0.26 + 0.25, 'container', bx * 31 + by * 7 + k * 3 + lv);
     }
-    for (const s of [3.5, 6.5]) for (const [x, y] of [[s, 2.1], [s, 7.9], [2.1, s], [7.9, s]])
-      extras.push({ x: X + x, y: Y + y, z: 0, w: 2.5, h: 0.2, art: ART.chain, col: (c, row, L) => C(GRAY, L * 0.8) });
+    for (const s of [3.5, 6.5]) for (const [x, y, ax] of [[s, 2.1, 1], [s, 7.9, 1], [2.1, s, 0], [7.9, s, 0]])
+      solidBox(X + x, Y + y, ax, 1.2, 0.01, 0, 0.2, 'chain', 0);
   }
   if (districtOf(bx, by) === 'industrial' && !kind && hash(bx, by, 51) < 0.45) { // a smokestack on the warehouse roof
     const x = X + 3 + hash(bx, by, 52) * 4, y = Y + 3 + hash(bx, by, 53) * 4;
@@ -670,7 +681,16 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
 }
 // dockside cranes on the industrial piers
 for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
-const extrasB = bucketed(extras);
+const extrasB = bucketed(extras), solidsB = bucketed(solids);
+// is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
+function solidAt(x, y, pad) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of solidsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
+    if (o.z0 > 0) continue;
+    const qx = rel(x - o.x), qy = rel(y - o.y);
+    if (Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return true;
+  }
+  return false;
+}
 
 // chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
 // strung wall to wall, so only where there's a building on both sides of the street to tie it to
@@ -1444,7 +1464,7 @@ const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, rain) and synthesised ones (waves,
+// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, rain) and synthesised ones (waves,
 // wind, rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -1472,13 +1492,14 @@ function seaDist(x, y) {
 }
 
 function audioMix(s) {
-  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
     out.restaurant = rest * (k === 'bar' || k === 'karaoke' ? s.barCrowd : 1);
     out.bossa = cafe ? 0.8 : bossa;
     out.coffee = cafe ? 0 : coffee;
+    if (k === 'karaoke') out.karaoke = 0.9; // somebody's always singing Sweet Caroline
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.25 * s.rain;
     if (k === 'station') out.tunnel = 0.7;
@@ -1686,7 +1707,27 @@ function useHeld(near) {
   }
   return ['Nothing happens.', null];
 }
-function dropHeld() { const it = heldItem(); if (!it) return null; removeHeld(); return ITEMS[it.id].name; }
+// things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
+// somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
+// Half-eaten stays half-eaten.
+const dropped = []; // { id, uses, x, y, at, z }
+function dropHeldAt(x, y, at, z = 0) {
+  const it = heldItem();
+  if (!it) return null;
+  removeHeld(); dropped.push({ id: it.id, uses: it.uses, x, y, at, z });
+  return ITEMS[it.id].name;
+}
+// the nearest thing lying within r of (x, y) in the same place, if any
+function droppedNear(x, y, at, r, z = 0) {
+  let best = null, bd = r;
+  for (const d of dropped) if (d.at === at && Math.abs((d.z || 0) - z) < 0.05) { const e = at ? Math.hypot(d.x - x, d.y - y) : Math.hypot(rel(d.x - x), rel(d.y - y)); if (e < bd) { bd = e; best = d; } }
+  return best;
+}
+function pickUpDropped(d) {
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  dropped.splice(dropped.indexOf(d), 1); inv.push({ id: d.id, uses: d.uses }); held = inv.length - 1;
+  return [true, `You pick up the ${ITEMS[d.id].name}.`];
+}
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
@@ -2641,6 +2682,7 @@ function citySprites() {
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
   islandSprites();
+  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   const LC = { G: GREEN, Y: YEL, R: RED };
@@ -2668,6 +2710,11 @@ function citySprites() {
     if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
   }
   drawBall();
+  for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down
+  if (job && job.ride) { // the fare's stop: a big marker hanging over the street
+    const [vx, vy] = R(job.ride.dest[0], job.ride.dest[1]);
+    drawArt(vx, vy, 0.25, 0.12, 0.18, ['\\ /', ' V '], () => C(YEL, fract(T * 2) < 0.7 ? 15 : 9));
+  }
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
 }
 
@@ -2754,6 +2801,38 @@ function drawVehicle(m, vx, vy, hx, hy) {
     BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
   });
 }
+
+// fences and shipping containers (solids, see props.js): how each kind's faces look
+const CONTAINER_COL = [RED, BLUE, ORANGE, GREEN, GRAY, CYAN];
+const SOLID_SHADE = {
+  // construction hoarding: an orange-and-white striped top rail on posts, see-through between
+  hoarding: () => (i, t, L) => {
+    const w = HIT.w, u = HIT.u, f = HIT.face;
+    if (w > 0.18 || f === 5) { BG[i] = C(fract(u * 4) < 0.5 ? ORANGE : WHITE, 3 + L * 0.3); return set(i, '=', C(GRAY, L * 0.4)), true; }
+    if (Math.abs(fract(u * 2.2) - 0.5) > 0.42 || f === 1 || f === 2) return set(i, '|', C(GRAY, L)), true; // posts
+    if (w < 0.03) return set(i, '_', C(ORANGE, L * 0.7)), true; // a kick board
+    return false;
+  },
+  // chain-link: a top rail and posts, the mesh a lattice of x's you can see through
+  chain: () => (i, t, L) => {
+    const w = HIT.w, u = HIT.u;
+    if (w > 0.185 || HIT.face === 5) return set(i, '-', C(GRAY, L)), true;
+    if (Math.abs(fract(u * 0.8) - 0.5) > 0.47) return set(i, '|', C(GRAY, L * 1.1)), true;
+    return fract(u * 14 + w * 14) < 0.22 || fract(u * 14 - w * 14) < 0.22 ? (set(i, 'x', C(GRAY, L * 0.7)), true) : false;
+  },
+  // a 40ft container: corrugated sides, doors with locking bars on the ends, a colour per box
+  container: o => {
+    const col = CONTAINER_COL[o.k % CONTAINER_COL.length];
+    return (i, t, L) => {
+      const f = HIT.face, k = shadeFace(f);
+      BG[i] = C(col, (1.5 + L * 0.4) * k);
+      if (f === 5) return set(i, fract(HIT.u * 8) < 0.15 ? '=' : ' ', C(col, L * 0.5)), true;
+      if (HIT.w - o.z0 > 0.235 || HIT.w - o.z0 < 0.012) return set(i, '_', C(GRAY, L * 0.6)), true; // the frame
+      if (f === 1 || f === 2) return set(i, Math.abs(HIT.v) < 0.006 ? '|' : fract(HIT.v * 40) < 0.2 ? '|' : ' ', C(GRAY, L * 0.8)), true; // doors and bars
+      return set(i, fract(HIT.u * 30) < 0.5 ? '|' : ' ', C(col, L * 0.75)), true; // corrugation
+    };
+  },
+};
 
 // ---- lighthouse island
 // the lighthouse, drawn as a billboard (it's round, so it looks the same from every side): a tapering tower in red
@@ -3039,7 +3118,7 @@ const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
     BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face));
     if (HIT.face === 5) return set(i, HIT.v > dy / 2 - 0.06 ? '=' : ' ', C(YEL, L * 0.8)), true;
     return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
-  }, 0, 1), walk: true };
+  }, 1, 0), walk: true }; // long axis across the stairwell (x): wall to wall, dy deep
 });
 const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
 const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
@@ -3048,7 +3127,7 @@ const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRI
 const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
                    CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
-const LYRICS = ['OH BABY BABY', 'I WILL SURVIVE', 'DONT STOP BELIEVING', 'SWEET CAROLINE', 'LIVIN ON A PRAYER', 'TAKE ON ME'];
+const LYRICS = ['SWEET CAROLINE', 'BAH BAH BAH', 'SO GOOD SO GOOD SO GOOD', 'SWEET CAROLINE']; // what the karaoke bar's playing (audio/ascii-city/karaoke.mp3)
 for (const w in MENUS) ROOM_FOR[w] = 'diner';
 for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'BAKERY']) ROOM_FOR[w] = 'cafe';
 for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
@@ -3606,6 +3685,8 @@ function roomSprites() {
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
     drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col);
   }
+  const at = placeKey();
+  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
   if (room.kind === 'station') {
     const tx = trainX(room);
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
@@ -3891,6 +3972,8 @@ function promptText() {
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
+    const drIn = droppedHere();
+    if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
     if (nearElevator()) return 'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
     if (room.kind === 'arcade') {
@@ -3905,7 +3988,7 @@ function promptText() {
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }
-  if (mode === 'roof') return 'E: take the stairs down';
+  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : 'E: take the stairs down'; }
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
@@ -3915,6 +3998,8 @@ function promptText() {
   if (mode === 'drive') return 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
   if (mode === 'taxi') return 'mouse: look around | V: camera | E: get out';
   const c = nearestCar(0.5);
+  const dr = droppedHere();
+  if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : 'E: take this car';
@@ -3941,52 +4026,55 @@ function promptText() {
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
 let showMap = false;
-const MAP_R = 20, MAP_PX = 5; // cells shown each side of you, pixels per cell (1 cell = 10m)
+// the minimap (M): solid tiles so the street grid reads at a glance, in an ASCII frame with character markers to match
+// the rest of the HUD. MAP_R cells each side of you; a tile is two characters wide and one tall, so it's square.
+const MAP_R = 14;
 const MAP_COL = { park: '#1f5a2a', sea: '#1d3f7a', construction: '#4a3a28', yard: '#3a3428', waterfront: '#4a4636' };
+function mapTile(mx, my) {
+  const k = idx(mx, my), h = map[k], wx = mx + 0.5, wy = my + 0.5;
+  if (h) { const v = Math.min(h, 12) * 12; return `rgb(${60 + v},${60 + v},${75 + v})`; } // taller is lighter
+  if (Math.abs(rel(wx - FOOTBRIDGE.x)) < 0.6 && onFootbridge(FOOTBRIDGE.x, wy) || onPier(wx, wy)) return '#5a4030'; // (the bridge is thinner than a tile)
+  if (onIsland(wx, wy)) return '#2a5a30';
+  if (ROAD[k]) return underEl(wy) ? '#3a2420' : '#16161c';
+  if (seaAt(wx, wy)) return MAP_COL.sea;
+  return MAP_COL[blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8))] || '#2a2a30';
+}
 function minimap() {
   if (!showMap || mode === 'room') return;
-  const size = (MAP_R * 2 + 1) * MAP_PX, x0 = cv.width - size - 8, y0 = 42; // below the home button
-  const ox = Math.floor(px), oy = Math.floor(py), sx = (wx, wy) => [x0 + (rel(wx - px) + MAP_R + 0.5) * MAP_PX, y0 + (rel(wy - py) + MAP_R + 0.5) * MAP_PX];
-  g.fillStyle = 'rgba(0,0,0,0.75)'; g.fillRect(x0 - 3, y0 - 3, size + 6, size + 6);
-  g.save(); g.beginPath(); g.rect(x0, y0, size, size); g.clip();
-  const fx = (MAP_R + 0.5 - fract(px)) * MAP_PX, fy = (MAP_R + 0.5 - fract(py)) * MAP_PX; // scroll smoothly by sub-cell
-  for (let j = -MAP_R - 1; j <= MAP_R + 1; j++) for (let i = -MAP_R - 1; i <= MAP_R + 1; i++) {
-    const mx = ox + i, my = oy + j, k = idx(mx, my), h = map[k], road = ROAD[k];
-    const kind = h || road ? '' : seaAt(mx + 0.5, my + 0.5) && !onPier(mx + 0.5, my + 0.5) ? 'sea' : blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8));
-    g.fillStyle = h ? `rgb(${60 + Math.min(h, 12) * 12},${60 + Math.min(h, 12) * 12},${75 + Math.min(h, 12) * 12})`
-                : road ? (underEl(my + 0.5) ? '#3a2420' : '#16161c') : MAP_COL[kind] || '#3a3a40';
-    g.fillRect(x0 + fx + i * MAP_PX, y0 + fy + j * MAP_PX, MAP_PX, MAP_PX);
-  }
-  g.restore();
-  const dot = (wx, wy, col, r) => {
-    const [x, y] = sx(wx, wy);
-    if (x < x0 || y < y0 || x > x0 + size || y > y0 + size) return;
-    g.fillStyle = col; g.fillRect(x - r / 2, y - r / 2, r, r);
+  const fs = Math.max(10, Math.round(cv.height / 66)); g.font = fs + 'px monospace';
+  const cw_ = g.measureText('M').width, n = MAP_R * 2 + 1, W = n * 2 * cw_, H = n * fs, x0 = Math.round(cv.width - W - 14), y0 = 44;
+  g.fillStyle = 'rgba(0,0,0,0.82)'; g.fillRect(x0 - cw_ * 1.5, y0 - fs * 1.2, W + cw_ * 3, H + fs * 2.4);
+  const ox = Math.floor(px), oy = Math.floor(py), tw = 2 * cw_;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { g.fillStyle = mapTile(ox + i - MAP_R, oy + j - MAP_R); g.fillRect(x0 + i * tw, y0 + j * fs, tw + 0.5, fs + 0.5); }
+  const inMap = (wx, wy) => { const i = Math.floor(rel(wx - px)) + MAP_R, j = Math.floor(rel(wy - py)) + MAP_R; return i >= 0 && j >= 0 && i < n && j < n ? [x0 + i * tw, y0 + j * fs] : null; };
+  const mark = (wx, wy, ch, col) => { // a character on a dark chip, so it reads over any tile
+    const p = inMap(wx, wy); if (!p) return;
+    g.fillStyle = 'rgba(0,0,0,0.85)'; g.fillRect(p[0], p[1], tw, fs);
+    g.fillStyle = col; g.fillText(ch, p[0] + (ch.length < 2 ? cw_ / 2 : 0), p[1]);
   };
-  for (const p of people) if (!p.hidden) dot(p.x, p.y, '#b9a', 1.5);
-  for (const c of cars) if (c !== me) dot(c.x, c.y, PAL[C(c.body, 14)], 3);
-  for (const s of stations) dot(s.x, s.y, '#3f3', 5);
-  for (const v of vendors) dot(v.x, v.y, '#fa3', 4);
-  if (me && me.dest) dot(me.dest[0], me.dest[1], '#f4f', 5);
-  for (const s of EL_STATIONS) dot(s.x, EL_Y + 1, '#f84', 5);
-  const tt = taskTarget();
-  if (tt) dot(tt.x, tt.y, '#4ff', 6);
-  const jt = jobTarget();
-  if (jt && fract(T * 2) < 0.7) dot(jt.x, jt.y, '#ff0', 7);
-  // you: an arrow pointing where you face (map y runs down = +y in the world, so world angles draw as-is)
-  const [cx, cy] = sx(px, py), ang = me ? Math.atan2(me.hy, me.hx) : a;
-  g.fillStyle = '#ff5'; g.beginPath();
-  g.moveTo(cx + Math.cos(ang) * 6, cy + Math.sin(ang) * 6);
-  g.lineTo(cx + Math.cos(ang + 2.5) * 4, cy + Math.sin(ang + 2.5) * 4);
-  g.lineTo(cx + Math.cos(ang - 2.5) * 4, cy + Math.sin(ang - 2.5) * 4);
-  g.fill();
-  g.fillStyle = '#bbb'; g.fillText('N', x0 + size / 2 - 3, y0 + 1);
+  for (const pp of people) if (!pp.hidden) { const p = inMap(pp.x, pp.y); if (p) { g.fillStyle = '#b9a'; g.fillRect(p[0] + cw_ * 0.8, p[1] + fs * 0.4, 2, 2); } }
+  for (const c of cars) if (c !== me) mark(c.x, c.y, 'o', PAL[C(c.body, 13)]);
+  for (const s of stations) mark(s.x, s.y, 'S', '#4f4');
+  for (const s of EL_STATIONS) mark(s.x, EL_Y + 1, 'E', '#f84');
+  for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
+  const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
+  const jt = jobTarget(); if (jt && fract(T * 2) < 0.7) mark(jt.x, jt.y, '!', '#ff0');
+  if (me && me.dest) mark(me.dest[0], me.dest[1], 'X', '#f4f');
+  const ang = me ? Math.atan2(me.hy, me.hx) : a; // you, and which way you're facing
+  mark(px, py, '@' + ['>', 'v', '<', '^'][mod(Math.round(ang / (Math.PI / 2)), 4)], '#ff5');
+  g.fillStyle = PAL[C(GRAY, 9)]; // the frame
+  const edge = '+' + '-'.repeat(n * 2 + 1) + '+';
+  g.fillText(edge, x0 - cw_ * 1.5, y0 - fs * 1.2); g.fillText(edge, x0 - cw_ * 1.5, y0 + H + fs * 0.2);
+  for (let j = 0; j < n; j++) { g.fillText('|', x0 - cw_ * 1.5, y0 + j * fs); g.fillText('|', x0 + W + cw_ * 0.5, y0 + j * fs); }
+  g.fillStyle = PAL[C(WHITE, 15)]; g.fillText('N', x0 + W / 2 - cw_ / 2, y0 - fs * 1.2);
+  g.font = FS + 'px monospace';
 }
 
 const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks',
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
 function hud() {
   drawHeldBig();
+  if (job && mode === 'drive') jobArrow();
   minimap();
   hotbar();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
@@ -4009,6 +4097,7 @@ function hud() {
     g.fillStyle = col; g.fillText(s, (cv.width - w) / 2, yy);
   }
 }
+
 
 // ---- actions
 function curbOf(c) { // sidewalk spot on the car's right, next to its lane
@@ -4105,6 +4194,8 @@ function interact() {
       const from = room.st;
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
+    const dr = droppedHere(); // something you put down here earlier
+    if (dr) return say(pickUpDropped(dr)[1]);
     if (room.kind === 'arcade') {
       const cab = nearCabinet();
       if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
@@ -4116,11 +4207,14 @@ function interact() {
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
   }
+  if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
+  const dr = droppedHere();
+  if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const c = nearestCar(0.5);
@@ -4201,6 +4295,7 @@ function hail() {
 // them where they're going (the dash says which way and how far, the map marks it), and stop there to let them out.
 // Each trip pays the meter plus a tip for getting there quickly and smoothly (taxiPay); hit anything on the way and
 // there's no tip. E (stopped) ends the shift.
+const DROP_R = 2, STOP_V = 5 / 36; // drop-off: within 20m, rolling at 5 km/h or less (1 unit/s = 36 km/h)
 let job = null; // { trips, earned, next: seconds till someone hails, hail: the person waving, ride: the trip under way }
 
 function startTaxiShift(c) {
@@ -4248,7 +4343,7 @@ function stepTaxiJob(dt) {
     r.v0 = c.v; r.took += dt; r.odo += Math.abs(c.v) * dt; r.p.x = c.x; r.p.y = c.y;
     const swerve = (K.KeyA || K.KeyD || K.ArrowLeft || K.ArrowRight) && Math.abs(c.v) > 1.9;
     if (Math.abs(acc) > 1.6 || swerve) r.harsh += dt; // slamming the brakes, flooring it, flinging it round corners
-    if (Math.hypot(rel(r.dest[0] - c.x), rel(r.dest[1] - c.y)) < 1.1 && Math.abs(c.v) < 0.2) {
+    if (Math.hypot(rel(r.dest[0] - c.x), rel(r.dest[1] - c.y)) < DROP_R && Math.abs(c.v) < STOP_V) { // pulled up near enough
       const p = taxiPay(r.odo, r.took, r.harsh, r.crashed, r.route), paid = Math.round((p.fare + p.tip) * 100) / 100;
       earn(paid); job.trips++; job.earned += paid;
       dropOff(r.p); job.ride = null; job.next = 4 + Math.random() * 8;
@@ -4260,7 +4355,7 @@ function stepTaxiJob(dt) {
     const p = job.hail, d = Math.hypot(rel(p.x - c.x), rel(p.y - c.y));
     if (p.hidden || d > 45) { p.hailing = false; p.talk = 0; job.hail = null; job.next = 3; return; } // gave up on you
     p.talk = 5; // still standing there waving
-    if (d < 0.8 && Math.abs(c.v) < 0.25) pickUp(p);
+    if (d < 1.2 && Math.abs(c.v) < STOP_V) pickUp(p);
     return;
   }
   if ((job.next -= dt) > 0) return;
@@ -4277,7 +4372,29 @@ function jobLine() {
   const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey) * 10;
   const ang = mod(Math.atan2(ey, ex) - Math.atan2(me.hy, me.hx) + Math.PI, Math.PI * 2) - Math.PI; // + = to the right
   const way = Math.abs(ang) < 0.4 ? 'ahead' : Math.abs(ang) > 2.7 ? 'behind you' : (Math.abs(ang) < 1.2 ? 'ahead, ' : Math.abs(ang) > 1.9 ? 'behind, ' : '') + (ang > 0 ? 'right' : 'left');
-  return `${t.what}: ${d < 60 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
+  return `${t.what}: ${d < DROP_R * 10 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
+}
+// the big arrow at the top of the screen: which way the fare (or their stop) is from where the car's pointing,
+// how far, and what to do there. Drawn over the frame like the rest of the HUD.
+function jobArrow() {
+  const t = jobTarget();
+  if (!t || !me) return;
+  const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey);
+  const ang = mod(Math.atan2(ey, ex) - (chaseOn ? camYaw : a) + Math.PI, Math.PI * 2) - Math.PI; // 0 = dead ahead, + = right
+  const x = cv.width / 2, y = 78, r = 26, here = d < DROP_R;
+  g.save(); g.translate(x, y);
+  if (!here) g.rotate(ang);
+  g.beginPath();
+  if (here) { g.arc(0, 0, r * 0.55, 0, Math.PI * 2); } // arrived: a dot, stop here
+  else { g.moveTo(0, -r); g.lineTo(r * 0.75, r * 0.15); g.lineTo(r * 0.28, r * 0.15); g.lineTo(r * 0.28, r * 0.8); g.lineTo(-r * 0.28, r * 0.8); g.lineTo(-r * 0.28, r * 0.15); g.lineTo(-r * 0.75, r * 0.15); g.closePath(); }
+  g.fillStyle = PAL[C(YEL, fract(T * 2) < 0.75 || !here ? 15 : 9)]; g.fill();
+  g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.8)'; g.stroke();
+  g.restore();
+  const label = here ? (job.ride ? 'STOP to let them out' : 'STOP to pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d * 10 / 10) * 10}m`;
+  g.font = FS + 'px monospace'; g.textAlign = 'center';
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - label.length * FS * 0.33 - 6, y + r + 6, label.length * FS * 0.66 + 12, FS + 6);
+  g.fillStyle = PAL[C(YEL, 15)]; g.fillText(label, x, y + r + 9);
+  g.textAlign = 'left';
 }
 // ===== audio: recorded beds and synthesised layers, glided toward audioMix()'s targets every frame, plus one-shots
 // (footsteps, sirens, the till, the shop bell, train clatter). Starts on the first key press or click (browsers
@@ -4288,12 +4405,12 @@ function jobLine() {
 // pauses where it is and picks up from there when it's needed again.
 const AUDIO_DIR = 'audio/ascii-city/';
 const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
-                    rain: 'rain.mp3' };
+                    rain: 'rain.mp3', karaoke: 'karaoke.mp3' };
 // overall level of each layer at full mix
-const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
-                rain: 0.5, board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
+const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3, karaoke: 0.35,
+                rain: 0.28, board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { board: 0.4, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null, musicBus, ambBus, sfxBus; // the three volume settings' buses
 const beds = {}, synth = {};
@@ -4311,7 +4428,7 @@ function audioStart() {
   applyVolumes();
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
-  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' ? musicBus : ambBus);
+  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' ? musicBus : ambBus);
   makeSynths();
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
 }
@@ -4371,9 +4488,15 @@ const filt = (type, freq, q = 0.7) => { const f = actx.createBiquadFilter(); f.t
 const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k].connect(nodes[k + 1]); return nodes[nodes.length - 1]; };
 function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
 function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambBus); return g; }
+// a short recorded loop, decoded once and played round and round into `dest` (whose gain the mix drives)
+function loopClip(name, dest) {
+  fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).then(buf => {
+    const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(dest); s.start();
+  }).catch(() => {}); // (no file, or opened from disk: silent)
+}
 function makeSynths() {
   // a skateboard: the low roar of wheels on the street
-  synth.board = layer(); chain(noiseSrc(0.6), filt('lowpass', 350), filt('highpass', 60), synth.board);
+  synth.board = layer(); loopClip('skateboard', synth.board); // wheels on the street: a recorded roll, looped
   // waves: low surf that swells and draws back
   synth.waves = layer(); const swell = actx.createGain(); swell.gain.value = 0.55; lfo(swell.gain, 0.08, 0.45);
   chain(noiseSrc(0.7), filt('lowpass', 550), swell, synth.waves);
@@ -4464,9 +4587,9 @@ function tickSirens(indoors) {
 // ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
 function sfxThunder(d, indoors) {
   const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
-  s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.6 + near * 0.3;
-  const lp = filt('lowpass', indoors ? 260 : 400 + near * 2600), g = actx.createGain(), k = (indoors ? 0.35 : 1) * near;
-  lp.frequency.setValueAtTime(lp.frequency.value, at); lp.frequency.exponentialRampToValueAtTime(140, at + 2.5);
+  s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.3 + near * 0.15; // slowed right down: a low growl
+  const lp = filt('lowpass', indoors ? 180 : 220 + near * 900), g = actx.createGain(), k = (indoors ? 0.4 : 1.1) * near;
+  lp.frequency.setValueAtTime(lp.frequency.value, at); lp.frequency.exponentialRampToValueAtTime(70, at + 3);
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(0.8 * k, at + (near > 0.7 ? 0.015 : 0.3)); // crack, or a far-off roll
   g.gain.exponentialRampToValueAtTime(0.25 * k, at + 0.7); g.gain.linearRampToValueAtTime(0.35 * k, at + 1.5);
   g.gain.exponentialRampToValueAtTime(0.0005, at + 4 + d / 30);
@@ -4600,7 +4723,7 @@ function buildPause() {
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
-        <b>M</b><span>map</span><b>1-5</b><span>taxi / train stop</span>
+        <b>M</b><span>map</span><b>1-8</b><span>hold an item (in a taxi or train: pick a stop)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
         <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
@@ -4658,181 +4781,250 @@ const togglePause = () => paused ? closePause(false) : openPause();
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep) openPause(); });
 applySettings();
 // ===== goods on screen: the shop menu, the inventory, the hotbar, and what's in your hand (or mouth, or underfoot)
-// ---- in your hand: ascii art at the bottom right, bobbing as you walk. [lines, colour(ch, row)]
-const HAND = {
-  coffee: [['  ) )', ' ( (', '.-----.', '|     |]', '|CAFE |', "'-----'"], (c, r) => r < 2 ? C(WHITE, 7) : c === 'C' || c === 'A' || c === 'F' || c === 'E' ? C(GREEN, 12) : C(WHITE, 13)],
-  latte: [['  ) )', '.-----.', '|~~~~~|]', '|     |', "'-----'"], (c, r) => r === 2 ? C(WARM, 13) : C(WHITE, 13)],
-  tea: [['  ) )', ' _____', '|     |)', '|  o  |', "'-----'"], (c, r) => c === 'o' ? C(GREEN, 12) : C(WHITE, 12)],
-  soda: [[' .---.', ' |   |', ' |COLA', ' |   |', " '---'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
-  water: [['  _', ' | |', '|   |', '|~~~|', '|___|'], (c, r) => C(CYAN, 12)],
-  energy: [[' .---.', ' |ZAP|', ' | / |', ' |/  |', " '---'"], (c, r) => /[A-Z/]/.test(c) ? C(YEL, 15) : C(GREEN, 12)],
-  beer: [[' _____', '(~~~~~)', '|     |]', '|     |]', '|_____|'], (c, r) => r < 2 ? C(WHITE, 14) : C(YEL, 12)],
-  whiskey: [['', ' _____', '|~~~~~|', '| o o |', '|_____|'], (c, r) => r === 2 ? C(ORANGE, 12) : c === 'o' ? C(CYAN, 13) : C(WHITE, 11)],
-  cocktail: [['  \\ o', '\\_____/', ' \\~~~/', '  \\ /', '   |', ' __|__'], (c, r) => c === 'o' ? C(RED, 14) : r === 2 ? C(MAG, 13) : C(WHITE, 12)],
-  hotdog: [[' ___________', '(~~~~~~~~~~~)', ' (_________)'], (c, r) => r === 1 ? C(c === '~' ? YEL : RED, 13) : C(ORANGE, 12)],
-  taco: [['  ________', ' /%%%%%%%%\\', '/__________\\'], (c, r) => r === 1 ? C(GREEN, 12) : C(YEL, 13)],
-  icecream: [['  @@@', ' @@@@@', '  \\#/', '   V'], (c, r) => c === '@' ? C(MAG, 14) : C(ORANGE, 12)],
-  noodlebox: [['   ||', ' _||__', '|~~~~~|', '\\_____/'], (c, r) => r < 2 ? C(BRICK, 12) : r === 2 ? C(YEL, 13) : C(WHITE, 13)],
-  ramen: [['   ||', ' _||___', '(~~@~~~)', ' \\____/'], (c, r) => c === '@' ? C(WHITE, 15) : r === 2 ? C(YEL, 13) : C(RED, 12)],
-  croissant: [['  _.--._', ' (__\\/__)'], (c, r) => C(ORANGE, 13)],
-  donut: [['  .---.', ' ( (o) )', "  '---'"], (c, r) => c === 'o' ? C(GRAY, 3) : C(MAG, 13)],
-  bagel: [['  .---.', ' ( (_) )', "  '---'"], (c, r) => C(WARM, 12)],
-  sandwich: [[' _________', '/%%%%%%%%%\\', '|=========|', '\\_________/'], (c, r) => r === 1 ? C(GREEN, 12) : r === 2 ? C(RED, 12) : C(WARM, 12)],
-  candy: [['  ______', ' (CANDY )', "  '----'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(MAG, 12)],
-  yoyo: [[' | ', ' | ', '(@)'], (c, r) => r < 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
-  harmonica: [[' ________', '[::::::::]', " '------'"], (c, r) => c === ':' ? C(GRAY, 6) : C(GRAY, 13)],
-  duck: [['   __', ' <(o )___', '  ( ._> /', "   `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : C(YEL, 15)],
-  sparklers: [['|', '|', '|', '|'], (c, r) => C(GRAY, 11)],
-  chips: [[' .------.', ' | CHIPS|', ' |  ()  |', " '------'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(YEL, 13)],
-  apple: [['   ,', ' .-|-.', '(     )', " '---'"], (c, r) => r === 0 || c === '|' ? C(GREEN, 12) : C(RED, 13)],
-  slice: [['\\%%%%%%/', ' \\%o%%/', '  \\%%/', '   \\/'], (c, r) => c === 'o' ? C(RED, 13) : C(YEL, 13)],
-  burger: [[' .-----.', '(%%%%%%%)', '(=======)', " '-----'"], (c, r) => r === 1 ? C(GREEN, 12) : r === 2 ? C(BRICK, 12) : C(ORANGE, 13)],
-  kebab: [['  _____', ' /%%%%%\\', ' \\_____/', '   | |'], (c, r) => r === 1 ? C(GREEN, 12) : C(WARM, 13)],
-  dumplings: [[' .-. .-.', '( . ( . )', ' \\_/ \\_/'], (c, r) => C(WHITE, 13)],
-  mooncake: [[' .----.', '( (**) )', " '----'"], (c, r) => c === '*' ? C(YEL, 15) : C(ORANGE, 12)],
-  book: [[' ________', '|        |', '| ~~~~~~ |', '|________|'], (c, r) => r === 2 ? C(WHITE, 12) : C(BLUE, 12)],
-  newspaper: [[' ________', '|NEWS ==|', '|=== ===|', '|=== ===|'], (c, r) => C(WHITE, 13)],
-  vinyl: [[' _______', '|  ___  |', '| ( o ) |', '|_______|'], (c, r) => c === 'o' ? C(RED, 13) : C(MAG, 12)],
-  flowers: [[' *@*@*', '  \\|/', '   |', '  [_]'], (c, r) => r === 0 ? C(ITEM_COL[(c.charCodeAt(0) + r) & 7], 14) : c === '[' || c === ']' || c === '_' ? C(BRICK, 12) : C(GREEN, 12)],
-  ball: [['  ____', ' / \\/ \\', '|  /\\  |', ' \\_\\/_/'], (c, r) => C(WHITE, 13)],
-  boombox: [[' _[====]_', '|O |==| O|', '|_|____|_|'], (c, r) => c === 'O' ? C(GRAY, 9) : c === '=' ? C(CYAN, 13) : C(GRAY, 13)],
-  skateboard: [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)],
-  cigarettes: [[' _____', '|=====|', '|SMOKE|', '|_____|'], (c, r) => /[A-Z]/.test(c) ? C(RED, 13) : C(WHITE, 13)],
-};
-let smokePuffs = []; // [x, y, life] in screen cells
-const putCell = (r, c, ch, col, bg = NONE) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ' && bg === NONE) return; const i = r * cols + c; set(i, ch, col); BG[i] = bg; FOGS[i] = FOGB[i] = 0; };
-// draw ascii art solid: the gaps inside each line are filled, so the street doesn't show through the cup
-function putArt(art, r0, c0, col, bg) {
-  art.forEach((l, r) => { const a0 = l.search(/\S/), a1 = l.length - [...l].reverse().join('').search(/\S/);
-    [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r), k >= a0 && k < a1 ? bg : NONE)); });
+// ---- in your hand: ASCII art at the bottom right, bobbing as you walk. No backgrounds: every character has a thin
+// dark outline so it reads over anything, and the fingers hide the bottom of whatever you're holding. Things change
+// as you use them: glasses empty, food gets bitten, a coffee stops steaming, the pack runs down.
+// HAND[id] = (it, f) => [lines, colour(ch, row, col)], f = how much is left (0..1)
+const usesLeft = it => { const m = ITEMS[it.id].uses || 0; return m ? clamp(it.uses / m, 0, 1) : 1; };
+// a glass or bowl: interior spans [row, c0, c1] (top to bottom) filled from the bottom up to f, a surface on top
+function filled(lines, spans, f, body, surface = '~') {
+  const out = lines.slice(), k = Math.ceil(f * spans.length - 1e-9);
+  spans.forEach(([r, c0, c1], i) => {
+    const lvl = spans.length - 1 - i, ch = lvl < k - 1 ? body : lvl === k - 1 ? surface : ' ';
+    out[r] = out[r].slice(0, c0) + ch.repeat(c1 - c0 + 1) + out[r].slice(c1 + 1);
+  });
+  return out;
 }
+// bites: a rounded notch out of one side (right / top / bottom), deeper the more is gone, its edge a curve
+function bitten(lines, f, from = 'right') {
+  if (f >= 0.999) return lines;
+  const H = lines.length, W = Math.max(...lines.map(l => l.length)), gone = 1 - f;
+  return lines.map((l, y) => [...l.padEnd(W)].map((ch, x) => {
+    const d = from === 'right' ? Math.hypot((W - 1 - x) / W, (y - H * 0.4) / H * 0.9) / (gone * 0.95)
+            : from === 'top' ? Math.hypot((x - W / 2) / W * 0.8, y / H) / (gone * 1.05)
+            : Math.hypot((x - W / 2) / W * 0.8, (H - 1 - y) / H) / (gone * 1.05);
+    return d < 1 ? ' ' : d < 1.25 && ch !== ' ' ? (from === 'right' ? '(' : from === 'top' ? 'v' : '^') : ch;
+  }).join('').replace(/\s+$/, ''));
+}
+const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars.includes(c)) return col; return dflt; };
+const HAND = {
+  // drinks: a paper cup steams less as it goes; glasses show their level
+  coffee: (it, f) => [[f > 0.5 ? '  ( ( (' : '', f > 0.25 ? '   ) ) )' : '', ' ._______.', ' [_______]', '  |     |', '  |CAFE |', '  |     |', '   \\___/'],
+    (c, r) => r < 2 ? C(WHITE, 8) : 'CAFE'.includes(c) ? C(GREEN, 13) : r < 4 ? C(GRAY, 12) : C(WHITE, 14)],
+  latte: (it, f) => [filled([' .________.', ' |        |__', ' |        |  )', ' |        |  )', ' |        |_/', " '--------'"], [[1, 2, 9], [2, 2, 9], [3, 2, 9], [4, 2, 9]], f, ':', '~'),
+    (c, r) => c === ':' ? C(BRICK, 13) : c === '~' ? C(WHITE, 15) : C(WHITE, 12)],
+  tea: (it, f) => [filled(['   ) )', ' ._______.', ' |       |\\', ' |       | )', '  \\_____/_/', ' ========='], [[2, 2, 8], [3, 2, 8]], f, ':', '~'),
+    (c, r) => r === 0 ? C(WHITE, 7) : c === ':' || c === '~' ? C(ORANGE, 12) : C(WHITE, 13)],
+  soda: () => [[' _______', '(_______)', '|       |', '| C O L |', '|   A   |', '|  ~~~  |', '(_______)'], (c, r) => /[A-Z~]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
+  energy: () => [[' _______', '(_______)', '|  ZAP  |', '|   /   |', '|  /_   |', '|   /   |', '(_______)'], (c, r) => /[A-Z/_]/.test(c) && r > 1 && r < 6 ? C(YEL, 15) : C(GREEN, 12)],
+  water: (it, f) => [filled(['   [=]', '   | |', '  /   \\', ' |     |', ' |     |', ' |     |', ' |_____|'], [[3, 2, 6], [4, 2, 6], [5, 2, 6]], f, ':', '~'),
+    (c, r) => c === ':' || c === '~' ? C(CYAN, 14) : r === 0 ? C(BLUE, 13) : C(CYAN, 9)],
+  beer: (it, f) => [filled([' ________', '|        |__', '|        |  |', '|        |  |', '|        |__|', '|        |', ' \\______/'], [[1, 1, 8], [2, 1, 8], [3, 1, 8], [4, 1, 8], [5, 1, 8]], f, '#', '@'),
+    (c, r) => c === '#' ? C(YEL, 13) : c === '@' ? C(WHITE, 15) : C(WHITE, 10)],
+  whiskey: (it, f) => [filled([' _________', '|         |', '|         |', '|         |', '|_________|'], [[1, 1, 9], [2, 1, 9], [3, 1, 9]], f, '#', '~'),
+    (c, r) => c === '#' || c === '~' ? C(ORANGE, 13) : C(WHITE, 11)],
+  cocktail: (it, f) => [filled(['   o   /', '\\-------/', ' \\     /', '  \\   /', '   \\ /', '    |', '  __|__'], [[2, 2, 6], [3, 3, 5]], f, '%', '~'),
+    (c, r) => c === 'o' ? C(RED, 15) : c === '%' || c === '~' ? C(MAG, 14) : C(WHITE, 12)],
+  // food: bites out of it
+  hotdog: (it, f) => [bitten(['  ____________', ' (~~~~~~~~~~~~)', '(==============)', ' (____________)'], f),
+    (c, r) => c === '~' ? C(YEL, 15) : c === '=' ? C(RED, 13) : C(ORANGE, 12)],
+  taco: (it, f) => [bitten(['    _______', '  .%%%%%%%%%.', ' /%%%%%%%%%%%\\', '/_____________\\'], f), (c, r) => c === '%' ? C(GREEN, 13) : C(YEL, 13)],
+  icecream: (it, f) => [bitten(['   .@@@@.', '  @@@@@@@@', '  @@@@@@@@', '   \\####/', '    \\##/', '     \\/'], 0.35 + f * 0.65),
+    (c, r) => c === '@' || c === 'v' ? C(MAG, 14) : C(ORANGE, 12)],
+  noodlebox: (it, f) => [filled(['     //', '    //', ' __//____', '|~~~~~~~~|', '|~~~~~~~~|', ' \\______/'], [[3, 1, 8], [4, 1, 8]], f, '~'),
+    (c, r) => r < 3 ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(WHITE, 13)],
+  ramen: (it, f) => [filled(['     ||', '  ___||_____', ' (~~~~~~~~~~)', '  \\________/'], [[2, 2, 11]], f, '~'),
+    (c, r) => r < 2 ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(RED, 12)],
+  croissant: (it, f) => [bitten(['    _..--.._', '  .(\\  \\/  /).', ' (__\\__/\\__/__)'], f), (c, r) => C(ORANGE, 13)],
+  donut: (it, f) => [bitten(['   .-~~~-.', '  /  .-.  \\', ' |  (   )  |', '  \\  `-`  /', "   `-...-'"], f), (c, r) => r < 2 || c === '~' ? C(MAG, 14) : C(WARM, 12)],
+  bagel: (it, f) => [bitten(['   .-----.', '  /  .-.  \\', ' |  (   )  |', '  \\  `-`  /', "   `-----'"], f), (c, r) => C(WARM, 12)],
+  sandwich: (it, f) => [bitten(['  _________', ' (%%%%%%%%%)', ' |=========|', ' |~~~~~~~~~|', ' (_________)'], f),
+    (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(RED, 12) : c === '~' ? C(YEL, 13) : C(WARM, 12)],
+  chips: (it, f) => [[' .--------.', ' | CHIPS  |', ' |  ' + (f > 0.5 ? '(__)' : f > 0 ? ' __ ' : '    ') + '  |', ' |  ' + (f > 0.25 ? '(__)' : '    ') + '  |', " '--------'"],
+    (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : c === '(' || c === ')' || r > 1 && c === '_' ? C(YEL, 15) : C(RED, 12)],
+  apple: (it, f) => [bitten(['     ,', '   .-|-.', '  /     \\', ' |       |', '  \\     /', "   `---'"], f), (c, r) => r === 0 || c === '|' && r === 1 ? C(GREEN, 13) : c === '(' ? C(WHITE, 13) : C(RED, 13)],
+  slice: (it, f) => [bitten(['\\%%o%%%o%%/', ' \\%%%o%%%/', '  \\%o%%%/', '   \\%%%/', '    \\%/', '     V'], f, 'bottom'),
+    (c, r) => c === 'o' ? C(RED, 14) : c === '%' ? C(YEL, 14) : C(ORANGE, 12)],
+  burger: (it, f) => [bitten(['   .-----.', '  / . . . \\', ' (%%%%%%%%%)', ' (=========)', ' (~~~~~~~~~)', "  '-------'"], f),
+    (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(ORANGE, 13)],
+  kebab: (it, f) => [bitten(['  _______', ' /%%%%%%%\\', ' |%=%=%=%|', ' |%%%%%%%|', ' \\_______/', '   |___|'], f, 'top'),
+    (c, r) => c === '%' ? C(GREEN, 12) : c === '=' ? C(BRICK, 12) : C(WARM, 13)],
+  dumplings: it => { // a tray of them, two by two, one fewer each time
+    const n = clamp(it.uses, 1, 4), row = k => ' ' + ' .-. '.repeat(k).trimEnd(), body = k => ' ' + '(   )'.repeat(k);
+    const lines = n > 2 ? [row(n - 2), body(n - 2), row(2), body(2)] : [row(n), body(n)];
+    return [[...lines, '(__________)'], (c, r) => r === lines.length ? C(BRICK, 12) : C(WHITE, 14)];
+  },
+  mooncake: (it, f) => [bitten(['  .------.', ' (  .--.  )', ' ( ( ** ) )', ' (  `--`  )', "  '------'"], f), (c, r) => c === '*' ? C(YEL, 15) : C(ORANGE, 12)],
+  candy: (it, f) => [bitten([' _________', '[  CANDY  >', "'---------'"], f), (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(MAG, 13)],
+  // things
+  cigarettes: it => { // the pack, with as many left as are poking out of it
+    const n = Math.max(0, it.uses), tips = '  ' + 'i'.repeat(n).padEnd(5), sticks = '  ' + '|'.repeat(n).padEnd(5);
+    return [[tips, sticks, ' .-------.', ' | SMOKES|', ' |  .-.  |', ' |  |_|  |', ' |_______|'],
+      (c, r) => r === 0 ? C(ORANGE, 13) : r === 1 ? C(WHITE, 15) : /[A-Z]/.test(c) ? C(RED, 14) : C(WHITE, 13)];
+  },
+  book: () => [[' __________', '|\\  ~~~~  |', '| |  ~~~~ |', '| |       |', '| |  ===  |', ' \\|_______|'], (c, r) => c === '~' || c === '=' ? C(WHITE, 13) : C(BLUE, 13)],
+  newspaper: () => [[' ___________', '|THE  DAILY |', '|===  ====  |', '|[] =======|', '|== ======= |', '|___________|'], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(GRAY, 12)],
+  vinyl: () => [[' _________', '|  _____  |', '| /     \\ |', '|(   o   )|', '| \\_____/ |', '|_________|'], (c, r) => c === 'o' ? C(RED, 14) : r > 1 && r < 5 && c !== '|' ? C(GRAY, 13) : C(MAG, 13)],
+  flowers: () => [['  *@ *@*', ' @*@ @* *', '  \\ |/ /', '   \\|//', '   [__]', '   [__]'],
+    (c, r) => r < 2 ? C(ITEM_COL[(c.charCodeAt(0) + r * 3) & 7], 15) : r > 3 ? C(BRICK, 12) : C(GREEN, 13)],
+  ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
+  boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
+  skateboard: () => [['  ___', ' (o o)', ' |   |', ' |   |', ' |   |', ' |   |', ' (o o)'], (c, r) => c === 'o' ? C(WHITE, 14) : C(RED, 13)],
+  yoyo: () => [['  |', '  |', ' .-.', '(-@-)', " '-'"], (c, r) => r < 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
+  harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
+  duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
+  sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
+  umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
+    (c, r) => c === '=' ? C(WHITE, 14) : c === '|' && r > 7 ? C(GRAY, 12) : c === '.' ? C(GRAY, 14) : C(BLUE, 13)],
+};
+const heldArt = it => (HAND[it.id] || HAND.book)(it, usesLeft(it));
+let smokePuffs = []; // [x, y, life, drift] in screen px
+const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ') return; const i = r * cols + c; set(i, ch, col); FOGS[i] = FOGB[i] = 0; };
+function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
+const BOARD_UNDER = [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)];
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.round(Math.sin(T * (fx.skating ? 4 : 9)) * 0.6) : 0;
-  if (fx.skating && mode === 'walk') { // the board under your feet
-    putArt(HAND.skateboard[0], rows - 3, (cols >> 1) - 8, HAND.skateboard[1], C(GRAY, 1));
-  }
-  if (fx.smoke > 0) { // a cigarette in your mouth, tip glowing; drags puff smoke
-    const c0 = (cols >> 1) - 2, r0 = rows - 2, tip = fract(T * 2) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5;
-    for (let k = 0; k < 6; k++) putCell(r0 - (k >> 1), c0 + k, k < 1 ? '_' : '/', C(WHITE, 14), C(GRAY, 2));
-    putCell(r0 - 3, c0 + 6, '*', C(cigTip > 0.3 ? YEL : ORANGE, tip), C(RED, 2 + cigTip * 4));
-    if (Math.random() < dt * (1.5 + cigTip * 25)) smokePuffs.push([c0 + 6, r0 - 4, 1]);
-  }
-  smokePuffs = smokePuffs.filter(p => (p[2] -= dt * 0.35) > 0);
-  for (const p of smokePuffs) { p[1] -= dt * 4; p[0] += Math.sin(T * 3 + p[1]) * dt * 3; putCell(Math.round(p[1]), Math.round(p[0]), p[2] > 0.6 ? '~' : '.', C(GRAY, 4 + p[2] * 8)); }
+  if (fx.skating && mode === 'walk') putArt(BOARD_UNDER[0], rows - 3, (cols >> 1) - 8, BOARD_UNDER[1]); // the board under your feet
 }
 
-// ---- what's in your hand, drawn big over the finished frame: ASCII at ~2x the map's character size, every line
-// solid-backed so nothing shows through, the hand gripping the bottom of whatever it holds
-function bigArt(lines, x, y, size, colFn, bgFn) {
+// ---- drawn big over the finished frame, in characters with a dark outline instead of a background
+function artText(lines, x, y, size, colFn) {
   const w = g.measureText('M').width;
-  lines.forEach((l, r) => {
-    const a0 = l.search(/\S/), a1 = l.length - [...l].reverse().join('').search(/\S/);
-    if (a0 < 0) return;
-    if (bgFn && l.replace(/ /g, '').length > 2) for (let k = a0; k < a1; k++) { const b = bgFn(l[k], r, k); if (b !== NONE) { g.fillStyle = PAL[b]; g.fillRect(x + k * w, y + r * size, w + 0.5, size); } }
-    for (let k = a0; k < a1; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r)]; g.fillText(l[k], x + k * w, y + r * size); }
-  });
+  g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
+  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') g.strokeText(l[k], x + k * w, y + r * size); });
+  lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r, k)]; g.fillText(l[k], x + k * w, y + r * size); } });
   return w;
 }
-// the hand, in ASCII at the held item's size: four fingers curled round the front of whatever it holds (stacked
-// bands, a knuckle crease in each), the thumb hooked over the top on the left, the wrist running off the screen.
-// Solid skin behind every row so nothing shows through; outlines and creases a darker brown.
+// the hand: a fist from the knuckle side, four curled fingers wrapped round the front of what it holds, the thumb
+// hooked over on the left, the wrist running off the bottom of the screen
 let HAND_ART = [
-  '  _',
-  ' / )-----.',
-  '( (__:___ )',
-  ' (___:___ )',
-  ' (___:___ )',
-  '  (__:__ /',
-  '   |     |',
-  '   |     |',
-  '   |     |'];
-const HAND_EDGE = new Set(['(', ')', '/', '\\', '|', '_', '-', '.', ':']);
+  '  ,-.',
+  ' / _ `-._.-._.-.',
+  '( (_)(_)(_)(_)  )',
+  ' \\(_)(_)(_)(_) /',
+  '  \\___________/',
+  '   |         |',
+  '   |         |'];
+const HAND_LINE = new Set(['(', ')', '/', '\\', '|', '_', '-', '.', ',', '`']);
 function drawHand(cx, top, size) {
   g.font = size + 'px monospace';
   const w = g.measureText('M').width, artW = Math.max(...HAND_ART.map(l => l.length));
-  bigArt(HAND_ART, cx - artW * w / 2, top, size, (c, r) => HAND_EDGE.has(c) ? C(BRICK, c === ':' ? 6 : 8) : C(SKIN, 12),
-         (c, r) => r === 0 ? NONE : C(SKIN, r > 5 ? 6 : 8));
+  artText(HAND_ART, cx - artW * w / 2, top, size, c => HAND_LINE.has(c) ? C(SKIN, 13) : C(SKIN, 10));
+}
+// a run of characters along a straight line on screen (a string, a shaft), each one picked to follow its slope
+function charLine(x0, y0, x1, y1, w, size, col) {
+  const dxs = (x1 - x0) / w, dys = (y1 - y0) / size, n = Math.ceil(Math.hypot(dxs, dys));
+  const ch = Math.abs(dys) > Math.abs(dxs) * 2 ? '|' : Math.abs(dxs) > Math.abs(dys) * 2 ? '-' : dxs * dys < 0 ? '/' : '\\';
+  g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)'; g.fillStyle = col;
+  for (let k = 0; k <= n; k++) { const x = x0 + (x1 - x0) * k / n - w / 2, y = y0 + (y1 - y0) * k / n - size / 2; g.strokeText(ch, x, y); g.fillText(ch, x, y); }
 }
 function drawHeldBig() {
+  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  if (onFoot && fx.smoke > 0) drawCigarette();
   const it = heldItem();
-  if (!it || !(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') || fx.skating && it.id === 'skateboard') return;
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), size = Math.round(u * 1.5); // scaled to the screen, not the detail setting
+  if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
+  const isz = Math.round(u * 1.75), hsz = Math.round(u * 1.35);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const hx = Math.round(cv.width * 0.7), hy = Math.round(cv.height - 5.4 * size + bob); // the top of the hand (its thumb)
-  const open = it.id === 'umbrella' && rain > 0.2;
-  g.font = size + 'px monospace';
-  const w = g.measureText('M').width;
-  if (open) { // the umbrella, open overhead, seen from underneath: ribs fan out from the hub at the top of the screen
-    // to a scalloped rim that hangs lowest straight ahead; the shaft runs from your fist up to the hub
-    const W = cv.width, H = cv.height, gx = hx + 2.6 * u, hub = [W * 0.56, H * 0.05 + bob * 0.5], ribs = 10, tips = [];
-    for (let k = 0; k <= ribs; k++) { const t = k / ribs * 2 - 1; tips.push([W * (0.5 + t * 0.62), H * (0.36 - t * t * 0.5) + bob * 0.5]); }
-    g.fillStyle = PAL[C(BLUE, 3)]; g.fillRect(0, 0, W, hub[1]); // above the hub the canopy runs on over your head
-    const line = Math.max(1.5, u * 0.09);
-    for (let k = 0; k < ribs; k++) { // the panels: alternating tones, each edge scalloped up toward the hub
-      const [x0, y0] = tips[k], [x1, y1] = tips[k + 1], mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
-      g.beginPath(); g.moveTo(hub[0], hub[1]); g.lineTo(x0, y0);
-      g.quadraticCurveTo(mx + (hub[0] - mx) * 0.12, my + (hub[1] - my) * 0.22, x1, y1); g.closePath();
-      g.fillStyle = PAL[C(BLUE, k & 1 ? 5 : 3)]; g.fill();
+  const cx = Math.round(cv.width * 0.72), hy = Math.round(cv.height - 4.6 * hsz + bob); // the top of the hand
+  const grip = hy + 1.2 * hsz; // where the fingers wrap round
+  if (it.id === 'umbrella' && rain > 0.2) drawCanopy(cx, grip, isz, bob);
+  else {
+    const [art, col] = heldArt(it);
+    g.font = isz + 'px monospace';
+    const w = g.measureText('M').width, artW = Math.max(...art.map(l => l.length)), top = grip + 0.5 * isz - art.length * isz;
+    if (!(it.id === 'yoyo' && fx.yoyo > 0)) {
+      g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.85 * hsz); g.clip(); // the fingers hide its bottom
+      artText(art, cx - artW * w / 2, top, isz, col); g.restore();
     }
-    g.strokeStyle = PAL[C(GRAY, 7)]; g.lineWidth = line;
-    for (const [x, y] of tips) { g.beginPath(); g.moveTo(hub[0], hub[1]); g.lineTo(x, y); g.stroke(); } // the ribs
-    g.fillStyle = PAL[C(GRAY, 11)];
-    tips.forEach(([x, y], k) => {
-      g.beginPath(); g.arc(x, y, u * 0.16, 0, Math.PI * 2); g.fill(); // the rib tips
-      const d = fract(T * 1.3 + k * 0.37); // a drip falling off each tip
-      g.fillStyle = PAL[C(BLUE, 10)]; g.fillRect(x - 1, y + u * 0.3 + d * H * 0.25, 2, u * 0.35); g.fillStyle = PAL[C(GRAY, 11)];
-    });
-    g.lineCap = 'round'; // the shaft: dark edge, light core, from your fist up to the hub
-    g.strokeStyle = PAL[C(GRAY, 3)]; g.lineWidth = u * 0.42; g.beginPath(); g.moveTo(gx, hy + u); g.lineTo(hub[0], hub[1]); g.stroke();
-    g.strokeStyle = '#cfcfd8'; g.lineWidth = u * 0.24; g.stroke();
-    g.lineCap = 'butt';
-    g.fillStyle = PAL[C(GRAY, 12)]; g.beginPath(); g.arc(hub[0], hub[1], u * 0.4, 0, Math.PI * 2); g.fill(); // the hub
-  } else if (it.id === 'umbrella') { // furled: the shaft up out of your fist into the wrapped canopy, strap, tip
-    g.save(); g.translate(hx + 2.6 * u, hy + u); g.rotate(-0.1); // leaning a touch to the left; up is -y
-    g.lineCap = 'round';
-    g.strokeStyle = PAL[C(GRAY, 3)]; g.lineWidth = u * 0.42; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -13 * u); g.stroke();
-    g.strokeStyle = '#cfcfd8'; g.lineWidth = u * 0.24; g.stroke(); // the shaft (its tip pokes out the top)
-    g.beginPath(); g.moveTo(-0.3 * u, -3 * u); // the wrapped canopy: bunched at the bottom, swelling, tapering to the tip
-    g.bezierCurveTo(-1.6 * u, -4.2 * u, -1.1 * u, -8 * u, -0.12 * u, -12.3 * u); g.lineTo(0.12 * u, -12.3 * u);
-    g.bezierCurveTo(1.1 * u, -8 * u, 1.6 * u, -4.2 * u, 0.3 * u, -3 * u); g.closePath();
-    g.fillStyle = PAL[C(BLUE, 6)]; g.fill(); g.strokeStyle = PAL[C(BLUE, 2)]; g.lineWidth = Math.max(1.5, u * 0.08); g.stroke();
-    g.strokeStyle = PAL[C(BLUE, 9)]; g.lineWidth = Math.max(1, u * 0.06);
-    for (const k of [-0.5, 0.15, 0.7]) { g.beginPath(); g.moveTo(k * 0.5 * u, -3.3 * u); g.quadraticCurveTo(k * 1.4 * u, -6.5 * u, 0, -12 * u); g.stroke(); } // the folds
-    g.fillStyle = PAL[C(GRAY, 12)]; g.fillRect(-1.15 * u, -5.6 * u, 2.3 * u, 0.4 * u); // the strap
-    g.lineCap = 'butt'; g.restore();
-  } else {
-    const [art, col] = HAND[it.id] || HAND.book, artW = Math.max(...art.map(l => l.length)), top = hy - (art.length - 1.6) * size;
-    // centred over the fingers, the bottom of it tucked behind them
-    if (!(it.id === 'yoyo' && fx.yoyo > 0)) bigArt(art, hx + 2.6 * u - artW * w / 2, top, size, col, () => C(GRAY, 1));
-    if (it.id === 'sparklers' && fx.spark > 0) drawSparks(hx + 2.6 * u, top - size * 0.5, size);
+    if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
   }
-  drawHand(hx + 2.6 * u, hy, size);
-  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(hx + 2.6 * u, hy + size, size);
+  drawHand(cx, hy, hsz);
+  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip, isz);
   g.font = FS + 'px monospace';
 }
+// the umbrella open over you, seen from underneath: panels of fabric between ribs fanning out from the hub (just off
+// the top of the screen) to a scalloped rim that hangs lowest straight ahead, drips falling off the tips, and the
+// shaft running from your fist up to the hub. All characters.
+function drawCanopy(cx, grip, size, bob) {
+  const W = cv.width, H = cv.height, s = Math.round(size * 0.9);
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, ribs = 9, hubX = W * 0.56, off = bob * 0.4;
+  charLine(cx, grip, hubX, -s, w, s, PAL[C(GRAY, 13)]); // the shaft
+  for (let c = 0; c * w < W + w; c++) {
+    const x = c * w, t = (x - W / 2) / (W * 0.62), seg = (t + 1) / 2 * ribs, k = Math.floor(seg), m = Math.abs(fract(seg) - 0.5);
+    const rim = H * (0.34 - t * t * 0.32) - (0.5 - m) * s * 1.4 + off; // scalloped: rises between the ribs
+    const rib = m > 0.44, ribCh = Math.abs(t) < 0.08 ? '|' : t < 0 ? '\\' : '/';
+    for (let y = 0; y < rim - s; y += s) {
+      if (rib) { g.fillStyle = PAL[C(GRAY, 11)]; g.fillText(ribCh, x, y); continue; }
+      g.fillStyle = PAL[C(BLUE, (k & 1 ? 7 : 5) - y / H * 2)];
+      g.fillText(k & 1 ? '#' : '%', x, y);
+    }
+    g.fillStyle = PAL[C(BLUE, 11)]; g.fillText(rib ? 'V' : '_', x, rim - s); // the rim
+    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillText('.', x, rim + fract(T * 1.1 + c * 0.37) * H * 0.4); } // drips
+  }
+}
+// a cigarette between your lips: filter, paper burning down as it's smoked (fx.smoke counts down), the ember glowing
+// brighter on a drag, smoke curling off it
+function drawCigarette() {
+  const u = Math.max(14, cv.height / 36), s = Math.round(u * 1.6);
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / 45);
+  const x0 = cv.width * 0.5 - w, y0 = cv.height - s * 0.9, dx = w * 0.95, dy = -s * 0.32;
+  const chars = ['#', '#', ...Array(len).fill('='), '*'];
+  g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
+  chars.forEach((ch, k) => {
+    const x = x0 + k * dx, y = y0 + k * dy, ember = k === chars.length - 1;
+    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
+    g.strokeText(ch, x, y); g.fillText(ch, x, y);
+  });
+  const tx = x0 + (chars.length - 1) * dx, ty = y0 + (chars.length - 1) * dy;
+  if (Math.random() < 0.08 + cigTip * 0.5) smokePuffs.push([tx, ty - s * 0.4, 1, Math.random() - 0.5]);
+  smokePuffs = smokePuffs.filter(p => (p[2] -= 0.008) > 0);
+  for (const p of smokePuffs) {
+    p[1] -= s * 0.035; p[0] += Math.sin(T * 2 + p[1] * 0.02) * 0.6 + p[3] * 0.4;
+    g.fillStyle = `rgba(200,200,210,${(p[2] * 0.6).toFixed(2)})`; g.fillText(p[2] > 0.55 ? '~' : '.', p[0], p[1]);
+  }
+}
 // a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
-// drawn in characters that follow its slope
+// following its slope
 function drawYoyo(x, y, size) {
   g.font = size + 'px monospace';
   const w = g.measureText('M').width, th = (1 - fx.yoyo / 1.4) * Math.PI * 2, R = 2.4;
   const yx = x + Math.sin(th) * R * w * 1.7, yy = y - (1 - Math.cos(th)) * R * size;
-  const n = Math.ceil(Math.hypot((yx - x) / w, (yy - y) / size)), dxs = (yx - x) / w, dys = (yy - y) / size;
-  const ch = Math.abs(dys) > Math.abs(dxs) * 2 ? '|' : Math.abs(dxs) > Math.abs(dys) * 2 ? '-' : dxs * dys < 0 ? '/' : '\\';
-  g.fillStyle = PAL[C(WHITE, 11)];
-  for (let k = 1; k < n; k++) g.fillText(ch, x + (yx - x) * k / n - w / 2, y + (yy - y) * k / n - size / 2);
-  bigArt(['(' + '@*o*'[(T * 16 | 0) & 3] + ')'], yx - 1.5 * w, yy - size / 2, size, c => c === '(' || c === ')' ? C(RED, 14) : C(WHITE, 15), () => C(RED, 4));
+  charLine(x, y, yx, yy, w, size, PAL[C(WHITE, 11)]);
+  artText(['(' + '@*o*'[(T * 16 | 0) & 3] + ')'], yx - 1.5 * w, yy - size / 2, size, c => c === '(' || c === ')' ? C(RED, 14) : C(WHITE, 15));
 }
-// a lit sparkler: a fizzing ball at the tip, sparks spitting out every which way (fx.spark counts down), in ASCII
+// a lit sparkler: a fizzing ball at the tip, sparks spitting out every which way (fx.spark counts down)
 function drawSparks(x, y, size) {
   g.font = size + 'px monospace';
   const w = g.measureText('M').width;
-  for (let k = 0; k < 14; k++) {
+  for (let k = 0; k < 16; k++) {
     const a_ = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 2.6;
     g.fillStyle = PAL[C(Math.random() < 0.5 ? YEL : WHITE, 9 + Math.random() * 6)];
     g.fillText(r < 1.4 ? '*' : Math.random() < 0.5 ? '+' : '.', x - w / 2 + Math.cos(a_) * r * w * 1.6, y + Math.sin(a_) * r * size * 0.9);
   }
   g.fillStyle = PAL[C(WHITE, 15)]; g.fillText('@', x - w / 2, y);
+}
+
+// ---- putting things down and picking them up: where you are decides where it lies
+// the place key for dropped things: '' outdoors (the street or a roof, told apart by height), the room's own key
+// indoors, null where you can't (a moving train, the el)
+const placeKey = () => mode === 'walk' || mode === 'roof' ? '' : mode === 'room' && room.kind !== 'train'
+  ? 'room:' + (room.cell ? room.cell.join(',') : room.kind + ':' + (room.st ?? room.word ?? '')) : null;
+function dropHere() {
+  const at = placeKey();
+  if (!heldItem()) return;
+  if (at === null) return say('Not up here.');
+  const reach = mode === 'room' ? 0.7 : 0.09; // a step in front of you (rooms are in metres, the street in 10m cells)
+  const x = mode === 'room' ? px + Math.cos(a) * reach : mod(px + Math.cos(a) * reach, N), y = mode === 'room' ? py + Math.sin(a) * reach : mod(py + Math.sin(a) * reach, N);
+  say(`You put the ${dropHeldAt(x, y, at, mode === 'roof' ? roofH : 0)} down.`);
+}
+const droppedHere = () => { const at = placeKey(); return at === null ? null : droppedNear(px, py, at, mode === 'room' ? 1.1 : 0.2, mode === 'roof' ? roofH : 0); };
+// lying on the ground: its own in-hand picture, shrunk to life size (s = world units per character: cells or metres)
+function drawDropped(d, vx, vy, s) {
+  const [lines, col] = heldArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;
+  drawArt(vx, vy, d.at ? 0 : d.z || 0, W * s * 0.5, art.length * s, art, (c, row, L) => { const k = col(c, row); return C(k >> 4, (k & 15) * clamp(L / 11, 0.3, 1)); });
 }
 
 // ---- the hotbar and the effects you're under, bottom left
@@ -4931,7 +5123,7 @@ function panelKey(e) {
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
   if (!shop && n && inv[n[1] - 1]) { held = n[1] - 1; openInventory(); return true; }
   if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
-  if (!shop && e.code === 'KeyX') { const d = dropHeld(); if (d) say(`You leave the ${d} behind.`); openInventory(); return true; }
+  if (!shop && e.code === 'KeyX') { dropHere(); openInventory(); return true; }
   return true; // swallow everything else
 }
 
@@ -4949,8 +5141,8 @@ function sfxUse(s) {
   const at = actx.currentTime;
   if (s === 'bite') playClip('eat', 0.5);
   if (s === 'sip') playClip('drink', 0.6);
-  if (s === 'light') { tone(at, 2600, 0.03, 0.08, 'square'); burst(at + 0.04, 0.4, [filt('lowpass', 1500)], 0.1); }
-  if (s === 'drag') { burst(at, 0.4, [filt('bandpass', 3500, 0.8)], 0.03); burst(at + 0.6, 0.9, [filt('lowpass', 900)], 0.06); }
+  if (s === 'light') playClip('cig-light', 0.45);
+  if (s === 'drag') playClip(Math.random() < 0.5 ? 'cig-pull-1' : 'cig-pull-2', 0.5);
   if (s === 'kick') { tone(at, 110, 0.12, 0.2); burst(at, 0.05, [filt('bandpass', 900, 1)], 0.15); }
   if (s === 'page') burst(at, 0.15, [filt('highpass', 2500)], 0.05);
   if (s === 'board') { tone(at, 180, 0.08, 0.12); burst(at, 0.1, [filt('bandpass', 1200, 1)], 0.1); }
@@ -5100,6 +5292,7 @@ onkeydown = e => {
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
   if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
+  if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
   if (paused) return;
   K[e.code] = 1;
   if (e.repeat) return;
@@ -5110,7 +5303,7 @@ onkeydown = e => {
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
     if (e.code === 'KeyI') openInventory();
-    if (e.code === 'KeyX') { const d = dropHeld(); if (d) say(`You leave the ${d} behind.`); }
+    if (e.code === 'KeyX') dropHere();
     const slot = /^Digit([1-8])$/.exec(e.code);
     if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) held = slot[1] - 1;
   }
@@ -5139,7 +5332,7 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -5180,7 +5373,8 @@ function loop(t) {
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
-    move((cx * f - cy * s) * sp, (cy * f + cx * s) * sp);
+    const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
+    move((cx * f - cy * (s + lurch)) * sp, (cy * f + cx * (s + lurch)) * sp);
   } else if (mode === 'drive') drive(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
@@ -5205,12 +5399,19 @@ function loop(t) {
   if (chaseOn) { // render from behind the car, then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
-  } else { // a drink or two and the world sways a little
-    camYaw = a; const wob = fx.booze, sa = Math.sin(T * 0.9) * 0.04 * wob, sp_ = Math.sin(T * 1.3) * 0.02 * wob;
+  } else { // a drink or two and the world sways; more and you're seeing double
+    camYaw = a; const wob = Math.min(1.3, fx.booze);
+    const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
     a += sa; pitch += sp_; render(dt); a -= sa; pitch -= sp_;
+    if (wob > 0.08) drunkVision(wob);
   }
   audioTick(dt);
   requestAnimationFrame(loop);
+}
+// double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had
+function drunkVision(wob) {
+  const k = Math.min(1, wob), ox = Math.sin(T * 0.7) * 18 * k + 4 * k, oy = Math.cos(T * 0.53) * 6 * k;
+  g.save(); g.globalAlpha = 0.18 + 0.22 * k; g.drawImage(cv, ox, oy); g.restore();
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {

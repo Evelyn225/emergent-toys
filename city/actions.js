@@ -93,6 +93,8 @@ function interact() {
       const from = room.st;
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
+    const dr = droppedHere(); // something you put down here earlier
+    if (dr) return say(pickUpDropped(dr)[1]);
     if (room.kind === 'arcade') {
       const cab = nearCabinet();
       if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
@@ -104,11 +106,14 @@ function interact() {
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
   }
+  if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
+  const dr = droppedHere();
+  if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const c = nearestCar(0.5);

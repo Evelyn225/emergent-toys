@@ -259,3 +259,14 @@ test('boats keep to open water: every point of every route clears the bridges, f
   assert.deepStrictEqual(bad, []);
   assert.ok(ev("boats.filter(b => b.kind !== 'sail').every(b => b.b - b.a > 20)"), 'tugs and ferries run a good way');
 });
+
+test('construction hoarding, yard fences and shipping containers are solid boxes', () => {
+  const kinds = j('solids.reduce((o, s) => (o[s.kind] = (o[s.kind] || 0) + 1, o), {})');
+  for (const k of ['hoarding', 'chain', 'container']) assert.ok(kinds[k] > 20, `${k}: ${kinds[k]}`);
+  assert.strictEqual(ev("solids.filter(s => s.z0 === 0).every(s => solidAt(s.x, s.y, 0))"), true, 'you can\'t stand in one');
+  // containers in a yard never overlap at ground level
+  assert.strictEqual(ev(`(() => { const g = solids.filter(s => s.kind === 'container' && s.z0 === 0); let n = 0;
+    for (const a_ of g) for (const b of g) if (a_ !== b && Math.abs(rel(a_.x - b.x)) < (a_.c ? a_.hl : a_.hw) + (b.c ? b.hl : b.hw) &&
+      Math.abs(rel(a_.y - b.y)) < (a_.c ? a_.hw : a_.hl) + (b.c ? b.hw : b.hl)) n++; return n; })()`), 0);
+  assert.strictEqual(ev('solids.some(s => ROAD[idx(Math.floor(s.x), Math.floor(s.y))])'), false, 'none of it out on the street');
+});

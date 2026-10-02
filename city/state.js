@@ -10,8 +10,14 @@ let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in p
 let paused = false;
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 63, detail: 'medium', help: true };
-function loadSettings() { try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch (e) { /* private window etc: defaults */ } }
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+    if (!saved.v && saved.fov === 63) delete saved.fov; // the old default: move up to the new one
+    Object.assign(settings, saved, { v: 2 });
+  } catch (e) { /* private window etc: defaults */ }
+}
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* not saved, still applied */ } }
 loadSettings();
 const say = (s, t = 3) => { msgText = s; msgT = t; };
