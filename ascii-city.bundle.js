@@ -5503,6 +5503,26 @@ function chaseCam(dt) {
   while (back > 0.15 && !free(me.x - bx * back, me.y - by * back)) back -= 0.05;
   return [me.x - bx * back, me.y - by * back, camYaw];
 }
+// ?goto=ARCADE (any shop sign: HOSPITAL, PAWN, KARAOKE...) starts you on the sidewalk outside the nearest one, facing
+// its door: for finding things, and for trying them out
+function gotoShop(word) {
+  let best = null, bd = Infinity;
+  for (let k = 0; k < N * N; k++) {
+    const sh = SHOP[k];
+    if (!sh || sh.word !== word) continue;
+    const x = k % N, y = k / N | 0;
+    for (const [ox, oy, ang] of [[0, 1, -Math.PI / 2], [0, -1, Math.PI / 2], [1, 0, Math.PI], [-1, 0, 0]]) { // a street cell beside it
+      const nx = x + ox, ny = y + oy;
+      if (map[idx(nx, ny)] || !ROAD[idx(nx, ny)]) continue;
+      const d = Math.hypot(rel(x - px), rel(y - py));
+      if (d < bd) { bd = d; best = { x: nx + 0.5 - ox * 0.3, y: ny + 0.5 - oy * 0.3, a: ang, sh }; }
+    }
+  }
+  if (!best) return say(`No ${word} in town.`);
+  px = mod(best.x, N); py = mod(best.y, N); a = best.a; pitch = 0;
+  say(`Outside ${word}. ${openAt(best.sh, tod) ? 'Walk up and press E.' : `Closed, opens at ${best.sh.hours[0]}:00.`}`, 5);
+}
+{ const w = new URLSearchParams(location.search).get('goto'); if (w) gotoShop(w.toUpperCase()); }
 requestAnimationFrame(loop);
 
 // the mouse wheel cycles what's in your hand
