@@ -159,8 +159,10 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
 
-// subway: stations with a sidewalk entrance on a block's north side, spread out across town
-const stations = [];
+// subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
+// hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point
+const SUBWAY_HOLE = [0.14, 0.065];
+const stations = [], STATION_AT = new Map(); // block -> its station
 {
   const cand = [];
   for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
@@ -171,10 +173,8 @@ const stations = [];
     if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 6)) continue;
     let name = ST_NAMES[by];
     if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
-    const w = Math.max(11, name.length + 2), a = (w - 3) >> 1;
-    const art = pad([' .' + '-'.repeat(a) + '[M]' + '-'.repeat(w - 3 - a) + '.', ' |' + (' ' + name).padEnd(w) + '|', " '" + '-'.repeat(w) + "'",
-                     ' '.repeat(w >> 1) + '| |', ' |' + '='.repeat(w) + '|', ' |  ' + '_'.repeat(w - 4) + '  |', ' |' + '_|'.repeat(w >> 1).padEnd(w, '_') + '|']);
-    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84, art, w: art[0].length * 0.04 });
+    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });
+    STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
   }
 }
 

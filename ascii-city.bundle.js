@@ -614,8 +614,10 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
 
-// subway: stations with a sidewalk entrance on a block's north side, spread out across town
-const stations = [];
+// subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
+// hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point
+const SUBWAY_HOLE = [0.14, 0.065];
+const stations = [], STATION_AT = new Map(); // block -> its station
 {
   const cand = [];
   for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
@@ -626,10 +628,8 @@ const stations = [];
     if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 6)) continue;
     let name = ST_NAMES[by];
     if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
-    const w = Math.max(11, name.length + 2), a = (w - 3) >> 1;
-    const art = pad([' .' + '-'.repeat(a) + '[M]' + '-'.repeat(w - 3 - a) + '.', ' |' + (' ' + name).padEnd(w) + '|', " '" + '-'.repeat(w) + "'",
-                     ' '.repeat(w >> 1) + '| |', ' |' + '='.repeat(w) + '|', ' |  ' + '_'.repeat(w - 4) + '  |', ' |' + '_|'.repeat(w >> 1).padEnd(w, '_') + '|']);
-    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84, art, w: art[0].length * 0.04 });
+    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });
+    STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
   }
 }
 
@@ -781,8 +781,7 @@ function stepTraffic(dt, t, everywhere = false) {
   // (which runs off-centre) the band is wider: it waits for the car in front to get properly out of the way, and
   // cars coming up behind it see it even though it isn't square in their lane
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
-  // (and nobody but the emergency vehicle squeezes past a car that has pulled over)
-  const band = (c, o) => c.ev || o.ev ? 0.3 : o.off > 0.1 ? 0.45 : 0.12;
+  const band = (c, o) => c.ev || o.ev ? 0.3 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
   const evs = cars.filter(c => c.ev), live = c => !c.player && (everywhere || c.ev || simulated(c.x, c.y));
   for (const c of cars) {
@@ -823,7 +822,10 @@ function stepTraffic(dt, t, everywhere = false) {
       const rx = rel(c.x - e.x), ry = rel(c.y - e.y), al = rx * c.hx + ry * c.hy;
       return e.hx === c.hx && e.hy === c.hy && Math.abs(rx * c.hy - ry * c.hx) < 0.3 && al > 0 && al < 5;
     };
-    const pull = !c.ev && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && evs.some(behind); // not mid-junction
+    // pull in only where the kerb is free: not mid-junction, and not on top of a car that's already pulled in there
+    const kerbTaken = c.off < 0.1 && c.near.some(o => o !== c && o.off > 0.1 && o.hx === c.hx && o.hy === c.hy &&
+      Math.abs(rel(o.x - c.x) * c.hx + rel(o.y - c.y) * c.hy) < 0.55 && Math.abs(rel(o.x - c.x) * c.hy - rel(o.y - c.y) * c.hx) < 0.3);
+    const pull = !c.ev && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
     const offTarget = c.ev ? -0.2 : pull ? 0.32 : 0;
     c.off += clamp(offTarget - c.off, -0.6 * dt, 0.6 * dt);
     if (pull || Math.abs(c.off - offTarget) > 0.02 && !c.ev) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
@@ -1736,6 +1738,14 @@ function roofTop(i, wx, wy, h, d) {
   set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
 }
 
+// how far down a subway entrance's stairs (wx, wy) is (0 at the top step, 1 at the bottom), or -1 if it isn't in one
+function subwayHole(wx, wy, bx, by) {
+  const s = STATION_AT.get(bi(bx, by));
+  if (!s) return -1;
+  const u = rel(wx - s.x), v = rel(wy - s.y);
+  return Math.abs(u) < SUBWAY_HOLE[0] && Math.abs(v) < SUBWAY_HOLE[1] ? (u + SUBWAY_HOLE[0]) / (2 * SUBWAY_HOLE[0]) : -1;
+}
+let stHole = -1;
 function floorCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
@@ -1776,6 +1786,10 @@ function floorCell(i, r, x, rx, ry) {
       else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
     } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
+  } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
+    const deep = stHole;
+    set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(GRAY, L * (1 - deep * 0.85) * 1.5)); BG[i] = C(GRAY, 1 + (1 - deep) * 2);
+    return;
   } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain sidewalk where none does
     const n = ly < 0.3 ? vseg(bx, by - 1) : ly > 1.7 ? vseg(bx, by) : -1, w = lx < 0.3 ? hseg(bx - 1, by) : lx > 1.7 ? hseg(bx, by) : -1;
     if (n === 0 || w === 0) { ch = ','; k = 1.3; }
@@ -1991,8 +2005,7 @@ function citySprites() {
       row < 3 ? C(t.color, Math.max(L, night * 12)) : c === 'O' ? C(GRAY, L * 0.5) : C(t.color, L));
     drawArt(...R(v.x + v.ox, v.y + v.oy), 0, 0.06, 0.18, ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? v.shirt : GRAY, L));
   }
-  for (const s of stations)
-    drawArt(...R(s.x, s.y), 0, s.w, 0.45, s.art, (c, row, L) => row === 0 ? C(GREEN, c === 'M' ? 15 : L) : row === 1 ? C(WHITE, Math.max(L, 12)) : C(GRAY, L));
+  for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
   forNear(roofsB, o => {
     const blink = fract(T * 0.8 + o.x) < 0.5;
     drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, (c, row, L) =>
@@ -2138,6 +2151,26 @@ function drawBench(vx, vy, fx, fy, s) {
   });
 }
 
+// a subway entrance in 3D: railings round a stairwell cut into the sidewalk (its treads are drawn by floorCell,
+// see SUBWAY_HOLE), green globe lamps at the open end, and the station's name on a sign over the far railing
+function drawStationEntrance(s, vx, vy) {
+  const [hl, hw] = SUBWAY_HOLE, iron = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 5 ? '=' : '|', C(GREEN, L * 0.7)), true; };
+  for (const side of [-1, 1]) drawBox(boxAt(vx, vy + side * hw, 1, 0, hl, 0.004, 0, 0.09), iron); // the long sides
+  drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.004, 0, 0.09), iron); // the far end
+  for (const side of [-1, 1]) { // the lamps either side of the way in
+    drawBox(boxAt(vx - hl, vy + side * hw, 1, 0, 0.005, 0.005, 0, 0.13), iron);
+    drawBox(boxAt(vx - hl, vy + side * hw, 1, 0, 0.014, 0.014, 0.13, 0.158), (i, t, L) => { BG[i] = C(GREEN, 6 + night * 7); return set(i, 'o', C(WHITE, 15)), true; });
+  }
+  const name = s.name; // the sign: one letter per cell across its face, so it never smears
+  drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.006, 0.09, 0.125), (i, t, L) => {
+    BG[i] = C(GREEN, 4 + night * 3);
+    if (HIT.face !== 1 && HIT.face !== 2) return set(i, ' ', 0), true;
+    const q = (HIT.u / hw * (HIT.face === 1 ? 1 : -1) + 1) / 2 * (name.length + 2) - 1, k = Math.floor(q);
+    const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
+    return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
+  });
+}
+
 // chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
 // glowing after dark. Real 3D, so it stays put across the street as you walk round it.
 const LANTERN_SPAN = 0.95, sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
@@ -2227,19 +2260,29 @@ function boxRoom(w, h, extra = {}, door = true) { // walls all round, double doo
   }
   return rows_;
 }
-// A subway station: the platform (x 9..36, y 1..5) with the track (y 6..7) running on into a tunnel at either end,
-// pillars down the middle, and stairs up to the street at x 10..11 (the 'D' at the top).
-const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 12, y0: 1, y1: 4.4, rise: 2.4 };
-const STATION_GRID = Array.from({ length: 9 }, (_, y) => Array.from({ length: STATION_W }, (_, x) =>
-  x === 0 || x === STATION_W - 1 || y === 8 ? '#' : y === 0 ? (x === 10 || x === 11 ? 'D' : '#')
-  : y === 6 || y === 7 ? '.' : x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 3 ? '#' : '.') : '#').join(''));
+// A subway station, 4.5m high. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
+// either end and pillars down the middle. Behind its back wall (row 6) a 3m-wide stairwell (x 10..12) climbs away
+// from the platform, set into the rock, up to the street (the 'D' at the top, row 0).
+const STATION_W = 46, STATION_H = 4.5, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const ST_TRACK = 12; // the first track row; the platform edge is just before it
+const STATION_GRID = Array.from({ length: 15 }, (_, y) => Array.from({ length: STATION_W }, (_, x) => {
+  const well = x >= 10 && x <= 12;
+  if (x === 0 || x === STATION_W - 1 || y === 14) return '#';
+  if (y === 0) return well ? 'D' : '#';
+  if (y <= 6) return well ? '.' : '#'; // the stairwell, through the back wall
+  if (y >= ST_TRACK) return '.'; // the track, platform to tunnels
+  return x >= 9 && x <= 36 ? ([13, 18, 23, 28, 33].includes(x) && y === 9 ? '#' : '.') : '#';
+}).join(''));
 // how high the stairs have lifted you at (x, y)
 const stairRise = (x, y) => { const s = room && room.def.stairs; return s && x >= s.x0 && x < s.x1 && y < s.y1 ? s.rise * clamp((s.y1 - y) / (s.y1 - s.y0), 0, 1) : 0; };
 // the steps themselves, as boxes, each a little higher toward the top; walkable (the stairs lift you, see stairRise)
 const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
   const dy = (s.y1 - s.y0) / 10, top = (k + 1) * s.rise / 10;
-  return { ...BX((s.x0 + s.x1) / 2, s.y1 - (k + 0.5) * dy, (s.x1 - s.x0) / 2, dy / 2, 0, top, (i, t, L) => {
-    BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (HIT.v < -dy / 2 + 0.06 ? '=' : ' ') : '_', C(YEL, L * 0.8)), true;
+  return { ...BX((s.x0 + s.x1) / 2, s.y1 - (k + 0.5) * dy, (s.x1 - s.x0) / 2, dy / 2, 0, top, (i, t, L) => { // wall to wall
+    // treads (yellow nosing at the front edge) and risers
+    BG[i] = C(GRAY, (1 + L * 0.3) * shadeFace(HIT.face));
+    if (HIT.face === 5) return set(i, HIT.v > dy / 2 - 0.06 ? '=' : ' ', C(YEL, L * 0.8)), true;
+    return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
   }, 0, 1), walk: true };
 });
 const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
@@ -2447,11 +2490,11 @@ const ROOM_DEFS = {
       }
       return p;
     } },
-  station: { grid: STATION_GRID, light: 1, floor: 'station', ceil: 'strip', wall: stationWall, block: (x, y) => y > 5.2, stairs: STATION_STAIRS,
+  station: { grid: STATION_GRID, light: 1, floor: 'station', ceil: 'strip', wall: stationWall, block: (x, y) => y > ST_TRACK - 0.8, stairs: STATION_STAIRS, height: STATION_H,
     props: r => {
       const p = [...stairSteps(STATION_STAIRS)];
-      for (const x of [15.5, 20.5, 25.5, 30.5]) p.push(BENCHP(x, 1.5, 0, 1));
-      for (let k = 0; k < 4; k++) p.push(standing(14 + Math.random() * 20, 3 + Math.random() * 1.6, shirt()));
+      for (const x of [15.5, 20.5, 25.5, 30.5]) p.push(BENCHP(x, 7.5, 0, 1)); // against the back wall
+      for (let k = 0; k < 4; k++) p.push(standing(14 + Math.random() * 20, 9 + Math.random() * 1.6, shirt()));
       return p;
     } },
   train: { grid: boxRoom(22, 5, {}, false), light: 1, floor: 'train', ceil: 'strip', wall: trainWall,
@@ -2676,7 +2719,7 @@ function stationWall(i, u, uStep, z, d, mx, my, L) {
   }
   const far = my === room.H - 1; // the tunnel wall across the tracks
   const u0 = Math.floor((u - 2) / 8) * 8 + 6;
-  if (z > 1.55 && z < 1.95 && (my === 0 || far)) { // name band, repeated along the platform
+  if (z > 1.55 && z < 1.95 && (my === ST_TRACK - 6 || far)) { // name band, repeated along the platform
     if (wallText(i, u, uStep, z, d, room.word, u0, 1.75, 0.25, 0.35, C(WHITE, 15), C(GREEN, 4))) return true;
     set(i, ' ', 0); BG[i] = C(GREEN, 4); return true;
   }
@@ -2707,7 +2750,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog) {
   BG[i] = NONE;
   if (c === 'D') { // the way out: glass doors, or stairs up from the subway
     if (R.kind === 'station') {
-      if (z > 2.3 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11, 2.6 + STATION_STAIRS.rise, 0.25, 0.4, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
+      if (z > 1.6 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, 1.8 + STATION_STAIRS.rise, 0.25, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
     }
     if (z > 2.3) return set(i, '=', C(GRAY, L));
@@ -2746,12 +2789,12 @@ function roomFloor(i, r, x, rx, ry) {
     case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
-      if (wy > 5.3) { // track bed: rails, sleepers, gravel
-        if (Math.abs(wy - 6.3) < 0.05 || Math.abs(wy - 7.5) < 0.05) return set(i, '=', C(GRAY, L * 1.8));
-        if (wy > 6.3 && wy < 7.5 && fract(wx / 0.6) < 0.25) return set(i, '#', C(BRICK, L));
+      if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
+        if (Math.abs(wy - ST_TRACK - 0.3) < 0.05 || Math.abs(wy - ST_TRACK - 1.5) < 0.05) return set(i, '=', C(GRAY, L * 1.8));
+        if (wy > ST_TRACK + 0.3 && wy < ST_TRACK + 1.5 && fract(wx / 0.6) < 0.25) return set(i, '#', C(BRICK, L));
         return set(i, (r + x) % 3 ? ' ' : '.', C(GRAY, L * 0.5));
       }
-      if (wy > 5.0) return set(i, '=', C(YEL, L * 2)); // mind the gap
+      if (wy > ST_TRACK - 1) return set(i, '=', C(YEL, L * 2)); // mind the gap
     // fall through: platform tiles
     default: {
       const edge = fract(wx) < 0.06 || fract(wy) < 0.06;
@@ -2760,7 +2803,7 @@ function roomFloor(i, r, x, rx, ry) {
   }
 }
 function roomCeil(i, r, x, rx, ry) {
-  const d = (3 - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
+  const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
   ZB[i] = d; FL[i] = 0;
   const st = room.def.ceil;
   if (st === 'pendant') { // warm hanging lamps on a 2m grid
@@ -2788,10 +2831,10 @@ function roomSprites() {
   }
   if (room.kind === 'station') {
     const tx = trainX(room);
-    if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, 6.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
+    if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
   }
 }
-const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : 3; },
+const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
@@ -3045,7 +3088,7 @@ const nearPerson = () => {
 const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
-const canBoard = () => room.kind === 'station' && trainStopped(room) && py > 4.2 && Math.abs(px - 23) < 13;
+const canBoard = () => room.kind === 'station' && trainStopped(room) && py > ST_TRACK - 1.8 && Math.abs(px - 23) < 13;
 // near a way out: a door, or the foot of the station stairs
 const nearExit = () => {
   const s = room.def.stairs;
@@ -3293,7 +3336,7 @@ function interact() {
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
-  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11, 4.8, 0]); // at the foot of the stairs
+  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.kind === SHOP_SHUT) return say('Closed.');
@@ -3327,12 +3370,12 @@ function stepSleep(dt) {
 }
 function leaveRoom() {
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
-  if (room.kind === 'station') { const s = stations[room.st]; px = s.x; py = s.y - 0.12; a = -Math.PI / 2; }
+  if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
 }
 function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
-  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, 3.6, -Math.PI / 2]); // back from the edge, so E means leave
+  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, ST_TRACK - 2.4, -Math.PI / 2]); // back from the edge, facing the stairs
   say(`${stations[n].name}`);
 }
 function hail() {

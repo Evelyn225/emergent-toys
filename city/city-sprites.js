@@ -33,8 +33,7 @@ function citySprites() {
       row < 3 ? C(t.color, Math.max(L, night * 12)) : c === 'O' ? C(GRAY, L * 0.5) : C(t.color, L));
     drawArt(...R(v.x + v.ox, v.y + v.oy), 0, 0.06, 0.18, ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? v.shirt : GRAY, L));
   }
-  for (const s of stations)
-    drawArt(...R(s.x, s.y), 0, s.w, 0.45, s.art, (c, row, L) => row === 0 ? C(GREEN, c === 'M' ? 15 : L) : row === 1 ? C(WHITE, Math.max(L, 12)) : C(GRAY, L));
+  for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
   forNear(roofsB, o => {
     const blink = fract(T * 0.8 + o.x) < 0.5;
     drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, (c, row, L) =>
@@ -177,6 +176,26 @@ function drawBench(vx, vy, fx, fy, s) {
   drawBox(boxAt(vx - fx * 1.9 * s, vy - fy * 1.9 * s, ax, ay, 7.5 * s, 0.4 * s, 4.8 * s, 8.5 * s), wood); // back
   for (const e of [-6, 6]) drawBox(boxAt(vx + ax * e * s, vy + ay * e * s, ax, ay, 0.5 * s, 1.8 * s, 0, 4 * s), (i, t, L) => {
     BG[i] = C(GRAY, 1); return set(i, '|', C(GRAY, L * 0.7)), true;
+  });
+}
+
+// a subway entrance in 3D: railings round a stairwell cut into the sidewalk (its treads are drawn by floorCell,
+// see SUBWAY_HOLE), green globe lamps at the open end, and the station's name on a sign over the far railing
+function drawStationEntrance(s, vx, vy) {
+  const [hl, hw] = SUBWAY_HOLE, iron = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, HIT.face === 5 ? '=' : '|', C(GREEN, L * 0.7)), true; };
+  for (const side of [-1, 1]) drawBox(boxAt(vx, vy + side * hw, 1, 0, hl, 0.004, 0, 0.09), iron); // the long sides
+  drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.004, 0, 0.09), iron); // the far end
+  for (const side of [-1, 1]) { // the lamps either side of the way in
+    drawBox(boxAt(vx - hl, vy + side * hw, 1, 0, 0.005, 0.005, 0, 0.13), iron);
+    drawBox(boxAt(vx - hl, vy + side * hw, 1, 0, 0.014, 0.014, 0.13, 0.158), (i, t, L) => { BG[i] = C(GREEN, 6 + night * 7); return set(i, 'o', C(WHITE, 15)), true; });
+  }
+  const name = s.name; // the sign: one letter per cell across its face, so it never smears
+  drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.006, 0.09, 0.125), (i, t, L) => {
+    BG[i] = C(GREEN, 4 + night * 3);
+    if (HIT.face !== 1 && HIT.face !== 2) return set(i, ' ', 0), true;
+    const q = (HIT.u / hw * (HIT.face === 1 ? 1 : -1) + 1) / 2 * (name.length + 2) - 1, k = Math.floor(q);
+    const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
+    return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
   });
 }
 
