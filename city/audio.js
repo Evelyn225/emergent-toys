@@ -6,13 +6,14 @@
 // so nothing is decoded whole into memory and the loop never clicks. A bed that has been silent for a few seconds
 // pauses where it is and picks up from there when it's needed again.
 const AUDIO_DIR = 'audio/ascii-city/';
-const BED_FILES = { city: 'city-day.mp3', crowd: 'crowd.mp3', night: 'night.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3' };
+const BED_FILES = { city: 'city-day.mp3', crowd: 'crowd.mp3', night: 'night.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
+                    rain: 'rain.mp3' };
 // overall level of each layer at full mix (the night recording is quieter than the rest, hence its boost)
 const LEVEL = { city: 0.5, crowd: 0.35, night: 0.8, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
-                rain: 0.45, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
+                rain: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { rain: 0.19, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
-const XF = 4, GLIDE = 0.45; // loop crossfade seconds; time constant of every level change
+const CAL = { waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null;
 const beds = {}, synth = {};
 
@@ -23,7 +24,7 @@ function audioStart() {
   actx = new AC();
   const comp = actx.createDynamicsCompressor(); // glues the layers together and stops stacked one-shots clipping
   comp.threshold.value = -18; comp.ratio.value = 3;
-  master = actx.createGain(); master.gain.value = soundOn ? 0.9 : 0;
+  master = actx.createGain(); master.gain.value = soundOn ? MASTER : 0;
   master.connect(comp); comp.connect(actx.destination);
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
@@ -33,7 +34,7 @@ function audioStart() {
 }
 function toggleSound() {
   soundOn = !soundOn;
-  if (master) master.gain.setTargetAtTime(soundOn ? 0.9 : 0, actx.currentTime, 0.15);
+  if (master) master.gain.setTargetAtTime(soundOn ? MASTER : 0, actx.currentTime, 0.15);
   say(soundOn ? 'Sound on' : 'Sound off', 1.5);
 }
 
@@ -81,8 +82,6 @@ const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k
 function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
 function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(master); return g; }
 function makeSynths() {
-  // rain: hiss
-  synth.rain = layer(); chain(noiseSrc(), filt('highpass', 500), filt('lowpass', 7000), synth.rain);
   // waves: low surf that swells and draws back
   synth.waves = layer(); const swell = actx.createGain(); swell.gain.value = 0.55; lfo(swell.gain, 0.08, 0.45);
   chain(noiseSrc(0.7), filt('lowpass', 550), swell, synth.waves);
@@ -104,7 +103,7 @@ function makeSynths() {
 function burst(at, len, filters, gain, pan = 0) {
   const s = actx.createBufferSource(); s.buffer = noiseBuf;
   const g = actx.createGain(), p = actx.createStereoPanner(); p.pan.value = pan;
-  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.008); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
   chain(s, ...filters, g, p, master); s.start(at, Math.random() * 1.5, len + 0.05);
 }
 function tone(at, freq, len, gain, type = 'sine', pan = 0) {
@@ -113,18 +112,20 @@ function tone(at, freq, len, gain, type = 'sine', pan = 0) {
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
   chain(o, g, p, master); o.start(at); o.stop(at + len + 0.05);
 }
-// footsteps per surface: [filter type, freq, Q, tail, level, thump Hz (0 = none)]
-const STEP = { stone: ['bandpass', 1800, 0.8, 0.06, 0.5, 85], grass: ['lowpass', 900, 0.5, 0.12, 0.35, 0], wood: ['bandpass', 650, 2, 0.08, 0.55, 150],
-               metal: ['bandpass', 2600, 5, 0.16, 0.4, 0], gravel: ['bandpass', 3200, 0.5, 0.11, 0.45, 0], sand: ['lowpass', 1400, 0.5, 0.12, 0.3, 0],
-               tile: ['bandpass', 2400, 1.2, 0.05, 0.45, 110], carpet: ['lowpass', 600, 0.5, 0.07, 0.3, 0] };
+// footsteps per surface: mostly a soft heel thud with a little scuff on top, nothing bright.
+// [scuff filter, freq, Q, tail seconds, level, thud Hz (0 = none)]
+const STEP = { stone: ['lowpass', 1000, 0.7, 0.07, 0.6, 72], grass: ['lowpass', 550, 0.5, 0.1, 0.45, 0], wood: ['bandpass', 420, 1.4, 0.09, 0.6, 115],
+               metal: ['bandpass', 1300, 2.5, 0.12, 0.4, 90], gravel: ['bandpass', 1500, 0.6, 0.09, 0.5, 0], sand: ['lowpass', 650, 0.5, 0.1, 0.35, 0],
+               tile: ['bandpass', 1300, 1, 0.05, 0.5, 95], carpet: ['lowpass', 380, 0.5, 0.06, 0.35, 0] };
 let stepSide = 1;
 function sfxStep(surface, run) {
-  const [type, f, q, tail, lvl, thump] = STEP[surface] || STEP.stone, at = actx.currentTime, g = lvl * (run ? 0.3 : 0.2) * (0.8 + Math.random() * 0.4);
+  const [type, f, q, tail, lvl, thump] = STEP[surface] || STEP.stone, at = actx.currentTime + Math.random() * 0.01;
+  const g = lvl * (run ? 0.11 : 0.075) * (0.8 + Math.random() * 0.4);
   stepSide = -stepSide;
-  burst(at, tail, [filt(type, f * (0.85 + Math.random() * 0.3), q)], g, stepSide * 0.15);
-  if (surface === 'gravel') burst(at + 0.03, tail, [filt(type, f * 0.8, q)], g * 0.6, stepSide * 0.15); // crunch
-  if (thump) tone(at, thump * (0.9 + Math.random() * 0.2), 0.05, g * 0.8);
-  if (surface === 'metal') tone(at, 900 + Math.random() * 300, 0.12, g * 0.15, 'triangle');
+  burst(at, tail, [filt(type, f * (0.85 + Math.random() * 0.3), q), filt('lowpass', 2500)], g * 0.6, stepSide * 0.12);
+  if (surface === 'gravel') burst(at + 0.035, tail, [filt(type, f * 0.8, q), filt('lowpass', 2500)], g * 0.35, stepSide * 0.12); // crunch
+  if (thump) tone(at, thump * (0.9 + Math.random() * 0.2), 0.07, g * 1.2);
+  if (surface === 'metal') tone(at, 600 + Math.random() * 150, 0.1, g * 0.12, 'sine');
 }
 function sfxTill() { // cha-ching: the drawer, then the bell
   const at = actx.currentTime;
@@ -139,19 +140,20 @@ const SIREN = { amb: { type: 'square', f: t => 700 + 520 * (0.5 - 0.5 * Math.cos
                 police: { type: 'sawtooth', f: t => 720 + 650 * fract(t * 2.8) },
                 fire: { type: 'square', f: t => 480 + 420 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 4.5)) } };
 const sirens = new Map(); // car -> voice
+const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 50) {
+  for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
     o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, master); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
     const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
-    if (!cars.includes(c) || d > 55) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
+    if (!cars.includes(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
-    v.g.gain.setTargetAtTime(0.16 / (1 + (d / 5) ** 1.4) * (indoors ? 0.12 : 1), now, 0.1);
+    v.g.gain.setTargetAtTime(0.16 * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
     v.lp.frequency.setTargetAtTime(indoors ? 700 : 2600 / (1 + d / 30), now, 0.2);
     v.p.pan.setTargetAtTime(clamp((rx * right[0] + ry * right[1]) / d, -1, 1) * 0.8, now, 0.1);
   }

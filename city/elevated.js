@@ -1,15 +1,17 @@
 // ---- the elevated train: a steel deck on pillars over the whole length of H(., EL_ROW), which wraps round the world
 // east-west, so the line is a loop. Two tracks: westbound on the north half, eastbound on the south half.
 // Stations every 8 blocks, with narrow platforms over the sidewalks and stairs down to the street.
-const EL_Y = EL_ROW * 8, EL_BOT = 0.55, EL_TOP = 0.68; // deck spans y EL_Y..EL_Y+2, between these heights
-const EL_TRACK = [EL_Y + 0.6, EL_Y + 1.4]; // [westbound, eastbound]
-const EL_PLAT = [EL_Y + 0.15, EL_Y + 1.85]; // where you stand on each platform
-const onEl = (mx, my) => (my & (N - 1)) - EL_Y >>> 0 < 2; // a deck cell
+// The deck is 12m wide over the middle of the street (clear of the building faces either side) and high enough
+// that the street lamps fit under it: y EL_Y0..EL_Y1, z EL_BOT..EL_TOP.
+const EL_Y = EL_ROW * 8, EL_HALF = 0.6, EL_Y0 = EL_Y + 1 - EL_HALF, EL_Y1 = EL_Y + 1 + EL_HALF, EL_BOT = 1.15, EL_TOP = 1.27;
+const EL_TRACK = [EL_Y + 0.78, EL_Y + 1.22]; // [westbound, eastbound]
+const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platform, along the deck's edges
+const underEl = y => Math.abs(rel(y - (EL_Y + 1))) < EL_HALF; // under (or on) the deck
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
 const elStationAt = x => EL_STATIONS.find(s => mod(x - s.x0, N) < s.x1 - s.x0);
 // pillars at both curbs, clear of the cross streets
 const elPillars = [];
-for (let bx = 0; bx < NB; bx++) for (const s of [2.6, 4.6, 6.6]) for (const y of [EL_Y + 0.12, EL_Y + 1.88]) elPillars.push({ x: bx * 8 + s, y });
+for (let bx = 0; bx < NB; bx++) for (const s of [2.6, 4.6, 6.6]) for (const y of [EL_Y0 + 0.05, EL_Y1 - 0.05]) elPillars.push({ x: bx * 8 + s, y });
 const elPillarsB = bucketed(elPillars);
 
 // trains: each runs the loop stopping at every station. A hop is HOP_T seconds of travel (eased in and out),

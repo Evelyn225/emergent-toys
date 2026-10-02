@@ -12,7 +12,7 @@ function toLane(c) { // snap a car onto the nearest lane in the direction it poi
 function leaveCar() {
   const c = me;
   [px, py] = curbOf(c);
-  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); a += Math.PI / 2; }
+  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; a += Math.PI / 2; }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);

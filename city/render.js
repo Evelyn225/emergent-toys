@@ -47,6 +47,32 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
   }
 }
 
+// the el deck in one screen column, for the stretch of ray [t0, t1] that's inside it: its underside (from below) or
+// top (from above), and the girder along its side where the ray comes in. Only fills cells nothing nearer covered.
+function drawDeck(x, rx, ry, t0, t1) {
+  const below = eye < EL_BOT, above = eye > EL_TOP;
+  if (below || above) {
+    const k = (below ? EL_BOT - eye : eye - EL_TOP) * projY;
+    const r0 = below ? (t0 > 0 ? Math.ceil(hor - k / t0) : 0) : Math.ceil(hor + k / t1);
+    const r1 = below ? Math.ceil(hor - k / t1) : t0 > 0 ? Math.ceil(hor + k / t0) : rows;
+    for (let r = Math.max(0, r0); r < Math.min(rows, r1); r++) {
+      const i = r * cols + x;
+      if (ZB[i] >= 0) continue;
+      const dr = below ? k / (hor - r - 0.5) : k / (r - hor + 0.5);
+      CITY.slabFace(i, px + rx * dr, py + ry * dr, below, dr); ZB[i] = dr; FL[i] = 0;
+    }
+  }
+  if (t0 > 0) { // the side girder, where the ray meets the deck
+    const r0 = Math.max(0, Math.ceil(hor - (EL_TOP - eye) * projY / t0)), r1 = Math.min(rows, Math.ceil(hor - (EL_BOT - eye) * projY / t0));
+    const u = (ry > 0 ? -1 : 1) * (px + rx * t0);
+    for (let r = r0; r < r1; r++) {
+      const i = r * cols + x;
+      if (ZB[i] >= 0) continue;
+      CITY.slabEdge(i, u, eye + (hor - r - 0.5) * t0 / projY, t0, 1); ZB[i] = t0; FL[i] = 0;
+    }
+  }
+}
+
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
@@ -60,9 +86,17 @@ function render(dt) {
     const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
     for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; ZB[i] = -1; } // -1: nothing drawn here yet
     // DDA through the grid, front to back; `clip` = lowest row not yet covered
-    // overhead decks (the el) leave gaps in a column, so once one is drawn every later write checks ZB first
-    let mx = Math.floor(px), my = Math.floor(py), clip = rows, first = true, dPrev = 0, hCur = W.cell(mx, my);
-    let slabCur = W.slab && W.slab(mx, my), holes = false;
+    // The el deck is a box over the middle of its street (y in EL_Y0..EL_Y1, z in EL_BOT..EL_TOP), narrower than a cell
+    // pair, so it isn't part of the grid: work out where this ray is inside it ([te, tx]) and draw it when the DDA
+    // gets that far. It leaves gaps in the column, so once it's drawn every later write checks ZB first.
+    let mx = Math.floor(px), my = Math.floor(py), clip = rows, first = true, dPrev = 0, hCur = W.cell(mx, my), holes = false;
+    let te = Infinity, tx = -Infinity;
+    if (W.deck) {
+      const yc = py + rel(EL_Y + 1 - py), y0 = yc - EL_HALF, y1 = yc + EL_HALF;
+      if (Math.abs(ry) < 1e-9) { if (py > y0 && py < y1) { te = 0; tx = Infinity; } }
+      else { const a0 = (y0 - py) / ry, a1 = (y1 - py) / ry; tx = Math.max(a0, a1); te = tx > 0 ? Math.max(0, Math.min(a0, a1)) : Infinity; }
+    }
+    let deckDue = te < vis;
     BASE[x] = clamp(hor, 0, rows);
     const ddx = Math.abs(1 / rx), ddy = Math.abs(1 / ry), sx = rx < 0 ? -1 : 1, sy = ry < 0 ? -1 : 1;
     let sdx = (rx < 0 ? px - mx : mx + 1 - px) * ddx, sdy = (ry < 0 ? py - my : my + 1 - py) * ddy;
@@ -79,32 +113,10 @@ function render(dt) {
         }
         clip = Math.min(clip, rOut);
       }
-      // a deck over the cell we just crossed: its underside when we're below it, its top when we're above
-      if (slabCur) {
-        const below = eye < EL_BOT, k = (below ? EL_BOT - eye : eye - EL_TOP) * projY, dd = Math.min(d, vis);
-        const r0 = below ? Math.max(0, Math.ceil(hor - (dPrev > 0 ? k / dPrev : Infinity))) : Math.max(0, Math.ceil(hor + k / dd));
-        const r1 = below ? Math.min(rows, Math.ceil(hor - k / dd)) : Math.min(clip, dPrev > 0 ? Math.ceil(hor + k / dPrev) : rows);
-        for (let r = r0; r < r1; r++) {
-          const i = r * cols + x;
-          if (ZB[i] >= 0) continue;
-          const dr = below ? k / (hor - r - 0.5) : k / (r - hor + 0.5);
-          W.slabFace(i, px + rx * dr, py + ry * dr, below, dr); ZB[i] = dr; FL[i] = 0;
-        }
-        holes = true;
-      }
+      // everything nearer than the deck is drawn: now the deck, before anything behind it
+      if (deckDue && d > te) { drawDeck(x, rx, ry, te, Math.min(tx, vis)); deckDue = false; holes = true; }
       if (d > vis) break;
-      const h = W.cell(mx, my), slab = W.slab && W.slab(mx, my); hCur = h; dPrev = d;
-      if (slab && !slabCur && eye < EL_TOP + 1) { // the deck's edge, seen from outside
-        const t0 = Math.max(0, Math.ceil(hor - (EL_TOP - eye) * projY / d)), t1 = Math.min(rows, Math.ceil(hor - (EL_BOT - eye) * projY / d));
-        const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
-        for (let r = t0; r < t1; r++) {
-          const i = r * cols + x;
-          if (ZB[i] >= 0) continue;
-          W.slabEdge(i, u, eye + (hor - r - 0.5) * d / projY, d, side); ZB[i] = d; FL[i] = 0;
-        }
-        holes = true;
-      }
-      slabCur = slab;
+      const h = W.cell(mx, my); hCur = h; dPrev = d;
       if (!h) continue;
       if (first) { first = false; BASE[x] = Math.min(rows, Math.ceil(hor + eye * projY / d)); if (x === cols >> 1) lookHit = { d, mx, my }; }
       const top = Math.max(0, Math.ceil(hor - (h - eye) * projY / d));
@@ -120,6 +132,7 @@ function render(dt) {
       }
       clip = Math.min(clip, top);
     }
+    if (deckDue) { drawDeck(x, rx, ry, te, Math.min(tx, vis)); holes = true; } // nothing at all was in front of it
     // sky / floor only where no wall or roof landed: shading them first and painting over was most of the cell work
     for (let r = 0; r < rows; r++) { const i = r * cols + x; if (ZB[i] < 0) (r < hor ? W.sky : W.floor)(i, r, x, rx, ry); }
   }

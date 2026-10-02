@@ -176,9 +176,9 @@ function floorCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
-  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), road = ROAD[idx(mx, my)], underEl = onEl(mx, my);
+  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), road = ROAD[idx(mx, my)], shade = underEl(wy);
   // under the el the street is in the deck's shadow, striped with light between the ties
-  const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (underEl ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
+  const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
@@ -223,7 +223,7 @@ function floorCell(i, r, x, rx, ry) {
     else if (Math.abs(e - 1) < 0.04 && fract(along * 2) < 0.5) { ch = '='; base = YEL; k = 1.5; }
   }
   let col = C(base, L * k);
-  BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (underEl ? 0.4 : 1));
+  BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
   if (!soft && wet > 0.05 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
@@ -237,21 +237,21 @@ function floorCell(i, r, x, rx, ry) {
 }
 
 // the el deck: its underside (girders and cross ties) seen from the street, and its top (two tracks, and the
-// platforms at stations) seen from up there
+// platforms at stations) seen from up there. ly = across the deck, 0..2*EL_HALF
 function slabFace(i, wx, wy, below, d) {
-  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = mod(wy, N) - EL_Y;
+  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = mod(wy, N) - EL_Y0, W = EL_HALF * 2;
   if (below) {
     BG[i] = C(GRAY, 1);
-    if (Math.abs(ly - 1) < 0.08 || ly < 0.08 || ly > 1.92) return set(i, '=', C(GRAY, L * 0.9)); // longitudinal girders
+    if (Math.abs(ly - W / 2) < 0.06 || ly < 0.07 || ly > W - 0.07) return set(i, '=', C(GRAY, L * 0.9)); // girders
     return set(i, fract(wx * 2) < 0.25 ? '#' : ' ', C(BRICK, L * 0.6)); // cross ties
   }
   BG[i] = bgAt(GRAY, day * 2);
-  if (elStationAt(wx) && (ly < 0.32 || ly > 1.68)) { // platforms, with a yellow edge
-    const edge = Math.abs(ly - 0.3) < 0.03 || Math.abs(ly - 1.7) < 0.03;
-    return set(i, ly < 0.06 || ly > 1.94 ? '|' : edge ? '=' : '.', edge ? C(YEL, L * 1.4) : C(GRAY, L));
+  if (elStationAt(wx) && (ly < 0.17 || ly > W - 0.17)) { // platforms, with a yellow edge
+    const edge = Math.abs(ly - 0.15) < 0.025 || Math.abs(ly - (W - 0.15)) < 0.025;
+    return set(i, ly < 0.03 || ly > W - 0.03 ? '|' : edge ? '=' : '.', edge ? C(YEL, L * 1.4) : C(GRAY, L));
   }
-  if (ly < 0.05 || ly > 1.95) return set(i, '|', C(GRAY, L * 1.2)); // edge rail
-  for (const t of EL_TRACK) if (Math.abs(Math.abs(ly - (t - EL_Y)) - 0.15) < 0.03) return set(i, '=', C(GRAY, L * 1.4)); // rails
+  if (ly < 0.04 || ly > W - 0.04) return set(i, '|', C(GRAY, L * 1.2)); // edge rail
+  for (const t of EL_TRACK) if (Math.abs(Math.abs(mod(wy, N) - t) - 0.1) < 0.025) return set(i, '=', C(GRAY, L * 1.4)); // rails
   set(i, fract(wx * 4) < 0.35 ? '-' : ' ', C(BRICK, L * 0.8)); // sleepers
 }
 // the deck's side, seen from the street: a riveted steel girder
@@ -263,7 +263,7 @@ function slabEdge(i, u, z, d, side) {
 }
 // standing under the el while a train goes over: the whole street shudders (a row up or down, now and then)
 function shake() {
-  if (mode === 'room' || mode === 'roof' || !onEl(Math.floor(px), Math.floor(py)) || mode === 'el' || mode === 'elplat') return 0;
+  if (mode === 'room' || mode === 'roof' || !underEl(py) || mode === 'el' || mode === 'elplat') return 0;
   if (!elTrains(T).some(t => !t.stopped && Math.abs(rel(t.x - px)) < 3.5)) return 0;
   return Math.random() < 0.6 ? 0 : Math.random() < 0.5 ? -1 : 1;
 }
@@ -389,5 +389,5 @@ function craneCell(i, u, z, du, dz, L, k, p) {
 }
 
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
-               slab: onEl, slabFace, slabEdge };
+               deck: true, slabFace, slabEdge };
 

@@ -30,6 +30,11 @@ test('indoors: the street drops right down and the room takes over', () => {
   const cafe = mix("{ mode: 'room', room: { kind: 'store', word: 'CAFE' } }");
   assert.ok(cafe.bossa > 0.5 && cafe.coffee === 0, 'cafes play bossa');
   assert.ok(mix("{ mode: 'room', room: { kind: 'station', word: 'X' } }").tunnel > 0.5);
+  // music: cafes, bars and shops only - never outside, in lobbies, the bank, the gym or the subway
+  const music = m => m.bossa + m.coffee;
+  for (const over of ['{}', "{ day: 0, night: 1, tod: 23 }", "{ mode: 'roof', roofH: 5 }", "{ mode: 'el' }", "{ mode: 'drive', speed: 2 }"]) assert.strictEqual(music(mix(over)), 0, over);
+  for (const kind of ['apts', 'hotel', 'bank', 'gym', 'station', 'train', 'cinema']) assert.strictEqual(music(mix(`{ mode: 'room', room: { kind: '${kind}', word: 'No.101' } }`)), 0, kind);
+  for (const kind of ['bar', 'diner', 'store', 'barber', 'florist']) assert.ok(music(mix(`{ mode: 'room', room: { kind: '${kind}', word: 'SHOP' } }`)) > 0, kind);
 });
 
 test('weather, the sea, height, the el and the car', () => {

@@ -2,7 +2,7 @@
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, crowd, night, restaurant, bossa, coffee) and synthesised ones (rain, waves, wind,
+// Layers: recorded beds (city, crowd, night, restaurant, bossa, coffee, rain) and synthesised ones (waves, wind,
 // rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -12,11 +12,12 @@ const AUDIO_DISTRICT = {
   brownstones: { city: 0.5, crowd: 0.35, night: 1 }, waterfront: { city: 0.35, crowd: 0.5, night: 0.9 },
   sea: { city: 0.15, crowd: 0, night: 0.8 },
 };
-// which room plays what: [restaurant crowd, bossa nova, coffee jazz]
+// which room plays what: [restaurant crowd, bossa nova, coffee jazz]. Music only where a shop would have it on:
+// cafes and restaurants, bars, and the shops; not lobbies, the bank, the gym, the cinema or the subway
 const ROOM_AUDIO = {
-  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0.3], hotel: [0.2, 0.5, 0],
-  cinema: [0, 0, 0], laundry: [0, 0, 0.5], gym: [0.15, 0, 0.6], barber: [0.1, 0, 0.6], bank: [0.15, 0, 0.35],
-  petshop: [0, 0, 0.55], florist: [0, 0.35, 0.4], apts: [0, 0, 0], store: [0, 0, 0.5], station: [0.25, 0, 0], train: [0, 0, 0],
+  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0.3], store: [0, 0, 0.5],
+  laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
+  hotel: [0.2, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -31,7 +32,7 @@ function seaDist(x, y) {
 function audioMix(s) {
   const out = { city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
-    const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0.4];
+    const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
     out.restaurant = rest * (k === 'bar' || k === 'karaoke' ? s.barCrowd : 1);
     out.bossa = cafe ? 0.8 : bossa;

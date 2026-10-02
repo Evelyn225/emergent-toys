@@ -217,17 +217,32 @@ const relB = v => mod(v + NB / 2, NB) - NB / 2; // nearest copy, in blocks
 const bi = (bx, by) => (by & (NB - 1)) * NB + (bx & (NB - 1));
 const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
 
-// districts: nearest hand-placed seed (wrapping east-west), with wobbly borders
+// districts: small neighbourhoods (~5 blocks across, a few minutes' walk) from a jittered grid of seeds, nearest seed
+// wins (wrapping east-west), with wobbly borders. Downtown sits round the middle of town, industry along the shores,
+// the rest a mix.
 const DISTRICTS = ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones'];
-const DIST_SEEDS = [[16, 13, 'downtown'], [8, 11, 'midtown'], [25, 16, 'midtown'], [21, 6, 'chinatown'], [4, 21, 'industrial'],
-                    [29, 22, 'industrial'], [7, 4, 'brownstones'], [13, 21, 'brownstones'], [30, 6, 'brownstones']];
+const DIST_SEEDS = [];
+for (let j = 0; j < 5; j++) for (let i = 0; i < 6; i++)
+  DIST_SEEDS.push([(i + 0.2 + hash(i, j, 61) * 0.6) * NB / 6, SHORE_N + 1 + (j + 0.2 + hash(i, j, 62) * 0.6) * (SHORE_S - SHORE_N - 1) / 5, '']);
+// a neighbourhood is never the same kind as one next door, so walking a few blocks always takes you somewhere new
+for (const seed of DIST_SEEDS) {
+  const [sx, sy] = seed, r = hash(sx * 7 | 0, sy * 7 | 0, 63);
+  const centre = Math.hypot(relB(sx - NB / 2), sy - (SHORE_S + SHORE_N) / 2), shore = sy < SHORE_N + 4 || sy > SHORE_S - 4;
+  if (centre < 4.5) { seed[2] = 'downtown'; continue; }
+  const next = DIST_SEEDS.filter(o => o !== seed && o[2] && Math.hypot(relB(o[0] - sx), o[1] - sy) < 7.5).map(o => o[2]);
+  const weights = { midtown: 3, brownstones: 3, industrial: shore ? 5 : 0.7, chinatown: DIST_SEEDS.filter(o => o[2] === 'chinatown').length < 2 ? 2 : 0 };
+  const opts = Object.keys(weights).filter(t => weights[t] && !next.includes(t)), pool = opts.length ? opts : Object.keys(weights).filter(t => weights[t]);
+  let x = r * pool.reduce((t, k) => t + weights[k], 0), k = 0;
+  while ((x -= weights[pool[k]]) > 0) k++;
+  seed[2] = pool[k];
+}
 const DIST = new Array(NB * NB);
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (by === SHORE_N || by === SHORE_S) { DIST[bi(bx, by)] = 'waterfront'; continue; }
   if (by > SHORE_S) { DIST[bi(bx, by)] = 'sea'; continue; }
   let best = '', bd = Infinity;
   for (const [sx, sy, d] of DIST_SEEDS) {
-    const dd = Math.hypot(relB(bx - sx), by - sy) + noise(bx * 0.6, by * 0.6, 77) * 3;
+    const dd = Math.hypot(relB(bx - sx), by - sy) + noise(bx * 0.9, by * 0.9, 77) * 1.6;
     if (dd < bd) { bd = dd; best = d; }
   }
   DIST[bi(bx, by)] = best;
@@ -242,10 +257,10 @@ const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const d = DIST[bi(bx, by)], h = hash(bx, by, 7);
   KIND[bi(bx, by)] = d === 'waterfront' ? 'waterfront' : d === 'sea' ? 'sea'
-    : d === 'industrial' ? (h < 0.14 ? 'yard' : h < 0.17 ? 'construction' : '')
-    : d === 'brownstones' ? (h < 0.05 ? 'park' : '')
-    : d === 'chinatown' ? (h < 0.06 ? 'plaza' : '')
-    : (h < 0.02 ? 'park' : h < 0.055 ? 'landmark' : h < 0.08 ? 'construction' : h < 0.11 ? 'plaza' : '');
+    : d === 'industrial' ? (h < 0.14 ? 'yard' : h < 0.19 ? 'construction' : '')
+    : d === 'brownstones' ? (h < 0.07 ? 'park' : h < 0.1 ? 'plaza' : '')
+    : d === 'chinatown' ? (h < 0.08 ? 'plaza' : h < 0.1 ? 'park' : '')
+    : (h < 0.03 ? 'park' : h < 0.07 ? 'landmark' : h < 0.1 ? 'construction' : h < 0.14 ? 'plaza' : '');
 }
 for (const [x0, y0, x1, y1, k] of SUPER) for (let by = y0; by <= y1; by++) for (let bx = x0; bx <= x1; bx++) KIND[bi(bx, by)] = k;
 const blockKind = (bx, by) => KIND[bi(bx, by)];
@@ -267,9 +282,42 @@ const hseg = (bx, by) => HSEG[bi(bx, by)], vseg = (bx, by) => VSEG[bi(bx, by)];
 const exitOK = (bx, by, dx, dy) => dx > 0 ? hseg(bx, by) : dx < 0 ? hseg(bx - 1, by) : dy > 0 ? vseg(bx, by) : vseg(bx, by - 1);
 const degree = (bx, by) => hseg(bx, by) + hseg(bx - 1, by) + vseg(bx, by) + vseg(bx, by - 1);
 const onBridge = (bx, by) => BRIDGE_X.includes(bx & (NB - 1)) && (by & (NB - 1)) >= SHORE_S;
-function streetProblems() { // for the tests: every intersection has no streets or at least two
+// A city that grew rather than one laid out with a ruler: the avenues (every 6th street each way, the shore roads,
+// the el street, the bridges) run straight through, but side streets come and go. The old districts have the
+// staggered T-junctions of streets that never lined up; industry swallows streets into yards; midtown loses the odd
+// one; downtown is mostly planned. A street only goes if no intersection is left a dead end and every street can
+// still reach every other.
+const AVENUE_V = bx => bx % 6 === 0 || BRIDGE_X.includes(bx), AVENUE_H = by => by % 6 === 4 || by === EL_ROW || by === SHORE_N + 1 || by === SHORE_S;
+const LOSE = { brownstones: 0.12, chinatown: 0.15, industrial: 0.3, midtown: 0.1, downtown: 0.03 }; // chance a side street goes
+const STAGGER = { brownstones: 0.8, chinatown: 0.8 };                                              // and of the old-town stagger
+function connected() { // can every intersection with streets reach every other?
+  const seen = new Uint8Array(NB * NB), stack = [];
+  let total = 0, start = -1;
+  for (let k = 0; k < NB * NB; k++) if (degree(k % NB, k / NB | 0)) { total++; if (start < 0) start = k; }
+  stack.push(start); seen[start] = 1; let n = 1;
+  while (stack.length) {
+    const k = stack.pop(), bx = k % NB, by = k / NB | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (exitOK(bx, by, dx, dy)) {
+      const m = bi(bx + dx, by + dy); if (!seen[m]) { seen[m] = 1; n++; stack.push(m); }
+    }
+  }
+  return n === total;
+}
+const removed = []; // [bx, by, 'h' | 'v'] streets that went (they become lanes, see below)
+for (let by = SHORE_N + 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++) for (const o of ['v', 'h']) {
+  const k = bi(bx, by), arr = o === 'v' ? VSEG : HSEG;
+  if (!arr[k] || (o === 'v' ? AVENUE_V(bx) : AVENUE_H(by))) continue;
+  const d = DIST[k], stagger = o === 'v' && ((bx + by) & 1) && hash(bx, by, 64) < (STAGGER[d] || 0);
+  if (!stagger && hash(bx, by, o === 'v' ? 65 : 66) >= (LOSE[d] || 0)) continue;
+  arr[k] = 0;
+  const ends = o === 'v' ? [[bx, by], [bx, by + 1]] : [[bx, by], [bx + 1, by]];
+  if (ends.some(([x, y]) => degree(x, y) === 1) || !connected()) arr[k] = 1; else removed.push([bx, by, o]);
+}
+
+function streetProblems() { // for the tests: every intersection has no streets or at least two, all connected
   const bad = [];
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) if (degree(bx, by) === 1) bad.push([bx, by]);
+  if (!connected()) bad.push('disconnected');
   return bad;
 }
 
@@ -339,6 +387,20 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     SEED[i] = hash(k, 5, 3);
     SHOP[i] = lotShop[li] || (lotShop[li] = shopOf(SEED[i], dist));
   }
+}
+
+// A street that went between two built-up blocks doesn't leave a 20m gap: the buildings on one side grow into half
+// of it, leaving a 10m lane between them (walkable, unlit, no traffic).
+function copyCell(from, to) { map[to] = map[from]; STY[to] = STY[from]; SEED[to] = SEED[from]; SHOP[to] = SHOP[from]; }
+for (const [bx, by, o] of removed) {
+  if (o === 'v' && !blockKind(bx - 1, by) && !blockKind(bx, by))
+    for (let y = by * 8 + 2; y < by * 8 + 8; y++) { const from = idx(bx * 8 - 1, y); if (map[from]) copyCell(from, idx(bx * 8, y)); }
+  if (o === 'h' && !blockKind(bx, by - 1) && !blockKind(bx, by))
+    for (let x = bx * 8 + 2; x < bx * 8 + 8; x++) { const from = idx(x, by * 8 - 1); if (map[from]) copyCell(from, idx(x, by * 8)); }
+}
+for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { // a crossing nothing uses any more: its corner fills in too
+  const from = idx(bx * 8 - 1, by * 8 - 1);
+  if (!degree(bx, by) && map[from] && !blockKind(bx - 1, by - 1) && map[idx(bx * 8, by * 8 + 2)] !== undefined) copyCell(from, idx(bx * 8, by * 8));
 }
 
 // ---- street names, for talk, directions and the HUD
@@ -864,6 +926,30 @@ function snapToCorner(p) {
 }
 for (let n = 0; n < 1100; n++) spawnPerson();
 
+// how far along the stretch from corner (x, y) heading (mx, my) a door is, if it's on that stretch (0 if not)
+function passesAt(x, y, mx, my, d) {
+  const along = rel(d.x - x) * mx + rel(d.y - y) * my, across = rel(d.x - x) * my - rel(d.y - y) * mx;
+  return along > 0 && along < 6.24 && Math.abs(across) < 0.02 ? along : 0;
+}
+// shortest number of street stretches from every intersection to either end of a door's stretch, by breadth-first
+// search over the street network; worked out the first time someone heads for that door, then kept
+const routeCache = new Map();
+function routeTo(d) {
+  let f = routeCache.get(d);
+  if (f) return f;
+  f = new Int16Array(NB * NB).fill(9999);
+  const bx = Math.floor(mod(d.x, N) / 8), by = Math.floor(mod(d.y, N) / 8);
+  const queue = d.ny ? [bi(bx, by), bi(bx + 1, by)] : [bi(bx, by), bi(bx, by + 1)]; // its stretch's two intersections
+  for (const k of queue) f[k] = 0;
+  for (let h = 0; h < queue.length; h++) {
+    const k = queue[h], x = k % NB, y = k / NB | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (exitOK(x, y, dx, dy)) {
+      const m = bi(x + dx, y + dy); if (f[m] > f[k] + 1) { f[m] = f[k] + 1; queue.push(m); }
+    }
+  }
+  routeCache.set(d, f);
+  return f;
+}
 // corner (qx, qy in {0, 1}: west/east, north/south) of intersection (ix, iy) is sidewalk if a street runs past it
 const cornerOK = (ix, iy, qx, qy) => !!(hseg(qx ? ix : ix - 1, iy) || vseg(ix, qy ? iy : iy - 1));
 
@@ -882,18 +968,24 @@ function planPerson(p, t) {
     opts.push({ mx, my, road });
   }
   if (!opts.length) { p.last = [-p.last[0], -p.last[1]]; return; } // turn back (only at the odd awkward corner)
-  // how far along an option's stretch a door is, if it's on it
-  const passes = (o, d) => {
-    if (!o.along) return 0;
-    const along = rel(d.x - p.x) * o.mx + rel(d.y - p.y) * o.my, across = rel(d.x - p.x) * o.my - rel(d.y - p.y) * o.mx;
-    return along > 0 && along < 6.24 && Math.abs(across) < 0.02 ? along : 0;
-  };
-  // head for the goal: the stretch past its door if there is one, else whatever gets closest, plus a bit of randomness
-  const goal = p.goal;
+  const passes = (o, d) => o.along ? passesAt(p.x, p.y, o.mx, o.my, d) : 0;
+  // Head for the goal along the shortest route through the streets (routeTo): the stretch past its door if we're on
+  // it; else the stretch toward the nearest end of the door's; else cross to the corner that has that stretch.
+  const goal = p.goal, f = goal && routeTo(goal);
   for (const q of opts) {
-    const d = q.along ? 6.24 : 1.76;
-    q.score = !goal ? Math.random() * 3 + (q.along ? 0.5 : 0) : passes(q, goal) ? 1e9
-            : -Math.hypot(rel(goal.x - (p.x + q.mx * d)), rel(goal.y - (p.y + q.my * d))) + Math.random() * 2.5;
+    if (!goal) { q.score = Math.random() * 3 + (q.along ? 0.5 : 0); continue; }
+    let cost;
+    if (q.along) cost = passes(q, goal) ? -1 : 1 + f[bi(ix + q.mx, iy + q.my)];
+    else { // a crossing is worth whatever the best stretch from the corner it takes us to is worth
+      const nqx = q.mx ? 1 - qx : qx, nqy = q.my ? 1 - qy : qy, cx_ = bx + (nqx ? 1.88 : 0.12), cy_ = by + (nqy ? 1.88 : 0.12);
+      cost = 9999;
+      for (const [mx, my] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!(mx ? (mx > 0) === !!nqx : (my > 0) === !!nqy) || !exitOK(ix, iy, mx, my)) continue;
+        cost = Math.min(cost, passesAt(cx_, cy_, mx, my, goal) ? 0 : 1 + f[bi(ix + mx, iy + my)]);
+      }
+      cost += 0.3;
+    }
+    q.score = -cost + Math.random() * 0.2;
   }
   const o = opts.reduce((b, q) => q.score > b.score ? q : b);
   p.last = [o.mx, o.my]; p.legs++;
@@ -1112,15 +1204,17 @@ const nearDog = () => task && task.kind === 'dog' && !task.dog.follow && Math.hy
 // ---- the elevated train: a steel deck on pillars over the whole length of H(., EL_ROW), which wraps round the world
 // east-west, so the line is a loop. Two tracks: westbound on the north half, eastbound on the south half.
 // Stations every 8 blocks, with narrow platforms over the sidewalks and stairs down to the street.
-const EL_Y = EL_ROW * 8, EL_BOT = 0.55, EL_TOP = 0.68; // deck spans y EL_Y..EL_Y+2, between these heights
-const EL_TRACK = [EL_Y + 0.6, EL_Y + 1.4]; // [westbound, eastbound]
-const EL_PLAT = [EL_Y + 0.15, EL_Y + 1.85]; // where you stand on each platform
-const onEl = (mx, my) => (my & (N - 1)) - EL_Y >>> 0 < 2; // a deck cell
+// The deck is 12m wide over the middle of the street (clear of the building faces either side) and high enough
+// that the street lamps fit under it: y EL_Y0..EL_Y1, z EL_BOT..EL_TOP.
+const EL_Y = EL_ROW * 8, EL_HALF = 0.6, EL_Y0 = EL_Y + 1 - EL_HALF, EL_Y1 = EL_Y + 1 + EL_HALF, EL_BOT = 1.15, EL_TOP = 1.27;
+const EL_TRACK = [EL_Y + 0.78, EL_Y + 1.22]; // [westbound, eastbound]
+const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platform, along the deck's edges
+const underEl = y => Math.abs(rel(y - (EL_Y + 1))) < EL_HALF; // under (or on) the deck
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
 const elStationAt = x => EL_STATIONS.find(s => mod(x - s.x0, N) < s.x1 - s.x0);
 // pillars at both curbs, clear of the cross streets
 const elPillars = [];
-for (let bx = 0; bx < NB; bx++) for (const s of [2.6, 4.6, 6.6]) for (const y of [EL_Y + 0.12, EL_Y + 1.88]) elPillars.push({ x: bx * 8 + s, y });
+for (let bx = 0; bx < NB; bx++) for (const s of [2.6, 4.6, 6.6]) for (const y of [EL_Y0 + 0.05, EL_Y1 - 0.05]) elPillars.push({ x: bx * 8 + s, y });
 const elPillarsB = bucketed(elPillars);
 
 // trains: each runs the loop stopping at every station. A hop is HOP_T seconds of travel (eased in and out),
@@ -1141,7 +1235,7 @@ const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, crowd, night, restaurant, bossa, coffee) and synthesised ones (rain, waves, wind,
+// Layers: recorded beds (city, crowd, night, restaurant, bossa, coffee, rain) and synthesised ones (waves, wind,
 // rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -1151,11 +1245,12 @@ const AUDIO_DISTRICT = {
   brownstones: { city: 0.5, crowd: 0.35, night: 1 }, waterfront: { city: 0.35, crowd: 0.5, night: 0.9 },
   sea: { city: 0.15, crowd: 0, night: 0.8 },
 };
-// which room plays what: [restaurant crowd, bossa nova, coffee jazz]
+// which room plays what: [restaurant crowd, bossa nova, coffee jazz]. Music only where a shop would have it on:
+// cafes and restaurants, bars, and the shops; not lobbies, the bank, the gym, the cinema or the subway
 const ROOM_AUDIO = {
-  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0.3], hotel: [0.2, 0.5, 0],
-  cinema: [0, 0, 0], laundry: [0, 0, 0.5], gym: [0.15, 0, 0.6], barber: [0.1, 0, 0.6], bank: [0.15, 0, 0.35],
-  petshop: [0, 0, 0.55], florist: [0, 0.35, 0.4], apts: [0, 0, 0], store: [0, 0, 0.5], station: [0.25, 0, 0], train: [0, 0, 0],
+  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0.3], store: [0, 0, 0.5],
+  laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
+  hotel: [0.2, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -1170,7 +1265,7 @@ function seaDist(x, y) {
 function audioMix(s) {
   const out = { city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
-    const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0.4];
+    const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
     out.restaurant = rest * (k === 'bar' || k === 'karaoke' ? s.barCrowd : 1);
     out.bossa = cafe ? 0.8 : bossa;
@@ -1462,9 +1557,9 @@ function floorCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
-  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), road = ROAD[idx(mx, my)], underEl = onEl(mx, my);
+  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), road = ROAD[idx(mx, my)], shade = underEl(wy);
   // under the el the street is in the deck's shadow, striped with light between the ties
-  const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (underEl ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
+  const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
@@ -1509,7 +1604,7 @@ function floorCell(i, r, x, rx, ry) {
     else if (Math.abs(e - 1) < 0.04 && fract(along * 2) < 0.5) { ch = '='; base = YEL; k = 1.5; }
   }
   let col = C(base, L * k);
-  BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (underEl ? 0.4 : 1));
+  BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
   if (!soft && wet > 0.05 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
@@ -1523,21 +1618,21 @@ function floorCell(i, r, x, rx, ry) {
 }
 
 // the el deck: its underside (girders and cross ties) seen from the street, and its top (two tracks, and the
-// platforms at stations) seen from up there
+// platforms at stations) seen from up there. ly = across the deck, 0..2*EL_HALF
 function slabFace(i, wx, wy, below, d) {
-  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = mod(wy, N) - EL_Y;
+  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = mod(wy, N) - EL_Y0, W = EL_HALF * 2;
   if (below) {
     BG[i] = C(GRAY, 1);
-    if (Math.abs(ly - 1) < 0.08 || ly < 0.08 || ly > 1.92) return set(i, '=', C(GRAY, L * 0.9)); // longitudinal girders
+    if (Math.abs(ly - W / 2) < 0.06 || ly < 0.07 || ly > W - 0.07) return set(i, '=', C(GRAY, L * 0.9)); // girders
     return set(i, fract(wx * 2) < 0.25 ? '#' : ' ', C(BRICK, L * 0.6)); // cross ties
   }
   BG[i] = bgAt(GRAY, day * 2);
-  if (elStationAt(wx) && (ly < 0.32 || ly > 1.68)) { // platforms, with a yellow edge
-    const edge = Math.abs(ly - 0.3) < 0.03 || Math.abs(ly - 1.7) < 0.03;
-    return set(i, ly < 0.06 || ly > 1.94 ? '|' : edge ? '=' : '.', edge ? C(YEL, L * 1.4) : C(GRAY, L));
+  if (elStationAt(wx) && (ly < 0.17 || ly > W - 0.17)) { // platforms, with a yellow edge
+    const edge = Math.abs(ly - 0.15) < 0.025 || Math.abs(ly - (W - 0.15)) < 0.025;
+    return set(i, ly < 0.03 || ly > W - 0.03 ? '|' : edge ? '=' : '.', edge ? C(YEL, L * 1.4) : C(GRAY, L));
   }
-  if (ly < 0.05 || ly > 1.95) return set(i, '|', C(GRAY, L * 1.2)); // edge rail
-  for (const t of EL_TRACK) if (Math.abs(Math.abs(ly - (t - EL_Y)) - 0.15) < 0.03) return set(i, '=', C(GRAY, L * 1.4)); // rails
+  if (ly < 0.04 || ly > W - 0.04) return set(i, '|', C(GRAY, L * 1.2)); // edge rail
+  for (const t of EL_TRACK) if (Math.abs(Math.abs(mod(wy, N) - t) - 0.1) < 0.025) return set(i, '=', C(GRAY, L * 1.4)); // rails
   set(i, fract(wx * 4) < 0.35 ? '-' : ' ', C(BRICK, L * 0.8)); // sleepers
 }
 // the deck's side, seen from the street: a riveted steel girder
@@ -1549,7 +1644,7 @@ function slabEdge(i, u, z, d, side) {
 }
 // standing under the el while a train goes over: the whole street shudders (a row up or down, now and then)
 function shake() {
-  if (mode === 'room' || mode === 'roof' || !onEl(Math.floor(px), Math.floor(py)) || mode === 'el' || mode === 'elplat') return 0;
+  if (mode === 'room' || mode === 'roof' || !underEl(py) || mode === 'el' || mode === 'elplat') return 0;
   if (!elTrains(T).some(t => !t.stopped && Math.abs(rel(t.x - px)) < 3.5)) return 0;
   return Math.random() < 0.6 ? 0 : Math.random() < 0.5 ? -1 : 1;
 }
@@ -1675,7 +1770,7 @@ function craneCell(i, u, z, du, dz, L, k, p) {
 }
 
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
-               slab: onEl, slabFace, slabEdge };
+               deck: true, slabFace, slabEdge };
 
 // ===== city sprites: everything drawn over the raycast scene, nearest-first order doesn't matter (drawArt depth-tests)
 // visit the props in the blocks within draw distance
@@ -2305,6 +2400,32 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
   }
 }
 
+// the el deck in one screen column, for the stretch of ray [t0, t1] that's inside it: its underside (from below) or
+// top (from above), and the girder along its side where the ray comes in. Only fills cells nothing nearer covered.
+function drawDeck(x, rx, ry, t0, t1) {
+  const below = eye < EL_BOT, above = eye > EL_TOP;
+  if (below || above) {
+    const k = (below ? EL_BOT - eye : eye - EL_TOP) * projY;
+    const r0 = below ? (t0 > 0 ? Math.ceil(hor - k / t0) : 0) : Math.ceil(hor + k / t1);
+    const r1 = below ? Math.ceil(hor - k / t1) : t0 > 0 ? Math.ceil(hor + k / t0) : rows;
+    for (let r = Math.max(0, r0); r < Math.min(rows, r1); r++) {
+      const i = r * cols + x;
+      if (ZB[i] >= 0) continue;
+      const dr = below ? k / (hor - r - 0.5) : k / (r - hor + 0.5);
+      CITY.slabFace(i, px + rx * dr, py + ry * dr, below, dr); ZB[i] = dr; FL[i] = 0;
+    }
+  }
+  if (t0 > 0) { // the side girder, where the ray meets the deck
+    const r0 = Math.max(0, Math.ceil(hor - (EL_TOP - eye) * projY / t0)), r1 = Math.min(rows, Math.ceil(hor - (EL_BOT - eye) * projY / t0));
+    const u = (ry > 0 ? -1 : 1) * (px + rx * t0);
+    for (let r = r0; r < r1; r++) {
+      const i = r * cols + x;
+      if (ZB[i] >= 0) continue;
+      CITY.slabEdge(i, u, eye + (hor - r - 0.5) * t0 / projY, t0, 1); ZB[i] = t0; FL[i] = 0;
+    }
+  }
+}
+
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
@@ -2318,9 +2439,17 @@ function render(dt) {
     const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
     for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; ZB[i] = -1; } // -1: nothing drawn here yet
     // DDA through the grid, front to back; `clip` = lowest row not yet covered
-    // overhead decks (the el) leave gaps in a column, so once one is drawn every later write checks ZB first
-    let mx = Math.floor(px), my = Math.floor(py), clip = rows, first = true, dPrev = 0, hCur = W.cell(mx, my);
-    let slabCur = W.slab && W.slab(mx, my), holes = false;
+    // The el deck is a box over the middle of its street (y in EL_Y0..EL_Y1, z in EL_BOT..EL_TOP), narrower than a cell
+    // pair, so it isn't part of the grid: work out where this ray is inside it ([te, tx]) and draw it when the DDA
+    // gets that far. It leaves gaps in the column, so once it's drawn every later write checks ZB first.
+    let mx = Math.floor(px), my = Math.floor(py), clip = rows, first = true, dPrev = 0, hCur = W.cell(mx, my), holes = false;
+    let te = Infinity, tx = -Infinity;
+    if (W.deck) {
+      const yc = py + rel(EL_Y + 1 - py), y0 = yc - EL_HALF, y1 = yc + EL_HALF;
+      if (Math.abs(ry) < 1e-9) { if (py > y0 && py < y1) { te = 0; tx = Infinity; } }
+      else { const a0 = (y0 - py) / ry, a1 = (y1 - py) / ry; tx = Math.max(a0, a1); te = tx > 0 ? Math.max(0, Math.min(a0, a1)) : Infinity; }
+    }
+    let deckDue = te < vis;
     BASE[x] = clamp(hor, 0, rows);
     const ddx = Math.abs(1 / rx), ddy = Math.abs(1 / ry), sx = rx < 0 ? -1 : 1, sy = ry < 0 ? -1 : 1;
     let sdx = (rx < 0 ? px - mx : mx + 1 - px) * ddx, sdy = (ry < 0 ? py - my : my + 1 - py) * ddy;
@@ -2337,32 +2466,10 @@ function render(dt) {
         }
         clip = Math.min(clip, rOut);
       }
-      // a deck over the cell we just crossed: its underside when we're below it, its top when we're above
-      if (slabCur) {
-        const below = eye < EL_BOT, k = (below ? EL_BOT - eye : eye - EL_TOP) * projY, dd = Math.min(d, vis);
-        const r0 = below ? Math.max(0, Math.ceil(hor - (dPrev > 0 ? k / dPrev : Infinity))) : Math.max(0, Math.ceil(hor + k / dd));
-        const r1 = below ? Math.min(rows, Math.ceil(hor - k / dd)) : Math.min(clip, dPrev > 0 ? Math.ceil(hor + k / dPrev) : rows);
-        for (let r = r0; r < r1; r++) {
-          const i = r * cols + x;
-          if (ZB[i] >= 0) continue;
-          const dr = below ? k / (hor - r - 0.5) : k / (r - hor + 0.5);
-          W.slabFace(i, px + rx * dr, py + ry * dr, below, dr); ZB[i] = dr; FL[i] = 0;
-        }
-        holes = true;
-      }
+      // everything nearer than the deck is drawn: now the deck, before anything behind it
+      if (deckDue && d > te) { drawDeck(x, rx, ry, te, Math.min(tx, vis)); deckDue = false; holes = true; }
       if (d > vis) break;
-      const h = W.cell(mx, my), slab = W.slab && W.slab(mx, my); hCur = h; dPrev = d;
-      if (slab && !slabCur && eye < EL_TOP + 1) { // the deck's edge, seen from outside
-        const t0 = Math.max(0, Math.ceil(hor - (EL_TOP - eye) * projY / d)), t1 = Math.min(rows, Math.ceil(hor - (EL_BOT - eye) * projY / d));
-        const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
-        for (let r = t0; r < t1; r++) {
-          const i = r * cols + x;
-          if (ZB[i] >= 0) continue;
-          W.slabEdge(i, u, eye + (hor - r - 0.5) * d / projY, d, side); ZB[i] = d; FL[i] = 0;
-        }
-        holes = true;
-      }
-      slabCur = slab;
+      const h = W.cell(mx, my); hCur = h; dPrev = d;
       if (!h) continue;
       if (first) { first = false; BASE[x] = Math.min(rows, Math.ceil(hor + eye * projY / d)); if (x === cols >> 1) lookHit = { d, mx, my }; }
       const top = Math.max(0, Math.ceil(hor - (h - eye) * projY / d));
@@ -2378,6 +2485,7 @@ function render(dt) {
       }
       clip = Math.min(clip, top);
     }
+    if (deckDue) { drawDeck(x, rx, ry, te, Math.min(tx, vis)); holes = true; } // nothing at all was in front of it
     // sky / floor only where no wall or roof landed: shading them first and painting over was most of the cell work
     for (let r = 0; r < rows; r++) { const i = r * cols + x; if (ZB[i] < 0) (r < hor ? W.sky : W.floor)(i, r, x, rx, ry); }
   }
@@ -2446,7 +2554,7 @@ function elFrame() {
 }
 const nearestCar = r => {
   let best = null, bd = r;
-  for (const c of cars) { if (c.player || c.rider) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) { if (c.player || c.rider || c.ev) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
   return best;
 };
 // someone right in front of you, close enough to talk to
@@ -2520,7 +2628,7 @@ function minimap() {
     const mx = ox + i, my = oy + j, k = idx(mx, my), h = map[k], road = ROAD[k];
     const kind = h || road ? '' : seaAt(mx + 0.5, my + 0.5) && !onPier(mx + 0.5, my + 0.5) ? 'sea' : blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8));
     g.fillStyle = h ? `rgb(${60 + Math.min(h, 12) * 12},${60 + Math.min(h, 12) * 12},${75 + Math.min(h, 12) * 12})`
-                : road ? (onEl(mx, my) ? '#3a2420' : '#16161c') : MAP_COL[kind] || '#3a3a40';
+                : road ? (underEl(my + 0.5) ? '#3a2420' : '#16161c') : MAP_COL[kind] || '#3a3a40';
     g.fillRect(x0 + fx + i * MAP_PX, y0 + fy + j * MAP_PX, MAP_PX, MAP_PX);
   }
   g.restore();
@@ -2585,7 +2693,7 @@ function toLane(c) { // snap a car onto the nearest lane in the direction it poi
 function leaveCar() {
   const c = me;
   [px, py] = curbOf(c);
-  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); a += Math.PI / 2; }
+  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; a += Math.PI / 2; }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
@@ -2730,13 +2838,14 @@ function hail() {
 // so nothing is decoded whole into memory and the loop never clicks. A bed that has been silent for a few seconds
 // pauses where it is and picks up from there when it's needed again.
 const AUDIO_DIR = 'audio/ascii-city/';
-const BED_FILES = { city: 'city-day.mp3', crowd: 'crowd.mp3', night: 'night.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3' };
+const BED_FILES = { city: 'city-day.mp3', crowd: 'crowd.mp3', night: 'night.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
+                    rain: 'rain.mp3' };
 // overall level of each layer at full mix (the night recording is quieter than the rest, hence its boost)
 const LEVEL = { city: 0.5, crowd: 0.35, night: 0.8, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
-                rain: 0.45, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
+                rain: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { rain: 0.19, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
-const XF = 4, GLIDE = 0.45; // loop crossfade seconds; time constant of every level change
+const CAL = { waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null;
 const beds = {}, synth = {};
 
@@ -2747,7 +2856,7 @@ function audioStart() {
   actx = new AC();
   const comp = actx.createDynamicsCompressor(); // glues the layers together and stops stacked one-shots clipping
   comp.threshold.value = -18; comp.ratio.value = 3;
-  master = actx.createGain(); master.gain.value = soundOn ? 0.9 : 0;
+  master = actx.createGain(); master.gain.value = soundOn ? MASTER : 0;
   master.connect(comp); comp.connect(actx.destination);
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
@@ -2757,7 +2866,7 @@ function audioStart() {
 }
 function toggleSound() {
   soundOn = !soundOn;
-  if (master) master.gain.setTargetAtTime(soundOn ? 0.9 : 0, actx.currentTime, 0.15);
+  if (master) master.gain.setTargetAtTime(soundOn ? MASTER : 0, actx.currentTime, 0.15);
   say(soundOn ? 'Sound on' : 'Sound off', 1.5);
 }
 
@@ -2805,8 +2914,6 @@ const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k
 function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
 function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(master); return g; }
 function makeSynths() {
-  // rain: hiss
-  synth.rain = layer(); chain(noiseSrc(), filt('highpass', 500), filt('lowpass', 7000), synth.rain);
   // waves: low surf that swells and draws back
   synth.waves = layer(); const swell = actx.createGain(); swell.gain.value = 0.55; lfo(swell.gain, 0.08, 0.45);
   chain(noiseSrc(0.7), filt('lowpass', 550), swell, synth.waves);
@@ -2828,7 +2935,7 @@ function makeSynths() {
 function burst(at, len, filters, gain, pan = 0) {
   const s = actx.createBufferSource(); s.buffer = noiseBuf;
   const g = actx.createGain(), p = actx.createStereoPanner(); p.pan.value = pan;
-  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.008); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
   chain(s, ...filters, g, p, master); s.start(at, Math.random() * 1.5, len + 0.05);
 }
 function tone(at, freq, len, gain, type = 'sine', pan = 0) {
@@ -2837,18 +2944,20 @@ function tone(at, freq, len, gain, type = 'sine', pan = 0) {
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
   chain(o, g, p, master); o.start(at); o.stop(at + len + 0.05);
 }
-// footsteps per surface: [filter type, freq, Q, tail, level, thump Hz (0 = none)]
-const STEP = { stone: ['bandpass', 1800, 0.8, 0.06, 0.5, 85], grass: ['lowpass', 900, 0.5, 0.12, 0.35, 0], wood: ['bandpass', 650, 2, 0.08, 0.55, 150],
-               metal: ['bandpass', 2600, 5, 0.16, 0.4, 0], gravel: ['bandpass', 3200, 0.5, 0.11, 0.45, 0], sand: ['lowpass', 1400, 0.5, 0.12, 0.3, 0],
-               tile: ['bandpass', 2400, 1.2, 0.05, 0.45, 110], carpet: ['lowpass', 600, 0.5, 0.07, 0.3, 0] };
+// footsteps per surface: mostly a soft heel thud with a little scuff on top, nothing bright.
+// [scuff filter, freq, Q, tail seconds, level, thud Hz (0 = none)]
+const STEP = { stone: ['lowpass', 1000, 0.7, 0.07, 0.6, 72], grass: ['lowpass', 550, 0.5, 0.1, 0.45, 0], wood: ['bandpass', 420, 1.4, 0.09, 0.6, 115],
+               metal: ['bandpass', 1300, 2.5, 0.12, 0.4, 90], gravel: ['bandpass', 1500, 0.6, 0.09, 0.5, 0], sand: ['lowpass', 650, 0.5, 0.1, 0.35, 0],
+               tile: ['bandpass', 1300, 1, 0.05, 0.5, 95], carpet: ['lowpass', 380, 0.5, 0.06, 0.35, 0] };
 let stepSide = 1;
 function sfxStep(surface, run) {
-  const [type, f, q, tail, lvl, thump] = STEP[surface] || STEP.stone, at = actx.currentTime, g = lvl * (run ? 0.3 : 0.2) * (0.8 + Math.random() * 0.4);
+  const [type, f, q, tail, lvl, thump] = STEP[surface] || STEP.stone, at = actx.currentTime + Math.random() * 0.01;
+  const g = lvl * (run ? 0.11 : 0.075) * (0.8 + Math.random() * 0.4);
   stepSide = -stepSide;
-  burst(at, tail, [filt(type, f * (0.85 + Math.random() * 0.3), q)], g, stepSide * 0.15);
-  if (surface === 'gravel') burst(at + 0.03, tail, [filt(type, f * 0.8, q)], g * 0.6, stepSide * 0.15); // crunch
-  if (thump) tone(at, thump * (0.9 + Math.random() * 0.2), 0.05, g * 0.8);
-  if (surface === 'metal') tone(at, 900 + Math.random() * 300, 0.12, g * 0.15, 'triangle');
+  burst(at, tail, [filt(type, f * (0.85 + Math.random() * 0.3), q), filt('lowpass', 2500)], g * 0.6, stepSide * 0.12);
+  if (surface === 'gravel') burst(at + 0.035, tail, [filt(type, f * 0.8, q), filt('lowpass', 2500)], g * 0.35, stepSide * 0.12); // crunch
+  if (thump) tone(at, thump * (0.9 + Math.random() * 0.2), 0.07, g * 1.2);
+  if (surface === 'metal') tone(at, 600 + Math.random() * 150, 0.1, g * 0.12, 'sine');
 }
 function sfxTill() { // cha-ching: the drawer, then the bell
   const at = actx.currentTime;
@@ -2863,19 +2972,20 @@ const SIREN = { amb: { type: 'square', f: t => 700 + 520 * (0.5 - 0.5 * Math.cos
                 police: { type: 'sawtooth', f: t => 720 + 650 * fract(t * 2.8) },
                 fire: { type: 'square', f: t => 480 + 420 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 4.5)) } };
 const sirens = new Map(); // car -> voice
+const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 50) {
+  for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
     o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, master); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
     const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
-    if (!cars.includes(c) || d > 55) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
+    if (!cars.includes(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
-    v.g.gain.setTargetAtTime(0.16 / (1 + (d / 5) ** 1.4) * (indoors ? 0.12 : 1), now, 0.1);
+    v.g.gain.setTargetAtTime(0.16 * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
     v.lp.frequency.setTargetAtTime(indoors ? 700 : 2600 / (1 + d / 30), now, 0.2);
     v.p.pan.setTargetAtTime(clamp((rx * right[0] + ry * right[1]) / d, -1, 1) * 0.8, now, 0.1);
   }
@@ -2960,6 +3070,7 @@ function drive(dt) {
            || people.some(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
   if (hit) { if (Math.abs(c.v) > 0.8) say('*CRUNCH*', 1); c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
   c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
+  c.off = 0; c.ex = c.x; c.ey = c.y; // where it's drawn and where traffic sees it: right here
 }
 
 let t0 = performance.now();

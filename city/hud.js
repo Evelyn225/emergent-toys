@@ -28,7 +28,7 @@ function elFrame() {
 }
 const nearestCar = r => {
   let best = null, bd = r;
-  for (const c of cars) { if (c.player || c.rider) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) { if (c.player || c.rider || c.ev) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
   return best;
 };
 // someone right in front of you, close enough to talk to
@@ -102,7 +102,7 @@ function minimap() {
     const mx = ox + i, my = oy + j, k = idx(mx, my), h = map[k], road = ROAD[k];
     const kind = h || road ? '' : seaAt(mx + 0.5, my + 0.5) && !onPier(mx + 0.5, my + 0.5) ? 'sea' : blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8));
     g.fillStyle = h ? `rgb(${60 + Math.min(h, 12) * 12},${60 + Math.min(h, 12) * 12},${75 + Math.min(h, 12) * 12})`
-                : road ? (onEl(mx, my) ? '#3a2420' : '#16161c') : MAP_COL[kind] || '#3a3a40';
+                : road ? (underEl(my + 0.5) ? '#3a2420' : '#16161c') : MAP_COL[kind] || '#3a3a40';
     g.fillRect(x0 + fx + i * MAP_PX, y0 + fy + j * MAP_PX, MAP_PX, MAP_PX);
   }
   g.restore();

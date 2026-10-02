@@ -54,17 +54,32 @@ const relB = v => mod(v + NB / 2, NB) - NB / 2; // nearest copy, in blocks
 const bi = (bx, by) => (by & (NB - 1)) * NB + (bx & (NB - 1));
 const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
 
-// districts: nearest hand-placed seed (wrapping east-west), with wobbly borders
+// districts: small neighbourhoods (~5 blocks across, a few minutes' walk) from a jittered grid of seeds, nearest seed
+// wins (wrapping east-west), with wobbly borders. Downtown sits round the middle of town, industry along the shores,
+// the rest a mix.
 const DISTRICTS = ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones'];
-const DIST_SEEDS = [[16, 13, 'downtown'], [8, 11, 'midtown'], [25, 16, 'midtown'], [21, 6, 'chinatown'], [4, 21, 'industrial'],
-                    [29, 22, 'industrial'], [7, 4, 'brownstones'], [13, 21, 'brownstones'], [30, 6, 'brownstones']];
+const DIST_SEEDS = [];
+for (let j = 0; j < 5; j++) for (let i = 0; i < 6; i++)
+  DIST_SEEDS.push([(i + 0.2 + hash(i, j, 61) * 0.6) * NB / 6, SHORE_N + 1 + (j + 0.2 + hash(i, j, 62) * 0.6) * (SHORE_S - SHORE_N - 1) / 5, '']);
+// a neighbourhood is never the same kind as one next door, so walking a few blocks always takes you somewhere new
+for (const seed of DIST_SEEDS) {
+  const [sx, sy] = seed, r = hash(sx * 7 | 0, sy * 7 | 0, 63);
+  const centre = Math.hypot(relB(sx - NB / 2), sy - (SHORE_S + SHORE_N) / 2), shore = sy < SHORE_N + 4 || sy > SHORE_S - 4;
+  if (centre < 4.5) { seed[2] = 'downtown'; continue; }
+  const next = DIST_SEEDS.filter(o => o !== seed && o[2] && Math.hypot(relB(o[0] - sx), o[1] - sy) < 7.5).map(o => o[2]);
+  const weights = { midtown: 3, brownstones: 3, industrial: shore ? 5 : 0.7, chinatown: DIST_SEEDS.filter(o => o[2] === 'chinatown').length < 2 ? 2 : 0 };
+  const opts = Object.keys(weights).filter(t => weights[t] && !next.includes(t)), pool = opts.length ? opts : Object.keys(weights).filter(t => weights[t]);
+  let x = r * pool.reduce((t, k) => t + weights[k], 0), k = 0;
+  while ((x -= weights[pool[k]]) > 0) k++;
+  seed[2] = pool[k];
+}
 const DIST = new Array(NB * NB);
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (by === SHORE_N || by === SHORE_S) { DIST[bi(bx, by)] = 'waterfront'; continue; }
   if (by > SHORE_S) { DIST[bi(bx, by)] = 'sea'; continue; }
   let best = '', bd = Infinity;
   for (const [sx, sy, d] of DIST_SEEDS) {
-    const dd = Math.hypot(relB(bx - sx), by - sy) + noise(bx * 0.6, by * 0.6, 77) * 3;
+    const dd = Math.hypot(relB(bx - sx), by - sy) + noise(bx * 0.9, by * 0.9, 77) * 1.6;
     if (dd < bd) { bd = dd; best = d; }
   }
   DIST[bi(bx, by)] = best;
@@ -79,10 +94,10 @@ const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const d = DIST[bi(bx, by)], h = hash(bx, by, 7);
   KIND[bi(bx, by)] = d === 'waterfront' ? 'waterfront' : d === 'sea' ? 'sea'
-    : d === 'industrial' ? (h < 0.14 ? 'yard' : h < 0.17 ? 'construction' : '')
-    : d === 'brownstones' ? (h < 0.05 ? 'park' : '')
-    : d === 'chinatown' ? (h < 0.06 ? 'plaza' : '')
-    : (h < 0.02 ? 'park' : h < 0.055 ? 'landmark' : h < 0.08 ? 'construction' : h < 0.11 ? 'plaza' : '');
+    : d === 'industrial' ? (h < 0.14 ? 'yard' : h < 0.19 ? 'construction' : '')
+    : d === 'brownstones' ? (h < 0.07 ? 'park' : h < 0.1 ? 'plaza' : '')
+    : d === 'chinatown' ? (h < 0.08 ? 'plaza' : h < 0.1 ? 'park' : '')
+    : (h < 0.03 ? 'park' : h < 0.07 ? 'landmark' : h < 0.1 ? 'construction' : h < 0.14 ? 'plaza' : '');
 }
 for (const [x0, y0, x1, y1, k] of SUPER) for (let by = y0; by <= y1; by++) for (let bx = x0; bx <= x1; bx++) KIND[bi(bx, by)] = k;
 const blockKind = (bx, by) => KIND[bi(bx, by)];
@@ -104,9 +119,42 @@ const hseg = (bx, by) => HSEG[bi(bx, by)], vseg = (bx, by) => VSEG[bi(bx, by)];
 const exitOK = (bx, by, dx, dy) => dx > 0 ? hseg(bx, by) : dx < 0 ? hseg(bx - 1, by) : dy > 0 ? vseg(bx, by) : vseg(bx, by - 1);
 const degree = (bx, by) => hseg(bx, by) + hseg(bx - 1, by) + vseg(bx, by) + vseg(bx, by - 1);
 const onBridge = (bx, by) => BRIDGE_X.includes(bx & (NB - 1)) && (by & (NB - 1)) >= SHORE_S;
-function streetProblems() { // for the tests: every intersection has no streets or at least two
+// A city that grew rather than one laid out with a ruler: the avenues (every 6th street each way, the shore roads,
+// the el street, the bridges) run straight through, but side streets come and go. The old districts have the
+// staggered T-junctions of streets that never lined up; industry swallows streets into yards; midtown loses the odd
+// one; downtown is mostly planned. A street only goes if no intersection is left a dead end and every street can
+// still reach every other.
+const AVENUE_V = bx => bx % 6 === 0 || BRIDGE_X.includes(bx), AVENUE_H = by => by % 6 === 4 || by === EL_ROW || by === SHORE_N + 1 || by === SHORE_S;
+const LOSE = { brownstones: 0.12, chinatown: 0.15, industrial: 0.3, midtown: 0.1, downtown: 0.03 }; // chance a side street goes
+const STAGGER = { brownstones: 0.8, chinatown: 0.8 };                                              // and of the old-town stagger
+function connected() { // can every intersection with streets reach every other?
+  const seen = new Uint8Array(NB * NB), stack = [];
+  let total = 0, start = -1;
+  for (let k = 0; k < NB * NB; k++) if (degree(k % NB, k / NB | 0)) { total++; if (start < 0) start = k; }
+  stack.push(start); seen[start] = 1; let n = 1;
+  while (stack.length) {
+    const k = stack.pop(), bx = k % NB, by = k / NB | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (exitOK(bx, by, dx, dy)) {
+      const m = bi(bx + dx, by + dy); if (!seen[m]) { seen[m] = 1; n++; stack.push(m); }
+    }
+  }
+  return n === total;
+}
+const removed = []; // [bx, by, 'h' | 'v'] streets that went (they become lanes, see below)
+for (let by = SHORE_N + 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++) for (const o of ['v', 'h']) {
+  const k = bi(bx, by), arr = o === 'v' ? VSEG : HSEG;
+  if (!arr[k] || (o === 'v' ? AVENUE_V(bx) : AVENUE_H(by))) continue;
+  const d = DIST[k], stagger = o === 'v' && ((bx + by) & 1) && hash(bx, by, 64) < (STAGGER[d] || 0);
+  if (!stagger && hash(bx, by, o === 'v' ? 65 : 66) >= (LOSE[d] || 0)) continue;
+  arr[k] = 0;
+  const ends = o === 'v' ? [[bx, by], [bx, by + 1]] : [[bx, by], [bx + 1, by]];
+  if (ends.some(([x, y]) => degree(x, y) === 1) || !connected()) arr[k] = 1; else removed.push([bx, by, o]);
+}
+
+function streetProblems() { // for the tests: every intersection has no streets or at least two, all connected
   const bad = [];
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) if (degree(bx, by) === 1) bad.push([bx, by]);
+  if (!connected()) bad.push('disconnected');
   return bad;
 }
 
@@ -176,6 +224,20 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     SEED[i] = hash(k, 5, 3);
     SHOP[i] = lotShop[li] || (lotShop[li] = shopOf(SEED[i], dist));
   }
+}
+
+// A street that went between two built-up blocks doesn't leave a 20m gap: the buildings on one side grow into half
+// of it, leaving a 10m lane between them (walkable, unlit, no traffic).
+function copyCell(from, to) { map[to] = map[from]; STY[to] = STY[from]; SEED[to] = SEED[from]; SHOP[to] = SHOP[from]; }
+for (const [bx, by, o] of removed) {
+  if (o === 'v' && !blockKind(bx - 1, by) && !blockKind(bx, by))
+    for (let y = by * 8 + 2; y < by * 8 + 8; y++) { const from = idx(bx * 8 - 1, y); if (map[from]) copyCell(from, idx(bx * 8, y)); }
+  if (o === 'h' && !blockKind(bx, by - 1) && !blockKind(bx, by))
+    for (let x = bx * 8 + 2; x < bx * 8 + 8; x++) { const from = idx(x, by * 8 - 1); if (map[from]) copyCell(from, idx(x, by * 8)); }
+}
+for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { // a crossing nothing uses any more: its corner fills in too
+  const from = idx(bx * 8 - 1, by * 8 - 1);
+  if (!degree(bx, by) && map[from] && !blockKind(bx - 1, by - 1) && map[idx(bx * 8, by * 8 + 2)] !== undefined) copyCell(from, idx(bx * 8, by * 8));
 }
 
 // ---- street names, for talk, directions and the HUD

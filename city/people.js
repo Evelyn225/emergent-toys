@@ -97,6 +97,30 @@ function snapToCorner(p) {
 }
 for (let n = 0; n < 1100; n++) spawnPerson();
 
+// how far along the stretch from corner (x, y) heading (mx, my) a door is, if it's on that stretch (0 if not)
+function passesAt(x, y, mx, my, d) {
+  const along = rel(d.x - x) * mx + rel(d.y - y) * my, across = rel(d.x - x) * my - rel(d.y - y) * mx;
+  return along > 0 && along < 6.24 && Math.abs(across) < 0.02 ? along : 0;
+}
+// shortest number of street stretches from every intersection to either end of a door's stretch, by breadth-first
+// search over the street network; worked out the first time someone heads for that door, then kept
+const routeCache = new Map();
+function routeTo(d) {
+  let f = routeCache.get(d);
+  if (f) return f;
+  f = new Int16Array(NB * NB).fill(9999);
+  const bx = Math.floor(mod(d.x, N) / 8), by = Math.floor(mod(d.y, N) / 8);
+  const queue = d.ny ? [bi(bx, by), bi(bx + 1, by)] : [bi(bx, by), bi(bx, by + 1)]; // its stretch's two intersections
+  for (const k of queue) f[k] = 0;
+  for (let h = 0; h < queue.length; h++) {
+    const k = queue[h], x = k % NB, y = k / NB | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (exitOK(x, y, dx, dy)) {
+      const m = bi(x + dx, y + dy); if (f[m] > f[k] + 1) { f[m] = f[k] + 1; queue.push(m); }
+    }
+  }
+  routeCache.set(d, f);
+  return f;
+}
 // corner (qx, qy in {0, 1}: west/east, north/south) of intersection (ix, iy) is sidewalk if a street runs past it
 const cornerOK = (ix, iy, qx, qy) => !!(hseg(qx ? ix : ix - 1, iy) || vseg(ix, qy ? iy : iy - 1));
 
@@ -115,18 +139,24 @@ function planPerson(p, t) {
     opts.push({ mx, my, road });
   }
   if (!opts.length) { p.last = [-p.last[0], -p.last[1]]; return; } // turn back (only at the odd awkward corner)
-  // how far along an option's stretch a door is, if it's on it
-  const passes = (o, d) => {
-    if (!o.along) return 0;
-    const along = rel(d.x - p.x) * o.mx + rel(d.y - p.y) * o.my, across = rel(d.x - p.x) * o.my - rel(d.y - p.y) * o.mx;
-    return along > 0 && along < 6.24 && Math.abs(across) < 0.02 ? along : 0;
-  };
-  // head for the goal: the stretch past its door if there is one, else whatever gets closest, plus a bit of randomness
-  const goal = p.goal;
+  const passes = (o, d) => o.along ? passesAt(p.x, p.y, o.mx, o.my, d) : 0;
+  // Head for the goal along the shortest route through the streets (routeTo): the stretch past its door if we're on
+  // it; else the stretch toward the nearest end of the door's; else cross to the corner that has that stretch.
+  const goal = p.goal, f = goal && routeTo(goal);
   for (const q of opts) {
-    const d = q.along ? 6.24 : 1.76;
-    q.score = !goal ? Math.random() * 3 + (q.along ? 0.5 : 0) : passes(q, goal) ? 1e9
-            : -Math.hypot(rel(goal.x - (p.x + q.mx * d)), rel(goal.y - (p.y + q.my * d))) + Math.random() * 2.5;
+    if (!goal) { q.score = Math.random() * 3 + (q.along ? 0.5 : 0); continue; }
+    let cost;
+    if (q.along) cost = passes(q, goal) ? -1 : 1 + f[bi(ix + q.mx, iy + q.my)];
+    else { // a crossing is worth whatever the best stretch from the corner it takes us to is worth
+      const nqx = q.mx ? 1 - qx : qx, nqy = q.my ? 1 - qy : qy, cx_ = bx + (nqx ? 1.88 : 0.12), cy_ = by + (nqy ? 1.88 : 0.12);
+      cost = 9999;
+      for (const [mx, my] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!(mx ? (mx > 0) === !!nqx : (my > 0) === !!nqy) || !exitOK(ix, iy, mx, my)) continue;
+        cost = Math.min(cost, passesAt(cx_, cy_, mx, my, goal) ? 0 : 1 + f[bi(ix + mx, iy + my)]);
+      }
+      cost += 0.3;
+    }
+    q.score = -cost + Math.random() * 0.2;
   }
   const o = opts.reduce((b, q) => q.score > b.score ? q : b);
   p.last = [o.mx, o.my]; p.legs++;

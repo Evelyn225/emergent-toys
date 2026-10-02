@@ -44,6 +44,7 @@ function drive(dt) {
            || people.some(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
   if (hit) { if (Math.abs(c.v) > 0.8) say('*CRUNCH*', 1); c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
   c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
+  c.off = 0; c.ex = c.x; c.ey = c.y; // where it's drawn and where traffic sees it: right here
 }
 
 let t0 = performance.now();
