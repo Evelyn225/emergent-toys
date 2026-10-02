@@ -144,6 +144,16 @@ function sfxTill() { // cha-ching: the drawer, then the bell
   tone(at + 0.08, 2093, 0.7, 0.12); tone(at + 0.08, 2637, 0.7, 0.1); tone(at + 0.11, 3136, 0.5, 0.06);
 }
 function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); tone(at + 0.07, 4150, 0.18, 0.06); }
+// short recorded one-shots (eating, drinking): fetched and decoded once, played through the effects bus
+const CLIPS = {};
+function playClip(name, gain) {
+  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
+  CLIPS[name].then(buf => {
+    if (!buf) return;
+    const s = actx.createBufferSource(), g_ = actx.createGain();
+    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; chain(s, g_, sfxBus); s.start();
+  });
+}
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
 
 // ---- sirens: one voice per emergency vehicle in earshot, with its own pattern, Doppler and panning

@@ -23,7 +23,21 @@ const ITEMS = {
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
+  // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
+  yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
+  duck: { name: 'rubber duck', price: 3, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
 };
+// the arcade's prize counter: what tickets buy
+let tickets = 0;
+const PRIZES = [['candy', 8], ['duck', 20], ['yoyo', 30], ['sparklers', 35], ['harmonica', 60], ['ball', 90], ['skateboard', 300]];
+function claimPrize(id) {
+  const p = PRIZES.find(q => q[0] === id);
+  if (!p) return [false, 'Not a prize.'];
+  if (tickets < p[1]) return [false, `That's ${p[1]} tickets. You have ${tickets}.`];
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  tickets -= p[1]; inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+  return [true, `You trade ${p[1]} tickets for ${aOrSome(ITEMS[id].name)}.`];
+}
 // what each kind of place sells: by shop word first, then by room kind
 const STOCK_WORD = {
   '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
@@ -48,7 +62,7 @@ const VENDOR_STOCK = { 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 
 const INV_SIZE = 8;
 const inv = []; // { id, uses }
 let held = 0; // which slot is in your hand
-const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false };
+const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, yoyo: 0, spark: 0 };
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
@@ -130,6 +144,20 @@ function useHeld(near) {
     case 'book': return [pick(BOOK_LINES), 'page'];
     case 'newspaper': return [`Headline: ${pick(near.headlines)}`, 'page'];
     case 'vinyl': return ['You admire the sleeve. Shame you don\'t have a record player.', null];
+    case 'yoyo': fx.yoyo = 1.4; return [pick(['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.']), 'whirr'];
+    case 'harmonica':
+      if (near.person) { // a little busking: they stop to listen, and might drop you something
+        near.person.talk = 4;
+        if (Math.random() < 0.5) { const c = Math.round((0.25 + Math.random() * 1.5) * 4) / 4; earn(c); return [`You play the blues. They listen, and drop you ${fmt$(c)}.`, 'harmonica']; }
+        return ['You play the blues. They listen, nod, and move on.', 'harmonica'];
+      }
+      return ['You play a few bars of the blues.', 'harmonica'];
+    case 'duck': return [near.water ? 'You float the duck on the water a while, then fish it back out.' : 'Squeak.', 'squeak'];
+    case 'sparklers':
+      if (fx.spark > 0) return ['It\'s still fizzing.', null];
+      it.uses--; fx.spark = 25;
+      if (it.uses <= 0) removeHeld();
+      return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
     case 'flowers':
       if (near.person) { removeHeld(); near.person.talk = 4; return [`"For me? Oh!" ${pick(['They light up.', 'They blush.', 'They smell them and grin.'])}`, 'chime']; }
       return ['You sniff the flowers. Lovely.', null];
@@ -140,6 +168,7 @@ function dropHeld() { const it = heldItem(); if (!it) return null; removeHeld();
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
+  fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
   return stepBall(dt);
 }

@@ -11,6 +11,7 @@ function toLane(c) { // snap a car onto the nearest lane in the direction it poi
 }
 function leaveCar() {
   const c = me;
+  endTaxiShift();
   [px, py] = curbOf(c);
   if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; a += Math.PI / 2; }
   else { // settle up: all of it if you can, everything you've got if you can't
@@ -92,6 +93,11 @@ function interact() {
       const from = room.st;
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
+    if (room.kind === 'arcade') {
+      const cab = nearCabinet();
+      if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
+      if (nearKeeper()) return openPrizes();
+    }
     if (room.kind === 'storage' && nearKeeper()) return openStorage();
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
@@ -103,6 +109,8 @@ function interact() {
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
+  const vm = nearMachine(); // before the cars: you're looking right at it
+  if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -123,8 +131,6 @@ function interact() {
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const ven = nearVendor();
   if (ven) return openShop(ven.type.name, VENDOR_STOCK[ven.type.name], ven);
-  const vm = nearMachine();
-  if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
@@ -173,7 +179,7 @@ function arriveAt(n) { // off the train onto the destination platform; the train
 }
 function hail() {
   if (mode !== 'walk') return;
-  let best = null, bd = 5;
+  let best = null, bd = 3;
   for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }

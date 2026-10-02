@@ -20,6 +20,10 @@ const HAND = {
   bagel: [['  .---.', ' ( (_) )', "  '---'"], (c, r) => C(WARM, 12)],
   sandwich: [[' _________', '/%%%%%%%%%\\', '|=========|', '\\_________/'], (c, r) => r === 1 ? C(GREEN, 12) : r === 2 ? C(RED, 12) : C(WARM, 12)],
   candy: [['  ______', ' (CANDY )', "  '----'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(MAG, 12)],
+  yoyo: [[' | ', ' | ', '(@)'], (c, r) => r < 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
+  harmonica: [[' ________', '[::::::::]', " '------'"], (c, r) => c === ':' ? C(GRAY, 6) : C(GRAY, 13)],
+  duck: [['   __', ' <(o )___', '  ( ._> /', "   `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : C(YEL, 15)],
+  sparklers: [['|', '|', '|', '|'], (c, r) => C(GRAY, 11)],
   chips: [[' .------.', ' | CHIPS|', ' |  ()  |', " '------'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(YEL, 13)],
   apple: [['   ,', ' .-|-.', '(     )', " '---'"], (c, r) => r === 0 || c === '|' ? C(GREEN, 12) : C(RED, 13)],
   slice: [['\\%%%%%%/', ' \\%o%%/', '  \\%%/', '   \\/'], (c, r) => c === 'o' ? C(RED, 13) : C(YEL, 13)],
@@ -71,39 +75,32 @@ function bigArt(lines, x, y, size, colFn, bgFn) {
   });
   return w;
 }
-// the hand: drawn as shapes, not characters (ASCII can't make a convincing hand at this size). Four fingers curled
-// across the front of whatever it holds, the thumb hooked over the top, palm and wrist running down off the screen.
-// u = the size unit (px); (x, y) = the top-left of the fingers.
-const SKIN_RGB = ['#d9a27a', '#b9805d', '#7a4c35', 'rgba(255,235,210,0.35)']; // base, shade, outline, highlight
-function capsule(x, y, w, h, fill, line) {
-  const r = Math.min(w, h) / 2;
-  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
-  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
-  g.fillStyle = fill; g.fill(); g.strokeStyle = line; g.lineWidth = Math.max(1.5, h * 0.07); g.stroke();
-}
-function drawHand(x, y, u) {
-  const [base, shade, line, hi] = SKIN_RGB;
-  g.beginPath(); // wrist and forearm, angling down off the bottom of the screen
-  g.moveTo(x + 0.6 * u, y + 2.5 * u); g.lineTo(x + 5.6 * u, y + 2.2 * u); g.lineTo(x + 6.8 * u, cv.height + u); g.lineTo(x + 0.4 * u, cv.height + u); g.closePath();
-  g.fillStyle = shade; g.fill(); g.strokeStyle = line; g.lineWidth = Math.max(1.5, u * 0.07); g.stroke();
-  capsule(x - 0.2 * u, y + 0.2 * u, 6.2 * u, 3.4 * u, base, line); // the back of the hand / palm
-  for (let k = 0; k < 4; k++) { // fingers, curled round the front: each a little shorter and set back
-    const fy = y + k * 0.82 * u, fx = x + 0.15 * u + k * 0.12 * u, fw = 5.3 * u - k * 0.35 * u;
-    capsule(fx, fy, fw, 0.95 * u, base, line);
-    g.strokeStyle = hi; g.lineWidth = Math.max(1, u * 0.08); g.beginPath(); g.moveTo(fx + 0.45 * u, fy + 0.22 * u); g.lineTo(fx + fw - 0.6 * u, fy + 0.22 * u); g.stroke(); // light on the top edge
-    g.strokeStyle = shade; g.beginPath(); g.moveTo(fx + fw * 0.62, fy + 0.15 * u); g.lineTo(fx + fw * 0.62, fy + 0.8 * u); g.stroke(); // the knuckle crease
-  }
-  g.save(); g.translate(x + 0.1 * u, y + 0.5 * u); g.rotate(-0.55); // the thumb, hooked over the top
-  capsule(-0.4 * u, -0.5 * u, 3.0 * u, 1.05 * u, base, line);
-  g.strokeStyle = shade; g.beginPath(); g.moveTo(2.0 * u, -0.35 * u); g.lineTo(2.0 * u, 0.4 * u); g.stroke(); // its nail
-  g.restore();
+// the hand, in ASCII at the held item's size: four fingers curled round the front of whatever it holds (stacked
+// bands, a knuckle crease in each), the thumb hooked over the top on the left, the wrist running off the screen.
+// Solid skin behind every row so nothing shows through; outlines and creases a darker brown.
+let HAND_ART = [
+  '  _',
+  ' / )-----.',
+  '( (__:___ )',
+  ' (___:___ )',
+  ' (___:___ )',
+  '  (__:__ /',
+  '   |     |',
+  '   |     |',
+  '   |     |'];
+const HAND_EDGE = new Set(['(', ')', '/', '\\', '|', '_', '-', '.', ':']);
+function drawHand(cx, top, size) {
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width, artW = Math.max(...HAND_ART.map(l => l.length));
+  bigArt(HAND_ART, cx - artW * w / 2, top, size, (c, r) => HAND_EDGE.has(c) ? C(BRICK, c === ':' ? 6 : 8) : C(SKIN, 12),
+         (c, r) => r === 0 ? NONE : C(SKIN, r > 5 ? 6 : 8));
 }
 function drawHeldBig() {
   const it = heldItem();
   if (!it || !(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), size = Math.round(u * 1.5); // scaled to the screen, not the detail setting
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const hx = Math.round(cv.width * 0.7), hy = cv.height - 4.2 * u + bob; // the top of the fingers
+  const hx = Math.round(cv.width * 0.7), hy = Math.round(cv.height - 5.4 * size + bob); // the top of the hand (its thumb)
   const open = it.id === 'umbrella' && rain > 0.2;
   g.font = size + 'px monospace';
   const w = g.measureText('M').width;
@@ -146,12 +143,37 @@ function drawHeldBig() {
     g.fillStyle = PAL[C(GRAY, 12)]; g.fillRect(-1.15 * u, -5.6 * u, 2.3 * u, 0.4 * u); // the strap
     g.lineCap = 'butt'; g.restore();
   } else {
-    const [art, col] = HAND[it.id] || HAND.book, artW = Math.max(...art.map(l => l.length));
+    const [art, col] = HAND[it.id] || HAND.book, artW = Math.max(...art.map(l => l.length)), top = hy - (art.length - 1.6) * size;
     // centred over the fingers, the bottom of it tucked behind them
-    bigArt(art, hx + 2.6 * u - artW * w / 2, hy - (art.length - 0.7) * size, size, col, () => C(GRAY, 1));
+    if (!(it.id === 'yoyo' && fx.yoyo > 0)) bigArt(art, hx + 2.6 * u - artW * w / 2, top, size, col, () => C(GRAY, 1));
+    if (it.id === 'sparklers' && fx.spark > 0) drawSparks(hx + 2.6 * u, top - size * 0.5, size);
   }
-  drawHand(hx, hy, u);
+  drawHand(hx + 2.6 * u, hy, size);
+  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(hx + 2.6 * u, hy + size, size);
   g.font = FS + 'px monospace';
+}
+// a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
+// drawn in characters that follow its slope
+function drawYoyo(x, y, size) {
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width, th = (1 - fx.yoyo / 1.4) * Math.PI * 2, R = 2.4;
+  const yx = x + Math.sin(th) * R * w * 1.7, yy = y - (1 - Math.cos(th)) * R * size;
+  const n = Math.ceil(Math.hypot((yx - x) / w, (yy - y) / size)), dxs = (yx - x) / w, dys = (yy - y) / size;
+  const ch = Math.abs(dys) > Math.abs(dxs) * 2 ? '|' : Math.abs(dxs) > Math.abs(dys) * 2 ? '-' : dxs * dys < 0 ? '/' : '\\';
+  g.fillStyle = PAL[C(WHITE, 11)];
+  for (let k = 1; k < n; k++) g.fillText(ch, x + (yx - x) * k / n - w / 2, y + (yy - y) * k / n - size / 2);
+  bigArt(['(' + '@*o*'[(T * 16 | 0) & 3] + ')'], yx - 1.5 * w, yy - size / 2, size, c => c === '(' || c === ')' ? C(RED, 14) : C(WHITE, 15), () => C(RED, 4));
+}
+// a lit sparkler: a fizzing ball at the tip, sparks spitting out every which way (fx.spark counts down), in ASCII
+function drawSparks(x, y, size) {
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width;
+  for (let k = 0; k < 14; k++) {
+    const a_ = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 2.6;
+    g.fillStyle = PAL[C(Math.random() < 0.5 ? YEL : WHITE, 9 + Math.random() * 6)];
+    g.fillText(r < 1.4 ? '*' : Math.random() < 0.5 ? '+' : '.', x - w / 2 + Math.cos(a_) * r * w * 1.6, y + Math.sin(a_) * r * size * 0.9);
+  }
+  g.fillStyle = PAL[C(WHITE, 15)]; g.fillText('@', x - w / 2, y);
 }
 
 // ---- the hotbar and the effects you're under, bottom left
@@ -165,7 +187,7 @@ function hotbar() {
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
   if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
@@ -186,9 +208,11 @@ function openShop(title, stock, vendor = null) {
   const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate);
     return `<button class="item" data-sell="${k}" ${p ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+  const work = shiftHere();
+  const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${work === 'serve' ? 'Wait tables for a shift' : 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
-    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''} &middot; E / Esc close</p>`);
-  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); };
+    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
+  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
 }
 function shopBuy(id) {
   const [ok, line] = buy(id);
@@ -201,6 +225,13 @@ function shopSell(k) {
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor);
 }
 const closeShop = () => hidePanel(shopEl);
+// work going here? (a room's counter, not a street cart; one shift a visit)
+const shiftHere = () => mode === 'room' && !shopCtx.vendor && !room.worked && SHIFT_FOR[room.kind] || null;
+function startShift() {
+  const id = shiftHere();
+  if (!id) return;
+  room.worked = true; closeShop(); startGame(id, 'shift');
+}
 function openInventory() {
   invEl = invEl || panel('inventory');
   const rows_ = inv.length ? inv.map((it, k) => `<button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
@@ -236,6 +267,7 @@ function panelKey(e) {
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
   if (e.code === 'Escape' || e.code === 'KeyE' && shop || e.code === 'KeyI' && !shop) { shop ? closeShop() : closeInventory(); return true; }
+  if (shop && e.code === 'KeyJ' && shiftHere()) { startShift(); return true; }
   if (shop && n && e.shiftKey && SELL_RATE[shopCtx.title]) { shopSell(n[1] - 1); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
   if (!shop && n && inv[n[1] - 1]) { held = n[1] - 1; openInventory(); return true; }
@@ -249,14 +281,15 @@ const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'M
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters'];
 function useHeldItem() {
-  const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES() });
+  const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
+    water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
   say(line, 3);
   if (actx && sound) sfxUse(sound);
 }
 function sfxUse(s) {
   const at = actx.currentTime;
-  if (s === 'bite') { burst(at, 0.06, [filt('bandpass', 2200, 1.2)], 0.12); burst(at + 0.09, 0.05, [filt('bandpass', 1800, 1.2)], 0.09); }
-  if (s === 'sip') burst(at, 0.25, [filt('lowpass', 900), filt('highpass', 300)], 0.07);
+  if (s === 'bite') playClip('eat', 0.5);
+  if (s === 'sip') playClip('drink', 0.6);
   if (s === 'light') { tone(at, 2600, 0.03, 0.08, 'square'); burst(at + 0.04, 0.4, [filt('lowpass', 1500)], 0.1); }
   if (s === 'drag') { burst(at, 0.4, [filt('bandpass', 3500, 0.8)], 0.03); burst(at + 0.6, 0.9, [filt('lowpass', 900)], 0.06); }
   if (s === 'kick') { tone(at, 110, 0.12, 0.2); burst(at, 0.05, [filt('bandpass', 900, 1)], 0.15); }
@@ -264,6 +297,11 @@ function sfxUse(s) {
   if (s === 'board') { tone(at, 180, 0.08, 0.12); burst(at, 0.1, [filt('bandpass', 1200, 1)], 0.1); }
   if (s === 'click') tone(at, 1800, 0.03, 0.08, 'square');
   if (s === 'chime') sfxDoor();
+  if (s === 'whirr') { burst(at, 0.5, [filt('bandpass', 700, 3)], 0.05); burst(at + 0.55, 0.4, [filt('bandpass', 900, 3)], 0.04); }
+  if (s === 'squeak') { const o = actx.createOscillator(), gn = actx.createGain(); o.frequency.setValueAtTime(1300, at); o.frequency.exponentialRampToValueAtTime(2100, at + 0.12);
+    gn.gain.setValueAtTime(0, at); gn.gain.linearRampToValueAtTime(0.06, at + 0.02); gn.gain.exponentialRampToValueAtTime(0.0005, at + 0.2); chain(o, gn, sfxBus); o.start(at); o.stop(at + 0.25); }
+  if (s === 'harmonica') [392, 466, 523, 587, 523, 466, 392].forEach((f, k) => { // a blues lick, reedy
+    tone(at + k * 0.2, f, 0.24, 0.035, 'sawtooth'); tone(at + k * 0.2, f * 2, 0.24, 0.015, 'square'); });
 }
 // the ball, out in the world
 function drawBall() {

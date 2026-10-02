@@ -34,7 +34,8 @@ function buildPause() {
         <b>M</b><span>map</span><b>1-5</b><span>taxi / train stop</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
         <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
-        <b>N</b><span>sound on / off</span><b>Esc</b><span>pause</span>
+        <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
+        <b>Esc</b><span>pause</span>
       </div>
       <h2></h2>
       <a class="item" href="index.html">Quit to Eve Net</a>

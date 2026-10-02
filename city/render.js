@@ -172,7 +172,12 @@ function render(dt) {
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
   drawHeld(dt); // what's in your hand (or mouth, or under your feet)
-
+  present();
+  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
+  hud();
+}
+// paint the character grid (CH / COL / BG, with fog) onto the canvas: the world's frame, or a minigame's
+function present() {
   g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
   for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length
     const j = r * cols + x0, b = BG[j], s = FOGB[j]; let x1 = x0 + 1;
@@ -198,7 +203,5 @@ function render(dt) {
     g.fillText(s.slice(0, end - x), x * cw, r * FS);
     x = end;
   }
-  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
-  hud();
 }
 

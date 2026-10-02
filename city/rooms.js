@@ -182,13 +182,16 @@ const ROOM_DEFS = {
       }
       return p;
     } },
-  arcade: { grid: boxRoom(12, 9), light: 0.5, floor: 'carpet', ceil: 'dark', sign: true, wall: arcadeWall,
+  // the arcade: two rows of cabinets (each plays one of ARCADE_GAMES, see minigame-ui.js), and a prize counter by
+  // the door where the clerk swaps tickets for prizes. Somebody's playing some of the machines.
+  arcade: { grid: boxRoom(12, 9), light: 0.5, floor: 'carpet', ceil: 'dark', sign: true, wall: arcadeWall, keeper: [10.2, 6.15],
     props: r => {
-      const p = [];
-      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[3.5, 5, 7, 8.5], 5.2]]) for (const x of xs) {
-        const k = Math.random() * 4 | 0, body = pick([MAG, BLUE, RED, GREEN]);
-        p.push(cabinet(x, y, k, body));
-        if (chance(0.35)) p.push(standing(x, y + 0.7, shirt()));
+      const p = [...counterBox(10.2, 6.8, 0.85), standing(10.2, 6.15, MAG)];
+      let n = 0;
+      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[2.5, 4, 5.5, 7], 5.2]]) for (const x of xs) {
+        const k = n % 4, body = [MAG, BLUE, RED, GREEN][(n * 3 + 1) % 4], busy = chance(0.3);
+        p.push({ ...cabinet(x, y, k, body), game: ARCADE_GAMES[n++ % ARCADE_GAMES.length], cx: x, cy: y, busy });
+        if (busy) p.push(standing(x, y + 0.7, shirt()));
       }
       return p;
     } },

@@ -46,15 +46,13 @@ function menuEl(id, z, html) { // a hidden full-screen menu layer; the styleshee
   document.body.appendChild(el);
   return el;
 }
-// a slider's bar: the filled part climbs a density ramp and brightens left to right, the rest is a faint dotted track
-const BAR_RAMP = '.:-=+*#%@', BAR_N = 26;
+// a slider's bar: solid blocks up to the value, brightening from dim grey to white along the bar, then a faint
+// shaded track for the rest
+const BAR_N = 26;
 function asciiBar(f) {
   const n = Math.round(clamp(f, 0, 1) * BAR_N);
   let s = '';
-  for (let i = 0; i < BAR_N; i++) {
-    const t = i / (BAR_N - 1);
-    s += i < n ? `<span style="color:rgba(255,255,255,${(0.45 + 0.55 * t).toFixed(2)})">${BAR_RAMP[Math.round(t * (BAR_RAMP.length - 1))]}</span>`
-               : '<span style="color:rgba(255,255,255,0.18)">·</span>';
-  }
+  for (let i = 0; i < BAR_N; i++) s += i < n ? `<span style="color:rgba(255,255,255,${(0.3 + 0.7 * i / (BAR_N - 1)).toFixed(2)})">█</span>`
+                                              : '<span style="color:rgba(255,255,255,0.14)">░</span>';
   return s;
 }
