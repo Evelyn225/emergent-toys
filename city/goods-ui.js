@@ -306,7 +306,7 @@ const shiftHere = () => mode === 'room' && !shopCtx.vendor && !room.worked && SH
 function startShift() {
   const id = shiftHere();
   if (!id) return;
-  room.worked = true; closeShop(); startGame(id, 'shift');
+  room.worked = true; closeShop(); startGame(id, 'shift', room.word);
 }
 function openInventory() {
   invEl = invEl || panel('inventory');

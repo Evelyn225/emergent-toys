@@ -5,9 +5,9 @@ let game = null; // { g, kind: 'arcade' | 'shift', paid, pressed: {} }
 
 const GAME_KEYS = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up',
                     ArrowDown: 'down', KeyS: 'down', Space: 'act', Enter: 'act' };
-function startGame(id, kind) {
+function startGame(id, kind, word = '') { // word: the shop's sign, for what's on its shelves
   for (const k in K) K[k] = 0;
-  game = { g: GAMES[id](), kind, paid: false, pressed: {} };
+  game = { g: GAMES[id](Math.random, word), kind, paid: false, pressed: {} };
   if (document.pointerLockElement) document.exitPointerLock();
 }
 // keys while a game's up; true if handled (every key is, while playing)
@@ -32,7 +32,7 @@ function finishGame(quit) {
   game.paid = true;
   const r = g.reward();
   if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : 'No tickets this time.', 3); }
-  else { if (r > 0) earn(r); say(`Shift's over${quit ? ' (you clocked off early)' : ''}. You earned ${fmt$(r)}.`, 4); }
+  else { if (r > 0) earn(r); say(quit ? `You clock off early. You earned ${fmt$(r)} (less for the hours you didn't work).` : `Shift's over. You earned ${fmt$(r)}.`, 4); }
 }
 function stepGame(dt) {
   const g = game.g;

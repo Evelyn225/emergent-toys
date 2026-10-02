@@ -215,19 +215,38 @@ GAMES.serve = (rnd = Math.random) => {
     for (const p of plates) put(Math.round(p.x), LANES[p.lane], '_', C(WHITE, 15), C(GRAY, 4));
   };
   g.status = () => `SERVED ${g.score}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN counter, SPACE slide a plate`;
-  g.reward = () => Math.max(0, Math.round((4 + g.score * 1.2 - misses * 0.8) * 100) / 100);
+  g.reward = () => Math.max(0, Math.round((4 * Math.min(1, t / 75) + g.score * 1.2 - misses * 0.8) * 100) / 100); // the base pay is for the hours worked
   g.misses = () => misses; g.cust = () => cust; g.lane = () => lane; g.plates = () => plates;
   return g;
 };
 
-// stocking shelves (a shift at a store): each shelf holds one kind of thing; shoppers keep taking them. Put each box
-// that comes off the truck in an empty slot on its own shelf. 60 seconds. Pays for every box shelved right, less
-// for the ones put in the wrong place.
-const STOCK_KINDS = [['CANS', 'c', RED], ['CEREAL', '#', YEL], ['BOTTLES', 'i', CYAN], ['SOAP', 'o', MAG]];
-GAMES.stock = (rnd = Math.random) => {
+// stocking shelves (a shift at a store): each shelf holds one kind of thing, and what they are depends on the shop
+// (STOCK_THEMES, by its sign); shoppers keep taking them. Put each box that comes off the truck in an empty slot on
+// its own shelf. 60 seconds. Pays for every box shelved right, less for the ones put in the wrong place.
+const STOCK_THEMES = {
+  DEFAULT: [['CANS', 'c', RED], ['CEREAL', '#', YEL], ['BOTTLES', 'i', CYAN], ['SOAP', 'o', MAG]],
+  RECORDS: [['VINYL', 'o', MAG], ['CDS', '@', CYAN], ['TAPES', '=', YEL], ['POSTERS', '#', RED]],
+  BOOKS: [['FICTION', '|', BLUE], ['COMICS', '%', RED], ['COOKBOOKS', '#', YEL], ['MAPS', '=', GREEN]],
+  PHARMACY: [['PILLS', 'o', WHITE], ['BANDAGES', '+', RED], ['SHAMPOO', 'i', CYAN], ['VITAMINS', ':', ORANGE]],
+  HARDWARE: [['NAILS', ':', GRAY], ['TOOLS', 'T', RED], ['PAINT', 'U', BLUE], ['ROPE', '@', BRICK]],
+  LIQUOR: [['WINE', 'i', RED], ['BEER', '#', YEL], ['SPIRITS', 'I', ORANGE], ['MIXERS', 'o', CYAN]],
+  PHONES: [['PHONES', '#', GRAY], ['CASES', '[', MAG], ['CHARGERS', '~', WHITE], ['CABLES', '=', CYAN]],
+  SPORTS: [['BALLS', 'o', ORANGE], ['SHOES', 'U', WHITE], ['BATS', '/', BRICK], ['JERSEYS', '#', BLUE]],
+  SKATE: [['DECKS', '=', RED], ['WHEELS', 'o', YEL], ['TEES', '#', CYAN], ['STICKERS', '*', MAG]],
+  GROCERY: [['FRUIT', 'o', RED], ['VEG', '%', GREEN], ['BREAD', '#', WARM], ['MILK', 'i', WHITE]],
+  HERBS: [['ROOTS', '%', WARM], ['TEAS', '#', GREEN], ['JARS', 'U', ORANGE], ['DRIED', ':', YEL]],
+  JADE: [['BANGLES', 'o', GREEN], ['FIGURES', '&', CYAN], ['BEADS', ':', RED], ['CHARMS', '*', YEL]],
+  PAWN: [['WATCHES', 'o', YEL], ['GUITARS', '%', BRICK], ['CAMERAS', '#', GRAY], ['JEWELLERY', '*', CYAN]],
+};
+STOCK_THEMES.MARKET = STOCK_THEMES.FRUIT = STOCK_THEMES.GROCERY;
+const stockKinds = word => STOCK_THEMES[word] || STOCK_THEMES.DEFAULT;
+GAMES.stock = (rnd = Math.random, word = '') => {
+  const STOCK_KINDS = stockKinds(word);
   const W = 34, H = 13, SLOTS = 10, g = { id: 'stock', title: 'RESTOCK', W, H, score: 0, over: false, shift: true };
   const shelf = STOCK_KINDS.map(() => Array.from({ length: SLOTS }, () => rnd() < 0.6));
-  let cur = [0, 0], box = rnd() * 4 | 0, wrong = 0, t = 0, take = 0.8;
+  // the next box off the truck: always for a shelf with a gap on it; none (-1) while every shelf is full
+  const nextBox = () => { const open = [0, 1, 2, 3].filter(i => shelf[i].includes(false)); return open.length ? open[rnd() * open.length | 0] : -1; };
+  let cur = [0, 0], box = nextBox(), wrong = 0, t = 0, take = 0.8;
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
@@ -236,10 +255,11 @@ GAMES.stock = (rnd = Math.random) => {
     if (k.rightP) cur[1] = Math.min(SLOTS - 1, cur[1] + 1);
     if (k.upP) cur[0] = Math.max(0, cur[0] - 1);
     if (k.downP) cur[0] = Math.min(3, cur[0] + 1);
-    if (k.actP) {
+    if (box < 0 || !shelf[box].includes(false)) box = nextBox(); // nothing to shelve, or its shelf filled: a box that fits
+    if (k.actP && box >= 0) {
       if (shelf[cur[0]][cur[1]]) ev.push('bump'); // already full
-      else if (cur[0] === box) { shelf[cur[0]][cur[1]] = true; g.score++; box = rnd() * 4 | 0; ev.push('place'); }
-      else { wrong++; box = rnd() * 4 | 0; ev.push('wrong'); }
+      else if (cur[0] === box) { shelf[cur[0]][cur[1]] = true; g.score++; box = nextBox(); ev.push('place'); }
+      else { wrong++; box = nextBox(); ev.push('wrong'); }
     }
     if ((take -= dt) <= 0) { // a shopper takes something
       const full = [];
@@ -247,6 +267,7 @@ GAMES.stock = (rnd = Math.random) => {
       if (full.length) { const [i, j] = full[rnd() * full.length | 0]; shelf[i][j] = false; }
       take = 0.6 + rnd() * 0.9;
     }
+    if (box < 0 || !shelf[box].includes(false)) box = nextBox(); // (again, now the shoppers have been)
     if (t >= 60) { g.over = true; ev.push('end'); }
     return ev;
   };
@@ -260,11 +281,12 @@ GAMES.stock = (rnd = Math.random) => {
         put(x, y + 1, '=', C(GRAY, 8)); put(x + 1, y + 1, '=', C(GRAY, 8));
       }
     });
+    if (box < 0) { text(10, H - 1, 'shelves full: waiting for the next box off the truck...', C(GRAY, 10)); return; }
     const [name, ch, col] = STOCK_KINDS[box];
     put(10, H - 1, ch, C(col, 15), C(col, 4)); text(13, H - 1, `the box in your arms: ${name}`, C(col, 15));
   };
   g.status = () => `SHELVED ${g.score}   WRONG ${wrong}   ${Math.max(0, 60 - t) | 0}s   ARROWS move, SPACE shelve the box`;
-  g.reward = () => Math.max(0, Math.round((3 + g.score * 0.7 - wrong * 0.6) * 100) / 100);
+  g.reward = () => Math.max(0, Math.round((3 * Math.min(1, t / 60) + g.score * 0.7 - wrong * 0.6) * 100) / 100); // the base pay is for the hours worked
   g.shelf = () => shelf; g.box = () => box; g.cur = () => cur; g.wrong = () => wrong;
   return g;
 };
