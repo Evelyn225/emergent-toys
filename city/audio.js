@@ -6,15 +6,15 @@
 // so nothing is decoded whole into memory and the loop never clicks. A bed that has been silent for a few seconds
 // pauses where it is and picks up from there when it's needed again.
 const AUDIO_DIR = 'audio/ascii-city/';
-const BED_FILES = { city: 'city-day.mp3', crowd: 'crowd.mp3', night: 'night.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
+const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
                     rain: 'rain.mp3' };
-// overall level of each layer at full mix (the night recording is quieter than the rest, hence its boost)
-const LEVEL = { city: 0.5, crowd: 0.35, night: 0.8, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
+// overall level of each layer at full mix
+const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, crickets: 0.3, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
                 rain: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const CAL = { crickets: 0.5, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
-let actx = null, master = null, soundOn = true, noiseBuf = null;
+let actx = null, master = null, soundOn = true, noiseBuf = null, musicBus, ambBus, sfxBus; // the three volume settings' buses
 const beds = {}, synth = {};
 
 function audioStart() {
@@ -26,11 +26,20 @@ function audioStart() {
   comp.threshold.value = -18; comp.ratio.value = 3;
   master = actx.createGain(); master.gain.value = soundOn ? MASTER : 0;
   master.connect(comp); comp.connect(actx.destination);
+  [musicBus, ambBus, sfxBus] = [0, 1, 2].map(() => { const g = actx.createGain(); g.connect(master); return g; });
+  applyVolumes();
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
-  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k]);
+  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' ? musicBus : ambBus);
   makeSynths();
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
+}
+// the volume settings: master scales everything, music / ambience / effects their own bus (squared: feels linear)
+function applyVolumes() {
+  if (!actx) return;
+  const now = actx.currentTime;
+  musicBus.gain.setTargetAtTime(settings.music ** 2 * 1.5, now, 0.1); ambBus.gain.setTargetAtTime(settings.ambience ** 2 * 1.5, now, 0.1);
+  sfxBus.gain.setTargetAtTime(settings.effects ** 2 * 1.5, now, 0.1);
 }
 function toggleSound() {
   soundOn = !soundOn;
@@ -39,8 +48,8 @@ function toggleSound() {
 }
 
 // ---- recorded beds
-function makeBed(file) {
-  const out = actx.createGain(); out.gain.value = 0; out.connect(master);
+function makeBed(file, bus) {
+  const out = actx.createGain(); out.gain.value = 0; out.connect(bus);
   const voices = [0, 1].map(() => {
     const el = new Audio(AUDIO_DIR + file); el.preload = 'auto';
     const g = actx.createGain(); g.gain.value = 0;
@@ -80,8 +89,21 @@ function noiseSrc(rate = 1) {
 const filt = (type, freq, q = 0.7) => { const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; return f; };
 const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k].connect(nodes[k + 1]); return nodes[nodes.length - 1]; };
 function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
-function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(master); return g; }
+function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambBus); return g; }
 function makeSynths() {
+  // crickets. A one-second chirp pattern (three quick pulses of a high tone), a few copies at slightly
+  // different rates and pitches, panned about, so they drift in and out of step like the real thing
+  synth.crickets = layer();
+  const sr = actx.sampleRate, chirp = actx.createBuffer(1, sr * 1.1, sr), cd = chirp.getChannelData(0);
+  for (let k = 0; k < cd.length; k++) {
+    const t = k / sr, pulse = Math.floor(t / 0.033), inPulse = t - pulse * 0.033;
+    cd[k] = pulse < 3 && inPulse < 0.022 ? Math.sin(2 * Math.PI * 4600 * t) * Math.sin(Math.PI * inPulse / 0.022) : 0;
+  }
+  for (const [rate, pan, g] of [[1, -0.6, 0.6], [1.07, 0.5, 0.45], [0.93, 0.1, 0.35], [1.13, -0.2, 0.25]]) {
+    const src = actx.createBufferSource(), gg = actx.createGain(), p = actx.createStereoPanner();
+    src.buffer = chirp; src.loop = true; src.playbackRate.value = rate; gg.gain.value = g; p.pan.value = pan;
+    chain(src, gg, p, synth.crickets); src.start(0, Math.random());
+  }
   // waves: low surf that swells and draws back
   synth.waves = layer(); const swell = actx.createGain(); swell.gain.value = 0.55; lfo(swell.gain, 0.08, 0.45);
   chain(noiseSrc(0.7), filt('lowpass', 550), swell, synth.waves);
@@ -104,13 +126,13 @@ function burst(at, len, filters, gain, pan = 0) {
   const s = actx.createBufferSource(); s.buffer = noiseBuf;
   const g = actx.createGain(), p = actx.createStereoPanner(); p.pan.value = pan;
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.008); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
-  chain(s, ...filters, g, p, master); s.start(at, Math.random() * 1.5, len + 0.05);
+  chain(s, ...filters, g, p, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
 }
 function tone(at, freq, len, gain, type = 'sine', pan = 0) {
   const o = actx.createOscillator(), g = actx.createGain(), p = actx.createStereoPanner();
   o.type = type; o.frequency.value = freq; p.pan.value = pan;
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
-  chain(o, g, p, master); o.start(at); o.stop(at + len + 0.05);
+  chain(o, g, p, sfxBus); o.start(at); o.stop(at + len + 0.05);
 }
 // footsteps per surface: mostly a soft heel thud with a little scuff on top, nothing bright.
 // [scuff filter, freq, Q, tail seconds, level, thud Hz (0 = none)]
@@ -145,7 +167,7 @@ function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
   for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
-    o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, master); o.start();
+    o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, sfxBus); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
@@ -164,6 +186,7 @@ let stepAcc = 0, lastPos = null, clackT = 0;
 function audioTick(dt) {
   if (!actx || actx.state !== 'running') return;
   const now = actx.currentTime, indoors = mode === 'room';
+  master.gain.setTargetAtTime(soundOn ? MASTER * settings.master ** 2 * 1.5 * (1 - fade) : 0, now, 0.3); // the world goes quiet as you fall asleep
   // the el: how close a moving train is, if you're by the el
   const elDist = Math.abs(rel(py - (EL_Y + 1))), trains = elTrains(T);
   const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *

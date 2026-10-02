@@ -16,7 +16,7 @@ let siren = null; // the emergency vehicle in sight, if any: floorCell washes it
 function citySprites() {
   forNear(treesB, t => drawArt(...R(t.x, t.y), 0, 0.45 * t.s, 0.6 * t.s, ART.tree,
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
-  forNear(benchesB, b => drawArt(...R(b.x, b.y), 0, 0.15, 0.05, ART.bench, (c, row, L) => C(BRICK, L)));
+  forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   for (const b of boats) {
     const x = b.x0 + T * b.sp, y = b.y + Math.sin(T * 0.05 + b.ph) * 2, [vx, vy] = R(x, y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
@@ -47,6 +47,11 @@ function citySprites() {
     if (Math.abs(vx) > vis + 5 || Math.abs(vy) > vis + 5) continue;
     // the jib slews slowly; p = how much of it faces sideways to us (+ = reaching right on screen)
     const th = k.slew + T * 0.03, p = across(Math.cos(th), Math.sin(th), vx, vy);
+    // where the hook hangs: under the trolley, always clear of whatever's built below it
+    const f = 0.45 + 0.35 * Math.sin(T * 0.08 + k.slew), tx = k.x + Math.cos(th) * JIB * f, ty = k.y + Math.sin(th) * JIB * f;
+    let below = 0;
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) below = Math.max(below, map[idx(Math.floor(tx) + i, Math.floor(ty) + j)]);
+    k.tro = f; k.hz = Math.min(k.H - 0.6, below + 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(T * 0.05 + k.slew * 3)));
     drawShape(vx, vy, 0, 5, k.H + 0.8, (i, u, z, du, dz, L) => craneCell(i, u, z, du, dz, L, k, p));
   }
   for (const s of stacks) {
@@ -75,17 +80,8 @@ function citySprites() {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
     const [vx, vy] = R(m.ex, m.ey), hx = m.hx, hy = m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    const dot = (hx * vx + hy * vy) / Math.hypot(vx, vy), arts = VEHICLE_ART[m.kind], big = m.kind === 'fire' ? 1.3 : 1;
-    let art = arts[0], w = 0.2 * big;
-    if (dot < -0.75) art = arts[1];
-    else if (dot <= 0.75) { art = hx * -vy + hy * vx > 0 ? arts[2] : arts[3]; w = (0.2 + 0.25 * Math.sqrt(1 - dot * dot)) * big; }
-    const lights_ = night > 0.4 || overcast > 0.5 ? 15 : 9, taxi = m.kind === 'taxi';
     if (m.ev && Math.hypot(vx, vy) < vis) siren = m;
-    drawArt(vx, vy, 0, w, 0.15 * big, art, (c, row, L) =>
-      c === '*' ? C(fract(T * 2.5) < 0.5 === (row & 1 ? true : false) ? RED : BLUE, 15) : // the light bar
-      row === 0 && taxi && c !== '_' ? C(c === '[' || c === ']' ? GRAY : YEL, 15) :
-      c === 'O' ? C(WHITE, lights_) : c === ']' || c === '[' ? C(RED, m.brake || m.v < 0.05 ? 15 : 8) :
-      c === '+' ? C(RED, Math.max(L, 10)) : c === '#' ? C(CYAN, L * 0.5) : c === '@' ? C(GRAY, L * 0.4) : C(m.body, L));
+    drawVehicle(m, vx, vy, hx, hy);
   }
   for (const m of people) if (!m.hidden)
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
@@ -125,6 +121,65 @@ function lampCell(i, u, z, du, dz, L, s) {
     }
   }
   return false;
+}
+
+// ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.
+// Sizes in cells (1 = 10m): [half length, half width, body top, cabin top, cabin half length, cabin offset along]
+const VEHICLES = {
+  car: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02], taxi: [0.21, 0.09, 0.075, 0.13, 0.11, -0.02],
+  police: [0.22, 0.09, 0.075, 0.13, 0.11, -0.02], amb: [0.25, 0.1, 0.15, 0, 0, 0], fire: [0.37, 0.1, 0.14, 0.17, 0.06, 0.29],
+};
+const shadeFace = f => f === 5 ? 1 : f === 1 || f === 2 ? 0.85 : 0.7; // a little light from above, a little less on the sides
+function drawVehicle(m, vx, vy, hx, hy) {
+  const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
+  const braking = m.brake || m.v < 0.05, body = m.body, flash = fract(T * 2.5) < 0.5;
+  // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
+  drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
+    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
+    BG[i] = C(body, (1.5 + L * 0.45) * k);
+    if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
+    if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(WHITE, lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
+    if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking ? 15 : 8)), true;
+    if (f === 6) return set(i, ' ', 0), true;
+    const wheel = w < 0.035 && Math.min(Math.abs(u - hl * 0.62), Math.abs(u + hl * 0.62)) < 0.04;
+    if (wheel) { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; }
+    if (w < 0.022) { BG[i] = C(GRAY, 1); return set(i, '_', C(GRAY, L * 0.3)), true; }
+    if (m.kind === 'amb' && w > 0.06 && w < 0.13) { // the ambulance's side: windows up front, a red stripe and cross
+      if (u > hl * 0.55 && w > 0.09) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; }
+      if (Math.abs(w - 0.08) < 0.008) return set(i, '=', C(RED, 13)), true;
+      if (Math.abs(u) < 0.03 && w > 0.095) return set(i, '+', C(RED, 14)), true;
+    }
+    if (m.kind === 'fire' && w > 0.05) return set(i, Math.abs(fract(u * 12) - 0.5) < 0.12 ? '|' : '=', C(GRAY, L * 0.7)), true; // lockers
+    return set(i, Math.abs(w - 0.05) < 0.006 ? '-' : ' ', C(body, L * 0.6)), true;
+  });
+  // cabin: glass all round, pillars at the corners, a roof
+  if (cab) drawBox(boxAt(vx + hx * cof, vy + hy * cof, hx, hy, chl, hw * 0.9, top, cab), (i, t, L) => {
+    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
+    if (f === 5 || f === 6) { BG[i] = C(body, (1.5 + L * 0.45) * shadeFace(f)); return set(i, ' ', 0), true; }
+    const edge = f <= 2 ? Math.abs(v) > hw * 0.8 : Math.abs(u - cof) > chl * 0.85;
+    if (edge || w > cab - 0.008) { BG[i] = C(body, (1.5 + L * 0.45) * 0.8); return set(i, '|', C(body, L * 0.5)), true; }
+    BG[i] = C(CYAN, 1 + L * 0.12); return set(i, ' ', 0), true;
+  });
+  const roof = cab || top; // what sits on the roof
+  if (m.kind === 'taxi') drawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
+    BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
+  });
+  if (m.ev) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
+    BG[i] = C((HIT.v > 0) === flash ? RED : BLUE, 15); return set(i, '*', C(WHITE, 15)), true; // the light bar
+  });
+  if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
+    BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
+  });
+}
+
+// a bench facing (fx, fy): seat, backrest, two legs; s scales it (0.01 outdoors in cells, 1 indoors in metres)
+function drawBench(vx, vy, fx, fy, s) {
+  const ax = -fy, ay = fx, wood = (i, t, L) => { BG[i] = C(BRICK, (1 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : '-', C(BRICK, L * 0.8)), true; };
+  drawBox(boxAt(vx, vy, ax, ay, 7.5 * s, 2 * s, 4 * s, 4.8 * s), wood); // seat
+  drawBox(boxAt(vx - fx * 1.9 * s, vy - fy * 1.9 * s, ax, ay, 7.5 * s, 0.4 * s, 4.8 * s, 8.5 * s), wood); // back
+  for (const e of [-6, 6]) drawBox(boxAt(vx + ax * e * s, vy + ay * e * s, ax, ay, 0.5 * s, 1.8 * s, 0, 4 * s), (i, t, L) => {
+    BG[i] = C(GRAY, 1); return set(i, '|', C(GRAY, L * 0.7)), true;
+  });
 }
 
 // chinatown lanterns: a string sagging across the street, red paper lanterns hanging off it, glowing after dark.

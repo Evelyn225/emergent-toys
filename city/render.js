@@ -47,6 +47,35 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
   }
 }
 
+// A real 3D box: every screen cell its outline could cover casts its ray at it (rayBox), so it looks right from any
+// side. b: {x, y relative to you, c, s heading, hl, hw, z0, z1}. shade(i, t, L) paints the cell from HIT (which face,
+// where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
+function drawBox(b, shade) {
+  let c0 = cols, c1 = -1, r0 = rows, r1 = -1, behind = 0, near = Infinity;
+  for (const su of [-1, 1]) for (const sv of [-1, 1]) {
+    const X = b.x + su * b.hl * b.c - sv * b.hw * b.s, Y = b.y + su * b.hl * b.s + sv * b.hw * b.c, depth = dx * X + dy * Y;
+    near = Math.min(near, depth);
+    if (depth < 0.02) { behind++; continue; }
+    const sc = projX / depth, col = cols / 2 + (-dy * X + dx * Y) * sc;
+    c0 = Math.min(c0, col); c1 = Math.max(c1, col);
+    r0 = Math.min(r0, hor - (b.z1 - eye) * projY / depth); r1 = Math.max(r1, hor - (b.z0 - eye) * projY / depth);
+  }
+  if (behind === 4 || near > vis) return;
+  if (behind) { c0 = 0; c1 = cols; r0 = 0; r1 = rows; } // straddling us: test the whole screen
+  c0 = Math.max(0, Math.floor(c0)); c1 = Math.min(cols, Math.ceil(c1) + 1);
+  r0 = Math.max(0, Math.floor(r0)); r1 = Math.min(rows, Math.ceil(r1) + 1);
+  for (let c = c0; c < c1; c++) {
+    const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
+    for (let r = r0; r < r1; r++) {
+      const i = r * cols + c, t = rayBox(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
+      if (t < 0 || t >= ZB[i] || t > vis) continue;
+      if (shade(i, t, (1 - t / vis) * 15 * amb)) { ZB[i] = ZBG[i] = t; FL[i] = 0; }
+    }
+  }
+}
+// a box at world position (x, y) heading angle a (or cos/sin), for drawBox
+const boxAt = (x, y, ca, sa, hl, hw, z0, z1) => ({ x, y, c: ca, s: sa, hl, hw, z0, z1 });
+
 // the el deck in one screen column, for the stretch of ray [t0, t1] that's inside it: its underside (from below) or
 // top (from above), and the girder along its side where the ray comes in. Only fills cells nothing nearer covered.
 function drawDeck(x, rx, ry, t0, t1) {
@@ -75,7 +104,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
-  eye = mode === 'room' ? 1.7 : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
+  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
       : mode === 'walk' ? 0.17 : chaseOn ? 0.28 : 0.12;
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows + shake() | 0;
@@ -168,6 +197,7 @@ function render(dt) {
     g.fillText(s.slice(0, end - x), x * cw, r * FS);
     x = end;
   }
+  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
   hud();
 }
 

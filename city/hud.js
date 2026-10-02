@@ -45,7 +45,8 @@ const nearPerson = () => {
 const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
-const canBoard = () => room.kind === 'station' && trainStopped(room) && py > 4.2 && Math.abs(px - 15) < 13;
+const canBoard = () => room.kind === 'station' && trainStopped(room) && py > 4.2 && Math.abs(px - 23) < 13;
+const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (mode === 'room') {
     if (room.kind === 'train') return room.dest == null
@@ -53,8 +54,8 @@ function promptText() {
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (nearElevator()) return 'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
-    const k = room.def.keeper;
-    if (k && Math.hypot(px - k[0], py - k[1]) < 2) return `"${room.line}"`;
+    if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
+    if (nearKeeper()) return `"${room.line}"`;
     return room.kind === 'station' ? 'E: leave (or take the EXIT stairs)' : 'E: leave';
   }
   if (mode === 'roof') return 'E: take the stairs down';
@@ -136,7 +137,7 @@ function hud() {
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const where = mode === 'room' ? '' : [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
-                 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound'];
+                 settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
   if (task) { // the favour you're doing, under the help line

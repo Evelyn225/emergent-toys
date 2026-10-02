@@ -91,6 +91,7 @@ function interact() {
       const from = room.st;
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
+    if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     return leaveRoom();
   }
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
@@ -122,7 +123,7 @@ function interact() {
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
-  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [2, 1.7, Math.PI / 2]);
+  if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11, 4.8, 0]); // at the foot of the stairs
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.kind === SHOP_SHUT) return say('Closed.');
@@ -133,13 +134,35 @@ function interact() {
     px = room.W / 2; py = room.H - 1.6;
   }
 }
+// the hotel: a night's sleep, from 6pm. Fade out, wake at 7:00 in a room upstairs to a clear morning,
+// with everyone outside already where their morning routine puts them
+function bookRoom() {
+  const rate = ROOM_RATE(room.word);
+  if (!checkInOpen(tod)) return say('"Sorry, check-in begins at 6pm."', 4);
+  if (!pay(rate)) return say(`"A room's ${fmt$(rate)} a night." You can't afford it.`, 4);
+  say(`"Room ${400 + (Math.random() * 60 | 0)}. Sleep well."`, 3);
+  sleep = { t: 0, lobby: { word: room.word, neon: room.neon, ret: room.ret, cell: room.cell, line: room.line } };
+}
+function stepSleep(dt) {
+  sleep.t += dt;
+  fade = sleep.t < 1.5 ? sleep.t / 1.5 : sleep.t < 3 ? 1 : clamp(1 - (sleep.t - 3) / 2, 0, 1);
+  if (sleep.t >= 1.5 && !sleep.done) {
+    sleep.done = true;
+    tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
+    for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
+    enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]);
+  }
+  if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say('7:00. You slept well, and the sky has cleared.', 4); }
+  if (sleep.t > 5) { sleep = null; fade = 0; }
+}
 function leaveRoom() {
+  if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x; py = s.y - 0.12; a = -Math.PI / 2; }
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
 }
 function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
-  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [15, 3.6, -Math.PI / 2]); // back from the edge, so E means leave
+  enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, 3.6, -Math.PI / 2]); // back from the edge, so E means leave
   say(`${stations[n].name}`);
 }
 function hail() {

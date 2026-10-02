@@ -381,7 +381,7 @@ function craneCell(i, u, z, du, dz, L, k, p) {
   if (z < H && z > H - 0.22 && between(u * Math.sign(p || 1), MW, MW + 0.16)) // operator's cab
     return set(i, z > H - 0.12 ? ':' : '#', z > H - 0.12 ? C(CYAN, Math.max(L, night * 12)) : steel), true;
   // trolley, cable, hook and a slung load of beams, drifting along the jib
-  const tro = jx * (0.45 + 0.35 * Math.sin(T * 0.08 + k.slew)), hz = 1.6 + 1.2 * (0.5 + 0.5 * Math.sin(T * 0.05 + k.slew * 3));
+  const tro = jx * k.tro, hz = k.hz; // set each frame in citySprites, clear of the buildings below
   if (Math.abs(jx) > du && z < H && z > hz && onLine(u - tro, du, 0, 0)) return set(i, '|', dark), true;
   if (z <= hz && z > hz - 0.08 && onLine(u - tro, du, 0, 0)) return set(i, 'J', dark), true;
   if (z <= hz - 0.08 && z > hz - 0.22 && Math.abs(u - tro) < 0.3) return set(i, '=', C(ORANGE, L)), true;

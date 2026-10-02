@@ -1,9 +1,11 @@
 onkeydown = e => {
+  if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
+  if (paused) return;
   K[e.code] = 1;
   if (e.repeat) return;
   audioStart(); // sound can only start from a key press or click
   if (e.code === 'KeyN') toggleSound();
-  if (e.code === 'KeyE') interact();
+  if (e.code === 'KeyE' && !sleep) interact();
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
@@ -13,23 +15,28 @@ onkeydown = e => {
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
 onkeyup = e => K[e.code] = 0;
-cv.onclick = () => { audioStart(); cv.requestPointerLock(); };
+cv.onclick = () => { audioStart(); if (!paused) cv.requestPointerLock(); };
 const clampPitch = () => pitch = clamp(pitch, -1.2, 1.6);
 onmousemove = e => {
   if (!document.pointerLockElement) return;
-  if (mode === 'taxi') look += e.movementX * 0.003; else if (mode !== 'drive') a += e.movementX * 0.003;
-  pitch -= e.movementY * 0.002; clampPitch();
+  if (paused) return;
+  const s = settings.sensitivity;
+  if (mode === 'taxi') look += e.movementX * 0.003 * s; else if (mode !== 'drive') a += e.movementX * 0.003 * s;
+  pitch -= e.movementY * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 };
 
 const free = (x, y) => {
-  if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y));
+  if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
+    !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;
-  if (mode === 'room' && roomAt(Math.floor(px + fx * 3), Math.floor(py + fy * 3)) === 'D') return leaveRoom();
+  // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
+  const n = Math.hypot(fx, fy);
+  if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * 0.45), Math.floor(py + fy / n * 0.45)) === 'D') return leaveRoom();
   if (free(px + fx + Math.sign(fx) * m, py)) px += fx;
   if (free(px, py + fy + Math.sign(fy) * m)) py += fy;
 }
@@ -49,10 +56,12 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
+  if (paused) { t0 = t; requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   const dt = Math.min(0.05, (t - t0) / 1000); t0 = t; T += dt; msgT -= dt;
   env(dt);
+  if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
-  if (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') {
+  if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt; // sprint 29 km/h, cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);

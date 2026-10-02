@@ -33,8 +33,8 @@ test('indoors: the street drops right down and the room takes over', () => {
   // music: cafes, bars and shops only - never outside, in lobbies, the bank, the gym or the subway
   const music = m => m.bossa + m.coffee;
   for (const over of ['{}', "{ day: 0, night: 1, tod: 23 }", "{ mode: 'roof', roofH: 5 }", "{ mode: 'el' }", "{ mode: 'drive', speed: 2 }"]) assert.strictEqual(music(mix(over)), 0, over);
-  for (const kind of ['apts', 'hotel', 'bank', 'gym', 'station', 'train', 'cinema']) assert.strictEqual(music(mix(`{ mode: 'room', room: { kind: '${kind}', word: 'No.101' } }`)), 0, kind);
-  for (const kind of ['bar', 'diner', 'store', 'barber', 'florist']) assert.ok(music(mix(`{ mode: 'room', room: { kind: '${kind}', word: 'SHOP' } }`)) > 0, kind);
+  for (const kind of ['apts', 'bank', 'gym', 'station', 'train', 'cinema']) assert.strictEqual(music(mix(`{ mode: 'room', room: { kind: '${kind}', word: 'No.101' } }`)), 0, kind);
+  for (const kind of ['bar', 'diner', 'store', 'barber', 'florist', 'hotel']) assert.ok(music(mix(`{ mode: 'room', room: { kind: '${kind}', word: 'SHOP' } }`)) > 0, kind);
 });
 
 test('weather, the sea, height, the el and the car', () => {
@@ -80,4 +80,27 @@ test('money: start with $100, pay only what you have, earn from favours', () => 
   })()`);
   assert.ok(r.gained >= 5 && r.gained <= 15, `escort paid ${r.gained}`);
   assert.strictEqual(r.task, null);
+});
+
+test('hotels: check-in from 6pm, a night is $40 (motels $20)', () => {
+  assert.deepStrictEqual(j('[17.9, 18, 23, 2, 5.5, 12].map(checkInOpen)'), [false, true, true, true, false, false]);
+  assert.strictEqual(ev("ROOM_RATE('HOTEL')"), 40);
+  assert.strictEqual(ev("ROOM_RATE('MOTEL')"), 20);
+});
+
+test('ray vs box: which face, how far, and misses', () => {
+  const b = "{ x: 5, y: 0, c: 1, s: 0, hl: 1, hw: 1, z0: 0, z1: 1 }";
+  assert.strictEqual(ev(`rayBox(0, 0, 0.5, 1, 0, 0, ${b})`), 4);
+  assert.strictEqual(ev('HIT.face'), 2, 'the back face, coming from behind');
+  assert.strictEqual(ev(`rayBox(0, 3, 0.5, 1, 0, 0, ${b})`), -1, 'misses to the side');
+  assert.ok(Math.abs(ev(`rayBox(5, 0, 3, 0, 0.001, -1, ${b})`) - 2) < 1e-6);
+  assert.strictEqual(ev('HIT.face'), 5, 'looking straight down: the top');
+  assert.strictEqual(ev(`rayBox(5, 0, 0.5, 1, 0, 0, ${b})`), -1, 'inside it: not drawn');
+  // turned 90 degrees: its long side now faces along y
+  assert.ok(Math.abs(ev(`rayBox(0, 0, 0.5, 1, 0, 0, { x: 5, y: 0, c: 0, s: 1, hl: 2, hw: 0.5, z0: 0, z1: 1 })`) - 4.5) < 1e-9);
+});
+
+test('settings have defaults without storage', () => {
+  assert.strictEqual(ev('settings.detail'), 'medium');
+  assert.strictEqual(ev('settings.fov'), 63);
 });

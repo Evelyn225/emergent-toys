@@ -40,7 +40,8 @@ function inPond(lx, ly, bx, by, pad = 0) {
   const edge = POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
   return Math.hypot(ex, ey) < edge + pad;
 }
-const BENCH = [[0.35, -2], [0.35, 2], [-2, 0.35], [2, -0.35]]; // relative to block center
+// relative to block center, and the way each faces: toward the path through the middle
+const BENCH = [[0.35, -2, -1, 0], [0.35, 2, -1, 0], [-2, 0.35, 0, -1], [2, -0.35, 0, 1]];
 const trees = [], benches = [], parks = [];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const kind = blockKind(bx, by), dist = districtOf(bx, by);
@@ -52,12 +53,12 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
       if (Math.abs(x - 5) < 0.5 || Math.abs(y - 5) < 0.5 || inPond(x, y, bx, by, 0.4)) continue;
       trees.push({ x: bx * 8 + x, y: by * 8 + y, s: 1 });
     }
-    for (const [x, y] of BENCH) benches.push({ x: bx * 8 + 5 + x, y: by * 8 + 5 + y });
+    for (const [x, y, fx, fy] of BENCH) benches.push({ x: bx * 8 + 5 + x, y: by * 8 + 5 + y, fx, fy });
   }
   if (kind === 'waterfront') for (let k = 0; k < 4; k++) { // promenade: trees and benches facing the water
     const x = bx * 8 + 1 + k * 2, south = by === SHORE_S, y = south ? by * 8 + 2.35 : by * 8 + 7.6;
     if (onBridge(bx, by) && k === 0) continue;
-    if (k & 1) benches.push({ x, y }); else trees.push({ x, y, s: 0.8 });
+    if (k & 1) benches.push({ x, y, fx: 0, fy: south ? 1 : -1 }); else trees.push({ x, y, s: 0.8 }); // facing the water
   }
 }
 // street trees down the brownstone blocks, between the lamps
