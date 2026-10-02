@@ -1,0 +1,160 @@
+const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
+// billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
+function drawArt(rx_, ry_, z, w, h, art, colFn) {
+  const depth = dx * rx_ + dy * ry_;
+  if (depth < 0.05 || depth > vis) return;
+  const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc;
+  const left = cx - w * sc / 2, right = cx + w * sc / 2;
+  const top = hor - (z + h - eye) * projY / depth, bot = hor - (z - eye) * projY / depth;
+  const c0 = Math.max(0, Math.floor(left)), c1 = Math.min(cols, Math.ceil(right));
+  const r0 = Math.max(0, Math.floor(top)), r1 = Math.min(rows, Math.ceil(bot));
+  const L = (1 - depth / vis) * 15 * amb, AR = art.length, AC = art[0].length;
+  const cellW = (right - left) / AC, cellH = (bot - top) / AR, stretched = cellW > 1.5 || cellH > 1.5;
+  for (let r = r0; r < r1; r++) {
+    const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
+    for (let c = c0; c < c1; c++) {
+      const i = r * cols + c;
+      if (depth >= ZB[i]) continue;
+      const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
+      if (ch === ' ') continue;
+      // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
+      // cell of its stretched span instead of smearing into "HHHOOOTTT"
+      if (stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1])) &&
+          (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
+        set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
+      }
+      set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0;
+    }
+  }
+}
+
+// a billboard painted by a function of world position instead of ascii art, for things too big for art to scale well.
+// hw = half width. fn(i, u, z, du, dz, L): u across (0 = centre, + right), z = height, du/dz = one cell's size there;
+// it paints the cell and returns true, or false to leave it see-through.
+function drawShape(rx_, ry_, z0, hw, h, fn) {
+  const depth = dx * rx_ + dy * ry_;
+  if (depth < 0.05 || depth > vis) return;
+  const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, du = 1 / sc, dz = depth / projY;
+  const c0 = Math.max(0, Math.floor(cx - hw * sc)), c1 = Math.min(cols, Math.ceil(cx + hw * sc));
+  const r0 = Math.max(0, Math.floor(hor - (z0 + h - eye) / dz)), r1 = Math.min(rows, Math.ceil(hor - (z0 - eye) / dz));
+  const L = (1 - depth / vis) * 15 * amb;
+  for (let r = r0; r < r1; r++) {
+    const z = eye + (hor - r - 0.5) * dz - z0;
+    for (let c = c0; c < c1; c++) {
+      const i = r * cols + c;
+      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; }
+    }
+  }
+}
+
+function render(dt) {
+  const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
+  eye = mode === 'room' ? 1.7 : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
+      : mode === 'walk' ? 0.17 : chaseOn ? 0.28 : 0.12;
+  tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
+  hor = (rows >> 1) + pitch * rows + shake() | 0;
+  dx = Math.cos(a); dy = Math.sin(a);
+  lookHit = null;
+  for (let x = 0; x < cols; x++) {
+    const cx = 2 * x / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
+    const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
+    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; ZB[i] = -1; } // -1: nothing drawn here yet
+    // DDA through the grid, front to back; `clip` = lowest row not yet covered
+    // overhead decks (the el) leave gaps in a column, so once one is drawn every later write checks ZB first
+    let mx = Math.floor(px), my = Math.floor(py), clip = rows, first = true, dPrev = 0, hCur = W.cell(mx, my);
+    let slabCur = W.slab && W.slab(mx, my), holes = false;
+    BASE[x] = clamp(hor, 0, rows);
+    const ddx = Math.abs(1 / rx), ddy = Math.abs(1 / ry), sx = rx < 0 ? -1 : 1, sy = ry < 0 ? -1 : 1;
+    let sdx = (rx < 0 ? px - mx : mx + 1 - px) * ddx, sdy = (ry < 0 ? py - my : my + 1 - py) * ddy;
+    while (clip > 0) {
+      let d, side;
+      if (sdx < sdy) { d = sdx; sdx += ddx; mx += sx; side = 0; } else { d = sdy; sdy += ddy; my += sy; side = 1; }
+      // the cell we just crossed spans dPrev..d; when we're above it (on a roof), draw its top
+      if (hCur > 0 && hCur < eye && W.roof) {
+        const k = (eye - hCur) * projY, rIn = dPrev > 0 ? Math.ceil(hor + k / dPrev) : rows, rOut = Math.max(0, Math.ceil(hor + k / Math.min(d, vis)));
+        for (let r = rOut; r < Math.min(clip, rIn); r++) {
+          const i = r * cols + x, dr = k / (r - hor + 0.5);
+          if (holes && ZB[i] >= 0) continue;
+          W.roof(i, px + rx * dr, py + ry * dr, hCur, dr); ZB[i] = dr; FL[i] = 0;
+        }
+        clip = Math.min(clip, rOut);
+      }
+      // a deck over the cell we just crossed: its underside when we're below it, its top when we're above
+      if (slabCur) {
+        const below = eye < EL_BOT, k = (below ? EL_BOT - eye : eye - EL_TOP) * projY, dd = Math.min(d, vis);
+        const r0 = below ? Math.max(0, Math.ceil(hor - (dPrev > 0 ? k / dPrev : Infinity))) : Math.max(0, Math.ceil(hor + k / dd));
+        const r1 = below ? Math.min(rows, Math.ceil(hor - k / dd)) : Math.min(clip, dPrev > 0 ? Math.ceil(hor + k / dPrev) : rows);
+        for (let r = r0; r < r1; r++) {
+          const i = r * cols + x;
+          if (ZB[i] >= 0) continue;
+          const dr = below ? k / (hor - r - 0.5) : k / (r - hor + 0.5);
+          W.slabFace(i, px + rx * dr, py + ry * dr, below, dr); ZB[i] = dr; FL[i] = 0;
+        }
+        holes = true;
+      }
+      if (d > vis) break;
+      const h = W.cell(mx, my), slab = W.slab && W.slab(mx, my); hCur = h; dPrev = d;
+      if (slab && !slabCur && eye < EL_TOP + 1) { // the deck's edge, seen from outside
+        const t0 = Math.max(0, Math.ceil(hor - (EL_TOP - eye) * projY / d)), t1 = Math.min(rows, Math.ceil(hor - (EL_BOT - eye) * projY / d));
+        const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
+        for (let r = t0; r < t1; r++) {
+          const i = r * cols + x;
+          if (ZB[i] >= 0) continue;
+          W.slabEdge(i, u, eye + (hor - r - 0.5) * d / projY, d, side); ZB[i] = d; FL[i] = 0;
+        }
+        holes = true;
+      }
+      slabCur = slab;
+      if (!h) continue;
+      if (first) { first = false; BASE[x] = Math.min(rows, Math.ceil(hor + eye * projY / d)); if (x === cols >> 1) lookHit = { d, mx, my }; }
+      const top = Math.max(0, Math.ceil(hor - (h - eye) * projY / d));
+      const bot = Math.min(clip, Math.ceil(hor + eye * projY / d));
+      // u runs left-to-right on screen for whichever face we see, so signs read correctly
+      const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
+      const uStep = side ? Math.abs(rx2 * (ry * d / ry2) - rx * d) : Math.abs(ry2 * (rx * d / rx2) - ry * d);
+      for (let r = top; r < bot; r++) {
+        const i = r * cols + x;
+        if (holes && ZB[i] >= 0) continue;
+        W.wall(i, u, uStep, eye + (hor - r - 0.5) * d / projY, h, d, side, mx, my, 1 - d / vis, side ? px + rx * d : py + ry * d);
+        ZB[i] = d; FL[i] = 0;
+      }
+      clip = Math.min(clip, top);
+    }
+    // sky / floor only where no wall or roof landed: shading them first and painting over was most of the cell work
+    for (let r = 0; r < rows; r++) { const i = r * cols + x; if (ZB[i] < 0) (r < hor ? W.sky : W.floor)(i, r, x, rx, ry); }
+  }
+  if (city) sunMoon();
+  ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
+  W.sprites();
+  if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  if (mode === 'drive' || mode === 'taxi') dash();
+  if (mode === 'el') elFrame();
+
+  g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+  for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length
+    const j = r * cols + x0, b = BG[j], s = FOGB[j]; let x1 = x0 + 1;
+    while (x1 < cols && BG[r * cols + x1] === b && FOGB[r * cols + x1] === s) x1++;
+    if (s || b !== NONE) { g.fillStyle = s ? fogged(b, s) : PAL[b]; g.fillRect(x0 * cw, r * FS, (x1 - x0) * cw + 0.5, FS); }
+    x0 = x1;
+  }
+  // text: one fillText per run of same-coloured characters on a row (gaps of spaces are allowed inside a run);
+  // the font is monospace so a run lines up with the grid, and it's far fewer canvas calls than one per cell
+  const blank = j => CH[j] === ' ' || FOGS[j] === 8; // fully fogged text is invisible
+  for (let r = 0; r < rows; r++) for (let x = 0; x < cols;) {
+    const i = r * cols + x;
+    if (blank(i)) { x++; continue; }
+    const key = COL[i] * 9 + FOGS[i];
+    let s = CH[i], x1 = x + 1, end = x1;
+    for (; x1 < cols; x1++) {
+      const j = r * cols + x1;
+      if (blank(j)) { s += ' '; continue; }
+      if (COL[j] * 9 + FOGS[j] !== key) break;
+      s += CH[j]; end = x1 + 1;
+    }
+    g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]];
+    g.fillText(s.slice(0, end - x), x * cw, r * FS);
+    x = end;
+  }
+  hud();
+}
+

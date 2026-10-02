@@ -1,0 +1,23 @@
+{
+  "pure": [
+    "city/core.js",
+    "city/state.js",
+    "city/art.js",
+    "city/world.js",
+    "city/props.js",
+    "city/traffic.js",
+    "city/people.js",
+    "city/talk.js",
+    "city/elevated.js"
+  ],
+  "dom": [
+    "city/screen.js",
+    "city/city-render.js",
+    "city/city-sprites.js",
+    "city/rooms.js",
+    "city/render.js",
+    "city/hud.js",
+    "city/actions.js",
+    "city/main.js"
+  ]
+}

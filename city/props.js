@@ -1,0 +1,197 @@
+// static props are bucketed by block, so a frame only visits the ones within draw distance (see forNear)
+function bucketed(items) {
+  const b = Array.from({ length: NB * NB }, () => []);
+  for (const it of items) b[bi(Math.floor(it.x / 8), Math.floor(it.y / 8))].push(it);
+  return b;
+}
+// visit a point on every street segment: `s` along it (block-local 2..8), `o` across it (0..2, 0 = north / west side).
+// fn(x, y, ax, ay, bx, by, 'h' | 'v'): ax/ay points from that side toward the middle of the street
+function alongStreets(s, o, fn) {
+  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+    if (hseg(bx, by)) fn(bx * 8 + s, by * 8 + o, 0, o < 1 ? 1 : -1, bx, by, 'h');
+    if (vseg(bx, by)) fn(bx * 8 + o, by * 8 + s, o < 1 ? 1 : -1, 0, bx, by, 'v');
+  }
+}
+
+// lamps stand at the curb edge of the sidewalk (sidewalk is 0..0.3), two per block side, a curved arm
+// reaching REACH out over the street. {x, y, ax, ay}: ax/ay = the arm's direction
+const CURB = 0.25, REACH = 0.2, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
+const lamps = [];
+for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x, y, ax, ay) => lamps.push({ x, y, ax, ay }));
+const lampsB = bucketed(lamps);
+// light pool on the ground, under the lamp heads of whichever streets exist here
+function glow(wx, wy) {
+  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), lx = wx - bx * 8, ly = wy - by * 8;
+  const ay = Math.min(Math.abs(ly - LAMP_AT[0]), Math.abs(ly - LAMP_AT[1])), ax = Math.min(Math.abs(lx - LAMP_AT[0]), Math.abs(lx - LAMP_AT[1]));
+  let d = Infinity;
+  if (vseg(bx, by)) d = Math.min(d, Math.hypot(Math.min(Math.abs(lx - HEAD), Math.abs(lx - 2 + HEAD)), ay));
+  if (vseg(bx + 1, by)) d = Math.min(d, Math.hypot(8 + HEAD - lx, ay));
+  if (hseg(bx, by)) d = Math.min(d, Math.hypot(Math.min(Math.abs(ly - HEAD), Math.abs(ly - 2 + HEAD)), ax));
+  if (hseg(bx, by + 1)) d = Math.min(d, Math.hypot(8 + HEAD - ly, ax));
+  return Math.max(0, 1 - d / 0.55);
+}
+
+// parks: grass, a cross of dirt paths through each block (block-local centre 5), a pond, trees, benches.
+// A superblock park also grows over the streets it swallowed.
+const POND = [3.5, 3.5, 0.85]; // block-local x, y, base radius
+// a lumpy, slightly oval pond outline (different per park); `pad` grows it, for shores and keeping trees out
+function inPond(lx, ly, bx, by, pad = 0) {
+  const ex = (lx - POND[0]) / 1.15, ey = ly - POND[1], ang = Math.atan2(ey, ex);
+  const edge = POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
+  return Math.hypot(ex, ey) < edge + pad;
+}
+const BENCH = [[0.35, -2], [0.35, 2], [-2, 0.35], [2, -0.35]]; // relative to block center
+const trees = [], benches = [], parks = [];
+for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+  const kind = blockKind(bx, by), dist = districtOf(bx, by);
+  if (kind === 'park') {
+    parks.push([bx, by]);
+    for (let k = 0; k < 50; k++) {
+      const x = 0.3 + hash(bx, by, k * 2) * 7.4, y = 0.3 + hash(bx, by, k * 2 + 1) * 7.4;
+      if (ROAD[idx(bx * 8 + x, by * 8 + y)] || x < 2 && !blockKind(bx - 1, by) || y < 2 && !blockKind(bx, by - 1)) continue;
+      if (Math.abs(x - 5) < 0.5 || Math.abs(y - 5) < 0.5 || inPond(x, y, bx, by, 0.4)) continue;
+      trees.push({ x: bx * 8 + x, y: by * 8 + y, s: 1 });
+    }
+    for (const [x, y] of BENCH) benches.push({ x: bx * 8 + 5 + x, y: by * 8 + 5 + y });
+  }
+  if (kind === 'waterfront') for (let k = 0; k < 4; k++) { // promenade: trees and benches facing the water
+    const x = bx * 8 + 1 + k * 2, south = by === SHORE_S, y = south ? by * 8 + 2.35 : by * 8 + 7.6;
+    if (onBridge(bx, by) && k === 0) continue;
+    if (k & 1) benches.push({ x, y }); else trees.push({ x, y, s: 0.8 });
+  }
+}
+// street trees down the brownstone blocks, between the lamps
+// (the north / west sidewalk borders the block on the far side of the street, the other one block (bx, by))
+alongStreets(5, CURB, (x, y, ax, ay, bx, by, o) => {
+  if (districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) === 'brownstones') trees.push({ x, y, s: 0.75 });
+});
+alongStreets(5, 2 - CURB, (x, y, ax, ay, bx, by) => { if (districtOf(bx, by) === 'brownstones') trees.push({ x, y, s: 0.75 }); });
+const treesB = bucketed(trees), benchesB = bucketed(benches);
+
+// boats out on the sea: sailboats tacking back and forth, tugs and ferries crossing east-west
+const boats = [];
+for (let k = 0; k < 28; k++) {
+  const y = SHORE_S * 8 + 10 + hash(k, 1, 92) * (N - SHORE_S * 8 - 18), kind = ['sail', 'sail', 'tug', 'ferry'][k & 3];
+  boats.push({ x0: hash(k, 2, 92) * N, y, sp: (kind === 'sail' ? 0.06 : 0.12) * (k & 4 ? 1 : -1) * (0.7 + hash(k, 3, 92) * 0.6),
+               ph: hash(k, 4, 92) * 6.28, kind });
+}
+
+// landmark, construction-site and industrial props
+const extras = [], cranes = [], stacks = [];
+for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+  const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
+  if (lm === 'cathedral') for (const x of [3.5, 6.5])
+    extras.push({ x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
+  if (lm === 'radio')
+    extras.push({ x: X + 5, y: Y + 5, z: 0, w: 2.2, h: 16, art: ART.radio, col: (c, row, L) => c === '*' ? C(RED, fract(T * 0.7) < 0.5 ? 15 : 3) : C(row & 2 ? RED : WHITE, L) });
+  if (kind === 'construction') {
+    cranes.push({ x: X + 7, y: Y + 6.2, H: 7 + hash(bx, by, 98) * 2, slew: hash(bx, by, 99) * 6.28 });
+    for (const s of [3.5, 5, 6.5]) for (const [x, y] of [[s, 2.1], [s, 7.9], [2.1, s], [7.9, s]])
+      extras.push({ x: X + x, y: Y + y, z: 0, w: 1.4, h: 0.22, art: ART.fence, col: (c, row, L) => C(c === '=' ? ORANGE : GRAY, L) });
+  }
+  if (kind === 'yard') { // container stacks and a chain-link fence
+    for (let k = 0; k < 6; k++) {
+      const x = X + 2.6 + hash(bx, by, k * 3 + 40) * 4.8, y = Y + 2.6 + hash(bx, by, k * 3 + 41) * 4.8, n = 1 + (hash(bx, by, k * 3 + 42) * 3 | 0);
+      extras.push({ x, y, z: 0, w: 1.2, h: 0.26 * n, art: ART.containers[n - 1], col: (c, row, L) => C([RED, BLUE, ORANGE, GREEN, GRAY][(row + k) % 5], L * (c === '|' ? 0.6 : 1)) });
+    }
+    for (const s of [3.5, 6.5]) for (const [x, y] of [[s, 2.1], [s, 7.9], [2.1, s], [7.9, s]])
+      extras.push({ x: X + x, y: Y + y, z: 0, w: 2.5, h: 0.2, art: ART.chain, col: (c, row, L) => C(GRAY, L * 0.8) });
+  }
+  if (districtOf(bx, by) === 'industrial' && !kind && hash(bx, by, 51) < 0.45) { // a smokestack on the warehouse roof
+    const x = X + 3 + hash(bx, by, 52) * 4, y = Y + 3 + hash(bx, by, 53) * 4;
+    stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
+  }
+}
+// dockside cranes on the industrial piers
+for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
+const extrasB = bucketed(extras);
+
+// chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
+const lanterns = [];
+for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
+  const side = o === 'h' ? districtOf(bx, by) === 'chinatown' || districtOf(bx, by - 1) === 'chinatown'
+                         : districtOf(bx, by) === 'chinatown' || districtOf(bx - 1, by) === 'chinatown';
+  if (side) lanterns.push({ x, y, ax: Math.abs(ax), ay: Math.abs(ay) });
+});
+const lanternsB = bucketed(lanterns);
+
+// suspension bridges: two towers each, cables sagging between them, lit up at night like a necklace
+const BRIDGE_Y0 = SHORE_S * 8 + 2, BRIDGE_LEN = N - BRIDGE_Y0 + SHORE_N * 8 + 8; // shore road to shore road, over the wrap
+const TOWERS = [0.2, 0.8].map(f => BRIDGE_Y0 + BRIDGE_LEN * f), TOWER_H = 7, DECK_EDGE = [0.05, 1.95];
+const bridgeBits = []; // cable points and suspenders: {x, y, z, kind}
+const cableZ = t => { // cable height along the bridge, t = 0..1
+  const [a, b] = [0.2, 0.8];
+  if (t < a) return 0.3 + (TOWER_H - 0.3) * t / a;
+  if (t > b) return 0.3 + (TOWER_H - 0.3) * (1 - t) / (1 - b);
+  const m = (t - a) / (b - a); return TOWER_H - (TOWER_H - 0.9) * 4 * m * (1 - m);
+};
+for (const bx of BRIDGE_X) for (const e of DECK_EDGE) for (let s = 0; s < BRIDGE_LEN; s += 0.5) {
+  const t = s / BRIDGE_LEN, z = cableZ(t), x = bx * 8 + e, y = mod(BRIDGE_Y0 + s, N);
+  bridgeBits.push({ x, y, z, kind: 'cable' });
+  if ((s * 2 | 0) % 4 === 0 && z > 0.5) bridgeBits.push({ x, y, z: 0.05, h: z - 0.05, kind: 'hanger' });
+}
+const bridgeB = bucketed(bridgeBits);
+const towers = BRIDGE_X.flatMap(bx => TOWERS.map(y => ({ x: bx * 8 + 1, y: mod(y, N) })));
+
+// street food: a rare cart at the curb, a few kinds. Two art frames each so the steam/umbrella shimmer.
+const VENDOR_TYPES = [
+  { name: 'HOT DOGS', item: 'a hot dog', price: 3, color: RED, w: 0.32, art: [
+    ['  ~  ~', ' .-~~~~-.', '/HOT DOGS\\', "'---||---'", ' [=====]|', ' |o o o||', " '-O---O'"],
+    [' ~  ~', ' .-~~~~-.', '/HOT DOGS\\', "'---||---'", ' [=====]|', ' |o o o||', " '-O---O'"]] },
+  { name: 'TACOS', item: 'two tacos', price: 5, color: ORANGE, w: 0.5, art: [
+    ['   ~   ~', ' ___________', '|  TACOS  |\\', '|[##] [##]| |', '|_________|_|', ' (O)     (O)'],
+    ['  ~   ~', ' ___________', '|  TACOS  |\\', '|[##] [##]| |', '|_________|_|', ' (O)     (O)']] },
+  { name: 'ICE CREAM', item: 'a double scoop', price: 4, color: MAG, w: 0.3, art: [
+    ['  .-~~-.', ' / ICE  \\', "'---||---'", ' |*@*@*|', ' |_____|', '  O   O'],
+    ['  .-~~-.', ' /CREAM \\', "'---||---'", ' |@*@*@|', ' |_____|', '  O   O']] },
+  { name: 'COFFEE', item: 'a coffee', price: 2, color: BRICK, w: 0.26, art: [
+    ['   ~', '  ______', ' |COFFEE|', ' |[] ~~ |', ' |______|', '  O    O'],
+    ['    ~', '  ______', ' |COFFEE|', ' |[] ~~ |', ' |______|', '  O    O']] },
+  { name: 'NOODLES', item: 'a bowl of noodles', price: 6, color: YEL, w: 0.4, art: [
+    ['  ~  ~  ~', ' /\\/\\/\\/\\/\\', '| NOODLES  |', '|~~  ##  ~~|', '|__________|'],
+    ['   ~  ~  ~', ' /\\/\\/\\/\\/\\', '| NOODLES  |', '|~~  ##  ~~|', '|__________|']] },
+].map(v => ({ ...v, art: v.art.map(pad) }));
+const vendors = [];
+// on a sidewalk between the lamps, clear of the subway entrances; o/x offset = toward the building behind the cart
+alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
+  if (hash(bx, by, o === 'h' ? 200 : 202) < 0.03 && !blockKind(bx, by) && districtOf(bx, by) !== 'industrial')
+    vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
+});
+
+// subway: stations with a sidewalk entrance on a block's north side, spread out across town
+const stations = [];
+{
+  const cand = [];
+  for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
+    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
+  cand.sort((p, q) => p[0] - q[0]);
+  for (const [, bx, by] of cand) {
+    if (stations.length >= 14) break;
+    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 6)) continue;
+    let name = ST_NAMES[by];
+    if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
+    const w = Math.max(11, name.length + 2), a = (w - 3) >> 1;
+    const art = pad([' .' + '-'.repeat(a) + '[M]' + '-'.repeat(w - 3 - a) + '.', ' |' + (' ' + name).padEnd(w) + '|', " '" + '-'.repeat(w) + "'",
+                     ' '.repeat(w >> 1) + '| |', ' |' + '='.repeat(w) + '|', ' |  ' + '_'.repeat(w - 4) + '  |', ' |' + '_|'.repeat(w >> 1).padEnd(w, '_') + '|']);
+    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84, art, w: art[0].length * 0.04 });
+  }
+}
+
+// rooftop clutter: one item on some lots, placed inside the lot so it sits on the roof
+const roofs = [];
+for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+  if (blockKind(bx, by)) continue;
+  const dist = districtOf(bx, by);
+  for (let ly = 0; ly < 2; ly++) for (let lx = 0; lx < 2; lx++) {
+    const lot = [bx * 2 + lx, by * 2 + ly], r = hash(...lot, 13);
+    const x = bx * 8 + 2 + lx * 3 + 0.6 + hash(...lot, 14) * 1.8, y = by * 8 + 2 + ly * 3 + 0.6 + hash(...lot, 15) * 1.8, h = map[idx(x, y)];
+    if (dist === 'industrial' || dist === 'brownstones' && r > 0.3) continue;
+    if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, w: 0.1, h: 1, art: ART.antenna, kind: 'antenna' });
+    else if (r < 0.35) roofs.push({ x, y, z: h, w: 0.3, h: 0.4, art: ART.tank, kind: 'tank' });
+    else if (r < 0.55) {
+      const art = billboard(ADS[hash(...lot, 16) * ADS.length | 0]);
+      roofs.push({ x, y, z: h, w: art[0].length * 0.06, h: 0.35, art, kind: 'board', neon: NEON[hash(...lot, 17) * 4 | 0] });
+    }
+  }
+}
+const roofsB = bucketed(roofs);
