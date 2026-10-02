@@ -104,3 +104,32 @@ test('the pause menu stops the game and keeps its settings', async () => {
     await browser.close();
   }
 });
+
+test('shops: E at the counter opens the menu, number keys buy; E only leaves at the door', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(PAGE);
+    await page.waitForTimeout(300);
+    await page.evaluate(() => enterRoom('cafe', { word: 'CAFE', neon: MAG, ret: [px, py, a], line: 'Hi!' }, [5, 4.5, -Math.PI / 2]));
+    await page.keyboard.press('KeyE'); // middle of the room: nothing to do, and no leaving
+    assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind]), ['room', 'cafe']);
+    await page.evaluate(() => { px = 4.6; py = 2.4; });
+    await page.keyboard.press('KeyE');
+    assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('shop')).display), 'flex');
+    await page.keyboard.press('Digit1'); // a coffee
+    assert.deepStrictEqual(await page.evaluate(() => [money, inv.map(i => i.id)]), [97, ['coffee']]);
+    await page.keyboard.press('KeyE');
+    assert.strictEqual(await page.evaluate(() => paused), false, 'menu closed, game running');
+    await page.evaluate(() => { px = 5; py = 6.2; }); // by the door
+    await page.keyboard.press('KeyE');
+    assert.strictEqual(await page.evaluate(() => mode), 'walk');
+    await page.waitForTimeout(200);
+    assert.ok(await page.evaluate(() => { let n = 0; for (let i = (rows - 10) * cols; i < rows * cols; i++) if (CH[i] === '|' && COL[i] >> 4 === WHITE) n++; return n; }) > 0, 'the cup is in your hand');
+    assert.deepStrictEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
+});

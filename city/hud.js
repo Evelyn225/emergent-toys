@@ -46,6 +46,14 @@ const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - p
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
 const canBoard = () => room.kind === 'station' && trainStopped(room) && py > 4.2 && Math.abs(px - 23) < 13;
+// near a way out: a door, or the foot of the station stairs
+const nearExit = () => {
+  const s = room.def.stairs;
+  if (s && px > s.x0 - 0.5 && px < s.x1 + 0.5 && py < s.y1 + 1.2) return true;
+  for (let y = Math.floor(py - 1.4); y <= py + 1.4; y++) for (let x = Math.floor(px - 1.4); x <= px + 1.4; x++)
+    if (roomAt(x, y) === 'D' && Math.hypot(x + 0.5 - px, y + 0.5 - py) < 1.6) return true;
+  return false;
+};
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (mode === 'room') {
@@ -55,8 +63,10 @@ function promptText() {
     if (nearElevator()) return 'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
+    if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
     if (nearKeeper()) return `"${room.line}"`;
-    return room.kind === 'station' ? 'E: leave (or take the EXIT stairs)' : 'E: leave';
+    if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
+    return '';
   }
   if (mode === 'roof') return 'E: take the stairs down';
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
@@ -76,8 +86,9 @@ function promptText() {
   if (el) return `E: up to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
+  if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const ven = nearVendor();
-  if (ven) return `E: buy ${ven.type.item} ($${ven.type.price})`;
+  if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.kind === SHOP_SHUT) return 'Closed.';
@@ -134,6 +145,7 @@ const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'C
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
 function hud() {
   minimap();
+  hotbar();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const where = mode === 'room' ? '' : [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,

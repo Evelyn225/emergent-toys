@@ -64,10 +64,7 @@ function citySprites() {
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
-  forNear(lanternsB, l => {
-    const [vx, vy] = R(l.x, l.y), s = Math.abs(across(l.ax, l.ay, vx, vy));
-    drawShape(vx, vy, 0.3, 0.95 * s + 0.04, 0.22, (i, u, z, du, dz, L) => lanternCell(i, u, z, du, dz, L, 0.95 * s + 0.04));
-  });
+  forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   const LC = { G: GREEN, Y: YEL, R: RED };
   forNear(lightsB, s => {
     const col = C(LC[light(s.bx, s.by, s.vert, T)], 15);
@@ -86,6 +83,7 @@ function citySprites() {
   for (const m of people) if (!m.hidden)
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+  drawBall();
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
 }
 
@@ -182,15 +180,24 @@ function drawBench(vx, vy, fx, fy, s) {
   });
 }
 
-// chinatown lanterns: a string sagging across the street, red paper lanterns hanging off it, glowing after dark.
-// hw = how wide the string looks from here
-function lanternCell(i, u, z, du, dz, L, hw) {
-  const t = u / hw, sag = 0.2 - 0.06 * (1 - t * t); // z is measured up from the shape base (0.3)
-  if (Math.abs(t) > 1) return false;
-  for (const k of [-0.66, -0.33, 0, 0.33, 0.66]) if (Math.abs(u - k * hw) < Math.max(du, 0.035) && z < sag && z > sag - 0.05)
-    return set(i, z > sag - 0.025 ? 'O' : 'o', C(k === 0 ? YEL : RED, Math.max(L, night * 15))), true;
-  if (onLine(z - sag, dz, du, 0.12 * Math.abs(t) / hw)) return set(i, '-', C(GRAY, L * 0.7)), true;
-  return false;
+// chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
+// glowing after dark. Real 3D, so it stays put across the street as you walk round it.
+const LANTERN_SPAN = 0.95, sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
+function drawLanternString(vx, vy, ax, ay) {
+  const segs = 8, cord = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
+  for (let k = 0; k < segs; k++) {
+    const t0 = -1 + 2 * k / segs, t1 = t0 + 2 / segs, tm = (t0 + t1) / 2, z = (sagZ(t0) + sagZ(t1)) / 2;
+    drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, 0.004, z - 0.004, z + 0.004), cord);
+  }
+  const lit = Math.max(night, overcast * 0.6);
+  for (const t of [-0.66, -0.33, 0, 0.33, 0.66]) {
+    const z = sagZ(t), gold = t === 0;
+    drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, 0.018, 0.018, z - 0.05, z - 0.006), (i, tt, L) => {
+      const cap = HIT.w > z - 0.014 || HIT.w < z - 0.042;
+      BG[i] = cap ? C(GRAY, 2) : C(gold ? YEL : RED, 3 + lit * 9 + L * 0.2);
+      return set(i, cap ? '=' : lit > 0.3 ? 'o' : ' ', C(YEL, 15)), true;
+    });
+  }
 }
 
 // a factory smokestack: banded brick, red and white at the top, smoke curling off downwind

@@ -332,7 +332,8 @@ function reflect() {
 
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
-  const n = drops.length * rain | 0;
+  const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
+  const n = drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];
     if ((d[1] += d[2] * dt * 1.8) > 1) { d[1] -= 1; d[0] = Math.random(); }

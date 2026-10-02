@@ -76,6 +76,7 @@ function elGetOff() {
   say(`${s.name}`);
 }
 function enterRoom(kind, extra, spawn) {
+  fx.skating = false; // the board comes up under your arm at the door
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
@@ -92,7 +93,9 @@ function interact() {
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
-    return leaveRoom();
+    if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
+    if (nearExit()) return leaveRoom();
+    return say('The way out is over by the door.', 2);
   }
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
@@ -110,6 +113,7 @@ function interact() {
     px = c.x; py = c.y;
     return;
   }
+  if (pickUpBall()) return say('You pick up the ball.');
   const who = nearPerson();
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
@@ -117,9 +121,7 @@ function interact() {
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const ven = nearVendor();
-  if (ven && !pay(ven.type.price)) return say(`${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)} is ${fmt$(ven.type.price)}. You can't afford it.`);
-  if (ven && taskBuy(ven)) return say(`You buy ${ven.type.item}. Not for you, though.`);
-  if (ven) return say(pick([`You buy ${ven.type.item}. Delicious.`, `${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)}, $${ven.type.price}. Worth it.`, `"Enjoy!" says the ${ven.type.name.toLowerCase()} vendor.`]));
+  if (ven) return openShop(ven.type.name, VENDOR_STOCK[ven.type.name], ven);
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);

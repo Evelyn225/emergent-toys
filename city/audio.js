@@ -9,10 +9,10 @@ const AUDIO_DIR = 'audio/ascii-city/';
 const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
                     rain: 'rain.mp3' };
 // overall level of each layer at full mix
-const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, crickets: 0.3, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
-                rain: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
+const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
+                rain: 0.5, board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { crickets: 0.5, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const CAL = { board: 0.4, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null, musicBus, ambBus, sfxBus; // the three volume settings' buses
 const beds = {}, synth = {};
@@ -91,19 +91,8 @@ const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k
 function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
 function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambBus); return g; }
 function makeSynths() {
-  // crickets. A one-second chirp pattern (three quick pulses of a high tone), a few copies at slightly
-  // different rates and pitches, panned about, so they drift in and out of step like the real thing
-  synth.crickets = layer();
-  const sr = actx.sampleRate, chirp = actx.createBuffer(1, sr * 1.1, sr), cd = chirp.getChannelData(0);
-  for (let k = 0; k < cd.length; k++) {
-    const t = k / sr, pulse = Math.floor(t / 0.033), inPulse = t - pulse * 0.033;
-    cd[k] = pulse < 3 && inPulse < 0.022 ? Math.sin(2 * Math.PI * 4600 * t) * Math.sin(Math.PI * inPulse / 0.022) : 0;
-  }
-  for (const [rate, pan, g] of [[1, -0.6, 0.6], [1.07, 0.5, 0.45], [0.93, 0.1, 0.35], [1.13, -0.2, 0.25]]) {
-    const src = actx.createBufferSource(), gg = actx.createGain(), p = actx.createStereoPanner();
-    src.buffer = chirp; src.loop = true; src.playbackRate.value = rate; gg.gain.value = g; p.pan.value = pan;
-    chain(src, gg, p, synth.crickets); src.start(0, Math.random());
-  }
+  // a skateboard: the low roar of wheels on the street
+  synth.board = layer(); chain(noiseSrc(0.6), filt('lowpass', 350), filt('highpass', 60), synth.board);
   // waves: low surf that swells and draws back
   synth.waves = layer(); const swell = actx.createGain(); swell.gain.value = 0.55; lfo(swell.gain, 0.08, 0.45);
   chain(noiseSrc(0.7), filt('lowpass', 550), swell, synth.waves);
@@ -193,7 +182,7 @@ function audioTick(dt) {
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
-    seaDist: seaDist(px, py), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
+    seaDist: seaDist(px, py), boombox: fx.boombox, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
   if (me) { // the engine note follows the car

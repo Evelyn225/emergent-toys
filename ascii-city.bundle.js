@@ -200,18 +200,18 @@ const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9'
 // ---- shops
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
-  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO'];
+  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE'];
 const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
   chinatown: ['DUMPLINGS','NOODLES','TEA HOUSE','HERBS','KARAOKE','BAKERY','DIM SUM','JADE','RAMEN','PHO','MAHJONG'],
-  downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR'],
+  downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS'],
   industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7'],
-  brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP'],
+  brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE'],
 };
 const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR: 'il!Y', PHARMACY: '+=o', PHONES: '[]#',
   HARDWARE: 'T7/', FLORIST: '*@&', 'PET SHOP': '~>o', ARCADE: '[]#', TATTOO: '*%', LAUNDRY: 'O@', HERBS: '%&*', JADE: 'o@*',
-  'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/' };
+  'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o' };
 const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, sorry.', 'Nice weather, huh?', 'Take your time.'];
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
 const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
@@ -1272,7 +1272,7 @@ const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, rain) and synthesised ones (crickets, waves,
+// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, rain) and synthesised ones (waves,
 // wind, rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -1300,7 +1300,7 @@ function seaDist(x, y) {
 }
 
 function audioMix(s) {
-  const out = { city: 0, crowd: 0, night: 0, crickets: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
@@ -1320,11 +1320,12 @@ function audioMix(s) {
   out.city = far * d.city * (0.3 + 0.7 * s.day) * (1 - 0.35 * s.rain);
   out.crowd = far * d.crowd * busyHour(s.tod) * (1 - 0.7 * s.rain);
   out.night = far * (0.5 + 0.5 * d.city) * s.night * (1 - 0.35 * s.rain); // the city at night: a distant hum, the odd car
-  out.crickets = d.night * s.night * (1 - 0.8 * s.rain) * (0.6 + 0.4 * far);
   out.rain = s.rain;
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog;
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.boombox) out.bossa = 0.7; // your boombox
+  out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : 0;
   for (const k in out) out[k] = clamp(out[k], 0, 1);
   return out;
@@ -1346,6 +1347,150 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'waterfront') return seaDist(x, y) < 1.6 && hash(bx & (NB - 1), (by & (NB - 1)) === SHORE_S ? 1 : 2, 47) < 0.35 ? 'sand' : 'stone';
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
+}
+// ---- goods: things you can buy, carry and use. Pure (no DOM), so the node tests can run it; goods-ui.js draws it.
+// kind: food / drink (used up in bites or sips), smoke, gear (kept). uses = bites, sips or drags.
+const ITEMS = {
+  // food
+  hotdog: { name: 'hot dog', price: 3, kind: 'food', uses: 3 }, taco: { name: 'tacos', price: 5, kind: 'food', uses: 3 },
+  icecream: { name: 'ice cream', price: 4, kind: 'food', uses: 4 }, noodlebox: { name: 'noodles', price: 6, kind: 'food', uses: 4 },
+  croissant: { name: 'croissant', price: 3, kind: 'food', uses: 3 }, donut: { name: 'donut', price: 2, kind: 'food', uses: 2 },
+  bagel: { name: 'bagel', price: 3, kind: 'food', uses: 3 }, sandwich: { name: 'sandwich', price: 7, kind: 'food', uses: 4 },
+  chips: { name: 'chips', price: 2, kind: 'food', uses: 4 }, apple: { name: 'apple', price: 1, kind: 'food', uses: 3 },
+  slice: { name: 'pizza slice', price: 4, kind: 'food', uses: 3 }, burger: { name: 'burger', price: 8, kind: 'food', uses: 4 },
+  kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
+  dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
+  // drink
+  coffee: { name: 'coffee', price: 3, kind: 'drink', uses: 4, caffeine: 60 }, latte: { name: 'latte', price: 5, kind: 'drink', uses: 4, caffeine: 50 },
+  tea: { name: 'tea', price: 2, kind: 'drink', uses: 3, caffeine: 25 }, soda: { name: 'soda', price: 2, kind: 'drink', uses: 3 },
+  water: { name: 'water', price: 1, kind: 'drink', uses: 3 }, energy: { name: 'energy drink', price: 4, kind: 'drink', uses: 3, caffeine: 90 },
+  beer: { name: 'beer', price: 6, kind: 'drink', uses: 4, booze: 0.25 }, whiskey: { name: 'whiskey', price: 9, kind: 'drink', uses: 2, booze: 0.4 },
+  cocktail: { name: 'cocktail', price: 12, kind: 'drink', uses: 3, booze: 0.3 },
+  // smoke
+  cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 },
+  // gear
+  skateboard: { name: 'skateboard', price: 60, kind: 'gear' }, ball: { name: 'soccer ball', price: 20, kind: 'gear' },
+  boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
+  book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
+  vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
+};
+// what each kind of place sells: by shop word first, then by room kind
+const STOCK_WORD = {
+  '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
+  BODEGA: ['sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper'], DELI: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'],
+  LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
+  GROCERY: ['apple', 'chips', 'water', 'soda'], MARKET: ['apple', 'chips', 'water'], FRUIT: ['apple'],
+  PAWN: ['skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda'],
+  HARDWARE: ['umbrella'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
+  CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
+  PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
+  RAMEN: ['ramen', 'tea'], NOODLES: ['ramen', 'dumplings', 'tea'], PHO: ['ramen', 'tea'], DUMPLINGS: ['dumplings', 'tea'],
+  'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['tea', 'dumplings'], THAI: ['ramen', 'soda'],
+  'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'],
+};
+const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
+                     hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
+const stockFor = (kind, word) => STOCK_WORD[word] || STOCK_ROOM[kind] || [];
+// the street carts
+const VENDOR_STOCK = { 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 'ICE CREAM': ['icecream'], COFFEE: ['coffee', 'donut'], NOODLES: ['noodlebox', 'tea'] };
+
+// ---- what you carry: 8 slots, one held. Effects wear off with time.
+const INV_SIZE = 8;
+const inv = []; // { id, uses }
+let held = 0; // which slot is in your hand
+const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false };
+let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
+const heldItem = () => inv[held] || null;
+function buy(id) { // false + why, if you can't
+  const it = ITEMS[id];
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
+  inv.push({ id, uses: it.uses || 0 }); held = inv.length - 1;
+  return [true, `You buy ${aOrSome(it.name)}. (${fmt$(it.price)})`];
+}
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
+function removeHeld() {
+  const it = inv[held];
+  if (it && it.id === 'skateboard') fx.skating = false;
+  if (it && it.id === 'boombox') fx.boombox = false;
+  inv.splice(held, 1); held = clamp(held, 0, Math.max(0, inv.length - 1));
+}
+// Q: use what's in your hand. Returns a line to show (and the sound to play, see goods-ui.js)
+const BOOK_LINES = ['"It was a dark and stormy night..." You read a chapter.', 'A detective novel. The butler, surely.', 'Poetry. You read one, then another.',
+  'A guidebook to the city. Half the shops in it have closed.'];
+function useHeld(near) {
+  const it = heldItem();
+  if (!it) return ['Your hands are empty.', null];
+  const d = ITEMS[it.id];
+  if (d.kind === 'food' || d.kind === 'drink') {
+    it.uses--;
+    if (d.caffeine) fx.caffeine = Math.min(180, fx.caffeine + d.caffeine / d.uses);
+    if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
+    const done = it.uses <= 0;
+    if (done) removeHeld();
+    return [done ? (d.kind === 'food' ? `You finish the ${d.name}.` : `You finish the ${d.name}.`) : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`,
+            d.kind === 'food' ? 'bite' : 'sip'];
+  }
+  if (d.kind === 'smoke') {
+    if (fx.smoke > 0) { cigTip = 1; return ['You take a drag.', 'drag']; }
+    it.uses--; fx.smoke = 45; cigTip = 1;
+    if (it.uses <= 0) removeHeld();
+    return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
+  }
+  switch (it.id) {
+    case 'skateboard':
+      if (near.indoors) return ['Not in here.', null];
+      fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
+    case 'boombox': fx.boombox = !fx.boombox; return [fx.boombox ? 'You hit play.' : 'You stop the tape.', 'click'];
+    case 'ball':
+      if (near.indoors) return ['Not in here.', null];
+      kickBall(near.x, near.y, near.a); removeHeld(); return ['You punt the ball down the street.', 'kick'];
+    case 'umbrella': return [near.rain > 0.3 ? 'You hold the umbrella up against the rain.' : 'You twirl the umbrella. It isn\'t raining.', null];
+    case 'book': return [pick(BOOK_LINES), 'page'];
+    case 'newspaper': return [`Headline: ${pick(near.headlines)}`, 'page'];
+    case 'vinyl': return ['You admire the sleeve. Shame you don\'t have a record player.', null];
+    case 'flowers':
+      if (near.person) { removeHeld(); near.person.talk = 4; return [`"For me? Oh!" ${pick(['They light up.', 'They blush.', 'They smell them and grin.'])}`, 'chime']; }
+      return ['You sniff the flowers. Lovely.', null];
+  }
+  return ['Nothing happens.', null];
+}
+function dropHeld() { const it = heldItem(); if (!it) return null; removeHeld(); return ITEMS[it.id].name; }
+function stepGoods(dt) {
+  if (fx.skating && mode !== 'walk') fx.skating = false;
+  fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
+  cigTip = Math.max(0, cigTip - dt * 0.8);
+  return stepBall(dt);
+}
+// how fast you walk, from what you've had and what you're riding
+const footSpeed = () => (fx.skating ? 1.8 : 1) * (fx.caffeine > 0 ? 1.25 : 1);
+
+// ---- the soccer ball, once kicked: rolls, slows, bounces off walls, sinks in the sea; walk into it to dribble,
+// E to pick it up
+let ball = null; // { x, y, vx, vy, z, vz }
+function kickBall(x, y, a, power = 2.6) {
+  ball = { x: x + Math.cos(a) * 0.12, y: y + Math.sin(a) * 0.12, vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
+}
+function stepBall(dt) {
+  if (!ball) return;
+  ball.vz -= 2 * dt; ball.z += ball.vz * dt;
+  if (ball.z < 0) { ball.z = 0; ball.vz = Math.abs(ball.vz) > 0.08 ? -ball.vz * 0.5 : 0; }
+  const f = Math.max(0, 1 - (ball.z > 0 ? 0.2 : 1.1) * dt); ball.vx *= f; ball.vy *= f;
+  for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
+    const nx = ax === 'x' ? ball.x + ball.vx * dt : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt : ball.y;
+    if (map[idx(Math.floor(nx), Math.floor(ny))] > ball.z) { if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
+    else { ball.x = mod(nx, N); ball.y = mod(ny, N); }
+  }
+  if (isWater(ball.x, ball.y) && ball.z === 0) { ball = null; return 'lost'; } // into the drink
+  // dribbling: walk into it and it rolls on ahead of you
+  const dx_ = rel(ball.x - px), dy_ = rel(ball.y - py), d = Math.hypot(dx_, dy_);
+  if (d < 0.07 && mode === 'walk') { const s = 0.9; ball.vx += dx_ / (d || 1) * s; ball.vy += dy_ / (d || 1) * s; }
+  return null;
+}
+function pickUpBall() {
+  if (!ball || Math.hypot(rel(ball.x - px), rel(ball.y - py)) > 0.3 || inv.length >= INV_SIZE) return false;
+  ball = null; inv.push({ id: 'ball', uses: 0 }); held = inv.length - 1; return true;
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
@@ -1751,7 +1896,8 @@ function reflect() {
 
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
-  const n = drops.length * rain | 0;
+  const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
+  const n = drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];
     if ((d[1] += d[2] * dt * 1.8) > 1) { d[1] -= 1; d[0] = Math.random(); }
@@ -1876,10 +2022,7 @@ function citySprites() {
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
-  forNear(lanternsB, l => {
-    const [vx, vy] = R(l.x, l.y), s = Math.abs(across(l.ax, l.ay, vx, vy));
-    drawShape(vx, vy, 0.3, 0.95 * s + 0.04, 0.22, (i, u, z, du, dz, L) => lanternCell(i, u, z, du, dz, L, 0.95 * s + 0.04));
-  });
+  forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   const LC = { G: GREEN, Y: YEL, R: RED };
   forNear(lightsB, s => {
     const col = C(LC[light(s.bx, s.by, s.vert, T)], 15);
@@ -1898,6 +2041,7 @@ function citySprites() {
   for (const m of people) if (!m.hidden)
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+  drawBall();
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
 }
 
@@ -1994,15 +2138,24 @@ function drawBench(vx, vy, fx, fy, s) {
   });
 }
 
-// chinatown lanterns: a string sagging across the street, red paper lanterns hanging off it, glowing after dark.
-// hw = how wide the string looks from here
-function lanternCell(i, u, z, du, dz, L, hw) {
-  const t = u / hw, sag = 0.2 - 0.06 * (1 - t * t); // z is measured up from the shape base (0.3)
-  if (Math.abs(t) > 1) return false;
-  for (const k of [-0.66, -0.33, 0, 0.33, 0.66]) if (Math.abs(u - k * hw) < Math.max(du, 0.035) && z < sag && z > sag - 0.05)
-    return set(i, z > sag - 0.025 ? 'O' : 'o', C(k === 0 ? YEL : RED, Math.max(L, night * 15))), true;
-  if (onLine(z - sag, dz, du, 0.12 * Math.abs(t) / hw)) return set(i, '-', C(GRAY, L * 0.7)), true;
-  return false;
+// chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
+// glowing after dark. Real 3D, so it stays put across the street as you walk round it.
+const LANTERN_SPAN = 0.95, sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
+function drawLanternString(vx, vy, ax, ay) {
+  const segs = 8, cord = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
+  for (let k = 0; k < segs; k++) {
+    const t0 = -1 + 2 * k / segs, t1 = t0 + 2 / segs, tm = (t0 + t1) / 2, z = (sagZ(t0) + sagZ(t1)) / 2;
+    drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, 0.004, z - 0.004, z + 0.004), cord);
+  }
+  const lit = Math.max(night, overcast * 0.6);
+  for (const t of [-0.66, -0.33, 0, 0.33, 0.66]) {
+    const z = sagZ(t), gold = t === 0;
+    drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, 0.018, 0.018, z - 0.05, z - 0.006), (i, tt, L) => {
+      const cap = HIT.w > z - 0.014 || HIT.w < z - 0.042;
+      BG[i] = cap ? C(GRAY, 2) : C(gold ? YEL : RED, 3 + lit * 9 + L * 0.2);
+      return set(i, cap ? '=' : lit > 0.3 ? 'o' : ' ', C(YEL, 15)), true;
+    });
+  }
 }
 
 // a factory smokestack: banded brick, red and white at the top, smoke curling off downwind
@@ -2814,6 +2967,7 @@ function render(dt) {
   if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
+  drawHeld(dt); // what's in your hand (or mouth, or under your feet)
 
   g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
   for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length
@@ -2892,6 +3046,14 @@ const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - p
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
 const canBoard = () => room.kind === 'station' && trainStopped(room) && py > 4.2 && Math.abs(px - 23) < 13;
+// near a way out: a door, or the foot of the station stairs
+const nearExit = () => {
+  const s = room.def.stairs;
+  if (s && px > s.x0 - 0.5 && px < s.x1 + 0.5 && py < s.y1 + 1.2) return true;
+  for (let y = Math.floor(py - 1.4); y <= py + 1.4; y++) for (let x = Math.floor(px - 1.4); x <= px + 1.4; x++)
+    if (roomAt(x, y) === 'D' && Math.hypot(x + 0.5 - px, y + 0.5 - py) < 1.6) return true;
+  return false;
+};
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (mode === 'room') {
@@ -2901,8 +3063,10 @@ function promptText() {
     if (nearElevator()) return 'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
+    if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
     if (nearKeeper()) return `"${room.line}"`;
-    return room.kind === 'station' ? 'E: leave (or take the EXIT stairs)' : 'E: leave';
+    if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
+    return '';
   }
   if (mode === 'roof') return 'E: take the stairs down';
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
@@ -2922,8 +3086,9 @@ function promptText() {
   if (el) return `E: up to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
+  if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const ven = nearVendor();
-  if (ven) return `E: buy ${ven.type.item} ($${ven.type.price})`;
+  if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.kind === SHOP_SHUT) return 'Closed.';
@@ -2980,6 +3145,7 @@ const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'C
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
 function hud() {
   minimap();
+  hotbar();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const where = mode === 'room' ? '' : [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
@@ -3078,6 +3244,7 @@ function elGetOff() {
   say(`${s.name}`);
 }
 function enterRoom(kind, extra, spawn) {
+  fx.skating = false; // the board comes up under your arm at the door
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
@@ -3094,7 +3261,9 @@ function interact() {
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
-    return leaveRoom();
+    if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
+    if (nearExit()) return leaveRoom();
+    return say('The way out is over by the door.', 2);
   }
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
@@ -3112,6 +3281,7 @@ function interact() {
     px = c.x; py = c.y;
     return;
   }
+  if (pickUpBall()) return say('You pick up the ball.');
   const who = nearPerson();
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
@@ -3119,9 +3289,7 @@ function interact() {
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const ven = nearVendor();
-  if (ven && !pay(ven.type.price)) return say(`${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)} is ${fmt$(ven.type.price)}. You can't afford it.`);
-  if (ven && taskBuy(ven)) return say(`You buy ${ven.type.item}. Not for you, though.`);
-  if (ven) return say(pick([`You buy ${ven.type.item}. Delicious.`, `${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)}, $${ven.type.price}. Worth it.`, `"Enjoy!" says the ${ven.type.name.toLowerCase()} vendor.`]));
+  if (ven) return openShop(ven.type.name, VENDOR_STOCK[ven.type.name], ven);
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
@@ -3185,10 +3353,10 @@ const AUDIO_DIR = 'audio/ascii-city/';
 const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
                     rain: 'rain.mp3' };
 // overall level of each layer at full mix
-const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, crickets: 0.3, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
-                rain: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
+const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
+                rain: 0.5, board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { crickets: 0.5, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const CAL = { board: 0.4, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null, musicBus, ambBus, sfxBus; // the three volume settings' buses
 const beds = {}, synth = {};
@@ -3267,19 +3435,8 @@ const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k
 function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
 function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambBus); return g; }
 function makeSynths() {
-  // crickets. A one-second chirp pattern (three quick pulses of a high tone), a few copies at slightly
-  // different rates and pitches, panned about, so they drift in and out of step like the real thing
-  synth.crickets = layer();
-  const sr = actx.sampleRate, chirp = actx.createBuffer(1, sr * 1.1, sr), cd = chirp.getChannelData(0);
-  for (let k = 0; k < cd.length; k++) {
-    const t = k / sr, pulse = Math.floor(t / 0.033), inPulse = t - pulse * 0.033;
-    cd[k] = pulse < 3 && inPulse < 0.022 ? Math.sin(2 * Math.PI * 4600 * t) * Math.sin(Math.PI * inPulse / 0.022) : 0;
-  }
-  for (const [rate, pan, g] of [[1, -0.6, 0.6], [1.07, 0.5, 0.45], [0.93, 0.1, 0.35], [1.13, -0.2, 0.25]]) {
-    const src = actx.createBufferSource(), gg = actx.createGain(), p = actx.createStereoPanner();
-    src.buffer = chirp; src.loop = true; src.playbackRate.value = rate; gg.gain.value = g; p.pan.value = pan;
-    chain(src, gg, p, synth.crickets); src.start(0, Math.random());
-  }
+  // a skateboard: the low roar of wheels on the street
+  synth.board = layer(); chain(noiseSrc(0.6), filt('lowpass', 350), filt('highpass', 60), synth.board);
   // waves: low surf that swells and draws back
   synth.waves = layer(); const swell = actx.createGain(); swell.gain.value = 0.55; lfo(swell.gain, 0.08, 0.45);
   chain(noiseSrc(0.7), filt('lowpass', 550), swell, synth.waves);
@@ -3369,7 +3526,7 @@ function audioTick(dt) {
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
-    seaDist: seaDist(px, py), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
+    seaDist: seaDist(px, py), boombox: fx.boombox, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
   if (me) { // the engine note follows the car
@@ -3493,7 +3650,185 @@ const togglePause = () => paused ? closePause(false) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep) openPause(); });
 applySettings();
+// ===== goods on screen: the shop menu, the inventory, the hotbar, and what's in your hand (or mouth, or underfoot)
+// ---- in your hand: ascii art at the bottom right, bobbing as you walk. [lines, colour(ch, row)]
+const HAND = {
+  coffee: [['  ) )', ' ( (', '.-----.', '|     |]', '|CAFE |', "'-----'"], (c, r) => r < 2 ? C(WHITE, 7) : c === 'C' || c === 'A' || c === 'F' || c === 'E' ? C(GREEN, 12) : C(WHITE, 13)],
+  latte: [['  ) )', '.-----.', '|~~~~~|]', '|     |', "'-----'"], (c, r) => r === 2 ? C(WARM, 13) : C(WHITE, 13)],
+  tea: [['  ) )', ' _____', '|     |)', '|  o  |', "'-----'"], (c, r) => c === 'o' ? C(GREEN, 12) : C(WHITE, 12)],
+  soda: [[' .---.', ' |   |', ' |COLA', ' |   |', " '---'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
+  water: [['  _', ' | |', '|   |', '|~~~|', '|___|'], (c, r) => C(CYAN, 12)],
+  energy: [[' .---.', ' |ZAP|', ' | / |', ' |/  |', " '---'"], (c, r) => /[A-Z/]/.test(c) ? C(YEL, 15) : C(GREEN, 12)],
+  beer: [[' _____', '(~~~~~)', '|     |]', '|     |]', '|_____|'], (c, r) => r < 2 ? C(WHITE, 14) : C(YEL, 12)],
+  whiskey: [['', ' _____', '|~~~~~|', '| o o |', '|_____|'], (c, r) => r === 2 ? C(ORANGE, 12) : c === 'o' ? C(CYAN, 13) : C(WHITE, 11)],
+  cocktail: [['  \\ o', '\\_____/', ' \\~~~/', '  \\ /', '   |', ' __|__'], (c, r) => c === 'o' ? C(RED, 14) : r === 2 ? C(MAG, 13) : C(WHITE, 12)],
+  hotdog: [[' ___________', '(~~~~~~~~~~~)', ' (_________)'], (c, r) => r === 1 ? C(c === '~' ? YEL : RED, 13) : C(ORANGE, 12)],
+  taco: [['  ________', ' /%%%%%%%%\\', '/__________\\'], (c, r) => r === 1 ? C(GREEN, 12) : C(YEL, 13)],
+  icecream: [['  @@@', ' @@@@@', '  \\#/', '   V'], (c, r) => c === '@' ? C(MAG, 14) : C(ORANGE, 12)],
+  noodlebox: [['   ||', ' _||__', '|~~~~~|', '\\_____/'], (c, r) => r < 2 ? C(BRICK, 12) : r === 2 ? C(YEL, 13) : C(WHITE, 13)],
+  ramen: [['   ||', ' _||___', '(~~@~~~)', ' \\____/'], (c, r) => c === '@' ? C(WHITE, 15) : r === 2 ? C(YEL, 13) : C(RED, 12)],
+  croissant: [['  _.--._', ' (__\\/__)'], (c, r) => C(ORANGE, 13)],
+  donut: [['  .---.', ' ( (o) )', "  '---'"], (c, r) => c === 'o' ? C(GRAY, 3) : C(MAG, 13)],
+  bagel: [['  .---.', ' ( (_) )', "  '---'"], (c, r) => C(WARM, 12)],
+  sandwich: [[' _________', '/%%%%%%%%%\\', '|=========|', '\\_________/'], (c, r) => r === 1 ? C(GREEN, 12) : r === 2 ? C(RED, 12) : C(WARM, 12)],
+  chips: [[' .------.', ' | CHIPS|', ' |  ()  |', " '------'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(YEL, 13)],
+  apple: [['   ,', ' .-|-.', '(     )', " '---'"], (c, r) => r === 0 || c === '|' ? C(GREEN, 12) : C(RED, 13)],
+  slice: [['\\%%%%%%/', ' \\%o%%/', '  \\%%/', '   \\/'], (c, r) => c === 'o' ? C(RED, 13) : C(YEL, 13)],
+  burger: [[' .-----.', '(%%%%%%%)', '(=======)', " '-----'"], (c, r) => r === 1 ? C(GREEN, 12) : r === 2 ? C(BRICK, 12) : C(ORANGE, 13)],
+  kebab: [['  _____', ' /%%%%%\\', ' \\_____/', '   | |'], (c, r) => r === 1 ? C(GREEN, 12) : C(WARM, 13)],
+  dumplings: [[' .-. .-.', '( . ( . )', ' \\_/ \\_/'], (c, r) => C(WHITE, 13)],
+  mooncake: [[' .----.', '( (**) )', " '----'"], (c, r) => c === '*' ? C(YEL, 15) : C(ORANGE, 12)],
+  book: [[' ________', '|        |', '| ~~~~~~ |', '|________|'], (c, r) => r === 2 ? C(WHITE, 12) : C(BLUE, 12)],
+  newspaper: [[' ________', '|NEWS ==|', '|=== ===|', '|=== ===|'], (c, r) => C(WHITE, 13)],
+  vinyl: [[' _______', '|  ___  |', '| ( o ) |', '|_______|'], (c, r) => c === 'o' ? C(RED, 13) : C(MAG, 12)],
+  flowers: [[' *@*@*', '  \\|/', '   |', '  [_]'], (c, r) => r === 0 ? C(ITEM_COL[(c.charCodeAt(0) + r) & 7], 14) : c === '[' || c === ']' || c === '_' ? C(BRICK, 12) : C(GREEN, 12)],
+  umbrella: [['   |', '   |', '   J'], (c, r) => C(GRAY, 12)],
+  ball: [['  ____', ' / \\/ \\', '|  /\\  |', ' \\_\\/_/'], (c, r) => C(WHITE, 13)],
+  boombox: [[' _[====]_', '|O |==| O|', '|_|____|_|'], (c, r) => c === 'O' ? C(GRAY, 9) : c === '=' ? C(CYAN, 13) : C(GRAY, 13)],
+  skateboard: [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)],
+  cigarettes: [[' _____', '|=====|', '|SMOKE|', '|_____|'], (c, r) => /[A-Z]/.test(c) ? C(RED, 13) : C(WHITE, 13)],
+};
+const HAND_FIST = ['  ____', ' (    \\', '(______)']; // the hand holding it
+let smokePuffs = []; // [x, y, life] in screen cells
+const putCell = (r, c, ch, col, bg = NONE) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ' && bg === NONE) return; const i = r * cols + c; set(i, ch, col); BG[i] = bg; FOGS[i] = FOGB[i] = 0; };
+// draw ascii art solid: the gaps inside each line are filled, so the street doesn't show through the cup
+function putArt(art, r0, c0, col, bg) {
+  art.forEach((l, r) => { const a0 = l.search(/\S/), a1 = l.length - [...l].reverse().join('').search(/\S/);
+    [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r), k >= a0 && k < a1 ? bg : NONE)); });
+}
+function drawHeld(dt) {
+  if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.round(Math.sin(T * (fx.skating ? 4 : 9)) * 0.6) : 0;
+  if (fx.skating && mode === 'walk') { // the board under your feet
+    putArt(HAND.skateboard[0], rows - 3, (cols >> 1) - 8, HAND.skateboard[1], C(GRAY, 1));
+  }
+  const it = heldItem();
+  if (it && !(fx.skating && it.id === 'skateboard')) {
+    const [art, col] = HAND[it.id] || HAND.book, c0 = Math.floor(cols * 0.72), r0 = rows - art.length - 3 + bob;
+    putArt(art, r0, c0, col, C(GRAY, 1));
+    putArt(HAND_FIST, rows - 3 + bob, c0, () => C(SKIN, 12), C(SKIN, 4));
+    if (it.id === 'umbrella' && rain > 0.2) { // the canopy overhead
+      for (let c = 0; c < cols; c++) {
+        const edge = Math.round(4 + Math.abs(c - cols / 2) / cols * 6);
+        for (let r = 0; r < edge; r++) { const i = r * cols + c; set(i, r === edge - 1 ? (c % 9 === 0 ? 'Y' : '-') : ' ', C(BLUE, 6)); BG[i] = C(BLUE, 2); FOGS[i] = FOGB[i] = 0; }
+        if (c % 9 === 0 && Math.random() < 0.3) putCell(edge + (T * 6 + c | 0) % 3, c, '.', C(BLUE, 8)); // drips off the edge
+      }
+    }
+  }
+  if (fx.smoke > 0) { // a cigarette in your mouth, tip glowing; drags puff smoke
+    const c0 = (cols >> 1) - 2, r0 = rows - 2, tip = fract(T * 2) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5;
+    for (let k = 0; k < 6; k++) putCell(r0 - (k >> 1), c0 + k, k < 1 ? '_' : '/', C(WHITE, 14), C(GRAY, 2));
+    putCell(r0 - 3, c0 + 6, '*', C(cigTip > 0.3 ? YEL : ORANGE, tip), C(RED, 2 + cigTip * 4));
+    if (Math.random() < dt * (1.5 + cigTip * 25)) smokePuffs.push([c0 + 6, r0 - 4, 1]);
+  }
+  smokePuffs = smokePuffs.filter(p => (p[2] -= dt * 0.35) > 0);
+  for (const p of smokePuffs) { p[1] -= dt * 4; p[0] += Math.sin(T * 3 + p[1]) * dt * 3; putCell(Math.round(p[1]), Math.round(p[0]), p[2] > 0.6 ? '~' : '.', C(GRAY, 4 + p[2] * 8)); }
+}
+
+// ---- the hotbar and the effects you're under, bottom left
+function hotbar() {
+  if (mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze) return;
+  let x = 6;
+  const y = cv.height - FS * 2 - 10;
+  inv.forEach((it, k) => {
+    const s = `${k + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
+    g.fillStyle = k === held ? 'rgba(255,184,77,0.35)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
+    g.fillStyle = k === held ? '#fff' : '#bbb'; g.fillText(s, x + 6, y + 4);
+    x += w + 4;
+  });
+  const tags = [fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
+  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = '#ffb84d'; g.fillText(s, 12, y - FS - 7); }
+}
+
+// ---- shop menu and inventory: small panels over a frozen game, keyboard or mouse
+let shopEl = null, invEl = null, shopCtx = null;
+function panel(id) {
+  const el = document.createElement('div');
+  el.id = id;
+  el.innerHTML = `<style>
+    #${id} { position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); font: 13px/1.5 monospace; color: rgba(255,255,255,0.85); }
+    #${id} .panel { width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; padding: 18px 20px; background: rgba(10,6,10,0.94); border: 1px solid rgba(255,255,255,0.15); }
+    #${id} h1 { margin: 0 0 4px; font-size: 16px; font-weight: normal; letter-spacing: 3px; color: #fff; }
+    #${id} .sub { margin: 0 0 12px; color: rgba(255,255,255,0.5); }
+    #${id} button { display: grid; grid-template-columns: 1.6em 1fr auto; gap: 8px; width: 100%; box-sizing: border-box; margin: 5px 0; padding: 7px 10px; text-align: left; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); cursor: pointer; }
+    #${id} button:hover, #${id} button:focus-visible { background: rgba(255,184,77,0.18); border-color: rgba(255,184,77,0.6); outline: none; }
+    #${id} button[disabled] { opacity: 0.4; cursor: default; }
+    #${id} .k { color: rgba(255,184,77,0.9); }
+    #${id} .hint { margin: 12px 0 0; color: rgba(255,255,255,0.45); }
+  </style><div class="panel"></div>`;
+  document.body.appendChild(el);
+  return el;
+}
+function showPanel(el, html) {
+  el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
+  for (const k in K) K[k] = 0;
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
+const panelOpen = () => shopEl && shopEl.style.display === 'flex' || invEl && invEl.style.display === 'flex';
+// title, item ids, and the cart if it's a street vendor (for the fetch favour)
+function openShop(title, stock, vendor = null) {
+  shopEl = shopEl || panel('shop');
+  shopCtx = { title, stock, vendor };
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span>${fmt$(it.price)}</span></button>`; }).join('');
+  showPanel(shopEl, `<h1>${title}</h1><p class="sub">You have ${fmt$(money)} &middot; ${inv.length}/${INV_SIZE} carried</p>${rows_}<p class="hint">1-${stock.length} or click to buy &middot; E / Esc to close</p>`);
+  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'); if (b) shopBuy(b.dataset.buy); };
+}
+function shopBuy(id) {
+  const [ok, line] = buy(id);
+  say(line, 3);
+  if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor)) say(`${line} That's the one they wanted.`, 4);
+  openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
+}
+const closeShop = () => hidePanel(shopEl);
+function openInventory() {
+  invEl = invEl || panel('inventory');
+  const rows_ = inv.length ? inv.map((it, k) => `<button data-slot="${k}"><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' (in hand)' : ''}</span><span>${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub">Nothing. Shops sell things.</p>';
+  showPanel(invEl, `<h1>CARRYING</h1><p class="sub">${fmt$(money)} &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">click or 1-${INV_SIZE}: hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { held = +b.dataset.slot; openInventory(); } };
+}
+const closeInventory = () => hidePanel(invEl);
+// keys while a panel is up; true if handled
+function panelKey(e) {
+  if (!panelOpen()) return false;
+  const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
+  if (e.code === 'Escape' || e.code === 'KeyE' && shop || e.code === 'KeyI' && !shop) { shop ? closeShop() : closeInventory(); return true; }
+  if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
+  if (!shop && n && inv[n[1] - 1]) { held = n[1] - 1; openInventory(); return true; }
+  if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
+  if (!shop && e.code === 'KeyX') { const d = dropHeld(); if (d) say(`You leave the ${d} behind.`); openInventory(); return true; }
+  return true; // swallow everything else
+}
+
+// ---- using things: the sounds that go with them
+const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
+  'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
+  'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters'];
+function useHeldItem() {
+  const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES() });
+  say(line, 3);
+  if (actx && sound) sfxUse(sound);
+}
+function sfxUse(s) {
+  const at = actx.currentTime;
+  if (s === 'bite') { burst(at, 0.06, [filt('bandpass', 2200, 1.2)], 0.12); burst(at + 0.09, 0.05, [filt('bandpass', 1800, 1.2)], 0.09); }
+  if (s === 'sip') burst(at, 0.25, [filt('lowpass', 900), filt('highpass', 300)], 0.07);
+  if (s === 'light') { tone(at, 2600, 0.03, 0.08, 'square'); burst(at + 0.04, 0.4, [filt('lowpass', 1500)], 0.1); }
+  if (s === 'drag') { burst(at, 0.4, [filt('bandpass', 3500, 0.8)], 0.03); burst(at + 0.6, 0.9, [filt('lowpass', 900)], 0.06); }
+  if (s === 'kick') { tone(at, 110, 0.12, 0.2); burst(at, 0.05, [filt('bandpass', 900, 1)], 0.15); }
+  if (s === 'page') burst(at, 0.15, [filt('highpass', 2500)], 0.05);
+  if (s === 'board') { tone(at, 180, 0.08, 0.12); burst(at, 0.1, [filt('bandpass', 1200, 1)], 0.1); }
+  if (s === 'click') tone(at, 1800, 0.03, 0.08, 'square');
+  if (s === 'chime') sfxDoor();
+}
+// the ball, out in the world
+function drawBall() {
+  if (!ball) return;
+  const [vx, vy] = R(ball.x, ball.y);
+  drawArt(vx, vy, ball.z, 0.035, 0.035, ['O'], (c, row, L) => C(WHITE, Math.max(L, 6)));
+}
 onkeydown = e => {
+  if (!e.repeat && panelKey(e)) return; // a shop or the inventory is open
   if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
   if (paused) return;
   K[e.code] = 1;
@@ -3501,6 +3836,14 @@ onkeydown = e => {
   audioStart(); // sound can only start from a key press or click
   if (e.code === 'KeyN') toggleSound();
   if (e.code === 'KeyE' && !sleep) interact();
+  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  if (onFoot && !sleep) {
+    if (e.code === 'KeyQ') useHeldItem();
+    if (e.code === 'KeyI') openInventory();
+    if (e.code === 'KeyX') { const d = dropHeld(); if (d) say(`You leave the ${d} behind.`); }
+    const slot = /^Digit([1-8])$/.exec(e.code);
+    if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) held = slot[1] - 1;
+  }
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
@@ -3558,7 +3901,7 @@ function loop(t) {
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
-    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt; // sprint 29 km/h, cars top out at 79
+    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     move((cx * f - cy * s) * sp, (cy * f + cx * s) * sp);
@@ -3569,6 +3912,7 @@ function loop(t) {
   }
   stepTraffic(dt, T);
   stepTask(dt);
+  if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   if (mode === 'taxi') {
     px = me.x; py = me.y;
     const target = Math.atan2(me.hy, me.hx) + look; // camera eases round corners
@@ -3584,7 +3928,10 @@ function loop(t) {
   if (chaseOn) { // render from behind the car, then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
-  } else { camYaw = a; render(dt); }
+  } else { // a drink or two and the world sways a little
+    camYaw = a; const wob = fx.booze, sa = Math.sin(T * 0.9) * 0.04 * wob, sp_ = Math.sin(T * 1.3) * 0.02 * wob;
+    a += sa; pitch += sp_; render(dt); a -= sa; pitch -= sp_;
+  }
   audioTick(dt);
   requestAnimationFrame(loop);
 }
@@ -3598,3 +3945,6 @@ function chaseCam(dt) {
   return [me.x - bx * back, me.y - by * back, camYaw];
 }
 requestAnimationFrame(loop);
+
+// the mouse wheel cycles what's in your hand
+addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + Math.sign(e.deltaY), inv.length); }, { passive: true });

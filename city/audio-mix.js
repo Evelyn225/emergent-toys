@@ -2,7 +2,7 @@
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, rain) and synthesised ones (crickets, waves,
+// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, rain) and synthesised ones (waves,
 // wind, rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -30,7 +30,7 @@ function seaDist(x, y) {
 }
 
 function audioMix(s) {
-  const out = { city: 0, crowd: 0, night: 0, crickets: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
@@ -50,11 +50,12 @@ function audioMix(s) {
   out.city = far * d.city * (0.3 + 0.7 * s.day) * (1 - 0.35 * s.rain);
   out.crowd = far * d.crowd * busyHour(s.tod) * (1 - 0.7 * s.rain);
   out.night = far * (0.5 + 0.5 * d.city) * s.night * (1 - 0.35 * s.rain); // the city at night: a distant hum, the odd car
-  out.crickets = d.night * s.night * (1 - 0.8 * s.rain) * (0.6 + 0.4 * far);
   out.rain = s.rain;
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog;
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.boombox) out.bossa = 0.7; // your boombox
+  out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : 0;
   for (const k in out) out[k] = clamp(out[k], 0, 1);
   return out;

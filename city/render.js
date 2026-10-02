@@ -171,6 +171,7 @@ function render(dt) {
   if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
+  drawHeld(dt); // what's in your hand (or mouth, or under your feet)
 
   g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
   for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length

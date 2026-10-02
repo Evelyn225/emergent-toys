@@ -1,4 +1,5 @@
 onkeydown = e => {
+  if (!e.repeat && panelKey(e)) return; // a shop or the inventory is open
   if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
   if (paused) return;
   K[e.code] = 1;
@@ -6,6 +7,14 @@ onkeydown = e => {
   audioStart(); // sound can only start from a key press or click
   if (e.code === 'KeyN') toggleSound();
   if (e.code === 'KeyE' && !sleep) interact();
+  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  if (onFoot && !sleep) {
+    if (e.code === 'KeyQ') useHeldItem();
+    if (e.code === 'KeyI') openInventory();
+    if (e.code === 'KeyX') { const d = dropHeld(); if (d) say(`You leave the ${d} behind.`); }
+    const slot = /^Digit([1-8])$/.exec(e.code);
+    if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) held = slot[1] - 1;
+  }
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
@@ -63,7 +72,7 @@ function loop(t) {
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
-    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt; // sprint 29 km/h, cars top out at 79
+    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     move((cx * f - cy * s) * sp, (cy * f + cx * s) * sp);
@@ -74,6 +83,7 @@ function loop(t) {
   }
   stepTraffic(dt, T);
   stepTask(dt);
+  if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   if (mode === 'taxi') {
     px = me.x; py = me.y;
     const target = Math.atan2(me.hy, me.hx) + look; // camera eases round corners
@@ -89,7 +99,10 @@ function loop(t) {
   if (chaseOn) { // render from behind the car, then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
-  } else { camYaw = a; render(dt); }
+  } else { // a drink or two and the world sways a little
+    camYaw = a; const wob = fx.booze, sa = Math.sin(T * 0.9) * 0.04 * wob, sp_ = Math.sin(T * 1.3) * 0.02 * wob;
+    a += sa; pitch += sp_; render(dt); a -= sa; pitch -= sp_;
+  }
   audioTick(dt);
   requestAnimationFrame(loop);
 }
@@ -103,3 +116,6 @@ function chaseCam(dt) {
   return [me.x - bx * back, me.y - by * back, camYaw];
 }
 requestAnimationFrame(loop);
+
+// the mouse wheel cycles what's in your hand
+addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + Math.sign(e.deltaY), inv.length); }, { passive: true });
