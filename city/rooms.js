@@ -492,7 +492,15 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
 }
 // cell walls: bars across the front, tally marks scratched by the bunk, bare concrete
 function jailWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === room.H - 1) { BG[i] = C(GRAY, 1); return set(i, fract(u * 5) < 0.22 ? '|' : z > 2.3 || z < 0.1 ? '=' : ' ', C(GRAY, L * 1.3)), true; }
+  if (my === room.H - 1 && z < 2.4) { // the bars, and through them the corridor: its floor, the cells across it, a light
+    const bar = fract(u * 4) < 0.16;
+    if (bar || z > 2.28 || z < 0.08) { BG[i] = C(GRAY, 3); return set(i, bar ? '|' : '=', C(WHITE, L * 1.3)), true; }
+    BG[i] = C(GRAY, 1);
+    if (z < 0.45) return set(i, fract(u * 2 + z * 7) < 0.25 ? '.' : ' ', C(GRAY, L * 0.7)), true; // the corridor floor
+    if (z > 1.85 && z < 2.05) return Math.abs(fract(u / 3) - 0.5) < 0.12 ? (BG[i] = C(YEL, 2), set(i, '=', C(YEL, 13))) : set(i, ' ', 0), true; // strip lights
+    if (z > 1.6) return set(i, z < 1.66 ? '_' : ' ', C(GRAY, L * 0.6)), true;
+    return set(i, fract(u * 9) < 0.22 ? '|' : z > 0.95 && z < 1.0 ? '-' : ' ', C(GRAY, L * 0.9)), true; // the cells opposite, behind their own bars
+  }
   if (my === 0 && z > 1 && z < 1.4 && u > 1 && u < 2.8) return BG[i] = C(GRAY, 3 + L * 0.12), set(i, fract(u * 9) < 0.35 ? '|' : z > 1.3 && fract(u * 1.8) < 0.5 ? '/' : ' ', C(WHITE, L * 0.8)), true;
   BG[i] = C(GRAY, 3 + L * 0.12); // painted cinder blocks: courses every 20cm, the joints staggered
   const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;

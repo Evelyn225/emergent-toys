@@ -170,14 +170,14 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (code(c) && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
+  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
     o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, sfxBus); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
     const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
-    if (!cars.includes(c) || !code(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
+    if (!cars.includes(c) || !code(c) || wanted.busted || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
     v.g.gain.setTargetAtTime(0.16 * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);

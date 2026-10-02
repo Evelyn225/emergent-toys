@@ -44,7 +44,7 @@ cv.onclick = () => { audioStart(); if (!paused) cv.requestPointerLock(); };
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 onmousemove = e => {
   if (!document.pointerLockElement) return;
-  if (paused) return;
+  if (paused || game) return;
   const s = settings.sensitivity;
   if (mode === 'taxi') look += e.movementX * 0.003 * s; else if (mode !== 'drive') a += e.movementX * 0.003 * s;
   pitch -= e.movementY * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();

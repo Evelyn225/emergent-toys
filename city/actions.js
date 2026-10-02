@@ -3,17 +3,28 @@ function curbOf(c) { // sidewalk spot on the car's right, next to its lane
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   return vert ? [mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir, N), c.y] : [c.x, mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir, N)];
 }
-function toLane(c) { // snap a car onto the nearest lane in the direction it points and hand it back to the AI
-  const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
-  if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
-  else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
-  plan(c);
+// a car you get out of stays where it is: pulled in to the kerb if it's on a street, nobody drives it away
+function parkCar(c) {
+  const r = ROAD[idx(Math.floor(c.x), Math.floor(c.y))];
+  if (r === 1 || r === 2) { // square it up to the street and into the kerb lane on the side it's nearer
+    const vert = r === 1, base = Math.floor((vert ? c.x : c.y) / 8) * 8 + 1, side = Math.sign((vert ? c.x : c.y) - base) || 1;
+    if (vert) { c.x = base + side * 0.72; c.hx = 0; c.hy = c.hy >= 0 ? 1 : -1; } else { c.y = base + side * 0.72; c.hy = 0; c.hx = c.hx >= 0 ? 1 : -1; }
+  }
+  c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
+}
+// the driver of a car you've just taken: out onto the sidewalk beside it, shouting (someone from far off stands in)
+function ejectDriver(c) {
+  const p = people.find(q => !q.follow && !q.hailing && Math.hypot(rel(q.x - px), rel(q.y - py)) > 40);
+  if (!p) return;
+  const [x, y] = curbOf(c);
+  Object.assign(p, { x, y, hidden: false, inside: null, path: [], wait: 0, talk: 3, goal: null });
+  snapToCorner(p);
 }
 function leaveCar() {
   const c = me;
   endTaxiShift();
   [px, py] = curbOf(c);
-  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; a += Math.PI / 2; }
+  if (mode === 'drive') { c.player = false; c.v = 0; parkCar(c); a += Math.PI / 2; }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
@@ -128,8 +139,12 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
-      const w = crime('steal', c.x, c.y);
-      say(w === 'cop' ? 'A cop saw that.' : w ? 'The driver runs off shouting...' : 'You hot-wire it.', 3);
+      if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
+      else {
+        c.mine = true; ejectDriver(c);
+        const w = crime('steal', c.x, c.y);
+        say(w === 'cop' ? 'A cop saw that.' : 'You drag the driver out. They run off shouting...', 3);
+      }
     }
     px = c.x; py = c.y;
     return;

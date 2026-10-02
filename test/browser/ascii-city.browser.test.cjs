@@ -215,3 +215,13 @@ test('busted: no fine money means a cell; a minute later the guard lets you out 
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [mode, Math.min(...SERVICES.filter(b => b.kind === 'police').map(b => Math.hypot(rel(b.x - px), rel(b.y - py)))) < 1.5]), ['walk', true], 'out, by the station');
 }));
+
+test('stealing a car drags the driver out onto the sidewalk; the car stays where you leave it', () => withPage(async page => {
+  await page.evaluate(() => { const c = cars.find(c => c.body !== TAXI && !c.ev && !c.patrol && ROAD[idx(Math.floor(c.x), Math.floor(c.y))]); c.v = 0; px = c.x + c.hy * 0.3; py = c.y - c.hx * 0.3; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => mode), 'drive');
+  assert.ok(await page.evaluate(() => people.some(p => !p.hidden && p.talk > 0 && Math.hypot(rel(p.x - me.x), rel(p.y - me.y)) < 1.5)), 'the driver, out and shouting');
+  const at = await page.evaluate(() => { const c = me; leaveCar(); window.parked = c; return [c.x, c.y]; });
+  await page.waitForTimeout(1500);
+  assert.deepStrictEqual(await page.evaluate(() => [parked.x, parked.y, parked.parked]), [...at, true], 'nobody drives it away');
+}));

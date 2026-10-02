@@ -9,7 +9,7 @@
 // Police: patrol cars cruising in the traffic (cars with patrol: true; in pursuit they run lights and siren and steer
 // for you), and officers on foot walking beats round the police stations (footCops), who chase you on foot.
 const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
-const ESCAPE_T = [0, 10, 16, 24];            // seconds out of sight to lose them, by stars
+const ESCAPE_T = [0, 18, 28, 40];            // seconds out of sight to lose them, by stars
 const UNITS = [0, 2, 3, 5];                  // patrol cars after you, by stars
 const FINE = [0, 60, 150, 300];              // what they'll take instead of a cell
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
@@ -133,8 +133,11 @@ function stepCrime(dt) {
   const [wx, wy] = crimePos(), inside = mode === 'room';
   const sees = c => !inside && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
   wanted.seen = cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
-  if (wanted.seen) { wanted.lastX = wx; wanted.lastY = wy; wanted.hideT = 0; }
+  if (wanted.seen) { wanted.lastX = wx; wanted.lastY = wy; wanted.hideT = 0; wanted.tipT = 0; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
+  else if (wanted.hideT < ESCAPE_T[wanted.stars] * 0.5 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
+    wanted.tipT = 6; wanted.lastX = mod(wx + (Math.random() - 0.5) * 3, N); wanted.lastY = mod(wy + (Math.random() - 0.5) * 3, N);
+  }
   for (const c of cars) if (c.pursuit) c.dest = [wanted.lastX, wanted.lastY]; // steering for you, or where you were
   const onFoot = mode === 'walk';
   for (const c of footCops) { // officers within a few blocks join the chase on foot

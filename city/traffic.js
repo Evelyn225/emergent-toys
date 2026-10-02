@@ -55,6 +55,13 @@ function addCar(props) {
   c.ex = c.x; c.ey = c.y; plan(c); cars.push(c);
   return c;
 }
+// snap a car onto the nearest lane in the direction it points and hand it back to the AI
+function toLane(c) {
+  const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
+  if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
+  else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
+  c.ex = c.x; c.ey = c.y; plan(c);
+}
 // a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y)
 function randomLane(near = 0, x = 0, y = 0) {
   for (;;) {
@@ -159,6 +166,7 @@ function stepEmergency(dt) {
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
 function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
+  for (const c of cars) if (c.parked && Math.hypot(rel(c.x - px), rel(c.y - py)) > 45) { c.parked = c.mine = false; c.v = 0; toLane(c); } // left behind: back into the traffic
   stepEmergency(dt);
   fillGrid(carGrid, cars, 'ex', 'ey'); fillGrid(pplGrid, people, 'x', 'y');
   // a car crossing our path sideways is long (0.45), one in line with us is narrow (0.2). Around an emergency vehicle
@@ -167,7 +175,7 @@ function stepTraffic(dt, t, everywhere = false) {
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
   const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !c.player && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;

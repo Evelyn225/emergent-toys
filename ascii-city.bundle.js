@@ -859,6 +859,13 @@ function addCar(props) {
   c.ex = c.x; c.ey = c.y; plan(c); cars.push(c);
   return c;
 }
+// snap a car onto the nearest lane in the direction it points and hand it back to the AI
+function toLane(c) {
+  const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
+  if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
+  else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
+  c.ex = c.x; c.ey = c.y; plan(c);
+}
 // a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y)
 function randomLane(near = 0, x = 0, y = 0) {
   for (;;) {
@@ -963,6 +970,7 @@ function stepEmergency(dt) {
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
 function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
+  for (const c of cars) if (c.parked && Math.hypot(rel(c.x - px), rel(c.y - py)) > 45) { c.parked = c.mine = false; c.v = 0; toLane(c); } // left behind: back into the traffic
   stepEmergency(dt);
   fillGrid(carGrid, cars, 'ex', 'ey'); fillGrid(pplGrid, people, 'x', 'y');
   // a car crossing our path sideways is long (0.45), one in line with us is narrow (0.2). Around an emergency vehicle
@@ -971,7 +979,7 @@ function stepTraffic(dt, t, everywhere = false) {
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
   const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
-  const evs = cars.filter(code), live = c => !c.player && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
+  const evs = cars.filter(code), live = c => !c.player && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
   for (const c of cars) {
     c.blk = null; let best = Infinity;
     if (!live(c)) continue;
@@ -2188,7 +2196,7 @@ function taxiPay(dist, took, harsh, crashed, route = dist) {
 // Police: patrol cars cruising in the traffic (cars with patrol: true; in pursuit they run lights and siren and steer
 // for you), and officers on foot walking beats round the police stations (footCops), who chase you on foot.
 const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
-const ESCAPE_T = [0, 10, 16, 24];            // seconds out of sight to lose them, by stars
+const ESCAPE_T = [0, 18, 28, 40];            // seconds out of sight to lose them, by stars
 const UNITS = [0, 2, 3, 5];                  // patrol cars after you, by stars
 const FINE = [0, 60, 150, 300];              // what they'll take instead of a cell
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
@@ -2312,8 +2320,11 @@ function stepCrime(dt) {
   const [wx, wy] = crimePos(), inside = mode === 'room';
   const sees = c => !inside && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
   wanted.seen = cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
-  if (wanted.seen) { wanted.lastX = wx; wanted.lastY = wy; wanted.hideT = 0; }
+  if (wanted.seen) { wanted.lastX = wx; wanted.lastY = wy; wanted.hideT = 0; wanted.tipT = 0; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
+  else if (wanted.hideT < ESCAPE_T[wanted.stars] * 0.5 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
+    wanted.tipT = 6; wanted.lastX = mod(wx + (Math.random() - 0.5) * 3, N); wanted.lastY = mod(wy + (Math.random() - 0.5) * 3, N);
+  }
   for (const c of cars) if (c.pursuit) c.dest = [wanted.lastX, wanted.lastY]; // steering for you, or where you were
   const onFoot = mode === 'walk';
   for (const c of footCops) { // officers within a few blocks join the chase on foot
@@ -3927,7 +3938,15 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
 }
 // cell walls: bars across the front, tally marks scratched by the bunk, bare concrete
 function jailWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === room.H - 1) { BG[i] = C(GRAY, 1); return set(i, fract(u * 5) < 0.22 ? '|' : z > 2.3 || z < 0.1 ? '=' : ' ', C(GRAY, L * 1.3)), true; }
+  if (my === room.H - 1 && z < 2.4) { // the bars, and through them the corridor: its floor, the cells across it, a light
+    const bar = fract(u * 4) < 0.16;
+    if (bar || z > 2.28 || z < 0.08) { BG[i] = C(GRAY, 3); return set(i, bar ? '|' : '=', C(WHITE, L * 1.3)), true; }
+    BG[i] = C(GRAY, 1);
+    if (z < 0.45) return set(i, fract(u * 2 + z * 7) < 0.25 ? '.' : ' ', C(GRAY, L * 0.7)), true; // the corridor floor
+    if (z > 1.85 && z < 2.05) return Math.abs(fract(u / 3) - 0.5) < 0.12 ? (BG[i] = C(YEL, 2), set(i, '=', C(YEL, 13))) : set(i, ' ', 0), true; // strip lights
+    if (z > 1.6) return set(i, z < 1.66 ? '_' : ' ', C(GRAY, L * 0.6)), true;
+    return set(i, fract(u * 9) < 0.22 ? '|' : z > 0.95 && z < 1.0 ? '-' : ' ', C(GRAY, L * 0.9)), true; // the cells opposite, behind their own bars
+  }
   if (my === 0 && z > 1 && z < 1.4 && u > 1 && u < 2.8) return BG[i] = C(GRAY, 3 + L * 0.12), set(i, fract(u * 9) < 0.35 ? '|' : z > 1.3 && fract(u * 1.8) < 0.5 ? '/' : ' ', C(WHITE, L * 0.8)), true;
   BG[i] = C(GRAY, 3 + L * 0.12); // painted cinder blocks: courses every 20cm, the joints staggered
   const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;
@@ -4519,17 +4538,28 @@ function curbOf(c) { // sidewalk spot on the car's right, next to its lane
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   return vert ? [mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir, N), c.y] : [c.x, mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir, N)];
 }
-function toLane(c) { // snap a car onto the nearest lane in the direction it points and hand it back to the AI
-  const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
-  if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
-  else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
-  plan(c);
+// a car you get out of stays where it is: pulled in to the kerb if it's on a street, nobody drives it away
+function parkCar(c) {
+  const r = ROAD[idx(Math.floor(c.x), Math.floor(c.y))];
+  if (r === 1 || r === 2) { // square it up to the street and into the kerb lane on the side it's nearer
+    const vert = r === 1, base = Math.floor((vert ? c.x : c.y) / 8) * 8 + 1, side = Math.sign((vert ? c.x : c.y) - base) || 1;
+    if (vert) { c.x = base + side * 0.72; c.hx = 0; c.hy = c.hy >= 0 ? 1 : -1; } else { c.y = base + side * 0.72; c.hy = 0; c.hx = c.hx >= 0 ? 1 : -1; }
+  }
+  c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
+}
+// the driver of a car you've just taken: out onto the sidewalk beside it, shouting (someone from far off stands in)
+function ejectDriver(c) {
+  const p = people.find(q => !q.follow && !q.hailing && Math.hypot(rel(q.x - px), rel(q.y - py)) > 40);
+  if (!p) return;
+  const [x, y] = curbOf(c);
+  Object.assign(p, { x, y, hidden: false, inside: null, path: [], wait: 0, talk: 3, goal: null });
+  snapToCorner(p);
 }
 function leaveCar() {
   const c = me;
   endTaxiShift();
   [px, py] = curbOf(c);
-  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; a += Math.PI / 2; }
+  if (mode === 'drive') { c.player = false; c.v = 0; parkCar(c); a += Math.PI / 2; }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
@@ -4644,8 +4674,12 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
-      const w = crime('steal', c.x, c.y);
-      say(w === 'cop' ? 'A cop saw that.' : w ? 'The driver runs off shouting...' : 'You hot-wire it.', 3);
+      if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
+      else {
+        c.mine = true; ejectDriver(c);
+        const w = crime('steal', c.x, c.y);
+        say(w === 'cop' ? 'A cop saw that.' : 'You drag the driver out. They run off shouting...', 3);
+      }
     }
     px = c.x; py = c.y;
     return;
@@ -4996,14 +5030,14 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (code(c) && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
+  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
     o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, sfxBus); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
     const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
-    if (!cars.includes(c) || !code(c) || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
+    if (!cars.includes(c) || !code(c) || wanted.busted || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
     v.g.gain.setTargetAtTime(0.16 * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
@@ -5605,8 +5639,7 @@ const GAME_KEYS = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 
                     ArrowDown: 'down', KeyS: 'down', Space: 'act', Enter: 'act' };
 function startGame(id, kind, word = '') { // word: the shop's sign, for what's on its shelves
   for (const k in K) K[k] = 0;
-  game = { g: GAMES[id](Math.random, word), kind, paid: false, pressed: {} };
-  if (document.pointerLockElement) document.exitPointerLock();
+  game = { g: GAMES[id](Math.random, word), kind, paid: false, pressed: {} }; // (the mouse stays locked: it just doesn't turn you)
 }
 // keys while a game's up; true if handled (every key is, while playing)
 function gameKey(e) {
@@ -5732,8 +5765,9 @@ function wantedHud() {
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
   const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, x = cv.width / 2 - line.length * w / 2;
-  const flash = fract(T * 2.5) < 0.5 ? RED : BLUE;
-  artText([line], x, y, s, (c, r, k) => pend ? C(GRAY, 12) : k < 6 ? C(WHITE, 14) : c === '*' ? (wanted.seen ? C(flash, 15) : C(GRAY, 12)) : C(GRAY, 7));
+  const flash = fract(T * 3) < 0.5, hue = wanted.seen ? (flash ? RED : BLUE) : flash ? WHITE : GRAY;
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - w, y - s * 0.15, (line.length + 2) * w, s * 1.3);
+  artText([line], x, y, s, (c, r, k) => pend ? C(GRAY, 12) : c === '.' ? C(GRAY, 7) : C(hue, 15)); // flashing: you can't miss it
   if (!pend && !wanted.seen) {
     const left = Math.max(0, ESCAPE_T[wanted.stars] - wanted.hideT), sub = `out of sight: losing them in ${Math.ceil(left)}s`;
     g.font = FS + 'px monospace';
@@ -5748,6 +5782,7 @@ function wantedHud() {
 let bustedEl = null, finePaid = 0;
 function openBusted() {
   if (bustedEl && bustedEl.style.display === 'flex') return;
+  if (actx) tickSirens(mode === 'room'); // the sirens cut out (they'd hang on one note while this is up)
   bustedEl = bustedEl || panel('busted');
   const f = fineFor(wanted.stars), can = money >= f;
   showPanel(bustedEl, `<h1>Busted</h1><p class="sub">${wanted.crime || 'trouble'} &middot; ${'*'.repeat(wanted.stars)}</p>
@@ -5765,7 +5800,7 @@ function bustedKey(e) { // nothing else while they've got you: not even Esc
 function outOfCar() { // they take you out of whatever you were driving
   if (!me) return;
   const c = me;
-  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; }
+  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); }
   else { c.rider = c.dest = c.arrived = false; plan(c); }
   me = null; mode = 'walk';
 }
@@ -5924,7 +5959,7 @@ cv.onclick = () => { audioStart(); if (!paused) cv.requestPointerLock(); };
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 onmousemove = e => {
   if (!document.pointerLockElement) return;
-  if (paused) return;
+  if (paused || game) return;
   const s = settings.sensitivity;
   if (mode === 'taxi') look += e.movementX * 0.003 * s; else if (mode !== 'drive') a += e.movementX * 0.003 * s;
   pitch -= e.movementY * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
