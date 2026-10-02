@@ -36,10 +36,11 @@ const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
     return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
   }, 1, 0), walk: true }; // long axis across the stairwell (x): wall to wall, dy deep
 });
-const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
+const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 6, DUMPLINGS: 0, THAI: 7, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
 const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
                     ['SLICE 3', 'WHOLE 18', 'KNOTS 4', 'SODA 2'], ['LATTE 4', 'DONUT 2', 'BAGEL 3', 'TEA 2'],
-                    ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3']];
+                    ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3'],
+                    ['PHO 11', 'BANH MI 7', 'ROLLS 5', 'TEA 2'], ['PAD THAI 11', 'CURRY 12', 'MANGO 6', 'THAI TEA 4']];
 const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
                    CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };

@@ -48,8 +48,9 @@ const nearPerson = () => {
 const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
 // a vending machine you're facing, within arm's reach (3m of its middle)
 const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Math.floor(py / 8))].find(m => {
-  const ex = m.x - px, ey = m.y - py, d = Math.hypot(ex, ey);
-  return d < 0.3 && (d < 0.12 || (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.5);
+  const ex = m.x - px, ey = m.y - py, d = Math.hypot(ex, ey), dot = (ex * Math.cos(a) + ey * Math.sin(a)) / d;
+  // in view, or right beside you and anywhere in front (it beats the shop door it stands by: step away for that)
+  return d < 0.3 && (d < 0.12 || dot > 0.5 || d < 0.2 && dot > 0);
 }) : null;
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
@@ -117,9 +118,9 @@ function promptText() {
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return 'Closed.';
-    if (!openAt(sh, tod)) return `${sh.signed ? sh.word : 'Shop'}: closed, opens at ${sh.hours[0]}:00`;
+    if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
-    return `E: enter ${sh.signed ? sh.word : 'shop'}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : ''}`;
+    return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : ''}`;
   }
   if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return '';

@@ -254,7 +254,7 @@ function shopOf(seed, dist) {
   const local = DIST_WORDS[dist], words = kind === SHOP_PRODUCE ? PRODUCE : local && fract(seed * 13) < 0.7 ? local : WORDS;
   const word = kind === SHOP_APTS ? 'No.' + (100 + (seed * 900 | 0)) : words[(seed * 104729 | 0) % words.length];
   return { kind, word, neon: kind === SHOP_APTS ? WHITE : dist === 'chinatown' ? pickBy(seed, [RED, YEL, RED, GREEN]) : NEON[(seed * 1000 | 0) % 4],
-           signed: seed > 0.25 || kind === SHOP_APTS, glyphs: GLYPHS[word] || 'o#=@', hours: hoursOf(word) };
+           glyphs: GLYPHS[word] || 'o#=@', hours: hoursOf(word) };
 }
 const pickBy = (seed, a) => a[(seed * 4813 | 0) % a.length];
 
@@ -496,7 +496,7 @@ const SERVICES = [];
       const lot = [];
       for (let y = by * 8; y < by * 8 + 8; y++) for (let x = bx * 8; x < bx * 8 + 8; x++) if (SHOP[idx(x, y)] === sh) lot.push([x, y]);
       if (kind !== 'amb' && lot.length > 12) continue; // a whole block is too big for a police or fire station
-      Object.assign(sh, { kind: SHOP_LIT, word: K_.word, neon: K_.neon, signed: true, base: kind, hours: [0, 24] });
+      Object.assign(sh, { kind: SHOP_LIT, word: K_.word, neon: K_.neon, base: kind, hours: [0, 24] });
       const B_ = SERVICE_BUILD[kind];
       for (const [x, y] of lot) { map[idx(x, y)] = B_.h; STY[idx(x, y)] = B_.sty; }
       if (kind === 'fire') { // the hose tower, at the back corner of the lot
@@ -1563,6 +1563,9 @@ const ITEMS = {
   slice: { name: 'pizza slice', price: 4, kind: 'food', uses: 3 }, burger: { name: 'burger', price: 8, kind: 'food', uses: 4 },
   kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
   dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
+  pho: { name: 'pho', price: 11, kind: 'food', uses: 5 }, banhmi: { name: 'banh mi', price: 7, kind: 'food', uses: 4 },
+  padthai: { name: 'pad thai', price: 11, kind: 'food', uses: 5 }, greencurry: { name: 'green curry', price: 12, kind: 'food', uses: 5 },
+  mangorice: { name: 'mango sticky rice', price: 6, kind: 'food', uses: 3 },
   ginseng: { name: 'ginseng root', price: 6, kind: 'food', uses: 2, caffeine: 70 }, // a bitter chew, and a kick like coffee
   // drink
   coffee: { name: 'coffee', price: 3, kind: 'drink', uses: 4, caffeine: 60 }, latte: { name: 'latte', price: 5, kind: 'drink', uses: 4, caffeine: 50 },
@@ -1570,6 +1573,7 @@ const ITEMS = {
   water: { name: 'water', price: 1, kind: 'drink', uses: 3 }, energy: { name: 'energy drink', price: 4, kind: 'drink', uses: 3, caffeine: 90 },
   beer: { name: 'beer', price: 6, kind: 'drink', uses: 4, booze: 0.25 }, whiskey: { name: 'whiskey', price: 9, kind: 'drink', uses: 2, booze: 0.4 },
   cocktail: { name: 'cocktail', price: 12, kind: 'drink', uses: 3, booze: 0.3 },
+  thaitea: { name: 'Thai iced tea', price: 4, kind: 'drink', uses: 4, caffeine: 30 },
   herbaltea: { name: 'herbal tea', price: 3, kind: 'drink', uses: 3, sober: 0.35 }, // clears your head a bit
   // smoke
   cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 },
@@ -1603,8 +1607,8 @@ const STOCK_WORD = {
   HARDWARE: ['umbrella'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
   CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
   PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
-  RAMEN: ['ramen', 'tea'], NOODLES: ['ramen', 'dumplings', 'tea'], PHO: ['ramen', 'tea'], DUMPLINGS: ['dumplings', 'tea'],
-  'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['tea', 'dumplings'], THAI: ['ramen', 'soda'],
+  RAMEN: ['ramen', 'tea'], NOODLES: ['ramen', 'dumplings', 'tea'], PHO: ['pho', 'banhmi', 'tea'], DUMPLINGS: ['dumplings', 'tea'],
+  'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['tea', 'dumplings'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
   'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
@@ -2434,6 +2438,7 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 const sk0 = seed => seed * 1e4 | 0;
 // background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse)
 const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE];
+const ARCADE_SIGN = new Set(['ARCADE', 'VIDEO']);
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -2447,7 +2452,12 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       // up close a letter spans many cells: draw it once, in the middle cell of its span
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.365, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
-      if (sh.signed && p < w.length) return set(i, centered ? w[p] : ' ', C(sh.neon, lvl));
+      if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
+        const lit = Math.max(lvl, 13), chase = Math.floor(T * 6);
+        if (p < w.length) return set(i, centered ? w[p] : ' ', C(NEON[(p + chase) & 3], lit));
+        return set(i, centered ? '*' : ' ', (p + chase) & 1 ? C(YEL, lit) : C(GRAY, L * 0.5));
+      }
+      if (p < w.length) return set(i, centered ? w[p] : ' ', C(sh.neon, lvl));
       return set(i, '-', C(GRAY, L));
     }
     if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
@@ -3482,10 +3492,11 @@ const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
     return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
   }, 1, 0), walk: true }; // long axis across the stairwell (x): wall to wall, dy deep
 });
-const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
+const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 6, DUMPLINGS: 0, THAI: 7, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
 const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
                     ['SLICE 3', 'WHOLE 18', 'KNOTS 4', 'SODA 2'], ['LATTE 4', 'DONUT 2', 'BAGEL 3', 'TEA 2'],
-                    ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3']];
+                    ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3'],
+                    ['PHO 11', 'BANH MI 7', 'ROLLS 5', 'TEA 2'], ['PAD THAI 11', 'CURRY 12', 'MANGO 6', 'THAI TEA 4']];
 const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
                    CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
@@ -4380,8 +4391,9 @@ const nearPerson = () => {
 const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
 // a vending machine you're facing, within arm's reach (3m of its middle)
 const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Math.floor(py / 8))].find(m => {
-  const ex = m.x - px, ey = m.y - py, d = Math.hypot(ex, ey);
-  return d < 0.3 && (d < 0.12 || (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.5);
+  const ex = m.x - px, ey = m.y - py, d = Math.hypot(ex, ey), dot = (ex * Math.cos(a) + ey * Math.sin(a)) / d;
+  // in view, or right beside you and anywhere in front (it beats the shop door it stands by: step away for that)
+  return d < 0.3 && (d < 0.12 || dot > 0.5 || d < 0.2 && dot > 0);
 }) : null;
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
@@ -4449,9 +4461,9 @@ function promptText() {
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return 'Closed.';
-    if (!openAt(sh, tod)) return `${sh.signed ? sh.word : 'Shop'}: closed, opens at ${sh.hours[0]}:00`;
+    if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
-    return `E: enter ${sh.signed ? sh.word : 'shop'}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : ''}`;
+    return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : ''}`;
   }
   if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return '';
@@ -5261,15 +5273,15 @@ function filled(lines, spans, f, body, surface = '~') {
   });
   return out;
 }
-// bites: a rounded notch out of one side (right / top / bottom), deeper the more is gone, its edge a curve
-function bitten(lines, f, from = 'right') {
+// bites: a rounded notch out of one side (right / top / bottom), deeper the more is gone (just pieces missing)
+function bitten(lines, f, from = 'right', edge = '') { // edge: what the bitten surface shows (an apple's white flesh), if anything
   if (f >= 0.999) return lines;
   const H = lines.length, W = Math.max(...lines.map(l => l.length)), gone = 1 - f;
   return lines.map((l, y) => [...l.padEnd(W)].map((ch, x) => {
     const d = from === 'right' ? Math.hypot((W - 1 - x) / W, (y - H * 0.4) / H * 0.9) / (gone * 0.95)
             : from === 'top' ? Math.hypot((x - W / 2) / W * 0.8, y / H) / (gone * 1.05)
             : Math.hypot((x - W / 2) / W * 0.8, (H - 1 - y) / H) / (gone * 1.05);
-    return d < 1 ? ' ' : d < 1.25 && ch !== ' ' ? (from === 'right' ? '(' : from === 'top' ? 'v' : '^') : ch;
+    return d < 1 ? ' ' : edge && d < 1.25 && ch !== ' ' ? edge : ch;
   }).join('').replace(/\s+$/, ''));
 }
 const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars.includes(c)) return col; return dflt; };
@@ -5291,6 +5303,8 @@ const HAND = {
     (c, r) => c === '#' || c === '~' ? C(ORANGE, 13) : C(WHITE, 11)],
   cocktail: (it, f) => [filled(['   o   /', '\\-------/', ' \\     /', '  \\   /', '   \\ /', '    |', '  __|__'], [[2, 2, 6], [3, 3, 5]], f, '%', '~'),
     (c, r) => c === 'o' ? C(RED, 15) : c === '%' || c === '~' ? C(MAG, 14) : C(WHITE, 12)],
+  thaitea: (it, f) => [filled(['    ||', '  __||__', ' |      |', ' |      |', ' |      |', '  \\____/'], [[2, 2, 7], [3, 2, 7], [4, 2, 7]], f, ':', '~'),
+    (c, r) => r < 2 && c === '|' ? C(WHITE, 13) : c === ':' ? C(ORANGE, 13) : c === '~' ? C(WARM, 15) : C(WHITE, 11)],
   herbaltea: (it, f) => [filled(['  ~ ~', ' .------.', ' |      |o', ' |      |', "  `----'"], [[2, 2, 7], [3, 2, 7]], f, ':', '~'),
     (c, r) => r === 0 ? C(WHITE, 7) : c === ':' || c === '~' ? C(GREEN, 13) : c === 'o' ? C(GRAY, 12) : C(BRICK, 13)],
   // food: bites out of it
@@ -5303,6 +5317,16 @@ const HAND = {
     (c, r) => r < 3 ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(WHITE, 13)],
   ramen: (it, f) => [filled(['     ||', '  ___||_____', ' (~~~~~~~~~~)', '  \\________/'], [[2, 2, 11]], f, '~'),
     (c, r) => r < 2 ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(RED, 12)],
+  pho: (it, f) => [filled(['     ||', '  _,_||_,_,_', ' (~~~~~~~~~~)', '  \\________/', '    \\____/'], [[2, 2, 11]], f, '~'),
+    (c, r) => c === ',' ? C(GREEN, 14) : r < 2 && c === '|' ? C(BRICK, 12) : c === '~' ? C(WARM, 14) : C(WHITE, 13)],
+  banhmi: (it, f) => [bitten(['   ____________', ' /%%=%%=%%=%%=%\\', '(~~~~~~~~~~~~~~~)', " '-------------'"], f),
+    (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(RED, 12) : c === '~' ? C(ORANGE, 12) : C(WARM, 13)],
+  padthai: (it, f) => [bitten(['    ,  .  ,', '  ~@~~*~~@~~', ' ~~~~*~~~~@~~', '(=============)', " '-----------'"], f, 'top'),
+    (c, r) => c === '@' ? C(BRICK, 13) : c === '*' ? C(YEL, 14) : c === ',' || c === '.' ? C(GREEN, 13) : c === '~' ? C(ORANGE, 13) : C(WHITE, 12)],
+  greencurry: (it, f) => [filled(['   ,  ,', ' .--------.', '(%%%%%%%%%%)', ' \\%%%%%%%%/', "  '------'"], [[2, 1, 10], [3, 2, 9]], f, '%', '~'),
+    (c, r) => r === 0 ? C(GREEN, 14) : c === '%' || c === '~' ? C(GREEN, 12) : C(WHITE, 13)],
+  mangorice: (it, f) => [bitten(['  .-~~~~-.', ' (@@@@@@@@)', ' (::::::::)', "(==========)"], f, 'top'),
+    (c, r) => c === '@' || c === '~' && r === 0 ? C(YEL, 15) : c === ':' ? C(WHITE, 15) : c === '=' ? C(GREEN, 12) : C(YEL, 12)],
   croissant: (it, f) => [bitten(['    _..--.._', '  .(\\  \\/  /).', ' (__\\__/\\__/__)'], f), (c, r) => C(ORANGE, 13)],
   donut: (it, f) => [bitten(['   .-~~~-.', '  /  .-.  \\', ' |  (   )  |', '  \\  `-`  /', "   `-...-'"], f), (c, r) => r < 2 || c === '~' ? C(MAG, 14) : C(WARM, 12)],
   bagel: (it, f) => [bitten(['   .-----.', '  /  .-.  \\', ' |  (   )  |', '  \\  `-`  /', "   `-----'"], f), (c, r) => C(WARM, 12)],
@@ -5310,7 +5334,7 @@ const HAND = {
     (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(RED, 12) : c === '~' ? C(YEL, 13) : C(WARM, 12)],
   chips: (it, f) => [[' .--------.', ' | CHIPS  |', ' |  ' + (f > 0.5 ? '(__)' : f > 0 ? ' __ ' : '    ') + '  |', ' |  ' + (f > 0.25 ? '(__)' : '    ') + '  |', " '--------'"],
     (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : c === '(' || c === ')' || r > 1 && c === '_' ? C(YEL, 15) : C(RED, 12)],
-  apple: (it, f) => [bitten(['     ,', '   .-|-.', '  /     \\', ' |       |', '  \\     /', "   `---'"], f), (c, r) => r === 0 || c === '|' && r === 1 ? C(GREEN, 13) : c === '(' ? C(WHITE, 13) : C(RED, 13)],
+  apple: (it, f) => [bitten(['     ,', '   .-|-.', '  /     \\', ' |       |', '  \\     /', "   `---'"], f, 'right', '('), (c, r) => r === 0 || c === '|' && r === 1 ? C(GREEN, 13) : c === '(' ? C(WHITE, 13) : C(RED, 13)],
   slice: (it, f) => [bitten(['\\%%o%%%o%%/', ' \\%%%o%%%/', '  \\%o%%%/', '   \\%%%/', '    \\%/', '     V'], f, 'bottom'),
     (c, r) => c === 'o' ? C(RED, 14) : c === '%' ? C(YEL, 14) : C(ORANGE, 12)],
   burger: (it, f) => [bitten(['   .-----.', '  / . . . \\', ' (%%%%%%%%%)', ' (=========)', ' (~~~~~~~~~)', "  '-------'"], f),
@@ -5339,7 +5363,7 @@ const HAND = {
   ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
   boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
   skateboard: () => [['  ___', ' (o o)', ' |   |', ' |   |', ' |   |', ' |   |', ' (o o)'], (c, r) => c === 'o' ? C(WHITE, 14) : C(RED, 13)],
-  yoyo: () => [['  |', '  |', ' .-.', '(-@-)', " '-'"], (c, r) => r < 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
+  yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
@@ -5456,7 +5480,9 @@ function drawCigarette() {
   smokePuffs = smokePuffs.filter(p => (p[2] -= dt * 0.35) > 0);
   for (const p of smokePuffs) {
     p[1] -= dt * 4 * FS; p[0] += Math.sin(T * 3 + p[1] / FS) * dt * 3 * cw;
-    g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', p[0], p[1]);
+    const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS; // on the grid, each wisp in its own black cell (the one exception to no backgrounds: it looks right)
+    g.fillStyle = '#000'; g.fillRect(x, y, cw, FS);
+    g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', x, y);
   }
 }
 // a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
@@ -5912,7 +5938,7 @@ function crimePrompt() {
   if (mode === 'room' && room.burgled) return 'G: take something   E (at the counter): the till';
   if (pickTarget()) return 'G: pick their pocket';
   const sh = lockTarget();
-  if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.signed ? sh.word : 'Shop'}: closed   L: pick the lock`;
+  if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;
   return '';
 }
 // closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it

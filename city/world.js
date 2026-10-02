@@ -36,7 +36,7 @@ function shopOf(seed, dist) {
   const local = DIST_WORDS[dist], words = kind === SHOP_PRODUCE ? PRODUCE : local && fract(seed * 13) < 0.7 ? local : WORDS;
   const word = kind === SHOP_APTS ? 'No.' + (100 + (seed * 900 | 0)) : words[(seed * 104729 | 0) % words.length];
   return { kind, word, neon: kind === SHOP_APTS ? WHITE : dist === 'chinatown' ? pickBy(seed, [RED, YEL, RED, GREEN]) : NEON[(seed * 1000 | 0) % 4],
-           signed: seed > 0.25 || kind === SHOP_APTS, glyphs: GLYPHS[word] || 'o#=@', hours: hoursOf(word) };
+           glyphs: GLYPHS[word] || 'o#=@', hours: hoursOf(word) };
 }
 const pickBy = (seed, a) => a[(seed * 4813 | 0) % a.length];
 
@@ -278,7 +278,7 @@ const SERVICES = [];
       const lot = [];
       for (let y = by * 8; y < by * 8 + 8; y++) for (let x = bx * 8; x < bx * 8 + 8; x++) if (SHOP[idx(x, y)] === sh) lot.push([x, y]);
       if (kind !== 'amb' && lot.length > 12) continue; // a whole block is too big for a police or fire station
-      Object.assign(sh, { kind: SHOP_LIT, word: K_.word, neon: K_.neon, signed: true, base: kind, hours: [0, 24] });
+      Object.assign(sh, { kind: SHOP_LIT, word: K_.word, neon: K_.neon, base: kind, hours: [0, 24] });
       const B_ = SERVICE_BUILD[kind];
       for (const [x, y] of lot) { map[idx(x, y)] = B_.h; STY[idx(x, y)] = B_.sty; }
       if (kind === 'fire') { // the hose tower, at the back corner of the lot

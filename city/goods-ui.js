@@ -13,15 +13,15 @@ function filled(lines, spans, f, body, surface = '~') {
   });
   return out;
 }
-// bites: a rounded notch out of one side (right / top / bottom), deeper the more is gone, its edge a curve
-function bitten(lines, f, from = 'right') {
+// bites: a rounded notch out of one side (right / top / bottom), deeper the more is gone (just pieces missing)
+function bitten(lines, f, from = 'right', edge = '') { // edge: what the bitten surface shows (an apple's white flesh), if anything
   if (f >= 0.999) return lines;
   const H = lines.length, W = Math.max(...lines.map(l => l.length)), gone = 1 - f;
   return lines.map((l, y) => [...l.padEnd(W)].map((ch, x) => {
     const d = from === 'right' ? Math.hypot((W - 1 - x) / W, (y - H * 0.4) / H * 0.9) / (gone * 0.95)
             : from === 'top' ? Math.hypot((x - W / 2) / W * 0.8, y / H) / (gone * 1.05)
             : Math.hypot((x - W / 2) / W * 0.8, (H - 1 - y) / H) / (gone * 1.05);
-    return d < 1 ? ' ' : d < 1.25 && ch !== ' ' ? (from === 'right' ? '(' : from === 'top' ? 'v' : '^') : ch;
+    return d < 1 ? ' ' : edge && d < 1.25 && ch !== ' ' ? edge : ch;
   }).join('').replace(/\s+$/, ''));
 }
 const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars.includes(c)) return col; return dflt; };
@@ -43,6 +43,8 @@ const HAND = {
     (c, r) => c === '#' || c === '~' ? C(ORANGE, 13) : C(WHITE, 11)],
   cocktail: (it, f) => [filled(['   o   /', '\\-------/', ' \\     /', '  \\   /', '   \\ /', '    |', '  __|__'], [[2, 2, 6], [3, 3, 5]], f, '%', '~'),
     (c, r) => c === 'o' ? C(RED, 15) : c === '%' || c === '~' ? C(MAG, 14) : C(WHITE, 12)],
+  thaitea: (it, f) => [filled(['    ||', '  __||__', ' |      |', ' |      |', ' |      |', '  \\____/'], [[2, 2, 7], [3, 2, 7], [4, 2, 7]], f, ':', '~'),
+    (c, r) => r < 2 && c === '|' ? C(WHITE, 13) : c === ':' ? C(ORANGE, 13) : c === '~' ? C(WARM, 15) : C(WHITE, 11)],
   herbaltea: (it, f) => [filled(['  ~ ~', ' .------.', ' |      |o', ' |      |', "  `----'"], [[2, 2, 7], [3, 2, 7]], f, ':', '~'),
     (c, r) => r === 0 ? C(WHITE, 7) : c === ':' || c === '~' ? C(GREEN, 13) : c === 'o' ? C(GRAY, 12) : C(BRICK, 13)],
   // food: bites out of it
@@ -55,6 +57,16 @@ const HAND = {
     (c, r) => r < 3 ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(WHITE, 13)],
   ramen: (it, f) => [filled(['     ||', '  ___||_____', ' (~~~~~~~~~~)', '  \\________/'], [[2, 2, 11]], f, '~'),
     (c, r) => r < 2 ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(RED, 12)],
+  pho: (it, f) => [filled(['     ||', '  _,_||_,_,_', ' (~~~~~~~~~~)', '  \\________/', '    \\____/'], [[2, 2, 11]], f, '~'),
+    (c, r) => c === ',' ? C(GREEN, 14) : r < 2 && c === '|' ? C(BRICK, 12) : c === '~' ? C(WARM, 14) : C(WHITE, 13)],
+  banhmi: (it, f) => [bitten(['   ____________', ' /%%=%%=%%=%%=%\\', '(~~~~~~~~~~~~~~~)', " '-------------'"], f),
+    (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(RED, 12) : c === '~' ? C(ORANGE, 12) : C(WARM, 13)],
+  padthai: (it, f) => [bitten(['    ,  .  ,', '  ~@~~*~~@~~', ' ~~~~*~~~~@~~', '(=============)', " '-----------'"], f, 'top'),
+    (c, r) => c === '@' ? C(BRICK, 13) : c === '*' ? C(YEL, 14) : c === ',' || c === '.' ? C(GREEN, 13) : c === '~' ? C(ORANGE, 13) : C(WHITE, 12)],
+  greencurry: (it, f) => [filled(['   ,  ,', ' .--------.', '(%%%%%%%%%%)', ' \\%%%%%%%%/', "  '------'"], [[2, 1, 10], [3, 2, 9]], f, '%', '~'),
+    (c, r) => r === 0 ? C(GREEN, 14) : c === '%' || c === '~' ? C(GREEN, 12) : C(WHITE, 13)],
+  mangorice: (it, f) => [bitten(['  .-~~~~-.', ' (@@@@@@@@)', ' (::::::::)', "(==========)"], f, 'top'),
+    (c, r) => c === '@' || c === '~' && r === 0 ? C(YEL, 15) : c === ':' ? C(WHITE, 15) : c === '=' ? C(GREEN, 12) : C(YEL, 12)],
   croissant: (it, f) => [bitten(['    _..--.._', '  .(\\  \\/  /).', ' (__\\__/\\__/__)'], f), (c, r) => C(ORANGE, 13)],
   donut: (it, f) => [bitten(['   .-~~~-.', '  /  .-.  \\', ' |  (   )  |', '  \\  `-`  /', "   `-...-'"], f), (c, r) => r < 2 || c === '~' ? C(MAG, 14) : C(WARM, 12)],
   bagel: (it, f) => [bitten(['   .-----.', '  /  .-.  \\', ' |  (   )  |', '  \\  `-`  /', "   `-----'"], f), (c, r) => C(WARM, 12)],
@@ -62,7 +74,7 @@ const HAND = {
     (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(RED, 12) : c === '~' ? C(YEL, 13) : C(WARM, 12)],
   chips: (it, f) => [[' .--------.', ' | CHIPS  |', ' |  ' + (f > 0.5 ? '(__)' : f > 0 ? ' __ ' : '    ') + '  |', ' |  ' + (f > 0.25 ? '(__)' : '    ') + '  |', " '--------'"],
     (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : c === '(' || c === ')' || r > 1 && c === '_' ? C(YEL, 15) : C(RED, 12)],
-  apple: (it, f) => [bitten(['     ,', '   .-|-.', '  /     \\', ' |       |', '  \\     /', "   `---'"], f), (c, r) => r === 0 || c === '|' && r === 1 ? C(GREEN, 13) : c === '(' ? C(WHITE, 13) : C(RED, 13)],
+  apple: (it, f) => [bitten(['     ,', '   .-|-.', '  /     \\', ' |       |', '  \\     /', "   `---'"], f, 'right', '('), (c, r) => r === 0 || c === '|' && r === 1 ? C(GREEN, 13) : c === '(' ? C(WHITE, 13) : C(RED, 13)],
   slice: (it, f) => [bitten(['\\%%o%%%o%%/', ' \\%%%o%%%/', '  \\%o%%%/', '   \\%%%/', '    \\%/', '     V'], f, 'bottom'),
     (c, r) => c === 'o' ? C(RED, 14) : c === '%' ? C(YEL, 14) : C(ORANGE, 12)],
   burger: (it, f) => [bitten(['   .-----.', '  / . . . \\', ' (%%%%%%%%%)', ' (=========)', ' (~~~~~~~~~)', "  '-------'"], f),
@@ -91,7 +103,7 @@ const HAND = {
   ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
   boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
   skateboard: () => [['  ___', ' (o o)', ' |   |', ' |   |', ' |   |', ' |   |', ' (o o)'], (c, r) => c === 'o' ? C(WHITE, 14) : C(RED, 13)],
-  yoyo: () => [['  |', '  |', ' .-.', '(-@-)', " '-'"], (c, r) => r < 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
+  yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
@@ -208,7 +220,9 @@ function drawCigarette() {
   smokePuffs = smokePuffs.filter(p => (p[2] -= dt * 0.35) > 0);
   for (const p of smokePuffs) {
     p[1] -= dt * 4 * FS; p[0] += Math.sin(T * 3 + p[1] / FS) * dt * 3 * cw;
-    g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', p[0], p[1]);
+    const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS; // on the grid, each wisp in its own black cell (the one exception to no backgrounds: it looks right)
+    g.fillStyle = '#000'; g.fillRect(x, y, cw, FS);
+    g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', x, y);
   }
 }
 // a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string

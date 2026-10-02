@@ -155,6 +155,6 @@ function crimePrompt() {
   if (mode === 'room' && room.burgled) return 'G: take something   E (at the counter): the till';
   if (pickTarget()) return 'G: pick their pocket';
   const sh = lockTarget();
-  if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.signed ? sh.word : 'Shop'}: closed   L: pick the lock`;
+  if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;
   return '';
 }
