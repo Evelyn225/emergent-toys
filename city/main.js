@@ -1,6 +1,8 @@
 onkeydown = e => {
   K[e.code] = 1;
   if (e.repeat) return;
+  audioStart(); // sound can only start from a key press or click
+  if (e.code === 'KeyN') toggleSound();
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyV' && me) third = !third;
@@ -11,7 +13,7 @@ onkeydown = e => {
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
 onkeyup = e => K[e.code] = 0;
-cv.onclick = () => cv.requestPointerLock();
+cv.onclick = () => { audioStart(); cv.requestPointerLock(); };
 const clampPitch = () => pitch = clamp(pitch, -1.2, 1.6);
 onmousemove = e => {
   if (!document.pointerLockElement) return;
@@ -78,6 +80,7 @@ function loop(t) {
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { camYaw = a; render(dt); }
+  audioTick(dt);
   requestAnimationFrame(loop);
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way

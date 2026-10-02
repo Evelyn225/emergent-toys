@@ -11,7 +11,7 @@ function dash() {
   if (mode === 'drive') {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
-    putText(rows - 3, 3, `TAXI   fare $${(3 + c.fare * 0.6).toFixed(2)}`, C(TAXI, 15));
+    putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
     putText(rows - 2, 3, c.dest ? `to: ${c.destName}` : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
   }
 }
@@ -72,9 +72,9 @@ function promptText() {
   if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
   const el = nearElStairs();
-  if (el) return `E: up to the ${el.s.name} el (${el.tr ? 'eastbound' : 'westbound'})`;
+  if (el) return `E: up to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
-  if (st) return `E: go down to ${st.name} station`;
+  if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
   const ven = nearVendor();
   if (ven) return `E: buy ${ven.type.item} ($${ven.type.price})`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
@@ -135,8 +135,8 @@ function hud() {
   minimap();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const where = mode === 'room' ? '' : [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
-  const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}${where ? '   ' + where : ''}`,
-                 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map'];
+  const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
+                 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
   if (task) { // the favour you're doing, under the help line

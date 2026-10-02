@@ -13,7 +13,12 @@ function leaveCar() {
   const c = me;
   [px, py] = curbOf(c);
   if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); a += Math.PI / 2; }
-  else { say(`Fare: $${(3 + c.fare * 0.6).toFixed(2)}. Thanks!`); c.rider = c.dest = c.arrived = false; plan(c); }
+  else { // settle up: all of it if you can, everything you've got if you can't
+    const fare = Math.round(taxiFare(c.fare) * 100) / 100;
+    if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
+    else { const all = money; pay(all); say(`Fare's ${fmt$(fare)}. You've only got ${fmt$(all)}. The driver takes it, muttering.`, 4); }
+    c.rider = c.dest = c.arrived = false; plan(c);
+  }
   me = null; mode = 'walk';
 }
 // taxi destinations: always a point in the middle of a street that exists
@@ -70,7 +75,10 @@ function elGetOff() {
   px = clamp(px, s.x0, s.x1);
   say(`${s.name}`);
 }
-function enterRoom(kind, extra, spawn) { room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0; }
+function enterRoom(kind, extra, spawn) {
+  room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
+  if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
+}
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
@@ -93,7 +101,10 @@ function interact() {
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
-    if (c.body === TAXI) { mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0; }
+    if (c.body === TAXI) {
+      if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
+      mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
+    }
     else { mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); }
     px = c.x; py = c.y;
     return;
@@ -102,11 +113,15 @@ function interact() {
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
   const el = nearElStairs();
-  if (el) return elUp(el);
+  if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
+  if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const ven = nearVendor();
+  if (ven && !pay(ven.type.price)) return say(`${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)} is ${fmt$(ven.type.price)}. You can't afford it.`);
   if (ven && taskBuy(ven)) return say(`You buy ${ven.type.item}. Not for you, though.`);
   if (ven) return say(pick([`You buy ${ven.type.item}. Delicious.`, `${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)}, $${ven.type.price}. Worth it.`, `"Enjoy!" says the ${ven.type.name.toLowerCase()} vendor.`]));
   const st = nearStation();
+  if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
+  if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [2, 1.7, Math.PI / 2]);
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];

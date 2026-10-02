@@ -8,6 +8,19 @@ let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase c
 const K = {}; // keys held, by KeyboardEvent.code
 const say = (s, t = 3) => { msgText = s; msgT = t; };
 
+// ---- money: you start with $100; taxis, the subway, the el and street food cost, favours pay
+let money = 100;
+const SUBWAY_FARE = 2.9;
+const taxiFare = cells => 3 + cells * 0.25; // $3 flag fall, $0.25 per 10m
+const fmt$ = v => '$' + v.toFixed(2);
+let onMoney = null; // the audio hooks in here for the till sound
+function pay(amount) { // false (and nothing spent) if you can't cover it
+  if (money + 1e-9 < amount) return false;
+  money = Math.round((money - amount) * 100) / 100; if (onMoney) onMoney(-amount);
+  return true;
+}
+function earn(amount) { money = Math.round((money + amount) * 100) / 100; if (onMoney) onMoney(amount); }
+
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {

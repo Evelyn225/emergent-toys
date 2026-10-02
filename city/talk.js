@@ -73,7 +73,12 @@ function release(p, hide = true) {
   const d = nearestDoor(p.x, p.y, () => true, 1);
   if (d) { p.x = d.x; p.y = d.y; p.hidden = hide; p.wait = 5 + Math.random() * 10; p.inside = d; snapToCorner(p); }
 }
-const endTask = line => { say(line, 4); task = null; };
+// a favour done: thanks, and usually some cash
+function endTask(line, reward = 0) {
+  if (reward > 0) { earn(reward); line += ` They press ${fmt$(reward)} into your hand.`; }
+  say(line, 5); task = null;
+}
+const tip = (lo, hi) => lo + Math.round(Math.random() * (hi - lo));
 // followers walk straight after you (they're in a hurry)
 function followYou(p, dt) {
   const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
@@ -86,7 +91,7 @@ function stepTask(dt) {
   const p = task.who, near = (t, r) => Math.hypot(rel(t.x - px), rel(t.y - py)) < r;
   if (task.until && T > task.until) { release(p, false); return endTask('They got tired of waiting and wandered off.'); }
   if (task.kind === 'escort' && near(task.to, 0.7)) {
-    release(p); return endTask(`"${task.to.name}! Thank you so much!"`);
+    release(p); return endTask(`"${task.to.name}! Thank you so much!"`, tip(5, 15));
   }
   if (task.kind === 'dog') {
     const g = task.dog;
@@ -94,14 +99,14 @@ function stepTask(dt) {
     const ex = rel(px - g.x), ey = rel(py - g.y), d = Math.hypot(ex, ey);
     if (d > 0.25) { const s = Math.min(d - 0.25, 0.3 * dt); g.x += ex / d * s; g.y += ey / d * s; }
     if (Math.hypot(rel(p.x - g.x), rel(p.y - g.y)) < 0.6) {
-      p.talk = 3; endTask(`"${pick(['There you are!', 'Oh, thank goodness!', 'Bad dog! Good dog!'])}" They're beaming.`);
+      p.talk = 3; endTask(`"${pick(['There you are!', 'Oh, thank goodness!', 'Bad dog! Good dog!'])}" They're beaming.`, tip(20, 40));
     }
   }
 }
 // E on someone: answer a task, or chat
 function talkTo(p) {
   if (task && task.who === p) {
-    if (task.kind === 'fetch' && task.have) { p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`); }
+    if (task.kind === 'fetch' && task.have) { p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
     return say(`"${task.ask}"`, 4);
   }
   if (!task && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);

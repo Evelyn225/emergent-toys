@@ -39,6 +39,19 @@ let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase c
 const K = {}; // keys held, by KeyboardEvent.code
 const say = (s, t = 3) => { msgText = s; msgT = t; };
 
+// ---- money: you start with $100; taxis, the subway, the el and street food cost, favours pay
+let money = 100;
+const SUBWAY_FARE = 2.9;
+const taxiFare = cells => 3 + cells * 0.25; // $3 flag fall, $0.25 per 10m
+const fmt$ = v => '$' + v.toFixed(2);
+let onMoney = null; // the audio hooks in here for the till sound
+function pay(amount) { // false (and nothing spent) if you can't cover it
+  if (money + 1e-9 < amount) return false;
+  money = Math.round((money - amount) * 100) / 100; if (onMoney) onMoney(-amount);
+  return true;
+}
+function earn(amount) { money = Math.round((money + amount) * 100) / 100; if (onMoney) onMoney(amount); }
+
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
@@ -68,9 +81,6 @@ const ART = {
   carBack: pad(['  _______', ' /#######\\', '|]|_____|[|', "'(@)---(@)'"]),
   walkA: pad([' _ ', '(_)', '/|\\', ' | ', '/ \\']),
   walkB: pad([' _ ', '(_)', '/|\\', ' | ', ' | ']),
-  // street lamp seen side-on (arm reaching right) and end-on (arm toward / away from you)
-  lampSide: pad(['  .---.', ' /     \\', ' |    _|_', ' |    \\_/', ...Array(10).fill(' |'), '_|_']),
-  lampEnd: pad(['  .', '  |', ' _|_', ' \\_/', ...Array(10).fill('  |'), ' _|_']),
   signal: pad(['.-.', '(O)', "'-'", ' |', ' |', ' |', ' |', '_|_']),
   tree: pad(['   ,@@%,', ' ,@%@@@%@,', '@@%@@%@@@%@', '%@@@%@@%@@@', " '@%@@@%@'", "   '\\|/'", '    |', '    |']),
   bench: pad([' _____', '|_____|', "'     '"]),
@@ -132,7 +142,6 @@ Object.assign(ART, {
   elEnd: pad([' _______', '|[##|##]|', '|  o o  |', "'(O)-(O)'"]),
 });
 ART.carSideL = mirror(ART.carSide);
-ART.lampSideL = mirror(ART.lampSide);
 ART.taxiSide = pad(['   _[TAXI]__', ...ART.carSide.slice(1)]);
 ART.taxiSideL = mirror(ART.taxiSide).map(l => l.replace('[IXAT]', '[TAXI]'));
 ART.taxiFront = pad(['  _[TAXI]_', ...ART.carFront.slice(1)]);
@@ -363,7 +372,7 @@ function alongStreets(s, o, fn) {
 
 // lamps stand at the curb edge of the sidewalk (sidewalk is 0..0.3), two per block side, a curved arm
 // reaching REACH out over the street. {x, y, ax, ay}: ax/ay = the arm's direction
-const CURB = 0.25, REACH = 0.2, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
+const CURB = 0.25, REACH = 0.24, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
 const lamps = [];
 for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x, y, ax, ay) => lamps.push({ x, y, ax, ay }));
 const lampsB = bucketed(lamps);
@@ -1056,7 +1065,12 @@ function release(p, hide = true) {
   const d = nearestDoor(p.x, p.y, () => true, 1);
   if (d) { p.x = d.x; p.y = d.y; p.hidden = hide; p.wait = 5 + Math.random() * 10; p.inside = d; snapToCorner(p); }
 }
-const endTask = line => { say(line, 4); task = null; };
+// a favour done: thanks, and usually some cash
+function endTask(line, reward = 0) {
+  if (reward > 0) { earn(reward); line += ` They press ${fmt$(reward)} into your hand.`; }
+  say(line, 5); task = null;
+}
+const tip = (lo, hi) => lo + Math.round(Math.random() * (hi - lo));
 // followers walk straight after you (they're in a hurry)
 function followYou(p, dt) {
   const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
@@ -1069,7 +1083,7 @@ function stepTask(dt) {
   const p = task.who, near = (t, r) => Math.hypot(rel(t.x - px), rel(t.y - py)) < r;
   if (task.until && T > task.until) { release(p, false); return endTask('They got tired of waiting and wandered off.'); }
   if (task.kind === 'escort' && near(task.to, 0.7)) {
-    release(p); return endTask(`"${task.to.name}! Thank you so much!"`);
+    release(p); return endTask(`"${task.to.name}! Thank you so much!"`, tip(5, 15));
   }
   if (task.kind === 'dog') {
     const g = task.dog;
@@ -1077,14 +1091,14 @@ function stepTask(dt) {
     const ex = rel(px - g.x), ey = rel(py - g.y), d = Math.hypot(ex, ey);
     if (d > 0.25) { const s = Math.min(d - 0.25, 0.3 * dt); g.x += ex / d * s; g.y += ey / d * s; }
     if (Math.hypot(rel(p.x - g.x), rel(p.y - g.y)) < 0.6) {
-      p.talk = 3; endTask(`"${pick(['There you are!', 'Oh, thank goodness!', 'Bad dog! Good dog!'])}" They're beaming.`);
+      p.talk = 3; endTask(`"${pick(['There you are!', 'Oh, thank goodness!', 'Bad dog! Good dog!'])}" They're beaming.`, tip(20, 40));
     }
   }
 }
 // E on someone: answer a task, or chat
 function talkTo(p) {
   if (task && task.who === p) {
-    if (task.kind === 'fetch' && task.have) { p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`); }
+    if (task.kind === 'fetch' && task.have) { p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
     return say(`"${task.ask}"`, 4);
   }
   if (!task && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
@@ -1123,6 +1137,83 @@ function elTrain(tr, k, t) {
            next: (from + (tr ? 1 : EL_STATIONS.length - 1)) % EL_STATIONS.length };
 }
 const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(tr, k, t) })));
+// ---- audio mix: how loud each layer of sound should be right now, 0..1, from the game state alone.
+// Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
+// which is what makes day turn into night, and indoors into outdoors, without a seam.
+//
+// Layers: recorded beds (city, crowd, night, restaurant, bossa, coffee) and synthesised ones (rain, waves, wind,
+// rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
+
+// how much traffic / crowd / night-time nature each district has
+const AUDIO_DISTRICT = {
+  downtown: { city: 1, crowd: 0.8, night: 0.4 }, midtown: { city: 1, crowd: 0.8, night: 0.5 },
+  chinatown: { city: 0.85, crowd: 1, night: 0.5 }, industrial: { city: 0.7, crowd: 0.15, night: 0.7 },
+  brownstones: { city: 0.5, crowd: 0.35, night: 1 }, waterfront: { city: 0.35, crowd: 0.5, night: 0.9 },
+  sea: { city: 0.15, crowd: 0, night: 0.8 },
+};
+// which room plays what: [restaurant crowd, bossa nova, coffee jazz]
+const ROOM_AUDIO = {
+  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0.3], hotel: [0.2, 0.5, 0],
+  cinema: [0, 0, 0], laundry: [0, 0, 0.5], gym: [0.15, 0, 0.6], barber: [0.1, 0, 0.6], bank: [0.15, 0, 0.35],
+  petshop: [0, 0, 0.55], florist: [0, 0.35, 0.4], apts: [0, 0, 0], store: [0, 0, 0.5], station: [0.25, 0, 0], train: [0, 0, 0],
+};
+const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
+// how busy the streets sound by hour: quiet small hours, morning and evening peaks
+const busyHour = h => clamp(Math.sin((h - 5) / 19 * Math.PI) * 1.3, 0, 1);
+// distance to open water, in cells (0 on it)
+function seaDist(x, y) {
+  if (seaAt(x, y) && !onPier(x, y)) return 0;
+  const m = mod(y, N);
+  return Math.max(0, Math.min(m - shoreN(x), shoreS(x) - m));
+}
+
+function audioMix(s) {
+  const out = { city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  if (s.mode === 'room') {
+    const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0.4];
+    const cafe = CAFE_WORDS.has(s.room.word);
+    out.restaurant = rest * (k === 'bar' || k === 'karaoke' ? s.barCrowd : 1);
+    out.bossa = cafe ? 0.8 : bossa;
+    out.coffee = cafe ? 0 : coffee;
+    out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
+    out.rain = 0.25 * s.rain;
+    if (k === 'station') out.tunnel = 0.7;
+    if (k === 'train') out.rumble = 0.9;
+    return out;
+  }
+  const d = AUDIO_DISTRICT[s.district] || AUDIO_DISTRICT.midtown;
+  // up high (a roof, the el) the street is further away and the wind gets at you
+  const height = s.mode === 'roof' ? s.roofH : s.mode === 'el' || s.mode === 'elplat' ? 0.7 : 0;
+  const far = 1 / (1 + height * 0.25);
+  out.city = far * d.city * (0.3 + 0.7 * s.day) * (1 - 0.35 * s.rain);
+  out.crowd = far * d.crowd * busyHour(s.tod) * (1 - 0.7 * s.rain);
+  out.night = d.night * s.night * (1 - 0.5 * s.rain) * (0.6 + 0.4 * far);
+  out.rain = s.rain;
+  out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
+  out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog;
+  out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : 0;
+  for (const k in out) out[k] = clamp(out[k], 0, 1);
+  return out;
+}
+
+// what's underfoot, for the footstep sound
+function surfaceAt(mode, room, x, y) {
+  if (mode === 'room') {
+    const f = room.def.floor;
+    return f === 'carpet' ? 'carpet' : f === 'wood' ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
+  }
+  if (mode === 'elplat' || mode === 'roof') return mode === 'roof' ? 'gravel' : 'metal';
+  if (onPier(x, y)) return 'wood';
+  const k = ROAD[idx(Math.floor(x), Math.floor(y))], bx = Math.floor(x / 8), by = Math.floor(y / 8);
+  if (k === 1 && onBridge(bx, by)) return 'metal';
+  if (k) return 'stone';
+  const kind = blockKind(bx, by);
+  if (kind === 'park') return inPond(mod(x, 8), mod(y, 8), bx & (NB - 1), by & (NB - 1), 0.15) ? 'wood' : 'grass';
+  if (kind === 'waterfront') return seaDist(x, y) < 1.6 && hash(bx & (NB - 1), (by & (NB - 1)) === SHORE_S ? 1 : 2, 47) < 0.35 ? 'sand' : 'stone';
+  if (kind === 'construction' || kind === 'yard') return 'gravel';
+  return 'stone';
+}
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
 let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE; // ZBG / FOGB: depth and fog of the background colour
@@ -1645,9 +1736,7 @@ function citySprites() {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
     if (depth < 0.05 || depth > vis) return;
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
-    const col = (c, row, L) => row === 3 && c !== '|' && lampsOn > 0.3 ? C(WARM, 15) : C(GRAY, L);
-    if (Math.abs(s) < 0.35) drawArt(vx, vy, 0, 0.13, 0.8, ART.lampEnd, col);
-    else drawArt(vx + ax * REACH / 2, vy + ay * REACH / 2, 0, REACH * Math.abs(s) / 0.6, 0.8, s > 0 ? ART.lampSide : ART.lampSideL, col);
+    drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
   forNear(lanternsB, l => {
     const [vx, vy] = R(l.x, l.y), s = Math.abs(across(l.ax, l.ay, vx, vy));
@@ -1681,6 +1770,40 @@ function citySprites() {
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
+}
+
+// a classic street lamp: a tall fluted pole, a swan neck curving out over the street, a lantern hanging from its end.
+// Drawn from measurements, so the curve stays one character thick at any distance; s squashes the neck sideways
+// when the arm points toward or away from you, so it turns smoothly as you walk round it.
+const LAMP_TOP = 0.95, NECK = REACH / 2; // pole height; the neck is a half circle of radius NECK
+function lampCell(i, u, z, du, dz, L, s) {
+  const lit = lampsOn > 0.3, steel = C(GRAY, L * 1.1), hx = 2 * NECK * s, lu = u - hx, lz = z - (LAMP_TOP - 0.09);
+  // the lantern: a cap, a glass body glowing after dark, a finial underneath
+  if (Math.abs(lu) < Math.max(0.03, du * 0.75) && z < LAMP_TOP - 0.03 && z > LAMP_TOP - 0.14) {
+    if (z > LAMP_TOP - 0.055) return set(i, Math.abs(lu) < Math.max(0.015, du / 2) ? '^' : '_', steel), true;
+    if (z < LAMP_TOP - 0.125) return set(i, 'v', steel), true;
+    if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
+    return set(i, lit ? '#' : ':', lit ? C(WARM, 15) : C(GRAY, L * 0.7)), true;
+  }
+  if (z <= LAMP_TOP && z > LAMP_TOP - 0.03 && onLine(lu, du, 0, 0)) return set(i, '|', steel), true; // the drop
+  const halo = Math.hypot(lu / 0.075, lz / 0.065);
+  if (lit && halo < 1) { BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, " ", 0), true; } // a soft glow round it
+  // the pole: a flared base, a collar, a finial on top
+  if (z < LAMP_TOP + 0.02 && Math.abs(u) < Math.max(du / 2, z < 0.06 ? 0.03 : 0.012)) {
+    if (z < 0.06) return set(i, z < 0.025 ? '#' : 'A', steel), true;
+    return set(i, Math.abs(z - 0.42) < Math.max(0.012, dz / 2) ? '=' : '|', steel), true;
+  }
+  // the swan neck: the upper half of an ellipse from the pole top out to the lantern
+  const w = NECK * Math.abs(s);
+  if (w > du * 0.3 && z > LAMP_TOP - dz) {
+    const ex = (u - NECK * s) / w, ez = (z - LAMP_TOP) / NECK, rho = Math.hypot(ex, ez), tol = Math.max(du / w, dz / NECK) / 2;
+    if (Math.abs(rho - 1) < tol && ez > -tol) {
+      const ang = Math.atan2(ez, ex), tu = -w * Math.sin(ang) / du, tz = NECK * Math.cos(ang) / dz; // tangent, in cells
+      const sl = Math.abs(tz) / (Math.abs(tu) + 1e-9);
+      return set(i, sl > 2.5 ? '|' : sl < 0.4 ? '-' : tu * tz > 0 ? '/' : '\\', steel), true; // rising to the right: '/'
+    }
+  }
+  return false;
 }
 
 // chinatown lanterns: a string sagging across the street, red paper lanterns hanging off it, glowing after dark.
@@ -2306,7 +2429,7 @@ function dash() {
   if (mode === 'drive') {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
-    putText(rows - 3, 3, `TAXI   fare $${(3 + c.fare * 0.6).toFixed(2)}`, C(TAXI, 15));
+    putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
     putText(rows - 2, 3, c.dest ? `to: ${c.destName}` : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
   }
 }
@@ -2367,9 +2490,9 @@ function promptText() {
   if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
   const el = nearElStairs();
-  if (el) return `E: up to the ${el.s.name} el (${el.tr ? 'eastbound' : 'westbound'})`;
+  if (el) return `E: up to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
-  if (st) return `E: go down to ${st.name} station`;
+  if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
   const ven = nearVendor();
   if (ven) return `E: buy ${ven.type.item} ($${ven.type.price})`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
@@ -2430,8 +2553,8 @@ function hud() {
   minimap();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const where = mode === 'room' ? '' : [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
-  const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}${where ? '   ' + where : ''}`,
-                 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map'];
+  const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
+                 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
   if (task) { // the favour you're doing, under the help line
@@ -2463,7 +2586,12 @@ function leaveCar() {
   const c = me;
   [px, py] = curbOf(c);
   if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); a += Math.PI / 2; }
-  else { say(`Fare: $${(3 + c.fare * 0.6).toFixed(2)}. Thanks!`); c.rider = c.dest = c.arrived = false; plan(c); }
+  else { // settle up: all of it if you can, everything you've got if you can't
+    const fare = Math.round(taxiFare(c.fare) * 100) / 100;
+    if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);
+    else { const all = money; pay(all); say(`Fare's ${fmt$(fare)}. You've only got ${fmt$(all)}. The driver takes it, muttering.`, 4); }
+    c.rider = c.dest = c.arrived = false; plan(c);
+  }
   me = null; mode = 'walk';
 }
 // taxi destinations: always a point in the middle of a street that exists
@@ -2520,7 +2648,10 @@ function elGetOff() {
   px = clamp(px, s.x0, s.x1);
   say(`${s.name}`);
 }
-function enterRoom(kind, extra, spawn) { room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0; }
+function enterRoom(kind, extra, spawn) {
+  room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
+  if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
+}
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
@@ -2543,7 +2674,10 @@ function interact() {
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
-    if (c.body === TAXI) { mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0; }
+    if (c.body === TAXI) {
+      if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
+      mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
+    }
     else { mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); }
     px = c.x; py = c.y;
     return;
@@ -2552,11 +2686,15 @@ function interact() {
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
   const el = nearElStairs();
-  if (el) return elUp(el);
+  if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
+  if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const ven = nearVendor();
+  if (ven && !pay(ven.type.price)) return say(`${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)} is ${fmt$(ven.type.price)}. You can't afford it.`);
   if (ven && taskBuy(ven)) return say(`You buy ${ven.type.item}. Not for you, though.`);
   if (ven) return say(pick([`You buy ${ven.type.item}. Delicious.`, `${ven.type.item[0].toUpperCase() + ven.type.item.slice(1)}, $${ven.type.price}. Worth it.`, `"Enjoy!" says the ${ven.type.name.toLowerCase()} vendor.`]));
   const st = nearStation();
+  if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
+  if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [2, 1.7, Math.PI / 2]);
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
@@ -2584,9 +2722,203 @@ function hail() {
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }
 
+// ===== audio: recorded beds and synthesised layers, glided toward audioMix()'s targets every frame, plus one-shots
+// (footsteps, sirens, the till, the shop bell, train clatter). Starts on the first key press or click (browsers
+// won't play sound before one). N toggles sound.
+//
+// Recorded beds stream from audio/ascii-city/ through two <audio> elements each that crossfade at the loop point,
+// so nothing is decoded whole into memory and the loop never clicks. A bed that has been silent for a few seconds
+// pauses where it is and picks up from there when it's needed again.
+const AUDIO_DIR = 'audio/ascii-city/';
+const BED_FILES = { city: 'city-day.mp3', crowd: 'crowd.mp3', night: 'night.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3' };
+// overall level of each layer at full mix (the night recording is quieter than the rest, hence its boost)
+const LEVEL = { city: 0.5, crowd: 0.35, night: 0.8, restaurant: 0.45, bossa: 0.3, coffee: 0.3,
+                rain: 0.45, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
+// measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
+const CAL = { rain: 0.19, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const XF = 4, GLIDE = 0.45; // loop crossfade seconds; time constant of every level change
+let actx = null, master = null, soundOn = true, noiseBuf = null;
+const beds = {}, synth = {};
+
+function audioStart() {
+  if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  actx = new AC();
+  const comp = actx.createDynamicsCompressor(); // glues the layers together and stops stacked one-shots clipping
+  comp.threshold.value = -18; comp.ratio.value = 3;
+  master = actx.createGain(); master.gain.value = soundOn ? 0.9 : 0;
+  master.connect(comp); comp.connect(actx.destination);
+  noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
+  const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
+  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k]);
+  makeSynths();
+  onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
+}
+function toggleSound() {
+  soundOn = !soundOn;
+  if (master) master.gain.setTargetAtTime(soundOn ? 0.9 : 0, actx.currentTime, 0.15);
+  say(soundOn ? 'Sound on' : 'Sound off', 1.5);
+}
+
+// ---- recorded beds
+function makeBed(file) {
+  const out = actx.createGain(); out.gain.value = 0; out.connect(master);
+  const voices = [0, 1].map(() => {
+    const el = new Audio(AUDIO_DIR + file); el.preload = 'auto';
+    const g = actx.createGain(); g.gain.value = 0;
+    actx.createMediaElementSource(el).connect(g); g.connect(out);
+    return { el, g };
+  });
+  // start somewhere random, so the beds never line up
+  voices[0].el.addEventListener('loadedmetadata', () => { voices[0].el.currentTime = Math.random() * Math.max(0, voices[0].el.duration - XF * 2); }, { once: true });
+  return { out, voices, cur: 0, idle: 99, xf: false };
+}
+function tickBed(b, target, dt) {
+  const now = actx.currentTime, v = b.voices[b.cur], o = b.voices[1 - b.cur];
+  b.out.gain.setTargetAtTime(target, now, GLIDE);
+  b.idle = target < 0.002 ? b.idle + dt : 0;
+  if (b.idle > 4) { v.el.pause(); o.el.pause(); return; } // faded right out: pause, keeping our place
+  if (b.idle > 0) return;
+  if (v.el.paused) { // (re)starting, from wherever it paused
+    if (b.xf) { o.el.pause(); b.xf = false; } // a crossfade cut short by a pause: just carry on with this copy
+    v.g.gain.cancelScheduledValues(now); v.g.gain.setValueAtTime(1, now);
+    v.el.play().catch(() => {});
+  }
+  const dur = v.el.duration;
+  if (!dur) return;
+  if (!b.xf && v.el.currentTime > dur - XF) { // near the end: bring the other copy in from the top
+    o.el.currentTime = 0; o.el.play().catch(() => {});
+    o.g.gain.cancelScheduledValues(now); o.g.gain.setValueAtTime(0, now); o.g.gain.linearRampToValueAtTime(1, now + XF);
+    v.g.gain.cancelScheduledValues(now); v.g.gain.setValueAtTime(1, now); v.g.gain.linearRampToValueAtTime(0, now + XF);
+    b.xf = true;
+  } else if (b.xf && (v.el.ended || v.el.currentTime >= dur - 0.05)) { v.el.pause(); b.cur = 1 - b.cur; b.xf = false; }
+}
+
+// ---- synthesised layers, all from one looped noise buffer and a few oscillators
+function noiseSrc(rate = 1) {
+  const s = actx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = rate;
+  s.start(0, Math.random() * 2); return s;
+}
+const filt = (type, freq, q = 0.7) => { const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; return f; };
+const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k].connect(nodes[k + 1]); return nodes[nodes.length - 1]; };
+function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
+function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(master); return g; }
+function makeSynths() {
+  // rain: hiss
+  synth.rain = layer(); chain(noiseSrc(), filt('highpass', 500), filt('lowpass', 7000), synth.rain);
+  // waves: low surf that swells and draws back
+  synth.waves = layer(); const swell = actx.createGain(); swell.gain.value = 0.55; lfo(swell.gain, 0.08, 0.45);
+  chain(noiseSrc(0.7), filt('lowpass', 550), swell, synth.waves);
+  // wind: a bandpassed rush whose pitch wanders
+  synth.wind = layer(); const wf = filt('bandpass', 380, 0.6); lfo(wf.frequency, 0.11, 160); chain(noiseSrc(), wf, synth.wind);
+  // the el: deep rumble and a hum
+  synth.rumble = layer(); chain(noiseSrc(0.5), filt('lowpass', 110), synth.rumble);
+  const hum = actx.createOscillator(); hum.frequency.value = 42; const hg = actx.createGain(); hg.gain.value = 0.3; chain(hum, hg, synth.rumble); hum.start();
+  // a subway station: tunnel air and fluorescent hum
+  synth.tunnel = layer(); chain(noiseSrc(0.6), filt('lowpass', 260), synth.tunnel);
+  const fl = actx.createOscillator(); fl.frequency.value = 120; const flg = actx.createGain(); flg.gain.value = 0.08; chain(fl, flg, synth.tunnel); fl.start();
+  // a car engine: a growl that rises with speed
+  synth.engine = layer(); synth.engineOsc = actx.createOscillator(); synth.engineOsc.type = 'sawtooth'; synth.engineOsc.frequency.value = 45;
+  synth.engineLP = filt('lowpass', 380); chain(synth.engineOsc, synth.engineLP, synth.engine); synth.engineOsc.start();
+}
+
+// ---- one-shots
+// a burst of filtered noise with a fast attack and an exponential tail; optional extra node for colour
+function burst(at, len, filters, gain, pan = 0) {
+  const s = actx.createBufferSource(); s.buffer = noiseBuf;
+  const g = actx.createGain(), p = actx.createStereoPanner(); p.pan.value = pan;
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
+  chain(s, ...filters, g, p, master); s.start(at, Math.random() * 1.5, len + 0.05);
+}
+function tone(at, freq, len, gain, type = 'sine', pan = 0) {
+  const o = actx.createOscillator(), g = actx.createGain(), p = actx.createStereoPanner();
+  o.type = type; o.frequency.value = freq; p.pan.value = pan;
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
+  chain(o, g, p, master); o.start(at); o.stop(at + len + 0.05);
+}
+// footsteps per surface: [filter type, freq, Q, tail, level, thump Hz (0 = none)]
+const STEP = { stone: ['bandpass', 1800, 0.8, 0.06, 0.5, 85], grass: ['lowpass', 900, 0.5, 0.12, 0.35, 0], wood: ['bandpass', 650, 2, 0.08, 0.55, 150],
+               metal: ['bandpass', 2600, 5, 0.16, 0.4, 0], gravel: ['bandpass', 3200, 0.5, 0.11, 0.45, 0], sand: ['lowpass', 1400, 0.5, 0.12, 0.3, 0],
+               tile: ['bandpass', 2400, 1.2, 0.05, 0.45, 110], carpet: ['lowpass', 600, 0.5, 0.07, 0.3, 0] };
+let stepSide = 1;
+function sfxStep(surface, run) {
+  const [type, f, q, tail, lvl, thump] = STEP[surface] || STEP.stone, at = actx.currentTime, g = lvl * (run ? 0.3 : 0.2) * (0.8 + Math.random() * 0.4);
+  stepSide = -stepSide;
+  burst(at, tail, [filt(type, f * (0.85 + Math.random() * 0.3), q)], g, stepSide * 0.15);
+  if (surface === 'gravel') burst(at + 0.03, tail, [filt(type, f * 0.8, q)], g * 0.6, stepSide * 0.15); // crunch
+  if (thump) tone(at, thump * (0.9 + Math.random() * 0.2), 0.05, g * 0.8);
+  if (surface === 'metal') tone(at, 900 + Math.random() * 300, 0.12, g * 0.15, 'triangle');
+}
+function sfxTill() { // cha-ching: the drawer, then the bell
+  const at = actx.currentTime;
+  burst(at, 0.08, [filt('bandpass', 2500, 1)], 0.25);
+  tone(at + 0.08, 2093, 0.7, 0.12); tone(at + 0.08, 2637, 0.7, 0.1); tone(at + 0.11, 3136, 0.5, 0.06);
+}
+function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); tone(at + 0.07, 4150, 0.18, 0.06); }
+function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
+
+// ---- sirens: one voice per emergency vehicle in earshot, with its own pattern, Doppler and panning
+const SIREN = { amb: { type: 'square', f: t => 700 + 520 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 3.2)) },
+                police: { type: 'sawtooth', f: t => 720 + 650 * fract(t * 2.8) },
+                fire: { type: 'square', f: t => 480 + 420 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 4.5)) } };
+const sirens = new Map(); // car -> voice
+function tickSirens(indoors) {
+  const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
+  for (const c of cars) if (c.ev && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < 50) {
+    const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
+    o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, master); o.start();
+    sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
+  }
+  for (const [c, v] of sirens) {
+    const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
+    if (!cars.includes(c) || d > 55) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
+    const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
+    v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
+    v.g.gain.setTargetAtTime(0.16 / (1 + (d / 5) ** 1.4) * (indoors ? 0.12 : 1), now, 0.1);
+    v.lp.frequency.setTargetAtTime(indoors ? 700 : 2600 / (1 + d / 30), now, 0.2);
+    v.p.pan.setTargetAtTime(clamp((rx * right[0] + ry * right[1]) / d, -1, 1) * 0.8, now, 0.1);
+  }
+}
+
+// ---- per frame
+let stepAcc = 0, lastPos = null, clackT = 0;
+function audioTick(dt) {
+  if (!actx || actx.state !== 'running') return;
+  const now = actx.currentTime, indoors = mode === 'room';
+  // the el: how close a moving train is, if you're by the el
+  const elDist = Math.abs(rel(py - (EL_Y + 1))), trains = elTrains(T);
+  const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *
+    Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
+  const bx = Math.floor(px / 8), by = Math.floor(py / 8);
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
+    seaDist: seaDist(px, py), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
+  for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
+  for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
+  if (me) { // the engine note follows the car
+    synth.engineOsc.frequency.setTargetAtTime(38 + Math.abs(me.v) * 32, now, 0.08);
+    synth.engineLP.frequency.setTargetAtTime(300 + Math.abs(me.v) * 400, now, 0.1);
+  }
+  // riding the el: wheels clatter over the rail joints, faster with speed
+  if (mode === 'el') {
+    const t = elRiding(), speed = !t || t.stopped ? 0 : t.left < 3 || t.left > HOP_T - 3 ? 1 : 3; // slow pulling in and out
+    if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
+  }
+  tickSirens(indoors);
+  // footsteps: one every step-length of ground covered on foot
+  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  if (onFoot && lastPos && lastPos[2] === mode) {
+    const moved = Math.hypot(rel(px - lastPos[0]), rel(py - lastPos[1])), run = K.ShiftLeft || K.ShiftRight;
+    if (moved < 1) stepAcc += moved / (mode === 'room' ? (run ? 1.0 : 0.75) : run ? 0.14 : 0.1);
+    if (stepAcc >= 1) { stepAcc = 0; sfxStep(surfaceAt(mode, room, px, py), run); }
+  }
+  lastPos = [px, py, mode];
+}
 onkeydown = e => {
   K[e.code] = 1;
   if (e.repeat) return;
+  audioStart(); // sound can only start from a key press or click
+  if (e.code === 'KeyN') toggleSound();
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyV' && me) third = !third;
@@ -2597,7 +2929,7 @@ onkeydown = e => {
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
 onkeyup = e => K[e.code] = 0;
-cv.onclick = () => cv.requestPointerLock();
+cv.onclick = () => { audioStart(); cv.requestPointerLock(); };
 const clampPitch = () => pitch = clamp(pitch, -1.2, 1.6);
 onmousemove = e => {
   if (!document.pointerLockElement) return;
@@ -2664,6 +2996,7 @@ function loop(t) {
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { camYaw = a; render(dt); }
+  audioTick(dt);
   requestAnimationFrame(loop);
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way

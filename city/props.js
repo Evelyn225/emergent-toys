@@ -15,7 +15,7 @@ function alongStreets(s, o, fn) {
 
 // lamps stand at the curb edge of the sidewalk (sidewalk is 0..0.3), two per block side, a curved arm
 // reaching REACH out over the street. {x, y, ax, ay}: ax/ay = the arm's direction
-const CURB = 0.25, REACH = 0.2, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
+const CURB = 0.25, REACH = 0.24, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
 const lamps = [];
 for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x, y, ax, ay) => lamps.push({ x, y, ax, ay }));
 const lampsB = bucketed(lamps);

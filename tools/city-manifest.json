@@ -8,7 +8,8 @@
     "city/traffic.js",
     "city/people.js",
     "city/talk.js",
-    "city/elevated.js"
+    "city/elevated.js",
+    "city/audio-mix.js"
   ],
   "dom": [
     "city/screen.js",
@@ -18,6 +19,7 @@
     "city/render.js",
     "city/hud.js",
     "city/actions.js",
+    "city/audio.js",
     "city/main.js"
   ]
 }

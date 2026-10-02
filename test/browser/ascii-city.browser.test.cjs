@@ -10,13 +10,15 @@ const { chromium } = require('playwright');
 const PAGE = pathToFileURL(path.join(__dirname, '..', '..', 'ascii-city.html')).href;
 
 test('every mode renders without errors', async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(PAGE);
     await page.waitForTimeout(500);
+    await page.keyboard.press('KeyX'); // starts the audio engine, so every scene below runs it too
+    assert.ok(await page.evaluate(() => !!actx), 'audio started on a key press');
     const scenes = {
       street: "mode = 'walk'; px = 9 * 8 + 1; py = 10 * 8 + 4; tod = 21",
       fog: "weather = 'fog'; fogAmt = 1; tod = 12",

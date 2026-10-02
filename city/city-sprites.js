@@ -57,9 +57,7 @@ function citySprites() {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
     if (depth < 0.05 || depth > vis) return;
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
-    const col = (c, row, L) => row === 3 && c !== '|' && lampsOn > 0.3 ? C(WARM, 15) : C(GRAY, L);
-    if (Math.abs(s) < 0.35) drawArt(vx, vy, 0, 0.13, 0.8, ART.lampEnd, col);
-    else drawArt(vx + ax * REACH / 2, vy + ay * REACH / 2, 0, REACH * Math.abs(s) / 0.6, 0.8, s > 0 ? ART.lampSide : ART.lampSideL, col);
+    drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
   forNear(lanternsB, l => {
     const [vx, vy] = R(l.x, l.y), s = Math.abs(across(l.ax, l.ay, vx, vy));
@@ -93,6 +91,40 @@ function citySprites() {
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
+}
+
+// a classic street lamp: a tall fluted pole, a swan neck curving out over the street, a lantern hanging from its end.
+// Drawn from measurements, so the curve stays one character thick at any distance; s squashes the neck sideways
+// when the arm points toward or away from you, so it turns smoothly as you walk round it.
+const LAMP_TOP = 0.95, NECK = REACH / 2; // pole height; the neck is a half circle of radius NECK
+function lampCell(i, u, z, du, dz, L, s) {
+  const lit = lampsOn > 0.3, steel = C(GRAY, L * 1.1), hx = 2 * NECK * s, lu = u - hx, lz = z - (LAMP_TOP - 0.09);
+  // the lantern: a cap, a glass body glowing after dark, a finial underneath
+  if (Math.abs(lu) < Math.max(0.03, du * 0.75) && z < LAMP_TOP - 0.03 && z > LAMP_TOP - 0.14) {
+    if (z > LAMP_TOP - 0.055) return set(i, Math.abs(lu) < Math.max(0.015, du / 2) ? '^' : '_', steel), true;
+    if (z < LAMP_TOP - 0.125) return set(i, 'v', steel), true;
+    if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
+    return set(i, lit ? '#' : ':', lit ? C(WARM, 15) : C(GRAY, L * 0.7)), true;
+  }
+  if (z <= LAMP_TOP && z > LAMP_TOP - 0.03 && onLine(lu, du, 0, 0)) return set(i, '|', steel), true; // the drop
+  const halo = Math.hypot(lu / 0.075, lz / 0.065);
+  if (lit && halo < 1) { BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, " ", 0), true; } // a soft glow round it
+  // the pole: a flared base, a collar, a finial on top
+  if (z < LAMP_TOP + 0.02 && Math.abs(u) < Math.max(du / 2, z < 0.06 ? 0.03 : 0.012)) {
+    if (z < 0.06) return set(i, z < 0.025 ? '#' : 'A', steel), true;
+    return set(i, Math.abs(z - 0.42) < Math.max(0.012, dz / 2) ? '=' : '|', steel), true;
+  }
+  // the swan neck: the upper half of an ellipse from the pole top out to the lantern
+  const w = NECK * Math.abs(s);
+  if (w > du * 0.3 && z > LAMP_TOP - dz) {
+    const ex = (u - NECK * s) / w, ez = (z - LAMP_TOP) / NECK, rho = Math.hypot(ex, ez), tol = Math.max(du / w, dz / NECK) / 2;
+    if (Math.abs(rho - 1) < tol && ez > -tol) {
+      const ang = Math.atan2(ez, ex), tu = -w * Math.sin(ang) / du, tz = NECK * Math.cos(ang) / dz; // tangent, in cells
+      const sl = Math.abs(tz) / (Math.abs(tu) + 1e-9);
+      return set(i, sl > 2.5 ? '|' : sl < 0.4 ? '-' : tu * tz > 0 ? '/' : '\\', steel), true; // rising to the right: '/'
+    }
+  }
+  return false;
 }
 
 // chinatown lanterns: a string sagging across the street, red paper lanterns hanging off it, glowing after dark.

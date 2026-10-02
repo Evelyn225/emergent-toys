@@ -8,9 +8,6 @@ const ART = {
   carBack: pad(['  _______', ' /#######\\', '|]|_____|[|', "'(@)---(@)'"]),
   walkA: pad([' _ ', '(_)', '/|\\', ' | ', '/ \\']),
   walkB: pad([' _ ', '(_)', '/|\\', ' | ', ' | ']),
-  // street lamp seen side-on (arm reaching right) and end-on (arm toward / away from you)
-  lampSide: pad(['  .---.', ' /     \\', ' |    _|_', ' |    \\_/', ...Array(10).fill(' |'), '_|_']),
-  lampEnd: pad(['  .', '  |', ' _|_', ' \\_/', ...Array(10).fill('  |'), ' _|_']),
   signal: pad(['.-.', '(O)', "'-'", ' |', ' |', ' |', ' |', '_|_']),
   tree: pad(['   ,@@%,', ' ,@%@@@%@,', '@@%@@%@@@%@', '%@@@%@@%@@@', " '@%@@@%@'", "   '\\|/'", '    |', '    |']),
   bench: pad([' _____', '|_____|', "'     '"]),
@@ -72,7 +69,6 @@ Object.assign(ART, {
   elEnd: pad([' _______', '|[##|##]|', '|  o o  |', "'(O)-(O)'"]),
 });
 ART.carSideL = mirror(ART.carSide);
-ART.lampSideL = mirror(ART.lampSide);
 ART.taxiSide = pad(['   _[TAXI]__', ...ART.carSide.slice(1)]);
 ART.taxiSideL = mirror(ART.taxiSide).map(l => l.replace('[IXAT]', '[TAXI]'));
 ART.taxiFront = pad(['  _[TAXI]_', ...ART.carFront.slice(1)]);

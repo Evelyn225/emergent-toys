@@ -30,6 +30,7 @@ temp/
 # Local audio generation sources
 audio/server-hum-generator.js
 audio/interference.mp3
+audio/ascii city/
 
 # Local video files
 videos/
