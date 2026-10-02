@@ -125,14 +125,13 @@ for (let k = 0; k < 28; k++) {
 
 // landmark, construction-site and industrial props. Fences and shipping containers are real boxes (solids): drawn
 // with drawBox and solid to walk or drive into. {x, y, c, s: long axis, hl, hw, z0, z1, kind, k: a per-thing seed}
-const extras = [], cranes = [], stacks = [], solids = [];
+const extras = [], cranes = [], stacks = [], solids = [], radios = [];
 const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k });
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
   if (lm === 'cathedral') for (const x of [3.5, 6.5])
     extras.push({ x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
-  if (lm === 'radio')
-    extras.push({ x: X + 5, y: Y + 5, z: 0, w: 2.2, h: 16, art: ART.radio, col: (c, row, L) => c === '*' ? C(RED, fract(T * 0.7) < 0.5 ? 15 : 3) : C(row & 2 ? RED : WHITE, L) });
+  if (lm === 'radio') radios.push({ x: X + 5, y: Y + 5 });
   if (kind === 'construction') {
     cranes.push({ x: X + 7, y: Y + 6.2, H: 7 + hash(bx, by, 98) * 2, slew: hash(bx, by, 99) * 6.28 });
     // the hoarding round the site: three panels a side, open at the corners

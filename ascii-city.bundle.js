@@ -167,7 +167,6 @@ const ART = {
 };
 Object.assign(ART, {
   spire: pad(['   +', '   ^', '  /|\\', '  |+|', ' /|||\\', ' |||||', '/|||||\\']),
-  radio: pad(['    *', '    |', '   /|\\', '   |X|', '   |X|', '  /|X|\\', '  |XXX|', '  |XXX|', ' /|XXX|\\', ' |XXXXX|', ' |XXXXX|', '/XXXXXXX\\']),
   fence: pad(['|==|==|==|==|', '|  |  |  |  |']),
   treadmill: pad(['  ____', ' |[::]|', ' |    |', '/______\\']),
   rack: pad(['|=O====O=|', '|=O====O=|', '|=O====O=|', '|_________|']),
@@ -650,14 +649,13 @@ for (let k = 0; k < 28; k++) {
 
 // landmark, construction-site and industrial props. Fences and shipping containers are real boxes (solids): drawn
 // with drawBox and solid to walk or drive into. {x, y, c, s: long axis, hl, hw, z0, z1, kind, k: a per-thing seed}
-const extras = [], cranes = [], stacks = [], solids = [];
+const extras = [], cranes = [], stacks = [], solids = [], radios = [];
 const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k });
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
   if (lm === 'cathedral') for (const x of [3.5, 6.5])
     extras.push({ x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
-  if (lm === 'radio')
-    extras.push({ x: X + 5, y: Y + 5, z: 0, w: 2.2, h: 16, art: ART.radio, col: (c, row, L) => c === '*' ? C(RED, fract(T * 0.7) < 0.5 ? 15 : 3) : C(row & 2 ? RED : WHITE, L) });
+  if (lm === 'radio') radios.push({ x: X + 5, y: Y + 5 });
   if (kind === 'construction') {
     cranes.push({ x: X + 7, y: Y + 6.2, H: 7 + hash(bx, by, 98) * 2, slew: hash(bx, by, 99) * 6.28 });
     // the hoarding round the site: three panels a side, open at the corners
@@ -3017,6 +3015,7 @@ function citySprites() {
       row < 3 ? C(t.color, Math.max(L, night * 12)) : c === 'O' ? C(GRAY, L * 0.5) : C(t.color, L));
     drawArt(...R(v.x + v.ox, v.y + v.oy), 0, 0.06, 0.18, ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? v.shirt : GRAY, L));
   }
+  for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (Math.hypot(vx, vy) < vis + 2) drawRadioTower(vx, vy); }
   for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
   forNear(roofsB, o => {
     const blink = fract(T * 0.8 + o.x) < 0.5;
@@ -3386,6 +3385,34 @@ function drawStationEntrance(s, vx, vy) {
   drawBox(boxAt(tx, ty, 1, 0, 0.012, 0.012, Z1, Z1 + 0.024), (i, t, L) => { BG[i] = C(GREEN, 7 + night * 7); return set(i, 'O', C(WHITE, 15)), true; });
 }
 
+// the radio mast: 160m of red and white lattice, tapering in sections. Each section is four corner legs (thickened
+// with distance so they never break up) and see-through faces with X bracing and a girder along the bottom; red lamps
+// blink at every other joint and on the very top
+const RADIO_H = 16, RADIO_SEC = 8, radioHalf = z => 0.9 - 0.78 * z / RADIO_H;
+function drawRadioTower(vx, vy) {
+  const d = Math.hypot(vx, vy), leg = Math.max(0.03, 0.6 * d / projX), sh = RADIO_H / RADIO_SEC;
+  for (let k = 0; k < RADIO_SEC; k++) {
+    const z0 = k * sh, z1 = z0 + sh, h0 = radioHalf(z0), h1 = radioHalf(z1), hs = (h0 + h1) / 2, col = k & 1 ? WHITE : RED;
+    for (let q = 0; q < 4; q++) { // the legs, stepped in a little every quarter section: the taper
+      const q0 = z0 + q * sh / 4, hq = radioHalf(q0 + sh / 8);
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
+        drawBox(boxAt(vx + sx * hq, vy + sy * hq, 1, 0, leg, leg, q0, q0 + sh / 4), (i, t, L) => set(i, HIT.face > 4 ? '=' : '#', C(col, Math.max(L, 6))) || true);
+    }
+    drawBox(boxAt(vx, vy, 1, 0, hs, hs, z0, z1), (i, t, L) => { // the bracing on its faces; the gaps show what's behind
+      if (HIT.face > 4) return false;
+      const s = (HIT.face < 3 ? HIT.v : HIT.u) / hs, h = (HIT.w - z0) / sh * 2 - 1, cell = t / projX / hs * 1.2; // s, h: -1..1 across, up
+      if (h < -1 + cell * 0.6) return set(i, '=', C(col, Math.max(L, 5))), true;
+      if (Math.abs(s - h) < cell) return set(i, '/', C(col, Math.max(L * 0.9, 4))), true;
+      if (Math.abs(s + h) < cell) return set(i, '\\', C(col, Math.max(L * 0.9, 4))), true;
+      return false;
+    });
+    if (k & 1) for (const [sx, sy] of [[-1, -1], [1, 1]]) drawBox(boxAt(vx + sx * h1, vy + sy * h1, 1, 0, leg * 1.4, leg * 1.4, z1 - leg * 2, z1 + leg), (i, t, L) =>
+      (BG[i] = C(RED, fract(T * 0.7 + k * 0.1) < 0.5 ? 6 : 0), set(i, '*', C(RED, fract(T * 0.7 + k * 0.1) < 0.5 ? 15 : 4)), true));
+  }
+  drawBox(boxAt(vx, vy, 1, 0, leg, leg, RADIO_H, RADIO_H + 1.2), (i, t, L) => set(i, '|', C(WHITE, Math.max(L, 6))) || true); // the aerial
+  drawBox(boxAt(vx, vy, 1, 0, leg * 2, leg * 2, RADIO_H + 1.2, RADIO_H + 1.2 + leg * 3), (i, t, L) =>
+    (BG[i] = C(RED, fract(T * 0.7) < 0.5 ? 8 : 0), set(i, '*', C(RED, fract(T * 0.7) < 0.5 ? 15 : 4)), true));
+}
 // chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
 // glowing after dark. Real 3D, so it stays put across the street as you walk round it.
 const sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
