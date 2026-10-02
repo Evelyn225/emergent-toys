@@ -148,8 +148,8 @@ test('the boombox: a random tape when you switch it on, B steps through them in 
   ev('useHeld({})');
   assert.strictEqual(ev('fx.boombox && BOOMBOX_SONGS.includes(fx.song)'), true);
   const seen = new Set();
-  for (let k = 0; k < 3; k++) seen.add(ev('nextSong()'));
-  assert.strictEqual(seen.size, 3, 'every tape comes round');
-  const before = ev('fx.song'); ev('nextSong(); nextSong(); nextSong()');
-  assert.strictEqual(ev('fx.song'), before, 'three presses and you are back where you started');
+  for (let k = 0; k < 4; k++) seen.add(ev('nextSong()'));
+  assert.strictEqual(seen.size, 4, 'every tape comes round');
+  const before = ev('fx.song'); ev('nextSong(); nextSong(); nextSong(); nextSong()');
+  assert.strictEqual(ev('fx.song'), before, 'once round and you are back where you started');
 });

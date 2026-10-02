@@ -68,7 +68,7 @@ let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 const holdSlot = k => { held = held === k ? -1 : k; };
 const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
-const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline' };
+const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)

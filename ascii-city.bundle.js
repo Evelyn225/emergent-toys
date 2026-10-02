@@ -1464,7 +1464,7 @@ const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, rain) and synthesised ones (waves,
+// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, arcade, rain) and synthesised ones (waves,
 // wind, rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -1477,7 +1477,7 @@ const AUDIO_DISTRICT = {
 // which room plays what: [restaurant crowd, bossa nova, coffee jazz]. Music only where a shop would have it on:
 // cafes and restaurants, bars, the shops and hotel lobbies; not apartment lobbies, the bank, the gym, the cinema or the subway
 const ROOM_AUDIO = {
-  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0.3], store: [0, 0, 0.5],
+  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
   hotel: [0.2, 0.4, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
@@ -1492,7 +1492,7 @@ function seaDist(x, y) {
 }
 
 function audioMix(s) {
-  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, arcade: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
@@ -1500,6 +1500,7 @@ function audioMix(s) {
     out.bossa = cafe ? 0.8 : bossa;
     out.coffee = cafe ? 0 : coffee;
     if (k === 'karaoke') out.karaoke = 0.9; // somebody's always singing Sweet Caroline
+    if (k === 'arcade') out.arcade = 0.85; // chiptunes over the cabinets' bleeps
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.25 * s.rain;
     if (k === 'station') out.tunnel = 0.7;
@@ -1611,7 +1612,7 @@ let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 const holdSlot = k => { held = held === k ? -1 : k; };
 const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
-const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline' };
+const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
@@ -4470,9 +4471,9 @@ function jobArrow() {
 // pauses where it is and picks up from there when it's needed again.
 const AUDIO_DIR = 'audio/ascii-city/';
 const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
-                    rain: 'rain.mp3', karaoke: 'karaoke.mp3' };
+                    rain: 'rain.mp3', karaoke: 'karaoke.mp3', arcade: 'arcade.mp3' };
 // overall level of each layer at full mix
-const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3, karaoke: 0.35,
+const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3, karaoke: 0.35, arcade: 0.35,
                 rain: 0.28, board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
 const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
@@ -4493,7 +4494,7 @@ function audioStart() {
   applyVolumes();
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
-  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' ? musicBus : ambBus);
+  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' ? musicBus : ambBus);
   makeSynths();
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
 }

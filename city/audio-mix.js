@@ -2,7 +2,7 @@
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, rain) and synthesised ones (waves,
+// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, arcade, rain) and synthesised ones (waves,
 // wind, rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -15,7 +15,7 @@ const AUDIO_DISTRICT = {
 // which room plays what: [restaurant crowd, bossa nova, coffee jazz]. Music only where a shop would have it on:
 // cafes and restaurants, bars, the shops and hotel lobbies; not apartment lobbies, the bank, the gym, the cinema or the subway
 const ROOM_AUDIO = {
-  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0.3], store: [0, 0, 0.5],
+  bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
   hotel: [0.2, 0.4, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
@@ -30,7 +30,7 @@ function seaDist(x, y) {
 }
 
 function audioMix(s) {
-  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, arcade: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
@@ -38,6 +38,7 @@ function audioMix(s) {
     out.bossa = cafe ? 0.8 : bossa;
     out.coffee = cafe ? 0 : coffee;
     if (k === 'karaoke') out.karaoke = 0.9; // somebody's always singing Sweet Caroline
+    if (k === 'arcade') out.arcade = 0.85; // chiptunes over the cabinets' bleeps
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.25 * s.rain;
     if (k === 'station') out.tunnel = 0.7;
