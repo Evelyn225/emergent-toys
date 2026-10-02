@@ -1911,6 +1911,53 @@ GAMES.crosser = (rnd = Math.random) => {
   return g;
 };
 
+// pong: you on the left, the machine on the right (a little slow to react, so it can be beaten); first to 7. The
+// ball speeds up every rally hit and leaves your paddle at an angle set by where it hit.
+GAMES.pong = (rnd = Math.random) => {
+  const W = 32, H = 18, PH = 4, WIN = 7, g = { id: 'pong', title: 'PONG', W, H, score: 0, over: false };
+  let you = H / 2, cpu = H / 2, them = 0, ball, wait = 1;
+  const serve = dir => { const a_ = (rnd() - 0.5) * 0.9; ball = { x: W / 2, y: H / 2, vx: Math.cos(a_) * 11 * dir, vy: Math.sin(a_) * 11 }; wait = 0.8; };
+  serve(rnd() < 0.5 ? 1 : -1);
+  const bounce = (py, dir) => { // off a paddle at py: faster, and angled by where on the paddle it hit
+    const off = clamp((ball.y - py) / (PH / 2 + 0.5), -1, 1), sp = Math.min(26, Math.hypot(ball.vx, ball.vy) * 1.1), a_ = off * 1.0;
+    ball.vx = Math.cos(a_) * sp * dir; ball.vy = Math.sin(a_) * sp;
+  };
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    you = clamp(you + ((k.down ? 1 : 0) - (k.up ? 1 : 0)) * 16 * dt, PH / 2, H - PH / 2);
+    // the machine: chases the ball when it's coming (a little slow, and misjudging it by a wobbling bit), drifts home when not
+    const aim = ball.vx > 0 ? ball.y + Math.sin(ball.x * 0.7 + them) * 1.6 : H / 2;
+    cpu = clamp(cpu + clamp(aim - cpu, -5.5 * dt, 5.5 * dt), PH / 2, H - PH / 2);
+    if (wait > 0) { wait -= dt; return ev; }
+    const n = Math.ceil(dt * 40);
+    for (let s = 0; s < n; s++) {
+      const h = dt / n;
+      ball.x += ball.vx * h; ball.y += ball.vy * h;
+      if (ball.y < 0 || ball.y > H - 1e-3) { ball.vy = -ball.vy; ball.y = clamp(ball.y, 0, H - 1e-3); ev.push('wall'); }
+      if (ball.vx < 0 && ball.x < 1.5 && ball.x > 0.5 && Math.abs(ball.y - you) <= PH / 2 + 0.5) { bounce(you, 1); ball.x = 1.5; ev.push('paddle'); }
+      if (ball.vx > 0 && ball.x > W - 1.5 && ball.x < W - 0.5 && Math.abs(ball.y - cpu) <= PH / 2 + 0.5) { bounce(cpu, -1); ball.x = W - 1.5; ev.push('paddle'); }
+      if (ball.x < 0 || ball.x > W) {
+        if (ball.x > W) { g.score++; ev.push('score'); } else { them++; ev.push('miss'); }
+        if (g.score >= WIN || them >= WIN) { g.over = true; ev.push(g.score >= WIN ? 'clear' : 'die'); }
+        else serve(ball.x > W ? -1 : 1);
+        return ev;
+      }
+    }
+    return ev;
+  };
+  g.draw = put => {
+    for (let y = 0; y < H; y += 2) put(W / 2, y, ':', C(GRAY, 7)); // the net
+    for (let y = Math.round(you - PH / 2); y < Math.round(you + PH / 2); y++) put(0, y, '#', C(WHITE, 15), C(GRAY, 5));
+    for (let y = Math.round(cpu - PH / 2); y < Math.round(cpu + PH / 2); y++) put(W - 1, y, '#', C(RED, 14), C(RED, 4));
+    if (wait <= 0 || fract(wait * 4) < 0.5) put(Math.floor(ball.x), Math.floor(ball.y), 'o', C(WHITE, 15));
+  };
+  g.status = () => `YOU ${g.score} - ${them} CPU   first to ${WIN}   UP/DOWN move`;
+  g.reward = () => g.score * 2 + (g.score >= WIN ? 10 : 0);
+  g.state = () => ({ you, cpu, ball, them });
+  return g;
+};
+
 // waiting tables (a shift at a diner, cafe or noodle bar): customers come down the four counters toward you; slide
 // each a plate before they reach the end. A plate with nobody to catch it breaks; a customer who gets to you walks
 // out. 75 seconds, or five mistakes. Pays per customer served.
@@ -2004,7 +2051,7 @@ GAMES.stock = (rnd = Math.random) => {
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
-const ARCADE_GAMES = ['snake', 'breakout', 'crosser'], CREDIT = 1;
+const ARCADE_GAMES = ['snake', 'breakout', 'crosser', 'pong'], CREDIT = 1;
 
 // ---- driving a taxi: what a trip pays. The meter (taxiFare) by distance, and a tip for getting there quickly and
 // smoothly; any crash on the way and there's no tip. took = seconds, harsh = seconds of hard braking or swerving.
@@ -4996,7 +5043,7 @@ function drawHeldBig() {
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const cx = Math.round(cv.width * 0.7), hy = Math.round(cv.height - 4.8 * hsz + bob); // the top of the fist
+  const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (it.id === 'umbrella' && rain > 0.2) drawCanopy(cx, grip, isz, bob);
   else {

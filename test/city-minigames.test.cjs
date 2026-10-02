@@ -125,3 +125,16 @@ test('taxi pay: the meter plus a tip for quick and smooth; a crash loses the tip
   assert.strictEqual(crash.tip, 0); assert.strictEqual(crash.fare, good.fare, 'still pays the meter');
   assert.strictEqual(good.stars, 5); assert.strictEqual(crash.stars, 1);
 });
+
+test('pong: a player who follows the ball beats the machine; one who stands still loses', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.pong()');
+  play(ev, 300, `t => { const s = g.state(); return { up: s.ball.y < s.you - 0.4, down: s.ball.y > s.you + 0.4 }; }`);
+  assert.ok(ev('g.over'));
+  assert.strictEqual(ev('g.score'), 7, 'won');
+  assert.strictEqual(ev('g.reward()'), 24);
+  ev('var g = GAMES.pong()');
+  play(ev, 300, `() => ({ up: 1 })`);
+  assert.ok(ev('g.over') && ev('g.state().them') === 7, 'lost');
+  assert.ok(ev('g.reward()') < 24);
+});
