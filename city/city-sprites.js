@@ -152,7 +152,66 @@ const VEHICLES = {
   police: [0.22, 0.09, 0.075, 0.13, 0.11, -0.02], amb: [0.25, 0.1, 0.15, 0, 0, 0], fire: [0.37, 0.1, 0.14, 0.17, 0.06, 0.29],
 };
 const shadeFace = f => f === 5 ? 1 : f === 1 || f === 2 ? 0.85 : 0.7; // a little light from above, a little less on the sides
+// the ambulance: a tall white box module behind a low cab. Red stripe and a star of life down the sides, a red cross on
+// the roof, rear doors with chevrons and little windows, the light bar along the top front edge of the box
+function drawAmbulance(m, vx, vy, hx, hy) {
+  const hl = 0.25, hw = 0.1, MH = 0.165, CH = 0.11, mhl = hl * 0.68, mo = -hl + mhl, chl = hl - mhl, co = hl - chl;
+  const lightsOn = night > 0.4 || overcast > 0.5, braking = m.brake || m.v < 0.05;
+  const white = (f, L) => C(WHITE, (2.5 + L * 0.7) * shadeFace(f));
+  const sill = (i, w, L) => { BG[i] = C(GRAY, 1); return set(i, '_', C(GRAY, L * 0.3)), true; };
+  const wheel = (i, L) => { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; };
+  drawBox(boxAt(vx + hx * mo, vy + hy * mo, hx, hy, mhl, hw, 0.012, MH), (i, t, L) => { // the box
+    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
+    BG[i] = white(f, L);
+    if (f === 6) return set(i, ' ', 0), true;
+    if (f === 5) return set(i, Math.abs(u) < 0.045 && Math.abs(v) < 0.012 || Math.abs(v) < 0.045 && Math.abs(u) < 0.012 ? '#' : ' ', C(RED, 13)), true;
+    if (f === 1) return set(i, ' ', 0), true; // (above the cab)
+    if (f === 2) { // the back: two doors, windows up top, chevrons along the bottom, tail lights
+      if (w < 0.022) return sill(i, w, L);
+      if (Math.abs(v) < 0.006) return set(i, '|', C(GRAY, L * 0.6)), true;
+      if (w > 0.11 && w < 0.145 && Math.abs(v) > 0.02 && Math.abs(v) < 0.075) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; }
+      if (w < 0.05 && Math.abs(v) > hw * 0.75) return set(i, ']', C(RED, braking ? 15 : 8)), true;
+      if (w < 0.06) { const c = fract((v * (v > 0 ? 1 : -1) + w) * 18) < 0.5; BG[i] = C(c ? RED : YEL, c ? 9 : 12); return set(i, ' ', 0), true; }
+      return set(i, ' ', 0), true;
+    }
+    // the sides
+    if (w < 0.035 && Math.abs(u + mhl * 0.55) < 0.04) return wheel(i, L);
+    if (w < 0.022) return sill(i, w, L);
+    if (w > 0.062 && w < 0.078) { BG[i] = C(RED, 9 + L * 0.2); return set(i, ' ', 0), true; } // the stripe
+    const su = u - mhl * 0.1, sw = w - 0.118; // the star of life
+    if (Math.abs(su) < 0.03 && Math.abs(sw) < 0.03 && (Math.abs(su) < 0.009 || Math.abs(sw) < 0.009 || Math.abs(Math.abs(su) - Math.abs(sw)) < 0.008)) { BG[i] = C(BLUE, 9); return set(i, ' ', 0), true; }
+    if (u > mhl * 0.6 && w > 0.1 && w < 0.14) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; } // a little side window
+    return set(i, ' ', 0), true;
+  });
+  drawBox(boxAt(vx + hx * co, vy + hy * co, hx, hy, chl, hw * 0.94, 0.012, CH), (i, t, L) => { // the cab
+    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
+    BG[i] = white(f, L);
+    if (f === 6 || f === 2) return set(i, ' ', 0), true;
+    if (f === 5) return set(i, ' ', 0), true;
+    if (f === 1) { // the windscreen, headlights, a grille
+      if (w > 0.07 && Math.abs(v) < hw * 0.82) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, w > 0.1 ? '-' : ' ', C(GRAY, 5)), true; }
+      if (w < 0.05 && Math.abs(v) > hw * 0.55) return set(i, 'O', C(WHITE, lightsOn ? 15 : 10)), true;
+      if (w < 0.045) return set(i, '=', C(GRAY, L * 0.5)), true;
+      return set(i, ' ', 0), true;
+    }
+    if (w < 0.035 && Math.abs(u) < 0.04) return wheel(i, L);
+    if (w < 0.022) return sill(i, w, L);
+    if (w > 0.062 && w < 0.078) { BG[i] = C(RED, 9 + L * 0.2); return set(i, ' ', 0), true; }
+    if (w > 0.072 && u > -chl * 0.6 && u < chl * 0.75) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; } // the door window
+    return set(i, Math.abs(u + chl * 0.65) < 0.004 ? '|' : ' ', C(GRAY, L * 0.5)), true;
+  });
+  const lb = mo + mhl - 0.02; // the light bar, and a lamp on each back corner
+  drawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
+    const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side;
+    BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
+  });
+  for (const s of [-1, 1]) drawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
+    const on = lightsOn_(m) && strobe() === (s > 0 ? RED : BLUE);
+    BG[i] = C(RED, on ? 15 : 4); return set(i, on ? '*' : ' ', C(WHITE, 15)), true;
+  });
+}
 function drawVehicle(m, vx, vy, hx, hy) {
+  if (m.kind === 'amb') return drawAmbulance(m, vx, vy, hx, hy);
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
   const braking = m.brake || m.v < 0.05, body = m.body;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
