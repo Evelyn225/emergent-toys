@@ -5,7 +5,7 @@
   "main": "server.cjs",
   "scripts": {
     "start": "node server.cjs",
-    "build": "node tools/build.cjs",
+    "build": "node tools/build.cjs && node tools/build-city.cjs",
     "test": "node --test test/*.cjs",
     "test:browser": "node --test test/browser/*.browser.test.cjs",
     "test:all": "npm test && npm run test:browser"

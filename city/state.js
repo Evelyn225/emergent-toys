@@ -1,0 +1,53 @@
+// ---- game state
+let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
+let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0;
+let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0;
+let day, night, dusk, amb, vis, lampsOn, overcast, litT;
+let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
+let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
+const K = {}; // keys held, by KeyboardEvent.code
+let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
+let paused = false;
+// settings, kept in localStorage (the pause menu edits them; pause.js applies them)
+const SETTINGS_KEY = 'asciiCity.settings';
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 63, detail: 'medium', help: true };
+function loadSettings() { try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch (e) { /* private window etc: defaults */ } }
+function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* not saved, still applied */ } }
+loadSettings();
+const say = (s, t = 3) => { msgText = s; msgT = t; };
+
+// ---- money: you start with $100; taxis, the subway, the el and street food cost, favours pay
+let money = 100;
+const SUBWAY_FARE = 2.9;
+const taxiFare = cells => 3 + cells * 0.25; // $3 flag fall, $0.25 per 10m
+const fmt$ = v => '$' + v.toFixed(2);
+let onMoney = null; // the audio hooks in here for the till sound
+function pay(amount) { // false (and nothing spent) if you can't cover it
+  if (money + 1e-9 < amount) return false;
+  money = Math.round((money - amount) * 100) / 100; if (onMoney) onMoney(-amount);
+  return true;
+}
+// the hotel: a night's stay, from 6pm (check-in closes at 5am)
+const ROOM_RATE = word => word === 'MOTEL' ? 20 : 40;
+const checkInOpen = t => t >= 18 || t < 5;
+function earn(amount) { money = Math.round((money + amount) * 100) / 100; if (onMoney) onMoney(amount); }
+
+const CLOUD_H = 60; // cloud layer height (600m)
+let cloudT = 0;
+function env(dt) {
+  const lapse = K.KeyT ? 40 : 1; // 20s per game hour; hold T to fast-forward (clouds race along too)
+  tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
+  if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog']); wTimer = 60 + Math.random() * 90; }
+  rain += clamp((weather === 'rain') - rain, -dt / 6, dt / 6);
+  fogAmt += clamp((weather === 'fog') - fogAmt, -dt / 6, dt / 6);
+  wet = clamp(wet + (rain > 0.3 ? dt / 10 : -dt / 60), 0, 1); // streets stay wet for a while after rain
+  const sunEl = Math.sin((tod - 6) / 12 * Math.PI);
+  day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
+  overcast = Math.max(rain, fogAmt);
+  amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast);
+  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain);
+  lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
+  litT = 0.62 + 0.33 * day; // fewer lit windows by day
+  if (mode === 'room') { amb = room.def.light; vis = 40; }
+}
+
