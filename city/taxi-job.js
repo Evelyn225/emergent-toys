@@ -82,25 +82,29 @@ function jobLine() {
   const way = Math.abs(ang) < 0.4 ? 'ahead' : Math.abs(ang) > 2.7 ? 'behind you' : (Math.abs(ang) < 1.2 ? 'ahead, ' : Math.abs(ang) > 1.9 ? 'behind, ' : '') + (ang > 0 ? 'right' : 'left');
   return `${t.what}: ${d < DROP_R * 10 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
 }
-// the big arrow at the top of the screen: which way the fare (or their stop) is from where the car's pointing,
-// how far, and what to do there. Drawn over the frame like the rest of the HUD.
+// the arrow at the top of the screen, in characters: a shaft and a two-stroke head drawn at whatever angle the fare
+// (or their stop) is from where the car's pointing, how far, and what to do there. Close enough: a blinking [ STOP ].
 function jobArrow() {
   const t = jobTarget();
   if (!t || !me) return;
   const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey);
   const ang = mod(Math.atan2(ey, ex) - (chaseOn ? camYaw : a) + Math.PI, Math.PI * 2) - Math.PI; // 0 = dead ahead, + = right
-  const x = cv.width / 2, y = 78, r = 26, here = d < DROP_R;
-  g.save(); g.translate(x, y);
-  if (!here) g.rotate(ang);
-  g.beginPath();
-  if (here) { g.arc(0, 0, r * 0.55, 0, Math.PI * 2); } // arrived: a dot, stop here
-  else { g.moveTo(0, -r); g.lineTo(r * 0.75, r * 0.15); g.lineTo(r * 0.28, r * 0.15); g.lineTo(r * 0.28, r * 0.8); g.lineTo(-r * 0.28, r * 0.8); g.lineTo(-r * 0.28, r * 0.15); g.lineTo(-r * 0.75, r * 0.15); g.closePath(); }
-  g.fillStyle = PAL[C(YEL, fract(T * 2) < 0.75 || !here ? 15 : 9)]; g.fill();
-  g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.8)'; g.stroke();
-  g.restore();
-  const label = here ? (job.ride ? 'STOP to let them out' : 'STOP to pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d * 10 / 10) * 10}m`;
-  g.font = FS + 'px monospace'; g.textAlign = 'center';
-  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - label.length * FS * 0.33 - 6, y + r + 6, label.length * FS * 0.66 + 12, FS + 6);
-  g.fillStyle = PAL[C(YEL, 15)]; g.fillText(label, x, y + r + 9);
-  g.textAlign = 'left';
+  const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.95), x = cv.width / 2, y = 70 + s * 3.2; // below the message line
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, col = PAL[C(YEL, 15)];
+  if (d < DROP_R) {
+    if (fract(T * 2) < 0.7) artText(['[ STOP ]'], x - 4 * w, y - s / 2, s, () => C(YEL, 15));
+  } else {
+    const L = s * 2.6, ux = Math.sin(ang), uy = -Math.cos(ang), tip = [x + ux * L, y + uy * L];
+    charLine(x - ux * L, y - uy * L, tip[0], tip[1], w, s, col); // the shaft
+    for (const side of [-1, 1]) { // the head: two strokes back from the tip
+      const h = ang + Math.PI + side * 0.55;
+      charLine(tip[0], tip[1], tip[0] + Math.sin(h) * L * 0.5, tip[1] - Math.cos(h) * L * 0.5, w, s, col);
+    }
+  }
+  const label = d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
+  g.font = FS + 'px monospace';
+  const lw = g.measureText(label).width;
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - lw / 2 - 6, y + s * 3.1, lw + 12, FS + 6);
+  g.fillStyle = col; g.fillText(label, x - lw / 2, y + s * 3.1 + 3);
 }

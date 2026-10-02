@@ -102,6 +102,7 @@ function interact() {
     }
     if (room.kind === 'storage' && nearKeeper()) return openStorage();
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
+    if (room.kind === 'hospital' && nearKeeper()) return say(`"${pick(NURSE_LINES)}"`, 3); // (healing would go here)
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
@@ -142,7 +143,7 @@ function interact() {
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
-    if (sh.base) return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
+    if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say('Closed.');
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
@@ -153,6 +154,8 @@ function interact() {
 }
 // the hotel: a night's sleep, from 6pm. Fade out, wake at 7:00 in a room upstairs to a clear morning,
 // with everyone outside already where their morning routine puts them
+const NURSE_LINES = ['Take a seat, someone will call your name.', 'Fill this in and bring it back up.', 'Are you hurt? No? Then you\'re in luck.',
+  'The doctor will see you when she can.', 'Busy night. Busy every night.'];
 function bookRoom() {
   const rate = ROOM_RATE(room.word);
   if (!checkInOpen(tod)) return say('"Sorry, check-in begins at 6pm."', 4);

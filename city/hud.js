@@ -111,6 +111,7 @@ function promptText() {
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return 'Closed.';
     if (!openAt(sh, tod)) return `${sh.signed ? sh.word : 'Shop'}: closed, opens at ${sh.hours[0]}:00`;
@@ -124,7 +125,7 @@ function promptText() {
 let showMap = false;
 // the minimap (M): solid tiles so the street grid reads at a glance, in an ASCII frame with character markers to match
 // the rest of the HUD. MAP_R cells each side of you; a tile is two characters wide and one tall, so it's square.
-const MAP_R = 14;
+const MAP_R = 12;
 const MAP_COL = { park: '#1f5a2a', sea: '#1d3f7a', construction: '#4a3a28', yard: '#3a3428', waterfront: '#4a4636' };
 function mapTile(mx, my) {
   const k = idx(mx, my), h = map[k], wx = mx + 0.5, wy = my + 0.5;
@@ -137,7 +138,7 @@ function mapTile(mx, my) {
 }
 function minimap() {
   if (!showMap || mode === 'room') return;
-  const fs = Math.max(10, Math.round(cv.height / 66)); g.font = fs + 'px monospace';
+  const fs = Math.max(8, Math.round(cv.height / 100)); g.font = fs + 'px monospace'; // ~270px across at 900 tall
   const cw_ = g.measureText('M').width, n = MAP_R * 2 + 1, W = n * 2 * cw_, H = n * fs, x0 = Math.round(cv.width - W - 14), y0 = 44;
   g.fillStyle = 'rgba(0,0,0,0.82)'; g.fillRect(x0 - cw_ * 1.5, y0 - fs * 1.2, W + cw_ * 3, H + fs * 2.4);
   const ox = Math.floor(px), oy = Math.floor(py), tw = 2 * cw_;

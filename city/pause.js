@@ -31,7 +31,7 @@ function buildPause() {
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
-        <b>M</b><span>map</span><b>1-8</b><span>hold an item (in a taxi or train: pick a stop)</span>
+        <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
         <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>

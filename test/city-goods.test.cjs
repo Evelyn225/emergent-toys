@@ -128,3 +128,28 @@ test('things you put down stay where they are, as they were, till you pick them 
   ev("for (let k = 0; k < 7; k++) buy('water')");
   assert.deepStrictEqual(j("pickUpDropped(dropped[0])"), [false, 'Your hands are full.']);
 });
+
+test('you can hold nothing: pick the same slot again, and nothing is in your hand', () => {
+  const { ev } = fresh();
+  ev("money = 50; buy('coffee'); buy('book')");
+  assert.strictEqual(ev('held'), 1);
+  ev('holdSlot(1)');
+  assert.strictEqual(ev('heldItem()'), null, 'put away');
+  assert.strictEqual(ev("useHeld({})[0]"), 'Your hands are empty.');
+  ev('storeSlot(0)');
+  assert.strictEqual(ev('held'), -1, 'stays empty-handed when something else is put away');
+  ev('holdSlot(0)');
+  assert.strictEqual(ev('heldItem().id'), 'book');
+});
+
+test('the boombox: a random tape when you switch it on, B steps through them in order', () => {
+  const { ev } = fresh();
+  ev("money = 100; buy('boombox')");
+  ev('useHeld({})');
+  assert.strictEqual(ev('fx.boombox && BOOMBOX_SONGS.includes(fx.song)'), true);
+  const seen = new Set();
+  for (let k = 0; k < 3; k++) seen.add(ev('nextSong()'));
+  assert.strictEqual(seen.size, 3, 'every tape comes round');
+  const before = ev('fx.song'); ev('nextSong(); nextSong(); nextSong()');
+  assert.strictEqual(ev('fx.song'), before, 'three presses and you are back where you started');
+});

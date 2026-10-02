@@ -1479,7 +1479,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0.3], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -1517,7 +1517,7 @@ function audioMix(s) {
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
-  if (s.boombox) out.bossa = 0.7; // your boombox
+  if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : 0;
   for (const k in out) out[k] = clamp(out[k], 0, 1);
@@ -1553,12 +1553,14 @@ const ITEMS = {
   slice: { name: 'pizza slice', price: 4, kind: 'food', uses: 3 }, burger: { name: 'burger', price: 8, kind: 'food', uses: 4 },
   kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
   dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
+  ginseng: { name: 'ginseng root', price: 6, kind: 'food', uses: 2, caffeine: 70 }, // a bitter chew, and a kick like coffee
   // drink
   coffee: { name: 'coffee', price: 3, kind: 'drink', uses: 4, caffeine: 60 }, latte: { name: 'latte', price: 5, kind: 'drink', uses: 4, caffeine: 50 },
   tea: { name: 'tea', price: 2, kind: 'drink', uses: 3, caffeine: 25 }, soda: { name: 'soda', price: 2, kind: 'drink', uses: 3 },
   water: { name: 'water', price: 1, kind: 'drink', uses: 3 }, energy: { name: 'energy drink', price: 4, kind: 'drink', uses: 3, caffeine: 90 },
   beer: { name: 'beer', price: 6, kind: 'drink', uses: 4, booze: 0.25 }, whiskey: { name: 'whiskey', price: 9, kind: 'drink', uses: 2, booze: 0.4 },
   cocktail: { name: 'cocktail', price: 12, kind: 'drink', uses: 3, booze: 0.3 },
+  herbaltea: { name: 'herbal tea', price: 3, kind: 'drink', uses: 3, sober: 0.35 }, // clears your head a bit
   // smoke
   cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 },
   // gear
@@ -1593,7 +1595,7 @@ const STOCK_WORD = {
   PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
   RAMEN: ['ramen', 'tea'], NOODLES: ['ramen', 'dumplings', 'tea'], PHO: ['ramen', 'tea'], DUMPLINGS: ['dumplings', 'tea'],
   'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['tea', 'dumplings'], THAI: ['ramen', 'soda'],
-  'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'],
+  'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
@@ -1604,8 +1606,14 @@ const VENDOR_STOCK = { 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 
 // ---- what you carry: 8 slots, one held. Effects wear off with time.
 const INV_SIZE = 8;
 const inv = []; // { id, uses }
-let held = 0; // which slot is in your hand
-const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, yoyo: 0, spark: 0 };
+let held = 0; // which slot is in your hand; -1 = nothing, hands empty
+// take slot k in hand, or (if it's already there) put it away and hold nothing
+const holdSlot = k => { held = held === k ? -1 : k; };
+const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
+// the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
+const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline' };
+// B with the boombox playing: on to the next tape, in order
+function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
@@ -1622,7 +1630,7 @@ const STORE_SIZE = 30, stored = [];
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
-  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  held = was < 0 ? -1 : clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1)); // (empty hands stay empty)
   return it;
 }
 function storeSlot(k) { // carried slot k -> the unit
@@ -1664,6 +1672,7 @@ function useHeld(near) {
     it.uses--;
     if (d.caffeine) fx.caffeine = Math.min(180, fx.caffeine + d.caffeine / d.uses);
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
+    if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
     const done = it.uses <= 0;
     if (done) removeHeld();
     return [done ? (d.kind === 'food' ? `You finish the ${d.name}.` : `You finish the ${d.name}.`) : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`,
@@ -1679,7 +1688,10 @@ function useHeld(near) {
     case 'skateboard':
       if (near.indoors) return ['Not in here.', null];
       fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
-    case 'boombox': fx.boombox = !fx.boombox; return [fx.boombox ? 'You hit play.' : 'You stop the tape.', 'click'];
+    case 'boombox': // a different tape each time you switch it on
+      fx.boombox = !fx.boombox;
+      if (fx.boombox) fx.song = pick(BOOMBOX_SONGS.filter(s => s !== fx.song));
+      return [fx.boombox ? `You hit play. ${SONG_NAMES[fx.song]}.` : 'You stop the tape.', 'click'];
     case 'ball':
       if (near.indoors) return ['Not in here.', null];
       kickBall(near.x, near.y, near.a); removeHeld(); return ['You punt the ball down the street.', 'kick'];
@@ -3134,6 +3146,7 @@ for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
 for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
 for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
+ROOM_FOR.HOSPITAL = 'hospital';
 ROOM_FOR.STORAGE = 'storage';
 
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
@@ -3272,7 +3285,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [...counterBox(10.2, 6.8, 0.85), standing(10.2, 6.15, MAG)];
       let n = 0;
-      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[2.5, 4, 5.5, 7], 5.2]]) for (const x of xs) {
+      for (const [xs, y] of [[[2, 3.5, 5, 6.5, 8, 9.5], 2.2], [[2.2, 3.7, 8.3, 9.8], 5.2]]) for (const x of xs) { // an aisle in from the door
         const k = n % 4, body = [MAG, BLUE, RED, GREEN][(n * 3 + 1) % 4], busy = chance(0.3);
         p.push({ ...cabinet(x, y, k, body), game: ARCADE_GAMES[n++ % ARCADE_GAMES.length], cx: x, cy: y, busy });
         if (busy) p.push(standing(x, y + 0.7, shirt()));
@@ -3280,13 +3293,13 @@ const ROOM_DEFS = {
       return p;
     } },
   laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
-    props: r => [BENCHP(5, 3.6, 0, -1), sitting(5, 3.58, shirt(), 0.45), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L))] },
+    props: r => [BENCHP(2.8, 3.6, 0, -1), sitting(2.8, 3.58, shirt(), 0.45), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L))] },
   cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,
     props: r => {
       const p = [];
-      for (const y of [5, 6.5, 8, 9.5]) {
-        p.push(BX(7, y, 4.5, 0.25, 0, 0.45, solid(RED, { top: '=', bright: 2 })), BX(7, y + 0.3, 4.5, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
-        for (let k = 0; k < 2; k++) if (chance(0.7)) p.push(sitting(3 + Math.random() * 8, y + 0.05, shirt(), 0.35, true));
+      for (const y of [5, 6.5, 8, 9.5]) for (const cx of [4.2, 9.8]) { // two blocks of seats, an aisle up the middle from the door
+        p.push(BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
+        if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.35, true));
       }
       return p;
     } },
@@ -3314,6 +3327,28 @@ const ROOM_DEFS = {
         p.push(SP(x, 1.8, 0.7, 1.2, ART.barberChair, (c, row, L) => C(row < 3 ? RED : GRAY, L)));
         if (chance(0.6)) p.push(sitting(x, 1.85, shirt(), 0.45, true));
       }
+      return p;
+    } },
+  // the hospital's emergency waiting room: a triage desk with a nurse, rows of seats with people waiting, two
+  // curtained bays with beds along the right-hand wall, EMERGENCY over everything. (The nurse is where healing would
+  // go, if you could get hurt.)
+  hospital: { grid: boxRoom(14, 10), light: 1, floor: 'tile', ceil: 'strip', wall: hospitalWall, keeper: [6, 1.9],
+    props: r => {
+      const p = [...counterBox(6, 2.6, 2, 1.1), standing(6, 1.9, CYAN), standing(4.7, 1.6, WHITE)]; // the nurse, a doctor behind
+      for (const [x, y] of [[3, 5.6], [8.4, 5.6], [3, 7.2], [8.4, 7.2]]) { // the waiting room seats, facing the desk
+        p.push(BENCHP(x, y, 0, -1));
+        if (chance(0.55)) p.push(sitting(x - 0.4, y + 0.02, shirt()));
+        if (chance(0.4)) p.push(sitting(x + 0.45, y + 0.02, shirt()));
+      }
+      for (const y of [2.2, 4.4]) { // the bays: a bed with white sheets and a pillow, a curtain either side
+        p.push(BX(11.6, y, 0.95, 0.42, 0.45, 0.62, (i, t, L) => { const f = HIT.face; BG[i] = C(WHITE, (2 + L * 0.3) * shadeFace(f));
+          return set(i, f === 5 ? (HIT.u > 0.6 ? '@' : '~') : f === 1 || f === 2 ? '#' : '_', C(f === 5 ? WHITE : GRAY, L)), true; }));
+        p.push(BX(11.6, y, 0.85, 0.32, 0, 0.45, solid(GRAY, { panel: 0.4 })));
+        for (const cy of [y - 0.95, y + 0.95]) p.push(BX(12.35, cy, 0.5, 0.02, 0.2, 1.95, (i, t, L) => { // a curtain, drawn back to the wall
+          BG[i] = C(CYAN, 1.5 + L * 0.12); return set(i, HIT.w > 1.86 ? 'o' : fract(HIT.u * 5) < 0.5 ? '|' : ' ', C(CYAN, L * 0.7)), true; }));
+      }
+      if (chance(0.6)) p.push(sitting(11.3, 4.4, shirt(), 0.62)); // someone waiting to be seen
+      p.push(BX(1.5, 8.4, 0.3, 0.3, 0, 1.4, solid(BLUE, { top: 'o', trim: 1.35 }))); // a water cooler by the door
       return p;
     } },
   bank: { grid: boxRoom(14, 9), light: 1, floor: 'marble', ceil: 'pendant', sign: true, wall: bankWall, keeper: [7, 1.5],
@@ -3367,7 +3402,7 @@ const ROOM_DEFS = {
           if ((f === 4 || f === 3) && HIT.w > 0.3 && HIT.w < 0.95) return set(i, fract(HIT.w * 4) < 0.4 ? '@o*o'[hash(Math.floor(HIT.u * 8), Math.floor(HIT.w * 4), 9) * 4 | 0] : '_', C(fract(HIT.w * 4) < 0.4 ? ORANGE : GRAY, 13)), true;
           return set(i, f === 5 ? '=' : ' ', C(GRAY, L)), true;
         })];
-      for (const [x, y] of [[2.2, 4.4], [5, 5.2], [7.8, 4.4], [2.5, 6.4], [7.5, 6.4]]) {
+      for (const [x, y] of [[2.2, 4.4], [5, 3.4], [7.8, 4.4], [2.2, 6.4], [7.8, 6.4]]) { // a clear way in down the middle
         p.push(...tableBox(x, y, 0.4, 0.4));
         if (chance(0.55)) p.push(sitting(x + 0.6, y + 0.02, shirt()));
         if (chance(0.3)) p.push(sitting(x - 0.6, y + 0.02, shirt()));
@@ -3523,6 +3558,28 @@ function barberWall(i, u, uStep, z, d, mx, my, L) {
     set(i, '*@%&#'[h * 5 | 0], C(ITEM_COL[h * 80 & 7], L)); return true;
   }
   return false;
+}
+// hospital walls: pale green tile with a handrail and a green guide stripe, EMERGENCY in red over the desk, a big
+// red cross beside it, and STAFF ONLY swing doors (round windows) in the back corner
+function hospitalWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === 0) {
+    if (wallText(i, u, uStep, z, d, 'EMERGENCY', 6, 2.55, 0.28, 0.32, C(RED, 15))) return true;
+    const cu = u - 12.55, cz = z - 2.45;
+    if (Math.abs(cu) < 0.35 && Math.abs(cz) < 0.35 && (Math.abs(cu) < 0.11 || Math.abs(cz) < 0.11)) { BG[i] = C(RED, 9); return set(i, ' ', 0), true; }
+    if (u > 1.1 && u < 3.1 && z > 2.05 && z < 2.35) { // STAFF ONLY over the swing doors
+      BG[i] = C(BLUE, 4); return wallText(i, u, uStep, z, d, 'STAFF ONLY', 2.1, 2.2, 0.17, 0.2, C(WHITE, 15)) || (set(i, ' ', 0), true);
+    }
+    if (u > 1.2 && u < 3 && z < 2.02) { // the swing doors, a round window in each
+      const fu = (u - 1.2) / 1.8, win = Math.hypot((fract(fu * 2) - 0.5) * 1.8, (z - 1.5) / 0.22) < 0.5;
+      if (Math.abs(fu - 0.5) < 0.02) return set(i, '|', C(GRAY, L)), true;
+      if (win) { BG[i] = C(CYAN, 3); return set(i, ' ', 0), true; }
+      BG[i] = C(GRAY, 4); return set(i, fract(u * 4) < 0.1 ? '|' : ' ', C(GRAY, L * 0.7)), true;
+    }
+  }
+  BG[i] = C(GREEN, 2 + L * 0.08);
+  if (Math.abs(z - 0.95) < 0.04) return set(i, '=', C(GRAY, L * 1.1)), true; // the handrail
+  if (Math.abs(z - 0.55) < 0.05) { BG[i] = C(GREEN, 5); return set(i, ' ', 0), true; } // the guide stripe
+  return set(i, fract(u * 3.3) < 0.06 || fract(z * 3.3) < 0.06 ? '+' : ' ', C(GREEN, L * 0.35)), true; // tiles
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall
@@ -4015,6 +4072,7 @@ function promptText() {
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return 'Closed.';
     if (!openAt(sh, tod)) return `${sh.signed ? sh.word : 'Shop'}: closed, opens at ${sh.hours[0]}:00`;
@@ -4028,7 +4086,7 @@ function promptText() {
 let showMap = false;
 // the minimap (M): solid tiles so the street grid reads at a glance, in an ASCII frame with character markers to match
 // the rest of the HUD. MAP_R cells each side of you; a tile is two characters wide and one tall, so it's square.
-const MAP_R = 14;
+const MAP_R = 12;
 const MAP_COL = { park: '#1f5a2a', sea: '#1d3f7a', construction: '#4a3a28', yard: '#3a3428', waterfront: '#4a4636' };
 function mapTile(mx, my) {
   const k = idx(mx, my), h = map[k], wx = mx + 0.5, wy = my + 0.5;
@@ -4041,7 +4099,7 @@ function mapTile(mx, my) {
 }
 function minimap() {
   if (!showMap || mode === 'room') return;
-  const fs = Math.max(10, Math.round(cv.height / 66)); g.font = fs + 'px monospace';
+  const fs = Math.max(8, Math.round(cv.height / 100)); g.font = fs + 'px monospace'; // ~270px across at 900 tall
   const cw_ = g.measureText('M').width, n = MAP_R * 2 + 1, W = n * 2 * cw_, H = n * fs, x0 = Math.round(cv.width - W - 14), y0 = 44;
   g.fillStyle = 'rgba(0,0,0,0.82)'; g.fillRect(x0 - cw_ * 1.5, y0 - fs * 1.2, W + cw_ * 3, H + fs * 2.4);
   const ox = Math.floor(px), oy = Math.floor(py), tw = 2 * cw_;
@@ -4203,6 +4261,7 @@ function interact() {
     }
     if (room.kind === 'storage' && nearKeeper()) return openStorage();
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
+    if (room.kind === 'hospital' && nearKeeper()) return say(`"${pick(NURSE_LINES)}"`, 3); // (healing would go here)
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
@@ -4243,7 +4302,7 @@ function interact() {
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
-    if (sh.base) return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
+    if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say('Closed.');
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
@@ -4254,6 +4313,8 @@ function interact() {
 }
 // the hotel: a night's sleep, from 6pm. Fade out, wake at 7:00 in a room upstairs to a clear morning,
 // with everyone outside already where their morning routine puts them
+const NURSE_LINES = ['Take a seat, someone will call your name.', 'Fill this in and bring it back up.', 'Are you hurt? No? Then you\'re in luck.',
+  'The doctor will see you when she can.', 'Busy night. Busy every night.'];
 function bookRoom() {
   const rate = ROOM_RATE(room.word);
   if (!checkInOpen(tod)) return say('"Sorry, check-in begins at 6pm."', 4);
@@ -4374,27 +4435,31 @@ function jobLine() {
   const way = Math.abs(ang) < 0.4 ? 'ahead' : Math.abs(ang) > 2.7 ? 'behind you' : (Math.abs(ang) < 1.2 ? 'ahead, ' : Math.abs(ang) > 1.9 ? 'behind, ' : '') + (ang > 0 ? 'right' : 'left');
   return `${t.what}: ${d < DROP_R * 10 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
 }
-// the big arrow at the top of the screen: which way the fare (or their stop) is from where the car's pointing,
-// how far, and what to do there. Drawn over the frame like the rest of the HUD.
+// the arrow at the top of the screen, in characters: a shaft and a two-stroke head drawn at whatever angle the fare
+// (or their stop) is from where the car's pointing, how far, and what to do there. Close enough: a blinking [ STOP ].
 function jobArrow() {
   const t = jobTarget();
   if (!t || !me) return;
   const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey);
   const ang = mod(Math.atan2(ey, ex) - (chaseOn ? camYaw : a) + Math.PI, Math.PI * 2) - Math.PI; // 0 = dead ahead, + = right
-  const x = cv.width / 2, y = 78, r = 26, here = d < DROP_R;
-  g.save(); g.translate(x, y);
-  if (!here) g.rotate(ang);
-  g.beginPath();
-  if (here) { g.arc(0, 0, r * 0.55, 0, Math.PI * 2); } // arrived: a dot, stop here
-  else { g.moveTo(0, -r); g.lineTo(r * 0.75, r * 0.15); g.lineTo(r * 0.28, r * 0.15); g.lineTo(r * 0.28, r * 0.8); g.lineTo(-r * 0.28, r * 0.8); g.lineTo(-r * 0.28, r * 0.15); g.lineTo(-r * 0.75, r * 0.15); g.closePath(); }
-  g.fillStyle = PAL[C(YEL, fract(T * 2) < 0.75 || !here ? 15 : 9)]; g.fill();
-  g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.8)'; g.stroke();
-  g.restore();
-  const label = here ? (job.ride ? 'STOP to let them out' : 'STOP to pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d * 10 / 10) * 10}m`;
-  g.font = FS + 'px monospace'; g.textAlign = 'center';
-  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - label.length * FS * 0.33 - 6, y + r + 6, label.length * FS * 0.66 + 12, FS + 6);
-  g.fillStyle = PAL[C(YEL, 15)]; g.fillText(label, x, y + r + 9);
-  g.textAlign = 'left';
+  const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.95), x = cv.width / 2, y = 70 + s * 3.2; // below the message line
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, col = PAL[C(YEL, 15)];
+  if (d < DROP_R) {
+    if (fract(T * 2) < 0.7) artText(['[ STOP ]'], x - 4 * w, y - s / 2, s, () => C(YEL, 15));
+  } else {
+    const L = s * 2.6, ux = Math.sin(ang), uy = -Math.cos(ang), tip = [x + ux * L, y + uy * L];
+    charLine(x - ux * L, y - uy * L, tip[0], tip[1], w, s, col); // the shaft
+    for (const side of [-1, 1]) { // the head: two strokes back from the tip
+      const h = ang + Math.PI + side * 0.55;
+      charLine(tip[0], tip[1], tip[0] + Math.sin(h) * L * 0.5, tip[1] - Math.cos(h) * L * 0.5, w, s, col);
+    }
+  }
+  const label = d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
+  g.font = FS + 'px monospace';
+  const lw = g.measureText(label).width;
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - lw / 2 - 6, y + s * 3.1, lw + 12, FS + 6);
+  g.fillStyle = col; g.fillText(label, x - lw / 2, y + s * 3.1 + 3);
 }
 // ===== audio: recorded beds and synthesised layers, glided toward audioMix()'s targets every frame, plus one-shots
 // (footsteps, sirens, the till, the shop bell, train clatter). Starts on the first key press or click (browsers
@@ -4609,7 +4674,7 @@ function audioTick(dt) {
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
-    seaDist: seaDist(px, py), boombox: fx.boombox, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
   if (me) { // the engine note follows the car
@@ -4723,7 +4788,7 @@ function buildPause() {
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
-        <b>M</b><span>map</span><b>1-8</b><span>hold an item (in a taxi or train: pick a stop)</span>
+        <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
         <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
@@ -4825,6 +4890,8 @@ const HAND = {
     (c, r) => c === '#' || c === '~' ? C(ORANGE, 13) : C(WHITE, 11)],
   cocktail: (it, f) => [filled(['   o   /', '\\-------/', ' \\     /', '  \\   /', '   \\ /', '    |', '  __|__'], [[2, 2, 6], [3, 3, 5]], f, '%', '~'),
     (c, r) => c === 'o' ? C(RED, 15) : c === '%' || c === '~' ? C(MAG, 14) : C(WHITE, 12)],
+  herbaltea: (it, f) => [filled(['  ~ ~', ' .------.', ' |      |o', ' |      |', "  `----'"], [[2, 2, 7], [3, 2, 7]], f, ':', '~'),
+    (c, r) => r === 0 ? C(WHITE, 7) : c === ':' || c === '~' ? C(GREEN, 13) : c === 'o' ? C(GRAY, 12) : C(BRICK, 13)],
   // food: bites out of it
   hotdog: (it, f) => [bitten(['  ____________', ' (~~~~~~~~~~~~)', '(==============)', ' (____________)'], f),
     (c, r) => c === '~' ? C(YEL, 15) : c === '=' ? C(RED, 13) : C(ORANGE, 12)],
@@ -4855,6 +4922,7 @@ const HAND = {
     return [[...lines, '(__________)'], (c, r) => r === lines.length ? C(BRICK, 12) : C(WHITE, 14)];
   },
   mooncake: (it, f) => [bitten(['  .------.', ' (  .--.  )', ' ( ( ** ) )', ' (  `--`  )', "  '------'"], f), (c, r) => c === '*' ? C(YEL, 15) : C(ORANGE, 12)],
+  ginseng: (it, f) => [bitten(['   \\ |/', '    \\|', '   (  )', '  / /\\ \\', ' / /  \\ \\'], f, 'bottom'), (c, r) => r < 2 ? C(GREEN, 13) : C(WARM, 13)],
   candy: (it, f) => [bitten([' _________', '[  CANDY  >', "'---------'"], f), (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(MAG, 13)],
   // things
   cigarettes: it => { // the pack, with as many left as are poking out of it
@@ -4895,21 +4963,21 @@ function artText(lines, x, y, size, colFn) {
   lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r, k)]; g.fillText(l[k], x + k * w, y + r * size); } });
   return w;
 }
-// the hand: a fist from the knuckle side, four curled fingers wrapped round the front of what it holds, the thumb
-// hooked over on the left, the wrist running off the bottom of the screen
+// the hand: a fist seen side-on, four fingers curled round the bottom of what it holds (a band each, knuckles to
+// the left), the arm running off to the right-hand edge of the screen. HAND_GRIP = the column under the item's middle.
 let HAND_ART = [
-  '  ,-.',
-  ' / _ `-._.-._.-.',
-  '( (_)(_)(_)(_)  )',
-  ' \\(_)(_)(_)(_) /',
-  '  \\___________/',
-  '   |         |',
-  '   |         |'];
-const HAND_LINE = new Set(['(', ')', '/', '\\', '|', '_', '-', '.', ',', '`']);
+  '  _________',
+  " (_________  '---",
+  '(__________',
+  '(__________',
+  ' (____________.---'];
+const HAND_GRIP = 6;
 function drawHand(cx, top, size) {
   g.font = size + 'px monospace';
-  const w = g.measureText('M').width, artW = Math.max(...HAND_ART.map(l => l.length));
-  artText(HAND_ART, cx - artW * w / 2, top, size, c => HAND_LINE.has(c) ? C(SKIN, 13) : C(SKIN, 10));
+  const w = g.measureText('M').width, x0 = cx - (HAND_GRIP + 0.5) * w;
+  const reach = Math.ceil((cv.width - x0) / w) + 1; // the arm carries on off the edge of the screen
+  const art = HAND_ART.map(l => l.endsWith('-') ? l.padEnd(reach, '-') : l);
+  artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? C(SKIN, 11) : C(SKIN, 13));
 }
 // a run of characters along a straight line on screen (a string, a shaft), each one picked to follow its slope
 function charLine(x0, y0, x1, y1, w, size, col) {
@@ -4924,17 +4992,17 @@ function drawHeldBig() {
   const it = heldItem();
   if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
-  const isz = Math.round(u * 1.75), hsz = Math.round(u * 1.35);
+  const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const cx = Math.round(cv.width * 0.72), hy = Math.round(cv.height - 4.6 * hsz + bob); // the top of the hand
-  const grip = hy + 1.2 * hsz; // where the fingers wrap round
+  const cx = Math.round(cv.width * 0.7), hy = Math.round(cv.height - 4.8 * hsz + bob); // the top of the fist
+  const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (it.id === 'umbrella' && rain > 0.2) drawCanopy(cx, grip, isz, bob);
   else {
     const [art, col] = heldArt(it);
     g.font = isz + 'px monospace';
     const w = g.measureText('M').width, artW = Math.max(...art.map(l => l.length)), top = grip + 0.5 * isz - art.length * isz;
     if (!(it.id === 'yoyo' && fx.yoyo > 0)) {
-      g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.85 * hsz); g.clip(); // the fingers hide its bottom
+      g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
       artText(art, cx - artW * w / 2, top, isz, col); g.restore();
     }
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
@@ -4978,12 +5046,16 @@ function drawCigarette() {
     g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
     g.strokeText(ch, x, y); g.fillText(ch, x, y);
   });
-  const tx = x0 + (chars.length - 1) * dx, ty = y0 + (chars.length - 1) * dy;
-  if (Math.random() < 0.08 + cigTip * 0.5) smokePuffs.push([tx, ty - s * 0.4, 1, Math.random() - 0.5]);
-  smokePuffs = smokePuffs.filter(p => (p[2] -= 0.008) > 0);
+  // the smoke: small wisps at the world's own character size, rising fast and swaying, '~' fading to '.'; a drag
+  // puffs out a lot more
+  const tx = x0 + (chars.length - 1) * dx + w * 0.3, ty = y0 + (chars.length - 1) * dy - s * 0.3, dt = Math.min(0.05, T - (drawCigarette.t ?? T));
+  drawCigarette.t = T;
+  g.font = FS + 'px monospace';
+  if (Math.random() < dt * (1.5 + cigTip * 25)) smokePuffs.push([tx, ty, 1]);
+  smokePuffs = smokePuffs.filter(p => (p[2] -= dt * 0.35) > 0);
   for (const p of smokePuffs) {
-    p[1] -= s * 0.035; p[0] += Math.sin(T * 2 + p[1] * 0.02) * 0.6 + p[3] * 0.4;
-    g.fillStyle = `rgba(200,200,210,${(p[2] * 0.6).toFixed(2)})`; g.fillText(p[2] > 0.55 ? '~' : '.', p[0], p[1]);
+    p[1] -= dt * 4 * FS; p[0] += Math.sin(T * 3 + p[1] / FS) * dt * 3 * cw;
+    g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', p[0], p[1]);
   }
 }
 // a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
@@ -5038,7 +5110,7 @@ function hotbar() {
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? ' (B: next)' : ''}`].filter(Boolean);
   if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
@@ -5087,7 +5159,7 @@ function openInventory() {
   invEl = invEl || panel('inventory');
   const rows_ = inv.length ? inv.map((it, k) => `<button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">1-${INV_SIZE} hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
-  invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { held = +b.dataset.slot; openInventory(); } };
+  invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
@@ -5121,7 +5193,7 @@ function panelKey(e) {
   if (shop && e.code === 'KeyJ' && shiftHere()) { startShift(); return true; }
   if (shop && n && e.shiftKey && SELL_RATE[shopCtx.title]) { shopSell(n[1] - 1); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
-  if (!shop && n && inv[n[1] - 1]) { held = n[1] - 1; openInventory(); return true; }
+  if (!shop && n && inv[n[1] - 1]) { holdSlot(n[1] - 1); openInventory(); return true; }
   if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
   if (!shop && e.code === 'KeyX') { dropHere(); openInventory(); return true; }
   return true; // swallow everything else
@@ -5305,7 +5377,9 @@ onkeydown = e => {
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
     const slot = /^Digit([1-8])$/.exec(e.code);
-    if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) held = slot[1] - 1;
+    if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) holdSlot(slot[1] - 1); // again: put it away
+    if (e.code === 'Digit0' || e.code === 'Backquote') held = -1; // empty your hands
+    if (e.code === 'KeyB' && heldItem() && heldItem().id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
   }
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
@@ -5318,7 +5392,8 @@ onkeydown = e => {
 };
 onkeyup = e => K[e.code] = 0;
 cv.onclick = () => { audioStart(); if (!paused) cv.requestPointerLock(); };
-const clampPitch = () => pitch = clamp(pitch, -1.2, 1.6);
+// how far you can look down / up; behind the wheel (or in the back of a cab) only a little down, not at your feet
+const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 onmousemove = e => {
   if (!document.pointerLockElement) return;
   if (paused) return;
@@ -5343,6 +5418,7 @@ function move(fx, fy) {
   if (free(px + fx + Math.sign(fx) * m, py)) px += fx;
   if (free(px, py + fy + Math.sign(fy) * m)) py += fy;
 }
+const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
 function drive(dt) {
   const c = me, f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
   if (f > 0) c.v += (c.v < 0 ? 2.5 : 1) * dt; else if (f < 0) c.v -= (c.v > 0 ? 2.5 : 0.8) * dt; else c.v *= 1 - 0.7 * dt;
@@ -5352,7 +5428,12 @@ function drive(dt) {
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   const hit = !free(fx, fy) || cars.some(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3)
            || people.some(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
-  if (hit) { if (Math.abs(c.v) > 0.8) { say('*CRUNCH*', 1); taxiCrash(); } c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
+  if (hit) { // a real crash only above CRASH_V; anything slower is a bump
+    const sp = Math.abs(c.v);
+    if (sp > CRASH_V) { say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); }
+    else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
+    c.v = 0;
+  } else { c.x = mod(nx, N); c.y = mod(ny, N); }
   c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
   c.off = 0; c.ex = c.x; c.ey = c.y; // where it's drawn and where traffic sees it: right here
 }
@@ -5425,4 +5506,4 @@ function chaseCam(dt) {
 requestAnimationFrame(loop);
 
 // the mouse wheel cycles what's in your hand
-addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + Math.sign(e.deltaY), inv.length); }, { passive: true });
+addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + 1 + Math.sign(e.deltaY), inv.length + 1) - 1; }, { passive: true }); // (round through empty hands too)

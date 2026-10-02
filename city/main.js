@@ -23,7 +23,9 @@ onkeydown = e => {
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
     const slot = /^Digit([1-8])$/.exec(e.code);
-    if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) held = slot[1] - 1;
+    if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) holdSlot(slot[1] - 1); // again: put it away
+    if (e.code === 'Digit0' || e.code === 'Backquote') held = -1; // empty your hands
+    if (e.code === 'KeyB' && heldItem() && heldItem().id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
   }
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
@@ -36,7 +38,8 @@ onkeydown = e => {
 };
 onkeyup = e => K[e.code] = 0;
 cv.onclick = () => { audioStart(); if (!paused) cv.requestPointerLock(); };
-const clampPitch = () => pitch = clamp(pitch, -1.2, 1.6);
+// how far you can look down / up; behind the wheel (or in the back of a cab) only a little down, not at your feet
+const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 onmousemove = e => {
   if (!document.pointerLockElement) return;
   if (paused) return;
@@ -61,6 +64,7 @@ function move(fx, fy) {
   if (free(px + fx + Math.sign(fx) * m, py)) px += fx;
   if (free(px, py + fy + Math.sign(fy) * m)) py += fy;
 }
+const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
 function drive(dt) {
   const c = me, f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
   if (f > 0) c.v += (c.v < 0 ? 2.5 : 1) * dt; else if (f < 0) c.v -= (c.v > 0 ? 2.5 : 0.8) * dt; else c.v *= 1 - 0.7 * dt;
@@ -70,7 +74,12 @@ function drive(dt) {
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   const hit = !free(fx, fy) || cars.some(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3)
            || people.some(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
-  if (hit) { if (Math.abs(c.v) > 0.8) { say('*CRUNCH*', 1); taxiCrash(); } c.v = 0; } else { c.x = mod(nx, N); c.y = mod(ny, N); }
+  if (hit) { // a real crash only above CRASH_V; anything slower is a bump
+    const sp = Math.abs(c.v);
+    if (sp > CRASH_V) { say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); }
+    else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
+    c.v = 0;
+  } else { c.x = mod(nx, N); c.y = mod(ny, N); }
   c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
   c.off = 0; c.ex = c.x; c.ey = c.y; // where it's drawn and where traffic sees it: right here
 }
@@ -143,4 +152,4 @@ function chaseCam(dt) {
 requestAnimationFrame(loop);
 
 // the mouse wheel cycles what's in your hand
-addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + Math.sign(e.deltaY), inv.length); }, { passive: true });
+addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + 1 + Math.sign(e.deltaY), inv.length + 1) - 1; }, { passive: true }); // (round through empty hands too)

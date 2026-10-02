@@ -43,6 +43,8 @@ const HAND = {
     (c, r) => c === '#' || c === '~' ? C(ORANGE, 13) : C(WHITE, 11)],
   cocktail: (it, f) => [filled(['   o   /', '\\-------/', ' \\     /', '  \\   /', '   \\ /', '    |', '  __|__'], [[2, 2, 6], [3, 3, 5]], f, '%', '~'),
     (c, r) => c === 'o' ? C(RED, 15) : c === '%' || c === '~' ? C(MAG, 14) : C(WHITE, 12)],
+  herbaltea: (it, f) => [filled(['  ~ ~', ' .------.', ' |      |o', ' |      |', "  `----'"], [[2, 2, 7], [3, 2, 7]], f, ':', '~'),
+    (c, r) => r === 0 ? C(WHITE, 7) : c === ':' || c === '~' ? C(GREEN, 13) : c === 'o' ? C(GRAY, 12) : C(BRICK, 13)],
   // food: bites out of it
   hotdog: (it, f) => [bitten(['  ____________', ' (~~~~~~~~~~~~)', '(==============)', ' (____________)'], f),
     (c, r) => c === '~' ? C(YEL, 15) : c === '=' ? C(RED, 13) : C(ORANGE, 12)],
@@ -73,6 +75,7 @@ const HAND = {
     return [[...lines, '(__________)'], (c, r) => r === lines.length ? C(BRICK, 12) : C(WHITE, 14)];
   },
   mooncake: (it, f) => [bitten(['  .------.', ' (  .--.  )', ' ( ( ** ) )', ' (  `--`  )', "  '------'"], f), (c, r) => c === '*' ? C(YEL, 15) : C(ORANGE, 12)],
+  ginseng: (it, f) => [bitten(['   \\ |/', '    \\|', '   (  )', '  / /\\ \\', ' / /  \\ \\'], f, 'bottom'), (c, r) => r < 2 ? C(GREEN, 13) : C(WARM, 13)],
   candy: (it, f) => [bitten([' _________', '[  CANDY  >', "'---------'"], f), (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(MAG, 13)],
   // things
   cigarettes: it => { // the pack, with as many left as are poking out of it
@@ -113,21 +116,21 @@ function artText(lines, x, y, size, colFn) {
   lines.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r, k)]; g.fillText(l[k], x + k * w, y + r * size); } });
   return w;
 }
-// the hand: a fist from the knuckle side, four curled fingers wrapped round the front of what it holds, the thumb
-// hooked over on the left, the wrist running off the bottom of the screen
+// the hand: a fist seen side-on, four fingers curled round the bottom of what it holds (a band each, knuckles to
+// the left), the arm running off to the right-hand edge of the screen. HAND_GRIP = the column under the item's middle.
 let HAND_ART = [
-  '  ,-.',
-  ' / _ `-._.-._.-.',
-  '( (_)(_)(_)(_)  )',
-  ' \\(_)(_)(_)(_) /',
-  '  \\___________/',
-  '   |         |',
-  '   |         |'];
-const HAND_LINE = new Set(['(', ')', '/', '\\', '|', '_', '-', '.', ',', '`']);
+  '  _________',
+  " (_________  '---",
+  '(__________',
+  '(__________',
+  ' (____________.---'];
+const HAND_GRIP = 6;
 function drawHand(cx, top, size) {
   g.font = size + 'px monospace';
-  const w = g.measureText('M').width, artW = Math.max(...HAND_ART.map(l => l.length));
-  artText(HAND_ART, cx - artW * w / 2, top, size, c => HAND_LINE.has(c) ? C(SKIN, 13) : C(SKIN, 10));
+  const w = g.measureText('M').width, x0 = cx - (HAND_GRIP + 0.5) * w;
+  const reach = Math.ceil((cv.width - x0) / w) + 1; // the arm carries on off the edge of the screen
+  const art = HAND_ART.map(l => l.endsWith('-') ? l.padEnd(reach, '-') : l);
+  artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? C(SKIN, 11) : C(SKIN, 13));
 }
 // a run of characters along a straight line on screen (a string, a shaft), each one picked to follow its slope
 function charLine(x0, y0, x1, y1, w, size, col) {
@@ -142,17 +145,17 @@ function drawHeldBig() {
   const it = heldItem();
   if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
-  const isz = Math.round(u * 1.75), hsz = Math.round(u * 1.35);
+  const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const cx = Math.round(cv.width * 0.72), hy = Math.round(cv.height - 4.6 * hsz + bob); // the top of the hand
-  const grip = hy + 1.2 * hsz; // where the fingers wrap round
+  const cx = Math.round(cv.width * 0.7), hy = Math.round(cv.height - 4.8 * hsz + bob); // the top of the fist
+  const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (it.id === 'umbrella' && rain > 0.2) drawCanopy(cx, grip, isz, bob);
   else {
     const [art, col] = heldArt(it);
     g.font = isz + 'px monospace';
     const w = g.measureText('M').width, artW = Math.max(...art.map(l => l.length)), top = grip + 0.5 * isz - art.length * isz;
     if (!(it.id === 'yoyo' && fx.yoyo > 0)) {
-      g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.85 * hsz); g.clip(); // the fingers hide its bottom
+      g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
       artText(art, cx - artW * w / 2, top, isz, col); g.restore();
     }
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
@@ -196,12 +199,16 @@ function drawCigarette() {
     g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
     g.strokeText(ch, x, y); g.fillText(ch, x, y);
   });
-  const tx = x0 + (chars.length - 1) * dx, ty = y0 + (chars.length - 1) * dy;
-  if (Math.random() < 0.08 + cigTip * 0.5) smokePuffs.push([tx, ty - s * 0.4, 1, Math.random() - 0.5]);
-  smokePuffs = smokePuffs.filter(p => (p[2] -= 0.008) > 0);
+  // the smoke: small wisps at the world's own character size, rising fast and swaying, '~' fading to '.'; a drag
+  // puffs out a lot more
+  const tx = x0 + (chars.length - 1) * dx + w * 0.3, ty = y0 + (chars.length - 1) * dy - s * 0.3, dt = Math.min(0.05, T - (drawCigarette.t ?? T));
+  drawCigarette.t = T;
+  g.font = FS + 'px monospace';
+  if (Math.random() < dt * (1.5 + cigTip * 25)) smokePuffs.push([tx, ty, 1]);
+  smokePuffs = smokePuffs.filter(p => (p[2] -= dt * 0.35) > 0);
   for (const p of smokePuffs) {
-    p[1] -= s * 0.035; p[0] += Math.sin(T * 2 + p[1] * 0.02) * 0.6 + p[3] * 0.4;
-    g.fillStyle = `rgba(200,200,210,${(p[2] * 0.6).toFixed(2)})`; g.fillText(p[2] > 0.55 ? '~' : '.', p[0], p[1]);
+    p[1] -= dt * 4 * FS; p[0] += Math.sin(T * 3 + p[1] / FS) * dt * 3 * cw;
+    g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', p[0], p[1]);
   }
 }
 // a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
@@ -256,7 +263,7 @@ function hotbar() {
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? ' (B: next)' : ''}`].filter(Boolean);
   if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
@@ -305,7 +312,7 @@ function openInventory() {
   invEl = invEl || panel('inventory');
   const rows_ = inv.length ? inv.map((it, k) => `<button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">1-${INV_SIZE} hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
-  invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { held = +b.dataset.slot; openInventory(); } };
+  invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
@@ -339,7 +346,7 @@ function panelKey(e) {
   if (shop && e.code === 'KeyJ' && shiftHere()) { startShift(); return true; }
   if (shop && n && e.shiftKey && SELL_RATE[shopCtx.title]) { shopSell(n[1] - 1); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
-  if (!shop && n && inv[n[1] - 1]) { held = n[1] - 1; openInventory(); return true; }
+  if (!shop && n && inv[n[1] - 1]) { holdSlot(n[1] - 1); openInventory(); return true; }
   if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
   if (!shop && e.code === 'KeyX') { dropHere(); openInventory(); return true; }
   return true; // swallow everything else
