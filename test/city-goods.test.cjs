@@ -71,3 +71,19 @@ test('the skateboard only rolls outside; the ball rolls, stops, and comes back',
   assert.strictEqual(ev('pickUpBall()'), true);
   assert.strictEqual(ev("inv.some(i => i.id === 'ball')"), true);
 });
+
+test('storage: put things in your unit and take them out again; one unit, limited room', () => {
+  const { ev, j } = fresh();
+  ev("money = 500; buy('skateboard'); buy('beer'); buy('book'); held = 1");
+  assert.deepStrictEqual(j('storeSlot(0)'), [true, 'You put the skateboard in your unit.']);
+  assert.deepStrictEqual(j('inv.map(i => i.id)'), ['beer', 'book']);
+  assert.strictEqual(ev('ITEMS[heldItem().id].name'), 'beer', 'still holding the same thing');
+  assert.deepStrictEqual(j('stored.map(i => i.id)'), ['skateboard']);
+  ev('inv[0].uses = 2; storeSlot(0)');
+  assert.strictEqual(ev("stored.find(i => i.id === 'beer').uses"), 2, 'a half-drunk beer stays half drunk');
+  assert.deepStrictEqual(j('retrieveSlot(0)'), [true, 'You take the skateboard out of your unit.']);
+  assert.deepStrictEqual(j('storeSlot(5)'), [false, 'Nothing there.']);
+  for (let k = 0; k < 7; k++) ev("buy('water')");
+  assert.deepStrictEqual(j('retrieveSlot(0)'), [false, 'Your hands are full.']);
+  assert.deepStrictEqual(j("stockFor('storage', 'STORAGE')"), [], 'storage sells nothing: it keeps your things');
+});

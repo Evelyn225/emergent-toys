@@ -113,7 +113,7 @@ function showPanel(el, html) {
   if (document.pointerLockElement) document.exitPointerLock();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => shopEl && shopEl.style.display === 'flex' || invEl && invEl.style.display === 'flex';
+const panelOpen = () => [shopEl, invEl, storeEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -136,9 +136,32 @@ function openInventory() {
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { held = +b.dataset.slot; openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
+// your storage unit: click a carried thing to put it in, a stored thing to take it out
+let storeEl = null;
+function openStorage() {
+  storeEl = storeEl || panel('storage');
+  const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
+  const carried = inv.length ? inv.map((it, k) => `<button data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span>store &rarr;</span></button>`).join('') : '<p class="sub">Nothing in your hands.</p>';
+  const unit = stored.length ? stored.map((it, k) => `<button data-take="${k}"><span class="k">${k < 9 ? '&#8679;' + (k + 1) : ''}</span><span>${item(it)}</span><span>&larr; take</span></button>`).join('') : '<p class="sub">Empty.</p>';
+  showPanel(storeEl, `<h1>STORAGE UNIT</h1><p class="sub">The same unit at every storage place in town &middot; ${stored.length}/${STORE_SIZE}</p>
+    <h2 style="margin:14px 0 6px;font-size:11px;font-weight:normal;letter-spacing:2px;color:rgba(255,255,255,0.5)">CARRYING ${inv.length}/${INV_SIZE}</h2>${carried}
+    <h2 style="margin:14px 0 6px;font-size:11px;font-weight:normal;letter-spacing:2px;color:rgba(255,255,255,0.5)">IN THE UNIT</h2>${unit}
+    <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
+  storeEl.onclick = e => {
+    const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
+    if (s) say(storeSlot(+s.dataset.store)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take)[1], 2); else return;
+    openStorage();
+  };
+}
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if (storeEl && storeEl.style.display === 'flex') {
+    const n = /^Digit([1-9])$/.exec(e.code);
+    if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
+    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1) : storeSlot(n[1] - 1))[1], 2); openStorage(); }
+    return true;
+  }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
   if (e.code === 'Escape' || e.code === 'KeyE' && shop || e.code === 'KeyI' && !shop) { shop ? closeShop() : closeInventory(); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }

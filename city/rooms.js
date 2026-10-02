@@ -50,6 +50,7 @@ for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
 for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
 for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
+ROOM_FOR.STORAGE = 'storage';
 
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
 // props
@@ -94,6 +95,18 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   }
   BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 3 + day * 8) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
   set(i, night > 0.5 && hash(Math.floor(du * 20), Math.floor(z * 20), 73) > 0.96 ? '.' : ' ', C(WHITE, 12)); return true;
+}
+function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
+  if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
+  const bay = fract(u / 1.2);
+  if (bay < 0.05 || bay > 0.95 || z < 0.05) { set(i, '|', C(GRAY, L)); BG[i] = C(GRAY, 1); return true; }
+  if (z > 2.1) { // the unit number plate
+    const n = String(100 + (hash(Math.floor(u / 1.2), mx * 31 + my, 5) * 800 | 0));
+    if (wallText(i, u, uStep, z, d, n, Math.floor(u / 1.2) * 1.2 + 0.6, 2.25, 0.12, 0.18, C(WHITE, 13), C(GRAY, 2))) return true;
+    set(i, ' ', 0); BG[i] = C(GRAY, 2); return true;
+  }
+  BG[i] = C(ORANGE, 2 + L * 0.15);
+  set(i, z < 0.18 && Math.abs(bay - 0.5) < 0.08 ? '_' : fract(z * 12) < 0.5 ? '=' : '-', C(ORANGE, L * 0.9)); return true;
 }
 function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind the counter, warm brick elsewhere
   if (my === 0 && Math.abs(u - room.W / 2) < 2 && z > 1.4 && z < 2.5) {
@@ -305,6 +318,11 @@ const ROOM_DEFS = {
       }
       return p;
     } },
+  // self storage: corridors of orange roll-up doors ('L', 2.6m locker blocks), an attendant by the door
+  storage: { grid: ['##############', '#............#', '#.LL.LL.LL.L.#', '#.LL.LL.LL.L.#', '#............#', '#.LL.LL.LL.L.#',
+                    '#.LL.LL.LL.L.#', '#............#', '#............#', '######DD######'],
+    light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: storageWall, keeper: [11.5, 7.15],
+    props: r => [BX(11.5, 7.75, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 0.99, top: '=' })), standing(11.5, 7.15, ORANGE)] },
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -585,6 +603,6 @@ function roomSprites() {
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
   }
 }
-const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : room.def.height || 3; },
+const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 

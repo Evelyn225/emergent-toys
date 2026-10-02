@@ -200,7 +200,7 @@ const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9'
 // ---- shops
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
-  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE'];
+  'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE'];
 const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
@@ -217,7 +217,7 @@ const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, so
 const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
-  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24] };
+  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24], STORAGE: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -1412,6 +1412,22 @@ function buy(id) { // false + why, if you can't
 }
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
+// your storage unit: one unit, the same at every STORAGE place in town
+const STORE_SIZE = 30, stored = [];
+function storeSlot(k) { // carried slot k -> the unit
+  if (!inv[k]) return [false, 'Nothing there.'];
+  if (stored.length >= STORE_SIZE) return [false, 'Your unit is full.'];
+  const was = held; held = k; const it = inv[k];
+  removeHeld(); stored.push(it);
+  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  return [true, `You put the ${ITEMS[it.id].name} in your unit.`];
+}
+function retrieveSlot(k) { // the unit's item k -> your hands
+  if (!stored[k]) return [false, 'Nothing there.'];
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  const it = stored.splice(k, 1)[0]; inv.push(it);
+  return [true, `You take the ${ITEMS[it.id].name} out of your unit.`];
+}
 function removeHeld() {
   const it = inv[held];
   if (it && it.id === 'skateboard') fx.skating = false;
@@ -2299,6 +2315,7 @@ for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
 for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
 for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
+ROOM_FOR.STORAGE = 'storage';
 
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
 // props
@@ -2343,6 +2360,18 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   }
   BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 3 + day * 8) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
   set(i, night > 0.5 && hash(Math.floor(du * 20), Math.floor(z * 20), 73) > 0.96 ? '.' : ' ', C(WHITE, 12)); return true;
+}
+function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
+  if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
+  const bay = fract(u / 1.2);
+  if (bay < 0.05 || bay > 0.95 || z < 0.05) { set(i, '|', C(GRAY, L)); BG[i] = C(GRAY, 1); return true; }
+  if (z > 2.1) { // the unit number plate
+    const n = String(100 + (hash(Math.floor(u / 1.2), mx * 31 + my, 5) * 800 | 0));
+    if (wallText(i, u, uStep, z, d, n, Math.floor(u / 1.2) * 1.2 + 0.6, 2.25, 0.12, 0.18, C(WHITE, 13), C(GRAY, 2))) return true;
+    set(i, ' ', 0); BG[i] = C(GRAY, 2); return true;
+  }
+  BG[i] = C(ORANGE, 2 + L * 0.15);
+  set(i, z < 0.18 && Math.abs(bay - 0.5) < 0.08 ? '_' : fract(z * 12) < 0.5 ? '=' : '-', C(ORANGE, L * 0.9)); return true;
 }
 function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind the counter, warm brick elsewhere
   if (my === 0 && Math.abs(u - room.W / 2) < 2 && z > 1.4 && z < 2.5) {
@@ -2554,6 +2583,11 @@ const ROOM_DEFS = {
       }
       return p;
     } },
+  // self storage: corridors of orange roll-up doors ('L', 2.6m locker blocks), an attendant by the door
+  storage: { grid: ['##############', '#............#', '#.LL.LL.LL.L.#', '#.LL.LL.LL.L.#', '#............#', '#.LL.LL.LL.L.#',
+                    '#.LL.LL.LL.L.#', '#............#', '#............#', '######DD######'],
+    light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: storageWall, keeper: [11.5, 7.15],
+    props: r => [BX(11.5, 7.75, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 0.99, top: '=' })), standing(11.5, 7.15, ORANGE)] },
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -2834,7 +2868,7 @@ function roomSprites() {
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
   }
 }
-const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : room.def.height || 3; },
+const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
@@ -3105,6 +3139,7 @@ function promptText() {
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (nearElevator()) return 'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
+    if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
     if (nearKeeper()) return `"${room.line}"`;
@@ -3303,6 +3338,7 @@ function interact() {
       const from = room.st;
       return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
     }
+    if (room.kind === 'storage' && nearKeeper()) return openStorage();
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
@@ -3808,7 +3844,7 @@ function showPanel(el, html) {
   if (document.pointerLockElement) document.exitPointerLock();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => shopEl && shopEl.style.display === 'flex' || invEl && invEl.style.display === 'flex';
+const panelOpen = () => [shopEl, invEl, storeEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -3831,9 +3867,32 @@ function openInventory() {
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { held = +b.dataset.slot; openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
+// your storage unit: click a carried thing to put it in, a stored thing to take it out
+let storeEl = null;
+function openStorage() {
+  storeEl = storeEl || panel('storage');
+  const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
+  const carried = inv.length ? inv.map((it, k) => `<button data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span>store &rarr;</span></button>`).join('') : '<p class="sub">Nothing in your hands.</p>';
+  const unit = stored.length ? stored.map((it, k) => `<button data-take="${k}"><span class="k">${k < 9 ? '&#8679;' + (k + 1) : ''}</span><span>${item(it)}</span><span>&larr; take</span></button>`).join('') : '<p class="sub">Empty.</p>';
+  showPanel(storeEl, `<h1>STORAGE UNIT</h1><p class="sub">The same unit at every storage place in town &middot; ${stored.length}/${STORE_SIZE}</p>
+    <h2 style="margin:14px 0 6px;font-size:11px;font-weight:normal;letter-spacing:2px;color:rgba(255,255,255,0.5)">CARRYING ${inv.length}/${INV_SIZE}</h2>${carried}
+    <h2 style="margin:14px 0 6px;font-size:11px;font-weight:normal;letter-spacing:2px;color:rgba(255,255,255,0.5)">IN THE UNIT</h2>${unit}
+    <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
+  storeEl.onclick = e => {
+    const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
+    if (s) say(storeSlot(+s.dataset.store)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take)[1], 2); else return;
+    openStorage();
+  };
+}
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if (storeEl && storeEl.style.display === 'flex') {
+    const n = /^Digit([1-9])$/.exec(e.code);
+    if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
+    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1) : storeSlot(n[1] - 1))[1], 2); openStorage(); }
+    return true;
+  }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
   if (e.code === 'Escape' || e.code === 'KeyE' && shop || e.code === 'KeyI' && !shop) { shop ? closeShop() : closeInventory(); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }

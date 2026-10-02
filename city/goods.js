@@ -60,6 +60,22 @@ function buy(id) { // false + why, if you can't
 }
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
+// your storage unit: one unit, the same at every STORAGE place in town
+const STORE_SIZE = 30, stored = [];
+function storeSlot(k) { // carried slot k -> the unit
+  if (!inv[k]) return [false, 'Nothing there.'];
+  if (stored.length >= STORE_SIZE) return [false, 'Your unit is full.'];
+  const was = held; held = k; const it = inv[k];
+  removeHeld(); stored.push(it);
+  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  return [true, `You put the ${ITEMS[it.id].name} in your unit.`];
+}
+function retrieveSlot(k) { // the unit's item k -> your hands
+  if (!stored[k]) return [false, 'Nothing there.'];
+  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  const it = stored.splice(k, 1)[0]; inv.push(it);
+  return [true, `You take the ${ITEMS[it.id].name} out of your unit.`];
+}
 function removeHeld() {
   const it = inv[held];
   if (it && it.id === 'skateboard') fx.skating = false;

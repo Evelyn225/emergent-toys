@@ -62,6 +62,7 @@ function promptText() {
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (nearElevator()) return 'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
+    if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
     if (nearKeeper()) return `"${room.line}"`;
