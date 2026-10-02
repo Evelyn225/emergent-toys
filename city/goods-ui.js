@@ -376,8 +376,7 @@ function sfxUse(s) {
   if (s === 'whirr') { burst(at, 0.5, [filt('bandpass', 700, 3)], 0.05); burst(at + 0.55, 0.4, [filt('bandpass', 900, 3)], 0.04); }
   if (s === 'squeak') { const o = actx.createOscillator(), gn = actx.createGain(); o.frequency.setValueAtTime(1300, at); o.frequency.exponentialRampToValueAtTime(2100, at + 0.12);
     gn.gain.setValueAtTime(0, at); gn.gain.linearRampToValueAtTime(0.06, at + 0.02); gn.gain.exponentialRampToValueAtTime(0.0005, at + 0.2); chain(o, gn, sfxBus); o.start(at); o.stop(at + 0.25); }
-  if (s === 'harmonica') [392, 466, 523, 587, 523, 466, 392].forEach((f, k) => { // a blues lick, reedy
-    tone(at + k * 0.2, f, 0.24, 0.035, 'sawtooth'); tone(at + k * 0.2, f * 2, 0.24, 0.015, 'square'); });
+  if (s === 'harmonica') playClip('harmonica', 0.6);
 }
 // the ball, out in the world
 function drawBall() {

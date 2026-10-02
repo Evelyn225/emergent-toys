@@ -91,6 +91,7 @@ test('the pause menu stops the game and keeps its settings', async () => {
     await page.waitForTimeout(300);
     await page.keyboard.press('Escape');
     assert.strictEqual(await page.evaluate(() => paused), true);
+    assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('home')).display), 'block', 'the home button, only now');
     const t0 = await page.evaluate(() => T);
     await page.waitForTimeout(400);
     assert.strictEqual(await page.evaluate(() => T), t0, 'time stands still');
@@ -98,6 +99,7 @@ test('the pause menu stops the game and keeps its settings', async () => {
     assert.strictEqual(await page.evaluate(() => FS), 15);
     await page.keyboard.press('Escape');
     assert.strictEqual(await page.evaluate(() => paused), false);
+    assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('home')).display), 'none', 'and gone again');
     await page.reload(); await page.waitForTimeout(300);
     assert.strictEqual(await page.evaluate(() => [settings.detail, FS].join()), 'low,15', 'remembered after a reload');
   } finally {

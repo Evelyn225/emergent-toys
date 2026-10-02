@@ -1511,7 +1511,7 @@ function audioMix(s) {
     if (k === 'karaoke') out.karaoke = 0.9; // somebody's always singing Sweet Caroline
     if (k === 'arcade') out.arcade = 0.85; // chiptunes over the cabinets' bleeps
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
-    out.rain = 0.25 * s.rain;
+    out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
     if (k === 'train') out.rumble = 0.9;
     return out;
@@ -4891,6 +4891,7 @@ function audioStart() {
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
   for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' ? musicBus : ambBus);
+  beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
   makeSynths();
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
 }
@@ -5050,7 +5051,7 @@ function tickSirens(indoors) {
 function sfxThunder(d, indoors) {
   const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
   s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.3 + near * 0.15; // slowed right down: a low growl
-  const lp = filt('lowpass', indoors ? 180 : 220 + near * 900), g = actx.createGain(), k = (indoors ? 0.4 : 1.1) * near;
+  const lp = filt('lowpass', indoors ? 180 : 220 + near * 900), g = actx.createGain(), k = (indoors ? 0.65 : 1.1) * near;
   lp.frequency.setValueAtTime(lp.frequency.value, at); lp.frequency.exponentialRampToValueAtTime(70, at + 3);
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(0.8 * k, at + (near > 0.7 ? 0.015 : 0.3)); // crack, or a far-off roll
   g.gain.exponentialRampToValueAtTime(0.25 * k, at + 0.7); g.gain.linearRampToValueAtTime(0.35 * k, at + 1.5);
@@ -5073,6 +5074,7 @@ function audioTick(dt) {
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
+  beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
   if (me) { // the engine note follows the car
     synth.engineOsc.frequency.setTargetAtTime(38 + Math.abs(me.v) * 32, now, 0.08);
@@ -5223,24 +5225,25 @@ function buildPause() {
   return el;
 }
 
+const homeEl = document.getElementById('home');
 function openPause() {
   if (paused) return;
   pauseEl = pauseEl || buildPause();
   paused = true;
   for (const k in K) K[k] = 0; // nothing held down while we're away
-  pauseEl.show(); pauseEl.style.display = 'flex';
+  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = 'block'; // the way home: only while paused
   if (document.pointerLockElement) document.exitPointerLock();
   if (actx) master.gain.setTargetAtTime(0, actx.currentTime, 0.15);
   pauseEl.querySelector('[data-act="resume"]').focus();
 }
 function closePause(lock) {
   if (!paused) return;
-  paused = false; pauseEl.style.display = 'none';
+  paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
   if (lock) cv.requestPointerLock(); // resuming with the mouse: take it straight back
 }
 const togglePause = () => paused ? closePause(false) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
-// (not when a cabinet or a shift has the screen: that lets go of the mouse itself)
+// (not while a cabinet or a shift has the screen: Esc there walks away from it)
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep && !game) openPause(); });
 applySettings();
 // ===== goods on screen: the shop menu, the inventory, the hotbar, and what's in your hand (or mouth, or underfoot)
@@ -5621,8 +5624,7 @@ function sfxUse(s) {
   if (s === 'whirr') { burst(at, 0.5, [filt('bandpass', 700, 3)], 0.05); burst(at + 0.55, 0.4, [filt('bandpass', 900, 3)], 0.04); }
   if (s === 'squeak') { const o = actx.createOscillator(), gn = actx.createGain(); o.frequency.setValueAtTime(1300, at); o.frequency.exponentialRampToValueAtTime(2100, at + 0.12);
     gn.gain.setValueAtTime(0, at); gn.gain.linearRampToValueAtTime(0.06, at + 0.02); gn.gain.exponentialRampToValueAtTime(0.0005, at + 0.2); chain(o, gn, sfxBus); o.start(at); o.stop(at + 0.25); }
-  if (s === 'harmonica') [392, 466, 523, 587, 523, 466, 392].forEach((f, k) => { // a blues lick, reedy
-    tone(at + k * 0.2, f, 0.24, 0.035, 'sawtooth'); tone(at + k * 0.2, f * 2, 0.24, 0.015, 'square'); });
+  if (s === 'harmonica') playClip('harmonica', 0.6);
 }
 // the ball, out in the world
 function drawBall() {

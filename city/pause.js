@@ -69,23 +69,24 @@ function buildPause() {
   return el;
 }
 
+const homeEl = document.getElementById('home');
 function openPause() {
   if (paused) return;
   pauseEl = pauseEl || buildPause();
   paused = true;
   for (const k in K) K[k] = 0; // nothing held down while we're away
-  pauseEl.show(); pauseEl.style.display = 'flex';
+  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = 'block'; // the way home: only while paused
   if (document.pointerLockElement) document.exitPointerLock();
   if (actx) master.gain.setTargetAtTime(0, actx.currentTime, 0.15);
   pauseEl.querySelector('[data-act="resume"]').focus();
 }
 function closePause(lock) {
   if (!paused) return;
-  paused = false; pauseEl.style.display = 'none';
+  paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
   if (lock) cv.requestPointerLock(); // resuming with the mouse: take it straight back
 }
 const togglePause = () => paused ? closePause(false) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
-// (not when a cabinet or a shift has the screen: that lets go of the mouse itself)
+// (not while a cabinet or a shift has the screen: Esc there walks away from it)
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep && !game) openPause(); });
 applySettings();
