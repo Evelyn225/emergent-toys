@@ -6,7 +6,7 @@ const ITEMS = {
   icecream: { name: 'ice cream', price: 4, kind: 'food', uses: 4 }, noodlebox: { name: 'noodles', price: 6, kind: 'food', uses: 4 },
   croissant: { name: 'croissant', price: 3, kind: 'food', uses: 3 }, donut: { name: 'donut', price: 2, kind: 'food', uses: 2 },
   bagel: { name: 'bagel', price: 3, kind: 'food', uses: 3 }, sandwich: { name: 'sandwich', price: 7, kind: 'food', uses: 4 },
-  chips: { name: 'chips', price: 2, kind: 'food', uses: 4 }, apple: { name: 'apple', price: 1, kind: 'food', uses: 3 },
+  chips: { name: 'chips', price: 2, kind: 'food', uses: 4 }, candy: { name: 'candy bar', price: 2, kind: 'food', uses: 2 }, apple: { name: 'apple', price: 1, kind: 'food', uses: 3 },
   slice: { name: 'pizza slice', price: 4, kind: 'food', uses: 3 }, burger: { name: 'burger', price: 8, kind: 'food', uses: 4 },
   kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
   dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
@@ -62,13 +62,27 @@ const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
 const STORE_SIZE = 30, stored = [];
+function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
+  const was = held, it = inv[k];
+  held = k; removeHeld();
+  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  return it;
+}
 function storeSlot(k) { // carried slot k -> the unit
   if (!inv[k]) return [false, 'Nothing there.'];
   if (stored.length >= STORE_SIZE) return [false, 'Your unit is full.'];
-  const was = held; held = k; const it = inv[k];
-  removeHeld(); stored.push(it);
-  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  const it = takeSlot(k); stored.push(it);
   return [true, `You put the ${ITEMS[it.id].name} in your unit.`];
+}
+// pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
+const SELL_RATE = { PAWN: 0.4 };
+const sellPrice = (it, rate) => ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+function sellSlot(k, rate) {
+  if (!inv[k]) return [false, 'Nothing there.'];
+  const p = sellPrice(inv[k], rate), name = ITEMS[inv[k].id].name;
+  if (!p) return [false, `"We don't take ${name}."`];
+  takeSlot(k); earn(p);
+  return [true, `You sell the ${name} for ${fmt$(p)}.`];
 }
 function retrieveSlot(k) { // the unit's item k -> your hands
   if (!stored[k]) return [false, 'Nothing there.'];

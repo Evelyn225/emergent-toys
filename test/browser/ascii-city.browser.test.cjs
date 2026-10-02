@@ -127,7 +127,10 @@ test('shops: E at the counter opens the menu, number keys buy; E only leaves at 
     await page.keyboard.press('KeyE');
     assert.strictEqual(await page.evaluate(() => mode), 'walk');
     await page.waitForTimeout(200);
-    assert.ok(await page.evaluate(() => { let n = 0; for (let i = (rows - 10) * cols; i < rows * cols; i++) if (CH[i] === '|' && COL[i] >> 4 === WHITE) n++; return n; }) > 0, 'the cup is in your hand');
+    assert.ok(await page.evaluate(() => { // the hand is drawn on the canvas over the frame: count its skin-tone pixels
+      const d = g.getImageData(cv.width * 0.6, cv.height * 0.7, cv.width * 0.3, cv.height * 0.3).data; let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - 0xd9) < 6 && Math.abs(d[i + 1] - 0xa2) < 6 && Math.abs(d[i + 2] - 0x7a) < 6) n++;
+      return n; }) > 500, 'the cup is in your hand');
     assert.deepStrictEqual(errors, []);
   } finally {
     await browser.close();

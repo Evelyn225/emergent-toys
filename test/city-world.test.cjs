@@ -188,3 +188,8 @@ test('talk: directions and lines', () => {
   const t = j('(() => { const p = people.find(p => !p.hidden); tod = 14; for (let k = 0; k < 20 && !task; k++) startTask(p); return task && task.kind; })()');
   assert.ok(['escort', 'fetch', 'dog'].includes(t));
 });
+
+test('chinatown lantern strings are tied to a building on both sides of the street', () => {
+  assert.ok(ev('lanterns.length') > 20);
+  assert.strictEqual(ev('lanterns.filter(l => !map[idx(l.x - l.ax * 1.2, l.y - l.ay * 1.2)] || !map[idx(l.x + l.ax * 1.2, l.y + l.ay * 1.2)]).length'), 0);
+});

@@ -123,6 +123,8 @@ function interact() {
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const ven = nearVendor();
   if (ven) return openShop(ven.type.name, VENDOR_STOCK[ven.type.name], ven);
+  const vm = nearMachine();
+  if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);

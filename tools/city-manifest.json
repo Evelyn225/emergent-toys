@@ -21,6 +21,7 @@
     "city/hud.js",
     "city/actions.js",
     "city/audio.js",
+    "city/menu.js",
     "city/pause.js",
     "city/goods-ui.js",
     "city/main.js"

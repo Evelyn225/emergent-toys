@@ -243,7 +243,8 @@ function floorCell(i, r, x, rx, ry) {
   }
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
-    if (s > 0) BG[i] = C(fract(T * 2.5) < 0.5 ? RED : BLUE, 1 + s * 3.5);
+    const on = strobe();
+    if (s > 0 && on >= 0) BG[i] = C(on, 1 + s * 3.5);
   }
   set(i, ch, col);
 }

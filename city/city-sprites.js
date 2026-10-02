@@ -12,6 +12,8 @@ const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
 const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
 const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
+// the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
+function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 || p === 2 ? RED : p === 5 || p === 7 ? BLUE : -1; }
 
 function citySprites() {
   forNear(treesB, t => drawArt(...R(t.x, t.y), 0, 0.45 * t.s, 0.6 * t.s, ART.tree,
@@ -63,6 +65,7 @@ function citySprites() {
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
+  forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   const LC = { G: GREEN, Y: YEL, R: RED };
   forNear(lightsB, s => {
@@ -129,7 +132,7 @@ const VEHICLES = {
 const shadeFace = f => f === 5 ? 1 : f === 1 || f === 2 ? 0.85 : 0.7; // a little light from above, a little less on the sides
 function drawVehicle(m, vx, vy, hx, hy) {
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
-  const braking = m.brake || m.v < 0.05, body = m.body, flash = fract(T * 2.5) < 0.5;
+  const braking = m.brake || m.v < 0.05, body = m.body;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
@@ -162,10 +165,43 @@ function drawVehicle(m, vx, vy, hx, hy) {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
   if (m.ev) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
-    BG[i] = C((HIT.v > 0) === flash ? RED : BLUE, 15); return set(i, '*', C(WHITE, 15)), true; // the light bar
+    const side = HIT.v > 0 ? RED : BLUE, on = strobe() === side; // the light bar: red on one side, blue the other
+    BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
   if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
     BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
+  });
+}
+
+// a vending machine: a lit header, a glass front with shelves of goods, a keypad and coin slot down the right,
+// the flap you reach into at the bottom. Glows after dark.
+const VM_COL = { DRINKS: RED, SNACKS: BLUE, CIGARETTES: GRAY };
+const VM_GOODS = { DRINKS: ['o', [RED, BLUE, GREEN, YEL, WHITE]], SNACKS: ['#', [YEL, ORANGE, RED, GREEN, MAG]], CIGARETTES: ['=', [WHITE, RED, YEL, WHITE, CYAN]] };
+function drawVending(m, vx, vy) {
+  const body = VM_COL[m.kind], glow = Math.max(night, overcast * 0.6), [g_, cols_] = VM_GOODS[m.kind];
+  drawBox(boxAt(vx, vy, m.c, m.s, VM_HL, VM_HW, 0, VM_H), (i, t, L) => {
+    const f = HIT.face, front = (f === 3 || f === 4) && Math.sign(HIT.v) === m.fs;
+    if (!front) { BG[i] = C(body, (1.5 + L * 0.35) * shadeFace(f)); return set(i, f === 5 ? ' ' : HIT.w < 0.01 ? '_' : ' ', C(GRAY, L * 0.4)), true; }
+    const q = (HIT.u * m.fs / VM_HL + 1) / 2, z = HIT.w / VM_H; // across the front 0..1 (left to right), up it 0..1
+    if (z > 0.85) { // the lit header, with what it sells across it
+      BG[i] = C(body, 5 + glow * 7);
+      const name = m.kind, n = name.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * VM_HL) * n;
+      const letter = Math.abs(z - 0.925) < t / projY / VM_H / 2 && k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
+      return set(i, letter ? name[k] : ' ', C(WHITE, 15)), true;
+    }
+    if (q > 0.72) { // the control column: keypad, coin slot
+      BG[i] = C(GRAY, 2 + L * 0.1);
+      return set(i, z > 0.55 && z < 0.72 ? ':' : z > 0.44 && z < 0.5 ? '-' : ' ', z > 0.5 ? C(WHITE, Math.max(L, glow * 11)) : C(YEL, 12)), true;
+    }
+    if (z < 0.17) { BG[i] = C(GRAY, 1); return set(i, z > 0.05 && z < 0.12 ? '_' : ' ', C(GRAY, L * 0.5)), true; } // the flap
+    if (z < 0.22) { BG[i] = C(body, 1.5 + L * 0.35); return set(i, ' ', 0), true; }
+    // the window: four shelves of goods behind glass
+    const sz = (z - 0.22) / 0.63 * 4, row = Math.floor(sz), sq = q / 0.72 * 5, k = Math.floor(sq);
+    BG[i] = C(CYAN, 1 + glow * 2.5);
+    if (fract(sz) < 0.12) return set(i, '_', C(GRAY, Math.max(L * 0.7, glow * 8))), true; // the shelf
+    const item = fract(sq) > 0.18 && fract(sq) < 0.82 && fract(sz) < 0.8; // each thing on it, glass between
+    if (item) BG[i] = C(cols_[(k + row * 2) % 5], 2 + glow * 3);
+    return set(i, item ? g_ : ' ', C(cols_[(k + row * 2) % 5], Math.max(L, glow * 13))), true;
   });
 }
 
@@ -201,17 +237,21 @@ function drawStationEntrance(s, vx, vy) {
 
 // chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
 // glowing after dark. Real 3D, so it stays put across the street as you walk round it.
-const LANTERN_SPAN = 0.95, sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
+const sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
 function drawLanternString(vx, vy, ax, ay) {
-  const segs = 8, cord = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
+  // the cord is thinner than a character cell past a few metres, so it grows to stay one cell thick (a grey dashed
+  // line) instead of breaking up into the odd cell the rays happen to hit
+  const d = Math.hypot(vx, vy), th = Math.max(0.004, 0.55 * d / projY), tw = Math.max(0.004, 0.55 * d / projX), far = th > 0.01;
+  const segs = 8, cord = (i, t, L) => { if (!far) BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
   for (let k = 0; k < segs; k++) {
     const t0 = -1 + 2 * k / segs, t1 = t0 + 2 / segs, tm = (t0 + t1) / 2, z = (sagZ(t0) + sagZ(t1)) / 2;
-    drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, 0.004, z - 0.004, z + 0.004), cord);
+    drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, tw, z - th, z + th), cord);
   }
   const lit = Math.max(night, overcast * 0.6);
   for (const t of [-0.66, -0.33, 0, 0.33, 0.66]) {
     const z = sagZ(t), gold = t === 0;
-    drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, 0.018, 0.018, z - 0.05, z - 0.006), (i, tt, L) => {
+    const lw = Math.max(0.018, tw); // at a distance a lantern stays at least a cell wide too
+    drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, lw, lw, z - 0.05, z - 0.006), (i, tt, L) => {
       const cap = HIT.w > z - 0.014 || HIT.w < z - 0.042;
       BG[i] = cap ? C(GRAY, 2) : C(gold ? YEL : RED, 3 + lit * 9 + L * 0.2);
       return set(i, cap ? '=' : lit > 0.3 ? 'o' : ' ', C(YEL, 15)), true;

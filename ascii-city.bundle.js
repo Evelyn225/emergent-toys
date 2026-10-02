@@ -563,11 +563,14 @@ for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && hash(x0, y0, 55) < 0.7)
 const extrasB = bucketed(extras);
 
 // chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
-const lanterns = [];
+// strung wall to wall, so only where there's a building on both sides of the street to tie it to
+const LANTERN_SPAN = 0.95, lanterns = [];
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   const side = o === 'h' ? districtOf(bx, by) === 'chinatown' || districtOf(bx, by - 1) === 'chinatown'
                          : districtOf(bx, by) === 'chinatown' || districtOf(bx - 1, by) === 'chinatown';
-  if (side) lanterns.push({ x, y, ax: Math.abs(ax), ay: Math.abs(ay) });
+  ax = Math.abs(ax); ay = Math.abs(ay);
+  const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
+  if (side && walls) lanterns.push({ x, y, ax, ay });
 });
 const lanternsB = bucketed(lanterns);
 
@@ -632,6 +635,24 @@ const stations = [], STATION_AT = new Map(); // block -> its station
     STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
   }
 }
+
+// vending machines: on the sidewalk against a building, at the edge of a frontage (beside a shopfront, not across it),
+// clear of subway entrances, facing the street. {x, y, kind, c, s: the box's axis along the street, fs: which side of it (+-1) is the front}
+const VENDING = { DRINKS: { title: 'DRINK MACHINE', stock: ['soda', 'water', 'energy'] },
+                  SNACKS: { title: 'SNACK MACHINE', stock: ['chips', 'candy'] },
+                  CIGARETTES: { title: 'CIGARETTE MACHINE', stock: ['cigarettes'] } };
+const VM_HL = 0.045, VM_HW = 0.035, VM_H = 0.19, machines = [];
+for (const s of [2.12, 4.88, 6.12]) for (const o of [VM_HW + 0.005, 2 - VM_HW - 0.005]) alongStreets(s, o, (x, y, ax, ay, bx, by, ori) => {
+  const r = hash(bx * 3 + s, by * 5 + o, ori === 'h' ? 210 : 211);
+  if (r > (districtOf(bx, by) === 'industrial' ? 0.03 : 0.07)) return;
+  const wall = idx(x - ax * 0.1, y - ay * 0.1); // the cell behind it
+  if (!map[wall] || stations.some(t => Math.hypot(rel(t.x - x), t.y - y) < 0.7)) return;
+  const c = Math.abs(ay), sn = Math.abs(ax);
+  machines.push({ x, y, kind: Object.keys(VENDING)[Math.floor(r / 0.07 * 3) % 3], c, s: sn, fs: Math.sign(-sn * ax + c * ay) });
+});
+const machinesB = bucketed(machines);
+const machineAt = (x, y, pad) => machinesB[bi(Math.floor(x / 8), Math.floor(y / 8))].some(m =>
+  Math.abs((x - m.x) * m.c + (y - m.y) * m.s) < VM_HL + pad && Math.abs(-(x - m.x) * m.s + (y - m.y) * m.c) < VM_HW + pad);
 
 // rooftop clutter: one item on some lots, placed inside the lot so it sits on the roof
 const roofs = [];
@@ -1358,7 +1379,7 @@ const ITEMS = {
   icecream: { name: 'ice cream', price: 4, kind: 'food', uses: 4 }, noodlebox: { name: 'noodles', price: 6, kind: 'food', uses: 4 },
   croissant: { name: 'croissant', price: 3, kind: 'food', uses: 3 }, donut: { name: 'donut', price: 2, kind: 'food', uses: 2 },
   bagel: { name: 'bagel', price: 3, kind: 'food', uses: 3 }, sandwich: { name: 'sandwich', price: 7, kind: 'food', uses: 4 },
-  chips: { name: 'chips', price: 2, kind: 'food', uses: 4 }, apple: { name: 'apple', price: 1, kind: 'food', uses: 3 },
+  chips: { name: 'chips', price: 2, kind: 'food', uses: 4 }, candy: { name: 'candy bar', price: 2, kind: 'food', uses: 2 }, apple: { name: 'apple', price: 1, kind: 'food', uses: 3 },
   slice: { name: 'pizza slice', price: 4, kind: 'food', uses: 3 }, burger: { name: 'burger', price: 8, kind: 'food', uses: 4 },
   kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
   dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
@@ -1414,13 +1435,27 @@ const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
 const STORE_SIZE = 30, stored = [];
+function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
+  const was = held, it = inv[k];
+  held = k; removeHeld();
+  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  return it;
+}
 function storeSlot(k) { // carried slot k -> the unit
   if (!inv[k]) return [false, 'Nothing there.'];
   if (stored.length >= STORE_SIZE) return [false, 'Your unit is full.'];
-  const was = held; held = k; const it = inv[k];
-  removeHeld(); stored.push(it);
-  held = clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1));
+  const it = takeSlot(k); stored.push(it);
   return [true, `You put the ${ITEMS[it.id].name} in your unit.`];
+}
+// pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
+const SELL_RATE = { PAWN: 0.4 };
+const sellPrice = (it, rate) => ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+function sellSlot(k, rate) {
+  if (!inv[k]) return [false, 'Nothing there.'];
+  const p = sellPrice(inv[k], rate), name = ITEMS[inv[k].id].name;
+  if (!p) return [false, `"We don't take ${name}."`];
+  takeSlot(k); earn(p);
+  return [true, `You sell the ${name} for ${fmt$(p)}.`];
 }
 function retrieveSlot(k) { // the unit's item k -> your hands
   if (!stored[k]) return [false, 'Nothing there.'];
@@ -1825,7 +1860,8 @@ function floorCell(i, r, x, rx, ry) {
   }
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
-    if (s > 0) BG[i] = C(fract(T * 2.5) < 0.5 ? RED : BLUE, 1 + s * 3.5);
+    const on = strobe();
+    if (s > 0 && on >= 0) BG[i] = C(on, 1 + s * 3.5);
   }
   set(i, ch, col);
 }
@@ -2000,6 +2036,8 @@ const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
 const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
 const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
+// the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
+function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 || p === 2 ? RED : p === 5 || p === 7 ? BLUE : -1; }
 
 function citySprites() {
   forNear(treesB, t => drawArt(...R(t.x, t.y), 0, 0.45 * t.s, 0.6 * t.s, ART.tree,
@@ -2051,6 +2089,7 @@ function citySprites() {
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
+  forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
   const LC = { G: GREEN, Y: YEL, R: RED };
   forNear(lightsB, s => {
@@ -2117,7 +2156,7 @@ const VEHICLES = {
 const shadeFace = f => f === 5 ? 1 : f === 1 || f === 2 ? 0.85 : 0.7; // a little light from above, a little less on the sides
 function drawVehicle(m, vx, vy, hx, hy) {
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
-  const braking = m.brake || m.v < 0.05, body = m.body, flash = fract(T * 2.5) < 0.5;
+  const braking = m.brake || m.v < 0.05, body = m.body;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
@@ -2150,10 +2189,43 @@ function drawVehicle(m, vx, vy, hx, hy) {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
   if (m.ev) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
-    BG[i] = C((HIT.v > 0) === flash ? RED : BLUE, 15); return set(i, '*', C(WHITE, 15)), true; // the light bar
+    const side = HIT.v > 0 ? RED : BLUE, on = strobe() === side; // the light bar: red on one side, blue the other
+    BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
   if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
     BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
+  });
+}
+
+// a vending machine: a lit header, a glass front with shelves of goods, a keypad and coin slot down the right,
+// the flap you reach into at the bottom. Glows after dark.
+const VM_COL = { DRINKS: RED, SNACKS: BLUE, CIGARETTES: GRAY };
+const VM_GOODS = { DRINKS: ['o', [RED, BLUE, GREEN, YEL, WHITE]], SNACKS: ['#', [YEL, ORANGE, RED, GREEN, MAG]], CIGARETTES: ['=', [WHITE, RED, YEL, WHITE, CYAN]] };
+function drawVending(m, vx, vy) {
+  const body = VM_COL[m.kind], glow = Math.max(night, overcast * 0.6), [g_, cols_] = VM_GOODS[m.kind];
+  drawBox(boxAt(vx, vy, m.c, m.s, VM_HL, VM_HW, 0, VM_H), (i, t, L) => {
+    const f = HIT.face, front = (f === 3 || f === 4) && Math.sign(HIT.v) === m.fs;
+    if (!front) { BG[i] = C(body, (1.5 + L * 0.35) * shadeFace(f)); return set(i, f === 5 ? ' ' : HIT.w < 0.01 ? '_' : ' ', C(GRAY, L * 0.4)), true; }
+    const q = (HIT.u * m.fs / VM_HL + 1) / 2, z = HIT.w / VM_H; // across the front 0..1 (left to right), up it 0..1
+    if (z > 0.85) { // the lit header, with what it sells across it
+      BG[i] = C(body, 5 + glow * 7);
+      const name = m.kind, n = name.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * VM_HL) * n;
+      const letter = Math.abs(z - 0.925) < t / projY / VM_H / 2 && k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
+      return set(i, letter ? name[k] : ' ', C(WHITE, 15)), true;
+    }
+    if (q > 0.72) { // the control column: keypad, coin slot
+      BG[i] = C(GRAY, 2 + L * 0.1);
+      return set(i, z > 0.55 && z < 0.72 ? ':' : z > 0.44 && z < 0.5 ? '-' : ' ', z > 0.5 ? C(WHITE, Math.max(L, glow * 11)) : C(YEL, 12)), true;
+    }
+    if (z < 0.17) { BG[i] = C(GRAY, 1); return set(i, z > 0.05 && z < 0.12 ? '_' : ' ', C(GRAY, L * 0.5)), true; } // the flap
+    if (z < 0.22) { BG[i] = C(body, 1.5 + L * 0.35); return set(i, ' ', 0), true; }
+    // the window: four shelves of goods behind glass
+    const sz = (z - 0.22) / 0.63 * 4, row = Math.floor(sz), sq = q / 0.72 * 5, k = Math.floor(sq);
+    BG[i] = C(CYAN, 1 + glow * 2.5);
+    if (fract(sz) < 0.12) return set(i, '_', C(GRAY, Math.max(L * 0.7, glow * 8))), true; // the shelf
+    const item = fract(sq) > 0.18 && fract(sq) < 0.82 && fract(sz) < 0.8; // each thing on it, glass between
+    if (item) BG[i] = C(cols_[(k + row * 2) % 5], 2 + glow * 3);
+    return set(i, item ? g_ : ' ', C(cols_[(k + row * 2) % 5], Math.max(L, glow * 13))), true;
   });
 }
 
@@ -2189,17 +2261,21 @@ function drawStationEntrance(s, vx, vy) {
 
 // chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
 // glowing after dark. Real 3D, so it stays put across the street as you walk round it.
-const LANTERN_SPAN = 0.95, sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
+const sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
 function drawLanternString(vx, vy, ax, ay) {
-  const segs = 8, cord = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
+  // the cord is thinner than a character cell past a few metres, so it grows to stay one cell thick (a grey dashed
+  // line) instead of breaking up into the odd cell the rays happen to hit
+  const d = Math.hypot(vx, vy), th = Math.max(0.004, 0.55 * d / projY), tw = Math.max(0.004, 0.55 * d / projX), far = th > 0.01;
+  const segs = 8, cord = (i, t, L) => { if (!far) BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
   for (let k = 0; k < segs; k++) {
     const t0 = -1 + 2 * k / segs, t1 = t0 + 2 / segs, tm = (t0 + t1) / 2, z = (sagZ(t0) + sagZ(t1)) / 2;
-    drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, 0.004, z - 0.004, z + 0.004), cord);
+    drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, tw, z - th, z + th), cord);
   }
   const lit = Math.max(night, overcast * 0.6);
   for (const t of [-0.66, -0.33, 0, 0.33, 0.66]) {
     const z = sagZ(t), gold = t === 0;
-    drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, 0.018, 0.018, z - 0.05, z - 0.006), (i, tt, L) => {
+    const lw = Math.max(0.018, tw); // at a distance a lantern stays at least a cell wide too
+    drawBox(boxAt(vx + ax * t * LANTERN_SPAN, vy + ay * t * LANTERN_SPAN, ax, ay, lw, lw, z - 0.05, z - 0.006), (i, tt, L) => {
       const cap = HIT.w > z - 0.014 || HIT.w < z - 0.042;
       BG[i] = cap ? C(GRAY, 2) : C(gold ? YEL : RED, 3 + lit * 9 + L * 0.2);
       return set(i, cap ? '=' : lit > 0.3 ? 'o' : ' ', C(YEL, 15)), true;
@@ -3120,6 +3196,7 @@ const nearPerson = () => {
   return best;
 };
 const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
+const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Math.floor(py / 8))].find(m => Math.hypot(m.x - px, m.y - py) < 0.17) : null;
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
 const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
 const canBoard = () => room.kind === 'station' && trainStopped(room) && py > ST_TRACK - 1.8 && Math.abs(px - 23) < 13;
@@ -3167,6 +3244,8 @@ function promptText() {
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
+  const vm = nearMachine();
+  if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.kind === SHOP_SHUT) return 'Closed.';
@@ -3222,6 +3301,7 @@ function minimap() {
 const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks',
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
 function hud() {
+  drawHeldBig();
   minimap();
   hotbar();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
@@ -3369,6 +3449,8 @@ function interact() {
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const ven = nearVendor();
   if (ven) return openShop(ven.type.name, VENDOR_STOCK[ven.type.name], ven);
+  const vm = nearMachine();
+  if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   const st = nearStation();
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
@@ -3627,6 +3709,66 @@ function audioTick(dt) {
   }
   lastPos = [px, py, mode];
 }
+// ===== the look shared by every menu (pause, shops, carrying, storage): W95 text on near-black, no boxes, a caret
+// for the row you're on, sliders drawn as an ASCII density ramp. Injected once, used through the .menu class.
+const MENU_FONT = 'https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/';
+const MENU_CSS = `
+  @font-face { font-family: 'W95'; src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff'),
+    url('${MENU_FONT}w95font.woff2') format('woff2'); }
+  .menu { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.72);
+          font: 16px/1.4 'W95', monospace; color: rgba(255, 255, 255, 0.6); }
+  .menu .panel { width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box;
+                 padding: 26px 30px; background: rgba(6, 6, 8, 0.94); scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent; }
+  .menu h1 { margin: 0 0 2px; font: inherit; font-size: 32px; line-height: 1.1; color: #fff; letter-spacing: 1px; }
+  .menu .sub { margin: 0 0 14px; color: rgba(255, 255, 255, 0.38); }
+  .menu h2 { display: flex; align-items: center; gap: 10px; margin: 20px 0 6px; font: inherit; color: rgba(255, 255, 255, 0.32); }
+  .menu h2::after { content: ''; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.1); }
+  .menu .hint { margin: 18px 0 0; color: rgba(255, 255, 255, 0.3); }
+  .menu button, .menu a { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-decoration: none; }
+  .menu .item { position: relative; display: flex; align-items: baseline; gap: 10px; width: 100%; box-sizing: border-box; padding: 2px 0 2px 18px; text-align: left; }
+  .menu .item::before { content: '>'; position: absolute; left: 2px; opacity: 0; color: #fff; }
+  .menu .item:hover, .menu .item:focus-visible { color: #fff; outline: none; }
+  .menu .item:hover::before, .menu .item:focus-visible::before { opacity: 1; }
+  .menu .item[disabled] { opacity: 0.3; cursor: default; }
+  .menu .item[disabled]::before { opacity: 0; }
+  .menu .k { min-width: 1.4em; text-align: right; color: rgba(255, 255, 255, 0.3); }
+  .menu .lead { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; color: rgba(255, 255, 255, 0.14); }
+  .menu .lead::before { content: '${'. '.repeat(60)}'; }
+  .menu .v { color: rgba(255, 255, 255, 0.85); }
+  .menu .row { display: grid; grid-template-columns: 8.5em 1fr 3.4em; align-items: baseline; gap: 12px; margin: 3px 0; padding-left: 18px; }
+  .menu .row:hover > span:first-child, .menu .row:focus-within > span:first-child { color: #fff; }
+  .menu .row > span:last-child { text-align: right; color: rgba(255, 255, 255, 0.85); }
+  .menu .slider { position: relative; font: 15px/1 monospace; letter-spacing: 0; white-space: pre; }
+  .menu .slider input { position: absolute; inset: -4px 0; width: 100%; height: calc(100% + 8px); margin: 0; opacity: 0; cursor: pointer; }
+  .menu .slider:focus-within .bar, .menu .slider:hover .bar { filter: brightness(1.5); }
+  .menu .opts { display: flex; gap: 14px; }
+  .menu .opt { color: rgba(255, 255, 255, 0.35); }
+  .menu .opt::before { content: '['; visibility: hidden; } .menu .opt::after { content: ']'; visibility: hidden; }
+  .menu .opt.on { color: #fff; } .menu .opt.on::before, .menu .opt.on::after { visibility: visible; }
+  .menu .opt:hover, .menu .opt:focus-visible, .menu .tog:hover, .menu .tog:focus-visible { color: #fff; outline: none; }
+  .menu .tog { justify-self: start; font: 14px/1 monospace; color: rgba(255, 255, 255, 0.6); }
+  .menu .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 1px 12px; padding-left: 18px; color: rgba(255, 255, 255, 0.38); }
+  .menu .keys b { font-weight: normal; color: rgba(255, 255, 255, 0.85); }`;
+let menuStyled = false;
+function menuEl(id, z, html) { // a hidden full-screen menu layer; the stylesheet goes in with the first one
+  if (!menuStyled) { const s = document.createElement('style'); s.textContent = MENU_CSS; document.head.appendChild(s); menuStyled = true; }
+  const el = document.createElement('div');
+  el.id = id; el.className = 'menu'; el.style.zIndex = z; el.innerHTML = html;
+  document.body.appendChild(el);
+  return el;
+}
+// a slider's bar: the filled part climbs a density ramp and brightens left to right, the rest is a faint dotted track
+const BAR_RAMP = '.:-=+*#%@', BAR_N = 26;
+function asciiBar(f) {
+  const n = Math.round(clamp(f, 0, 1) * BAR_N);
+  let s = '';
+  for (let i = 0; i < BAR_N; i++) {
+    const t = i / (BAR_N - 1);
+    s += i < n ? `<span style="color:rgba(255,255,255,${(0.45 + 0.55 * t).toFixed(2)})">${BAR_RAMP[Math.round(t * (BAR_RAMP.length - 1))]}</span>`
+               : '<span style="color:rgba(255,255,255,0.18)">·</span>';
+  }
+  return s;
+}
 // ===== pause menu: Esc or P (or the mouse lock being released). Freezes the game, fades the sound, and holds the
 // settings, which apply as you change them and are kept in localStorage.
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
@@ -3639,72 +3781,59 @@ function applySettings() {
 }
 
 function buildPause() {
-  const el = document.createElement('div');
-  el.id = 'pause';
-  el.innerHTML = `
-    <style>
-      #pause { position: fixed; inset: 0; z-index: 500; display: none; align-items: center; justify-content: center;
-               background: rgba(0, 0, 0, 0.6); font: 13px/1.5 monospace; color: rgba(255, 255, 255, 0.85); }
-      #pause .panel { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box;
-                      padding: 20px 22px; background: rgba(10, 6, 10, 0.94); border: 1px solid rgba(255, 255, 255, 0.15); }
-      #pause h1 { margin: 0 0 14px; font-size: 18px; font-weight: normal; letter-spacing: 4px; color: #fff; }
-      #pause h2 { margin: 18px 0 8px; font-size: 11px; font-weight: normal; letter-spacing: 2px; color: rgba(255, 255, 255, 0.5); }
-      #pause .row { display: grid; grid-template-columns: 9em 1fr 3.5em; align-items: center; gap: 10px; margin: 6px 0; }
-      #pause .row span:last-child { text-align: right; color: rgba(255, 255, 255, 0.6); }
-      #pause input[type=range] { width: 100%; accent-color: #ffb84d; }
-      #pause input[type=checkbox] { justify-self: start; width: 16px; height: 16px; margin: 0; accent-color: #ffb84d; }
-      #pause button, #pause a.btn { display: block; width: 100%; box-sizing: border-box; margin: 6px 0; padding: 8px 10px; text-align: left;
-               font: inherit; color: #fff; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.15); cursor: pointer; text-decoration: none; }
-      #pause button:hover, #pause a.btn:hover, #pause button:focus-visible { background: rgba(255, 184, 77, 0.18); border-color: rgba(255, 184, 77, 0.6); outline: none; }
-      #pause .seg { display: flex; gap: 6px; }
-      #pause .seg button { margin: 0; text-align: center; padding: 4px 0; }
-      #pause .seg button.on { background: rgba(255, 184, 77, 0.25); border-color: rgba(255, 184, 77, 0.7); }
-      #pause .keys { display: grid; grid-template-columns: 8em 1fr; gap: 2px 10px; color: rgba(255, 255, 255, 0.7); }
-      #pause .keys b { font-weight: normal; color: #fff; }
-    </style>
-    <div class="panel" role="dialog" aria-label="Paused">
-      <h1>PAUSED</h1>
-      <button data-act="resume">Resume</button>
-      <h2>SOUND</h2>
-      ${['master', 'music', 'ambience', 'effects'].map(k => `<label class="row"><span>${k[0].toUpperCase() + k.slice(1)}</span>
-        <input type="range" min="0" max="1" step="0.05" data-set="${k}"><span data-show="${k}"></span></label>`).join('')}
-      <h2>VIEW</h2>
-      <label class="row"><span>Field of view</span><input type="range" min="50" max="100" step="1" data-set="fov"><span data-show="fov"></span></label>
-      <div class="row"><span>Detail</span><div class="seg">${Object.keys(DETAIL).map(d => `<button data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
-      <label class="row"><span>Help line</span><input type="checkbox" data-set="help"><span></span></label>
-      <h2>MOUSE</h2>
-      <label class="row"><span>Sensitivity</span><input type="range" min="0.25" max="3" step="0.05" data-set="sensitivity"><span data-show="sensitivity"></span></label>
-      <label class="row"><span>Invert Y</span><input type="checkbox" data-set="invertY"><span></span></label>
-      <h2>CONTROLS</h2>
+  const slider = (k, label, min, max, step) => `<label class="row"><span>${label}</span><span class="slider"><span class="bar" data-bar="${k}"></span><input type="range" min="${min}" max="${max}" step="${step}" data-set="${k}" aria-label="${label}"></span><span data-show="${k}"></span></label>`;
+  const toggle = (k, label) => `<div class="row"><span>${label}</span><button class="tog" data-toggle="${k}"></button><span></span></div>`;
+  const el = menuEl('pause', 500, `
+    <div class="panel" role="dialog" aria-label="Paused" style="width: min(520px, calc(100vw - 32px))">
+      <h1>Paused</h1>
+      <p class="sub">ASCII City</p>
+      <button class="item" data-act="resume">Resume</button>
+      <h2>sound</h2>
+      ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
+      <h2>view</h2>
+      ${slider('fov', 'Field of view', 50, 100, 1)}
+      <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
+      ${toggle('help', 'Help line')}
+      <h2>mouse</h2>
+      ${slider('sensitivity', 'Sensitivity', 0.25, 3, 0.05)}
+      ${toggle('invertY', 'Invert Y')}
+      <h2>controls</h2>
       <div class="keys">
-        <b>WASD</b><span>move (in a car: drive)</span><b>mouse / arrows</b><span>look (click to lock the mouse)</span>
-        <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy, get in / out</span><b>H</b><span>hail a taxi</span>
-        <b>V</b><span>car camera</span><b>M</b><span>map</span><b>1-5</b><span>taxi / train destination</span>
-        <b>hold T</b><span>fast-forward time</span><b>Y</b><span>weather</span><b>N</b><span>sound on / off</span><b>Esc / P</b><span>pause</span>
+        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
+        <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
+        <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
+        <b>M</b><span>map</span><b>1-5</b><span>taxi / train stop</span>
+        <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
+        <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
+        <b>N</b><span>sound on / off</span><b>Esc</b><span>pause</span>
       </div>
       <h2></h2>
-      <a class="btn" href="index.html">Quit to Eve Net</a>
-    </div>`;
-  document.body.appendChild(el);
+      <a class="item" href="index.html">Quit to Eve Net</a>
+    </div>`);
+  const RANGE = { fov: [50, 100], sensitivity: [0.25, 3] };
   const show = () => {
-    for (const inp of el.querySelectorAll('[data-set]')) inp.type === 'checkbox' ? inp.checked = settings[inp.dataset.set] : inp.value = settings[inp.dataset.set];
+    for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
       s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : Math.round(v * 100) + '%';
     }
+    for (const b of el.querySelectorAll('[data-bar]')) { const [lo, hi] = RANGE[b.dataset.bar] || [0, 1]; b.innerHTML = asciiBar((settings[b.dataset.bar] - lo) / (hi - lo)); }
+    for (const b of el.querySelectorAll('[data-toggle]')) b.textContent = settings[b.dataset.toggle] ? '[x] on' : '[ ] off';
     for (const b of el.querySelectorAll('[data-detail]')) b.classList.toggle('on', b.dataset.detail === settings.detail);
   };
   el.addEventListener('input', e => {
     const k = e.target.dataset.set;
     if (!k) return;
-    settings[k] = e.target.type === 'checkbox' ? e.target.checked : +e.target.value;
+    settings[k] = +e.target.value;
     saveSettings(); applySettings(); show();
   });
   el.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'resume') closePause(true);
-    if (b.dataset.detail) { settings.detail = b.dataset.detail; saveSettings(); applySettings(); show(); }
+    if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
+    if (b.dataset.detail) settings.detail = b.dataset.detail;
+    if (b.dataset.toggle || b.dataset.detail) { saveSettings(); applySettings(); show(); }
   });
   el.show = show;
   return el;
@@ -3750,6 +3879,7 @@ const HAND = {
   donut: [['  .---.', ' ( (o) )', "  '---'"], (c, r) => c === 'o' ? C(GRAY, 3) : C(MAG, 13)],
   bagel: [['  .---.', ' ( (_) )', "  '---'"], (c, r) => C(WARM, 12)],
   sandwich: [[' _________', '/%%%%%%%%%\\', '|=========|', '\\_________/'], (c, r) => r === 1 ? C(GREEN, 12) : r === 2 ? C(RED, 12) : C(WARM, 12)],
+  candy: [['  ______', ' (CANDY )', "  '----'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(MAG, 12)],
   chips: [[' .------.', ' | CHIPS|', ' |  ()  |', " '------'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(YEL, 13)],
   apple: [['   ,', ' .-|-.', '(     )', " '---'"], (c, r) => r === 0 || c === '|' ? C(GREEN, 12) : C(RED, 13)],
   slice: [['\\%%%%%%/', ' \\%o%%/', '  \\%%/', '   \\/'], (c, r) => c === 'o' ? C(RED, 13) : C(YEL, 13)],
@@ -3761,13 +3891,11 @@ const HAND = {
   newspaper: [[' ________', '|NEWS ==|', '|=== ===|', '|=== ===|'], (c, r) => C(WHITE, 13)],
   vinyl: [[' _______', '|  ___  |', '| ( o ) |', '|_______|'], (c, r) => c === 'o' ? C(RED, 13) : C(MAG, 12)],
   flowers: [[' *@*@*', '  \\|/', '   |', '  [_]'], (c, r) => r === 0 ? C(ITEM_COL[(c.charCodeAt(0) + r) & 7], 14) : c === '[' || c === ']' || c === '_' ? C(BRICK, 12) : C(GREEN, 12)],
-  umbrella: [['   |', '   |', '   J'], (c, r) => C(GRAY, 12)],
   ball: [['  ____', ' / \\/ \\', '|  /\\  |', ' \\_\\/_/'], (c, r) => C(WHITE, 13)],
   boombox: [[' _[====]_', '|O |==| O|', '|_|____|_|'], (c, r) => c === 'O' ? C(GRAY, 9) : c === '=' ? C(CYAN, 13) : C(GRAY, 13)],
   skateboard: [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)],
   cigarettes: [[' _____', '|=====|', '|SMOKE|', '|_____|'], (c, r) => /[A-Z]/.test(c) ? C(RED, 13) : C(WHITE, 13)],
 };
-const HAND_FIST = ['  ____', ' (    \\', '(______)']; // the hand holding it
 let smokePuffs = []; // [x, y, life] in screen cells
 const putCell = (r, c, ch, col, bg = NONE) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ' && bg === NONE) return; const i = r * cols + c; set(i, ch, col); BG[i] = bg; FOGS[i] = FOGB[i] = 0; };
 // draw ascii art solid: the gaps inside each line are filled, so the street doesn't show through the cup
@@ -3781,19 +3909,6 @@ function drawHeld(dt) {
   if (fx.skating && mode === 'walk') { // the board under your feet
     putArt(HAND.skateboard[0], rows - 3, (cols >> 1) - 8, HAND.skateboard[1], C(GRAY, 1));
   }
-  const it = heldItem();
-  if (it && !(fx.skating && it.id === 'skateboard')) {
-    const [art, col] = HAND[it.id] || HAND.book, c0 = Math.floor(cols * 0.72), r0 = rows - art.length - 3 + bob;
-    putArt(art, r0, c0, col, C(GRAY, 1));
-    putArt(HAND_FIST, rows - 3 + bob, c0, () => C(SKIN, 12), C(SKIN, 4));
-    if (it.id === 'umbrella' && rain > 0.2) { // the canopy overhead
-      for (let c = 0; c < cols; c++) {
-        const edge = Math.round(4 + Math.abs(c - cols / 2) / cols * 6);
-        for (let r = 0; r < edge; r++) { const i = r * cols + c; set(i, r === edge - 1 ? (c % 9 === 0 ? 'Y' : '-') : ' ', C(BLUE, 6)); BG[i] = C(BLUE, 2); FOGS[i] = FOGB[i] = 0; }
-        if (c % 9 === 0 && Math.random() < 0.3) putCell(edge + (T * 6 + c | 0) % 3, c, '.', C(BLUE, 8)); // drips off the edge
-      }
-    }
-  }
   if (fx.smoke > 0) { // a cigarette in your mouth, tip glowing; drags puff smoke
     const c0 = (cols >> 1) - 2, r0 = rows - 2, tip = fract(T * 2) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5;
     for (let k = 0; k < 6; k++) putCell(r0 - (k >> 1), c0 + k, k < 1 ? '_' : '/', C(WHITE, 14), C(GRAY, 2));
@@ -3804,6 +3919,101 @@ function drawHeld(dt) {
   for (const p of smokePuffs) { p[1] -= dt * 4; p[0] += Math.sin(T * 3 + p[1]) * dt * 3; putCell(Math.round(p[1]), Math.round(p[0]), p[2] > 0.6 ? '~' : '.', C(GRAY, 4 + p[2] * 8)); }
 }
 
+// ---- what's in your hand, drawn big over the finished frame: ASCII at ~2x the map's character size, every line
+// solid-backed so nothing shows through, the hand gripping the bottom of whatever it holds
+function bigArt(lines, x, y, size, colFn, bgFn) {
+  const w = g.measureText('M').width;
+  lines.forEach((l, r) => {
+    const a0 = l.search(/\S/), a1 = l.length - [...l].reverse().join('').search(/\S/);
+    if (a0 < 0) return;
+    if (bgFn && l.replace(/ /g, '').length > 2) for (let k = a0; k < a1; k++) { const b = bgFn(l[k], r, k); if (b !== NONE) { g.fillStyle = PAL[b]; g.fillRect(x + k * w, y + r * size, w + 0.5, size); } }
+    for (let k = a0; k < a1; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r)]; g.fillText(l[k], x + k * w, y + r * size); }
+  });
+  return w;
+}
+// the hand: drawn as shapes, not characters (ASCII can't make a convincing hand at this size). Four fingers curled
+// across the front of whatever it holds, the thumb hooked over the top, palm and wrist running down off the screen.
+// u = the size unit (px); (x, y) = the top-left of the fingers.
+const SKIN_RGB = ['#d9a27a', '#b9805d', '#7a4c35', 'rgba(255,235,210,0.35)']; // base, shade, outline, highlight
+function capsule(x, y, w, h, fill, line) {
+  const r = Math.min(w, h) / 2;
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  g.fillStyle = fill; g.fill(); g.strokeStyle = line; g.lineWidth = Math.max(1.5, h * 0.07); g.stroke();
+}
+function drawHand(x, y, u) {
+  const [base, shade, line, hi] = SKIN_RGB;
+  g.beginPath(); // wrist and forearm, angling down off the bottom of the screen
+  g.moveTo(x + 0.6 * u, y + 2.5 * u); g.lineTo(x + 5.6 * u, y + 2.2 * u); g.lineTo(x + 6.8 * u, cv.height + u); g.lineTo(x + 0.4 * u, cv.height + u); g.closePath();
+  g.fillStyle = shade; g.fill(); g.strokeStyle = line; g.lineWidth = Math.max(1.5, u * 0.07); g.stroke();
+  capsule(x - 0.2 * u, y + 0.2 * u, 6.2 * u, 3.4 * u, base, line); // the back of the hand / palm
+  for (let k = 0; k < 4; k++) { // fingers, curled round the front: each a little shorter and set back
+    const fy = y + k * 0.82 * u, fx = x + 0.15 * u + k * 0.12 * u, fw = 5.3 * u - k * 0.35 * u;
+    capsule(fx, fy, fw, 0.95 * u, base, line);
+    g.strokeStyle = hi; g.lineWidth = Math.max(1, u * 0.08); g.beginPath(); g.moveTo(fx + 0.45 * u, fy + 0.22 * u); g.lineTo(fx + fw - 0.6 * u, fy + 0.22 * u); g.stroke(); // light on the top edge
+    g.strokeStyle = shade; g.beginPath(); g.moveTo(fx + fw * 0.62, fy + 0.15 * u); g.lineTo(fx + fw * 0.62, fy + 0.8 * u); g.stroke(); // the knuckle crease
+  }
+  g.save(); g.translate(x + 0.1 * u, y + 0.5 * u); g.rotate(-0.55); // the thumb, hooked over the top
+  capsule(-0.4 * u, -0.5 * u, 3.0 * u, 1.05 * u, base, line);
+  g.strokeStyle = shade; g.beginPath(); g.moveTo(2.0 * u, -0.35 * u); g.lineTo(2.0 * u, 0.4 * u); g.stroke(); // its nail
+  g.restore();
+}
+function drawHeldBig() {
+  const it = heldItem();
+  if (!it || !(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') || fx.skating && it.id === 'skateboard') return;
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), size = Math.round(u * 1.5); // scaled to the screen, not the detail setting
+  const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
+  const hx = Math.round(cv.width * 0.7), hy = cv.height - 4.2 * u + bob; // the top of the fingers
+  const open = it.id === 'umbrella' && rain > 0.2;
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width;
+  if (open) { // the umbrella, open overhead, seen from underneath: ribs fan out from the hub at the top of the screen
+    // to a scalloped rim that hangs lowest straight ahead; the shaft runs from your fist up to the hub
+    const W = cv.width, H = cv.height, gx = hx + 2.6 * u, hub = [W * 0.56, H * 0.05 + bob * 0.5], ribs = 10, tips = [];
+    for (let k = 0; k <= ribs; k++) { const t = k / ribs * 2 - 1; tips.push([W * (0.5 + t * 0.62), H * (0.36 - t * t * 0.5) + bob * 0.5]); }
+    g.fillStyle = PAL[C(BLUE, 3)]; g.fillRect(0, 0, W, hub[1]); // above the hub the canopy runs on over your head
+    const line = Math.max(1.5, u * 0.09);
+    for (let k = 0; k < ribs; k++) { // the panels: alternating tones, each edge scalloped up toward the hub
+      const [x0, y0] = tips[k], [x1, y1] = tips[k + 1], mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      g.beginPath(); g.moveTo(hub[0], hub[1]); g.lineTo(x0, y0);
+      g.quadraticCurveTo(mx + (hub[0] - mx) * 0.12, my + (hub[1] - my) * 0.22, x1, y1); g.closePath();
+      g.fillStyle = PAL[C(BLUE, k & 1 ? 5 : 3)]; g.fill();
+    }
+    g.strokeStyle = PAL[C(GRAY, 7)]; g.lineWidth = line;
+    for (const [x, y] of tips) { g.beginPath(); g.moveTo(hub[0], hub[1]); g.lineTo(x, y); g.stroke(); } // the ribs
+    g.fillStyle = PAL[C(GRAY, 11)];
+    tips.forEach(([x, y], k) => {
+      g.beginPath(); g.arc(x, y, u * 0.16, 0, Math.PI * 2); g.fill(); // the rib tips
+      const d = fract(T * 1.3 + k * 0.37); // a drip falling off each tip
+      g.fillStyle = PAL[C(BLUE, 10)]; g.fillRect(x - 1, y + u * 0.3 + d * H * 0.25, 2, u * 0.35); g.fillStyle = PAL[C(GRAY, 11)];
+    });
+    g.lineCap = 'round'; // the shaft: dark edge, light core, from your fist up to the hub
+    g.strokeStyle = PAL[C(GRAY, 3)]; g.lineWidth = u * 0.42; g.beginPath(); g.moveTo(gx, hy + u); g.lineTo(hub[0], hub[1]); g.stroke();
+    g.strokeStyle = '#cfcfd8'; g.lineWidth = u * 0.24; g.stroke();
+    g.lineCap = 'butt';
+    g.fillStyle = PAL[C(GRAY, 12)]; g.beginPath(); g.arc(hub[0], hub[1], u * 0.4, 0, Math.PI * 2); g.fill(); // the hub
+  } else if (it.id === 'umbrella') { // furled: the shaft up out of your fist into the wrapped canopy, strap, tip
+    g.save(); g.translate(hx + 2.6 * u, hy + u); g.rotate(-0.1); // leaning a touch to the left; up is -y
+    g.lineCap = 'round';
+    g.strokeStyle = PAL[C(GRAY, 3)]; g.lineWidth = u * 0.42; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -13 * u); g.stroke();
+    g.strokeStyle = '#cfcfd8'; g.lineWidth = u * 0.24; g.stroke(); // the shaft (its tip pokes out the top)
+    g.beginPath(); g.moveTo(-0.3 * u, -3 * u); // the wrapped canopy: bunched at the bottom, swelling, tapering to the tip
+    g.bezierCurveTo(-1.6 * u, -4.2 * u, -1.1 * u, -8 * u, -0.12 * u, -12.3 * u); g.lineTo(0.12 * u, -12.3 * u);
+    g.bezierCurveTo(1.1 * u, -8 * u, 1.6 * u, -4.2 * u, 0.3 * u, -3 * u); g.closePath();
+    g.fillStyle = PAL[C(BLUE, 6)]; g.fill(); g.strokeStyle = PAL[C(BLUE, 2)]; g.lineWidth = Math.max(1.5, u * 0.08); g.stroke();
+    g.strokeStyle = PAL[C(BLUE, 9)]; g.lineWidth = Math.max(1, u * 0.06);
+    for (const k of [-0.5, 0.15, 0.7]) { g.beginPath(); g.moveTo(k * 0.5 * u, -3.3 * u); g.quadraticCurveTo(k * 1.4 * u, -6.5 * u, 0, -12 * u); g.stroke(); } // the folds
+    g.fillStyle = PAL[C(GRAY, 12)]; g.fillRect(-1.15 * u, -5.6 * u, 2.3 * u, 0.4 * u); // the strap
+    g.lineCap = 'butt'; g.restore();
+  } else {
+    const [art, col] = HAND[it.id] || HAND.book, artW = Math.max(...art.map(l => l.length));
+    // centred over the fingers, the bottom of it tucked behind them
+    bigArt(art, hx + 2.6 * u - artW * w / 2, hy - (art.length - 0.7) * size, size, col, () => C(GRAY, 1));
+  }
+  drawHand(hx, hy, u);
+  g.font = FS + 'px monospace';
+}
+
 // ---- the hotbar and the effects you're under, bottom left
 function hotbar() {
   if (mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze) return;
@@ -3811,33 +4021,17 @@ function hotbar() {
   const y = cv.height - FS * 2 - 10;
   inv.forEach((it, k) => {
     const s = `${k + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
-    g.fillStyle = k === held ? 'rgba(255,184,77,0.35)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
-    g.fillStyle = k === held ? '#fff' : '#bbb'; g.fillText(s, x + 6, y + 4);
+    g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
+    g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
   const tags = [fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
-  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = '#ffb84d'; g.fillText(s, 12, y - FS - 7); }
+  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
 // ---- shop menu and inventory: small panels over a frozen game, keyboard or mouse
 let shopEl = null, invEl = null, shopCtx = null;
-function panel(id) {
-  const el = document.createElement('div');
-  el.id = id;
-  el.innerHTML = `<style>
-    #${id} { position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); font: 13px/1.5 monospace; color: rgba(255,255,255,0.85); }
-    #${id} .panel { width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; padding: 18px 20px; background: rgba(10,6,10,0.94); border: 1px solid rgba(255,255,255,0.15); }
-    #${id} h1 { margin: 0 0 4px; font-size: 16px; font-weight: normal; letter-spacing: 3px; color: #fff; }
-    #${id} .sub { margin: 0 0 12px; color: rgba(255,255,255,0.5); }
-    #${id} button { display: grid; grid-template-columns: 1.6em 1fr auto; gap: 8px; width: 100%; box-sizing: border-box; margin: 5px 0; padding: 7px 10px; text-align: left; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); cursor: pointer; }
-    #${id} button:hover, #${id} button:focus-visible { background: rgba(255,184,77,0.18); border-color: rgba(255,184,77,0.6); outline: none; }
-    #${id} button[disabled] { opacity: 0.4; cursor: default; }
-    #${id} .k { color: rgba(255,184,77,0.9); }
-    #${id} .hint { margin: 12px 0 0; color: rgba(255,255,255,0.45); }
-  </style><div class="panel"></div>`;
-  document.body.appendChild(el);
-  return el;
-}
+const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
   el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
   for (const k in K) K[k] = 0;
@@ -3849,9 +4043,12 @@ const panelOpen = () => [shopEl, invEl, storeEl].some(el => el && el.style.displ
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span>${fmt$(it.price)}</span></button>`; }).join('');
-  showPanel(shopEl, `<h1>${title}</h1><p class="sub">You have ${fmt$(money)} &middot; ${inv.length}/${INV_SIZE} carried</p>${rows_}<p class="hint">1-${stock.length} or click to buy &middot; E / Esc to close</p>`);
-  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'); if (b) shopBuy(b.dataset.buy); };
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate);
+    return `<button class="item" data-sell="${k}" ${p ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+  showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
+    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''} &middot; E / Esc close</p>`);
+  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); };
 }
 function shopBuy(id) {
   const [ok, line] = buy(id);
@@ -3859,11 +4056,15 @@ function shopBuy(id) {
   if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor)) say(`${line} That's the one they wanted.`, 4);
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
 }
+function shopSell(k) {
+  say(sellSlot(k, SELL_RATE[shopCtx.title])[1], 3);
+  openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor);
+}
 const closeShop = () => hidePanel(shopEl);
 function openInventory() {
   invEl = invEl || panel('inventory');
-  const rows_ = inv.length ? inv.map((it, k) => `<button data-slot="${k}"><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' (in hand)' : ''}</span><span>${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub">Nothing. Shops sell things.</p>';
-  showPanel(invEl, `<h1>CARRYING</h1><p class="sub">${fmt$(money)} &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">click or 1-${INV_SIZE}: hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  const rows_ = inv.length ? inv.map((it, k) => `<button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">1-${INV_SIZE} hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { held = +b.dataset.slot; openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
@@ -3872,11 +4073,11 @@ let storeEl = null;
 function openStorage() {
   storeEl = storeEl || panel('storage');
   const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
-  const carried = inv.length ? inv.map((it, k) => `<button data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span>store &rarr;</span></button>`).join('') : '<p class="sub">Nothing in your hands.</p>';
-  const unit = stored.length ? stored.map((it, k) => `<button data-take="${k}"><span class="k">${k < 9 ? '&#8679;' + (k + 1) : ''}</span><span>${item(it)}</span><span>&larr; take</span></button>`).join('') : '<p class="sub">Empty.</p>';
-  showPanel(storeEl, `<h1>STORAGE UNIT</h1><p class="sub">The same unit at every storage place in town &middot; ${stored.length}/${STORE_SIZE}</p>
-    <h2 style="margin:14px 0 6px;font-size:11px;font-weight:normal;letter-spacing:2px;color:rgba(255,255,255,0.5)">CARRYING ${inv.length}/${INV_SIZE}</h2>${carried}
-    <h2 style="margin:14px 0 6px;font-size:11px;font-weight:normal;letter-spacing:2px;color:rgba(255,255,255,0.5)">IN THE UNIT</h2>${unit}
+  const carried = inv.length ? inv.map((it, k) => `<button class="item" data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
+  const unit = stored.length ? stored.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
+  showPanel(storeEl, `<h1>Storage unit</h1><p class="sub">The same unit at every storage place in town</p>
+    <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
+    <h2>in the unit ${stored.length}/${STORE_SIZE}</h2>${unit}
     <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
@@ -3895,6 +4096,7 @@ function panelKey(e) {
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
   if (e.code === 'Escape' || e.code === 'KeyE' && shop || e.code === 'KeyI' && !shop) { shop ? closeShop() : closeInventory(); return true; }
+  if (shop && n && e.shiftKey && SELL_RATE[shopCtx.title]) { shopSell(n[1] - 1); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
   if (!shop && n && inv[n[1] - 1]) { held = n[1] - 1; openInventory(); return true; }
   if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
@@ -3929,10 +4131,18 @@ function drawBall() {
   const [vx, vy] = R(ball.x, ball.y);
   drawArt(vx, vy, ball.z, 0.035, 0.035, ['O'], (c, row, L) => C(WHITE, Math.max(L, 6)));
 }
+// take the mouse back whenever the game runs without it. Browsers only allow that from a click or a key press, and
+// not from Esc (Esc is the way out of a mouse lock), so after leaving a menu with Esc it comes back on your next key
+function relock() {
+  if (paused || document.pointerLockElement) return;
+  const p = cv.requestPointerLock();
+  if (p && p.catch) p.catch(() => {}); // refused (Esc, or too soon after the browser let go): the next key tries again
+}
 onkeydown = e => {
-  if (!e.repeat && panelKey(e)) return; // a shop or the inventory is open
-  if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
+  if (!e.repeat && panelKey(e)) return relock(); // a shop or the inventory is open (and may just have closed)
+  if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) { togglePause(); return relock(); }
   if (paused) return;
+  relock();
   K[e.code] = 1;
   if (e.repeat) return;
   audioStart(); // sound can only start from a key press or click
@@ -3970,7 +4180,7 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02));
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;

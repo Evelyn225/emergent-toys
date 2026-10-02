@@ -108,11 +108,14 @@ for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && hash(x0, y0, 55) < 0.7)
 const extrasB = bucketed(extras);
 
 // chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
-const lanterns = [];
+// strung wall to wall, so only where there's a building on both sides of the street to tie it to
+const LANTERN_SPAN = 0.95, lanterns = [];
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   const side = o === 'h' ? districtOf(bx, by) === 'chinatown' || districtOf(bx, by - 1) === 'chinatown'
                          : districtOf(bx, by) === 'chinatown' || districtOf(bx - 1, by) === 'chinatown';
-  if (side) lanterns.push({ x, y, ax: Math.abs(ax), ay: Math.abs(ay) });
+  ax = Math.abs(ax); ay = Math.abs(ay);
+  const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
+  if (side && walls) lanterns.push({ x, y, ax, ay });
 });
 const lanternsB = bucketed(lanterns);
 
@@ -177,6 +180,24 @@ const stations = [], STATION_AT = new Map(); // block -> its station
     STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
   }
 }
+
+// vending machines: on the sidewalk against a building, at the edge of a frontage (beside a shopfront, not across it),
+// clear of subway entrances, facing the street. {x, y, kind, c, s: the box's axis along the street, fs: which side of it (+-1) is the front}
+const VENDING = { DRINKS: { title: 'DRINK MACHINE', stock: ['soda', 'water', 'energy'] },
+                  SNACKS: { title: 'SNACK MACHINE', stock: ['chips', 'candy'] },
+                  CIGARETTES: { title: 'CIGARETTE MACHINE', stock: ['cigarettes'] } };
+const VM_HL = 0.045, VM_HW = 0.035, VM_H = 0.19, machines = [];
+for (const s of [2.12, 4.88, 6.12]) for (const o of [VM_HW + 0.005, 2 - VM_HW - 0.005]) alongStreets(s, o, (x, y, ax, ay, bx, by, ori) => {
+  const r = hash(bx * 3 + s, by * 5 + o, ori === 'h' ? 210 : 211);
+  if (r > (districtOf(bx, by) === 'industrial' ? 0.03 : 0.07)) return;
+  const wall = idx(x - ax * 0.1, y - ay * 0.1); // the cell behind it
+  if (!map[wall] || stations.some(t => Math.hypot(rel(t.x - x), t.y - y) < 0.7)) return;
+  const c = Math.abs(ay), sn = Math.abs(ax);
+  machines.push({ x, y, kind: Object.keys(VENDING)[Math.floor(r / 0.07 * 3) % 3], c, s: sn, fs: Math.sign(-sn * ax + c * ay) });
+});
+const machinesB = bucketed(machines);
+const machineAt = (x, y, pad) => machinesB[bi(Math.floor(x / 8), Math.floor(y / 8))].some(m =>
+  Math.abs((x - m.x) * m.c + (y - m.y) * m.s) < VM_HL + pad && Math.abs(-(x - m.x) * m.s + (y - m.y) * m.c) < VM_HW + pad);
 
 // rooftop clutter: one item on some lots, placed inside the lot so it sits on the roof
 const roofs = [];

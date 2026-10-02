@@ -19,6 +19,7 @@ const HAND = {
   donut: [['  .---.', ' ( (o) )', "  '---'"], (c, r) => c === 'o' ? C(GRAY, 3) : C(MAG, 13)],
   bagel: [['  .---.', ' ( (_) )', "  '---'"], (c, r) => C(WARM, 12)],
   sandwich: [[' _________', '/%%%%%%%%%\\', '|=========|', '\\_________/'], (c, r) => r === 1 ? C(GREEN, 12) : r === 2 ? C(RED, 12) : C(WARM, 12)],
+  candy: [['  ______', ' (CANDY )', "  '----'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(MAG, 12)],
   chips: [[' .------.', ' | CHIPS|', ' |  ()  |', " '------'"], (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : C(YEL, 13)],
   apple: [['   ,', ' .-|-.', '(     )', " '---'"], (c, r) => r === 0 || c === '|' ? C(GREEN, 12) : C(RED, 13)],
   slice: [['\\%%%%%%/', ' \\%o%%/', '  \\%%/', '   \\/'], (c, r) => c === 'o' ? C(RED, 13) : C(YEL, 13)],
@@ -30,13 +31,11 @@ const HAND = {
   newspaper: [[' ________', '|NEWS ==|', '|=== ===|', '|=== ===|'], (c, r) => C(WHITE, 13)],
   vinyl: [[' _______', '|  ___  |', '| ( o ) |', '|_______|'], (c, r) => c === 'o' ? C(RED, 13) : C(MAG, 12)],
   flowers: [[' *@*@*', '  \\|/', '   |', '  [_]'], (c, r) => r === 0 ? C(ITEM_COL[(c.charCodeAt(0) + r) & 7], 14) : c === '[' || c === ']' || c === '_' ? C(BRICK, 12) : C(GREEN, 12)],
-  umbrella: [['   |', '   |', '   J'], (c, r) => C(GRAY, 12)],
   ball: [['  ____', ' / \\/ \\', '|  /\\  |', ' \\_\\/_/'], (c, r) => C(WHITE, 13)],
   boombox: [[' _[====]_', '|O |==| O|', '|_|____|_|'], (c, r) => c === 'O' ? C(GRAY, 9) : c === '=' ? C(CYAN, 13) : C(GRAY, 13)],
   skateboard: [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)],
   cigarettes: [[' _____', '|=====|', '|SMOKE|', '|_____|'], (c, r) => /[A-Z]/.test(c) ? C(RED, 13) : C(WHITE, 13)],
 };
-const HAND_FIST = ['  ____', ' (    \\', '(______)']; // the hand holding it
 let smokePuffs = []; // [x, y, life] in screen cells
 const putCell = (r, c, ch, col, bg = NONE) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ' && bg === NONE) return; const i = r * cols + c; set(i, ch, col); BG[i] = bg; FOGS[i] = FOGB[i] = 0; };
 // draw ascii art solid: the gaps inside each line are filled, so the street doesn't show through the cup
@@ -50,19 +49,6 @@ function drawHeld(dt) {
   if (fx.skating && mode === 'walk') { // the board under your feet
     putArt(HAND.skateboard[0], rows - 3, (cols >> 1) - 8, HAND.skateboard[1], C(GRAY, 1));
   }
-  const it = heldItem();
-  if (it && !(fx.skating && it.id === 'skateboard')) {
-    const [art, col] = HAND[it.id] || HAND.book, c0 = Math.floor(cols * 0.72), r0 = rows - art.length - 3 + bob;
-    putArt(art, r0, c0, col, C(GRAY, 1));
-    putArt(HAND_FIST, rows - 3 + bob, c0, () => C(SKIN, 12), C(SKIN, 4));
-    if (it.id === 'umbrella' && rain > 0.2) { // the canopy overhead
-      for (let c = 0; c < cols; c++) {
-        const edge = Math.round(4 + Math.abs(c - cols / 2) / cols * 6);
-        for (let r = 0; r < edge; r++) { const i = r * cols + c; set(i, r === edge - 1 ? (c % 9 === 0 ? 'Y' : '-') : ' ', C(BLUE, 6)); BG[i] = C(BLUE, 2); FOGS[i] = FOGB[i] = 0; }
-        if (c % 9 === 0 && Math.random() < 0.3) putCell(edge + (T * 6 + c | 0) % 3, c, '.', C(BLUE, 8)); // drips off the edge
-      }
-    }
-  }
   if (fx.smoke > 0) { // a cigarette in your mouth, tip glowing; drags puff smoke
     const c0 = (cols >> 1) - 2, r0 = rows - 2, tip = fract(T * 2) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5;
     for (let k = 0; k < 6; k++) putCell(r0 - (k >> 1), c0 + k, k < 1 ? '_' : '/', C(WHITE, 14), C(GRAY, 2));
@@ -73,6 +59,101 @@ function drawHeld(dt) {
   for (const p of smokePuffs) { p[1] -= dt * 4; p[0] += Math.sin(T * 3 + p[1]) * dt * 3; putCell(Math.round(p[1]), Math.round(p[0]), p[2] > 0.6 ? '~' : '.', C(GRAY, 4 + p[2] * 8)); }
 }
 
+// ---- what's in your hand, drawn big over the finished frame: ASCII at ~2x the map's character size, every line
+// solid-backed so nothing shows through, the hand gripping the bottom of whatever it holds
+function bigArt(lines, x, y, size, colFn, bgFn) {
+  const w = g.measureText('M').width;
+  lines.forEach((l, r) => {
+    const a0 = l.search(/\S/), a1 = l.length - [...l].reverse().join('').search(/\S/);
+    if (a0 < 0) return;
+    if (bgFn && l.replace(/ /g, '').length > 2) for (let k = a0; k < a1; k++) { const b = bgFn(l[k], r, k); if (b !== NONE) { g.fillStyle = PAL[b]; g.fillRect(x + k * w, y + r * size, w + 0.5, size); } }
+    for (let k = a0; k < a1; k++) if (l[k] !== ' ') { g.fillStyle = PAL[colFn(l[k], r)]; g.fillText(l[k], x + k * w, y + r * size); }
+  });
+  return w;
+}
+// the hand: drawn as shapes, not characters (ASCII can't make a convincing hand at this size). Four fingers curled
+// across the front of whatever it holds, the thumb hooked over the top, palm and wrist running down off the screen.
+// u = the size unit (px); (x, y) = the top-left of the fingers.
+const SKIN_RGB = ['#d9a27a', '#b9805d', '#7a4c35', 'rgba(255,235,210,0.35)']; // base, shade, outline, highlight
+function capsule(x, y, w, h, fill, line) {
+  const r = Math.min(w, h) / 2;
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  g.fillStyle = fill; g.fill(); g.strokeStyle = line; g.lineWidth = Math.max(1.5, h * 0.07); g.stroke();
+}
+function drawHand(x, y, u) {
+  const [base, shade, line, hi] = SKIN_RGB;
+  g.beginPath(); // wrist and forearm, angling down off the bottom of the screen
+  g.moveTo(x + 0.6 * u, y + 2.5 * u); g.lineTo(x + 5.6 * u, y + 2.2 * u); g.lineTo(x + 6.8 * u, cv.height + u); g.lineTo(x + 0.4 * u, cv.height + u); g.closePath();
+  g.fillStyle = shade; g.fill(); g.strokeStyle = line; g.lineWidth = Math.max(1.5, u * 0.07); g.stroke();
+  capsule(x - 0.2 * u, y + 0.2 * u, 6.2 * u, 3.4 * u, base, line); // the back of the hand / palm
+  for (let k = 0; k < 4; k++) { // fingers, curled round the front: each a little shorter and set back
+    const fy = y + k * 0.82 * u, fx = x + 0.15 * u + k * 0.12 * u, fw = 5.3 * u - k * 0.35 * u;
+    capsule(fx, fy, fw, 0.95 * u, base, line);
+    g.strokeStyle = hi; g.lineWidth = Math.max(1, u * 0.08); g.beginPath(); g.moveTo(fx + 0.45 * u, fy + 0.22 * u); g.lineTo(fx + fw - 0.6 * u, fy + 0.22 * u); g.stroke(); // light on the top edge
+    g.strokeStyle = shade; g.beginPath(); g.moveTo(fx + fw * 0.62, fy + 0.15 * u); g.lineTo(fx + fw * 0.62, fy + 0.8 * u); g.stroke(); // the knuckle crease
+  }
+  g.save(); g.translate(x + 0.1 * u, y + 0.5 * u); g.rotate(-0.55); // the thumb, hooked over the top
+  capsule(-0.4 * u, -0.5 * u, 3.0 * u, 1.05 * u, base, line);
+  g.strokeStyle = shade; g.beginPath(); g.moveTo(2.0 * u, -0.35 * u); g.lineTo(2.0 * u, 0.4 * u); g.stroke(); // its nail
+  g.restore();
+}
+function drawHeldBig() {
+  const it = heldItem();
+  if (!it || !(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') || fx.skating && it.id === 'skateboard') return;
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), size = Math.round(u * 1.5); // scaled to the screen, not the detail setting
+  const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
+  const hx = Math.round(cv.width * 0.7), hy = cv.height - 4.2 * u + bob; // the top of the fingers
+  const open = it.id === 'umbrella' && rain > 0.2;
+  g.font = size + 'px monospace';
+  const w = g.measureText('M').width;
+  if (open) { // the umbrella, open overhead, seen from underneath: ribs fan out from the hub at the top of the screen
+    // to a scalloped rim that hangs lowest straight ahead; the shaft runs from your fist up to the hub
+    const W = cv.width, H = cv.height, gx = hx + 2.6 * u, hub = [W * 0.56, H * 0.05 + bob * 0.5], ribs = 10, tips = [];
+    for (let k = 0; k <= ribs; k++) { const t = k / ribs * 2 - 1; tips.push([W * (0.5 + t * 0.62), H * (0.36 - t * t * 0.5) + bob * 0.5]); }
+    g.fillStyle = PAL[C(BLUE, 3)]; g.fillRect(0, 0, W, hub[1]); // above the hub the canopy runs on over your head
+    const line = Math.max(1.5, u * 0.09);
+    for (let k = 0; k < ribs; k++) { // the panels: alternating tones, each edge scalloped up toward the hub
+      const [x0, y0] = tips[k], [x1, y1] = tips[k + 1], mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      g.beginPath(); g.moveTo(hub[0], hub[1]); g.lineTo(x0, y0);
+      g.quadraticCurveTo(mx + (hub[0] - mx) * 0.12, my + (hub[1] - my) * 0.22, x1, y1); g.closePath();
+      g.fillStyle = PAL[C(BLUE, k & 1 ? 5 : 3)]; g.fill();
+    }
+    g.strokeStyle = PAL[C(GRAY, 7)]; g.lineWidth = line;
+    for (const [x, y] of tips) { g.beginPath(); g.moveTo(hub[0], hub[1]); g.lineTo(x, y); g.stroke(); } // the ribs
+    g.fillStyle = PAL[C(GRAY, 11)];
+    tips.forEach(([x, y], k) => {
+      g.beginPath(); g.arc(x, y, u * 0.16, 0, Math.PI * 2); g.fill(); // the rib tips
+      const d = fract(T * 1.3 + k * 0.37); // a drip falling off each tip
+      g.fillStyle = PAL[C(BLUE, 10)]; g.fillRect(x - 1, y + u * 0.3 + d * H * 0.25, 2, u * 0.35); g.fillStyle = PAL[C(GRAY, 11)];
+    });
+    g.lineCap = 'round'; // the shaft: dark edge, light core, from your fist up to the hub
+    g.strokeStyle = PAL[C(GRAY, 3)]; g.lineWidth = u * 0.42; g.beginPath(); g.moveTo(gx, hy + u); g.lineTo(hub[0], hub[1]); g.stroke();
+    g.strokeStyle = '#cfcfd8'; g.lineWidth = u * 0.24; g.stroke();
+    g.lineCap = 'butt';
+    g.fillStyle = PAL[C(GRAY, 12)]; g.beginPath(); g.arc(hub[0], hub[1], u * 0.4, 0, Math.PI * 2); g.fill(); // the hub
+  } else if (it.id === 'umbrella') { // furled: the shaft up out of your fist into the wrapped canopy, strap, tip
+    g.save(); g.translate(hx + 2.6 * u, hy + u); g.rotate(-0.1); // leaning a touch to the left; up is -y
+    g.lineCap = 'round';
+    g.strokeStyle = PAL[C(GRAY, 3)]; g.lineWidth = u * 0.42; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -13 * u); g.stroke();
+    g.strokeStyle = '#cfcfd8'; g.lineWidth = u * 0.24; g.stroke(); // the shaft (its tip pokes out the top)
+    g.beginPath(); g.moveTo(-0.3 * u, -3 * u); // the wrapped canopy: bunched at the bottom, swelling, tapering to the tip
+    g.bezierCurveTo(-1.6 * u, -4.2 * u, -1.1 * u, -8 * u, -0.12 * u, -12.3 * u); g.lineTo(0.12 * u, -12.3 * u);
+    g.bezierCurveTo(1.1 * u, -8 * u, 1.6 * u, -4.2 * u, 0.3 * u, -3 * u); g.closePath();
+    g.fillStyle = PAL[C(BLUE, 6)]; g.fill(); g.strokeStyle = PAL[C(BLUE, 2)]; g.lineWidth = Math.max(1.5, u * 0.08); g.stroke();
+    g.strokeStyle = PAL[C(BLUE, 9)]; g.lineWidth = Math.max(1, u * 0.06);
+    for (const k of [-0.5, 0.15, 0.7]) { g.beginPath(); g.moveTo(k * 0.5 * u, -3.3 * u); g.quadraticCurveTo(k * 1.4 * u, -6.5 * u, 0, -12 * u); g.stroke(); } // the folds
+    g.fillStyle = PAL[C(GRAY, 12)]; g.fillRect(-1.15 * u, -5.6 * u, 2.3 * u, 0.4 * u); // the strap
+    g.lineCap = 'butt'; g.restore();
+  } else {
+    const [art, col] = HAND[it.id] || HAND.book, artW = Math.max(...art.map(l => l.length));
+    // centred over the fingers, the bottom of it tucked behind them
+    bigArt(art, hx + 2.6 * u - artW * w / 2, hy - (art.length - 0.7) * size, size, col, () => C(GRAY, 1));
+  }
+  drawHand(hx, hy, u);
+  g.font = FS + 'px monospace';
+}
+
 // ---- the hotbar and the effects you're under, bottom left
 function hotbar() {
   if (mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze) return;
@@ -80,33 +161,17 @@ function hotbar() {
   const y = cv.height - FS * 2 - 10;
   inv.forEach((it, k) => {
     const s = `${k + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
-    g.fillStyle = k === held ? 'rgba(255,184,77,0.35)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
-    g.fillStyle = k === held ? '#fff' : '#bbb'; g.fillText(s, x + 6, y + 4);
+    g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
+    g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
   const tags = [fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && 'music on'].filter(Boolean);
-  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = '#ffb84d'; g.fillText(s, 12, y - FS - 7); }
+  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
 // ---- shop menu and inventory: small panels over a frozen game, keyboard or mouse
 let shopEl = null, invEl = null, shopCtx = null;
-function panel(id) {
-  const el = document.createElement('div');
-  el.id = id;
-  el.innerHTML = `<style>
-    #${id} { position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); font: 13px/1.5 monospace; color: rgba(255,255,255,0.85); }
-    #${id} .panel { width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; padding: 18px 20px; background: rgba(10,6,10,0.94); border: 1px solid rgba(255,255,255,0.15); }
-    #${id} h1 { margin: 0 0 4px; font-size: 16px; font-weight: normal; letter-spacing: 3px; color: #fff; }
-    #${id} .sub { margin: 0 0 12px; color: rgba(255,255,255,0.5); }
-    #${id} button { display: grid; grid-template-columns: 1.6em 1fr auto; gap: 8px; width: 100%; box-sizing: border-box; margin: 5px 0; padding: 7px 10px; text-align: left; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); cursor: pointer; }
-    #${id} button:hover, #${id} button:focus-visible { background: rgba(255,184,77,0.18); border-color: rgba(255,184,77,0.6); outline: none; }
-    #${id} button[disabled] { opacity: 0.4; cursor: default; }
-    #${id} .k { color: rgba(255,184,77,0.9); }
-    #${id} .hint { margin: 12px 0 0; color: rgba(255,255,255,0.45); }
-  </style><div class="panel"></div>`;
-  document.body.appendChild(el);
-  return el;
-}
+const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
   el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
   for (const k in K) K[k] = 0;
@@ -118,9 +183,12 @@ const panelOpen = () => [shopEl, invEl, storeEl].some(el => el && el.style.displ
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span>${fmt$(it.price)}</span></button>`; }).join('');
-  showPanel(shopEl, `<h1>${title}</h1><p class="sub">You have ${fmt$(money)} &middot; ${inv.length}/${INV_SIZE} carried</p>${rows_}<p class="hint">1-${stock.length} or click to buy &middot; E / Esc to close</p>`);
-  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'); if (b) shopBuy(b.dataset.buy); };
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate);
+    return `<button class="item" data-sell="${k}" ${p ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+  showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
+    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''} &middot; E / Esc close</p>`);
+  shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); };
 }
 function shopBuy(id) {
   const [ok, line] = buy(id);
@@ -128,11 +196,15 @@ function shopBuy(id) {
   if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor)) say(`${line} That's the one they wanted.`, 4);
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
 }
+function shopSell(k) {
+  say(sellSlot(k, SELL_RATE[shopCtx.title])[1], 3);
+  openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor);
+}
 const closeShop = () => hidePanel(shopEl);
 function openInventory() {
   invEl = invEl || panel('inventory');
-  const rows_ = inv.length ? inv.map((it, k) => `<button data-slot="${k}"><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' (in hand)' : ''}</span><span>${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub">Nothing. Shops sell things.</p>';
-  showPanel(invEl, `<h1>CARRYING</h1><p class="sub">${fmt$(money)} &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">click or 1-${INV_SIZE}: hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  const rows_ = inv.length ? inv.map((it, k) => `<button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">1-${INV_SIZE} hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { held = +b.dataset.slot; openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
@@ -141,11 +213,11 @@ let storeEl = null;
 function openStorage() {
   storeEl = storeEl || panel('storage');
   const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
-  const carried = inv.length ? inv.map((it, k) => `<button data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span>store &rarr;</span></button>`).join('') : '<p class="sub">Nothing in your hands.</p>';
-  const unit = stored.length ? stored.map((it, k) => `<button data-take="${k}"><span class="k">${k < 9 ? '&#8679;' + (k + 1) : ''}</span><span>${item(it)}</span><span>&larr; take</span></button>`).join('') : '<p class="sub">Empty.</p>';
-  showPanel(storeEl, `<h1>STORAGE UNIT</h1><p class="sub">The same unit at every storage place in town &middot; ${stored.length}/${STORE_SIZE}</p>
-    <h2 style="margin:14px 0 6px;font-size:11px;font-weight:normal;letter-spacing:2px;color:rgba(255,255,255,0.5)">CARRYING ${inv.length}/${INV_SIZE}</h2>${carried}
-    <h2 style="margin:14px 0 6px;font-size:11px;font-weight:normal;letter-spacing:2px;color:rgba(255,255,255,0.5)">IN THE UNIT</h2>${unit}
+  const carried = inv.length ? inv.map((it, k) => `<button class="item" data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
+  const unit = stored.length ? stored.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
+  showPanel(storeEl, `<h1>Storage unit</h1><p class="sub">The same unit at every storage place in town</p>
+    <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
+    <h2>in the unit ${stored.length}/${STORE_SIZE}</h2>${unit}
     <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
@@ -164,6 +236,7 @@ function panelKey(e) {
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
   if (e.code === 'Escape' || e.code === 'KeyE' && shop || e.code === 'KeyI' && !shop) { shop ? closeShop() : closeInventory(); return true; }
+  if (shop && n && e.shiftKey && SELL_RATE[shopCtx.title]) { shopSell(n[1] - 1); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
   if (!shop && n && inv[n[1] - 1]) { held = n[1] - 1; openInventory(); return true; }
   if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
