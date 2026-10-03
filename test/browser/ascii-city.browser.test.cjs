@@ -663,3 +663,18 @@ test('a shop you\'ve broken into: E means the till only at the counter, the way 
   await page.evaluate(() => { px = 1.6; py = room.H / 2; });
   if (await page.evaluate(() => !nearKeeper() && !nearExit())) assert.strictEqual(await page.evaluate(() => promptText()), 'G: take something');
 }));
+
+test('smoke hangs in the air: a drag leaves puffs in front of you, gone in seconds outside and lingering indoors', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 15; mode = 'walk'; haze.length = 0;
+    cigTip = 1; stepHaze(0.05); for (let k = 0; k < 20; k++) stepHaze(0.05); // breathe it out
+    const out = haze.length, ahead = haze.every(p => Math.cos(a) * rel(p.x - px) + Math.sin(a) * rel(p.y - py) > 0);
+    for (let k = 0; k < 200; k++) stepHaze(0.05); // ten seconds
+    const outLater = haze.length;
+    enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a], line: '' }, [6, 6, -Math.PI / 2]);
+    cigTip = 0; stepHaze(0.05); cigTip = 1; for (let k = 0; k < 21; k++) stepHaze(0.05);
+    const inside = haze.length; for (let k = 0; k < 200; k++) stepHaze(0.05);
+    return [out > 0, ahead, outLater, inside > 0, haze.length === inside];
+  });
+  assert.deepStrictEqual(r, [true, true, 0, true, true]);
+}));

@@ -132,6 +132,7 @@ function loop(t) {
   stepLaundry();
   stepEvents(dt);
   stepGardens(dt);
+  stepHaze(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();

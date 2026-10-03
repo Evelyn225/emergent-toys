@@ -284,6 +284,7 @@ function drawVapeCloud() {
       cloudPuffs.push([cv.width / 2 + (Math.random() - 0.5) * cw * 6, cv.height - FS * 2, Math.cos(ang) * sp * cw, Math.sin(ang) * sp * FS * 0.8, 1 + big * 0.5]);
     }
     say(fx.cloud > 2.5 ? 'You blow out an enormous cloud of mango.' : fx.cloud > 1.2 ? 'A fat cloud of mango vapour rolls out.' : 'A little puff of mango.', 2.5);
+    hazeExhale(fx.cloud, 'vape'); // (and it hangs in the air)
     fx.cloud = 0; if (actx) sfxUse('drag');
   }
   if (!cloudPuffs.length) return;
