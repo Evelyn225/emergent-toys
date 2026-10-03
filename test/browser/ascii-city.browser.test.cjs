@@ -626,3 +626,19 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
   await page.keyboard.press('KeyE');
   assert.strictEqual(await page.evaluate(() => game && game.g.id), 'garden');
 }));
+
+test('on the board the camera sits behind you (V for your own eyes); shut-down shops say so; each district paints its own walls', () => withPage(async page => {
+  await page.evaluate(() => { tod = 13; weather = 'clear'; fx.skating = true; mode = 'walk'; px = 12 * 8 + 1; py = 10 * 8 + 4; a = Math.PI / 2; });
+  await page.waitForTimeout(200);
+  assert.deepStrictEqual(await page.evaluate(() => [!!skater, skater && skater.back > 0.05, px, py]), [true, true, 12 * 8 + 1, 10 * 8 + 4], 'watching from behind; you stay where you are');
+  await page.keyboard.press('KeyV');
+  await page.waitForTimeout(100);
+  assert.strictEqual(await page.evaluate(() => skater), null, 'V: back to your own eyes');
+  await page.evaluate(() => { fx.skating = false; });
+  const shut = await page.evaluate(() => { for (let k = 0; k < N * N; k++) { const sh = SHOP[k], x = k % N, y = k / N | 0; if (sh && sh.kind === SHOP_SHUT && !map[idx(x, y + 1)] && ROAD[idx(x, y + 1)]) return [x, y]; } });
+  await page.evaluate(([x, y]) => { px = x + 0.5; py = y + 1.25; a = -Math.PI / 2; pitch = 0; }, shut);
+  await page.waitForTimeout(150);
+  assert.match(await page.evaluate(() => promptText()), /closed down for good/);
+  const themes = await page.evaluate(() => [MURAL_THEMES.chinatown.art.includes('dragon'), MURAL_THEMES.industrial.chance > MURAL_THEMES.downtown.chance * 4]);
+  assert.deepStrictEqual(themes, [true, true]);
+}));

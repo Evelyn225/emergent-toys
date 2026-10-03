@@ -62,6 +62,7 @@ let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet =
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
+let skateThird = true, skater = null; // on the board: watch yourself from behind (V toggles); where you really are while the camera's back there
 const K = {}; // keys held, by KeyboardEvent.code
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
@@ -257,6 +258,7 @@ function shopOf(seed, dist) {
   let kind = (seed * 7919 | 0) % 4;
   const apts = dist === 'brownstones' ? 0.75 : dist === 'industrial' ? 0.15 : 0.5;
   if (kind === SHOP_SHUT && fract(seed * 331) < apts) kind = SHOP_APTS;
+  if (kind === SHOP_SHUT && fract(seed * 53) < 0.5) kind = SHOP_LIT; // (not so many boarded-up shops)
   if (dist === 'brownstones' && kind !== SHOP_APTS && fract(seed * 77) < 0.5) kind = SHOP_APTS; // mostly front doors
   if (dist === 'shotengai' && kind !== SHOP_PRODUCE && fract(seed * 57) < 0.8) kind = fract(seed * 91) < 0.4 ? SHOP_NEON : SHOP_LIT; // shops, shops, shops
   const local = DIST_WORDS[dist], words = kind === SHOP_PRODUCE ? PRODUCE : local && fract(seed * 13) < 0.7 ? local : WORDS;
@@ -3339,6 +3341,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
     const fs = fract(u * 2);
     if (fs < 0.08) return set(i, '|', C(GRAY, L));
+    if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
     if (!open) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // roll-down shutter: vacant, or shut for the night
     if (z > 0.28) return set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
@@ -3895,11 +3898,42 @@ function craneCell(i, u, z, du, dz, L, k, p) {
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
                deck: true, slabFace, slabEdge };
 
-// ===== graffiti: murals painted across some buildings' upper floors (more on the docks, fewer downtown), and the tags
+// ===== graffiti: murals painted across some buildings' upper floors, each district in its own style (rust and anchors on
+// the docks, dragons in Chinatown, flowers in the Brownstones, a lone stencil downtown), quick tags low on the shutters, and the tags
 // you spray yourself with a can from the hardware store. Police don't like it: spraying is vandalism, and if a cop
 // sees you, you're wanted. Your tags stay where you put them (save.js keeps them).
-const MURAL_WORDS = ['ASCII', 'DREAM', 'LOVE', 'CITY', 'HOPE', 'WAVE', 'NOW', 'YES', 'GLOW', 'ZAP', 'RISE', 'FREE'];
-const MURAL_CHANCE = { industrial: 0.16, brownstones: 0.06, midtown: 0.07, chinatown: 0.04, downtown: 0.025 };
+// each district paints its own: a palette, words, the pictures it likes, how often a wall gets a mural, how often a
+// shutter or a door gets a quick tag
+const MURAL_ART = {
+  anchor: [' __O__ ', '   |   ', '\\  |  /', ' \\_|_/ '],
+  ship: ['   |\\   ', '   | \\  ', '   |__\\ ', '___|____', '\\______/'],
+  wild: ['>>-->  ', '  <==<<'],
+  dragon: ['   /\\_/\\___   ', '  ( @ @     \\__', '   >  ^  /\\/\\ \\', '  /_/\\_/     \\/'],
+  koi: ['    ___    ', '><(( o )>  ', '    ^^^    '],
+  lantern: ['  _|_  ', ' (###) ', ' (###) ', '  `|`  '],
+  flowers: [' @  *  @ ', ' |  |  | ', '\\|/\\|/\\|/'],
+  sun: [' \\ | / ', '-- O --', ' / | \\ '],
+  heart: [' _   _ ', '( \\_/ )', ' \\   / ', '  \\_/  '],
+  cat: ['  /\\_/\\  ', ' ( o.o ) ', '  > ^ <  '],
+  eyes: [' ___   ___ ', '( @ ) ( @ )', ' ---   --- '],
+  wave: ['  .-~~-.   ', ' ~      ~. ', '~~~~~~~~~~~'],
+  fish: ['><(((o>', '  <o)))><'],
+  balloon: ['  O    ()', ' /|\\   | ', ' / \\   | '],
+  checker: ['#.#.#.#', '.#.#.#.', '#.#.#.#'],
+};
+const MURAL_THEMES = {
+  industrial: { chance: 0.08, tags: 0.3, words: ['DOCKS', 'RUST', 'HAUL', 'STEEL', 'PORT', 'GRIT'], art: ['anchor', 'ship', 'wild', 'wild'], styles: [4, 1, 3], pals: [[ORANGE, BRICK, YEL], [GRAY, ORANGE, CYAN], [RED, YEL, GRAY]] },
+  chinatown: { chance: 0.02, tags: 0.08, words: ['LUCK', 'JADE', 'TEA', 'FORTUNE'], art: ['dragon', 'koi', 'lantern'], styles: [0, 2], pals: [[RED, YEL, ORANGE], [RED, GREEN, YEL]] },
+  brownstones: { chance: 0.03, tags: 0.1, words: ['PEACE', 'HOME', 'BLOCK', 'LOVE'], art: ['flowers', 'sun', 'heart'], styles: [0, 3, 4], pals: [[GREEN, YEL, MAG], [BLUE, YEL, WHITE], [ORANGE, GREEN, CYAN]] },
+  midtown: { chance: 0.035, tags: 0.15, words: ['POP', 'NOW', 'WOW', 'CITY', 'ZAP'], art: ['checker', 'eyes', 'heart'], styles: [5, 2, 3], pals: [[MAG, CYAN, YEL], [RED, BLUE, YEL], [CYAN, MAG, WHITE]] },
+  downtown: { chance: 0.01, tags: 0.03, words: ['LOOK UP', 'RISE', 'DREAM'], art: ['balloon'], styles: [6], pals: [[GRAY, WHITE, RED]] },
+  shotengai: { chance: 0.03, tags: 0.18, words: ['NEKO', 'KAWAII', 'GO GO'], art: ['cat', 'eyes', 'cat'], styles: [5, 1], pals: [[MAG, CYAN, WHITE], [YEL, MAG, BLUE]] },
+  waterfront: { chance: 0.03, tags: 0.12, words: ['SURF', 'WAVE', 'SUN', 'TIDE'], art: ['wave', 'fish', 'sun'], styles: [1, 0], pals: [[CYAN, BLUE, YEL], [BLUE, WHITE, ORANGE]] },
+};
+const themeAt = (mx, my) => MURAL_THEMES[districtAt(mx, my)] || MURAL_THEMES.midtown;
+// the quick tags on shutters and doors: a name, written fast, a flourish
+const STREET_TAGS = ['KAT', 'REX', 'ZEN', 'MOE', 'DUKE', 'JINX', 'NOX', 'VEX', 'SKY', 'BOO', 'ACE', 'OZ', 'RAZE', 'FLY'];
+const TAG_FLOURISH = ['^^^', '~~~', '->', '*', '!!', '<3', '==='];
 const tags = []; // { cell, face: 'N' | 'S' | 'E' | 'W', u (along the wall, world), z (height, cells), design }
 const TAG_MAX = 60, TAG_W = 0.26, TAG_H = 0.12;
 let tagIndex = new Map(); // cell -> its tags, for the facade to check quickly
@@ -3913,40 +3947,84 @@ const TAG_ART = [
   { art: [' _   _ ', '( \\_/ )', ' \\   / ', '  \\_/  '], col: () => RED },
   { art: ['  /\\_/\\ ', ' ( o.o )', '  > ^ < '], col: (c) => c === 'o' ? GREEN : ORANGE },
   { art: ['  ___ ', ' (o o)', '  |=| ', ' /|_|\\'], col: (c) => c === 'o' ? WHITE : MAG },
+  { art: [' \\|||/ ', ' |o o| ', '  \\_/  '], col: (c) => c === 'o' ? WHITE : YEL }, // a crowned face
+  { art: ['   /|  ', '  / |  ', ' /__|_ ', '    |/ '], col: () => YEL }, // a lightning bolt
+  { art: ['  .--.  ', ' ( @@ ) ', "  '--'  "], col: (c) => c === '@' ? CYAN : BLUE }, // an eye
+  { art: ['  *  ', '*****', ' * * '], col: () => MAG }, // a star
 ];
-const TAG_WORDS = ['ACE', 'ZAP', 'YO', 'KAT', 'REX', 'OK', 'WOW', 'RAD'];
+const TAG_WORDS = ['ACE', 'ZAP', 'YO', 'KAT', 'REX', 'OK', 'WOW', 'RAD', 'BAM', 'HEY', 'GO', 'ART'];
 const designCount = TAG_ART.length + TAG_WORDS.length;
 
 // a mural on this face? deterministic per face, so it's always there
+const paintable = k => { const sh = SHOP[k]; return sh && !sh.base && !sh.aqua && !sh.glass && !(STY[k] >= 3 && STY[k] <= 6) && !(STY[k] >= 11 && STY[k] <= 13); };
 function muralSeed(k, mx, my, face) {
-  const sh = SHOP[k];
-  if (!sh || sh.base || sh.aqua || sh.glass || STY[k] >= 3 && STY[k] <= 6 || STY[k] >= 11 && STY[k] <= 13) return -1;
+  if (!paintable(k)) return -1;
   const fx_ = face === 'E' ? 1 : face === 'W' ? -1 : 0, fy = face === 'S' ? 1 : face === 'N' ? -1 : 0;
   if (map[idx(mx + fx_, my + fy)]) return -1; // a wall nobody can see
   const h = hash(mx * 3 + fx_, my * 3 + fy, 601);
-  return h < (MURAL_CHANCE[districtAt(mx, my)] || 0.05) ? hash(mx, my, 602) : -1;
+  return h < themeAt(mx, my).chance ? hash(mx, my, 602) : -1;
 }
-// a mural cell: lu across the face (0..1, left to right on screen), lz up it (0..1)
-function muralCell(i, lu, lz, seed, L) {
-  const style = seed * 5 | 0, lit = Math.max(L * 0.9, 3), pal = [[MAG, ORANGE, YEL], [BLUE, CYAN, GREEN], [RED, MAG, BLUE], [GREEN, YEL, ORANGE], [CYAN, MAG, WHITE]][(seed * 37 | 0) % 5];
-  // the ground: bands, waves, a sunburst, blobs or mountains
+// a mural cell: lu across the face (0..1, left to right on screen), lz up it (0..1); du, dz: one screen cell's size in those
+function muralCell(i, lu, lz, seed, L, th, du, dz) {
+  const sts = th.styles, style = sts[(seed * 5 | 0) % sts.length], lit = Math.max(L * 0.9, 3), pal = th.pals[(seed * 37 | 0) % th.pals.length];
+  // the ground: bands, waves, a sunburst, blobs, mountains, a pop-art dot grid, or (downtown) bare wall for a stencil
   const bgOf = () => {
     if (style === 0) return pal[Math.floor(lz * 3) % 3]; // sunset bands
     if (style === 1) return pal[Math.floor(lz * 6 + Math.sin(lu * 9) * 0.6) % 3]; // waves
     if (style === 2) return pal[Math.floor((Math.atan2(lz - 0.15, lu - 0.5) + 3.2) * 3) % 3]; // a sunburst
     if (style === 3) return pal[noise(lu * 4, lz * 4, seed * 50) * 3 | 0]; // blobs
+    if (style === 5) return Math.hypot(fract(lu * 12) - 0.5, fract(lz * 8) - 0.5) < 0.3 ? pal[1] : pal[0]; // dots
+    if (style === 6) return GRAY; // a plain wall
     return lz < 0.35 + 0.25 * Math.abs(fract(lu * 2.5) - 0.5) ? pal[0] : lz < 0.7 ? pal[1] : pal[2]; // mountains
   };
-  // over it, a word in big bubble letters with a dark outline
-  const word = MURAL_WORDS[(seed * 911 | 0) % MURAL_WORDS.length], n = word.length * 4 - 1;
-  const gx = Math.floor((lu - 0.06) / 0.88 * n), gy = Math.floor((0.72 - lz) / 0.4 * 5), li = Math.floor(gx / 4), lx = gx % 4;
-  const on = (x, y) => { const l = Math.floor(x / 4), xx = x % 4; return x >= 0 && x < n && xx < 3 && glyphOn(word[l], xx, y); };
-  if (gx >= 0 && gx < n && gy >= -1 && gy <= 5) {
-    if (lx < 3 && on(gx, gy)) { BG[i] = C(WHITE, lit * 0.8); return set(i, '#', C(pal[(li + 1) % 3], lit)); }
-    if (on(gx - 1, gy) || on(gx + 1, gy) || on(gx, gy - 1) || on(gx, gy + 1)) { BG[i] = C(GRAY, 1); return set(i, ' ', 0); } // the outline
+  const pick_ = (seed * 7 | 0) % 3; // over it: a picture (most of the time) or a word in big bubble letters
+  if (pick_ > 0) {
+    const art = MURAL_ART[th.art[(seed * 911 | 0) % th.art.length]], W = Math.max(...art.map(l => l.length)), H = art.length;
+    const q = (lu - 0.12) / 0.76 * W, r = (0.82 - lz) / 0.64 * H, cx = Math.floor(q), cy = Math.floor(r);
+    if (cx >= 0 && cx < W && cy >= 0 && cy < H) {
+      const ch = art[cy][cx];
+      if (ch && ch !== ' ') { // a painted stroke: the cell filled in, the character once in its middle
+        BG[i] = style === 6 ? C(GRAY, 0.6) : C(pal[(cx + cy) % 3 === 0 ? 2 : 1], lit * 0.75); // (downtown: black stencil paint)
+        const mid = oneCell((fract(q) - 0.5) * 0.76 / W, du) && oneCell((fract(r) - 0.5) * 0.64 / H, dz);
+        return set(i, mid || 0.76 / W < du * 1.5 ? ch : ' ', C(WHITE, style === 6 ? lit * 0.4 : lit));
+      }
+    }
+  } else {
+    const word = th.words[(seed * 911 | 0) % th.words.length], n = word.length * 4 - 1;
+    const gx = Math.floor((lu - 0.06) / 0.88 * n), gy = Math.floor((0.72 - lz) / 0.4 * 5), li = Math.floor(gx / 4), lx = gx % 4;
+    const on = (x, y) => { const l = Math.floor(x / 4), xx = x % 4; return x >= 0 && x < n && xx < 3 && glyphOn(word[l], xx, y); };
+    if (gx >= 0 && gx < n && gy >= -1 && gy <= 5) {
+      if (lx < 3 && on(gx, gy)) { BG[i] = C(WHITE, lit * 0.8); return set(i, '#', C(pal[(li + 1) % 3], lit)); }
+      if (on(gx - 1, gy) || on(gx + 1, gy) || on(gx, gy - 1) || on(gx, gy + 1)) { BG[i] = C(GRAY, 1); return set(i, ' ', 0); } // the outline
+    }
   }
+  if (style === 6) return false; // (a stencil on bare wall: the wall shows round it)
   BG[i] = C(bgOf(), lit * 0.45);
-  return set(i, hash(Math.floor(lu * 40), Math.floor(lz * 40), seed * 99) > 0.93 ? '*' : ' ', C(WHITE, lit)); // spatter
+  return set(i, hash(Math.floor(lu * 40), Math.floor(lz * 40), seed * 99) > 0.93 ? '*' : ' ', C(WHITE, lit)), true; // spatter
+}
+// a quick tag's letters, sprayed straight on the wall: only the letters themselves (the wall shows between them)
+function tagText(i, u, uStep, z, d, text, u0, z0, col) {
+  const cw_ = 0.028, dz = d / projY;
+  if (Math.abs(z - z0) > Math.max(dz, 0.012) / 2) return false;
+  const q = (u - u0) / cw_ + text.length / 2, p = Math.floor(q);
+  if (p < 0 || p >= text.length || text[p] === ' ') return false;
+  if (!(uStep >= cw_ || oneCell((fract(q) - 0.5) * cw_, uStep)) || !oneCell(z - z0, dz)) return false;
+  BG[i] = bgAt(FACADE_BG[STY[WH.k]], day * 3 * (0.45 + 0.55 * (1 - d / vis)), d); // (the wall's own colour round the letter)
+  return set(i, text[p], col), true;
+}
+// street tags on this face: up to two quick names low down, near the corners (clear of the door), in the district's colours
+function streetTags(k, mx, my, face) {
+  if (!paintable(k)) return null;
+  const fx_ = face === 'E' ? 1 : face === 'W' ? -1 : 0, fy = face === 'S' ? 1 : face === 'N' ? -1 : 0, th = themeAt(mx, my), out = [];
+  if (map[idx(mx + fx_, my + fy)]) return null;
+  for (const s of [0, 1]) {
+    const h = hash(mx * 5 + fx_ + s * 17, my * 5 + fy, 611);
+    if (h >= th.tags) continue;
+    const word = STREET_TAGS[hash(mx + s, my, 612) * STREET_TAGS.length | 0].replace(/E/g, hash(mx, my + s, 613) > 0.6 ? '3' : 'E').replace(/A/g, hash(mx, my + s, 614) > 0.6 ? '4' : 'A');
+    out.push({ word, at: s ? 0.78 + hash(mx, my + s, 615) * 0.1 : 0.12 + hash(mx, my + s, 615) * 0.1, z: 0.12 + hash(mx + s, my, 616) * 0.12,
+      col: th.pals[hash(mx, my, 617) * th.pals.length | 0][s + 1], fl: TAG_FLOURISH[hash(mx + s, my + s, 618) * TAG_FLOURISH.length | 0] });
+  }
+  return out.length ? out : null;
 }
 // a tag cell: q across it (0..1, left to right), r down it (0..1)
 function tagCell(i, q, r, t, L) {
@@ -3969,11 +4047,21 @@ function graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     const q = rel(wc - t.u) / TAG_W * flip + 0.5, r = (t.z + TAG_H / 2 - z) / TAG_H;
     if (tagCell(i, q, r, t, L)) return true;
   }
+  if (z < 0.33 && d < 6) { // the quick tags low down
+    WH.k = k;
+    const st = streetTags(k, mx, my, face);
+    if (st) for (const t of st) {
+      const lu = flip > 0 ? fract(wc) : 1 - fract(wc), u0 = u + (t.at - lu); // (the tag's centre, in u)
+      if (Math.abs(lu - t.at) > 0.12) continue;
+      if (tagText(i, u, uStep, z, d, t.word, u0, t.z, C(t.col, Math.max(L * 1.1, 5)))) return true;
+      if (tagText(i, u, uStep, z, d, t.fl, u0 + 0.02, t.z - 0.03, C(t.col, Math.max(L, 4)))) return true;
+    }
+  }
   if (z < 0.45 || z > Math.min(h - 0.1, 1.9)) return false;
   const seed = muralSeed(k, mx, my, face);
   if (seed < 0) return false;
-  const f = fract(wc);
-  return muralCell(i, flip > 0 ? f : 1 - f, (z - 0.45) / (Math.min(h - 0.1, 1.9) - 0.45), seed, L), true;
+  const f = fract(wc), top = Math.min(h - 0.1, 1.9);
+  return muralCell(i, flip > 0 ? f : 1 - f, (z - 0.45) / (top - 0.45), seed, L, themeAt(mx, my), uStep, d / projY / (top - 0.45)) !== false;
 }
 
 // ---- spraying: hold the can, face a wall up close, Q
@@ -4022,6 +4110,7 @@ function citySprites() {
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
+  if (skater) drawSkater();
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
@@ -6727,10 +6816,10 @@ function drawDeck(x, rx, ry, t0, t1) {
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
-      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
-  eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
+      : skater ? 0.25 : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
+  eye += skater ? 0 : eyeLift() * (mode === 'room' ? 1 : 0.1); // (the camera behind you doesn't jump when you do) // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
-  hor = (rows >> 1) + pitch * rows + shake() | 0;
+  hor = (rows >> 1) + (pitch - (skater ? 0.16 : 0)) * rows + shake() | 0; // (looking down a little at yourself on the board)
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
   for (let x = 0; x < cols; x++) {
@@ -6970,7 +7059,7 @@ function promptText() {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
-    if (sh.kind === SHOP_SHUT) return 'Closed.';
+    if (sh.kind === SHOP_SHUT) return `${sh.word}: closed down for good (FOR LEASE)`;
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
     return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
@@ -7300,7 +7389,7 @@ function interact() {
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
-    if (sh.kind === SHOP_SHUT) return say('Closed.');
+    if (sh.kind === SHOP_SHUT) return say(pick(['Closed down for good. A FOR LEASE sign on the shutter.', 'Shuttered for good. The FOR LEASE sign has a phone number nobody answers.', 'Gone out of business. Just the old sign left.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
     if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [lookHit.mx, lookHit.my] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
@@ -8266,7 +8355,7 @@ function drawHeldBig() {
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
-  if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
+  if (!it || !onFoot || skater || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
@@ -8931,9 +9020,10 @@ function drawBoard3D() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
-  const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob, cz = 1.15; // the board lifts with you (and a bit more)
+  const cy = skater ? eye * 10 - body.z - 0.09 : 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
+  const cz = skater ? skater.back * 10 : 1.15; // a few metres ahead when you're watching from behind
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
-  const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = rows / 2;
+  const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
   const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
   // a point on the board (u along, v across, h up) to the screen
   const plot = (u, v, h, ch, col, bg) => {
@@ -8961,6 +9051,18 @@ function drawBoard3D() {
     for (let v = -0.09; v <= 0.09; v += 0.01) plot(tu, v, -BOARD_T / 2 - 0.03, '-', C(GRAY, 12), C(GRAY, 3));
     for (const wv of [-0.1, 0.1]) for (let dh = 0; dh < 0.05; dh += 0.01) plot(tu, wv, -BOARD_T / 2 - 0.035 - dh, 'O', C(WHITE, 15), C(GRAY, 4));
   }
+}
+
+// you, seen from behind on the board: knees bent riding, tucked in the air, arms out for balance
+const SKATER_ART = {
+  ride: pad(['   ___   ', '  /%%%\  ', '  \%%%/  ', '  _|#|_  ', ' /#####\ ', '//#####\\', '"|#####|"', '  |###|  ', '  |/ \|  ', '  /   \  ', ' /     \ ', '[]     []']),
+  air: pad(['"  ___  "', '\\/%%%\//', '  \%%%/  ', '  _|#|_  ', '  |###|  ', '  |###|  ', '  |###|  ', '  |###|  ', '  /| |\  ', ' |_| |_| ', '         ', '         ']),
+};
+function drawSkater() {
+  const [vx, vy] = R(skater.x, skater.y), moving = K.KeyW || K.KeyS;
+  const art = body.z > 0.05 ? SKATER_ART.air : SKATER_ART.ride, shirt = fx.fresh > 0 ? CYAN : RED;
+  drawArt(vx, vy, body.z * 0.1 + 0.01, 0.075, 0.17 - body.crouch * 0.03 + (moving ? Math.sin(T * 4) * 0.002 : 0), art,
+    (c, row, L) => C(row < 3 ? BRICK : c === '"' ? SKIN : row < 7 ? shirt : c === '[' || c === ']' ? WHITE : BLUE, Math.max(L, 7))); // hair, shirt, jeans, sneakers
 }
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
 // your cars are parked), kept in localStorage every few seconds and when you leave. Not saved: where you are, the
@@ -9024,6 +9126,7 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && me) third = !third;
+  else if (e.code === 'KeyV' && skatingNow()) { skateThird = !skateThird; say(skateThird ? 'Camera: behind you' : 'Camera: your eyes', 1.2); }
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-6])$/.exec(e.code);
@@ -9146,9 +9249,14 @@ function loop(t) {
     if (room.rideT <= 0) arriveAt(room.dest);
   }
   chaseOn = !!me && third;
+  skater = skatingNow() && skateThird && !sleep ? { x: px, y: py, back: 0.34 } : null;
   if (chaseOn) { // render from behind the car, then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+  } else if (skater) { // skating: from a few metres behind you, so you can watch your tricks
+    const bx = Math.cos(a), by = Math.sin(a);
+    while (skater.back > 0.08 && !free(px - bx * skater.back, py - by * skater.back)) skater.back -= 0.02;
+    px -= bx * skater.back; py -= by * skater.back; render(dt); [px, py] = [skater.x, skater.y];
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze);
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
@@ -9274,6 +9382,7 @@ function touchActions() {
     if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
+    if (skatingNow()) out.push(['Camera', 'KeyV', 'pop']);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push(['Jump', 'Space', 'jump']);
   }

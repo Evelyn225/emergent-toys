@@ -63,6 +63,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
     const fs = fract(u * 2);
     if (fs < 0.08) return set(i, '|', C(GRAY, L));
+    if (sh.kind === SHOP_SHUT && wallText(i, u, uStep, z, d, 'FOR LEASE', Math.floor(u) + 0.5, 0.17, 0.05, 0.05, C(RED, Math.max(L, 6)), C(WHITE, Math.max(L * 0.5, 3)))) return; // closed down for good
     if (!open) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // roll-down shutter: vacant, or shut for the night
     if (z > 0.28) return set(i, '/', C(fract(u * 8) < 0.5 ? sh.neon : WHITE, L)); // awning
     if (sh.kind === SHOP_PRODUCE && z < 0.08) // crates of fruit out front
