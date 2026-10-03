@@ -191,3 +191,14 @@ test('jailbreak: there is a way past the guard, and walking straight into his li
   const r = ev(`(() => { for (let t = 0; t < 46 && !g.over; t += 0.05) g.step(0.05, { up: 1 }); return [g.over, g.success].join(); })()`);
   assert.strictEqual(r, 'true,false', 'charging out gets you caught');
 });
+
+test('tapper: pour to the line and let go to slide a beer; hold too long and it spills', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.tapper(() => 0)'); // every customer on the first bar
+  // pour a full mug and let go, again and again, at the first customer's bar
+  const served = ev(`(() => { let held = 0; for (let k = 0; k < 600 && !g.over; k++) { const s = g.state(); const pour = s.fill < 0.95;
+    g.step(1 / 60, pour ? { act: 1 } : {}); } return g.score; })()`);
+  assert.ok(served >= 3, 'served ' + served);
+  ev('var g = GAMES.tapper(() => 0)');
+  assert.strictEqual(ev('(() => { for (let k = 0; k < 120; k++) g.step(1 / 60, { act: 1 }); return g.state().misses; })()'), 1, 'one spill');
+});
