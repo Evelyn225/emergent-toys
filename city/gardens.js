@@ -49,20 +49,35 @@ function glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty) {
   }
   if (onDoorFace && Math.abs(z - 0.32) < 0.035 && wallText(i, u, uStep, z, d, gh.word, sgn * dx, 0.32, 0.045, 0.05, C(sty === 18 ? GREEN : CYAN, Math.max(L * 1.2, glow * 15)), C(WHITE, 2))) return;
   if (z > h - 0.03) return set(i, '^', C(WHITE, L)); // the crest along the ridge
-  if (sty === 19) { // the aviary: a fine mesh, trees behind it, birds flitting about inside
-    const m = (Math.floor(u * 40) + Math.floor(z * 40)) & 1;
-    if (fract(u * 4) < 0.05 || fract(z * 4) < 0.04) return set(i, '|', C(GRAY, L * 1.1));
-    const bird = hash(Math.floor(u * 30 + T * 2), Math.floor(z * 30 - Math.sin(T + u) * 3), 821) > 0.985;
-    if (bird) return set(i, fract(T * 4 + u) < 0.5 ? 'v' : '^', C(NEON[Math.floor(u * 7) & 3], Math.max(L, 9)));
-    const leaf = noise(u * 6, z * 6, 822) > 0.55 - 0.3 * (1 - z / h);
-    BG[i] = leaf ? C(GREEN, 1 + L * 0.12) : C(day > 0.3 ? CYAN : BLUE, 1 + day * 2);
-    return set(i, m ? 'x' : ' ', C(GRAY, L * 0.5));
+  if (sty === 19 && (fract(u * 4) < 0.05 || fract(z * 4) < 0.04)) return set(i, '|', C(GRAY, L * 1.1)); // the aviary's frame
+  if (sty === 18 && (fract(u * 8) < 0.07 || fract(z * 6) < 0.06)) { BG[i] = C(WHITE, 1 + L * 0.12); return set(i, fract(z * 6) < 0.06 ? '-' : '|', C(WHITE, L * 1.1)); } // glazing bars
+  if (sty === 19 && ((Math.floor(u * 40) + Math.floor(z * 40)) & 1) && d < 1.5) return set(i, 'x', C(GRAY, L * 0.5)); // the mesh, close up
+  return glassDepth(i, u, z, h, gh, side, L, glow, sty === 19);
+}
+// what's inside a glasshouse, in depth: three rows of plants one behind the other (palms and ferns, or the aviary's
+// trees with birds among them), then the far glass, the soil, the roof. Each row sits at its own depth, so as you walk
+// past they slide across each other
+function glassDepth(i, u, z, h, gh, side, L, glow, aviary) {
+  const sg = Math.sign(u * WH.wc) || 1, a0 = side ? GARDEN.x0 + gh.gx0 : GARDEN.y0 + gh.gy0, a1 = side ? GARDEN.x0 + gh.gx1 + 1 : GARDEN.y0 + gh.gy1 + 1;
+  const u0 = Math.min(sg * a0, sg * a1), u1 = Math.max(sg * a0, sg * a1), dep = side ? gh.gy1 - gh.gy0 + 1 : gh.gx1 - gh.gx0 + 1;
+  const b = boxBehind(u, z, u0, u1, 0, h, dep), [su, sz] = glassSlopes(u, z);
+  for (let k = 0; k < 3; k++) {
+    const q = dep * (0.12 + k * 0.28);
+    if (q > b.q) break;
+    const lu = u + su * q, lz = z + sz * q, fade = 1 - k * 0.25, seed = 870 + k * 3 + gh.sty;
+    const slot = Math.floor(lu * 3), c = (slot + 0.3 + hash(slot, k, seed) * 0.4) / 3, tall = (0.35 + hash(slot, k, seed + 1) * 0.5) * h; // a plant every third of a cell, its trunk at c
+    const trunk = Math.abs(lu - c) < 0.012 && lz < tall, crown = Math.hypot((lu - c) * 2.2, lz - tall) < 0.12 + 0.06 * noise(lu * 30, lz * 30, seed);
+    const fern = lz < 0.12 + 0.08 * noise(lu * 12, k, seed + 2);
+    if (aviary && Math.hypot((lu - c - 0.08 * Math.sin(T * 0.7 + slot)) * 3, lz - tall * 0.8 - 0.05 * Math.sin(T * 1.3 + slot)) < 0.02 && hash(slot, k, seed + 3) > 0.4)
+      return set(i, fract(T * 4 + slot) < 0.5 ? 'v' : '^', C(BIRD_COL[slot & 7], 13)); // a bird darting between the trees
+    if (crown || fern) { BG[i] = C(GREEN, (1.5 + glow * 2) * fade); return set(i, noise(lu * 40, lz * 40, seed + 4) > 0.5 ? '%' : aviary ? '@' : '"', C(GREEN, Math.max(L, glow * 10) * fade)); }
+    if (trunk) return set(i, '|', C(BRICK, Math.max(L, glow * 8) * fade));
   }
-  // the conservatory: white iron glazing bars, panes misted green with the jungle behind them, lit at night
-  if (fract(u * 8) < 0.07 || fract(z * 6) < 0.06) { BG[i] = C(WHITE, 1 + L * 0.12); return set(i, fract(z * 6) < 0.06 ? '-' : '|', C(WHITE, L * 1.1)); }
-  const frond = noise(u * 5, z * 4, 823), palm = Math.abs(fract(u * 1.3) - 0.5) < 0.04 && z < 0.7;
-  BG[i] = C(frond > 0.5 ? GREEN : CYAN, 1.5 + day * 2 + glow * 2);
-  return set(i, palm ? '|' : frond > 0.62 ? '%' : frond > 0.52 ? '"' : ' ', C(palm ? BRICK : GREEN, Math.max(L, glow * 11)));
+  const sky = day > 0.3 ? C(CYAN, 1.5 + day * 2) : dusk > 0.3 ? C(ORANGE, 2) : C(BLUE, 1 + glow);
+  if (b.s === 'floor') { BG[i] = C(aviary ? GREEN : BRICK, 1 + glow * 1.5); return set(i, (Math.floor(b.u * 30) + Math.floor(b.q * 30)) % 4 ? ' ' : ',', C(GREEN, L * 0.6)); }
+  if (b.s === 'ceil') { BG[i] = sky; return set(i, fract(b.u * 2) < 0.06 || fract(b.q * 2) < 0.06 ? '=' : ' ', C(WHITE, L * 0.6)); }
+  BG[i] = sky; // the far glass, the sky through it
+  return set(i, fract(b.u * 2) < 0.04 || fract(b.z * 2) < 0.04 ? (aviary ? '+' : '|') : ' ', C(aviary ? GRAY : WHITE, L * 0.5));
 }
 
 // ---- solids: the railings (black iron, spear-topped), the gardeners' shed
@@ -247,16 +262,25 @@ function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
     const word = px < 13 ? 'DESERT HOUSE' : 'TROPICAL HOUSE', u0 = u < 7.5 ? 4 : 11;
     if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(px < 13 ? BRICK : GREEN, 3))) return true;
     if (fract(u / 1.2) < 0.05 || fract(z / 1.5) < 0.03 || z > 3.92) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
-    // through the glass, the other house: sand and cacti, or the jungle; a streak of reflection now and then
+    // through the glass, the other house, in depth: rows of cacti on sand, or of palms in the green
     const streak = fract((u + z) * 0.35) < 0.025 && hash(Math.floor((u + z) * 0.35), 7, 866) > 0.5;
-    if (px < 13) {
-      const cactus = z < 2.4 && hash(Math.floor(u * 1.5), 3, 861) > 0.7 && Math.abs(fract(u * 1.5) - 0.5) < 0.1;
-      BG[i] = z < 0.7 ? C(YEL, 3 + day * 2) : C(CYAN, 2 + day * 3);
-      return set(i, streak ? '/' : cactus ? '|' : z < 0.7 && (Math.floor(u * 6) + Math.floor(z * 6)) % 5 === 0 ? '.' : ' ', C(streak ? WHITE : cactus ? GREEN : WARM, streak ? 8 : 6)), true;
+    if (streak) return set(i, '/', C(WHITE, 8)), true;
+    const [gsu, gsz] = glassSlopes(su, z), desert = px < 13;
+    for (const q of [1.5, 4, 7.5]) {
+      const lu = u + gsu * q, lz = z + gsz * q, slot = Math.floor(lu / 1.8), c = (slot + 0.3 + hash(slot, q, 867) * 0.4) * 1.8, fade = 1 - q / 14;
+      if (lz < 0) { BG[i] = desert ? C(YEL, 3 + day * 2) : C(GREEN, 1.5); return set(i, desert ? (Math.floor(lu * 4) + Math.floor(q)) % 7 ? ' ' : '.' : ',', C(desert ? WARM : GREEN, 6 * fade)), true; } // the ground
+      if (hash(slot, q, 868) < 0.35) continue;
+      if (desert) { // a saguaro: a trunk, and an arm or two
+        const tall = 1.6 + hash(slot, q, 869) * 2, dx_ = lu - c, arm = Math.abs(dx_) > 0.1 && Math.abs(dx_) < 0.45 && (Math.abs(lz - tall * 0.55) < 0.08 && Math.sign(dx_) === (slot & 1 ? 1 : -1) || Math.abs(Math.abs(dx_) - 0.4) < 0.07 && lz > tall * 0.55 && lz < tall * 0.8 && Math.sign(dx_) === (slot & 1 ? 1 : -1));
+        if (Math.abs(dx_) < 0.13 && lz < tall || arm) { BG[i] = C(GREEN, 2 * fade); return set(i, Math.abs(dx_) < 0.04 ? ':' : '|', C(GREEN, 9 * fade)), true; }
+      } else { // a palm: a leaning trunk, a crown of fronds
+        const tall = 3 + hash(slot, q, 869) * 3, lean = (lz / tall) * 0.4 * (slot & 1 ? 1 : -1);
+        if (Math.hypot((lu - c - lean) * 0.8, lz - tall) < 0.9 + 0.4 * noise(lu * 3, lz * 3, 870)) { BG[i] = C(GREEN, 2.5 * fade); return set(i, noise(lu * 9, lz * 9, 871) > 0.5 ? '%' : '"', C(GREEN, 10 * fade)), true; }
+        if (Math.abs(lu - c - lean) < 0.1 && lz < tall) return set(i, '|', C(BRICK, 9 * fade)), true;
+      }
     }
-    const leaf = noise(u * 1.4, z * 1.4, 862) > 0.42;
-    BG[i] = leaf ? C(GREEN, 2 + L * 0.1) : C(CYAN, 1.5 + day * 2);
-    return set(i, streak ? '/' : leaf ? (noise(u * 5, z * 5, 863) > 0.5 ? '%' : '"') : ' ', C(streak ? WHITE : GREEN, streak ? 8 : L * 1.3)), true;
+    BG[i] = desert ? C(CYAN, 2 + day * 3) : C(GREEN, 1.2);
+    return set(i, ' ', 0), true;
   }
   if (z < 0.8) { BG[i] = C(BRICK, 1 + L * 0.12); return set(i, fract(z / 0.2) < 0.15 ? '_' : fract(u * 2 + (Math.floor(z * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(BRICK, L)), true; } // the brick plinth
   const left = mx < 13 || mx === 0;
@@ -268,8 +292,10 @@ function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
   // glass all round: white bars, sky beyond, leaves pressed against it on the tropical side
   if (fract(u / 1.2) < 0.04 || fract(z / 1.5) < 0.03) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
   const leaf = left && noise(u * 1.5, z * 1.2, 841) > 0.5 - 0.35 * (1 - z / 9);
-  const city = !left && z < 2.5 + 3.5 * hash(Math.floor(u / 1.7), my + mx, 864); // the city's towers, beyond the glass
-  if (city) { BG[i] = C(GRAY, 1.5 + day * 2); return set(i, night > 0.4 && hash(Math.floor(u * 3), Math.floor(z * 3), 865) > 0.8 ? '.' : ' ', C(YEL, 12)), true; }
+  if (!left) { // the city's towers beyond the glass, far off: they stay put against the sky as you walk about
+    const [gsu, gsz] = glassSlopes(su, z), ang = Math.atan2(gsu, 1) + (mx === 0 || mx === CONS_W - 1 ? 1.6 * Math.sign(mx - 1) : my === 0 ? 0 : 3.1), col = Math.floor(ang * 14);
+    if (gsz < 0.08 + 0.35 * hash(col, 1, 864) * hash(col >> 1, 2, 864)) { BG[i] = C(GRAY, 1.5 + day * 2); return set(i, night > 0.4 && hash(Math.floor(ang * 60), Math.floor(gsz * 60), 865) > 0.8 ? '.' : ' ', C(YEL, 12)), true; }
+  }
   BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 1);
   return set(i, leaf ? (noise(u * 6, z * 6, 842) > 0.5 ? '%' : '"') : ' ', C(GREEN, L * 1.3)), true;
 }

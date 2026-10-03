@@ -353,7 +353,7 @@ test('buy a car and a home: both are still yours after a reload, and the buildin
   assert.deepStrictEqual(await page.evaluate(() => [room.kind, Math.floor(tod)]), ['home', 7], 'woke at home at 7');
 }));
 
-test('the pleasure pier: once round the Ferris wheel and back to the platform, a horse on the carousel, a go at ring toss', () => withPage(async page => {
+test('the Sunset Pier: once round the Ferris wheel and back to the platform, a horse on the carousel, a go at ring toss', () => withPage(async page => {
   await page.evaluate(() => { tod = 15; px = WHEEL_BOARD.x; py = WHEEL_BOARD.y; a = Math.PI / 2; });
   await page.waitForTimeout(100);
   assert.match(await page.evaluate(() => promptText()), /ride the Ferris wheel/);

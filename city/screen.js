@@ -32,6 +32,68 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
   return true;
 }
 
+// ---- seeing through glass. Before each wall the renderer leaves in WH the ray that hit it: dn, how far the eye is
+// from the wall's plane; sl, how far the ray goes along the wall (world units) for each unit it goes in; wc, the
+// hit's world coordinate along the wall. Carry the ray on past the glass and whatever is behind it moves as it would
+// if it were really there: rooms behind lit windows, plants deep in a glasshouse, the skyline out of a window.
+const WH = { dn: 1, sl: 0, wc: 0 };
+const glassSlopes = (u, z) => [(Math.sign(u * WH.wc) || 1) * WH.sl, (z - eye) / WH.dn]; // per unit of depth: along u, up
+// a box behind the glass: u0..u1 across (in the wall's u), floor z0, ceiling z1, back wall `dep` in. Which face the
+// ray meets first, how deep (q), and where on it (u, z)
+function boxBehind(u, z, u0, u1, z0, z1, dep) {
+  const [su, sz] = glassSlopes(u, z);
+  let q = dep, s = 'back';
+  if (su > 1e-6 && (u1 - u) / su < q) { q = (u1 - u) / su; s = 'side'; }
+  if (su < -1e-6 && (u0 - u) / su < q) { q = (u0 - u) / su; s = 'side'; }
+  if (sz > 1e-6 && (z1 - z) / sz < q) { q = (z1 - z) / sz; s = 'ceil'; }
+  if (sz < -1e-6 && (z0 - z) / sz < q) { q = (z0 - z) / sz; s = 'floor'; }
+  return { s, q, u: u + su * q, z: z + sz * q };
+}
+// a room behind a lit window, for the street's buildings: wallpaper in the window's colour, a lamp in the ceiling, a
+// floor, and something against the back wall (a shelf, a bed, the telly's glow, somebody home). u0..u1 the bay, z0..z1
+// the storey, all in cells; `seed` picks the room
+function litRoom(i, u, z, u0, u1, z0, z1, col, lit, seed) {
+  const b = boxBehind(u, z, u0, u1, z0, z1, (u1 - u0) * 0.9), w = u1 - u0, hh = z1 - z0;
+  const fu = (b.u - u0) / w, fz = (b.z - z0) / hh, edge = b.s === 'back' && (fu < 0.03 || fu > 0.97 || fz < 0.03 || fz > 0.97);
+  const k = hash(seed, 1, 881), lamp = Math.hypot(fu - 0.5, (b.s === 'ceil' ? b.q / (w * 0.9) : 9) - 0.45) < 0.11;
+  if (b.s === 'ceil') { BG[i] = lamp ? C(YEL, 12) : C(col, 2.5); return set(i, ' ', 0); } // a lampshade's glow
+  if (b.s === 'floor') { BG[i] = C(BRICK, 1.5 + (1 - b.q / (w * 0.9)) * 1.5); return set(i, fract(b.u * 40) < 0.2 ? '|' : ' ', C(BRICK, lit * 0.5)); }
+  if (b.s === 'side') { BG[i] = C(col, 2.2); return set(i, (Math.floor(b.q * 60) + Math.floor(b.z * 60)) % 4 ? ' ' : '.', C(col, lit * 0.4)); }
+  if (edge) { BG[i] = C(col, 2); return set(i, fz < 0.03 || fz > 0.97 ? '_' : '|', C(GRAY, lit * 0.5)); }
+  BG[i] = C(col, 4);
+  if (k < 0.25 && fz < 0.75 && Math.abs(fu - 0.3) < 0.18) return set(i, fract(fz * 5) < 0.2 ? '=' : '#', C(ITEM_COL[(fu * 20 | 0) & 7], lit)); // a bookshelf
+  if (k < 0.45 && fz < 0.3 && Math.abs(fu - 0.55) < 0.3) return set(i, fz > 0.24 ? '_' : '#', C(WHITE, lit * 0.8)); // a bed
+  if (k < 0.65 && fz > 0.2 && fz < 0.5 && Math.abs(fu - 0.6) < 0.15) { BG[i] = C(BLUE, 6 + Math.sin(T * 7 + seed) * 2); return set(i, ' ', 0); } // the telly
+  if (k < 0.8 && fz < 0.62 && Math.abs(fu - 0.4 - 0.15 * Math.sin(T * 0.3 + seed)) < 0.06) return set(i, fz > 0.5 ? 'o' : '|', C(GRAY, 3)); // somebody home
+  return set(i, (Math.floor(b.u * 50) + Math.floor(b.z * 50)) % 5 ? ' ' : '.', C(col, lit * 0.4));
+}
+// out of a window: a building across the street `near` away (its lit windows), the skyline at the horizon (fixed to
+// the direction you look, so it stays put as you walk past), and the sky. `up`: how high the window is above the
+// street, in the same units
+function viewOut(i, u, z, near, up) {
+  const [su, sz] = glassSlopes(u, z), nu = u + su * near, nz = z + sz * near + up;
+  if (nz > 0 && nz < up + near * 0.25 && Math.abs(fract(nu / (near * 1.5)) - 0.5) < 0.42) { // the building across the street
+    const wl = fract(nu / 3), fl = fract(nz / 3), lit = hash(Math.floor(nu / 3), Math.floor(nz / 3), 882) > 0.45 + day * 0.4;
+    BG[i] = C(BRICK, 1 + day * 2.5);
+    if (wl > 0.25 && wl < 0.75 && fl > 0.3 && fl < 0.8) { if (lit) BG[i] = C(WARM, 6); return set(i, lit ? ' ' : ':', C(GRAY, 5)); }
+    return set(i, ' ', 0);
+  }
+  if (nz < 0) { // the street below: the centre line, cars' lights going by
+    const qs = (-up - z) / sz, su_ = u + su * qs;
+    BG[i] = C(GRAY, 1 + day);
+    if (Math.abs(qs - near * 0.5) < near * 0.03) return set(i, fract(su_ * 0.25) < 0.5 ? '-' : ' ', C(YEL, 9));
+    const car = fract(su_ * 0.03 + T * (qs < near * 0.5 ? 0.04 : -0.04) + (qs < near * 0.5 ? 0 : 0.5)) < 0.06 && Math.abs(qs - near * (qs < near * 0.5 ? 0.3 : 0.7)) < near * 0.08;
+    return set(i, car ? 'o' : ' ', car ? C(night > 0.3 ? YEL : RED, 13) : 0);
+  }
+  const ang = Math.atan(su), col = Math.floor(ang * 18), top = hash(col, 4, 883) * 0.3 + (hash(col >> 2, 5, 884) > 0.8 ? 0.25 : 0);
+  if (sz < top) { // the skyline, far off
+    const lit = night > 0.2 && hash(Math.floor(ang * 90), Math.floor(sz * 90), 885) > 0.8;
+    BG[i] = C(GRAY, 1.5 + day * 3); return set(i, lit ? '.' : ' ', C(YEL, 12));
+  }
+  BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 3 + day * 8) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
+  return set(i, night > 0.5 && hash(Math.floor(ang * 120), Math.floor(sz * 120), 886) > 0.96 ? '.' : ' ', C(WHITE, 12));
+}
+
 // fog: at draw time every cell's text and background colors are mixed toward the fog color by distance.
 // 8 blend levels, with a Bayer dither between neighbouring levels so the gradient stays smooth.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);

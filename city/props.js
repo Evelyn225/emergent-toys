@@ -172,7 +172,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
-// the pleasure pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
+// the Sunset Pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
 const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -1, 3.6, { game: 'strength' }],
@@ -295,7 +295,7 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
   if (hash(bx, by, o === 'h' ? 200 : 202) < 0.03 && !blockKind(bx, by) && districtOf(bx, by) !== 'industrial')
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
-// and a cotton candy cart at the foot of the pleasure pier
+// and a cotton candy cart at the foot of the Sunset Pier
 const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, art: [
   ['  @@@@  ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O'], ['  @@@@@ ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O']].map(pad) };
 vendors.push({ x: FAIR.cx + 1.1, y: FAIR.y0 + 0.9, ox: 0.12, oy: 0, type: CANDY_CART, shirt: WHITE });

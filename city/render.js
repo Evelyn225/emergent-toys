@@ -155,6 +155,7 @@ function render(dt) {
       // u runs left-to-right on screen for whichever face we see, so signs read correctly
       const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
       const uStep = side ? Math.abs(rx2 * (ry * d / ry2) - rx * d) : Math.abs(ry2 * (rx * d / rx2) - ry * d);
+      WH.wc = side ? px + rx * d : py + ry * d; WH.dn = Math.abs(side ? ry * d : rx * d) || 1e-4; WH.sl = (side ? rx * d : ry * d) / WH.dn; // (for things seen through glass)
       for (let r = top; r < bot; r++) {
         const i = r * cols + x;
         if (holes && ZB[i] >= 0) continue;

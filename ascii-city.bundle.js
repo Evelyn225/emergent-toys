@@ -415,7 +415,7 @@ function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cel
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
-// the pleasure pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
+// the Sunset Pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
 // docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
 // the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
 const FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
@@ -578,7 +578,7 @@ const SERVICES = [];
   }
 }
 
-// ---- the aquarium: the south half of the block across the shore road from the pleasure pier, one building, its
+// ---- the aquarium: the south half of the block across the shore road from the Sunset Pier, one building, its
 // front on the promenade (aquarium.js has the inside, and the fish in its windows)
 const AQUARIUM = { bx: FAIR_BX, by: SHORE_S - 1, x0: FAIR_BX * 8 + 2, x1: FAIR_BX * 8 + 8, doorU: FAIR_BX * 8 + 5 };
 {
@@ -783,7 +783,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
-// the pleasure pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
+// the Sunset Pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
 const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -1, 3.6, { game: 'strength' }],
@@ -906,7 +906,7 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
   if (hash(bx, by, o === 'h' ? 200 : 202) < 0.03 && !blockKind(bx, by) && districtOf(bx, by) !== 'industrial')
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
-// and a cotton candy cart at the foot of the pleasure pier
+// and a cotton candy cart at the foot of the Sunset Pier
 const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, art: [
   ['  @@@@  ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O'], ['  @@@@@ ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O']].map(pad) };
 vendors.push({ x: FAIR.cx + 1.1, y: FAIR.y0 + 0.9, ox: 0.12, oy: 0, type: CANDY_CART, shirt: WHITE });
@@ -1702,7 +1702,7 @@ function audioMix(s) {
   if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
   if (s.district === 'shotengai') out.arcade = Math.max(out.arcade, 0.28 * far); // jingles spilling out of the parlours under the roof
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
-  if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
+  if (s.fairNear) { // the Sunset Pier: a crowd, and the booths' bleeps and jingles drifting over it
     out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
     out.arcade = 0.4 * s.fairNear * far;
   }
@@ -2526,7 +2526,7 @@ GAMES.jailbreak = (rnd = Math.random) => {
   return g;
 };
 
-// ---- the pleasure pier's booths. Like the cabinets: a credit a go, tickets for how you did.
+// ---- the Sunset Pier's booths. Like the cabinets: a credit a go, tickets for how you did.
 // ring toss: rows of bottles; the ring swings back and forth in front of you, GO throws it straight up the board.
 // It lands on a bottle neck only if it's dead on (the far rows count double). Six rings.
 GAMES.ringtoss = (rnd = Math.random) => {
@@ -3166,6 +3166,68 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
   return true;
 }
 
+// ---- seeing through glass. Before each wall the renderer leaves in WH the ray that hit it: dn, how far the eye is
+// from the wall's plane; sl, how far the ray goes along the wall (world units) for each unit it goes in; wc, the
+// hit's world coordinate along the wall. Carry the ray on past the glass and whatever is behind it moves as it would
+// if it were really there: rooms behind lit windows, plants deep in a glasshouse, the skyline out of a window.
+const WH = { dn: 1, sl: 0, wc: 0 };
+const glassSlopes = (u, z) => [(Math.sign(u * WH.wc) || 1) * WH.sl, (z - eye) / WH.dn]; // per unit of depth: along u, up
+// a box behind the glass: u0..u1 across (in the wall's u), floor z0, ceiling z1, back wall `dep` in. Which face the
+// ray meets first, how deep (q), and where on it (u, z)
+function boxBehind(u, z, u0, u1, z0, z1, dep) {
+  const [su, sz] = glassSlopes(u, z);
+  let q = dep, s = 'back';
+  if (su > 1e-6 && (u1 - u) / su < q) { q = (u1 - u) / su; s = 'side'; }
+  if (su < -1e-6 && (u0 - u) / su < q) { q = (u0 - u) / su; s = 'side'; }
+  if (sz > 1e-6 && (z1 - z) / sz < q) { q = (z1 - z) / sz; s = 'ceil'; }
+  if (sz < -1e-6 && (z0 - z) / sz < q) { q = (z0 - z) / sz; s = 'floor'; }
+  return { s, q, u: u + su * q, z: z + sz * q };
+}
+// a room behind a lit window, for the street's buildings: wallpaper in the window's colour, a lamp in the ceiling, a
+// floor, and something against the back wall (a shelf, a bed, the telly's glow, somebody home). u0..u1 the bay, z0..z1
+// the storey, all in cells; `seed` picks the room
+function litRoom(i, u, z, u0, u1, z0, z1, col, lit, seed) {
+  const b = boxBehind(u, z, u0, u1, z0, z1, (u1 - u0) * 0.9), w = u1 - u0, hh = z1 - z0;
+  const fu = (b.u - u0) / w, fz = (b.z - z0) / hh, edge = b.s === 'back' && (fu < 0.03 || fu > 0.97 || fz < 0.03 || fz > 0.97);
+  const k = hash(seed, 1, 881), lamp = Math.hypot(fu - 0.5, (b.s === 'ceil' ? b.q / (w * 0.9) : 9) - 0.45) < 0.11;
+  if (b.s === 'ceil') { BG[i] = lamp ? C(YEL, 12) : C(col, 2.5); return set(i, ' ', 0); } // a lampshade's glow
+  if (b.s === 'floor') { BG[i] = C(BRICK, 1.5 + (1 - b.q / (w * 0.9)) * 1.5); return set(i, fract(b.u * 40) < 0.2 ? '|' : ' ', C(BRICK, lit * 0.5)); }
+  if (b.s === 'side') { BG[i] = C(col, 2.2); return set(i, (Math.floor(b.q * 60) + Math.floor(b.z * 60)) % 4 ? ' ' : '.', C(col, lit * 0.4)); }
+  if (edge) { BG[i] = C(col, 2); return set(i, fz < 0.03 || fz > 0.97 ? '_' : '|', C(GRAY, lit * 0.5)); }
+  BG[i] = C(col, 4);
+  if (k < 0.25 && fz < 0.75 && Math.abs(fu - 0.3) < 0.18) return set(i, fract(fz * 5) < 0.2 ? '=' : '#', C(ITEM_COL[(fu * 20 | 0) & 7], lit)); // a bookshelf
+  if (k < 0.45 && fz < 0.3 && Math.abs(fu - 0.55) < 0.3) return set(i, fz > 0.24 ? '_' : '#', C(WHITE, lit * 0.8)); // a bed
+  if (k < 0.65 && fz > 0.2 && fz < 0.5 && Math.abs(fu - 0.6) < 0.15) { BG[i] = C(BLUE, 6 + Math.sin(T * 7 + seed) * 2); return set(i, ' ', 0); } // the telly
+  if (k < 0.8 && fz < 0.62 && Math.abs(fu - 0.4 - 0.15 * Math.sin(T * 0.3 + seed)) < 0.06) return set(i, fz > 0.5 ? 'o' : '|', C(GRAY, 3)); // somebody home
+  return set(i, (Math.floor(b.u * 50) + Math.floor(b.z * 50)) % 5 ? ' ' : '.', C(col, lit * 0.4));
+}
+// out of a window: a building across the street `near` away (its lit windows), the skyline at the horizon (fixed to
+// the direction you look, so it stays put as you walk past), and the sky. `up`: how high the window is above the
+// street, in the same units
+function viewOut(i, u, z, near, up) {
+  const [su, sz] = glassSlopes(u, z), nu = u + su * near, nz = z + sz * near + up;
+  if (nz > 0 && nz < up + near * 0.25 && Math.abs(fract(nu / (near * 1.5)) - 0.5) < 0.42) { // the building across the street
+    const wl = fract(nu / 3), fl = fract(nz / 3), lit = hash(Math.floor(nu / 3), Math.floor(nz / 3), 882) > 0.45 + day * 0.4;
+    BG[i] = C(BRICK, 1 + day * 2.5);
+    if (wl > 0.25 && wl < 0.75 && fl > 0.3 && fl < 0.8) { if (lit) BG[i] = C(WARM, 6); return set(i, lit ? ' ' : ':', C(GRAY, 5)); }
+    return set(i, ' ', 0);
+  }
+  if (nz < 0) { // the street below: the centre line, cars' lights going by
+    const qs = (-up - z) / sz, su_ = u + su * qs;
+    BG[i] = C(GRAY, 1 + day);
+    if (Math.abs(qs - near * 0.5) < near * 0.03) return set(i, fract(su_ * 0.25) < 0.5 ? '-' : ' ', C(YEL, 9));
+    const car = fract(su_ * 0.03 + T * (qs < near * 0.5 ? 0.04 : -0.04) + (qs < near * 0.5 ? 0 : 0.5)) < 0.06 && Math.abs(qs - near * (qs < near * 0.5 ? 0.3 : 0.7)) < near * 0.08;
+    return set(i, car ? 'o' : ' ', car ? C(night > 0.3 ? YEL : RED, 13) : 0);
+  }
+  const ang = Math.atan(su), col = Math.floor(ang * 18), top = hash(col, 4, 883) * 0.3 + (hash(col >> 2, 5, 884) > 0.8 ? 0.25 : 0);
+  if (sz < top) { // the skyline, far off
+    const lit = night > 0.2 && hash(Math.floor(ang * 90), Math.floor(sz * 90), 885) > 0.8;
+    BG[i] = C(GRAY, 1.5 + day * 3); return set(i, lit ? '.' : ' ', C(YEL, 12));
+  }
+  BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 3 + day * 8) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
+  return set(i, night > 0.5 && hash(Math.floor(ang * 120), Math.floor(sz * 120), 886) > 0.96 ? '.' : ' ', C(WHITE, 12));
+}
+
 // fog: at draw time every cell's text and background colors are mixed toward the fog color by distance.
 // 8 blend levels, with a Bayer dither between neighbouring levels so the gradient stays smooth.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
@@ -3287,6 +3349,8 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  // a lit window up close: the room behind it, in depth (k windows a cell, so the room is the bay's width)
+  const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
@@ -3297,7 +3361,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty === 9) { // brownstone: tall narrow windows with stone lintels
     const fu = fract(u * 4);
     if (fu > 0.3 && fu < 0.7 && fz > 0.2 && fz < 0.8)
-      return hash(Math.floor(u * 4), fl, sk) > litT - 0.1 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+      return hash(Math.floor(u * 4), fl, sk) > litT - 0.1 ? inside(4, WARM) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
     if (fu > 0.25 && fu < 0.75 && fz >= 0.8 && fz < 0.9) return set(i, '-', C(GRAY, L));
     return set(i, (Math.floor(u * 12) + Math.floor(zz * 18)) % 5 ? ' ' : '.', C(BRICK, L * 0.7));
   }
@@ -3313,7 +3377,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (fz > 0.86 && Math.abs(fract(u * 3) - 0.5) < 0.08) return set(i, 'o', C(RED, Math.max(L, night * 14)));
     const wu = fract(u * 3);
     if (wu > 0.2 && wu < 0.8 && fz > 0.25 && fz < 0.8)
-      return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+      return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? inside(3, RED) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
     return set(i, ' ', 0);
   }
   if (sty === 14) { // art deco: limestone piers running the full height, gold chevrons round the crown, spandrels between floors
@@ -3343,13 +3407,13 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       if (hash(bay, fl, sk + 4) > 0.75 && Math.abs(fu - 0.75) < 0.1) return set(i, '%', C(GREEN, L));
       return set(i, fz > 0.32 ? '-' : ':', C(CYAN, L * (fz > 0.32 ? 0.9 : 0.4)));
     }
-    if (fu > 0.15 && fu < 0.85 && fz < 0.88) return hash(bay, fl, sk) > litT - 0.05 ? set(i, fu < 0.5 ? '#' : '|', C(WARM, Math.max(L, glowL))) : set(i, fu < 0.5 ? ':' : '|', C(CYAN, L * 0.5));
+    if (fu > 0.15 && fu < 0.85 && fz < 0.88) return hash(bay, fl, sk) > litT - 0.05 ? inside(2, WARM) || set(i, fu < 0.5 ? '#' : '|', C(WARM, Math.max(L, glowL))) : set(i, fu < 0.5 ? ':' : '|', C(CYAN, L * 0.5));
     return set(i, ' ', 0);
   }
   if (sty === 0) { // office
     const fu = fract(u * 4);
     if (fu > 0.15 && fu < 0.85 && fz > 0.25 && fz < 0.85)
-      return hash(Math.floor(u * 4), fl, sk) > litT ? set(i, '#', C(YEL, Math.max(L * 0.7, glowL))) : set(i, '.', C(day > 0.5 ? CYAN : GRAY, L * 0.35));
+      return hash(Math.floor(u * 4), fl, sk) > litT ? inside(4, WHITE) || set(i, '#', C(YEL, Math.max(L * 0.7, glowL))) : set(i, '.', C(day > 0.5 ? CYAN : GRAY, L * 0.35));
     return set(i, RAMP[fog * (side ? 0.6 : 1) * 8.99 | 0], C(GRAY, L));
   }
   if (sty === 1) { // glass tower
@@ -3371,14 +3435,14 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
     const wu = fract(u * 4);
     if (wu > 0.2 && wu < 0.8 && fz > 0.3 && fz < 0.85)
-      return hash(Math.floor(u * 4), fl, sk) > litT - 0.05 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+      return hash(Math.floor(u * 4), fl, sk) > litT - 0.05 ? inside(4, WARM) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
     if (fz < 0.08) return set(i, '_', C(WARM, L * 0.6)); // floor line
     return set(i, ' ', 0);
   }
   // brick
   const fu = fract(u * 3);
   if (fu > 0.3 && fu < 0.7 && fz > 0.25 && fz < 0.75)
-    return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? set(i, '#', C(ORANGE, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+    return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? inside(3, ORANGE) || set(i, '#', C(ORANGE, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   if (fu > 0.25 && fu < 0.75 && fz > 0.18 && fz <= 0.25) return set(i, '=', C(GRAY, L));
   if (d > 8) return set(i, RAMP[fog * (side ? 0.6 : 1) * 8.99 | 0], C(BRICK, L));
   return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
@@ -3592,7 +3656,12 @@ function floorCell(i, r, x, rx, ry) {
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
-      if (inPond(lx, ly, pbx, pby)) { const n = noise(wx * 4 + T * 0.3, wy * 4, 92); ch = n > 0.6 ? '~' : n > 0.45 ? '-' : ' '; base = BLUE; k = 1.4; }
+      if (inPond(lx, ly, pbx, pby)) { // the pond: ripples, lily pads by the edge, the sky and trees in it
+        const n = noise(wx * 4 + T * 0.3, wy * 4 - T * 0.1, 92), lily = !inPond(lx, ly, pbx, pby, -0.18) && hash(Math.floor(wx * 9), Math.floor(wy * 9), 93) > 0.8;
+        set(i, lily ? (hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? '*' : 'o') : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? MAG : GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
+        BG[i] = C(BLUE, 1 + day * 2.5 + lampsOn * glow(wx, wy) * 2); FL[i] = lily ? 0 : 3;
+        return;
+      }
       else if (inPond(lx, ly, pbx, pby, 0.15)) { ch = (r + x) % 3 ? '|' : ','; base = GREEN; k = 0.9; } // reeds round the edge
       else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
@@ -4566,7 +4635,7 @@ function elSprites() {
   }
 }
 
-// ===== the pleasure pier: the Ferris wheel, the carousel, and the arch over the way in
+// ===== the Sunset Pier: the Ferris wheel, the carousel, and the arch over the way in
 // the wheel is a billboard turned to its real angle: sq = how face-on it is (its east-west axis across the screen),
 // so from the side it narrows to an ellipse and then a line. Cars are real-sized whatever the angle.
 function wheelCell(i, u, z, du, dz, L, sq) {
@@ -4637,7 +4706,7 @@ function carouselCell(i, u, z, du, dz, L, s) {
   }
   return false;
 }
-const FAIR_SIGN = 'PLEASURE PIER';
+const FAIR_SIGN = 'SUNSET PIER';
 function fairSprites() {
   const [wx, wy] = R(WHEEL.x, WHEEL.y);
   if (Math.hypot(wx, wy) < vis + 4) {
@@ -4838,13 +4907,7 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   if (my !== 0 || Math.abs(u - room.W / 2) > 1.6 || z < 0.9 || z > 2.3) return false;
   const du = u - room.W / 2;
   if (Math.abs(du) > 1.45 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > 1.45 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
-  const col = Math.floor(du * 7), hgt = 0.97 + hash(col, 3, 71) * 0.7 + (Math.abs(col) < 2 ? 0.3 : 0); // the skyline
-  if (z < hgt) {
-    const lit = hash(col, Math.floor(z * 12), 72) > 0.55 + day * 0.4;
-    BG[i] = C(GRAY, 1 + day * 3); set(i, lit && fract(z * 12) > 0.4 ? '#' : ' ', C(YEL, 13)); return true;
-  }
-  BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 3 + day * 8) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
-  set(i, night > 0.5 && hash(Math.floor(du * 20), Math.floor(z * 20), 73) > 0.96 ? '.' : ' ', C(WHITE, 12)); return true;
+  viewOut(i, u, z, 14, 18); return true; // six floors up, across the avenue
 }
 function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
   if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
@@ -5280,8 +5343,10 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
 }
 function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
-    BG[i] = z < 1.5 ? C(BLUE, 2 + day * 3) : C(day > 0.5 ? CYAN : BLUE, 1 + day * 5);
-    return set(i, z < 1.5 ? '~' : ' ', C(CYAN, 6 + day * 6)), true;
+    const [su, sz] = glassSlopes(u, z); // the horizon's at your eye, wherever you stand; the sea, 30m down
+    if (sz < 0) { const q = (-30 - z) / sz, n = noise((u + su * q) * 0.2 + T * 0.3, q * 0.2, 887); BG[i] = C(BLUE, 2 + day * 3); return set(i, n > 0.6 ? '~' : n > 0.45 ? '-' : ' ', C(CYAN, 6 + day * 6)), true; }
+    BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 2 + day * 6) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
+    return set(i, night > 0.5 && hash(Math.floor(Math.atan(su) * 120), Math.floor(sz * 120), 888) > 0.95 ? '.' : ' ', C(WHITE, 12)), true;
   }
   BG[i] = C(WHITE, 2 + L * 0.15); // whitewashed stone in courses
   const row = Math.floor(z * 3), joint = fract(z * 3) < 0.08 || fract(u * 1.5 + (row & 1) * 0.5) < 0.04;
@@ -5327,8 +5392,9 @@ function homeDef(w, h) {
 }
 function homeWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === 0 && z > 1.0 && z < 2.1 && Math.abs(fract(u / 3) - 0.5) < 0.2) { // a window on the city: lit windows across the street at night
-    BG[i] = C(day > 0.5 ? CYAN : BLUE, day > 0.5 ? 4 : 1);
-    return set(i, night > 0.3 && hash(Math.floor(u * 8), Math.floor(z * 8), 7) > 0.6 ? '#' : fract(u * 2) < 0.04 ? '|' : ' ', night > 0.3 ? C(WARM, 12) : C(GRAY, 8)), true;
+    const fw = fract(u / 3);
+    if (Math.abs(fw - 0.5) > 0.19 || z < 1.04 || z > 2.06 || Math.abs(fw - 0.5) < 0.01) { BG[i] = C(WARM, 2); return set(i, Math.abs(fw - 0.5) > 0.19 ? '|' : '=', C(WHITE, L)), true; } // the frame
+    return viewOut(i, u, z, 12, 4), true; // across the street from the first floor
   }
   BG[i] = C(WARM, 2 + L * 0.2); // wallpaper with a little pattern
   return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 3 ? ' ' : '.', C(BRICK, L * 0.5)), true;
@@ -5515,7 +5581,7 @@ function roomSprites() {
 const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 
-// ===== the aquarium, across the shore road from the pleasure pier (world.js gives it its lot). Inside: the open
+// ===== the aquarium, across the shore road from the Sunset Pier (world.js gives it its lot). Inside: the open
 // ocean window across the back of the main hall, a walk-through tunnel with sharks and rays going over your head,
 // a dark gallery of jellyfish, a bright one of reef tanks and a kelp forest, seahorses by the door, a touch pool
 // and a gift shop. Outside: the ground floor is one long tank behind glass, fish swimming past the windows.
@@ -6227,20 +6293,35 @@ function glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty) {
   }
   if (onDoorFace && Math.abs(z - 0.32) < 0.035 && wallText(i, u, uStep, z, d, gh.word, sgn * dx, 0.32, 0.045, 0.05, C(sty === 18 ? GREEN : CYAN, Math.max(L * 1.2, glow * 15)), C(WHITE, 2))) return;
   if (z > h - 0.03) return set(i, '^', C(WHITE, L)); // the crest along the ridge
-  if (sty === 19) { // the aviary: a fine mesh, trees behind it, birds flitting about inside
-    const m = (Math.floor(u * 40) + Math.floor(z * 40)) & 1;
-    if (fract(u * 4) < 0.05 || fract(z * 4) < 0.04) return set(i, '|', C(GRAY, L * 1.1));
-    const bird = hash(Math.floor(u * 30 + T * 2), Math.floor(z * 30 - Math.sin(T + u) * 3), 821) > 0.985;
-    if (bird) return set(i, fract(T * 4 + u) < 0.5 ? 'v' : '^', C(NEON[Math.floor(u * 7) & 3], Math.max(L, 9)));
-    const leaf = noise(u * 6, z * 6, 822) > 0.55 - 0.3 * (1 - z / h);
-    BG[i] = leaf ? C(GREEN, 1 + L * 0.12) : C(day > 0.3 ? CYAN : BLUE, 1 + day * 2);
-    return set(i, m ? 'x' : ' ', C(GRAY, L * 0.5));
+  if (sty === 19 && (fract(u * 4) < 0.05 || fract(z * 4) < 0.04)) return set(i, '|', C(GRAY, L * 1.1)); // the aviary's frame
+  if (sty === 18 && (fract(u * 8) < 0.07 || fract(z * 6) < 0.06)) { BG[i] = C(WHITE, 1 + L * 0.12); return set(i, fract(z * 6) < 0.06 ? '-' : '|', C(WHITE, L * 1.1)); } // glazing bars
+  if (sty === 19 && ((Math.floor(u * 40) + Math.floor(z * 40)) & 1) && d < 1.5) return set(i, 'x', C(GRAY, L * 0.5)); // the mesh, close up
+  return glassDepth(i, u, z, h, gh, side, L, glow, sty === 19);
+}
+// what's inside a glasshouse, in depth: three rows of plants one behind the other (palms and ferns, or the aviary's
+// trees with birds among them), then the far glass, the soil, the roof. Each row sits at its own depth, so as you walk
+// past they slide across each other
+function glassDepth(i, u, z, h, gh, side, L, glow, aviary) {
+  const sg = Math.sign(u * WH.wc) || 1, a0 = side ? GARDEN.x0 + gh.gx0 : GARDEN.y0 + gh.gy0, a1 = side ? GARDEN.x0 + gh.gx1 + 1 : GARDEN.y0 + gh.gy1 + 1;
+  const u0 = Math.min(sg * a0, sg * a1), u1 = Math.max(sg * a0, sg * a1), dep = side ? gh.gy1 - gh.gy0 + 1 : gh.gx1 - gh.gx0 + 1;
+  const b = boxBehind(u, z, u0, u1, 0, h, dep), [su, sz] = glassSlopes(u, z);
+  for (let k = 0; k < 3; k++) {
+    const q = dep * (0.12 + k * 0.28);
+    if (q > b.q) break;
+    const lu = u + su * q, lz = z + sz * q, fade = 1 - k * 0.25, seed = 870 + k * 3 + gh.sty;
+    const slot = Math.floor(lu * 3), c = (slot + 0.3 + hash(slot, k, seed) * 0.4) / 3, tall = (0.35 + hash(slot, k, seed + 1) * 0.5) * h; // a plant every third of a cell, its trunk at c
+    const trunk = Math.abs(lu - c) < 0.012 && lz < tall, crown = Math.hypot((lu - c) * 2.2, lz - tall) < 0.12 + 0.06 * noise(lu * 30, lz * 30, seed);
+    const fern = lz < 0.12 + 0.08 * noise(lu * 12, k, seed + 2);
+    if (aviary && Math.hypot((lu - c - 0.08 * Math.sin(T * 0.7 + slot)) * 3, lz - tall * 0.8 - 0.05 * Math.sin(T * 1.3 + slot)) < 0.02 && hash(slot, k, seed + 3) > 0.4)
+      return set(i, fract(T * 4 + slot) < 0.5 ? 'v' : '^', C(BIRD_COL[slot & 7], 13)); // a bird darting between the trees
+    if (crown || fern) { BG[i] = C(GREEN, (1.5 + glow * 2) * fade); return set(i, noise(lu * 40, lz * 40, seed + 4) > 0.5 ? '%' : aviary ? '@' : '"', C(GREEN, Math.max(L, glow * 10) * fade)); }
+    if (trunk) return set(i, '|', C(BRICK, Math.max(L, glow * 8) * fade));
   }
-  // the conservatory: white iron glazing bars, panes misted green with the jungle behind them, lit at night
-  if (fract(u * 8) < 0.07 || fract(z * 6) < 0.06) { BG[i] = C(WHITE, 1 + L * 0.12); return set(i, fract(z * 6) < 0.06 ? '-' : '|', C(WHITE, L * 1.1)); }
-  const frond = noise(u * 5, z * 4, 823), palm = Math.abs(fract(u * 1.3) - 0.5) < 0.04 && z < 0.7;
-  BG[i] = C(frond > 0.5 ? GREEN : CYAN, 1.5 + day * 2 + glow * 2);
-  return set(i, palm ? '|' : frond > 0.62 ? '%' : frond > 0.52 ? '"' : ' ', C(palm ? BRICK : GREEN, Math.max(L, glow * 11)));
+  const sky = day > 0.3 ? C(CYAN, 1.5 + day * 2) : dusk > 0.3 ? C(ORANGE, 2) : C(BLUE, 1 + glow);
+  if (b.s === 'floor') { BG[i] = C(aviary ? GREEN : BRICK, 1 + glow * 1.5); return set(i, (Math.floor(b.u * 30) + Math.floor(b.q * 30)) % 4 ? ' ' : ',', C(GREEN, L * 0.6)); }
+  if (b.s === 'ceil') { BG[i] = sky; return set(i, fract(b.u * 2) < 0.06 || fract(b.q * 2) < 0.06 ? '=' : ' ', C(WHITE, L * 0.6)); }
+  BG[i] = sky; // the far glass, the sky through it
+  return set(i, fract(b.u * 2) < 0.04 || fract(b.z * 2) < 0.04 ? (aviary ? '+' : '|') : ' ', C(aviary ? GRAY : WHITE, L * 0.5));
 }
 
 // ---- solids: the railings (black iron, spear-topped), the gardeners' shed
@@ -6425,16 +6506,25 @@ function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
     const word = px < 13 ? 'DESERT HOUSE' : 'TROPICAL HOUSE', u0 = u < 7.5 ? 4 : 11;
     if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(px < 13 ? BRICK : GREEN, 3))) return true;
     if (fract(u / 1.2) < 0.05 || fract(z / 1.5) < 0.03 || z > 3.92) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
-    // through the glass, the other house: sand and cacti, or the jungle; a streak of reflection now and then
+    // through the glass, the other house, in depth: rows of cacti on sand, or of palms in the green
     const streak = fract((u + z) * 0.35) < 0.025 && hash(Math.floor((u + z) * 0.35), 7, 866) > 0.5;
-    if (px < 13) {
-      const cactus = z < 2.4 && hash(Math.floor(u * 1.5), 3, 861) > 0.7 && Math.abs(fract(u * 1.5) - 0.5) < 0.1;
-      BG[i] = z < 0.7 ? C(YEL, 3 + day * 2) : C(CYAN, 2 + day * 3);
-      return set(i, streak ? '/' : cactus ? '|' : z < 0.7 && (Math.floor(u * 6) + Math.floor(z * 6)) % 5 === 0 ? '.' : ' ', C(streak ? WHITE : cactus ? GREEN : WARM, streak ? 8 : 6)), true;
+    if (streak) return set(i, '/', C(WHITE, 8)), true;
+    const [gsu, gsz] = glassSlopes(su, z), desert = px < 13;
+    for (const q of [1.5, 4, 7.5]) {
+      const lu = u + gsu * q, lz = z + gsz * q, slot = Math.floor(lu / 1.8), c = (slot + 0.3 + hash(slot, q, 867) * 0.4) * 1.8, fade = 1 - q / 14;
+      if (lz < 0) { BG[i] = desert ? C(YEL, 3 + day * 2) : C(GREEN, 1.5); return set(i, desert ? (Math.floor(lu * 4) + Math.floor(q)) % 7 ? ' ' : '.' : ',', C(desert ? WARM : GREEN, 6 * fade)), true; } // the ground
+      if (hash(slot, q, 868) < 0.35) continue;
+      if (desert) { // a saguaro: a trunk, and an arm or two
+        const tall = 1.6 + hash(slot, q, 869) * 2, dx_ = lu - c, arm = Math.abs(dx_) > 0.1 && Math.abs(dx_) < 0.45 && (Math.abs(lz - tall * 0.55) < 0.08 && Math.sign(dx_) === (slot & 1 ? 1 : -1) || Math.abs(Math.abs(dx_) - 0.4) < 0.07 && lz > tall * 0.55 && lz < tall * 0.8 && Math.sign(dx_) === (slot & 1 ? 1 : -1));
+        if (Math.abs(dx_) < 0.13 && lz < tall || arm) { BG[i] = C(GREEN, 2 * fade); return set(i, Math.abs(dx_) < 0.04 ? ':' : '|', C(GREEN, 9 * fade)), true; }
+      } else { // a palm: a leaning trunk, a crown of fronds
+        const tall = 3 + hash(slot, q, 869) * 3, lean = (lz / tall) * 0.4 * (slot & 1 ? 1 : -1);
+        if (Math.hypot((lu - c - lean) * 0.8, lz - tall) < 0.9 + 0.4 * noise(lu * 3, lz * 3, 870)) { BG[i] = C(GREEN, 2.5 * fade); return set(i, noise(lu * 9, lz * 9, 871) > 0.5 ? '%' : '"', C(GREEN, 10 * fade)), true; }
+        if (Math.abs(lu - c - lean) < 0.1 && lz < tall) return set(i, '|', C(BRICK, 9 * fade)), true;
+      }
     }
-    const leaf = noise(u * 1.4, z * 1.4, 862) > 0.42;
-    BG[i] = leaf ? C(GREEN, 2 + L * 0.1) : C(CYAN, 1.5 + day * 2);
-    return set(i, streak ? '/' : leaf ? (noise(u * 5, z * 5, 863) > 0.5 ? '%' : '"') : ' ', C(streak ? WHITE : GREEN, streak ? 8 : L * 1.3)), true;
+    BG[i] = desert ? C(CYAN, 2 + day * 3) : C(GREEN, 1.2);
+    return set(i, ' ', 0), true;
   }
   if (z < 0.8) { BG[i] = C(BRICK, 1 + L * 0.12); return set(i, fract(z / 0.2) < 0.15 ? '_' : fract(u * 2 + (Math.floor(z * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(BRICK, L)), true; } // the brick plinth
   const left = mx < 13 || mx === 0;
@@ -6446,8 +6536,10 @@ function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
   // glass all round: white bars, sky beyond, leaves pressed against it on the tropical side
   if (fract(u / 1.2) < 0.04 || fract(z / 1.5) < 0.03) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
   const leaf = left && noise(u * 1.5, z * 1.2, 841) > 0.5 - 0.35 * (1 - z / 9);
-  const city = !left && z < 2.5 + 3.5 * hash(Math.floor(u / 1.7), my + mx, 864); // the city's towers, beyond the glass
-  if (city) { BG[i] = C(GRAY, 1.5 + day * 2); return set(i, night > 0.4 && hash(Math.floor(u * 3), Math.floor(z * 3), 865) > 0.8 ? '.' : ' ', C(YEL, 12)), true; }
+  if (!left) { // the city's towers beyond the glass, far off: they stay put against the sky as you walk about
+    const [gsu, gsz] = glassSlopes(su, z), ang = Math.atan2(gsu, 1) + (mx === 0 || mx === CONS_W - 1 ? 1.6 * Math.sign(mx - 1) : my === 0 ? 0 : 3.1), col = Math.floor(ang * 14);
+    if (gsz < 0.08 + 0.35 * hash(col, 1, 864) * hash(col >> 1, 2, 864)) { BG[i] = C(GRAY, 1.5 + day * 2); return set(i, night > 0.4 && hash(Math.floor(ang * 60), Math.floor(gsz * 60), 865) > 0.8 ? '.' : ' ', C(YEL, 12)), true; }
+  }
   BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 1);
   return set(i, leaf ? (noise(u * 6, z * 6, 842) > 0.5 ? '%' : '"') : ' ', C(GREEN, L * 1.3)), true;
 }
@@ -6684,6 +6776,7 @@ function render(dt) {
       // u runs left-to-right on screen for whichever face we see, so signs read correctly
       const u = side ? (ry > 0 ? -1 : 1) * (px + rx * d) : (rx > 0 ? 1 : -1) * (py + ry * d);
       const uStep = side ? Math.abs(rx2 * (ry * d / ry2) - rx * d) : Math.abs(ry2 * (rx * d / rx2) - ry * d);
+      WH.wc = side ? px + rx * d : py + ry * d; WH.dn = Math.abs(side ? ry * d : rx * d) || 1e-4; WH.sl = (side ? rx * d : ry * d) / WH.dn; // (for things seen through glass)
       for (let r = top; r < bot; r++) {
         const i = r * cols + x;
         if (holes && ZB[i] >= 0) continue;
@@ -6957,7 +7050,7 @@ let hudBottom = 0; // where the text block top left ends (px), for the map and t
 function hud() {
   drawHeldBig();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Pleasure Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : '';
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
@@ -7370,7 +7463,7 @@ function jobArrow() {
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - lw / 2 - 6, y + s * 3.1, lw + 12, FS + 6);
   g.fillStyle = col; g.fillText(label, x - lw / 2, y + s * 3.1 + 3);
 }
-// ===== the pleasure pier (world.js lays it out, props.js puts up the booths, city-sprites.js draws the rides):
+// ===== the Sunset Pier (world.js lays it out, props.js puts up the booths, city-sprites.js draws the rides):
 // riding the Ferris wheel and the carousel, and what E does at the booths. The rides run 9am till 2am.
 const WHEEL_FARE = 5, CAROUSEL_FARE = 3;
 const fairOpen = () => tod >= 9 || tod < 2;
@@ -7466,7 +7559,7 @@ function fairFrame() {
   ['   ,/\\_/\\,', '  (  o    >', "  /`---.__/", " /  ~~~~ \\"].forEach((l, k) => putText(rows - 4 + k, mid - 6, l, C(WHITE, 13)));
 }
 // ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
-// through one). Starting simple: every Saturday night, fireworks over the bay off the pleasure pier.
+// through one). Starting simple: every Saturday night, fireworks over the bay off the Sunset Pier.
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const weekday = () => WEEKDAYS[mod(dayNum, 7)];
 // what's on: [weekday, from hour, to hour, what, a line for the newspaper and the gossip]

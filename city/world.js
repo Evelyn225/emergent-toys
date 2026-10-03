@@ -194,7 +194,7 @@ function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cel
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
-// the pleasure pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
+// the Sunset Pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
 // docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
 // the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
 const FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
@@ -357,7 +357,7 @@ const SERVICES = [];
   }
 }
 
-// ---- the aquarium: the south half of the block across the shore road from the pleasure pier, one building, its
+// ---- the aquarium: the south half of the block across the shore road from the Sunset Pier, one building, its
 // front on the promenade (aquarium.js has the inside, and the fish in its windows)
 const AQUARIUM = { bx: FAIR_BX, by: SHORE_S - 1, x0: FAIR_BX * 8 + 2, x1: FAIR_BX * 8 + 8, doorU: FAIR_BX * 8 + 5 };
 {

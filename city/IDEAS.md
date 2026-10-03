@@ -206,7 +206,7 @@ the licence on each), Pixabay sound effects, the BBC sound effects archive (pers
 - **Shotengai**: pachinko parlour roar (thousands of steel balls, jingles), shop greetings shouted from doorways,
   a crane game's tune, the hum under the roof, rain drumming on it.
 - **Fireworks**: real bursts and crackles (it synthesises a thud now), the crowd going "ooh".
-- **Pleasure pier**: carnival / calliope music, a carousel band organ (the classic oom-pah waltz), the crowd at a fair,
+- **Sunset Pier**: carnival / calliope music, a carousel band organ (the classic oom-pah waltz), the crowd at a fair,
   seagulls.
 - **Aquarium**: underwater ambience, tank bubblers and pump hum, a muffled crowd, maybe a soft ambient pad.
 - **Jail**: echoey cell block room tone, distant shouting, a radio, a buzzing fluorescent light.

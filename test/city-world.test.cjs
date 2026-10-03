@@ -290,7 +290,7 @@ test('a taxi tipped to step on it runs the red light; an ordinary one stops at i
   assert.ok(run(true) > 0, 'straight through it');
 });
 
-test('the pleasure pier: a deck off the shore you can walk out on, booths you can reach, the wheel clear of the water', () => {
+test('the Sunset Pier: a deck off the shore you can walk out on, booths you can reach, the wheel clear of the water', () => {
   const { loadCity } = require('./helpers/load-city.cjs');
   const { ev } = loadCity();
   assert.notStrictEqual(ev('districtOf(FAIR_BX, SHORE_S - 1)'), 'industrial');

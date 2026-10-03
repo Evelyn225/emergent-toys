@@ -73,6 +73,8 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  // a lit window up close: the room behind it, in depth (k windows a cell, so the room is the bay's width)
+  const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
@@ -83,7 +85,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty === 9) { // brownstone: tall narrow windows with stone lintels
     const fu = fract(u * 4);
     if (fu > 0.3 && fu < 0.7 && fz > 0.2 && fz < 0.8)
-      return hash(Math.floor(u * 4), fl, sk) > litT - 0.1 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+      return hash(Math.floor(u * 4), fl, sk) > litT - 0.1 ? inside(4, WARM) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
     if (fu > 0.25 && fu < 0.75 && fz >= 0.8 && fz < 0.9) return set(i, '-', C(GRAY, L));
     return set(i, (Math.floor(u * 12) + Math.floor(zz * 18)) % 5 ? ' ' : '.', C(BRICK, L * 0.7));
   }
@@ -99,7 +101,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (fz > 0.86 && Math.abs(fract(u * 3) - 0.5) < 0.08) return set(i, 'o', C(RED, Math.max(L, night * 14)));
     const wu = fract(u * 3);
     if (wu > 0.2 && wu < 0.8 && fz > 0.25 && fz < 0.8)
-      return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+      return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? inside(3, RED) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
     return set(i, ' ', 0);
   }
   if (sty === 14) { // art deco: limestone piers running the full height, gold chevrons round the crown, spandrels between floors
@@ -129,13 +131,13 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       if (hash(bay, fl, sk + 4) > 0.75 && Math.abs(fu - 0.75) < 0.1) return set(i, '%', C(GREEN, L));
       return set(i, fz > 0.32 ? '-' : ':', C(CYAN, L * (fz > 0.32 ? 0.9 : 0.4)));
     }
-    if (fu > 0.15 && fu < 0.85 && fz < 0.88) return hash(bay, fl, sk) > litT - 0.05 ? set(i, fu < 0.5 ? '#' : '|', C(WARM, Math.max(L, glowL))) : set(i, fu < 0.5 ? ':' : '|', C(CYAN, L * 0.5));
+    if (fu > 0.15 && fu < 0.85 && fz < 0.88) return hash(bay, fl, sk) > litT - 0.05 ? inside(2, WARM) || set(i, fu < 0.5 ? '#' : '|', C(WARM, Math.max(L, glowL))) : set(i, fu < 0.5 ? ':' : '|', C(CYAN, L * 0.5));
     return set(i, ' ', 0);
   }
   if (sty === 0) { // office
     const fu = fract(u * 4);
     if (fu > 0.15 && fu < 0.85 && fz > 0.25 && fz < 0.85)
-      return hash(Math.floor(u * 4), fl, sk) > litT ? set(i, '#', C(YEL, Math.max(L * 0.7, glowL))) : set(i, '.', C(day > 0.5 ? CYAN : GRAY, L * 0.35));
+      return hash(Math.floor(u * 4), fl, sk) > litT ? inside(4, WHITE) || set(i, '#', C(YEL, Math.max(L * 0.7, glowL))) : set(i, '.', C(day > 0.5 ? CYAN : GRAY, L * 0.35));
     return set(i, RAMP[fog * (side ? 0.6 : 1) * 8.99 | 0], C(GRAY, L));
   }
   if (sty === 1) { // glass tower
@@ -157,14 +159,14 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     }
     const wu = fract(u * 4);
     if (wu > 0.2 && wu < 0.8 && fz > 0.3 && fz < 0.85)
-      return hash(Math.floor(u * 4), fl, sk) > litT - 0.05 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+      return hash(Math.floor(u * 4), fl, sk) > litT - 0.05 ? inside(4, WARM) || set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
     if (fz < 0.08) return set(i, '_', C(WARM, L * 0.6)); // floor line
     return set(i, ' ', 0);
   }
   // brick
   const fu = fract(u * 3);
   if (fu > 0.3 && fu < 0.7 && fz > 0.25 && fz < 0.75)
-    return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? set(i, '#', C(ORANGE, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+    return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? inside(3, ORANGE) || set(i, '#', C(ORANGE, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   if (fu > 0.25 && fu < 0.75 && fz > 0.18 && fz <= 0.25) return set(i, '=', C(GRAY, L));
   if (d > 8) return set(i, RAMP[fog * (side ? 0.6 : 1) * 8.99 | 0], C(BRICK, L));
   return set(i, fract(u * 12 + (Math.floor(zz * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
@@ -378,7 +380,12 @@ function floorCell(i, r, x, rx, ry) {
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
-      if (inPond(lx, ly, pbx, pby)) { const n = noise(wx * 4 + T * 0.3, wy * 4, 92); ch = n > 0.6 ? '~' : n > 0.45 ? '-' : ' '; base = BLUE; k = 1.4; }
+      if (inPond(lx, ly, pbx, pby)) { // the pond: ripples, lily pads by the edge, the sky and trees in it
+        const n = noise(wx * 4 + T * 0.3, wy * 4 - T * 0.1, 92), lily = !inPond(lx, ly, pbx, pby, -0.18) && hash(Math.floor(wx * 9), Math.floor(wy * 9), 93) > 0.8;
+        set(i, lily ? (hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? '*' : 'o') : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? MAG : GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
+        BG[i] = C(BLUE, 1 + day * 2.5 + lampsOn * glow(wx, wy) * 2); FL[i] = lily ? 0 : 3;
+        return;
+      }
       else if (inPond(lx, ly, pbx, pby, 0.15)) { ch = (r + x) % 3 ? '|' : ','; base = GREEN; k = 0.9; } // reeds round the edge
       else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }

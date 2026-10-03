@@ -634,7 +634,7 @@ function elSprites() {
   }
 }
 
-// ===== the pleasure pier: the Ferris wheel, the carousel, and the arch over the way in
+// ===== the Sunset Pier: the Ferris wheel, the carousel, and the arch over the way in
 // the wheel is a billboard turned to its real angle: sq = how face-on it is (its east-west axis across the screen),
 // so from the side it narrows to an ellipse and then a line. Cars are real-sized whatever the angle.
 function wheelCell(i, u, z, du, dz, L, sq) {
@@ -705,7 +705,7 @@ function carouselCell(i, u, z, du, dz, L, s) {
   }
   return false;
 }
-const FAIR_SIGN = 'PLEASURE PIER';
+const FAIR_SIGN = 'SUNSET PIER';
 function fairSprites() {
   const [wx, wy] = R(WHEEL.x, WHEEL.y);
   if (Math.hypot(wx, wy) < vis + 4) {

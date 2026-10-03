@@ -517,7 +517,7 @@ GAMES.jailbreak = (rnd = Math.random) => {
   return g;
 };
 
-// ---- the pleasure pier's booths. Like the cabinets: a credit a go, tickets for how you did.
+// ---- the Sunset Pier's booths. Like the cabinets: a credit a go, tickets for how you did.
 // ring toss: rows of bottles; the ring swings back and forth in front of you, GO throws it straight up the board.
 // It lands on a bottle neck only if it's dead on (the far rows count double). Six rings.
 GAMES.ringtoss = (rnd = Math.random) => {

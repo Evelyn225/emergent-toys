@@ -66,7 +66,7 @@ function audioMix(s) {
   if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
   if (s.district === 'shotengai') out.arcade = Math.max(out.arcade, 0.28 * far); // jingles spilling out of the parlours under the roof
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
-  if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
+  if (s.fairNear) { // the Sunset Pier: a crowd, and the booths' bleeps and jingles drifting over it
     out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
     out.arcade = 0.4 * s.fairNear * far;
   }
